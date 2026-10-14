@@ -44,7 +44,8 @@ INSTRUCTIONS = """\
 robotforge is a robot playground backed by the MuJoCo physics engine, made for beginners.
 
 Design: new_world creates a world (saved as world.yaml). list_templates shows the robot templates
-(arm, quadruped, rover) and their parameters; add_robot builds one from a template or imports an
+(arm, quadruped, rover) and their parameters; list_library shows real robots (Unitree Go2, Franka
+Panda, ...); add_robot builds one from a template, takes one from the library or imports an
 MJCF/URDF file. add_object places boxes, balls, cylinders, tables and bins. update_robot,
 update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
@@ -138,6 +139,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         return _json({"templates": templates.catalog(), "parts": parts, "colors": list(components.COLORS)})
 
     @server.tool()
+    def list_library() -> str:
+        """List real, well-known robots that add_robot(library=...) can load: Unitree Go2 and other robot
+        dogs (they walk with move and the keyboard), arms like the Franka Panda, and humanoids (stand only).
+        Each is downloaded from MuJoCo Menagerie on first use (a few seconds, tens of MB) and cached."""
+        from robotforge.design import library
+
+        return _json({"robots": library.catalog()})
+
+    @server.tool()
     def new_world(name: str, floor: Literal["checker", "grass", "wood", "concrete"] = "checker") -> str:
         """Create a new world (or reopen it if one with this name exists) and show it in the viewer."""
         with _tool_errors():
@@ -157,14 +167,16 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float = 0.0,
+        library: str | None = None,
     ) -> str:
-        """Add a robot to the open world, from a template (see list_templates) or an MJCF/URDF file.
+        """Add a robot to the open world: from a template (see list_templates), from the robot library
+        (see list_library, e.g. library="go2"; downloaded on first use) or from an MJCF/URDF file.
 
         params override template defaults, e.g. {"leg_length": 0.3, "color": "orange"}.
-        pos is [x, y] in meters (height is automatic for templates); yaw is in degrees.
+        pos is [x, y] in meters (height is automatic for templates and library robots); yaw is in degrees.
         """
         with _tool_errors():
-            return _json(playground.add_robot(name, template, file, params, pos, yaw))
+            return _json(playground.add_robot(name, template, file, params, pos, yaw, library=library))
 
     @server.tool()
     def update_robot(

@@ -1,8 +1,8 @@
 """world.yaml: the single source of truth for a playground world, and its compiler to MuJoCo.
 
-A world has a floor, robots (from templates or imported files) and loose or fixed
-objects. Every robot's names are prefixed with "<robot>/" so several robots can
-share a world without clashing.
+A world has a floor, robots (from templates, the robot library or imported files)
+and loose or fixed objects. Every robot's names are prefixed with "<robot>/" so
+several robots can share a world without clashing.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from robotforge.design import components, templates
+from robotforge.design import components, library, templates
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 FLOOR_STYLES = {
@@ -47,6 +47,7 @@ class RobotEntry(_Strict):
     name: str
     template: str | None = None
     file: str | None = None  # MJCF or URDF path, relative to the world directory
+    library: str | None = None  # a robot from the library, e.g. "go2" (see library.CATALOG)
     params: dict[str, Any] = Field(default_factory=dict)
     pos: list[float] = Field(default_factory=lambda: [0.0, 0.0])  # x, y (and optional z) in meters
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
@@ -58,8 +59,10 @@ class RobotEntry(_Strict):
 
     @model_validator(mode="after")
     def _one_source(self) -> RobotEntry:
-        if (self.template is None) == (self.file is None):
-            raise ValueError(f"robot {self.name!r}: give exactly one of 'template' or 'file'")
+        if [self.template, self.file, self.library].count(None) != 2:
+            raise ValueError(f"robot {self.name!r}: give exactly one of 'template', 'library' or 'file'")
+        if self.library is not None:
+            library.get(self.library)
         if len(self.pos) not in (2, 3):
             raise ValueError(f"robot {self.name!r}: pos is [x, y] or [x, y, z]")
         return self
@@ -154,6 +157,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         built = _robot_spec(entry, base_dir)
         z = entry.pos[2] if len(entry.pos) == 3 else built.spawn_height
         frame = spec.worldbody.add_frame(pos=[entry.pos[0], entry.pos[1], z], quat=_yaw_quat(entry.yaw))
+        _share_options(spec, built.spec)
         spec.attach(built.spec, prefix=f"{entry.name}/", frame=frame)
         homes.append((entry.name, built.home_qpos, built.home_ctrl))
         notes += [f"{entry.name}: {n}" for n in built.notes]
@@ -179,6 +183,11 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
             return templates.build(entry.template, entry.params)
         except ValueError as exc:  # includes pydantic ValidationError
             raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+    if entry.library is not None:
+        try:
+            return library.build(entry.library, entry.params)
+        except ValueError as exc:
+            raise ValueError(f"robot {entry.name!r}: {exc}") from exc
     path = Path(entry.file).expanduser()
     if not path.is_absolute() and base_dir is not None:
         path = base_dir / path
@@ -190,6 +199,20 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
         raise ValueError(f"robot {entry.name!r}: MuJoCo could not read {path.name}: {exc}") from exc
     _strip_world_extras(child)
     return templates.BuiltRobot(spec=child, notes=[f"imported from {path.name}"])
+
+
+def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:
+    """Adopt a robot's contact settings for the world, then align the robot's options to the world's.
+
+    Physics options are global, so attach keeps the world's values; models like Menagerie's
+    quadrupeds rely on elliptic friction cones with a high impratio to keep their feet from
+    slipping. Aligning the child afterwards also silences MuJoCo's attach-conflict warnings.
+    """
+    if child.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
+        world.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
+        world.option.impratio = max(world.option.impratio, child.option.impratio)
+    for name in ("timestep", "integrator", "cone", "impratio", "iterations", "ls_iterations", "noslip_iterations"):
+        setattr(child.option, name, getattr(world.option, name))
 
 
 def _strip_world_extras(child: mujoco.MjSpec) -> None:

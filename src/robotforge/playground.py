@@ -129,8 +129,20 @@ class Playground:
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float = 0.0,
+        library: str | None = None,
     ) -> dict[str, Any]:
-        entry = RobotEntry(name=name, template=template, file=file, params=params or {}, pos=pos or [0.0, 0.0], yaw=yaw)
+        try:
+            entry = RobotEntry(
+                name=name,
+                template=template,
+                file=file,
+                library=library,
+                params=params or {},
+                pos=pos or [0.0, 0.0],
+                yaw=yaw,
+            )
+        except ValidationError as exc:
+            raise PlaygroundError(_validation_message(exc)) from exc
 
         def change(w: World) -> None:
             w.robots.append(entry)
@@ -348,8 +360,9 @@ def _find(items: list, name: str, kind: str):
 def _validation_message(exc: ValidationError) -> str:
     parts = []
     for err in exc.errors():
-        where = ".".join(str(x) for x in err["loc"]) or "value"
-        parts.append(f"{where}: {err['msg']}")
+        msg = err["msg"].removeprefix("Value error, ")  # pydantic's prefix means nothing to a beginner
+        where = ".".join(str(x) for x in err["loc"])
+        parts.append(f"{where}: {msg}" if where else msg)
     return "; ".join(parts)
 
 
