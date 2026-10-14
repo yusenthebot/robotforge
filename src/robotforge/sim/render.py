@@ -7,6 +7,7 @@ import io
 import math
 import sys
 import threading
+import warnings
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -53,20 +54,28 @@ def _on_gl_thread[T](fn: Callable[..., T], *args: Any) -> T:
 @functools.cache
 def _probe_gl() -> str | None:
     """Render one frame of an empty world. Only ever runs on the GL thread, once per process."""
+    # GLFW reports why it failed ("the driver does not appear to support OpenGL") as a warning, not an exception.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            _render_empty_frame()
+        except Exception as exc:
+            # GL setup fails with RuntimeError, ImportError, OSError, AttributeError, GLFWError, FatalError
+            # depending on the platform. The probe model is known good, so any failure is the machine's.
+            reason = f"{type(exc).__name__}: {exc}"
+            details = "; ".join(str(w.message) for w in caught)
+            return " ".join((f"{reason} ({details})" if details else reason).split())[:300]
+    return None
+
+
+def _render_empty_frame() -> None:
     model = mujoco.MjModel.from_xml_string("<mujoco/>")
-    renderer = None
+    renderer = mujoco.Renderer(model, height=16, width=16)
     try:
-        renderer = mujoco.Renderer(model, height=16, width=16)
         renderer.update_scene(mujoco.MjData(model))
         renderer.render()
-    except Exception as exc:
-        # GL setup fails with RuntimeError, ImportError, OSError, AttributeError, GLFWError, FatalError
-        # depending on the platform. The probe model is known good, so any failure is the machine's.
-        return " ".join(f"{type(exc).__name__}: {exc}".split())[:300]
     finally:
-        if renderer is not None:
-            renderer.close()
-    return None
+        renderer.close()
 
 
 def render_unavailable_reason() -> str | None:

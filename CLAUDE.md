@@ -26,3 +26,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - Run the viewer: `uv run robotforge demo` or `uv run robotforge open path/to/model.xml` (MJCF or URDF). Browser-pane preview config `robotforge-demo` lives in `~/Desktop/.claude/launch.json`.
 - The viewer exposes `window.__robotforge` (`scene`, `time`, `bodyPosition`, `pick`, `screenOf`) for scripted checks. The browser pane may be hidden and throttle `requestAnimationFrame`, so drive pointer tests with `screenOf` coordinates (CSS px, not screenshot px).
 - Tests: `uv run pytest -q`; lint: `uv run ruff check . && uv run ruff format --check .`.
+- CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
+  Read a failed run with `gh run view <id> --log-failed`.
+- `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
+- Offscreen rendering needs OpenGL. Without it (Windows CI, VMs, servers) `observe` returns the state plus a note instead of an image, and rendering tests skip with the reason.
+  `ROBOTFORGE_REQUIRE_GL=1` turns those skips into failures; the Ubuntu job sets it and uses Mesa EGL (`MUJOCO_GL=egl`).
+- Portability rules: pass `encoding="utf-8"` to every text read and write, compare paths with `Path` (never `endswith("a/b")`), and do not bind or probe ports with `SO_REUSEADDR` on Windows.

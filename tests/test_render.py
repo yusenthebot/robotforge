@@ -1,6 +1,7 @@
 import io
 import json
 import threading
+import warnings
 from pathlib import Path
 
 import mujoco
@@ -60,22 +61,37 @@ def test_one_renderer_serves_calls_from_different_threads(needs_gl, session):
     assert sizes == [(48, 64, 3)] * 3
 
 
-def test_failed_probe_is_reported_once_as_one_line(monkeypatch):
+@pytest.fixture
+def broken_renderer(monkeypatch):
+    """Make mujoco.Renderer fail like a driverless machine does, and forget cached probe results around it."""
     attempts = []
 
-    def broken(*args, **kwargs):
-        attempts.append(1)
-        raise RuntimeError("could not create\nwindow")
+    def install(error: Exception, warning: str | None = None) -> list:
+        def broken(*args, **kwargs):
+            attempts.append(1)
+            if warning:
+                warnings.warn(warning, stacklevel=2)  # GLFW reports the real cause this way
+            raise error
 
-    render._probe_gl.cache_clear()
-    monkeypatch.setattr(mujoco, "Renderer", broken)
-    try:
-        assert render_unavailable_reason() == "RuntimeError: could not create window"
-        assert render_unavailable_reason() == "RuntimeError: could not create window"
-        assert len(attempts) == 1
-    finally:
-        monkeypatch.undo()
         render._probe_gl.cache_clear()
+        monkeypatch.setattr(mujoco, "Renderer", broken)
+        return attempts
+
+    yield install
+    monkeypatch.undo()
+    render._probe_gl.cache_clear()
+
+
+def test_failed_probe_is_reported_once_as_one_line(broken_renderer):
+    attempts = broken_renderer(RuntimeError("could not create\nwindow"))
+    assert render_unavailable_reason() == "RuntimeError: could not create window"
+    assert render_unavailable_reason() == "RuntimeError: could not create window"
+    assert len(attempts) == 1
+
+
+def test_probe_reason_includes_what_the_driver_warned_about(broken_renderer):
+    broken_renderer(RuntimeError("gladLoadGL error"), warning="WGL: the driver does not support OpenGL")
+    assert render_unavailable_reason() == "RuntimeError: gladLoadGL error (WGL: the driver does not support OpenGL)"
 
 
 def test_snapshot_without_gl_raises_a_clear_error(no_gl, session):
