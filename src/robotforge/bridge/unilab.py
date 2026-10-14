@@ -311,8 +311,10 @@ def _alive(pid: Any) -> bool:
     if pid in _STARTED:
         return _STARTED[pid].poll() is None
     if sys.platform == "win32":
+        # No process groups to check here, so ask for the command line itself.
+        query = f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"
         done = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", query],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -320,8 +322,7 @@ def _alive(pid: Any) -> bool:
             errors="replace",
             check=False,
         )
-        rows = [line.split('","') for line in done.stdout.splitlines() if line.startswith('"')]
-        return any(len(r) > 1 and r[1] == str(pid) and r[0].lower().startswith('"python') for r in rows)
+        return TOOL.name in done.stdout
     try:
         if os.getpgid(pid) != pid:  # the tool leads its own session; anything else is not ours
             return False

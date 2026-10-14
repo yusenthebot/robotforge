@@ -67,3 +67,7 @@ jobs:
 
       - name: Headless smoke test
         run: uv run python scripts/smoke.py
+
+      # Learned walking policies need the optional extra; their tests skip without it, so run them once more with it.
+      - name: Learned policies (extra policy = onnxruntime)
+        run: uv run --extra policy pytest -q -ra tests/test_onnx_policy.py
