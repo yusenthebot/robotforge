@@ -173,13 +173,19 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         library: str | None = None,
     ) -> str:
         """Add a robot to the open world: from a template (see list_templates), from the robot library
-        (see list_library, e.g. library="go2") or from an MJCF/URDF file.
+        (see list_library, e.g. library="go2") or from a file.
+
+        file can be an MJCF (.xml), a URDF, a xacro, or a plain mesh (.stl .obj .dae .glb ...). URDFs and
+        meshes go through the import doctor, which repairs mesh paths, formats, mass and inertia, adds motors
+        and picks a fixed or floating base; the result's "doctor" field lists what it fixed and what it could
+        not. For files, params are import options: base (auto, fixed, floating), decompose (true splits
+        concave collision meshes into convex pieces), scale and mass (meshes), xacro_args.
 
         The first use of a library robot downloads it (4-55 MB, usually 5-30 s, with progress updates);
         if your call timed out meanwhile, simply call again: the download continues in the background
         and a repeated identical call reports the robot instead of failing.
-        params override template defaults, e.g. {"leg_length": 0.3, "color": "orange"}.
-        pos is [x, y] in meters (height is automatic for templates and library robots); yaw is in degrees.
+        For templates, params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}.
+        pos is [x, y] in meters (height is automatic for templates, library robots and imports); yaw is in degrees.
         """
         with _tool_errors():
             if library is not None:
@@ -408,13 +414,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json({"robots": out, "behaviors": playground.behaviors.status()})
 
     @server.tool()
-    def open_model(path: str) -> str:
-        """Load a robot or scene from an MJCF (.xml) or URDF (.urdf) file, replacing the current one.
+    def open_model(path: str, options: dict[str, Any] | None = None) -> str:
+        """Load a robot or scene from an MJCF (.xml), URDF, xacro or mesh file, replacing the current one.
 
+        URDFs and meshes are repaired by the import doctor; the result's "doctor" field says what was fixed.
+        options (URDF/mesh only): base (auto, fixed, floating), decompose, scale, mass, xacro_args.
         Returns the model summary (actuators, joints, free bodies, sensors, views).
         """
         with _tool_errors():
-            return _json(playground.open_model(path))
+            return _json(playground.open_model(path, options))
 
     @server.tool()
     def describe_model() -> str:

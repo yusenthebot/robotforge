@@ -17,6 +17,7 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge.behaviors.manager import BehaviorManager
+from robotforge.design import importer
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, ObjectEntry, RobotEntry, World
 from robotforge.sim.render import VIEWS, SnapshotRenderer
@@ -45,6 +46,7 @@ class Playground:
     viewer_url: str | None = None
     renderer: SnapshotRenderer = field(default_factory=SnapshotRenderer)
     store: WorldStore | None = None
+    last_doctor: dict[str, Any] = field(default_factory=dict)  # robot name -> import doctor report
     behaviors: BehaviorManager = field(init=False)
 
     def __post_init__(self) -> None:
@@ -68,10 +70,25 @@ class Playground:
 
     # ---- loading and describing ----------------------------------------------------
 
-    def open_model(self, path: str) -> dict[str, Any]:
+    def open_model(self, path: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Load an MJCF (.xml), a URDF/xacro or a plain mesh. URDFs and meshes go through the import doctor."""
         p = Path(path).expanduser()
-        if p.suffix.lower() not in {".xml", ".urdf", ".mjcf"}:
-            raise PlaygroundError(f"{p.name}: expected an MJCF (.xml) or URDF (.urdf) file")
+        if importer.is_importable(p):
+            if not p.is_file():
+                raise PlaygroundError(f"file not found: {p}")
+            try:
+                compiled = importer.compile_standalone(p, options)
+            except ValueError as exc:
+                raise PlaygroundError(str(exc)) from exc
+            self.store = None  # the loaded model is no longer a saved world
+            self.session.load_model(compiled.model, str(p.resolve()))
+            self.last_doctor = compiled.doctor
+            result = self.describe()
+            result["doctor"] = next(iter(compiled.doctor.values()), None)
+            return result
+        if p.suffix.lower() not in {".xml", ".mjcf"}:
+            meshes = ", ".join(sorted(importer.MESH_SUFFIXES))
+            raise PlaygroundError(f"{p.name}: expected an MJCF (.xml), a URDF/xacro, or a mesh ({meshes})")
         self.session.load_path(p.resolve())
         return self.describe()
 
@@ -152,7 +169,10 @@ class Playground:
         def change(w: World) -> None:
             w.robots.append(entry)
 
-        return self._edit(change)
+        result = self._edit(change)
+        if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
+            result["doctor"] = self.last_doctor[name]
+        return result
 
     def update_robot(
         self,
@@ -245,6 +265,7 @@ class Playground:
     def _load_world(self, compiled: CompiledWorld, created: bool = False) -> dict[str, Any]:
         store = self._require_store()
         self.session.load_model(compiled.model, str(store.file))
+        self.last_doctor = compiled.doctor
         world = store.load()
         summary = self.describe()
         return {
