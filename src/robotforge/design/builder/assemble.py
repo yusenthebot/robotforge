@@ -292,7 +292,7 @@ def _shape(
         )
         body.add_geom(
             type=GEOM.mjGEOM_BOX,
-            size=[r * 0.42, half_w + 0.0012, r * 0.07],
+            size=[r * 0.42, r * 0.07, half_w + 0.0012],  # a bar across both faces: you see the wheel turn
             pos=center.tolist(),
             quat=_z_to(axis),
             rgba=accent,

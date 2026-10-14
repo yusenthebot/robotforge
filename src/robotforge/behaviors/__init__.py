@@ -17,6 +17,7 @@ class Kind(StrEnum):
     HEXAPOD = "hexapod"
     HUMANOID = "humanoid"
     ROVER = "rover"
+    BALANCER = "balancer"  # two wheels on one axle, balances like a Segway
     OTHER = "other"
 
 
@@ -30,6 +31,10 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
 
     if has(mujoco.mjtObj.mjOBJ_SITE, "tcp") or (_has_mounted_tool(model, robot) and not _floating(model, robot)):
         return Kind.ARM  # an arm, or a fixed robot built from parts with a gripper mounted on it
+    from robotforge.behaviors.balance import find_balancer  # lazy: it imports this package
+
+    if find_balancer(model, robot, home_pose(model)) is not None:
+        return Kind.BALANCER
     if has(mujoco.mjtObj.mjOBJ_ACTUATOR, "left_wheel") and has(mujoco.mjtObj.mjOBJ_ACTUATOR, "right_wheel"):
         return Kind.ROVER
     if has(mujoco.mjtObj.mjOBJ_SITE, "front_left_foot"):

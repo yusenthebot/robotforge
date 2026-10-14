@@ -12,14 +12,16 @@ import numpy as np
 
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.behaviors.arm import ArmMotion
+from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
 MAX_RUN_SECONDS = 60.0
-MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID)
-WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController)
+MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER)
+WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer)
+SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
 
 
 class BehaviorError(ValueError):
@@ -34,16 +36,17 @@ class BehaviorManager:
         self.start_balancing()
 
     def start_balancing(self) -> None:
-        """Humanoids keep their balance from the moment they appear and after every reset, so a beginner
-        never sees one hang limp from its servos (or topple at the first nudge)."""
+        """Humanoids and two-wheeled robots keep their balance from the moment they appear and after every
+        reset, so a beginner never sees one hang limp from its servos or topple at the first nudge."""
         world = self._world()
         names = [r.name for r in world.robots] if world else sorted(self._prefixes())
         templates = {r.name: r.template for r in world.robots} if world else {}
         with self.session.lock:
             for name in names:
-                if robot_kind(self.session.model, name, templates.get(name)) == Kind.HUMANOID:
+                kind = robot_kind(self.session.model, name, templates.get(name))
+                if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
-                        self._mobile_controller(name, Kind.HUMANOID, create=True)
+                        self._mobile_controller(name, kind, create=True)
 
     # ---- robots in the session -------------------------------------------------------
 
@@ -99,7 +102,7 @@ class BehaviorManager:
         if kind not in MOBILE:
             raise BehaviorError(
                 f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids) and wheeled "
-                "robots can move around"
+                "robots (rovers, balancers) can move around"
             )
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True)
@@ -117,6 +120,8 @@ class BehaviorManager:
                 ctrl = humanoid.for_template(m, robot, self.home_qpos())
             elif kind in (Kind.QUADRUPED, Kind.HEXAPOD):
                 ctrl = quadruped.for_robot(m, robot, self.home_qpos())
+            elif kind == Kind.BALANCER:
+                ctrl = WheelBalancer(m, robot, self.home_qpos())
             else:
                 ctrl = DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:

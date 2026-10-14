@@ -302,3 +302,40 @@ def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
     pg.add_robot("dog", build=DOG)
     with pytest.raises(ValueError, match="not an arm, and carries none"):
         pg.behaviors.move_arm("dog", [0.3, 0, 0.1])
+
+
+BALANCER = {
+    "color": "red",
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.07, 0.14, 0.22], "sensors": ["imu"]},
+    "parts": [
+        {"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025], "mirror": True},
+        {"name": "head", "at": "top", "joint": "fixed", "shape": "sphere", "size": [0.07], "direction": "up"},
+    ],
+}
+
+
+def test_two_wheeled_robot_balances_by_itself_and_drives(pg):
+    pg.add_robot("seg", build=BALANCER)
+    assert pg.behaviors.robots()[0]["kind"] == "balancer"
+    _run(pg, 3.0)  # it starts balancing as soon as it appears
+    assert pg.behaviors.pose("seg")["upright"]
+    pg.behaviors.move("seg", 0.3, 0.0)
+    _run(pg, 4.0)
+    pg.behaviors.stop("seg")
+    _run(pg, 2.0)
+    end = pg.behaviors.pose("seg")
+    assert end["upright"] and end["position"][0] > 0.8
+
+
+def test_balance_task_compares_lqr_with_doing_nothing(pg):
+    from robotforge.control.compare import compare_methods
+
+    pg.add_robot("seg", build=BALANCER)
+    s = pg.session
+    comparison = compare_methods(
+        "balance", ["lqr", "none"], 4.0, model=s.model, robot="seg", data=copy.copy(s.data), seed=0, push_at=1.5
+    )
+    lqr, none = comparison.results
+    assert lqr.success and not lqr.failed
+    assert none.failed  # without control it falls over within a second

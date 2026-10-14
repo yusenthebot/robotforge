@@ -11,6 +11,7 @@ from robotforge.control.tasks.base import Batch, Robot, StateLayout, Task, TaskE
 from robotforge.control.tasks.drive import DriveTo
 from robotforge.control.tasks.legged import Stand, Walk
 from robotforge.control.tasks.reach import Reach
+from robotforge.control.tasks.wheel_balance import WheelBalance
 
 TASKS: dict[str, type[Task]] = {t.name: t for t in (Reach, Balance, Stand, Walk, DriveTo)}
 
@@ -21,6 +22,8 @@ def make_task(name: str, model: mujoco.MjModel, robot: str, params: dict[str, An
         cls = TASKS[name]
     except KeyError:
         raise TaskError(f"unknown task {name!r}; choose one of: {', '.join(TASKS)}") from None
+    if cls is Balance and WheelBalance.fits(model, robot):  # a two-wheeled robot balances on its wheels
+        cls = WheelBalance
     return cls(model, robot, params)
 
 

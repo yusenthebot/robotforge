@@ -58,6 +58,8 @@ def make_controller(
         if method == "cartesian":
             return classic.CartesianPD(task, model, data, **params)
         if method == "lqr":
+            if hasattr(task, "lqr_controller"):  # tasks with their own model-based design (wheel balancers)
+                return task.lqr_controller(model, data, **params)
             return classic.LQR(task, model, data, **{**_LQR_WEIGHTS.get(task.name, {}), **params})
         if method == "pd":
             if task.name == "reach":
