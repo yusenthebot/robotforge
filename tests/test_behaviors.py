@@ -92,7 +92,7 @@ def test_unreachable_pick_is_refused_with_advice(pg):
 
 def test_wrong_behavior_for_robot_kind_is_explained(pg):
     pg.add_robot("arm", template="arm")
-    with pytest.raises(BehaviorError, match="only quadrupeds and rovers"):
+    with pytest.raises(BehaviorError, match="only quadrupeds, humanoids and rovers"):
         pg.behaviors.move("arm", 0.2, 0.0)
     with pytest.raises(BehaviorError, match="no robot named 'cat'"):
         pg.behaviors.move("cat", 0.2, 0.0)

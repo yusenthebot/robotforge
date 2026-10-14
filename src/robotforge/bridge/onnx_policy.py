@@ -133,6 +133,10 @@ class PolicyWalker:
         self.steps = 0
         self.paused_reason: str | None = None
 
+    @property
+    def fallen(self) -> bool:
+        return bool(self.paused_reason and self.paused_reason.startswith("fallen"))
+
     def limit_speed(self, top: float) -> None:
         """Lower the fastest accepted forward speed (m/s); kept for parity with the gait."""
         self.max_speed = min(self.max_speed, top)
