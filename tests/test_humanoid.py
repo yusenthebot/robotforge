@@ -35,8 +35,9 @@ def _up(pg: Playground, robot: str = "bot") -> float:
 def _run(pg: Playground, seconds: float, robot: str = "bot") -> float:
     """Simulate and return the lowest torso up-axis z seen (1 = perfectly upright)."""
     lowest = 1.0
+    steps = round(0.05 / pg.session.model.opt.timestep)  # exact slices (run_fast rounds up to 0.02 s chunks)
     for _ in range(round(seconds / 0.05)):
-        pg.run_fast(lambda: False, 0.05)
+        pg.session.step(steps)
         lowest = min(lowest, _up(pg, robot))
     return lowest
 
@@ -109,18 +110,19 @@ def test_humanoid_stands_ten_seconds_and_shrugs_off_pushes(pg):
 # ---- walking -----------------------------------------------------------------------------
 
 
-def test_humanoid_walks_forward_half_a_meter_in_fifteen_seconds(pg):
+def test_humanoid_walks_forward_at_the_commanded_speed(pg):
     pg.add_robot("bot", template="humanoid")
     start = pg.behaviors.pose("bot")["position"]
     status = pg.behaviors.move("bot", 0.1, 0.0)
-    assert status["behavior"] in ("stand", "walk")
+    assert status["behavior"] == "walk"
     assert _run(pg, 15.0) > 0.95
     end = pg.behaviors.pose("bot")["position"]
-    assert end[0] - start[0] > 0.5
-    assert abs(end[1] - start[1]) < 0.2
+    # 0.1 m/s for 15 s, minus about half a second to get going: ~1.45 m (measured 1.57)
+    assert 1.25 < end[0] - start[0] < 1.8
+    assert abs(end[1] - start[1]) < 0.1
 
 
-def test_humanoid_turns_in_place_and_walks_backwards(pg):
+def test_humanoid_turns_in_place_and_walks_backwards_at_the_commanded_rates(pg):
     pg.add_robot("bot", template="humanoid")
     pg.behaviors.move("bot", 0.0, 0.3)
     total, last = 0.0, _heading(pg)
@@ -129,14 +131,14 @@ def test_humanoid_turns_in_place_and_walks_backwards(pg):
         h = _heading(pg)
         total += (h - last + 180) % 360 - 180
         last = h
-    assert total > 45
-    assert math.dist(pg.behaviors.pose("bot")["position"][:2], [0, 0]) < 0.15  # turned on the spot
+    assert 145 < total < 185  # 0.3 rad/s for 10 s is 172 degrees
+    assert math.dist(pg.behaviors.pose("bot")["position"][:2], [0, 0]) < 0.1  # turned on the spot
     pg.behaviors.move("bot", -0.08, 0.0)
     before = np.array(pg.behaviors.pose("bot")["position"][:2])
     yaw = math.radians(_heading(pg))
     assert _run(pg, 6.0) > 0.95
     moved = np.array(pg.behaviors.pose("bot")["position"][:2]) - before
-    assert moved @ [math.cos(yaw), math.sin(yaw)] < -0.15
+    assert -0.6 < moved @ [math.cos(yaw), math.sin(yaw)] < -0.35  # -0.08 m/s for 6 s: about -0.45 m
 
 
 def test_stop_brings_a_walking_humanoid_to_a_still_stand(pg):
@@ -207,23 +209,93 @@ def test_a_long_stand_keeps_the_plan_small(pg):
 # ---- poses ---------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", list(humanoid.POSES))
-def test_every_pose_plays_and_ends_upright(pg, name):
-    pg.add_robot("bot", template="humanoid")
+def _play(pg: Playground, name: str) -> dict[str, tuple[float, float]]:
+    """Play a pose; return the (lowest, highest) value seen of each joint, torso pitch and torso height."""
+    m, d = pg.session.model, pg.session.data
     ctrl = pg.behaviors.strike_pose("bot", name)
-    pg.run_fast(lambda: ctrl.done, 15.0)
-    assert ctrl.done
+    joints = {m.joint(j).name.split("/", 1)[1]: m.jnt_qposadr[j] for j in range(m.njnt) if m.jnt_type[j] == 3}
+    torso = m.body("bot/torso").id
+    seen: dict[str, list[float]] = {k: [] for k in [*joints, "pitch", "height"]}
+    while not ctrl.done and d.time < 20:
+        pg.session.step(25)
+        for k, adr in joints.items():
+            seen[k].append(float(d.qpos[adr]))
+        seen["pitch"].append(math.asin(-d.xmat[torso][6]))
+        seen["height"].append(float(d.xpos[torso][2]))
+    assert ctrl.done, f"{name} did not finish"
+    return {k: (min(v), max(v)) for k, v in seen.items()}
+
+
+def _reversals(pg: Playground, name: str, joint: str) -> int:
+    """How many times a joint changes direction (by more than 0.1 rad) while a pose plays."""
+    m, d = pg.session.model, pg.session.data
+    adr = m.jnt_qposadr[m.joint(f"bot/{joint}").id]
+    ctrl = pg.behaviors.strike_pose("bot", name)
+    values = []
+    while not ctrl.done and d.time < 20:
+        pg.session.step(25)
+        values.append(float(d.qpos[adr]))
+    turns, anchor, direction = 0, values[0], 0
+    for v in values:
+        step = v - anchor
+        if abs(step) > 0.1:
+            if direction and np.sign(step) != direction:
+                turns += 1
+            direction, anchor = int(np.sign(step)), v
+    return turns
+
+
+def test_wave_raises_the_right_arm_and_waves_it(pg):
+    pg.add_robot("bot", template="humanoid")
+    seen = _play(pg, "wave")
+    assert seen["right_shoulder_roll"][1] > 2.3 and seen["left_shoulder_roll"][1] < 0.4
+    assert _reversals(pg, "wave", "right_shoulder_roll") >= 4  # side to side, not just up and down
     assert _run(pg, 1.0) > 0.95
-    if name == "wave":
-        assert ctrl.status()["behavior"] == "stand"
 
 
-def test_squat_really_lowers_the_body(pg):
+def test_squat_bends_the_knees_and_lowers_the_body(pg):
     pg.add_robot("bot", template="humanoid")
     start = pg.behaviors.pose("bot")["position"][2]
-    pg.behaviors.strike_pose("bot", "squat")
-    pg.run_fast(lambda: False, 1.9)
-    assert pg.behaviors.pose("bot")["position"][2] < start - 0.04
+    seen = _play(pg, "squat")
+    assert seen["height"][0] < start - 0.045
+    assert min(seen["left_knee"][1], seen["right_knee"][1]) > 1.4
+    assert min(seen["left_shoulder_pitch"][1], seen["right_shoulder_pitch"][1]) > 1.1  # arms forward
+    assert _run(pg, 1.0) > 0.95
+
+
+def test_arms_up_raises_both_arms_overhead(pg):
+    pg.add_robot("bot", template="humanoid")
+    seen = _play(pg, "arms_up")
+    assert min(seen["left_shoulder_roll"][1], seen["right_shoulder_roll"][1]) > 2.4
+    assert _run(pg, 1.0) > 0.95
+
+
+def test_bow_leans_the_torso_forward(pg):
+    pg.add_robot("bot", template="humanoid")
+    seen = _play(pg, "bow")
+    assert seen["pitch"][1] > 0.35 and seen["neck_pitch"][1] > 0.25
+    assert _run(pg, 1.0) > 0.95
+
+
+def test_look_around_turns_the_head_both_ways(pg):
+    pg.add_robot("bot", template="humanoid")
+    seen = _play(pg, "look_around")
+    assert seen["neck_yaw"][1] > 0.85 and seen["neck_yaw"][0] < -0.85
+    assert _run(pg, 1.0) > 0.95
+
+
+def test_stand_brings_arms_and_head_home_and_every_pose_ends_upright(pg):
+    pg.add_robot("bot", template="humanoid")
+    ctrl = pg.behaviors.strike_pose("bot", "arms_up")
+    pg.run_fast(lambda: False, 1.5)  # arms are high now
+    for name in humanoid.POSES:
+        ctrl = pg.behaviors.strike_pose("bot", name)
+        pg.run_fast(lambda c=ctrl: c.done, 15.0)
+        assert ctrl.done and _run(pg, 0.5) > 0.95, name
+    m, d = pg.session.model, pg.session.data
+    for joint, home in {"left_shoulder_roll": 0.12, "right_elbow": 0.35, "neck_yaw": 0.0}.items():
+        assert d.qpos[m.jnt_qposadr[m.joint(f"bot/{joint}").id]] == pytest.approx(home, abs=0.08)
+    assert ctrl.status()["behavior"] == "stand"
 
 
 def test_pose_errors_tell_what_to_do(pg):
