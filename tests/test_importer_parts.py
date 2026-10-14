@@ -342,6 +342,27 @@ def test_xacro_undeclared_namespace_and_bom_are_tolerated(tmp_path):
     assert 'name="l2"' in out
 
 
+def test_xacro_cannot_read_files_outside_its_project_or_environment_variables(tmp_path):
+    outside = write(tmp_path / "secret" / "data.yaml", "key: topsecret\n")
+    project = tmp_path / "proj"
+    write(project / "package.xml", "<package><name>proj</name></package>")
+    src = write(
+        project / "r.xacro",
+        f'<robot name="r" {XACRO_NS}><xacro:property name="d" value="${{xacro.load_yaml(\'{outside}\')}}"/>'
+        '<link name="${d.key}"/></robot>',
+    )
+    with pytest.raises(xacro.XacroError, match="outside the project folder"):
+        xacro.expand(src)
+    include = write(project / "i.xacro", f'<robot {XACRO_NS}><xacro:include filename="{outside}"/></robot>')
+    with pytest.raises(xacro.XacroError, match="outside the project folder"):
+        xacro.expand(include)
+    env = write(project / "e.xacro", f'<robot name="r" {XACRO_NS}><link name="$(env HOME)"/></robot>')
+    with pytest.raises(xacro.XacroError, match="not allowed"):
+        xacro.expand(env)
+    optenv = write(project / "o.xacro", f'<robot name="r" {XACRO_NS}><link name="$(optenv HOME fallback)"/></robot>')
+    assert 'name="fallback"' in xacro.expand(optenv)[0]
+
+
 def test_xacro_expressions_are_sandboxed(tmp_path):
     for evil in ("__import__('os').system('echo hi')", "().__class__", "[x for x in range(3)]", "exec('1')"):
         with pytest.raises(xacro.XacroError):

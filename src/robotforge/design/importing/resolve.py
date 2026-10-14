@@ -150,7 +150,7 @@ class MeshResolver:
     def _file_index(self) -> dict[str, list[Path]]:
         if self._index is None:
             self._index = {}
-            top = self._search_root()
+            top = self.search_root()
             seen = 0
             for dirpath, dirnames, filenames in os.walk(top):
                 dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS]
@@ -162,7 +162,7 @@ class MeshResolver:
                     break
         return self._index
 
-    def _search_root(self) -> Path:
+    def search_root(self) -> Path:
         """Where to look for files by name: the enclosing repository or package, else just next to the URDF's folder.
 
         Staying inside one project avoids picking up an unrelated mesh that happens to share a file name.

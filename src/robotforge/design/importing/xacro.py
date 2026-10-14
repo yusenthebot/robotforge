@@ -14,7 +14,6 @@ import ast
 import copy
 import math
 import operator
-import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -26,6 +25,7 @@ from robotforge.design.importing.resolve import MeshResolver
 
 _XACRO_NS = "http://www.ros.org/wiki/xacro"
 _MAX_DEPTH = 80
+_MAX_FILE_BYTES = 5_000_000
 _GROUP = "_group"  # holds the children passed to a `**name` macro parameter
 _SUBST = re.compile(r"\$\$|\$\{([^}]*)\}|\$\(([^)]*)\)")
 _SAFE_FUNCTIONS: dict[str, Any] = {
@@ -284,6 +284,7 @@ class _Expander:
         self.files: list[Path] = [path]
         self.resolver = MeshResolver(path)
         self.depth = 0
+        self.package_roots: list[Path] = []  # folders of packages named by $(find ...)
         # xacro's own diagnostics are accepted and ignored.
         quiet = lambda *args: ""  # noqa: E731
         self.functions: dict[str, Any] = {
@@ -299,11 +300,23 @@ class _Expander:
             target = self.path.parent / target
         if not target.is_file():
             raise XacroError(f"load_yaml: the file '{filename}' does not exist ({target})")
+        self._check_inside_project(target, "load_yaml")
         self.files.append(target)
         try:
             return _wrap(yaml.load(target.read_text(encoding="utf-8"), Loader=_XacroYamlLoader))  # noqa: S506 - safe subclass
         except yaml.YAMLError as exc:
             raise XacroError(f"load_yaml: '{target.name}' is not valid YAML ({exc})") from exc
+
+    def _check_inside_project(self, target: Path, what: str) -> None:
+        """Files named inside a xacro (which may come from anywhere) are read only from its own project."""
+        resolved = target.resolve()
+        roots = [self.resolver.search_root(), *self.package_roots]
+        if not any(resolved == r or r.resolve() in resolved.parents for r in roots):
+            raise XacroError(
+                f"{what} '{target}' is outside the project folder; xacro files may only read their own project"
+            )
+        if target.stat().st_size > _MAX_FILE_BYTES:
+            raise XacroError(f"{what} '{target.name}' is too large to read")
 
     def run(self) -> ET.Element:
         root = _parse(self.path.read_text(encoding="utf-8-sig", errors="replace"), self.path.name)
@@ -393,6 +406,7 @@ class _Expander:
             target = file.parent / target
         if not target.is_file():
             raise XacroError(f"xacro:include of '{filename}' failed: the file does not exist ({target})")
+        self._check_inside_project(target, "xacro:include")
         self.files.append(target)
         root = _parse(target.read_text(encoding="utf-8-sig", errors="replace"), target.name)
         assert root is not None
@@ -496,18 +510,19 @@ class _Expander:
             root = self.resolver.find_package(rest)
             if root is None:
                 raise XacroError(f"$(find {rest}): package '{rest}' was not found next to the xacro file")
+            self.package_roots.append(root)
             return str(root)
         if verb == "arg":
             if rest not in self.args:
                 raise XacroError(f"$(arg {rest}) has no value; pass xacro_args={{'{rest}': '...'}}")
             return self.args[rest]
         if verb == "env":
-            if rest not in os.environ:
-                raise XacroError(f"$(env {rest}): the environment variable is not set")
-            return os.environ[rest]
-        if verb == "optenv":
-            name, _, default = rest.partition(" ")
-            return os.environ.get(name, default)
+            raise XacroError(
+                f"$(env {rest}) is not allowed: robotforge does not read environment variables while expanding xacro. "
+                f"Pass the value with xacro_args instead"
+            )
+        if verb == "optenv":  # always the default, so the result never depends on the machine it runs on
+            return rest.partition(" ")[2].strip()
         if verb == "dirname":
             return str(file.parent)
         if verb == "eval":
