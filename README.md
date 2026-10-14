@@ -9,4 +9,5 @@
 
 - 方案：[docs/OVERVIEW.md](docs/OVERVIEW.md)
 - 目标与验收：[docs/GOAL.md](docs/GOAL.md)
+- 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
 - 进度：[STATUS.md](STATUS.md)，[progress.md](progress.md)

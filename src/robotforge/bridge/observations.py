@@ -170,7 +170,8 @@ class Observer:
         if name == "velocity_command":
             return np.asarray(command, float).copy()
         if name == "gait_phase":
-            return np.mod(self.phase + np.asarray(term.offsets, float), 1.0)
+            cycles = np.mod(self.phase + np.asarray(term.offsets, float), 1.0)
+            return cycles * (2 * np.pi if term.unit == "radian" else 1.0)
         rot = self._base_rotation(data)
         if name == "projected_gravity":
             return rot.T @ GRAVITY_DIR

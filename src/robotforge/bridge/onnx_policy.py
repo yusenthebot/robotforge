@@ -187,6 +187,8 @@ class PolicyWalker:
         if self.paused_reason:
             self._restart()
         command = np.array([self.command_speed, 0.0, self.command_turn])
+        if abs(command[0]) <= self.spec.commands.planar_dead_zone:  # as in training: too slow means stand
+            command[0] = 0.0
         obs = self.observer.build(model, data, self.last_action, command)
         action = np.asarray(self.policy(obs), float).reshape(-1)
         if action.shape != self.last_action.shape or not np.all(np.isfinite(action)):

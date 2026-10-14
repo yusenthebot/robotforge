@@ -192,6 +192,15 @@ def _translate_terms(env, group: str, model, joints: list[str]) -> tuple[list[di
             term = {"term": "last_action"}
         elif func == "generated_commands":
             term = {"term": "velocity_command"}
+        elif func == "G1GaitPhase":
+            if params.get("init_mode", "offset_phase") != "offset_phase":
+                raise SystemExit(f"observation {name}: only the offset_phase gait clock is supported")
+            term = {
+                "term": "gait_phase",
+                "frequency": float(params.get("frequency", 1.5)),
+                "offsets": [0.0, 0.5],  # left, right: half a cycle apart
+                "unit": "radian",
+            }
         elif func == "quadruped_gait_phase":
             offsets = list(params.get("phase_offsets", (0.0, 0.5, 0.5, 0.0)))
             term = {
@@ -322,6 +331,7 @@ def build_card(run: Path, name: str, robot: str | None, title: str | None, task:
             "lin_vel_x": [float(v) for v in ranges.lin_vel_x],
             "lin_vel_y": [float(v) for v in ranges.lin_vel_y],
             "ang_vel_z": [float(v) for v in ranges.ang_vel_z],
+            "planar_dead_zone": float(getattr(command, "planar_dead_zone", 0.0)),
         },
         "trained_with": {
             "framework": "UniLab",

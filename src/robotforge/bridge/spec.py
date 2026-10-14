@@ -30,7 +30,8 @@ TERM_HELP: dict[str, str] = {
     "joint_vel": "joint velocities in the card's joint order, rad/s",
     "last_action": "the policy's previous raw output",
     "velocity_command": "commanded [forward m/s, left m/s, turn rad/s]",
-    "gait_phase": "per-foot gait clock in [0, 1): (phase + offset) mod 1, advanced by frequency every step",
+    "gait_phase": "per-foot gait clock: (phase + offset) mod 1, advanced by frequency every step; in cycles [0, 1) "
+    "or radians [0, 2 pi)",
 }
 TermName = Literal[
     "base_ang_vel",
@@ -61,6 +62,7 @@ class ObsTerm(_Strict):
     frequency: float | None = Field(None, gt=0)  # gait_phase: cycles per second
     offsets: list[float] | None = None  # gait_phase: one per foot
     always_advance: bool = True  # gait_phase: False = the clock stops while the command is zero
+    unit: Literal["cycle", "radian"] = "cycle"  # gait_phase: [0, 1) or [0, 2 pi)
 
 
 class PDGains(_Strict):
@@ -76,6 +78,8 @@ class CommandRanges(_Strict):
     lin_vel_x: tuple[float, float]
     lin_vel_y: tuple[float, float] = (0.0, 0.0)
     ang_vel_z: tuple[float, float] = (0.0, 0.0)
+    # Training zeroed planar commands slower than this (m/s), so the policy never saw them.
+    planar_dead_zone: float = Field(0.0, ge=0)
 
     @model_validator(mode="after")
     def _ordered(self) -> CommandRanges:
