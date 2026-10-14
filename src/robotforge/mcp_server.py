@@ -27,6 +27,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
+from robotforge.control import mcp_tools as control_tools
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
@@ -53,6 +54,10 @@ robots lists robots with their positions. For anything custom, set_controls / si
 directly (names from describe_model, prefixed "<robot>/"). observe reports state with an image so you
 can check your work. open_viewer gives the user a live 3D view (they can also drive with WASD);
 offer it early, and when it is open, actions play out in real time for the user to watch.
+
+Algorithms: the same robot and task can be solved by different control methods (IK, PD, LQR, sampling
+MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
+compare_controllers runs several on the same task and returns a table to discuss with the user.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
 (joints, actuators, control): the user may be new to robotics.
@@ -263,6 +268,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                     "behavior": status,
                 }
             )
+
+    control_tools.register(server, playground, run_until)
 
     @server.tool()
     def stop(robot: str) -> str:
