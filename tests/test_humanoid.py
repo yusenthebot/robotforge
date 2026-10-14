@@ -247,14 +247,16 @@ def test_non_finite_commands_are_refused_before_they_reach_the_motors(pg, templa
     assert np.isfinite(pg.session.data.qpos).all()
 
 
-def test_a_fallen_humanoid_asks_for_a_reset(pg):
+def test_a_fallen_humanoid_says_so_and_asks_for_a_reset(pg):
     pg.add_robot("bot", template="humanoid")
-    pg.behaviors.move("bot", 0.0, 0.0)
+    pg.behaviors.move("bot", 0.1, 0.0)
     torso = pg.session.model.body("bot/torso").id
     pg.session.data.xfrc_applied[torso, :3] = [40, 0, 0]
     pg.run_fast(lambda: False, 0.3)
     pg.session.data.xfrc_applied[torso, :3] = 0
     pg.run_fast(lambda: False, 2.0)
+    status = pg.behaviors.status()[0]
+    assert status["behavior"] == "fallen" and status["speed"] == 0.0
     with pytest.raises(BehaviorError, match="fallen over"):
         pg.behaviors.move("bot", 0.1, 0.0)
 
@@ -271,6 +273,8 @@ async def test_pose_and_move_tools_work_for_humanoids(pg):
         moved = await client.call_tool("move", {"robot": "bot", "speed": 0.1, "seconds": 8})
         report = json.loads(moved.content[0].text)
         assert report["distance_m"] > 0.3 and report["to"]["upright"]
+        # It finishes its last step before measuring, so the reported spot is where it really stops.
+        assert 0 < report["settle_seconds"] < 2 and pg.session.controllers["bot"].done
 
 
 @pytest.fixture

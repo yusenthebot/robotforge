@@ -291,6 +291,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 raise PlaygroundError("seconds must be in (0, 60]")
             run = await run_until(lambda: False, seconds)
             playground.behaviors.stop(robot)
+            settled = playground.behaviors.settled(robot)
+            if settled is not None:  # a humanoid finishes its step first; measure where it really stops
+                extra = await run_until(settled, 3.0)
+                run["settle_seconds"] = extra["sim_seconds"]
+                run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
             after = playground.behaviors.pose(robot)
             moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
             turned = (after["heading_deg"] - before["heading_deg"] + 180) % 360 - 180

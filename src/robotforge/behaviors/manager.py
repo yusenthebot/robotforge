@@ -123,6 +123,13 @@ class BehaviorManager:
                 self.session.set_controller(robot, None)
             return {"robot": robot, "stopped": ctrl is not None}
 
+    def settled(self, robot: str) -> Callable[[], bool] | None:
+        """For robots that keep stepping for a moment after `stop`: a check for when they stand still."""
+        ctrl = self.session.controllers.get(robot)
+        if isinstance(ctrl, humanoid.HumanoidController):
+            return lambda: ctrl.done
+        return None
+
     def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
         """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
         kind = self.kind(robot)

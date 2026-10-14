@@ -234,6 +234,8 @@ class HumanoidController:
     def status(self) -> dict:
         walking = bool(self.command_speed or self.command_turn) or not self._idle
         behavior = "pose" if self._pose or self._pending else "walk" if walking else "stand"
+        if self.fallen:
+            behavior = "fallen"
         out = {
             "behavior": behavior,
             "robot": self.robot,
@@ -253,6 +255,9 @@ class HumanoidController:
         if self.plan is None:
             self._begin(data)
         if self.fallen or self._up(data) < FALLEN_UP:
+            if not self.fallen:  # forget what it was doing, so status says what is going on
+                self.command_speed = self.command_turn = 0.0
+                self._pose = self._pending = None
             self.fallen = True
             return  # keep the last targets; flailing on the floor helps nobody
         ticks = 1 if self._last_t is None else int(np.clip(round((data.time - self._last_t) / DT), 1, 10))
