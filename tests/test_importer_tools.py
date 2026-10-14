@@ -183,3 +183,23 @@ def test_imported_arm_is_not_mistaken_for_a_rover(tmp_path):
     pg.new_world("arm import")
     pg.add_robot("mine", file=str(write(tmp_path / "arm.urdf", arm_urdf())))
     assert {r["name"]: r["kind"] for r in pg.behaviors.robots()}["mine"] == "other"
+
+
+def test_cli_passes_import_options_through(tmp_path, monkeypatch, capsys):
+    xacro = (
+        '<robot name="r" xmlns:xacro="http://ros.org/wiki/xacro"><xacro:arg name="who" default="a"/>'
+        '<link name="$(arg who)_base"><inertial><mass value="1"/>'
+        '<inertia ixx="1" iyy="1" izz="1" ixy="0" ixz="0" iyz="0"/></inertial>'
+        '<collision><geometry><box size="0.1 0.1 0.1"/></geometry></collision></link></robot>'
+    )
+    path = write(tmp_path / "r.xacro", xacro)
+    served = {}
+
+    async def fake_serve(playground, host, port, open_browser):
+        served["model"] = playground.session.model
+
+    monkeypatch.setattr(cli, "serve", fake_serve)
+    assert cli.main(["open", str(path), "--no-browser", "--xacro-arg", "who=zed", "--ignore-effort-limits"]) == 0
+    assert mujoco.mj_name2id(served["model"], mujoco.mjtObj.mjOBJ_BODY, "r/zed_base") >= 0
+    assert cli.main(["open", str(path), "--no-browser", "--xacro-arg", "oops"]) == 2
+    assert "KEY=VALUE" in capsys.readouterr().err
