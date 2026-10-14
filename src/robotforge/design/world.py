@@ -1,8 +1,10 @@
 """world.yaml: the single source of truth for a playground world, and its compiler to MuJoCo.
 
-A world has a floor, robots (from templates, the robot library or imported files)
-and loose or fixed objects. Every robot's names are prefixed with "<robot>/" so
-several robots can share a world without clashing.
+A world has a floor, terrain (hills, stairs, ramps, ... see terrain.py), robots
+(from templates, the robot library or imported files) and loose or fixed objects
+(including furniture and architecture, see props.py). Every robot's names are
+prefixed with "<robot>/" so several robots can share a world without clashing.
+Robots and objects without an explicit height rest on the ground under them.
 """
 
 from __future__ import annotations
@@ -17,15 +19,12 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from robotforge.design import components, library, templates
+from robotforge.design import components, library, props, templates, terrain
+from robotforge.design.terrain import TerrainPatch
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-FLOOR_STYLES = {
-    "checker": [0.3, 0.33, 0.37, 1.0],
-    "grass": [0.33, 0.52, 0.27, 1.0],
-    "wood": [0.55, 0.42, 0.3, 1.0],
-    "concrete": [0.5, 0.5, 0.5, 1.0],
-}
+FLOOR_STYLES = {name: list(style.rgba) for name, style in terrain.STYLES.items()}
+ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, wall, shelf, ...
 
 
 class _Strict(BaseModel):
@@ -39,7 +38,7 @@ def _check_name(value: str) -> str:
 
 
 class Floor(_Strict):
-    style: Literal["checker", "grass", "wood", "concrete"] = "checker"
+    style: terrain.StyleName = "checker"
     friction: float = Field(1.0, gt=0, le=3)
 
 
@@ -70,12 +69,23 @@ class RobotEntry(_Strict):
 
 class ObjectEntry(_Strict):
     name: str
-    shape: Literal["box", "sphere", "cylinder", "table", "bin"] = "box"
+    shape: ShapeName = "box"
     size: list[float] = Field(default_factory=lambda: [0.05, 0.05, 0.05])
     pos: list[float] = Field(default_factory=lambda: [0.3, 0.0])  # x, y (and optional z); z defaults to resting
+    yaw: float = 0.0  # degrees, counter-clockwise seen from above
     color: str | list[float] = "red"
     mass: float | None = Field(None, gt=0, description="kg; default from size and a plastic density")
     fixed: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _shape_defaults(cls, data: Any) -> Any:
+        """Fields left out take the shape's defaults: a wall is fixed and off-white, a box small and red."""
+        if isinstance(data, dict):
+            info = props.SHAPES.get(data.get("shape", "box"))
+            if info is not None:
+                data = {"size": list(info.size), "color": _plain(info.color), "fixed": info.fixed, **data}
+        return data
 
     @field_validator("name")
     @classmethod
@@ -84,16 +94,9 @@ class ObjectEntry(_Strict):
 
     @model_validator(mode="after")
     def _sizes(self) -> ObjectEntry:
-        need = {"box": 3, "sphere": 1, "cylinder": 2, "table": 3, "bin": 3}[self.shape]
-        if len(self.size) != need or any(s <= 0 for s in self.size):
-            hint = {
-                "box": "[length, width, height]",
-                "sphere": "[diameter]",
-                "cylinder": "[diameter, height]",
-                "table": "[length, width, height]",
-                "bin": "[length, width, height]",
-            }[self.shape]
-            raise ValueError(f"object {self.name!r}: {self.shape} size is {hint} in meters")
+        info = props.SHAPES[self.shape]
+        if len(self.size) not in info.size_lengths or any(s <= 0 for s in self.size):
+            raise ValueError(f"object {self.name!r}: {self.shape} size is {info.size_hint} in meters")
         if len(self.pos) not in (2, 3):
             raise ValueError(f"object {self.name!r}: pos is [x, y] or [x, y, z]")
         components.color(self.color)
@@ -103,15 +106,17 @@ class ObjectEntry(_Strict):
 class World(_Strict):
     name: str = "my_world"
     floor: Floor = Field(default_factory=Floor)
+    terrain: list[TerrainPatch] = Field(default_factory=list)
     robots: list[RobotEntry] = Field(default_factory=list)
     objects: list[ObjectEntry] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique(self) -> World:
-        names = [r.name for r in self.robots] + [o.name for o in self.objects]
+        terrain.assign_names(self.terrain, {r.name for r in self.robots} | {o.name for o in self.objects})
+        names = [r.name for r in self.robots] + [o.name for o in self.objects] + [t.name for t in self.terrain]
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
-            raise ValueError(f"names must be unique across robots and objects: {', '.join(dupes)}")
+            raise ValueError(f"names must be unique across robots, objects and terrain: {', '.join(dupes)}")
         return self
 
     # ---- persistence ----------------------------------------------------------------
@@ -150,24 +155,49 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     spec.visual.global_.offwidth = 1280
     spec.visual.global_.offheight = 960
     _floor(spec, world.floor)
+    # ---- terrain: patches on the floor, and the ground height everything else rests on
+    notes: list[str] = terrain.add_terrain(spec, world.terrain, world.floor.style)
+    ground = terrain.Ground.build(world.terrain, world.floor.style)
 
-    notes: list[str] = []
     homes: list[tuple[str, dict[str, float], dict[str, float]]] = []
+    frames: list[tuple[str, mujoco.MjsFrame]] = []  # robots that rest on the ground (no explicit z)
     for entry in world.robots:
         built = _robot_spec(entry, base_dir)
-        z = entry.pos[2] if len(entry.pos) == 3 else built.spawn_height
+        z = entry.pos[2] if len(entry.pos) == 3 else ground.height(entry.pos[0], entry.pos[1]) + built.spawn_height
         frame = spec.worldbody.add_frame(pos=[entry.pos[0], entry.pos[1], z], quat=_yaw_quat(entry.yaw))
         _share_options(spec, built.spec)
         spec.attach(built.spec, prefix=f"{entry.name}/", frame=frame)
         homes.append((entry.name, built.home_qpos, built.home_ctrl))
+        if len(entry.pos) == 2:
+            frames.append((entry.name, frame))
         notes += [f"{entry.name}: {n}" for n in built.notes]
 
     for obj in world.objects:
-        _object(spec, obj)
+        _object(spec, obj, ground)
 
     model = _compile(spec)
+    if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
+        model = _compile(spec)
     _add_home_key(spec, model, homes)
     return CompiledWorld(spec, _compile(spec), notes)
+
+
+def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Ground) -> bool:
+    """Raise or lower each robot so that, in its home pose, its lowest point rests on the terrain under it.
+
+    The first placement only knew the ground height under the robot's center; on stairs,
+    slopes or bumps a foot can be higher or lower than that. Returns True if anything moved.
+    """
+    data = mujoco.MjData(model)
+    data.qpos[:] = _home_qpos(model, homes)
+    mujoco.mj_kinematics(model, data)
+    moved = False
+    for robot, frame in frames:
+        lift = ground.lift_for(model, data, f"{robot}/")
+        if abs(lift) > 5e-4:
+            frame.pos = [frame.pos[0], frame.pos[1], frame.pos[2] + lift]
+            moved = True
+    return moved
 
 
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
@@ -228,20 +258,28 @@ def _strip_world_extras(child: mujoco.MjSpec) -> None:
 
 
 def _floor(spec: mujoco.MjSpec, floor: Floor) -> None:
-    rgba = FLOOR_STYLES[floor.style]
-    spec.worldbody.add_geom(
-        name="floor",
-        type=mujoco.mjtGeom.mjGEOM_PLANE,
-        size=[0, 0, 0.05],
-        rgba=rgba,
-        friction=[floor.friction, 0.01, 0.001],
-    )
+    terrain.add_floor(spec, floor.style, floor.friction)
+    # A directional sun lights a 20 m park as evenly as a desk; a spot light would leave a lit circle.
     spec.worldbody.add_light(
         name="sun",
         pos=[0.5, -0.5, 3.0],
-        dir=[-0.15, 0.15, -1.0],
-        diffuse=[0.75, 0.75, 0.75],
+        dir=[-0.3, 0.4, -1.0],
+        diffuse=[0.8, 0.8, 0.8],
+        type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
         castshadow=True,
+    )
+    spec.visual.headlight.ambient = [0.25, 0.25, 0.25]
+    spec.visual.headlight.diffuse = [0.35, 0.35, 0.35]
+    spec.visual.quality.shadowsize = 4096
+    # Same dark gradient as the browser viewer, so snapshots and the live view look alike.
+    spec.add_texture(
+        name="sky",
+        type=mujoco.mjtTexture.mjTEXTURE_SKYBOX,
+        builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
+        rgb1=[0.17, 0.2, 0.24],
+        rgb2=[0.1, 0.12, 0.15],
+        width=512,
+        height=3072,
     )
 
 
@@ -250,18 +288,29 @@ def _yaw_quat(deg: float) -> list[float]:
     return [math.cos(half), 0.0, 0.0, math.sin(half)]
 
 
+def _plain(color: str | tuple[float, ...]) -> str | list[float]:
+    return color if isinstance(color, str) else list(color)
+
+
 PLASTIC_DENSITY = 600.0  # kg/m^3, light printed or molded parts
 
 
-def _object(spec: mujoco.MjSpec, obj: ObjectEntry) -> None:
+def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> None:
     rgba = components.color(obj.color)
     G = mujoco.mjtGeom
     x, y = obj.pos[0], obj.pos[1]
+    # Without an explicit z, objects rest on the ground (floor or terrain) under their footprint.
+    ground_z = ground.under(x, y, *props.footprint(obj.shape, obj.size), obj.yaw)
+    quat = _yaw_quat(obj.yaw)
+    if obj.shape in props.PROPS:
+        base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
+        props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
+        return
     if obj.shape == "table":
-        _table(spec, obj, rgba)
+        _table(spec, obj, rgba, ground_z, quat)
         return
     if obj.shape == "bin":
-        _bin(spec, obj, rgba)
+        _bin(spec, obj, rgba, ground_z, quat)
         return
     if obj.shape == "box":
         half = [s / 2 for s in obj.size]
@@ -275,21 +324,21 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry) -> None:
         r, h = obj.size[0] / 2, obj.size[1] / 2
         geom = {"type": G.mjGEOM_CYLINDER, "size": [r, h, 0]}
         rest_z, volume = h, math.pi * r * r * obj.size[1]
-    z = obj.pos[2] if len(obj.pos) == 3 else rest_z
+    z = obj.pos[2] if len(obj.pos) == 3 else ground_z + rest_z
     mass = obj.mass if obj.mass is not None else volume * PLASTIC_DENSITY
     if obj.fixed:
-        spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], rgba=rgba, **geom)
+        spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], quat=quat, rgba=rgba, **geom)
         return
-    body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z])
+    body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
     body.add_freejoint(name=obj.name)
     body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=4, **geom)
 
 
-def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float]) -> None:
+def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
     length, width, height = obj.size
     top = 0.025
     x, y = obj.pos[0], obj.pos[1]
-    body = spec.worldbody.add_body(name=obj.name, pos=[x, y, 0])
+    body = spec.worldbody.add_body(name=obj.name, pos=[x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z], quat=quat)
     body.add_geom(
         name=obj.name,
         type=mujoco.mjtGeom.mjGEOM_BOX,
@@ -308,16 +357,19 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float]) -> None:
             )
 
 
-def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float]) -> None:
+def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
     """Open-top container; walls are 5 mm thick."""
     length, width, height = obj.size
     t = 0.005
     x, y = obj.pos[0], obj.pos[1]
-    z = obj.pos[2] if len(obj.pos) == 3 else 0.0
+    z = obj.pos[2] if len(obj.pos) == 3 else ground_z
     parent = spec.worldbody
     if not obj.fixed:
-        parent = spec.worldbody.add_body(name=obj.name, pos=[x, y, z])
+        parent = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
         parent.add_freejoint(name=obj.name)
+        x = y = z = 0.0
+    elif obj.yaw:
+        parent = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)  # static, turned
         x = y = z = 0.0
     G = mujoco.mjtGeom.mjGEOM_BOX
     parts = [
@@ -340,18 +392,22 @@ def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float]) -> None:
         )
 
 
-def _add_home_key(spec: mujoco.MjSpec, model: mujoco.MjModel, homes) -> None:
-    """Bake every robot's home pose into a 'home' keyframe so reset returns there."""
-    data = mujoco.MjData(model)
+def _home_qpos(model: mujoco.MjModel, homes) -> np.ndarray:
+    """qpos with every robot's joints at their home values (free joints at their attachment frames)."""
     qpos = model.qpos0.copy()
-    # Free joints start at their attachment frame; take that from a forward pass.
-    mujoco.mj_forward(model, data)
-    ctrl = np.zeros(model.nu)
-    for robot, joint_values, ctrl_values in homes:
+    for robot, joint_values, _ in homes:
         for joint, value in joint_values.items():
             j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{robot}/{joint}")
             if j >= 0:
                 qpos[model.jnt_qposadr[j]] = value
+    return qpos
+
+
+def _add_home_key(spec: mujoco.MjSpec, model: mujoco.MjModel, homes) -> None:
+    """Bake every robot's home pose into a 'home' keyframe so reset returns there."""
+    qpos = _home_qpos(model, homes)
+    ctrl = np.zeros(model.nu)
+    for robot, _, ctrl_values in homes:
         for act, value in ctrl_values.items():
             a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/{act}")
             if a >= 0:

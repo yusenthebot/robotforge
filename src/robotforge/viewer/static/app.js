@@ -126,16 +126,148 @@ function geometryFor(geom, meshGeometries) {
   }
 }
 
-function planeObject(geom, extent) {
+function planeObject(geom, extent, look) {
   const half = geom.size[0] > 0 ? geom.size[0] : Math.max(20, extent * 20);
   const halfY = geom.size[1] > 0 ? geom.size[1] : half;
-  const tex = checkerTexture(geom.rgba);
-  const cell = Math.max(0.25, extent / 4);
-  tex.repeat.set((2 * half) / (2 * cell), (2 * halfY) / (2 * cell));
-  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 });
+  let mat;
+  if (look && look.pattern !== "checker") {
+    const tex = groundTexture(look.pattern);
+    tex.repeat.set((2 * half) / look.tile, (2 * halfY) / look.tile);
+    mat = new THREE.MeshStandardMaterial({ map: tex, color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 });
+  } else {
+    const tex = checkerTexture(geom.rgba);
+    const cell = Math.max(0.25, extent / 4);
+    tex.repeat.set((2 * half) / (2 * cell), (2 * halfY) / (2 * cell));
+    mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 });
+  }
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * half, 2 * halfY), mat);
   mesh.receiveShadow = true;
   return mesh;
+}
+
+// ---------------------------------------------------------------- ground surfaces and terrain
+
+// Grayscale surface patterns; the material color tints them, so one canvas serves every style.
+const groundCanvases = new Map();
+
+function groundCanvas(pattern) {
+  if (groundCanvases.has(pattern)) return groundCanvases.get(pattern);
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  if (pattern === "tiles") {
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, size, size);
+    g.fillStyle = "#b8b8b8"; // grout
+    for (const at of [0, size / 2]) {
+      g.fillRect(at, 0, 3, size);
+      g.fillRect(0, at, size, 3);
+    }
+  } else if (pattern === "planks") {
+    const rows = 8;
+    for (let r = 0; r < rows; r++) {
+      const v = Math.round(225 + 30 * rand());
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect(0, (r * size) / rows, size, size / rows);
+      g.fillStyle = "#9a9a9a";
+      g.fillRect(0, (r * size) / rows, size, 2);
+      g.fillRect(((r % 2) + 0.5) * (size / 2) * rand(), (r * size) / rows, 2, size / rows); // butt joint
+    }
+  } else {
+    // speckle: soft blotches plus fine grain, like grass, soil or concrete seen from standing height
+    const blotch = document.createElement("canvas");
+    blotch.width = blotch.height = 16;
+    const b = blotch.getContext("2d");
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const v = Math.round(222 + 33 * rand());
+        b.fillStyle = `rgb(${v},${v},${v})`;
+        b.fillRect(x, y, 1, 1);
+      }
+    }
+    g.imageSmoothingEnabled = true;
+    g.drawImage(blotch, 0, 0, size, size);
+    const img = g.getImageData(0, 0, size, size);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const grain = (rand() - 0.5) * 26;
+      for (let k = 0; k < 3; k++) img.data[i + k] = Math.max(0, Math.min(255, img.data[i + k] + grain));
+    }
+    g.putImageData(img, 0, 0);
+  }
+  groundCanvases.set(pattern, c);
+  return c;
+}
+
+function groundTexture(pattern) {
+  const tex = new THREE.CanvasTexture(groundCanvas(pattern)); // its own texture, so disposing it is safe
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
+// A MuJoCo heightfield as a displaced grid. Rows run from -y to +y (MuJoCo's order); PlaneGeometry
+// lists vertices from +y down, hence the flipped row. Tops are tinted a little lighter than valleys.
+function hfieldObject(geom, desc, floats, look) {
+  const h = desc.hfields.find((x) => x.id === geom.hfield);
+  if (!h) return null;
+  const [rx, ry, top, base] = h.size;
+  const g = new THREE.PlaneGeometry(2 * rx, 2 * ry, h.ncol - 1, h.nrow - 1);
+  const pos = g.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  for (let iy = 0; iy < h.nrow; iy++) {
+    const row = h.nrow - 1 - iy;
+    for (let ix = 0; ix < h.ncol; ix++) {
+      const v = iy * h.ncol + ix;
+      const t = floats[h.offset + row * h.ncol + ix];
+      pos.setZ(v, t * top);
+      colors.fill(1 + 0.3 * t, 3 * v, 3 * v + 3); // the rim (t = 0) matches the floor exactly
+    }
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  const tex = groundTexture(look ? look.pattern : "speckle");
+  const tile = look ? look.tile : 0.6;
+  tex.repeat.set((2 * rx) / tile, (2 * ry) / tile);
+  const mat = new THREE.MeshStandardMaterial({
+    color: rgbaColor(geom.rgba),
+    map: tex,
+    vertexColors: true,
+    roughness: 0.95,
+    metalness: 0,
+  });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.add(hfieldSkirt(h, floats, top, base, mat));
+  return mesh;
+}
+
+// The sides of a heightfield, down to its base, for fields whose rim is not at floor level.
+function hfieldSkirt(h, floats, top, base, mat) {
+  const [rx, ry] = h.size;
+  const verts = [];
+  const at = (r, c) => [-rx + (2 * rx * c) / (h.ncol - 1), -ry + (2 * ry * r) / (h.nrow - 1), floats[h.offset + r * h.ncol + c] * top];
+  const edge = (points) => {
+    for (let i = 0; i + 1 < points.length; i++) {
+      const [a, b] = [points[i], points[i + 1]];
+      verts.push(...a, a[0], a[1], -base, ...b, ...b, a[0], a[1], -base, b[0], b[1], -base);
+    }
+  };
+  const range = (n) => Array.from({ length: n }, (_, i) => i);
+  edge(range(h.ncol).map((c) => at(0, c)));
+  edge(range(h.ncol).map((c) => at(h.nrow - 1, h.ncol - 1 - c)));
+  edge(range(h.nrow).map((r) => at(h.nrow - 1 - r, 0)));
+  edge(range(h.nrow).map((r) => at(r, h.ncol - 1)));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  g.computeVertexNormals();
+  const skirt = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: mat.color.clone().multiplyScalar(0.7), roughness: 1, side: THREE.DoubleSide }));
+  skirt.receiveShadow = true;
+  return skirt;
 }
 
 function buildMeshGeometries(desc, buffer) {
@@ -171,12 +303,14 @@ function disposeWorld() {
 
 async function applyScene(desc) {
   let buffer = new ArrayBuffer(0);
-  if (desc.meshes.length > 0) {
+  if (desc.meshes.length > 0 || (desc.hfields || []).length > 0) {
     const res = await fetch(`mesh/${desc.version}.bin`);
     if (!res.ok) return; // a newer scene is already on its way
     buffer = await res.arrayBuffer();
   }
   const meshGeometries = buildMeshGeometries(desc, buffer);
+  const floats = new Float32Array(buffer);
+  const grounds = desc.grounds || {};
   disposeWorld();
   sceneDesc = desc;
   worldRoot = new THREE.Group();
@@ -190,20 +324,30 @@ async function applyScene(desc) {
   const extent = Math.max(desc.stat.extent, 0.1);
   for (const geom of desc.geoms) {
     let obj;
+    const look = grounds[geom.material];
     if (geom.type === "plane") {
-      obj = planeObject(geom, extent);
+      obj = planeObject(geom, extent, look);
+    } else if (geom.type === "hfield") {
+      obj = hfieldObject(geom, desc, floats, look);
+      if (!obj) continue;
     } else {
       const g = geometryFor(geom, meshGeometries);
       if (!g) continue;
       const transparent = geom.rgba[3] < 1;
       const mat = new THREE.MeshStandardMaterial({
         color: rgbaColor(geom.rgba),
-        roughness: 0.55,
-        metalness: 0.05,
+        roughness: look ? 0.95 : 0.55,
+        metalness: look ? 0 : 0.05,
         transparent,
         opacity: geom.rgba[3],
         depthWrite: !transparent,
       });
+      if (look && geom.type === "box") {
+        // Terrain blocks (stairs, ramps, stones) share the ground's surface; tile it by the block's size.
+        mat.map = groundTexture(look.pattern === "checker" ? "speckle" : look.pattern);
+        const span = Math.max(geom.size[0], geom.size[1]) * 2;
+        mat.map.repeat.set(span / look.tile, span / look.tile);
+      }
       obj = new THREE.Mesh(g, mat);
       obj.castShadow = true;
       obj.receiveShadow = true;
@@ -504,7 +648,8 @@ function sendDrive() {
 }
 
 // Follow the driven robot with the camera until the user orbits by hand.
-let follow = null; // { body, last: Vector3 }
+let follow = null; // { body, last: Vector3, z: smoothed height, t: last update ms }
+const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
 
 function rootBodyOf(robot) {
   return sceneDesc?.bodies.find((b) => b.name.startsWith(`${robot}/`) && b.dynamic)?.id ?? null;
@@ -514,14 +659,20 @@ function startFollow() {
   const body = rootBodyOf($("drive-robot").value);
   if (body === null || !bodyNodes[body]) return;
   if (follow && follow.body === body) return;
-  follow = { body, last: bodyNodes[body].position.clone() };
+  const start = bodyNodes[body].position;
+  follow = { body, last: start.clone(), z: start.z, t: performance.now() };
 }
 
 function updateFollow() {
   if (!follow || !bodyNodes[follow.body]) return;
   const now = bodyNodes[follow.body].position;
   const delta = now.clone().sub(follow.last);
-  delta.z = 0; // follow across the floor, keep the user's camera height
+  const t = performance.now();
+  const alpha = 1 - Math.exp(-Math.min(t - follow.t, 200) / 1000 / FOLLOW_Z_SECONDS);
+  const z = follow.z + (now.z - follow.z) * alpha;
+  delta.z = z - follow.z; // across the ground at once; up and down slowly, so the gait does not bob the view
+  follow.z = z;
+  follow.t = t;
   camera.position.add(delta);
   controls.target.add(delta);
   follow.last.copy(now);
@@ -736,6 +887,14 @@ window.__robotforge = {
   bodyPosition: (id) => bodyNodes[id]?.position.toArray(),
   pick: (clientX, clientY) => pickBody({ clientX, clientY })?.body ?? null,
   cameraTarget: () => controls.target.toArray(),
+  // Place the camera for scripted screenshots: eye and target in world meters.
+  lookAt: (eye, target) => {
+    follow = null;
+    camera.position.fromArray(eye);
+    controls.target.fromArray(target);
+    controls.update();
+  },
+  following: () => (follow ? follow.body : null),
   // CSS-pixel position of a body's origin, for scripted pointer tests.
   screenOf: (id) => {
     const node = bodyNodes[id];
