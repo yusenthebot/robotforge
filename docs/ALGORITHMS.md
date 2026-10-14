@@ -323,11 +323,13 @@ reach，随机目标，4 秒，10 个随机起点：
 from robotforge.control import compare_methods
 from robotforge.control.rl import train
 
-policy = train("balance", minutes=2)        # 在单独的进程里训练，打印进度，训练完返回
-print(policy.meta["final"])                  # 最终测试：平均回报、成功率
+policy = train("balance", minutes=2)  # 在单独的进程里训练，打印进度，训练完返回
+print(policy.meta["final"])  # 最终测试：平均回报、成功率
+
 method = f"policy:{policy.name}"
-print(compare_methods("balance", ["lqr", "mpc", method], seconds=6, push_at=3,
-                      method_params={method: {"path": str(policy.folder)}}).table)
+where = {method: {"path": str(policy.folder)}}
+table = compare_methods("balance", ["lqr", "mpc", method], seconds=6, push_at=3, method_params=where).table
+print(table)
 ```
 
 命令行也可以：`python -m robotforge.control.rl train walk --task-params '{"speed": 0.6}' --timesteps 1000000`。
