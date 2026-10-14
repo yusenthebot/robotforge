@@ -54,6 +54,10 @@ Evolving。
 前端：three.js（vendored ES module，不引入前端构建链）。
 开发：pytest、ruff。
 扩展（可选 extra，后期）：build123d。
+强化学习（用户 2026-10-14 批准“sb3 + unilab”）：
+- 可选 extra `rl`：gymnasium、stable-baselines3、PyTorch（CPU 版）。核心安装不包含。
+- 可选 extra `policy`：onnxruntime，用来在 robotforge 里回放 UniLab 等外部训练出的 ONNX 策略。
+- UniLab 作为外部训练后端，放在独立的 checkout 和虚拟环境里，通过命令行调用；不进入 robotforge 的依赖（它锁定 torch 2.7 和 mujoco-uni 3.8，与本项目的 mujoco 冲突）。
 
 超出这个列表的新依赖属于 Gate。
 
