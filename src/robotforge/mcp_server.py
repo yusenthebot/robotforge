@@ -37,6 +37,7 @@ from robotforge.viewer.server import ViewerHub, create_app
 log = logging.getLogger(__name__)
 
 VIEWER_UI_URI = "ui://robotforge/viewer.html"
+FAST_WALL_LIMIT = 60.0  # computer seconds one unwatched run may take
 HOST = "127.0.0.1"
 
 INSTRUCTIONS = """\
@@ -237,9 +238,21 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             deadline = time.monotonic() + max_seconds * 3 + 5  # guard against a slow machine
             while not done() and session.data.time - start < max_seconds and time.monotonic() < deadline:
                 await asyncio.sleep(0.05)
-        else:
-            playground.run_fast(done, max_seconds)
-        return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched}
+        result: dict[str, Any] = {}
+        if not watched:
+            # Fast, but in short slices that yield to the event loop (viewer, other requests), and never
+            # longer than FAST_WALL_LIMIT of computer time, however slow a controller is.
+            deadline = time.monotonic() + FAST_WALL_LIMIT
+            while not done() and session.data.time - start < max_seconds - 1e-9:
+                if time.monotonic() > deadline:
+                    result["stopped_early"] = (
+                        f"stopped after {FAST_WALL_LIMIT:.0f} s of computer time; the controller is too slow "
+                        "for this machine (for MPC use fewer samples or a shorter horizon)"
+                    )
+                    break
+                playground.run_fast(done, min(0.1, max_seconds - (session.data.time - start)))
+                await asyncio.sleep(0)
+        return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
     @server.tool()
     async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:

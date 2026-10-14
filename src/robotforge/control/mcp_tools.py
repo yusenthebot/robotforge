@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import copy
 import json
+import uuid
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
@@ -17,7 +18,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge.control import tasks as task_catalog
-from robotforge.control.compare import MONITOR, EpisodeMonitor, compare_methods
+from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
 from robotforge.control.methods import METHODS, make_controller
 from robotforge.control.tasks import TaskError, make_task
 from robotforge.playground import Playground
@@ -25,6 +26,7 @@ from robotforge.playground import Playground
 MAX_SECONDS = 60.0
 MAX_COMPARE_SECONDS = 30.0
 MAX_METHODS = 6
+COMPARE_WALL_SECONDS = 60.0  # computer time for a whole comparison; slower methods are cut short
 
 RunUntil = Callable[[Callable[[], bool], float], Awaitable[dict[str, Any]]]
 
@@ -55,7 +57,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         robot="pole", task="balance", method="lqr", push_at=2 (shoves it at 2 s to show recovery);
         robot="dog", task="stand", method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}.
         list_algorithms says which methods fit which task. Plays out in real time when the viewer is open.
-        The controller keeps running afterwards (e.g. keeps the pole balanced); call stop(robot) to release.
+        The controller stays attached afterwards (e.g. keeps the pole balanced; the result says
+        keeps_running) until you call stop(robot).
         Returns reward, success, effort (joules), the task's own numbers and, for MPC, planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
@@ -63,50 +66,57 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 model, snapshot, version = session.model, copy.copy(session.data), session.version
             bound = make_task(task, model, robot, task_params)
             seconds = seconds or bound.default_seconds
+            check_push(push_at, seconds)
             bound.begin(snapshot)
             # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
             controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)
+            monitor_key = f"{MONITOR}{robot}/{uuid.uuid4().hex[:8]}"  # one per call: runs may overlap
             with session.lock:
                 _same_world(session, version)
                 bound.begin(session.data)
                 monitor = EpisodeMonitor(bound, model, session.data)
                 session.set_controller(robot, controller)
-                session.set_controller(MONITOR, monitor)
+                session.set_controller(monitor_key, monitor)
             events: list[str] = []
+            runs: list[dict[str, Any]] = []
             try:
-                if push_at is not None and 0 < push_at < seconds:
-                    first = await run_until(lambda: False, push_at)
-                    _same_world(session, version)
-                    with session.lock:
-                        events.append(f"t={push_at:.1f}s: {bound.push(session.data)}")
-                    rest = await run_until(lambda: False, seconds - push_at)
-                    total = round(first["sim_seconds"] + rest["sim_seconds"], 2)
-                    run = {"sim_seconds": total, "shown_live": rest["shown_live"]}
+                if push_at is not None:
+                    runs.append(await run_until(lambda: False, push_at))
+                    _still_running(session, version, monitor_key)
+                    if "stopped_early" not in runs[-1]:
+                        with session.lock:
+                            events.append(f"t={push_at:.1f}s: {bound.push(session.data)}")
+                        runs.append(await run_until(lambda: False, seconds - push_at))
                 else:
-                    run = await run_until(lambda: False, seconds)
-                _same_world(session, version)
+                    runs.append(await run_until(lambda: False, seconds))
+                _still_running(session, version, monitor_key)
             finally:
-                if session.version == version:
-                    session.set_controller(MONITOR, None)
+                session.set_controller(monitor_key, None)
+            run = {"sim_seconds": round(sum(r["sim_seconds"] for r in runs), 2), "shown_live": runs[-1]["shown_live"]}
+            stopped = next((r["stopped_early"] for r in runs if "stopped_early" in r), None)
             with session.lock:
-                return _json(
-                    {
-                        "robot": robot,
-                        "task": bound.describe(),
-                        "method": method,
-                        "explain": METHODS[method],
-                        "reward": round(monitor.reward, 3),
-                        "success": bool(bound.success(session.data)) and monitor.failed_at is None,
-                        "failed_at": monitor.failed_at,
-                        "first_success_at": monitor.first_success,
-                        "effort_j": round(monitor.effort, 3),
-                        "result": bound.report(session.data),
-                        "controller": controller.status(),
-                        "events": events,
-                        **run,
-                        "still_running": f"{method} keeps controlling {robot}; call stop to release it",
-                    }
-                )
+                if session.controllers.get(robot) is not controller:
+                    events.append(f"something else took over {robot} during the run (e.g. keyboard driving)")
+                result = {
+                    "robot": robot,
+                    "task": bound.describe(),
+                    "method": method,
+                    "explain": METHODS[method],
+                    "reward": round(monitor.reward, 3),
+                    "success": bool(bound.success(session.data)) and monitor.failed_at is None,
+                    "failed_at": monitor.failed_at,
+                    "first_success_at": monitor.first_success,
+                    "effort_j": round(monitor.effort, 3),
+                    "result": bound.report(session.data),
+                    "controller": controller.status(),
+                    "events": events,
+                    **run,
+                    "keeps_running": session.controllers.get(robot) is controller,
+                    "release_with": f"stop(robot={robot!r})",
+                }
+                if stopped:
+                    result["stopped_early"] = stopped
+                return _json(result)
 
     @server.tool()
     async def compare_controllers(
@@ -144,6 +154,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 robot=robot,
                 data=start,
                 seed=None,
+                wall_budget=COMPARE_WALL_SECONDS,
             )
             # Best = did not fail, then met the goal, then highest reward.
             best = max(comparison.results, key=lambda r: (not r.failed, r.success, r.reward))
@@ -166,6 +177,12 @@ def _seconds(seconds: float | None, limit: float) -> float | None:
 def _same_world(session, version: int) -> None:
     if session.version != version:
         raise TaskError("the world was changed during the run, so the controller was removed; run it again")
+
+
+def _still_running(session, version: int, monitor_key: str) -> None:
+    _same_world(session, version)
+    if monitor_key not in session.controllers:
+        raise TaskError("the world was reset during the run, which removed the controller; run it again")
 
 
 @contextlib.contextmanager
