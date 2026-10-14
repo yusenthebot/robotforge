@@ -27,13 +27,14 @@ COLLISION_GROUP = 3  # hidden by the viewer, like MuJoCo Menagerie
 GRAVITY = 9.81
 BASE_OMEGA = 30.0  # rad/s: natural frequency of the joint position loops before tuning
 DAMPING_RATIO = 1.0
-MIN_JOINT_INERTIA = 1e-5
+MIN_JOINT_INERTIA = 1e-4
 MAX_TIME_CONSTANT = 0.12  # s: slowest acceptable motor response, including the joint's own damping
 WHEEL_TIME_CONSTANT = 0.15  # s
 WHEEL_DEFAULT_SPEED = 10.0  # rad/s
 WHEEL_ACCELERATION = 4.0  # m/s^2 the wheels can give the robot when no effort limit is given
 WHEEL_FULL_TORQUE_ERROR = 0.5  # rad/s of speed error at which a wheel motor reaches its torque limit
 DEFAULT_PRISMATIC_SPAN = 0.5  # m, slider range when the URDF gives no limits
+FIXED_CLEARANCE = 0.01  # m between a fixed robot's lowest point and the floor when it has to be lifted
 TOUCH_TOLERANCE = 0.02  # m: a link this close to the lowest point counts as touching the ground
 MAX_HULL_VERTICES = 64
 HULL_CAP_THRESHOLD = 200
@@ -52,6 +53,7 @@ STANCE_CLIMB_STEPS = 600
 STANCE_REACH = 1.6  # rad: how far a joint may stray from its zero pose while looking for a stance
 _WHEEL = re.compile(r"wheel|tire|tyre", re.IGNORECASE)
 _PASSIVE = re.compile(r"caster|castor", re.IGNORECASE)
+_FINGER = re.compile(r"finger|gripper|claw|thumb|jaw", re.IGNORECASE)
 _MOVABLE = ("revolute", "continuous", "prismatic")
 
 
@@ -422,10 +424,28 @@ def _choose_base(
     cluster = clusters(staged)
     touching = {cluster[geo.body_name(b)] for b in geo.touching() if geo.body_name(b) in cluster}
     root_cluster = cluster[root]
-    others = touching - {root_cluster}
-    if others and (root_cluster not in touching or len(others) >= 2):
+    limbs = _limb_roots(staged, cluster, touching - {root_cluster}, root_cluster)
+    if len(limbs) >= 2 and not _all_fingers(staged, limbs):
         return "floating", "it stands on its limbs (legs or wheels touch the ground, the body does not)"
     return "fixed", "its first link sits on the ground and nothing else does, like a robot arm on a table"
+
+
+def _limb_roots(staged: StagedUrdf, cluster: dict[str, str], touching: set[str], root_cluster: str) -> set[str]:
+    """The distinct limbs (branches off the base) that the ground-touching link groups belong to."""
+    joints = {j.child: j for j in staged.joints}
+    roots = set()
+    for top in touching:
+        current = top
+        while current in joints and cluster[joints[current].parent] != root_cluster:
+            current = cluster[joints[current].parent]
+        roots.add(current)
+    return roots
+
+
+def _all_fingers(staged: StagedUrdf, limb_tops: set[str]) -> bool:
+    """True when every ground-touching limb hangs off a finger-like joint (a gripper held pointing down)."""
+    joints = {j.child: j for j in staged.joints}
+    return all(top in joints and _FINGER.search(joints[top].name) for top in limb_tops)
 
 
 def clusters(staged: StagedUrdf) -> dict[str, str]:
@@ -449,7 +469,7 @@ def _spawn_height(base: str, geo: _Geometry) -> tuple[float, float]:
     if base == "floating":
         return -low + 0.003, 0.0
     if low < -0.001:
-        return -low, -low
+        return -low + FIXED_CLEARANCE, -low  # clearance: resting on the floor would make joints push against it
     return 0.0, 0.0
 
 
@@ -854,11 +874,15 @@ def _pose_distance(a: dict[str, float], b: dict[str, float]) -> float:
 
 
 def _test_world(urdf: Path, plan: RigPlan) -> tuple[mujoco.MjModel, mujoco.MjData, int]:
-    """The robot on a floor, at its home pose with every motor commanded to hold it."""
+    """The robot at its home pose with every motor commanded to hold it; floating robots get a floor.
+
+    A fixed robot is tested without one: a floor can only add contacts that have nothing to do with its motors.
+    """
     world = mujoco.MjSpec()
     world.option.timestep = 0.002
     world.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-    world.worldbody.add_geom(type=GEOM.mjGEOM_PLANE, size=[0, 0, 0.05])
+    if plan.base == "floating":
+        world.worldbody.add_geom(type=GEOM.mjGEOM_PLANE, size=[0, 0, 0.05])
     frame = world.worldbody.add_frame(pos=[0, 0, plan.spawn_height])
     world.attach(build_spec(urdf, plan), prefix="t/", frame=frame)
     model = world.compile()
@@ -989,7 +1013,7 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
         report.fixed(
             "placement",
             f"part of the robot is {draft.lifted * 100:.1f} cm below its base origin, which would sink into the floor",
-            "lifted it so the lowest part rests on the floor",
+            "lifted it so nothing is stuck in the floor (pass pos=[x, y, z] to place it, or put it on a table)",
         )
     if plan.actuators:
         kinds = {"position": 0, "velocity": 0}

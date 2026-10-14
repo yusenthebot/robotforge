@@ -278,11 +278,37 @@ def test_xacro_find_resolves_packages_next_to_the_file(tmp_path):
 
 def test_xacro_python_helpers_are_refused_with_an_explanation(tmp_path):
     with pytest.raises(xacro.XacroError, match="Python helper"):
-        _expand(tmp_path, "<link name=\"${load_yaml('params.yaml')}\"/>")
-    with pytest.raises(xacro.XacroError, match="cannot evaluate"):
+        _expand(tmp_path, '<link name="${made_up_helper(1)}"/>')
+    with pytest.raises(xacro.XacroError, match="Python helper|cannot evaluate"):
         _expand(tmp_path, "<link name=\"${open('/etc/passwd').read()}\"/>")
     with pytest.raises(xacro.XacroError, match="never defined"):
         _expand(tmp_path, '<link name="${missing}"/>')
+
+
+def test_xacro_load_yaml_and_scope_parent(tmp_path):
+    write(tmp_path / "params.yaml", "links:\n  arm:\n    mass: 2.5\n    names: [a, b]\n")
+    body = """
+    <xacro:macro name="load" params="file">
+      <xacro:property name="data" value="${xacro.load_yaml(file)}" scope="parent"/>
+    </xacro:macro>
+    <xacro:load file="params.yaml"/>
+    <link name="${data['links']['arm']['names'][1]}">
+      <inertial><mass value="${data.links.arm.mass * 2}"/></inertial></link>
+    """
+    out = _expand(tmp_path, body)
+    assert 'name="b"' in out and 'value="5.0"' in out
+
+
+def test_xacro_params_with_quotes_and_spaces_and_booleans(tmp_path):
+    body = """
+    <xacro:macro name="m" params="path:='$(find nothing_here)/x y.yaml' empty:='' flag:=false">
+      <link name="n"><xacro:if value="${flag}"><visual/></xacro:if>
+        <xacro:unless value="${flag}"><collision/></xacro:unless></link>
+    </xacro:macro>
+    <xacro:m path="plain"/>
+    """
+    out = _expand(tmp_path, body)
+    assert "<collision" in out and "<visual" not in out
 
 
 def test_xacro_expressions_are_sandboxed(tmp_path):
