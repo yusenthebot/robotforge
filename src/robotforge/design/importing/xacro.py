@@ -80,6 +80,13 @@ class XacroError(ValueError):
     """The xacro file uses something the built-in expander cannot handle."""
 
 
+def parse_text(text: str, label: str) -> ET.Element:
+    """Parse URDF text, tolerating prefixed tags that the file never declared (raises ValueError)."""
+    root = _parse(text, label)
+    assert root is not None
+    return root
+
+
 def needs_expansion(text: str) -> bool:
     """True when a URDF still contains xacro constructs in the parts robotforge reads."""
     root = _parse(text, "this file", tolerant=True)
@@ -126,8 +133,8 @@ def _parse(text: str, label: str, tolerant: bool = False) -> ET.Element | None:
     try:
         return ET.fromstring(text)
     except ET.ParseError as exc:
-        if "unbound prefix" in str(exc):  # xacro: elements used without declaring the namespace
-            patched = re.sub(r"<robot\b", f'<robot xmlns:xacro="{_XACRO_NS}"', text, count=1)
+        if "unbound prefix" in str(exc):  # prefixed tags (xacro:, sensor:, ...) used without declaring them
+            patched = _declare_prefixes(text)
             try:
                 return ET.fromstring(patched)
             except ET.ParseError as exc2:
@@ -135,6 +142,17 @@ def _parse(text: str, label: str, tolerant: bool = False) -> ET.Element | None:
         if tolerant:
             return None
         raise XacroError(f"{label} is not valid XML ({exc})") from exc
+
+
+def _declare_prefixes(text: str) -> str:
+    """Add an xmlns declaration to <robot> for every namespace prefix the file uses but never declares."""
+    used = set(re.findall(r"</?([A-Za-z_][\w.-]*):[\w.-]", text)) - {"xml", "xmlns"}
+    declared = set(re.findall(r"xmlns:([\w.-]+)=", text))
+    extra = " ".join(
+        f'xmlns:{p}="{_XACRO_NS if p == "xacro" else "urn:robotforge:undeclared:" + p}"'
+        for p in sorted(used - declared)
+    )
+    return re.sub(r"<robot\b", f"<robot {extra}", text, count=1) if extra else text
 
 
 # ---- safe expressions ------------------------------------------------------------------------

@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -198,11 +197,9 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
     report = DoctorReport(source=str(src))
     text, deps = _read_urdf(src, opts, report)
     try:
-        robot = ET.fromstring(text)
-    except ET.ParseError as exc:
-        raise ValueError(
-            f"{src.name} is not valid XML ({exc}). Look for a missing closing tag or stray character"
-        ) from exc
+        robot = xacro.parse_text(text, src.name)
+    except ValueError as exc:
+        raise ValueError(f"{exc}. Look for a missing closing tag or stray character") from exc
 
     resolver = MeshResolver(src)
     staged = stage_urdf(robot, resolver, cache, report, opts.decompose)

@@ -78,9 +78,14 @@ def stage_urdf(
         raise ValueError("this URDF has no <link> elements, so there is nothing to simulate")
     if "" in links:
         raise ValueError("a <link> in this URDF has no name")
-    if len(links) != len(robot.findall("link")):
-        raise ValueError("two links in this URDF share a name; every link needs its own name")
+    names = [el.get("name", "") for el in robot.findall("link")]
+    duplicates = sorted({n for n in names if names.count(n) > 1})
+    if duplicates:
+        raise ValueError(
+            f"two links in this URDF share a name ({', '.join(duplicates[:3])}); every link needs its own name"
+        )
 
+    _complete_links(robot, links, report)
     joints = _read_joints(robot, links, report)
     roots = _check_tree(links, joints, report)
     _fix_materials(robot, report)
@@ -113,6 +118,40 @@ def _strip_noise(robot: ET.Element) -> None:
     for child in list(robot):
         if child.tag not in _KEEP_TAGS:
             robot.remove(child)
+
+
+def _complete_links(robot: ET.Element, links: dict[str, ET.Element], report: DoctorReport) -> None:
+    """Joints may name a parent link that the file never defines (often `world`, or a part that is bolted on
+    elsewhere): create an empty frame for it. Joints whose child link does not exist are dropped."""
+    created, dropped = [], []
+    for el in list(robot.findall("joint")):
+        parent = el.find("parent")
+        child = el.find("child")
+        parent_name = parent.get("link", "") if parent is not None else ""
+        child_name = child.get("link", "") if child is not None else ""
+        if child_name not in links:
+            robot.remove(el)
+            dropped.append(el.get("name", "?"))
+            continue
+        if parent_name and parent_name not in links:
+            frame = ET.Element("link", {"name": parent_name})
+            robot.insert(0, frame)
+            links[parent_name] = frame
+            created.append(parent_name)
+    if created:
+        report.fixed(
+            "structure",
+            "some joints are attached to links that the file never defines",
+            "created an empty frame for each, so the robot has a base to stand on",
+            created,
+        )
+    if dropped:
+        report.fixed(
+            "structure",
+            "some joints lead to links that do not exist, so they cannot be used",
+            "removed those joints",
+            dropped,
+        )
 
 
 def _fix_origins(robot: ET.Element, report: DoctorReport) -> None:

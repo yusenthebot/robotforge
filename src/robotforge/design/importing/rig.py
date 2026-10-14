@@ -26,6 +26,7 @@ from robotforge.design.importing.verify import HOLD_SECONDS, HoldResult, score, 
 GEOM = mujoco.mjtGeom
 BASE_OMEGA = 30.0  # rad/s: natural frequency of the joint position loops before tuning
 DAMPING_RATIO = 1.0
+WEAK_MOTOR_RATIO = 4.0  # effort below this multiple of the worst-case gravity torque counts as weak
 SAG_TARGET = 0.02  # rad of sag allowed under worst-case gravity torque
 OMEGA_LIMIT = 250.0  # rad/s: fastest position loop the 2 ms time step handles comfortably
 MIN_JOINT_INERTIA = 1e-4
@@ -276,6 +277,10 @@ def _position_actuator(
     # Hold the joint within a small sag even when the arm is stretched out (worst-case gravity torque), as far as
     # the time step allows: the loop must stay slower than OMEGA_LIMIT for the integrator to cope.
     kp = max(kp, min(torque / (0.002 if slide else SAG_TARGET), effective * OMEGA_LIMIT**2))
+    if j.effort and j.effort < WEAK_MOTOR_RATIO * torque:
+        # A motor this close to the weight it carries saturates on any sizeable step, and a saturated PD
+        # controller overshoots into the range where gravity wins. Soften it so ordinary steps stay linear.
+        kp = min(kp, j.effort / (0.05 if slide else 0.3))
     kv = max(2 * DAMPING_RATIO * math.sqrt(kp * effective) - j.damping, 0.1 * math.sqrt(kp * effective))
     span = 0.1 if slide else 0.5
     force = j.effort if j.effort else max(4.0 * torque, kp * span)
@@ -392,7 +397,8 @@ def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft) -> _Draft | 
 
 def _emit(draft: _Draft, report: DoctorReport) -> None:
     plan = draft.plan
-    report.info("base", f"the robot's base is {plan.base}: {draft.base_reason}")
+    shape = "bolted down (fixed base)" if plan.base == "fixed" else "free-standing (floating base)"
+    report.info("base", f"the robot is {shape}: {draft.base_reason}")
     if plan.base == "floating":
         if plan.spawn_height > 0.005:
             report.info(

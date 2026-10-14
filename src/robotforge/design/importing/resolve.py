@@ -61,9 +61,12 @@ class MeshResolver:
         if scheme in ("package", "model"):
             return self._resolve_package(uri, parsed.netloc, unquote(parsed.path).lstrip("/"))
         if scheme == "file":
-            path = Path(unquote(parsed.path))
+            raw = unquote(parsed.path)
+            if re.match(r"^/[A-Za-z]:", raw):  # file:///C:/robot/a.stl
+                raw = raw[1:]
+            path = Path(raw)
             if parsed.netloc and parsed.netloc != "localhost":
-                path = Path(f"//{parsed.netloc}{unquote(parsed.path)}")
+                path = Path(f"//{parsed.netloc}{raw}")
             return self._resolve_plain(uri, path)
         if scheme:
             return Resolution(None, f"unsupported address '{scheme}://' (download the mesh and use a local path)")

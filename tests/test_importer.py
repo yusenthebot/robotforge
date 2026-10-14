@@ -99,7 +99,7 @@ def test_report_lists_the_added_motors_and_the_base_choice(tmp_path):
     motors = next(f for f in result.report.findings if f.topic == "actuators")
     assert motors.status == "fixed" and set(motors.items) == {"shoulder", "elbow"}
     base = next(f for f in result.report.findings if f.topic == "base")
-    assert "fixed" in base.problem
+    assert "fixed base" in base.problem
     assert any(f.topic == "stability" and f.status == "info" for f in result.report.findings)
     assert result.report.stats["motors"] == 2
 
@@ -223,9 +223,18 @@ def test_closed_loops_and_dangling_joints_get_actionable_errors(tmp_path):
     loop = robot(box_link("a") + box_link("b") + box_link("c") + revolute("j1", "a", "c") + revolute("j2", "b", "c"))
     with pytest.raises(ValueError, match="closed loop"):
         import_file(write(tmp_path / "loop.urdf", loop))
-    dangling = robot(box_link("a") + revolute("j", "a", "ghost"))
-    with pytest.raises(ValueError, match="do not exist"):
-        import_file(write(tmp_path / "dangling.urdf", dangling))
+    dangling = robot(box_link("a") + box_link("b") + revolute("j", "a", "b") + revolute("lost", "b", "ghost"))
+    result = import_file(write(tmp_path / "dangling.urdf", dangling))
+    assert any(
+        f.topic == "structure" and "lead to links that do not exist" in f.problem for f in result.report.findings
+    )
+    _world(result)
+    headless = robot(box_link("arm") + revolute("mount", "bracket", "arm"))  # parent link missing: made an empty frame
+    created = import_file(write(tmp_path / "headless.urdf", headless))
+    assert any(f.topic == "structure" and "never defines" in f.problem for f in created.report.findings)
+    _world(created)
+    implicit_world = robot(box_link("arm") + revolute("mount", "world", "arm"))
+    assert not import_file(write(tmp_path / "world.urdf", implicit_world)).floating  # the usual sign of a fixed base
     with pytest.raises(ValueError, match="no <link>"):
         import_file(write(tmp_path / "empty.urdf", robot("")))
     with pytest.raises(ValueError, match="not valid XML"):
@@ -323,6 +332,7 @@ def test_unreadable_mesh_is_dropped_and_reported(tmp_path):
     result = import_file(_mesh_arm(tmp_path, "package://pkg/meshes/upper.dae"))
     bad = next(f for f in result.report.findings if f.status == "unfixed" and f.topic == "meshes")
     assert "could not be read" in bad.problem
+    assert "pycollada" in bad.problem  # tells the user which package would widen what can be read
     _world(result)
 
 

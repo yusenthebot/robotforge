@@ -26,7 +26,7 @@ class HoldResult:
     finite: bool
     drift: float  # worst joint error relative to what counts as "holding" (1.0 = at the limit)
     drift_raw: str  # human readable worst error
-    drop: float  # fraction of its starting height a floating base lost
+    drop: float  # how far a floating base sank, as a fraction of the robot's size
     upright: bool
     tracking: float = 0.0  # worst share of a small commanded move that was not achieved (fixed bases only)
     tracking_raw: str = ""
@@ -95,8 +95,9 @@ def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldR
         if ratio >= worst:
             worst, worst_text = ratio, f"{a.joint} off by {err:.3g} {'m' if slide else 'rad'}"
     drop, upright = 0.0, True
-    if plan.base == "floating" and start_height > 1e-3:
-        drop = max(0.0, (start_height - float(data.subtree_com[root][2])) / start_height)
+    if plan.base == "floating":
+        # Measured against the robot's size, not its height: a wheeled base can have its center of mass 2 cm up.
+        drop = max(0.0, (start_height - float(data.subtree_com[root][2])) / max(float(model.stat.extent), 0.05))
         upright = float(data.xmat[root].reshape(3, 3)[2, 2]) > 0.7
     result = HoldResult(True, worst, worst_text, drop, upright)
     if plan.base == "fixed" and result.finite and result.drift <= 1.0:
