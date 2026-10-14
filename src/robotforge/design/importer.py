@@ -26,10 +26,12 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from robotforge.design.importing import collision, rig, xacro
+from robotforge.design.importing import collision, xacro
 from robotforge.design.importing.meshio import TOOL_VERSION, MeshAsset, MeshError, prepare_mesh, solid_properties
+from robotforge.design.importing.plan import COLLISION_GROUP, PLAN_VERSION, VISUAL_GROUP, RigPlan, build_spec
 from robotforge.design.importing.report import DoctorReport
 from robotforge.design.importing.resolve import MESH_SUFFIXES, MeshResolver
+from robotforge.design.importing.rig import make_plan
 from robotforge.design.importing.urdf import StagedUrdf, stage_urdf
 
 log = logging.getLogger(__name__)
@@ -144,7 +146,7 @@ def _import_urdf(src: Path, opts: ImportOptions, cache: Path) -> ImportResult:
         if cached is None:  # pragma: no cover - would mean the cache folder is not writable
             raise ValueError(f"could not write the import cache at {entry}")
     plan, report = cached
-    spec = rig.build_spec(entry / "staged.urdf", plan, name=re.sub(r"\W+", "_", src.stem))
+    spec = build_spec(entry / "staged.urdf", plan, name=re.sub(r"\W+", "_", src.stem))
     return ImportResult(
         spec=spec,
         report=report,
@@ -158,12 +160,12 @@ def _import_urdf(src: Path, opts: ImportOptions, cache: Path) -> ImportResult:
 
 def _cache_key(src: Path, opts: ImportOptions) -> str:
     st = src.stat()
-    versions = f"{IMPORTER_VERSION}|{TOOL_VERSION}|{rig.PLAN_VERSION}"
+    versions = f"{IMPORTER_VERSION}|{TOOL_VERSION}|{PLAN_VERSION}"
     raw = f"{versions}|{src}|{st.st_size}|{st.st_mtime_ns}|{opts.model_dump_json()}"
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
-def _load_cached(entry: Path, src: Path) -> tuple[rig.RigPlan, DoctorReport] | None:
+def _load_cached(entry: Path, src: Path) -> tuple[RigPlan, DoctorReport] | None:
     meta = entry / "meta.json"
     try:
         info = json.loads(meta.read_text(encoding="utf-8"))
@@ -175,7 +177,7 @@ def _load_cached(entry: Path, src: Path) -> tuple[rig.RigPlan, DoctorReport] | N
             resolver = MeshResolver(src)
             if any(resolver.resolve(uri).path is not None for uri in info["missing"]):
                 return None  # a mesh that was missing has appeared since
-        plan = rig.RigPlan.from_json(info["plan"])
+        plan = RigPlan.from_json(info["plan"])
         report = DoctorReport.from_dict(info["report"])
     except (OSError, ValueError, KeyError, TypeError):
         return None
@@ -202,7 +204,7 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
     urdf_path = entry / "staged.urdf"
     urdf_path.write_text(staged.text, encoding="utf-8")
 
-    plan = rig.make_plan(staged, urdf_path, report, opts.base)
+    plan = make_plan(staged, urdf_path, report, opts.base)
     report.stats.update(_stats(staged, plan))
 
     dep_files = {src, *deps, *staged.mesh_sources}
@@ -228,7 +230,7 @@ def _read_urdf(src: Path, opts: ImportOptions, report: DoctorReport) -> tuple[st
     return text, []
 
 
-def _stats(staged: StagedUrdf, plan: rig.RigPlan) -> dict[str, Any]:
+def _stats(staged: StagedUrdf, plan: RigPlan) -> dict[str, Any]:
     movable = [j for j in staged.joints if j.type in ("revolute", "continuous", "prismatic")]
     return {
         "links": len(staged.links),
@@ -359,7 +361,7 @@ def _add_mesh_geoms(
         body.add_geom(
             type=G.mjGEOM_MESH,
             meshname=mesh.name,
-            group=rig.VISUAL_GROUP,
+            group=VISUAL_GROUP,
             rgba=list(piece.rgba or _OBJECT_COLOR),
             **({} if collide_with_visual else {"contype": 0, "conaffinity": 0}),
         )
@@ -369,4 +371,4 @@ def _add_mesh_geoms(
     for i, path in enumerate(hull_paths):
         mesh = spec.add_mesh(name=f"collision{i}", file=str(path), scale=sc)
         mesh.maxhullvert = hull_cap
-        body.add_geom(type=G.mjGEOM_MESH, meshname=mesh.name, group=rig.COLLISION_GROUP, density=0)
+        body.add_geom(type=G.mjGEOM_MESH, meshname=mesh.name, group=COLLISION_GROUP, density=0)

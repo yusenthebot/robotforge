@@ -8,7 +8,6 @@ MuJoCo then loads it with its own URDF compiler, so we never re-implement kinema
 from __future__ import annotations
 
 import copy
-import hashlib
 import math
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -56,7 +55,6 @@ class StagedUrdf:
     joints: list[JointInfo]
     link_shapes: dict[str, list[Shape]]  # collision shapes, or visual shapes where a link has no collision
     link_mass: dict[str, float]
-    visual_links: set[str]  # links that have at least one visual shape
     link_friction: dict[str, float] = field(default_factory=dict)  # Gazebo mu1 hints, link -> sliding friction
     mesh_sources: list[Path] = field(default_factory=list)  # original mesh files that were read
     unresolved: list[str] = field(default_factory=list)  # mesh URIs that were not found
@@ -88,7 +86,6 @@ def stage_urdf(
     roots = _check_tree(links, joints, report)
     _fix_materials(robot, report)
     ctx, shapes, visual_shapes = _prepare_geometry(robot, links, resolver, work_dir, report, decompose)
-    visual_links = {n for n, s in visual_shapes.items() if s}
     link_shapes = {n: (shapes[n] or visual_shapes[n]) for n in links}
     masses = _fix_inertials(links, joints, roots, link_shapes, report)
     _set_compiler_options(robot)
@@ -101,7 +98,6 @@ def stage_urdf(
         joints=joints,
         link_shapes=link_shapes,
         link_mass=masses,
-        visual_links=visual_links,
         link_friction={k: v for k, v in friction.items() if k in links},
         mesh_sources=[p for p, a in ctx.assets.items() if isinstance(a, MeshAsset)],
         unresolved=sorted(set(ctx.unresolved_uris)),
@@ -476,15 +472,11 @@ def _process_role(link: ET.Element, role: str, link_name: str, ctx: _Geometry) -
                 shapes.append(shape)
             continue
         if shape is None:
-            _remove(link, el)
+            link.remove(el)
             ctx.dropped.append(f"{link_name} ({role}{' ' + child.tag if child is not None else ''})")
             continue
         shapes.append(shape)
     return shapes
-
-
-def _remove(link: ET.Element, el: ET.Element) -> None:
-    link.remove(el)
 
 
 def _process_mesh(
@@ -495,7 +487,7 @@ def _process_mesh(
     if resolution.path is None:
         ctx.unresolved_uris.append(uri)
         ctx.unresolved.append(f"{uri or '(empty)'}: {resolution.note}" if resolution.note else uri)
-        _remove(link, el)
+        link.remove(el)
         return None
     if resolution.guessed:
         ctx.guessed.append(resolution.note)
@@ -503,7 +495,7 @@ def _process_mesh(
     if isinstance(asset, MeshError):
         ctx.unreadable.append(f"{resolution.path.name}: {asset}")
         ctx.unreadable_reasons.add(str(asset))
-        _remove(link, el)
+        link.remove(el)
         return None
 
     scale = np.array(_scale(mesh_el.get("scale")))
@@ -827,7 +819,3 @@ def _set_compiler_options(robot: ET.Element) -> None:
         "compiler",
         {"fusestatic": "false", "discardvisual": "false", "balanceinertia": "true", "strippath": "false"},
     )
-
-
-def digest(text: str) -> str:
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()

@@ -53,10 +53,6 @@ def rpy_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
     return rz @ ry @ rx
 
 
-def shape_volume(shape: Shape) -> float:
-    return _unit_properties(shape)[0]
-
-
 def shape_radius(shape: Shape) -> float:
     """Radius of a sphere around the shape's own center that contains it."""
     if shape.kind == "box":
