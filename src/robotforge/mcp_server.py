@@ -194,7 +194,12 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             if library is not None:
                 await _download_with_progress(library, ctx)
-            return _json(playground.add_robot(name, template, file, params, pos, yaw, library=library))
+            # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
+            # minute: off the event loop, so the viewer and other requests keep running meanwhile.
+            added = await asyncio.to_thread(
+                playground.add_robot, name, template, file, params, pos, yaw, library=library
+            )
+            return _json(added)
 
     @server.tool()
     def update_robot(

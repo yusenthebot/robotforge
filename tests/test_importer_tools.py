@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 
 import mujoco
 import numpy as np
@@ -137,6 +139,42 @@ async def test_mcp_tools_return_the_doctor_field(tmp_path):
             "open_model", {"path": str(box_stl(tmp_path / "b.stl")), "options": {"scale": 2}}
         )
         assert not meshed.is_error and json.loads(_text(meshed))["doctor"]["stats"]["size_m"] == [0.2, 0.2, 0.2]
+
+
+async def test_a_slow_import_does_not_freeze_the_event_loop(tmp_path, monkeypatch):
+    """add_robot is an async tool; a cold import must run in a worker thread so the viewer keeps serving."""
+    pg = Playground.with_demo()
+    real = Playground.add_robot
+
+    def slow_add_robot(self, *args, **kwargs):
+        time.sleep(0.8)  # stands in for mesh conversion and the planning simulations
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Playground, "add_robot", slow_add_robot)
+    urdf = write(tmp_path / "arm.urdf", arm_urdf())
+    gaps: list[float] = []
+
+    async def heartbeat() -> None:
+        last = time.monotonic()
+        while True:
+            await asyncio.sleep(0.02)
+            now = time.monotonic()
+            gaps.append(now - last)
+            last = now
+
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        await client.call_tool("new_world", {"name": "slow import"})
+        beat = asyncio.create_task(heartbeat())
+        try:
+            result = await client.call_tool("add_robot", {"name": "mine", "file": str(urdf)})
+        finally:
+            beat.cancel()
+    assert not result.is_error and json.loads(_text(result))["robots"] == ["mine"]
+    stall = max(gaps, default=float("inf"))
+    assert len(gaps) > 10 and stall < 0.3, (
+        f"the event loop was blocked during the import ({len(gaps)} beats, worst gap {stall:.2f} s)"
+    )
 
 
 def test_cli_prints_the_doctor_report_for_imports(tmp_path, monkeypatch, capsys):
