@@ -152,7 +152,7 @@ class ViewerHub:
             tick_start = time.perf_counter()
             # The real-time clock only runs while someone is watching, so an agent's
             # world does not drift between tool calls.
-            if self.clients:
+            if self.clients and self.session.clock_owner is None:
                 self.session.advance(tick_start - last)
             last = tick_start
             if self.clients:

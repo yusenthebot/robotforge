@@ -55,6 +55,7 @@ class SimSession:
     version: int = 1
     drag: Drag | None = None
     controllers: dict[str, Controller] = field(default_factory=dict)
+    clock_owner: str | None = None  # set while e.g. a script advances time itself
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0

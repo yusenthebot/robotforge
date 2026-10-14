@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import time
 import webbrowser
 from collections.abc import AsyncIterator, Iterator
@@ -23,10 +24,12 @@ from mcp.server.apps import Apps, ResourceCsp
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
+from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port
 from robotforge.playground import Playground, PlaygroundError
+from robotforge.script_runner import ScriptRunner
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
 
@@ -306,6 +309,52 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             )
 
     @server.tool()
+    def write_script(name: str, code: str) -> str:
+        """Save a Python robot script as behaviors/<name>.py in the open world. Scripts use:
+
+            from robotforge.script import connect
+            sim = connect()
+            sim.time; sim.step(seconds)                      # time passes only when you step
+            sim.position(name) -> [x, y, z]; sim.heading(robot) -> degrees
+            sim.joints(robot) -> {joint: value}; sim.sensors(robot) -> {sensor: value}
+            sim.set_controls({"arm/shoulder": 0.5})          # raw actuator targets
+            sim.move(robot, speed, turn); sim.stop(robot)      # walk / drive (keeps going until stop)
+            sim.move_arm(robot, [x, y, z], gripper="open"|"close"|None)   # waits until arrived
+            sim.gripper(robot, "open"|"close"); sim.pick_and_place(robot, obj, target) -> bool
+            print(...)                                         # output is returned by run_script
+
+        Write clear, commented code: the user may read it to learn. Then call run_script."""
+        with _tool_errors():
+            store = playground._require_store()
+            path = _script_path(store.dir, name)
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(code, encoding="utf-8")
+            return _json({"saved": str(path), "lines": code.count("\n") + 1})
+
+    @server.tool()
+    def read_script(name: str) -> str:
+        """Show a saved script from the open world's behaviors folder."""
+        with _tool_errors():
+            path = _script_path(playground._require_store().dir, name)
+            if not path.exists():
+                raise PlaygroundError(f"no script named {name!r}")
+            return path.read_text(encoding="utf-8")
+
+    @server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
+    async def run_script(name: str, max_sim_seconds: float = 60.0) -> str:
+        """Run behaviors/<name>.py against the live world. Runs Python on this computer (not a sandbox),
+        in lockstep with the simulation, shown live if the viewer is open. Returns the script output,
+        exit code and any traceback."""
+        with _tool_errors():
+            path = _script_path(playground._require_store().dir, name)
+            if not path.exists():
+                raise PlaygroundError(f"no script named {name!r}; write it with write_script first")
+            if not 0 < max_sim_seconds <= 300:
+                raise PlaygroundError("max_sim_seconds must be in (0, 300]")
+            runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
+            return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
+
+    @server.tool()
     def robots() -> str:
         """List robots in the world with their kind (arm, quadruped, rover), where they are, which way they
         face, whether they are upright, and any behavior running on them."""
@@ -378,6 +427,16 @@ def _tool_errors() -> Iterator[None]:
         yield
     except (PlaygroundError, BehaviorError, ModelLoadError, IndexError, ValueError) as exc:
         raise ToolError(str(exc)) from exc
+
+
+SCRIPT_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
+
+
+def _script_path(world_dir: Path, name: str) -> Path:
+    stem = name[:-3] if name.endswith(".py") else name
+    if not SCRIPT_NAME.match(stem):
+        raise PlaygroundError("script names use lowercase letters, digits and _, e.g. pick_cube")
+    return world_dir / "behaviors" / f"{stem}.py"
 
 
 def _json(data: object) -> str:
