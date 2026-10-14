@@ -64,6 +64,8 @@ class IKSolver:
         for the end body's full orientation, e.g. a foot kept flat and turned to a heading.
         Returns (q, position error).
         """
+        if axis is not None and rotation is not None:
+            raise ValueError("give IK either an axis to point or a full rotation, not both")
         q = np.clip(np.asarray(q_init, float).copy(), chain.lower, chain.upper)
         err = np.inf
         for _ in range(iterations):

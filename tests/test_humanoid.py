@@ -295,6 +295,8 @@ def test_ik_can_also_match_a_full_orientation():
     q, err = ik.solve(chain, target, ik.base_qpos[chain.qpos_adr], iterations=30, damping=1e-8, rotation=want)
     assert err < 1e-4
     assert np.allclose(ik.data.xmat[chain.body].reshape(3, 3), want, atol=1e-3)
+    with pytest.raises(ValueError, match="not both"):
+        ik.solve(chain, target, q, axis=(np.array([0, 0, 1.0]), np.array([0, 0, 1.0])), rotation=want)
 
 
 def test_preview_control_keeps_the_zmp_on_the_planned_path():
