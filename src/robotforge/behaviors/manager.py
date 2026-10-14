@@ -84,7 +84,7 @@ class BehaviorManager:
             return existing
         m = self.session.model
         try:
-            ctrl = quadruped.for_template(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
+            ctrl = quadruped.for_robot(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
             raise BehaviorError(str(exc)) from exc
         if create:

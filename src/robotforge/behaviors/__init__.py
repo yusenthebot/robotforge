@@ -15,7 +15,7 @@ class Kind(StrEnum):
 
 
 def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -> Kind:
-    """Recognize a robot by its template, or by the names our templates use."""
+    """Recognize a robot by its template, by the names our templates use, or by its shape."""
     if template in {k.value for k in Kind}:
         return Kind(template)
 
@@ -27,5 +27,9 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
     if has(mujoco.mjtObj.mjOBJ_ACTUATOR, "left_wheel") and has(mujoco.mjtObj.mjOBJ_ACTUATOR, "right_wheel"):
         return Kind.ROVER
     if has(mujoco.mjtObj.mjOBJ_SITE, "front_left_foot"):
+        return Kind.QUADRUPED
+    from robotforge.behaviors.quadruped import discover_legs  # lazy: it imports this package
+
+    if discover_legs(model, robot) is not None:  # library and imported quadrupeds
         return Kind.QUADRUPED
     return Kind.OTHER
