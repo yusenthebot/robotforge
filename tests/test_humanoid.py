@@ -247,18 +247,30 @@ def test_non_finite_commands_are_refused_before_they_reach_the_motors(pg, templa
     assert np.isfinite(pg.session.data.qpos).all()
 
 
-def test_a_fallen_humanoid_says_so_and_asks_for_a_reset(pg):
+def test_humanoids_balance_from_the_start_and_after_a_fall_and_reset(pg, tmp_path):
     pg.add_robot("bot", template="humanoid")
-    pg.behaviors.move("bot", 0.1, 0.0)
+    assert isinstance(pg.session.controllers.get("bot"), humanoid.HumanoidController)  # never limp
     torso = pg.session.model.body("bot/torso").id
+    pg.behaviors.move("bot", 0.1, 0.0)
     pg.session.data.xfrc_applied[torso, :3] = [40, 0, 0]
     pg.run_fast(lambda: False, 0.3)
     pg.session.data.xfrc_applied[torso, :3] = 0
     pg.run_fast(lambda: False, 2.0)
+    assert _up(pg) < 0.5
     status = pg.behaviors.status()[0]
     assert status["behavior"] == "fallen" and status["speed"] == 0.0
     with pytest.raises(BehaviorError, match="fallen over"):
         pg.behaviors.move("bot", 0.1, 0.0)
+    pg.control("reset")
+    assert pg.session.controllers["bot"].status()["behavior"] == "stand"
+    pg.behaviors.move("bot", 0.1, 0.0)
+    assert _run(pg, 5.0) > 0.95
+    assert pg.behaviors.pose("bot")["position"][0] > 0.3
+    # Opening the saved world later (as `robotforge open` does) also starts the balance.
+    from robotforge.cli import load_playground
+
+    reopened = load_playground(pg.store.dir)
+    assert isinstance(reopened.session.controllers.get("bot"), humanoid.HumanoidController)
 
 
 @pytest.mark.anyio

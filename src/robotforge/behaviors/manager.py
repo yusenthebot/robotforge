@@ -30,6 +30,20 @@ class BehaviorManager:
     def __init__(self, session: SimSession, world: Callable[[], World | None]):
         self.session = session
         self._world = world
+        session.reset_hooks.append(self.start_balancing)
+        self.start_balancing()
+
+    def start_balancing(self) -> None:
+        """Humanoids keep their balance from the moment they appear and after every reset, so a beginner
+        never sees one hang limp from its servos (or topple at the first nudge)."""
+        world = self._world()
+        names = [r.name for r in world.robots] if world else sorted(self._prefixes())
+        templates = {r.name: r.template for r in world.robots} if world else {}
+        with self.session.lock:
+            for name in names:
+                if robot_kind(self.session.model, name, templates.get(name)) == Kind.HUMANOID:
+                    with contextlib.suppress(BehaviorError):
+                        self._mobile_controller(name, Kind.HUMANOID, create=True)
 
     # ---- robots in the session -------------------------------------------------------
 
