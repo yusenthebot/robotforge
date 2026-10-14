@@ -16,6 +16,8 @@ from pathlib import Path
 import mujoco
 import uvicorn
 
+from robotforge.design import importer
+from robotforge.design.importing.report import render_text
 from robotforge.design.store import WorldStore
 from robotforge.playground import Playground
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -70,9 +72,16 @@ def find_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> i
     raise RuntimeError(f"no free port in {start}-{start + attempts - 1}")
 
 
-def load_playground(path: Path) -> Playground:
-    """Open an MJCF/URDF file, or a world folder / world.yaml."""
+def load_playground(path: Path, options: dict | None = None) -> Playground:
+    """Open an MJCF file, a URDF/xacro/mesh (through the import doctor), or a world folder / world.yaml."""
     path = path.expanduser()
+    if importer.is_importable(path):
+        compiled = importer.compile_standalone(path, options)
+        session = SimSession(model=compiled.model, data=mujoco.MjData(compiled.model), source=str(path.resolve()))
+        session.reset()
+        playground = Playground(session=session)
+        playground.last_doctor = compiled.doctor
+        return playground
     world_file = path / "world.yaml" if path.is_dir() else path
     if world_file.name == "world.yaml" and world_file.exists():
         store = WorldStore(world_file.parent)
@@ -101,8 +110,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="robotforge", description="Beginner-friendly robot playground.")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_open = sub.add_parser("open", help="open an MJCF/URDF model or a world folder in the viewer")
+    p_open = sub.add_parser("open", help="open an MJCF/URDF/xacro/mesh model or a world folder in the viewer")
     p_open.add_argument("model", type=Path)
+    p_open.add_argument("--base", choices=["auto", "fixed", "floating"], default=None, help="URDF/mesh: base type")
+    p_open.add_argument("--decompose", action="store_true", help="split concave collision meshes (slower)")
+    p_open.add_argument("--scale", type=float, default=None, help="plain mesh: size multiplier")
+    p_open.add_argument(
+        "--respect-effort-limits",
+        action="store_true",
+        help="URDF: keep the file's torque limits even where they are too weak to hold the robot up",
+    )
+    p_open.add_argument(
+        "--xacro-arg", action="append", default=[], metavar="KEY=VALUE", help="value for a <xacro:arg> (repeatable)"
+    )
     sub.add_parser("demo", help="open the built-in demo scene")
     p_mcp = sub.add_parser("mcp", help="run as an MCP server on stdio (for Claude, Codex, ...)")
     p_mcp.add_argument("--model", type=Path, default=None, help="model to load at start (default: demo)")
@@ -126,11 +146,26 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     model_path = DEMO_MODEL if args.command == "demo" else args.model
+    options = {}
+    if args.command == "open":
+        options = {k: v for k, v in (("base", args.base), ("scale", args.scale)) if v is not None}
+        if args.decompose:
+            options["decompose"] = True
+        if args.respect_effort_limits:
+            options["respect_effort_limits"] = True
+        if args.xacro_arg:
+            pairs = [a.partition("=") for a in args.xacro_arg]
+            if any(not sep for _, sep, _ in pairs):
+                print("error: --xacro-arg needs KEY=VALUE, for example --xacro-arg hand=true", file=sys.stderr)
+                return 2
+            options["xacro_args"] = {k: v for k, _, v in pairs}
     try:
-        playground = load_playground(model_path)
+        playground = load_playground(model_path, options)
     except (ModelLoadError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    for report in playground.last_doctor.values():
+        print(render_text(report), flush=True)
 
     if args.port is None:
         port = find_free_port(DEFAULT_PORT, args.host)
