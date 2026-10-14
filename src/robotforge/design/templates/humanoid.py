@@ -38,11 +38,15 @@ EYE = [0.55, 0.85, 1.0, 1.0]
 DRIVER_DAMPING = 0.02  # s: joint damping is at least this fraction of servo stiffness
 REFERENCE_HEIGHT = 0.45  # m; every length below is given at this height and scales with it
 _Y_CYL = [0.7071068, 0.7071068, 0, 0]  # cylinder axis along y
-_X_CYL = [0.7071068, 0, 0.7071068, 0]  # cylinder axis along x
 
 
 class HumanoidParams(TemplateParams):
-    height: float = Field(0.45, ge=0.3, le=1.0, description="standing height in meters (legs straight)")
+    height: float = Field(
+        0.45,
+        ge=0.3,
+        le=1.0,
+        description="standing height in meters; 0.3-0.6 walks on sts3215 servos, taller needs stronger",
+    )
     servo: str = Field("sts3215", description="joint actuator from the parts catalog")
     material: Literal["pla", "aluminum", "carbon"] = "pla"
     arms: bool = Field(True, description="add two 3-joint arms")
