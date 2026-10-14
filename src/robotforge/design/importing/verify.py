@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def _touching_links(model: mujoco.MjModel, data: mujoco.MjData) -> set[tuple[str
     return pairs
 
 
-def tune_gains(urdf: Path, plan: RigPlan) -> HoldResult | None:
+def tune_gains(urdf: Path, plan: RigPlan, deadline: float = math.inf) -> HoldResult | None:
     """Raise motor stiffness until the robot holds its pose and follows commands; keeps the best in `plan`.
 
     Returns None when the plan has no motors or the simulation blows up at every setting.
@@ -171,7 +172,7 @@ def tune_gains(urdf: Path, plan: RigPlan) -> HoldResult | None:
             stalled = best is not None and value > 0.97 * best[0]  # more stiffness no longer helps
             if best is None or value < best[0]:
                 best = (value, scale, result)
-            if result.holds or stalled:
+            if result.holds or stalled or time.monotonic() > deadline:
                 break
     if best is None:
         _scale_gains(plan, base, 1.0)

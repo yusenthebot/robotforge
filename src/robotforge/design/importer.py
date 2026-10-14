@@ -17,24 +17,16 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
-import mujoco
-import numpy as np
-from pydantic import BaseModel, ConfigDict, ValidationError
-
-from robotforge.design.importing import collision, xacro
+from robotforge.design.importing import xacro
+from robotforge.design.importing.mesh_object import import_mesh_object
 from robotforge.design.importing.meshio import (
-    MM_LIMIT,
     TOOL_VERSION,
-    MeshAsset,
-    MeshError,
-    prepare_mesh,
-    solid_properties,
 )
-from robotforge.design.importing.plan import COLLISION_GROUP, PLAN_VERSION, VISUAL_GROUP, RigPlan, build_spec
+from robotforge.design.importing.options import ImportOptions, ImportResult
+from robotforge.design.importing.plan import PLAN_VERSION, RigPlan, build_spec
 from robotforge.design.importing.report import DoctorReport
 from robotforge.design.importing.resolve import MESH_SUFFIXES, MeshResolver
 from robotforge.design.importing.rig import make_plan
@@ -46,45 +38,7 @@ IMPORTER_VERSION = "1"
 URDF_SUFFIXES = frozenset({".urdf", ".xacro"})
 IMPORT_SUFFIXES = URDF_SUFFIXES | MESH_SUFFIXES
 CACHE_LIMIT = 40
-OBJECT_DENSITY = 500.0  # kg/m^3 for loose mesh objects without a given mass
-_OBJECT_COLOR = (0.72, 0.74, 0.78, 1.0)
-
-
-class ImportOptions(BaseModel):
-    """Optional knobs, passed as `params` of a robot entry or as keyword arguments."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    base: Literal["auto", "fixed", "floating"] = "auto"  # URDF: arm-like or free-standing; mesh: fixed or dropped
-    decompose: bool = False  # split concave collision meshes into convex pieces (slow, cached)
-    ignore_effort_limits: bool = False  # URDF: size motors from the robot's weight instead of the file's <limit effort>
-    scale: float | None = None  # plain meshes: multiply the size (default: guess meters vs millimeters)
-    mass: float | None = None  # plain meshes that float: kg (default: from volume at 500 kg/m^3)
-    xacro_args: dict[str, str] | None = None  # values for <xacro:arg> names
-
-    @classmethod
-    def parse(cls, params: dict[str, Any] | ImportOptions | None) -> ImportOptions:
-        if isinstance(params, ImportOptions):
-            return params
-        try:
-            return cls.model_validate(params or {})
-        except ValidationError as exc:
-            parts = [f"{'.'.join(str(x) for x in e['loc']) or 'value'}: {e['msg']}" for e in exc.errors()]
-            allowed = ", ".join(cls.model_fields)
-            raise ValueError(f"bad import option ({'; '.join(parts)}). Import options are: {allowed}") from exc
-
-
-@dataclass
-class ImportResult:
-    """A spec ready to attach to a world, how to place it, and the doctor's notes."""
-
-    spec: mujoco.MjSpec
-    report: DoctorReport
-    kind: Literal["robot", "object"]
-    floating: bool
-    spawn_height: float
-    home_qpos: dict[str, float]
-    home_ctrl: dict[str, float]
+MESH_CACHE_BYTES = 1_000_000_000  # converted meshes are cheap to rebuild, but not worth gigabytes of disk
 
 
 def is_importable(path: str | Path) -> bool:
@@ -114,7 +68,7 @@ def import_file(
     if suffix in URDF_SUFFIXES:
         return _import_urdf(src, opts, cache)
     if suffix in MESH_SUFFIXES:
-        return _import_mesh(src, opts, cache)
+        return import_mesh_object(src, opts, cache)
     raise ValueError(
         f"{src.name}: robotforge imports .urdf, .xacro and meshes ({', '.join(sorted(MESH_SUFFIXES))}); "
         "MuJoCo .xml files are opened directly"
@@ -190,6 +144,9 @@ def _load_cached(entry: Path, src: Path) -> tuple[RigPlan, DoctorReport] | None:
     if not (entry / "staged.urdf").is_file():
         return None
     meta.touch()  # recently used entries survive pruning
+    for dep, _, _ in info["deps"]:
+        if Path(dep).is_relative_to(entry.parent):
+            Path(dep).touch()  # converted meshes in use are the last to be pruned
     return plan, report
 
 
@@ -211,7 +168,8 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
     plan = make_plan(staged, urdf_path, report, opts.base, opts.ignore_effort_limits)
     report.stats.update(_stats(staged, plan))
 
-    dep_files = {src, *deps, *staged.mesh_sources}
+    staged_meshes = {Path(m.get("filename", "")) for m in robot.iter("mesh") if m.get("filename")}
+    dep_files = {src, *deps, *staged.mesh_sources, *staged_meshes}
     stamped = [[str(p), p.stat().st_size, p.stat().st_mtime_ns] for p in sorted(dep_files, key=str) if p.exists()]
     meta = {"deps": stamped, "missing": staged.unresolved, "plan": plan.to_json(), "report": report.to_dict(full=True)}
     (entry / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
@@ -257,130 +215,16 @@ def _stats(staged: StagedUrdf, plan: RigPlan) -> dict[str, Any]:
 
 
 def _prune(cache: Path) -> None:
+    """Keep the newest CACHE_LIMIT imports, and the converted meshes under MESH_CACHE_BYTES (oldest go first)."""
     entries = [m.parent for m in cache.glob("*/meta.json")]
     for old in sorted(entries, key=lambda d: (d / "meta.json").stat().st_mtime)[:-CACHE_LIMIT]:
         for f in old.iterdir():
             f.unlink(missing_ok=True)
         old.rmdir()
-
-
-# ---- plain meshes ----------------------------------------------------------------------------
-
-
-def _import_mesh(src: Path, opts: ImportOptions, cache: Path) -> ImportResult:
-    """A single mesh file as a free-standing object (fixed in place unless base='floating')."""
-    report = DoctorReport(source=str(src))
-    try:
-        asset = prepare_mesh(src, cache / "meshes")
-    except MeshError as exc:
-        raise ValueError(str(exc)) from exc
-    for note in asset.notes:
-        report.fixed("mesh", f"{src.name}: the file would not load as it was", note)
-
-    scale = opts.scale
-    extent = float(np.max(asset.mesh.extents))
-    if scale is None and extent > MM_LIMIT:
-        scale = 0.001
-        report.fixed(
-            "units",
-            f"the mesh is {extent:.0f} units wide, so it is probably in millimeters",
-            "scaled it by 0.001; pass scale=1 to keep the original size",
-        )
-    scale = 1.0 if scale is None else scale
-    if scale <= 0:
-        raise ValueError("scale must be positive")
-    size = asset.mesh.extents * scale
-    if float(np.max(size)) < 0.005:
-        report.unfixed(
-            "units",
-            f"the mesh is only {float(np.max(size)) * 1000:.1f} mm wide",
-            "left it as is; pass scale=1000 if it was meant to be in meters",
-        )
-
-    floating = opts.base == "floating"
-    spec = mujoco.MjSpec()
-    spec.modelname = re.sub(r"\W+", "_", src.stem)
-    body = spec.worldbody.add_body(name="object")
-    props = solid_properties(asset.mesh, np.full(3, scale))
-    mass = opts.mass if opts.mass is not None else props.volume * OBJECT_DENSITY
-    if floating:
-        _set_inertial(body, mass, props)
-        body.add_freejoint(name="root")
-        if opts.mass is None:
-            report.info(
-                "mass", f"mass is {mass:.3g} kg (volume x {OBJECT_DENSITY:.0f} kg/m^3); pass mass=... to change it"
-            )
-    elif opts.mass is not None:
-        report.info("mass", "mass is ignored because the object is fixed in place")
-    _add_mesh_geoms(spec, body, asset, scale, opts, cache, report)
-
-    low = float(asset.bounds[0][2]) * scale
-    spawn = -low + (0.003 if floating else 0.0)
-    report.info(
-        "placement",
-        f"the object is {size[0] * 100:.1f} x {size[1] * 100:.1f} x {size[2] * 100:.1f} cm and rests on the floor"
-        + ("" if floating else "; it is fixed in place (pass base=floating to let it fall and be pushed)"),
-    )
-    report.stats.update({"triangles": asset.out_faces, "size_m": [round(float(v), 4) for v in size]})
-    return ImportResult(spec, report, "object", floating, spawn, {}, {})
-
-
-def _set_inertial(body: mujoco.MjsBody, mass: float, props) -> None:
-    body.mass = mass
-    body.ipos = np.asarray(props.center)
-    unit = props.inertia / max(props.volume, 1e-12) * mass
-    body.fullinertia = [unit[0, 0], unit[1, 1], unit[2, 2], unit[0, 1], unit[0, 2], unit[1, 2]]
-    body.explicitinertial = True
-
-
-def _add_mesh_geoms(
-    spec: mujoco.MjSpec,
-    body: mujoco.MjsBody,
-    asset: MeshAsset,
-    scale: float,
-    opts: ImportOptions,
-    cache: Path,
-    report: DoctorReport,
-) -> None:
-    G = mujoco.mjtGeom
-    sc = [scale] * 3
-    parts: list[Path] | None = None
-    if opts.decompose and asset.out_faces >= collision.DECOMPOSE_MIN_FACES:
-        try:
-            parts = collision.decompose(asset, cache / "meshes")
-            report.fixed(
-                "collision",
-                "concave shapes would collide as a solid blob",
-                f"split the collision shape into {len(parts)} convex pieces (CoACD)",
-            )
-        except collision.DecomposeError as exc:
-            report.unfixed(
-                "collision", f"could not split the shape into convex pieces ({exc})", "using one convex outline"
-            )
-    elif asset.out_faces > 5000:
-        report.info(
-            "collision",
-            f"the mesh has {asset.out_faces:,} triangles; it collides as one convex outline. "
-            "Pass decompose=true to keep concave details",
-        )
-
-    hull_cap = 64
-    collide_with_visual = parts is None and len(asset.pieces) == 1
-    for i, piece in enumerate(asset.pieces):
-        mesh = spec.add_mesh(name=f"visual{i}", file=str(piece.path), scale=sc)
-        if collide_with_visual:
-            mesh.maxhullvert = hull_cap
-        body.add_geom(
-            type=G.mjGEOM_MESH,
-            meshname=mesh.name,
-            group=VISUAL_GROUP,
-            rgba=list(piece.rgba or _OBJECT_COLOR),
-            **({} if collide_with_visual else {"contype": 0, "conaffinity": 0}),
-        )
-    if collide_with_visual:
-        return
-    hull_paths = parts if parts is not None else [asset.merged]
-    for i, path in enumerate(hull_paths):
-        mesh = spec.add_mesh(name=f"collision{i}", file=str(path), scale=sc)
-        mesh.maxhullvert = hull_cap
-        body.add_geom(type=G.mjGEOM_MESH, meshname=mesh.name, group=COLLISION_GROUP, density=0)
+    files = sorted((f for f in (cache / "meshes").glob("*") if f.is_file()), key=lambda f: f.stat().st_mtime)
+    total = sum(f.stat().st_size for f in files)
+    for f in files:
+        if total <= MESH_CACHE_BYTES:
+            break
+        total -= f.stat().st_size
+        f.unlink(missing_ok=True)

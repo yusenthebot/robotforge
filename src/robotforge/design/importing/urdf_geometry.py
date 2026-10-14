@@ -221,8 +221,8 @@ def _report_geometry(ctx: GeometryContext, report: DoctorReport) -> None:
     if ctx.guessed:
         report.fixed(
             "meshes",
-            "some mesh paths pointed at folders that are not on this computer",
-            "found the same files by name nearby and used those",
+            "some mesh paths did not match any file (wrong package folder or file format)",
+            "found the files by name nearby and used those",
             sorted(set(ctx.guessed)),
         )
     if ctx.unresolved:

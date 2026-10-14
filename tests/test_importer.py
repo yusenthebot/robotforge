@@ -721,3 +721,19 @@ def test_a_robot_on_two_wheels_without_a_caster_is_reported_as_tipping(tmp_path)
     assert verdict  # either it balances on its body or the report says what is missing
     if verdict[0].status == "unfixed":
         assert "caster" in verdict[0].action
+
+
+def test_deleted_cache_meshes_trigger_a_rebuild_and_the_mesh_cache_is_bounded(tmp_path, home, monkeypatch):
+    write(tmp_path / "pkg" / "meshes" / "upper.dae", dae_text(size=(0.05, 0.05, 0.3)))
+    urdf = _mesh_arm(tmp_path, "package://pkg/meshes/upper.dae")
+    first = import_file(urdf)
+    converted = list((home / "cache" / "import" / "meshes").glob("*.stl"))
+    assert converted
+    for f in converted:
+        f.unlink()  # as if the mesh cache had been pruned
+    again = import_file(urdf)  # must not hand MuJoCo a path that no longer exists
+    _world(again)
+    assert again.report.to_dict()["fixed"] == first.report.to_dict()["fixed"]
+    monkeypatch.setattr(importer, "MESH_CACHE_BYTES", 1)
+    importer._prune(home / "cache" / "import")
+    assert not list((home / "cache" / "import" / "meshes").glob("*"))

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -24,6 +25,7 @@ from robotforge.design.importing.urdf import JointInfo, StagedUrdf
 from robotforge.design.importing.verify import HOLD_SECONDS, HoldResult, score, tipped, tune_gains
 
 GEOM = mujoco.mjtGeom
+PLAN_TIME_BUDGET = 40.0  # s: tuning and stance search stop refining after this long (huge robots)
 BASE_OMEGA = 30.0  # rad/s: natural frequency of the joint position loops before tuning
 DAMPING_RATIO = 1.0
 WEAK_MOTOR_RATIO = 4.0  # effort below this multiple of the worst-case gravity torque counts as weak
@@ -74,18 +76,19 @@ def make_plan(
         report.info(
             "actuators", "ignoring the file's effort limits, as asked; motors are sized from the robot's weight"
         )
+    deadline = time.monotonic() + PLAN_TIME_BUDGET
     home = home_pose(staged)
     draft = _draft(staged, urdf, base, home)
-    draft.result = tune_gains(urdf, draft.plan)
+    draft.result = tune_gains(urdf, draft.plan, deadline)
     if draft.result is not None and draft.result.blockers:
         # A joint could not make a small move because two links touch: their collision shapes overlap.
         extra = [pair for pair in draft.result.blockers if pair not in draft.plan.excludes]
         draft.plan.excludes = sorted([*draft.plan.excludes, *extra])
-        draft.result = tune_gains(urdf, draft.plan)
+        draft.result = tune_gains(urdf, draft.plan, deadline)
 
     result = draft.result
     if draft.plan.base == "floating" and result is not None and result.finite and tipped(result):
-        better = _search_stance(staged, urdf, draft)
+        better = _search_stance(staged, urdf, draft, deadline)
         if better is not None:
             _describe_stance(draft.plan.home_qpos, better.plan.home_qpos, report)
             draft = better
@@ -372,18 +375,18 @@ def _body(model: mujoco.MjModel, b: int) -> str:
     return mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}"
 
 
-def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft) -> _Draft | None:
+def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft, deadline: float) -> _Draft | None:
     """Zero is rarely a pose a legged robot can stand in; look for one by sampling joint angles."""
     best: _Draft | None = None
     for pose in find_stances(staged, urdf, current.plan.home_qpos):
         draft = _draft(staged, urdf, "floating", pose)
         draft.base_reason = current.base_reason
-        draft.result = tune_gains(urdf, draft.plan)
+        draft.result = tune_gains(urdf, draft.plan, deadline)
         if draft.result is None or not draft.result.finite:
             continue
         if best is None or best.result is None or score(draft.result) < score(best.result):
             best = draft
-        if draft.result.holds:
+        if draft.result.holds or time.monotonic() > deadline:
             break
     if best is None or best.result is None:
         return None
