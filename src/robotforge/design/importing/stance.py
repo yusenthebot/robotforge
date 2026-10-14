@@ -16,6 +16,8 @@ from robotforge.design.importing.urdf import JointInfo, StagedUrdf
 STANCE_SAMPLES = 4000
 STANCE_CANDIDATES = 6
 STANCE_CLIMB_STEPS = 600
+MAX_FOOT_SPREAD = 0.05  # m: all feet must reach the same floor
+MIN_LEG_DROP = 0.04  # m: and hang at least this far below their shoulders
 STANCE_REACH = 1.6  # rad: how far a joint may stray from its zero pose while looking for a stance
 
 
@@ -67,14 +69,16 @@ class _StanceSearch:
         out.update({n: float(v) for n, v in zip(self.names, values, strict=True)})
         return out
 
-    def score(self, values: np.ndarray) -> float:
+    def score(self, values: np.ndarray, strict: bool = False) -> float:
         q = self.base_q.copy()
         q[self.adr] = values
         self.data.qpos[:] = q
         mujoco.mj_kinematics(self.model, self.data)
         mujoco.mj_comPos(self.model, self.data)
         deviation = float(np.abs(values - self.start).sum())
-        return _stance_score(self.model, self.data, self.geo, self.limbs, self.root, deviation, self.reference_height)
+        return _stance_score(
+            self.model, self.data, self.geo, self.limbs, self.root, deviation, self.reference_height, strict
+        )
 
     def run(self) -> list[dict[str, float]]:
         n = len(self.names)
@@ -96,7 +100,8 @@ class _StanceSearch:
                 break
         refined = [self._climb(v) for v in seeds]
         refined.sort(key=lambda s: s[0])
-        return [self.pose(v) for score, v in refined if score != math.inf]
+        # Only poses with every foot on the same floor, below its shoulder, count as stances at all.
+        return [self.pose(v) for score, v in refined if score != math.inf and self.score(v, strict=True) != math.inf]
 
     def _climb(self, values: np.ndarray) -> tuple[float, np.ndarray]:
         best, best_score = values, self.score(values)
@@ -126,6 +131,14 @@ def _limbs(staged: StagedUrdf, geo: Geometry) -> list[_Limb]:
             out += collect(j.child)
         return out
 
+    depth: dict[str, int] = {staged.root: 0}
+    stack = [staged.root]
+    while stack:
+        link = stack.pop()
+        for j in child_joints.get(link, []):
+            depth[j.child] = depth[link] + 1
+            stack.append(j.child)
+
     top = max(geo.low.values(), default=0.0)
     reach_limit = geo.lowest + 0.3 * max(top - geo.lowest, 0.2)
     limbs = []
@@ -139,7 +152,11 @@ def _limbs(staged: StagedUrdf, geo: Geometry) -> list[_Limb]:
             if not lows or min(lows) > reach_limit:
                 continue
             joints = [x for x in staged.joints if x.child in links and x.type in MOVABLE and not x.mimic_of]
-            limbs.append(_Limb(joints, bodies, j.name))
+            # The feet belong under the leg's own shoulder: with a hip-abduction joint first, that is the second
+            # joint (the first sits at the body's edge, and chasing it would draw the feet in under the trunk).
+            order = sorted(joints, key=lambda x: depth[x.child])
+            reference = order[1] if len(order) >= 3 else order[0]
+            limbs.append(_Limb(joints, bodies, reference.name))
     return limbs
 
 
@@ -151,6 +168,7 @@ def _stance_score(
     root: int,
     deviation: float,
     reference_height: float,
+    strict: bool = False,
 ) -> float:
     feet, hips = [], []
     for limb in limbs:
@@ -173,12 +191,16 @@ def _stance_score(
     body_height = float(data.xpos[root][2] - feet_arr[:, 2].mean())
     if body_height < 0.02:
         return math.inf
+    leg_drop = float((hips_arr[:, 2] - feet_arr[:, 2]).min())  # every foot must hang below its own shoulder
+    if strict and (spread > MAX_FOOT_SPREAD or leg_drop < MIN_LEG_DROP):
+        return math.inf
     asymmetry = _asymmetry(foot_offsets, hips_arr[:, :2] - data.xpos[root][:2])
     margin = _support_margin(feet_arr[:, :2], com)
     # Prefer a tall, left-right symmetric stance close to the zero pose over a crouch that merely balances.
     return (
         4.0 * com_offset
-        + 4.0 * spread
+        + 12.0 * spread
+        + 20.0 * max(0.0, MIN_LEG_DROP * 1.5 - leg_drop)
         + 2.0 * hip_offset
         + 4.0 * asymmetry
         - 3.0 * min(body_height / reference_height, 0.9)
