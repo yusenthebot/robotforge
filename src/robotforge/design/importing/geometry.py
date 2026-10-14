@@ -118,7 +118,7 @@ class Geometry:
             r = d.xipos[b] - anchor
             perp = r - axis * float(r @ axis)
             mass += mb
-            torque += mb * GRAVITY * (1.0 if slide else float(np.linalg.norm(perp)))
+            torque += mb * GRAVITY * (abs(float(axis[2])) if slide else float(np.linalg.norm(perp)))
             if not slide:
                 rot = d.ximat[b].reshape(3, 3)
                 tensor = rot @ np.diag(m.body_inertia[b]) @ rot.T

@@ -230,8 +230,7 @@ def _expand(tmp_path, body: str, args=None, name="r.xacro", extra_files=None) ->
     for rel, text in (extra_files or {}).items():
         write(tmp_path / rel, text)
     src = write(tmp_path / name, f'<robot name="r" {XACRO_NS}>{body}</robot>')
-    text, _ = xacro.expand(src, args)
-    return text
+    return xacro.expand(src, args).text
 
 
 def test_xacro_properties_math_and_macros(tmp_path):
@@ -272,8 +271,8 @@ def test_xacro_find_resolves_packages_next_to_the_file(tmp_path):
         tmp_path / "pkg" / "urdf" / "r.xacro",
         f'<robot name="r" {XACRO_NS}><xacro:include filename="$(find pkg)/inc.xacro"/></robot>',
     )
-    text, files = xacro.expand(src)
-    assert 'name="inc"' in text and any(f.name == "inc.xacro" for f in files)
+    expansion = xacro.expand(src)
+    assert 'name="inc"' in expansion.text and any(f.name == "inc.xacro" for f in expansion.files)
 
 
 def test_xacro_python_helpers_are_refused_with_an_explanation(tmp_path):
@@ -338,8 +337,7 @@ def test_xacro_undeclared_namespace_and_bom_are_tolerated(tmp_path):
     text = '\ufeff<robot name="r"><xacro:property name="a" value="2"/><link name="l${a}"/></robot>'
     src = tmp_path / "r.xacro"
     src.write_text(text, encoding="utf-8")
-    out, _ = xacro.expand(src)
-    assert 'name="l2"' in out
+    assert 'name="l2"' in xacro.expand(src).text
 
 
 def test_xacro_cannot_read_files_outside_its_project_or_environment_variables(tmp_path):
@@ -360,7 +358,7 @@ def test_xacro_cannot_read_files_outside_its_project_or_environment_variables(tm
     with pytest.raises(xacro.XacroError, match="not allowed"):
         xacro.expand(env)
     optenv = write(project / "o.xacro", f'<robot name="r" {XACRO_NS}><link name="$(optenv HOME fallback)"/></robot>')
-    assert 'name="fallback"' in xacro.expand(optenv)[0]
+    assert 'name="fallback"' in xacro.expand(optenv).text
 
 
 def test_xacro_expressions_are_sandboxed(tmp_path):

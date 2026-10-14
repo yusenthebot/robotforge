@@ -651,3 +651,63 @@ def test_flipped_wheel_axes_still_drive_forward(tmp_path):
         drive.update(model, data)
         mujoco.mj_step(model, data)
     assert data.xpos[model.body("r/chassis").id][0] - start[0] > 0.2
+
+
+def test_undefined_xacro_macros_are_skipped_and_reported(tmp_path):
+    text = (
+        '<robot name="r" xmlns:xacro="http://ros.org/wiki/xacro">'
+        '<link name="base"><inertial><mass value="1"/><inertia ixx="1" iyy="1" izz="1" ixy="0" ixz="0" iyz="0"/>'
+        '</inertial><collision><geometry><box size="0.1 0.1 0.1"/></geometry></collision></link>'
+        "<xacro:make_pelvis/></robot>"
+    )
+    result = import_file(write(tmp_path / "r.urdf", text))
+    skipped = next(f for f in result.report.findings if f.topic == "xacro" and f.status == "unfixed")
+    assert skipped.items == ("make_pelvis",)
+    _world(result)
+
+
+def test_meshes_listed_in_one_format_are_found_in_another(tmp_path):
+    box_stl(tmp_path / "pkg" / "meshes" / "upper.stl", (0.05, 0.05, 0.3))
+    result = import_file(_mesh_arm(tmp_path, "package://pkg/meshes/upper.obj"))  # only the .stl exists
+    guess = next(f for f in result.report.findings if f.topic == "meshes" and f.status == "fixed")
+    assert "upper.stl" in " ".join(guess.items)
+    assert not [f for f in result.report.findings if f.status == "unfixed"]
+
+
+def test_empty_mesh_files_are_noted_not_failed(tmp_path):
+    (tmp_path / "pkg" / "meshes").mkdir(parents=True)
+    (tmp_path / "pkg" / "meshes" / "upper.stl").write_bytes(b"\x00" * 80 + b"\x00\x00\x00\x00")  # header, 0 triangles
+    result = import_file(_mesh_arm(tmp_path, "package://pkg/meshes/upper.stl"))
+    note = next(f for f in result.report.findings if f.topic == "meshes")
+    assert note.status == "info" and "empty" in note.problem
+    _world(result)
+
+
+def test_axis_and_limit_leftovers_on_fixed_joints_do_not_break_loading(tmp_path):
+    body = box_link("base_link") + box_link("plate")
+    body += (
+        '<joint name="mount" type="fixed"><parent link="base_link"/><child link="plate"/>'
+        '<axis/><limit effort="1"/><dynamics damping="0.1"/></joint>'
+    )
+    _world(import_file(write(tmp_path / "r.urdf", robot(body))))
+
+
+def test_ignoring_effort_limits_lets_a_weak_robot_hold_itself_up(tmp_path):
+    weak = arm_urdf().replace('effort="20"', 'effort="0.05"')
+    path = write(tmp_path / "arm.urdf", weak)
+    kept = import_file(path)
+    assert any(f.topic == "actuators" and f.status == "unfixed" for f in kept.report.findings)
+    freed = import_file(path, {"ignore_effort_limits": True})
+    assert not [f for f in freed.report.findings if f.status == "unfixed"]
+    model, data = _world(freed)
+    assert model.actuator_forcerange[0][1] > 1.0
+    _run(model, data, 1.5)
+    assert abs(data.qpos[model.jnt_qposadr[model.joint("r/shoulder").id]]) < 0.05
+
+
+def test_a_robot_on_two_wheels_without_a_caster_is_reported_as_tipping(tmp_path):
+    result = import_file(write(tmp_path / "r.urdf", rover_urdf(caster=False)))
+    verdict = [f for f in result.report.findings if f.topic == "stability"]
+    assert verdict  # either it balances on its body or the report says what is missing
+    if verdict[0].status == "unfixed":
+        assert "caster" in verdict[0].action

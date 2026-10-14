@@ -51,7 +51,7 @@ def arm_urdf(name: str = "arm") -> str:
     )
 
 
-def rover_urdf() -> str:
+def rover_urdf(caster: bool = True) -> str:
     """A box with two driven wheels (continuous joints) and a skid caster."""
     wheel = (
         '<link name="{n}">' + inertial(0.1, 2e-4) + '<visual><origin rpy="1.5708 0 0"/>'
@@ -69,11 +69,15 @@ def rover_urdf() -> str:
         + wheel.format(n="right_wheel")
         + joint.format(n="left_wheel", y=0.13)
         + joint.format(n="right_wheel", y=-0.13)
-        + '<link name="caster_link">'
-        + inertial(0.05, 1e-5)
-        + '<collision><geometry><sphere radius="0.02"/></geometry></collision></link>'
-        + '<joint name="caster_joint" type="fixed"><parent link="chassis"/><child link="caster_link"/>'
-        + '<origin xyz="-0.12 0 -0.03"/></joint>',
+        + (
+            '<link name="caster_link">'
+            + inertial(0.05, 1e-5)
+            + '<collision><geometry><sphere radius="0.02"/></geometry></collision></link>'
+            + '<joint name="caster_joint" type="fixed"><parent link="chassis"/><child link="caster_link"/>'
+            + '<origin xyz="-0.12 0 -0.03"/></joint>'
+            if caster
+            else ""
+        ),
         "rover",
     )
 

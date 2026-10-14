@@ -11,7 +11,7 @@ import numpy as np
 
 from robotforge.design.importing import collision, inertia
 from robotforge.design.importing.inertia import Shape
-from robotforge.design.importing.meshio import MM_LIMIT, MeshAsset, MeshError, prepare_mesh
+from robotforge.design.importing.meshio import MM_LIMIT, EmptyMeshError, MeshAsset, MeshError, prepare_mesh
 from robotforge.design.importing.report import DoctorReport
 from robotforge.design.importing.resolve import MeshResolver
 from robotforge.design.importing.xmlnum import floats
@@ -30,6 +30,7 @@ class GeometryContext:
         self.assets: dict[Path, MeshAsset | MeshError] = {}
         self.guessed: list[str] = []
         self.unresolved: list[str] = []
+        self.empty: set[str] = set()
         self.unresolved_uris: list[str] = []
         self.unreadable: list[str] = []
         self.unreadable_reasons: set[str] = set()
@@ -132,6 +133,10 @@ def _process_mesh(
     if resolution.guessed:
         ctx.guessed.append(resolution.note)
     asset = ctx.asset(resolution.path)
+    if isinstance(asset, EmptyMeshError):
+        ctx.empty.add(resolution.path.name)
+        link.remove(el)
+        return None
     if isinstance(asset, MeshError):
         ctx.unreadable.append(f"{resolution.path.name}: {asset}")
         ctx.unreadable_reasons.add(str(asset))
@@ -227,6 +232,8 @@ def _report_geometry(ctx: GeometryContext, report: DoctorReport) -> None:
             "left those shapes out; the rest of the robot still loads",
             sorted(set(ctx.unresolved)),
         )
+    if ctx.empty:
+        report.info("meshes", "some mesh files are empty placeholders (no triangles); skipped them", sorted(ctx.empty))
     if ctx.unreadable:
         pycollada = any("pycollada" in r for r in ctx.unreadable_reasons)
         action = "left those shapes out; the rest of the robot still loads"

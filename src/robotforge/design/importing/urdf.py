@@ -211,6 +211,9 @@ def _read_joints(robot: ET.Element, links: dict[str, ET.Element], report: Doctor
         if jtype == "fixed" or info.type == "fixed":
             info.type = "fixed"
             el.set("type", "fixed")
+            for extra in ("axis", "limit", "dynamics", "mimic"):  # meaningless on a fixed joint; some are malformed
+                for old in el.findall(extra):
+                    el.remove(old)
         mimic = el.find("mimic")
         if mimic is not None and mimic.get("joint"):
             info.mimic_of = mimic.get("joint")
@@ -269,6 +272,10 @@ def _sanitize_motion(el: ET.Element, info: JointInfo, axes: list[str], notes: li
     effort = _positive(limit.get("effort"))
     velocity = _positive(limit.get("velocity"))
     info.effort, info.velocity = effort, velocity
+    # The motors robotforge adds carry these limits; left in the file, MuJoCo would also clamp the joint's total
+    # actuator force to them (and to 0 for placeholder values), whatever the motors are told.
+    limit.attrib.pop("effort", None)
+    limit.attrib.pop("velocity", None)
     has_lo, has_hi = limit.get("lower") is not None, limit.get("upper") is not None
 
     if info.type == "continuous":

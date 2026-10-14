@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlparse
 # Formats we can read (MuJoCo natively: stl, obj; the rest are converted).
 MESH_SUFFIXES = frozenset({".stl", ".obj", ".dae", ".glb", ".gltf", ".ply", ".off"})
 _SUPPORTED = ".stl, .obj, .dae, .glb, .gltf, .ply, .off"
+_FORMAT_PREFERENCE = (".stl", ".obj", ".dae", ".ply", ".glb", ".gltf", ".off")
 _MAX_LEVELS_UP = 8
 _MAX_SIBLINGS = 300
 _MAX_INDEXED_FILES = 40_000
@@ -123,10 +124,22 @@ class MeshResolver:
     # ---- guessing ----------------------------------------------------------------------
 
     def _guess_by_suffix(self, rest: Path) -> Path | None:
-        """Look for `rest` (or its tail) under the URDF's folder and parents, then by file name."""
+        """Look for `rest` (or its tail) under the URDF's folder and parents, then by file name.
+
+        A file with the same name but another mesh format counts too: some URDFs name .obj or .dae files
+        while the folder only holds the .stl versions.
+        """
         parts = [p for p in rest.parts if p not in ("", ".", "..", "/")]
         if not parts:
             return None
+        formats = [rest.suffix.lower(), *(s for s in _FORMAT_PREFERENCE if s != rest.suffix.lower())]
+        for suffix in formats:
+            hit = self._guess_exact(parts[:-1] + [Path(parts[-1]).with_suffix(suffix).name])
+            if hit is not None:
+                return hit
+        return None
+
+    def _guess_exact(self, parts: list[str]) -> Path | None:
         for ancestor in self.ancestors[:4]:
             for i in range(len(parts)):
                 cand = ancestor.joinpath(*parts[i:])

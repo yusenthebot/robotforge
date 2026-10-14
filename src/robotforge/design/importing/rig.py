@@ -26,6 +26,8 @@ from robotforge.design.importing.verify import HOLD_SECONDS, HoldResult, score, 
 GEOM = mujoco.mjtGeom
 BASE_OMEGA = 30.0  # rad/s: natural frequency of the joint position loops before tuning
 DAMPING_RATIO = 1.0
+SAG_TARGET = 0.02  # rad of sag allowed under worst-case gravity torque
+OMEGA_LIMIT = 250.0  # rad/s: fastest position loop the 2 ms time step handles comfortably
 MIN_JOINT_INERTIA = 1e-4
 MAX_TIME_CONSTANT = 0.12  # s: slowest acceptable motor response, including the joint's own damping
 WHEEL_TIME_CONSTANT = 0.15  # s
@@ -62,11 +64,23 @@ def make_plan(
     urdf: Path,
     report: DoctorReport,
     base: Literal["auto", "fixed", "floating"] = "auto",
+    ignore_effort_limits: bool = False,
 ) -> RigPlan:
     """Inspect the repaired robot, decide how to drive it, and test that it holds still."""
-    home = homepose_model(staged)
+    if ignore_effort_limits:
+        for joint in staged.joints:
+            joint.effort = None
+        report.info(
+            "actuators", "ignoring the file's effort limits, as asked; motors are sized from the robot's weight"
+        )
+    home = home_pose(staged)
     draft = _draft(staged, urdf, base, home)
     draft.result = tune_gains(urdf, draft.plan)
+    if draft.result is not None and draft.result.blockers:
+        # A joint could not make a small move because two links touch: their collision shapes overlap.
+        extra = [pair for pair in draft.result.blockers if pair not in draft.plan.excludes]
+        draft.plan.excludes = sorted([*draft.plan.excludes, *extra])
+        draft.result = tune_gains(urdf, draft.plan)
 
     result = draft.result
     if draft.plan.base == "floating" and result is not None and result.finite and tipped(result):
@@ -109,7 +123,7 @@ def _friction(staged: StagedUrdf) -> dict[str, float]:
     return out
 
 
-def homepose_model(staged: StagedUrdf) -> dict[str, float]:
+def home_pose(staged: StagedUrdf) -> dict[str, float]:
     """Joint values the robot starts at: zero, moved inside the joint limits where zero is not allowed."""
     pose: dict[str, float] = {}
     by_name = {j.name: j for j in staged.joints}
@@ -259,6 +273,9 @@ def _position_actuator(
     kv = 2 * DAMPING_RATIO * effective * BASE_OMEGA
     # The file's own joint damping and friction fight the motor: keep it from turning the joint into molasses.
     kp = max(kp, (j.damping + kv) / MAX_TIME_CONSTANT, j.friction / (0.002 if slide else 0.01))
+    # Hold the joint within a small sag even when the arm is stretched out (worst-case gravity torque), as far as
+    # the time step allows: the loop must stay slower than OMEGA_LIMIT for the integrator to cope.
+    kp = max(kp, min(torque / (0.002 if slide else SAG_TARGET), effective * OMEGA_LIMIT**2))
     kv = max(2 * DAMPING_RATIO * math.sqrt(kp * effective) - j.damping, 0.1 * math.sqrt(kp * effective))
     span = 0.1 if slide else 0.5
     force = j.effort if j.effort else max(4.0 * torque, kp * span)
@@ -281,7 +298,7 @@ def _share_body_weight(
             reach = max(reach, float(np.linalg.norm(geo.data.xipos[b] - anchor)))
     reach = max(reach, 0.05)
     if slide:
-        return max(effective, share), torque + share * GRAVITY
+        return max(effective, share), torque + share * GRAVITY * abs(float(geo.data.xaxis[jid][2]))
     return max(effective, share * reach * reach), torque + share * GRAVITY * reach
 
 
@@ -377,9 +394,10 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
     plan = draft.plan
     report.info("base", f"the robot's base is {plan.base}: {draft.base_reason}")
     if plan.base == "floating":
-        report.info(
-            "placement", f"the robot starts {plan.spawn_height * 100:.1f} cm above the floor so it just touches it"
-        )
+        if plan.spawn_height > 0.005:
+            report.info(
+                "placement", f"the robot starts {plan.spawn_height * 100:.1f} cm above the floor so it just touches it"
+            )
     elif draft.lifted:
         report.fixed(
             "placement",
@@ -423,7 +441,7 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
             "actuators",
             "the file's effort limits are too weak to hold the robot's own weight when it is stretched out",
             "kept the file's limits, so these joints will sag; "
-            "re-import a copy of the URDF with larger <limit effort> values if that is not wanted",
+            "pass ignore_effort_limits=true to size the motors from the robot's weight instead",
             draft.weak,
         )
     if plan.excludes:
@@ -471,13 +489,18 @@ def report_hold(plan: RigPlan, result: HoldResult | None, report: DoctorReport) 
     if result.drift > 1.0:
         reasons.append(f"joints sag ({result.drift_raw})")
     if result.tracking > 0.2:
-        reasons.append(f"joints do not follow commands ({result.tracking_raw})")
+        reasons.append(f"joints do not follow commands ({result.tracking_raw}; a link may be blocking it)")
     if tipped(result):
         reasons.append("the body falls over or collapses")
+    wheeled = any(a.kind == "velocity" for a in plan.actuators)
+    advice = (
+        "a wheeled robot needs a third point of support (a caster or skid) to stay upright"
+        if wheeled and tipped(result)
+        else "legged robots also need a balance controller to stay up"
+    )
     report.unfixed(
         "stability",
         "the robot does not hold its starting pose by itself: " + " and ".join(reasons),
         "kept the strongest motors the file's effort limits allow. "
-        "If the limits are too low, edit <limit effort> in a copy of the URDF; "
-        "legged robots also need a balance controller to stay up",
+        f"If the limits are too low, pass ignore_effort_limits=true; {advice}",
     )

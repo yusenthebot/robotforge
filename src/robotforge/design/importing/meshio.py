@@ -34,6 +34,10 @@ class MeshError(ValueError):
     """A mesh file that cannot be used at all; the message says why."""
 
 
+class EmptyMeshError(MeshError):
+    """A mesh file that is valid but holds no triangles (a placeholder some exporters leave behind)."""
+
+
 @dataclass
 class Piece:
     """One output file of a mesh and the flat color it should be drawn with (None = unknown)."""
@@ -76,7 +80,7 @@ def prepare_mesh(source: Path, out_dir: Path) -> MeshAsset:
         if len(mesh.faces):
             cleaned.append((mesh, rgba))
     if not cleaned:
-        raise MeshError(f"{source.name} contains no usable triangles")
+        raise EmptyMeshError(f"{source.name} contains no triangles")
     original_faces = sum(len(m.faces) for m, _ in cleaned)
 
     digest = hashlib.sha1(

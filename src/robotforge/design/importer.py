@@ -58,6 +58,7 @@ class ImportOptions(BaseModel):
 
     base: Literal["auto", "fixed", "floating"] = "auto"  # URDF: arm-like or free-standing; mesh: fixed or dropped
     decompose: bool = False  # split concave collision meshes into convex pieces (slow, cached)
+    ignore_effort_limits: bool = False  # URDF: size motors from the robot's weight instead of the file's <limit effort>
     scale: float | None = None  # plain meshes: multiply the size (default: guess meters vs millimeters)
     mass: float | None = None  # plain meshes that float: kg (default: from volume at 500 kg/m^3)
     xacro_args: dict[str, str] | None = None  # values for <xacro:arg> names
@@ -210,7 +211,7 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
     urdf_path = entry / "staged.urdf"
     urdf_path.write_text(staged.text, encoding="utf-8")
 
-    plan = make_plan(staged, urdf_path, report, opts.base)
+    plan = make_plan(staged, urdf_path, report, opts.base, opts.ignore_effort_limits)
     report.stats.update(_stats(staged, plan))
 
     dep_files = {src, *deps, *staged.mesh_sources}
@@ -226,7 +227,15 @@ def _read_urdf(src: Path, opts: ImportOptions, report: DoctorReport) -> tuple[st
     except OSError as exc:
         raise ValueError(f"could not read {src}: {exc}") from exc
     if src.suffix.lower() == ".xacro" or xacro.needs_expansion(text):
-        expanded, deps = xacro.expand(src, opts.xacro_args)
+        expansion = xacro.expand(src, opts.xacro_args)
+        expanded, deps = expansion.text, expansion.files
+        if expansion.undefined_macros:
+            report.unfixed(
+                "xacro",
+                "the file calls xacro macros that are never defined in it or in what it includes",
+                "left those parts out; if they matter, include the xacro files that define them",
+                expansion.undefined_macros,
+            )
         report.fixed(
             "xacro",
             "the file is a xacro template (macros and ${...} formulas), not a finished URDF",

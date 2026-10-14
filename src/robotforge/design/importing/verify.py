@@ -13,7 +13,8 @@ from robotforge.design.importing.plan import ActuatorPlan, RigPlan, build_spec
 
 GEOM = mujoco.mjtGeom
 HOLD_SECONDS = 3.0
-TRACK_SECONDS = 1.0
+TRACK_SECONDS = 0.6
+TRACK_SETTLE_SECONDS = 0.4
 TRACK_STEP_REV = 0.25  # rad: the small move used to check that sliders follow
 TRACK_STEP_SLIDE = 0.03  # m
 MAX_HOLD_DRIFT_REV = 0.03  # rad
@@ -29,6 +30,7 @@ class HoldResult:
     upright: bool
     tracking: float = 0.0  # worst share of a small commanded move that was not achieved (fixed bases only)
     tracking_raw: str = ""
+    blockers: tuple[tuple[str, str], ...] = ()  # link pairs touching while a joint failed to reach its target
 
     @property
     def holds(self) -> bool:
@@ -98,37 +100,57 @@ def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldR
         upright = float(data.xmat[root].reshape(3, 3)[2, 2]) > 0.7
     result = HoldResult(True, worst, worst_text, drop, upright)
     if plan.base == "fixed" and result.finite and result.drift <= 1.0:
-        result.tracking, result.tracking_raw = _tracking(model, data, plan)
+        result.tracking, result.tracking_raw, result.blockers = _tracking(model, data, plan)
     return result
 
 
-def _tracking(model: mujoco.MjModel, data: mujoco.MjData, plan: RigPlan) -> tuple[float, str]:
-    """Command a small move on every joint at once; return the worst share of it that was not achieved."""
-    targets: dict[int, tuple[float, str]] = {}
+def _tracking(
+    model: mujoco.MjModel, data: mujoco.MjData, plan: RigPlan
+) -> tuple[float, str, tuple[tuple[str, str], ...]]:
+    """Nudge each joint on its own and return the worst share of the move that was not achieved.
+
+    Joints are tested one at a time: moving them all at once measures how they shake each other, not their motors.
+    """
+    worst, text = 0.0, ""
+    blockers: set[tuple[str, str]] = set()
     for a in plan.actuators:
         if a.kind != "position":
             continue
         jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"t/{a.joint}")
         slide = model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_SLIDE
         up, down = a.ctrl_hi - a.home, a.home - a.ctrl_lo
-        room = max(up, down)
-        delta = min(TRACK_STEP_SLIDE if slide else TRACK_STEP_REV, 0.8 * room)
+        delta = min(TRACK_STEP_SLIDE if slide else TRACK_STEP_REV, 0.8 * max(up, down))
         if delta <= 1e-6:
             continue
         delta = delta if up >= down else -delta
         aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"t/{a.joint}")
         data.ctrl[aid] = a.home + delta
-        targets[jid] = (a.home + delta, a.joint)
-    if not targets or not _run(model, data, TRACK_SECONDS):
-        return (0.0, "") if not targets else (math.inf, "the simulation blew up")
-    worst, text = 0.0, ""
-    for jid, (target, name) in targets.items():
-        start = plan.home_qpos.get(name, 0.0)
+        if not _run(model, data, TRACK_SECONDS):
+            return math.inf, "the simulation blew up", ()
         achieved = float(data.qpos[model.jnt_qposadr[jid]])
-        missing = abs(target - achieved) / max(abs(target - start), 1e-9)
+        progress = (achieved - a.home) / delta  # 1.0 means it got exactly where it was told to go
+        missing = max(1.0 - progress, progress - 1.5, 0.0)  # falling short, or flinging past by half the move
+        if missing > 0.2:
+            blockers |= _touching_links(model, data)
         if missing >= worst:
-            worst, text = missing, f"{name} reached {achieved:.3g} of {target:.3g}"
-    return worst, text
+            worst, text = missing, f"{a.joint} reached {achieved:.3g} of {a.home + delta:.3g}"
+        data.ctrl[aid] = a.home
+        if not _run(model, data, TRACK_SETTLE_SECONDS):
+            return math.inf, "the simulation blew up", ()
+    return worst, text, tuple(sorted(blockers))
+
+
+def _touching_links(model: mujoco.MjModel, data: mujoco.MjData) -> set[tuple[str, str]]:
+    """Pairs of the robot's own links that are in contact right now (names without the test prefix)."""
+    pairs = set()
+    for i in range(data.ncon):
+        c = data.contact[i]
+        a, b = int(model.geom_bodyid[c.geom1]), int(model.geom_bodyid[c.geom2])
+        if a == b or a == 0 or b == 0 or c.dist >= 0:
+            continue
+        names = sorted(mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, x).removeprefix("t/") for x in (a, b))
+        pairs.add((names[0], names[1]))
+    return pairs
 
 
 def tune_gains(urdf: Path, plan: RigPlan) -> HoldResult | None:
