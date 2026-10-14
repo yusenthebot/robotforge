@@ -65,10 +65,17 @@ def import_file(
     src = src.resolve()
     suffix = src.suffix.lower()
     cache = cache_dir or import_cache_dir()
-    if suffix in URDF_SUFFIXES:
-        return _import_urdf(src, opts, cache)
-    if suffix in MESH_SUFFIXES:
-        return import_mesh_object(src, opts, cache)
+    try:
+        if suffix in URDF_SUFFIXES:
+            return _import_urdf(src, opts, cache)
+        if suffix in MESH_SUFFIXES:
+            return import_mesh_object(src, opts, cache)
+    except OSError as exc:  # most likely the cache folder: say how to point it somewhere writable
+        raise ValueError(
+            f"could not read or write files while importing {src.name} ({exc}); "
+            f"robotforge keeps converted meshes in {cache}; set ROBOTFORGE_HOME to a writable folder if that is "
+            "the problem"
+        ) from exc
     raise ValueError(
         f"{src.name}: robotforge imports .urdf, .xacro and meshes ({', '.join(sorted(MESH_SUFFIXES))}); "
         "MuJoCo .xml files are opened directly"

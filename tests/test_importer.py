@@ -737,3 +737,10 @@ def test_deleted_cache_meshes_trigger_a_rebuild_and_the_mesh_cache_is_bounded(tm
     monkeypatch.setattr(importer, "MESH_CACHE_BYTES", 1)
     importer._prune(home / "cache" / "import")
     assert not list((home / "cache" / "import" / "meshes").glob("*"))
+
+
+def test_an_unwritable_cache_gives_an_actionable_error(tmp_path, monkeypatch):
+    blocker = write(tmp_path / "not_a_folder", "x")
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(blocker))
+    with pytest.raises(ValueError, match="ROBOTFORGE_HOME"):
+        import_file(write(tmp_path / "arm.urdf", arm_urdf()))
