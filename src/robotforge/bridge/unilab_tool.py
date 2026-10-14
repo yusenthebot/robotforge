@@ -419,7 +419,7 @@ def export(run: Path, out: Path, name: str, robot: str | None, title: str | None
     cfg = _load_cfg(run)
     task = task or _owner_task(cfg)
     started = time.perf_counter()
-    if not (run / "policy.onnx").is_file():
+    if _onnx_is_stale(run):
         _export_onnx_with_unilab(run, task, cfg)
     card = build_card(run, name, robot, title, task)
     out.mkdir(parents=True, exist_ok=True)
@@ -442,6 +442,15 @@ def export(run: Path, out: Path, name: str, robot: str | None, title: str | None
         "onnx_bytes": (out / "policy.onnx").stat().st_size,
         "export_seconds": round(time.perf_counter() - started, 1),
     }
+
+
+def _onnx_is_stale(run: Path) -> bool:
+    """policy.onnx is missing or older than the newest checkpoint (e.g. exported mid-training)."""
+    onnx_file = run / "policy.onnx"
+    checkpoints = list(run.glob("model_*.pt"))
+    if not onnx_file.is_file():
+        return True
+    return bool(checkpoints) and max(c.stat().st_mtime for c in checkpoints) > onnx_file.stat().st_mtime
 
 
 def _term_width(term: dict[str, Any], joints: int) -> int:
