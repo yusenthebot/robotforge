@@ -70,4 +70,5 @@ jobs:
 
       # Learned walking policies need the optional extra; their tests skip without it, so run them once more with it.
       - name: Learned policies (extra policy = onnxruntime)
+        if: success() || failure()  # independent of the main test run's result
         run: uv run --extra policy pytest -q -ra tests/test_onnx_policy.py
