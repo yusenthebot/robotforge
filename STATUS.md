@@ -2,13 +2,11 @@
 
 - Goal: docs/GOAL.md (evolving; Floor = A1-A9)
 - Mode: evolving
-- Round: 1 done (sim server + thin viewer)
-- Phase: R0 spikes; spike 1 done and verified in the browser pane
-- Last done: MuJoCo real-time session, three.js viewer over WebSocket (sliders, play/pause/step/reset, speed, drag with gravity comp), `robotforge open|demo` CLI, 17 tests
-- Verified for real: demo scene + a 263-geom Go2 room scene (81 meshes, 15 MB) run at realtime 1.00x; drag lifts a cube to the cursor; sliders move the arm
-- Next: round 2 - MCP server (official SDK 2.3) with world_open / robot_add / sim / observe / view, driven by a real `claude -p` session
-- Then: spike 3 - MCP App embed in Claude Desktop (localhost WebSocket via connectDomains)
-- Floor status: A1 [ ] A2 [ ] A3 [~ MJCF/URDF open works, no doctor yet] A4 [ ] A5 [~ local web viewer works] A6 [ ] A7 [~ cold start 0.19s] A8 [ ] A9 [~ ruff + pytest green]
-- Blockers: none
+- Round: 3 done (design layer); round 2 (MCP server) done except real-agent verification
+- Last done: world.yaml + MjSpec compiler, arm/quadruped/rover templates from a real-parts catalog, atomic edits + undo, 18 MCP tools, grouped/collapsible viewer panel, bounds-based camera framing, no-cache assets
+- Verified for real: showcase world (dog + arm + rover + cube + bin + ball) in the browser pane at 604 px; quadruped stands 3 s upright; rover drives straight; MCP over real stdio (SDK client) incl. PNG observe
+- Next: round 4 - behaviors: quadruped trot gait (A1), arm IK pick-and-place script runner (A2), keyboard teleop
+- Floor status: A1 [ ] A2 [ ] A3 [~ open MJCF/URDF; no doctor] A4 [ ] A5 [~ local viewer; MCP App resource exists, host embed untested] A6 [~ blocked, see below] A7 [~ cold start 0.19 s] A8 [ ] A9 [~ 36 tests, ruff clean]
+- Blockers (need user): `claude` CLI OAuth expired (run `claude auth login`); `codex exec` fails with "workspace routing discovery failed/timed out" (Codex backend via proxy). One earlier codex run did reach the model and called our tools (approval mode had to be set).
 - Gates pending: none
 - Updated: 2026-10-14

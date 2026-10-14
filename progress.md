@@ -2,43 +2,40 @@
 
 ## Current state
 
-Round 1 done, 2026-10-14.
-`src/robotforge/sim/session.py` owns one MjModel/MjData and advances it in scaled real time (debt-based, capped at 0.1 s per tick so stalls become slow motion, not bursts).
-`src/robotforge/viewer/` serves a vendored three.js r178 client (no build step) and a WebSocket: scene JSON per model version, mesh blob over HTTP, binary pose frames (float32 time + xpos + xquat) at 60 Hz, state JSON at 4 Hz.
-Client sends ctrl, cmd (play/pause/step/reset), speed, drag_start/move/end.
-`robotforge open <mjcf|urdf>` and `robotforge demo` work; demo is a 3-DOF arm with cubes and a ball.
+Rounds 1-3 done, 2026-10-14.
+
+- `sim/session.py`: one MjModel/MjData, real-time advance (only while a viewer is connected), drag with gravity compensation, `load_model` for compiled worlds.
+- `sim/render.py`: offscreen PNG snapshots (CGL on macOS, works off the main thread), view presets + model cameras.
+- `viewer/`: Starlette + WebSocket thin client (three.js r178 vendored). Grouped per-robot sliders, collapsible panel, Frame button, no-cache headers.
+- `design/`: `components.py` (servo/motor catalog with approximate datasheet values, materials, colors), `templates/` (arm 3-6 DOF + gripper, quadruped 12 DOF with IMU/touch/camera, rover diff-drive), `world.py` (pydantic World -> MjSpec, `<robot>/` prefixes, objects incl. table and bin, `home` keyframe), `store.py` (world dir under $ROBOTFORGE_HOME/worlds, atomic edits, undo history, build/world.xml).
+- `playground.py` + `mcp_server.py`: 18 MCP tools (design + control + observe + open_viewer with MCP Apps ui:// resource). `robotforge mcp` runs it on stdio; `robotforge open <world dir|mjcf|urdf>` opens the viewer.
 
 ## What worked
 
-- Python-authoritative physics with a thin viewer: realtime factor 1.00 and 120 fps on the demo and on a 263-geom Go2 room scene.
-- MuJoCo's own mesh normals (mesh_normal + mesh_facenormal) give correct hard-edge shading without client-side normal computation.
-- Spring drag plus subtree gravity compensation: the held body tracks the cursor (test asserts within 1 cm).
-- Cold start to a served scene: 0.19 s.
+- MjSpec `attach(child, prefix, frame)` makes multi-robot worlds and imports clean. Each attach needs a fresh child spec.
+- Real-parts sizing: quadruped (sts3215) stands unaided, arm holds a ready pose, rover drives straight at 10 rad/s.
+- MCP SDK 2.x (`MCPServer`, `mcp.server.apps.Apps`) covers MCP Apps natively.
+- Raising `ToolError` for anticipated failures gives agents actionable text ("Did you mean shoulder?").
 
 ## What did NOT work (and the fix)
 
-- `import robotforge` failed: iCloud Desktop sets the macOS `hidden` flag on `.venv/*.pth`, and Python 3.12 skips hidden .pth files. Fixed with `.venv -> .venv.nosync` symlink.
-- `_GEOM_TYPE_NAMES` keyed by `mjtGeom` enums never matched `model.geom_type` ints, so the scene had 0 geoms. Keys are now ints.
-- After a restart the server silently moved from 8737 to 8738: the free-port probe lacked SO_REUSEADDR so TIME_WAIT looked busy. Probe now matches uvicorn, and an explicit `--port` is strict.
-- Scripted pointer tests in the browser pane failed because the pane is hidden: rAF is throttled (fps 0), so camera matrices were stale, and screenshot px != CSS px (viewport 1024x768 vs 800x600 screenshot). Picking now refreshes matrices itself; tests use `window.__robotforge.screenOf`.
-- Instant synthetic drags (down/move/up in one tick) do nothing; that is expected, real drags work.
-
-## Measurements
-
-- Unpacked site-packages incl. dev tools: 153 MB (mujoco 72 MB, numpy 24 MB). Runtime-only footprint still to measure in a clean venv; A7 needs a clear definition (download vs unpacked).
-- Go2 room mesh blob 15 MB as non-indexed float32 triangles. Indexed transfer would be ~2x smaller; not needed on localhost yet.
+- mcp 2.x hides messages of unexpected exceptions from clients; tools must raise `ToolError` (wrapped via `_tool_errors`).
+- `Apps` snapshots its tools at `MCPServer(...)` construction: register `@apps.tool` before creating the server.
+- Viewer showed a stale UI after code changes: browsers heuristically cached index/app.js. Now `Cache-Control: no-cache` (ETag revalidation).
+- 604 px-wide pane (same as an inline chat app) made the old fixed panel cover half the view; now collapsible and grouped.
+- `claude -p` real-agent run: blocked by expired CLI OAuth (needs user). `codex exec`: first run reached the model but MCP calls needed `mcp_servers.<name>.default_tools_approval_mode="approve"`; later runs fail with "workspace routing discovery failed/timed out" though curl to OpenAI works via the proxy. Needs the user. Also: `codex exec` waits on stdin unless `< /dev/null`.
 
 ## Next-round seed
 
-Round 2: MCP server with the official Python SDK (mcp 2.3.0 is a new major version; read its API before writing).
-Tools: world_open, robot_add (MJCF/URDF path for now), sim (play/pause/reset/step), observe (state + rendered image), view (start viewer, return URL).
-One process hosts both the MCP stdio server and the viewer server sharing a SimSession.
-Verify with a real headless `claude -p` session that loads the demo, moves an actuator, and reports an observation; then the same with `codex exec`.
-Also: headless offscreen rendering for `observe` (mujoco.Renderer) on macOS.
+Round 4, behaviors:
+1. Quadruped trot gait controller (open loop, phase-based foot trajectories + leg IK) with forward speed and turn rate; verify trunk advances > 1 m in 10 s without falling (A1).
+2. Arm IK (mink is approved; or a small damped-least-squares IK on MuJoCo Jacobians) + pick-and-place helper; agent-authored `behaviors/*.py` run in a subprocess against a restricted API; verify cube ends inside the bin (A2).
+3. Keyboard teleop in the viewer for rover and quadruped (A4 needs it for Go2).
+Expose as MCP tools: `run_behavior` (built-ins: walk, turn, stand, pick_and_place) and `write_script` / `run_script`.
 
 ## Frontier
 
-- Current ceiling: interactive viewer for existing MJCF/URDF; no agent, no design, no behaviors.
-- Next frontiers: MCP agent loop (round 2), world.yaml + robot templates (round 3), behaviors + scenes (round 4), import doctor + robot library (round 5), MCP App embed.
-- Radical ideas weighed: physics in browser via MuJoCo WASM (rejected as primary; kept for sharing).
-- Escalation ladder: open-loop gaits -> CPU RL -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real with real hardware.
+- Current ceiling: design + inspect + manual control of three template robots; no autonomous behavior yet.
+- Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
+- Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
+- Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
