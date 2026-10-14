@@ -34,7 +34,7 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 | 任务 | 要做到什么 | 适用的机器人 | 可选算法 |
 |---|---|---|---|
 | reach | 把机械臂末端（tcp 点）移到目标点并停住，误差小于 1 厘米算成功 | 机械臂模板 | ik, pd, cartesian, mpc, mppi |
-| balance | 推小车让摆杆保持竖直，小车尽量待在中间，倾角超过 46 度算失败 | 倒立摆模板 cartpole | lqr, pd, mpc, mppi, none |
+| balance | 推小车让摆杆保持竖直，小车尽量待在中间，倾角超过 46 度算失败 | 倒立摆模板 cartpole | lqr, pd, mpc, mppi, ars, none |
 | stand | 在指定高度站稳，不漂移，被推之后能恢复 | 四足模板 | hold, mpc, mppi |
 | walk | 按指定速度往前走（可带转向），不能摔倒 | 四足模板 | gait, mpc, mppi |
 | drive_to | 开到地面上的目标点并停下，误差小于 5 厘米算成功 | 小车模板 | pd, mpc, mppi |
@@ -81,6 +81,14 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 和 mpc 一样采样很多未来，但不是只选最好的一个，而是按好坏加权平均所有方案。
 动作通常更平滑，更省力，但在需要“果断转一大圈”的目标上可能犹豫。
 
+### ars：强化学习（增强随机搜索）
+
+不给任何控制规则，让机器人自己试错：随机微调一个线性策略（动作等于观测的加权和），保留得分高的方向，反复几十轮。
+它只用 numpy，不需要安装 PyTorch，在倒立摆上大约 3 秒就学会平衡（相当于在仿真里练了 800 多秒）。
+`run_controller` 和 `compare_controllers` 里选 ars 时，会先当场训练再运行，结果里有训练用时。
+目前只对 balance 开放；更难的任务（随机目标的 reach、走路）需要神经网络策略，也就是可选的 `rl` 依赖组里的 PPO、SAC。
+在 Python 里也可以直接训练：`train_ars(make_env("balance"))`，返回的策略能 `save` 成一个小文件。
+
 ### hold、gait、none
 
 hold 是让所有舵机保持初始姿态，也就是“没人控制时机器人在做什么”。
@@ -116,6 +124,7 @@ balance，起始倾角随机，3 秒时推摆杆一下，6 秒：
 | pd | 11.38 | yes | 0.45 | 0.71 | 0.01 | |
 | mpc | 11.67 | yes | -2.64 | 1.10 | 0.04 | 1756 plans/s |
 | mppi | 11.65 | yes | 2.64 | 1.29 | 0.04 | 1603 plans/s |
+| ars | 11.69 | yes | -1.19 | 1.32 | 0.01 | learned in 3.2s |
 | none | -25.73 | no | 117.14 | 0.00 | 0.01 | failed at 0.84s |
 
 stand，2 秒时侧向猛推（1.2 米每秒），5 秒：
@@ -148,6 +157,7 @@ drive_to，目标 [-0.8, 0.3]，6 秒：
 - MPC 不用为每个任务专门设计控制律，换任务只换代价函数，代价是每秒几百到上千次物理模拟。
 - 被猛推时，只会“保持姿态”的 hold 和只会“按节奏迈腿”的 gait 都会摔，会预测未来的 MPC 能救回来。
 - MPC 的动作有采样噪声，所以 effort 往往比经典控制高。
+- 强化学习（ars）不需要懂物理，靠试错学出来的线性策略和 LQR 的效果几乎一样，但要先花时间训练。
 
 ## 统一的环境接口（Gym 风格）
 
@@ -187,4 +197,4 @@ gymnasium 只在调用这一行时才导入，核心安装不受影响；没装�
 - MPC 预测时会模拟整个世界，世界里机器人越多越慢；同时在一个世界里跑多个 MPC 会互相抢 CPU。
 - LQR 目前只支持没有浮动基座的机器人（倒立摆这类），四足的 LQR 需要处理接触，留到后面。
 - 纯采样 MPC 学不会走路，walk 默认叠加在内置步态上。
-- 强化学习训练本身还没接入，环境接口已经按 Stable-Baselines3 的要求准备好。
+- 神经网络强化学习（PPO、SAC）还没接入，环境接口已经按 Stable-Baselines3 的要求准备好；目前能用的是只依赖 numpy 的 ars。

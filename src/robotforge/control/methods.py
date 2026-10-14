@@ -19,6 +19,7 @@ METHODS: dict[str, str] = {
     "lqr": "Linear-quadratic regulator: the optimal feedback gains for a model linearized around balance.",
     "mpc": "Predictive sampling MPC: simulate many possible futures every 20 ms and follow the best one.",
     "mppi": "MPPI: like predictive sampling, but blends all futures weighted by how good they are.",
+    "ars": "Reinforcement learning (Augmented Random Search): learn a linear policy by trial and error, then run it.",
     "hold": "Hold the home pose with every servo (what the robot does when nobody controls it).",
     "gait": "The built-in trot gait: legs follow scripted foot paths, solved with leg IK.",
     "none": "No control at all, to see what physics does on its own.",
@@ -69,6 +70,10 @@ def make_controller(
             return classic.Hold(task, np.zeros(len(task.actuators)), label="none")
         if method == "gait":
             return _gait(task, model, params)
+        if method == "ars":
+            from robotforge.control.ars import train_controller
+
+            return train_controller(task, model, params)
     except TypeError as exc:  # unknown keyword in params
         raise TaskError(f"{method}: bad params {sorted(params)}: {exc}") from exc
     raise TaskError(f"{method} is not available for {task.name} yet")

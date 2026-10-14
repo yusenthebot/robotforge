@@ -175,6 +175,8 @@ def table(results: list[RunResult]) -> str:
             notes.append(f"goal reached at {r.first_success_at:.2f}s")
         if "plan_hz" in r.controller:
             notes.append(f"{r.controller['plan_hz']:.0f} plans/s")
+        if "train_seconds" in r.controller:
+            notes.append(f"learned in {r.controller['train_seconds']:.1f}s")
         notes.extend(e.split(": ", 1)[-1] for e in r.events if "unstable" in e)
         value = r.report.get(headline, "") if headline else ""
         rows.append(

@@ -366,3 +366,26 @@ def test_mppi_on_top_of_the_gait_walks():
     result = run(make_task("walk", model, robot), model, _home(model), "mppi", 3.0)
     assert not result.failed and result.report["distance_m"] > 0.6
     assert result.controller["on_top_of"]["behavior"] == "walk"
+
+
+def test_ars_learns_to_balance_with_numpy_only(tmp_path):
+    from robotforge.control.ars import LinearPolicy, evaluate, train_ars
+
+    env = make_env("balance", episode_seconds=4.0)
+    policy, log = train_ars(env, iterations=15, seed=2)
+    returns = [evaluate(env, policy, 100 + s)[0] for s in range(3)]
+    assert min(returns) > 0.95 * 2.0 * 4.0  # alive the whole episode with little cost
+    assert log.iterations[-1]["mean_return"] > log.iterations[0]["mean_return"]
+    policy.save(tmp_path / "pole.npz")
+    again = LinearPolicy.load(tmp_path / "pole.npz")
+    obs, _ = env.reset(seed=5)
+    np.testing.assert_array_equal(policy(obs), again(obs))
+
+
+def test_ars_method_trains_then_balances_through_a_push():
+    model, robot = task_world("balance")
+    data = _home(model)
+    task = make_task("balance", model, robot)
+    task.reset(data, np.random.default_rng(3))
+    result = run(task, model, data, "ars", 4.0, {"iterations": 15, "seed": 2}, push_at=2.0)
+    assert not result.failed and result.controller["iterations"] == 15

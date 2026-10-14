@@ -60,12 +60,16 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
             with session.lock:
-                model, data, version = session.model, session.data, session.version
-                bound = make_task(task, model, robot, task_params)
-                seconds = seconds or bound.default_seconds
-                bound.begin(data)
-                controller = make_controller(method, bound, model, data, method_params)
-                monitor = EpisodeMonitor(bound, model, data)
+                model, snapshot, version = session.model, copy.copy(session.data), session.version
+            bound = make_task(task, model, robot, task_params)
+            seconds = seconds or bound.default_seconds
+            bound.begin(snapshot)
+            # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
+            controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)
+            with session.lock:
+                _same_world(session, version)
+                bound.begin(session.data)
+                monitor = EpisodeMonitor(bound, model, session.data)
                 session.set_controller(robot, controller)
                 session.set_controller(MONITOR, monitor)
             events: list[str] = []

@@ -22,7 +22,7 @@ class Balance(Task):
     name = "balance"
     summary = "Keep the pole of a cart-pole upright by moving the cart, and keep the cart near the middle."
     robot_hint = "a cart-pole (add_robot with template 'cartpole')"
-    methods = ("lqr", "pd", "mpc", "mppi", "none")
+    methods = ("lqr", "pd", "mpc", "mppi", "ars", "none")
     Params = BalanceParams
     default_seconds = 6.0
     control_hz = 100.0
