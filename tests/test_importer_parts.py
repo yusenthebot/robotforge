@@ -311,6 +311,37 @@ def test_xacro_params_with_quotes_and_spaces_and_booleans(tmp_path):
     assert "<collision" in out and "<visual" not in out
 
 
+def test_xacro_double_star_blocks_string_methods_and_numeric_strings(tmp_path):
+    body = """
+    <xacro:macro name="part" params="name xyz **extras">
+      <xacro:property name="x" value="${xyz.split(' ')[0]}"/>
+      <link name="${name}"><origin xyz="${x + 0.5} 0 0"/><xacro:insert_block name="extras"/></link>
+    </xacro:macro>
+    <xacro:part name="p" xyz="1 2 3"><visual/><collision/></xacro:part>
+    """
+    out = _expand(tmp_path, body)
+    assert 'xyz="1.5 0 0"' in out  # "1" became a number, so the formula could add to it
+    assert "<visual" in out and "<collision" in out
+
+
+def test_xacro_yaml_degrees_tag_and_eager_properties(tmp_path):
+    write(tmp_path / "limits.yaml", "lower: !degrees -90\nupper: !radians 1.5\n")
+    body = """
+    <xacro:property name="limits" value="${xacro.load_yaml('limits.yaml')}" lazy_eval="false"/>
+    <joint name="j"><limit lower="${limits.lower}" upper="${limits.upper}"/></joint>
+    """
+    out = _expand(tmp_path, body)
+    assert 'lower="-1.57079' in out and 'upper="1.5"' in out
+
+
+def test_xacro_undeclared_namespace_and_bom_are_tolerated(tmp_path):
+    text = '\ufeff<robot name="r"><xacro:property name="a" value="2"/><link name="l${a}"/></robot>'
+    src = tmp_path / "r.xacro"
+    src.write_text(text, encoding="utf-8")
+    out, _ = xacro.expand(src)
+    assert 'name="l2"' in out
+
+
 def test_xacro_expressions_are_sandboxed(tmp_path):
     for evil in ("__import__('os').system('echo hi')", "().__class__", "[x for x in range(3)]", "exec('1')"):
         with pytest.raises(xacro.XacroError):

@@ -261,7 +261,7 @@ def test_xacro_flavoured_urdf_is_expanded(tmp_path):
 
 
 def test_xacro_file_with_python_helper_explains_what_to_do(tmp_path):
-    text = '<robot name="r" xmlns:xacro="http://ros.org/wiki/xacro"><link name="${load_yaml(\'a.yaml\')}"/></robot>'
+    text = '<robot name="r" xmlns:xacro="http://ros.org/wiki/xacro"><link name="${made_up_helper(1)}"/></robot>'
     with pytest.raises(ValueError, match="Python helper"):
         import_file(write(tmp_path / "bad.xacro", text))
 
@@ -422,7 +422,7 @@ def test_legged_robot_is_floating_and_stands_on_its_own(tmp_path):
 
 def test_robot_that_cannot_hold_itself_up_is_reported_honestly(tmp_path):
     one_legged = _walker_urdf(legs=1)  # a body on one leg cannot balance
-    result = import_file(write(tmp_path / "weak.urdf", one_legged))
+    result = import_file(write(tmp_path / "weak.urdf", one_legged), {"base": "floating"})
     stability = [f for f in result.report.findings if f.topic == "stability"]
     assert stability and stability[0].status == "unfixed"
     assert "does not hold" in stability[0].problem
@@ -589,3 +589,65 @@ def test_doctor_report_is_json_serializable(tmp_path):
     result = import_file(write(tmp_path / "arm.urdf", arm_urdf()))
     data = json.loads(json.dumps(result.report.to_dict()))
     assert data["findings"] and data["summary"]
+
+
+# ---- more real-world quirks ------------------------------------------------------------------
+
+
+def test_friction_hints_from_gazebo_and_pybullet_tags_are_applied(tmp_path):
+    body = (
+        box_link("base_link")
+        + box_link("foot_link").replace("</link>", '<contact><lateral_friction value="0.3"/></contact></link>')
+        + box_link("pad")
+        + revolute("j1", "base_link", "foot_link")
+        + revolute("j2", "foot_link", "pad")
+        + '<gazebo reference="pad"><mu1>0.7</mu1><mu2>0.7</mu2></gazebo>'
+    )
+    result = import_file(write(tmp_path / "r.urdf", robot(body)))
+    model, _ = _world(result)
+    friction = {
+        n: model.geom_friction[g][0] for g in range(model.ngeom) for n in [model.body(model.geom_bodyid[g]).name]
+    }
+    assert friction["r/foot_link"] == pytest.approx(0.3) and friction["r/pad"] == pytest.approx(0.7)
+
+
+def test_mesh_formats_robotforge_cannot_read_are_named_in_the_report(tmp_path):
+    result = import_file(_mesh_arm(tmp_path, "package://pkg/meshes/upper.blend"))
+    bad = next(f for f in result.report.findings if f.status == "unfixed" and f.topic == "meshes")
+    assert "not a mesh format robotforge reads" in " ".join(bad.items)
+
+
+def test_a_utf8_bom_and_odd_numbers_do_not_break_the_import(tmp_path):
+    text = "\ufeff" + arm_urdf().replace('xyz="0 0 0.1"', 'xyz="0 0 nan"', 1)
+    path = tmp_path / "bom.urdf"
+    path.write_text(text, encoding="utf-8")
+    model, _ = _world(import_file(path))
+    assert np.isfinite(model.body_pos).all()
+
+
+def test_single_link_urdf_is_an_object_that_falls_to_the_floor_and_stays(tmp_path):
+    result = import_file(write(tmp_path / "block.urdf", robot(box_link("block", (0.2, 0.2, 0.2)))))
+    assert result.floating and result.home_ctrl == {}
+    model, data = _world(result)
+    _run(model, data, 1.0)
+    assert data.xpos[model.body("r/block").id][2] == pytest.approx(0.1, abs=0.01)
+
+
+def test_flipped_wheel_axes_still_drive_forward(tmp_path):
+    from robotforge.behaviors import find_wheels
+    from robotforge.behaviors.drive import DiffDrive
+
+    flipped = rover_urdf().replace(
+        '<origin xyz="0 -0.13 0"/><axis xyz="0 1 0"/>', '<origin xyz="0 -0.13 0"/><axis xyz="0 -1 0"/>'
+    )
+    model, data = _world(import_file(write(tmp_path / "r.urdf", flipped)), "r")
+    wheels = find_wheels(model, "r")
+    assert wheels is not None and wheels.left_signs == (1.0,) and wheels.right_signs == (-1.0,)
+    assert wheels.radius == pytest.approx(0.05, abs=0.002) and wheels.track == pytest.approx(0.26, abs=0.01)
+    drive = DiffDrive(model, "r")
+    drive.command(0.2, 0.0)
+    start = data.xpos[model.body("r/chassis").id].copy()
+    for _ in range(1500):
+        drive.update(model, data)
+        mujoco.mj_step(model, data)
+    assert data.xpos[model.body("r/chassis").id][0] - start[0] > 0.2

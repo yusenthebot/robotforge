@@ -214,7 +214,7 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
 
 def _read_urdf(src: Path, opts: ImportOptions, report: DoctorReport) -> tuple[str, list[Path]]:
     try:
-        text = src.read_text(encoding="utf-8", errors="replace")
+        text = src.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
         raise ValueError(f"could not read {src}: {exc}") from exc
     if src.suffix.lower() == ".xacro" or xacro.needs_expansion(text):

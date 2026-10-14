@@ -136,6 +136,8 @@ def _evaluate(expr: str, lookup, extra: dict[str, Any] | None = None) -> Any:
         raise XacroError(f"cannot read the formula '${{{expr}}}'") from exc
     try:
         return _eval_node(tree.body, lookup, expr, extra or {})
+    except XacroError:
+        raise
     except (TypeError, ValueError, KeyError, IndexError, ZeroDivisionError, AttributeError, OverflowError) as exc:
         raise XacroError(f"the formula '${{{expr}}}' failed ({type(exc).__name__}: {exc})") from exc
 
@@ -304,7 +306,7 @@ class _Expander:
             raise XacroError(f"load_yaml: '{target.name}' is not valid YAML ({exc})") from exc
 
     def run(self) -> ET.Element:
-        root = _parse(self.path.read_text(encoding="utf-8", errors="replace"), self.path.name)
+        root = _parse(self.path.read_text(encoding="utf-8-sig", errors="replace"), self.path.name)
         assert root is not None
         if _local(root.tag) != "robot":
             raise XacroError(f"{self.path.name}: the top element is <{_local(root.tag)}>, expected <robot>")
@@ -392,7 +394,7 @@ class _Expander:
         if not target.is_file():
             raise XacroError(f"xacro:include of '{filename}' failed: the file does not exist ({target})")
         self.files.append(target)
-        root = _parse(target.read_text(encoding="utf-8", errors="replace"), target.name)
+        root = _parse(target.read_text(encoding="utf-8-sig", errors="replace"), target.name)
         assert root is not None
         self._children(root, out, scope, target)
 

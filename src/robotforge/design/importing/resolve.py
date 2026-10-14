@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlparse
 
 # Formats we can read (MuJoCo natively: stl, obj; the rest are converted).
 MESH_SUFFIXES = frozenset({".stl", ".obj", ".dae", ".glb", ".gltf", ".ply", ".off"})
+_SUPPORTED = ".stl, .obj, .dae, .glb, .gltf, .ply, .off"
 _MAX_LEVELS_UP = 8
 _MAX_SIBLINGS = 300
 _MAX_INDEXED_FILES = 40_000
@@ -68,6 +69,8 @@ class MeshResolver:
         return self._resolve_plain(uri, Path(unquote(uri)))
 
     def _resolve_plain(self, uri: str, path: Path) -> Resolution:
+        if path.suffix.lower() not in MESH_SUFFIXES:
+            return Resolution(None, f"'{uri}' is not a mesh format robotforge reads ({_SUPPORTED})")
         candidate = path if path.is_absolute() else self.base / path
         if _is_mesh_file(candidate):
             return Resolution(candidate.resolve())
@@ -77,6 +80,8 @@ class MeshResolver:
         return Resolution(None, f"'{uri}' does not exist")
 
     def _resolve_package(self, uri: str, package: str, rest: str) -> Resolution:
+        if Path(rest).suffix.lower() not in MESH_SUFFIXES:
+            return Resolution(None, f"'{uri}' is not a mesh format robotforge reads ({_SUPPORTED})")
         root = self.find_package(package)
         if root is not None:
             hit = _confined(root, rest)

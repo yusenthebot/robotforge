@@ -75,6 +75,7 @@ def stage_urdf(
         raise ValueError(f"this is not a URDF: the top element is <{robot.tag}>, expected <robot>")
     friction = _gazebo_friction(robot)
     _strip_noise(robot)
+    _fix_origins(robot, report)
     links = {el.get("name", ""): el for el in robot.findall("link")}
     if not links:
         raise ValueError("this URDF has no <link> elements, so there is nothing to simulate")
@@ -117,6 +118,28 @@ def _strip_noise(robot: ET.Element) -> None:
     for child in list(robot):
         if child.tag not in _KEEP_TAGS:
             robot.remove(child)
+
+
+def _fix_origins(robot: ET.Element, report: DoctorReport) -> None:
+    """Make every <origin> three plain finite numbers per attribute (NaN, missing or short values become 0)."""
+    broken = 0
+    for origin in robot.iter("origin"):
+        for attr in ("xyz", "rpy"):
+            text = origin.get(attr)
+            if text is None:
+                continue
+            try:
+                raw = [float(p) for p in text.split()]
+            except ValueError:
+                raw = []
+            fixed = _floats(text, 3)
+            if len(raw) != 3 or not all(math.isfinite(v) for v in raw):
+                broken += 1
+            origin.set(attr, " ".join(f"{v:.9g}" for v in fixed))
+    if broken:
+        report.fixed(
+            "geometry", f"{broken} position or rotation value(s) were missing or not numbers", "replaced them with 0"
+        )
 
 
 def _gazebo_friction(robot: ET.Element) -> dict[str, float]:
@@ -169,6 +192,7 @@ def _floats(text: str | None, count: int, default: float = 0.0) -> list[float]:
         vals = [float(p) for p in (text or "").split()]
     except ValueError:
         vals = []
+    vals = [v if math.isfinite(v) else default for v in vals]
     return (vals + [default] * count)[:count]
 
 
