@@ -465,20 +465,29 @@ def test_mpc_never_follows_a_rollout_that_blew_up(method, monkeypatch):
     np.testing.assert_allclose(controller.nominal, before)
 
 
-def test_env_ends_the_episode_when_the_simulation_diverges():
+@pytest.fixture
+def quiet_mujoco():
+    """Collect MuJoCo's warnings instead of letting it append them to MUJOCO_LOG.TXT in the repo."""
+    previous, seen = mujoco.get_mju_user_warning(), []
+    mujoco.set_mju_user_warning(seen.append)
+    yield seen
+    mujoco.set_mju_user_warning(previous)
+
+
+def test_env_ends_the_episode_when_the_simulation_diverges(quiet_mujoco):
     env = make_env("reach")
     env.reset(seed=0)
     target = env.task.target.copy()
     env.data.qvel[:] = 1e12  # guaranteed blow-up on the next step; MuJoCo resets the state itself
     obs, reward, terminated, truncated, info = env.step(np.zeros(env.action_space.shape))
     assert terminated and not truncated and info["unstable"]
-    assert reward < 0 and np.all(np.isfinite(obs))
+    assert reward < 0 and np.all(np.isfinite(obs)) and "unstable" in quiet_mujoco[0]
     np.testing.assert_allclose(obs[-6:-3], target, atol=1e-6)  # the goal survived the recovery
     marker = env.model.body_mocapid[env.model.body("goal_marker").id]
     np.testing.assert_allclose(env.data.mocap_pos[marker], target)
 
 
-def test_comparison_marks_a_diverged_run_as_failed():
+def test_comparison_marks_a_diverged_run_as_failed(quiet_mujoco):
     model, robot = task_world("balance")
     data = _home(model)
     task = make_task("balance", model, robot)
