@@ -44,8 +44,9 @@ class Reach(Task):
         self.actuators = np.array([joint_to_act[j] for j in self.joints])
         self.qadr = np.array([model.jnt_qposadr[j] for j in self.joints])
         self.dadr = np.array([model.jnt_dofadr[j] for j in self.joints])
-        self._fk = mujoco.MjData(model)
+        self._fk = mujoco.MjData(model)  # scratch for forward kinematics, reused to avoid allocations
         self.target = np.zeros(3)
+        self._fresh_target = False  # set by reset(): an episode already drew its random target
         self._resolve_target(home_qpos(model), np.random.default_rng(0))
 
     # ---- target ----
@@ -79,9 +80,9 @@ class Reach(Task):
     def random_target(self, qpos: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         """A point the tool can certainly reach: the tool position of a random joint configuration."""
         m, d = self.model, self._fk
-        base = d.xpos[m.jnt_bodyid[self.joints[0]]]
-        lo = np.maximum(m.jnt_range[self.joints, 0], -2.0)
-        hi = np.minimum(m.jnt_range[self.joints, 1], 2.0)
+        limited = m.jnt_limited[self.joints].astype(bool)
+        lo = np.where(limited, np.maximum(m.jnt_range[self.joints, 0], -np.pi), -np.pi)
+        hi = np.where(limited, np.minimum(m.jnt_range[self.joints, 1], np.pi), np.pi)
         for _ in range(200):
             d.qpos[:] = qpos
             d.qpos[self.qadr] = rng.uniform(lo, hi)
@@ -117,13 +118,22 @@ class Reach(Task):
         )
 
     def cost(self, batch: Batch) -> np.ndarray:
-        tool = batch.site_pos(self.site, self.site_sensor)
+        return self._cost(batch.site_pos(self.site, self.site_sensor, self._fk), batch.qvel)
+
+    def _cost(self, tool: np.ndarray, qvel: np.ndarray) -> np.ndarray:
         dist = np.linalg.norm(tool - self.target, axis=-1)
-        speed = np.sum(batch.qvel[..., self.dadr] ** 2, axis=-1)
+        speed = np.sum(qvel[..., self.dadr] ** 2, axis=-1)
         return 10.0 * smooth_abs(dist, 0.02) + 0.02 * speed
 
     def terminal_cost(self, batch: Batch) -> np.ndarray:
-        return 5.0 * self.cost(batch.last())[:, 0]
+        # Sensors in a rollout lag the state by one step, so place the final tool exactly with kinematics.
+        final_q = batch.qpos[:, -1]
+        tool = np.empty((len(final_q), 3))
+        for i, q in enumerate(final_q):
+            self._fk.qpos[:] = q
+            mujoco.mj_kinematics(self.model, self._fk)
+            tool[i] = self._fk.site_xpos[self.site]
+        return 5.0 * self._cost(tool, batch.qvel[:, -1])
 
     def success(self, data: mujoco.MjData) -> bool:
         return self.distance(data) < self.params.tolerance
@@ -138,10 +148,15 @@ class Reach(Task):
     def reset(self, data: mujoco.MjData, rng: np.random.Generator) -> None:
         if self.params.target is None:
             self.target = self.random_target(data.qpos.copy(), rng)
+            self._fresh_target = True
 
     def begin(self, data: mujoco.MjData) -> None:
         if isinstance(self.params.target, str):  # the object may have moved since the task was made
             self.target = self._object_position(self.params.target, data.qpos.copy())
+        elif self.params.target is None and not self._fresh_target:
+            # A live run without a target: pick one reachable from where the arm is now.
+            self.target = self.random_target(data.qpos.copy(), np.random.default_rng(0))
+        self._fresh_target = False
 
     def push(self, data: mujoco.MjData, strength: float = 1.0) -> str:
         data.qvel[self.dadr[: min(3, len(self.dadr))]] += 2.0 * strength

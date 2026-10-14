@@ -41,6 +41,7 @@ class DriveTo(Task):
             raise TaskError(f"robot {robot!r} has no left_wheel/right_wheel motors; drive_to needs {self.robot_hint}")
         self.actuators = np.array([self.left, self.right])
         self.goal = np.zeros(2)
+        self._fresh_goal = False  # set by reset(): an episode already drew its random goal
         self._resolve_goal(home_qpos(model), np.random.default_rng(0))
 
     def _resolve_goal(self, qpos: np.ndarray, rng: np.random.Generator) -> None:
@@ -125,10 +126,15 @@ class DriveTo(Task):
     def reset(self, data: mujoco.MjData, rng: np.random.Generator) -> None:
         if self.params.goal is None:
             self._resolve_goal(data.qpos.copy(), rng)
+            self._fresh_goal = True
 
     def begin(self, data: mujoco.MjData) -> None:
         if isinstance(self.params.goal, str):
             self.goal = self._object_xy(self.params.goal, data.qpos.copy())
+        elif self.params.goal is None and not self._fresh_goal:
+            # A live run without a goal: pick one about a meter from where the robot is now.
+            self._resolve_goal(data.qpos.copy(), np.random.default_rng(0))
+        self._fresh_goal = False
 
     def push(self, data: mujoco.MjData, strength: float = 1.0) -> str:
         data.qvel[self.da + 5] += 3.0 * strength

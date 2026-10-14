@@ -28,7 +28,13 @@ class TaskError(ValueError):
 
 
 class TaskParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+def readable(exc: ValidationError, what: str) -> str:
+    """A pydantic error as one line a beginner (or an agent) can act on."""
+    parts = [f"{'.'.join(str(x) for x in e['loc']) or 'value'}: {e['msg']}" for e in exc.errors()]
+    return f"{what}: {'; '.join(parts)}"
 
 
 # ---- states in bulk ------------------------------------------------------------------------
@@ -39,6 +45,7 @@ class StateLayout:
     """Where qpos and qvel sit inside a mjSTATE_FULLPHYSICS vector (what mujoco.rollout returns)."""
 
     size: int
+    time: int
     qpos: slice
     qvel: slice
 
@@ -48,10 +55,12 @@ class StateLayout:
             # mj_getState writes components in increasing bit order.
             return mujoco.mj_stateSize(model, int(FULLPHYSICS) & (bit - 1))
 
+        time_at = offset(int(mujoco.mjtState.mjSTATE_TIME))
         qpos_at = offset(int(mujoco.mjtState.mjSTATE_QPOS))
         qvel_at = offset(int(mujoco.mjtState.mjSTATE_QVEL))
         return cls(
             size=mujoco.mj_stateSize(model, FULLPHYSICS),
+            time=time_at,
             qpos=slice(qpos_at, qpos_at + model.nq),
             qvel=slice(qvel_at, qvel_at + model.nv),
         )
@@ -92,12 +101,13 @@ class Batch:
         adr, dim = self.model.sensor_adr[sensor_id], self.model.sensor_dim[sensor_id]
         return self.sensordata[..., adr : adr + dim]
 
-    def site_pos(self, site_id: int, framepos_sensor: int = -1) -> np.ndarray:
+    def site_pos(self, site_id: int, framepos_sensor: int = -1, scratch: mujoco.MjData | None = None) -> np.ndarray:
         """World position of a site in every state. Reads a framepos sensor when the model has one
-        (free: MuJoCo computed it during the rollout), otherwise runs forward kinematics per state."""
+        (free: MuJoCo computed it during the rollout), otherwise runs forward kinematics per state
+        on `scratch` (pass a reusable MjData to avoid allocating one per call)."""
         if framepos_sensor >= 0:
             return self.sensor(framepos_sensor)
-        data = mujoco.MjData(self.model)
+        data = scratch if scratch is not None else mujoco.MjData(self.model)
         b, t = self.shape
         out = np.empty((b, t, 3))
         for i in range(b):
@@ -177,6 +187,15 @@ class Robot:
         return np.array(out, dtype=int)
 
 
+_DIVERGENCE = (mujoco.mjtWarning.mjWARN_BADQPOS, mujoco.mjtWarning.mjWARN_BADQVEL, mujoco.mjtWarning.mjWARN_BADQACC)
+
+
+def divergences(data: mujoco.MjData) -> int:
+    """How many times the simulation has blown up so far. MuJoCo resets the state when that
+    happens, so the state itself can look fine afterwards; only these counters remember."""
+    return sum(int(data.warning[int(w)].number) for w in _DIVERGENCE)
+
+
 def home_qpos(model: mujoco.MjModel) -> np.ndarray:
     key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
     return model.key_qpos[key].copy() if key >= 0 else model.qpos0.copy()
@@ -212,8 +231,7 @@ class Task(ABC):
         try:
             self.params = self.Params.model_validate(params or {})
         except ValidationError as exc:
-            parts = [f"{'.'.join(str(x) for x in e['loc']) or 'params'}: {e['msg']}" for e in exc.errors()]
-            raise TaskError(f"task {self.name!r}: {'; '.join(parts)}") from exc
+            raise TaskError(readable(exc, f"task {self.name!r}")) from exc
         self.model = model
         self.robot = Robot(model, robot)
         self.actuators: np.ndarray = self.robot.actuators
