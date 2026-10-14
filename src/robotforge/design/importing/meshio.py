@@ -25,6 +25,7 @@ TOOL_VERSION = "1"  # bump when conversion output changes, so cached files are r
 # MuJoCo refuses STL/OBJ files above 200k triangles, and the viewer ships every triangle to the browser,
 # so anything above this cap is simplified.
 VISUAL_FACE_CAP = 100_000
+MM_LIMIT = 20.0  # a single part bigger than this many meters is almost certainly in millimeters
 FLAT_THICKNESS = 0.002  # meters; flat sheets are given this much depth so MuJoCo can build a hull
 _NATIVE = (".stl", ".obj")
 

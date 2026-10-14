@@ -27,7 +27,14 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from robotforge.design.importing import collision, xacro
-from robotforge.design.importing.meshio import TOOL_VERSION, MeshAsset, MeshError, prepare_mesh, solid_properties
+from robotforge.design.importing.meshio import (
+    MM_LIMIT,
+    TOOL_VERSION,
+    MeshAsset,
+    MeshError,
+    prepare_mesh,
+    solid_properties,
+)
 from robotforge.design.importing.plan import COLLISION_GROUP, PLAN_VERSION, VISUAL_GROUP, RigPlan, build_spec
 from robotforge.design.importing.report import DoctorReport
 from robotforge.design.importing.resolve import MESH_SUFFIXES, MeshResolver
@@ -40,7 +47,6 @@ IMPORTER_VERSION = "1"
 URDF_SUFFIXES = frozenset({".urdf", ".xacro"})
 IMPORT_SUFFIXES = URDF_SUFFIXES | MESH_SUFFIXES
 CACHE_LIMIT = 40
-_MM_LIMIT = 20.0
 OBJECT_DENSITY = 500.0  # kg/m^3 for loose mesh objects without a given mass
 _OBJECT_COLOR = (0.72, 0.74, 0.78, 1.0)
 
@@ -267,7 +273,7 @@ def _import_mesh(src: Path, opts: ImportOptions, cache: Path) -> ImportResult:
 
     scale = opts.scale
     extent = float(np.max(asset.mesh.extents))
-    if scale is None and extent > _MM_LIMIT:
+    if scale is None and extent > MM_LIMIT:
         scale = 0.001
         report.fixed(
             "units",
