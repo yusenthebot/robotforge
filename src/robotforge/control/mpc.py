@@ -22,7 +22,7 @@ import copy
 import os
 import threading
 import time
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import mujoco
 import numpy as np
@@ -34,6 +34,7 @@ from robotforge.control.tasks import Batch, StateLayout, Task
 
 FULLPHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
 _NOISE_SIZES = np.array([1.0, 0.3, 0.1])
+_PREVIEW_DT = 0.02  # s between look-ahead samples of a base controller
 
 
 class MPCConfig(BaseModel):
@@ -102,11 +103,38 @@ def interpolate(knots: np.ndarray, times: np.ndarray, horizon: float, kind: str)
     return (2 * f3 - 3 * f2 + 1) * p0 + (f3 - 2 * f2 + f) * m0 + (-2 * f3 + 3 * f2) * p1 + (f3 - f2) * m1
 
 
-class SamplingMPC:
-    """A Controller that replans with sampled rollouts and applies the current best plan."""
+class Base(Protocol):
+    """A controller MPC can correct ("residual" MPC): it must also say what it will command next."""
 
-    def __init__(self, task: Task, model: mujoco.MjModel, config: MPCConfig | dict[str, Any] | None = None):
+    rate_hz: float
+
+    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None: ...
+
+    def status(self) -> dict[str, Any]: ...
+
+    def preview(self, model: mujoco.MjModel, data: mujoco.MjData, times: np.ndarray) -> np.ndarray:
+        """Commands for the task's actuators at `times` seconds from now, shape [len(times), n]."""
+        ...
+
+
+class SamplingMPC:
+    """A Controller that replans with sampled rollouts and applies the current best plan.
+
+    With `base`, the plan is a correction added to what another controller commands (e.g. the
+    trot gait): sampling only has to find small adjustments instead of inventing walking."""
+
+    def __init__(
+        self,
+        task: Task,
+        model: mujoco.MjModel,
+        config: MPCConfig | dict[str, Any] | None = None,
+        base: Base | None = None,
+    ):
         self.task = task
+        self.base = base
+        self.base_ctrl: np.ndarray | None = None
+        self._next_base = -np.inf
+        self._preview: np.ndarray | None = None
         cfg = config if isinstance(config, MPCConfig) else MPCConfig.model_validate(config or {})
         self.cfg = cfg
         self.model = model
@@ -127,7 +155,7 @@ class SamplingMPC:
         self.rng = np.random.default_rng(cfg.seed)
         self.rate_hz = 1.0 / model.opt.timestep
         self.knot_times = np.linspace(0.0, cfg.horizon, cfg.knots)
-        self.nominal: np.ndarray | None = None  # [knots, n_actuators], absolute ctrl values
+        self.nominal: np.ndarray | None = None  # [knots, n_actuators]: ctrl values, or corrections with a base
         self.plan_start = 0.0
         self.next_plan = -np.inf
         self._state = np.zeros(self.layout.size)
@@ -140,6 +168,10 @@ class SamplingMPC:
     # ---- Controller protocol ----
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if self.base is not None and data.time + 1e-9 >= self._next_base:
+            self.base.update(model, data)
+            self.base_ctrl = data.ctrl[self.task.actuators].copy()
+            self._next_base = data.time + 1.0 / self.base.rate_hz
         if data.time + 1e-9 >= self.next_plan:
             self.plan(data)
             self.next_plan = data.time + 1.0 / self.cfg.replan_hz
@@ -154,6 +186,7 @@ class SamplingMPC:
             "plan_ms": round(self.last_plan_ms, 2),
             "plan_hz": round(self.plan_hz, 1),
             "best_cost": round(self.best_cost, 4) if np.isfinite(self.best_cost) else None,
+            **({"on_top_of": self.base.status()} if self.base is not None else {}),
         }
 
     @property
@@ -166,21 +199,32 @@ class SamplingMPC:
     def policy(self, t: float) -> np.ndarray:
         if self.nominal is None:
             return np.zeros(len(self.task.actuators))
-        u = interpolate(self.nominal, np.array([t - self.plan_start]), self.cfg.horizon, self.cfg.interpolation)
-        return self.scale.clip(u[0])
+        u = interpolate(self.nominal, np.array([t - self.plan_start]), self.cfg.horizon, self.cfg.interpolation)[0]
+        if self.base_ctrl is not None:
+            u = self.base_ctrl + u
+        return self.scale.clip(u)
 
     def plan(self, data: mujoco.MjData) -> None:
         started = time.perf_counter()
         t = float(data.time)
         if self.nominal is None:
-            self.nominal = np.tile(self.task.nominal_ctrl(data), (self.cfg.knots, 1))
+            start = np.zeros(len(self.task.actuators)) if self.base else self.task.nominal_ctrl(data)
+            self.nominal = np.tile(start, (self.cfg.knots, 1))
         else:
             # Warm start: last plan, evaluated from now on (held at its final value past its end).
             shifted = interpolate(
                 self.nominal, t - self.plan_start + self.knot_times, self.cfg.horizon, self.cfg.interpolation
             )
-            self.nominal = self.scale.clip(shifted)
+            self.nominal = shifted if self.base else self.scale.clip(shifted)
         self.plan_start = t
+        self._preview = None
+        if self.base is not None:
+            # What the base will command over the horizon, sampled coarsely and interpolated.
+            coarse = np.linspace(0.0, self.cfg.horizon, max(2, round(self.cfg.horizon / _PREVIEW_DT) + 1))
+            ahead = self.base.preview(self.model, data, coarse)
+            self._preview = np.stack(
+                [np.interp(self.step_times, coarse, ahead[:, j]) for j in range(ahead.shape[1])], axis=1
+            )
         mujoco.mj_getState(self.model, data, self._state, FULLPHYSICS)
         for _ in range(self.cfg.iterations):
             self._improve(data)
@@ -194,9 +238,13 @@ class SamplingMPC:
         # Three noise sizes: big steps to explore, small ones to fine-tune (precision near the goal).
         sizes = _NOISE_SIZES[np.arange(n - 1) % len(_NOISE_SIZES)][:, None, None]
         noise = self.rng.standard_normal((n - 1, k, len(acts))) * self.sigma * sizes
-        candidates = np.concatenate([self.nominal[None], self.scale.clip(self.nominal[None] + noise)])
+        if self._preview is None:
+            candidates = np.concatenate([self.nominal[None], self.scale.clip(self.nominal[None] + noise)])
+        else:
+            candidates = np.concatenate([self.nominal[None], self.nominal[None] + noise])
         ctrl = np.repeat(np.asarray(data.ctrl, float)[None, None, :], self.steps, axis=1).repeat(n, axis=0)
-        ctrl[..., acts] = interpolate(candidates, self.step_times, cfg.horizon, cfg.interpolation)
+        planned = interpolate(candidates, self.step_times, cfg.horizon, cfg.interpolation)
+        ctrl[..., acts] = planned if self._preview is None else self.scale.clip(self._preview[None] + planned)
         with _pool_lock:
             pool = _rollout_pool(self.threads)
             state, sensordata = pool.rollout(

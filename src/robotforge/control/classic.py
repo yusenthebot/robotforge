@@ -7,7 +7,9 @@ so it can drive the live world and the viewer exactly like the built-in behavior
 
 from __future__ import annotations
 
+import copy
 import math
+import types
 from typing import Any
 
 import mujoco
@@ -44,6 +46,34 @@ class Hold:
 
     def status(self) -> dict[str, Any]:
         return {"controller": self.label, "robot": self.task.robot.name}
+
+
+class GaitBase:
+    """The built-in trot gait, able to say what it will command next, so MPC can correct it."""
+
+    def __init__(self, task: Task, gait):
+        self.task = task
+        self.gait = gait
+        self.rate_hz = gait.rate_hz
+
+    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        self.gait.update(model, data)
+
+    def status(self) -> dict[str, Any]:
+        return self.gait.status()
+
+    def preview(self, model: mujoco.MjModel, data: mujoco.MjData, times: np.ndarray) -> np.ndarray:
+        # Run a throwaway copy of the gait forward in time; it only reads the clock and the trunk
+        # attitude (held at its current value) and writes ctrl.
+        ghost = copy.copy(self.gait)
+        ghost.legs = [copy.copy(leg) for leg in self.gait.legs]
+        scratch = types.SimpleNamespace(time=0.0, xquat=data.xquat, ctrl=np.array(data.ctrl))
+        out = np.empty((len(times), len(self.task.actuators)))
+        for i, dt in enumerate(times):
+            scratch.time = float(data.time) + float(dt)
+            ghost.update(model, scratch)
+            out[i] = scratch.ctrl[self.task.actuators]
+        return out
 
 
 # ---- arms -----------------------------------------------------------------------------------

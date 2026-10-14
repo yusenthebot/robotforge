@@ -48,7 +48,9 @@ def make_controller(
     try:
         if method in ("mpc", "mppi"):
             cfg = {**task.mpc_defaults, **params, "method": "predictive" if method == "mpc" else "mppi"}
-            return SamplingMPC(task, model, MPCConfig.model_validate(cfg))
+            base_name = cfg.pop("base", None)
+            base = _base(base_name, task, model, params) if base_name else None
+            return SamplingMPC(task, model, MPCConfig.model_validate(cfg), base=base)
         if method == "ik":
             return classic.ServoIK(task, model, data)
         if method == "cartesian":
@@ -70,6 +72,13 @@ def make_controller(
     except TypeError as exc:  # unknown keyword in params
         raise TaskError(f"{method}: bad params {sorted(params)}: {exc}") from exc
     raise TaskError(f"{method} is not available for {task.name} yet")
+
+
+def _base(name: str, task: Task, model: mujoco.MjModel, params: dict[str, Any]):
+    """A controller that MPC corrects instead of planning from scratch."""
+    if name == "gait":
+        return classic.GaitBase(task, _gait(task, model, {}))
+    raise TaskError(f"MPC can only be put on top of the gait for now, not {name!r}; use base=null for plain MPC")
 
 
 def _gait(task: Task, model: mujoco.MjModel, params: dict[str, Any]):

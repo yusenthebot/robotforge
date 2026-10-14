@@ -341,3 +341,28 @@ async def test_mcp_tools_run_and_compare_controllers(tmp_path, monkeypatch):
 
         bad = await client.call_tool("run_controller", {"robot": "arm", "task": "balance", "method": "lqr"})
         assert bad.is_error and "cart-pole" in bad.content[0].text
+
+
+def test_gait_preview_predicts_the_gait_without_disturbing_it():
+    from robotforge.control.classic import GaitBase
+    from robotforge.control.methods import _gait
+
+    model, robot = task_world("walk")
+    data = _home(model)
+    task = make_task("walk", model, robot)
+    base = GaitBase(task, _gait(task, model, {}))
+    base.update(model, data)
+    phase = base.gait._phase
+    ahead = base.preview(model, data, np.array([0.0, 0.01, 0.02]))
+    assert base.gait._phase == phase  # the live gait did not move on
+    for i in range(1, 3):  # stepping the real gait by the same times gives the same commands
+        data.time += 0.01
+        base.update(model, data)
+        np.testing.assert_allclose(data.ctrl[task.actuators], ahead[i], atol=1e-9)
+
+
+def test_mppi_on_top_of_the_gait_walks():
+    model, robot = task_world("walk")
+    result = run(make_task("walk", model, robot), model, _home(model), "mppi", 3.0)
+    assert not result.failed and result.report["distance_m"] > 0.6
+    assert result.controller["on_top_of"]["behavior"] == "walk"
