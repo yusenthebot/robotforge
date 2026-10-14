@@ -31,3 +31,15 @@ def is_position_servo(model: mujoco.MjModel, a: int) -> bool:
         and kp > 0
         and bool(np.isclose(model.actuator_biasprm[a, 1], -kp))
     )
+
+
+def is_velocity_servo(model: mujoco.MjModel, a: int) -> bool:
+    """A velocity servo: the control is a target speed (force = kv * (ctrl - qdot)), as on driven wheels."""
+    kv = float(model.actuator_gainprm[a, 0])
+    return (
+        int(model.actuator_gaintype[a]) == mujoco.mjtGain.mjGAIN_FIXED
+        and int(model.actuator_biastype[a]) == mujoco.mjtBias.mjBIAS_AFFINE
+        and kv > 0
+        and bool(np.isclose(model.actuator_biasprm[a, 2], -kv))
+        and model.actuator_biasprm[a, 1] == 0
+    )

@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict
 from robotforge.design import components
 
 GEOM = mujoco.mjtGeom
+# Joint modules run a velocity loop in their driver; model it as damping of at least this fraction of the
+# servo's stiffness (seconds). Back-EMF alone leaves a stiff BLDC joint on a heavy limb ringing.
+DRIVER_DAMPING = 0.02
 DARK = [0.16, 0.17, 0.2, 1.0]
 SHELL = [0.9, 0.91, 0.93, 1.0]
 
@@ -35,6 +38,7 @@ class BuiltRobot:
     spawn_height: float = 0.0  # base height above the floor so feet/wheels touch it at home
     floating: bool = False  # True when the root body has a free joint
     notes: list[str] = field(default_factory=list)
+    doctor: dict | None = None  # import doctor report (imported files only)
 
 
 class Template:
@@ -68,7 +72,7 @@ def servo_joint(
         axis=axis,
         range=list(joint_range),
         limited=mujoco.mjtLimited.mjLIMITED_TRUE,
-        damping=part.damping,
+        damping=max(part.damping, DRIVER_DAMPING * part.kp),
         armature=part.armature,
         frictionloss=0.02 * part.stall_torque,
     )

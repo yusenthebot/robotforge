@@ -463,7 +463,7 @@ let mobileRobots = [];
 let lastDrive = "";
 
 function renderDrive(robots) {
-  mobileRobots = robots.filter((r) => r.kind === "quadruped" || r.kind === "rover");
+  mobileRobots = robots.filter((r) => ["quadruped", "rover", "humanoid"].includes(r.kind));
   const box = $("drive");
   box.hidden = mobileRobots.length === 0;
   const select = $("drive-robot");

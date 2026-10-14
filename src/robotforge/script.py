@@ -8,6 +8,7 @@
     sim.step(3.0)                       # let 3 seconds pass
     sim.stop("dog")
     ok = sim.pick_and_place("arm", "cube", "tray")   # runs the whole motion, True if it landed
+    sim.pose("kid", "wave")             # a humanoid waves hello, then stands
 
 Time only moves when the script calls step() or a blocking action, so a script
 can read the world, think, and act without the world running away from it.
@@ -77,8 +78,13 @@ class Sim:
         self._call("set_controls", controls=controls)
 
     def move(self, robot: str, speed: float = 0.2, turn: float = 0.0) -> None:
-        """Start walking (quadruped) or driving (rover); keeps going until stop(). m/s and rad/s."""
+        """Start walking (quadruped or humanoid) or driving (rover); keeps going until stop(). m/s and rad/s."""
         self._call("move", robot=robot, speed=speed, turn=turn)
+
+    def pose(self, robot: str, name: str) -> bool:
+        """A humanoid strikes a pose: "wave", "squat", "arms_up", "bow", "look_around" or "stand".
+        Waits until it is done; True if the robot is still upright."""
+        return self._call("pose", robot=robot, name=name)
 
     def stop(self, robot: str) -> None:
         self._call("stop", robot=robot)

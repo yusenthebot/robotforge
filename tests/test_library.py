@@ -188,7 +188,7 @@ def test_legs_are_found_from_the_kinematic_tree(pg):
 def test_arms_are_not_mistaken_for_quadrupeds(pg):
     pg.add_robot("arm", library="so_arm100")
     assert robot_kind(pg.session.model, "arm") == Kind.OTHER
-    with pytest.raises(ValueError, match="only quadrupeds and rovers"):
+    with pytest.raises(ValueError, match="only quadrupeds, humanoids and rovers"):
         pg.behaviors.move("arm", 0.2, 0.0)
 
 

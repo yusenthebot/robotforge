@@ -182,6 +182,11 @@ class ScriptRunner:
     def _op_stop(self, req) -> dict:
         return self.pg.behaviors.stop(req["robot"])
 
+    async def _op_pose(self, req) -> bool:
+        ctrl = self.pg.behaviors.strike_pose(req["robot"], str(req["name"]))
+        await self._advance(lambda: ctrl.done, 20.0)
+        return bool(self.pg.behaviors.pose(req["robot"])["upright"])
+
     async def _op_move_arm(self, req) -> list[float]:
         arm = self.pg.behaviors.move_arm(req["robot"], req["position"], req.get("gripper"))
         await self._advance(lambda: arm.done, 20.0)
