@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -52,6 +55,10 @@ TASKS: dict[str, dict[str, Any]] = {
 # Jobs started by this process: polling them reaps finished children, which would otherwise linger
 # as zombies that still answer "alive" to a signal-0 probe.
 _STARTED: dict[int, subprocess.Popen] = {}
+# Status reads may install a finished job's policy; MCP runs sync tools on worker threads, so two
+# calls at once must not both install it.
+_STATUS_LOCK = threading.Lock()
+JOB_RE = re.compile(r"\A\d{8}-\d{6}-[0-9a-f]{6}\Z")
 
 
 class UniLabError(RuntimeError):
@@ -161,15 +168,17 @@ def start_training(task: str, iterations: int, name: str, num_envs: int | None =
     ]
     if num_envs:
         args += ["--num-envs", str(num_envs)]
-    (folder / "job.json").write_text(
-        json.dumps({"job": job, "task": task, "iterations": iterations, "name": name, "command": args}, indent=1),
-        encoding="utf-8",
-    )
-    with (folder / "tool.log").open("w", encoding="utf-8") as log:
-        proc = subprocess.Popen(
-            args, cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **_detached()
-        )
+    try:
+        with (folder / "tool.log").open("w", encoding="utf-8") as log:
+            proc = subprocess.Popen(
+                args, cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **_detached()
+            )
+    except OSError as exc:
+        shutil.rmtree(folder, ignore_errors=True)  # no half-made job that looks like it is starting
+        raise UniLabError(f"could not start UniLab's python ({python}): {exc}") from exc
     _STARTED[proc.pid] = proc
+    job_info = {"job": job, "task": task, "iterations": iterations, "name": name, "pid": proc.pid, "command": args}
+    (folder / "job.json").write_text(json.dumps(job_info, indent=1), encoding="utf-8")
     estimate = iterations * spec["seconds_per_iteration"]
     return {
         "job": job,
@@ -193,21 +202,21 @@ def _detached() -> dict[str, Any]:
 def job_status(job: str | None = None) -> dict[str, Any]:
     """Progress of one job (the newest if None); installs the policy once the job is done."""
     folder = _job_folder(job)
+    with _STATUS_LOCK:
+        return _read_status(folder)
+
+
+def _read_status(folder: Path) -> dict[str, Any]:
     status_file = folder / "status.json"
-    if not status_file.is_file():
-        tool_log = (
-            (folder / "tool.log").read_text(encoding="utf-8", errors="replace")
-            if (folder / "tool.log").is_file()
-            else ""
-        )
-        return {"job": folder.name, "state": "starting", "log_tail": tool_log.strip().splitlines()[-5:]}
-    status = json.loads(status_file.read_text(encoding="utf-8"))
+    running = ("starting", "training", "exporting")
+    status = _load_json(status_file) or {"state": "starting", "pid": _load_json(folder / "job.json").get("pid")}
+    if status.get("state") in running and not _alive(status.get("pid")):
+        status = _load_json(status_file) or status  # it may have finished between the two reads
+        if status.get("state") in running:
+            status["state"] = "failed"
+            status.setdefault("error", "the training process is gone (stopped or crashed); see the log")
+            status["log_tail"] = _tail(folder / "tool.log", 8)
     status["job"] = folder.name
-    if status.get("state") in ("starting", "training", "exporting") and not _alive(status.get("pid")):
-        status["state"] = "failed"
-        status.setdefault("error", "the training process is gone (stopped or crashed); see the log")
-        tool_log = (folder / "tool.log").read_text(encoding="utf-8", errors="replace").strip().splitlines()
-        status["log_tail"] = tool_log[-8:]
     if status.get("state") == "done" and status.get("policy_dir") and "installed" not in status:
         try:
             installed = policies.install(Path(status["policy_dir"]))
@@ -222,16 +231,34 @@ def job_status(job: str | None = None) -> dict[str, Any]:
     return status
 
 
+def _load_json(path: Path) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _tail(path: Path, lines: int) -> list[str]:
+    if not path.is_file():
+        return []
+    return path.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-lines:]
+
+
 def cancel(job: str | None = None) -> dict[str, Any]:
     folder = _job_folder(job)
     status = job_status(folder.name)
     pid = status.get("pid")
     if status.get("state") not in ("starting", "training", "exporting") or not _alive(pid):
         return {"job": folder.name, "cancelled": False, "state": status.get("state")}
-    if sys.platform == "win32":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], stdin=subprocess.DEVNULL, capture_output=True)
-    else:
-        os.killpg(os.getpgid(int(pid)), signal.SIGTERM)  # the tool, UniLab's CLI and its trainer
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)], stdin=subprocess.DEVNULL, capture_output=True, check=False
+            )
+        else:
+            os.killpg(int(pid), signal.SIGTERM)  # its own process group: the tool, UniLab's CLI and its trainer
+    except ProcessLookupError:
+        return {"job": folder.name, "cancelled": False, "state": "finished before it could be stopped"}
     return {"job": folder.name, "cancelled": True}
 
 
@@ -240,7 +267,7 @@ def list_jobs(limit: int = 10) -> list[dict[str, Any]]:
     if not root.is_dir():
         return []
     out = []
-    for folder in sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)[:limit]:
+    for folder in sorted((p for p in root.iterdir() if JOB_RE.match(p.name)), reverse=True)[:limit]:
         status = job_status(folder.name)
         out.append(
             {k: status.get(k) for k in ("job", "state", "task", "iteration", "iterations", "mean_reward", "installed")}
@@ -267,30 +294,40 @@ def export_run(run: Path, name: str, task: str | None = None) -> dict[str, Any]:
 def _job_folder(job: str | None) -> Path:
     root = jobs_dir()
     if job is None:
-        folders = sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+        folders = sorted(p for p in root.iterdir() if JOB_RE.match(p.name)) if root.is_dir() else []
         if not folders:
             raise UniLabError("no UniLab training jobs yet; start one with unilab_train")
         return folders[-1]
     folder = root / job
-    if Path(job).name != job or not folder.is_dir():
+    if not JOB_RE.match(job) or not folder.is_dir():
         raise UniLabError(f"no UniLab job {job!r}; jobs: {', '.join(j['job'] for j in list_jobs()) or 'none'}")
     return folder
 
 
 def _alive(pid: Any) -> bool:
+    """Is `pid` a training tool we started? A stale pid from before a reboot may belong to anyone now."""
     if not isinstance(pid, int) or pid <= 0:
         return False
     if pid in _STARTED:
         return _STARTED[pid].poll() is None
     if sys.platform == "win32":
         done = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"], stdin=subprocess.DEVNULL, capture_output=True, text=True
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
         )
-        return str(pid) in done.stdout
+        rows = [line.split('","') for line in done.stdout.splitlines() if line.startswith('"')]
+        return any(len(r) > 1 and r[1] == str(pid) and r[0].lower().startswith('"python') for r in rows)
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+        if os.getpgid(pid) != pid:  # the tool leads its own session; anything else is not ours
+            return False
+    except (ProcessLookupError, PermissionError):
         return False
-    except PermissionError:
-        return True
-    return True
+    done = subprocess.run(
+        ["ps", "-o", "command=", "-p", str(pid)], stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False
+    )
+    return TOOL.name in done.stdout

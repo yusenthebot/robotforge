@@ -307,12 +307,12 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         "rl" = the learned policy for this robot (list_policies), or a policy name; omitted keeps the current
         one. Keyboard driving then uses the same walker."""
         with _tool_errors():
+            if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
+                raise PlaygroundError("seconds must be in (0, 60]")
             before = playground.behaviors.pose(robot)
             status = playground.behaviors.move(robot, speed, turn, walker)
             if seconds is None:
                 return _json({"started": status, "pose": before})
-            if not 0 < seconds <= 60:
-                raise PlaygroundError("seconds must be in (0, 60]")
             run = await run_until(lambda: False, seconds)
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)

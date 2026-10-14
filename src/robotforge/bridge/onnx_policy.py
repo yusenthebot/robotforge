@@ -12,6 +12,7 @@ so observation building and joint mapping are testable without it.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable
 from pathlib import Path
@@ -24,6 +25,7 @@ from robotforge.bridge.observations import JointBinding, Observer
 from robotforge.bridge.spec import PolicySpec, SpecError
 from robotforge.control.actuation import TorqueMap
 
+log = logging.getLogger(__name__)
 INSTALL_HINT = "install the optional extra: uv sync --extra policy (or pip install 'robotforge[policy]')"
 # A walker that tips past this (cosine of the tilt from upright) has fallen; the policy is then
 # out of its training distribution, so it is paused rather than left to thrash.
@@ -190,7 +192,13 @@ class PolicyWalker:
         if abs(command[0]) <= self.spec.commands.planar_dead_zone:  # as in training: too slow means stand
             command[0] = 0.0
         obs = self.observer.build(model, data, self.last_action, command)
-        action = np.asarray(self.policy(obs), float).reshape(-1)
+        try:
+            action = np.asarray(self.policy(obs), float).reshape(-1)
+        except Exception as exc:  # onnxruntime raises its own types; the sim loop must survive any of them
+            log.warning("policy %s failed: %s", self.spec.name, exc)
+            self.paused_reason = f"the policy failed to run ({type(exc).__name__}); holding the default pose"
+            self.targets = self.default_pos.copy()
+            return
         if action.shape != self.last_action.shape or not np.all(np.isfinite(action)):
             self.paused_reason = "the policy returned an invalid action; holding the default pose"
             self.targets = self.default_pos.copy()

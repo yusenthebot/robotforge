@@ -90,7 +90,14 @@ def write_status(path: Path, status: dict[str, Any]) -> None:
     status = {**status, "updated": datetime.now(UTC).isoformat(timespec="seconds")}
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:  # Windows refuses while robotforge has the file open for reading
+            if attempt == 19:
+                raise
+            time.sleep(0.05)
 
 
 # ---- UniLab environment helpers (need UniLab) -----------------------------------------------
@@ -367,6 +374,15 @@ def _version(package: str) -> str | None:
         return None
 
 
+def _child_options() -> dict[str, Any]:
+    """Run UniLab's own commands with UTF-8 pipes and, on Windows, without a console window each."""
+    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    options: dict[str, Any] = {"env": env, "encoding": "utf-8", "errors": "replace"}
+    if sys.platform == "win32":
+        options["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+    return options
+
+
 def _export_onnx_with_unilab(run: Path, task: str, cfg) -> None:
     """UniLab writes policy.onnx during playback; run its eval for one step to get it."""
     command = [
@@ -387,7 +403,9 @@ def _export_onnx_with_unilab(run: Path, task: str, cfg) -> None:
         "training.play_steps=1",
         "training.play_env_num=1",
     ]
-    done = subprocess.run(command, cwd=unilab_root(), stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    done = subprocess.run(
+        command, cwd=unilab_root(), stdin=subprocess.DEVNULL, capture_output=True, text=True, **_child_options()
+    )
     if done.returncode != 0 or not (run / "policy.onnx").is_file():
         tail = "\n".join((done.stdout + done.stderr).splitlines()[-15:])
         raise SystemExit(f"UniLab's eval did not export policy.onnx (exit {done.returncode}):\n{tail}")
@@ -524,7 +542,6 @@ def train(args: argparse.Namespace) -> int:
     log_path = status_path.with_name("train.log")
     state["state"], state["log"] = "training", str(log_path)
     write_status(status_path, state)
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     with log_path.open("w", encoding="utf-8") as log:
         proc = subprocess.Popen(
             command,
@@ -533,8 +550,7 @@ def train(args: argparse.Namespace) -> int:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            errors="replace",
-            env=env,
+            **_child_options(),
         )
         last_write = 0.0
         assert proc.stdout is not None

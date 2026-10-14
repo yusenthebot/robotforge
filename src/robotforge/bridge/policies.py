@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from robotforge.bridge.spec import PolicySpec, SpecError, load_spec, save_spec
+from robotforge.bridge.spec import NAME_RE, PolicySpec, SpecError, load_spec, save_spec
 
 SHIPPED_DIR = Path(__file__).resolve().parent.parent / "policies"
 
@@ -64,6 +64,8 @@ def all_policies() -> dict[str, InstalledPolicy]:
 
 
 def load(name: str) -> InstalledPolicy:
+    if not NAME_RE.match(name):  # names come from agents and the viewer: never let one be a path
+        raise SpecError(f"{name!r} is not a policy name (lowercase letters, digits and _); see list_policies")
     for root, shipped in ((user_dir(), False), (SHIPPED_DIR, True)):
         folder = root / name
         if (folder / "policy.json").is_file():

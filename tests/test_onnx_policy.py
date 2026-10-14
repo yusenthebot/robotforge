@@ -453,3 +453,42 @@ async def test_mcp_lists_policies_walks_with_one_and_explains_unilab_setup(pg):
             moved = await call("move", {"robot": "go2", "speed": 0.5, "seconds": 4, "walker": "rl"})
             assert moved["behavior"]["policy"] == "go2_unilab_walk"
             assert moved["distance_m"] > 1.4 and moved["to"]["upright"]
+
+
+# ---- hardening (from review) -------------------------------------------------------------------
+
+
+def test_policy_names_can_never_be_paths(card, tmp_path):
+    folder = _write_card(tmp_path / "elsewhere", card.model_copy(update={"name": "elsewhere"}))
+    for bad in (str(folder), "../elsewhere", "walk\n"):
+        with pytest.raises(SpecError, match="not a policy name"):
+            policies.load(bad)
+
+
+def test_job_ids_can_never_be_paths():
+    unilab.jobs_dir().mkdir(parents=True)
+    for bad in ("..", ".", "../../policies"):
+        with pytest.raises(unilab.UniLabError, match="no UniLab job"):
+            unilab.job_status(bad)
+
+
+def test_a_stale_pid_is_never_signalled(tmp_path):
+    import os
+
+    folder = unilab.jobs_dir() / "20261014-120000-0aa000"
+    folder.mkdir(parents=True)
+    # After a reboot the recorded pid may belong to anything, here this very test process.
+    unilab_tool.write_status(folder / "status.json", {"state": "training", "pid": os.getpid()})
+    assert unilab.cancel(folder.name)["cancelled"] is False
+    assert unilab.job_status(folder.name)["state"] == "failed"
+
+
+def test_a_policy_that_raises_pauses_the_walker_instead_of_the_simulation(pg, card):
+    def broken(obs):
+        raise RuntimeError("bad input shape")
+
+    walker = PolicyWalker(pg.session.model, "go2", card, broken)
+    pg.session.set_controller("go2", walker)
+    pg.run_fast(lambda: False, 0.1)  # keeps stepping
+    assert "failed to run" in walker.status()["paused"]
+    np.testing.assert_allclose(walker.targets, card.default_joint_pos)
