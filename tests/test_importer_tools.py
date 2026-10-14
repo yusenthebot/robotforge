@@ -159,3 +159,27 @@ def test_cli_reports_import_failures_without_a_traceback(tmp_path, capsys):
     bad = write(tmp_path / "bad.urdf", "<robot><link name='a'></robot>")
     assert cli.main(["open", str(bad), "--no-browser"]) == 2
     assert "not valid XML" in capsys.readouterr().err
+
+
+def test_imported_wheeled_robot_drives_with_the_rover_behaviors(tmp_path):
+    pg = Playground.with_demo()
+    pg.new_world("drive import")
+    pg.add_robot("cart", file=str(write(tmp_path / "rover.urdf", rover_urdf())))
+    robots = {r["name"]: r for r in pg.behaviors.robots()}
+    assert robots["cart"]["kind"] == "rover" and robots["cart"]["max_speed"] > 0
+
+    start = pg.behaviors.pose("cart")["position"]
+    pg.behaviors.move("cart", 0.15, 0.0)  # the same call the keyboard sends
+    pg.session.step(1500)
+    end = pg.behaviors.pose("cart")
+    assert end["position"][0] - start[0] > 0.3 and abs(end["position"][1] - start[1]) < 0.1
+    pg.behaviors.move("cart", 0.0, 1.0)  # turn on the spot
+    pg.session.step(500)
+    assert abs(pg.behaviors.pose("cart")["heading_deg"]) > 10
+
+
+def test_imported_arm_is_not_mistaken_for_a_rover(tmp_path):
+    pg = Playground.with_demo()
+    pg.new_world("arm import")
+    pg.add_robot("mine", file=str(write(tmp_path / "arm.urdf", arm_urdf())))
+    assert {r["name"]: r["kind"] for r in pg.behaviors.robots()}["mine"] == "other"

@@ -31,7 +31,8 @@ MIN_JOINT_INERTIA = 1e-4
 MAX_TIME_CONSTANT = 0.12  # s: slowest acceptable motor response, including the joint's own damping
 WHEEL_TIME_CONSTANT = 0.15  # s
 WHEEL_DEFAULT_SPEED = 10.0  # rad/s
-WHEEL_ACCELERATION = 4.0  # m/s^2 the wheels can give the robot when no effort limit is given
+WHEEL_GRIP_ACCELERATION = 9.8  # m/s^2: with no effort limit, wheels may push up to the grip of the floor
+SKID_STEER_FRICTION = 0.5  # four or more wheels turn by skidding sideways, which needs slippery tires
 WHEEL_FULL_TORQUE_ERROR = 0.5  # rad/s of speed error at which a wheel motor reaches its torque limit
 DEFAULT_PRISMATIC_SPAN = 0.5  # m, slider range when the URDF gives no limits
 FIXED_CLEARANCE = 0.01  # m between a fixed robot's lowest point and the floor when it has to be lifted
@@ -256,6 +257,9 @@ def _draft(
 def _friction(staged: StagedUrdf) -> dict[str, float]:
     """Sliding friction per link: the author's Gazebo values, and slippery casters and skids."""
     out = {link: CASTER_FRICTION for link in staged.links if _PASSIVE.search(link)}
+    wheels = [j for j in staged.joints if j.type == "continuous" and _WHEEL.search(j.name)]
+    if len(wheels) >= 3 and not out:  # skid steering
+        out.update({j.child: SKID_STEER_FRICTION for j in wheels})
     out.update(staged.link_friction)
     return out
 
@@ -568,7 +572,8 @@ def _wheel_actuator(staged: StagedUrdf, geo: _Geometry, j: JointInfo) -> Actuato
     radius = max(shapes_radius(shapes, np.zeros(3)) if shapes else 0.0, 0.02)
     n_wheels = max(1, sum(1 for x in staged.joints if x.type == "continuous" and _WHEEL.search(x.name)))
     load = geo.total_mass / n_wheels
-    force = j.effort if j.effort else load * radius * WHEEL_ACCELERATION
+    skid = sum(1 for x in staged.joints if x.type == "continuous" and _WHEEL.search(x.name)) >= 3
+    force = j.effort if j.effort else load * radius * WHEEL_GRIP_ACCELERATION * (3.0 if skid else 1.0)
     kv = max(force / WHEEL_FULL_TORQUE_ERROR, load * radius * radius / WHEEL_TIME_CONSTANT, 1e-4)
     speed = max(j.velocity or 0.0, WHEEL_DEFAULT_SPEED)
     return ActuatorPlan(
@@ -1036,7 +1041,8 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
     if plan.friction:
         report.info(
             "friction",
-            "set the floor friction of some links (Gazebo mu1 values from the file, or low for casters and skids)",
+            "set the floor friction of some links (values from the file, low for casters, "
+            "medium for skid-steer wheels)",
             [f"{k}: {v:g}" for k, v in sorted(plan.friction.items())],
         )
     if draft.clamped:

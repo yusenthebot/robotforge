@@ -120,15 +120,23 @@ def _strip_noise(robot: ET.Element) -> None:
 
 
 def _gazebo_friction(robot: ET.Element) -> dict[str, float]:
-    """Friction the author asked for in Gazebo-only <gazebo reference="link"><mu1> tags."""
+    """Friction the author asked for in simulator-only tags: Gazebo's <gazebo reference="link"><mu1> and
+    PyBullet's <link><contact><lateral_friction value=.../>."""
     out: dict[str, float] = {}
+
+    def keep(link: str | None, text: str | None) -> None:
+        try:
+            if link and text:
+                out[link] = min(max(float(text), 0.01), 5.0)
+        except ValueError:
+            pass
+
     for el in robot.findall("gazebo"):
-        ref, mu = el.get("reference"), el.find("mu1")
-        if ref and mu is not None and mu.text:
-            try:
-                out[ref] = min(max(float(mu.text), 0.01), 5.0)
-            except ValueError:
-                continue
+        mu = el.find("mu1")
+        keep(el.get("reference"), mu.text if mu is not None else None)
+    for link in robot.findall("link"):
+        lateral = link.find("contact/lateral_friction")
+        keep(link.get("name"), lateral.get("value") if lateral is not None else None)
     return out
 
 
