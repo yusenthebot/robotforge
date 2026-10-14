@@ -177,6 +177,30 @@ async def test_a_slow_import_does_not_freeze_the_event_loop(tmp_path, monkeypatc
     )
 
 
+async def test_two_imports_at_once_both_end_up_in_the_world(tmp_path, monkeypatch):
+    """Tool calls run in worker threads; concurrent edits must queue instead of overwriting each other."""
+    from robotforge.design import importer
+
+    real = importer.import_file
+
+    def slow_import(*args, **kwargs):
+        time.sleep(0.3)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(importer, "import_file", slow_import)
+    urdf = write(tmp_path / "arm.urdf", arm_urdf())
+    server = build_server(Playground.with_demo(), find_free_port(8790))
+    async with Client(server) as client:
+        await client.call_tool("new_world", {"name": "two at once"})
+        results = await asyncio.gather(
+            client.call_tool("add_robot", {"name": "left", "file": str(urdf), "pos": [-0.5, 0]}),
+            client.call_tool("add_robot", {"name": "right", "file": str(urdf), "pos": [0.5, 0]}),
+        )
+        assert not any(r.is_error for r in results)
+        final = json.loads(_text(await client.call_tool("robots", {})))
+    assert sorted(r["name"] for r in final["robots"]) == ["left", "right"]
+
+
 def test_cli_prints_the_doctor_report_for_imports(tmp_path, monkeypatch, capsys):
     urdf = write(tmp_path / "arm.urdf", arm_urdf())
     served = {}
