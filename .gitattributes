@@ -1,0 +1,2 @@
+# Check out text as LF on every OS, so Windows runners and developers see the same bytes as the repo.
+* text=auto eol=lf
