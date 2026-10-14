@@ -177,7 +177,7 @@ class HumanoidController:
             min_width=1.6 * self.half_width,
             max_stride=0.25 * self.leg_length,
             max_turn=0.2,
-            zmp_inset=0.2 * self.half_width,
+            zmp_inset=0.35 * self.half_width,  # less sway: wide steps rocked tall robots off their feet
             zmp_roll=0.5,
         )
         self.gains = gains or BalanceGains()

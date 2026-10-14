@@ -35,6 +35,7 @@ HEAD_JOINTS = ("neck_yaw", "neck_pitch")
 HOME_BEND = 0.35  # rad on hip and ankle pitch (knee bends twice as much): knees soft, ready to step
 HOME_ARM = {"shoulder_pitch": 0.1, "shoulder_roll": 0.12, "elbow": 0.35}
 EYE = [0.55, 0.85, 1.0, 1.0]
+DRIVER_DAMPING = 0.02  # s: joint damping is at least this fraction of servo stiffness
 REFERENCE_HEIGHT = 0.45  # m; every length below is given at this height and scales with it
 _Y_CYL = [0.7071068, 0.7071068, 0, 0]  # cylinder axis along y
 _X_CYL = [0.7071068, 0, 0.7071068, 0]  # cylinder axis along x
@@ -144,9 +145,9 @@ class Humanoid(Template):
 
         # Hip yaw, roll and pitch axes cross at one point, so the whole thigh hangs off a 3-axis hip.
         thigh = torso.add_body(name=f"{side}_thigh", pos=[0, sy * d.hip_y, -tall / 2 - d.hip_drop])
-        servo_joint(spec, thigh, f"{side}_hip_yaw", [0, 0, sy], (-0.6, 0.6), part)
-        servo_joint(spec, thigh, f"{side}_hip_roll", [sy, 0, 0], (-0.4, 0.6), part)
-        servo_joint(spec, thigh, f"{side}_hip_pitch", [0, -1, 0], (-1.0, 1.9), part)
+        _damped(spec, thigh, f"{side}_hip_yaw", [0, 0, sy], (-0.6, 0.6), part)
+        _damped(spec, thigh, f"{side}_hip_roll", [sy, 0, 0], (-0.4, 0.6), part)
+        _damped(spec, thigh, f"{side}_hip_pitch", [0, -1, 0], (-1.0, 1.9), part)
         _joint_cap(thigh, part, 2, d.leg_r * 1.3, part.size[1] / 2 + 0.006 * s, _Y_CYL)
         thigh.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
@@ -157,7 +158,7 @@ class Humanoid(Template):
         )
 
         shin = thigh.add_body(name=f"{side}_shin", pos=[0, 0, -d.thigh])
-        servo_joint(spec, shin, f"{side}_knee", [0, 1, 0], (0.0, 2.4), part)
+        _damped(spec, shin, f"{side}_knee", [0, 1, 0], (0.0, 2.4), part)
         _joint_cap(shin, part, 1, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s, _Y_CYL)
         shin.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
@@ -169,8 +170,8 @@ class Humanoid(Template):
 
         # Ankle pitch and roll also cross at one point, so the sole stays flat with simple math.
         foot = shin.add_body(name=f"{side}_foot", pos=[0, 0, -d.shin])
-        servo_joint(spec, foot, f"{side}_ankle_pitch", [0, -1, 0], (-0.9, 1.2), part)
-        servo_joint(spec, foot, f"{side}_ankle_roll", [sy, 0, 0], (-0.5, 0.5), part)
+        _damped(spec, foot, f"{side}_ankle_pitch", [0, -1, 0], (-0.9, 1.2), part)
+        _damped(spec, foot, f"{side}_ankle_roll", [sy, 0, 0], (-0.5, 0.5), part)
         case_z = -d.ankle + d.foot[2] + part.size[2] / 2 + 0.001 * s
         servo_case(foot, part, [0, 0, max(case_z, -part.size[2] / 2)])
         _visual_only(foot)
@@ -229,8 +230,8 @@ class Humanoid(Template):
         )
         _visual_only(torso)
         upper = torso.add_body(name=f"{side}_upper_arm", pos=[0, sy * shoulder_y, shoulder_z])
-        servo_joint(spec, upper, f"{side}_shoulder_pitch", [0, -1, 0], (-1.0, 3.1), part)
-        servo_joint(spec, upper, f"{side}_shoulder_roll", [sy, 0, 0], (-0.15, 2.8), part)
+        _damped(spec, upper, f"{side}_shoulder_pitch", [0, -1, 0], (-1.0, 3.1), part)
+        _damped(spec, upper, f"{side}_shoulder_roll", [sy, 0, 0], (-0.15, 2.8), part)
         _joint_cap(upper, part, 1, d.arm_r * 1.45, d.arm_r * 1.2, _Y_CYL)
         upper.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
@@ -240,7 +241,7 @@ class Humanoid(Template):
             density=density,
         )
         fore = upper.add_body(name=f"{side}_forearm", pos=[0, 0, -d.upper_arm])
-        servo_joint(spec, fore, f"{side}_elbow", [0, -1, 0], (-0.1, 2.4), part)
+        _damped(spec, fore, f"{side}_elbow", [0, -1, 0], (-0.1, 2.4), part)
         _joint_cap(fore, part, 1, d.arm_r * 1.3, d.arm_r * 1.1, _Y_CYL)
         fore.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
@@ -270,8 +271,8 @@ class Humanoid(Template):
         servo_case(torso, part, [0, 0, tall / 2 - part.size[2] / 2 + 0.01 * s], quat=[0.7071068, 0, 0, 0.7071068])
         _visual_only(torso)
         head = torso.add_body(name="head", pos=[0, 0, tall / 2 + 0.012 * s])
-        servo_joint(spec, head, "neck_yaw", [0, 0, 1], (-1.4, 1.4), part)
-        servo_joint(spec, head, "neck_pitch", [0, 1, 0], (-0.6, 0.8), part)
+        _damped(spec, head, "neck_yaw", [0, 0, 1], (-1.4, 1.4), part)
+        _damped(spec, head, "neck_pitch", [0, 1, 0], (-0.6, 0.8), part)
         _joint_cap(head, part, 1, 0.009 * s, part.size[1] / 2, _Y_CYL)
         center = [0.004 * s, 0, rz + 0.004 * s]
         head.add_geom(type=GEOM.mjGEOM_ELLIPSOID, size=[rx, ry, rz], pos=center, rgba=SHELL, density=density * 0.3)
@@ -303,12 +304,13 @@ def _strength_warnings(model: mujoco.MjModel, part: components.Actuator, mass: f
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     com_height = d.stand_height() + float(data.subtree_com[1][2])
-    # On one leg the knee holds the whole robot at the thigh's lever arm; walking tolerates ~75 % of stall.
+    # On one leg the knee holds the whole robot at the thigh's lever arm. A grid of heights x servos in
+    # simulation walked forward, backward and turned up to 67 % of stall and fell from 71 %.
     knee = mass * 9.81 * d.thigh * math.sin(HOME_BEND)
     # A position servo must be stiffer than the robot's tendency to topple over its ankles.
     topple = mass * 9.81 * com_height
     out = []
-    if knee > 0.75 * part.stall_torque:
+    if knee > 0.7 * part.stall_torque:
         out.append(
             f"warning: {part.name} servos ({part.stall_torque} N*m) are too weak for a {mass:.1f} kg humanoid: "
             f"standing on one leg needs about {knee:.1f} N*m at the knee, so it will likely fall when walking. "
@@ -320,6 +322,14 @@ def _strength_warnings(model: mujoco.MjModel, part: components.Actuator, mass: f
             "and fall when walking. Choose a stronger servo or a smaller height."
         )
     return out
+
+
+def _damped(spec, body, name, axis, joint_range, part: components.Actuator) -> mujoco.MjsJoint:
+    """servo_joint plus the damping a joint module's driver adds: a stiff BLDC joint on a heavy leg
+    otherwise rings (its back-EMF alone is far below critical damping), and the gait falls apart."""
+    joint = servo_joint(spec, body, name, axis, joint_range, part)
+    joint.damping[0] = max(part.damping, DRIVER_DAMPING * part.kp)
+    return joint
 
 
 def _visual_only(body: mujoco.MjsBody) -> None:
