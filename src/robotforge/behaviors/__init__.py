@@ -14,6 +14,7 @@ from robotforge.sim.actuators import drives_joint, is_velocity_servo
 class Kind(StrEnum):
     ARM = "arm"
     QUADRUPED = "quadruped"
+    HUMANOID = "humanoid"
     ROVER = "rover"
     OTHER = "other"
 
@@ -32,6 +33,8 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
         return Kind.ROVER
     if has(mujoco.mjtObj.mjOBJ_SITE, "front_left_foot"):
         return Kind.QUADRUPED
+    if has(mujoco.mjtObj.mjOBJ_SITE, "left_foot") and has(mujoco.mjtObj.mjOBJ_JOINT, "left_knee"):
+        return Kind.HUMANOID
     if find_wheels(model, robot) is not None:
         return Kind.ROVER  # an imported or hand-built robot with a driven wheel on each side
     from robotforge.behaviors.quadruped import discover_legs  # lazy: it imports this package

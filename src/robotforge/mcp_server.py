@@ -44,8 +44,8 @@ INSTRUCTIONS = """\
 robotforge is a robot playground backed by the MuJoCo physics engine, made for beginners.
 
 Design: new_world creates a world (saved as world.yaml). list_templates shows the robot templates
-(arm, quadruped, rover) and their parameters; list_library shows real robots (Unitree Go2, Franka
-Panda, ...); add_robot builds one from a template, takes one from the library or imports a file
+(arm, quadruped, humanoid, rover) and their parameters; list_library shows real robots (Unitree Go2,
+Franka Panda, ...); add_robot builds one from a template, takes one from the library or imports a file
 (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; URDFs and meshes are repaired by the
 import doctor, whose report comes back in the result's "doctor" field). add_object places boxes, balls,
 cylinders, tables and bins. update_robot, update_object, remove, set_floor and undo edit the world;
@@ -53,11 +53,12 @@ every edit is validated and the live
 viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
 radians for joints and degrees for yaw.
 
-Behavior: move walks a quadruped or drives a rover; pick_and_place, move_arm and gripper work arms;
-robots lists robots with their positions. For anything custom, set_controls / simulate drive actuators
-directly (names from describe_model, prefixed "<robot>/"). observe reports state with an image so you
-can check your work. open_viewer gives the user a live 3D view (they can also drive with WASD);
-offer it early, and when it is open, actions play out in real time for the user to watch.
+Behavior: move walks a quadruped or a humanoid or drives a rover; pose makes a humanoid wave, squat,
+bow or cheer; pick_and_place, move_arm and gripper work arms; robots lists robots with their positions.
+For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
+prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer
+gives the user a live 3D view (they can also drive with WASD); offer it early, and when it is open,
+actions play out in real time for the user to watch.
 
 Algorithms: the same robot and task can be solved by different control methods (IK, PD, LQR, sampling
 MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -130,7 +131,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, rover) with their parameters, defaults and limits,
+        """List robot templates (arm, quadruped, humanoid, rover) with their parameters, defaults and limits,
         and the parts catalog (servos and motors) that templates can use."""
         from robotforge.design import components, templates
 
@@ -291,9 +292,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
-        """Walk a quadruped or drive a rover. speed in m/s (negative = backwards), turn in rad/s (positive =
-        left). With `seconds`, moves for that long then stops and reports how far it went; with seconds=null
-        it keeps moving until `stop`. If the viewer is open the user watches it happen in real time."""
+        """Walk a quadruped or a humanoid, or drive a rover. speed in m/s (negative = backwards), turn in rad/s
+        (positive = left); each robot's max_speed is listed by `robots` (humanoids are slow, about 0.1 m/s, and
+        take a moment to start and stop stepping). With `seconds`, moves for that long then stops and reports
+        how far it went; with seconds=null it keeps moving until `stop`. If the viewer is open the user
+        watches it happen in real time."""
         with _tool_errors():
             before = playground.behaviors.pose(robot)
             status = playground.behaviors.move(robot, speed, turn)
@@ -303,6 +306,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 raise PlaygroundError("seconds must be in (0, 60]")
             run = await run_until(lambda: False, seconds)
             playground.behaviors.stop(robot)
+            settled = playground.behaviors.settled(robot)
+            if settled is not None:  # a humanoid finishes its step first; measure where it really stops
+                extra = await run_until(settled, 3.0)
+                run["settle_seconds"] = extra["sim_seconds"]
+                run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
             after = playground.behaviors.pose(robot)
             moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
             turned = (after["heading_deg"] - before["heading_deg"] + 180) % 360 - 180
@@ -324,6 +332,17 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         """Stop a robot's current behavior (a walking robot settles into a stand)."""
         with _tool_errors():
             return _json(playground.behaviors.stop(robot))
+
+    @server.tool()
+    async def pose(robot: str, name: Literal["wave", "squat", "arms_up", "bow", "look_around", "stand"]) -> str:
+        """Make a humanoid strike a pose: wave (waves hello), squat (deep knee bend), arms_up (cheer),
+        bow, look_around (turns its head) or stand (back to neutral). A walking humanoid stops first; the
+        robot keeps its balance throughout. Waits until the pose is done and reports whether it stayed up."""
+        with _tool_errors():
+            ctrl = playground.behaviors.strike_pose(robot, name)
+            run = await run_until(lambda: ctrl.done, 20.0)
+            after = playground.behaviors.pose(robot)
+            return _json({"robot": robot, "pose": name, "upright": after["upright"], **run})
 
     @server.tool()
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
@@ -374,6 +393,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             sim.joints(robot) -> {joint: value}; sim.sensors(robot) -> {sensor: value}
             sim.set_controls({"arm/shoulder": 0.5})          # raw actuator targets
             sim.move(robot, speed, turn); sim.stop(robot)      # walk / drive (keeps going until stop)
+            sim.pose(robot, "wave") -> bool                    # humanoid poses; waits, True if upright
             sim.move_arm(robot, [x, y, z], gripper="open"|"close"|None)   # waits until arrived
             sim.gripper(robot, "open"|"close"); sim.pick_and_place(robot, obj, target) -> bool
             print(...)                                         # output is returned by run_script
@@ -412,7 +432,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def robots() -> str:
-        """List robots in the world with their kind (arm, quadruped, rover), where they are, which way they
+        """List robots in the world with their kind (arm, quadruped, humanoid, rover), where they are, which way they
         face, whether they are upright, and any behavior running on them."""
         with _tool_errors():
             out = []
