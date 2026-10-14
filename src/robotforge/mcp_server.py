@@ -20,7 +20,7 @@ from typing import Any, Literal
 import numpy as np
 import uvicorn
 from mcp.server.apps import Apps, ResourceCsp
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
@@ -142,10 +142,12 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     def list_library() -> str:
         """List real, well-known robots that add_robot(library=...) can load: Unitree Go2 and other robot
         dogs (they walk with move and the keyboard), arms like the Franka Panda, and humanoids (stand only).
-        Each is downloaded from MuJoCo Menagerie on first use (a few seconds, tens of MB) and cached."""
+        The first add_robot of each one downloads it from MuJoCo Menagerie (download_mb: Go2 31 MB, Spot
+        55 MB, SO-ARM100 4 MB; usually 5-30 s) and caches it; after that it loads instantly."""
         from robotforge.design import library
 
-        return _json({"robots": library.catalog()})
+        with _tool_errors():
+            return _json({"robots": library.catalog()})
 
     @server.tool()
     def new_world(name: str, floor: Literal["checker", "grass", "wood", "concrete"] = "checker") -> str:
@@ -160,7 +162,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json(playground.open_world(name_or_path))
 
     @server.tool()
-    def add_robot(
+    async def add_robot(
+        ctx: Context,
         name: str,
         template: str | None = None,
         file: str | None = None,
@@ -170,12 +173,17 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         library: str | None = None,
     ) -> str:
         """Add a robot to the open world: from a template (see list_templates), from the robot library
-        (see list_library, e.g. library="go2"; downloaded on first use) or from an MJCF/URDF file.
+        (see list_library, e.g. library="go2") or from an MJCF/URDF file.
 
+        The first use of a library robot downloads it (4-55 MB, usually 5-30 s, with progress updates);
+        if your call timed out meanwhile, simply call again: the download continues in the background
+        and a repeated identical call reports the robot instead of failing.
         params override template defaults, e.g. {"leg_length": 0.3, "color": "orange"}.
         pos is [x, y] in meters (height is automatic for templates and library robots); yaw is in degrees.
         """
         with _tool_errors():
+            if library is not None:
+                await _download_with_progress(library, ctx)
             return _json(playground.add_robot(name, template, file, params, pos, yaw, library=library))
 
     @server.tool()
@@ -462,6 +470,43 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return content
 
     return server
+
+
+PROGRESS_INTERVAL = 1.0  # s between progress notifications during a download
+# Downloads in flight, by library robot: a call retried after a client timeout joins the running
+# download instead of starting a second one.
+_downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
+
+
+async def _download_with_progress(name: str, ctx: Context) -> None:
+    """Download a library robot off the event loop (the viewer stays live), reporting progress."""
+    from robotforge.design import library
+
+    robot = library.get(name)
+    if library.is_downloaded(name):
+        return
+    running = _downloads.get(name)
+    if running is None or running[0].done():
+        state: dict[str, Any] = {
+            "fraction": 0.0,
+            "message": f"downloading {robot.title} ({library.download_mb(name)} MB)",
+            "started": time.monotonic(),
+        }
+
+        def progress(fraction: float, message: str) -> None:  # called from the download thread
+            state.update(fraction=fraction, message=f"{robot.title}: {message}")
+
+        # If the client gives up, the download thread keeps going and fills the cache for the next call.
+        running = (asyncio.ensure_future(asyncio.to_thread(library.model_dir, robot, progress)), state)
+        _downloads[name] = running
+    task, state = running
+    while True:
+        elapsed = time.monotonic() - state["started"]
+        await ctx.report_progress(round(100 * state["fraction"], 1), 100, f"{state['message']} ({elapsed:.0f} s)")
+        done, _ = await asyncio.wait({task}, timeout=PROGRESS_INTERVAL)
+        if done:
+            break
+    task.result()  # re-raises a failed download
 
 
 @contextlib.contextmanager

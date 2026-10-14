@@ -6,10 +6,12 @@ Downloading itself is tested in test_menagerie.py. The real robots are covered b
 set ROBOTFORGE_NETWORK_TESTS=1 to run them (the first run downloads each robot into the cache).
 """
 
+import asyncio
 import dataclasses
 import json
 import math
 import os
+import time
 from pathlib import Path
 
 import mujoco
@@ -17,6 +19,7 @@ import numpy as np
 import pytest
 from mcp import Client
 
+from robotforge import mcp_server
 from robotforge.behaviors import Kind, quadruped, robot_kind
 from robotforge.cli import find_free_port
 from robotforge.design import library, menagerie
@@ -217,6 +220,82 @@ def test_every_catalog_robot_has_a_file_list():
         names = {f.path for f in menagerie.files(robot.folder)}
         assert robot.mjcf in names and "LICENSE" in names
         assert library.download_mb(robot.name) > 1
+
+
+def test_adding_the_same_robot_twice_is_harmless(pg):
+    pg.add_robot("go2", library="go2")
+    _run(pg, 0.5)
+    t = pg.session.data.time
+    again = pg.add_robot("go2", library="go2")  # e.g. a retry after the client timed out
+    assert again["unchanged"] is True and again["robots"] == ["go2"]
+    assert pg.session.data.time == t  # the simulation was not reloaded
+    with pytest.raises(PlaygroundError, match="unique"):
+        pg.add_robot("go2", library="go2", pos=[1.0, 0.0])  # a different request under the same name
+
+
+@pytest.mark.anyio
+async def test_mcp_reports_download_progress(pg, monkeypatch):
+    def slow_fetch(folder, progress=None):
+        if progress is None:  # the build after the download: already "downloaded"
+            return FIXTURES / folder
+        for i in range(3):
+            progress(i / 3, f"step {i}")
+            time.sleep(0.6)
+        return FIXTURES / folder
+
+    monkeypatch.setattr(library, "is_downloaded", lambda _name: False)
+    monkeypatch.setattr(menagerie, "fetch", slow_fetch)
+    monkeypatch.setattr(mcp_server, "PROGRESS_INTERVAL", 0.2)
+    updates = []
+
+    async def on_progress(progress, total, message):
+        updates.append((progress, total, message))
+
+    server = build_server(pg, find_free_port(8792))
+    async with Client(server) as client:
+        result = await client.call_tool("add_robot", {"name": "go2", "library": "go2"}, progress_callback=on_progress)
+    assert not result.is_error
+    assert len(updates) >= 3 and all(total == 100 for _, total, _ in updates)
+    assert [p for p, _, _ in updates] == sorted(p for p, _, _ in updates)  # never goes backwards
+    assert any("Unitree Go2: step 1" in m for *_, m in updates)
+
+
+@pytest.mark.anyio
+async def test_a_retried_call_joins_the_running_download(pg, monkeypatch):
+    downloads = []
+
+    def slow_fetch(folder, progress=None):
+        if progress is not None:
+            downloads.append(folder)
+            time.sleep(1.0)
+        return FIXTURES / folder
+
+    monkeypatch.setattr(library, "is_downloaded", lambda _name: False)
+    monkeypatch.setattr(menagerie, "fetch", slow_fetch)
+    server = build_server(pg, find_free_port(8794))
+    async with Client(server) as client:
+        first, retry = await asyncio.gather(
+            client.call_tool("add_robot", {"name": "go2", "library": "go2"}),
+            client.call_tool("add_robot", {"name": "go2", "library": "go2"}),
+        )
+    assert downloads == ["unitree_go2"]  # one download, both calls waited for it
+    bodies = [json.loads(r.content[0].text) for r in (first, retry)]
+    assert sorted(bool(b.get("unchanged")) for b in bodies) == [False, True]
+
+
+@pytest.mark.anyio
+async def test_a_failed_download_reaches_the_agent_as_a_tool_error(pg, monkeypatch):
+    def broken(folder, progress=None):
+        raise menagerie.MenagerieError("could not reach GitHub (MuJoCo Menagerie); check your internet connection")
+
+    monkeypatch.setattr(library, "is_downloaded", lambda _name: False)
+    monkeypatch.setattr(menagerie, "fetch", broken)
+    server = build_server(pg, find_free_port(8793))
+    async with Client(server) as client:
+        result = await client.call_tool("add_robot", {"name": "go2", "library": "go2"})
+    assert result.is_error
+    assert "check your internet connection" in result.content[0].text
+    assert pg.current_world().robots == []  # nothing half-added
 
 
 def test_motors_become_servos_in_radians_even_in_degree_models():
