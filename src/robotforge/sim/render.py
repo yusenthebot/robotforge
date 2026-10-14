@@ -162,7 +162,8 @@ def _framing(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndar
     if box is None:
         return model.stat.center.copy(), extent
     low, high = box
-    return (low + high) / 2, max(0.15, float(np.linalg.norm(high - low)))
+    # At least a meter across, so a lone robot is shown with some ground around it.
+    return (low + high) / 2, max(1.0, float(np.linalg.norm(high - low)))
 
 
 def _geom_box(model: mujoco.MjModel, data: mujoco.MjData, geoms: list[int]) -> tuple[np.ndarray, np.ndarray] | None:

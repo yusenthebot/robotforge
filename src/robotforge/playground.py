@@ -19,9 +19,9 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge.behaviors.manager import BehaviorManager
-from robotforge.design import importer
+from robotforge.design import importer, scenes, terrain
 from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, ObjectEntry, RobotEntry, World
+from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
 from robotforge.viewer.server import ViewerHub
@@ -234,10 +234,11 @@ class Playground:
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
         def change(w: World) -> None:
-            before = len(w.robots) + len(w.objects)
+            before = len(w.robots) + len(w.objects) + len(w.terrain)
             w.robots = [r for r in w.robots if r.name != name]
             w.objects = [o for o in w.objects if o.name != name]
-            if len(w.robots) + len(w.objects) == before:
+            w.terrain = [t for t in w.terrain if t.name != name]
+            if len(w.robots) + len(w.objects) + len(w.terrain) == before:
                 raise PlaygroundError(f"nothing named {name!r} in this world")
 
         return self._edit(change)
@@ -298,11 +299,118 @@ class Playground:
             "world_dir": str(store.dir),
             "created": created,
             "robots": [r.name for r in world.robots],
-            "objects": [o.name for o in world.objects],
+            "objects": _limit([o.name for o in world.objects]),
+            **({"terrain": [t.name for t in world.terrain]} if world.terrain else {}),
             "notes": compiled.notes,
             "actuators": summary["actuators"],
             "viewer_url": self.viewer_url,
         }
+
+    # ---- scenes and terrain (design/scenes.py, design/terrain.py) ------------------------
+
+    def list_scenes(self) -> dict[str, Any]:
+        return {
+            "scenes": scenes.catalog(),
+            "terrain_types": terrain.catalog(),
+            "ground_styles": list(terrain.STYLES),
+        }
+
+    @_one_edit_at_a_time
+    def load_scene(
+        self,
+        preset: str,
+        seed: int = 0,
+        keep_robots: bool = True,
+        starter: bool = True,
+        options: dict[str, float] | None = None,
+    ) -> dict[str, Any]:
+        """Replace the floor, terrain and objects with a ready-made scene (opening a world named after it if
+        none is open). Kept robots move to the scene's places; an empty world gets the scene's starter robot."""
+        try:
+            content = scenes.build(preset, seed, options)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+        if self.store is None:
+            self.store = WorldStore.create(preset, content.floor.get("style", "checker"))
+        base_dir = self.store.dir
+        placed: list[str] = []
+
+        def change(w: World) -> None:
+            robots = list(w.robots) if keep_robots else []
+            if not robots and starter:
+                robots = [RobotEntry(**r) for r in content.starter]
+            placed.extend(scenes.place(robots, content, lambda entry: spawn_height(entry, base_dir)))
+            taken = {r.name for r in robots}
+            w.robots = robots
+            w.floor = Floor.model_validate(content.floor)
+            w.terrain = [terrain.parse(t) for t in content.terrain]
+            w.objects = [ObjectEntry(**{**o, "name": _unused(o["name"], taken)}) for o in content.objects]
+
+        result = self._edit(change)
+        result["scene"] = {
+            "preset": preset,
+            "seed": seed,
+            "placed": placed,
+            "robot_places": [list(s.pos) for s in content.ground_slots],
+            "arm_places": [[*s.pos, s.z] for s in content.arm_slots],
+            "tips": content.tips,
+        }
+        return result
+
+    @_one_edit_at_a_time
+    def set_terrain(self, type: str, style: str | None = None, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Make the whole ground one terrain patch centered on the origin; type "flat" removes all terrain."""
+        patches = [] if type == "flat" else [self._patch({**(params or {}), "type": type, "style": style})]
+
+        def change(w: World) -> None:
+            w.terrain = patches
+
+        return self._edit(change)
+
+    @_one_edit_at_a_time
+    def add_terrain(
+        self,
+        type: str,
+        name: str | None = None,
+        pos: list[float] | None = None,
+        yaw: float = 0.0,
+        style: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        fields = {"name": name, "pos": pos, "yaw": yaw, "style": style}
+        patch = self._patch({**(params or {}), "type": type, **{k: v for k, v in fields.items() if v is not None}})
+
+        def change(w: World) -> None:
+            w.terrain.append(patch)
+
+        return self._edit(change)
+
+    @_one_edit_at_a_time
+    def update_terrain(
+        self,
+        name: str,
+        pos: list[float] | None = None,
+        yaw: float | None = None,
+        style: str | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        def change(w: World) -> None:
+            old = _find(w.terrain, name, "terrain patch")
+            fields = {"pos": pos, "yaw": yaw, "style": style}
+            data = {**old.model_dump(), **(params or {}), **{k: v for k, v in fields.items() if v is not None}}
+            data["type"], data["name"] = old.type, old.name  # a patch keeps its type and name
+            w.terrain = [self._patch(data) if t.name == name else t for t in w.terrain]
+
+        return self._edit(change)
+
+    @staticmethod
+    def _patch(data: dict[str, Any]) -> Any:
+        if data.get("style") is None:
+            data.pop("style", None)
+        try:
+            return terrain.parse(data)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
 
     # ---- control and simulation ----------------------------------------------------
 
@@ -413,6 +521,15 @@ class Playground:
             _name(m, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}": [round(float(x), 4) for x in d.xpos[b]]
             for b in _free_bodies(m)
         }
+
+
+def _unused(name: str, taken: set[str]) -> str:
+    """`name`, or name_2, name_3, ... if a robot already uses it."""
+    n, out = 1, name
+    while out in taken:
+        n += 1
+        out = f"{name}_{n}"
+    return out
 
 
 def _find(items: list, name: str, kind: str):

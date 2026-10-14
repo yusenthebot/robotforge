@@ -28,6 +28,9 @@ from mcp.types import ToolAnnotations
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
+from robotforge.design import mcp_tools as scene_tools
+from robotforge.design.terrain import StyleName
+from robotforge.design.world import ShapeName
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
@@ -48,10 +51,16 @@ Design: new_world creates a world (saved as world.yaml). list_templates shows th
 Franka Panda, ...); add_robot builds one from a template, takes one from the library or imports a file
 (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; URDFs and meshes are repaired by the
 import doctor, whose report comes back in the result's "doctor" field). add_object places boxes, balls,
-cylinders, tables and bins. update_robot, update_object, remove, set_floor and undo edit the world;
-every edit is validated and the live
-viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
-radians for joints and degrees for yaw.
+cylinders, tables and bins, and furniture and architecture (walls, shelves, counters, pallets, trees,
+benches, rocks, flat ground markers). update_robot, update_object, remove, set_floor and undo edit the
+world; every edit is validated and the live viewer updates immediately. Names are lowercase with
+underscores. Units are meters, kilograms, radians for joints and degrees for yaw.
+
+Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse,
+park, maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground
+with hills, rough ground, stairs, ramps, stepping stones, curbs and platforms; robots and objects stand
+on whatever ground is under them. To build a scene from a sentence, combine load_scene, add_terrain and
+add_object, then check it with observe(view="overview").
 
 Behavior: move walks a quadruped or a humanoid or drives a rover; pose makes a humanoid wave, squat,
 bow or cheer; pick_and_place, move_arm and gripper work arms; robots lists robots with their positions.
@@ -153,7 +162,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json({"robots": library.catalog()})
 
     @server.tool()
-    def new_world(name: str, floor: Literal["checker", "grass", "wood", "concrete"] = "checker") -> str:
+    def new_world(name: str, floor: StyleName = "checker") -> str:
         """Create a new world (or reopen it if one with this name exists) and show it in the viewer."""
         with _tool_errors():
             return _json(playground.new_world(name, floor))
@@ -213,20 +222,25 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     def add_object(
         name: str,
-        shape: Literal["box", "sphere", "cylinder", "table", "bin"] = "box",
+        shape: ShapeName = "box",
         size: list[float] | None = None,
         pos: list[float] | None = None,
         color: str | list[float] | None = None,
         mass: float | None = None,
-        fixed: bool = False,
+        fixed: bool | None = None,
+        yaw: float = 0.0,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height], sphere [diameter],
-        cylinder [diameter, height]. pos is [x, y] (resting on the floor) or [x, y, z].
-        fixed objects never move; a bin is an open-top container."""
+        cylinder [diameter, height]; wall [length, thickness, height], pillar [diameter, height], shelf and
+        counter and bench [length, depth, height], door_frame [width, depth, height], pallet [length, width,
+        height], tree [crown diameter, height], rock [diameter, height], marker [diameter] or [length, width].
+        Every shape has a default size and color. pos is [x, y] (resting on the ground or terrain there) or
+        [x, y, z]; yaw turns it (degrees). fixed objects never move (walls, shelves, counters, trees, benches
+        and rocks are fixed unless fixed=false); a bin is an open-top container, a marker a flat colored mark
+        nothing collides with (goals, lanes, paths). Ramps and stairs are terrain: see add_terrain."""
         with _tool_errors():
-            return _json(
-                playground.add_object(name, shape=shape, size=size, pos=pos, color=color, mass=mass, fixed=fixed)
-            )
+            fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
+            return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
     def update_object(
@@ -236,19 +250,21 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         color: str | list[float] | None = None,
         mass: float | None = None,
         fixed: bool | None = None,
+        yaw: float | None = None,
     ) -> str:
-        """Change an object's size, position, color, mass or fixed flag."""
+        """Change an object's size, position, heading (yaw, degrees), color, mass or fixed flag."""
         with _tool_errors():
-            return _json(playground.update_object(name, size=size, pos=pos, color=color, mass=mass, fixed=fixed))
+            fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
+            return _json(playground.update_object(name, **fields))
 
     @server.tool()
     def remove(name: str) -> str:
-        """Remove a robot or object from the world."""
+        """Remove a robot, object or terrain patch from the world."""
         with _tool_errors():
             return _json(playground.remove(name))
 
     @server.tool()
-    def set_floor(style: Literal["checker", "grass", "wood", "concrete"]) -> str:
+    def set_floor(style: StyleName) -> str:
         """Change the floor look and feel."""
         with _tool_errors():
             return _json(playground.set_floor(style))
@@ -326,6 +342,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             )
 
     control_tools.register(server, playground, run_until)
+    scene_tools.register(server, playground)
 
     @server.tool()
     def stop(robot: str) -> str:
@@ -488,7 +505,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         """Report the current state (joint angles, controls, free body positions, sensors, contacts) and,
         by default, a rendered image (on machines without OpenGL the state comes back with a note instead).
 
-        `view` is a preset (default, front, back, left, right, top) or a camera name from describe_model.
+        `view` is a preset (default, front, back, left, right, top, or overview for the whole scene with its
+        terrain and furniture) or a camera name from describe_model.
         """
         with _tool_errors():
             state = playground.state()

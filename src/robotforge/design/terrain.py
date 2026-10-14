@@ -12,6 +12,7 @@ placed on top of whatever terrain is under them.
 
 from __future__ import annotations
 
+import difflib
 import math
 import re
 from dataclasses import dataclass, field
@@ -19,7 +20,7 @@ from typing import Annotated, Literal
 
 import mujoco
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator, model_validator
 
 from robotforge.sim.geometry import collides, lowest_point
 
@@ -239,6 +240,30 @@ TYPES: dict[str, type[_Patch]] = {
 }
 
 
+_ADAPTER: TypeAdapter = TypeAdapter(TerrainPatch)
+
+
+def parse(data: dict) -> _Patch:
+    """Validate one patch given as a dict (as in world.yaml). Raises ValueError with a readable message."""
+    kind = data.get("type")
+    if kind not in TYPES:
+        close = difflib.get_close_matches(str(kind), list(TYPES), n=1)
+        hint = f" Did you mean {close[0]!r}?" if close else ""
+        raise ValueError(f"unknown terrain type {kind!r}.{hint} Types: {', '.join(TYPES)}")
+    try:
+        return _ADAPTER.validate_python(data)
+    except ValidationError as exc:
+        parts = []
+        for err in exc.errors():
+            where = ".".join(str(x) for x in err["loc"][1:])  # drop the union tag
+            msg = err["msg"].removeprefix("Value error, ")
+            if where:
+                parts.append(f"{kind} {where}: {msg}")
+            else:
+                parts.append(msg if msg.startswith(kind) else f"{kind}: {msg}")
+        raise ValueError("; ".join(parts)) from None
+
+
 def assign_names(patches: list[_Patch], taken: set[str]) -> None:
     """Give unnamed patches a name like hills1, ramp2 that no robot, object or patch uses."""
     used = set(taken) | {p.name for p in patches if p.name}
@@ -290,12 +315,14 @@ def _ensure_material(spec: mujoco.MjSpec, style: str) -> str:
         tex = {"builtin": B.mjBUILTIN_CHECKER, "rgb1": [1.0] * 3, "rgb2": [0.9] * 3, "mark": M.mjMARK_NONE}
         repeat = [1.0 / look.tile] * 2
     elif look.pattern == "tiles":
-        tex = {"builtin": B.mjBUILTIN_CHECKER, "rgb1": [1.0] * 3, "rgb2": [0.96] * 3, "mark": M.mjMARK_EDGE}
+        tex = {"builtin": B.mjBUILTIN_CHECKER, "rgb1": [1.0] * 3, "rgb2": [0.975] * 3, "mark": M.mjMARK_EDGE}
         tex["markrgb"] = [0.72] * 3
         repeat = [0.5 / look.tile] * 2  # one checker texture holds 2 x 2 tiles
     elif look.pattern == "planks":
-        tex = {"builtin": B.mjBUILTIN_FLAT, "rgb1": [1.0] * 3, "mark": M.mjMARK_EDGE, "markrgb": [0.7] * 3}
-        repeat = [1.0 / look.tile, 1.0 / 0.16]  # long planks along x
+        # Grain stretched along x. Hard plank seams alias into big moire bands in MuJoCo's renderer.
+        tex = {"builtin": B.mjBUILTIN_FLAT, "rgb1": [1.0] * 3, "mark": M.mjMARK_RANDOM, "random": 0.5}
+        tex["markrgb"] = [0.8] * 3
+        repeat = [1.0 / look.tile, 1.0 / 0.1]
     else:  # speckle: fine random grain, like grass, gravel or concrete seen from standing height
         tex = {"builtin": B.mjBUILTIN_FLAT, "rgb1": [1.0] * 3, "mark": M.mjMARK_RANDOM, "random": 0.35}
         tex["markrgb"] = [0.84] * 3
@@ -434,7 +461,8 @@ def _ramp(p: Ramp) -> list[_Box]:
         mid_top = np.array([x0 + p.length / 2, rise / 2])
         n = normal * np.array([sign, 1.0])
         c = mid_top - n * thick / 2
-        return _Box((float(c[0]), 0.0, float(c[1])), (slope_len / 2, p.width / 2, thick / 2), -sign * a)
+        # 1 mm narrower than the landing, so their side faces never overlap and flicker
+        return _Box((float(c[0]), 0.0, float(c[1])), (slope_len / 2, p.width / 2 - 0.001, thick / 2), -sign * a)
 
     boxes: list[_Box] = []
     start = 0.0

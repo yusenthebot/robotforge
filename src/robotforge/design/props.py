@@ -80,6 +80,9 @@ SHAPES: dict[str, ShapeInfo] = {
     "bench": ShapeInfo(
         "[length, depth, seat height]", (3,), (1.4, 0.45, 0.45), tuple(WOOD), True, summary="a park bench facing -y"
     ),
+    "rock": ShapeInfo(
+        "[diameter, height]", (2,), (0.6, 0.35), (0.5, 0.49, 0.47, 1), True, summary="a boulder (half buried)"
+    ),
     "marker": ShapeInfo(
         "[diameter] or [length, width]",
         (1, 2),
@@ -89,7 +92,7 @@ SHAPES: dict[str, ShapeInfo] = {
         summary="a flat mark on the ground (goal, lane, path); nothing collides with it",
     ),
 }
-PROPS = ("wall", "pillar", "shelf", "door_frame", "counter", "pallet", "tree", "bench", "marker")
+PROPS = ("wall", "pillar", "shelf", "door_frame", "counter", "pallet", "tree", "bench", "rock", "marker")
 DEFAULT_MASS = {"pallet": 20.0}
 
 
@@ -105,7 +108,9 @@ class Part:
 
 def footprint(shape: str, size: list[float]) -> tuple[float, float]:
     """Half extents (x, y) of a shape's footprint in its own frame."""
-    if shape in ("sphere", "pillar", "tree") or (shape == "marker" and len(size) == 1):
+    if shape == "tree":  # the trunk stands on the ground, the crown can hang over a slope
+        return size[0] * 0.06, size[0] * 0.06
+    if shape in ("sphere", "pillar", "rock") or (shape == "marker" and len(size) == 1):
         return size[0] / 2, size[0] / 2
     if shape == "cylinder":
         return size[0] / 2, size[0] / 2
@@ -165,6 +170,8 @@ def _volume(p: Part) -> float:
         return 8 * float(np.prod(p.size))
     if p.type == G.mjGEOM_CYLINDER:
         return 2 * np.pi * p.size[0] ** 2 * p.size[1]
+    if p.type == G.mjGEOM_ELLIPSOID:
+        return 4 / 3 * np.pi * float(np.prod(p.size))
     return 4 / 3 * np.pi * p.size[0] ** 3
 
 
@@ -272,6 +279,18 @@ def _bench(size: list[float], rgba: list[float]) -> list[Part]:
     return parts
 
 
+def _rock(size: list[float], rgba: list[float]) -> list[Part]:
+    """Three overlapping squashed balls, sunk a little into the ground like a boulder."""
+    d, h = size
+    r = d / 2
+    lumps = ((0.0, 0.0, 1.0, 1.0, 1.0), (0.3, 0.2, 0.7, 0.75, 0.92), (-0.25, -0.22, 0.65, 0.7, 0.86))
+    parts = []
+    for dx, dy, kxy, kz, shade in lumps:
+        half = [r * kxy, r * kxy * 0.85, h * kz * 0.6]
+        parts.append(Part(G.mjGEOM_ELLIPSOID, half, [dx * r, dy * r, h * kz * 0.4], _shade(rgba, shade)))
+    return parts
+
+
 def _marker(size: list[float], rgba: list[float]) -> list[Part]:
     if len(size) == 1:
         return [Part(G.mjGEOM_CYLINDER, [size[0] / 2, MARK / 2, 0], [0, 0, MARK / 2], rgba, collide=False)]
@@ -291,5 +310,6 @@ _PARTS = {
     "pallet": _pallet,
     "tree": _tree,
     "bench": _bench,
+    "rock": _rock,
     "marker": _marker,
 }

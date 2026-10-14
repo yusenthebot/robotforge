@@ -192,6 +192,11 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     return CompiledWorld(spec, _compile(spec), notes, doctor)
 
 
+def spawn_height(entry: RobotEntry, base_dir: Path | None = None) -> float:
+    """How high a robot's base frame sits above the surface it stands on (to put arms on tables)."""
+    return _robot_spec(entry, base_dir).spawn_height
+
+
 def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Ground) -> bool:
     """Raise or lower each robot so that, in its home pose, its lowest point rests on the terrain under it.
 
