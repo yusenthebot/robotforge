@@ -1,5 +1,6 @@
 import json
 import math
+import random
 
 import mujoco
 import numpy as np
@@ -152,6 +153,55 @@ def test_stop_brings_a_walking_humanoid_to_a_still_stand(pg):
     d, m = pg.session.data, pg.session.model
     touch = [d.sensordata[m.sensor(f"bot/{s}_foot_touch").adr[0]] for s in ("left", "right")]
     assert min(touch) > 0.25 * sum(touch)  # weight shared by both feet
+
+
+@pytest.mark.parametrize("tap", [0.4, 0.8, 1.2, 2.0])
+def test_tapping_the_walk_key_never_tips_it_over(pg, tap):
+    # Walk, let go for half a second, walk again: restarting while the stop is still settling used to
+    # swap the planned weight shift with no warning and rocked the robot over by the fourth tap.
+    pg.add_robot("bot", template="humanoid")
+    top = pg.behaviors.robots()[0]["max_speed"]
+    lowest = 1.0
+    for _ in range(8):
+        pg.behaviors.move("bot", top, 0.0)
+        lowest = min(lowest, _run(pg, tap))
+        pg.behaviors.move("bot", 0.0, 0.0)
+        lowest = min(lowest, _run(pg, 0.5))
+    assert lowest > 0.9
+
+
+@pytest.mark.parametrize("seed", [0, 1, 34, 39])  # 34 and 39 tipped the robot before the fix
+def test_mashing_the_driving_keys_never_tips_it_over(pg, seed):
+    rng = random.Random(seed)
+    pg.add_robot("bot", template="humanoid")
+    lowest = 1.0
+    for _ in range(60):
+        pg.behaviors.move("bot", rng.choice([0.0, 0.06, -0.06]), rng.choice([0.0, 1.0, -1.0]))
+        lowest = min(lowest, _run(pg, rng.choice([0.05, 0.15, 0.3, 0.5])))
+    assert lowest > 0.9
+
+
+def test_new_commands_take_effect_within_a_step(pg):
+    pg.add_robot("bot", template="humanoid")
+    m, d = pg.session.model, pg.session.data
+    soles = [m.site(f"bot/{s}_foot").id for s in ("left", "right")]
+    pg.behaviors.move("bot", 0.1, 0.0)
+    start = d.time
+    pg.run_fast(lambda: max(d.site_xpos[s][2] for s in soles) > 0.01, 2.0)
+    assert d.time - start < 0.8  # the first foot is in the air
+    pg.run_fast(lambda: False, 3.0)
+    pg.behaviors.stop("bot")
+    ctrl = pg.session.controllers["bot"]
+    start = d.time
+    pg.run_fast(lambda: ctrl.done, 3.0)
+    assert d.time - start < 1.0  # standing still again
+
+
+def test_a_long_stand_keeps_the_plan_small(pg):
+    pg.add_robot("bot", template="humanoid")
+    pg.behaviors.move("bot", 0.0, 0.0)
+    pg.run_fast(lambda: False, 60.0)
+    assert len(pg.session.controllers["bot"].plan._checkpoints) < 20
 
 
 # ---- poses ---------------------------------------------------------------------------------

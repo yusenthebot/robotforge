@@ -111,7 +111,8 @@ class GaitPlan:
         self._support = np.zeros(0, dtype=int)
         self._i = 0
         self._base = 0  # absolute tick number of buffer row 0
-        self._checkpoints: list[tuple[int, tuple]] = []  # (absolute tick, planner state) where pieces begin
+        # (absolute tick, planner state, kind of piece) where each planned piece begins
+        self._checkpoints: list[tuple[int, tuple, str]] = []
 
     # ---- reading ----------------------------------------------------------------------
 
@@ -130,20 +131,33 @@ class GaitPlan:
         """True when nothing but standing still is planned."""
         return self.standing and bool(np.all(self._support[self._i :] == 0)) and self._still()
 
-    def rewind(self, lead: int) -> None:
+    def rewind(self, lead: int, notice: int, moving: bool) -> None:
         """Forget the pieces of the plan that start at least `lead` ticks from now, so a new command
-        takes effect after the step in progress instead of after everything already planned."""
+        takes effect after the step in progress instead of after everything already planned.
+
+        Swapping a settle (weight drifts back to the middle) for a step (weight jumps to one foot), or
+        the other way round, needs `notice` ticks of warning: with less, the body sway cannot follow,
+        the robot starts to rock sideways and a few quick taps on a key tip it over.
+        """
+        self._forget_past()
         now = self._base + self._i
-        self._checkpoints = [c for c in self._checkpoints if c[0] >= now]
-        keep = next((k for k, (tick, _) in enumerate(self._checkpoints) if tick >= now + lead), None)
-        if keep is None:
+        for k, (tick, state, kind) in enumerate(self._checkpoints):
+            if tick < now + lead:
+                continue
+            if tick < now + notice and (kind == "settle") != (self._kind(state, moving) == "settle"):
+                continue
+            del self._checkpoints[k:]
+            end = tick - self._base
+            self._zmp, self._feet, self._support = self._zmp[:end], self._feet[:end], self._support[:end]
+            feet, zmp, self.standing, self.next_swing, self.frame, self.last_stride = state
+            self.feet_end, self.zmp_end = list(feet), zmp.copy()
             return
-        tick, state = self._checkpoints[keep]
-        del self._checkpoints[keep:]
-        end = tick - self._base
-        self._zmp, self._feet, self._support = self._zmp[:end], self._feet[:end], self._support[:end]
-        feet, zmp, self.standing, self.next_swing, self.frame, self.last_stride = state
-        self.feet_end, self.zmp_end = list(feet), zmp.copy()
+
+    def _forget_past(self) -> None:
+        """Checkpoints behind the current tick can never be rewound to; keep the list short."""
+        now = self._base + self._i
+        drop = next((k for k, c in enumerate(self._checkpoints) if c[0] >= now), len(self._checkpoints))
+        del self._checkpoints[:drop]
 
     def _still(self) -> bool:
         rest = self._feet[self._i :]
@@ -154,30 +168,42 @@ class GaitPlan:
     def extend(self, speed: float, turn: float) -> None:
         """Append the next piece of the plan for the commanded speed (m/s) and turn rate (rad/s)."""
         p = self.p
+        self._forget_past()
         state = (list(self.feet_end), self.zmp_end.copy(), self.standing, self.next_swing, self.frame, self.last_stride)
-        self._checkpoints.append((self._base + len(self._zmp), state))
         moving = abs(speed) > 1e-3 or abs(turn) > 1e-3
-        if moving and self.standing:
+        kind = self._kind(state, moving)
+        self._checkpoints.append((self._base + len(self._zmp), state, kind))
+        if kind == "start":
             self.frame = self._middle()
             self.next_swing = LEFT if turn >= 0 else RIGHT  # open toward the turn
             stance = self.next_swing ^ 1
             self._hold_shift(self._stance_zmp(stance, 0.0), p.start)
             self.standing = False
             self._step(speed, turn, double_support=False)
-        elif moving or abs(self.last_stride) > 1e-3:
-            self._step(speed, turn, double_support=True)  # also eases a reversal over two steps
-        elif not self.standing:
-            swing = self.next_swing
-            target = Foot(*self._place(self.frame, swing), self.frame[2])
-            foot = self.feet_end[swing]
-            if math.hypot(foot.x - target.x, foot.y - target.y) > 0.004 or abs(_wrap(foot.yaw - target.yaw)) > 0.03:
-                self._step(0.0, 0.0, double_support=True)  # closing step: bring the feet side by side
+        elif kind == "step":
+            # Walking on, slowing down (one step), reversing (two) or closing up the feet to stop.
+            self._step(speed, turn, double_support=True)
+        elif kind == "settle":
             middle = (self.feet_end[LEFT].xy() + self.feet_end[RIGHT].xy()) / 2
             self._hold_shift(middle, p.settle)
             self.standing = True
             self.last_stride = 0.0
         else:
             self._hold_shift(self.zmp_end, 0.1)
+
+    def _kind(self, state: tuple, moving: bool) -> str:
+        """Which piece extend() appends from a planner state: start, step, settle or hold."""
+        feet, _, standing, next_swing, frame, last_stride = state
+        if moving and standing:
+            return "start"
+        if moving or abs(last_stride) > 1e-3:
+            return "step"
+        if standing:
+            return "hold"
+        target = Foot(*self._place(frame, next_swing), frame[2])
+        foot = feet[next_swing]
+        apart = math.hypot(foot.x - target.x, foot.y - target.y) > 0.004 or abs(_wrap(foot.yaw - target.yaw)) > 0.03
+        return "step" if apart else "settle"
 
     def _step(self, speed: float, turn: float, double_support: bool) -> None:
         p = self.p

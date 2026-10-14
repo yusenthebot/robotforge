@@ -36,6 +36,7 @@ UPPER = (
 DT = 0.01  # control period, s
 PREVIEW = 0.8  # s of future ZMP the body sway looks at
 REPLAN_LEAD = 0.05  # s; plan pieces starting sooner than this are kept when the command changes
+REPLAN_NOTICE = 0.2  # s of warning before a settle and a step may be swapped (see GaitPlan.rewind)
 FALLEN_UP = 0.5  # torso up-axis z below this means the robot is lying down
 
 
@@ -116,8 +117,8 @@ class BalanceGains:
 
     ankle_pitch: float = 0.5
     ankle_pitch_rate: float = 0.03
-    ankle_roll: float = 0.5
-    ankle_roll_rate: float = 0.03
+    ankle_roll: float = 1.0
+    ankle_roll_rate: float = 0.1
     hip_roll: float = 0.3
     hip_roll_rate: float = 0.02
 
@@ -280,7 +281,7 @@ class HumanoidController:
         assert plan is not None
         command = (self.command_speed, self.command_turn)
         if command != self._planned_for:
-            plan.rewind(lead=round(REPLAN_LEAD / DT))
+            plan.rewind(round(REPLAN_LEAD / DT), round(REPLAN_NOTICE / DT), moving=any(command))
             self._planned_for = command
         horizon = self.preview.horizon
         while len(plan) <= horizon:
