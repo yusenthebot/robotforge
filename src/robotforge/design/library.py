@@ -25,6 +25,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design.templates.base import BuiltRobot
+from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.geometry import collides, lowest_point
 
 log = logging.getLogger(__name__)
@@ -314,15 +315,26 @@ def _motors_to_servos(spec: mujoco.MjSpec, kp: float) -> int:
             and act.dyntype == mujoco.mjtDyn.mjDYN_NONE
         )
         joint = joints.get(act.target)
-        torque = np.abs(np.asarray(act.ctrlrange, float)) * abs(act.gear[0])
-        if not is_motor or joint is None or torque.max() <= 0:  # no torque limit known: leave it alone
+        torque = float(np.abs(np.asarray(act.ctrlrange, float)).max() * abs(act.gear[0]))
+        if not is_motor or joint is None or torque <= 0:  # no torque limit known: leave it alone
+            continue
+        if joint.type not in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE):
             continue
         act.gear = [1, 0, 0, 0, 0, 0]
         act.set_to_position(kp=kp)  # damping comes from the model's joints
         act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
-        act.forcerange = [-float(torque.max()), float(torque.max())]
-        act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
-        act.ctrlrange = list(joint.range) if joint.limited != mujoco.mjtLimited.mjLIMITED_FALSE else [-np.pi, np.pi]
+        act.forcerange = [-torque, torque]
+        joint_range = np.asarray(joint.range, float)
+        limited = joint.limited == mujoco.mjtLimited.mjLIMITED_TRUE or (
+            joint.limited == mujoco.mjtLimited.mjLIMITED_AUTO and joint_range[0] < joint_range[1]
+        )
+        if limited:
+            if spec.compiler.degree and joint.type == mujoco.mjtJoint.mjJNT_HINGE:
+                joint_range = np.radians(joint_range)  # spec ranges keep the file's units; controls are radians
+            act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
+            act.ctrlrange = joint_range.tolist()
+        else:  # a continuous joint: any target is fine
+            act.ctrllimited = mujoco.mjtLimited.mjLIMITED_FALSE
         count += 1
     return count
 
@@ -346,8 +358,8 @@ def _home_pose(
     home_ctrl: dict[str, float] = {}
     for a in range(model.nu):
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
-        is_servo = int(model.actuator_biastype[a]) == mujoco.mjtBias.mjBIAS_AFFINE
-        if is_servo and int(model.actuator_trntype[a]) == mujoco.mjtTrn.mjTRN_JOINT:
+        on_joint = int(model.actuator_trntype[a]) == mujoco.mjtTrn.mjTRN_JOINT
+        if on_joint and is_position_servo(model, a):
             # A servo on a joint should aim where the joint is, or the robot jumps at the start.
             home_ctrl[name] = float(data.qpos[model.jnt_qposadr[model.actuator_trnid[a, 0]]])
         elif key_ctrl is not None and key_ctrl.size == model.nu:

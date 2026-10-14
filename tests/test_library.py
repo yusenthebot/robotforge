@@ -25,6 +25,7 @@ from robotforge.design import library
 from robotforge.design.world import RobotEntry, World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
+from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.session import SimSession
 
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
@@ -208,6 +209,25 @@ async def test_mcp_tools_list_the_library_and_add_a_go2(pg):
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+def test_motors_become_servos_in_radians_even_in_degree_models():
+    spec = mujoco.MjSpec.from_string(
+        """<mujoco><compiler angle="degree" autolimits="true"/><worldbody><body>
+        <joint name="elbow" type="hinge" axis="0 1 0" range="-90 45"/><geom size="0.05"/>
+        <body pos="0.1 0 0"><joint name="spin" type="hinge" axis="1 0 0"/><geom size="0.05"/></body>
+        </body></worldbody><actuator>
+        <motor name="elbow" joint="elbow" ctrlrange="-5 5" gear="2"/><motor name="spin" joint="spin" ctrlrange="-1 1"/>
+        <velocity name="spin_speed" joint="spin" kv="3"/></actuator></mujoco>"""
+    )
+    assert library._motors_to_servos(spec, kp=50.0) == 2
+    model = spec.compile()
+    elbow, spin, speed = (model.actuator(n).id for n in ("elbow", "spin", "spin_speed"))
+    np.testing.assert_allclose(model.actuator_ctrlrange[elbow], np.radians([-90, 45]))
+    np.testing.assert_allclose(model.actuator_forcerange[elbow], [-10, 10])  # torque limit times gear
+    assert not model.actuator_ctrllimited[spin]  # a continuous joint takes any target
+    assert is_position_servo(model, elbow) and is_position_servo(model, spin)
+    assert not is_position_servo(model, speed)  # velocity actuators are not position servos
 
 
 # ---- fetching -----------------------------------------------------------------------------------

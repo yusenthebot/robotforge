@@ -17,6 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.sim.actuators import drives_joint, is_torque_motor
 from robotforge.sim.geometry import collides, lowest_point
 
 # Trot phase offset of each leg (diagonal pairs in phase). Also our template's leg names.
@@ -96,7 +97,7 @@ class QuadrupedGait:
         base = home_qpos.copy()
         base[self.root_qpos : self.root_qpos + 7] = [0, 0, 0, 1, 0, 0, 0]  # trunk frame == world frame
         self.ik = IKSolver(model, base)
-        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if _drives_joint(model, a)}
+        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
 
         self.legs: list[Leg] = []
         for name, joints, body, point, offset in legs:
@@ -243,22 +244,9 @@ def _roll_pitch(quat: np.ndarray) -> tuple[float, float]:
 # ---- actuators ------------------------------------------------------------------------------
 
 
-def _drives_joint(model: mujoco.MjModel, a: int) -> bool:
-    return int(model.actuator_trntype[a]) == mujoco.mjtTrn.mjTRN_JOINT
-
-
-def _is_torque_motor(model: mujoco.MjModel, a: int) -> bool:
-    """A plain motor: its control is a torque, with no position feedback inside the actuator."""
-    return (
-        int(model.actuator_biastype[a]) == mujoco.mjtBias.mjBIAS_NONE
-        and int(model.actuator_gaintype[a]) == mujoco.mjtGain.mjGAIN_FIXED
-        and int(model.actuator_dyntype[a]) == mujoco.mjtDyn.mjDYN_NONE
-    )
-
-
 def _motor_drive(model: mujoco.MjModel, actuators: np.ndarray) -> MotorDrive | None:
     """PD gains for torque-motor legs, scaled to each motor's torque limit; None for servo legs."""
-    motors = [_is_torque_motor(model, int(a)) for a in actuators]
+    motors = [is_torque_motor(model, int(a)) for a in actuators]
     if not any(motors):
         return None
     if not all(motors):
