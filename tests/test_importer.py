@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import mujoco
 import numpy as np
@@ -767,3 +768,68 @@ def test_converted_meshes_do_not_make_a_cached_import_look_stale(tmp_path, monke
     monkeypatch.setattr(importer, "_stage_and_plan", refuse)
     import_file(urdf)  # served from the cache, even though loading it touched the converted mesh files
     import_file(urdf)
+
+
+# ---- time budgets and cache names ----------------------------------------------------------------
+
+
+def _staged_walker(tmp_path):
+    import xml.etree.ElementTree as ET
+
+    from robotforge.design.importing import rig
+    from robotforge.design.importing.report import DoctorReport
+    from robotforge.design.importing.resolve import MeshResolver
+    from robotforge.design.importing.urdf import stage_urdf
+
+    path = write(tmp_path / "walker.urdf", _walker_urdf())
+    staged = stage_urdf(
+        ET.fromstring(path.read_text()), MeshResolver(path), tmp_path / "cache", DoctorReport(""), False
+    )
+    urdf = write(tmp_path / "staged.urdf", staged.text)
+    return staged, urdf, rig.home_pose(staged)
+
+
+def test_stance_search_respects_its_deadline(tmp_path):
+    import time
+
+    from robotforge.design.importing.stance import find_stances
+
+    staged, urdf, home = _staged_walker(tmp_path)
+    expired = find_stances(staged, urdf, home, deadline=time.monotonic() - 1.0)
+    assert expired.stopped_early and expired.poses == []
+    start = time.monotonic()
+    short = find_stances(staged, urdf, home, deadline=time.monotonic() + 0.05)
+    assert short.stopped_early and time.monotonic() - start < 3.0  # not 4000 samples and 600 climb steps
+    full = find_stances(staged, urdf, home)
+    assert not full.stopped_early and full.poses  # unbounded, the walker has a stance
+
+
+def test_a_cut_short_stance_search_is_reported(tmp_path, monkeypatch):
+    from robotforge.design.importing import rig
+    from robotforge.design.importing.stance import StanceResult
+
+    monkeypatch.setattr(rig, "find_stances", lambda *a, **k: StanceResult([], stopped_early=True))
+    result = import_file(write(tmp_path / "one.urdf", _walker_urdf(legs=1)), {"base": "floating"})
+    note = next(f for f in result.report.findings if f.topic == "stance")
+    assert "stopped early" in note.problem and note.status == "info"
+
+
+def test_cache_file_names_never_contain_characters_from_the_mesh_name(tmp_path, home):
+    from robotforge.design.importing import collision, meshio
+
+    a = trimesh.creation.icosphere(subdivisions=3, radius=0.08)
+    b = trimesh.creation.icosphere(subdivisions=3, radius=0.08)
+    b.apply_translation([0.3, 0, 0])
+    dumbbell = trimesh.util.concatenate([a, b])
+    out = home / "meshes"
+    names = ("my robot; rm -rf $HOME`x`.stl", "..stl", "...stl", "\u00e9l\u00e9ment\n.stl", "a b'c\".stl")
+    for name in names:
+        src = tmp_path / name
+        dumbbell.export(src)
+        collision.decompose(meshio.prepare_mesh(src, out), out)
+    written = sorted(out.glob("*"))
+    assert written
+    for path in written:
+        assert re.fullmatch(r"[A-Za-z0-9_.-]+", path.name) and not path.name.startswith("."), path.name
+    outside = {p.name for p in tmp_path.iterdir()} - {"home", *names}
+    assert not outside  # nothing was written next to the sources or anywhere else

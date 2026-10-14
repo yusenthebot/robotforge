@@ -87,7 +87,7 @@ def prepare_mesh(source: Path, out_dir: Path) -> MeshAsset:
         f"{source.resolve()}|{source.stat().st_size}|{source.stat().st_mtime_ns}|{TOOL_VERSION}".encode()
     )
     tag = digest.hexdigest()[:10]
-    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", source.stem)[:40]
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", source.stem).strip(".")[:40] or "mesh"
 
     pieces: list[tuple[trimesh.Trimesh, tuple[float, ...] | None]] = []
     rewrite = suffix not in _NATIVE or len(cleaned) > 1 or any(rgba for _, rgba in cleaned) or bool(notes)

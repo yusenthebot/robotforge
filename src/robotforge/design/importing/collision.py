@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
@@ -33,7 +34,7 @@ def decompose(asset: MeshAsset, out_dir: Path) -> list[Path]:
         f"{asset.merged.resolve()}|{asset.merged.stat().st_mtime_ns}|{_SETTINGS}|{TOOL_VERSION}".encode()
     )
     tag = key.hexdigest()[:10]
-    stem = asset.source.stem[:30]
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", asset.source.stem).strip(".")[:30] or "mesh"
     done = out_dir / f"{stem}-{tag}-convex.json"
     if done.exists():
         names = done.read_text(encoding="utf-8").split()
