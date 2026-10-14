@@ -80,7 +80,7 @@ async def test_script_errors_come_back_as_tracebacks(pg):
         _, ran = await _call(client, "run_script", {"name": "bad"})
         out = json.loads(ran)
         assert not out["ok"]
-        assert "only quadrupeds, humanoids and rovers" in out["output"]
+        assert "only legged robots" in out["output"]
 
 
 async def test_script_time_budget_is_enforced(pg):

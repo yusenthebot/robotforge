@@ -10,6 +10,7 @@ import mujoco
 class Kind(StrEnum):
     ARM = "arm"
     QUADRUPED = "quadruped"
+    HEXAPOD = "hexapod"
     HUMANOID = "humanoid"
     ROVER = "rover"
     OTHER = "other"
@@ -33,6 +34,13 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
         return Kind.HUMANOID
     from robotforge.behaviors.quadruped import discover_legs  # lazy: it imports this package
 
-    if discover_legs(model, robot) is not None:  # library and imported quadrupeds
-        return Kind.QUADRUPED
+    found = discover_legs(model, robot, home_pose(model))
+    if found is not None:  # library, imported and built walkers
+        return Kind.QUADRUPED if len(found[1]) == 4 else Kind.HEXAPOD
     return Kind.OTHER
+
+
+def home_pose(model: mujoco.MjModel):
+    """qpos of the world's home keyframe (robots stand in it), or qpos0 without one."""
+    key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    return model.key_qpos[key].copy() if key >= 0 else model.qpos0.copy()

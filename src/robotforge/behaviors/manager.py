@@ -18,7 +18,7 @@ from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
 MAX_RUN_SECONDS = 60.0
-MOBILE = (Kind.QUADRUPED, Kind.ROVER, Kind.HUMANOID)
+MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID)
 WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController)
 
 
@@ -94,7 +94,10 @@ class BehaviorManager:
             raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         kind = self.kind(robot)
         if kind not in MOBILE:
-            raise BehaviorError(f"{robot} is a {kind.value}; only quadrupeds, humanoids and rovers can move around")
+            raise BehaviorError(
+                f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids) and wheeled "
+                "robots can move around"
+            )
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True)
             _check_standing(ctrl)
@@ -109,7 +112,7 @@ class BehaviorManager:
         try:
             if kind == Kind.HUMANOID:
                 ctrl = humanoid.for_template(m, robot, self.home_qpos())
-            elif kind == Kind.QUADRUPED:
+            elif kind in (Kind.QUADRUPED, Kind.HEXAPOD):
                 ctrl = quadruped.for_robot(m, robot, self.home_qpos())
             else:
                 ctrl = DiffDrive(m, robot)
