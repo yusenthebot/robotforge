@@ -59,12 +59,20 @@ def main(argv: list[str] | None = None) -> int:
     p_open = sub.add_parser("open", help="open an MJCF or URDF model in the viewer")
     p_open.add_argument("model", type=Path)
     sub.add_parser("demo", help="open the built-in demo scene")
+    p_mcp = sub.add_parser("mcp", help="run as an MCP server on stdio (for Claude, Codex, ...)")
+    p_mcp.add_argument("--model", type=Path, default=None, help="model to load at start (default: demo)")
+    p_mcp.add_argument("--port", type=int, default=None, help="viewer port (default: first free from 8737)")
     for p in (p_open, sub.choices["demo"]):
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int, default=None, help=f"default: first free port from {DEFAULT_PORT}")
         p.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
 
     args = parser.parse_args(argv)
+    if args.command == "mcp":
+        from robotforge import mcp_server  # imported lazily: the viewer CLI does not need the MCP SDK
+
+        mcp_server.run(model=args.model, port=args.port)
+        return 0
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     model_path = DEMO_MODEL if args.command == "demo" else args.model
