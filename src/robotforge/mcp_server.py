@@ -27,6 +27,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
+from robotforge.control import mcp_tools as control_tools
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
@@ -36,6 +37,7 @@ from robotforge.viewer.server import ViewerHub, create_app
 log = logging.getLogger(__name__)
 
 VIEWER_UI_URI = "ui://robotforge/viewer.html"
+FAST_WALL_LIMIT = 60.0  # computer seconds one unwatched run may take
 HOST = "127.0.0.1"
 
 INSTRUCTIONS = """\
@@ -53,6 +55,10 @@ robots lists robots with their positions. For anything custom, set_controls / si
 directly (names from describe_model, prefixed "<robot>/"). observe reports state with an image so you
 can check your work. open_viewer gives the user a live 3D view (they can also drive with WASD);
 offer it early, and when it is open, actions play out in real time for the user to watch.
+
+Algorithms: the same robot and task can be solved by different control methods (IK, PD, LQR, sampling
+MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
+compare_controllers runs several on the same task and returns a table to discuss with the user.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
 (joints, actuators, control): the user may be new to robotics.
@@ -232,9 +238,21 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             deadline = time.monotonic() + max_seconds * 3 + 5  # guard against a slow machine
             while not done() and session.data.time - start < max_seconds and time.monotonic() < deadline:
                 await asyncio.sleep(0.05)
-        else:
-            playground.run_fast(done, max_seconds)
-        return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched}
+        result: dict[str, Any] = {}
+        if not watched:
+            # Fast, but in short slices that yield to the event loop (viewer, other requests), and never
+            # longer than FAST_WALL_LIMIT of computer time, however slow a controller is.
+            deadline = time.monotonic() + FAST_WALL_LIMIT
+            while not done() and session.data.time - start < max_seconds - 1e-9:
+                if time.monotonic() > deadline:
+                    result["stopped_early"] = (
+                        f"stopped after {FAST_WALL_LIMIT:.0f} s of computer time; the controller is too slow "
+                        "for this machine (for MPC use fewer samples or a shorter horizon)"
+                    )
+                    break
+                playground.run_fast(done, min(0.1, max_seconds - (session.data.time - start)))
+                await asyncio.sleep(0)
+        return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
     @server.tool()
     async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
@@ -263,6 +281,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                     "behavior": status,
                 }
             )
+
+    control_tools.register(server, playground, run_until)
 
     @server.tool()
     def stop(robot: str) -> str:
