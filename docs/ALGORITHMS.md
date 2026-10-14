@@ -86,7 +86,7 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 不给任何控制规则，让机器人自己试错：随机微调一个线性策略（动作等于观测的加权和），保留得分高的方向，反复几十轮。
 它只用 numpy，不需要安装 PyTorch，在倒立摆上大约 3 秒就学会平衡（相当于在仿真里练了 800 多秒）。
 `run_controller` 和 `compare_controllers` 里选 ars 时，会先当场训练再运行，结果里有训练用时。
-目前只对 balance 开放；更难的任务（随机目标的 reach、走路）需要神经网络策略，也就是可选的 `rl` 依赖组里的 PPO、SAC。
+目前只对 balance 开放；更难的任务（随机目标的 reach、走路）需要神经网络策略，也就是计划中的可选 `rl` 依赖组里的 PPO、SAC。
 在 Python 里也可以直接训练：`train_ars(make_env("balance"))`，返回的策略能 `save` 成一个小文件。
 
 ### hold、gait、none
@@ -105,26 +105,27 @@ Gym 环境也有同样的叠加模式，见下文的 `action_mode="residual"`。
 ## 实测对比（M5 Max，MuJoCo 3.15，默认参数）
 
 列的含义：reward 越高越好；success 是结束时是否达到目标；effort 是电机做的机械功（焦耳）；wall/sim 是算 1 秒仿真花几秒真实时间，小于 1 就比实时快。
+每秒规划次数（plans/s）和电脑当时有多忙有关，同一台机器上空闲时能快一倍左右。
 
 reach，目标 [0.25, 0.1, 0.15]，4 秒：
 
 | method | reward | success | distance_m | effort (J) | wall/sim | notes |
 |---|---|---|---|---|---|---|
-| ik | -0.60 | no | 0.0186 | 0.33 | 0.01 | |
+| ik | -0.60 | no | 0.0186 | 0.33 | 0.01 |  |
 | pd | -0.35 | yes | 0.0012 | 0.26 | 0.02 | goal reached at 0.73s |
-| cartesian | -0.42 | yes | 0.0044 | 0.25 | 0.03 | goal reached at 1.33s |
-| mpc | -0.38 | yes | 0.0019 | 1.71 | 0.06 | goal reached at 0.65s; 1158 plans/s |
-| mppi | -0.39 | yes | 0.003 | 1.70 | 0.07 | goal reached at 0.61s; 969 plans/s |
+| cartesian | -0.42 | yes | 0.0044 | 0.25 | 0.04 | goal reached at 1.33s |
+| mpc | -0.40 | yes | 0.0014 | 1.97 | 0.11 | goal reached at 0.61s; 642 plans/s |
+| mppi | -0.43 | yes | 0.0029 | 1.79 | 0.10 | goal reached at 0.64s; 662 plans/s |
 
 balance，起始倾角随机，3 秒时推摆杆一下，6 秒：
 
 | method | reward | success | pole_angle_deg | effort (J) | wall/sim | notes |
 |---|---|---|---|---|---|---|
-| lqr | 11.72 | yes | 0.34 | 1.03 | 0.01 | |
-| pd | 11.38 | yes | 0.45 | 0.71 | 0.01 | |
-| mpc | 11.67 | yes | -2.64 | 1.10 | 0.04 | 1756 plans/s |
-| mppi | 11.65 | yes | 2.64 | 1.29 | 0.04 | 1603 plans/s |
-| ars | 11.69 | yes | -1.19 | 1.32 | 0.01 | learned in 3.2s |
+| lqr | 11.72 | yes | 0.34 | 1.03 | 0.01 |  |
+| pd | 11.38 | yes | 0.45 | 0.71 | 0.01 |  |
+| mpc | 11.67 | yes | -2.64 | 1.10 | 0.08 | 854 plans/s |
+| mppi | 11.65 | yes | 2.64 | 1.29 | 0.08 | 885 plans/s |
+| ars | 11.69 | yes | -1.19 | 1.32 | 0.01 | learned in 3.8s |
 | none | -25.73 | no | 117.14 | 0.00 | 0.01 | failed at 0.84s |
 
 stand，2 秒时侧向猛推（1.2 米每秒），5 秒：
@@ -132,24 +133,24 @@ stand，2 秒时侧向猛推（1.2 米每秒），5 秒：
 | method | reward | success | height_m | effort (J) | wall/sim | notes |
 |---|---|---|---|---|---|---|
 | hold | -23.84 | no | 0.038 | 0.19 | 0.02 | failed at 2.36s |
-| mpc | 9.45 | yes | 0.174 | 7.20 | 0.12 | 543 plans/s |
-| mppi | 9.44 | yes | 0.177 | 6.78 | 0.13 | 495 plans/s |
+| mpc | 9.45 | yes | 0.174 | 7.20 | 0.11 | 636 plans/s |
+| mppi | 9.44 | yes | 0.177 | 6.78 | 0.11 | 608 plans/s |
 
 walk，0.3 米每秒，2.5 秒时侧向猛推（1.5 米每秒），6 秒：
 
 | method | reward | success | distance_m | effort (J) | wall/sim | notes |
 |---|---|---|---|---|---|---|
-| gait | -24.28 | no | 0.853 | 254.63 | 0.04 | failed at 2.84s |
-| mpc | 9.47 | no | 1.323 | 160.22 | 0.35 | failed at 5.76s; 165 plans/s |
-| mppi | 10.22 | yes | 1.358 | 150.87 | 0.35 | 165 plans/s |
+| gait | -24.28 | no | 0.853 | 254.63 | 0.05 | failed at 2.84s |
+| mpc | 9.47 | no | 1.323 | 160.22 | 0.38 | failed at 5.76s; 152 plans/s |
+| mppi | 10.22 | yes | 1.358 | 150.87 | 0.38 | goal reached at 1.00s; 155 plans/s |
 
 drive_to，目标 [-0.8, 0.3]，6 秒：
 
 | method | reward | success | distance_m | effort (J) | wall/sim | notes |
 |---|---|---|---|---|---|---|
 | pd | -9.49 | yes | 0.024 | 3.51 | 0.01 | goal reached at 3.93s |
-| mpc | -4.06 | yes | 0.003 | 4.55 | 0.08 | goal reached at 1.72s; 837 plans/s |
-| mppi | -5.30 | yes | 0.005 | 4.19 | 0.08 | goal reached at 2.85s; 803 plans/s |
+| mpc | -4.06 | yes | 0.003 | 4.55 | 0.10 | goal reached at 1.72s; 607 plans/s |
+| mppi | -5.30 | yes | 0.005 | 4.19 | 0.11 | goal reached at 2.85s; 561 plans/s |
 
 能读出来的规律：
 
@@ -183,7 +184,7 @@ from robotforge.control.gym_compat import as_gymnasium
 env = as_gymnasium(make_env("balance"))  # 得到真正的 gymnasium.Env
 ```
 
-gymnasium 只在调用这一行时才导入，核心安装不受影响；没装时会提示安装可选的 `rl` 依赖组。
+gymnasium 只在调用这一行时才导入，核心安装不受影响；没装时会提示 `pip install gymnasium`（打包 gymnasium、Stable-Baselines3 和 PyTorch 的可选 `rl` 依赖组正在计划中）。
 
 ## 怎么调参数
 

@@ -5,7 +5,7 @@ observation, by trying random nudges of W in both directions, keeping the nudges
 that earned the most reward, and stepping W toward them. It needs no neural
 network library, so it runs anywhere robotforge runs, and on small tasks like
 balance it learns in seconds. It is the zero-install way to see reinforcement
-learning work on a RobotEnv; deep RL (PPO, SAC) needs the optional `rl` extra.
+learning work on a RobotEnv; deep RL (PPO, SAC) needs a neural network library (a planned `rl` extra).
 """
 
 from __future__ import annotations

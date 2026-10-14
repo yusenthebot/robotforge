@@ -11,7 +11,16 @@ import pytest
 from mcp import Client
 
 from robotforge.cli import find_free_port
-from robotforge.control import TASKS, Box, TaskError, compare_methods, make_env, make_task, task_world
+from robotforge.control import (
+    TASKS,
+    Box,
+    TaskError,
+    compare_methods,
+    make_controller,
+    make_env,
+    make_task,
+    task_world,
+)
 from robotforge.control.actuation import TorqueMap
 from robotforge.control.checks import EnvCheckError, check_env
 from robotforge.control.classic import solve_dare
@@ -201,9 +210,9 @@ def test_env_renders_rgb_frames():
 
 def test_gymnasium_wrapper_is_optional_and_thin(monkeypatch):
     monkeypatch.setitem(sys.modules, "gymnasium", None)
-    with pytest.raises(ImportError, match=r"robotforge\[rl\]"):
+    with pytest.raises(ImportError, match="needs the gymnasium package, which is not installed: pip install gymnasium"):
         as_gymnasium(make_env("balance"))
-    assert "pip install" in INSTALL_HINT
+    assert INSTALL_HINT.startswith("as_gymnasium needs the gymnasium package")
 
     class FakeEnv:  # the parts of gymnasium.Env the wrapper relies on
         metadata: dict = {}
@@ -395,3 +404,169 @@ def test_ars_method_trains_then_balances_through_a_push():
     task.reset(data, np.random.default_rng(3))
     result = run(task, model, data, "ars", 4.0, {"iterations": 15, "seed": 2}, push_at=2.0)
     assert not result.failed and result.controller["iterations"] == 15
+
+
+# ---- guards found in review ------------------------------------------------------------------------
+
+
+def test_mpc_refuses_settings_that_would_stall_the_server():
+    model, robot = task_world("stand")
+    task = make_task("stand", model, robot)
+    with pytest.raises(TaskError, match="physics steps per replan"):
+        make_controller("mpc", task, model, _home(model), {"samples": 1024, "horizon": 2.0})
+    with pytest.raises(TaskError, match="mpc settings: replan_hz"):
+        make_controller("mpc", task, model, _home(model), {"replan_hz": 1000})
+    with pytest.raises(TaskError, match="mpc settings: samples"):
+        make_controller("mpc", task, model, _home(model), {"samples": "lots"})
+
+
+@pytest.mark.parametrize("method", ["mpc", "mppi"])
+def test_mpc_never_follows_a_rollout_that_blew_up(method, monkeypatch):
+    from robotforge.control import mpc as mpc_module
+
+    model, robot = task_world("balance")
+    data = _home(model)
+    data.qpos[1] = 0.3  # tilted: every honest future has a cost
+    mujoco.mj_forward(model, data)
+    task = make_task("balance", model, robot)
+    controller = make_controller(method, task, model, data, {"seed": 0})
+    real_pool = mpc_module._rollout_pool
+
+    class Exploding:
+        """Rollouts where every sample but the first one diverged and was reset by MuJoCo."""
+
+        def __init__(self, pool):
+            self.pool = pool
+
+        def rollout(self, *args, **kwargs):
+            state, sensordata = self.pool.rollout(*args, **kwargs)
+            layout = controller.layout
+            state[1:, :, layout.qpos] = 0.0  # perfectly upright: the cheapest possible future...
+            state[1:, :, layout.qvel] = 0.0
+            state[1:, :, layout.time] = np.arange(state.shape[1]) * controller.dt  # ...but the clock restarted
+            return state, sensordata
+
+    monkeypatch.setattr(mpc_module, "_rollout_pool", lambda n: Exploding(real_pool(n)))
+    controller.update(model, data)  # first plan: nominal = hold the current command
+    np.testing.assert_allclose(controller.nominal, 0.0)
+    assert np.isfinite(controller.best_cost)
+
+    class AllBad(Exploding):
+        def rollout(self, *args, **kwargs):
+            state, sensordata = super().rollout(*args, **kwargs)
+            state[0, :, controller.layout.time] = 0.0
+            return state, sensordata
+
+    monkeypatch.setattr(mpc_module, "_rollout_pool", lambda n: AllBad(real_pool(n)))
+    before = controller.nominal.copy()
+    controller.plan(data)
+    assert controller.best_cost == np.inf
+    assert np.all(np.isfinite(controller.nominal))
+    np.testing.assert_allclose(controller.nominal, before)
+
+
+def test_env_ends_the_episode_when_the_simulation_diverges():
+    env = make_env("reach")
+    env.reset(seed=0)
+    target = env.task.target.copy()
+    env.data.qvel[:] = 1e12  # guaranteed blow-up on the next step; MuJoCo resets the state itself
+    obs, reward, terminated, truncated, info = env.step(np.zeros(env.action_space.shape))
+    assert terminated and not truncated and info["unstable"]
+    assert reward < 0 and np.all(np.isfinite(obs))
+    np.testing.assert_allclose(obs[-6:-3], target, atol=1e-6)  # the goal survived the recovery
+    marker = env.model.body_mocapid[env.model.body("goal_marker").id]
+    np.testing.assert_allclose(env.data.mocap_pos[marker], target)
+
+
+def test_comparison_marks_a_diverged_run_as_failed():
+    model, robot = task_world("balance")
+    data = _home(model)
+    task = make_task("balance", model, robot)
+    data.qvel[:] = 1e12
+    result = run(task, model, data, "lqr", 0.5)
+    assert result.failed and any("unstable" in e for e in result.events)
+
+
+def test_task_and_method_params_must_be_finite_and_sensible():
+    model, robot = task_world("reach")
+    with pytest.raises(TaskError, match="finite"):
+        make_task("reach", model, robot, {"target": [0.3, float("nan"), 0.2]})
+    task = make_task("reach", model, robot, {"target": [0.25, 0.1, 0.15]})
+    with pytest.raises(TaskError, match="omega"):
+        make_controller("pd", task, model, _home(model), {"omega": -5})
+    cp_model, cp = task_world("balance")
+    balance = make_task("balance", cp_model, cp)
+    with pytest.raises(TaskError, match="could not find gains"):
+        make_controller("lqr", balance, cp_model, _home(cp_model), {"q_weights": [0, 0, 0, 0]})
+    with pytest.raises(TaskError, match="robot settings"):
+        task_world("reach", robot_params={"dof": 99})
+
+
+def test_random_reach_targets_use_unlimited_joints_fully():
+    model, robot = task_world("reach")
+    yaw = model.joint(f"{robot}/yaw").id
+    model.jnt_limited[yaw] = 0
+    model.jnt_range[yaw] = [0.0, 0.0]  # what an unlimited joint looks like
+    task = make_task("reach", model, robot)
+    rng = np.random.default_rng(0)
+    headings = [np.arctan2(*task.random_target(model.qpos0.copy(), rng)[1::-1]) for _ in range(20)]
+    assert np.ptp(headings) > 2.0  # targets all around the base, not only straight ahead
+
+
+def test_live_goals_without_coordinates_are_picked_near_the_robot():
+    model, robot = task_world("drive_to")
+    data = _home(model)
+    task = make_task("drive_to", model, robot)
+    data.qpos[task.qa : task.qa + 2] = [3.0, -2.0]
+    task.begin(data)
+    assert np.linalg.norm(task.goal - [3.0, -2.0]) < 1.25
+
+
+def test_comparisons_check_every_method_and_the_push_before_running():
+    with pytest.raises(TaskError, match="ik does not fit the balance task"):
+        compare_methods("balance", ["lqr", "ik"], seconds=1.0)
+    with pytest.raises(TaskError, match="push_at"):
+        compare_methods("balance", ["lqr"], seconds=1.0, push_at=1.0)
+
+
+def test_comparison_respects_a_computer_time_budget():
+    comparison = compare_methods("stand", ["mpc", "hold"], seconds=30.0, wall_budget=0.3)
+    assert comparison.results[0].stopped_early and comparison.results[0].sim_seconds < 30.0
+    assert comparison.skipped == ["hold"]
+    assert "out of computer time" in json.dumps(comparison.to_dict())
+
+
+@pytest.mark.anyio
+async def test_mcp_run_controller_survives_resets_and_slow_machines(tmp_path, monkeypatch):
+    import asyncio
+
+    from robotforge import mcp_server
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("lab")
+    pg.add_robot("pole", template="cartpole")
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        lqr = {"robot": "pole", "task": "balance", "method": "lqr"}
+        bad = await client.call_tool("run_controller", {**lqr, "seconds": 2, "push_at": 3})
+        assert bad.is_error and "push_at" in bad.content[0].text
+
+        async def reset_mid_run():
+            while not any(k.startswith("__monitor__") for k in pg.session.controllers):
+                await asyncio.sleep(0)
+            for _ in range(3):
+                await asyncio.sleep(0)
+            pg.session.reset()
+
+        resetter = asyncio.create_task(reset_mid_run())
+        reset = await client.call_tool("run_controller", {**lqr, "seconds": 5})
+        await resetter
+        assert reset.is_error and "reset during the run" in reset.content[0].text
+
+        monkeypatch.setattr(mcp_server, "FAST_WALL_LIMIT", 0.0)
+        slow = await client.call_tool("run_controller", {**lqr, "seconds": 5})
+        out = json.loads(slow.content[0].text)
+        assert "computer time" in out["stopped_early"] and out["sim_seconds"] < 5
+        assert out["keeps_running"] is True and out["release_with"] == "stop(robot='pole')"
+        assert not any(k.startswith("__monitor__") for k in pg.session.controllers)

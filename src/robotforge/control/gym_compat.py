@@ -15,7 +15,10 @@ from typing import Any
 
 from robotforge.control.env import RobotEnv
 
-INSTALL_HINT = 'this needs the optional RL packages: pip install "robotforge[rl]" (or: uv sync --extra rl)'
+INSTALL_HINT = (
+    "as_gymnasium needs the gymnasium package, which is not installed: pip install gymnasium "
+    "(a robotforge 'rl' extra bundling gymnasium, Stable-Baselines3 and PyTorch is planned)"
+)
 
 
 def as_gymnasium(env: RobotEnv) -> Any:
