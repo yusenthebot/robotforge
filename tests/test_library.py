@@ -1,17 +1,15 @@
-"""Robot library: catalog, Menagerie fetching, world integration and walking library quadrupeds.
+"""Robot library: catalog, world integration, walking library quadrupeds, MCP tools.
 
 Most tests run offline against tests/fixtures/menagerie, small stand-ins that mirror Menagerie's
 folder layout, names, kinematics and actuators (see the comment at the top of each file).
-The real download is covered by opt-in tests: set ROBOTFORGE_NETWORK_TESTS=1 to run them
-(first run fetches each robot from GitHub into ~/.cache/robot_descriptions).
+Downloading itself is tested in test_menagerie.py. The real robots are covered by opt-in tests:
+set ROBOTFORGE_NETWORK_TESTS=1 to run them (the first run downloads each robot into the cache).
 """
 
 import dataclasses
 import json
 import math
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
 import mujoco
@@ -21,7 +19,7 @@ from mcp import Client
 
 from robotforge.behaviors import Kind, quadruped, robot_kind
 from robotforge.cli import find_free_port
-from robotforge.design import library
+from robotforge.design import library, menagerie
 from robotforge.design.world import RobotEntry, World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
@@ -211,6 +209,16 @@ def anyio_backend():
     return "asyncio"
 
 
+# ---- library-level behavior around downloads ----------------------------------------------------
+
+
+def test_every_catalog_robot_has_a_file_list():
+    for robot in library.CATALOG.values():
+        names = {f.path for f in menagerie.files(robot.folder)}
+        assert robot.mjcf in names and "LICENSE" in names
+        assert library.download_mb(robot.name) > 1
+
+
 def test_motors_become_servos_in_radians_even_in_degree_models():
     spec = mujoco.MjSpec.from_string(
         """<mujoco><compiler angle="degree" autolimits="true"/><worldbody><body>
@@ -228,79 +236,6 @@ def test_motors_become_servos_in_radians_even_in_degree_models():
     assert not model.actuator_ctrllimited[spin]  # a continuous joint takes any target
     assert is_position_servo(model, elbow) and is_position_servo(model, spin)
     assert not is_position_servo(model, speed)  # velocity actuators are not position servos
-
-
-# ---- fetching -----------------------------------------------------------------------------------
-
-
-def _fake_menagerie(tmp_path: Path) -> tuple[str, str]:
-    """A local git repo shaped like Menagerie; returns (url, commit)."""
-    repo = tmp_path / "menagerie_remote"
-    shutil.copytree(FIXTURES, repo)
-    git = ["git", "-C", str(repo)]
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    for key, value in [
-        ("user.email", "test@example.com"),
-        ("user.name", "test"),
-        ("uploadpack.allowFilter", "true"),
-        ("uploadpack.allowAnySHA1InWant", "true"),
-    ]:
-        subprocess.run([*git, "config", key, value], check=True)
-    subprocess.run([*git, "add", "."], check=True)
-    subprocess.run([*git, "commit", "-q", "-m", "models"], check=True)
-    commit = subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-    return repo.as_uri(), commit
-
-
-@pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
-def test_first_use_fetches_only_the_requested_folder(tmp_path, monkeypatch):
-    url, commit = _fake_menagerie(tmp_path)
-    monkeypatch.delenv("ROBOTFORGE_MENAGERIE")
-    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "cache"))
-    monkeypatch.setattr(library, "_menagerie_pin", lambda: (url, commit))
-
-    folder = library.model_dir(library.get("go2"))
-    assert (folder / "go2.xml").is_file()
-    assert folder.parent == tmp_path / "cache" / "robotforge" / f"mujoco_menagerie-{commit[:12]}"
-    assert sorted(p.name for p in folder.parent.iterdir()) == ["unitree_go2"]  # nothing else, no leftovers
-    assert {e["name"]: e["downloaded"] for e in library.catalog()}["go2"] is True
-
-    def no_network(*_args):
-        raise AssertionError("a cached robot must not be downloaded again")
-
-    monkeypatch.setattr(library, "_git", no_network)
-    assert library.model_dir(library.get("go2")) == folder
-
-
-def test_an_existing_full_robot_descriptions_clone_is_reused(tmp_path, monkeypatch):
-    _, commit = library._menagerie_pin()
-    full = tmp_path / "mujoco_menagerie"
-    shutil.copytree(FIXTURES / "unitree_go2", full / "unitree_go2")
-    (full / ".git").mkdir()
-    (full / ".git" / "HEAD").write_text(commit + "\n")
-    monkeypatch.delenv("ROBOTFORGE_MENAGERIE")
-    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path))
-    monkeypatch.setattr(library, "_git", lambda *_: pytest.fail("must not download"))
-    assert library.model_dir(library.get("go2")) == full / "unitree_go2"
-
-
-def test_a_dropped_connection_is_retried(monkeypatch):
-    results = iter([subprocess.CompletedProcess([], 128, "", "SSL_ERROR_SYSCALL"), subprocess.CompletedProcess([], 0)])
-    monkeypatch.setattr(library.subprocess, "run", lambda *_a, **_k: next(results))
-    monkeypatch.setattr(library.time, "sleep", lambda _s: None)
-    library._git("git", ["fetch"], attempts=2)  # second attempt succeeds
-    failing = iter([subprocess.CompletedProcess([], 128, "", "SSL_ERROR_SYSCALL")] * 2)
-    monkeypatch.setattr(library.subprocess, "run", lambda *_a, **_k: next(failing))
-    with pytest.raises(library.LibraryError, match="check your internet connection or proxy.*SSL_ERROR_SYSCALL"):
-        library._git("git", ["fetch"], attempts=2)
-
-
-def test_a_missing_git_is_explained(tmp_path, monkeypatch):
-    monkeypatch.delenv("ROBOTFORGE_MENAGERIE")
-    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path))
-    monkeypatch.setattr(library.shutil, "which", lambda _name: None)
-    with pytest.raises(library.LibraryError, match="needs git"):
-        library.model_dir(library.get("go2"))
 
 
 # ---- real downloads (opt-in) ----------------------------------------------------------------------

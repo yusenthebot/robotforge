@@ -13,7 +13,6 @@ dependencies = [
     "pillow>=12.3.0",
     "pydantic>=2.14.1",
     "pyyaml>=6.0.3",
-    "robot-descriptions>=3.3.0",
 ]
 
 [project.scripts]

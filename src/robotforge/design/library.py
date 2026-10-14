@@ -1,22 +1,14 @@
 """Robot library: well-known real robots from MuJoCo Menagerie, fetched on first use.
 
-The catalog is small and curated for beginners. Models come from the Menagerie
-commit that the robot_descriptions package pins. robot_descriptions itself would
-clone all of Menagerie (about 2 GB on disk, a few minutes) to give you one robot,
-so robotforge fetches only the folder of the robot you ask for with a shallow,
-sparse git checkout (tens of MB, seconds) into the same cache directory.
-An existing full robot_descriptions clone at the pinned commit is reused as is.
+The catalog is small and curated for beginners. Each robot is downloaded on its
+first use, only its own folder (see menagerie.py), and compiled like an imported
+file, plus a home pose from its keyframe, a spawn height that puts it on the
+floor and, for torque-motor robots, position servos.
 """
 
 from __future__ import annotations
 
 import difflib
-import logging
-import os
-import shutil
-import subprocess
-import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -24,15 +16,12 @@ from typing import Any, Literal
 import mujoco
 import numpy as np
 
+from robotforge.design import menagerie
 from robotforge.design.templates.base import BuiltRobot
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.geometry import collides, lowest_point
 
-log = logging.getLogger(__name__)
-
 SPAWN_CLEARANCE = 0.002  # m between the lowest point and the floor, so nothing starts inside it
-FETCH_TIMEOUT = 900  # s for one robot folder over a slow connection
-FETCH_ATTEMPTS = 3  # proxies and flaky Wi-Fi drop GitHub connections now and then
 
 
 class LibraryError(ValueError):
@@ -144,7 +133,7 @@ def get(name: str) -> LibraryRobot:
 
 
 def catalog() -> list[dict[str, Any]]:
-    """Library robots for agents: what they are, their license and whether they are downloaded yet."""
+    """Library robots for agents: what they are, their license, download size and whether they are here yet."""
     return [
         {
             "name": r.name,
@@ -153,101 +142,24 @@ def catalog() -> list[dict[str, Any]]:
             "summary": r.summary,
             "maker": r.maker,
             "license": r.license,
-            "downloaded": _cached_folder(r.folder) is not None,
+            "download_mb": download_mb(r.name),
+            "downloaded": is_downloaded(r.name),
         }
         for r in CATALOG.values()
     ]
 
 
-# ---- fetching from Menagerie ----------------------------------------------------------
+def download_mb(name: str) -> float:
+    return round(menagerie.download_size(get(name).folder) / 1e6, 1)
 
 
-def _menagerie_pin() -> tuple[str, str]:
-    """(url, commit) of Menagerie as pinned by the installed robot_descriptions."""
-    from robot_descriptions._repositories import REPOSITORIES
-
-    repo = REPOSITORIES["mujoco_menagerie"]
-    return repo.url, repo.commit
+def is_downloaded(name: str) -> bool:
+    return menagerie.local_folder(get(name).folder) is not None
 
 
-def _cache_root() -> Path:
-    return Path(os.environ.get("ROBOT_DESCRIPTIONS_CACHE", "~/.cache/robot_descriptions")).expanduser()
-
-
-def _sparse_root(commit: str) -> Path:
-    return _cache_root() / "robotforge" / f"mujoco_menagerie-{commit[:12]}"
-
-
-def _cached_folder(folder: str) -> Path | None:
-    """Where a Menagerie folder already is on disk, without downloading anything."""
-    override = os.environ.get("ROBOTFORGE_MENAGERIE")
-    if override:
-        path = Path(override).expanduser() / folder
-        return path if path.is_dir() else None
-    _, commit = _menagerie_pin()
-    full = _cache_root() / "mujoco_menagerie"
-    head = full / ".git" / "HEAD"
-    if (full / folder).is_dir() and head.is_file() and head.read_text().strip() == commit:
-        return full / folder
-    sparse = _sparse_root(commit) / folder
-    return sparse if sparse.is_dir() else None
-
-
-def model_dir(robot: LibraryRobot) -> Path:
+def model_dir(robot: LibraryRobot, progress: menagerie.Progress | None = None) -> Path:
     """The robot's Menagerie folder, downloading it on first use."""
-    found = _cached_folder(robot.folder)
-    if found is not None:
-        return found
-    if os.environ.get("ROBOTFORGE_MENAGERIE"):
-        raise LibraryError(f"{robot.folder} is not in ROBOTFORGE_MENAGERIE={os.environ['ROBOTFORGE_MENAGERIE']}")
-    url, commit = _menagerie_pin()
-    target = _sparse_root(commit) / robot.folder
-    _sparse_fetch(url, commit, robot.folder, target)
-    return target
-
-
-def _sparse_fetch(url: str, commit: str, folder: str, target: Path) -> None:
-    """Shallow, sparse checkout of one folder, moved into place atomically when complete."""
-    git = shutil.which("git")
-    if git is None:
-        raise LibraryError("downloading library robots needs git; install it from https://git-scm.com and try again")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    log.info("downloading %s from MuJoCo Menagerie (first use only)", folder)
-    # Cleanup errors are ignored because git marks pack files read-only on Windows.
-    with tempfile.TemporaryDirectory(dir=target.parent, prefix=".fetch-", ignore_cleanup_errors=True) as tmp:
-        _git(git, ["init", "-q", tmp])
-        _git(git, ["-C", tmp, "remote", "add", "origin", url])
-        _git(git, ["-C", tmp, "sparse-checkout", "set", "--no-cone", f"/{folder}/"])
-        # Both of these talk to GitHub: the checkout downloads the folder's files (a partial clone).
-        _git(git, ["-C", tmp, "fetch", "-q", "--depth", "1", "--filter=blob:none", "origin", commit], FETCH_ATTEMPTS)
-        _git(git, ["-C", tmp, "checkout", "-q", "FETCH_HEAD"], FETCH_ATTEMPTS)
-        fetched = Path(tmp) / folder
-        if not fetched.is_dir():
-            raise LibraryError(f"Menagerie at {commit[:12]} has no folder {folder!r}")
-        try:
-            fetched.rename(target)
-        except OSError:
-            if not target.is_dir():  # another process finishing first is fine; anything else is not
-                raise
-
-
-def _git(git: str, args: list[str], attempts: int = 1) -> None:
-    for attempt in range(1, attempts + 1):
-        try:
-            # Output is captured: on stdio MCP servers stdout belongs to the protocol.
-            done = subprocess.run([git, *args], capture_output=True, text=True, timeout=FETCH_TIMEOUT, check=False)
-        except subprocess.TimeoutExpired as exc:
-            raise LibraryError("downloading the robot timed out; check your internet connection and try again") from exc
-        if done.returncode == 0:
-            return
-        detail = " / ".join((done.stderr or done.stdout).strip().splitlines()[-3:])
-        if attempt < attempts:
-            log.warning("git failed (attempt %d of %d), retrying: %s", attempt, attempts, detail)
-            time.sleep(2.0 * attempt)
-    raise LibraryError(
-        "could not download the robot from GitHub (MuJoCo Menagerie); check your internet connection "
-        f"or proxy. git said: {detail}"
-    )
+    return menagerie.fetch(robot.folder, progress)
 
 
 # ---- building ---------------------------------------------------------------------------
