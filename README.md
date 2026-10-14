@@ -1,5 +1,7 @@
 # robotforge (暂名)
 
+[![CI](https://github.com/yusenthebot/robotforge/actions/workflows/ci.yml/badge.svg)](https://github.com/yusenthebot/robotforge/actions/workflows/ci.yml)
+
 新手入门具身智能的机器人游乐场：在 Claude 或 GPT 里用自然语言设计任何机器人，让它做任何事情，也能打开外部 URDF 和网格。
 轻量，支持 macOS 和 Windows。
 
