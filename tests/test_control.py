@@ -13,6 +13,7 @@ from mcp import Client
 from robotforge.cli import find_free_port
 from robotforge.control import TASKS, Box, TaskError, compare_methods, make_env, make_task, task_world
 from robotforge.control.actuation import TorqueMap
+from robotforge.control.checks import EnvCheckError, check_env
 from robotforge.control.classic import solve_dare
 from robotforge.control.compare import run
 from robotforge.control.gym_compat import INSTALL_HINT, as_gymnasium
@@ -117,28 +118,33 @@ def test_tasks_explain_what_does_not_fit():
 # ---- Gym-style environment contract -------------------------------------------------------------
 
 
+@pytest.mark.parametrize("mode", ["direct", "residual"])
 @pytest.mark.parametrize("task", list(TASKS))
-def test_env_follows_the_gym_api(task):
-    env = make_env(task, episode_seconds=0.5)
-    assert env.action_space.dtype == np.float32 and env.observation_space.dtype == np.float32
-    assert np.all(env.action_space.low == -1) and np.all(env.action_space.high == 1)
-    obs, info = env.reset(seed=1)
-    assert isinstance(info, dict) and obs.dtype == np.float32
-    assert obs.shape == env.observation_space.shape and obs in env.observation_space
+def test_env_passes_the_gym_contract_check(task, mode):
+    env = make_env(task, episode_seconds=0.6, action_mode=mode)
+    check_env(env, steps=80)
+    env.reset(seed=1)
     steps = 0
     while True:
-        obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+        _, _, terminated, truncated, info = env.step(env.action_space.sample())
         steps += 1
-        assert obs.dtype == np.float32 and obs.shape == env.observation_space.shape
-        assert isinstance(reward, float) and np.isfinite(reward)
-        assert isinstance(terminated, bool) and isinstance(truncated, bool) and "success" in info
+        assert "is_success" in info
         if terminated or truncated:
             break
     assert steps <= env.max_steps and (terminated or steps == env.max_steps)
-    with pytest.raises(ValueError, match="shape"):
-        env.step(np.zeros(env.action_space.shape[0] + 1))
-    with pytest.raises(ValueError, match="NaN"):
-        env.step(np.full(env.action_space.shape, np.nan))
+
+
+def test_check_env_catches_contract_breaks():
+    env = make_env("balance")
+    real_step = env.step
+
+    def float64_obs(action):
+        obs, *rest = real_step(action)
+        return (obs.astype(np.float64), *rest)
+
+    env.step = float64_obs
+    with pytest.raises(EnvCheckError, match="dtype"):
+        check_env(env)
 
 
 def _rollout(env, seed: int, actions: np.ndarray) -> tuple[np.ndarray, list[float]]:

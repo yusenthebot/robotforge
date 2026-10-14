@@ -196,7 +196,9 @@ class RobotEnv:
             mujoco.mj_forward(self.model, self.data)
 
     def _info(self, cost: float | None = None) -> dict[str, Any]:
-        info: dict[str, Any] = {"time": round(float(self.data.time), 4), "success": bool(self.task.success(self.data))}
+        success = bool(self.task.success(self.data))
+        # "is_success" is the key Stable-Baselines3's Monitor and EvalCallback read for success rates.
+        info: dict[str, Any] = {"time": round(float(self.data.time), 4), "success": success, "is_success": success}
         if cost is not None:
             info["cost"] = cost
         return info
