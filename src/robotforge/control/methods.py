@@ -6,11 +6,12 @@ from typing import Any
 
 import mujoco
 import numpy as np
+from pydantic import ValidationError
 
 from robotforge.control import classic
 from robotforge.control.mpc import MPCConfig, SamplingMPC
 from robotforge.control.tasks import Task, TaskError
-from robotforge.control.tasks.base import home_ctrl
+from robotforge.control.tasks.base import home_ctrl, readable
 
 METHODS: dict[str, str] = {
     "ik": "Inverse kinematics + servo position control: solve for joint angles once and send them to the servos.",
@@ -76,6 +77,8 @@ def make_controller(
             return train_controller(task, model, params)
     except TypeError as exc:  # unknown keyword in params
         raise TaskError(f"{method}: bad params {sorted(params)}: {exc}") from exc
+    except ValidationError as exc:
+        raise TaskError(readable(exc, f"{method} settings")) from exc
     raise TaskError(f"{method} is not available for {task.name} yet")
 
 

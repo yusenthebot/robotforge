@@ -21,11 +21,13 @@ from typing import Any, Literal
 
 import mujoco
 import numpy as np
+from pydantic import ValidationError
 
 from robotforge.control.actuation import ActionScale
 from robotforge.control.methods import make_controller
 from robotforge.control.spaces import Box
 from robotforge.control.tasks import Task, TaskError, make_task
+from robotforge.control.tasks.base import divergences, readable
 from robotforge.sim.session import SimSession
 
 DEFAULT_ROBOTS: dict[str, tuple[str, str]] = {
@@ -36,6 +38,7 @@ DEFAULT_ROBOTS: dict[str, tuple[str, str]] = {
     "drive_to": ("rover", "rover"),
 }
 MARKER = "goal_marker"
+UNSTABLE_PENALTY = 10.0  # reward lost when the simulation diverges (ends the episode)
 
 
 class _Residual:
@@ -141,13 +144,17 @@ class RobotEnv:
             self._residual.apply(self.data)
         else:
             self.data.ctrl[self.task.actuators] = self.scale.to_ctrl(a)
+        before = divergences(self.data)
         self.session.step(self.substeps)
         self._steps += 1
-        unstable = not np.isfinite(self.data.qpos).all()
-        if unstable:  # keep returning finite numbers so a learner does not crash on NaN
-            mujoco.mj_resetData(self.model, self.data)
+        unstable = divergences(self.data) > before or not np.isfinite(self.data.qpos).all()
+        if unstable:
+            # The physics blew up (MuJoCo already reset it). End the episode from a valid home pose so
+            # the observation is meaningful, with a penalty so blowing up is never a way out of costs.
+            self._home()
+            self._show_goal()
             obs, cost = self.task.observation(self.data), 0.0
-            reward = -self.task.alive_bonus * self.control_dt
+            reward = -UNSTABLE_PENALTY
         else:
             obs, cost = self.task.observation(self.data), self.task.step_cost(self.data)
             reward = (self.task.alive_bonus - cost) * self.control_dt
@@ -217,10 +224,18 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
         raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, robot = DEFAULT_ROBOTS[task]
     template = robot_template or template
-    world = World.model_validate(
-        {"name": f"{task}_lab", "robots": [{"name": robot, "template": template, "params": robot_params or {}}]}
-    )
-    compiled = compile_world(world)
+    from robotforge.design import templates
+
+    try:
+        templates.get(template).Params.model_validate(robot_params or {})  # readable errors before compiling
+        world = World.model_validate(
+            {"name": f"{task}_lab", "robots": [{"name": robot, "template": template, "params": robot_params or {}}]}
+        )
+        compiled = compile_world(world)
+    except ValidationError as exc:
+        raise TaskError(readable(exc, "robot settings")) from exc
+    except ValueError as exc:  # template parameters are checked while compiling
+        raise TaskError(str(exc)) from exc
     spec = compiled.spec
     if task in ("reach", "drive_to"):
         marker = spec.worldbody.add_body(name=MARKER, mocap=True, pos=[0.3, 0.0, 0.2])

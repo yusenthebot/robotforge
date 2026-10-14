@@ -32,6 +32,14 @@ def physics_rate(model: mujoco.MjModel) -> float:
     return 1.0 / model.opt.timestep
 
 
+def positive(name: str, value: float, high: float = 1e4) -> float:
+    """Validate a tuning number from the user: finite and in (0, high]."""
+    value = float(value)
+    if not (np.isfinite(value) and 0 < value <= high):
+        raise TaskError(f"{name} must be a number between 0 and {high:g}, got {value}")
+    return value
+
+
 class Hold:
     """Send fixed commands: for servo robots that means "hold this pose" (a stiff position loop)."""
 
@@ -139,7 +147,7 @@ class JointPD:
         self.task = task
         self.plan = _ReachPlan(task, model, data)
         self.torque = TorqueMap(model, task.actuators)
-        self.omega, self.zeta = omega, zeta
+        self.omega, self.zeta = positive("omega", omega, 200.0), positive("zeta", zeta, 10.0)
         self.rate_hz = physics_rate(model)
         self._M = np.zeros((model.nv, model.nv))
 
@@ -164,7 +172,7 @@ class CartesianPD:
         self.task = task
         self.plan = _ReachPlan(task, model, data)
         self.torque = TorqueMap(model, task.actuators)
-        self.omega, self.zeta = omega, zeta
+        self.omega, self.zeta = positive("omega", omega, 200.0), positive("zeta", zeta, 10.0)
         self.rate_hz = physics_rate(model)
         self.q_rest = home_qpos(model)[self.plan.qadr]
         self._jacp = np.zeros((3, model.nv))
@@ -253,9 +261,10 @@ class LQR:
         mujoco.mjd_transitionFD(model, lin, 1e-6, True, A, B, None, None)
         idx = np.concatenate([self.dofs, model.nv + self.dofs])
         self.A, self.B = A[np.ix_(idx, idx)], B[np.ix_(idx, acts)]
-        weights = q_weights if q_weights is not None else [1.0] * (2 * nd)
-        if len(weights) != 2 * nd:
-            raise TaskError(f"q_weights needs {2 * nd} numbers: {nd} positions then {nd} speeds")
+        weights = np.asarray(q_weights if q_weights is not None else [1.0] * (2 * nd), float)
+        if weights.shape != (2 * nd,) or not np.all(np.isfinite(weights)) or np.any(weights < 0):
+            raise TaskError(f"q_weights needs {2 * nd} numbers >= 0: {nd} positions then {nd} speeds")
+        r_weight = positive("r_weight", r_weight, 1e6)
         self.Q = np.diag(np.asarray(weights, float))
         self.R = r_weight * np.eye(len(acts))
         P = solve_dare(self.A, self.B, self.Q, self.R)
@@ -268,7 +277,12 @@ class LQR:
         self.rate_hz = physics_rate(model)
         self._dq = np.zeros(model.nv)
         closed = np.abs(np.linalg.eigvals(self.A - self.B @ self.K))
-        self.stable = bool(closed.max() < 1.0)
+        self.stable = bool(np.all(np.isfinite(self.K)) and closed.max() < 1.0)
+        if not self.stable:
+            raise TaskError(
+                "LQR could not find gains that stabilize this robot around its home pose with these weights; "
+                "try other q_weights / r_weight, or a different method (mpc)"
+            )
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         mujoco.mj_differentiatePos(model, self._dq, 1.0, self.qpos_eq, data.qpos)
@@ -292,7 +306,7 @@ class StateFeedback:
             raise TaskError("this rule is written for the cart-pole balance task")
         self.task = task
         self.gains = np.asarray(gains if gains is not None else [0.3, 4.0, 0.5, 0.6], float)
-        if self.gains.shape != (4,):
+        if self.gains.shape != (4,) or not np.all(np.isfinite(self.gains)):
             raise TaskError("gains are [cart position, pole angle, cart speed, pole spin]")
         self.rate_hz = 100.0
 
@@ -319,7 +333,7 @@ class GoToGoal:
             self.drive = DiffDrive(model, task.robot.name)
         except (ValueError, KeyError, StopIteration) as exc:
             raise TaskError(str(exc)) from exc
-        self.k_turn, self.k_speed = k_turn, k_speed
+        self.k_turn, self.k_speed = positive("k_turn", k_turn, 100.0), positive("k_speed", k_speed, 100.0)
         self.rate_hz = 50.0
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
