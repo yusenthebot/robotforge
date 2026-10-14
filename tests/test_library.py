@@ -119,7 +119,7 @@ def test_fixed_base_arm_sits_on_the_floor_and_holds_its_home_pose():
 def test_go2_stands_walks_turns_and_settles(pg):
     pg.add_robot("go2", library="go2")
     assert pg.behaviors.robots() == [
-        {"name": "go2", "kind": "quadruped", "model": "Unitree Go2", "max_speed": pytest.approx(0.86, abs=0.05)}
+        {"name": "go2", "kind": "quadruped", "model": "Unitree Go2", "max_speed": pytest.approx(0.6, abs=0.03)}
     ]
     pg.behaviors.move("go2", 0.0, 0.0)  # gait running at zero command
     start = pg.behaviors.pose("go2")

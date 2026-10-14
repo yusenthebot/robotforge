@@ -71,11 +71,11 @@ class GaitBase:
         return self.gait.status()
 
     def preview(self, model: mujoco.MjModel, data: mujoco.MjData, times: np.ndarray) -> np.ndarray:
-        # Run a throwaway copy of the gait forward in time; it only reads the clock and the trunk
-        # attitude (held at its current value) and writes ctrl.
+        # Run a throwaway copy of the gait forward in time; it only reads the clock, the trunk attitude
+        # and velocity (held at their current values) and writes ctrl.
         ghost = copy.copy(self.gait)
         ghost.legs = [copy.copy(leg) for leg in self.gait.legs]
-        scratch = types.SimpleNamespace(time=0.0, xquat=data.xquat, ctrl=np.array(data.ctrl))
+        scratch = types.SimpleNamespace(time=0.0, xquat=data.xquat, qvel=data.qvel, ctrl=np.array(data.ctrl))
         out = np.empty((len(times), len(self.task.actuators)))
         for i, dt in enumerate(times):
             scratch.time = float(data.time) + float(dt)

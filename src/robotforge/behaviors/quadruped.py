@@ -32,6 +32,11 @@ REFERENCE_LEG, REFERENCE_PERIOD = 0.28, 0.36
 # yaw rate, active only while stepping, makes commands come true (Go2: 0.301 m/s for 0.3).
 VELOCITY_KP = 0.5
 VELOCITY_KI = 2.0  # 1/s
+# The fastest command the gait accepts, as a share of what the longest stride allows. The rest is
+# headroom for the velocity correction. Measured top speeds at the full stride: template dog 0.39 of
+# 0.52 m/s (it stumbles at full stride), Go2 0.62, Go1 0.66, A1 0.63 of 0.86 m/s. Library robots that
+# reach less (Spot: 0.39) carry their own limit.
+SPEED_MARGIN = 0.7
 # PD for torque-motor legs: full torque at this joint error (rad), lightly damped on top of the
 # joints' own damping. The PD runs explicitly at physics rate, where heavy damping makes light knee
 # joints chatter (critical damping sent Go2 bouncing in circles). On Menagerie's Go2 with its raw
@@ -118,7 +123,8 @@ class QuadrupedGait:
         self.lift = lift if lift is not None else 0.25 * leg_len
         # Stride is limited to what the legs can reach comfortably.
         self.max_stride = 0.55 * leg_len
-        self.max_speed = self.max_stride / (self.period * self.duty)
+        self._stride_speed = self.max_stride / (self.period * self.duty)  # body speed at the longest stride
+        self.max_speed = SPEED_MARGIN * self._stride_speed
         self.command_speed = 0.0
         self.command_turn = 0.0
         self.speed = 0.0
@@ -127,8 +133,17 @@ class QuadrupedGait:
         self._next_plan = -math.inf
         self._phase = 0.0
         self._amplitude = 0.0  # 0 = standing still, 1 = full stepping
-        self._v_meas = np.zeros(3)  # trunk velocity (forward, left) in its heading frame and yaw rate, averaged
-        self._v_int = np.zeros(3)  # integrated error of the same
+        # Trunk velocity (forward, left) in its heading frame and yaw rate, averaged; and the
+        # integrated error of the same. Updated by rebinding, never in place, so a shallow copy of
+        # the gait (the control layer's preview) cannot disturb the live one.
+        self._v_meas = np.zeros(3)
+        self._v_int = np.zeros(3)
+        self._saturated = False  # the last plan had to shorten a stride
+
+    def limit_speed(self, top: float) -> None:
+        """Lower the fastest accepted speed to what this robot is known to reach (m/s)."""
+        self.max_speed = min(self.max_speed, top)
+        self.command(self.command_speed, self.command_turn)
 
     def command(self, speed: float = 0.0, turn: float = 0.0) -> None:
         """speed in m/s (negative = backwards), turn in rad/s (positive = left)."""
@@ -170,6 +185,7 @@ class QuadrupedGait:
         roll, pitch = _roll_pitch(quat)
         v_body, turn = self._corrected_velocity(data, dt)
         half_cycle = self.period * self.duty
+        saturated = False
         for leg in self.legs:
             # Each foot sweeps backwards during stance at the body's commanded velocity.
             v = np.array([v_body[0] - turn * leg.hip[1], v_body[1] + turn * leg.hip[0]])
@@ -177,6 +193,7 @@ class QuadrupedGait:
             norm = np.linalg.norm(stride)
             if norm > self.max_stride:
                 stride *= self.max_stride / norm
+                saturated = True
             phase = (self._phase + leg.phase_offset) % 1.0
             target = leg.home_foot.copy()
             if phase < self.duty:
@@ -191,22 +208,25 @@ class QuadrupedGait:
             target[2] += self.attitude_gain * (-pitch * leg.hip[0] + roll * leg.hip[1])
             leg.q, _ = self.ik.solve(leg.chain, target, leg.q, iterations=4)
         self._targets = np.concatenate([leg.q for leg in self.legs])
+        self._saturated = saturated
 
     def _corrected_velocity(self, data: mujoco.MjData, dt: float) -> tuple[np.ndarray, float]:
         """The body velocity and turn rate to step for: the command plus a PI correction."""
-        rot = data.xmat[self.trunk].reshape(3, 3)
+        rot = np.empty(9)
+        mujoco.mju_quat2Mat(rot, data.xquat[self.trunk])
+        rot = rot.reshape(3, 3)
         yaw = math.atan2(rot[1, 0], rot[0, 0])
         c, s = math.cos(yaw), math.sin(yaw)
         lin = data.qvel[self.root_dof : self.root_dof + 3]  # world frame
         yaw_rate = (rot @ data.qvel[self.root_dof + 3 : self.root_dof + 6])[2]  # angular part is in body frame
         measured = np.array([c * lin[0] + s * lin[1], -s * lin[0] + c * lin[1], yaw_rate])
         beta = 1.0 - math.exp(-dt / self.period)  # average over about one gait cycle
-        self._v_meas += beta * (measured - self._v_meas)
+        self._v_meas = self._v_meas + beta * (measured - self._v_meas)
         want = np.array([self.speed, 0.0, self.turn])
-        limit = np.array([0.5 * self.max_speed, 0.5 * self.max_speed, 1.0])
+        limit = np.array([0.5 * self._stride_speed, 0.5 * self._stride_speed, 1.0])
         if self._amplitude < 0.05:  # standing: nothing to correct, and no windup for the next start
-            self._v_int[:] = 0.0
-        else:
+            self._v_int = np.zeros(3)
+        elif not self._saturated:  # strides at their limit cannot go faster; integrating then only winds up
             self._v_int = np.clip(self._v_int + VELOCITY_KI * dt * (want - self._v_meas), -limit, limit)
         correction = self._amplitude * (VELOCITY_KP * (want - self._v_meas) + self._v_int)
         corrected = want + np.clip(correction, -limit, limit)
