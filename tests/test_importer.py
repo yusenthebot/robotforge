@@ -797,11 +797,18 @@ def test_stance_search_respects_its_deadline(tmp_path):
     staged, urdf, home = _staged_walker(tmp_path)
     expired = find_stances(staged, urdf, home, deadline=time.monotonic() - 1.0)
     assert expired.stopped_early and expired.poses == []
-    start = time.monotonic()
-    short = find_stances(staged, urdf, home, deadline=time.monotonic() + 0.05)
-    assert short.stopped_early and time.monotonic() - start < 3.0  # not 4000 samples and 600 climb steps
+    start = time.process_time()
     full = find_stances(staged, urdf, home)
+    full_seconds = time.process_time() - start
     assert not full.stopped_early and full.poses  # unbounded, the walker has a stance
+
+    start = time.process_time()
+    short = find_stances(staged, urdf, home, deadline=time.monotonic() + 0.05)
+    short_seconds = time.process_time() - start
+    assert short.stopped_early
+    assert short_seconds < full_seconds / 2, (
+        f"{short_seconds:.2f} s with a deadline, {full_seconds:.2f} s without"
+    )  # unbounded, the walker has a stance
 
 
 def test_a_cut_short_stance_search_is_reported(tmp_path, monkeypatch):

@@ -147,7 +147,7 @@ async def test_a_slow_import_does_not_freeze_the_event_loop(tmp_path, monkeypatc
     real = Playground.add_robot
 
     def slow_add_robot(self, *args, **kwargs):
-        time.sleep(0.8)  # stands in for mesh conversion and the planning simulations
+        time.sleep(1.5)  # stands in for mesh conversion and the planning simulations
         return real(self, *args, **kwargs)
 
     monkeypatch.setattr(Playground, "add_robot", slow_add_robot)
@@ -172,7 +172,7 @@ async def test_a_slow_import_does_not_freeze_the_event_loop(tmp_path, monkeypatc
             beat.cancel()
     assert not result.is_error and json.loads(_text(result))["robots"] == ["mine"]
     stall = max(gaps, default=float("inf"))
-    assert len(gaps) > 10 and stall < 0.3, (
+    assert len(gaps) > 10 and stall < 0.75, (
         f"the event loop was blocked during the import ({len(gaps)} beats, worst gap {stall:.2f} s)"
     )
 

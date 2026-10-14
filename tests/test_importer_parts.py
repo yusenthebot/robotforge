@@ -404,12 +404,14 @@ def test_report_roundtrips_and_shortens_long_item_lists():
 
 
 def _timed_peak(fn):
-    """(seconds, peak MB of Python allocations, exception or None) for `fn()`."""
+    """(CPU seconds, peak MB of Python allocations, exception or None) for `fn()`.
+
+    CPU time, not wall time, so a busy machine cannot make a fast refusal look slow."""
     import time
     import tracemalloc
 
     tracemalloc.start()
-    start = time.monotonic()
+    start = time.process_time()
     error = None
     try:
         fn()
@@ -418,7 +420,7 @@ def _timed_peak(fn):
     finally:
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-    return time.monotonic() - start, peak / 2**20, error
+    return time.process_time() - start, peak / 2**20, error
 
 
 @pytest.mark.parametrize(
