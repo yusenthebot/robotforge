@@ -419,3 +419,37 @@ def test_a_job_whose_process_died_reports_failure(tmp_path):
     assert status["state"] == "failed" and "boom" in status["log_tail"][-1]
     with pytest.raises(unilab.UniLabError, match="no UniLab job"):
         unilab.job_status("../escape")
+
+
+# ---- MCP tools ---------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_mcp_lists_policies_walks_with_one_and_explains_unilab_setup(pg):
+    from mcp import Client
+
+    from robotforge.cli import find_free_port
+    from robotforge.mcp_server import build_server
+
+    server = build_server(pg, find_free_port(8811))
+    async with Client(server) as client:
+
+        async def call(tool: str, args: dict) -> dict:
+            result = await client.call_tool(tool, args)
+            assert not result.is_error, result.content[0].text
+            return json.loads(result.content[0].text)
+
+        listed = await call("list_policies", {})
+        assert [p["name"] for p in listed["policies"]] == ["go2_unilab_walk"]
+        assert ("note" in listed) != onnxruntime_available()  # the install hint shows only when needed
+        failed = await client.call_tool("unilab_check", {})
+        assert failed.is_error and "ROBOTFORGE_UNILAB_DIR" in failed.content[0].text
+        if onnxruntime_available():
+            moved = await call("move", {"robot": "go2", "speed": 0.5, "seconds": 4, "walker": "rl"})
+            assert moved["behavior"]["policy"] == "go2_unilab_walk"
+            assert moved["distance_m"] > 1.4 and moved["to"]["upright"]
