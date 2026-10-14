@@ -120,10 +120,26 @@ def _load_cfg(run: Path):
     return cfg
 
 
-def _make_env(cfg):
+def _register_task(task_name: str) -> None:
+    """Make a config-only task known to UniLab (one whose owner YAML lives outside UniLab's tree).
+
+    UniLab's built-in locomotion tasks register the generic manager-based environment under their
+    name and keep everything else in Hydra YAML, so a task robotforge exports needs nothing more."""
     from unilab.training import ensure_registries
 
     ensure_registries()
+    from unilab.base import registry
+
+    if registry.contains(task_name):
+        return
+    from unilab.envs import ManagerBasedRlEnvCfg, make_manager_based_rl_env
+
+    registry.register_env_config(task_name, ManagerBasedRlEnvCfg)
+    registry.register_env(task_name, make_manager_based_rl_env, sim_backend="mujoco")
+
+
+def _make_env(cfg):
+    _register_task(str(cfg.training.task_name))
     from unilab.base.config_adapter import create_env
     from unilab.scripts.train_rsl_rl import build_ppo_play_env_cfg_override
 
@@ -383,26 +399,34 @@ def _child_options() -> dict[str, Any]:
     return options
 
 
-def _export_onnx_with_unilab(run: Path, task: str, cfg) -> None:
+def _export_onnx_with_unilab(run: Path, task: str, cfg, conf_dir: Path | None = None) -> None:
     """UniLab writes policy.onnx during playback; run its eval for one step to get it."""
-    command = [
-        sys.executable,
-        "-c",
-        "import sys; from unilab.cli import eval_main; sys.exit(eval_main())",
-        "--algo",
-        str(cfg.algo.algo),
-        "--task",
-        task,
-        "--sim",
-        str(cfg.training.sim_backend),
-        "--load-run",
-        run.name,
-        "--render-mode",
-        "record",  # playback (and with it the export) is skipped in "none" mode
+    playback = [
         f"training.log_root={run.parent.parent}",
         "training.play_steps=1",
         "training.play_env_num=1",
     ]
+    if conf_dir is not None:  # a task of our own: same overrides UniLab's eval would build
+        command = _custom_command(conf_dir, str(cfg.training.task_name), task, str(cfg.training.sim_backend))
+        command += ["training.play_render_mode=record", "training.play_only=true", f"algo.load_run={run.name}"]
+        command += playback
+    else:
+        command = [
+            sys.executable,
+            "-c",
+            "import sys; from unilab.cli import eval_main; sys.exit(eval_main())",
+            "--algo",
+            str(cfg.algo.algo),
+            "--task",
+            task,
+            "--sim",
+            str(cfg.training.sim_backend),
+            "--load-run",
+            run.name,
+            "--render-mode",
+            "record",  # playback (and with it the export) is skipped in "none" mode
+            *playback,
+        ]
     done = subprocess.run(
         command, cwd=unilab_root(), stdin=subprocess.DEVNULL, capture_output=True, text=True, **_child_options()
     )
@@ -411,7 +435,15 @@ def _export_onnx_with_unilab(run: Path, task: str, cfg) -> None:
         raise SystemExit(f"UniLab's eval did not export policy.onnx (exit {done.returncode}):\n{tail}")
 
 
-def export(run: Path, out: Path, name: str, robot: str | None, title: str | None, task: str | None) -> dict[str, Any]:
+def export(
+    run: Path,
+    out: Path,
+    name: str,
+    robot: str | None,
+    title: str | None,
+    task: str | None,
+    conf_dir: Path | None = None,
+) -> dict[str, Any]:
     import numpy as np
     import onnx
     import onnxruntime as ort
@@ -420,7 +452,7 @@ def export(run: Path, out: Path, name: str, robot: str | None, title: str | None
     task = task or _owner_task(cfg)
     started = time.perf_counter()
     if _onnx_is_stale(run):
-        _export_onnx_with_unilab(run, task, cfg)
+        _export_onnx_with_unilab(run, task, cfg, conf_dir)
     card = build_card(run, name, robot, title, task)
     out.mkdir(parents=True, exist_ok=True)
     # UniLab's exporter stores weights in policy.onnx.data; one self-contained file is easier to move around.
@@ -442,6 +474,33 @@ def export(run: Path, out: Path, name: str, robot: str | None, title: str | None
         "onnx_bytes": (out / "policy.onnx").stat().st_size,
         "export_seconds": round(time.perf_counter() - started, 1),
     }
+
+
+def _custom_command(conf_dir: Path, task_name: str, task: str, sim: str) -> list[str]:
+    """Run UniLab's PPO script on a task whose owner YAML is in `conf_dir`/task/<task>/<sim>.yaml."""
+    return [
+        sys.executable,
+        "-u",
+        str(Path(__file__).resolve()),
+        "run-ppo",
+        "--task-name",
+        task_name,
+        "--",
+        f"task={task}/{sim}",
+        f"hydra.searchpath=[file://{conf_dir.resolve().as_posix()}]",
+    ]
+
+
+def run_ppo(task_name: str, overrides: list[str]) -> None:
+    """UniLab's PPO entry point (train or play) in this process, with `task_name` registered first."""
+    import runpy
+
+    import unilab
+
+    _register_task(task_name)
+    script = Path(unilab.__file__).resolve().parent / "scripts" / "train_rsl_rl.py"
+    sys.argv = [str(script), *overrides]
+    runpy.run_path(str(script), run_name="__main__")  # as UniLab's CLI runs it, ONNX export included
 
 
 def _onnx_is_stale(run: Path) -> bool:
@@ -532,21 +591,28 @@ def train(args: argparse.Namespace) -> int:
     ]
     if args.num_envs:
         overrides.append(f"algo.num_envs={args.num_envs}")
-    command = [
-        sys.executable,
-        "-u",
-        "-c",
-        "import sys; from unilab.cli import train_main; sys.exit(train_main())",
-        "--algo",
-        args.algo,
-        "--task",
-        args.task,
-        "--sim",
-        args.sim,
-        "--render-mode",
-        "none",
-        *overrides,
-    ]
+    conf_dir = Path(args.conf_dir) if args.conf_dir else None
+    if conf_dir is not None:  # a task of our own, e.g. exported from a robotforge robot
+        if args.algo != "ppo":
+            raise SystemExit("tasks from --conf-dir train with ppo")
+        command = _custom_command(conf_dir, args.task_name, args.task, args.sim)
+        command += ["training.play_render_mode=none", *overrides]
+    else:
+        command = [
+            sys.executable,
+            "-u",
+            "-c",
+            "import sys; from unilab.cli import train_main; sys.exit(train_main())",
+            "--algo",
+            args.algo,
+            "--task",
+            args.task,
+            "--sim",
+            args.sim,
+            "--render-mode",
+            "none",
+            *overrides,
+        ]
     started = time.perf_counter()
     log_path = status_path.with_name("train.log")
     state["state"], state["log"] = "training", str(log_path)
@@ -590,7 +656,7 @@ def train(args: argparse.Namespace) -> int:
     state["state"] = "exporting"
     write_status(status_path, state)
     try:
-        result = export(runs[-1], Path(args.export_to), args.name, args.robot, args.title, args.task)
+        result = export(runs[-1], Path(args.export_to), args.name, args.robot, args.title, args.task, conf_dir)
     except SystemExit as exc:
         state.update(state="failed", error=f"export failed: {exc}")
         write_status(status_path, state)
@@ -626,6 +692,8 @@ def main(argv: list[str] | None = None) -> int:
     p_train.add_argument("--name", default="unilab_policy")
     p_train.add_argument("--robot", default=None)
     p_train.add_argument("--title", default=None)
+    p_train.add_argument("--conf-dir", default=None, help="folder with task/<task>/<sim>.yaml for a task of our own")
+    p_train.add_argument("--task-name", default=None, help="training.task_name of that task (registered here)")
     p_export = sub.add_parser("export")
     p_export.add_argument("--run", required=True, type=Path)
     p_export.add_argument("--out", required=True, type=Path)
@@ -633,17 +701,26 @@ def main(argv: list[str] | None = None) -> int:
     p_export.add_argument("--robot", default=None)
     p_export.add_argument("--title", default=None)
     p_export.add_argument("--task", default=None)
+    p_export.add_argument("--conf-dir", default=None, type=Path)
     p_record = sub.add_parser("record")
     p_record.add_argument("--run", required=True, type=Path)
     p_record.add_argument("--steps", type=int, default=30)
     p_record.add_argument("--out", required=True, type=Path)
+    p_ppo = sub.add_parser("run-ppo", help="internal: UniLab's PPO script with a task of our own registered")
+    p_ppo.add_argument("--task-name", required=True)
+    p_ppo.add_argument("overrides", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.command == "train":
+        if bool(args.conf_dir) != bool(args.task_name):
+            parser.error("--conf-dir and --task-name go together")
         return train(args)
+    if args.command == "run-ppo":
+        run_ppo(args.task_name, [o for o in args.overrides if o != "--"])
+        return 0
     if args.command == "info":
         result = info()
     elif args.command == "export":
-        result = export(args.run, args.out, args.name, args.robot, args.title, args.task)
+        result = export(args.run, args.out, args.name, args.robot, args.title, args.task, args.conf_dir)
     else:
         result = record(args.run, args.steps, args.out)
     print(json.dumps(result))

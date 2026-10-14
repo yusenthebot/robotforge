@@ -492,3 +492,10 @@ def test_a_policy_that_raises_pauses_the_walker_instead_of_the_simulation(pg, ca
     pg.run_fast(lambda: False, 0.1)  # keeps stepping
     assert "failed to run" in walker.status()["paused"]
     np.testing.assert_allclose(walker.targets, card.default_joint_pos)
+
+
+def test_a_task_of_our_own_needs_both_its_config_folder_and_its_name(tmp_path, capsys):
+    args = ["train", "--task", "rf_dog", "--iterations", "3", "--log-root", str(tmp_path), "--status", "s.json"]
+    with pytest.raises(SystemExit):
+        unilab_tool.main([*args, "--conf-dir", str(tmp_path)])
+    assert "--conf-dir and --task-name go together" in capsys.readouterr().err
