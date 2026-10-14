@@ -172,10 +172,11 @@ class Humanoid(Template):
         foot = shin.add_body(name=f"{side}_foot", pos=[0, 0, -d.shin])
         _damped(spec, foot, f"{side}_ankle_pitch", [0, -1, 0], (-0.9, 1.2), part)
         _damped(spec, foot, f"{side}_ankle_roll", [sy, 0, 0], (-0.5, 0.5), part)
-        case_z = -d.ankle + d.foot[2] + part.size[2] / 2 + 0.001 * s
-        servo_case(foot, part, [0, 0, max(case_z, -part.size[2] / 2)])
+        case_z = max(-d.ankle + d.foot[2] + part.size[2] / 2 + 0.001 * s, -part.size[2] / 2)
+        servo_case(foot, part, [0, 0, case_z])
         _visual_only(foot)
-        _joint_cap(foot, part, 1, d.leg_r, part.size[0] / 2 * 0.9, _X_CYL)
+        # The ankle roll servo nests inside the pitch servo's housing (hidden, but it weighs as much).
+        _hidden_mass(foot, part.mass, [0, 0, case_z], [v * 0.8 for v in part.size])
         length, wide, plate = d.foot
         sole = [0.006 * s, sy * 0.003 * s, -d.ankle]  # slightly toe-heavy and outboard, like a real foot
         foot.add_geom(
