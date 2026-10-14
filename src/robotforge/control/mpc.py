@@ -30,15 +30,18 @@ from mujoco import rollout
 from pydantic import BaseModel, ConfigDict, Field
 
 from robotforge.control.actuation import ActionScale
-from robotforge.control.tasks import Batch, StateLayout, Task
+from robotforge.control.tasks import Batch, StateLayout, Task, TaskError
 
 FULLPHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
+# Physics steps one replan may simulate (samples x horizon steps x iterations). Beyond this a single
+# replan takes tens of milliseconds even on a fast laptop and the robot falls far behind real time.
+MAX_STEPS_PER_PLAN = 50_000
 _NOISE_SIZES = np.array([1.0, 0.3, 0.1])
 _PREVIEW_DT = 0.02  # s between look-ahead samples of a base controller
 
 
 class MPCConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     method: Literal["predictive", "mppi"] = "predictive"
     horizon: float = Field(0.5, gt=0.02, le=5.0, description="how far ahead to predict, seconds")
@@ -46,7 +49,7 @@ class MPCConfig(BaseModel):
     samples: int = Field(32, ge=2, le=1024, description="candidate plans simulated per replan")
     noise: float = Field(0.1, gt=0, le=2.0, description="exploration noise, as a fraction of each control's range")
     plan_dt: float = Field(0.01, gt=0, le=0.05, description="physics step used inside predictions, seconds")
-    replan_hz: float = Field(50.0, gt=0, le=1000.0, description="how often to replan, per simulated second")
+    replan_hz: float = Field(50.0, gt=0, le=100.0, description="how often to replan, per simulated second")
     iterations: int = Field(1, ge=1, le=10, description="optimizer iterations per replan")
     temperature: float = Field(0.1, gt=0, le=10.0, description="MPPI only: lower = trust the best samples more")
     interpolation: Literal["zero", "linear", "cubic"] = "linear"
@@ -146,6 +149,13 @@ class SamplingMPC:
             self.plan_model = model
         self.dt = float(self.plan_model.opt.timestep)
         self.steps = max(2, round(cfg.horizon / self.dt))
+        work = cfg.samples * self.steps * cfg.iterations
+        if work > MAX_STEPS_PER_PLAN:
+            raise TaskError(
+                f"this MPC setting simulates {work} physics steps per replan (samples x horizon/plan_dt x "
+                f"iterations); keep it under {MAX_STEPS_PER_PLAN} with fewer samples, a shorter horizon "
+                "or a larger plan_dt"
+            )
         self.step_times = np.arange(self.steps) * self.dt
         self.scale = ActionScale(model, task.actuators)
         self.sigma = cfg.noise * self.scale.half
@@ -208,14 +218,14 @@ class SamplingMPC:
         started = time.perf_counter()
         t = float(data.time)
         if self.nominal is None:
-            start = np.zeros(len(self.task.actuators)) if self.base else self.task.nominal_ctrl(data)
+            start = np.zeros(len(self.task.actuators)) if self.base is not None else self.task.nominal_ctrl(data)
             self.nominal = np.tile(start, (self.cfg.knots, 1))
         else:
             # Warm start: last plan, evaluated from now on (held at its final value past its end).
             shifted = interpolate(
                 self.nominal, t - self.plan_start + self.knot_times, self.cfg.horizon, self.cfg.interpolation
             )
-            self.nominal = shifted if self.base else self.scale.clip(shifted)
+            self.nominal = shifted if self.base is not None else self.scale.clip(shifted)
         self.plan_start = t
         self._preview = None
         if self.base is not None:
@@ -253,14 +263,21 @@ class SamplingMPC:
         batch = Batch.from_rollout(self.plan_model, self.layout, state, sensordata, ctrl)
         running = self.task.cost(batch)
         total = running.sum(axis=1) * self.dt + self.task.terminal_cost(batch)
-        total = np.where(np.isfinite(total), total, np.inf)  # an exploding rollout is never chosen
+        # MuJoCo resets a rollout that blows up (and restarts its clock), which can look calm and cheap;
+        # a final time other than now + horizon gives it away. Such rollouts are never chosen.
+        expected = self._state[self.layout.time] + self.steps * self.dt
+        exploded = np.abs(state[:, -1, self.layout.time] - expected) > self.dt / 2
+        finite = np.isfinite(total) & ~exploded
+        total = np.where(finite, total, np.inf)
+        if not finite.any():
+            self.best_cost = float("inf")
+            return  # nothing usable this time: keep following the previous plan
         best = int(np.argmin(total))
         self.best_cost = float(total[best])
         if cfg.method == "predictive":
             self.nominal = candidates[best]
             return
-        finite = np.isfinite(total)
-        spread = float(np.mean(total[finite]) - total[best]) if finite.any() else 0.0
+        spread = float(np.mean(total[finite]) - total[best])
         lam = cfg.temperature * max(spread, 1e-9)
         weights = np.where(finite, np.exp(-(total - total[best]) / lam), 0.0)
         weights /= weights.sum()
