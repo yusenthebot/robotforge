@@ -3,18 +3,22 @@
 Supported: properties (lazy, with block properties), args, macros (with defaults, `*block`
 parameters and `insert_block`), include, if/unless, `${...}` formulas (a safe arithmetic
 subset with math functions) and the `$(find|arg|env|optenv|dirname|eval ...)` substitutions.
-Not supported: Python helpers such as load_yaml, dynamic macro names and `xacro:element`.
-Unsupported constructs raise XacroError saying which one, so the user knows what to expand
-by hand.
+Not supported: other Python helpers, dynamic macro names and `xacro:element`. Unsupported
+constructs raise XacroError saying which one, so the user knows what to expand by hand.
+
+xacro files come from anywhere, so expansion is bounded: formulas cannot build huge numbers,
+strings or lists, and one expansion has a budget of elements, output size and time.
 """
 
 from __future__ import annotations
 
 import ast
 import copy
+import functools
 import math
 import operator
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +31,15 @@ from robotforge.design.importing.resolve import MeshResolver
 _XACRO_NS = "http://www.ros.org/wiki/xacro"
 _MAX_DEPTH = 80
 _MAX_FILE_BYTES = 5_000_000
+# One expansion may not exceed these, however a file tries to multiply itself.
+_MAX_NODES = 100_000  # elements and macro calls processed (the largest real robots I tried need ~1,200)
+_MAX_OUTPUT_CHARS = 5_000_000
+_MAX_SECONDS = 15.0
+# What a single `${...}` formula may produce.
+_MAX_SEQ = 100_000  # characters in a string, items in a list
+_MAX_INT_BITS = 8192
+_MAX_FORMULA_NODES = 2000
+_MAX_YAML_NODES = 500_000
 _KNOWN_DIRECTIVES = frozenset({"element", "attribute", "call", "include_all", "eval", "arg_scope"})
 _GROUP = "_group"  # holds the children passed to a `**name` macro parameter
 _SUBST = re.compile(r"\$\$|\$\{([^}]*)\}|\$\(([^)]*)\)")
@@ -45,7 +58,7 @@ _SAFE_FUNCTIONS: dict[str, Any] = {
     "str": str,
     "len": len,
     "sum": sum,
-    "pow": pow,
+    "pow": lambda a, b: _binop(ast.Pow(), a, b, "pow"),
 }
 _SAFE_NAMES: dict[str, Any] = {
     "pi": math.pi,
@@ -78,6 +91,53 @@ _CMPOPS = {
 
 class XacroError(ValueError):
     """The xacro file uses something the built-in expander cannot handle."""
+
+
+def _is_number(x: Any) -> bool:
+    return isinstance(x, int | float)
+
+
+def _bits(x: int) -> int:
+    return abs(x).bit_length()
+
+
+def _binop(op: ast.operator, left: Any, right: Any, expr: str) -> Any:
+    """An arithmetic operator that refuses to build huge numbers, strings or lists."""
+    too_big = XacroError(f"the formula '${{{expr}}}' would build something far too large; formulas are kept small")
+    both_numbers = _is_number(left) and _is_number(right)
+    both_ints = isinstance(left, int) and isinstance(right, int)
+    if isinstance(op, ast.Pow):
+        if not both_numbers:
+            raise XacroError(f"'**' works on numbers only, in '${{{expr}}}'")
+        if both_ints and (abs(right) > 10_000 or (right > 0 and _bits(left) * right > _MAX_INT_BITS)):
+            raise too_big
+        result = operator.pow(left, right)
+        if isinstance(result, complex):
+            raise XacroError(f"'${{{expr}}}' has no real value")
+        return result
+    if isinstance(op, ast.Mult):
+        if both_ints and _bits(left) + _bits(right) > _MAX_INT_BITS:
+            raise too_big
+        for seq, count in ((left, right), (right, left)):
+            if isinstance(seq, str | list | tuple) and isinstance(count, int) and len(seq) * max(count, 0) > _MAX_SEQ:
+                raise too_big
+        return operator.mul(left, right)
+    if isinstance(op, ast.Add):
+        both_sequences = isinstance(left, str | list | tuple) and isinstance(right, str | list | tuple)
+        if both_sequences and len(left) + len(right) > _MAX_SEQ:
+            raise too_big
+        return operator.add(left, right)
+    if isinstance(op, ast.Mod):
+        if not both_numbers:  # `'%99999999s' % 1` would build a huge string
+            raise XacroError(f"'%' works on numbers only, in '${{{expr}}}'")
+        return operator.mod(left, right)
+    return _BINOPS[type(op)](left, right)
+
+
+def _safe_replace(text: str, old: str, new: str, count: int = -1) -> str:
+    if not old or text.count(old) * len(new) + len(text) > _MAX_SEQ:
+        raise XacroError("str.replace in a formula would build a string that is far too large")
+    return text.replace(old, new, count)
 
 
 def parse_text(text: str, label: str) -> ET.Element:
@@ -114,8 +174,14 @@ class Expansion:
 def expand(path: Path, args: dict[str, str] | None = None) -> Expansion:
     """Expand `path` into plain URDF text."""
     ex = _Expander(path, args or {})
-    root = ex.run()
-    return Expansion(ET.tostring(root, encoding="unicode"), ex.files, sorted(ex.undefined))
+    try:
+        root = ex.run()
+        text = ET.tostring(root, encoding="unicode")
+    except RecursionError as exc:
+        raise XacroError(f"{path.name}: macros or elements are nested too deeply") from exc
+    if len(text) > _MAX_OUTPUT_CHARS:
+        raise XacroError(f"{path.name}: the expanded robot description is far too large")
+    return Expansion(text, ex.files, sorted(ex.undefined))
 
 
 # ---- xml helpers -----------------------------------------------------------------------------
@@ -163,10 +229,16 @@ def _evaluate(expr: str, lookup, extra: dict[str, Any] | None = None) -> Any:
         tree = ast.parse(expr.strip(), mode="eval")
     except SyntaxError as exc:
         raise XacroError(f"cannot read the formula '${{{expr}}}'") from exc
+    except (RecursionError, MemoryError, ValueError) as exc:
+        raise XacroError(f"the formula '${{{expr.strip()[:60]}...}}' is too deeply nested or too large") from exc
+    if sum(1 for _ in ast.walk(tree)) > _MAX_FORMULA_NODES:
+        raise XacroError(f"the formula '${{{expr.strip()[:60]}...}}' is too long")
     try:
         return _eval_node(tree.body, lookup, expr, extra or {})
     except XacroError:
         raise
+    except RecursionError as exc:
+        raise XacroError(f"the formula '${{{expr.strip()[:60]}...}}' is too deeply nested") from exc
     except (TypeError, ValueError, KeyError, IndexError, ZeroDivisionError, AttributeError, OverflowError) as exc:
         raise XacroError(f"the formula '${{{expr}}}' failed ({type(exc).__name__}: {exc})") from exc
 
@@ -198,11 +270,17 @@ class _Yaml(dict):
             raise AttributeError(name) from None
 
 
-def _wrap(value: Any) -> Any:
+def _wrap(value: Any, budget: list[int] | None = None) -> Any:
+    """Wrap loaded YAML for attribute access. YAML aliases can make a tiny file describe an enormous tree, so
+    the number of values visited is bounded."""
+    budget = budget if budget is not None else [_MAX_YAML_NODES]
+    budget[0] -= 1
+    if budget[0] < 0:
+        raise XacroError("load_yaml: the YAML expands into far too many values (aliases that multiply themselves?)")
     if isinstance(value, dict):
-        return _Yaml({k: _wrap(v) for k, v in value.items()})
+        return _Yaml({k: _wrap(v, budget) for k, v in value.items()})
     if isinstance(value, list):
-        return [_wrap(v) for v in value]
+        return [_wrap(v, budget) for v in value]
     return value
 
 
@@ -215,7 +293,7 @@ def _eval_node(node: ast.AST, lookup, expr: str, extra: dict[str, Any]) -> Any:
     if isinstance(node, ast.Name):
         return lookup(node.id)
     if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
-        return _BINOPS[type(node.op)](ev(node.left), ev(node.right))
+        return _binop(node.op, ev(node.left), ev(node.right), expr)
     if isinstance(node, ast.UnaryOp):
         value = ev(node.operand)
         if isinstance(node.op, ast.USub):
@@ -258,6 +336,8 @@ def _eval_node(node: ast.AST, lookup, expr: str, extra: dict[str, Any]) -> Any:
         owner = ev(node.value)
         if isinstance(owner, _Yaml) and node.attr in owner:
             return owner[node.attr]
+        if isinstance(owner, str) and node.attr == "replace":
+            return functools.partial(_safe_replace, owner)
         if isinstance(owner, str) and node.attr in _STR_METHODS:
             return getattr(owner, node.attr)
         if isinstance(owner, dict) and node.attr in _DICT_METHODS:
@@ -314,6 +394,9 @@ class _Expander:
         self.resolver = MeshResolver(path)
         self.depth = 0
         self.package_roots: list[Path] = []  # folders of packages named by $(find ...)
+        self.nodes = 0  # elements and macro calls handled so far
+        self.chars = 0  # characters of text produced so far
+        self.deadline = time.monotonic() + _MAX_SECONDS
         self.undefined: set[str] = set()  # macros that were called but never defined
         # xacro's own diagnostics are accepted and ignored.
         quiet = lambda *args: ""  # noqa: E731
@@ -337,10 +420,31 @@ class _Expander:
         except yaml.YAMLError as exc:
             raise XacroError(f"load_yaml: '{target.name}' is not valid YAML ({exc})") from exc
 
+    def _spend(self, nodes: int = 0, chars: int = 0) -> None:
+        """Count work against the expansion budget (a macro that doubles at every level would never finish)."""
+        self.nodes += nodes
+        self.chars += chars
+        if self.nodes > _MAX_NODES:
+            raise XacroError(
+                f"{self.path.name} expands into more than {_MAX_NODES:,} elements; a macro probably calls "
+                "itself or doubles at every level"
+            )
+        if self.chars > _MAX_OUTPUT_CHARS:
+            raise XacroError(f"{self.path.name} expands into far too much text (over {_MAX_OUTPUT_CHARS // 10**6} MB)")
+        if nodes and self.nodes % 256 == 0 and time.monotonic() > self.deadline:
+            raise XacroError(f"{self.path.name} takes more than {_MAX_SECONDS:.0f} s to expand")
+
+    def _project_root(self) -> Path:
+        """What a xacro may read: its package (the nearest folder with a package.xml above it), else its own folder."""
+        for folder in [self.path.parent, *list(self.path.parent.parents)[:5]]:
+            if (folder / "package.xml").is_file():
+                return folder
+        return self.path.parent
+
     def _check_inside_project(self, target: Path, what: str) -> None:
         """Files named inside a xacro (which may come from anywhere) are read only from its own project."""
         resolved = target.resolve()
-        roots = [self.resolver.search_root(), *self.package_roots]
+        roots = [self._project_root(), *self.package_roots]
         if not any(resolved == r or r.resolve() in resolved.parents for r in roots):
             raise XacroError(
                 f"{what} '{target}' is outside the project folder; xacro files may only read their own project"
@@ -349,6 +453,8 @@ class _Expander:
             raise XacroError(f"{what} '{target.name}' is too large to read")
 
     def run(self) -> ET.Element:
+        if self.path.stat().st_size > _MAX_FILE_BYTES * 4:
+            raise XacroError(f"{self.path.name} is too large to read")
         root = _parse(self.path.read_text(encoding="utf-8-sig", errors="replace"), self.path.name)
         assert root is not None
         if _local(root.tag) != "robot":
@@ -368,6 +474,7 @@ class _Expander:
             self._node(child, out, scope, file)
 
     def _node(self, el: ET.Element, out: ET.Element, scope: _Scope, file: Path) -> None:
+        self._spend(nodes=1)
         self.depth += 1
         if self.depth > _MAX_DEPTH:
             raise XacroError("xacro macros call each other too deeply (an infinite loop?)")
@@ -537,7 +644,9 @@ class _Expander:
                 return _fmt(_evaluate(expr, lambda n: self._lookup(n, scope), self.functions))
             return self._command(m.group(2).strip(), scope, file)
 
-        return _SUBST.sub(sub, text)
+        result = _SUBST.sub(sub, text)
+        self._spend(chars=len(result))
+        return result
 
     def _resolve_commands(self, expr: str, scope: _Scope, file: Path) -> str:
         """`$(arg x)` and friends inside a formula are replaced by their value before the formula runs."""

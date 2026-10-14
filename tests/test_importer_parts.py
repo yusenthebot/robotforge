@@ -398,3 +398,139 @@ def test_report_roundtrips_and_shortens_long_item_lists():
     assert "1 thing could not be fixed" in report.summary
     assert "NOT FIXED" in report.to_text()
     assert DoctorReport("y").summary == "No problems found."
+
+
+# ---- resource bounds: xacro files come from anywhere --------------------------------------------
+
+
+def _timed_peak(fn):
+    """(seconds, peak MB of Python allocations, exception or None) for `fn()`."""
+    import time
+    import tracemalloc
+
+    tracemalloc.start()
+    start = time.monotonic()
+    error = None
+    try:
+        fn()
+    except xacro.XacroError as exc:
+        error = exc
+    finally:
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+    return time.monotonic() - start, peak / 2**20, error
+
+
+@pytest.mark.parametrize(
+    "formula",
+    [
+        "2**500000000",  # a 60 MB integer
+        "2**2**40",
+        "9**9**9**9",
+        "pow(2, 500000000)",
+        "'A'*200000000",  # 200 MB of text
+        "[0.0]*50000000",  # a 400 MB list
+        "'ab'*100000*100000",
+        "('a'*99999 + 'b'*99999 + 'c')*99999",
+        "'%99999999s' % 1",
+        "'a'.replace('a', 'b'*99999)*3",
+        "(10**1000)**100",
+    ],
+)
+def test_xacro_formula_bombs_fail_fast_without_allocating(tmp_path, formula):
+    src = write(tmp_path / "bomb.xacro", f'<robot name="r" {XACRO_NS}><link name="${{{formula}}}"/></robot>')
+    seconds, peak_mb, error = _timed_peak(lambda: xacro.expand(src))
+    assert error is not None, "the formula must be refused"
+    assert seconds < 2.0 and peak_mb < 50, f"{seconds:.1f} s, {peak_mb:.0f} MB"
+
+
+def test_xacro_still_does_ordinary_arithmetic_within_the_bounds(tmp_path):
+    body = (
+        "<link name=\"a${2**10}_${pow(2, 3)}_${3 * 4}_${10 % 4}_${len([0] * 1000)}_${'ab' * 3}\"/>"
+        "<link name=\"${'x,y'.replace(',', '-')}_${(1 + 2) ** 2}_${2 ** -2}\"/>"
+    )
+    out = _expand(tmp_path, body)
+    assert 'name="a1024_8_12_2_1000_ababab"' in out and 'name="x-y_9_0.25"' in out
+
+
+def test_xacro_macro_doubling_is_stopped_by_the_element_budget(tmp_path):
+    macros = '<xacro:macro name="m0"><link name="l"/></xacro:macro>'
+    for i in range(1, 31):  # 2**30 links if it were allowed to run
+        macros += f'<xacro:macro name="m{i}"><xacro:m{i - 1}/><xacro:m{i - 1}/></xacro:macro>'
+    src = write(tmp_path / "laughs.xacro", f'<robot name="r" {XACRO_NS}>{macros}<xacro:m30/></robot>')
+    seconds, peak_mb, error = _timed_peak(lambda: xacro.expand(src))
+    assert error is not None and "expands into more than" in str(error)
+    assert seconds < 5.0 and peak_mb < 300, f"{seconds:.1f} s, {peak_mb:.0f} MB"
+
+
+def test_xacro_wide_text_amplification_is_stopped_by_the_output_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(xacro, "_MAX_OUTPUT_CHARS", 10_000)
+    body = '<xacro:property name="t" value="${\'x\' * 5000}"/>' + '<link name="${t}"/>' * 4
+    with pytest.raises(xacro.XacroError, match="far too much text"):
+        _expand(tmp_path, body)
+
+
+def test_xacro_wall_clock_budget_is_enforced(tmp_path, monkeypatch):
+    monkeypatch.setattr(xacro, "_MAX_SECONDS", -1.0)
+    with pytest.raises(xacro.XacroError, match="takes more than"):
+        _expand(tmp_path, "<link name='a'/>" * 300)
+
+
+def test_xacro_recursion_in_formulas_and_files_becomes_a_clean_error(tmp_path):
+    deep = "(" * 3000 + "1" + ")" * 3000
+    with pytest.raises(xacro.XacroError, match="too deeply nested|too long|cannot read"):
+        _expand(tmp_path, f'<link name="${{{deep}}}"/>')
+    chain = "-".join(["1"] * 5000)
+    with pytest.raises(xacro.XacroError, match="too long|too deeply nested"):
+        _expand(tmp_path, f'<link name="${{{chain}}}"/>')
+    nested = "<g>" * 3000 + "</g>" * 3000
+    try:
+        xacro.expand(write(tmp_path / "nested.xacro", f'<robot name="r" {XACRO_NS}>{nested}</robot>'))
+    except xacro.XacroError as exc:
+        assert "too deeply" in str(exc) or "too many" in str(exc)
+    with pytest.raises(xacro.XacroError):  # a file that includes itself
+        xacro.expand(
+            write(tmp_path / "self.xacro", f'<robot name="r" {XACRO_NS}><xacro:include filename="self.xacro"/></robot>')
+        )
+
+
+def test_yaml_alias_bombs_are_refused(tmp_path):
+    lines = ["a0: &a0 [x, x, x, x, x, x, x, x, x, x]"]
+    for i in range(1, 12):
+        lines.append(f"a{i}: &a{i} [" + ", ".join([f"*a{i - 1}"] * 10) + "]")
+    write(tmp_path / "bomb.yaml", "\n".join(lines) + "\n")
+    src = write(
+        tmp_path / "y.xacro",
+        f'<robot name="r" {XACRO_NS}>'
+        '<xacro:property name="d" value="${xacro.load_yaml(\'bomb.yaml\')}"/>'
+        '<link name="${d.a11[0]}"/></robot>',
+    )
+    seconds, peak_mb, error = _timed_peak(lambda: xacro.expand(src))
+    assert error is not None and "far too many values" in str(error)
+    assert seconds < 5.0 and peak_mb < 300
+
+
+def test_xacro_reads_only_its_own_folder_when_there_is_no_package_xml(tmp_path):
+    write(tmp_path / "up" / "above.xacro", f'<robot {XACRO_NS}><link name="above"/></robot>')
+    write(tmp_path / "up" / "proj" / "inc" / "own.xacro", f'<robot {XACRO_NS}><link name="own"/></robot>')
+    write(tmp_path / "up" / ".git" / "HEAD", "ref")  # a whole repository is no reason to read everything in it
+    inside = write(
+        tmp_path / "up" / "proj" / "ok.xacro",
+        f'<robot name="r" {XACRO_NS}><xacro:include filename="inc/own.xacro"/></robot>',
+    )
+    assert 'name="own"' in xacro.expand(inside).text
+    write(tmp_path / "far.xacro", f'<robot {XACRO_NS}><link name="far"/></robot>')
+    for target in ("../above.xacro", "../../far.xacro"):
+        outside = write(
+            tmp_path / "up" / "proj" / "bad.xacro",
+            f'<robot name="r" {XACRO_NS}><xacro:include filename="{target}"/></robot>',
+        )
+        with pytest.raises(xacro.XacroError, match="outside the project folder"):
+            xacro.expand(outside)
+    # With a package.xml, the whole package is fair game.
+    write(tmp_path / "up" / "proj" / "package.xml", "<package><name>proj</name></package>")
+    write(
+        tmp_path / "up" / "proj" / "sub" / "deep.xacro",
+        f'<robot {XACRO_NS}><xacro:include filename="../inc/own.xacro"/></robot>',
+    )
+    assert 'name="own"' in xacro.expand(tmp_path / "up" / "proj" / "sub" / "deep.xacro").text
