@@ -34,7 +34,8 @@ UPPER = (
     "neck_pitch",
 )
 DT = 0.01  # control period, s
-PREVIEW = 1.0  # s of future ZMP the body sway looks at
+PREVIEW = 0.8  # s of future ZMP the body sway looks at
+REPLAN_LEAD = 0.05  # s; plan pieces starting sooner than this are kept when the command changes
 FALLEN_UP = 0.5  # torso up-axis z below this means the robot is lying down
 
 
@@ -196,6 +197,7 @@ class HumanoidController:
         self._pose: tuple[str, list[Keyframe]] | None = None
         self._pose_t = 0.0
         self._pending: str | None = None
+        self._planned_for = (0.0, 0.0)  # the command the plan's future was made for
         self._upper_from: dict[str, float] = dict(self.upper_home)
         self._pose_level = (0.0, 0.0)  # (drop, lean) where the last pose ended
 
@@ -227,7 +229,7 @@ class HumanoidController:
         return self.fallen or (self._pose is None and self._pending is None and idle)
 
     def status(self) -> dict:
-        walking = self.plan is not None and not self.plan.idle()
+        walking = bool(self.command_speed or self.command_turn) or (self.plan is not None and not self.plan.idle())
         behavior = "pose" if self._pose or self._pending else "walk" if walking else "stand"
         out = {
             "behavior": behavior,
@@ -276,9 +278,10 @@ class HumanoidController:
     def _tick(self) -> None:
         plan = self.plan
         assert plan is not None
-        moving = bool(self.command_speed or self.command_turn)
-        if moving:
-            plan.drop_idle_tail(keep=5)
+        command = (self.command_speed, self.command_turn)
+        if command != self._planned_for:
+            plan.rewind(lead=round(REPLAN_LEAD / DT))
+            self._planned_for = command
         horizon = self.preview.horizon
         while len(plan) <= horizon:
             plan.extend(self.command_speed, self.command_turn)

@@ -110,6 +110,8 @@ class GaitPlan:
         self._feet = np.zeros((0, 2, 4))
         self._support = np.zeros(0, dtype=int)
         self._i = 0
+        self._base = 0  # absolute tick number of buffer row 0
+        self._checkpoints: list[tuple[int, tuple]] = []  # (absolute tick, planner state) where pieces begin
 
     # ---- reading ----------------------------------------------------------------------
 
@@ -128,11 +130,20 @@ class GaitPlan:
         """True when nothing but standing still is planned."""
         return self.standing and bool(np.all(self._support[self._i :] == 0)) and self._still()
 
-    def drop_idle_tail(self, keep: int) -> None:
-        """Forget planned standing still beyond `keep` ticks, so a new command starts promptly."""
-        if self.idle() and len(self) > keep:
-            end = self._i + keep
-            self._zmp, self._feet, self._support = self._zmp[:end], self._feet[:end], self._support[:end]
+    def rewind(self, lead: int) -> None:
+        """Forget the pieces of the plan that start at least `lead` ticks from now, so a new command
+        takes effect after the step in progress instead of after everything already planned."""
+        now = self._base + self._i
+        self._checkpoints = [c for c in self._checkpoints if c[0] >= now]
+        keep = next((k for k, (tick, _) in enumerate(self._checkpoints) if tick >= now + lead), None)
+        if keep is None:
+            return
+        tick, state = self._checkpoints[keep]
+        del self._checkpoints[keep:]
+        end = tick - self._base
+        self._zmp, self._feet, self._support = self._zmp[:end], self._feet[:end], self._support[:end]
+        feet, zmp, self.standing, self.next_swing, self.frame, self.last_stride = state
+        self.feet_end, self.zmp_end = list(feet), zmp.copy()
 
     def _still(self) -> bool:
         rest = self._feet[self._i :]
@@ -143,6 +154,8 @@ class GaitPlan:
     def extend(self, speed: float, turn: float) -> None:
         """Append the next piece of the plan for the commanded speed (m/s) and turn rate (rad/s)."""
         p = self.p
+        state = (list(self.feet_end), self.zmp_end.copy(), self.standing, self.next_swing, self.frame, self.last_stride)
+        self._checkpoints.append((self._base + len(self._zmp), state))
         moving = abs(speed) > 1e-3 or abs(turn) > 1e-3
         if moving and self.standing:
             self.frame = self._middle()
@@ -152,7 +165,7 @@ class GaitPlan:
             self.standing = False
             self._step(speed, turn, double_support=False)
         elif moving or abs(self.last_stride) > 1e-3:
-            self._step(speed, turn, double_support=True)  # also slows down over a step or two
+            self._step(speed, turn, double_support=True)  # also eases a reversal over two steps
         elif not self.standing:
             swing = self.next_swing
             target = Foot(*self._place(self.frame, swing), self.frame[2])
@@ -170,9 +183,8 @@ class GaitPlan:
         p = self.p
         swing, stance = self.next_swing, self.next_swing ^ 1
         stride = float(np.clip(speed * p.step_time, -p.max_stride, p.max_stride))
-        # Change pace gradually so the body sway can follow.
-        limit = p.max_stride * 0.5
-        stride = float(np.clip(stride, self.last_stride - limit, self.last_stride + limit))
+        # Starting or stopping takes one step; reversing takes two, so the body sway can follow.
+        stride = float(np.clip(stride, self.last_stride - p.max_stride, self.last_stride + p.max_stride))
         dyaw = float(np.clip(turn * p.step_time, -p.max_turn, p.max_turn))
         x, y, yaw = self.frame
         mid_yaw = yaw + dyaw / 2
@@ -220,6 +232,7 @@ class GaitPlan:
         self._zmp = np.concatenate([self._zmp[self._i :], zmp])
         self._feet = np.concatenate([self._feet[self._i :], feet])
         self._support = np.concatenate([self._support[self._i :], support])
+        self._base += self._i
         self._i = 0
 
     # ---- geometry ---------------------------------------------------------------------
