@@ -206,6 +206,8 @@ class HumanoidController:
 
     def command(self, speed: float = 0.0, turn: float = 0.0) -> None:
         """speed in m/s (negative = backwards), turn in rad/s (positive = left)."""
+        if not (math.isfinite(speed) and math.isfinite(turn)):
+            raise ValueError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         self.command_speed = float(np.clip(speed, -self.max_speed, self.max_speed))
         self.command_turn = float(np.clip(turn, -self.max_turn, self.max_turn))
         if (self.command_speed or self.command_turn) and (self._pose or self._pending):

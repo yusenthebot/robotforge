@@ -76,6 +76,8 @@ class BehaviorManager:
     # ---- moving robots (legs and wheels) ---------------------------------------------
 
     def move(self, robot: str, speed: float, turn: float) -> dict[str, Any]:
+        if not (math.isfinite(speed) and math.isfinite(turn)):
+            raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         kind = self.kind(robot)
         if kind not in MOBILE:
             raise BehaviorError(f"{robot} is a {kind.value}; only quadrupeds, humanoids and rovers can move around")

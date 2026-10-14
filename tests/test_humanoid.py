@@ -235,6 +235,18 @@ def test_pose_errors_tell_what_to_do(pg):
         pg.behaviors.strike_pose("dog", "wave")
 
 
+@pytest.mark.parametrize("template", ["humanoid", "quadruped", "rover"])
+def test_non_finite_commands_are_refused_before_they_reach_the_motors(pg, template):
+    pg.add_robot("bot", template=template)
+    pg.behaviors.move("bot", 0.05, 0.0)
+    for speed, turn in ((math.nan, 0.2), (0.1, math.nan), (math.inf, 0.0)):
+        with pytest.raises(BehaviorError, match="finite"):
+            pg.behaviors.move("bot", speed, turn)
+    pg.run_fast(lambda: False, 1.0)
+    assert np.isfinite(pg.session.data.ctrl).all()
+    assert np.isfinite(pg.session.data.qpos).all()
+
+
 def test_a_fallen_humanoid_asks_for_a_reset(pg):
     pg.add_robot("bot", template="humanoid")
     pg.behaviors.move("bot", 0.0, 0.0)
