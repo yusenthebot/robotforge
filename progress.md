@@ -35,11 +35,9 @@ Rounds 1-3 done, 2026-10-14.
 
 ## Next-round seed
 
-Round 4, behaviors:
-1. Quadruped trot gait controller (open loop, phase-based foot trajectories + leg IK) with forward speed and turn rate; verify trunk advances > 1 m in 10 s without falling (A1).
-2. Arm IK (mink is approved; or a small damped-least-squares IK on MuJoCo Jacobians) + pick-and-place helper; agent-authored `behaviors/*.py` run in a subprocess against a restricted API; verify cube ends inside the bin (A2).
-3. Keyboard teleop in the viewer for rover and quadruped (A4 needs it for Go2).
-Expose as MCP tools: `run_behavior` (built-ins: walk, turn, stand, pick_and_place) and `write_script` / `run_script`.
+Round 5 (now): wave 1 agents are running on feat/humanoid, feat/import-doctor, feat/robot-library, feat/ci, feat/control.
+As each reports: review its diff, run the full suite in its worktree, merge into main serially (resolve shared-file conflicts in world.py, manager.py, mcp_server.py, app.js), re-run the suite on main, verify in the browser pane, push.
+Wave 2 after that: free-form parts builder ("any robot"), scenes + terrains (heightfield, slopes, stairs, obstacles, preset scenes), RL tier 1 (SB3 extra on RobotEnv), UniLab bridge (export task, train externally, ONNX playback; start with pretrained Go2/G1 policies).
 
 ## Frontier
 
