@@ -8,6 +8,8 @@ from enum import StrEnum
 import mujoco
 import numpy as np
 
+from robotforge.sim.actuators import drives_joint, is_velocity_servo
+
 
 class Kind(StrEnum):
     ARM = "arm"
@@ -70,8 +72,7 @@ def find_wheels(model: mujoco.MjModel, robot: str) -> WheelSet | None:
     sides: dict[int, list[tuple[int, float, float, float]]] = {1: [], -1: []}
     for a in range(model.nu):
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""
-        is_speed_motor = model.actuator_biasprm[a][1] == 0 and model.actuator_biasprm[a][2] < 0
-        if not name.startswith(prefix) or not is_speed_motor or model.actuator_trntype[a] != mujoco.mjtTrn.mjTRN_JOINT:
+        if not name.startswith(prefix) or not is_velocity_servo(model, a) or not drives_joint(model, a):
             continue
         joint = int(model.actuator_trnid[a, 0])
         if int(model.jnt_type[joint]) != int(mujoco.mjtJoint.mjJNT_HINGE):

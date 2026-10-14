@@ -9,8 +9,8 @@ import numpy as np
 
 from robotforge.design.importing.plan import RigError
 from robotforge.design.importing.urdf import StagedUrdf
+from robotforge.sim.geometry import collides, lowest_point
 
-GEOM = mujoco.mjtGeom
 GRAVITY = 9.81
 TOUCH_TOLERANCE = 0.02  # m: a link this close to the lowest point counts as touching the ground
 
@@ -42,9 +42,7 @@ class Geometry:
         for b in range(1, model.nbody):
             self.children.setdefault(int(model.body_parentid[b]), []).append(b)
         self.total_mass = float(model.body_mass.sum())
-        self.collision_geoms = [
-            g for g in range(model.ngeom) if model.geom_contype[g] != 0 or model.geom_conaffinity[g] != 0
-        ]
+        self.collision_geoms = [g for g in range(model.ngeom) if collides(model, g)]
         self.low = self.lowest_by_body()
 
     def body_name(self, b: int) -> str:
@@ -73,28 +71,9 @@ class Geometry:
         return low
 
     def geom_low(self, g: int) -> tuple[float, float, float]:
-        """Lowest world point of one geom (primitives analytically, meshes by their vertices)."""
-        m, d = self.model, self.data
-        pos, rot = d.geom_xpos[g], d.geom_xmat[g].reshape(3, 3)
-        size, kind = m.geom_size[g], int(m.geom_type[g])
-        axis_z = float(rot[2, 2])  # z component of the geom's own z axis
-        if kind == GEOM.mjGEOM_SPHERE:
-            return float(pos[0]), float(pos[1]), float(pos[2] - size[0])
-        if kind == GEOM.mjGEOM_CAPSULE:
-            return float(pos[0]), float(pos[1]), float(pos[2] - abs(axis_z) * size[1] - size[0])
-        if kind == GEOM.mjGEOM_CYLINDER:
-            drop = abs(axis_z) * size[1] + size[0] * math.sqrt(max(0.0, 1.0 - axis_z * axis_z))
-            return float(pos[0]), float(pos[1]), float(pos[2] - drop)
-        if kind == GEOM.mjGEOM_BOX:
-            return float(pos[0]), float(pos[1]), float(pos[2] - float(np.abs(rot[2]) @ size[:3]))
-        if kind == GEOM.mjGEOM_MESH:
-            mesh = int(m.geom_dataid[g])
-            first, count = int(m.mesh_vertadr[mesh]), int(m.mesh_vertnum[mesh])
-            world = pos + m.mesh_vert[first : first + count] @ rot.T
-            lowest = world[int(np.argmin(world[:, 2]))]
-            return float(lowest[0]), float(lowest[1]), float(lowest[2])
-        center, half = m.geom_aabb[g, :3], m.geom_aabb[g, 3:]
-        return float(pos[0]), float(pos[1]), float(pos[2] + rot[2] @ center - np.abs(rot[2]) @ half)
+        """Lowest world point of one geom (exact for primitives, vertex-based for meshes)."""
+        p = lowest_point(self.model, self.data, g)
+        return float(p[0]), float(p[1]), float(p[2])
 
     @property
     def lowest(self) -> float:
