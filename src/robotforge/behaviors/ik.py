@@ -55,12 +55,17 @@ class IKSolver:
         tol: float = 1e-4,
         axis: tuple[np.ndarray, np.ndarray] | None = None,
         axis_weight: float = 0.3,
+        rotation: np.ndarray | None = None,
     ) -> tuple[np.ndarray, float]:
         """Joint values placing the chain's point at `target` (in the base frame of base_qpos).
 
         `axis` = (local_axis, desired_world_axis) also asks the end body's local axis to point
-        along a direction, e.g. a gripper pointing straight down. Returns (q, position error).
+        along a direction, e.g. a gripper pointing straight down. `rotation` (3x3) instead asks
+        for the end body's full orientation, e.g. a foot kept flat and turned to a heading.
+        Returns (q, position error).
         """
+        if axis is not None and rotation is not None:
+            raise ValueError("give IK either an axis to point or a full rotation, not both")
         q = np.clip(np.asarray(q_init, float).copy(), chain.lower, chain.upper)
         err = np.inf
         for _ in range(iterations):
@@ -77,7 +82,11 @@ class IKSolver:
                 e_rot = np.cross(have, want) * axis_weight
                 J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
                 e = np.concatenate([e, e_rot])
-            if err < tol and (axis is None or np.linalg.norm(e[3:]) < tol * 10):
+            elif rotation is not None:
+                e_rot = _rotation_error(self.data.xquat[chain.body], rotation) * axis_weight
+                J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
+                e = np.concatenate([e, e_rot])
+            if err < tol and (len(e) == 3 or np.linalg.norm(e[3:]) < tol * 10):
                 break
             JJt = J @ J.T + damping * np.eye(J.shape[0])
             q = np.clip(q + J.T @ np.linalg.solve(JJt, e), chain.lower, chain.upper)
@@ -92,3 +101,14 @@ class IKSolver:
     def _point(self, chain: Chain) -> np.ndarray:
         rot = self.data.xmat[chain.body].reshape(3, 3)
         return self.data.xpos[chain.body] + rot @ chain.local_point
+
+
+def _rotation_error(have_quat: np.ndarray, want: np.ndarray) -> np.ndarray:
+    """Rotation vector (world frame) that turns orientation `have_quat` into rotation matrix `want`."""
+    want_quat = np.zeros(4)
+    mujoco.mju_mat2Quat(want_quat, np.ascontiguousarray(want, float).ravel())
+    local = np.zeros(3)
+    mujoco.mju_subQuat(local, want_quat, have_quat)  # have * quat(local) = want
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, have_quat)
+    return rot.reshape(3, 3) @ local

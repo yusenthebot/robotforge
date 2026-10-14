@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -56,6 +57,8 @@ class SimSession:
     drag: Drag | None = None
     controllers: dict[str, Controller] = field(default_factory=dict)
     clock_owner: str | None = None  # set while e.g. a script advances time itself
+    # Run after a reset or a model swap clears the controllers, e.g. so humanoids keep their balance.
+    reset_hooks: list[Callable[[], None]] = field(default_factory=list, repr=False)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
@@ -92,6 +95,7 @@ class SimSession:
             self._sim_debt = 0.0
             self.controllers.clear()  # controllers hold ids from the old model
             self.version += 1
+            self._run_reset_hooks()
 
     # ---- control ----------------------------------------------------------------
 
@@ -104,6 +108,11 @@ class SimSession:
             self.drag = None
             self._sim_debt = 0.0
             self.controllers.clear()
+            self._run_reset_hooks()
+
+    def _run_reset_hooks(self) -> None:
+        for hook in self.reset_hooks:
+            hook()
 
     def set_ctrl(self, actuator: int, value: float) -> None:
         with self.lock:
