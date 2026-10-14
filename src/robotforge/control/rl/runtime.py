@@ -185,7 +185,8 @@ class LearnedPolicyController(PolicyController):
         if self.residual:
             from robotforge.control.methods import make_controller
 
-            self.base = make_controller(meta.get("base_method") or task.methods[0], task, model, data)
+            self.base_method = meta.get("base_method") or task.methods[0]
+            self.base = make_controller(self.base_method, task, model, data)
             self.residual_scale = float(meta.get("residual_scale", 0.2))
         # Run at the physics rate and schedule the network and the base controller inside, so both
         # tick at exactly the rates they had during training.
@@ -214,7 +215,7 @@ class LearnedPolicyController(PolicyController):
     def status(self) -> dict[str, Any]:
         out = super().status()
         if self.base is not None:
-            out["base"] = self.base.status().get("controller")
+            out["base"] = self.base_method
         return out
 
 

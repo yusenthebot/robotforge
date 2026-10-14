@@ -49,6 +49,7 @@ def train(
     name: str | None = None,
     save_dir: str | Path | None = None,
     push: float | None = None,
+    residual_scale: float | None = None,
     hyperparams: dict[str, Any] | None = None,
     quiet: bool = False,
 ) -> TrainedPolicy:
@@ -71,6 +72,7 @@ def train(
         seed=seed,
         task_params=task_params,
         push=push,
+        residual_scale=residual_scale,
         hyperparams=hyperparams,
     )
     folder = place / spec.name

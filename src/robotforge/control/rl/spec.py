@@ -33,6 +33,9 @@ class TaskDefaults:
     net: tuple[int, ...] = (64, 64)
     # Fast simulations (balance) step quicker in one process than the pipes to worker processes cost.
     inline: bool = False
+    # Residual mode: the largest correction, as a share of each motor's half range. Arms need fine
+    # corrections (a servo's half range is up to pi rad); legs need room to change the stride.
+    residual_scale: float = 0.2
 
 
 _PPO = {"n_steps": 256, "batch_size": 256, "n_epochs": 10, "gamma": 0.99, "gae_lambda": 0.95, "learning_rate": 3e-4}
@@ -40,7 +43,7 @@ _SAC = {"learning_rate": 3e-4, "batch_size": 256, "gamma": 0.99, "learning_start
 
 DEFAULTS: dict[str, TaskDefaults] = {
     "balance": TaskDefaults("ppo", "direct", 150_000, 1.5, 19_000, {**_PPO}, {**_SAC}, inline=True),
-    "reach": TaskDefaults("sac", "direct", 150_000, 0.0, 9_500, {**_PPO}, {**_SAC}, (256, 256)),
+    "reach": TaskDefaults("sac", "direct", 150_000, 0.0, 9_500, {**_PPO}, {**_SAC}, (256, 256), residual_scale=0.05),
     "stand": TaskDefaults("ppo", "residual", 400_000, 2.0, 4_700, {**_PPO, "batch_size": 512}, {**_SAC}, (128, 128)),
     "walk": TaskDefaults("ppo", "residual", 600_000, 2.5, 1_600, {**_PPO, "batch_size": 512}, {**_SAC}, (128, 128)),
     "drive_to": TaskDefaults("ppo", "direct", 300_000, 0.0, 4_300, {**_PPO}, {**_SAC}),
@@ -118,6 +121,7 @@ def make_spec(
     floor: dict[str, Any] | None = None,
     world_dir: str | None = None,
     push: float | None = None,
+    residual_scale: float | None = None,
     hyperparams: dict[str, Any] | None = None,
     **extra: Any,
 ) -> TrainSpec:
@@ -145,6 +149,7 @@ def make_spec(
             n_envs=n_envs or default_envs(algo),
             seed=seed,
             push=d.push if push is None else push,
+            residual_scale=d.residual_scale if residual_scale is None else residual_scale,
             net=list(d.net),
             hyperparams=hyperparams or {},
             **extra,

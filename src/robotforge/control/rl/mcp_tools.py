@@ -58,6 +58,7 @@ def register(server: MCPServer, playground: Playground) -> None:
         task_params: dict[str, Any] | None = None,
         name: str | None = None,
         action_mode: Literal["direct", "residual"] | None = None,
+        shoves: float | None = None,
         replace: bool = False,
     ) -> str:
         """Teach a robot a task by reinforcement learning (trial and error with a neural network), in the
@@ -66,8 +67,10 @@ def register(server: MCPServer, playground: Playground) -> None:
         Examples: task="balance", robot="pole" (PPO, about a minute); task="walk", robot="dog",
         task_params={"speed": 0.4}, minutes=5 (PPO learning corrections on top of the trot gait);
         task="reach", robot="arm", algo="sac". Defaults per task need no tuning. Give minutes (a time budget)
-        or timesteps (simulation steps), or neither for the task's default. The robot is rebuilt from this
-        world's description and trained alone on the same floor. Needs the optional rl extra.
+        or timesteps (simulation steps), or neither for the task's default. shoves sets how hard the robot is
+        pushed now and then while it learns (0 = never; harder shoves teach recovery but make it cautious).
+        The robot is rebuilt from this world's description and trained alone on the same floor.
+        Needs the optional rl extra.
         Then: training_status(name) to follow it, and run_controller(method="policy:<name>") or
         compare_controllers(methods=["lqr", "mpc", "policy:<name>"]) to use it."""
         with _tool_errors():
@@ -89,6 +92,7 @@ def register(server: MCPServer, playground: Playground) -> None:
                 timesteps=timesteps,
                 minutes=minutes,
                 task_params=params,
+                push=shoves,
                 floor=floor,
                 world_dir=str(world_dir()) if world_dir() else None,
             )
