@@ -10,7 +10,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.behaviors import Kind, quadruped, robot_kind
+from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.behaviors.arm import ArmMotion
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.design import library
@@ -18,6 +18,8 @@ from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
 MAX_RUN_SECONDS = 60.0
+MOBILE = (Kind.QUADRUPED, Kind.ROVER, Kind.HUMANOID)
+WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController)
 
 
 class BehaviorError(ValueError):
@@ -43,7 +45,7 @@ class BehaviorManager:
             info: dict[str, Any] = {"name": name, "kind": kind.value}
             if name in models:
                 info["model"] = models[name]
-            if kind in (Kind.QUADRUPED, Kind.ROVER):
+            if kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
             out.append(info)
@@ -75,20 +77,26 @@ class BehaviorManager:
 
     def move(self, robot: str, speed: float, turn: float) -> dict[str, Any]:
         kind = self.kind(robot)
-        if kind not in (Kind.QUADRUPED, Kind.ROVER):
-            raise BehaviorError(f"{robot} is a {kind.value}; only quadrupeds and rovers can move around")
+        if kind not in MOBILE:
+            raise BehaviorError(f"{robot} is a {kind.value}; only quadrupeds, humanoids and rovers can move around")
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True)
+            _check_standing(ctrl)
             ctrl.command(speed, turn)
         return ctrl.status()
 
     def _mobile_controller(self, robot: str, kind: Kind, create: bool):
         existing = self.session.controllers.get(robot)
-        if isinstance(existing, quadruped.QuadrupedGait | DiffDrive):
+        if isinstance(existing, WALKERS):
             return existing
         m = self.session.model
         try:
-            ctrl = quadruped.for_robot(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
+            if kind == Kind.HUMANOID:
+                ctrl = humanoid.for_template(m, robot, self.home_qpos())
+            elif kind == Kind.QUADRUPED:
+                ctrl = quadruped.for_robot(m, robot, self.home_qpos())
+            else:
+                ctrl = DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
             raise BehaviorError(str(exc)) from exc
         top = self._library_top_speed(robot)
@@ -106,12 +114,25 @@ class BehaviorManager:
     def stop(self, robot: str) -> dict[str, Any]:
         with self.session.lock:
             ctrl = self.session.controllers.get(robot)
-            if isinstance(ctrl, quadruped.QuadrupedGait | DiffDrive):
+            if isinstance(ctrl, WALKERS):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
                 return {"robot": robot, "stopped": True}
             if ctrl is not None:
                 self.session.set_controller(robot, None)
             return {"robot": robot, "stopped": ctrl is not None}
+
+    def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
+        """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
+        kind = self.kind(robot)
+        if kind != Kind.HUMANOID:
+            raise BehaviorError(f"{robot} is a {kind.value}; only humanoids strike poses")
+        if name not in humanoid.POSES:
+            raise BehaviorError(f"unknown pose {name!r}; choose one of: {', '.join(humanoid.POSES)}")
+        with self.session.lock:
+            ctrl = self._mobile_controller(robot, kind, create=True)
+            _check_standing(ctrl)
+            ctrl.play(name)
+        return ctrl
 
     def pose(self, robot: str) -> dict[str, Any]:
         """Where a robot is and which way it faces (degrees, counter-clockwise from +x)."""
@@ -249,3 +270,10 @@ class BehaviorManager:
 
     def status(self) -> list[dict[str, Any]]:
         return [c.status() for c in self.session.controllers.values()]
+
+
+def _check_standing(ctrl) -> None:
+    if getattr(ctrl, "fallen", False):
+        raise BehaviorError(
+            f"{ctrl.robot} has fallen over and cannot get up by itself; reset the simulation (sim_control reset)"
+        )

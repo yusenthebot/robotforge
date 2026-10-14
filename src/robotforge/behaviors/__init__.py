@@ -10,6 +10,7 @@ import mujoco
 class Kind(StrEnum):
     ARM = "arm"
     QUADRUPED = "quadruped"
+    HUMANOID = "humanoid"
     ROVER = "rover"
     OTHER = "other"
 
@@ -28,6 +29,8 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
         return Kind.ROVER
     if has(mujoco.mjtObj.mjOBJ_SITE, "front_left_foot"):
         return Kind.QUADRUPED
+    if has(mujoco.mjtObj.mjOBJ_SITE, "left_foot") and has(mujoco.mjtObj.mjOBJ_JOINT, "left_knee"):
+        return Kind.HUMANOID
     from robotforge.behaviors.quadruped import discover_legs  # lazy: it imports this package
 
     if discover_legs(model, robot) is not None:  # library and imported quadrupeds
