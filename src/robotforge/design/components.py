@@ -13,12 +13,12 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Actuator:
     name: str
-    kind: str  # "servo" (position control) or "motor" (velocity control, e.g. wheels)
-    stall_torque: float  # N*m
-    no_load_speed: float  # rad/s
+    kind: str  # "servo" (position control), "motor" (velocity control, e.g. wheels) or "linear" (slides)
+    stall_torque: float  # N*m (linear actuators: N)
+    no_load_speed: float  # rad/s (linear actuators: m/s)
     mass: float  # kg
     size: tuple[float, float, float]  # case dimensions in meters (x, y, z)
-    armature: float  # reflected rotor inertia, kg*m^2
+    armature: float  # reflected rotor inertia, kg*m^2 (linear actuators: reflected mass, kg)
     note: str
 
     @property
@@ -60,6 +60,19 @@ ACTUATORS: dict[str, Actuator] = {
         ),
         Actuator("tt_motor", "motor", 0.08, 20.0, 0.03, (0.07, 0.022, 0.018), 0.0001, "yellow TT gear motor, 6 V"),
         Actuator("jga25", "motor", 0.5, 29.0, 0.09, (0.07, 0.025, 0.025), 0.0005, "25 mm metal gear motor, 12 V"),
+        Actuator(
+            "l16", "linear", 75.0, 0.02, 0.056, (0.11, 0.026, 0.02), 0.5, "Actuonix L16 lead-screw actuator, 63:1, 12 V"
+        ),
+        Actuator(
+            "belt_rail",
+            "linear",
+            40.0,
+            0.5,
+            0.35,
+            (0.06, 0.042, 0.042),
+            0.3,
+            "NEMA 17 stepper on a GT2 belt rail, 12 V (fast, for gantries and lifts)",
+        ),
     ]
 }
 

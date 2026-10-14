@@ -130,6 +130,7 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float = 0.0,
         library: str | None = None,
+        build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             entry = RobotEntry(
@@ -137,6 +138,7 @@ class Playground:
                 template=template,
                 file=file,
                 library=library,
+                build=build,
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw,
