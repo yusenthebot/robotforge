@@ -26,6 +26,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
 from robotforge.playground import Playground, PlaygroundError
@@ -60,6 +61,10 @@ offer it early, and when it is open, actions play out in real time for the user 
 Algorithms: the same robot and task can be solved by different control methods (IK, PD, LQR, sampling
 MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss with the user.
+
+Learned policies: list_policies shows neural-network walkers trained with reinforcement learning
+(a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
+UniLab, an external RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
 (joints, actuators, control): the user may be new to robotics.
@@ -275,13 +280,17 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
     @server.tool()
-    async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
+    async def move(
+        robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0, walker: str | None = None
+    ) -> str:
         """Walk a quadruped or drive a rover. speed in m/s (negative = backwards), turn in rad/s (positive =
         left). With `seconds`, moves for that long then stops and reports how far it went; with seconds=null
-        it keeps moving until `stop`. If the viewer is open the user watches it happen in real time."""
+        it keeps moving until `stop`. If the viewer is open the user watches it happen in real time.
+        walker (quadrupeds): "gait" = built-in trot, "rl" = the learned policy for this robot (list_policies),
+        or a policy name; omitted keeps the current one. Keyboard driving then uses the same walker."""
         with _tool_errors():
             before = playground.behaviors.pose(robot)
-            status = playground.behaviors.move(robot, speed, turn)
+            status = playground.behaviors.move(robot, speed, turn, walker)
             if seconds is None:
                 return _json({"started": status, "pose": before})
             if not 0 < seconds <= 60:
@@ -303,6 +312,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             )
 
     control_tools.register(server, playground, run_until)
+    policy_tools.register(server)
 
     @server.tool()
     def stop(robot: str) -> str:

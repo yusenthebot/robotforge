@@ -1,4 +1,4 @@
-"""Command line entry: `robotforge open <model>` and `robotforge demo`."""
+"""Command line entry: `robotforge open <model>`, `robotforge demo`, `robotforge mcp`, `robotforge unilab ...`."""
 
 from __future__ import annotations
 
@@ -107,12 +107,17 @@ def main(argv: list[str] | None = None) -> int:
     p_mcp = sub.add_parser("mcp", help="run as an MCP server on stdio (for Claude, Codex, ...)")
     p_mcp.add_argument("--model", type=Path, default=None, help="model to load at start (default: demo)")
     p_mcp.add_argument("--port", type=int, default=None, help="viewer port (default: first free from 8737)")
+    from robotforge.bridge import cli as bridge_cli  # `policies` and `unilab ...`
+
+    bridge_cli.add_parsers(sub)
     for p in (p_open, sub.choices["demo"]):
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int, default=None, help=f"default: first free port from {DEFAULT_PORT}")
         p.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
 
     args = parser.parse_args(argv)
+    if args.command in ("policies", "unilab"):
+        return bridge_cli.run(args)
     if args.command == "mcp":
         from robotforge import mcp_server  # imported lazily: the viewer CLI does not need the MCP SDK
 
