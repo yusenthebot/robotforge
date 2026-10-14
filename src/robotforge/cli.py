@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
 
     args = parser.parse_args(argv)
-    if args.command in ("policies", "unilab"):
+    if args.command in ("walkers", "unilab"):
         return bridge_cli.run(args)
     if args.command == "mcp":
         from robotforge import mcp_server  # imported lazily: the viewer CLI does not need the MCP SDK

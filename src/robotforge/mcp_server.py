@@ -65,7 +65,7 @@ Algorithms: the same robot and task can be solved by different control methods (
 MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss with the user.
 
-Learned policies: list_policies shows neural-network walkers trained with reinforcement learning
+Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
 UniLab, an external RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
@@ -304,7 +304,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         take a moment to start and stop stepping). With `seconds`, moves for that long then stops and reports
         how far it went; with seconds=null it keeps moving until `stop`. If the viewer is open the user
         watches it happen in real time. walker (legged robots): "gait" = the built-in walking controller,
-        "rl" = the learned policy for this robot (list_policies), or a policy name; omitted keeps the current
+        "rl" = the learned policy for this robot (list_walkers), or a policy name; omitted keeps the current
         one. Keyboard driving then uses the same walker."""
         with _tool_errors():
             if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going

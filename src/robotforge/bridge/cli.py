@@ -1,4 +1,4 @@
-"""`robotforge unilab ...` and `robotforge policies`: the command line side of the bridge."""
+"""`robotforge unilab ...` and `robotforge walkers`: the command line side of the bridge."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ POLL_SECONDS = 5.0
 
 
 def add_parsers(sub: argparse._SubParsersAction) -> None:
-    sub.add_parser("policies", help="list the learned walking policies robotforge can play")
+    sub.add_parser("walkers", help="list the learned walking policies robotforge can play")
     p = sub.add_parser("unilab", help="train walking policies with UniLab (external RL framework)")
     usub = p.add_subparsers(dest="unilab_command", required=True)
     usub.add_parser("check", help=f"check the UniLab checkout named by ${unilab.ENV_VAR}")
@@ -39,7 +39,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
 
 def run(args: argparse.Namespace) -> int:
     try:
-        if args.command == "policies":
+        if args.command == "walkers":
             return _print([p.describe() for p in policies.all_policies().values()])
         command = args.unilab_command
         if command == "check":

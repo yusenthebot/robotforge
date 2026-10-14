@@ -9,7 +9,7 @@ only ever talks to it through subprocesses and files:
 - `start_training()` launches unilab_tool.py train detached; it trains, exports ONNX with
   UniLab's own exporter, writes the policy card and reports progress in a status file.
 - `job_status()` reads that file; a finished job's policy is installed under
-  $ROBOTFORGE_HOME/policies, where move(walker="rl") finds it.
+  $ROBOTFORGE_HOME/walkers, where move(walker="rl") finds it.
 
 Nothing here writes to stdout, which carries the MCP protocol when robotforge runs as a server.
 """

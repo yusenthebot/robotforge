@@ -1,8 +1,9 @@
-"""Where learned policies live: shipped with robotforge, or installed by the user.
+"""Where learned walking policies live: shipped with robotforge, or installed by the user.
 
 Each policy is a folder with policy.onnx and its card, policy.json. Shipped policies sit in
-robotforge/policies/; installed ones in $ROBOTFORGE_HOME/policies/ (default ~/robotforge/policies)
-and win over a shipped policy of the same name.
+robotforge/walkers/; installed ones in $ROBOTFORGE_HOME/walkers/ (default ~/robotforge/walkers)
+and win over a shipped policy of the same name. (Policies trained inside robotforge with the
+`rl` extra keep their own format under $ROBOTFORGE_HOME/policies/.)
 """
 
 from __future__ import annotations
@@ -16,12 +17,12 @@ from typing import Any
 
 from robotforge.bridge.spec import NAME_RE, PolicySpec, SpecError, load_spec, save_spec
 
-SHIPPED_DIR = Path(__file__).resolve().parent.parent / "policies"
+SHIPPED_DIR = Path(__file__).resolve().parent.parent / "walkers"
 
 
 def user_dir() -> Path:
     root = Path(os.environ.get("ROBOTFORGE_HOME", Path.home() / "robotforge")).expanduser()
-    return root / "policies"
+    return root / "walkers"
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ def all_policies() -> dict[str, InstalledPolicy]:
 
 def load(name: str) -> InstalledPolicy:
     if not NAME_RE.match(name):  # names come from agents and the viewer: never let one be a path
-        raise SpecError(f"{name!r} is not a policy name (lowercase letters, digits and _); see list_policies")
+        raise SpecError(f"{name!r} is not a policy name (lowercase letters, digits and _); see list_walkers")
     for root, shipped in ((user_dir(), False), (SHIPPED_DIR, True)):
         folder = root / name
         if (folder / "policy.json").is_file():

@@ -26,7 +26,7 @@ pip install "robotforge[policy]"  # 或者用 pip
 
 在 Claude 或 GPT 里直接说：
 
-- “有哪些学会走路的神经网络？” 对应工具 `list_policies`，列出策略、适用的机器人和它学过的速度范围。
+- “有哪些学会走路的神经网络？” 对应工具 `list_walkers`，列出策略、适用的机器人和它学过的速度范围。
 - “给我一台 Go2，用强化学习的步态往前走” 对应 `add_robot(name="go2", library="go2")`，然后 `move(robot="go2", speed=0.5, walker="rl")`。
 - “换回原来的步态” 对应 `move(robot="go2", speed=0.3, walker="gait")`。
 
@@ -90,7 +90,7 @@ robotforge unilab train --iterations 1000 --name go2_walk_mine --wait
 或者在 Claude 里说 “用 UniLab 训练一个 Go2 走路的策略”，对应 `unilab_train(iterations=1000, name="go2_walk_mine")`，再用 `unilab_job` 查看进度。
 
 训练在后台的独立进程里进行，robotforge 和 MCP 会话可以照常使用，查看器也不会卡。
-整个流程是：UniLab 训练，UniLab 自带的导出器生成 ONNX，`unilab_tool.py` 从一个真实的 UniLab 环境里读出观测和动作的约定写成策略卡，最后安装到 `~/robotforge/policies/<名字>/`。
+整个流程是：UniLab 训练，UniLab 自带的导出器生成 ONNX，`unilab_tool.py` 从一个真实的 UniLab 环境里读出观测和动作的约定写成策略卡，最后安装到 `~/robotforge/walkers/<名字>/`。
 进度写在 `~/robotforge/unilab/jobs/<任务号>/status.json` 里，训练日志在同一个文件夹的 `train.log`，都不会写到 MCP 的标准输出。
 
 本机实测（M5 Max，1024 个并行环境）：
