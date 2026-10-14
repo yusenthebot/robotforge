@@ -56,7 +56,8 @@ class _Draft:
     plan: RigPlan
     base_reason: str = ""
     passive: list[str] = field(default_factory=list)
-    weak: list[str] = field(default_factory=list)
+    weak: dict[str, str] = field(default_factory=dict)  # joint -> what its file limit is against what it needs
+    relaxed: list[str] = field(default_factory=list)  # joints whose file limit was too weak and was dropped
     clamped: list[str] = field(default_factory=list)
     lifted: float = 0.0
     result: HoldResult | None = None
@@ -67,24 +68,42 @@ def make_plan(
     urdf: Path,
     report: DoctorReport,
     base: Literal["auto", "fixed", "floating"] = "auto",
-    ignore_effort_limits: bool = False,
+    respect_effort_limits: bool = False,
 ) -> RigPlan:
-    """Inspect the repaired robot, decide how to drive it, and test that it holds still."""
-    if ignore_effort_limits:
-        for joint in staged.joints:
-            joint.effort = None
-        report.info(
-            "actuators", "ignoring the file's effort limits, as asked; motors are sized from the robot's weight"
-        )
+    """Inspect the repaired robot, decide how to drive it, and test that it holds still.
+
+    URDF effort limits are often just a robot's rated torque, with gravity compensation done by its own
+    controller. Unless `respect_effort_limits`, limits too weak to hold the robot up are relaxed.
+    """
     deadline = time.monotonic() + PLAN_TIME_BUDGET
     home = home_pose(staged)
     draft = _draft(staged, urdf, base, home)
+    relaxed: list[str] = []
+    weak = dict(draft.weak)
+    if weak and not respect_effort_limits:
+        relaxed = _drop_efforts(staged, weak)
+        draft = _draft(staged, urdf, base, home)
     draft.result = tune_gains(urdf, draft.plan, deadline)
     if draft.result is not None and draft.result.blockers:
         # A joint could not make a small move because two links touch: their collision shapes overlap.
         extra = [pair for pair in draft.result.blockers if pair not in draft.plan.excludes]
         draft.plan.excludes = sorted([*draft.plan.excludes, *extra])
         draft.result = tune_gains(urdf, draft.plan, deadline)
+    if not respect_effort_limits and _fails(draft.result) and any(j.effort for j in staged.joints):
+        # Still not holding with some limits kept: see whether the remaining limits are what stops it.
+        kept = {j.name: j.effort for j in staged.joints}
+        freed = _drop_efforts(staged, {n: "" for n, e in kept.items() if e})
+        second = _draft(staged, urdf, base, home)
+        second.result = tune_gains(urdf, second.plan, deadline)
+        if second.result is not None and (draft.result is None or score(second.result) < score(draft.result)):
+            draft, relaxed = second, sorted({*relaxed, *freed})
+            weak.update({n: weak.get(n, f"{n}: the file's limit") for n in freed})
+        else:
+            for j in staged.joints:
+                j.effort = kept[j.name]
+    if relaxed:
+        draft.relaxed = relaxed
+        draft.weak = {n: weak[n] for n in relaxed if n in weak}
 
     result = draft.result
     if draft.plan.base == "floating" and result is not None and result.finite and tipped(result):
@@ -95,6 +114,20 @@ def make_plan(
     _emit(draft, report)
     report_hold(draft.plan, draft.result, report)
     return draft.plan
+
+
+def _drop_efforts(staged: StagedUrdf, joints: dict[str, str]) -> list[str]:
+    """Forget the file's effort limit of these joints (motors are then sized from the robot's weight)."""
+    dropped = []
+    for j in staged.joints:
+        if j.name in joints and j.effort:
+            j.effort = None
+            dropped.append(j.name)
+    return dropped
+
+
+def _fails(result: HoldResult | None) -> bool:
+    return result is not None and result.finite and not result.holds
 
 
 def _draft(
@@ -235,8 +268,8 @@ def _plan_actuators(staged: StagedUrdf, geo: Geometry, draft: _Draft, movable: l
         actuator.home = plan.home_qpos.get(j.name, 0.0)
         if j.name in plan.home_qpos and not _inside(j, 0.0):
             draft.clamped.append(f"{j.name} (starts at {actuator.home:.3g})")
-        if j.effort and plan.base == "fixed" and j.effort < 0.9 * torque:
-            draft.weak.append(f"{j.name}: limit {j.effort:.3g}, needs about {torque:.3g} when stretched out")
+        if j.effort and j.effort < 0.9 * torque:
+            draft.weak[j.name] = f"{j.name}: limit {j.effort:.3g}, needs about {torque:.3g} when stretched out"
         plan.actuators.append(actuator)
 
 
@@ -445,13 +478,21 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
             "start inside the allowed range instead",
             draft.clamped,
         )
-    if draft.weak:
+    if draft.relaxed:
+        report.fixed(
+            "actuators",
+            "the file's effort limits are too weak to hold the robot's pose (real robots add gravity compensation "
+            "that a URDF does not describe)",
+            f"relaxed the limit of {len(draft.relaxed)} joint(s) so the motors can hold the pose; "
+            "pass respect_effort_limits=true to keep the file's limits",
+            list(draft.weak.values()) or draft.relaxed,
+        )
+    elif draft.weak:  # only with respect_effort_limits
         report.unfixed(
             "actuators",
             "the file's effort limits are too weak to hold the robot's own weight when it is stretched out",
-            "kept the file's limits, so these joints will sag; "
-            "pass ignore_effort_limits=true to size the motors from the robot's weight instead",
-            draft.weak,
+            "kept the file's limits, as asked, so these joints will sag; drop respect_effort_limits to relax them",
+            list(draft.weak.values()),
         )
     if plan.excludes:
         report.fixed(
@@ -505,11 +546,11 @@ def report_hold(plan: RigPlan, result: HoldResult | None, report: DoctorReport) 
     advice = (
         "a wheeled robot needs a third point of support (a caster or skid) to stay upright"
         if wheeled and tipped(result)
-        else "legged robots also need a balance controller to stay up"
+        else "legged robots also need a balance controller to stay up, and a few URDFs expect the robot to be "
+        "rotated when it is spawned, so check that its legs point down in the file"
     )
     report.unfixed(
         "stability",
         "the robot does not hold its starting pose by itself: " + " and ".join(reasons),
-        "kept the strongest motors the file's effort limits allow. "
-        f"If the limits are too low, pass ignore_effort_limits=true; {advice}",
+        f"kept the strongest motors that were possible; {advice}",
     )

@@ -438,13 +438,36 @@ def test_robot_that_cannot_hold_itself_up_is_reported_honestly(tmp_path):
     assert "does not hold" in stability[0].problem
 
 
-def test_effort_limits_too_weak_for_a_fixed_arm_are_flagged_not_overridden(tmp_path):
+def test_weak_effort_limits_are_relaxed_by_default_and_reported(tmp_path):
     weak = arm_urdf().replace('effort="20"', 'effort="0.05"')
     result = import_file(write(tmp_path / "arm.urdf", weak))
+    relaxed = next(f for f in result.report.findings if f.topic == "actuators" and "too weak" in f.problem)
+    assert (
+        relaxed.status == "fixed"
+        and "shoulder" in " ".join(relaxed.items)
+        and "respect_effort_limits" in relaxed.action
+    )
+    assert not [f for f in result.report.findings if f.status == "unfixed"]
+    model, data = _world(result)
+    assert model.actuator_forcerange[model.actuator("r/shoulder").id][1] > 1.0
+    _run(model, data, 1.5)
+    assert abs(data.qpos[model.jnt_qposadr[model.joint("r/shoulder").id]]) < 0.05
+
+
+def test_respecting_effort_limits_keeps_a_weak_robot_weak_and_says_so(tmp_path):
+    weak = arm_urdf().replace('effort="20"', 'effort="0.05"')
+    result = import_file(write(tmp_path / "arm.urdf", weak), {"respect_effort_limits": True})
     flagged = [f for f in result.report.findings if f.topic == "actuators" and f.status == "unfixed"]
-    assert flagged and "shoulder" in " ".join(flagged[0].items)
+    assert flagged and "shoulder" in " ".join(flagged[0].items) and "drop respect_effort_limits" in flagged[0].action
     model, _ = _world(result)
     assert model.actuator_forcerange[model.actuator("r/shoulder").id][1] == pytest.approx(0.05)
+
+
+def test_adequate_effort_limits_are_kept(tmp_path):
+    result = import_file(write(tmp_path / "arm.urdf", arm_urdf()))
+    assert not any("too weak" in f.problem for f in result.report.findings)
+    model, _ = _world(result)
+    assert model.actuator_forcerange[0][1] == pytest.approx(20.0)
 
 
 # ---- plain meshes -------------------------------------------------------------------------------
@@ -700,19 +723,6 @@ def test_axis_and_limit_leftovers_on_fixed_joints_do_not_break_loading(tmp_path)
         '<axis/><limit effort="1"/><dynamics damping="0.1"/></joint>'
     )
     _world(import_file(write(tmp_path / "r.urdf", robot(body))))
-
-
-def test_ignoring_effort_limits_lets_a_weak_robot_hold_itself_up(tmp_path):
-    weak = arm_urdf().replace('effort="20"', 'effort="0.05"')
-    path = write(tmp_path / "arm.urdf", weak)
-    kept = import_file(path)
-    assert any(f.topic == "actuators" and f.status == "unfixed" for f in kept.report.findings)
-    freed = import_file(path, {"ignore_effort_limits": True})
-    assert not [f for f in freed.report.findings if f.status == "unfixed"]
-    model, data = _world(freed)
-    assert model.actuator_forcerange[0][1] > 1.0
-    _run(model, data, 1.5)
-    assert abs(data.qpos[model.jnt_qposadr[model.joint("r/shoulder").id]]) < 0.05
 
 
 def test_a_robot_on_two_wheels_without_a_caster_is_reported_as_tipping(tmp_path):

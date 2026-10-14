@@ -199,7 +199,7 @@ def test_cli_passes_import_options_through(tmp_path, monkeypatch, capsys):
         served["model"] = playground.session.model
 
     monkeypatch.setattr(cli, "serve", fake_serve)
-    assert cli.main(["open", str(path), "--no-browser", "--xacro-arg", "who=zed", "--ignore-effort-limits"]) == 0
+    assert cli.main(["open", str(path), "--no-browser", "--xacro-arg", "who=zed", "--respect-effort-limits"]) == 0
     assert mujoco.mj_name2id(served["model"], mujoco.mjtObj.mjOBJ_BODY, "r/zed_base") >= 0
     assert cli.main(["open", str(path), "--no-browser", "--xacro-arg", "oops"]) == 2
     assert "KEY=VALUE" in capsys.readouterr().err

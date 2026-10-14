@@ -18,7 +18,7 @@ class ImportOptions(BaseModel):
 
     base: Literal["auto", "fixed", "floating"] = "auto"  # URDF: arm-like or free-standing; mesh: fixed or dropped
     decompose: bool = False  # split concave collision meshes into convex pieces (slow, cached)
-    ignore_effort_limits: bool = False  # URDF: size motors from the robot's weight instead of the file's <limit effort>
+    respect_effort_limits: bool = False  # URDF: keep the file's <limit effort> even where it cannot hold the pose
     scale: float | None = None  # plain meshes: multiply the size (default: guess meters vs millimeters)
     mass: float | None = None  # plain meshes that float: kg (default: from volume at 500 kg/m^3)
     xacro_args: dict[str, str] | None = None  # values for <xacro:arg> names

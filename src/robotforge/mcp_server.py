@@ -181,8 +181,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         meshes go through the import doctor, which repairs mesh paths, formats, mass and inertia, adds motors
         and picks a fixed or floating base; the result's "doctor" field lists what it fixed and what it could
         not. For files, params are import options: base (auto, fixed, floating), decompose (true splits
-        concave collision meshes into convex pieces), ignore_effort_limits (true when the file's torque limits
-        are too weak to hold the robot up), scale and mass (meshes), xacro_args.
+        concave collision meshes into convex pieces), respect_effort_limits (by default torque limits too weak
+        to hold the robot up are relaxed and reported; true keeps the file's limits), scale and mass (meshes),
+        xacro_args.
 
         The first use of a library robot downloads it (4-55 MB, usually 5-30 s, with progress updates);
         if your call timed out meanwhile, simply call again: the download continues in the background
@@ -421,7 +422,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         """Load a robot or scene from an MJCF (.xml), URDF, xacro or mesh file, replacing the current one.
 
         URDFs and meshes are repaired by the import doctor; the result's "doctor" field says what was fixed.
-        options (URDF/mesh only): base (auto, fixed, floating), decompose, ignore_effort_limits, scale, mass,
+        options (URDF/mesh only): base (auto, fixed, floating), decompose, respect_effort_limits, scale, mass,
         xacro_args.
         Returns the model summary (actuators, joints, free bodies, sensors, views).
         """

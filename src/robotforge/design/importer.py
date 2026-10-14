@@ -172,7 +172,7 @@ def _stage_and_plan(src: Path, opts: ImportOptions, cache: Path, entry: Path) ->
     urdf_path = entry / "staged.urdf"
     urdf_path.write_text(staged.text, encoding="utf-8")
 
-    plan = make_plan(staged, urdf_path, report, opts.base, opts.ignore_effort_limits)
+    plan = make_plan(staged, urdf_path, report, opts.base, opts.respect_effort_limits)
     report.stats.update(_stats(staged, plan))
 
     staged_meshes = {Path(m.get("filename", "")) for m in robot.iter("mesh") if m.get("filename")}

@@ -116,7 +116,9 @@ def main(argv: list[str] | None = None) -> int:
     p_open.add_argument("--decompose", action="store_true", help="split concave collision meshes (slower)")
     p_open.add_argument("--scale", type=float, default=None, help="plain mesh: size multiplier")
     p_open.add_argument(
-        "--ignore-effort-limits", action="store_true", help="URDF: size motors from the robot's weight, not the file"
+        "--respect-effort-limits",
+        action="store_true",
+        help="URDF: keep the file's torque limits even where they are too weak to hold the robot up",
     )
     p_open.add_argument(
         "--xacro-arg", action="append", default=[], metavar="KEY=VALUE", help="value for a <xacro:arg> (repeatable)"
@@ -144,8 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         options = {k: v for k, v in (("base", args.base), ("scale", args.scale)) if v is not None}
         if args.decompose:
             options["decompose"] = True
-        if args.ignore_effort_limits:
-            options["ignore_effort_limits"] = True
+        if args.respect_effort_limits:
+            options["respect_effort_limits"] = True
         if args.xacro_arg:
             pairs = [a.partition("=") for a in args.xacro_arg]
             if any(not sep for _, sep, _ in pairs):
