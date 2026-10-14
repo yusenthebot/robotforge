@@ -19,7 +19,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge.control import tasks as task_catalog
 from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
-from robotforge.control.methods import METHODS, make_controller
+from robotforge.control.methods import METHODS, explain, make_controller
+from robotforge.control.rl.runtime import policy_params
 from robotforge.control.tasks import TaskError, make_task
 from robotforge.playground import Playground
 
@@ -34,12 +35,23 @@ RunUntil = Callable[[Callable[[], bool], float], Awaitable[dict[str, Any]]]
 def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> None:
     session = playground.session
 
+    def world_dir():
+        return playground.store.dir if playground.store is not None else None
+
     @server.tool()
     def list_algorithms() -> str:
         """List the control tasks (reach, balance, stand, walk, drive_to), which robots and algorithms fit
         each, their parameters, and a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc,
-        mppi, hold, gait, none). Use it to explain the options before running or comparing them."""
-        return _json({"tasks": task_catalog.catalog(), "algorithms": METHODS})
+        mppi, hold, gait, none), plus reinforcement learning (ppo, sac: train_policy first) and the policies
+        trained so far. Use it to explain the options before running or comparing them."""
+        from robotforge.control.rl.mcp_tools import ALGOS
+        from robotforge.control.rl.store import list_policies
+
+        trained = [f"policy:{p['name']} ({p['task']}, {p['state']})" for p in list_policies(world_dir())]
+        learning = {**ALGOS, "how": "train_policy(task, robot) in the background, then method='policy:<name>'"}
+        return _json(
+            {"tasks": task_catalog.catalog(), "algorithms": METHODS, "learning": learning, "trained_policies": trained}
+        )
 
     @server.tool()
     async def run_controller(
@@ -56,7 +68,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         Examples: robot="arm", task="reach", method="mpc", task_params={"target": [0.3, 0.1, 0.2]};
         robot="pole", task="balance", method="lqr", push_at=2 (shoves it at 2 s to show recovery);
         robot="dog", task="stand", method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}.
-        list_algorithms says which methods fit which task. Plays out in real time when the viewer is open.
+        list_algorithms says which methods fit which task; method="policy:<name>" runs a policy trained with
+        train_policy. Plays out in real time when the viewer is open.
         The controller stays attached afterwards (e.g. keeps the pole balanced; the result says
         keeps_running) until you call stop(robot).
         Returns reward, success, effort (joules), the task's own numbers and, for MPC, planning speed."""
@@ -68,6 +81,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
             seconds = seconds or bound.default_seconds
             check_push(push_at, seconds)
             bound.begin(snapshot)
+            method_params = policy_params(method, method_params, world_dir(), bound)
             # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
             controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)
             monitor_key = f"{MONITOR}{robot}/{uuid.uuid4().hex[:8]}"  # one per call: runs may overlap
@@ -101,7 +115,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     "robot": robot,
                     "task": bound.describe(),
                     "method": method,
-                    "explain": METHODS[method],
+                    "explain": explain(method),
                     "reward": round(monitor.reward, 3),
                     "success": bool(bound.success(session.data)) and monitor.failed_at is None,
                     "failed_at": monitor.failed_at,
@@ -132,8 +146,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         return a comparison table: reward (higher is better), success, the task's key number, effort in
         joules and computer time per simulated second. Runs off-screen (the live world is not changed).
 
-        methods defaults to every algorithm that fits the task (see list_algorithms); method_params maps a
-        method to its settings, e.g. {"mpc": {"samples": 64}}. push_at adds the same shove to every run
+        methods defaults to every algorithm that fits the task (see list_algorithms) and may include trained
+        policies, e.g. ["lqr", "mpc", "policy:pole_balance"]; method_params maps a method to its settings,
+        e.g. {"mpc": {"samples": 64}}. push_at adds the same shove to every run
         to compare how they recover. Explain the table to the user: what each method does and why it won
         or lost."""
         with _tool_errors():
@@ -142,6 +157,11 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 raise TaskError(f"compare 1 to {MAX_METHODS} methods at a time")
             with session.lock:
                 model, start = session.model, copy.copy(session.data)
+            method_params = dict(method_params or {})
+            if methods is not None and any(m.startswith("policy:") for m in methods):
+                probe = make_task(task, model, robot, task_params)  # check each policy fits before running any
+                for m in methods:
+                    method_params[m] = policy_params(m, method_params.get(m), world_dir(), probe)
             comparison = await asyncio.to_thread(
                 compare_methods,
                 task,
@@ -162,10 +182,14 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 {
                     **comparison.to_dict(),
                     "best": best.method,
-                    "explain": {r.method: METHODS[r.method] for r in comparison.results},
+                    "explain": {r.method: explain(r.method) for r in comparison.results},
                     "next": f"run_controller(robot={robot!r}, task={task!r}, method={best.method!r}) shows it live",
                 }
             )
+
+    from robotforge.control.rl import mcp_tools as rl_tools  # the learning tools belong to this layer too
+
+    rl_tools.register(server, playground)
 
 
 def _seconds(seconds: float | None, limit: float) -> float | None:

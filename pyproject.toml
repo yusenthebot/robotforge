@@ -15,6 +15,15 @@ dependencies = [
     "pyyaml>=6.0.3",
 ]
 
+[project.optional-dependencies]
+# Deep reinforcement learning (PPO, SAC) on the built-in tasks; the core install never imports these.
+# On Linux, PyPI's default torch wheel is the large CUDA build; docs/ALGORITHMS.md shows the CPU-only index.
+rl = [
+    "gymnasium>=1.0",
+    "stable-baselines3>=2.4",
+    "torch>=2.5",
+]
+
 [project.scripts]
 robotforge = "robotforge:main"
 

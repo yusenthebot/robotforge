@@ -218,7 +218,7 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
     """A small world for `task`: the default robot (or `robot_template`) on a floor, plus a goal marker.
 
     Returns (model, robot name)."""
-    from robotforge.design.world import World, compile_world
+    from robotforge.design.world import World
 
     if task not in DEFAULT_ROBOTS:
         raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
@@ -231,7 +231,19 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
         world = World.model_validate(
             {"name": f"{task}_lab", "robots": [{"name": robot, "template": template, "params": robot_params or {}}]}
         )
-        compiled = compile_world(world)
+    except ValidationError as exc:
+        raise TaskError(readable(exc, "robot settings")) from exc
+    except ValueError as exc:  # e.g. an unknown template
+        raise TaskError(str(exc)) from exc
+    return compile_task_world(task, world), robot
+
+
+def compile_task_world(task: str, world, base_dir=None) -> mujoco.MjModel:
+    """Compile a design World for `task`, adding the goal marker that reach and drive_to show."""
+    from robotforge.design.world import compile_world
+
+    try:
+        compiled = compile_world(world, base_dir)
     except ValidationError as exc:
         raise TaskError(readable(exc, "robot settings")) from exc
     except ValueError as exc:  # template parameters are checked while compiling
@@ -242,7 +254,7 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
         size = [0.012, 0, 0] if task == "reach" else [0.05, 0.003, 0]
         shape = mujoco.mjtGeom.mjGEOM_SPHERE if task == "reach" else mujoco.mjtGeom.mjGEOM_CYLINDER
         marker.add_geom(type=shape, size=size, rgba=[0.2, 0.9, 0.4, 0.6], contype=0, conaffinity=0, group=1)
-    return spec.compile(), robot
+    return spec.compile()
 
 
 def make_env(

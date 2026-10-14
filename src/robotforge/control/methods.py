@@ -32,7 +32,28 @@ _LQR_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
+POLICY_PREFIX = "policy:"  # "policy:<name>" runs a trained neural network policy (see control/rl)
+LEARNED_HINT = (
+    "{method} is trained, not built on the spot: train a policy with train_policy(algo={method!r}), "
+    "then run it with method='policy:<its name>'"
+)
+
+
+def explain(method: str) -> str:
+    """The one-line explanation of a method, including trained policies."""
+    if method.startswith(POLICY_PREFIX):
+        return f"A trained neural network policy ({method.removeprefix(POLICY_PREFIX)}), learned by trial and error."
+    return METHODS[method]
+
+
 def check(task: Task, method: str) -> None:
+    if method.startswith(POLICY_PREFIX):
+        from robotforge.control.rl.store import check_name
+
+        check_name(method.removeprefix(POLICY_PREFIX))
+        return
+    if method in ("ppo", "sac"):
+        raise TaskError(LEARNED_HINT.format(method=method))
     if method not in METHODS:
         raise TaskError(f"unknown method {method!r}; choose one of: {', '.join(METHODS)}")
     if method not in task.methods:
@@ -47,6 +68,10 @@ def make_controller(
     """Build the controller for `method` on `task`, starting from the state in `data`."""
     check(task, method)
     params = dict(params or {})
+    if method.startswith(POLICY_PREFIX):
+        from robotforge.control.rl.runtime import policy_controller
+
+        return policy_controller(method.removeprefix(POLICY_PREFIX), task, model, data, params)
     try:
         if method in ("mpc", "mppi"):
             cfg = {**task.mpc_defaults, **params, "method": "predictive" if method == "mpc" else "mppi"}
