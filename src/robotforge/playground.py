@@ -7,6 +7,8 @@ without an MCP client. Methods return plain dicts that serialize to JSON.
 from __future__ import annotations
 
 import difflib
+import functools
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +19,7 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge.behaviors.manager import BehaviorManager
+from robotforge.design import importer
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, ObjectEntry, RobotEntry, World
 from robotforge.sim.render import VIEWS, SnapshotRenderer
@@ -39,13 +42,27 @@ class PlaygroundError(ValueError):
     """A user-facing error: the message tells the agent what to do instead."""
 
 
+def _one_edit_at_a_time(method):
+    """Edits read, change and recompile the whole world, so two at once (tool calls run in worker
+    threads) would lose one of them or repeat a slow import; the second waits for the first."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._edit_lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 @dataclass
 class Playground:
     session: SimSession
     viewer_url: str | None = None
     renderer: SnapshotRenderer = field(default_factory=SnapshotRenderer)
     store: WorldStore | None = None
+    last_doctor: dict[str, Any] = field(default_factory=dict)  # robot name -> import doctor report
     behaviors: BehaviorManager = field(init=False)
+    _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(self.session, self.current_world)
@@ -68,10 +85,26 @@ class Playground:
 
     # ---- loading and describing ----------------------------------------------------
 
-    def open_model(self, path: str) -> dict[str, Any]:
+    @_one_edit_at_a_time
+    def open_model(self, path: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Load an MJCF (.xml), a URDF/xacro or a plain mesh. URDFs and meshes go through the import doctor."""
         p = Path(path).expanduser()
-        if p.suffix.lower() not in {".xml", ".urdf", ".mjcf"}:
-            raise PlaygroundError(f"{p.name}: expected an MJCF (.xml) or URDF (.urdf) file")
+        if importer.is_importable(p):
+            if not p.is_file():
+                raise PlaygroundError(f"file not found: {p}")
+            try:
+                compiled = importer.compile_standalone(p, options)
+            except ValueError as exc:
+                raise PlaygroundError(str(exc)) from exc
+            self.store = None  # the loaded model is no longer a saved world
+            self.session.load_model(compiled.model, str(p.resolve()))
+            self.last_doctor = compiled.doctor
+            result = self.describe()
+            result["doctor"] = next(iter(compiled.doctor.values()), None)
+            return result
+        if p.suffix.lower() not in {".xml", ".mjcf"}:
+            meshes = ", ".join(sorted(importer.MESH_SUFFIXES))
+            raise PlaygroundError(f"{p.name}: expected an MJCF (.xml), a URDF/xacro, or a mesh ({meshes})")
         self.session.load_path(p.resolve())
         return self.describe()
 
@@ -113,14 +146,17 @@ class Playground:
 
     # ---- worlds (design) ------------------------------------------------------------
 
+    @_one_edit_at_a_time
     def new_world(self, name: str, floor: str = "checker") -> dict[str, Any]:
         self.store = WorldStore.create(name, floor)
         return self._load_world(self.store.compile(), created=True)
 
+    @_one_edit_at_a_time
     def open_world(self, name_or_path: str) -> dict[str, Any]:
         self.store = WorldStore.open(name_or_path)
         return self._load_world(self.store.compile())
 
+    @_one_edit_at_a_time
     def add_robot(
         self,
         name: str,
@@ -154,8 +190,12 @@ class Playground:
         def change(w: World) -> None:
             w.robots.append(entry)
 
-        return self._edit(change)
+        result = self._edit(change)
+        if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
+            result["doctor"] = self.last_doctor[name]
+        return result
 
+    @_one_edit_at_a_time
     def update_robot(
         self,
         name: str,
@@ -174,6 +214,7 @@ class Playground:
 
         return self._edit(change)
 
+    @_one_edit_at_a_time
     def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
         entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
 
@@ -182,6 +223,7 @@ class Playground:
 
         return self._edit(change)
 
+    @_one_edit_at_a_time
     def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
         def change(w: World) -> None:
             obj = _find(w.objects, name, "object")
@@ -191,6 +233,7 @@ class Playground:
 
         return self._edit(change)
 
+    @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
         def change(w: World) -> None:
             before = len(w.robots) + len(w.objects)
@@ -201,12 +244,14 @@ class Playground:
 
         return self._edit(change)
 
+    @_one_edit_at_a_time
     def set_floor(self, style: str) -> dict[str, Any]:
         def change(w: World) -> None:
             w.floor.style = style
 
         return self._edit(change)
 
+    @_one_edit_at_a_time
     def undo(self) -> dict[str, Any]:
         store = self._require_store()
         store.undo()
@@ -247,6 +292,7 @@ class Playground:
     def _load_world(self, compiled: CompiledWorld, created: bool = False) -> dict[str, Any]:
         store = self._require_store()
         self.session.load_model(compiled.model, str(store.file))
+        self.last_doctor = compiled.doctor
         world = store.load()
         summary = self.describe()
         return {

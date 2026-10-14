@@ -7,12 +7,14 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "coacd>=1.0.14",
     "mcp>=2.3.0",
     "mujoco>=3.15.0",
     "numpy>=2.5.4",
     "pillow>=12.3.0",
     "pydantic>=2.14.1",
     "pyyaml>=6.0.3",
+    "trimesh>=5.1.1",
 ]
 
 [project.scripts]
