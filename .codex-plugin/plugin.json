@@ -1,0 +1,31 @@
+{
+  "name": "robotforge",
+  "version": "0.1.0",
+  "description": "Beginner robot playground: design, load or import robots in plain language, simulate them in MuJoCo, watch them in a live 3D viewer, compare controllers and learn embodied AI lesson by lesson.",
+  "author": {
+    "name": "yusenthebot",
+    "url": "https://github.com/yusenthebot"
+  },
+  "homepage": "https://github.com/yusenthebot/robotforge",
+  "repository": "https://github.com/yusenthebot/robotforge",
+  "keywords": ["robotics", "mujoco", "simulation", "embodied-ai", "education", "urdf", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "interface": {
+    "displayName": "robotforge",
+    "shortDescription": "Beginner robot playground on MuJoCo",
+    "longDescription": "Describe a robot in plain words and robotforge builds it: arms, robot dogs, rovers, humanoids, real robots like the Unitree Go2, or your own URDF. Make it walk, drive or pick things up, watch it live in a 3D viewer, compare PD, LQR and MPC, write Python scripts, and follow nine short lessons into embodied AI.",
+    "developerName": "yusenthebot",
+    "category": "Engineering",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://github.com/yusenthebot/robotforge",
+    "defaultPrompt": [
+      "给我一只四足机器狗，放在草地上，让它往前走 10 秒。",
+      "教我第 1 课",
+      "Import my URDF and explain the import doctor's report"
+    ],
+    "brandColor": "#F28C28",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/icon.png"
+  }
+}
