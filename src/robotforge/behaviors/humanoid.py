@@ -199,6 +199,7 @@ class HumanoidController:
         self._pose_t = 0.0
         self._pending: str | None = None
         self._planned_for = (0.0, 0.0)  # the command the plan's future was made for
+        self._idle = True  # nothing but standing still is planned (updated every tick)
         self._upper_from: dict[str, float] = dict(self.upper_home)
         self._pose_level = (0.0, 0.0)  # (drop, lean) where the last pose ended
 
@@ -228,11 +229,10 @@ class HumanoidController:
     @property
     def done(self) -> bool:
         """True when no pose is playing or waiting and no steps are left to take."""
-        idle = self.plan is None or self.plan.idle()
-        return self.fallen or (self._pose is None and self._pending is None and idle)
+        return self.fallen or (self._pose is None and self._pending is None and self._idle)
 
     def status(self) -> dict:
-        walking = bool(self.command_speed or self.command_turn) or (self.plan is not None and not self.plan.idle())
+        walking = bool(self.command_speed or self.command_turn) or not self._idle
         behavior = "pose" if self._pose or self._pending else "walk" if walking else "stand"
         out = {
             "behavior": behavior,
@@ -289,11 +289,13 @@ class HumanoidController:
         while len(plan) <= horizon:
             plan.extend(self.command_speed, self.command_turn)
         _, self._feet, self._support = plan.pop()
+        # Snapshot for done/status, which other threads read while the simulation thread plans.
+        self._idle = plan.idle()
         self._com = self.preview.step(self._com, plan.zmp_ahead(horizon))
         self._advance_pose(plan)
 
     def _advance_pose(self, plan: GaitPlan) -> None:
-        if self._pending is not None and plan.idle():
+        if self._pending is not None and self._idle:
             self._upper_from = self._upper_targets()
             self._pose_level = self._level()
             self._pose = (self._pending, POSES[self._pending][1])
