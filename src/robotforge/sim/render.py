@@ -111,7 +111,7 @@ class SnapshotRenderer:
             model, data = session.model, session.data
             width = min(width, model.vis.global_.offwidth)
             height = min(height, model.vis.global_.offheight)
-            camera = _camera_for(model, view)  # bad arguments are reported the same with or without GL
+            camera = _camera_for(model, view, data)  # bad arguments are reported the same with or without GL
             return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
 
     def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
@@ -129,13 +129,14 @@ class SnapshotRenderer:
         return self._renderer.render().copy()
 
 
-def _camera_for(model: mujoco.MjModel, view: str) -> mujoco.MjvCamera | str:
+def _camera_for(model: mujoco.MjModel, view: str, data: mujoco.MjData | None = None) -> mujoco.MjvCamera | str:
     if view in VIEWS:
         azimuth, elevation, dist = VIEWS[view]
+        center, extent = _framing(model, data)
         cam = mujoco.MjvCamera()
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-        cam.lookat[:] = model.stat.center
-        cam.distance = dist * max(float(model.stat.extent), 0.1)
+        cam.lookat[:] = center
+        cam.distance = dist * max(extent, 0.1)
         cam.azimuth = azimuth
         cam.elevation = elevation
         return cam
@@ -143,6 +144,19 @@ def _camera_for(model: mujoco.MjModel, view: str) -> mujoco.MjvCamera | str:
         return view
     options = sorted(VIEWS) + [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
     raise ValueError(f"unknown view {view!r}; choose one of: {', '.join(options)}")
+
+
+def _framing(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, float]:
+    """Center and size of the scene as it is now, so a robot that walked away stays in the picture.
+
+    The model's own statistics describe the starting pose only.
+    """
+    extent = float(model.stat.extent)
+    if data is None or model.nbody <= 1:
+        return model.stat.center.copy(), extent
+    points = data.xpos[1:]
+    low, high = points.min(axis=0), points.max(axis=0)
+    return (low + high) / 2, max(extent, 0.6 * float(np.linalg.norm(high - low)))
 
 
 def look_direction(view: str) -> tuple[float, float, float]:

@@ -129,8 +129,25 @@ class Playground:
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float = 0.0,
+        library: str | None = None,
     ) -> dict[str, Any]:
-        entry = RobotEntry(name=name, template=template, file=file, params=params or {}, pos=pos or [0.0, 0.0], yaw=yaw)
+        try:
+            entry = RobotEntry(
+                name=name,
+                template=template,
+                file=file,
+                library=library,
+                params=params or {},
+                pos=pos or [0.0, 0.0],
+                yaw=yaw,
+            )
+        except ValidationError as exc:
+            raise PlaygroundError(_validation_message(exc)) from exc
+        world = self.current_world()
+        existing = next((r for r in world.robots if r.name == name), None) if world else None
+        if existing is not None and existing == entry:
+            # Typically a retry after the client timed out while the first call was still downloading.
+            return self._unchanged(f"{name} is already in the world exactly like this; nothing to do")
 
         def change(w: World) -> None:
             w.robots.append(entry)
@@ -204,6 +221,21 @@ class Playground:
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         return self._load_world(compiled)
+
+    def _unchanged(self, note: str) -> dict[str, Any]:
+        """The world summary without recompiling: the simulation keeps running as it is."""
+        store = self._require_store()
+        world = store.load()
+        return {
+            "world": world.name,
+            "world_dir": str(store.dir),
+            "created": False,
+            "unchanged": True,
+            "robots": [r.name for r in world.robots],
+            "objects": [o.name for o in world.objects],
+            "notes": [note],
+            "viewer_url": self.viewer_url,
+        }
 
     def _require_store(self) -> WorldStore:
         if self.store is None:
@@ -348,8 +380,9 @@ def _find(items: list, name: str, kind: str):
 def _validation_message(exc: ValidationError) -> str:
     parts = []
     for err in exc.errors():
-        where = ".".join(str(x) for x in err["loc"]) or "value"
-        parts.append(f"{where}: {err['msg']}")
+        msg = err["msg"].removeprefix("Value error, ")  # pydantic's prefix means nothing to a beginner
+        where = ".".join(str(x) for x in err["loc"])
+        parts.append(f"{where}: {msg}" if where else msg)
     return "; ".join(parts)
 
 

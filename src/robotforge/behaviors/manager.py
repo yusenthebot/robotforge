@@ -13,6 +13,7 @@ import numpy as np
 from robotforge.behaviors import Kind, quadruped, robot_kind
 from robotforge.behaviors.arm import ArmMotion
 from robotforge.behaviors.drive import DiffDrive
+from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
@@ -35,10 +36,13 @@ class BehaviorManager:
         world = self._world()
         names = [r.name for r in world.robots] if world else sorted(self._prefixes())
         templates = {r.name: r.template for r in world.robots} if world else {}
+        models = {r.name: library.get(r.library).title for r in world.robots if r.library} if world else {}
         out = []
         for name in names:
             kind = robot_kind(m, name, templates.get(name))
             info: dict[str, Any] = {"name": name, "kind": kind.value}
+            if name in models:
+                info["model"] = models[name]
             if kind in (Kind.QUADRUPED, Kind.ROVER):
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
@@ -84,12 +88,20 @@ class BehaviorManager:
             return existing
         m = self.session.model
         try:
-            ctrl = quadruped.for_template(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
+            ctrl = quadruped.for_robot(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
             raise BehaviorError(str(exc)) from exc
+        top = self._library_top_speed(robot)
+        if top is not None and isinstance(ctrl, quadruped.QuadrupedGait):
+            ctrl.limit_speed(top)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _library_top_speed(self, robot: str) -> float | None:
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        return library.get(entry.library).max_speed if entry is not None and entry.library else None
 
     def stop(self, robot: str) -> dict[str, Any]:
         with self.session.lock:
