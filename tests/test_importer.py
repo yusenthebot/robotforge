@@ -754,3 +754,16 @@ def test_an_unwritable_cache_gives_an_actionable_error(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(blocker))
     with pytest.raises(ValueError, match="ROBOTFORGE_HOME"):
         import_file(write(tmp_path / "arm.urdf", arm_urdf()))
+
+
+def test_converted_meshes_do_not_make_a_cached_import_look_stale(tmp_path, monkeypatch):
+    write(tmp_path / "pkg" / "meshes" / "upper.dae", dae_text(size=(0.05, 0.05, 0.3)))
+    urdf = _mesh_arm(tmp_path, "package://pkg/meshes/upper.dae")
+    import_file(urdf)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the cached import was thrown away and redone")
+
+    monkeypatch.setattr(importer, "_stage_and_plan", refuse)
+    import_file(urdf)  # served from the cache, even though loading it touched the converted mesh files
+    import_file(urdf)

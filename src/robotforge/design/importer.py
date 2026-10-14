@@ -138,6 +138,8 @@ def _load_cached(entry: Path, src: Path) -> tuple[RigPlan, DoctorReport] | None:
         info = json.loads(meta.read_text(encoding="utf-8"))
         for dep, size, mtime in info["deps"]:
             st = Path(dep).stat()
+            if Path(dep).is_relative_to(entry.parent):
+                continue  # converted meshes are named after the file they came from; they only need to exist
             if st.st_size != size or st.st_mtime_ns != mtime:
                 return None
         if info["missing"]:
