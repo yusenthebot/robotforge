@@ -10,3 +10,4 @@ dist/
 build/
 .ruff_cache/
 .pytest_cache/
+MUJOCO_LOG.TXT
