@@ -35,6 +35,7 @@ HEAD_JOINTS = ("neck_yaw", "neck_pitch")
 HOME_BEND = 0.35  # rad on hip and ankle pitch (knee bends twice as much): knees soft, ready to step
 HOME_ARM = {"shoulder_pitch": 0.1, "shoulder_roll": 0.12, "elbow": 0.35}
 EYE = [0.55, 0.85, 1.0, 1.0]
+MAX_WALKING_HEIGHT = 0.75  # m; taller (heavy-legged) humanoids fell under quick command changes
 REFERENCE_HEIGHT = 0.45  # m; every length below is given at this height and scales with it
 _Y_CYL = [0.7071068, 0.7071068, 0, 0]  # cylinder axis along y
 
@@ -308,13 +309,13 @@ def _strength_warnings(model: mujoco.MjModel, part: components.Actuator, mass: f
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     com_height = d.stand_height() + float(data.subtree_com[1][2])
-    # On one leg the knee holds the whole robot at the thigh's lever arm. A grid of heights x servos in
-    # simulation walked forward, backward and turned up to 67 % of stall and fell from 71 %.
+    # On one leg the knee holds the whole robot at the thigh's lever arm. A grid of 12 heights x 5 servos
+    # (walk, back, turn, tapped and mashed keys, random commands) stayed up to 56 % of stall, fell from 67 %.
     knee = mass * 9.81 * d.thigh * math.sin(HOME_BEND)
     # A position servo must be stiffer than the robot's tendency to topple over its ankles.
     topple = mass * 9.81 * com_height
     out = []
-    if knee > 0.7 * part.stall_torque:
+    if knee > 0.6 * part.stall_torque:
         out.append(
             f"warning: {part.name} servos ({part.stall_torque} N*m) are too weak for a {mass:.1f} kg humanoid: "
             f"standing on one leg needs about {knee:.1f} N*m at the knee, so it will likely fall when walking. "
@@ -324,6 +325,11 @@ def _strength_warnings(model: mujoco.MjModel, part: components.Actuator, mass: f
         out.append(
             f"warning: {part.name} servos are too springy for a {mass:.1f} kg humanoid this tall; it may wobble "
             "and fall when walking. Choose a stronger servo or a smaller height."
+        )
+    elif d.scale * REFERENCE_HEIGHT > MAX_WALKING_HEIGHT + 1e-9:
+        out.append(
+            f"note: walking is tuned for humanoids up to {MAX_WALKING_HEIGHT} m tall; this one stands and poses, "
+            "but quick changes of speed or direction may topple it."
         )
     return out
 

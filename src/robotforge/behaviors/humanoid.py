@@ -36,7 +36,7 @@ UPPER = (
 DT = 0.01  # control period, s
 PREVIEW = 0.8  # s of future ZMP the body sway looks at
 REPLAN_LEAD = 0.05  # s; plan pieces starting sooner than this are kept when the command changes
-REPLAN_NOTICE = 0.2  # s of warning before a settle and a step may be swapped (see GaitPlan.rewind)
+REPLAN_NOTICE = 0.2  # s of warning (at 0.2 m legs) before a settle and a step may be swapped; see GaitPlan.rewind
 FALLEN_UP = 0.5  # torso up-axis z below this means the robot is lying down
 
 
@@ -168,6 +168,7 @@ class HumanoidController:
         self.com_local = self._com_local()
         com_height = self.stand_z + float(self.com_local[2])
         scale = math.sqrt(self.leg_length / 0.2)  # pendulum timing scales with the square root of size
+        self.replan_notice = round(REPLAN_NOTICE * scale / DT)
         self.gait = gait or GaitParams(
             single=0.36 * scale,
             double=0.12 * scale,
@@ -288,7 +289,7 @@ class HumanoidController:
         assert plan is not None
         command = (self.command_speed, self.command_turn)
         if command != self._planned_for:
-            plan.rewind(round(REPLAN_LEAD / DT), round(REPLAN_NOTICE / DT), moving=any(command))
+            plan.rewind(round(REPLAN_LEAD / DT), self.replan_notice, moving=any(command))
             self._planned_for = command
         horizon = self.preview.horizon
         while len(plan) <= horizon:

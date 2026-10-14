@@ -54,7 +54,7 @@ def _heading(pg: Playground) -> float:
     [
         ({}, 20),
         ({"height": 0.3}, 20),
-        ({"height": 0.6, "color": "orange"}, 20),
+        ({"height": 0.55, "color": "orange"}, 20),
         ({"arms": False}, 14),
         ({"arms": False, "head": False, "servo": "xl430"}, 12),
     ],
@@ -75,10 +75,13 @@ def test_humanoid_variants_spawn_with_feet_on_the_floor(params, servos):
     assert "bot/head_cam" in [m.camera(i).name for i in range(m.ncam)] or not params.get("head", True)
 
 
-def test_weak_servos_come_with_a_warning():
-    notes = templates.build("humanoid", {"servo": "sg90"}).notes
-    assert any("too weak" in n for n in notes)
-    assert len(templates.build("humanoid", {}).notes) == 1
+def test_weak_servos_and_very_tall_humanoids_come_with_a_warning():
+    # Limits from a 12 heights x 5 servos grid with command switching (see _strength_warnings).
+    assert any("too weak" in n for n in templates.build("humanoid", {"servo": "sg90"}).notes)
+    assert any("too weak" in n for n in templates.build("humanoid", {"height": 0.6}).notes)
+    assert any("tuned for" in n for n in templates.build("humanoid", {"height": 0.8, "servo": "bldc_joint"}).notes)
+    for fine in ({}, {"height": 0.55}, {"height": 0.75, "servo": "bldc_joint"}, {"servo": "mg996r"}):
+        assert len(templates.build("humanoid", fine).notes) == 1, fine
 
 
 def test_humanoid_is_recognized_with_and_without_its_template_name(pg):
