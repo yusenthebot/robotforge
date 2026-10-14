@@ -1,5 +1,6 @@
 import json
 import textwrap
+from pathlib import Path
 
 import pytest
 from mcp import Client
@@ -61,7 +62,7 @@ async def test_agent_written_script_walks_and_places(pg):
     server = build_server(pg, find_free_port(8790))
     async with Client(server) as client:
         _, saved = await _call(client, "write_script", {"name": "demo_task", "code": SCRIPT})
-        assert json.loads(saved)["saved"].endswith("behaviors/demo_task.py")
+        assert Path(json.loads(saved)["saved"]).parts[-2:] == ("behaviors", "demo_task.py")  # separator-agnostic
         _, ran = await _call(client, "run_script", {"name": "demo_task"})
         out = json.loads(ran)
         assert out["ok"], out["output"]
@@ -99,3 +100,15 @@ async def test_script_names_are_validated(pg):
     async with Client(server) as client:
         result, text = await _call(client, "write_script", {"name": "../escape", "code": "print(1)"})
         assert result.is_error and "lowercase" in text
+
+
+async def test_script_output_survives_non_ascii_text(pg):
+    # A child process writing to a pipe uses the ANSI code page on Windows unless told otherwise.
+    code = "print('h\\u00e9llo \\u4f60\\u597d \\U0001f916')\n"
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        await _call(client, "write_script", {"name": "unicode_out", "code": code})
+        _, ran = await _call(client, "run_script", {"name": "unicode_out"})
+        out = json.loads(ran)
+        assert out["ok"], out["output"]
+        assert "h\u00e9llo \u4f60\u597d \U0001f916" in out["output"]

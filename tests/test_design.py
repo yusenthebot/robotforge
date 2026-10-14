@@ -99,10 +99,10 @@ def test_store_edits_are_atomic_and_undoable(tmp_path):
     store = WorldStore.create("Test World!", parent=tmp_path)
     assert store.dir.name == "test_world"
     store.apply(lambda w: w.robots.append(_entry("dog", "quadruped")))
-    before = store.file.read_text()
+    before = store.file.read_text(encoding="utf-8")
     with pytest.raises(ValueError):
         store.apply(lambda w: w.robots.append(_entry("cat", "spider")))
-    assert store.file.read_text() == before  # failed edit left the world untouched
+    assert store.file.read_text(encoding="utf-8") == before  # failed edit left the world untouched
     assert (store.build_dir / "world.xml").exists()
     store.undo()
     assert store.load().robots == []
@@ -133,3 +133,22 @@ def _entry(name, template):
     from robotforge.design.world import RobotEntry
 
     return RobotEntry(name=name, template=template)
+
+
+def test_undo_steps_back_one_edit_at_a_time_even_if_the_clock_stands_still(tmp_path, monkeypatch):
+    # Windows reads the same time for edits less than ~15 ms apart.
+    monkeypatch.setattr("robotforge.design.store.time.time_ns", lambda: 1_000)
+    store = WorldStore.create("Frozen Clock", parent=tmp_path)
+    for name in ("a", "b", "c"):
+        store.apply(lambda w, name=name: w.robots.append(_entry(name, "rover")))
+    seen = []
+    for _ in range(3):
+        seen.append([r.name for r in store.undo().robots])
+    assert seen == [["a", "b"], ["a"], []]
+
+
+def test_world_files_are_utf8_with_lf_endings(tmp_path):
+    store = WorldStore.create("Plain", parent=tmp_path)
+    store.apply(lambda w: w.robots.append(_entry("dog", "quadruped")))
+    for path in (store.file, store.build_dir / "world.xml", *store.history.glob("*.yaml")):
+        assert b"\r" not in path.read_bytes(), path

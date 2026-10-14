@@ -65,7 +65,8 @@ class ScriptRunner:
 
         server = await asyncio.start_server(on_client, "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
-        env = {**os.environ, ENV_PORT: str(port), ENV_TOKEN: token, "PYTHONUNBUFFERED": "1"}
+        # PYTHONUTF8: on Windows a piped child would print in the ANSI code page and crash on non-Latin text.
+        env = {**os.environ, ENV_PORT: str(port), ENV_TOKEN: token, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1"}
         session.clock_owner = "script"
         started = time.monotonic()
         output = bytearray()

@@ -92,12 +92,20 @@ class WorldStore:
 
     def _snapshot(self) -> None:
         self.history.mkdir(exist_ok=True)
-        stamp = f"{time.time_ns()}.yaml"
-        (self.history / stamp).write_text(self.file.read_text(encoding="utf-8"), encoding="utf-8")
+        taken = [int(p.stem) for p in self.history.glob("*.yaml") if p.stem.isdigit()]
+        # The Windows clock ticks every ~15 ms, so two quick edits can read the same time; keep names increasing.
+        stamp = max(time.time_ns(), max(taken, default=0) + 1)
+        _write_text(self.history / f"{stamp}.yaml", self.file.read_text(encoding="utf-8"))
         for old in sorted(self.history.glob("*.yaml"))[:-HISTORY_LIMIT]:
             old.unlink()
 
     def _write(self, world: World, compiled: CompiledWorld) -> None:
-        self.file.write_text(world.to_yaml(), encoding="utf-8")
+        _write_text(self.file, world.to_yaml())
         self.build_dir.mkdir(exist_ok=True)
-        (self.build_dir / "world.xml").write_text(compiled.to_xml(), encoding="utf-8")
+        _write_text(self.build_dir / "world.xml", compiled.to_xml())
+
+
+def _write_text(path: Path, text: str) -> None:
+    """UTF-8 with LF endings on every OS, so a world folder copied between machines does not churn."""
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)

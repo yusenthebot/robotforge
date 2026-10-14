@@ -329,7 +329,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             store = playground._require_store()
             path = _script_path(store.dir, name)
             path.parent.mkdir(exist_ok=True)
-            path.write_text(code, encoding="utf-8")
+            with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
+                f.write(code)
             return _json({"saved": str(path), "lines": code.count("\n") + 1})
 
     @server.tool()

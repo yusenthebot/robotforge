@@ -26,9 +26,13 @@ log = logging.getLogger("robotforge")
 
 
 def port_is_free(port: int, host: str = "127.0.0.1") -> bool:
-    # Same socket option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform == "win32":
+            # SO_REUSEADDR means "share the port" on Windows, so the probe would call a port in use free.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            # Same option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((host, port))
         except OSError:
