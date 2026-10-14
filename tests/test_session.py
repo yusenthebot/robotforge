@@ -76,3 +76,16 @@ def test_bad_model_reports_compiler_error(tmp_path):
         SimSession.from_path(bad)
     with pytest.raises(ModelLoadError, match="not found"):
         SimSession.from_path(tmp_path / "missing.xml")
+
+
+def test_snapshots_frame_bodies_where_they_are_now():
+    from robotforge.sim.render import _framing
+
+    session = SimSession.from_xml(
+        '<mujoco><worldbody><geom type="plane" size="1 1 .1"/>'
+        '<body name="ball" pos="0 0 0.1"><freejoint/><geom size="0.1"/></body></worldbody></mujoco>'
+    )
+    session.data.qpos[:3] = [5.0, -2.0, 0.1]  # the ball rolled far away from where the model put it
+    session.step(1)
+    center, _extent = _framing(session.model, session.data)
+    assert np.allclose(center[:2], [5.0, -2.0], atol=0.01)
