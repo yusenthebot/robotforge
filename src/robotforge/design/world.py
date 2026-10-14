@@ -19,7 +19,7 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from robotforge.design import components, library, props, templates, terrain
+from robotforge.design import components, importer, library, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -137,10 +137,17 @@ class World(_Strict):
 
 
 class CompiledWorld:
-    def __init__(self, spec: mujoco.MjSpec, model: mujoco.MjModel, notes: list[str]):
+    def __init__(
+        self,
+        spec: mujoco.MjSpec,
+        model: mujoco.MjModel,
+        notes: list[str],
+        doctor: dict[str, dict[str, Any]] | None = None,
+    ):
         self.spec = spec
         self.model = model
         self.notes = notes
+        self.doctor = doctor or {}  # robot name -> import doctor report, for imported files
 
     def to_xml(self) -> str:
         return self.spec.to_xml()
@@ -159,6 +166,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     notes: list[str] = terrain.add_terrain(spec, world.terrain, world.floor.style)
     ground = terrain.Ground.build(world.terrain, world.floor.style)
 
+    doctor: dict[str, dict[str, Any]] = {}
     homes: list[tuple[str, dict[str, float], dict[str, float]]] = []
     frames: list[tuple[str, mujoco.MjsFrame]] = []  # robots that rest on the ground (no explicit z)
     for entry in world.robots:
@@ -171,6 +179,8 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         if len(entry.pos) == 2:
             frames.append((entry.name, frame))
         notes += [f"{entry.name}: {n}" for n in built.notes]
+        if built.doctor:
+            doctor[entry.name] = built.doctor
 
     for obj in world.objects:
         _object(spec, obj, ground)
@@ -179,7 +189,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
         model = _compile(spec)
     _add_home_key(spec, model, homes)
-    return CompiledWorld(spec, _compile(spec), notes)
+    return CompiledWorld(spec, _compile(spec), notes, doctor)
 
 
 def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Ground) -> bool:
@@ -223,6 +233,20 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
         path = base_dir / path
     if not path.exists():
         raise ValueError(f"robot {entry.name!r}: file not found: {path}")
+    if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
+        try:
+            result = importer.import_file(path, entry.params)
+        except ValueError as exc:
+            raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+        return templates.BuiltRobot(
+            spec=result.spec,
+            home_qpos=result.home_qpos,
+            home_ctrl=result.home_ctrl,
+            spawn_height=result.spawn_height,
+            floating=result.floating,
+            notes=[f"imported {path.name}. {result.report.summary}"],
+            doctor=result.report.to_dict(),
+        )
     try:
         child = mujoco.MjSpec.from_file(str(path))
     except ValueError as exc:
