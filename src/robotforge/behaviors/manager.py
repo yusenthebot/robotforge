@@ -148,6 +148,26 @@ class BehaviorManager:
             self.session.set_controller(robot, ctrl)
         return ctrl
 
+    def learned_walkers(self) -> dict[str, dict[str, Any]]:
+        """Legged robots that have a learned walking policy: {robot: {policy, max_speed, active}}."""
+        from robotforge.bridge import policies  # light: cards only, no onnxruntime
+
+        world = self._world()
+        if world is None:
+            return {}
+        out = {}
+        for entry in world.robots:
+            found = policies.for_robot(entry.library)
+            if found is None or robot_kind(self.session.model, entry.name, entry.template) not in LEGGED:
+                continue
+            active = self.session.controllers.get(entry.name)
+            out[entry.name] = {
+                "policy": found.spec.name,
+                "max_speed": found.spec.commands.lin_vel_x[1],
+                "active": _is_policy_walker(active),
+            }
+        return out
+
     def _library_top_speed(self, robot: str) -> float | None:
         world = self._world()
         entry = next((r for r in world.robots if r.name == robot), None) if world else None
@@ -323,8 +343,10 @@ class BehaviorManager:
 
 def _is_mover(ctrl: Any) -> bool:
     """A controller that walks or drives on speed and turn commands (gaits, wheels, learned policies)."""
-    if isinstance(ctrl, WALKERS):
-        return True
+    return isinstance(ctrl, WALKERS) or _is_policy_walker(ctrl)
+
+
+def _is_policy_walker(ctrl: Any) -> bool:
     # No import here: the bridge pulls in the control layer. Without the module loaded, no walker exists.
     bridge = sys.modules.get("robotforge.bridge.onnx_policy")
     return bridge is not None and isinstance(ctrl, bridge.PolicyWalker)

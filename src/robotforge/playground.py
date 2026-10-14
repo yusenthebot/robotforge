@@ -54,10 +54,12 @@ class Playground:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
 
         def teleop(msg: dict[str, Any]) -> None:
-            self.behaviors.move(str(msg["robot"]), float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0)))
+            walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
+            speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
+            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
 
         hub.handlers["teleop"] = teleop
-        hub.scene_extras = lambda: {"robots": self.behaviors.robots()}
+        hub.scene_extras = lambda: {"robots": self.behaviors.robots(), "learned": self.behaviors.learned_walkers()}
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
