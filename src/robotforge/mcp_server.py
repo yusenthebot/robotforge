@@ -13,7 +13,6 @@ import logging
 import os
 import re
 import time
-import webbrowser
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -27,7 +26,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
-from robotforge.cli import DEFAULT_PORT, find_free_port
+from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
@@ -93,7 +92,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     )
     def open_viewer(launch_browser: bool = True) -> str:
         if launch_browser and not os.environ.get("ROBOTFORGE_NO_BROWSER"):
-            webbrowser.open(playground.viewer_url)
+            open_in_browser(playground.viewer_url)
         return _json({"viewer_url": playground.viewer_url, "model": playground.session.source})
 
     @contextlib.asynccontextmanager

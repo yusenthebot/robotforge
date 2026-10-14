@@ -34,3 +34,27 @@ def test_demo_refuses_a_busy_port(capsys):
 def test_open_reports_a_missing_model(tmp_path, capsys):
     assert cli.main(["open", str(tmp_path / "nope.xml"), "--no-browser"]) == 2
     assert "not found" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("platform", "env", "expected"),
+    [
+        ("linux", {}, False),
+        ("linux", {"DISPLAY": ":0"}, True),
+        ("linux", {"WAYLAND_DISPLAY": "wayland-0"}, True),
+        ("win32", {}, True),
+        ("darwin", {}, True),
+    ],
+)
+def test_a_desktop_is_assumed_except_on_headless_linux(platform, env, expected):
+    assert cli.has_display(platform, env) is expected
+
+
+def test_no_browser_is_launched_without_a_display(monkeypatch):
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url) or True)
+    monkeypatch.setattr(cli, "has_display", lambda: False)
+    assert cli.open_in_browser("http://127.0.0.1:1/") is False
+    monkeypatch.setattr(cli, "has_display", lambda: True)
+    assert cli.open_in_browser("http://127.0.0.1:1/") is True
+    assert opened == ["http://127.0.0.1:1/"]

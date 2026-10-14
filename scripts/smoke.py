@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -149,9 +150,10 @@ async def check_mcp(home: Path) -> None:
     port = find_free_port(DEFAULT_PORT)
     # The client starts the server with a minimal environment; pass ours so GL settings (MUJOCO_GL...) arrive.
     env = {**os.environ, "ROBOTFORGE_NO_BROWSER": "1", "ROBOTFORGE_HOME": str(home)}
-    params = StdioServerParameters(
-        command=sys.executable, args=["-m", "robotforge", "mcp", "--port", str(port)], env=env
-    )
+    # Launch it the way an MCP client config does: through the installed `robotforge` command.
+    command = shutil.which("robotforge", path=str(Path(sys.executable).parent))
+    check(command, "the robotforge command is installed next to this Python")
+    params = StdioServerParameters(command=command, args=["mcp", "--port", str(port)], env=env)
     async with Client(params, read_timeout_seconds=STARTUP_SECONDS) as client:
         tools = {t.name for t in (await client.list_tools()).tools}
         wanted = {
