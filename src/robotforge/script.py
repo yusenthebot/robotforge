@@ -95,6 +95,11 @@ class Sim:
         """Pick `obj` up and put it on/in `target` (object name or [x, y]); waits. True if it landed there."""
         return self._call("pick_and_place", robot=robot, object=obj, target=target)
 
+    def run_policy(self, robot: str, name: str, task_params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Hand `robot` to a trained policy (see list_policies); it keeps driving while time passes, until
+        stop(robot). task_params changes the goal, e.g. {"target": "cube"} for a reach policy."""
+        return self._call("run_policy", robot=robot, name=name, task_params=task_params)
+
 
 def connect() -> Sim:
     """Connect to the playground that launched this script."""

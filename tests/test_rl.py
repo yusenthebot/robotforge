@@ -198,23 +198,33 @@ async def test_mcp_runs_a_trained_policy_and_explains_missing_extras(tmp_path, m
         assert nobody.is_error and "no robot named 'ghost'" in nobody.content[0].text
 
 
-def test_scripts_can_hand_a_robot_to_a_trained_policy(tmp_path, monkeypatch):
+@pytest.mark.anyio
+async def test_scripts_can_hand_a_robot_to_a_trained_policy(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
     world = pg.new_world("lab")
     pg.add_robot("pole", template="cartpole")
+    net = _random_net(4, 1, np.random.default_rng(5))
     _fake_policy(
-        store.policies_home(world["world_dir"]) / "pole_net",
-        "balance",
-        _random_net(4, 1, np.random.default_rng(5)),
-        robot="pole",
-        template="cartpole",
+        store.policies_home(world["world_dir"]) / "pole_net", "balance", net, robot="pole", template="cartpole"
     )
-    info = attach_policy(pg.session, "pole", "pole_net", pg.store.dir)
-    assert info["policy"] == "pole_net" and info["controller"] == "policy"
-    assert pg.session.controllers["pole"].task.robot.name == "pole"
-    pg.run_fast(lambda: False, 0.5)  # the policy drives the cart
-    assert abs(pg.session.data.ctrl[pg.session.controllers["pole"].task.actuators[0]]) > 0
+    code = (
+        "from robotforge.script import connect\n"
+        "sim = connect()\n"
+        "info = sim.run_policy('pole', 'pole_net')\n"
+        "sim.step(0.5)\n"
+        "print(info['controller'], info['policy'], round(sim.time, 2))\n"
+        "try:\n"
+        "    sim.run_policy('pole', 'missing')\n"
+        "except Exception as exc:\n"
+        "    print('refused:', exc)\n"
+    )
+    async with Client(build_server(pg, find_free_port(8790))) as client:
+        await client.call_tool("write_script", {"name": "use_policy", "code": code})
+        out = json.loads((await client.call_tool("run_script", {"name": "use_policy"})).content[0].text)
+    assert out["exit_code"] == 0, out
+    assert "policy pole_net 0.5" in out["output"] and "refused: no policy named 'missing'" in out["output"]
+    assert attach_policy(pg.session, "pole", "pole_net", pg.store.dir)["task"]["task"] == "balance"
 
 
 # ---- with the rl extra: real training ------------------------------------------------------------
