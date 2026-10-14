@@ -378,6 +378,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             sim.joints(robot) -> {joint: value}; sim.sensors(robot) -> {sensor: value}
             sim.set_controls({"arm/shoulder": 0.5})          # raw actuator targets
             sim.move(robot, speed, turn); sim.stop(robot)      # walk / drive (keeps going until stop)
+            sim.pose(robot, "wave") -> bool                    # humanoid poses; waits, True if upright
             sim.move_arm(robot, [x, y, z], gripper="open"|"close"|None)   # waits until arrived
             sim.gripper(robot, "open"|"close"); sim.pick_and_place(robot, obj, target) -> bool
             print(...)                                         # output is returned by run_script

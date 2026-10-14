@@ -289,6 +289,34 @@ async def test_pose_and_move_tools_work_for_humanoids(pg):
         assert 0 < report["settle_seconds"] < 2 and pg.session.controllers["bot"].done
 
 
+@pytest.mark.anyio
+async def test_scripts_can_walk_a_humanoid_and_strike_poses(pg):
+    pg.add_robot("kid", template="humanoid", params={"color": "teal"})
+    code = (
+        "from robotforge.script import connect\n"
+        "sim = connect()\n"
+        "start = sim.position('kid')\n"
+        "sim.move('kid', speed=0.1)\n"
+        "sim.step(4.0)\n"
+        "sim.stop('kid')\n"
+        "sim.step(1.0)\n"
+        "print('walked', round(sim.position('kid')[0] - start[0], 2))\n"
+        "print('waved upright', sim.pose('kid', 'wave'))\n"
+        "try:\n"
+        "    sim.pose('kid', 'dance')\n"
+        "except Exception as exc:\n"
+        "    print('refused:', exc)\n"
+    )
+    server = build_server(pg, find_free_port(8805))
+    async with Client(server) as client:
+        await client.call_tool("write_script", {"name": "kid_demo", "code": code})
+        out = json.loads((await client.call_tool("run_script", {"name": "kid_demo"})).content[0].text)
+    lines = out["output"]
+    walked = float(lines.split("walked ")[1].split()[0])
+    assert walked > 0.25, lines
+    assert "waved upright True" in lines and "refused: unknown pose 'dance'" in lines
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
