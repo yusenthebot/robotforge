@@ -265,3 +265,40 @@ def test_bad_build_leaves_the_world_unchanged(pg):
     with pytest.raises(PlaygroundError, match="not an axis"):
         pg.add_robot("dog2", build=bad, pos=[1, 0])
     assert [r.name for r in pg.current_world().robots] == ["dog"]
+
+
+MOBILE_ARM = {
+    "color": "yellow",
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.34, 0.22, 0.06], "mass": 3.0, "sensors": ["imu"]},
+    "parts": [
+        {"name": "left_wheel", "at": [0, 0.13, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "front_caster", "at": [0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "rear_caster", "at": [-0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "arm", "at": "top", "shift": [0.06, 0, 0], "robot": {"template": "arm", "params": {"reach": 0.45}}},
+    ],
+}
+
+
+def test_mobile_manipulator_drives_then_picks_with_its_mounted_arm(pg):
+    pg.add_robot("mm", build=MOBILE_ARM)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.2, 0.0])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[0.95, 0.32], fixed=True)
+    info = pg.behaviors.robots()[0]
+    assert info["kind"] == "rover" and info["arms"] == ["mm/arm"]
+    pg.behaviors.move("mm", 0.3, 0.0)
+    _run(pg, 3.0)
+    pg.behaviors.stop("mm")
+    _run(pg, 0.5)
+    assert pg.behaviors.pose("mm")["position"][0] > 0.8  # casters glide instead of braking
+    # The arm plans from where the rover is now, not from where the world started.
+    arm, placed = pg.behaviors.pick_and_place("mm", "cube", "bin")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
+    pg.add_robot("dog", build=DOG)
+    with pytest.raises(ValueError, match="not an arm, and carries none"):
+        pg.behaviors.move_arm("dog", [0.3, 0, 0.1])

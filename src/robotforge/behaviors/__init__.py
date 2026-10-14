@@ -28,8 +28,8 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
     def has(obj: mujoco.mjtObj, name: str) -> bool:
         return mujoco.mj_name2id(model, obj, f"{robot}/{name}") >= 0
 
-    if has(mujoco.mjtObj.mjOBJ_SITE, "tcp"):
-        return Kind.ARM
+    if has(mujoco.mjtObj.mjOBJ_SITE, "tcp") or (_has_mounted_tool(model, robot) and not _floating(model, robot)):
+        return Kind.ARM  # an arm, or a fixed robot built from parts with a gripper mounted on it
     if has(mujoco.mjtObj.mjOBJ_ACTUATOR, "left_wheel") and has(mujoco.mjtObj.mjOBJ_ACTUATOR, "right_wheel"):
         return Kind.ROVER
     if has(mujoco.mjtObj.mjOBJ_SITE, "front_left_foot"):
@@ -139,3 +139,19 @@ def _geom_points(model: mujoco.MjModel, g: int) -> np.ndarray:
         return np.array([[r, 0, 0], [-r, 0, 0], [0, r, 0], [0, -r, 0], [0, 0, r + extra], [0, 0, -r - extra]])
     half, center = model.geom_aabb[g, 3:], model.geom_aabb[g, :3]
     return np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]) * half + center
+
+
+def _has_mounted_tool(model: mujoco.MjModel, robot: str) -> bool:
+    names = (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, i) or "" for i in range(model.nsite))
+    return any(n.startswith(f"{robot}/") and n.endswith("/tcp") for n in names)
+
+
+def _floating(model: mujoco.MjModel, robot: str) -> bool:
+    """True when the robot's root body moves freely (a free joint), false when it is bolted down."""
+    for b in range(1, model.nbody):
+        if model.body_parentid[b] == 0 and (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith(
+            f"{robot}/"
+        ):
+            start, count = model.body_jntadr[b], model.body_jntnum[b]
+            return any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for j in range(start, start + count))
+    return False

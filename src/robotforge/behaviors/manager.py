@@ -59,6 +59,9 @@ class BehaviorManager:
             info: dict[str, Any] = {"name": name, "kind": kind.value}
             if name in models:
                 info["model"] = models[name]
+            arms = self.arms(name)
+            if arms and arms != [name]:  # e.g. an arm riding on a rover: drive the robot, work the arm
+                info["arms"] = arms
             if kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
@@ -182,17 +185,49 @@ class BehaviorManager:
 
     # ---- arms ---------------------------------------------------------------------------
 
-    def _arm(self, robot: str) -> ArmMotion:
+    def arms(self, robot: str) -> list[str]:
+        """The arms of a robot: the robot itself for an arm, "<robot>/<part>" for each arm mounted on it."""
+        m = self.session.model
+        found = []
+        for s in range(m.nsite):
+            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_SITE, s) or ""
+            if name == f"{robot}/tcp":
+                found.append(robot)
+            elif name.startswith(f"{robot}/") and name.endswith("/tcp"):
+                found.append(name.removesuffix("/tcp"))
+        return found
+
+    def _arm_name(self, robot: str) -> str:
+        """Which arm a command means: "rover/arm" names one; a robot with a single arm stands for it."""
+        if "/" in robot:
+            owner = robot.split("/", 1)[0]
+            self.kind(owner)  # unknown robots get the usual message
+            arms = self.arms(owner)
+            if robot not in arms:
+                raise BehaviorError(f"{robot!r} is not an arm; arms on {owner}: {', '.join(arms) or 'none'}")
+            return robot
         kind = self.kind(robot)
-        if kind != Kind.ARM:
-            raise BehaviorError(f"{robot} is a {kind.value}, not an arm")
-        existing = self.session.controllers.get(robot)
+        arms = self.arms(robot)
+        if not arms:
+            raise BehaviorError(f"{robot} is a {kind.value}, not an arm, and carries none")
+        if len(arms) > 1:
+            raise BehaviorError(f"{robot} has {len(arms)} arms; name the one you mean: {', '.join(arms)}")
+        return arms[0]
+
+    def _arm(self, robot: str) -> ArmMotion:
+        name = self._arm_name(robot)
+        existing = self.session.controllers.get(name)
         if isinstance(existing, ArmMotion):
+            existing.sync(self.session.data)
             return existing
-        arm = ArmMotion(self.session.model, robot, self.home_qpos())
-        # Continue from where the arm is now, not from its home pose.
+        try:
+            arm = ArmMotion(self.session.model, name, self.home_qpos())
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        # Continue from where the arm (and whatever carries it) is now, not from the home pose.
+        arm.sync(self.session.data)
         arm.q = self.session.data.qpos[arm.chain.qpos_adr].copy()
-        self.session.set_controller(robot, arm)
+        self.session.set_controller(name, arm)
         return arm
 
     def move_arm(self, robot: str, position: list[float], gripper: str | None = None) -> ArmMotion:

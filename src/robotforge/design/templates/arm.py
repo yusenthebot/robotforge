@@ -134,45 +134,54 @@ class Arm(Template):
 
     @staticmethod
     def _gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, p: ArmParams, radius: float, accent) -> float:
-        palm_h = 0.02
-        half_w = p.gripper_opening / 2 + 0.012
-        tool.add_geom(
+        return add_gripper(spec, tool, p.gripper_opening, accent)
+
+
+def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accent) -> float:
+    """A parallel two-finger gripper on `tool`, opening along its y axis, fingers along +z.
+
+    Adds the coupled finger joints, the `gripper` actuator (its control is one finger's travel)
+    and returns the height of the point between the fingertips above the tool frame.
+    """
+    palm_h = 0.02
+    half_w = opening / 2 + 0.012
+    tool.add_geom(
+        type=GEOM.mjGEOM_BOX,
+        size=[0.018, half_w, palm_h / 2],
+        pos=[0, 0, palm_h / 2],
+        rgba=DARK,
+        density=components.MATERIALS["pla"],
+    )
+    finger_len = 0.05
+    travel = opening / 2
+    for side, sign in (("left", 1), ("right", -1)):
+        finger = tool.add_body(name=f"finger_{side}", pos=[0, sign * 0.006, palm_h])
+        finger.add_joint(
+            name=f"finger_{side}",
+            type=mujoco.mjtJoint.mjJNT_SLIDE,
+            axis=[0, sign, 0],
+            range=[0, travel],
+            limited=mujoco.mjtLimited.mjLIMITED_TRUE,
+            damping=1.0,
+            armature=0.001,
+        )
+        finger.add_geom(
             type=GEOM.mjGEOM_BOX,
-            size=[0.018, half_w, palm_h / 2],
-            pos=[0, 0, palm_h / 2],
-            rgba=DARK,
-            density=components.MATERIALS["pla"],
+            size=[0.012, 0.005, finger_len / 2],
+            pos=[0, 0, finger_len / 2],
+            rgba=accent,
+            friction=[1.5, 0.02, 0.002],
+            condim=4,
+            solref=[0.005, 1],
+            mass=0.012,
         )
-        finger_len = 0.05
-        travel = p.gripper_opening / 2
-        for side, sign in (("left", 1), ("right", -1)):
-            finger = tool.add_body(name=f"finger_{side}", pos=[0, sign * 0.006, palm_h])
-            finger.add_joint(
-                name=f"finger_{side}",
-                type=mujoco.mjtJoint.mjJNT_SLIDE,
-                axis=[0, sign, 0],
-                range=[0, travel],
-                limited=mujoco.mjtLimited.mjLIMITED_TRUE,
-                damping=1.0,
-                armature=0.001,
-            )
-            finger.add_geom(
-                type=GEOM.mjGEOM_BOX,
-                size=[0.012, 0.005, finger_len / 2],
-                pos=[0, 0, finger_len / 2],
-                rgba=accent,
-                friction=[1.5, 0.02, 0.002],
-                condim=4,
-                solref=[0.005, 1],
-                mass=0.012,
-            )
-        spec.add_equality(
-            type=mujoco.mjtEq.mjEQ_JOINT, name1="finger_left", name2="finger_right", data=[0, 1, 0, 0, 0] + [0] * 6
-        )
-        act = spec.add_actuator(name="gripper", target="finger_left", trntype=mujoco.mjtTrn.mjTRN_JOINT)
-        act.set_to_position(kp=200)
-        act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
-        act.ctrlrange = [0, travel]
-        act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
-        act.forcerange = [-15, 15]
-        return palm_h + finger_len - 0.012
+    spec.add_equality(
+        type=mujoco.mjtEq.mjEQ_JOINT, name1="finger_left", name2="finger_right", data=[0, 1, 0, 0, 0] + [0] * 6
+    )
+    act = spec.add_actuator(name="gripper", target="finger_left", trntype=mujoco.mjtTrn.mjTRN_JOINT)
+    act.set_to_position(kp=200)
+    act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
+    act.ctrlrange = [0, travel]
+    act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
+    act.forcerange = [-15, 15]
+    return palm_h + finger_len - 0.012

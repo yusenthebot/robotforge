@@ -260,7 +260,10 @@ def _shape(
     elif shape == "wheel":
         kwargs["friction"] = FOOT_FRICTION
     elif shape == "caster":
+        # MuJoCo uses the larger friction of two touching geoms unless one has priority; without it the
+        # floor's grip would turn a ball caster into a brake.
         kwargs["friction"] = CASTER_FRICTION
+        kwargs["priority"] = 1
     if not getattr(spec, "collide", True):
         kwargs["contype"] = 0
         kwargs["conaffinity"] = 0
