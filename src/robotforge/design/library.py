@@ -42,6 +42,7 @@ class LibraryRobot:
     # Torque-motor models get position servos with this stiffness (N*m/rad), keeping their torque
     # limits: that is how the real robots are commanded (joint targets + PD in the motor driver).
     servo_kp: float | None = None
+    max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -87,6 +88,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "boston_dynamics_spot",
             "spot.xml",
+            max_speed=0.35,  # measured: tops out at 0.36-0.39 m/s however long the stride
         ),
         LibraryRobot(
             "panda",

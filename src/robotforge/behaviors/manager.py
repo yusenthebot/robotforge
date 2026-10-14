@@ -91,9 +91,17 @@ class BehaviorManager:
             ctrl = quadruped.for_robot(m, robot, self.home_qpos()) if kind == Kind.QUADRUPED else DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
             raise BehaviorError(str(exc)) from exc
+        top = self._library_top_speed(robot)
+        if top is not None and isinstance(ctrl, quadruped.QuadrupedGait):
+            ctrl.limit_speed(top)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _library_top_speed(self, robot: str) -> float | None:
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        return library.get(entry.library).max_speed if entry is not None and entry.library else None
 
     def stop(self, robot: str) -> dict[str, Any]:
         with self.session.lock:

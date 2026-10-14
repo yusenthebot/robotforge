@@ -206,7 +206,9 @@ def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:
 
     Physics options are global, so attach keeps the world's values; models like Menagerie's
     quadrupeds rely on elliptic friction cones with a high impratio to keep their feet from
-    slipping. Aligning the child afterwards also silences MuJoCo's attach-conflict warnings.
+    slipping. Note this is world-wide: adding a Go2 also makes every other robot and object in
+    the world use elliptic cones (grip gets slightly stronger; all built-in behaviors still pass).
+    Aligning the child afterwards also silences MuJoCo's attach-conflict warnings.
     """
     if child.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
         world.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC

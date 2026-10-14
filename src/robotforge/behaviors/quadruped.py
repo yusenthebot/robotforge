@@ -36,7 +36,7 @@ VELOCITY_KI = 2.0  # 1/s
 # The fastest command the gait accepts, as a share of what the longest stride allows. The rest is
 # headroom for the velocity correction. Measured top speeds at the full stride: template dog 0.39 of
 # 0.52 m/s (it stumbles at full stride), Go2 0.62, Go1 0.66, A1 0.63 of 0.86 m/s. Library robots that
-# reach less (Spot: 0.39) carry their own limit.
+# reach less (Spot: about 0.37) carry their own limit.
 SPEED_MARGIN = 0.7
 # PD for torque-motor legs: full torque at this joint error (rad), lightly damped on top of the
 # joints' own damping. The PD runs explicitly at physics rate, where heavy damping makes light knee
@@ -310,7 +310,10 @@ def discover_legs(
     """Find the four legs of a floating robot named `robot`, or None if it has no such legs.
 
     A leg is a chain of exactly three hinge joints from the trunk to a leaf body whose lowest
-    collision geom (the foot) reaches below the trunk. Legs are named by where their hips are.
+    collision geom (the foot) is at least 5 cm below the trunk origin at the home pose. Legs are
+    named by where their hips are, assuming the trunk's +x points forward and +y left (the
+    convention of MuJoCo Menagerie and URDF). Robots with two-joint or four-joint legs, wheels on
+    the legs, or an extra leaf with three hinges that reaches the floor are not recognized.
     """
     prefix = f"{robot}/"
     bodies = [b for b in range(1, model.nbody) if _name(model, mujoco.mjtObj.mjOBJ_BODY, b).startswith(prefix)]
