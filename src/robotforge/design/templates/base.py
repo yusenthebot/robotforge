@@ -38,6 +38,7 @@ class BuiltRobot:
     spawn_height: float = 0.0  # base height above the floor so feet/wheels touch it at home
     floating: bool = False  # True when the root body has a free joint
     notes: list[str] = field(default_factory=list)
+    doctor: dict | None = None  # import doctor report (imported files only)
 
 
 class Template:
