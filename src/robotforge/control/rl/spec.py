@@ -45,7 +45,7 @@ DEFAULTS: dict[str, TaskDefaults] = {
     "balance": TaskDefaults("ppo", "direct", 150_000, 1.5, 19_000, {**_PPO}, {**_SAC}, inline=True),
     "reach": TaskDefaults("sac", "direct", 150_000, 0.0, 9_500, {**_PPO}, {**_SAC}, (256, 256), residual_scale=0.05),
     "stand": TaskDefaults("ppo", "residual", 400_000, 2.0, 4_700, {**_PPO, "batch_size": 512}, {**_SAC}, (128, 128)),
-    "walk": TaskDefaults("ppo", "residual", 600_000, 2.5, 1_600, {**_PPO, "batch_size": 512}, {**_SAC}, (128, 128)),
+    "walk": TaskDefaults("ppo", "residual", 600_000, 1.2, 1_600, {**_PPO, "batch_size": 512}, {**_SAC}, (128, 128)),
     "drive_to": TaskDefaults("ppo", "direct", 300_000, 0.0, 4_300, {**_PPO}, {**_SAC}),
 }
 

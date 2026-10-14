@@ -22,7 +22,7 @@ from robotforge.control.env import DEFAULT_ROBOTS
 from robotforge.control.rl import store
 from robotforge.control.rl.jobs import JOBS
 from robotforge.control.rl.runtime import TrainedPolicy
-from robotforge.control.rl.spec import make_spec
+from robotforge.control.rl.spec import DEFAULTS, make_spec
 from robotforge.control.tasks import TaskError
 
 
@@ -61,7 +61,7 @@ def train(
     template, robot = DEFAULT_ROBOTS[task]
     place = Path(save_dir) if save_dir is not None else store.policies_home(None)
     spec = make_spec(
-        store.check_name(name) if name else unused_name(f"{task}_{algo or 'policy'}", place),
+        store.check_name(name) if name else unused_name(f"{task}_{algo or DEFAULTS[task].algo}", place),
         task,
         {"name": robot, "template": robot_template or template, "params": robot_params or {}},
         algo=algo,
