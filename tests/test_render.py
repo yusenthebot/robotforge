@@ -43,22 +43,36 @@ def test_snapshot_is_a_real_picture(needs_gl, session):
     assert len(colors) > 10  # a blank frame would be one flat color
 
 
-def test_one_renderer_serves_calls_from_different_threads(needs_gl, session):
-    renderer, sizes, errors = SnapshotRenderer(), [], []
+def test_one_renderer_serves_threads_that_are_alive_at_the_same_time(needs_gl, session):
+    # MCP runs sync tools on pooled worker threads. A GL context stays current in the thread that last used
+    # it, and EGL refuses to hand it to another live thread, so the second thread must not touch it directly.
+    renderer, shapes, errors = SnapshotRenderer(), [], []
+    first_rendered, second_rendered = threading.Event(), threading.Event()
 
     def shoot() -> None:
         try:
-            sizes.append(renderer.rgb(session, "top", 64, 48).shape)
+            shapes.append(renderer.rgb(session, "top", 64, 48).shape)
         except Exception as exc:  # collected so the main thread can fail with the cause
             errors.append(exc)
 
-    for _ in range(3):
-        thread = threading.Thread(target=shoot)
+    def first() -> None:
+        shoot()
+        first_rendered.set()
+        second_rendered.wait(30)  # stay alive, still holding whatever context it made current
+
+    def second() -> None:
+        first_rendered.wait(30)
+        shoot()
+        second_rendered.set()
+
+    threads = [threading.Thread(target=first), threading.Thread(target=second)]
+    for thread in threads:
         thread.start()
+    for thread in threads:
         thread.join()
     renderer.close()
     assert not errors
-    assert sizes == [(48, 64, 3)] * 3
+    assert shapes == [(48, 64, 3)] * 2
 
 
 @pytest.fixture
