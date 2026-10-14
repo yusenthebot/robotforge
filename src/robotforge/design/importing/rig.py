@@ -474,17 +474,13 @@ def _plan_actuators(staged: StagedUrdf, geo: _Geometry, draft: _Draft, movable: 
         actuator.home = plan.home_qpos.get(j.name, 0.0)
         if j.name in plan.home_qpos and not _inside(j, 0.0):
             draft.clamped.append(f"{j.name} (starts at {actuator.home:.3g})")
-        if j.effort and plan.base == "fixed" and j.effort < 0.9 * _holding_load(geo, jid):
-            draft.weak.append(f"{j.name}: limit {j.effort:.3g}, needs about {_holding_load(geo, jid):.3g}")
+        if j.effort and plan.base == "fixed" and j.effort < 0.9 * torque:
+            draft.weak.append(f"{j.name}: limit {j.effort:.3g}, needs about {torque:.3g} when stretched out")
         plan.actuators.append(actuator)
 
 
 def _inside(j: JointInfo, value: float) -> bool:
     return j.lower is None or j.upper is None or j.lower <= value <= j.upper
-
-
-def _holding_load(geo: _Geometry, jid: int) -> float:
-    return abs(float(geo.data.qfrc_bias[int(geo.model.jnt_dofadr[jid])]))
 
 
 def _support_share(staged: StagedUrdf, geo: _Geometry, plan: RigPlan) -> float:
@@ -1029,7 +1025,7 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
     if draft.weak:
         report.unfixed(
             "actuators",
-            "the file's effort limits are too weak to hold the robot's own weight in its starting pose",
+            "the file's effort limits are too weak to hold the robot's own weight when it is stretched out",
             "kept the file's limits, so these joints will sag; "
             "re-import a copy of the URDF with larger <limit effort> values if that is not wanted",
             draft.weak,

@@ -45,9 +45,11 @@ robotforge is a robot playground backed by the MuJoCo physics engine, made for b
 
 Design: new_world creates a world (saved as world.yaml). list_templates shows the robot templates
 (arm, quadruped, rover) and their parameters; list_library shows real robots (Unitree Go2, Franka
-Panda, ...); add_robot builds one from a template, takes one from the library or imports an
-MJCF/URDF file. add_object places boxes, balls, cylinders, tables and bins. update_robot,
-update_object, remove, set_floor and undo edit the world; every edit is validated and the live
+Panda, ...); add_robot builds one from a template, takes one from the library or imports a file
+(URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; URDFs and meshes are repaired by the
+import doctor, whose report comes back in the result's "doctor" field). add_object places boxes, balls,
+cylinders, tables and bins. update_robot, update_object, remove, set_floor and undo edit the world;
+every edit is validated and the live
 viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
 radians for joints and degrees for yaw.
 

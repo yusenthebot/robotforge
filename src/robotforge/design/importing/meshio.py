@@ -166,11 +166,11 @@ def _load_pieces(source: Path) -> list[tuple[trimesh.Trimesh, tuple[float, ...] 
 def _load_with_trimesh(source: Path, prefix: str) -> list[tuple[trimesh.Trimesh, tuple[float, ...] | None]]:
     try:
         loaded = trimesh.load(source, force="mesh", allow_remote=False)
-    except ModuleNotFoundError as exc:
+    except ImportError as exc:
         hint = ""
         if source.suffix.lower() == ".dae" or "collada" in str(exc).lower():
             hint = " DAE meshes need pycollada for this file; ask the user to approve installing it."
-        raise MeshError(f"{prefix or source.name}: a reader library is missing ({exc.name}).{hint}".strip()) from exc
+        raise MeshError(f"{prefix or source.name}: a reader library is missing ({exc}).{hint}".strip()) from exc
     except (ValueError, OSError, KeyError, IndexError, TypeError) as exc:
         reason = f"{prefix}; " if prefix else ""
         raise MeshError(f"{source.name}: {reason}trimesh could not read it ({exc})") from exc
@@ -316,6 +316,10 @@ def _native_problem(path: Path) -> str:
             (count,) = struct.unpack("<I", head[80:84])
             if size != 84 + 50 * count:
                 return "ASCII STL converted to binary STL (MuJoCo only reads binary STL)"
+            record = np.dtype([("normal", "<f4", 3), ("verts", "<f4", (3, 3)), ("attr", "<u2")])
+            body = np.fromfile(path, dtype=record, count=count, offset=84)
+            if not np.isfinite(body["verts"]).all():
+                return "removed broken (NaN) vertices"
             return ""
         if size > 200_000_000:
             return "OBJ file is too large to inspect"
@@ -326,6 +330,8 @@ def _native_problem(path: Path) -> str:
                     objects += 1
                     if objects > 1:
                         return "OBJ file holds several objects; merged them into one mesh (MuJoCo reads only the first)"
+                elif line.startswith("v ") and ("nan" in line.lower() or "inf" in line.lower()):
+                    return "removed broken (NaN) vertices"
         return ""
     except OSError as exc:
         return f"file could not be read ({exc})"

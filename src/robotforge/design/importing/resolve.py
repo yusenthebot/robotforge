@@ -145,7 +145,7 @@ class MeshResolver:
     def _file_index(self) -> dict[str, list[Path]]:
         if self._index is None:
             self._index = {}
-            top = self.ancestors[min(3, len(self.ancestors) - 1)]
+            top = self._search_root()
             seen = 0
             for dirpath, dirnames, filenames in os.walk(top):
                 dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS]
@@ -156,6 +156,16 @@ class MeshResolver:
                 if seen > _MAX_INDEXED_FILES:
                     break
         return self._index
+
+    def _search_root(self) -> Path:
+        """Where to look for files by name: the enclosing repository or package, else just next to the URDF's folder.
+
+        Staying inside one project avoids picking up an unrelated mesh that happens to share a file name.
+        """
+        for ancestor in self.ancestors[:5]:
+            if (ancestor / ".git").exists() or (ancestor / "package.xml").is_file():
+                return ancestor
+        return self.ancestors[min(1, len(self.ancestors) - 1)]
 
     def _pretty(self, path: Path) -> str:
         try:

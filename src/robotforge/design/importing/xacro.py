@@ -379,7 +379,8 @@ class _Expander:
         stripped = text.strip()
         match = re.fullmatch(r"\$\{([^}]*)\}", stripped)
         if match:
-            return _evaluate(match.group(1), lambda n: self._lookup(n, scope))
+            expr = self._resolve_commands(match.group(1), scope, file)
+            return _evaluate(expr, lambda n: self._lookup(n, scope))
         out = self._text(text, scope, file)
         for conv in (int, float):
             try:
@@ -393,10 +394,15 @@ class _Expander:
             if m.group(0) == "$$":
                 return "$"
             if m.group(1) is not None:
-                return _fmt(_evaluate(m.group(1), lambda n: self._lookup(n, scope)))
+                expr = self._resolve_commands(m.group(1), scope, file)
+                return _fmt(_evaluate(expr, lambda n: self._lookup(n, scope)))
             return self._command(m.group(2).strip(), scope, file)
 
         return _SUBST.sub(sub, text)
+
+    def _resolve_commands(self, expr: str, scope: _Scope, file: Path) -> str:
+        """`$(arg x)` and friends inside a formula are replaced by their value before the formula runs."""
+        return re.sub(r"\$\(([^)]*)\)", lambda m: self._command(m.group(1).strip(), scope, file), expr)
 
     def _command(self, command: str, scope: _Scope, file: Path) -> str:
         verb, _, rest = command.partition(" ")
