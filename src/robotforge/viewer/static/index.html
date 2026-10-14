@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>robotforge</title>
+  <link rel="stylesheet" href="static/style.css">
+  <script type="importmap">
+    { "imports": { "three": "./static/vendor/three/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <header class="hud hud-top">
+    <div class="brand">robotforge</div>
+    <div class="source" id="source" title=""></div>
+    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
+  </header>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head">
+      <span>Actuators</span>
+      <span class="count" id="act-count"></span>
+    </div>
+    <div class="panel-body" id="actuators"></div>
+    <div class="panel-head panel-head-sub"><span>Display</span></div>
+    <div class="panel-body toggles">
+      <label><input type="checkbox" id="show-collision"> Collision geoms</label>
+      <label><input type="checkbox" id="show-shadows" checked> Shadows</label>
+    </div>
+  </aside>
+
+  <footer class="hud hud-bottom">
+    <div class="transport">
+      <button id="btn-play" class="btn primary" title="Play / pause (Space)">Pause</button>
+      <button id="btn-step" class="btn" title="Step one physics tick (.)">Step</button>
+      <button id="btn-reset" class="btn" title="Reset (R)">Reset</button>
+      <label class="speed" title="Simulation speed">
+        <span>Speed</span>
+        <select id="speed">
+          <option value="0.1">0.1x</option>
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+        </select>
+      </label>
+    </div>
+    <div class="stats">
+      <span>t <b id="stat-time">0.00</b> s</span>
+      <span>realtime <b id="stat-rtf">-</b></span>
+      <span>fps <b id="stat-fps">-</b></span>
+    </div>
+    <div class="hint">Drag the robot to push it. Drag empty space to orbit, scroll to zoom.</div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="static/app.js"></script>
+</body>
+</html>
