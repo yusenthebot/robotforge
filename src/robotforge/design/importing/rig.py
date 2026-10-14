@@ -107,7 +107,12 @@ def make_plan(
 
     result = draft.result
     if draft.plan.base == "floating" and result is not None and result.finite and tipped(result):
-        better = _search_stance(staged, urdf, draft, deadline)
+        better, stopped = _search_stance(staged, urdf, draft, deadline)
+        if stopped:
+            report.info(
+                "stance",
+                "the stance search stopped early because it ran out of time; the starting pose may not be the best one",
+            )
         if better is not None:
             _describe_stance(draft.plan.home_qpos, better.plan.home_qpos, report)
             draft = better
@@ -408,10 +413,15 @@ def _body(model: mujoco.MjModel, b: int) -> str:
     return mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}"
 
 
-def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft, deadline: float) -> _Draft | None:
-    """Zero is rarely a pose a legged robot can stand in; look for one by sampling joint angles."""
+def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft, deadline: float) -> tuple[_Draft | None, bool]:
+    """Zero is rarely a pose a legged robot can stand in; look for one by sampling joint angles.
+
+    Returns the better draft (or None) and whether the time budget cut the search short.
+    """
+    found = find_stances(staged, urdf, current.plan.home_qpos, deadline)
     best: _Draft | None = None
-    for pose in find_stances(staged, urdf, current.plan.home_qpos):
+    stopped = found.stopped_early
+    for pose in found.poses:
         draft = _draft(staged, urdf, "floating", pose)
         draft.base_reason = current.base_reason
         draft.result = tune_gains(urdf, draft.plan, deadline)
@@ -419,13 +429,16 @@ def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft, deadline: fl
             continue
         if best is None or best.result is None or score(draft.result) < score(best.result):
             best = draft
-        if draft.result.holds or time.monotonic() > deadline:
+        if draft.result.holds:
+            break
+        if time.monotonic() > deadline:
+            stopped = True
             break
     if best is None or best.result is None:
-        return None
+        return None, stopped
     if current.result is not None and score(best.result) >= score(current.result):
-        return None
-    return best
+        return None, stopped
+    return best, stopped
 
 
 # ---- reporting -------------------------------------------------------------------------------

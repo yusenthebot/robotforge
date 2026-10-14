@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,24 +29,42 @@ class _Limb:
     hip_joint: str
 
 
-def find_stances(staged: StagedUrdf, urdf: Path, home: dict[str, float]) -> list[dict[str, float]]:
-    """Joint poses, best first, where the feet sit under the hips and the body is over its feet."""
+@dataclass
+class StanceResult:
+    """Candidate stances, best first, and whether the time budget cut the search short."""
+
+    poses: list[dict[str, float]]
+    stopped_early: bool = False
+
+
+def find_stances(staged: StagedUrdf, urdf: Path, home: dict[str, float], deadline: float = math.inf) -> StanceResult:
+    """Joint poses, best first, where the feet sit under the hips and the body is over its feet.
+
+    The search stops refining once `deadline` (a time.monotonic() value) has passed.
+    """
+    if time.monotonic() > deadline:
+        return StanceResult([], stopped_early=True)
     spec = build_spec(urdf)
     model, data = compile_spec(spec)
     pose_model(model, data, home)
     geo = Geometry(model, data)
     limbs = _limbs(staged, geo)
     if len(limbs) < 2:
-        return []
-    search = _StanceSearch(model, data, geo, limbs, geo.body_id(staged.root), home)
-    return search.run()
+        return StanceResult([])
+    search = _StanceSearch(model, data, geo, limbs, geo.body_id(staged.root), home, deadline)
+    poses = search.run()
+    return StanceResult(poses, search.stopped_early)
 
 
 class _StanceSearch:
     """Random sampling followed by hill climbing on a stance score (kinematics only, no simulation)."""
 
-    def __init__(self, model, data, geo: Geometry, limbs: list[_Limb], root: int, home: dict[str, float]):
+    def __init__(
+        self, model, data, geo: Geometry, limbs: list[_Limb], root: int, home: dict[str, float], deadline: float
+    ):
         self.model, self.data, self.geo, self.limbs, self.root, self.home = model, data, geo, limbs, root, home
+        self.deadline = deadline
+        self.stopped_early = False
         self.rng = np.random.default_rng(1)
         self.names: list[str] = []
         self.adr: list[int] = []
@@ -84,6 +103,8 @@ class _StanceSearch:
         n = len(self.names)
         samples = []
         for k in range(STANCE_SAMPLES):
+            if k % 64 == 0 and self._out_of_time():
+                break
             if k % 2:
                 values = self.rng.uniform(self.lo, self.hi)
             else:
@@ -103,10 +124,17 @@ class _StanceSearch:
         # Only poses with every foot on the same floor, below its shoulder, count as stances at all.
         return [self.pose(v) for score, v in refined if score != math.inf and self.score(v, strict=True) != math.inf]
 
+    def _out_of_time(self) -> bool:
+        if time.monotonic() > self.deadline:
+            self.stopped_early = True
+        return self.stopped_early
+
     def _climb(self, values: np.ndarray) -> tuple[float, np.ndarray]:
         best, best_score = values, self.score(values)
         step = 0.2
-        for _ in range(STANCE_CLIMB_STEPS):
+        for i in range(STANCE_CLIMB_STEPS):
+            if i % 50 == 0 and self._out_of_time():
+                break
             trial = np.clip(
                 best + self.rng.normal(0, step, len(best)) * (self.rng.random(len(best)) < 0.4), self.lo, self.hi
             )
