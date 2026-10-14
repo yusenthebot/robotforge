@@ -3,6 +3,7 @@
 robotforge 把“让机器人做到一件事”拆成两半：任务（要做到什么）和算法（怎么做到）。
 同一个任务可以交给不同的算法，跑完给出同一套指标，新手可以直接看到每种方法的长处和代价。
 代码在 `src/robotforge/control/`，不需要额外安装任何依赖。
+神经网络强化学习（PPO、SAC）例外：它需要可选依赖组 `rl`，见下文“神经网络强化学习”一节。
 
 ## 一句话怎么用
 
@@ -12,6 +13,8 @@ robotforge 把“让机器人做到一件事”拆成两半：任务（要做到
 - “用 LQR 让倒立摆保持平衡，2 秒时推它一下” 对应 `run_controller(robot="pole", task="balance", method="lqr", push_at=2)`。
 - “用 MPC 让机械臂把末端移到方块那里” 对应 `run_controller(robot="arm", task="reach", method="mpc", task_params={"target": "cube"})`。
 - “对比几种算法谁更好” 对应 `compare_controllers(robot="arm", task="reach")`，返回一张对比表。
+- “训练倒立摆保持平衡” 对应 `train_policy(task="balance", robot="pole")`，在后台训练，立刻返回。
+- “训练我的机器狗走得更快” 对应 `train_policy(task="walk", robot="dog", task_params={"speed": 0.6})`。
 
 查看器打开时，`run_controller` 按真实时间播放，用户能看到机器人怎么动。
 跑完后控制器继续工作（比如继续扶住摆杆），用 `stop(robot)` 释放。
@@ -86,7 +89,7 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 不给任何控制规则，让机器人自己试错：随机微调一个线性策略（动作等于观测的加权和），保留得分高的方向，反复几十轮。
 它只用 numpy，不需要安装 PyTorch，在倒立摆上大约 3 秒就学会平衡（相当于在仿真里练了 800 多秒）。
 `run_controller` 和 `compare_controllers` 里选 ars 时，会先当场训练再运行，结果里有训练用时。
-目前只对 balance 开放；更难的任务（随机目标的 reach、走路）需要神经网络策略，也就是计划中的可选 `rl` 依赖组里的 PPO、SAC。
+目前只对 balance 开放；更难的任务（随机目标的 reach、走路）需要神经网络策略，也就是可选 `rl` 依赖组里的 PPO、SAC，见下文。
 在 Python 里也可以直接训练：`train_ars(make_env("balance"))`，返回的策略能 `save` 成一个小文件。
 
 ### hold、gait、none
@@ -184,7 +187,151 @@ from robotforge.control.gym_compat import as_gymnasium
 env = as_gymnasium(make_env("balance"))  # 得到真正的 gymnasium.Env
 ```
 
-gymnasium 只在调用这一行时才导入，核心安装不受影响；没装时会提示 `pip install gymnasium`（打包 gymnasium、Stable-Baselines3 和 PyTorch 的可选 `rl` 依赖组正在计划中）。
+gymnasium 只在调用这一行时才导入，核心安装不受影响；没装时会提示 `pip install gymnasium`，或者直接装可选依赖组 `rl`。
+
+## 神经网络强化学习：PPO 和 SAC（可选依赖组 rl）
+
+ars 只能学“观测的加权和”这种线性策略，平衡倒立摆够用，走路和随机目标的 reach 就不够了。
+PPO 和 SAC 学的是一个小神经网络，能表达复杂得多的动作规则。
+它们来自 Stable-Baselines3，需要 PyTorch，所以放在可选依赖组 `rl` 里，核心安装不包含。
+
+### 安装
+
+- 在 robotforge 的仓库里：`uv sync --extra rl`。
+- 用 pip 安装时：`pip install "robotforge[rl]"`。
+- macOS（Apple 芯片）和 Windows 上，PyPI 默认的 PyTorch 就是 CPU 版：macOS 下载约 130 MB（torch 本身 127 MB），装好后约 580 MB（torch 占 526 MB），核心安装是 180 MB。
+- Linux 上，PyPI 默认的 PyTorch 是带 CUDA 的版本：torch 本身 555 MB，还会拉进十几个 nvidia 包，合计好几个 GB。
+- 只用 CPU 的 Linux 机器，先装 CPU 版再装 robotforge：`pip install torch --index-url https://download.pytorch.org/whl/cpu`，然后 `pip install "robotforge[rl]"`。
+- 用 uv 的项目也一样：`uv pip install torch --index-url https://download.pytorch.org/whl/cpu`，或者在 `pyproject.toml` 里用 `[tool.uv.sources]` 把 torch 指到这个 CPU 源。
+- 没装 `rl` 时调用 `train_policy`，会直接告诉你上面的安装命令，不会出现看不懂的报错。
+
+### 一句话怎么用
+
+- “训练倒立摆保持平衡” 对应 `train_policy(task="balance", robot="pole")`，立刻返回策略名字和预计时间，训练在后台进行。
+- “训练进度怎么样？” 对应 `training_status(name="pole_balance", wait_seconds=60)`，返回进度、平均奖励、成功率和剩余时间；等待期间会持续发送 MCP 进度通知。
+- “先停下，用现在学到的” 对应 `stop_training(name)`，它会保留到目前为止最好的策略并做一次最终测试。
+- “用训练好的策略跑一下” 对应 `run_controller(robot="pole", task="balance", method="policy:pole_balance", push_at=4)`，查看器打开时实时播放。
+- “和 LQR、MPC 比一比” 对应 `compare_controllers(robot="pole", task="balance", methods=["lqr", "mpc", "policy:pole_balance"], push_at=3)`。
+- “有哪些训练好的策略？” 对应 `list_policies()`。
+- 脚本里用 `sim.run_policy("dog", "dog_walk")` 把机器人交给训练好的策略，直到 `sim.stop("dog")`。
+
+训练在单独的进程里跑（`python -m robotforge.control.rl job <文件夹>`），MCP 服务和查看器不会卡，训练进程的输出只写进 `train.log`，不会混进 MCP 的通信。
+训练进程的优先级调低了一档，查看器和 agent 照常流畅。
+关掉 Claude 之后训练会继续跑完并保存，下次打开时 `list_policies` 能看到它。
+
+### PPO 和 SAC 是什么（大白话）
+
+PPO（近端策略优化）：同时开几个模拟世界，让机器人在里面反复尝试；每攒够一批经验，神经网络就朝“得分更高的动作”挪一小步，每次挪得不会太远，所以训练稳定。
+它是最常用的入门算法，适合能并行开很多模拟的任务，比如平衡和走路。
+
+SAC（软演员评论家）：只开一个模拟世界，但把试过的每一步都记下来，反复从记忆里学；另一个网络专门评估“在这个状态做这个动作值多少分”，策略照着它改进，同时保持一点好奇心（随机性），避免过早认定一种做法。
+它更省样本，适合动作需要精细连续调整的任务，比如机械臂 reach，代价是每一步都要更新网络，墙钟时间更长。
+
+两种算法学到的都是同一样东西：一个输入观测、输出电机指令的小网络（默认两层，每层 64 到 256 个神经元）。
+
+### 直接模式和叠加模式
+
+直接模式：网络的输出就是电机指令，从零学起，balance 和 reach 默认这样。
+叠加模式：内置控制器照常工作，网络只学“在它的指令上加多少修正”，walk 叠在小跑步态上，stand 叠在保持姿态上。
+叠加模式起点就能走，学得快，也不容易学出奇怪的动作；修正幅度默认是每个电机行程的 20%，机械臂是 5%。
+
+### 训练时会推它
+
+balance、stand、walk 训练时，机器人每隔 1.5 到 4 秒会被随机推一下（方向和力度随机），和对比测试里 `push_at` 用的是同一种推法。
+只在平静环境里练过的策略，第一次被推就会倒；练的时候挨过推的策略学会了恢复。
+推得越狠，策略越保守：walk 用最大 2.5 倍力度训练后，走得比步态本身还慢（见下表）。
+`train_policy(..., shoves=0)` 关掉推，`shoves=1.5` 这样的数值调力度。
+
+### 训练出来的东西
+
+每个策略是一个文件夹：打开世界时在 `<世界>/policies/<名字>/`，没有打开世界时在 `$ROBOTFORGE_HOME/policies/<名字>/`。
+
+- `policy.json`：任务、机器人、算法、观测的含义、训练步数、最终测试成绩。
+- `status.json`：训练进度，训练时每一两秒更新一次，包括学习曲线。
+- `policy.npz`：训练好的网络，存成普通的 numpy 数组。
+- `model.zip` 和 `vecnormalize.pkl`：Stable-Baselines3 的原始模型和观测归一化，想继续训练或者直接用 SB3 时用。
+- `train.log`：训练进程打印的所有内容。
+
+运行策略只用 `policy.npz`，几次矩阵乘法，不需要 PyTorch，所以 MCP 服务运行策略时不加载 PyTorch，只装了核心依赖的电脑也能运行别人训练好的策略。
+测试保证导出的网络和 Stable-Baselines3 自己算出的动作一致，误差小于十万分之一。
+训练时每隔八分之一的进度用固定的测试回合检查一次，保留成绩最好的那一版，所以训练后期变差也不会丢掉好策略。
+机器人按世界里的描述（模板、参数、位置、地面）在训练进程里重新搭一份，单独训练；世界里的其他物体不参与训练。
+
+### 在笔记本上要多久（实测）
+
+测量环境：M5 Max（18 核），同时还有另外三个 agent 在跑仿真和测试，负载很高，所以下面的时间偏保守，空闲的电脑会更快。
+
+| 任务 | 算法和模式 | 训练量 | 用时 | 结果 |
+|---|---|---|---|---|
+| balance | PPO，直接 | 15 万步 | 50 秒（通过 MCP 训练时 98 秒） | 平静 10/10 成功，被推 9/10 成功；3.7 万步时就已经学会 |
+| walk，0.6 米每秒 | PPO，叠加在步态上，不推 | 100 万步 | 5.2 分钟 | 实际 0.61 米每秒，10/10 不摔；步态本身最快只到 0.34 米每秒 |
+| walk，0.3 米每秒 | PPO，叠加，推力最大 2.5 | 60 万步 | 4.7 分钟 | 2.0 倍推力下 10 次活下来 2 次（步态 0 次）；2.5 倍都会倒；走得更慢（0.22 对 0.31 米每秒） |
+| reach，随机目标 | SAC，直接 | 15 万步 | 10.7 分钟 | 最终平均误差 5.3 厘米，没有达到 1 厘米的成功线 |
+| reach，随机目标 | PPO，直接 | 100 万步 | 3.4 分钟 | 平均误差 5.5 厘米 |
+
+SAC 每走一步就更新一次网络，在负载高的机器上只有每秒 100 到 250 步，所以同样的步数比 PPO 慢得多。
+PPO 用 8 个模拟进程并行，每个进程只加载 MuJoCo 和 numpy，不加载 PyTorch，单个进程大约 60 MB。
+
+### 和 MPC、LQR 对比（实测）
+
+balance，3 秒时推摆杆一下，6 秒，同一个起点：
+
+| method | reward | success | pole_angle_deg | effort (J) | wall/sim | notes |
+|---|---|---|---|---|---|---|
+| lqr | 11.72 | yes | 0.34 | 1.03 | 0.02 |  |
+| pd | 11.38 | yes | 0.45 | 0.71 | 0.01 |  |
+| mpc | 11.67 | yes | -2.64 | 1.10 | 0.09 | 727 plans/s |
+| mppi | 11.65 | yes | 2.64 | 1.29 | 0.09 | 738 plans/s |
+| ars | 11.69 | yes | -1.19 | 1.32 | 0.01 | learned in 5.1s |
+| policy:pole_ppo | 11.54 | yes | 1.36 | 0.69 | 0.01 | learned in 49.6s |
+
+换 10 个随机起点重复，五种方法都是 10/10 成功；PPO 用的力气最小（0.69 焦耳），运行时和 LQR 一样几乎不花算力，但要先花 50 秒训练。
+
+walk，命令速度 0.6 米每秒，6 秒，10 个随机起点：
+
+| method | success | fell | mean reward | mean avg_speed_m_s | wall/sim |
+|---|---|---|---|---|---|
+| gait | 8/10 | 0/10 | 9.11 | 0.341 | 0.04 |
+| mppi | 0/10 | 7/10 | 4.54 | 0.279 | 0.43 |
+| policy:dog_fast | 10/10 | 0/10 | 11.83 | 0.607 | 0.04 |
+
+这是强化学习最能体现价值的地方：内置步态的步幅到上限后只能走 0.34 米每秒，叠加在步态上的 MPC 想走快反而会摔，PPO 花 5 分钟学会了调整步幅，稳稳走到 0.61 米每秒，运行时的算力和步态本身一样。
+
+reach，随机目标，4 秒，10 个随机起点：
+
+| method | success | mean reward | mean distance_m | wall/sim |
+|---|---|---|---|---|
+| ik | 1/10 | -5.96 | 0.059 | 0.05 |
+| pd | 7/10 | -5.90 | 0.047 | 0.12 |
+| cartesian | 10/10 | -4.77 | 0.007 | 0.15 |
+| mpc | 9/10 | -3.07 | 0.033 | 0.27 |
+| SAC 策略 | 0/10 | -3.84 | 0.056 | 0.06 |
+| PPO 策略 | 0/10 | -4.45 | 0.055 | 0.07 |
+
+这里强化学习输给了经典控制，原因值得讲给新手：
+
+- 机械臂的运动学是精确已知的，操作空间控制不用训练就能做到 7 毫米。
+- 策略要从零学会“任意目标对应的关节角”，还要自己学会抵消重力下垂；舵机角度范围是正负 3.14 弧度，网络输出差 1%，末端就差 1 到 2 厘米。
+- 策略很快学会“先快速靠近”（所以 reward 比 ik、pd 高），但最后几厘米的精度需要多得多的训练；它的动作也更抖，effort 比经典控制大一百倍。
+- 叠加在 ik 上训练也没有明显帮助：随机目标里有些点 ik 本身就解不好（最大误差 18 厘米），小幅修正救不回来。
+
+结论：已知模型、要求精度的任务用经典控制；模型复杂、规则写不出来的任务（走得更快、被推后恢复）才是强化学习的强项。
+
+### 在 Python 里
+
+```python
+from robotforge.control import compare_methods
+from robotforge.control.rl import train
+
+policy = train("balance", minutes=2)        # 在单独的进程里训练，打印进度，训练完返回
+print(policy.meta["final"])                  # 最终测试：平均回报、成功率
+method = f"policy:{policy.name}"
+print(compare_methods("balance", ["lqr", "mpc", method], seconds=6, push_at=3,
+                      method_params={method: {"path": str(policy.folder)}}).table)
+```
+
+命令行也可以：`python -m robotforge.control.rl train walk --task-params '{"speed": 0.6}' --timesteps 1000000`。
+`train` 在单独的进程里训练，所以普通脚本不用写 `if __name__ == "__main__":`。
 
 ## 怎么调参数
 
@@ -198,4 +345,9 @@ gymnasium 只在调用这一行时才导入，核心安装不受影响；没装�
 - MPC 预测时会模拟整个世界，世界里机器人越多越慢；同时在一个世界里跑多个 MPC 会互相抢 CPU。
 - LQR 目前只支持没有浮动基座的机器人（倒立摆这类），四足的 LQR 需要处理接触，留到后面。
 - 纯采样 MPC 学不会走路，walk 默认叠加在内置步态上。
-- 神经网络强化学习（PPO、SAC）还没接入，环境接口已经按 Stable-Baselines3 的要求准备好；目前能用的是只依赖 numpy 的 ars。
+- 神经网络策略只能用在和训练时同一种机器人（电机名字和数量一致）、同一个任务上，换了机器人要重新训练。
+- 训练时世界里只有这一个机器人和地面，桌子、障碍物这些物体不参与训练。
+- walk 策略是在固定的命令速度上训练的，运行时换一个差很多的速度，效果没有保证。
+- 同一时间只训练一个策略：每个训练已经会占满大部分 CPU 核。
+- reach 的强化学习还达不到 2 厘米以内，原因见上面的对比。
+- 小跑步态的腿部逆运动学是纯 Python 写的，占了走路训练 75% 的时间；换成解析解能让走路训练快好几倍。
