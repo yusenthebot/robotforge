@@ -9,6 +9,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 import mujoco
 import numpy as np
@@ -32,6 +33,16 @@ class Drag:
     target: np.ndarray  # desired anchor position in world frame
 
 
+class Controller(Protocol):
+    """Something that drives actuators while time passes (a gait, an IK motion, a script)."""
+
+    rate_hz: float
+
+    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None: ...
+
+    def status(self) -> dict: ...
+
+
 @dataclass
 class SimSession:
     """Owns one MjModel/MjData pair and advances it in (scaled) real time."""
@@ -43,7 +54,9 @@ class SimSession:
     speed: float = 1.0
     version: int = 1
     drag: Drag | None = None
+    controllers: dict[str, Controller] = field(default_factory=dict)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
 
@@ -76,6 +89,7 @@ class SimSession:
             self.source = source
             self.drag = None
             self._sim_debt = 0.0
+            self.controllers.clear()  # controllers hold ids from the old model
             self.version += 1
 
     # ---- control ----------------------------------------------------------------
@@ -88,6 +102,7 @@ class SimSession:
             mujoco.mj_forward(self.model, self.data)
             self.drag = None
             self._sim_debt = 0.0
+            self.controllers.clear()
 
     def set_ctrl(self, actuator: int, value: float) -> None:
         with self.lock:
@@ -117,11 +132,28 @@ class SimSession:
 
     # ---- stepping ---------------------------------------------------------------
 
+    def set_controller(self, name: str, controller: Controller | None) -> None:
+        """Attach (or with None, remove) a controller; it runs on every future step at its rate."""
+        with self.lock:
+            if controller is None:
+                self.controllers.pop(name, None)
+                return
+            self.controllers[name] = controller
+            self._next_update[name] = self.data.time
+
     def step(self, n: int = 1) -> None:
         with self.lock:
             for _ in range(n):
+                self._run_controllers()
                 self._apply_drag()
                 mujoco.mj_step(self.model, self.data)
+
+    def _run_controllers(self) -> None:
+        t = self.data.time
+        for name, controller in list(self.controllers.items()):
+            if t + 1e-9 >= self._next_update.get(name, 0.0):
+                controller.update(self.model, self.data)
+                self._next_update[name] = t + 1.0 / controller.rate_hz
 
     def advance(self, wall_dt: float) -> int:
         """Advance by `wall_dt` seconds of wall time scaled by `speed`. Returns steps taken."""

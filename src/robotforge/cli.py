@@ -14,6 +14,8 @@ from pathlib import Path
 import mujoco
 import uvicorn
 
+from robotforge.design.store import WorldStore
+from robotforge.playground import Playground
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
 
@@ -41,27 +43,28 @@ def find_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> i
     raise RuntimeError(f"no free port in {start}-{start + attempts - 1}")
 
 
-def load_session(path: Path) -> SimSession:
+def load_playground(path: Path) -> Playground:
     """Open an MJCF/URDF file, or a world folder / world.yaml."""
     path = path.expanduser()
     world_file = path / "world.yaml" if path.is_dir() else path
     if world_file.name == "world.yaml" and world_file.exists():
-        from robotforge.design.store import WorldStore
-
-        compiled = WorldStore(world_file.parent).compile()
+        store = WorldStore(world_file.parent)
+        compiled = store.compile()
         session = SimSession(model=compiled.model, data=mujoco.MjData(compiled.model), source=str(world_file))
         session.reset()
-        return session
-    return SimSession.from_path(path)
+        return Playground(session=session, store=store)
+    return Playground(session=SimSession.from_path(path))
 
 
-async def serve(session: SimSession, host: str, port: int, open_browser: bool) -> None:
-    hub = ViewerHub(session)
+async def serve(playground: Playground, host: str, port: int, open_browser: bool) -> None:
+    hub = ViewerHub(playground.session)
+    playground.attach_viewer(hub)
     app = create_app(hub)
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     url = f"http://{host}:{port}/"
-    print(f"robotforge viewer: {url}  (model: {session.source})", flush=True)
+    playground.viewer_url = url
+    print(f"robotforge viewer: {url}  (model: {playground.session.source})", flush=True)
     if open_browser:
         webbrowser.open(url)
     await server.serve()
@@ -92,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
 
     model_path = DEMO_MODEL if args.command == "demo" else args.model
     try:
-        session = load_session(model_path)
+        playground = load_playground(model_path)
     except (ModelLoadError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -105,5 +108,5 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: port {args.port} is already in use", file=sys.stderr)
         return 2
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(serve(session, args.host, port, open_browser=not args.no_browser))
+        asyncio.run(serve(playground, args.host, port, open_browser=not args.no_browser))
     return 0

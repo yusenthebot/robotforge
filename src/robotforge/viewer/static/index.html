@@ -15,6 +15,14 @@
   <header class="hud hud-top">
     <div class="brand">robotforge</div>
     <div class="source" id="source" title=""></div>
+    <div class="drive" id="drive" hidden>
+      <label class="drive-pick" title="Robot to drive with the keyboard">
+        <span>Drive</span>
+        <select id="drive-robot"></select>
+      </label>
+      <span class="keys" aria-label="Use W A S D or arrow keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+      <span class="drive-status" id="drive-status"></span>
+    </div>
     <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
   </header>
 

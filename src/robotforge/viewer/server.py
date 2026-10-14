@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,9 @@ class ViewerHub:
         self._mesh_payload: scene.MeshPayload | None = None
         self._scene_msg: dict | None = None
         self._announced_version = session.version
+        # Hooks the playground installs: extra message types (e.g. teleop) and extra scene info.
+        self.handlers: dict[str, Callable[[dict[str, Any]], None]] = {}
+        self.scene_extras: Callable[[], dict[str, Any]] | None = None
 
     # ---- scene description (cached per model version) -------------------------------
 
@@ -62,6 +66,8 @@ class ViewerHub:
         with s.lock:
             payload = scene.build_mesh_payload(s.model)
             self._scene_msg = scene.describe(s.model, s.version, payload.entries)
+            if self.scene_extras is not None:
+                self._scene_msg.update(self.scene_extras())
             self._mesh_payload = payload
             self._payload_version = s.version
 
@@ -87,6 +93,7 @@ class ViewerHub:
             "ctrl": [float(c) for c in s.data.ctrl],
             "source": s.source,
             "clients": len(self.clients),
+            "behaviors": [c.status() for c in list(s.controllers.values())],
         }
 
     # ---- client messages ------------------------------------------------------------
@@ -117,6 +124,8 @@ class ViewerHub:
             s.move_drag(np.asarray(msg["target"], float))
         elif kind == "drag_end":
             s.end_drag()
+        elif kind in self.handlers:
+            self.handlers[kind](msg)
         else:
             raise ValueError(f"unknown message type {kind!r}")
 

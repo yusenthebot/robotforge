@@ -7,6 +7,7 @@ without an MCP client. Methods return plain dicts that serialize to JSON.
 from __future__ import annotations
 
 import difflib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -15,10 +16,12 @@ import mujoco
 import numpy as np
 from pydantic import ValidationError
 
+from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, ObjectEntry, RobotEntry, World
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
+from robotforge.viewer.server import ViewerHub
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
@@ -42,6 +45,22 @@ class Playground:
     viewer_url: str | None = None
     renderer: SnapshotRenderer = field(default_factory=SnapshotRenderer)
     store: WorldStore | None = None
+    behaviors: BehaviorManager = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.behaviors = BehaviorManager(self.session, self.current_world)
+
+    def attach_viewer(self, hub: ViewerHub) -> None:
+        """Let the viewer drive robots from the keyboard and list them in its UI."""
+
+        def teleop(msg: dict[str, Any]) -> None:
+            self.behaviors.move(str(msg["robot"]), float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0)))
+
+        hub.handlers["teleop"] = teleop
+        hub.scene_extras = lambda: {"robots": self.behaviors.robots()}
+
+    def current_world(self) -> World | None:
+        return self.store.load() if self.store is not None else None
 
     @classmethod
     def with_demo(cls) -> Playground:
@@ -242,6 +261,15 @@ class Playground:
         if unstable:
             result["warning"] = "simulation became unstable (NaN state); reset and check the model"
         return result
+
+    def run_fast(self, until: Callable[[], bool], max_seconds: float) -> float:
+        """Step as fast as possible until `until()` or `max_seconds` of sim time; returns sim seconds run."""
+        with self.session.lock:
+            start = self.session.data.time
+            chunk = max(1, round(0.02 / self.session.model.opt.timestep))
+            while not until() and self.session.data.time - start < max_seconds:
+                self.session.step(chunk)
+            return float(self.session.data.time - start)
 
     def control(self, action: str) -> dict[str, Any]:
         s = self.session

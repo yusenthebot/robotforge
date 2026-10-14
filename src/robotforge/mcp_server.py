@@ -11,17 +11,20 @@ import contextlib
 import json
 import logging
 import os
+import time
 import webbrowser
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import uvicorn
 from mcp.server.apps import Apps, ResourceCsp
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -42,9 +45,11 @@ update_object, remove, set_floor and undo edit the world; every edit is validate
 viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
 radians for joints and degrees for yaw.
 
-Behavior: describe_model lists actuator names (robot actuators are prefixed "<robot>/").
-set_controls / simulate make robots move; observe reports state with an image so you can check
-your work. open_viewer gives the user a live 3D view; offer it early.
+Behavior: move walks a quadruped or drives a rover; pick_and_place, move_arm and gripper work arms;
+robots lists robots with their positions. For anything custom, set_controls / simulate drive actuators
+directly (names from describe_model, prefixed "<robot>/"). observe reports state with an image so you
+can check your work. open_viewer gives the user a live 3D view (they can also drive with WASD);
+offer it early, and when it is open, actions play out in real time for the user to watch.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
 (joints, actuators, control): the user may be new to robotics.
@@ -62,6 +67,7 @@ def _viewer_page(port: int) -> str:
 
 def build_server(playground: Playground, port: int) -> MCPServer:
     hub = ViewerHub(playground.session)
+    playground.attach_viewer(hub)
     playground.viewer_url = f"http://{HOST}:{port}/"
     apps = Apps()
     origins = [f"http://{HOST}:{port}", f"http://localhost:{port}"]
@@ -214,6 +220,103 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             return _json(playground.show_world())
 
+    async def run_until(done, max_seconds: float) -> dict[str, Any]:
+        """Let time pass until `done()`: in real time if someone is watching, else as fast as possible."""
+        session = playground.session
+        start = session.data.time
+        watched = bool(hub.clients) and not session.paused
+        if watched:
+            deadline = time.monotonic() + max_seconds * 3 + 5  # guard against a slow machine
+            while not done() and session.data.time - start < max_seconds and time.monotonic() < deadline:
+                await asyncio.sleep(0.05)
+        else:
+            playground.run_fast(done, max_seconds)
+        return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched}
+
+    @server.tool()
+    async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
+        """Walk a quadruped or drive a rover. speed in m/s (negative = backwards), turn in rad/s (positive =
+        left). With `seconds`, moves for that long then stops and reports how far it went; with seconds=null
+        it keeps moving until `stop`. If the viewer is open the user watches it happen in real time."""
+        with _tool_errors():
+            before = playground.behaviors.pose(robot)
+            status = playground.behaviors.move(robot, speed, turn)
+            if seconds is None:
+                return _json({"started": status, "pose": before})
+            if not 0 < seconds <= 60:
+                raise PlaygroundError("seconds must be in (0, 60]")
+            run = await run_until(lambda: False, seconds)
+            playground.behaviors.stop(robot)
+            after = playground.behaviors.pose(robot)
+            moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
+            turned = (after["heading_deg"] - before["heading_deg"] + 180) % 360 - 180
+            return _json(
+                {
+                    "from": before,
+                    "to": after,
+                    "distance_m": round(moved, 3),
+                    "turned_deg": round(turned, 1),
+                    **run,
+                    "behavior": status,
+                }
+            )
+
+    @server.tool()
+    def stop(robot: str) -> str:
+        """Stop a robot's current behavior (a walking robot settles into a stand)."""
+        with _tool_errors():
+            return _json(playground.behaviors.stop(robot))
+
+    @server.tool()
+    async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
+        """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or
+        closing the gripper on the way. Fails with an explanation if the point is out of reach."""
+        with _tool_errors():
+            arm = playground.behaviors.move_arm(robot, position, gripper)
+            run = await run_until(lambda: arm.done, 20.0)
+            tcp = playground.session.data.site_xpos[arm.site]
+            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
+
+    @server.tool()
+    async def gripper(robot: str, state: Literal["open", "close"]) -> str:
+        """Open or close an arm's gripper."""
+        with _tool_errors():
+            arm = playground.behaviors.set_gripper(robot, state)
+            run = await run_until(lambda: arm.done, 5.0)
+            return _json({"gripper": state, **run})
+
+    @server.tool()
+    async def pick_and_place(robot: str, object: str, target: str | list[float]) -> str:
+        """Have an arm pick up a small object and put it on/in a target: another object's name (a bin, table
+        or box) or a floor position [x, y]. Plans the whole motion, checks reach first, runs it and reports
+        whether the object really ended up there."""
+        with _tool_errors():
+            arm, info = playground.behaviors.pick_and_place(robot, object, target)
+            run = await run_until(lambda: arm.done, 40.0)
+            settle = await run_until(lambda: False, 0.5)
+            result = playground.behaviors.placed(object, info["region"])
+            return _json(
+                {
+                    **result,
+                    "object": object,
+                    "target": target,
+                    "sim_seconds": run["sim_seconds"] + settle["sim_seconds"],
+                    "shown_live": run["shown_live"],
+                }
+            )
+
+    @server.tool()
+    def robots() -> str:
+        """List robots in the world with their kind (arm, quadruped, rover), where they are, which way they
+        face, whether they are upright, and any behavior running on them."""
+        with _tool_errors():
+            out = []
+            for info in playground.behaviors.robots():
+                with contextlib.suppress(BehaviorError):
+                    info.update(playground.behaviors.pose(info["name"]))
+                out.append(info)
+            return _json({"robots": out, "behaviors": playground.behaviors.status()})
+
     @server.tool()
     def open_model(path: str) -> str:
         """Load a robot or scene from an MJCF (.xml) or URDF (.urdf) file, replacing the current one.
@@ -273,7 +376,7 @@ def _tool_errors() -> Iterator[None]:
     """Turn anticipated failures into ToolError so the agent sees the actual message."""
     try:
         yield
-    except (PlaygroundError, ModelLoadError, IndexError, ValueError) as exc:
+    except (PlaygroundError, BehaviorError, ModelLoadError, IndexError, ValueError) as exc:
         raise ToolError(str(exc)) from exc
 
 

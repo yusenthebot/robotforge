@@ -100,7 +100,8 @@ class Rover(Template):
                 conaffinity=0,
             )
             act = spec.add_actuator(name=f"{side}_wheel", target=f"{side}_wheel", trntype=mujoco.mjtTrn.mjTRN_JOINT)
-            act.set_to_velocity(kv=part.stall_torque / part.no_load_speed * 4)
+            # Stiff speed loop: full torque at ~5 % speed error, like a motor driver with feedback.
+            act.set_to_velocity(kv=part.stall_torque / (0.05 * part.no_load_speed))
             act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
             act.ctrlrange = [-part.no_load_speed, part.no_load_speed]
             act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE

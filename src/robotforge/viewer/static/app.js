@@ -222,6 +222,8 @@ async function applyScene(desc) {
   pendingFit = firstScene ? "camera" : "lights";
   firstScene = false;
   renderActuators(desc.actuators);
+  renderDrive(desc.robots || []);
+  follow = null;
 }
 
 function contentSphere() {
@@ -338,6 +340,9 @@ let activeSlider = null;
 
 function applyState(s) {
   paused = s.paused;
+  const active = (s.behaviors || []).find((b) => b.robot === $("drive-robot").value);
+  $("drive-status").textContent =
+    active && "speed" in active ? `${active.speed >= 0 ? " " : ""}${active.speed.toFixed(2)} m/s` : "";
   $("btn-play").textContent = paused ? "Play" : "Pause";
   $("stat-rtf").textContent = paused ? "paused" : `${s.rtf.toFixed(2)}x`;
   const src = s.source || "";
@@ -448,6 +453,107 @@ function initialPanelCollapsed() {
 setPanelCollapsed(initialPanelCollapsed());
 $("panel-toggle").addEventListener("click", () => setPanelCollapsed(!$("panel").classList.contains("collapsed")));
 
+// ---------------------------------------------------------------- keyboard driving
+
+const DRIVE_KEYS = {
+  w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
+};
+const pressed = new Set();
+let mobileRobots = [];
+let lastDrive = "";
+
+function renderDrive(robots) {
+  mobileRobots = robots.filter((r) => r.kind === "quadruped" || r.kind === "rover");
+  const box = $("drive");
+  box.hidden = mobileRobots.length === 0;
+  const select = $("drive-robot");
+  const previous = select.value;
+  select.replaceChildren(
+    ...mobileRobots.map((r) => {
+      const o = document.createElement("option");
+      o.value = r.name;
+      o.textContent = r.name;
+      return o;
+    })
+  );
+  if (mobileRobots.some((r) => r.name === previous)) select.value = previous;
+  lastDrive = "";
+}
+
+function driveCommand() {
+  const robot = mobileRobots.find((r) => r.name === $("drive-robot").value);
+  if (!robot) return null;
+  const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
+  const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+  const top = robot.max_speed ?? 0.3;
+  const turnRate = robot.kind === "rover" ? 2.0 : 1.0;
+  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * turnRate };
+}
+
+function sendDrive() {
+  const cmd = driveCommand();
+  if (!cmd) return;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
+  if (key === lastDrive) return;
+  lastDrive = key;
+  send(cmd);
+  for (const k of document.querySelectorAll("#drive kbd")) {
+    const dir = { W: "fwd", A: "left", S: "back", D: "right" }[k.textContent];
+    k.classList.toggle("on", pressed.has(dir));
+  }
+}
+
+// Follow the driven robot with the camera until the user orbits by hand.
+let follow = null; // { body, last: Vector3 }
+
+function rootBodyOf(robot) {
+  return sceneDesc?.bodies.find((b) => b.name.startsWith(`${robot}/`) && b.dynamic)?.id ?? null;
+}
+
+function startFollow() {
+  const body = rootBodyOf($("drive-robot").value);
+  if (body === null || !bodyNodes[body]) return;
+  if (follow && follow.body === body) return;
+  follow = { body, last: bodyNodes[body].position.clone() };
+}
+
+function updateFollow() {
+  if (!follow || !bodyNodes[follow.body]) return;
+  const now = bodyNodes[follow.body].position;
+  const delta = now.clone().sub(follow.last);
+  delta.z = 0; // follow across the floor, keep the user's camera height
+  camera.position.add(delta);
+  controls.target.add(delta);
+  follow.last.copy(now);
+}
+
+controls.addEventListener("start", () => {
+  follow = null;
+});
+
+function driveKey(e, down) {
+  if (mobileRobots.length === 0) return false;
+  const dir = DRIVE_KEYS[e.key.toLowerCase()];
+  if (!dir) return false;
+  e.preventDefault();
+  if (down) startFollow();
+  if (down) pressed.add(dir);
+  else pressed.delete(dir);
+  sendDrive();
+  return true;
+}
+
+window.addEventListener("keyup", (e) => driveKey(e, false));
+window.addEventListener("blur", () => {
+  pressed.clear();
+  sendDrive();
+});
+$("drive-robot").addEventListener("change", (e) => {
+  e.target.blur(); // keep arrow keys for driving, not for changing the selection
+  lastDrive = "";
+  follow = null;
+});
+
 let toastTimer = null;
 function toast(text) {
   const el = $("toast");
@@ -477,6 +583,7 @@ $("show-shadows").addEventListener("change", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  if (driveKey(e, true)) return;
   if (e.code === "Space") {
     e.preventDefault();
     send({ type: "cmd", cmd: paused ? "play" : "pause" });
@@ -605,6 +712,7 @@ let fpsT0 = performance.now();
 
 function loop() {
   requestAnimationFrame(loop);
+  updateFollow();
   controls.update();
   refreshDragVisual();
   renderer.render(scene3, camera);
@@ -627,6 +735,7 @@ window.__robotforge = {
   get time() { return latestTime; },
   bodyPosition: (id) => bodyNodes[id]?.position.toArray(),
   pick: (clientX, clientY) => pickBody({ clientX, clientY })?.body ?? null,
+  cameraTarget: () => controls.target.toArray(),
   // CSS-pixel position of a body's origin, for scripted pointer tests.
   screenOf: (id) => {
     const node = bodyNodes[id];
