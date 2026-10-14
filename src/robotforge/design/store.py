@@ -1,0 +1,103 @@
+"""A world on disk: world.yaml plus undo history and the compiled MJCF.
+
+Edits are atomic: a change is validated and compiled before world.yaml is
+touched, so a bad edit never leaves a broken world behind.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import time
+from collections.abc import Callable
+from pathlib import Path
+
+from robotforge.design.world import CompiledWorld, World, compile_world
+
+HISTORY_LIMIT = 50
+_SAFE = re.compile(r"[^a-z0-9_]+")
+
+
+def worlds_home() -> Path:
+    """Where worlds live: $ROBOTFORGE_HOME/worlds, default ~/robotforge/worlds."""
+    root = Path(os.environ.get("ROBOTFORGE_HOME", Path.home() / "robotforge")).expanduser()
+    return root / "worlds"
+
+
+def slug(name: str) -> str:
+    s = _SAFE.sub("_", name.strip().lower()).strip("_")
+    if not s or not s[0].isalpha():
+        s = f"world_{s}" if s else "world"
+    return s[:32]
+
+
+class WorldStore:
+    def __init__(self, directory: Path):
+        self.dir = directory
+        self.file = directory / "world.yaml"
+        self.history = directory / ".history"
+        self.build_dir = directory / "build"
+
+    @classmethod
+    def create(cls, name: str, floor_style: str = "checker", parent: Path | None = None) -> WorldStore:
+        directory = (parent or worlds_home()) / slug(name)
+        store = cls(directory)
+        if store.file.exists():
+            return store  # reopening an existing world is friendlier than failing
+        world = World.model_validate({"name": slug(name), "floor": {"style": floor_style}})
+        compiled = compile_world(world, directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        store._write(world, compiled)
+        return store
+
+    @classmethod
+    def open(cls, name_or_path: str) -> WorldStore:
+        p = Path(name_or_path).expanduser()
+        candidates = [p, p / "world.yaml"] if p.is_absolute() or p.exists() else []
+        candidates.append(worlds_home() / slug(name_or_path))
+        for c in candidates:
+            directory = c.parent if c.name == "world.yaml" else c
+            if (directory / "world.yaml").exists():
+                return cls(directory)
+        known = sorted(d.name for d in worlds_home().glob("*") if (d / "world.yaml").exists())
+        raise ValueError(f"no world named {name_or_path!r}. Existing worlds: {', '.join(known) or 'none yet'}")
+
+    def load(self) -> World:
+        return World.from_yaml(self.file.read_text(encoding="utf-8"))
+
+    def compile(self) -> CompiledWorld:
+        return compile_world(self.load(), self.dir)
+
+    def apply(self, change: Callable[[World], None]) -> tuple[World, CompiledWorld]:
+        """Run `change` on a copy, validate and compile it, then save. Raises without saving on error."""
+        current = self.load()
+        candidate = current.model_copy(deep=True)
+        change(candidate)
+        candidate = World.model_validate(candidate.model_dump())  # re-run validators after mutation
+        compiled = compile_world(candidate, self.dir)
+        self._snapshot()
+        self._write(candidate, compiled)
+        return candidate, compiled
+
+    def undo(self) -> World:
+        snapshots = sorted(self.history.glob("*.yaml"))
+        if not snapshots:
+            raise ValueError("nothing to undo")
+        last = snapshots[-1]
+        world = World.from_yaml(last.read_text(encoding="utf-8"))
+        compiled = compile_world(world, self.dir)
+        self._write(world, compiled)
+        last.unlink()
+        return world
+
+    def _snapshot(self) -> None:
+        self.history.mkdir(exist_ok=True)
+        stamp = f"{time.time_ns()}.yaml"
+        (self.history / stamp).write_text(self.file.read_text(encoding="utf-8"), encoding="utf-8")
+        for old in sorted(self.history.glob("*.yaml"))[:-HISTORY_LIMIT]:
+            old.unlink()
+
+    def _write(self, world: World, compiled: CompiledWorld) -> None:
+        self.file.write_text(world.to_yaml(), encoding="utf-8")
+        self.build_dir.mkdir(exist_ok=True)
+        (self.build_dir / "world.xml").write_text(compiled.to_xml(), encoding="utf-8")

@@ -47,9 +47,7 @@ class SnapshotRenderer:
         Image.fromarray(rgb).save(buf, format="PNG", optimize=True)
         return buf.getvalue()
 
-    def rgb(
-        self, session: SimSession, view: str = "default", width: int = 640, height: int = 480
-    ) -> np.ndarray:
+    def rgb(self, session: SimSession, view: str = "default", width: int = 640, height: int = 480) -> np.ndarray:
         if width * height > MAX_PIXELS or width < 16 or height < 16:
             raise ValueError(f"image size {width}x{height} out of range (max {MAX_PIXELS} pixels)")
         with self._lock, session.lock:

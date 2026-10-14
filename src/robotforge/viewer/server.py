@@ -31,6 +31,17 @@ FRAME_HZ = 60.0
 STATE_HZ = 4.0
 
 
+# Revalidate on every load (cheap 304s) so an upgraded robotforge never shows a stale UI.
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+class RevalidatingStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers.update(NO_CACHE)
+        return response
+
+
 class ViewerHub:
     """Connects one SimSession to any number of browser clients."""
 
@@ -149,7 +160,7 @@ class ViewerHub:
 
 def create_app(hub: ViewerHub) -> Starlette:
     async def index(_request):
-        return FileResponse(STATIC_DIR / "index.html")
+        return FileResponse(STATIC_DIR / "index.html", headers=NO_CACHE)
 
     async def mesh_blob(request):
         blob = hub.mesh_blob(int(request.path_params["version"]))
@@ -193,7 +204,7 @@ def create_app(hub: ViewerHub) -> Starlette:
             Route("/scene.json", scene_json),
             Route("/mesh/{version:int}.bin", mesh_blob),
             WebSocketRoute("/ws", ws_endpoint),
-            Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
+            Mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static"),
         ],
         lifespan=lifespan,
     )

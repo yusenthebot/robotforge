@@ -13,7 +13,10 @@ from typing import Any
 
 import mujoco
 import numpy as np
+from pydantic import ValidationError
 
+from robotforge.design.store import WorldStore
+from robotforge.design.world import CompiledWorld, ObjectEntry, RobotEntry, World
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
 
@@ -38,6 +41,7 @@ class Playground:
     session: SimSession
     viewer_url: str | None = None
     renderer: SnapshotRenderer = field(default_factory=SnapshotRenderer)
+    store: WorldStore | None = None
 
     @classmethod
     def with_demo(cls) -> Playground:
@@ -87,6 +91,121 @@ class Playground:
         if m.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT:
             info["joint"] = _name(m, mujoco.mjtObj.mjOBJ_JOINT, int(m.actuator_trnid[a, 0]))
         return info
+
+    # ---- worlds (design) ------------------------------------------------------------
+
+    def new_world(self, name: str, floor: str = "checker") -> dict[str, Any]:
+        self.store = WorldStore.create(name, floor)
+        return self._load_world(self.store.compile(), created=True)
+
+    def open_world(self, name_or_path: str) -> dict[str, Any]:
+        self.store = WorldStore.open(name_or_path)
+        return self._load_world(self.store.compile())
+
+    def add_robot(
+        self,
+        name: str,
+        template: str | None = None,
+        file: str | None = None,
+        params: dict[str, Any] | None = None,
+        pos: list[float] | None = None,
+        yaw: float = 0.0,
+    ) -> dict[str, Any]:
+        entry = RobotEntry(name=name, template=template, file=file, params=params or {}, pos=pos or [0.0, 0.0], yaw=yaw)
+
+        def change(w: World) -> None:
+            w.robots.append(entry)
+
+        return self._edit(change)
+
+    def update_robot(
+        self,
+        name: str,
+        params: dict[str, Any] | None = None,
+        pos: list[float] | None = None,
+        yaw: float | None = None,
+    ) -> dict[str, Any]:
+        def change(w: World) -> None:
+            robot = _find(w.robots, name, "robot")
+            if params:
+                robot.params = {**robot.params, **params}
+            if pos is not None:
+                robot.pos = pos
+            if yaw is not None:
+                robot.yaw = yaw
+
+        return self._edit(change)
+
+    def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
+        entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
+
+        def change(w: World) -> None:
+            w.objects.append(entry)
+
+        return self._edit(change)
+
+    def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
+        def change(w: World) -> None:
+            obj = _find(w.objects, name, "object")
+            for key, value in fields.items():
+                if value is not None:
+                    setattr(obj, key, value)
+
+        return self._edit(change)
+
+    def remove(self, name: str) -> dict[str, Any]:
+        def change(w: World) -> None:
+            before = len(w.robots) + len(w.objects)
+            w.robots = [r for r in w.robots if r.name != name]
+            w.objects = [o for o in w.objects if o.name != name]
+            if len(w.robots) + len(w.objects) == before:
+                raise PlaygroundError(f"nothing named {name!r} in this world")
+
+        return self._edit(change)
+
+    def set_floor(self, style: str) -> dict[str, Any]:
+        def change(w: World) -> None:
+            w.floor.style = style
+
+        return self._edit(change)
+
+    def undo(self) -> dict[str, Any]:
+        store = self._require_store()
+        store.undo()
+        return self._load_world(store.compile())
+
+    def show_world(self) -> dict[str, Any]:
+        store = self._require_store()
+        return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
+
+    def _edit(self, change) -> dict[str, Any]:
+        store = self._require_store()
+        try:
+            _, compiled = store.apply(change)
+        except ValidationError as exc:
+            raise PlaygroundError(_validation_message(exc)) from exc
+        return self._load_world(compiled)
+
+    def _require_store(self) -> WorldStore:
+        if self.store is None:
+            raise PlaygroundError("no world is open; call new_world first (or open_world for an existing one)")
+        return self.store
+
+    def _load_world(self, compiled: CompiledWorld, created: bool = False) -> dict[str, Any]:
+        store = self._require_store()
+        self.session.load_model(compiled.model, str(store.file))
+        world = store.load()
+        summary = self.describe()
+        return {
+            "world": world.name,
+            "world_dir": str(store.dir),
+            "created": created,
+            "robots": [r.name for r in world.robots],
+            "objects": [o.name for o in world.objects],
+            "notes": compiled.notes,
+            "actuators": summary["actuators"],
+            "viewer_url": self.viewer_url,
+        }
 
     # ---- control and simulation ----------------------------------------------------
 
@@ -153,9 +272,7 @@ class Playground:
             for s in range(m.nsensor):
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
                 values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = (
-                    values[0] if dim == 1 else values
-                )
+                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
             return {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
@@ -192,21 +309,33 @@ class Playground:
         }
 
 
+def _find(items: list, name: str, kind: str):
+    for item in items:
+        if item.name == name:
+            return item
+    names = ", ".join(i.name for i in items) or "none"
+    raise PlaygroundError(f"no {kind} named {name!r}; {kind}s in this world: {names}")
+
+
+def _validation_message(exc: ValidationError) -> str:
+    parts = []
+    for err in exc.errors():
+        where = ".".join(str(x) for x in err["loc"]) or "value"
+        parts.append(f"{where}: {err['msg']}")
+    return "; ".join(parts)
+
+
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(m, obj, idx) or ""
 
 
 def _free_bodies(m: mujoco.MjModel) -> list[int]:
     """Bodies attached to the world by a free joint: robots' bases and loose objects."""
-    return [
-        int(m.jnt_bodyid[j]) for j in range(m.njnt) if int(m.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_FREE)
-    ]
+    return [int(m.jnt_bodyid[j]) for j in range(m.njnt) if int(m.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_FREE)]
 
 
 def _limit(items: list) -> list:
-    return (
-        items if len(items) <= _LIST_LIMIT else [*items[:_LIST_LIMIT], f"... {len(items) - _LIST_LIMIT} more"]
-    )
+    return items if len(items) <= _LIST_LIMIT else [*items[:_LIST_LIMIT], f"... {len(items) - _LIST_LIMIT} more"]
 
 
 def _limit_dict(d: dict) -> dict:

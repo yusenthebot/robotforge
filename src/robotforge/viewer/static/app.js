@@ -70,6 +70,7 @@ let sceneDesc = null; // last scene description from the server
 let bodyNodes = []; // THREE.Group per body, index = MuJoCo body id
 let worldRoot = null;
 let firstScene = true;
+let pendingFit = null; // "camera" | "lights" | null
 let showCollision = false;
 
 function rgbaColor(rgba) {
@@ -217,19 +218,31 @@ async function applyScene(desc) {
   }
   scene3.add(worldRoot);
 
-  fitLights(desc);
-  if (firstScene) {
-    frameCamera(desc);
-    firstScene = false;
-  }
+  // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
+  pendingFit = firstScene ? "camera" : "lights";
+  firstScene = false;
   renderActuators(desc.actuators);
 }
 
-function fitLights(desc) {
-  const c = new THREE.Vector3().fromArray(desc.stat.center);
-  const r = Math.max(desc.stat.extent, 0.2) * 1.6;
+function contentSphere() {
+  const box = new THREE.Box3();
+  if (worldRoot) {
+    worldRoot.updateMatrixWorld(true);
+    worldRoot.traverse((o) => {
+      if (o.isMesh && o.visible && !o.userData.isPlane) box.expandByObject(o);
+    });
+  }
+  if (box.isEmpty() && sceneDesc) {
+    return new THREE.Sphere(new THREE.Vector3().fromArray(sceneDesc.stat.center), sceneDesc.stat.extent);
+  }
+  return box.getBoundingSphere(new THREE.Sphere());
+}
+
+function fitLights(sphere) {
+  const c = sphere.center;
+  const r = Math.max(sphere.radius, 0.2) * 1.5;
   // Fade the (often infinite) floor into the background instead of a hard horizon.
-  scene3.fog = new THREE.Fog(BG_HORIZON, r * 4, r * 14);
+  scene3.fog = new THREE.Fog(BG_HORIZON, r * 5, r * 18);
   sun.position.copy(c).add(new THREE.Vector3(0.6, -0.8, 1.6).multiplyScalar(r * 1.5));
   sun.target.position.copy(c);
   const cam = sun.shadow.camera;
@@ -240,11 +253,14 @@ function fitLights(desc) {
   cam.updateProjectionMatrix();
 }
 
-function frameCamera(desc) {
-  const c = new THREE.Vector3().fromArray(desc.stat.center);
-  const d = Math.max(desc.stat.extent, 0.2) * 1.6;
-  camera.position.copy(c).add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d * 1.25));
-  controls.target.copy(c);
+function frameCamera() {
+  const sphere = contentSphere();
+  const r = Math.max(sphere.radius, 0.08);
+  const vfov = THREE.MathUtils.degToRad(camera.fov);
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  const d = (r / Math.sin(Math.min(vfov, hfov) / 2)) * 1.05;
+  camera.position.copy(sphere.center).add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
+  controls.target.copy(sphere.center);
   camera.near = Math.max(d / 1000, 0.001);
   camera.far = d * 200;
   camera.updateProjectionMatrix();
@@ -262,6 +278,12 @@ function applyPoses(buffer) {
     const node = bodyNodes[b];
     node.position.set(f[1 + 3 * b], f[2 + 3 * b], f[3 + 3 * b]);
     node.quaternion.set(f[qOff + 4 * b + 1], f[qOff + 4 * b + 2], f[qOff + 4 * b + 3], f[qOff + 4 * b]);
+  }
+  if (pendingFit) {
+    const sphere = contentSphere();
+    fitLights(sphere);
+    if (pendingFit === "camera") frameCamera();
+    pendingFit = null;
   }
 }
 
@@ -331,6 +353,34 @@ function applyState(s) {
   });
 }
 
+function sliderRow(a, label) {
+  const row = document.createElement("div");
+  row.className = "slider-row";
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = label.replaceAll("_", " ");
+  name.title = a.name;
+  const value = document.createElement("span");
+  value.className = "value";
+  value.textContent = "0.00";
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = a.range[0];
+  input.max = a.range[1];
+  input.step = (a.range[1] - a.range[0]) / 500 || 0.001;
+  input.value = Math.min(Math.max(0, a.range[0]), a.range[1]);
+  input.setAttribute("aria-label", a.name);
+  input.addEventListener("pointerdown", () => (activeSlider = input));
+  input.addEventListener("pointerup", () => (activeSlider = null));
+  input.addEventListener("input", () => {
+    value.textContent = Number(input.value).toFixed(2);
+    send({ type: "ctrl", id: a.id, value: Number(input.value) });
+  });
+  row.append(name, value, input);
+  sliderEls.set(a.id, { input, value });
+  return row;
+}
+
 function renderActuators(actuators) {
   const box = $("actuators");
   box.replaceChildren();
@@ -339,37 +389,64 @@ function renderActuators(actuators) {
   if (!actuators.length) {
     const p = document.createElement("div");
     p.className = "empty";
-    p.textContent = "This model has no actuators yet.";
+    p.textContent = "Nothing to control yet. Robots you add will show their joints here.";
     box.append(p);
     return;
   }
+  // "dog/front_left_hip" -> group "dog"; names without a prefix go in one unnamed group.
+  const groups = new Map();
   for (const a of actuators) {
-    const row = document.createElement("div");
-    row.className = "slider-row";
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = a.name;
-    name.title = a.name;
-    const value = document.createElement("span");
-    value.className = "value";
-    value.textContent = "0.00";
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = a.range[0];
-    input.max = a.range[1];
-    input.step = (a.range[1] - a.range[0]) / 500 || 0.001;
-    input.value = Math.min(Math.max(0, a.range[0]), a.range[1]);
-    input.addEventListener("pointerdown", () => (activeSlider = input));
-    input.addEventListener("pointerup", () => (activeSlider = null));
-    input.addEventListener("input", () => {
-      value.textContent = Number(input.value).toFixed(2);
-      send({ type: "ctrl", id: a.id, value: Number(input.value) });
-    });
-    row.append(name, value, input);
-    box.append(row);
-    sliderEls.set(a.id, { input, value });
+    const cut = a.name.indexOf("/");
+    const group = cut > 0 ? a.name.slice(0, cut) : "";
+    const label = cut > 0 ? a.name.slice(cut + 1) : a.name;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push([a, label]);
+  }
+  if (groups.size === 1 && groups.has("")) {
+    for (const [a, label] of groups.get("")) box.append(sliderRow(a, label));
+    return;
+  }
+  let first = true;
+  for (const [group, items] of groups) {
+    const details = document.createElement("details");
+    details.className = "group";
+    details.open = first;
+    first = false;
+    const summary = document.createElement("summary");
+    const title = document.createElement("span");
+    title.textContent = group || "other";
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(items.length);
+    summary.append(title, n);
+    details.append(summary);
+    for (const [a, label] of items) details.append(sliderRow(a, label));
+    box.append(details);
   }
 }
+
+function setPanelCollapsed(collapsed) {
+  $("panel").classList.toggle("collapsed", collapsed);
+  $("panel-toggle").setAttribute("aria-expanded", String(!collapsed));
+  try {
+    localStorage.setItem("robotforge.panelCollapsed", collapsed ? "1" : "0");
+  } catch {
+    // storage may be unavailable (private mode, sandboxed iframe); the panel still works
+  }
+}
+
+function initialPanelCollapsed() {
+  try {
+    const saved = localStorage.getItem("robotforge.panelCollapsed");
+    if (saved !== null) return saved === "1";
+  } catch {
+    // ignore and fall back to the width rule
+  }
+  return window.innerWidth < 900;
+}
+
+setPanelCollapsed(initialPanelCollapsed());
+$("panel-toggle").addEventListener("click", () => setPanelCollapsed(!$("panel").classList.contains("collapsed")));
 
 let toastTimer = null;
 function toast(text) {
@@ -383,6 +460,7 @@ function toast(text) {
 $("btn-play").addEventListener("click", () => send({ type: "cmd", cmd: paused ? "play" : "pause" }));
 $("btn-step").addEventListener("click", () => send({ type: "cmd", cmd: "step" }));
 $("btn-reset").addEventListener("click", () => send({ type: "cmd", cmd: "reset" }));
+$("btn-frame").addEventListener("click", () => frameCamera());
 $("speed").addEventListener("change", (e) => send({ type: "speed", value: Number(e.target.value) }));
 $("show-collision").addEventListener("change", (e) => {
   showCollision = e.target.checked;
@@ -406,6 +484,8 @@ window.addEventListener("keydown", (e) => {
     send({ type: "cmd", cmd: "reset" });
   } else if (e.key === ".") {
     send({ type: "cmd", cmd: "step" });
+  } else if (e.key === "f" || e.key === "F") {
+    frameCamera();
   }
 });
 
@@ -515,7 +595,7 @@ function refreshDragVisual() {
   pos.needsUpdate = true;
   dragLine.geometry.computeBoundingSphere();
   dragDot.position.copy(dragTarget);
-  dragDot.scale.setScalar(Math.max(sceneDesc.stat.extent, 0.1) * 0.012);
+  dragDot.scale.setScalar(Math.max(camera.position.distanceTo(dragTarget), 0.1) * 0.006);
 }
 
 // ---------------------------------------------------------------- render loop

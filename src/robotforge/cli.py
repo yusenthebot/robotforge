@@ -11,6 +11,7 @@ import sys
 import webbrowser
 from pathlib import Path
 
+import mujoco
 import uvicorn
 
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -40,6 +41,20 @@ def find_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> i
     raise RuntimeError(f"no free port in {start}-{start + attempts - 1}")
 
 
+def load_session(path: Path) -> SimSession:
+    """Open an MJCF/URDF file, or a world folder / world.yaml."""
+    path = path.expanduser()
+    world_file = path / "world.yaml" if path.is_dir() else path
+    if world_file.name == "world.yaml" and world_file.exists():
+        from robotforge.design.store import WorldStore
+
+        compiled = WorldStore(world_file.parent).compile()
+        session = SimSession(model=compiled.model, data=mujoco.MjData(compiled.model), source=str(world_file))
+        session.reset()
+        return session
+    return SimSession.from_path(path)
+
+
 async def serve(session: SimSession, host: str, port: int, open_browser: bool) -> None:
     hub = ViewerHub(session)
     app = create_app(hub)
@@ -56,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="robotforge", description="Beginner-friendly robot playground.")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_open = sub.add_parser("open", help="open an MJCF or URDF model in the viewer")
+    p_open = sub.add_parser("open", help="open an MJCF/URDF model or a world folder in the viewer")
     p_open.add_argument("model", type=Path)
     sub.add_parser("demo", help="open the built-in demo scene")
     p_mcp = sub.add_parser("mcp", help="run as an MCP server on stdio (for Claude, Codex, ...)")
@@ -77,8 +92,8 @@ def main(argv: list[str] | None = None) -> int:
 
     model_path = DEMO_MODEL if args.command == "demo" else args.model
     try:
-        session = SimSession.from_path(model_path)
-    except ModelLoadError as exc:
+        session = load_session(model_path)
+    except (ModelLoadError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

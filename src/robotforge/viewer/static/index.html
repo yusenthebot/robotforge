@@ -19,15 +19,18 @@
   </header>
 
   <aside class="panel" id="panel">
-    <div class="panel-head">
-      <span>Actuators</span>
+    <button class="panel-toggle" id="panel-toggle" aria-expanded="true" aria-controls="panel-content">
+      <span>Controls</span>
       <span class="count" id="act-count"></span>
-    </div>
-    <div class="panel-body" id="actuators"></div>
-    <div class="panel-head panel-head-sub"><span>Display</span></div>
-    <div class="panel-body toggles">
-      <label><input type="checkbox" id="show-collision"> Collision geoms</label>
-      <label><input type="checkbox" id="show-shadows" checked> Shadows</label>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="panel-content" id="panel-content">
+      <div class="panel-body" id="actuators"></div>
+      <div class="panel-sub">Display</div>
+      <div class="panel-body toggles">
+        <label><input type="checkbox" id="show-collision"> Collision geoms</label>
+        <label><input type="checkbox" id="show-shadows" checked> Shadows</label>
+      </div>
     </div>
   </aside>
 
@@ -36,6 +39,7 @@
       <button id="btn-play" class="btn primary" title="Play / pause (Space)">Pause</button>
       <button id="btn-step" class="btn" title="Step one physics tick (.)">Step</button>
       <button id="btn-reset" class="btn" title="Reset (R)">Reset</button>
+      <button id="btn-frame" class="btn" title="Frame everything (F)">Frame</button>
       <label class="speed" title="Simulation speed">
         <span>Speed</span>
         <select id="speed">

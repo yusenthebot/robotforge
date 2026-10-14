@@ -38,7 +38,10 @@ def test_index_and_static_assets_are_served():
     _, client = _client()
     with client:
         assert "robotforge" in client.get("/").text
-        assert client.get("/static/app.js").status_code == 200
+        app_js = client.get("/static/app.js")
+        assert app_js.status_code == 200
+        assert app_js.headers["cache-control"] == "no-cache"
+        assert client.get("/").headers["cache-control"] == "no-cache"
         assert client.get("/static/vendor/three/three.module.min.js").status_code == 200
 
 

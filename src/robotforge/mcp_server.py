@@ -14,7 +14,7 @@ import os
 import webbrowser
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import uvicorn
 from mcp.server.apps import Apps, ResourceCsp
@@ -33,12 +33,21 @@ VIEWER_UI_URI = "ui://robotforge/viewer.html"
 HOST = "127.0.0.1"
 
 INSTRUCTIONS = """\
-robotforge is a robot playground backed by the MuJoCo physics engine.
-Typical loop: open_model (or keep the built-in demo) -> describe_model to learn actuator names ->
-set_controls / simulate to make the robot move -> observe to check the result with numbers and an image.
-open_viewer gives the user a live 3D view they can play with; offer it early.
-Actuator values are targets in the units of the actuator (radians for position-controlled hinges).
-Explain what you are doing in plain language: the user may be new to robotics.
+robotforge is a robot playground backed by the MuJoCo physics engine, made for beginners.
+
+Design: new_world creates a world (saved as world.yaml). list_templates shows the robot templates
+(arm, quadruped, rover) and their parameters; add_robot builds one from a template or imports an
+MJCF/URDF file. add_object places boxes, balls, cylinders, tables and bins. update_robot,
+update_object, remove, set_floor and undo edit the world; every edit is validated and the live
+viewer updates immediately. Names are lowercase with underscores. Units are meters, kilograms,
+radians for joints and degrees for yaw.
+
+Behavior: describe_model lists actuator names (robot actuators are prefixed "<robot>/").
+set_controls / simulate make robots move; observe reports state with an image so you can check
+your work. open_viewer gives the user a live 3D view; offer it early.
+
+Explain what you are doing in plain language and briefly teach the idea behind it
+(joints, actuators, control): the user may be new to robotics.
 """
 
 
@@ -102,6 +111,110 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     )
 
     @server.tool()
+    def list_templates() -> str:
+        """List robot templates (arm, quadruped, rover) with their parameters, defaults and limits,
+        and the parts catalog (servos and motors) that templates can use."""
+        from robotforge.design import components, templates
+
+        parts = {
+            n: {"kind": a.kind, "stall_torque_nm": a.stall_torque, "speed_rad_s": a.no_load_speed, "note": a.note}
+            for n, a in components.ACTUATORS.items()
+        }
+        return _json({"templates": templates.catalog(), "parts": parts, "colors": list(components.COLORS)})
+
+    @server.tool()
+    def new_world(name: str, floor: Literal["checker", "grass", "wood", "concrete"] = "checker") -> str:
+        """Create a new world (or reopen it if one with this name exists) and show it in the viewer."""
+        with _tool_errors():
+            return _json(playground.new_world(name, floor))
+
+    @server.tool()
+    def open_world(name_or_path: str) -> str:
+        """Open an existing world by name or by path to its folder or world.yaml."""
+        with _tool_errors():
+            return _json(playground.open_world(name_or_path))
+
+    @server.tool()
+    def add_robot(
+        name: str,
+        template: str | None = None,
+        file: str | None = None,
+        params: dict[str, Any] | None = None,
+        pos: list[float] | None = None,
+        yaw: float = 0.0,
+    ) -> str:
+        """Add a robot to the open world, from a template (see list_templates) or an MJCF/URDF file.
+
+        params override template defaults, e.g. {"leg_length": 0.3, "color": "orange"}.
+        pos is [x, y] in meters (height is automatic for templates); yaw is in degrees.
+        """
+        with _tool_errors():
+            return _json(playground.add_robot(name, template, file, params, pos, yaw))
+
+    @server.tool()
+    def update_robot(
+        name: str, params: dict[str, Any] | None = None, pos: list[float] | None = None, yaw: float | None = None
+    ) -> str:
+        """Change a robot's template parameters (merged into existing ones), position or heading."""
+        with _tool_errors():
+            return _json(playground.update_robot(name, params, pos, yaw))
+
+    @server.tool()
+    def add_object(
+        name: str,
+        shape: Literal["box", "sphere", "cylinder", "table", "bin"] = "box",
+        size: list[float] | None = None,
+        pos: list[float] | None = None,
+        color: str | list[float] | None = None,
+        mass: float | None = None,
+        fixed: bool = False,
+    ) -> str:
+        """Add an object. size in meters: box/table/bin [length, width, height], sphere [diameter],
+        cylinder [diameter, height]. pos is [x, y] (resting on the floor) or [x, y, z].
+        fixed objects never move; a bin is an open-top container."""
+        with _tool_errors():
+            return _json(
+                playground.add_object(name, shape=shape, size=size, pos=pos, color=color, mass=mass, fixed=fixed)
+            )
+
+    @server.tool()
+    def update_object(
+        name: str,
+        size: list[float] | None = None,
+        pos: list[float] | None = None,
+        color: str | list[float] | None = None,
+        mass: float | None = None,
+        fixed: bool | None = None,
+    ) -> str:
+        """Change an object's size, position, color, mass or fixed flag."""
+        with _tool_errors():
+            return _json(playground.update_object(name, size=size, pos=pos, color=color, mass=mass, fixed=fixed))
+
+    @server.tool()
+    def remove(name: str) -> str:
+        """Remove a robot or object from the world."""
+        with _tool_errors():
+            return _json(playground.remove(name))
+
+    @server.tool()
+    def set_floor(style: Literal["checker", "grass", "wood", "concrete"]) -> str:
+        """Change the floor look and feel."""
+        with _tool_errors():
+            return _json(playground.set_floor(style))
+
+    @server.tool()
+    def undo() -> str:
+        """Undo the last world edit."""
+        with _tool_errors():
+            return _json(playground.undo())
+
+    @server.tool()
+    def show_world() -> str:
+        """Show the world.yaml of the open world (the editable description of everything in it)."""
+        with _tool_errors():
+            return _json(playground.show_world())
+
+    @server.tool()
     def open_model(path: str) -> str:
         """Load a robot or scene from an MJCF (.xml) or URDF (.urdf) file, replacing the current one.
 
@@ -140,9 +253,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json(playground.control(action))
 
     @server.tool()
-    def observe(
-        view: str = "default", width: int = 640, height: int = 480, include_image: bool = True
-    ) -> list:
+    def observe(view: str = "default", width: int = 640, height: int = 480, include_image: bool = True) -> list:
         """Report the current state (joint angles, controls, free body positions, sensors, contacts) and,
         by default, a rendered image.
 

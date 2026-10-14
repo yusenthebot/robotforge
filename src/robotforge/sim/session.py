@@ -65,6 +65,10 @@ class SimSession:
     def load_xml(self, xml: str, assets: dict[str, bytes] | None = None) -> None:
         self._swap(_compile_xml(xml, assets), "<memory>")
 
+    def load_model(self, model: mujoco.MjModel, source: str) -> None:
+        """Swap in an already compiled model (e.g. from a world.yaml)."""
+        self._swap(model, source)
+
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
             self.model = model
@@ -145,9 +149,7 @@ class SimSession:
         mujoco.mj_objectVelocity(m, d, mujoco.mjtObj.mjOBJ_BODY, body, vel6, 0)
         anchor_vel = vel6[3:] + np.cross(vel6[:3], anchor - d.xpos[body])
         mass = max(float(m.body_subtreemass[body]), 1e-6)
-        force = mass * (
-            _DRAG_OMEGA**2 * (self.drag.target - anchor) - 2 * _DRAG_ZETA * _DRAG_OMEGA * anchor_vel
-        )
+        force = mass * (_DRAG_OMEGA**2 * (self.drag.target - anchor) - 2 * _DRAG_ZETA * _DRAG_OMEGA * anchor_vel)
         mujoco.mj_applyFT(m, d, force, np.zeros(3), anchor, body, d.qfrc_applied)
         # Hold the dragged subtree's weight so it follows the cursor instead of sagging g/omega^2 below it.
         mujoco.mj_applyFT(m, d, -mass * m.opt.gravity, np.zeros(3), d.subtree_com[body], body, d.qfrc_applied)
