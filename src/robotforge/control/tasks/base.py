@@ -154,7 +154,10 @@ class Robot:
 
     @property
     def joints(self) -> list[int]:
-        return self._names(mujoco.mjtObj.mjOBJ_JOINT, self.model.njnt)
+        """Joints on the robot's bodies. Matched by body, not joint name: imported models often leave
+        their free joint unnamed, and an unnamed joint gets no '<robot>/' prefix."""
+        bodies = set(self._names(mujoco.mjtObj.mjOBJ_BODY, self.model.nbody))
+        return [j for j in range(self.model.njnt) if int(self.model.jnt_bodyid[j]) in bodies]
 
     def hinge_joints(self) -> list[int]:
         return [j for j in self.joints if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE]

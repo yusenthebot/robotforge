@@ -94,9 +94,9 @@ def _gait(task: Task, model: mujoco.MjModel, params: dict[str, Any]):
     from robotforge.control.tasks.base import home_qpos
 
     try:
-        gait = quadruped.for_template(model, task.robot.name, home_qpos(model))
+        gait = quadruped.for_robot(model, task.robot.name, home_qpos(model))
     except ValueError as exc:
-        raise TaskError(f"the built-in gait needs a robot from the quadruped template: {exc}") from exc
+        raise TaskError(f"the built-in gait needs a four-legged robot: {exc}") from exc
     speed = float(params.get("speed", getattr(task.params, "speed", 0.0)))
     turn = float(params.get("turn", getattr(task.params, "turn", 0.0)))
     gait.command(speed, turn)
