@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import functools
 import io
 import math
+import sys
 import threading
+import warnings
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -26,6 +32,57 @@ VIEWS: dict[str, tuple[float, float, float]] = {
 MAX_PIXELS = 1280 * 960
 
 
+class RenderUnavailable(RuntimeError):
+    """Offscreen OpenGL rendering cannot start on this machine (no GPU, driver or display)."""
+
+
+# An OpenGL context belongs to the thread that made it current (EGL refuses to move it, GLFW wants one
+# owner), but MCP runs sync tools on whichever worker thread is free. Every GL call goes through this
+# single thread so the context never changes hands.
+_GL_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="robotforge-gl")
+_GL_HINTS = {
+    "linux": "Install Mesa's EGL or OSMesa libraries and set MUJOCO_GL=egl or MUJOCO_GL=osmesa.",
+    "win32": "Windows needs a graphics driver with OpenGL 3.3; headless machines and CI runners have none.",
+    "darwin": "This is unexpected on macOS; check that MUJOCO_GL is unset or cgl.",
+}
+
+
+def _on_gl_thread[T](fn: Callable[..., T], *args: Any) -> T:
+    return _GL_THREAD.submit(fn, *args).result()
+
+
+@functools.cache
+def _probe_gl() -> str | None:
+    """Render one frame of an empty world. Only ever runs on the GL thread, once per process."""
+    # GLFW reports why it failed ("the driver does not appear to support OpenGL") as a warning, not an exception.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            _render_empty_frame()
+        except Exception as exc:
+            # GL setup fails with RuntimeError, ImportError, OSError, AttributeError, GLFWError, FatalError
+            # depending on the platform. The probe model is known good, so any failure is the machine's.
+            reason = f"{type(exc).__name__}: {exc}"
+            details = "; ".join(str(w.message) for w in caught)
+            return " ".join((f"{reason} ({details})" if details else reason).split())[:300]
+    return None
+
+
+def _render_empty_frame() -> None:
+    model = mujoco.MjModel.from_xml_string("<mujoco/>")
+    renderer = mujoco.Renderer(model, height=16, width=16)
+    try:
+        renderer.update_scene(mujoco.MjData(model))
+        renderer.render()
+    finally:
+        renderer.close()
+
+
+def render_unavailable_reason() -> str | None:
+    """Why offscreen rendering cannot work here, or None when it can. Probed once, then cached."""
+    return _on_gl_thread(_probe_gl)
+
+
 class SnapshotRenderer:
     """Caches one mujoco.Renderer per model version and size; safe to call from any thread."""
 
@@ -37,7 +94,7 @@ class SnapshotRenderer:
     def close(self) -> None:
         with self._lock:
             if self._renderer is not None:
-                self._renderer.close()
+                _on_gl_thread(self._renderer.close)
                 self._renderer = None
                 self._key = None
 
@@ -54,15 +111,22 @@ class SnapshotRenderer:
             model, data = session.model, session.data
             width = min(width, model.vis.global_.offwidth)
             height = min(height, model.vis.global_.offheight)
-            key = (session.version, width, height)
-            if self._key != key:
-                if self._renderer is not None:
-                    self._renderer.close()
-                self._renderer = mujoco.Renderer(model, height=height, width=width)
-                self._key = key
-            camera = _camera_for(model, view)
-            self._renderer.update_scene(data, camera=camera)
-            return self._renderer.render().copy()
+            camera = _camera_for(model, view)  # bad arguments are reported the same with or without GL
+            return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
+
+    def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
+        """Runs on the GL thread, with the renderer and session locks held by the caller."""
+        reason = _probe_gl()
+        if reason is not None:
+            hint = _GL_HINTS.get(sys.platform, _GL_HINTS["linux"])
+            raise RenderUnavailable(f"Offscreen OpenGL rendering is unavailable here ({reason}). {hint}")
+        if self._key != key:
+            if self._renderer is not None:
+                self._renderer.close()
+            self._renderer = mujoco.Renderer(model, height=key[2], width=key[1])
+            self._key = key
+        self._renderer.update_scene(data, camera=camera)
+        return self._renderer.render().copy()
 
 
 def _camera_for(model: mujoco.MjModel, view: str) -> mujoco.MjvCamera | str:

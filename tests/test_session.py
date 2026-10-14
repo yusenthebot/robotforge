@@ -71,7 +71,7 @@ def test_body_poses_layout(session):
 
 def test_bad_model_reports_compiler_error(tmp_path):
     bad = tmp_path / "bad.xml"
-    bad.write_text("<mujoco><worldbody><geom type='nonsense'/></worldbody></mujoco>")
+    bad.write_text("<mujoco><worldbody><geom type='nonsense'/></worldbody></mujoco>", encoding="utf-8")
     with pytest.raises(ModelLoadError, match="bad.xml"):
         SimSession.from_path(bad)
     with pytest.raises(ModelLoadError, match="not found"):

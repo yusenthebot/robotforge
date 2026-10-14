@@ -6,9 +6,11 @@ import argparse
 import asyncio
 import contextlib
 import logging
+import os
 import socket
 import sys
 import webbrowser
+from collections.abc import Mapping
 from pathlib import Path
 
 import mujoco
@@ -26,14 +28,39 @@ log = logging.getLogger("robotforge")
 
 
 def port_is_free(port: int, host: str = "127.0.0.1") -> bool:
-    # Same socket option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform == "win32":
+            # SO_REUSEADDR means "share the port" on Windows, so the probe would call a port in use free.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            # Same option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((host, port))
         except OSError:
             return False
         return True
+
+
+def has_display(platform: str = sys.platform, env: Mapping[str, str] = os.environ) -> bool:
+    """Windows and macOS always have a desktop; on Linux there is one only under X11 or Wayland."""
+    if platform.startswith("linux"):
+        return bool(env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"))
+    return True
+
+
+def open_in_browser(url: str) -> bool:
+    """Open `url` in a desktop browser if this machine has one.
+
+    Without a display Python's webbrowser falls back to text browsers like lynx, which block until
+    quit and, inside an MCP server, would read the protocol stream from stdin.
+    """
+    if not has_display():
+        return False
+    try:
+        return webbrowser.open(url)
+    except webbrowser.Error:
+        return False
 
 
 def find_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> int:
@@ -66,7 +93,7 @@ async def serve(playground: Playground, host: str, port: int, open_browser: bool
     playground.viewer_url = url
     print(f"robotforge viewer: {url}  (model: {playground.session.source})", flush=True)
     if open_browser:
-        webbrowser.open(url)
+        open_in_browser(url)
     await server.serve()
 
 

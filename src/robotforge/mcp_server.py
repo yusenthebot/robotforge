@@ -13,7 +13,6 @@ import logging
 import os
 import re
 import time
-import webbrowser
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -27,9 +26,10 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge.behaviors.manager import BehaviorError
-from robotforge.cli import DEFAULT_PORT, find_free_port
+from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
+from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
 
@@ -92,7 +92,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     )
     def open_viewer(launch_browser: bool = True) -> str:
         if launch_browser and not os.environ.get("ROBOTFORGE_NO_BROWSER"):
-            webbrowser.open(playground.viewer_url)
+            open_in_browser(playground.viewer_url)
         return _json({"viewer_url": playground.viewer_url, "model": playground.session.source})
 
     @contextlib.asynccontextmanager
@@ -328,7 +328,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             store = playground._require_store()
             path = _script_path(store.dir, name)
             path.parent.mkdir(exist_ok=True)
-            path.write_text(code, encoding="utf-8")
+            with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
+                f.write(code)
             return _json({"saved": str(path), "lines": code.count("\n") + 1})
 
     @server.tool()
@@ -407,14 +408,25 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     def observe(view: str = "default", width: int = 640, height: int = 480, include_image: bool = True) -> list:
         """Report the current state (joint angles, controls, free body positions, sensors, contacts) and,
-        by default, a rendered image.
+        by default, a rendered image (on machines without OpenGL the state comes back with a note instead).
 
         `view` is a preset (default, front, back, left, right, top) or a camera name from describe_model.
         """
         with _tool_errors():
-            content: list = [_json(playground.state())]
+            state = playground.state()
+            image = None
             if include_image:
-                content.append(Image(data=playground.snapshot(view, width, height), format="png"))
+                try:
+                    image = playground.snapshot(view, width, height)
+                except RenderUnavailable as exc:
+                    # Headless machines (CI, servers, VMs) have no OpenGL: keep the state, say why there is no image.
+                    state["note"] = (
+                        f"No image. {exc} Everything else in this state is accurate, "
+                        "and open_viewer shows the live 3D view in a browser."
+                    )
+            content: list = [_json(state)]
+            if image is not None:
+                content.append(Image(data=image, format="png"))
             return content
 
     return server

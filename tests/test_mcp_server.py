@@ -26,7 +26,7 @@ def _data(result) -> dict:
     return json.loads(_text(result))
 
 
-async def test_tools_drive_the_demo_arm():
+async def test_tools_drive_the_demo_arm(gl_reason):
     playground = Playground.with_demo()
     server = build_server(playground, find_free_port(8790))
     async with Client(server) as client:
@@ -42,7 +42,10 @@ async def test_tools_drive_the_demo_arm():
         obs = await client.call_tool("observe", {"view": "front", "width": 320, "height": 240})
         state = json.loads(obs.content[0].text)
         assert state["joints"]["shoulder"] == pytest.approx(1.0, abs=0.05)
-        assert obs.content[1].type == "image" and obs.content[1].mime_type == "image/png"
+        if gl_reason is None:
+            assert obs.content[1].type == "image" and obs.content[1].mime_type == "image/png"
+        else:  # headless machine: the state still arrives, with a note instead of an image
+            assert len(obs.content) == 1 and "No image" in state["note"]
 
 
 async def test_tool_errors_reach_the_agent_with_guidance():
