@@ -28,8 +28,11 @@ GRAVITY = 9.81
 BASE_OMEGA = 30.0  # rad/s: natural frequency of the joint position loops before tuning
 DAMPING_RATIO = 1.0
 MIN_JOINT_INERTIA = 1e-5
+MAX_TIME_CONSTANT = 0.12  # s: slowest acceptable motor response, including the joint's own damping
 WHEEL_TIME_CONSTANT = 0.15  # s
 WHEEL_DEFAULT_SPEED = 10.0  # rad/s
+WHEEL_ACCELERATION = 4.0  # m/s^2 the wheels can give the robot when no effort limit is given
+WHEEL_FULL_TORQUE_ERROR = 0.5  # rad/s of speed error at which a wheel motor reaches its torque limit
 DEFAULT_PRISMATIC_SPAN = 0.5  # m, slider range when the URDF gives no limits
 TOUCH_TOLERANCE = 0.02  # m: a link this close to the lowest point counts as touching the ground
 MAX_HULL_VERTICES = 64
@@ -37,14 +40,18 @@ HULL_CAP_THRESHOLD = 200
 SELF_COLLISION_SAMPLES = 150
 SELF_COLLISION_RATE = 0.4  # pairs overlapping in this share of random poses never collide
 HOLD_SECONDS = 3.0
+TRACK_SECONDS = 1.0
+TRACK_STEP_REV = 0.25  # rad: the small move used to check that sliders follow
+TRACK_STEP_SLIDE = 0.03  # m
 MAX_HOLD_DRIFT_REV = 0.03  # rad
 MAX_HOLD_DRIFT_SLIDE = 0.01  # m
+CASTER_FRICTION = 0.05  # a caster or skid that dragged on the floor would stall a wheeled robot
 STANCE_SAMPLES = 4000
 STANCE_CANDIDATES = 6
 STANCE_CLIMB_STEPS = 600
 STANCE_REACH = 1.6  # rad: how far a joint may stray from its zero pose while looking for a stance
 _WHEEL = re.compile(r"wheel|tire|tyre", re.IGNORECASE)
-_PASSIVE = re.compile(r"caster|castor|swivel", re.IGNORECASE)
+_PASSIVE = re.compile(r"caster|castor", re.IGNORECASE)
 _MOVABLE = ("revolute", "continuous", "prismatic")
 
 
@@ -76,6 +83,7 @@ class RigPlan:
     armature: dict[str, float] = field(default_factory=dict)
     capped_meshes: list[str] = field(default_factory=list)
     home_qpos: dict[str, float] = field(default_factory=dict)
+    friction: dict[str, float] = field(default_factory=dict)  # body -> sliding friction of its collision shapes
     gain_scale: float = 1.0
 
     def to_json(self) -> dict[str, Any]:
@@ -150,6 +158,12 @@ def _apply_plan(spec: mujoco.MjSpec, plan: RigPlan) -> None:
         spec.add_exclude(bodyname1=first, bodyname2=second)
     for mesh in plan.capped_meshes:
         spec.mesh(mesh).maxhullvert = MAX_HULL_VERTICES
+    if plan.friction:
+        for body in spec.bodies:
+            mu = plan.friction.get(body.name)
+            for g in body.geoms if mu is not None else []:
+                if not _is_visual(g):
+                    g.friction = [mu, g.friction[1], g.friction[2]]
 
 
 def _free_name(spec: mujoco.MjSpec) -> str:
@@ -170,10 +184,12 @@ class HoldResult:
     drift_raw: str  # human readable worst error
     drop: float  # fraction of its starting height a floating base lost
     upright: bool
+    tracking: float = 0.0  # worst share of a small commanded move that was not achieved (fixed bases only)
+    tracking_raw: str = ""
 
     @property
     def holds(self) -> bool:
-        return self.finite and self.drift <= 1.0 and self.drop < 0.25 and self.upright
+        return self.finite and self.drift <= 1.0 and self.drop < 0.25 and self.upright and self.tracking <= 0.2
 
 
 @dataclass
@@ -228,10 +244,18 @@ def _draft(
     geo = _Geometry(model, data)
     plan.base, draft.base_reason = _choose_base(staged, geo, base)
     plan.spawn_height, draft.lifted = _spawn_height(plan.base, geo)
+    plan.friction = _friction(staged)
     movable = [j for j in staged.joints if j.type in _MOVABLE and not j.mimic_of]
     _plan_actuators(staged, geo, draft, movable)
     plan.excludes = _plan_exclusions(urdf, home)
     return draft
+
+
+def _friction(staged: StagedUrdf) -> dict[str, float]:
+    """Sliding friction per link: the author's Gazebo values, and slippery casters and skids."""
+    out = {link: CASTER_FRICTION for link in staged.links if _PASSIVE.search(link)}
+    out.update(staged.link_friction)
+    return out
 
 
 def home_pose(staged: StagedUrdf) -> dict[str, float]:
@@ -494,6 +518,9 @@ def _position_actuator(
     effective, torque = _share_body_weight(effective, torque, plan, geo, jid, support, slide)
     kp = effective * BASE_OMEGA**2
     kv = 2 * DAMPING_RATIO * effective * BASE_OMEGA
+    # The file's own joint damping and friction fight the motor: keep it from turning the joint into molasses.
+    kp = max(kp, (j.damping + kv) / MAX_TIME_CONSTANT, j.friction / (0.002 if slide else 0.01))
+    kv = max(2 * DAMPING_RATIO * math.sqrt(kp * effective) - j.damping, 0.1 * math.sqrt(kp * effective))
     span = 0.1 if slide else 0.5
     force = j.effort if j.effort else max(4.0 * torque, kp * span)
     return ActuatorPlan(j.name, "position", kp, kv, float(lo), float(hi), float(force), 0.0, bool(j.effort))
@@ -520,13 +547,14 @@ def _share_body_weight(
 
 
 def _wheel_actuator(staged: StagedUrdf, geo: _Geometry, j: JointInfo) -> ActuatorPlan:
+    """A speed motor: full torque once the wheel is 0.5 rad/s off its command, so rolling resistance barely shows."""
     shapes = staged.link_shapes.get(j.child, [])
     radius = max(shapes_radius(shapes, np.zeros(3)) if shapes else 0.0, 0.02)
     n_wheels = max(1, sum(1 for x in staged.joints if x.type == "continuous" and _WHEEL.search(x.name)))
     load = geo.total_mass / n_wheels
-    kv = max(load * radius * radius, 1e-4) / WHEEL_TIME_CONSTANT
+    force = j.effort if j.effort else load * radius * WHEEL_ACCELERATION
+    kv = max(force / WHEEL_FULL_TORQUE_ERROR, load * radius * radius / WHEEL_TIME_CONSTANT, 1e-4)
     speed = max(j.velocity or 0.0, WHEEL_DEFAULT_SPEED)
-    force = j.effort if j.effort else max(load * radius * 4.0, kv * 2.0)
     return ActuatorPlan(
         j.name, "velocity", 0.0, float(kv), -float(speed), float(speed), float(force), 0.0, bool(j.effort)
     )
@@ -544,7 +572,7 @@ def _plan_exclusions(urdf: Path, home: dict[str, float]) -> list[tuple[str, str]
     movable = [
         (int(model.jnt_qposadr[j]), *_joint_span(model, j))
         for j in range(model.njnt)
-        if model.jnt_type[j] in (mujoco.mjtJoint.mjJNT_HINGE, mujoco.mjtJoint.mjJNT_SLIDE)
+        if int(model.jnt_type[j]) in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
     ]
     chosen = _contact_pairs(model, data)
     counts: dict[tuple[int, int], int] = {}
@@ -606,7 +634,7 @@ def _search_stance(staged: StagedUrdf, urdf: Path, current: _Draft) -> _Draft | 
 
 
 def _score(result: HoldResult) -> float:
-    return result.drift + 10 * result.drop + (0 if result.upright else 100)
+    return result.drift + 10 * result.drop + (0 if result.upright else 100) + 5 * result.tracking
 
 
 @dataclass
@@ -829,8 +857,8 @@ def _pose_distance(a: dict[str, float], b: dict[str, float]) -> float:
 # ---- verification and gain tuning ------------------------------------------------------------
 
 
-def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldResult:
-    """Drop the robot on a floor with every motor commanded to its home pose and see if it stays put."""
+def _test_world(urdf: Path, plan: RigPlan) -> tuple[mujoco.MjModel, mujoco.MjData, int]:
+    """The robot on a floor, at its home pose with every motor commanded to hold it."""
     world = mujoco.MjSpec()
     world.option.timestep = 0.002
     world.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
@@ -844,13 +872,25 @@ def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldR
     for a in plan.actuators:
         data.ctrl[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"t/{a.joint}")] = a.home
     mujoco.mj_forward(model, data)
-
     root = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"t/{plan.root_body}")
-    start_height = float(data.xpos[root][2])
+    return model, data, root
+
+
+def _run(model: mujoco.MjModel, data: mujoco.MjData, seconds: float) -> bool:
+    """Step the simulation; False when it blows up."""
     for step in range(round(seconds / model.opt.timestep)):
         mujoco.mj_step(model, data)
         if step % 50 == 0 and not (np.isfinite(data.qpos).all() and np.abs(data.qpos).max() < 1e6):
-            return HoldResult(False, math.inf, "the simulation blew up", 1.0, False)
+            return False
+    return True
+
+
+def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldResult:
+    """Put the robot on a floor with every motor at its home pose, then nudge each joint; check it behaves."""
+    model, data, root = _test_world(urdf, plan)
+    start_height = float(data.subtree_com[root][2])  # center of mass: robust when the base origin sits on the floor
+    if not _run(model, data, seconds):
+        return HoldResult(False, math.inf, "the simulation blew up", 1.0, False)
 
     worst, worst_text = 0.0, "none"
     for a in plan.actuators:
@@ -864,13 +904,45 @@ def hold_test(urdf: Path, plan: RigPlan, seconds: float = HOLD_SECONDS) -> HoldR
             worst, worst_text = ratio, f"{a.joint} off by {err:.3g} {'m' if slide else 'rad'}"
     drop, upright = 0.0, True
     if plan.base == "floating" and start_height > 1e-3:
-        drop = max(0.0, (start_height - float(data.xpos[root][2])) / start_height)
+        drop = max(0.0, (start_height - float(data.subtree_com[root][2])) / start_height)
         upright = float(data.xmat[root].reshape(3, 3)[2, 2]) > 0.7
-    return HoldResult(True, worst, worst_text, drop, upright)
+    result = HoldResult(True, worst, worst_text, drop, upright)
+    if plan.base == "fixed" and result.finite and result.drift <= 1.0:
+        result.tracking, result.tracking_raw = _tracking(model, data, plan)
+    return result
+
+
+def _tracking(model: mujoco.MjModel, data: mujoco.MjData, plan: RigPlan) -> tuple[float, str]:
+    """Command a small move on every joint at once; return the worst share of it that was not achieved."""
+    targets: dict[int, tuple[float, str]] = {}
+    for a in plan.actuators:
+        if a.kind != "position":
+            continue
+        jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"t/{a.joint}")
+        slide = model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_SLIDE
+        up, down = a.ctrl_hi - a.home, a.home - a.ctrl_lo
+        room = max(up, down)
+        delta = min(TRACK_STEP_SLIDE if slide else TRACK_STEP_REV, 0.8 * room)
+        if delta <= 1e-6:
+            continue
+        delta = delta if up >= down else -delta
+        aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"t/{a.joint}")
+        data.ctrl[aid] = a.home + delta
+        targets[jid] = (a.home + delta, a.joint)
+    if not targets or not _run(model, data, TRACK_SECONDS):
+        return (0.0, "") if not targets else (math.inf, "the simulation blew up")
+    worst, text = 0.0, ""
+    for jid, (target, name) in targets.items():
+        start = plan.home_qpos.get(name, 0.0)
+        achieved = float(data.qpos[model.jnt_qposadr[jid]])
+        missing = abs(target - achieved) / max(abs(target - start), 1e-9)
+        if missing >= worst:
+            worst, text = missing, f"{name} reached {achieved:.3g} of {target:.3g}"
+    return worst, text
 
 
 def tune_gains(urdf: Path, plan: RigPlan) -> HoldResult | None:
-    """Raise motor stiffness until the robot holds its pose; leaves the best setting in `plan`.
+    """Raise motor stiffness until the robot holds its pose and follows commands; keeps the best in `plan`.
 
     Returns None when the plan has no motors or the simulation blows up at every setting.
     """
@@ -881,10 +953,13 @@ def tune_gains(urdf: Path, plan: RigPlan) -> HoldResult | None:
     for scale in (1.0, 2.0, 4.0, 8.0, 16.0, 32.0):
         _scale_gains(plan, base, scale)
         result = hold_test(urdf, plan)
-        if result.finite and (best is None or _score(result) < best[0]):
-            best = (_score(result), scale, result)
-        if result.holds:
-            break
+        if result.finite:
+            score = _score(result)
+            stalled = best is not None and score > 0.97 * best[0]  # more stiffness no longer helps
+            if best is None or score < best[0]:
+                best = (score, scale, result)
+            if result.holds or stalled:
+                break
     if best is None:
         _scale_gains(plan, base, 1.0)
         return None
@@ -927,13 +1002,23 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
         report.fixed(
             "actuators",
             "the URDF describes joints but no motors, so sliders and controls would do nothing",
-            f"added {kinds['position']} position motor(s)"
-            + (f" and {kinds['velocity']} wheel (speed) motor(s)" if kinds["velocity"] else "")
-            + " sized to the weight each joint carries; joint limits and effort limits from the file are respected",
+            "added "
+            + " and ".join(
+                f"{n} {label} motor{'s' if n != 1 else ''}"
+                for n, label in ((kinds["position"], "position"), (kinds["velocity"], "wheel (speed)"))
+                if n
+            )
+            + ", sized to the weight each joint carries; joint limits and effort limits from the file are respected",
             [a.joint for a in plan.actuators],
         )
     if draft.passive:
-        report.info("actuators", "these joints spin freely, as casters should; they have no motor", draft.passive)
+        report.info("actuators", "these joints are casters, which spin freely; they have no motor", draft.passive)
+    if plan.friction:
+        report.info(
+            "friction",
+            "set the floor friction of some links (Gazebo mu1 values from the file, or low for casters and skids)",
+            [f"{k}: {v:g}" for k, v in sorted(plan.friction.items())],
+        )
     if draft.clamped:
         report.fixed(
             "joints",
@@ -952,8 +1037,8 @@ def _emit(draft: _Draft, report: DoctorReport) -> None:
     if plan.excludes:
         report.fixed(
             "collision",
-            f"{len(plan.excludes)} pair(s) of links overlap in their collision shapes, "
-            "which makes a robot jitter or explode",
+            f"{len(plan.excludes)} pair(s) of links overlap in their collision shapes (common in URDFs), "
+            "which makes a robot jitter",
             "stopped those pairs from colliding with each other (they still collide with the floor and with objects)",
             [f"{a} / {b}" for a, b in plan.excludes],
         )
@@ -993,6 +1078,8 @@ def report_hold(plan: RigPlan, result: HoldResult | None, report: DoctorReport) 
     reasons = []
     if result.drift > 1.0:
         reasons.append(f"joints sag ({result.drift_raw})")
+    if result.tracking > 0.2:
+        reasons.append(f"joints do not follow commands ({result.tracking_raw})")
     if _tipped(result):
         reasons.append("the body falls over or collapses")
     report.unfixed(

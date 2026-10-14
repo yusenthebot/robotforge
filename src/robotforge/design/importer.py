@@ -115,14 +115,21 @@ def import_file(
 
 def compile_standalone(path: str | Path, options: dict[str, Any] | None = None, floor: str = "checker"):
     """A one-robot world around an imported file, for `open_model` and `robotforge open`."""
-    from robotforge.design.store import slug
     from robotforge.design.world import RobotEntry, World, compile_world
 
     src = Path(path).expanduser().resolve()
-    name = slug(src.stem)
+    name = _robot_name(src.stem)
     world = World.model_validate({"name": name, "floor": {"style": floor}})
     world.robots.append(RobotEntry(name=name, file=str(src), params=dict(options or {})))
     return compile_world(world, src.parent)
+
+
+def _robot_name(stem: str) -> str:
+    """A valid world name (lowercase, digits, underscore, starts with a letter) from a file name."""
+    name = re.sub(r"[^a-z0-9_]+", "_", stem.lower()).strip("_") or "robot"
+    if not name[0].isalpha():
+        name = f"robot_{name}"
+    return name[:32]
 
 
 # ---- URDF ------------------------------------------------------------------------------------

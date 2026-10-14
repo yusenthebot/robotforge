@@ -100,13 +100,17 @@ class DoctorReport:
 
     def to_text(self) -> str:
         """A short console rendering for `robotforge open`."""
-        lines = [f"Import doctor: {self.summary}"]
-        marks = {"fixed": "fixed", "unfixed": "NOT FIXED", "info": "note"}
-        for f in self.findings:
-            lines.append(f"  [{marks[f.status]}] {f.problem}")
-            if f.action:
-                lines.append(f"      -> {f.action}")
-            d = f.to_dict()
-            if "items" in d:
-                lines.append(f"      ({', '.join(d['items'])})")
-        return "\n".join(lines)
+        return render_text(self.to_dict())
+
+
+def render_text(data: dict[str, Any]) -> str:
+    """Console rendering of a report dict (as returned by `DoctorReport.to_dict`)."""
+    lines = [f"Import doctor: {data['summary']}"]
+    marks = {"fixed": "fixed", "unfixed": "NOT FIXED", "info": "note"}
+    for f in data["findings"]:
+        lines.append(f"  [{marks[f['status']]}] {f['problem']}")
+        if f.get("action"):
+            lines.append(f"      -> {f['action']}")
+        if f.get("items"):
+            lines.append(f"      ({', '.join(f['items'])})")
+    return "\n".join(lines)

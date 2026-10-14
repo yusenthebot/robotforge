@@ -17,7 +17,7 @@ import mujoco
 import uvicorn
 
 from robotforge.design import importer
-from robotforge.design.importing.report import DoctorReport
+from robotforge.design.importing.report import render_text
 from robotforge.design.store import WorldStore
 from robotforge.playground import Playground
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     for report in playground.last_doctor.values():
-        print(DoctorReport.from_dict(report).to_text(), flush=True)
+        print(render_text(report), flush=True)
 
     if args.port is None:
         port = find_free_port(DEFAULT_PORT, args.host)

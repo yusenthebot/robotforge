@@ -44,6 +44,7 @@ class JointInfo:
     mimic_multiplier: float = 1.0
     mimic_offset: float = 0.0
     damping: float = 0.0
+    friction: float = 0.0  # dry friction loss, N m or N
 
 
 @dataclass
@@ -56,6 +57,7 @@ class StagedUrdf:
     link_shapes: dict[str, list[Shape]]  # collision shapes, or visual shapes where a link has no collision
     link_mass: dict[str, float]
     visual_links: set[str]  # links that have at least one visual shape
+    link_friction: dict[str, float] = field(default_factory=dict)  # Gazebo mu1 hints, link -> sliding friction
     mesh_sources: list[Path] = field(default_factory=list)  # original mesh files that were read
     unresolved: list[str] = field(default_factory=list)  # mesh URIs that were not found
     visual_triangles: int = 0
@@ -71,6 +73,7 @@ def stage_urdf(
     """Repair `robot` (a parsed <robot> element, modified in place) and return the staged description."""
     if robot.tag != "robot":
         raise ValueError(f"this is not a URDF: the top element is <{robot.tag}>, expected <robot>")
+    friction = _gazebo_friction(robot)
     _strip_noise(robot)
     links = {el.get("name", ""): el for el in robot.findall("link")}
     if not links:
@@ -98,6 +101,7 @@ def stage_urdf(
         link_shapes=link_shapes,
         link_mass=masses,
         visual_links=visual_links,
+        link_friction={k: v for k, v in friction.items() if k in links},
         mesh_sources=[p for p, a in ctx.assets.items() if isinstance(a, MeshAsset)],
         unresolved=sorted(set(ctx.unresolved_uris)),
         visual_triangles=ctx.visual_faces,
@@ -113,6 +117,19 @@ def _strip_noise(robot: ET.Element) -> None:
     for child in list(robot):
         if child.tag not in _KEEP_TAGS:
             robot.remove(child)
+
+
+def _gazebo_friction(robot: ET.Element) -> dict[str, float]:
+    """Friction the author asked for in Gazebo-only <gazebo reference="link"><mu1> tags."""
+    out: dict[str, float] = {}
+    for el in robot.findall("gazebo"):
+        ref, mu = el.get("reference"), el.find("mu1")
+        if ref and mu is not None and mu.text:
+            try:
+                out[ref] = min(max(float(mu.text), 0.01), 5.0)
+            except ValueError:
+                continue
+    return out
 
 
 def _fix_materials(robot: ET.Element, report: DoctorReport) -> None:
@@ -184,6 +201,7 @@ def _read_joints(robot: ET.Element, links: dict[str, ET.Element], report: Doctor
         dyn = el.find("dynamics")
         if dyn is not None:
             info.damping = max(0.0, _floats(dyn.get("damping"), 1)[0])
+            info.friction = max(0.0, _floats(dyn.get("friction"), 1)[0])
         joints.append(info)
 
     if missing_refs:
