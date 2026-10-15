@@ -169,6 +169,9 @@ class QuadrupedGait:
         self.robot = robot
         self.duty = 0.5
         self.attitude_gain = attitude_gain
+        # Standing still, level the trunk as while walking. Off: hold the stance the servos would, leveling only as
+        # much as it steps (see _plan); for a robot an open world stands on its gait before anyone moved it.
+        self.level_standing = True
         self.root_qpos = model.jnt_qposadr[root_joint]
         self.root_dof = model.jnt_dofadr[root_joint]
         self.trunk = model.jnt_bodyid[root_joint]
@@ -315,13 +318,15 @@ class QuadrupedGait:
 
         v_body, turn = self._corrected_velocity(dt)
         w = self._recovery
-        if not moving and self._amplitude == 0.0 and w == 0.0 and self.speed == 0.0 and self.turn == 0.0:
+        # The trunk is leveled while the robot walks. Standing, a gait without level_standing levels it only as much
+        # as it steps (recovering, or stopping) and otherwise holds the stance its servos would: leveled standing on
+        # a 17 to 20 degree ramp, a Go2 nobody had moved, which stood there on its servos, pushed its downhill legs
+        # out, its feet slid, the pitch grew with them and it went over backwards. A robot that was moved keeps its
+        # leveled stand: on a 15 degree ramp a Go2 walked up and stopped stood 10 degrees tilted, unleveled 19.
+        leveling = self.attitude_gain * (1.0 if moving or self.level_standing else max(self._amplitude, w))
+        still = not moving and self._amplitude == 0.0 and w == 0.0 and self.speed == 0.0 and self.turn == 0.0
+        if still and leveling == 0.0:
             return  # it has not stepped since it started: every foot target is still its home (see IK_TOL)
-        # The trunk is leveled while the robot walks, and while it stands only as much as it steps (recovering, or
-        # stopping): standing still, it holds the stance its servos would. Leveled standing on a 17 to 20 degree
-        # ramp, a Go2 that stood there on its servos pushed its downhill legs out, its feet slid, the pitch grew
-        # with them and it went over backwards.
-        leveling = self.attitude_gain * (1.0 if moving else max(self._amplitude, w))
         level = None
         if w > 1e-3:
             # Sideways strides follow the trunk, and the velocity correction lets go of that axis.

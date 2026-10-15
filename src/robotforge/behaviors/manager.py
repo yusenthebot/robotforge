@@ -113,7 +113,9 @@ class BehaviorManager:
                         self._mobile_controller(name, kind, create=True)
                 elif kind in STEPPING and in_world:
                     with contextlib.suppress(BehaviorError):
-                        self._standing[name] = self._mobile_controller(name, kind, create=True, walker="gait")
+                        gait = self._mobile_controller(name, kind, create=True, walker="gait")
+                        gait.level_standing = False  # it stands as on its servos until moved (see QuadrupedGait)
+                        self._standing[name] = gait
 
     def _set_by_hand(self, actuator: int) -> None:
         """A leg joint set by hand (a viewer slider, set_controls) on a robot still on the gait start_balancing
@@ -267,7 +269,9 @@ class BehaviorManager:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             ctrl.command(speed, turn)
-            self._standing.pop(robot, None)  # moved: its gait is its own now
+            standing = self._standing.pop(robot, None)
+            if standing is not None:  # moved: its gait is its own now, and stands as any gait it was moved with
+                standing.level_standing = True
         notes = _clamp_notes(ctrl, speed, turn)
         return {**ctrl.status(), "notes": notes} if notes else ctrl.status()
 

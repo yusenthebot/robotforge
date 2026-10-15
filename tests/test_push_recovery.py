@@ -198,6 +198,25 @@ def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot, 
     assert _tilt(pg, trunk) == pytest.approx(_tilt(plain, trunk), abs=1.0)
 
 
+@pytest.mark.parametrize(("robot", "angle", "tilted"), [("dog", 10, 8.0), ("go2", 15, 13.0)])
+def test_a_quadruped_walked_on_a_slope_and_stopped_stands_leveled(pg, robot, angle, tilted):
+    """Regression found in review: holding the servo stance is for robots nobody moved. A Go2 walked up a 15 degree
+    ramp and stopped stood 10.4 degrees tilted on base 7a4aa92 and 18.7 with that stance, sliding 55 mm instead of
+    12; our dog on 10 degrees 6.3 and 10.3. A robot that was moved stands leveled, as it always did."""
+    pg.add_terrain("ramp", pos=[0.0, 0.0], params={"angle": angle, "length": 1.5, "direction": "up"})
+    pg.add_robot(robot, **ROBOTS[robot], pos=[-0.4, 0.0])
+    pg.run_fast(lambda: False, 1.0)
+    pg.behaviors.move(robot, 0.1, 0.0, walker="gait")
+    pg.run_fast(lambda: False, 1.5)
+    pg.behaviors.stop(robot)
+    stopped = np.array(pg.behaviors.pose(robot)["position"][:2])
+    pg.run_fast(lambda: False, 10.0)
+    trunk = pg.behaviors._root_body(robot)
+    assert _tilt(pg, trunk) < tilted
+    if robot == "go2":
+        assert np.linalg.norm(np.array(pg.behaviors.pose(robot)["position"][:2]) - stopped) < 0.025
+
+
 def _stepping(pg: Playground, robot: str, seconds: float) -> tuple[float, float]:
     """Run `seconds` and return how long `robot`'s gait stepped in all, and in its longest stretch."""
     gait = pg.session.controllers[robot]
