@@ -1,0 +1,23 @@
+{
+  "name": "robotforge",
+  "displayName": "robotforge",
+  "version": "0.1.0",
+  "description": "Beginner robot playground: design, load or import robots in plain language, simulate them in MuJoCo, watch them in a live 3D viewer, compare controllers and learn embodied AI lesson by lesson.",
+  "author": {
+    "name": "yusenthebot",
+    "url": "https://github.com/yusenthebot"
+  },
+  "homepage": "https://github.com/yusenthebot/robotforge",
+  "repository": "https://github.com/yusenthebot/robotforge",
+  "keywords": ["robotics", "mujoco", "simulation", "embodied-ai", "education", "urdf", "mcp"],
+  "mcpServers": {
+    "robotforge": {
+      "command": "uv",
+      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "--frozen", "--no-dev", "robotforge", "mcp"],
+      "env": {
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv"
+      },
+      "timeout": 600000
+    }
+  }
+}

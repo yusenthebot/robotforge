@@ -1,0 +1,17 @@
+{
+  "name": "robotforge",
+  "description": "robotforge, the beginner robot playground, as a plugin: MCP tools, an agent skill and a learning path.",
+  "owner": {
+    "name": "yusenthebot",
+    "url": "https://github.com/yusenthebot"
+  },
+  "plugins": [
+    {
+      "name": "robotforge",
+      "source": "./",
+      "description": "Design, import and simulate robots in plain language, watch them in a live 3D viewer, and learn embodied AI lesson by lesson.",
+      "category": "education",
+      "tags": ["robotics", "mujoco", "simulation", "embodied-ai", "urdf"]
+    }
+  ]
+}

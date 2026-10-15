@@ -25,6 +25,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
+from robotforge import lessons
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
@@ -69,9 +70,16 @@ actions play out in real time for the user to watch.
 Algorithms: the same robot and task can be solved by different control methods (IK, PD, LQR, sampling
 MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss with the user.
+train_policy teaches a robot a task by reinforcement learning (PPO, SAC) in the background; follow it with
+training_status, then run or compare it as method "policy:<name>".
+
+Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
+sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
+"第三课"), call lessons(number) and follow its plan.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
-(joints, actuators, control): the user may be new to robotics.
+(joints, actuators, control): the user may be new to robotics. Check results (numbers, observe) before
+saying something worked.
 """
 
 
@@ -417,6 +425,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             sim.pose(robot, "wave") -> bool                    # humanoid poses; waits, True if upright
             sim.move_arm(robot, [x, y, z], gripper="open"|"close"|None)   # waits until arrived
             sim.gripper(robot, "open"|"close"); sim.pick_and_place(robot, obj, target) -> bool
+            sim.run_policy(robot, policy_name)                 # a trained policy drives it until stop
             print(...)                                         # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Then call run_script."""

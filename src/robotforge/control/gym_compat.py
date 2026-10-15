@@ -17,7 +17,7 @@ from robotforge.control.env import RobotEnv
 
 INSTALL_HINT = (
     "as_gymnasium needs the gymnasium package, which is not installed: pip install gymnasium "
-    "(a robotforge 'rl' extra bundling gymnasium, Stable-Baselines3 and PyTorch is planned)"
+    "(or the robotforge 'rl' extra with gymnasium, Stable-Baselines3 and PyTorch: uv sync --extra rl)"
 )
 
 

@@ -65,8 +65,10 @@ class MeshResolver:
             if re.match(r"^/[A-Za-z]:", raw):  # file:///C:/robot/a.stl
                 raw = raw[1:]
             path = Path(raw)
-            if re.fullmatch(r"[A-Za-z]:", parsed.netloc):  # file://C:/robot/a.stl, a common hand-written form
-                path = Path(parsed.netloc + raw)
+            if re.match(r"[A-Za-z]:", parsed.netloc):
+                # file://C:/robot/a.stl or file://C:\robot\a.stl: hand-written forms where the drive letter lands
+                # in the host part (with backslashes, urlparse puts the whole path there).
+                path = Path(unquote(parsed.netloc) + raw)
             elif parsed.netloc and parsed.netloc != "localhost":
                 path = Path(f"//{parsed.netloc}{raw}")
             return self._resolve_plain(uri, path)
