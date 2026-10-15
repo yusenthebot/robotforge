@@ -357,6 +357,19 @@ def test_an_arm_on_a_rover_that_turned_lowers_straight_into_the_bin(pg):
     assert abs(pg.behaviors.pose("mm")["heading_deg"] - heading) < 2  # nothing yanked the rover round
 
 
+def test_the_arm_on_a_rover_is_an_arm_to_move_and_pose_and_says_who_carries_it(pg):
+    """move and pose on "mm/arm" took it for the rover and said "no driven wheels" or "mm/arm is a rover"."""
+    pg.add_robot("mm", build=MOBILE_ARM)
+    assert pg.behaviors.kind("mm/arm").value == "arm"
+    assert pg.behaviors.kind("MM/Arm").value == "arm"  # other capitals still find it
+    with pytest.raises(ValueError, match=r"mm/arm is the arm mounted on mm: drive mm with move; .*move_arm"):
+        pg.behaviors.move("mm/arm", 0.2, 0.0)
+    with pytest.raises(ValueError, match=r"mm/arm is an arm, and only humanoids strike poses; .*move_arm"):
+        pg.behaviors.strike_pose("mm/arm", "wave")
+    with pytest.raises(ValueError, match=r"'mm/claw' is not an arm: mm carries mm/arm"):
+        pg.behaviors.move("mm/claw", 0.2, 0.0)
+
+
 def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
     pg.add_robot("dog", build=DOG)
     with pytest.raises(ValueError, match="not an arm, and carries none"):

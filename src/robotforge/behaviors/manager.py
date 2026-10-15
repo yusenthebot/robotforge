@@ -167,7 +167,10 @@ class BehaviorManager:
 
     def kind(self, robot: str) -> Kind:
         world = self._world()  # read once: it comes from the file
-        robot = self._resolve(robot, world).split("/", 1)[0]  # an arm on a robot is part of the robot
+        robot = self._resolve(robot, world)
+        if "/" in robot:  # "rover/arm": an arm mounted on a robot is an arm, whatever carries it
+            self._check_mounted_arm(robot)
+            return Kind.ARM
         if world is not None:
             entry = next(r for r in world.robots if r.name == robot)
             return robot_kind(self.session.model, robot, _told_kind(entry))
@@ -189,6 +192,12 @@ class BehaviorManager:
         if walker is not None:
             walker = wording.match(walker, GAIT_WALKERS) or walker
         kind = self.kind(robot)
+        if "/" in robot:
+            owner = robot.split("/", 1)[0]
+            raise BehaviorError(
+                f"{robot} is the arm mounted on {owner}: drive {owner} with move; the arm works with "
+                "move_arm, gripper and pick_and_place"
+            )
         if kind not in MOBILE and walker in (None, RHYTHM):
             if self.kept_walk(robot) is None:
                 raise BehaviorError(self._cannot_move(robot, kind))
@@ -431,15 +440,19 @@ class BehaviorManager:
                 found.append(name.removesuffix("/tcp"))
         return found
 
+    def _check_mounted_arm(self, robot: str) -> None:
+        """"owner/part" must be one of the arms mounted on the owner; otherwise say which arms it carries."""
+        owner = robot.split("/", 1)[0]
+        arms = self.arms(owner)
+        if robot not in arms:
+            carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
+            raise BehaviorError(f"{robot!r} is not an arm: {owner} carries {carries}")
+
     def _arm_name(self, robot: str) -> str:
         """Which arm a command means: "rover/arm" names one; a robot with a single arm stands for it."""
         robot = self.resolve(robot)  # unknown robots get the usual message
         if "/" in robot:
-            owner = robot.split("/", 1)[0]
-            arms = self.arms(owner)
-            if robot not in arms:
-                carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
-                raise BehaviorError(f"{robot!r} is not an arm: {owner} carries {carries}")
+            self._check_mounted_arm(robot)
             return robot
         kind = self.kind(robot)
         arms = self.arms(robot)
