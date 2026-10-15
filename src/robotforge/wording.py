@@ -78,9 +78,10 @@ def unknown(
     where: str = "in this world",
     aliases: Mapping[str, str] | None = None,
     many: str | None = None,
+    make: str = "",
 ) -> str:
     """ "no robot named 'dog1'. Did you mean dog? Robots in this world: dog, arm": what failed, and the way out.
-    `many` is the plural of `kind` when it is not just an s."""
+    `many` is the plural of `kind` when it is not just an s; `make` says what creates one when there are none."""
     many = many or plural(kind)
     text = f"no {kind} named {short(given)}."
     close = near(given, names, aliases)
@@ -88,7 +89,7 @@ def unknown(
         text += f" Did you mean {', '.join(close)}?"
     if names:
         return f"{text} {many.capitalize()} {where}: {choices(list(names))}"
-    return f"{text} There are no {many} {where}."
+    return f"{text} There are no {many} {where}" + (f"; {make} makes one" if make else ".")
 
 
 def short(value: Any) -> str:
@@ -193,13 +194,19 @@ def unwrap(text: str) -> str:
     return "\n\n".join(kept)
 
 
+def in_meters(point: Sequence[float], distance: float, reach: float) -> str:
+    """What the point would be in meters if its numbers were centimetres (the usual mistake): said only when it
+    is far beyond `reach` as given and within it once divided by 100."""
+    if distance >= TOO_BIG * reach and distance / 100 <= reach * 1.05:
+        return f" (positions are meters; in cm that would be {[round(float(v) / 100, 3) for v in point]})"
+    return ""
+
+
 def too_far(point: Sequence[float], distance: float, reach: float) -> str:
     """ "it is 25.0 m from the arm's base, which reaches about 0.45 m", and what the point would be in meters if
-    its numbers were centimetres (the usual mistake)."""
+    its numbers were centimetres."""
     text = f"it is {distance:.2f} m from the arm's base, which reaches about {reach:.2f} m; give a nearer point"
-    if distance >= TOO_BIG * reach and distance / 100 <= reach * 1.05:
-        text += f" (positions are meters; in cm that would be {[round(float(v) / 100, 3) for v in point]})"
-    return text
+    return text + in_meters(point, distance, reach)
 
 
 def _lean(value: Any) -> Any:

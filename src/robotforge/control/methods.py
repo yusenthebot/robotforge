@@ -38,6 +38,7 @@ _LQR_WEIGHTS: dict[str, dict[str, Any]] = {
 
 
 POLICY_PREFIX = "policy:"  # "policy:<name>" runs a trained neural network policy (see control/rl)
+LEARNED = ("ppo", "sac")  # algorithms that are trained first, so they are named but not in METHODS
 LEARNED_HINT = (
     "{method} is trained, not built on the spot: train a policy with train_policy(algo={method!r}), "
     "then run it with method='policy:<its name>'"
@@ -57,7 +58,7 @@ def check(task: Task, method: str) -> None:
 
         check_name(method.removeprefix(POLICY_PREFIX))
         return
-    if method in ("ppo", "sac"):
+    if method in LEARNED:
         raise TaskError(LEARNED_HINT.format(method=method))
     if method not in METHODS:
         close = wording.near(method, METHODS, NICKNAMES)

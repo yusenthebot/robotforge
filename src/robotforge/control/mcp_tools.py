@@ -19,7 +19,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from robotforge import wording
 from robotforge.control import tasks as task_catalog
 from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
-from robotforge.control.methods import LONG_NAMES, METHODS, explain, make_controller
+from robotforge.control.methods import LEARNED, LONG_NAMES, METHODS, explain, make_controller
 from robotforge.control.rl.runtime import policy_params
 from robotforge.control.tasks import TaskError, make_task
 from robotforge.playground import Playground
@@ -218,7 +218,7 @@ def _method(method: str) -> str:
     prefix, colon, rest = method.partition(":")
     if colon:
         return f"{prefix.lower()}:{rest}"
-    return wording.match(method, METHODS, LONG_NAMES) or method
+    return wording.match(method, [*METHODS, *LEARNED], LONG_NAMES) or method  # "PPO" is ppo
 
 
 def _same_world(session, version: int) -> None:

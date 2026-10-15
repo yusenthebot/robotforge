@@ -15,7 +15,7 @@ import numpy as np
 
 from robotforge import wording
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
-from robotforge.behaviors.arm import REACH_TOL, ArmMotion
+from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
@@ -521,9 +521,30 @@ class BehaviorManager:
             place, place_top, region = self._place_target(target)
             try:
                 arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
+            except OutOfReach as exc:
+                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target)) from exc
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}
+
+    def _pick_out_of_reach(
+        self, arm: ArmMotion, exc: OutOfReach, object_at: np.ndarray, target_at: np.ndarray, target: str | list[float]
+    ) -> str:
+        """What move_arm says about a point, for the two a pick-and-place has: how far each one that is out of reach
+        is, how far the arm goes, and the target in meters if its numbers look like centimetres."""
+        base, reach = arm.base_and_reach(self.session.data)
+        points = {"object": object_at, "place": target_at}
+        far = {("target" if b.split()[-1] == "place" else "object"): points[b.split()[-1]] for b in exc.bad}
+        away = " and ".join(f"{np.linalg.norm(p - base):.2f}" for p in far.values())
+        one = len(far) == 1
+        text = (
+            f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
+            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; "
+            f"move {'it' if one else 'them'} nearer"
+        )
+        if "target" in far and (not isinstance(target, str) or NUMBER_LIST.fullmatch(target)):  # not a named object
+            text += wording.in_meters(target_at[:2], float(np.linalg.norm(target_at - base)), reach)
+        return text
 
     def placed(self, obj: str, region: dict[str, Any]) -> dict[str, Any]:
         """Check whether `obj` ended up inside the target region."""

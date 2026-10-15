@@ -372,7 +372,10 @@ class Playground:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
             found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
             if found is None:
-                raise PlaygroundError(wording.unknown("robot, object or terrain patch", name, names, many="names"))
+                text = wording.unknown("robot, object or terrain patch", name, names, many="names")
+                raise PlaygroundError(
+                    f"{text}. The floor is changed with set_floor" if "floor" in name.lower() else text
+                )
             w.robots = [r for r in w.robots if r.name != found]
             w.objects = [o for o in w.objects if o.name != found]
             w.terrain = [t for t in w.terrain if t.name != found]
@@ -775,8 +778,11 @@ def _find(items: list, name: str, kind: str):
     names = [i.name for i in items]
     found = wording.match(name, names)
     if found is None:
-        raise PlaygroundError(wording.unknown(kind, name, names))
+        raise PlaygroundError(wording.unknown(kind, name, names, make=CREATED_BY[kind]))
     return items[names.index(found)]
+
+CREATED_BY = {"robot": "add_robot", "object": "add_object", "terrain patch": "add_terrain"}
+
 
 
 def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
