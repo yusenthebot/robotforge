@@ -1,0 +1,141 @@
+<!--
+  Offline stand-in for MuJoCo Menagerie's franka_emika_panda/panda.xml (Apache-2.0, see that folder's LICENSE),
+  for tests only: the same bodies, joints, inertias, actuators and keyframe, with every collision mesh replaced
+  by the box MuJoCo fits to it and the visual meshes left out.
+-->
+<mujoco model="panda">
+  <compiler angle="radian"/>
+
+  <option integrator="implicitfast"/>
+
+
+  <default>
+    <default class="panda">
+      <material shininess="0.25"/>
+      <joint range="-2.8973 2.8973" armature="0.1" damping="1"/>
+      <general ctrlrange="-2.8973 2.8973" forcerange="-87 87" biastype="affine"/>
+      <default class="finger">
+        <joint type="slide" range="0 0.04" axis="0 1 0"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="mesh" group="3"/>
+        <default class="fingertip_pad_collision_1">
+          <geom size="0.0085 0.004 0.0085" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_2">
+          <geom size="0.003 0.002 0.003" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_3">
+          <geom size="0.003 0.002 0.003" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_4">
+          <geom size="0.003 0.002 0.0035" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_5">
+          <geom size="0.003 0.002 0.0035" type="box"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="link0" childclass="panda">
+      <inertial pos="-0.041018 -0.00014 0.049974" quat="0.00630474 0.751245 0.00741775 0.659952" mass="0.629769" diaginertia="0.00430465 0.00387984 0.00313051"/>
+      <geom class="collision" size="0.0616899 0.0687106 0.0888823" pos="-0.0291898 -0.000879466 0.0566032" quat="0.00411744 0.564916 0.0132875 0.825031" type="box"/>
+      <body name="link1" pos="0 0 0.333">
+        <inertial pos="0.003875 0.002081 -0.04762" quat="0.711549 0.00634354 -0.0131122 0.702485" mass="4.97068" diaginertia="0.707137 0.703435 0.00852456"/>
+        <joint name="joint1"/>
+        <geom class="collision" size="0.0489942 0.0592455 0.119407" pos="1.13988e-05 -0.0312655 -0.0693733" quat="0.98466 0.174481 -0.000101814 0.000347661" type="box"/>
+        <body name="link2" quat="0.707107 -0.707107 0 0">
+          <inertial pos="-0.003141 -0.02872 0.003495" quat="-0.168175 0.828366 -0.122878 0.520027" mass="0.646926" diaginertia="0.0310326 0.0283001 0.00273425"/>
+          <joint name="joint2" range="-1.7628 1.7628"/>
+          <geom class="collision" size="0.0490196 0.0593568 0.120272" pos="-1.31766e-05 -0.0703216 0.0311782" quat="0.57484 0.818266 -6.05941e-05 -6.61511e-05" type="box"/>
+          <body name="link3" pos="0 -0.316 0" quat="0.707107 0.707107 0 0">
+            <inertial pos="0.027518 0.039252 -0.066502" quat="0.662769 -0.00678333 0.252053 0.705096" mass="3.2286" diaginertia="0.0415014 0.0414793 0.00124635"/>
+            <joint name="joint3"/>
+            <geom class="collision" size="0.0505762 0.0531082 0.0998708" pos="0.0443483 0.0249283 -0.03813" quat="0.0615264 0.349824 0.234291 0.904956" type="box"/>
+            <body name="link4" pos="0.0825 0 0" quat="0.707107 0.707107 0 0">
+              <inertial pos="-0.05317 0.104419 0.027454" quat="0.65058 0.529822 -0.0962034 0.535518" mass="3.5879" diaginertia="0.0349596 0.0281483 0.0106201"/>
+              <joint name="joint4" range="-3.0718 -0.0698"/>
+              <geom class="collision" size="0.0509243 0.0533448 0.100683" pos="-0.0385503 0.0395256 0.0247162" quat="0.813566 0.465041 0.309792 0.160858" type="box"/>
+              <body name="link5" pos="-0.0825 0.384 0" quat="0.707107 -0.707107 0 0">
+                <inertial pos="-0.011953 0.041065 -0.038437" quat="0.987313 -0.0121953 0.0719187 -0.141037" mass="1.22595" diaginertia="0.0367625 0.0288531 0.00803437"/>
+                <joint name="joint5"/>
+                <geom class="collision" size="0.0392156 0.0422266 0.0680324" pos="0.000973259 0.0199222 -0.209107" quat="0.304644 0.561745 -0.69866 0.321729" type="box"/>
+                <geom class="collision" size="0.0188254 0.0320464 0.058398" pos="-0.00023507 0.0800592 -0.121153" quat="0.703428 -0.0855259 0.0885639 0.700023" type="box"/>
+                <geom class="collision" size="0.0406891 0.0459474 0.0517034" pos="0.000150253 0.069183 -0.00453883" quat="0.831462 0.55557 -0.000708029 0.00360466" type="box"/>
+                <body name="link6" quat="0.707107 0.707107 0 0">
+                  <inertial pos="0.060149 -0.014117 -0.010517" quat="0.101075 0.59332 0.0287227 0.798079" mass="1.66656" diaginertia="0.00584276 0.00431037 0.00159787"/>
+                  <joint name="joint6" range="-0.0175 3.7525"/>
+                  <geom class="collision" size="0.0390644 0.0564579 0.0769445" pos="0.0510023 0.00693267 0.00616899" quat="-0.0460841 0.754362 0.0444941 0.653325" type="box"/>
+                  <body name="link7" pos="0.088 0 0" quat="0.707107 0.707107 0 0">
+                    <inertial pos="0.010517 -0.004252 0.061597" quat="0.992939 -0.0762041 0.0733595 -0.0537067" mass="0.735522" diaginertia="0.0127345 0.0101055 0.00451803"/>
+                    <joint name="joint7"/>
+                    <geom class="collision" size="0.0247157 0.0374008 0.0564354" pos="0.0103614 0.0103596 0.0791078" quat="0.63547 0.278021 -0.670462 0.263369" type="box"/>
+                    <body name="hand" pos="0 0 0.107" quat="0.92388 0 0 -0.382683">
+                      <inertial pos="-0.01 0 0.03" mass="0.73" diaginertia="0.001 0.0025 0.0017"/>
+                      <geom class="collision" size="0.0232193 0.0387647 0.0931552" pos="-2.76657e-06 -0.00061547 0.0239295" quat="0.697945 0.716151 -0.00024248 8.47517e-05" type="box"/>
+                      <body name="left_finger" pos="0 0 0.0584">
+                        <inertial pos="0 0 0" mass="0.015" diaginertia="2.375e-06 2.375e-06 7.5e-07"/>
+                        <joint name="finger_joint1" class="finger"/>
+                        <geom class="collision" size="0.00849611 0.00942185 0.023817" pos="4.87423e-07 0.0156954 0.0168744" quat="0.706414 0.0271905 -0.0269828 0.706762" type="box"/>
+                        <geom class="fingertip_pad_collision_1" pos="0 0.0055 0.0445"/>
+                        <geom class="fingertip_pad_collision_2" pos="0.0055 0.002 0.05"/>
+                        <geom class="fingertip_pad_collision_3" pos="-0.0055 0.002 0.05"/>
+                        <geom class="fingertip_pad_collision_4" pos="0.0055 0.002 0.0395"/>
+                        <geom class="fingertip_pad_collision_5" pos="-0.0055 0.002 0.0395"/>
+                      </body>
+                      <body name="right_finger" pos="0 0 0.0584" quat="0 0 0 1">
+                        <inertial pos="0 0 0" mass="0.015" diaginertia="2.375e-06 2.375e-06 7.5e-07"/>
+                        <joint name="finger_joint2" class="finger"/>
+                        <geom class="collision" size="0.00849611 0.00942185 0.023817" pos="4.87423e-07 0.0156954 0.0168744" quat="0.706414 0.0271905 -0.0269828 0.706762" type="box"/>
+                        <geom class="fingertip_pad_collision_1" pos="0 0.0055 0.0445"/>
+                        <geom class="fingertip_pad_collision_2" pos="0.0055 0.002 0.05"/>
+                        <geom class="fingertip_pad_collision_3" pos="-0.0055 0.002 0.05"/>
+                        <geom class="fingertip_pad_collision_4" pos="0.0055 0.002 0.0395"/>
+                        <geom class="fingertip_pad_collision_5" pos="-0.0055 0.002 0.0395"/>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="link0" body2="link1"/>
+  </contact>
+
+  <tendon>
+    <fixed name="split">
+      <joint joint="finger_joint1" coef="0.5"/>
+      <joint joint="finger_joint2" coef="0.5"/>
+    </fixed>
+  </tendon>
+
+  <equality>
+    <joint joint1="finger_joint1" joint2="finger_joint2" solref="0.005" solimp="0.95 0.99"/>
+  </equality>
+
+  <actuator>
+    <general name="actuator1" class="panda" joint="joint1" gainprm="4500" biasprm="0 -4500 -450"/>
+    <general name="actuator2" class="panda" joint="joint2" ctrlrange="-1.7628 1.7628" gainprm="4500" biasprm="0 -4500 -450"/>
+    <general name="actuator3" class="panda" joint="joint3" gainprm="3500" biasprm="0 -3500 -350"/>
+    <general name="actuator4" class="panda" joint="joint4" ctrlrange="-3.0718 -0.0698" gainprm="3500" biasprm="0 -3500 -350"/>
+    <general name="actuator5" class="panda" joint="joint5" forcerange="-12 12" gainprm="2000" biasprm="0 -2000 -200"/>
+    <general name="actuator6" class="panda" joint="joint6" ctrlrange="-0.0175 3.7525" forcerange="-12 12" gainprm="2000" biasprm="0 -2000 -200"/>
+    <general name="actuator7" class="panda" joint="joint7" forcerange="-12 12" gainprm="2000" biasprm="0 -2000 -200"/>
+    <general name="actuator8" class="panda" tendon="split" ctrlrange="0 255" forcerange="-100 100" gainprm="0.0156863" biasprm="0 -100 -10"/>
+  </actuator>
+
+  <keyframe>
+    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04" ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 255"/>
+  </keyframe>
+</mujoco>

@@ -43,6 +43,10 @@ class LibraryRobot:
     # limits: that is how the real robots are commanded (joint targets + PD in the motor driver).
     servo_kp: float | None = None
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
+    # Arms: the body the tool hangs from and how far along its +z the grasp point is (m). It becomes
+    # the "tcp" site that move_arm, pick_and_place and reach steer, as on our own arms.
+    tool: tuple[str, float] | None = None
+    gripper: str | None = None  # actuator that opens the gripper, renamed "gripper" like ours
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -99,6 +103,8 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "franka_emika_panda",
             "panda.xml",
+            tool=("hand", 0.1034),  # Franka's own flange-to-TCP distance
+            gripper="actuator8",
         ),
         LibraryRobot(
             "so_arm100",
@@ -109,6 +115,18 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "trs_so_arm100",
             "so_arm100.xml",
+        ),
+        LibraryRobot(
+            "piper",
+            "AgileX PiPER",
+            "arm",
+            "Light 6-joint desktop arm (0.63 m reach) with a parallel gripper, popular for teaching.",
+            "AgileX Robotics (model by Omar Rayyan)",
+            "MIT",
+            "agilex_piper",
+            "piper.xml",
+            tool=("link6", 0.12),  # centre of the fingertip pads (the pads span 0.075-0.135 m past the flange)
+            gripper="gripper",
         ),
         LibraryRobot(
             "g1",
@@ -185,6 +203,8 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
             notes.append(
                 f"{converted} torque motors driven as position servos (kp {robot.servo_kp:g}, torque limits kept)"
             )
+    if robot.tool is not None:
+        _add_tool(spec, robot)
     for geom in list(spec.worldbody.geoms):  # the world brings its own floor and lights
         spec.delete(geom)
     for light in list(spec.worldbody.lights):
@@ -204,6 +224,19 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     return BuiltRobot(
         spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
     )
+
+
+def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
+    body_name, reach = robot.tool
+    body = spec.body(body_name)
+    if body is None:
+        raise LibraryError(f"{robot.title}: the model has no body {body_name!r} to put the tool point on")
+    body.add_site(name="tcp", pos=[0, 0, reach], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
+    if robot.gripper and robot.gripper != "gripper":
+        actuator = next((a for a in spec.actuators if a.name == robot.gripper), None)
+        if actuator is None:
+            raise LibraryError(f"{robot.title}: the model has no gripper actuator {robot.gripper!r}")
+        actuator.name = "gripper"
 
 
 def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:

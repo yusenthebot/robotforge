@@ -1,0 +1,99 @@
+<!--
+  Offline stand-in for MuJoCo Menagerie's agilex_piper/piper.xml (MIT, see that folder's LICENSE), for
+  tests only: the same bodies, joints, inertias, actuators and keyframe, with every collision mesh replaced by
+  the capsule MuJoCo fits to it and the visual meshes left out.
+-->
+<mujoco model="piper_description">
+  <compiler angle="radian"/>
+
+  <option impratio="10" integrator="implicitfast" cone="elliptic"/>
+
+
+  <default>
+    <default class="piper">
+      <joint armature="0.005" frictionloss="0.3"/>
+      <general forcerange="-100 100" biastype="affine" biasprm="0 -1"/>
+      <default class="finger">
+        <joint type="slide" frictionloss="0"/>
+        <general forcerange="-10 10"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" density="0"/>
+      </default>
+      <default class="collision">
+        <geom type="capsule" group="3"/>
+      </default>
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="base_link" childclass="piper" gravcomp="1">
+      <inertial pos="-0.00979275 1.82906e-06 0.04101" quat="0.692988 -0.137524 -0.137826 0.69416" mass="0.162549" diaginertia="0.000269445 0.000227478 0.000221437"/>
+      <geom class="collision" size="0.0357691 0.024065" pos="-0.0107422 1.86147e-06 0.0395259" quat="0.536726 0.460902 0.460261 0.536334"/>
+      <body name="link1" pos="0 0 0.123" quat="0.707105 0 0 -0.707108" gravcomp="1">
+        <inertial pos="0.00131676 0.000310289 -0.00922875" quat="0.557105 0.432155 0.377373 0.600388" mass="0.097868" diaginertia="9.25942e-05 8.3083e-05 7.69469e-05"/>
+        <joint name="joint1" range="-2.618 2.618"/>
+        <geom class="collision" size="0.0271645 0.0182943" pos="0.00101464 -0.000188218 -0.00563398" quat="0.51914 0.484099 0.499514 0.496616"/>
+        <body name="link2" quat="0.499998 0.5 -0.500002 -0.5" gravcomp="1">
+          <inertial pos="0.148794 -0.00242027 0.00175155" quat="-0.0249063 0.70684 0.00803509 0.706889" mass="0.290889" diaginertia="0.00177549 0.00173142 0.00014552"/>
+          <joint name="joint2" range="0 3.14"/>
+          <geom class="collision" size="0.0354545 0.136662" pos="0.152179 -0.00040773 0.000313761" quat="0.486718 0.483816 0.516937 0.511668"/>
+          <body name="link3" pos="0.28358 0.028726 0" quat="0.998726 0 0 0.0504536" gravcomp="1">
+            <inertial pos="-0.0996835 0.0349477 0.000508026" quat="0.0777021 0.702287 -0.0990541 0.700674" mass="0.290848" diaginertia="0.000241946 0.000222224 0.000100384"/>
+            <joint name="joint3" range="-2.697 0"/>
+            <geom class="collision" size="0.0246371 0.102428" pos="-0.0767504 0.02843 0.000535139" quat="0.569519 0.572735 0.410029 0.423674"/>
+            <body name="link4" pos="-0.24221 0.068514 0" quat="0.544767 -0.544769 -0.450809 0.450808" gravcomp="1">
+              <inertial pos="0.000276465 -0.00102804 -0.00472831" quat="0.492305 0.505285 0.503294 0.499017" mass="0.127087" diaginertia="4.87057e-05 4.10595e-05 3.82001e-05"/>
+              <joint name="joint4" range="-1.832 1.832"/>
+              <geom class="collision" size="0.0238936 0.016908" pos="0.000761852 -0.00691041 -0.0082418" quat="0.955364 0.287171 -0.06124 0.0325818"/>
+              <body name="link5" quat="0.707105 0.707108 0 0" gravcomp="1">
+                <inertial pos="8.82262e-05 0.0566829 -0.0019612" quat="0.507447 0.490986 0.506887 0.494466" mass="0.144711" diaginertia="0.001 0.001 0.001"/>
+                <joint name="joint5" range="-1.22 1.22"/>
+                <geom class="collision" size="0.0224253 0.0337559" pos="0.000165456 0.0435329 -0.00463601" quat="0.351921 0.544329 -0.638336 0.415192"/>
+                <body name="link6" pos="0 0.091 0.0014165" quat="0 0 -0.707105 -0.707108" gravcomp="1">
+                  <inertial pos="0.0010312 0.0121761 0.0315481" quat="0.0230402 0.707091 0.0373344 0.70576" mass="1.2" diaginertia="0.001 0.001 0.001"/>
+                  <joint name="joint6" range="-3.14 3.14"/>
+                  <geom class="collision" size="0.0264136 0.0296273" pos="-0.000316499 -5.15037e-08 0.0332864" quat="0.00759712 -0.00727331 0.707074 0.707062"/>
+                  <body name="link7" pos="0 0 0.13503" quat="1.89468e-08 1.89469e-08 0.707108 0.707105" gravcomp="1">
+                    <inertial pos="-0.000277778 -0.0467673 -0.00921029" quat="0.46134 0.536174 -0.553273 0.439968" mass="0.0264823" diaginertia="0.001 0.001 0.001"/>
+                    <joint name="joint7" class="finger" range="0 0.035" axis="0 0 -1"/>
+                    <geom class="collision" size="0.012 0.015 0.0025" pos="0 -0.015 -0.0025" type="box" rgba="1 0 0 0.2"/>
+                    <geom class="collision" size="0.015 0.015 0.0025" pos="0 -0.045 -0.0025" type="box" rgba="0 0 1 0.2"/>
+                  </body>
+                  <body name="link8" pos="0 0 0.13503" quat="1.89468e-08 -1.89469e-08 -0.707108 0.707105" gravcomp="1">
+                    <inertial pos="0.000277817 0.0467674 -0.0092103" quat="0.553273 0.439968 -0.46134 0.536174" mass="0.0264822" diaginertia="0.001 0.001 0.001"/>
+                    <joint name="joint8" class="finger" range="-0.035 0"/>
+                    <geom class="collision" size="0.012 0.015 0.0025" pos="0 0.015 -0.0025" type="box" rgba="1 0 0 0.2"/>
+                    <geom class="collision" size="0.015 0.015 0.0025" pos="0 0.045 -0.0025" type="box" rgba="0 0 1 0.2"/>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="base_link" body2="link1"/>
+  </contact>
+
+  <equality>
+    <joint joint1="joint8" joint2="joint7" polycoef="0 -1 0 0 0"/>
+  </equality>
+
+  <actuator>
+    <general name="joint1" class="piper" joint="joint1" ctrlrange="-2.618 2.618" gainprm="80" biasprm="0 -80 -5"/>
+    <general name="joint2" class="piper" joint="joint2" ctrlrange="0 3.14" gainprm="80" biasprm="0 -80 -5"/>
+    <general name="joint3" class="piper" joint="joint3" ctrlrange="-2.697 0" gainprm="80" biasprm="0 -80 -5"/>
+    <general name="joint4" class="piper" joint="joint4" ctrlrange="-1.832 1.832" gainprm="40" biasprm="0 -40 -5"/>
+    <general name="joint5" class="piper" joint="joint5" ctrlrange="-1.22 1.22" gainprm="10" biasprm="0 -10 -1.5"/>
+    <general name="joint6" class="piper" joint="joint6" ctrlrange="-3.14 3.14" gainprm="10" biasprm="0 -10 -1.5"/>
+    <general name="gripper" class="finger" joint="joint7" ctrlrange="0 0.035" gainprm="40" biasprm="0 -40 -5"/>
+  </actuator>
+
+  <keyframe>
+    <key name="home" qpos="0 1.57 -1.3485 0 0 0 0 0" ctrl="0 1.57 -1.3485 0 0 0 0"/>
+  </keyframe>
+</mujoco>

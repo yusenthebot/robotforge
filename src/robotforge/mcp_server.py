@@ -178,9 +178,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     def list_library() -> str:
         """List real, well-known robots that add_robot(library=...) can load: Unitree Go2 and other robot
-        dogs (they walk with move and the keyboard), arms like the Franka Panda, and humanoids (stand only).
-        The first add_robot of each one downloads it from MuJoCo Menagerie (download_mb: Go2 31 MB, Spot
-        55 MB, SO-ARM100 4 MB; usually 5-30 s) and caches it; after that it loads instantly."""
+        dogs (they walk with move and the keyboard), arms like the Franka Panda and AgileX PiPER (move_arm
+        and pick_and_place work on them), and humanoids (stand only). The first add_robot of each one
+        downloads it from MuJoCo Menagerie (download_mb: Go2 31 MB, Spot 55 MB, PiPER 35 MB, SO-ARM100
+        4 MB; usually 5-30 s) and caches it; after that it loads instantly."""
         from robotforge.design import library
 
         with _tool_errors():
