@@ -80,7 +80,7 @@ def test_bad_model_reports_compiler_error(tmp_path):
 
 
 def test_snapshots_frame_bodies_where_they_are_now():
-    from robotforge.sim.render import _framing
+    from robotforge.sim.render import _camera_for
 
     session = SimSession.from_xml(
         '<mujoco><worldbody><geom type="plane" size="1 1 .1"/>'
@@ -88,8 +88,32 @@ def test_snapshots_frame_bodies_where_they_are_now():
     )
     session.data.qpos[:3] = [5.0, -2.0, 0.1]  # the ball rolled far away from where the model put it
     session.step(1)
-    center, _extent = _framing(session.model, session.data)
-    assert np.allclose(center[:2], [5.0, -2.0], atol=0.01)
+    camera = _camera_for(session.model, "default", session.data)
+    assert np.allclose(camera.lookat[:2], [5.0, -2.0], atol=0.01)
+
+
+def test_views_step_back_just_far_enough_for_what_they_show():
+    """A fixed multiple of the scene size left a small arm and a cube a few pixels wide in a top view."""
+    from robotforge.sim.render import VIEWS, _camera_for
+
+    def scene(spread: float) -> SimSession:
+        bodies = "".join(
+            f'<body pos="{x} {y} 0.05"><freejoint/><geom type="box" size="0.05 0.05 0.05"/></body>'
+            for x, y in ((-spread, -spread), (spread, spread))
+        )
+        return SimSession.from_xml(
+            f'<mujoco><worldbody><geom type="plane" size="9 9 .1"/>{bodies}</worldbody></mujoco>'
+        )
+
+    near, far = scene(0.5), scene(2.0)
+    for view in VIEWS:
+        a = _camera_for(near.model, view, near.data).distance
+        b = _camera_for(far.model, view, far.data).distance
+        assert 2.5 < b / a < 5.0, view  # four times the spread, about four times as far
+    top = _camera_for(far.model, "top", far.data, aspect=4 / 3)
+    # the boxes' corners, 4.1 m apart along y, span about three quarters of the image height (45 degree fov)
+    half_height = top.distance * np.tan(np.radians(far.model.vis.global_.fovy) / 2)
+    assert 0.65 < 2.05 / half_height < 0.85
 
 
 def test_dragging_a_standing_robot_pushes_it_and_a_loose_object_is_carried():

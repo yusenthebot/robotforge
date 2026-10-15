@@ -17,18 +17,21 @@ from PIL import Image
 
 from robotforge.sim.session import SimSession
 
-# Free-camera presets as (azimuth deg, elevation deg, distance in model extents).
-# "default" matches the browser viewer's opening view; "overview" frames the whole world,
-# terrain and furniture included, where the others frame what can move.
+# Free-camera presets as (azimuth deg, elevation deg, share of the image the content spans).
+# "default" matches the browser viewer's opening direction; "overview" frames the whole world, terrain and
+# furniture included, where the others frame what can move. Each is stepped back just far enough for its
+# content to fill that share of the picture: a fixed multiple of the scene's size left a small arm and a
+# cube a few pixels wide in the corner of a top view.
 VIEWS: dict[str, tuple[float, float, float]] = {
-    "default": (127.6, -25.9, 2.0),
-    "overview": (122.0, -38.0, 1.2),
-    "front": (180.0, -10.0, 1.8),
-    "back": (0.0, -10.0, 1.8),
-    "left": (270.0, -10.0, 1.8),
-    "right": (90.0, -10.0, 1.8),
-    "top": (90.0, -89.0, 2.0),
+    "default": (127.6, -25.9, 0.7),
+    "overview": (122.0, -38.0, 0.85),
+    "front": (180.0, -10.0, 0.75),
+    "back": (0.0, -10.0, 0.75),
+    "left": (270.0, -10.0, 0.75),
+    "right": (90.0, -10.0, 0.75),
+    "top": (90.0, -89.0, 0.75),
 }
+MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown with some ground around it
 
 MAX_PIXELS = 1280 * 960
 
@@ -112,7 +115,7 @@ class SnapshotRenderer:
             model, data = session.model, session.data
             width = min(width, model.vis.global_.offwidth)
             height = min(height, model.vis.global_.offheight)
-            camera = _camera_for(model, view, data)  # bad arguments are reported the same with or without GL
+            camera = _camera_for(model, view, data, width / height)  # bad views fail the same with or without GL
             return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
 
     def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
@@ -130,16 +133,25 @@ class SnapshotRenderer:
         return self._renderer.render().copy()
 
 
-def _camera_for(model: mujoco.MjModel, view: str, data: mujoco.MjData | None = None) -> mujoco.MjvCamera | str:
+def _camera_for(
+    model: mujoco.MjModel, view: str, data: mujoco.MjData | None = None, aspect: float = 4 / 3
+) -> mujoco.MjvCamera | str:
     if view in VIEWS:
-        azimuth, elevation, dist = VIEWS[view]
-        center, extent = _scene_framing(model, data) if view == "overview" else _framing(model, data)
+        azimuth, elevation, fill = VIEWS[view]
         cam = mujoco.MjvCamera()
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-        cam.lookat[:] = center
-        cam.distance = dist * max(extent, 0.1)
         cam.azimuth = azimuth
         cam.elevation = elevation
+        box = _scene_box(model, data) if view == "overview" else _moving_box(model, data)
+        if box is None:  # nothing posed yet: the model's own statistics
+            cam.lookat[:] = model.stat.center
+            cam.distance = 2.0 * max(float(model.stat.extent), 0.1)
+            return cam
+        low, high = box
+        grow = np.maximum(MIN_SPAN - (high - low), 0.0) / 2
+        low, high = low - grow, high + grow
+        cam.lookat[:] = (low + high) / 2
+        cam.distance = _fit_distance(low, high, azimuth, elevation, fill, float(model.vis.global_.fovy), aspect)
         return cam
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, view) >= 0:
         return view
@@ -147,22 +159,32 @@ def _camera_for(model: mujoco.MjModel, view: str, data: mujoco.MjData | None = N
     raise ValueError(f"unknown view {view!r}; choose one of: {', '.join(options)}")
 
 
-def _framing(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, float]:
-    """Center and size of what can move (robots, loose objects) as it is now, so a robot that walked
-    away stays in the picture and a big terrain or a room full of furniture does not shrink it.
+def _fit_distance(
+    low: np.ndarray, high: np.ndarray, azimuth: float, elevation: float, fill: float, fovy: float, aspect: float
+) -> float:
+    """How far back a camera looking at the box's center must stand for every corner to land inside `fill`
+    of the image, given its direction (MuJoCo's azimuth and elevation) and field of view."""
+    az, el = np.radians(azimuth), np.radians(elevation)
+    forward = np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+    right = np.cross(forward, [0.0, 0.0, 1.0])
+    right /= np.linalg.norm(right)
+    up = np.cross(right, forward)
+    tan_v = np.tan(np.radians(fovy) / 2) * fill
+    tan_h = tan_v * aspect
+    corners = np.array([[x, y, z] for x in (low[0], high[0]) for y in (low[1], high[1]) for z in (low[2], high[2])])
+    rel = corners - (low + high) / 2
+    across, upward, deeper = rel @ right, rel @ up, rel @ forward
+    need = np.maximum(np.abs(across) / tan_h, np.abs(upward) / tan_v) - deeper
+    return float(max(need.max(), 0.6 * np.linalg.norm(high - low)))
 
-    The model's own statistics describe the starting pose and include all static geometry.
-    """
-    extent = float(model.stat.extent)
+
+def _moving_box(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, np.ndarray] | None:
+    """Bounds of what can move (robots, loose objects) as it is now, so a robot that walked away stays in the
+    picture and a big terrain or a room full of furniture does not shrink it."""
     if data is None or model.nbody <= 1:
-        return model.stat.center.copy(), extent
+        return None
     moving = model.body_weldid[model.geom_bodyid] != 0
-    box = _geom_box(model, data, [g for g in range(model.ngeom) if moving[g] and model.geom_group[g] < 3])
-    if box is None:
-        return model.stat.center.copy(), extent
-    low, high = box
-    # At least a meter across, so a lone robot is shown with some ground around it.
-    return (low + high) / 2, max(1.0, float(np.linalg.norm(high - low)))
+    return _geom_box(model, data, [g for g in range(model.ngeom) if moving[g] and model.geom_group[g] < 3])
 
 
 def _geom_box(model: mujoco.MjModel, data: mujoco.MjData, geoms: list[int]) -> tuple[np.ndarray, np.ndarray] | None:
@@ -176,15 +198,12 @@ def _geom_box(model: mujoco.MjModel, data: mujoco.MjData, geoms: list[int]) -> t
     return (centers - half).min(axis=0), (centers + half).max(axis=0)
 
 
-def _scene_framing(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, float]:
-    """Center and size of everything drawn except infinite planes: terrain, furniture and robots."""
+def _scene_box(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, np.ndarray] | None:
+    """Bounds of everything drawn except infinite planes: terrain, furniture and robots."""
     if data is None:
-        return _framing(model, data)
+        return None
     plane = int(mujoco.mjtGeom.mjGEOM_PLANE)
     box = _geom_box(
         model, data, [g for g in range(model.ngeom) if int(model.geom_type[g]) != plane and model.geom_group[g] < 3]
     )
-    if box is None:
-        return _framing(model, data)
-    low, high = box
-    return (low + high) / 2, max(0.3, float(np.linalg.norm(high - low)))
+    return box if box is not None else _moving_box(model, data)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import json
 import logging
 import os
@@ -118,6 +119,43 @@ def _viewer_page(port: int) -> str:
 """
 
 
+def _plain_tools(server: MCPServer) -> None:
+    """Every tool registered on `server` from here on returns its text only and is described without the
+    docstring's indentation. Tools return JSON text; declaring an output schema made the SDK send each result
+    a second time as structured content, and the indentation was 8 spaces on every line of 50 descriptions,
+    all of which an agent's model reads again on every turn."""
+    register = server.tool
+
+    def tool(*args: Any, **kwargs: Any):
+        kwargs.setdefault("structured_output", False)
+        decorate = register(*args, **kwargs)
+
+        def apply(fn):
+            if fn.__doc__ and "description" not in kwargs:
+                fn.__doc__ = inspect.cleandoc(fn.__doc__)
+            return decorate(fn)
+
+        return apply
+
+    server.tool = tool  # type: ignore[method-assign]
+
+
+def _drop_schema_titles(server: MCPServer) -> None:
+    """The generated argument schemas give every parameter a "title" that repeats its name ("Name", "Speed");
+    agents read them on every turn and learn nothing. Arguments are still checked against the function's own
+    model, so only the advertised copy changes. (A parameter that is itself called title is a dict: kept.)"""
+
+    def lean(node: Any) -> Any:
+        if isinstance(node, dict):
+            return {k: lean(v) for k, v in node.items() if not (k == "title" and isinstance(v, str))}
+        if isinstance(node, list):
+            return [lean(v) for v in node]
+        return node
+
+    for tool in server._tool_manager.list_tools():  # noqa: SLF001 (the SDK has no public setter)
+        tool.parameters = lean(tool.parameters)
+
+
 def build_server(playground: Playground, port: int) -> MCPServer:
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
@@ -168,6 +206,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         extensions=[apps],
         lifespan=lifespan,
     )
+    _plain_tools(server)
 
     @server.tool()
     def list_templates() -> str:
@@ -589,6 +628,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 content.append(Image(data=image, format="png"))
             return content
 
+    _drop_schema_titles(server)
     return server
 
 
