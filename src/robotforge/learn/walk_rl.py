@@ -266,12 +266,13 @@ STEPS = (
         ),
         done=_text(
             "它学会了往前一扑：扑出去三分之一米左右就倒（我们学了 6 次，6 次都是这样）。"
-            "两条腿一碰就倒，每轮试的大多都会倒，搜索只能在倒法里挑扑得最远的。奖励只看走了多远，又被钻了空子。"
+            "两条腿一碰就倒，每轮试的大多都会倒，搜索只能在倒法里挑扑得最远的。"
+            "奖励看的是走了多远，倒下只扣一个固定的分，早倒晚倒都一样，又被钻了空子。"
             "下一步给它两样东西：站住也算分，和能看身体倾斜的“反射”。",
             "It learns to lunge: a third of a metre forward, then down (all 6 of our trainings). Two legs topple at "
             "the slightest nudge, so most tries fall, and of those the search keeps whichever falls furthest forward: "
-            "another loophole of a reward that counts distance. Next it gets two things: points for staying up, and "
-            "reflexes that feel the body tilt.",
+            "another loophole: the reward is about distance, and a fall costs the same however early it comes. Next it "
+            "gets two things: points for staying up, and reflexes that feel the body tilt.",
         ),
         quiz=Quiz(
             question=_text("人形用这个方法会学出什么？", "What does the humanoid learn this way?"),
@@ -282,8 +283,9 @@ STEPS = (
             ),
             answer=1,
             explain=_text(
-                "奖励只看距离，搜索碰到的大多是倒法，扑得最远的那种分最高。",
-                "The reward only counts distance, and of the falls the search meets, a lunge scores best.",
+                "奖励看的是走了多远，倒下扣的分早倒晚倒都一样；搜索碰到的大多是倒法，扑得最远的那种分最高。",
+                "The reward is about distance, and a fall costs the same however early it comes: of the falls the "
+                "search meets, a lunge scores best.",
             ),
             predict=True,
         ),
