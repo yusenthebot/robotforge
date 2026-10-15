@@ -25,10 +25,13 @@ def squash(text: str) -> str:
     return re.sub(r"[\s_-]+", "_", text.strip().lower()).strip("_")
 
 
-def match(given: str, names: Iterable[str], aliases: Mapping[str, str] | None = None) -> str | None:
+def match(
+    given: str, names: Iterable[str], aliases: Mapping[str, str] | None = None, plurals: bool = True
+) -> str | None:
     """The one name that `given` can only mean: spelled exactly, in other capitals or with spaces for
     underscores, with an article in front, in the singular or plural, or an alias. None if it fits none or
-    several (a guess between two robots could act on the wrong one)."""
+    several (a guess between two robots could act on the wrong one). `plurals=False` is for what deletes
+    something: "dogs" may mean dog, dog2 or both, so only the name itself, its capitals and its article count."""
     names = list(names)
     if given in names:
         return given
@@ -38,7 +41,7 @@ def match(given: str, names: Iterable[str], aliases: Mapping[str, str] | None = 
     key = squash(given)
     candidates = [key, *(key[len(a) :] for a in ARTICLES if key.startswith(a) and len(key) > len(a))]
     for cand in candidates:
-        for form in (cand, cand.removesuffix("s"), cand + "s"):
+        for form in (cand, cand.removesuffix("s"), cand + "s") if plurals else (cand,):
             found = by_key.get(form, [])
             if len(found) == 1:
                 return found[0]

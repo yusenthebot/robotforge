@@ -330,6 +330,7 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             {"robot": "dog/trunk", "position": [0.2, 0.0, 0.1]},
             ["'dog/trunk' is not an arm", "dog carries no arm"],
         ),
+        ("remove", {"name": "dogs"}, ["named 'dogs'", "Did you mean dog", "dog, arm, rover, ball"]),
         ("simulate", {"seconds": 100}, ["seconds must be in (0, 60], got 100"]),
         ("sim_control", {"action": "stop"}, ["action", "'stop'", "play, pause, reset"]),
         ("observe", {"view": "sideways"}, ["unknown view 'sideways'", "Views:", "front", "overview"]),
@@ -411,6 +412,29 @@ async def test_an_empty_build_beside_a_change_keeps_every_part_of_a_built_robot(
     assert "build={} would remove every part" in text and len(spider().build["parts"]) == parts
     moved = json.loads(await lab.accepted("update_robot", name="dog", pos=[0.5, 1.2], build={}))  # a template robot
     assert moved["robots"][0] == "dog"
+    await lab.restore()
+
+
+async def test_remove_deletes_the_name_it_was_given_and_does_not_guess_a_plural(lab):
+    await lab.accepted("add_robot", name="dog2", template="quadruped", pos=[3, 3])
+    text = await lab.refused("remove", name="dogs")  # dog, dog2 or both: asked, not deleted
+    assert "Did you mean dog, dog2" in text
+    assert {"dog", "dog2"} <= {r.name for r in lab.playground.current_world().robots}
+    await lab.accepted("remove", name="The Dog2")  # capitals and an article have one meaning
+    assert "dog2" not in [r.name for r in lab.playground.current_world().robots]
+    await lab.restore()
+
+
+async def test_a_part_is_not_removed_under_its_plural_either(lab):
+    from robotforge.design.builder.guide import EXAMPLE_DOG
+
+    await lab.accepted("add_robot", name="spider", build=EXAMPLE_DOG, pos=[-2.0, 2.0])
+    part = next(p["name"] for p in EXAMPLE_DOG["parts"] if p.get("name"))
+    await lab.accepted(
+        "update_part", robot="spider", part=part + "s", changes={"color": "red"}
+    )  # editing may read a plural
+    text = await lab.refused("remove_part", robot="spider", part=part + "s")
+    assert f"no part named '{part}s'" in text and f"Did you mean {part}" in text
     await lab.restore()
 
 

@@ -58,7 +58,7 @@ def update_part(build: dict[str, Any], name: str, changes: dict[str, Any]) -> di
 def remove_part(build: dict[str, Any], name: str) -> tuple[dict[str, Any], list[str]]:
     """Remove a part and everything that hangs on it; returns the new build and the removed names."""
     out = copy.deepcopy(build)
-    name = _find(out, name)["name"]  # as the robot spells it
+    name = _find(out, name, plurals=False)["name"]  # as the robot spells it; "legs" is not "leg" when deleting
     removed = {name}
     grew = True
     while grew:  # parts hanging on removed parts go too
@@ -83,12 +83,12 @@ def libraries_in(build: dict[str, Any] | None) -> list[str]:
     return found
 
 
-def _find(build: dict[str, Any], name: str) -> dict[str, Any]:
+def _find(build: dict[str, Any], name: str, plurals: bool = True) -> dict[str, Any]:
     for p in build.get("parts", []):
         if isinstance(p, dict) and p.get("name") == name:
             return p
     names = part_names(build)
-    found = wording.match(name, [n for n in names if isinstance(n, str)])
+    found = wording.match(name, [n for n in names if isinstance(n, str)], plurals=plurals)
     if found is not None:  # "Left_Shin" is left_shin
         return next(p for p in build["parts"] if isinstance(p, dict) and p.get("name") == found)
     source = _copied_from(build).get(name)

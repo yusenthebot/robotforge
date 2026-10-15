@@ -370,7 +370,7 @@ class Playground:
     def remove(self, name: str) -> dict[str, Any]:
         def change(w: World) -> None:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
-            found = wording.match(name, names)
+            found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
             if found is None:
                 raise PlaygroundError(wording.unknown("robot, object or terrain patch", name, names, many="names"))
             w.robots = [r for r in w.robots if r.name != found]
