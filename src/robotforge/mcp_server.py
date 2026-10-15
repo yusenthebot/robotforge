@@ -410,16 +410,27 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             status = playground.behaviors.move(robot, speed, turn, walker)
             if seconds is None:
                 return _json({"started": status, "pose": before})
-            run = await run_until(lambda: False, seconds)
+            # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
+            # to the left read as -177.6 degrees, a turn to the right.
+            heading = {"last": before["heading_deg"], "turned": 0.0}
+
+            def track() -> bool:
+                now = playground.behaviors.pose(robot)["heading_deg"]
+                heading["turned"] += (now - heading["last"] + 180) % 360 - 180
+                heading["last"] = now
+                return False
+
+            run = await run_until(track, seconds)
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)
             if settled is not None:  # a humanoid finishes its step first; measure where it really stops
-                extra = await run_until(settled, 3.0)
+                extra = await run_until(lambda: track() or settled(), 3.0)
                 run["settle_seconds"] = extra["sim_seconds"]
                 run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
+            track()
             after = playground.behaviors.pose(robot)
             moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
-            turned = (after["heading_deg"] - before["heading_deg"] + 180) % 360 - 180
+            turned = heading["turned"]
             return _json(
                 {
                     "from": before,

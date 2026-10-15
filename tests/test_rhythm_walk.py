@@ -174,3 +174,31 @@ def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg):
     assert heading_after(0.8) > 40  # degrees, to the left
     assert heading_after(-0.8) < -40
     assert pg.behaviors.pose("crab")["upright"]
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_move_reports_a_half_turn_as_turned_not_wrapped(pg):
+    """Regression: move reported turned_deg as the difference of the two headings, which wraps at 180: a half
+    turn to the left (182 degrees) read as -177.6, a turn to the right."""
+    import json as _json
+
+    from mcp import Client
+
+    from robotforge.behaviors.rhythm_walk import learn_turns
+    from robotforge.cli import find_free_port
+    from robotforge.mcp_server import build_server
+
+    pg.add_robot("crab", build=STAR)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    walk = learn_turns(solo, "crab", _walk("crab", joint_names(solo, Body.find(solo, "crab"))), seed=1)
+    save_walk(pg.store.dir, walk)
+    seconds = 1.2 * math.pi / walk.turn_rate  # past a half turn at the slower side's rate
+    async with Client(build_server(pg, find_free_port(8790))) as client:
+        result = await client.call_tool("move", {"robot": "crab", "speed": 0.0, "turn": 0.8, "seconds": seconds})
+        turned = _json.loads(result.content[0].text)["turned_deg"]
+    assert turned > 180, f"turned {turned} degrees"
