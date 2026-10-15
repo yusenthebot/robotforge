@@ -166,8 +166,23 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path) -> None:
             await page.eval(f"(async () => {{ {shot.page} }})()")
             await asyncio.sleep(1.0)
         data = (await page.call("Page.captureScreenshot", format="png", captureBeyondViewport=False))["data"]
-        out.write_bytes(base64.b64decode(data))
+        _save(base64.b64decode(data), out)
         await browser.call("Target.closeTarget", targetId=target)
+
+
+SAVED_WIDTH = 1600  # px: sharp on a high-density screen, small enough for the repository
+JPEG_QUALITY = 84
+
+
+def _save(png: bytes, out: Path) -> None:
+    """Keep the capture as a JPEG SAVED_WIDTH wide (a 2560 px PNG of the viewer is 3 to 5 MB)."""
+    import io
+
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(png)).convert("RGB")
+    height = round(image.height * SAVED_WIDTH / image.width)
+    image.resize((SAVED_WIDTH, height), Image.Resampling.LANCZOS).save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)
 
 
 def take(shot: Shot, out_dir: Path, lang: str) -> Path:
@@ -201,7 +216,7 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    out = out_dir / f"{shot.name}.png"
+    out = out_dir / f"{shot.name}.jpg"
     try:
         _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
         asyncio.run(_capture(chrome_port, port, shot, out))
@@ -264,6 +279,17 @@ def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
     """
 
 
+A1_URDF = Path(
+    os.environ.get(
+        "A1_URDF", "~/worktrees/_artifacts/import-doctor/repos/unitree_ros/robots/a1_description/urdf/a1.urdf"
+    )
+).expanduser()  # a checkout of unitree_ros; the shots that import it are skipped without one
+
+
+def _a1(pg: Any) -> None:
+    pg.add_robot("a1", file=str(A1_URDF))
+
+
 def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
@@ -276,7 +302,19 @@ SHOTS = [
         page=_look_at(["go2", "dog"], (3.2, -1.9, 1.5)),
         settle=1.0,
     ),
-    Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen")),
+    Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
+    Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
+    Shot(
+        "lesson_your_robot",
+        _a1,
+        page=_lesson(
+            "learn_to_walk",
+            "document.querySelector('[data-choice=\"robot\"] button:last-child').click();",
+            _wait(1.0),
+            _press("train"),
+            _wait(22.0),
+        ),
+    ),
     Shot("lesson_learn_to_walk", _nothing, page=_lesson("learn_to_walk", _press("train"), _wait(25.0))),
     Shot(  # the plots show 6 s: capture while the step response is still in them
         "bench_pid_twins",
@@ -297,6 +335,9 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     for shot in SHOTS:
         if args.only and shot.name not in args.only:
+            continue
+        if shot.world is _a1 and not A1_URDF.is_file():
+            print(f"{shot.name}: skipped, no A1 URDF at {A1_URDF} (set A1_URDF)")
             continue
         t0 = time.monotonic()
         path = take(shot, args.out, args.lang)

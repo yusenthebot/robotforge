@@ -1131,7 +1131,7 @@ input[type="range"]::-moz-range-thumb {
   vertical-align: middle;
   border-top: 2px solid var(--c);
 }
-.run-settings { color: var(--ink-2); }
+.run-settings { color: var(--ink-2); word-break: keep-all; overflow-wrap: anywhere; } /* break at the · and spaces, not inside 你的机器人 */
 
 .bench-sweeps { margin-top: 8px; }
 .sweep-buttons { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -393,7 +393,7 @@ class LearnToWalkLesson(Lesson):
         ),
         metrics=(
             Metric("distance", _text("走了", "covered"), "m", lower_is_better=False),
-            Metric("survived", _text(f"推{PUSH_TRIALS}次站住", f"up of {PUSH_TRIALS}"), "", lower_is_better=False),
+            Metric("survived", _text(f"推 {PUSH_TRIALS} 次站住", f"up of {PUSH_TRIALS}"), "", lower_is_better=False),
             Metric("energy", _text("能量", "energy"), "J", ranked=False),
             Metric("seconds", _text("学了", "trained"), "s", ranked=False),
         ),

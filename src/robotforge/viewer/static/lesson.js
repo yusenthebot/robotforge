@@ -603,7 +603,8 @@ const bench = {
       chip.textContent = `#${run.id}`;
       const settings = document.createElement("span");
       settings.className = "run-settings";
-      settings.textContent = spec.params.map((p) => `${this.label(p)} ${this.value(p, run.params[p])}`).join(" · ");
+      // Each setting stays on one line with its value; lines break after a dot, never before one.
+      settings.textContent = spec.params.map((p) => `${this.label(p)}\u00a0${this.value(p, run.params[p])}`).join("\u00a0· ");
       th.append(chip, settings);
       tr.append(th);
       spec.metrics.forEach((m, k) => {
