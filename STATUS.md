@@ -1,14 +1,16 @@
 # STATUS
 
 - Goal: docs/GOAL.md (evolving; Floor = A1-A9; vision 2026-10-14: any robot, scenes, terrains, algorithm adapters)
-- Mode: evolving, multi-agent waves with review before every merge
-- Round: 5, wave 2 merging (plugin and rl merged; terrain, unilab, builder in review)
-- Merged into main: feat/ci (Ubuntu + Windows CI green), feat/humanoid (ZMP walking, balance on load, poses, review fixes), feat/control (tasks, Gym-style env, PD/LQR, sampling MPC, ARS, comparisons), feat/robot-library (Go2/Go1/A1/Spot/Panda/SO-ARM100/G1, git or HTTPS fetch, gait for any quadruped), fix for library quadrupeds in the control layer
-- Also merged: feat/import-doctor (URDF/xacro/mesh import + doctor; security review fixed: bounded xacro, off-loop imports, serialized world edits)
-- Wave 2 merged: feat/plugin (Claude Code / Codex plugins, .mcpb, skill, 9 lessons), feat/rl (SB3 PPO/SAC, numpy policy runtime)
-- Wave 2 in review: feat/builder (any robot from parts), feat/terrain (terrains + 6 scene presets), feat/unilab (UniLab ONNX walkers; Go2 0.97 m/s at a 1.0 command)
-- Verified for real by the orchestrator: library Go2 driven with W in the viewer 1.79 m in 5 s, settles on release; Go2 MPPI-on-gait walks 1.41 m in 5 s through a side shove; 147 tests + smoke green on main
-- Floor status: A1 [x GPT via codex exec: new world + dog walked 1.545 m in 5 s upright; Claude side blocked by CLI login] A2 [x GPT via codex exec: agent wrote behaviors/pick_red_cube.py, run_script ok, cube inside the box, self-verified] A3 [x raw Unitree A1 URDF (package://, DAE) opened in the viewer: 12 actuators, recognized as quadruped, W drove it 1.81 m in 5 s; 209/214 public URDFs import] A4 [x verified in viewer] A5 [~ local viewer; MCP App embed untested] A6 [~ Codex works (default_tools_approval_mode=approve); Claude Code blocked by expired CLI login] A7 [x measured: 49 MB download / 157 MB unpacked, cold start 0.19 s, 120 fps] A8 [x CI green Ubuntu + Windows] A9 [x 345 tests, ruff clean; Windows CI fixed]
-- Blockers (need user): `claude` CLI OAuth expired (Codex works again)
-- Gates pending: none (pycollada not needed: import doctor ships its own DAE reader)
-- Updated: 2026-10-14
+- Mode: evolving; trunk-based on main since 2026-10-15 (no long-lived branches; every feature branch is merged and deleted)
+- Round: 6, viewer UI redesign done (2c69719)
+- On main: CI, humanoid, control layer (PD/LQR/MPC/MPPI/ARS), robot library, import doctor, plugins + lessons, RL (SB3), terrain + 6 scenes, parts builder, UniLab learned walkers
+- Viewer (new): minimal light/dark UI, amber selection ring, Robots drawer, and a World panel with Maps (6 scenes + empty), Terrain (9 grounds, 8 terrain types) and Modes (gait, learned walk, joints, hold, MPC stand, MPPI walk, LQR/MPC balance, IK/OSC/MPC reach, MPC drive-to-goal) per robot type
+- Verified for real: in the browser, park/maze/empty maps load, stairs land in front of the dog, ground styles switch, MPC stand holds, MPPI walk covers 1.23 m, arm IK reaches a fresh random target each click; 440 tests + smoke green
+- Floor status: A1 [x GPT via codex exec] A2 [x] A3 [x raw Unitree A1 URDF] A4 [x] A5 [~ MCP App embed untested] A6 [~ Codex works; Claude Code blocked by expired CLI login] A7 [x] A8 [x] A9 [x]
+- Open review findings (fix next, on main):
+  builder HIGH 1-4 (two-wheel rover seen as balancer, rangefinder intprm, mirrored slide axis, arm seed angle wrap), MED 6-9;
+  unilab 1-4 (Hydra quoting, concurrent jobs, Go2 walker needs onnxruntime: give it a numpy runtime, clip before scale) + naming A-E
+- Known gaps: walk_mppi mode walks on forever (a dog left for minutes can tip over); skill + lessons do not mention builder/terrain/unilab tools yet
+- Pending for user: showcase film re-render on main; roadmap A->B->C; license + publish timing; G1 2 h training; `claude auth login`
+- Blockers (need user): `claude` CLI OAuth expired
+- Updated: 2026-10-15
