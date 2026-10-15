@@ -25,13 +25,9 @@ def register(server: MCPServer) -> None:
         """List the learned walking policies robotforge can play (neural networks trained with reinforcement
         learning, e.g. in UniLab), which library robot each fits and the speeds it learned. Use one with
         move(robot, speed, turn, walker="rl"); walker="gait" goes back to the built-in trot."""
-        from robotforge.bridge.onnx_policy import INSTALL_HINT, onnxruntime_available
-
         with _tool_errors():
             found = [p.describe() for p in policies.all_policies().values()]
             out: dict[str, Any] = {"walkers": found, "user_folder": str(policies.user_dir())}
-            if not onnxruntime_available():
-                out["note"] = f"playing policies needs onnxruntime: {INSTALL_HINT}"
             return _json(out)
 
     @server.tool()

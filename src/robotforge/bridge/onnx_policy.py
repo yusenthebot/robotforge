@@ -6,8 +6,8 @@ different (robotforge's Go2 has stiffer position servos than UniLab's), so the P
 turned into whatever control signal the actuators take (`TorqueMap`): the policy feels the
 joints it was trained on, whatever motors the robot has.
 
-ONNX inference needs the optional `policy` extra (onnxruntime); everything else here does not,
-so observation building and joint mapping are testable without it.
+Small policies (MLPs, like the shipped Go2 walk) run with numpy alone (`onnx_numpy`); onnxruntime,
+the optional `policy` extra, is used when it is installed and needed for anything bigger.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ FALLEN_UPRIGHTNESS = 0.3
 
 
 class PolicyUnavailable(RuntimeError):
-    """onnxruntime is missing or the model cannot be loaded; the message says what to do."""
+    """The model cannot be run (e.g. it needs onnxruntime, which is missing); the message says what to do."""
 
 
 def onnxruntime_available() -> bool:
@@ -45,13 +45,15 @@ def onnxruntime_available() -> bool:
 
 
 class OnnxPolicy:
-    """A callable obs -> action backed by onnxruntime (CPU, single thread: the model is tiny)."""
+    """A callable obs -> action: onnxruntime when installed (CPU, one thread), otherwise numpy."""
 
     def __init__(self, path: Path, input_name: str = "obs", output_name: str | None = None):
         try:
             import onnxruntime as ort
         except ImportError:
-            raise PolicyUnavailable(f"running learned policies needs onnxruntime; {INSTALL_HINT}") from None
+            self._numpy(path, input_name, output_name)
+            return
+        self.runtime = "onnxruntime"
         options = ort.SessionOptions()
         options.intra_op_num_threads = 1
         options.inter_op_num_threads = 1
@@ -71,8 +73,31 @@ class OnnxPolicy:
         self.input_dim = _last_dim(inputs[input_name].shape)
         self.output_dim = _last_dim(next(o for o in self.session.get_outputs() if o.name == self.output_name).shape)
 
+    def _numpy(self, path: Path, input_name: str, output_name: str | None) -> None:
+        from robotforge.bridge.onnx_numpy import NumpyOnnx, UnsupportedModel
+
+        try:
+            model = NumpyOnnx(path)
+        except UnsupportedModel as exc:
+            raise PolicyUnavailable(f"{path.name}: {exc}; {INSTALL_HINT}") from None
+        except OSError as exc:
+            raise PolicyUnavailable(f"could not read {path}: {exc}") from exc
+        if input_name not in model.inputs:
+            raise PolicyUnavailable(f"{path.name} has no input {input_name!r}; its inputs: {', '.join(model.inputs)}")
+        if output_name is not None and output_name not in model.outputs:
+            outputs = ", ".join(model.outputs)
+            raise PolicyUnavailable(f"{path.name} has no output {output_name!r}; its outputs: {outputs}")
+        self.runtime = "numpy"
+        self.model = model
+        self.input_name = input_name
+        self.output_name = output_name or model.outputs[0]
+        self.input_dim = _last_dim(model.shapes.get(input_name, []))
+        self.output_dim = _last_dim(model.shapes.get(self.output_name, []))
+
     def __call__(self, obs: np.ndarray) -> np.ndarray:
         batch = np.asarray(obs, np.float32).reshape(1, -1)
+        if self.runtime == "numpy":
+            return np.asarray(self.model(batch), float).reshape(-1)
         return np.asarray(self.session.run([self.output_name], {self.input_name: batch})[0], float).reshape(-1)
 
 

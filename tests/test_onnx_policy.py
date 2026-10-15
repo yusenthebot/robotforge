@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import math
 import shutil
+import sys
 from pathlib import Path
 
 import mujoco
@@ -252,11 +253,44 @@ def test_commands_are_clipped_to_what_the_policy_learned(pg, card):
 # ---- choosing a walker -------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(onnxruntime_available(), reason="checks the message shown without the extra")
-def test_rl_walker_without_onnxruntime_says_how_to_install_it(pg):
-    with pytest.raises(BehaviorError, match="uv sync --extra policy"):
-        pg.behaviors.move("go2", 0.5, 0.0, walker="rl")
-    assert isinstance(pg.session.controllers.get("go2"), type(None))
+@pytest.fixture(params=["numpy", "onnxruntime"])
+def runtime(request, monkeypatch):
+    """Run a test with each ONNX runtime: numpy always works, onnxruntime only with the extra."""
+    if request.param == "numpy":
+        monkeypatch.setitem(sys.modules, "onnxruntime", None)  # makes `import onnxruntime` fail
+    elif not onnxruntime_available():
+        pytest.skip("needs the optional extra: policy")
+    return request.param
+
+
+def test_the_numpy_runtime_matches_onnxruntime():
+    ort = pytest.importorskip("onnxruntime")
+    from robotforge.bridge.onnx_numpy import NumpyOnnx
+
+    path = policies.SHIPPED_DIR / "go2_unilab_walk" / "policy.onnx"
+    model = NumpyOnnx(path)
+    assert model.ops == ["Sub", "Div", "Gemm", "Elu", "Gemm", "Elu", "Gemm", "Elu", "Gemm"]
+    assert model.shapes["obs"] == [1, 49] and model.shapes["actions"] == [1, 12]
+    session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        obs = (rng.normal(size=(1, 49)) * 2).astype(np.float32)
+        np.testing.assert_allclose(model(obs), session.run(None, {"obs": obs})[0], atol=1e-4)
+
+
+def test_models_numpy_cannot_run_ask_for_onnxruntime(tmp_path, monkeypatch):
+    from robotforge.bridge.onnx_policy import OnnxPolicy, PolicyUnavailable
+
+    def field(number: int, payload: bytes) -> bytes:  # one length-delimited protobuf field
+        return bytes([number << 3 | 2, len(payload)]) + payload
+
+    node = field(1, b"x") + field(2, b"y") + field(4, b"Conv")
+    graph = field(1, node) + field(11, field(1, b"x")) + field(12, field(1, b"y"))
+    path = tmp_path / "conv.onnx"
+    path.write_bytes(field(7, graph))
+    monkeypatch.setitem(sys.modules, "onnxruntime", None)
+    with pytest.raises(PolicyUnavailable, match="Conv need onnxruntime; install the optional extra"):
+        OnnxPolicy(path, "x")
 
 
 def test_rl_walker_for_a_robot_without_a_policy_explains_the_options(pg, monkeypatch):
@@ -265,9 +299,9 @@ def test_rl_walker_for_a_robot_without_a_policy_explains_the_options(pg, monkeyp
         pg.behaviors.move("go2", 0.5, 0.0, walker="rl")
 
 
-@needs_onnxruntime
-def test_library_go2_walks_turns_and_stops_with_the_unilab_policy(pg):
+def test_library_go2_walks_turns_and_stops_with_the_unilab_policy(pg, runtime):
     status = pg.behaviors.move("go2", 0.5, 0.0, walker="rl")
+    assert pg.session.controllers["go2"].policy.runtime == runtime
     assert status["walker"] == "rl" and status["policy"] == "go2_unilab_walk"
     start = pg.behaviors.pose("go2")
     pg.run_fast(lambda: False, 5.0)
@@ -294,8 +328,7 @@ def test_the_viewer_learns_which_robots_have_a_learned_walker(pg):
     assert isinstance(pg.session.controllers["go2"], quadruped.QuadrupedGait)
 
 
-@needs_onnxruntime
-def test_keyboard_driving_switches_to_and_keeps_the_learned_walker(pg):
+def test_keyboard_driving_switches_to_and_keeps_the_learned_walker(pg, runtime):
     hub = ViewerHub(pg.session)
     pg.attach_viewer(hub)
     handlers = hub.handlers
