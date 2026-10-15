@@ -16,6 +16,15 @@ def _play(pg: Playground, seconds: float) -> dict:
     return update
 
 
+def _samples(pg: Playground, seconds: float) -> list[dict]:
+    """Every plot sample over `seconds`, not just the last tick's (that one may fall right after a replay restarts)."""
+    out = []
+    for _ in range(round(seconds * 20)):
+        pg.session.step(round(0.05 / pg.session.model.opt.timestep))
+        out += pg.lessons.tick()["samples"]
+    return out
+
+
 def _train(pg: Playground) -> dict:
     pg.lessons.handle({"action": "press", "control": "train"})
     deadline = time.monotonic() + 300
@@ -45,7 +54,7 @@ def test_the_dog_learns_and_the_viewer_replays_the_newest_rhythm(pg):
     assert run["x"] == list(range(1, 21)) and run["y"][-1] > run["y"][0]  # a learning curve
     lesson = pg.lessons.lesson
     assert lesson.players["dog"].rhythm.theta.any()  # the live dog plays what was learned
-    walk = _play(pg, walk_rl.ATTEMPT + 0.5)["samples"]
+    walk = _samples(pg, walk_rl.ATTEMPT + 0.5)  # at least one whole replay
     assert max(s["x"] for s in walk) > 0.2  # and really walks in the viewer
 
 
