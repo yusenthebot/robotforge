@@ -6,7 +6,6 @@ sizes, so recompiling a world reuses the same arrays. Callers place parts with `
 
 from __future__ import annotations
 
-import functools
 import math
 
 import numpy as np
@@ -24,20 +23,6 @@ LED_RED = [1.0, 0.25, 0.2, 1.0]
 LED_WHITE = [1.0, 0.97, 0.88, 1.0]
 
 
-def cached(fn):
-    """lru_cache keyed on arguments with floats rounded to 0.01 mm, so tiny float noise still hits."""
-    inner = functools.lru_cache(maxsize=1024)(fn)
-
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        args = tuple(round(a, 5) if isinstance(a, float) else a for a in args)
-        kwargs = {k: round(v, 5) if isinstance(v, float) else v for k, v in kwargs.items()}
-        return inner(*args, **kwargs)
-
-    wrapper.cache_clear = inner.cache_clear  # type: ignore[attr-defined]
-    return wrapper
-
-
 def merge_parts(*groups: Parts) -> Parts:
     out: dict[str, list[M.Mesh]] = {}
     for g in groups:
@@ -50,7 +35,7 @@ def moved(parts: Parts, pos=(0.0, 0.0, 0.0), rot: np.ndarray | None = None) -> P
     return {k: m.moved(pos, rot) for k, m in parts.items()}
 
 
-@cached
+@M.cached
 def horn(r: float, t: float, screws: int = 4) -> Parts:
     """A round servo horn standing on the z = 0 plane: metal disc, dark center screw and (on horns big
     enough to see them) a screw circle."""
@@ -64,7 +49,7 @@ def horn(r: float, t: float, screws: int = 4) -> Parts:
     return {"metal": disc, "dark": M.merge(dark)}
 
 
-@cached
+@M.cached
 def servo_box(sx: float, sy: float, sz: float, horn_r: float) -> Parts:
     """A servo case of half sizes (sx, sy, sz) with its round horn on the +z face."""
     r = min(sx, sy, sz) * 0.3
@@ -75,7 +60,7 @@ def servo_box(sx: float, sy: float, sz: float, horn_r: float) -> Parts:
     return merge_parts({"dark": M.merge([body, boss])}, moved(h, (0, 0, sz + sz * 0.12 - 0.0012)))
 
 
-@cached
+@M.cached
 def drum(r: float, half: float, cap_r: float, both: bool = True) -> Parts:
     """A cylindrical joint actuator along z (radius r, half length `half`) with metal end caps."""
     body = M.cylinder(r, 2 * half, segments=28, bevel=min(r * 0.16, half * 0.35), arc=2)
@@ -86,7 +71,7 @@ def drum(r: float, half: float, cap_r: float, both: bool = True) -> Parts:
     return merge_parts({"dark": body}, *caps)
 
 
-@cached
+@M.cached
 def lens(r: float, depth: float) -> Parts:
     """A camera lens looking along +z from the z = 0 plane: dark bezel, glass and a fine metal ring."""
     bezel = M.revolve(
@@ -107,13 +92,13 @@ def lens(r: float, depth: float) -> Parts:
     return {"dark": bezel, "glass": glass, "metal": ring}
 
 
-@cached
+@M.cached
 def led(r: float, depth: float = 0.0015) -> Parts:
     dome = [(r * math.cos(a), depth * math.sin(a)) for a in np.linspace(0, math.pi / 2, 4)]
     return {"led": M.lathe([(0, -depth), (r, -depth), *dome], segments=20, sharp=(1,))}
 
 
-@cached
+@M.cached
 def ball_foot(r: float, shin_r: float) -> Parts:
     """A rubber ball foot of radius r at the origin with a metal collar where a shin of radius shin_r joins."""
     ball = M.sphere(r, rings=12, segments=24)
@@ -121,7 +106,7 @@ def ball_foot(r: float, shin_r: float) -> Parts:
     return {"rubber": ball, "metal": collar}
 
 
-@cached
+@M.cached
 def tyre(r: float, half_w: float) -> Parts:
     """A wheel about z: tyre with tread blocks (tread on radius r, -half_w..half_w), spoked rim, hub."""
     shoulder = min(half_w * 0.45, r * 0.18)
@@ -169,7 +154,7 @@ def tyre(r: float, half_w: float) -> Parts:
     }
 
 
-@cached
+@M.cached
 def bolt(r: float, h: float) -> M.Mesh:
     """A hex bolt head standing on the z = 0 plane."""
     return M.lathe([(0, 0), (r, 0), (r, h * 0.7), (r * 0.8, h), (0, h)], segments=6, sharp=(1, 2, 3))
@@ -183,7 +168,7 @@ def bolt_circle(radius: float, n: int, r: float, h: float, start: float = 0.0) -
     return M.merge(heads)
 
 
-@cached
+@M.cached
 def slats(hx: float, hz: float, count: int, depth: float) -> M.Mesh:
     """Horizontal vent slats in the x-z plane, `depth` thick along y."""
     out = []

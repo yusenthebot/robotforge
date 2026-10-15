@@ -104,9 +104,11 @@ class Visuals:
     geoms however many little parts it shows.
     """
 
-    def __init__(self, spec: mujoco.MjSpec, tag: str = "") -> None:
+    def __init__(self, spec: mujoco.MjSpec, owner: str | None = None) -> None:
         self.spec = spec
-        self.tag = tag  # keeps mesh names unique when several owners share a spec (props)
+        # Mesh names are rf_<owner>_<preset>: the body name for a robot (its spec is its own), the
+        # object's name for a prop (unique in the world, and props on the world body share no body name).
+        self.owner = owner
         self.on = enabled()
         self._groups: dict[tuple, tuple[mujoco.MjsBody, str, list[float], list[Mesh]]] = {}
         self._materials: set[str] = set()
@@ -139,22 +141,24 @@ class Visuals:
     def finish(self) -> int:
         """Add the collected meshes to the spec; returns the number of triangles added."""
         triangles = 0
-        taken = {m.name for m in self.spec.meshes} if self._groups else set()
-        for i, (body, preset, color, meshes) in enumerate(self._groups.values()):
+        taken: set[str] = set()
+        for body, preset, color, meshes in self._groups.values():
             merged = merge(meshes)
             if merged.triangles == 0:
                 continue
-            owner = (body.name or "world").replace("/", "_")
-            name = f"rf_{self.tag}{owner}_{preset}"
-            if name in taken:
-                name = f"{name}_{i}"
+            owner = (self.owner or body.name or "world").replace("/", "_")
+            base = name = f"rf_{owner}_{preset}"
+            k = 1
+            while name in taken:
+                k += 1
+                name = f"{base}{k}"
             taken.add(name)
             self.spec.add_mesh(
                 name=name,
-                uservert=merged.vertices.ravel().tolist(),
-                usernormal=merged.normals.ravel().tolist(),
-                userface=merged.faces.ravel().tolist(),
-                userfacenormal=merged.faces.ravel().tolist(),
+                uservert=merged.vertices.ravel(),
+                usernormal=merged.normals.ravel(),
+                userface=merged.faces.ravel(),
+                userfacenormal=merged.faces.ravel(),
                 # Visual meshes weigh nothing, but MuJoCo still sizes every mesh; the shell rule
                 # accepts open surfaces and overlapping parts.
                 inertia=mujoco.mjtMeshInertia.mjMESH_INERTIA_SHELL,

@@ -9,6 +9,7 @@ tapered links, lumpy foliage).
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -16,6 +17,47 @@ from dataclasses import dataclass
 import numpy as np
 
 _EPS = 1e-12
+
+
+def _key(value):
+    """A hashable cache key: floats rounded to 0.1 micrometer, sequences as tuples."""
+    if isinstance(value, float):
+        return round(value, 7)
+    if isinstance(value, (list, tuple, range)):
+        return tuple(_key(v) for v in value)
+    return value
+
+
+def cached(fn):
+    """Memoize a pure mesh builder; float noise below 0.1 micrometer still hits the cache.
+
+    Recompiling a world (a robot moved, an object added) then rebuilds no geometry at all.
+    The returned meshes are shared, so their arrays are made read-only.
+    """
+    memo = functools.lru_cache(maxsize=4096)(lambda args, kwargs: _frozen(fn(*args, **dict(kwargs))))
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        return memo(_key(args), tuple(sorted((k, _key(v)) for k, v in kwargs.items())))
+
+    wrapper.cache_clear = memo.cache_clear  # type: ignore[attr-defined]
+    return wrapper
+
+
+def _frozen(result):
+    meshes = result.values() if isinstance(result, dict) else [result]
+    for m in meshes:
+        if isinstance(m, Mesh):
+            for arr in (m.vertices, m.normals, m.faces, m.keys):
+                arr.flags.writeable = False
+    return result
+
+
+def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """np.cross for (..., 3) arrays without its per-call overhead (it dominates small meshes)."""
+    ax, ay, az = a[..., 0], a[..., 1], a[..., 2]
+    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
+    return np.stack([ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx], axis=-1)
 
 
 @dataclass(frozen=True, eq=False)
@@ -50,6 +92,13 @@ class Mesh:
             n = n @ np.asarray(rot).T
         v = v + np.asarray(pos, dtype=float)
         return Mesh(v, n, self.faces, self.keys)
+
+    def faceted(self) -> Mesh:
+        """Flat-shaded copy: every triangle gets its own vertices (a low-poly, chiselled look)."""
+        v = self.vertices[self.faces].reshape(-1, 3)
+        f = np.arange(len(v), dtype=np.int32).reshape(-1, 3)
+        keys = np.arange(len(v), dtype=np.int64)
+        return Mesh(v, _smooth_normals(v, f, keys), f, keys)
 
     def displaced(self, offset: np.ndarray) -> Mesh:
         """Move every vertex by `offset` (n, 3) and recompute the smooth normals."""
@@ -222,16 +271,16 @@ def _cap(ring: np.ndarray, reverse: bool) -> Mesh:
 
 def _signed_volume(rings: list[np.ndarray], n: int) -> float:
     """Volume enclosed by the side bands plus end caps, with the faces as `loft` builds them."""
+    stack = np.stack(rings)
     i = np.arange(n)
     j = (i + 1) % n
-    vol = 0.0
-    for r0, r1 in zip(rings[:-1], rings[1:], strict=True):
-        a, b, c, d = r0[i], r0[j], r1[j], r1[i]
-        vol += float(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() + np.einsum("ij,ij->i", a, np.cross(c, d)).sum())
-    for ring, reverse in ((rings[0], True), (rings[-1], False)):
-        center = np.broadcast_to(ring.mean(axis=0), ring.shape)
+    a, b = stack[:-1, i], stack[:-1, j]
+    c, d = stack[1:, j], stack[1:, i]
+    vol = float(np.sum(a * _cross(b, c)) + np.sum(a * _cross(c, d)))
+    for ring, reverse in ((stack[0], True), (stack[-1], False)):
+        center = ring.mean(axis=0)
         p, q = (ring[j], ring[i]) if reverse else (ring[i], ring[j])
-        vol += float(np.einsum("ij,ij->i", center, np.cross(p, q)).sum())
+        vol += float(np.sum(center * _cross(p, q)))
     return vol / 6.0
 
 
@@ -251,7 +300,7 @@ def _smooth_normals(verts: np.ndarray, faces: np.ndarray, keys: np.ndarray) -> n
     if faces.size == 0:
         return np.zeros_like(verts)
     a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
-    fn = np.cross(b - a, c - a)  # length = 2 * area
+    fn = _cross(b - a, c - a)  # length = 2 * area
     acc = np.zeros((int(keys.max()) + 1, 3))
     for k in range(3):
         np.add.at(acc, keys[faces[:, k]], fn)
@@ -269,6 +318,7 @@ def _unit(v: np.ndarray) -> np.ndarray:
 # ---- shapes ------------------------------------------------------------------------------------
 
 
+@cached
 def lathe(profile: Sequence[tuple[float, float]], segments: int = 32, sharp: Iterable[int] = ()) -> Mesh:
     """Surface of revolution about z from (radius, z) points, bottom to top.
 
@@ -278,6 +328,7 @@ def lathe(profile: Sequence[tuple[float, float]], segments: int = 32, sharp: Ite
     return loft(rings, sharp=sharp)
 
 
+@cached
 def rounded_box(hx: float, hy: float, hz: float, radius: float, segments: int = 3, corner: float | None = None) -> Mesh:
     """Box of half extents (hx, hy, hz) with every edge rounded by `radius`.
 
@@ -299,6 +350,7 @@ def rounded_box(hx: float, hy: float, hz: float, radius: float, segments: int = 
     return loft(rings)
 
 
+@cached
 def box(hx: float, hy: float, hz: float, chamfer: float = 0.0) -> Mesh:
     """A box with crisp (or slightly chamfered) edges, for planks, slats and seams."""
     if chamfer > 0:
@@ -321,6 +373,7 @@ def _quad(p: np.ndarray) -> Mesh:
     return Mesh(p, np.zeros_like(p), faces, np.arange(4))
 
 
+@cached
 def cylinder(r: float, h: float, segments: int = 24, bevel: float = 0.0, z0: float | None = None, arc: int = 3) -> Mesh:
     """Cylinder along z of radius r, centered (or from z0 to z0 + h), with an optional rounded rim
     (`arc` segments per rounded edge; 1 makes a chamfer)."""
@@ -339,11 +392,13 @@ def cylinder(r: float, h: float, segments: int = 24, bevel: float = 0.0, z0: flo
     return lathe(prof, segments, sharp=range(1, len(prof) - 1) if arc == 1 else ())
 
 
+@cached
 def sphere(r: float, rings: int = 12, segments: int = 24) -> Mesh:
     prof = [(r * math.sin(t), -r * math.cos(t)) for t in np.linspace(0, math.pi, rings + 1)]
     return lathe(prof, segments)
 
 
+@cached
 def capsule(r: float, length: float, rings: int = 6, segments: int = 20) -> Mesh:
     """Capsule along z from 0 to `length` (the end caps reach r beyond)."""
     prof = [(r * math.sin(t), -r * math.cos(t)) for t in np.linspace(0, math.pi / 2, rings + 1)]
@@ -351,6 +406,7 @@ def capsule(r: float, length: float, rings: int = 6, segments: int = 20) -> Mesh
     return lathe(prof, segments)
 
 
+@cached
 def link(
     length: float,
     start: tuple[float, float],
@@ -393,6 +449,7 @@ def _point(count: int, z: float) -> np.ndarray:
     return np.tile([0.0, 0.0, z], (count, 1))
 
 
+@cached
 def torus(r_major: float, r_minor: float, segments: int = 32, sides: int = 10) -> Mesh:
     """Ring around z."""
     prof = [
@@ -421,12 +478,13 @@ def _closed_tube(rings: list[np.ndarray], n: int) -> Mesh:
 def _outward(mesh: Mesh) -> Mesh:
     """Flip all faces of a closed mesh if they point inward."""
     v, f = mesh.vertices, mesh.faces
-    vol = float(np.einsum("ij,ij->i", v[f[:, 0]], np.cross(v[f[:, 1]], v[f[:, 2]])).sum())
+    vol = float(np.sum(v[f[:, 0]] * _cross(v[f[:, 1]], v[f[:, 2]])))
     if vol < 0:
         return Mesh(v, mesh.normals, f[:, ::-1].copy(), mesh.keys)
     return mesh
 
 
+@cached
 def blob(
     radii: Sequence[float],
     seed: int,
@@ -473,11 +531,11 @@ def tube(path: np.ndarray, radii: Sequence[float], segments: int = 12) -> Mesh:
         t /= np.linalg.norm(t) or 1.0
         if u is None:
             ref = np.array([1.0, 0.0, 0.0]) if abs(t[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-            u = np.cross(t, ref)
+            u = _cross(t, ref)
         else:  # carry the previous frame along, so the tube does not twist
             u = u - (u @ t) * t
         u /= np.linalg.norm(u)
-        v = np.cross(t, u)
+        v = _cross(t, u)
         ring2 = circle(radii[k], segments)
         rings.append(p + ring2[:, :1] * u + ring2[:, 1:] * v)
     return loft(rings)
@@ -497,6 +555,7 @@ def extrude(polygon: np.ndarray, depth: float) -> Mesh:
     return _finish(merge(parts))
 
 
+@cached
 def revolve(profile: Sequence[tuple[float, float]], segments: int = 32, sharp: Iterable[int] | None = None) -> Mesh:
     """Solid of revolution about z of a closed (radius, z) polygon: rims, rings, cups and bowls with walls.
 
@@ -518,3 +577,60 @@ def revolve(profile: Sequence[tuple[float, float]], segments: int = 32, sharp: I
             current = [idx]
     parts = [_band([rings[i] for i in run], segments, True) for run in runs]
     return _finish(_outward(merge(parts)))
+
+
+def resample_loop(ring2: np.ndarray, step: float) -> np.ndarray:
+    """Evenly spaced points (about `step` apart) along a closed 2D polyline."""
+    closed = np.vstack([ring2, ring2[:1]])
+    seg = np.linalg.norm(np.diff(closed, axis=0), axis=1)
+    total = float(seg.sum())
+    n = max(8, round(total / step))
+    s = np.concatenate([[0.0], np.cumsum(seg)])
+    t = np.linspace(0.0, total, n, endpoint=False)
+    return np.column_stack([np.interp(t, s, closed[:, 0]), np.interp(t, s, closed[:, 1])])
+
+
+@cached
+def dense_rounded_box(hx: float, hy: float, hz: float, radius: float, step: float) -> Mesh:
+    """A rounded box with vertices about `step` apart on its sides, ready to be displaced."""
+    rb = max(min(radius, hx, hy, hz), 1e-4)
+    rings = []
+    base = rounded_rect(hx, hy, rb, 6)
+    count = len(resample_loop(base, step))
+
+    def ring(inset: float, z: float) -> np.ndarray:  # same point count on every ring, so they loft
+        return at_z(_fit(rounded_rect(hx - inset, hy - inset, max(rb - inset, 1e-4), 6), count), z)
+
+    for a in np.linspace(0.0, math.pi / 2, 4):
+        rings.append(ring(rb * (1 - math.sin(a)), -(hz - rb) - rb * math.cos(a)))
+    levels = max(1, round(2 * (hz - rb) / step))
+    for z in np.linspace(-(hz - rb), hz - rb, levels + 1)[1:-1]:
+        rings.append(ring(0.0, z))
+    for a in np.linspace(math.pi / 2, 0.0, 4):
+        rings.append(ring(rb * (1 - math.sin(a)), (hz - rb) + rb * math.cos(a)))
+    return loft(rings)
+
+
+def _fit(loop: np.ndarray, count: int) -> np.ndarray:
+    """`count` evenly spaced points along a closed 2D polyline."""
+    closed = np.vstack([loop, loop[:1]])
+    seg = np.linalg.norm(np.diff(closed, axis=0), axis=1)
+    s = np.concatenate([[0.0], np.cumsum(seg)])
+    t = np.linspace(0.0, float(s[-1]), count, endpoint=False)
+    return np.column_stack([np.interp(t, s, closed[:, 0]), np.interp(t, s, closed[:, 1])])
+
+
+@cached
+def noise_displaced(mesh: Mesh, seed: int, amplitude: float, wavelength: float) -> Mesh:
+    """Push every vertex along its normal by smooth 3D noise (a sum of random plane waves)."""
+    rng = np.random.default_rng(seed)
+    p = mesh.vertices
+    field = np.zeros(len(p))
+    for octave, weight in ((1.0, 1.0), (2.1, 0.5), (4.3, 0.25)):
+        for _ in range(4):
+            d = rng.normal(size=3)
+            d /= np.linalg.norm(d)
+            k = 2 * math.pi * octave / wavelength
+            field += weight * np.sin(p @ d * k + rng.uniform(0, 2 * math.pi))
+    field /= np.abs(field).max() or 1.0
+    return mesh.displaced(mesh.normals * (amplitude * field)[:, None])
