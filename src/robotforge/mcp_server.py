@@ -319,10 +319,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         cylinder [diameter, height]; wall [length, thickness, height], pillar [diameter, height], shelf and
         counter and bench [length, depth, height], door_frame [width, depth, height], pallet [length, width,
         height], tree [crown diameter, height], rock [diameter, height], marker [diameter] or [length, width].
-        Every shape has a default size and color. pos is [x, y] (resting on the ground or terrain there) or
-        [x, y, z]; yaw turns it (degrees). fixed objects never move (walls, shelves, counters, trees, benches
-        and rocks are fixed unless fixed=false); a bin is an open-top container, a marker a flat colored mark
-        nothing collides with (goals, lanes, paths). Ramps and stairs are terrain: see add_terrain."""
+        Every shape has a default size and color; color is a name, a hex code like "#9c6b3f" or [r, g, b].
+        pos is [x, y] (resting on the ground or terrain there) or [x, y, z]; yaw turns it (degrees). fixed
+        objects never move (walls, shelves, counters, trees, benches and rocks are fixed unless fixed=false); a
+        bin is an open-top container, a marker a flat colored mark nothing collides with (goals, lanes, paths).
+        Ramps and stairs are terrain: see add_terrain."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))

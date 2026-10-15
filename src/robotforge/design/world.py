@@ -24,6 +24,8 @@ from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+# A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
+BARE_HEX_COLOR = re.compile(r"(?:^[ \t-]*|[{,][ \t]*)color:[ \t]*(#[0-9a-fA-F]+)(?![\w-])", re.MULTILINE)
 ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, wall, shelf, ...
 
 
@@ -131,7 +133,17 @@ class World(_Strict):
 
     @classmethod
     def from_yaml(cls, text: str) -> World:
-        data = yaml.safe_load(text) or {}
+        bare = BARE_HEX_COLOR.search(text)
+        if bare:
+            line = text.count("\n", 0, bare.start()) + 1
+            raise ValueError(
+                f'world.yaml line {line}: put the hex color in quotes, color: "{bare[1]}"; '
+                "without them YAML reads # as the start of a comment"
+            )
+        try:
+            data = yaml.safe_load(text) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f"world.yaml is not valid YAML: {exc}") from exc
         if not isinstance(data, dict):
             raise ValueError("world.yaml must be a mapping")
         return cls.model_validate(data)

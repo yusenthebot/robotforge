@@ -7,6 +7,7 @@ that a printed robot will match the simulation exactly.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 
@@ -98,6 +99,10 @@ COLORS: dict[str, tuple[float, float, float, float]] = {
     "teal": (0.2, 0.7, 0.7, 1),
     "pink": (0.95, 0.5, 0.7, 1),
 }
+# Agents write the colors they would write in CSS or a design tool, so those work too.
+COLOR_SPELLINGS = {"grey": "gray"}
+HEX_COLOR = re.compile(r"#(?:[0-9a-f]{3}|[0-9a-f]{6})")  # matched after lowercasing
+COLOR_HINT = 'a name like red or brown, a hex code like "#9c6b3f", or [r, g, b] in 0..1'
 
 
 def actuator(name: str) -> Actuator:
@@ -108,15 +113,27 @@ def actuator(name: str) -> Actuator:
 
 
 def color(value: str | list[float] | tuple[float, ...]) -> list[float]:
-    """Accept a color name or an [r, g, b(, a)] list in 0..1."""
+    """Accept a color name, a hex code ("#9c6b3f" or "#963") or an [r, g, b(, a)] list in 0..1."""
     if isinstance(value, str):
-        try:
-            return list(COLORS[value.lower()])
-        except KeyError:
-            raise ValueError(f"unknown color {value!r}; use one of {', '.join(COLORS)} or [r, g, b]") from None
+        return _color_text(value)
     rgba = [float(v) for v in value]
     if len(rgba) == 3:
         rgba.append(1.0)
     if len(rgba) != 4 or not all(0.0 <= v <= 1.0 for v in rgba):
-        raise ValueError(f"color must be 3 or 4 numbers in 0..1, got {value!r}")
+        raise ValueError(f'color must be 3 or 4 numbers in 0..1 (or a hex code like "#9c6b3f"), got {value!r}')
     return rgba
+
+
+def _color_text(value: str) -> list[float]:
+    text = value.strip().lower()
+    text = COLOR_SPELLINGS.get(text, text)
+    if text in COLORS:
+        return list(COLORS[text])
+    if HEX_COLOR.fullmatch(text):
+        digits = text[1:] if len(text) == 7 else "".join(d * 2 for d in text[1:])
+        return [int(digits[i : i + 2], 16) / 255 for i in (0, 2, 4)] + [1.0]
+    if text.startswith("#"):
+        raise ValueError(f'unknown color {value!r}: a hex color is # and 6 or 3 digits 0-9, a-f, like "#9c6b3f"')
+    raise ValueError(
+        f'unknown color {value!r}; use one of {", ".join(COLORS)}, a hex code like "#9c6b3f", or [r, g, b] in 0..1'
+    )

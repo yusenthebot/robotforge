@@ -319,7 +319,10 @@ class Playground:
 
     @_one_edit_at_a_time
     def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
-        entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
+        try:
+            entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
+        except ValidationError as exc:  # pydantic's own wording buries the fix under types and a docs link
+            raise PlaygroundError(_validation_message(exc)) from exc
 
         def change(w: World) -> None:
             w.objects.append(entry)

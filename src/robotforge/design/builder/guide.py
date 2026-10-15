@@ -52,8 +52,8 @@ def guide() -> dict[str, Any]:
             "and remove_part change it later. Units: meters, kg, degrees. The robot's front is +x, left +y, up "
             "+z. Every part has a frame at its joint; its numbers are in its parent's frame."
         ),
-        "robot": "color, material (pla, aluminum, carbon, rubber), servo / motor / linear (default actuators), "
-        "servo_caps (draw servos), base, parts",
+        "robot": f"color ({components.COLOR_HINT}), material (pla, aluminum, carbon, rubber), servo / motor / linear "
+        "(default actuators), servo_caps (draw servos), base, parts",
         "base": "shape box|sphere|capsule|cylinder, size, axis (capsule/cylinder), color, material, mass, "
         "fixed (true = bolted to the floor), mounts {name: [x,y,z]}, sensors",
         "part": {
