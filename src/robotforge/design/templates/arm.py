@@ -20,6 +20,9 @@ from robotforge.design.templates.base import (
     servo_case,
     servo_joint,
 )
+from robotforge.design.visuals import Visuals
+from robotforge.design.visuals import mesh as M
+from robotforge.design.visuals import parts as P
 
 
 class ArmParams(TemplateParams):
@@ -46,8 +49,9 @@ class Arm(Template):
         upper, fore = 0.45 * p.reach, 0.35 * p.reach
         hand = 0.2 * p.reach - (0.05 if p.gripper else 0.0)
 
+        vis = Visuals(spec)
         base = spec.worldbody.add_body(name="base")
-        base.add_geom(
+        pedestal = base.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[2.2 * radius + 0.02, p.base_height / 4],
             pos=[0, 0, p.base_height / 4],
@@ -57,14 +61,17 @@ class Arm(Template):
 
         turret = base.add_body(name="turret", pos=[0, 0, p.base_height / 2])
         servo_joint(spec, turret, "yaw", [0, 0, 1], (-math.pi, math.pi), part)
-        turret.add_geom(
+        column = turret.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[2 * radius + 0.01, p.base_height / 4],
             pos=[0, 0, p.base_height / 4],
             rgba=SHELL,
             density=density,
         )
-        servo_case(turret, part, [0, 0, p.base_height / 2])
+        shoulder_servo = servo_case(turret, part, [0, 0, p.base_height / 2])
+        for geom in (pedestal, column, shoulder_servo):
+            vis.hide(geom)
+        _dress_base(vis, base, turret, p.base_height, 2.2 * radius + 0.02, 2 * radius + 0.01)
 
         links = [("shoulder", upper), ("elbow", fore)]
         if p.dof >= 4:
@@ -74,7 +81,7 @@ class Arm(Template):
             body = parent.add_body(name=f"link{i + 1}", pos=[0, 0, z])
             limit = 2.6 if joint_name != "shoulder" else 1.9
             servo_joint(spec, body, joint_name, [0, 1, 0], (-limit, limit), part)
-            body.add_geom(
+            drum = body.add_geom(
                 type=GEOM.mjGEOM_CYLINDER,
                 size=[radius * 1.25, part.size[1] / 2 + 0.004],
                 quat=[0.7071068, 0.7071068, 0, 0],
@@ -83,13 +90,17 @@ class Arm(Template):
             )
             is_last = i == len(links) - 1
             rgba = accent if i == 0 else SHELL
-            body.add_geom(
+            tube = body.add_geom(
                 type=GEOM.mjGEOM_CAPSULE,
                 fromto=[0, 0, 0, 0, 0, length],
                 size=[radius * (0.8 if is_last else 1.0), 0, 0],
                 rgba=rgba,
                 density=density,
             )
+            vis.hide(drum)
+            vis.hide(tube)
+            link_r = radius * (0.8 if is_last else 1.0)
+            _dress_link(vis, body, length, radius * 1.25, part.size[1] / 2 + 0.004, link_r, rgba, is_last)
             parent, z = body, length
 
         if p.dof >= 5:
@@ -97,20 +108,24 @@ class Arm(Template):
             if p.dof >= 6:
                 servo_joint(spec, roll, "wrist_yaw", [1, 0, 0], (-1.6, 1.6), part)
             servo_joint(spec, roll, "wrist_roll", [0, 0, 1], (-math.pi, math.pi), part)
-            roll.add_geom(
+            wrist = roll.add_geom(
                 type=GEOM.mjGEOM_CYLINDER,
                 size=[radius * 1.1, 0.012],
                 pos=[0, 0, 0.012],
                 rgba=DARK,
                 mass=part.mass,
             )
+            vis.hide(wrist)
+            _dress_wrist(vis, roll, radius * 1.1, 0.024)
             parent, z = roll, 0.024
 
         tool = parent.add_body(name="hand", pos=[0, 0, z])
         tool.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
         tcp_z = 0.0
         if p.gripper:
-            tcp_z = self._gripper(spec, tool, p, radius, accent)
+            tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis)
+        _dress_wrist_camera(vis, tool, p.gripper)
+        vis.finish()
         tool.add_site(name="tcp", pos=[0, 0, tcp_z], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
         spec.add_sensor(
             name="tcp_pos", type=mujoco.mjtSensor.mjSENS_FRAMEPOS, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="tcp"
@@ -132,20 +147,19 @@ class Arm(Template):
             notes=[f"{p.dof}-joint arm, reach {p.reach:.2f} m, {part.name} servos ({part.stall_torque} N*m)"],
         )
 
-    @staticmethod
-    def _gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, p: ArmParams, radius: float, accent) -> float:
-        return add_gripper(spec, tool, p.gripper_opening, accent)
 
-
-def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accent) -> float:
+def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accent, vis: Visuals | None = None) -> float:
     """A parallel two-finger gripper on `tool`, opening along its y axis, fingers along +z.
 
     Adds the coupled finger joints, the `gripper` actuator (its control is one finger's travel)
-    and returns the height of the point between the fingertips above the tool frame.
+    and returns the height of the point between the fingertips above the tool frame. Its looks go
+    into `vis` (or into its own Visuals, finished here, when none is given).
     """
+    own = vis is None
+    vis = vis or Visuals(spec)
     palm_h = 0.02
     half_w = opening / 2 + 0.012
-    tool.add_geom(
+    palm = tool.add_geom(
         type=GEOM.mjGEOM_BOX,
         size=[0.018, half_w, palm_h / 2],
         pos=[0, 0, palm_h / 2],
@@ -165,7 +179,7 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
             damping=1.0,
             armature=0.001,
         )
-        finger.add_geom(
+        pad = finger.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[0.012, 0.005, finger_len / 2],
             pos=[0, 0, finger_len / 2],
@@ -175,6 +189,12 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
             solref=[0.005, 1],
             mass=0.012,
         )
+        vis.hide(pad)
+        _dress_finger(vis, finger, sign, finger_len, accent)
+    vis.hide(palm)
+    _dress_palm(vis, tool, half_w, palm_h, travel)
+    if own:
+        vis.finish()
     spec.add_equality(
         type=mujoco.mjtEq.mjEQ_JOINT, name1="finger_left", name2="finger_right", data=[0, 1, 0, 0, 0] + [0] * 6
     )
@@ -185,3 +205,84 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
     act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
     act.forcerange = [-15, 15]
     return palm_h + finger_len - 0.012
+
+
+# ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
+
+
+def _dress_base(vis: Visuals, base, turret, height: float, base_r: float, turret_r: float) -> None:
+    """A dark pedestal with a bolted flange and a light ring, under a light turret column."""
+    h = height / 2
+    bevel = min(0.005, h * 0.2)
+    vis.add(base, "dark", DARK, M.cylinder(base_r, h, segments=48, bevel=bevel, z0=0.0))
+    vis.add(base, "metal", P.METAL, M.cylinder(base_r * 1.015, h * 0.1, segments=48, bevel=h * 0.03, z0=0.0))
+    bolts = P.bolt_circle(base_r * 0.86, 6, base_r * 0.055, 0.0025, start=math.pi / 6)
+    vis.add(base, "metal", P.METAL, bolts, (0, 0, h - 0.0005))
+    ring = M.torus(turret_r * 1.06, 0.0018, segments=48, sides=8)
+    vis.add(base, "led", P.LED_CYAN, ring, (0, 0, h + 0.0005))
+    column = M.cylinder(turret_r, h, segments=48, bevel=min(0.006, h * 0.25), z0=0.0)
+    vis.add(turret, "shell", SHELL, column)
+    seam = M.cylinder(turret_r * 1.004, 0.0012, segments=48, z0=h * 0.32)
+    vis.add(turret, "dark", DARK, seam)
+
+
+def _dress_link(
+    vis: Visuals, body, length: float, drum_r: float, drum_half: float, link_r: float, rgba, is_last: bool
+) -> None:
+    """A joint drum on the pitch axis (y) and a tapered rounded limb up to the next joint."""
+    half_y = link_r * 1.02
+    drum_half = max(drum_half, half_y + 0.003)
+    for preset, mesh in P.drum(drum_r, drum_half, drum_r * 0.72).items():
+        vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), M.Z_TO_Y)
+    if is_last:  # the short wrist link: a straight round neck out of the drum
+        start = end = (link_r * 1.02, half_y)
+    else:
+        start, end = (drum_r * 0.98, half_y), (link_r * 0.95, half_y * 0.95)
+    limb = M.link(length, start, end, roundness=0.85, rounding=(1.0, 1.0), stations=8)
+    vis.add(body, "shell", rgba, limb)
+
+
+def _dress_wrist(vis: Visuals, roll, r: float, height: float) -> None:
+    """The wrist roll unit: a dark drum ending in a metal tool flange with bolts."""
+    vis.add(roll, "dark", DARK, M.cylinder(r, height * 0.8, segments=36, bevel=0.002, z0=0.0))
+    flange = M.cylinder(r * 0.92, height * 0.2, segments=36, bevel=0.0008, z0=height * 0.8)
+    vis.add(roll, "metal", P.METAL, flange)
+    vis.add(roll, "dark", DARK, P.bolt_circle(r * 0.7, 4, r * 0.08, 0.0012, math.pi / 4), (0, 0, height - 0.0003))
+
+
+def _dress_wrist_camera(vis: Visuals, tool, gripper: bool) -> None:
+    """The wrist camera beside the palm, looking along the fingers (+z), centered on `wrist_cam`."""
+    x = 0.035
+    inner = 0.018 if gripper else 0.012
+    hx = (x + 0.008 - inner) / 2
+    housing = M.rounded_box(hx, 0.012, 0.0075, 0.0025, segments=2, corner=0.004)
+    vis.add(tool, "dark", DARK, housing, (inner + hx, 0, 0.0))
+    for preset, mesh in P.lens(0.0055, 0.0025).items():
+        color = {"dark": DARK, "glass": P.GLASS, "metal": P.METAL}[preset]
+        vis.add(tool, preset, color, mesh, (x, 0, 0.0075))
+    vis.add(tool, "led", P.LED_GREEN, P.led(0.0012, 0.0008)["led"], (x, 0.009, 0.0075))
+
+
+def _dress_palm(vis: Visuals, tool, half_w: float, palm_h: float, travel: float) -> None:
+    """The gripper body: a dark housing with light side covers and the metal rails the fingers ride on."""
+    body = M.rounded_box(0.018, half_w, palm_h / 2, 0.004, segments=3, corner=0.005)
+    vis.add(tool, "dark", DARK, body, (0, 0, palm_h / 2))
+    for side in (1, -1):
+        cover = M.rounded_box(0.0012, half_w * 0.86, palm_h * 0.32, 0.001, segments=2, corner=0.004)
+        vis.add(tool, "shell", SHELL, cover, (side * 0.0185, 0, palm_h * 0.5))
+    for x in (0.009, -0.009):
+        rail = M.cylinder(0.0022, 2 * half_w * 0.92, segments=12).moved(rot=M.Z_TO_Y)
+        vis.add(tool, "metal", P.METAL, rail, (x, 0, palm_h + 0.0008))
+
+
+def _dress_finger(vis: Visuals, finger, sign: int, length: float, accent) -> None:
+    """An accent finger with a rubber grip pad flush with its inner (closing) face."""
+    t = 0.005  # half thickness of the collision box along y
+    pad_t = 0.0009
+    body_t = t - pad_t
+    body = M.rounded_box(0.012, body_t, length / 2, 0.0025, segments=2, corner=0.003)
+    vis.add(finger, "shell", accent, body, (0, sign * pad_t, length / 2))
+    pad = M.rounded_box(0.0112, pad_t, length * 0.4, 0.0008, segments=2, corner=0.002)
+    vis.add(finger, "rubber", P.RUBBER, pad, (0, -sign * (t - pad_t), length * 0.56))
+    screw = P.bolt(0.0016, 0.0008).moved(rot=M.rot_x(-sign * math.pi / 2))
+    vis.add(finger, "metal", P.METAL, screw, (0, sign * t, length * 0.18))
