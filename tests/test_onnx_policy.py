@@ -481,7 +481,7 @@ async def test_mcp_lists_policies_walks_with_one_and_explains_unilab_setup(pg):
 
         listed = await call("list_walkers", {})
         assert [p["name"] for p in listed["walkers"]] == ["go2_unilab_walk"]
-        assert ("note" in listed) != onnxruntime_available()  # the install hint shows only when needed
+        assert "note" not in listed  # walkers run with numpy, so there is nothing to install first
         failed = await client.call_tool("unilab_check", {})
         assert failed.is_error and "ROBOTFORGE_UNILAB_DIR" in failed.content[0].text
         if onnxruntime_available():
