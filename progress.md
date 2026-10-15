@@ -180,13 +180,29 @@ Rounds 1-3 done, 2026-10-14.
   - Rooms side by side put rover A under the lesson panel: the free area between the panels is portrait-shaped, so the rooms stack front to back under a near top-down camera.
   - The browser pane again rendered an emulated viewport into a corner after the server restarted; reset with preset desktop, then set the size again.
 
+## Round 17 (2026-10-15): PID I rebuilt, PID II on the PiPER shoulder (phase C part 3)
+
+- Engine: `Quiz(predict=True)` is a guess before an experiment: any answer is taken once, the step's check waits for it, and the verdict (with the right answer marked) only shows after the experiment passes. `LessonContext.step` names the current step. `Bench.zoom` offers a closer look at the run chart around the target.
+- `pd.JointLesson`: one-joint PID lessons in general (a graded, recorded step test, sweeps on copies, a live formula with a row per term). `JointPD` takes any joint, a sign and offset (lifting is always a bigger angle), a torque limit and the controller's own gravity model; the integral has anti-windup. `grade()` takes start and target and reports `end_err` only once the arm has come to rest.
+- Viewer: "控制器此刻在算什么" panel (P, D, I, feedforward, motor with a saturation note, gravity, zeta), predict quiz states (guess in amber, then right/wrong plus the answer), result banner says how far off a run came to rest, a "not counted" note, run chart zoom to +-6 degrees, the joint dial takes a body-frame arm direction and a range.
+- PID I (6 steps, each P/D/steady/FF step starts with a guess and uses the step test): P only, Kp 10 and 40 give nearly the same swing (9 to 170 degrees) because Kp * e is far past the 4 N*m limit; D sweep at Kp 40 shows overshoot falling to 0 by Kd 3 and settling fastest there (0.41 s, 0.95 s at Kd 6); Kp 80 / Kd 5 halves the steady error (2.7 -> 1.33 degrees); feedforward ends at 0 in 0.4 s while Ki 10 is still 1.1 degrees off after 3 s (Ki 40 catches up, Ki 60 starts to overshoot).
+- PID II "pid_piper" (Menagerie PiPER, shoulder joint2 as a torque motor, gravcomp off, other servos 5x stiffer to hold the pose, a box at the tool point whose 0.5 kg the controller's model does not know): Kp 40 / Kd 3 sag 8.7 degrees (gravity 6.05 N*m vs 1.8); with feedforward they overshoot 25% (zeta 0.39: I = 0.37 vs 0.076 on the small arm); Kp 80 / Kd 10 (zeta 0.92) settles in 0.26 s with no overshoot; box full with feedforward ends 2 degrees short, Ki 20 fixes it; challenge: three stars without the model (needs Ki about 60; Ki 20 earns one).
+- Menagerie's own PiPER servo (Kp 80, Kd 5) has zeta about 0.45 and overshoots 15% in the same test with gravcomp on.
+- What did NOT work (and the fix):
+  - In the old step test Kp made no visible difference: a 120 degree step saturates the 4 N*m motor for any Kp above 10. Kept and taught (the formula shows the clipped sum) instead of raising the limit; D and steady error carry the Kp story.
+  - The PiPER showed no sag at all: every Menagerie PiPER link has `gravcomp="1"`. Switched off for the lesson and named in the text.
+  - With gravcomp off the held elbow and wrist sagged 4 and 8 degrees under their file servos; stiffened 5x at the same damping ratio.
+  - Without anti-windup Ki 5 looked as good as feedforward by luck (the integral charged during the climb); conditional integration makes the integral honest.
+  - Swinging runs reported a meaningless "ended off by 42 degrees" and won "best"; end_err is now None unless the arm came to rest.
+  - The PiPER challenge passed instantly with the previous step's settings; it now has to be done without the model, and a run with feedforward says it does not count.
+
 ## Next-round seed
 
-Round 17 = phase C part 3: the PID lesson rebuilt to the cart-pole standard around triplets and sweeps (what each knob does, seen on three joints at once, then the learner tunes one to stars, then the bench sweep), and plan the gait lesson (template dog, then Go2) and a humanoid balance lesson (our template, then G1). Odometry drift corrected by lidar stays optional.
+Round 18 = phase C part 4: a gait lesson (template dog: phase, swing and stance, step period; then the Go2) built the same way (guess, recorded test, live formula), and plan the humanoid balance lesson (centre of mass and support polygon, our template then G1). Then a Review round: walk every lesson as a beginner in the browser, prune dead code, ambition critic.
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 6 lessons, 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 7 lessons (two on real robots' joints), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Next frontiers (2026-10-15): the experiment bench (phase B); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
