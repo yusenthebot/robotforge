@@ -240,14 +240,23 @@ Rounds 1-3 done, 2026-10-14.
 - Floor A5 (MCP App embed in Claude Desktop) and A6 (Claude Code session, blocked by the expired CLI login) are still not verified.
 - No obstacle-aware arm motion, no crawl gait, no terrain policy.
 
+## Round 21 (2026-10-15): any body learns to walk (phase D part 1, Frontier round)
+
+- `control/cpg.py`: `Body.find` (a robot's free trunk and its position-servo hinge joints, any morphology), `Rhythm` (target = home + offset + amplitude sin(2 pi f t + phase), 3 numbers per joint), `Trainer` (rollouts on a private model of the robot alone, reward = distance - 0.5 drift - w energy / (m g) - 1 per fall, ARS with 8 directions both ways, top 4), `RhythmController` for the live world.
+- `learn/walk_rl.py` ("learn_to_walk", RL II): template dog, a three-legged starfish built from parts (no gait code knows it), the template humanoid, and "your robot" when the world the learner came from has one that moves freely with servo joints (file imports skipped). Training runs on a thread; the viewer replays the newest rhythm every 4 s from the start line with the camera following; each training is a learning curve in the record; per-training seeds.
+- Measured (30 rounds, 4 seeds): dog 1.1 to 1.8 m in 4 s (about 11 s of training; 60 rounds pass 2 m), energy 76 to 148 J; energy cost 0.1: 1.0 to 1.4 m on about 50 J; 0.3: 3 of 4 stand still; starfish 0.5 to 0.85 m; humanoid falls every time (open loop).
+- Why a rhythm and not ARS on a linear feedback policy: the ARS paper needed tens of thousands of episodes for MuJoCo walkers; a rhythm with 3 numbers per joint learns in tens of rounds on a laptop and works for any number of legs.
+- Engine guard: a test checks every lesson's controls unlock in some step (this lesson first shipped with Stop, Rounds and Frequency locked forever).
+- What did NOT work (and the fix): the camera framed the dog at the panel edge and the other robots out of view (side on to the active lane now, following); one seed for every training made each setting give the same number every time (per-training seeds, ranges in the text); name tags floated at one height for all bodies.
+
 ## Next-round seed
 
-Round 21 = phase D part 1, a Frontier round: teach a robot the user builds to walk by learning, live in the viewer. Measure first: ARS with linear policies (Mania et al. 2018 trained MuJoCo walkers this way on CPUs) on our quadruped template and a builder-made robot, reward = forward speed minus energy and falls, observation from joint state and IMU; how many minutes to a forward walk on this Mac. If it learns, build a lesson around it (reward shaping knobs, the training curve, the learned gait next to the hand-written one).
+Round 22 = phase D part 2: reflexes for the rhythm, so two legs can try. Add linear feedback from the trunk's tilt and tilt rate to each joint (learned by the same search along with the rhythm), measure whether the template humanoid can stand and step with it, and whether it helps the dog on rough ground. If it works, add it to RL II as a step ("give the rhythm reflexes"); if not after real pushing, record why and move to obstacle-aware arm motion (RRT-Connect lesson).
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 9 lessons (PID on the PiPER, gaits on the Go2, balance on the G1), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (ARS on CPU, live in the viewer); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 10 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
+- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (done in round 21, open loop; next: reflexes); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
