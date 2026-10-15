@@ -466,3 +466,52 @@ async def test_agents_build_and_edit_robots_through_mcp(tmp_path, monkeypatch):
         # mirror copies come from the removed parts, so they go too
         model = playground.session.model
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "dog/right_thigh_1") < 0
+
+
+def test_arm_built_from_parts_with_a_mounted_gripper_picks_and_places(pg):
+    crane = {
+        "base": {"shape": "cylinder", "size": [0.12, 0.04], "fixed": True},
+        "parts": [
+            {
+                "name": "turret",
+                "at": "top",
+                "joint": {"axis": "z", "range": [-180, 180]},
+                "shape": "cylinder",
+                "size": [0.08, 0.04],
+                "direction": "up",
+            },
+            {
+                "name": "upper",
+                "parent": "turret",
+                "at": "end",
+                "joint": {"range": [-100, 100], "home": 20},
+                "size": [0.03, 0.18],
+                "direction": "up",
+            },
+            {
+                "name": "fore",
+                "parent": "upper",
+                "at": "end",
+                "joint": {"range": [-150, 150], "home": 80},
+                "size": [0.025, 0.16],
+                "direction": "up",
+            },
+            {
+                "name": "wrist",
+                "parent": "fore",
+                "at": "end",
+                "joint": {"range": [-150, 150], "home": 80},
+                "size": [0.022, 0.05],
+                "direction": "up",
+            },
+            {"name": "hand", "parent": "wrist", "at": "end", "robot": {"template": "gripper"}},
+        ],
+    }
+    pg.add_robot("crane", build=crane)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.05])
+    pg.add_object("bin", shape="bin", size=[0.14, 0.14, 0.06], pos=[0.0, 0.27], fixed=True)
+    assert pg.behaviors.robots()[0]["kind"] == "arm"
+    arm, placed = pg.behaviors.pick_and_place("crane", "cube", "bin")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
