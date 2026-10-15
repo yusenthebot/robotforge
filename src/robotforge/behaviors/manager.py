@@ -513,12 +513,22 @@ class BehaviorManager:
         if isinstance(existing, RhythmWalker) and existing.walk == walk:
             return existing
         try:
-            ctrl = RhythmWalker(self.session.model, robot, walk, self.home_qpos())
+            ctrl = RhythmWalker(self.session.model, robot, walk, self._walk_home(robot, walk))
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _walk_home(self, robot: str, walk: SavedWalk) -> np.ndarray:
+        """The pose a kept walk swings around when its file does not say (one kept before files said). An MJCF
+        robot's home was then the file's zero pose, its keyframe dropped as the world was built: played around the
+        crouched keyframe instead, a critter's walk went 0.88 m in 4 s instead of 1.25."""
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        if walk.home is None and entry is not None and entry.mjcf_file:
+            return self.session.model.qpos0.copy()
+        return self.home_qpos()
 
     def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
         existing = self.session.controllers.get(robot)

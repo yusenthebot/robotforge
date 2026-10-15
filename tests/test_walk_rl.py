@@ -7,7 +7,7 @@ from importer_fixtures import critter_mjcf, critter_urdf, write
 
 from robotforge.behaviors import rhythm_walk
 from robotforge.behaviors.manager import BehaviorError
-from robotforge.control.cpg import HEADING_WEIGHT, Reward
+from robotforge.control.cpg import HEADING_WEIGHT, Body, Reward
 from robotforge.learn import walk_rl
 from robotforge.playground import Playground
 
@@ -165,6 +165,11 @@ def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg
     assert pg.lessons.ctx.results["kept"]["robot"] == "critter"
     lesson.turning.join(timeout=120)
     assert pg.lessons.ctx.results["kept"]["turns"], pg.lessons.ctx.results["summary"]["en"]
+    kept = rhythm_walk.load_walk(lesson.own[1], "critter")  # the learner's world folder
+    solo = lesson.solo["yours"]
+    body = Body.find(solo, "yours")
+    learned_around = dict(zip(rhythm_walk.joint_names(solo, body), solo.key("home").qpos[body.qadr], strict=True))
+    assert kept.home == pytest.approx(learned_around)  # it says what it learned around
     pg.lessons.exit()
 
     start = pg.behaviors.pose("critter")

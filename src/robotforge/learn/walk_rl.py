@@ -707,9 +707,12 @@ class LearnToWalkLesson(Lesson):
         name, folder = self.own
         rhythm = self.rhythms["yours"]
         assert self.model is not None
+        joints = joint_names(self.model, self.bodies["yours"])
         walk = SavedWalk(
             robot=name,
-            joints=joint_names(self.model, self.bodies["yours"]),
+            joints=joints,
+            # What it learned around, so it plays the same if the world's home pose changes (an MJCF robot's did).
+            home={j: float(v) for j, v in zip(joints, self.homes["yours"], strict=True)},
             freq=rhythm.freq,
             reflexes=rhythm.reflexes,
             theta=[float(v) for v in rhythm.theta],

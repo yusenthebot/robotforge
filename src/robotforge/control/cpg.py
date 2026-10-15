@@ -210,13 +210,27 @@ class TrainingLog:
 class Trainer:
     """Rollouts of one robot alone in its own model (never the live world) and the search over the rhythm."""
 
-    def __init__(self, model: mujoco.MjModel, robot: str, reward: Reward, seconds: float = 4.0, freq: float = 2.0):
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        robot: str,
+        reward: Reward,
+        seconds: float = 4.0,
+        freq: float = 2.0,
+        home: np.ndarray | None = None,
+    ):
         self.model = model
         self.body = Body.find(model, robot)
         self.reward = reward
         self.seconds = seconds
         self.freq = freq
-        self.home = model.key("home").qpos[self.body.qadr].copy() if model.nkey else model.qpos0[self.body.qadr].copy()
+        # The joint angles rhythms swing around (the driven joints'): the model's home pose unless told otherwise.
+        if home is not None:
+            self.home = np.asarray(home, dtype=float).copy()
+        elif model.nkey:
+            self.home = model.key("home").qpos[self.body.qadr].copy()
+        else:
+            self.home = model.qpos0[self.body.qadr].copy()
         self.mass = float(sum(model.body_mass))
         self.substeps = max(1, round(1.0 / (CONTROL_HZ * model.opt.timestep)))
 

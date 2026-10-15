@@ -97,6 +97,11 @@ class RobotEntry(_Strict):
             raise ValueError(f"robot {self.name!r}: pos is [x, y] or [x, y, z]")
         return self
 
+    @property
+    def mjcf_file(self) -> bool:
+        """Whether it comes from an MJCF file of its own (URDF and mesh files go through the import doctor)."""
+        return self.file is not None and not importer.is_importable(self.file)
+
 
 class ObjectEntry(_Strict):
     name: str

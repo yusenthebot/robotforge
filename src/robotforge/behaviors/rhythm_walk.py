@@ -2,8 +2,9 @@
 
 The RL II lesson teaches any freely moving robot a rhythm per joint (control/cpg.py). Keeping one writes
 it to walks/<robot>.json in the world's folder: the rhythm's numbers, the joint each belongs to (without
-the robot's name, so the file does not care what the robot is called in the lesson) and how fast it went.
-From then on `move` and the keyboard drive that robot with it, even when no gait code knows its body.
+the robot's name, so the file does not care what the robot is called in the lesson), the joint angles it swings
+around and how fast it went. From then on `move` and the keyboard drive that robot with it, even when no gait code
+knows its body.
 
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot also
 learns to turn on the spot, one rhythm each way (`learn_turns`), from standing still and right out of its walk,
@@ -66,6 +67,7 @@ class SavedWalk(BaseModel):
     turn_right: list[float] | None = None
     turn_rate: float | None = Field(None, ge=0)  # rad/s, the slower of the two turns
     turns_from_walking: bool = False  # the turns also learned to start right out of the walk (older files: no)
+    home: dict[str, float] | None = None  # joint -> the angle (rad) the rhythms swing around (older files: none)
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -81,6 +83,10 @@ class SavedWalk(BaseModel):
         for side in (self.turn_left, self.turn_right):
             if side is not None and (len(side) != 3 * len(self.joints) or not all(math.isfinite(v) for v in side)):
                 raise ValueError(f"a turn rhythm needs {3 * len(self.joints)} finite numbers")
+        if self.home is not None and (
+            sorted(self.home) != sorted(self.joints) or not all(math.isfinite(v) for v in self.home.values())
+        ):
+            raise ValueError("the home pose needs a finite angle for each of the rhythm's joints and no others")
         return self
 
     @property
@@ -128,14 +134,15 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
     n = body.joints
     in_model_order = [walk.joints.index(j) for j in names]
     forward = Rhythm(_reordered(walk.theta, in_model_order, walk.reflexes), walk.freq, walk.reflexes)
+    home = None if walk.home is None else np.array([walk.home[j] for j in names])  # in the trainer's order
     # Learned only from standing still, a turn asked for mid-stride either waited for the robot to stand still (a
     # 1 s turn right after walking turned the imported A1 16 degrees of the 88 it promised) or started from a
     # pose and speed it never met (3 A1 walks tipped past 45 degrees in 64 of 561 random switches started at once).
     # So half the tries begin out of the walk.
-    walking = Trainer(model, robot, Reward(), walk.seconds, walk.freq).moments(forward, WALK_STARTS)
+    walking = Trainer(model, robot, Reward(), walk.seconds, walk.freq, home=home).moments(forward, WALK_STARTS)
     starts: list[Start | None] = [None] * len(walking) + list(walking)
     for side, sign in (("turn_left", 1.0), ("turn_right", -1.0)):
-        trainer = Trainer(model, robot, Reward(turn=sign), walk.seconds, walk.freq)
+        trainer = Trainer(model, robot, Reward(turn=sign), walk.seconds, walk.freq, home=home)
         # Random search lands somewhere different from every start (one tripod turn came out at 16 deg/s, the
         # next at 87): two starts each way, keeping the one whose worst beginning (standing or walking) is best.
         best: tuple[float, Rhythm, dict[str, float]] | None = None
@@ -222,7 +229,11 @@ class RhythmWalker:
         self.walk = walk
         self.actuators = body.actuators[order]
         self.lower, self.upper = body.lower[order], body.upper[order]
-        self.home = np.asarray(home_qpos)[body.qadr[order]].copy()
+        # The angles the rhythms were learned around: the file's, else the world's home pose.
+        if walk.home is not None:
+            self.home = np.array([walk.home[j] for j in walk.joints])
+        else:
+            self.home = np.asarray(home_qpos)[body.qadr[order]].copy()
         self.rhythms = {"forward": Rhythm(np.array(walk.theta), walk.freq, walk.reflexes)}
         if walk.turns:
             self.rhythms["left"] = Rhythm(np.array(walk.turn_left), walk.freq)

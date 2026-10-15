@@ -70,7 +70,10 @@ def test_a_saved_walk_checks_its_numbers():
         "turn_right": [0.0] * 6,
         "turn_rate": 1.0,
     }
-    assert not SavedWalk.model_validate(kept_before).turns_from_walking  # format 1 files from before still load
+    old = SavedWalk.model_validate(kept_before)  # format 1 files from before still load
+    assert not old.turns_from_walking and old.home is None
+    with pytest.raises(ValidationError, match="home pose"):
+        _walk("crab", ["a", "b"], home={"a": 0.0, "c": 0.0})
 
 
 def test_a_kept_walk_survives_the_round_trip(tmp_path):
@@ -294,3 +297,24 @@ async def test_move_reports_a_half_turn_as_turned_not_wrapped(pg):
         result = await client.call_tool("move", {"robot": "crab", "speed": 0.0, "turn": 0.8, "seconds": seconds})
         turned = _json.loads(result.content[0].text)["turned_deg"]
     assert turned > 180, f"turned {turned} degrees"
+
+
+def test_a_walk_kept_before_files_named_their_home_plays_an_mjcf_robot_as_it_learned(pg):
+    """Regression: an MJCF robot's home keyframe became its home pose, but a walk kept before that was learned around
+    the file's zero pose (the keyframe was dropped then): played around the crouch, a critter's walk went 0.88 m in
+    4 s instead of 1.25. Such files play around the zero pose; files kept now say what they learned around."""
+    from importer_fixtures import CRITTER_HOME, critter_mjcf, write
+
+    write(pg.store.dir / "critter.xml", critter_mjcf())
+    pg.add_robot("critter", file="critter.xml")
+    model = pg.session.model
+    names = joint_names(model, Body.find(model, "critter"))
+    hip, knee = CRITTER_HOME
+    crouch = [hip if j.startswith("hip") else knee for j in names]
+    assert pg.behaviors.home_qpos()[Body.find(model, "critter").qadr] == pytest.approx(crouch)  # the world's home
+    save_walk(pg.store.dir, _walk("critter", names))
+    pg.behaviors.move("critter", 0.2, 0.0, "rhythm")
+    assert pg.session.controllers["critter"].home == pytest.approx(np.zeros(len(names)))
+    save_walk(pg.store.dir, _walk("critter", names, home=dict(zip(names, crouch, strict=True))))
+    pg.behaviors.move("critter", 0.2, 0.0, "rhythm")
+    assert pg.session.controllers["critter"].home == pytest.approx(crouch)
