@@ -74,6 +74,11 @@ def robot_bodies(model: mujoco.MjModel, name: str) -> list[int]:
     return [b for b in range(1, model.nbody) if (model.body(b).name or "").startswith(f"{name}/")]
 
 
+def root_body(model: mujoco.MjModel, name: str) -> int:
+    """The robot's body attached to the world (its base, or its floating trunk)."""
+    return next(b for b in robot_bodies(model, name) if model.body_parentid[b] == 0)
+
+
 # ---- arms: ours, AgileX PiPER, Franka Panda -----------------------------------------------------------
 
 CUBE = (0.25, -0.12)  # m from each arm's base, toward the camera and to its right
@@ -340,6 +345,7 @@ class ArmFaceOff(FaceOff):
                 {
                     **c,
                     "base": [*self.base(i), 0.0],
+                    "body": root_body(model, c["name"]),
                     "top": round(self.facts.get(c["name"], {}).get("top", 0.5), 3),
                     "cloud": self.facts.get(c["name"], {}).get("cloud", []),
                 }
@@ -540,6 +546,433 @@ class ArmFaceOff(FaceOff):
                 ),
             ]
         return {"columns": self.columns(), "rows": rows}
+
+
+# ---- humanoids: ours and the Unitree G1 ------------------------------------------------------------
+
+WALK_SECONDS = 6.0
+START_X = -1.4  # m: the G1 walks about 3 m in the test, which keeps it between the panels
+G1_TEST_SPEED = 0.5  # m/s: well inside what the policy learned, and it stays in view
+PUSH_EVERY = 2.5  # s between shoves
+PUSH_STEP = 0.15  # m/s of sideways kick added per level, the same for both robots
+PUSH_LEVELS = 10
+FALLEN = 0.5  # cosine of the torso's tilt below which a humanoid is down
+GRAVITY = 9.81
+
+
+class HumanoidFaceOff(FaceOff):
+    id = "humanoid_faceoff"
+    chapter = _text("真机对比", "Real robots")
+    title = _text("人形：我们的、Unitree G1", "Humanoids: ours and the Unitree G1")
+    summary = _text(
+        "手写的经典控制器对上强化学习：我们的小人形用 ZMP 预观控制走路，G1 用在仿真里练出来的神经网络。",
+        "A hand-written classic controller against reinforcement learning: our small humanoid walks with ZMP "
+        "preview control, the G1 with a neural network that practised in simulation.",
+    )
+    minutes = 8
+    spacing = 1.6
+    entrants = (
+        Entrant("ours", _text("我们的人形", "Our humanoid"), {"template": "humanoid"}, False, "amber"),
+        Entrant("g1", _text("Unitree G1", "Unitree G1"), {"library": "g1"}, True, "blue"),
+    )
+    controls = (
+        Control("walk", "button", _text("开始行走测试", "Run the walking test")),
+        Control("push", "button", _text("开始推", "Start shoving")),
+    )
+    plots = (
+        Plot(
+            "speed",
+            _text("前进速度", "Forward speed"),
+            "m/s",
+            tuple(Series(e.name, e.label, e.color) for e in entrants),
+            window=12.0,
+        ),
+        Plot(
+            "tilt",
+            _text("身体倾斜", "Body tilt"),
+            "°",
+            tuple(Series(f"{e.name}_tilt", e.label, e.color) for e in entrants),
+            window=12.0,
+        ),
+    )
+    steps = (
+        Step(
+            id="meet",
+            title=_text("两种走路的办法", "Two ways to walk"),
+            body=_text(
+                "左边是我们的模板人形：0.45 米高、不到 2 千克、20 个舵机。它的控制器是人写的：先规划脚落在哪，"
+                "再用“倒立摆”模型和 ZMP（零力矩点）预观控制算出身体该怎么晃，脚才不会翻。\n"
+                "右边是 Unitree G1：1.3 米、33 千克、29 个电机。它的控制器是一个神经网络，没有人告诉它怎么迈步："
+                "UniLab 让 2048 个仿真的 G1 同时练习，练了 2200 轮（这台电脑上约 1 小时），每走稳一步就加分。\n"
+                "看下面的规格表，然后点「下一步」。",
+                "On the left, our template humanoid: 0.45 m tall, under 2 kg, 20 servos. Its controller was written "
+                "by people: it plans where each foot lands, then uses an inverted pendulum model and ZMP (zero moment "
+                "point) preview control to work out how the body must sway so the foot never tips.\nOn the right, the "
+                "Unitree G1: 1.3 m, 33 kg, 29 motors. Its controller is a neural network that nobody told how to "
+                "step: UniLab had 2048 simulated G1s practise at once for 2200 rounds (about an hour on this "
+                "computer), scoring points for every steady step.\nRead the spec table, then press Next.",
+            ),
+            done=_text("", ""),
+            show=("labels",),
+        ),
+        Step(
+            id="walk",
+            title=_text("谁走得好？", "Who walks better?"),
+            body=_text(
+                f"点「开始行走测试」：两台都往前走 {WALK_SECONDS:g} 秒，"
+                f"我们的用它最快的速度，G1 用 {G1_TEST_SPEED:g} 米/秒。\n"
+                "只比“米/秒”不公平：腿长的天生走得快。看表里的“每秒走几个身高”和“弗劳德数”"
+                "（速度²÷(重力×腿长)），它把大小不同的走路者放到同一把尺子上，猫和马都在它约等于 0.5 时从走换成跑。\n"
+                "再看“每米能耗”：同样走一米，谁更省力。",
+                f"Press Run the walking test: both walk forward for {WALK_SECONDS:g} s, ours at its top speed "
+                f"and the G1 at {G1_TEST_SPEED:g} m/s.\n"
+                "Comparing metres per second alone is unfair: long legs walk faster. Look at 'body heights "
+                "per second' and the 'Froude number' (speed squared over gravity times leg length): it puts walkers "
+                "of any size on one scale, and cats and horses alike switch from walking to running near 0.5.\nThen "
+                "look at 'energy per metre': who walks a metre for less effort.",
+            ),
+            done=_text(
+                "按身高折算后，差距比“米/秒”小得多。我们的手写控制器每一步都要先算好再走，所以只敢走得很慢；"
+                "强化学习的策略在几千次摔倒里学会了一边走一边接住自己，所以走得又快又自然。代价是：要先在仿真里练一个小时，"
+                "而且它为什么这么迈步，没有人能一行一行地解释。",
+                "Scaled by size, the gap is much smaller than in metres per second. Our hand-written controller "
+                "plans every step before taking it, so it only dares to walk slowly; the reinforcement learning "
+                "policy learned over thousands of falls to catch itself as it goes, so it walks faster and more "
+                "naturally. The price: an hour of practice in simulation first, and nobody can explain line by "
+                "line why it steps the way it does.",
+            ),
+            check=lambda ctx: "walk" in ctx.results,
+            unlock=("walk",),
+            show=("labels",),
+        ),
+        Step(
+            id="push",
+            title=_text("推一推", "Give them a shove"),
+            body=_text(
+                "点「开始推」：每 2.5 秒，两台被同样大小的侧向速度踢一下，一次比一次猛，倒了就出局。"
+                "看谁扛过的级数多，再看倾斜曲线：谁晃得少、回得快。",
+                "Press Start shoving: every 2.5 s both get the same sideways kick, harder each time; a fall puts a "
+                "robot out. See who survives more levels, and in the tilt plot who sways less and recovers faster.",
+            ),
+            done=_text(
+                "两台都只扛了几级，因为谁都没专门练过被推。我们的控制器只会用脚踝和髋关节把身体扭回来，不会临时迈步；"
+                "G1 的策略训练时没被中途推过，只是每一局开始时带着随机的初速度（最多 0.5 米/秒），"
+                "所以学会了从晃动里站稳，"
+                "但没学会接住猛推。想让它更抗推，就在训练里加上随机推力：这叫域随机化，是让仿真里学到的本事在现实中也管用的关键。",
+                "Neither lasts many levels, because neither practised being shoved. Our controller only twists its "
+                "body back with its ankles and hips and never takes an unplanned step; the G1's policy was never "
+                "pushed mid-run in training, it only started each run with a random velocity (up to 0.5 m/s), so it "
+                "learned to steady itself from a wobble but not to catch a hard shove. To make it tougher, add random "
+                "shoves to training: that is domain randomization, the key to skills learned in simulation working "
+                "in the real world.",
+            ),
+            check=lambda ctx: "push" in ctx.results,
+            unlock=("push",),
+            show=("labels",),
+        ),
+        Step(
+            id="how",
+            title=_text("它是怎么学会的？", "How did it learn?"),
+            body=_text("想一想 G1 的走路是怎么来的。", "Think about where the G1's walk came from."),
+            done=_text("", ""),
+            quiz=Quiz(
+                question=_text("G1 的行走策略是怎么得到的？", "How did the G1 get its walking policy?"),
+                options=(
+                    _text("工程师写好了每一步怎么迈", "Engineers wrote down how to take every step"),
+                    _text(
+                        "在仿真里反复试错，做得好就加分", "Trial and error in simulation, scoring points for good moves"
+                    ),
+                    _text("看了很多人类走路的视频", "It watched lots of videos of people walking"),
+                ),
+                answer=1,
+                explain=_text(
+                    "对，这就是强化学习：奖励“按指令的速度走、身体不倒、动作别太猛”，几千个仿真机器人一起试，"
+                    "网络慢慢学会了什么动作能拿高分。前面强化学习那一课的倒立摆，用的是同一个思路。",
+                    "Right, that is reinforcement learning: reward walking at the commanded speed, staying upright and "
+                    "moving smoothly, let thousands of simulated robots try at once, and the network slowly learns "
+                    "which moves score well. The cart-pole in the reinforcement learning lesson used the same idea.",
+                ),
+            ),
+        ),
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.facts: dict[str, dict[str, Any]] = {}
+        self.missing: dict[str, str] = {}  # robot -> why it has no walking controller
+        self.runs: dict[str, dict[str, Any]] = {}
+        self.test: str | None = None  # "walk" or "push" while one runs
+        self.samples: deque[dict[str, float]] = deque(maxlen=2048)
+        self.next_sample = 0.0
+        self.last_time = 0.0
+
+    def base(self, index: int) -> tuple[float, float]:
+        _, y = super().base(index)
+        return START_X, y  # they walk toward +x, so the test happens in the middle of the view
+
+    def camera(self) -> dict[str, list[float]]:
+        return {"eye": [0.2, -5.6, 1.8], "target": [0.1, 0.0, 0.5]}
+
+    def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
+        return {
+            "kind": "faceoff",
+            "entrants": [
+                {
+                    **c,
+                    "base": [*self.base(i), 0.0],
+                    "body": root_body(model, c["name"]),
+                    "top": round(self.facts.get(c["name"], {}).get("top", 1.0), 3),
+                    "cloud": [],
+                }
+                for i, c in enumerate(self.columns())
+            ],
+            "targets": [],
+        }
+
+    def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        self.runs, self.test = {}, None
+        for e in self.entrants:
+            if e.name not in self.facts:
+                self.facts[e.name] = self._facts(model, data, e.name)
+            try:
+                self.playground.behaviors.move(e.name, 0.0, 0.0)  # stand, balancing, from the first moment
+            except BehaviorError as exc:
+                self.missing[e.name] = str(exc)
+        return {}
+
+    def _facts(self, model: mujoco.MjModel, data: mujoco.MjData, name: str) -> dict[str, Any]:
+        mujoco.mj_forward(model, data)
+        bodies = robot_bodies(model, name)
+        geoms = [g for g in range(model.ngeom) if model.geom_bodyid[g] in bodies]
+        top = max(_geom_top(model, data, g) for g in geoms)
+        root = root_body(model, name)
+        return {
+            "top": top,
+            "height": top,  # standing on the floor, its highest point is its height
+            "mass": float(sum(model.body_mass[b] for b in bodies)),
+            "motors": sum(1 for a in range(model.nu) if (model.actuator(a).name or "").startswith(f"{name}/")),
+            "leg": float(data.xpos[root][2]),  # hip height: the leg length the Froude number uses
+            "root": root,
+        }
+
+    def _top_speed(self, name: str) -> float:
+        if name == "g1":
+            return G1_TEST_SPEED
+        info = next((r for r in self.playground.behaviors.robots() if r["name"] == name), {})
+        return float(info.get("max_speed") or 0.1)
+
+    # ---- the tests ------------------------------------------------------------------------------
+
+    def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
+        if control not in ("walk", "push") or self.test is not None:
+            return
+        self.test = control
+        self.runs = {}
+        for e in self.entrants:
+            root = self.facts[e.name]["root"]
+            run: dict[str, Any] = {"start": float(data.time), "end": None, "x0": float(data.xpos[root][0])}
+            if e.name in self.missing:
+                run.update(end=float(data.time), skipped=self.missing[e.name])
+            elif control == "walk":
+                run.update(speed=self._top_speed(e.name), energy=0.0, fell=False)
+                self.playground.behaviors.move(e.name, run["speed"], 0.0)
+            else:
+                run.update(level=0, survived=0)
+            self.runs[e.name] = run
+        if control == "push":
+            self.next_push = float(data.time) + 1.0
+            self.level = 0
+        self.last_time = float(data.time)
+
+    def _tilt(self, data: mujoco.MjData, root: int) -> float:
+        return math.degrees(math.acos(max(-1.0, min(1.0, float(data.xmat[root][8])))))
+
+    def _step_walk(self, name: str, run: dict[str, Any], model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        dt = float(data.time) - self.last_time
+        acts = [a for a in range(model.nu) if (model.actuator(a).name or "").startswith(f"{name}/")]
+        power = float(np.sum(np.abs(data.actuator_force[acts] * data.actuator_velocity[acts])))
+        run["energy"] += power * max(0.0, dt)
+        root = self.facts[name]["root"]
+        run["fell"] = run["fell"] or float(data.xmat[root][8]) < FALLEN
+        if data.time - run["start"] >= WALK_SECONDS or run["fell"]:
+            run["end"] = float(data.time)
+            run["distance"] = float(data.xpos[root][0]) - run["x0"]
+            self.playground.behaviors.move(name, 0.0, 0.0)
+
+    def _step_push(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        for name, run in self.runs.items():
+            if run["end"] is None and float(data.xmat[self.facts[name]["root"]][8]) < FALLEN:
+                run["end"] = float(data.time)
+                run["survived"] = max(0, self.level - 1)
+        if data.time < self.next_push or all(r["end"] is not None for r in self.runs.values()):
+            return
+        if self.level >= PUSH_LEVELS:
+            for run in self.runs.values():
+                if run["end"] is None:
+                    run["end"], run["survived"] = float(data.time), PUSH_LEVELS
+            return
+        self.level += 1
+        side = 1.0 if self.level % 2 else -1.0
+        for name, run in self.runs.items():
+            if run["end"] is None:
+                dof = int(model.jnt_dofadr[model.body_jntadr[self.facts[name]["root"]]])
+                data.qvel[dof + 1] += side * PUSH_STEP * self.level  # the same sideways kick for both
+                run["level"] = self.level
+        self.next_push = float(data.time) + PUSH_EVERY
+
+    def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        point: dict[str, float] = {"t": float(data.time)}
+        for e in self.entrants:
+            root = self.facts[e.name]["root"]
+            point[e.name] = _forward_speed(model, data, root)
+            point[f"{e.name}_tilt"] = self._tilt(data, root)
+        if self.test == "walk":
+            for name, run in self.runs.items():
+                if run["end"] is None:
+                    self._step_walk(name, run, model, data)
+        elif self.test == "push":
+            self._step_push(model, data)
+        self.last_time = float(data.time)
+        if data.time >= self.next_sample:
+            self.next_sample = float(data.time) + 0.05
+            self.samples.append(point)
+        if self.test is not None and all(r["end"] is not None for r in self.runs.values()):
+            ctx.results[self.test] = {name: self._result(name, run) for name, run in self.runs.items()}
+            self.test = None
+        return {"table": self.table(ctx), "readout": self._readout()}
+
+    def _result(self, name: str, run: dict[str, Any]) -> dict[str, Any]:
+        if "skipped" in run:
+            return {"skipped": run["skipped"]}
+        if "survived" in run:
+            return {"levels": run["survived"]}
+        f = self.facts[name]
+        seconds = max(1e-6, run["end"] - run["start"])
+        distance = max(0.0, run.get("distance", 0.0))
+        speed = distance / seconds
+        return {
+            "distance": round(distance, 2),
+            "speed": round(speed, 3),
+            "heights_per_s": round(speed / f["height"], 2),
+            "froude": round(speed**2 / (GRAVITY * f["leg"]), 3),
+            "cost_of_transport": round(run["energy"] / (f["mass"] * GRAVITY * distance), 2)
+            if distance > 0.05
+            else None,
+            "fell": run["fell"],
+        }
+
+    def _readout(self) -> Text:
+        if self.test == "walk":
+            return _text("正在走……", "Walking...")
+        if self.test == "push":
+            return _text(f"第 {self.level} 级", f"level {self.level}")
+        return _text("", "")
+
+    def drain_samples(self) -> list[dict[str, float]]:
+        out = list(self.samples)
+        self.samples.clear()
+        return out
+
+    def table(self, ctx: LessonContext) -> dict[str, Any]:
+        names = [e.name for e in self.entrants]
+        facts = [self.facts.get(n, {}) for n in names]
+        rows: list[dict[str, Any]] = [
+            {"heading": _text("规格（从模型算出）", "Specs (from the models)")},
+            _row(_text("身高", "Height"), [f"{f.get('height', 0):.2f} m" for f in facts], None),
+            _row(_text("质量", "Mass"), [f"{f.get('mass', 0):.1f} kg" for f in facts], None),
+            _row(_text("电机", "Motors"), [str(f.get("motors", 0)) for f in facts], None),
+            _row(_text("走路的控制器", "Walking controller"), [self._controller(n) for n in names], None),
+            _row(_text("来源", "Source"), [_source(e) for e in self.entrants], None),
+        ]
+        walk = ctx.results.get("walk")
+        if walk:
+            got = [walk[n] for n in names]
+            ok = ["skipped" not in r for r in got]
+            rows += [
+                {"heading": _text(f"行走测试（{WALK_SECONDS:g} 秒）", f"Walking test ({WALK_SECONDS:g} s)")},
+                _row(
+                    _text("走了多远", "Distance"),
+                    [f"{r['distance']:.2f} m" if k else "-" for r, k in zip(got, ok, strict=True)],
+                    None,
+                ),
+                _row(
+                    _text("速度", "Speed"),
+                    [f"{r['speed']:.2f} m/s" if k else "-" for r, k in zip(got, ok, strict=True)],
+                    [r["speed"] if k else -1 for r, k in zip(got, ok, strict=True)],
+                ),
+                _row(
+                    _text("每秒几个身高", "Body heights per second"),
+                    [f"{r['heights_per_s']:.2f}" if k else "-" for r, k in zip(got, ok, strict=True)],
+                    [r["heights_per_s"] if k else -1 for r, k in zip(got, ok, strict=True)],
+                ),
+                _row(
+                    _text("弗劳德数", "Froude number"),
+                    [f"{r['froude']:.3f}" if k else "-" for r, k in zip(got, ok, strict=True)],
+                    None,
+                ),
+                _row(
+                    _text("每米能耗", "Energy per metre"),
+                    [_cot(r) if k else "-" for r, k in zip(got, ok, strict=True)],
+                    [
+                        r["cost_of_transport"] if k and r["cost_of_transport"] is not None else math.inf
+                        for r, k in zip(got, ok, strict=True)
+                    ],
+                    high=False,
+                ),
+                _row(
+                    _text("摔倒", "Fell"),
+                    [
+                        (_text("摔了", "yes") if r["fell"] else _text("没有", "no")) if k else "-"
+                        for r, k in zip(got, ok, strict=True)
+                    ],
+                    None,
+                ),
+            ]
+        push = ctx.results.get("push")
+        if push:
+            got = [push[n] for n in names]
+            rows += [
+                {"heading": _text("推的测试", "Shove test")},
+                _row(
+                    _text("扛过的级数", "Levels survived"),
+                    [str(r["levels"]) if "levels" in r else "-" for r in got],
+                    [r.get("levels", -1) for r in got],
+                ),
+            ]
+        return {"columns": self.columns(), "rows": rows}
+
+    def _controller(self, name: str) -> Text:
+        if name in self.missing:
+            return _text(
+                "没有行走策略（用 UniLab 训练 g1_walk_flat）", "no walking policy (train g1_walk_flat in UniLab)"
+            )
+        if name == "g1":
+            return _text("强化学习策略（UniLab PPO）", "reinforcement learning policy (UniLab PPO)")
+        return _text("ZMP 预观控制（手写）", "ZMP preview control (hand-written)")
+
+
+def _forward_speed(model: mujoco.MjModel, data: mujoco.MjData, root: int) -> float:
+    """The root body's velocity along its own forward axis (its x), in m/s."""
+    vel = np.zeros(6)
+    mujoco.mj_objectVelocity(model, data, mujoco.mjtObj.mjOBJ_BODY, root, vel, 0)  # world frame
+    forward = data.xmat[root].reshape(3, 3)[:, 0].copy()
+    forward[2] = 0.0
+    norm = float(np.linalg.norm(forward))
+    return float(vel[3:] @ forward / norm) if norm > 1e-6 else 0.0
+
+
+def _geom_top(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> float:
+    """Highest world z of a geom's bounding box (tighter than its bounding sphere)."""
+    center, half = model.geom_aabb[geom, :3], model.geom_aabb[geom, 3:]
+    corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]) * half + center
+    world = corners @ data.geom_xmat[geom].reshape(3, 3).T + data.geom_xpos[geom]
+    return float(world[:, 2].max())
+
+
+def _cot(result: dict[str, Any]) -> Text | str:
+    if result["cost_of_transport"] is None:
+        return "-"
+    return f"{result['cost_of_transport']:.2f}"
 
 
 def _source(entrant: Entrant) -> Text:

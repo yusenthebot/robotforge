@@ -88,9 +88,10 @@ Learning path: lessons lists nine short beginner lessons (joints, driving, gaits
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
 "第三课"), call lessons(number) and follow its plan.
 The viewer also has hands-on lessons behind its Learn button (学习): PID control, inverse kinematics,
-sensors and reinforcement learning (a cart-pole trains live), plus challenges with stars (maze escape,
-shove survival, obstacle course). Each is a guided experiment with live plots and checks; suggest them to
-beginners who want to understand how robots work: open the viewer (open_viewer) and press Learn.
+sensors and reinforcement learning (a cart-pole trains live), real-robot face-offs (our arm next to the
+AgileX PiPER and Franka Panda; our humanoid next to the Unitree G1), plus challenges with stars (maze
+escape, shove survival, obstacle course). Each is a guided experiment with live plots and checks; suggest
+them to beginners who want to understand how robots work: open the viewer (open_viewer) and press Learn.
 
 Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
@@ -179,9 +180,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     def list_library() -> str:
         """List real, well-known robots that add_robot(library=...) can load: Unitree Go2 and other robot
         dogs (they walk with move and the keyboard), arms like the Franka Panda and AgileX PiPER (move_arm
-        and pick_and_place work on them), and humanoids (stand only). The first add_robot of each one
-        downloads it from MuJoCo Menagerie (download_mb: Go2 31 MB, Spot 55 MB, PiPER 35 MB, SO-ARM100
-        4 MB; usually 5-30 s) and caches it; after that it loads instantly."""
+        and pick_and_place work on them), and the Unitree G1 humanoid (walks with a learned policy). The
+        first add_robot of each one downloads it from MuJoCo Menagerie (download_mb: Go2 31 MB, Spot 55 MB,
+        PiPER 35 MB, SO-ARM100 4 MB; usually 5-30 s) and caches it; after that it loads instantly."""
         from robotforge.design import library
 
         with _tool_errors():

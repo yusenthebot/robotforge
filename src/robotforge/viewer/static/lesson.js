@@ -1049,11 +1049,13 @@ function faceoffRig(rig) {
   const targets = new THREE.Group();
   const amber = api.color("--amber");
   const balls = [];
+  const tags = [];
   rig.entrants.forEach((e, i) => {
     const color = api.color(COLORS[e.color]);
     const tag = nameTag(pick(e.label), t(e.real ? "real_robot" : "our_template"), color);
     tag.position.set(e.base[0], e.base[1], e.top + 0.12);
     labels.add(tag);
+    tags.push([tag, e]);
     if (e.cloud.length) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(e.cloud.flat(), 3));
@@ -1084,6 +1086,10 @@ function faceoffRig(rig) {
     group,
     parts,
     frame() {
+      for (const [tag, e] of tags) {
+        const node = e.body !== undefined ? api.bodyNode(e.body) : null;
+        if (node) tag.position.set(node.position.x, node.position.y, e.top + 0.12); // walking robots take theirs along
+      }
       workspace.visible = (state.values.workspace ?? 0) >= 1;
       const active = state.live?.active ?? [];
       balls.forEach((row, i) =>

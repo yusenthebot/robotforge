@@ -126,3 +126,50 @@ def test_real_arms_all_place_their_cubes(pg):
     _to_pick(pg)
     race = _run(pg, "pick")["results"]["pick"]
     assert all(race[name]["success"] for name in ("ours", "piper", "panda"))
+
+
+# ---- humanoids: ours and the Unitree G1 on its shipped learned policy --------------------------------
+
+
+@pytest.fixture
+def humanoids(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(FIXTURES))
+    playground = Playground.with_demo()
+    playground.lessons.start("humanoid_faceoff")
+    return playground
+
+
+def test_the_g1_walks_straight_on_its_learned_policy(humanoids):
+    pg = humanoids
+    root = pg.lessons.lesson.facts["g1"]["root"]
+    data = pg.session.data
+    assert pg.behaviors.kind("g1").value == "humanoid"  # from the catalog: its joints are not named like ours
+    _play(pg, 2.0)
+    start = data.xpos[root].copy()
+    pg.behaviors.move("g1", 0.5, 0.0)
+    _play(pg, 6.0)
+    moved = data.xpos[root] - start
+    assert moved[0] > 2.5  # about 0.5 m/s
+    assert abs(moved[1]) < 0.3  # the heading hold keeps "straight" straight
+    assert data.xmat[root][8] > 0.9
+
+
+def test_a_hand_written_walk_against_a_learned_one(humanoids):
+    pg = humanoids
+    assert not pg.lessons.lesson.missing  # both robots have a walking controller
+    _play(pg, 1.0)
+    pg.lessons.handle({"action": "next"})
+    walk = _run(pg, "walk")["results"]["walk"]
+    ours, g1 = walk["ours"], walk["g1"]
+    assert not ours["fell"] and not g1["fell"]
+    assert g1["speed"] > 4 * ours["speed"]  # much faster in metres per second...
+    assert g1["heights_per_s"] < 2 * ours["heights_per_s"]  # ...far less so for its size
+    assert g1["cost_of_transport"] < ours["cost_of_transport"]
+    _play(pg, 0.2)
+    pg.lessons.handle({"action": "next"})
+    update = _run(pg, "push")
+    shoves = update["results"]["push"]
+    assert shoves["ours"]["levels"] >= 2 and shoves["g1"]["levels"] >= 2
+    _play(pg, 0.2)
+    assert {"Froude number", "Levels survived"} <= set(_rows(update))

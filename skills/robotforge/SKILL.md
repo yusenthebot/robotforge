@@ -79,7 +79,7 @@ Report real numbers, including disappointing ones.
 `lessons()` lists nine beginner lessons; `lessons(number)` returns one lesson's plan: ideas to teach, tool steps, checks and a closing challenge.
 Follow the plan and adapt it to the learner. MCP clients with prompt support also list them as prompts `lesson_1` to `lesson_9`, plus `start`.
 
-The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, sensors and reinforcement learning (a cart-pole trains live), plus challenges with stars (maze escape, shove survival, obstacle course).
+The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, sensors and reinforcement learning (a cart-pole trains live), real-robot face-offs (our arm next to the AgileX PiPER and Franka Panda, our humanoid next to the Unitree G1), plus challenges with stars (maze escape, shove survival, obstacle course).
 Each is a guided experiment with live plots, quizzes and checks that run on the physics, and it works without you.
 When a beginner wants to understand how robots work, open the viewer and suggest one; afterwards, offer to build on it in their own world.
 
