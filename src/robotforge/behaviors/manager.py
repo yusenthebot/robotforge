@@ -136,15 +136,20 @@ class BehaviorManager:
         names = (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or "" for a in range(m.nu))
         return {n.split("/", 1)[0] for n in names if "/" in n}
 
+    def _names(self, world: World | None) -> list[str]:
+        return [r.name for r in world.robots] if world else sorted(self._prefixes())
+
     def robot_names(self) -> list[str]:
         """The robots by name: the open world's, else those a loaded model names with a prefix."""
-        world = self._world()
-        return [r.name for r in world.robots] if world else sorted(self._prefixes())
+        return self._names(self._world())
 
     def resolve(self, robot: str) -> str:
         """The robot `robot` means: spelled exactly, in other capitals or as "the dog"; "Rover/Arm" for an arm
         mounted on a robot. Raises BehaviorError listing the robots when there is no such one."""
-        names = self.robot_names()
+        return self._resolve(robot, self._world())
+
+    def _resolve(self, robot: str, world: World | None) -> str:
+        names = self._names(world)
         owner, slash, part = robot.partition("/")
         found = wording.match(owner, names)
         if found is None:
@@ -154,8 +159,8 @@ class BehaviorManager:
         return wording.match(robot, self.arms(found)) or f"{found}/{part}"  # a wrong part is named by _arm_name
 
     def kind(self, robot: str) -> Kind:
-        robot = self.resolve(robot).split("/", 1)[0]  # an arm on a robot is part of the robot
-        world = self._world()
+        world = self._world()  # read once: it comes from the file
+        robot = self._resolve(robot, world).split("/", 1)[0]  # an arm on a robot is part of the robot
         if world is not None:
             entry = next(r for r in world.robots if r.name == robot)
             return robot_kind(self.session.model, robot, _told_kind(entry))

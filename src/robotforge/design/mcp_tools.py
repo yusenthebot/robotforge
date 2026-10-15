@@ -64,16 +64,18 @@ def register(server: MCPServer, playground: Playground) -> None:
         style: StyleName | None = None,
         params: dict[str, Any] | None = None,
     ) -> str:
-        """Lay a terrain patch on the floor, centered at pos [x, y] and turned by yaw degrees. Stairs and ramps
-        climb along the patch's own +x. Types and their main params (meters, degrees):
-          hills  {"size": [6, 6], "height": 0.25, "scale": 1.5, "seed": 0}   smooth rolling hills
-          rough  {"size": [3, 3], "height": 0.03, "scale": 0.25, "seed": 0}  small bumps
+        """Lay a terrain patch on the floor, centered at pos [x, y] and turned by yaw degrees. Stairs and ramps climb
+        along the patch's own +x. Types and their main params (meters, degrees):
+
+          hills {"size": [6, 6], "height": 0.25, "scale": 1.5, "seed": 0} smooth rolling hills
+          rough {"size": [3, 3], "height": 0.03, "scale": 0.25, "seed": 0} small bumps
           stairs {"steps": 4, "step_height": 0.05, "step_depth": 0.3, "width": 1.2, "direction": "up_down"}
-          ramp   {"angle": 10, "length": 1.5, "width": 1.2, "direction": "up_down", "landing": 0.8}
-          stones {"size": [2.4, 1.2], "stone": 0.25, "gap": 0.08, "height": 0.08}  stepping stones
-          curb   {"size": [0.15, 2.0], "height": 0.06};  platform {"size": [1, 1], "height": 0.1}
-        Example: add_terrain("ramp", pos=[2, 0], params={"angle": 15}). style is the look and grip (grass, dirt,
-        sand, rock, snow is slippery, concrete, wood, tile). The result notes each patch's extent and slope."""
+          ramp {"angle": 10, "length": 1.5, "width": 1.2, "direction": "up_down", "landing": 0.8}
+          stones {"size": [2.4, 1.2], "stone": 0.25, "gap": 0.08, "height": 0.08} stepping stones
+          curb {"size": [0.15, 2.0], "height": 0.06}; platform {"size": [1, 1], "height": 0.1}
+
+        Example: add_terrain("ramp", pos=[2, 0], params={"angle": 15}). style is the look and grip (grass, dirt, sand,
+        rock, snow is slippery, concrete, wood, tile). The result notes each patch's extent and slope."""
         with _tool_errors():
             return _json(playground.add_terrain(type, name, pos, yaw, style, params))
 

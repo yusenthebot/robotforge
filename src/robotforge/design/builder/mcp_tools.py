@@ -46,7 +46,7 @@ def register(server: MCPServer, playground: Playground) -> None:
         material, servo, motor, linear, servo_caps). Copies made by mirror or repeat follow their source.
 
         Examples: update_part(robot="dog", part="left_thigh", changes={"size": [0.022, 0.15], "joint": {"home":
-        50}}) update_part(robot="dog", part="robot", changes={"servo": "xl430"})"""
+        50}}); update_part(robot="dog", part="robot", changes={"servo": "xl430"})"""
         with _tool_errors():
             return _json(await asyncio.to_thread(playground.update_part, robot, part, changes))
 
