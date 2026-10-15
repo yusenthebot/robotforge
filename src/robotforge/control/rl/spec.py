@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from robotforge import wording
 from robotforge.control.env import RobotEnv, compile_task_world
 from robotforge.control.tasks import TASKS, Task, TaskError, make_task
 from robotforge.control.tasks.base import readable
@@ -100,7 +101,7 @@ class TrainSpec(BaseModel):
     @model_validator(mode="after")
     def _fits(self) -> TrainSpec:
         if self.task not in TASKS:
-            raise ValueError(f"unknown task {self.task!r}; choose one of: {', '.join(TASKS)}")
+            raise ValueError(f"unknown task {wording.short(self.task)}; choose one of: {', '.join(TASKS)}")
         if not self.net or any(not 1 <= n <= 1024 for n in self.net) or len(self.net) > 4:
             raise ValueError("net is 1 to 4 layer sizes between 1 and 1024, e.g. [64, 64]")
         return self
@@ -127,7 +128,7 @@ def make_spec(
 ) -> TrainSpec:
     """A complete spec from what the user said plus the task's defaults."""
     if task not in DEFAULTS:
-        raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULTS)}")
+        raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULTS)}")
     d = DEFAULTS[task]
     algo = algo or d.algo
     if algo not in ("ppo", "sac"):

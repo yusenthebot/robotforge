@@ -37,8 +37,8 @@ class _Strict(BaseModel):
 def _check_name(value: str) -> str:
     if not NAME_RE.match(value):
         raise ValueError(
-            f"{value!r} must use lowercase letters, digits and _, start with a letter and have at most 32 characters, "
-            "e.g. 'red_cube'"
+            f"{wording.short(value)} must use lowercase letters, digits and _, start with a letter and have at most "
+            "32 characters, e.g. 'red_cube'"
         )
     return value
 

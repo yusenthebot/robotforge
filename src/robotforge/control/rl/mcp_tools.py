@@ -174,7 +174,7 @@ def _tool_errors() -> Iterator[None]:
 def _robot_spec(playground: Playground, task: str, robot: str | None) -> tuple[dict[str, Any], dict, list[str]]:
     """The robot as world.yaml describes it (template, library or file, params, pose) and the floor."""
     if task not in DEFAULT_ROBOTS:
-        raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
+        raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, default_name = DEFAULT_ROBOTS[task]
     world = playground.current_world()
     if world is None:

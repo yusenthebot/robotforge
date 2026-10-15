@@ -45,7 +45,7 @@ def get(name: str) -> Template:
     if found is None:
         close = wording.near(name, TEMPLATES, NICKNAMES)
         hint = f" Did you mean {', '.join(close)}?" if close else ""
-        raise ValueError(f"unknown template {name!r}.{hint} Templates: {', '.join(TEMPLATES)}")
+        raise ValueError(f"unknown template {wording.short(name)}.{hint} Templates: {', '.join(TEMPLATES)}")
     return TEMPLATES[found]
 
 

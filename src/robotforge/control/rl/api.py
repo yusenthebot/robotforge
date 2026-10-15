@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from robotforge import wording
 from robotforge.control.env import DEFAULT_ROBOTS
 from robotforge.control.rl import store
 from robotforge.control.rl.jobs import JOBS
@@ -59,7 +60,7 @@ def train(
     (default $ROBOTFORGE_HOME/policies/<name>); an existing policy of that name is only overwritten
     with replace=True."""
     if task not in DEFAULT_ROBOTS:
-        raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
+        raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, robot = DEFAULT_ROBOTS[task]
     place = Path(save_dir) if save_dir is not None else store.policies_home(None)
     spec = make_spec(

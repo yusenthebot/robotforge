@@ -99,7 +99,9 @@ def _find(build: dict[str, Any], name: str) -> dict[str, Any]:
         )
     close = wording.near(name, names)
     hint = f" Did you mean {', '.join(close)}?" if close else ""
-    raise ValueError(f"no part named {name!r}.{hint} Parts: {', '.join(names) or 'none'} (and base, robot)")
+    raise ValueError(
+        f"no part named {wording.short(name)}.{hint} Parts: {', '.join(names) or 'none'} (and base, robot)"
+    )
 
 
 def _copied_from(build: dict[str, Any]) -> dict[str, str]:

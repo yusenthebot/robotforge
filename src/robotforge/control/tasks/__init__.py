@@ -6,6 +6,7 @@ from typing import Any
 
 import mujoco
 
+from robotforge import wording
 from robotforge.control.tasks.balance import Balance
 from robotforge.control.tasks.base import Batch, Robot, StateLayout, Task, TaskError, TaskParams
 from robotforge.control.tasks.drive import DriveTo
@@ -21,7 +22,7 @@ def make_task(name: str, model: mujoco.MjModel, robot: str, params: dict[str, An
     try:
         cls = TASKS[name]
     except KeyError:
-        raise TaskError(f"unknown task {name!r}; choose one of: {', '.join(TASKS)}") from None
+        raise TaskError(f"unknown task {wording.short(name)}; choose one of: {', '.join(TASKS)}") from None
     if cls is Balance and WheelBalance.fits(model, robot):  # a two-wheeled robot balances on its wheels
         cls = WheelBalance
     return cls(model, robot, params)

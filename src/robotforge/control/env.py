@@ -23,6 +23,7 @@ import mujoco
 import numpy as np
 from pydantic import ValidationError
 
+from robotforge import wording
 from robotforge.control.actuation import ActionScale
 from robotforge.control.methods import make_controller
 from robotforge.control.spaces import Box
@@ -221,7 +222,7 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
     from robotforge.design.world import World
 
     if task not in DEFAULT_ROBOTS:
-        raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
+        raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, robot = DEFAULT_ROBOTS[task]
     template = robot_template or template
     from robotforge.design import templates

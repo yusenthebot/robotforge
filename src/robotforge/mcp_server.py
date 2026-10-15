@@ -745,7 +745,8 @@ def _script_path(world_dir: Path, name: str) -> Path:
     stem = wording.squash(name[:-3] if name.lower().endswith(".py") else name)  # "Pick Cube" is pick_cube
     if not SCRIPT_NAME.match(stem):
         raise PlaygroundError(
-            f"script name {name!r} must use lowercase letters, digits and _, start with a letter, e.g. pick_cube"
+            f"script name {wording.short(name)} must use lowercase letters, digits and _, start with a letter, "
+            "e.g. pick_cube"
         )
     return world_dir / "behaviors" / f"{stem}.py"
 

@@ -56,7 +56,8 @@ def policies_home(world_dir: Path | None) -> Path:
 def check_name(name: str) -> str:
     if not isinstance(name, str) or not NAME_RE.fullmatch(name) or name in WINDOWS_RESERVED:
         raise TaskError(
-            f"policy names use lowercase letters, digits and _, start with a letter (e.g. pole_ppo), got {name!r}"
+            "policy names use lowercase letters, digits and _, start with a letter (e.g. pole_ppo), "
+            f"got {wording.short(name)}"
         )
     return name
 

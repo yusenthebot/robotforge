@@ -320,7 +320,10 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("set_controls", {"controls": {"wing": 1}}, ["no actuator named 'wing'", "Names look like", "describe_model"]),
         ("simulate", {"seconds": 500}, ["seconds must be in (0, 60]", "got 500", "not milliseconds"]),
         ("simulate", {"seconds": 61}, ["seconds must be in (0, 60], got 61"]),
+        ("observe", {"include_image": []}, ["include_image must be true or false", "got []"]),
+        ("load_scene", {"preset": "maze", "keep_robots": {}}, ["keep_robots must be true or false", "got {}"]),
         ("update_robot", {"name": "dog", "build": {}}, ["build={} would remove every part", "leave build out"]),
+        ("simulate", {"seconds": 100}, ["seconds must be in (0, 60], got 100"]),
         ("sim_control", {"action": "stop"}, ["action", "'stop'", "play, pause, reset"]),
         ("observe", {"view": "sideways"}, ["unknown view 'sideways'", "Views:", "front", "overview"]),
         ("observe", {"view": "front", "width": 0}, ["image size 0x480 is out of range", "each at least 16"]),
@@ -404,6 +407,22 @@ async def test_an_empty_build_beside_a_change_keeps_every_part_of_a_built_robot(
     await lab.restore()
 
 
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        ("move", {"robot": "x" * 3000}),
+        ("stop", {"robot": "x" * 3000}),
+        ("remove", {"name": "x" * 3000}),
+        ("update_robot", {"name": "x" * 3000, "pos": [1, 1]}),
+        ("update_object", {"name": "x" * 3000, "pos": [1, 1]}),
+        ("update_terrain", {"name": "x" * 3000, "yaw": 3}),
+    ],
+)
+async def test_an_unknown_name_is_echoed_in_a_few_words_not_in_full(lab, tool, args):
+    text = await lab.refused(tool, **args)
+    assert "no " in text and "xxxxxxxx..." in text and len(text) < 300, len(text)
+
+
 def test_a_value_tidy_cannot_read_goes_on_as_given(monkeypatch, caplog):
     def broken(name, value, prop):
         raise RuntimeError("boom")
@@ -428,10 +447,27 @@ async def test_code_in_a_markdown_fence_is_saved_without_it(lab):
     await lab.restore()
 
 
-async def test_a_script_run_for_too_long_says_the_limit_and_the_unit(lab):
+@pytest.mark.parametrize(
+    ("tool", "args", "unit_hint"),
+    [
+        ("simulate", {"seconds": 100}, False),  # a long run, not a count of milliseconds
+        ("simulate", {"seconds": 500}, True),
+        ("simulate", {"seconds": 60000}, True),
+        ("simulate", {"seconds": 100000}, False),  # 100 s would still be over the limit
+        ("move", {"robot": "dog", "seconds": 120}, False),
+        ("move", {"robot": "dog", "seconds": 3000}, True),
+        ("run_script", {"name": "idle", "max_sim_seconds": 400}, False),
+        ("run_script", {"name": "idle", "max_sim_seconds": 1000}, False),
+        ("run_script", {"name": "idle", "max_sim_seconds": 60000}, True),
+    ],
+)
+async def test_a_run_too_long_says_the_limit_and_names_the_unit_only_when_milliseconds_would_fit(
+    lab, tool, args, unit_hint
+):
     await lab.accepted("write_script", name="idle", code="print('hi')\n")
-    text = await lab.refused("run_script", name="idle", max_sim_seconds=1000)
-    assert "max_sim_seconds must be in (0, 300], got 1000 (it is seconds, not milliseconds)" in text, text
+    text = await lab.refused(tool, **args)
+    assert "must be in (0, " in text and f"got {args.get('seconds', args.get('max_sim_seconds'))}" in text, text
+    assert ("not milliseconds" in text) is unit_hint, text
 
 
 async def test_a_script_that_does_not_parse_is_not_saved(lab):

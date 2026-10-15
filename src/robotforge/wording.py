@@ -79,7 +79,7 @@ def unknown(
     """ "no robot named 'dog1'. Did you mean dog? Robots in this world: dog, arm": what failed, and the way out.
     `many` is the plural of `kind` when it is not just an s."""
     many = many or plural(kind)
-    text = f"no {kind} named {given!r}."
+    text = f"no {kind} named {short(given)}."
     close = near(given, names, aliases)
     if close:
         text += f" Did you mean {', '.join(close)}?"
@@ -89,8 +89,8 @@ def unknown(
 
 
 def short(value: Any) -> str:
-    """A rejected value as the agent sent it, cut to a few words."""
-    text = repr(value)
+    """A rejected value as the agent sent it (null for None), cut to a few words."""
+    text = "null" if value is None else repr(value)
     return text if len(text) <= SHORT else text[: SHORT - 3] + "..."
 
 
@@ -107,12 +107,12 @@ def unit_hint(value: Any, high: float) -> str:
     return ""
 
 
-MILLISECONDS = 100  # a duration this long in seconds is more likely a count of milliseconds (a 3 s move is 3000)
-
-
 def seconds_range(name: str, value: float, high: float) -> str:
-    """ "seconds must be in (0, 60], got 3000 (it is seconds, not milliseconds)": the limit, the value, the unit."""
-    unit = " (it is seconds, not milliseconds)" if value >= MILLISECONDS else ""
+    """ "seconds must be in (0, 60], got 3000 (it is seconds, not milliseconds)": the limit, the value, the unit.
+    The unit is named only when the number read as milliseconds would fit (a 3 s move written as 3000), the way
+    `unit_hint` does for meters: 120 s asked of a 60 s tool is a long run, not a mistake of unit."""
+    milliseconds = value >= TOO_BIG * high and value / 1000 <= high
+    unit = " (it is seconds, not milliseconds)" if milliseconds else ""
     return f"{name} must be in (0, {high:g}], got {value:g}{unit}"
 
 
@@ -167,7 +167,7 @@ def validation_message(
             parts.append(f"{at} must be {what}, got {short(value)}")
         elif kind == "int_from_float":
             parts.append(f"{at} must be a whole number, got {short(value)}")
-        elif kind == "bool_parsing":
+        elif kind in ("bool_parsing", "bool_type"):
             parts.append(f"{at} must be true or false, got {short(value)}")
         elif kind in ("list_type", "dict_type", "tuple_type", "model_type"):
             what = form or ("a list" if kind in ("list_type", "tuple_type") else "an object")
