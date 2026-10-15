@@ -18,6 +18,7 @@ class Kind(StrEnum):
     HUMANOID = "humanoid"
     ROVER = "rover"
     BALANCER = "balancer"  # two wheels on one axle, balances like a Segway
+    SNAKE = "snake"  # a chain of side-to-side joints that slithers
     OTHER = "other"
 
 
@@ -48,6 +49,10 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
     found = discover_legs(model, robot, home_pose(model))
     if found is not None:  # library, imported and built walkers
         return Kind.QUADRUPED if len(found[1]) == 4 else Kind.HEXAPOD
+    from robotforge.behaviors.snake import find_spine  # lazy: it imports this package
+
+    if find_spine(model, robot, home_pose(model)) is not None:
+        return Kind.SNAKE
     return Kind.OTHER
 
 

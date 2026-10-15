@@ -14,13 +14,14 @@ from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.behaviors.arm import ArmMotion
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.snake import SnakeGait
 from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
 MAX_RUN_SECONDS = 60.0
-MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER)
-WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer)
+MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE)
+WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
 
 
@@ -101,8 +102,8 @@ class BehaviorManager:
         kind = self.kind(robot)
         if kind not in MOBILE:
             raise BehaviorError(
-                f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids) and wheeled "
-                "robots (rovers, balancers) can move around"
+                f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids), wheeled "
+                "robots (rovers, balancers) and snakes can move around"
             )
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True)
@@ -122,6 +123,8 @@ class BehaviorManager:
                 ctrl = quadruped.for_robot(m, robot, self.home_qpos())
             elif kind == Kind.BALANCER:
                 ctrl = WheelBalancer(m, robot, self.home_qpos())
+            elif kind == Kind.SNAKE:
+                ctrl = SnakeGait(m, robot, self.home_qpos())
             else:
                 ctrl = DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:

@@ -339,3 +339,46 @@ def test_balance_task_compares_lqr_with_doing_nothing(pg):
     lqr, none = comparison.results
     assert lqr.success and not lqr.failed
     assert none.failed  # without control it falls over within a second
+
+
+SNAKE = {
+    "color": "green",
+    "servo": "mg996r",
+    "base": {"shape": "box", "size": [0.09, 0.06, 0.045]},
+    "parts": [
+        {
+            "name": "segment",
+            "at": "back",
+            "joint": {"axis": "z", "range": [-70, 70]},
+            "shape": "box",
+            "size": [0.08, 0.05, 0.04],
+            "direction": "back",
+            "repeat": {"count": 8, "chain": True},
+        },
+        {
+            "name": "left_wheel",
+            "parent": "segment",
+            "at": [-0.04, 0.031, -0.004],
+            "shape": "wheel",
+            "size": [0.036, 0.008],
+            "actuator": "none",
+            "mirror": True,
+        },
+    ],
+}
+
+
+def test_snake_slithers_forward_and_steers(pg):
+    pg.add_robot("snake", build=SNAKE)
+    assert pg.behaviors.robots()[0]["kind"] == "snake"  # passive wheels do not make it a rover
+    start = pg.behaviors.pose("snake")
+    pg.behaviors.move("snake", 0.2, 0.0)
+    _run(pg, 6.0)
+    end = pg.behaviors.pose("snake")
+    assert end["position"][0] - start["position"][0] > 0.6
+    assert abs(end["position"][1] - start["position"][1]) < 0.3
+    pg.behaviors.move("snake", 0.15, 0.4)
+    before = pg.behaviors.pose("snake")["heading_deg"]
+    _run(pg, 4.0)
+    turned = (pg.behaviors.pose("snake")["heading_deg"] - before + 180) % 360 - 180
+    assert turned > 30  # positive turn = left, like every other robot
