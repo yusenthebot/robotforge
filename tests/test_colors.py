@@ -57,6 +57,9 @@ def pg(tmp_path, monkeypatch):
         ((0.1, 0.2, 0.3, 0.5), [0.1, 0.2, 0.3, 0.5]),
         ([156, 107, 63], _hex("#9c6b3f")),  # a component above 1 can only be on the 0..255 scale
         ([156, 107, 63, 255], _hex("#9c6b3f")),
+        ([255, 0, 0, 1], [1.0, 0.0, 0.0, 1.0]),  # CSS rgba(): alpha stays 0..1 beside 0..255 channels
+        ([255, 128, 0, 0.5], [1.0, 128 / 255, 0.0, 0.5]),
+        ([255, 128, 0, 128], [1.0, 128 / 255, 0.0, 128 / 255]),
         ([1, 1, 1], [1.0, 1.0, 1.0, 1.0]),  # all in 0..1: white, not near-black
     ],
 )
@@ -73,6 +76,9 @@ def test_a_color_is_a_name_a_hex_code_or_numbers(value, rgba):
         ("#ggg", "6 or 3 digits"),
         ("9c6b3f", "unknown color '9c6b3f'"),
         ([300, 107, 63], r"in 0\.\.1 \(or a hex code"),
+        ([1, 1, 1.5], r"in 0\.\.1 \(or a hex code"),  # a fraction among 0..1 values is a slip, not 0..255
+        ([0.5, 0.5, 2], r"in 0\.\.1 \(or a hex code"),
+        ([255, 0, 0, 300], r"in 0\.\.1 \(or a hex code"),
         ([0.1, 0.2], "3 or 4 numbers"),
     ],
 )

@@ -121,8 +121,11 @@ def color(value: str | list[float] | tuple[float, ...]) -> list[float]:
     if isinstance(value, str):
         return _color_text(value)
     rgba = [float(v) for v in value]
-    if len(rgba) in (3, 4) and max(rgba) > 1 and all(0 <= v <= 255 for v in rgba):
-        rgba = [v / 255 for v in rgba]  # a component above 1 can only be on the 0..255 scale
+    rgb = rgba[:3]
+    # Whole numbers with one above 1 can only be on the 0..255 scale. Fractions or a stray 2 among 0..1
+    # values are a mistake to report, not a color to guess, and alpha is 0..1 (CSS) or 0..255 on its own.
+    if len(rgba) in (3, 4) and max(rgb) > 1 and all(0 <= v <= 255 and v.is_integer() for v in rgb):
+        rgba = [v / 255 for v in rgb] + [a / 255 if a > 1 else a for a in rgba[3:]]
     if len(rgba) == 3:
         rgba.append(1.0)
     if len(rgba) != 4 or not all(0.0 <= v <= 1.0 for v in rgba):
