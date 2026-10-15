@@ -61,7 +61,8 @@ snake, a self-balancing robot, an arm on a rover); read builder_guide first, the
 update_part / remove_part edit it piece by piece. add_object places boxes, balls, cylinders, tables
 and bins, and furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks,
 flat ground markers). update_robot, update_object, remove, set_floor and undo edit the world; every edit is
-validated and the live viewer updates immediately. Names are lowercase with underscores. Units are
+validated and the live viewer updates immediately. Robots and objects an edit does not change stay where
+they are (new terrain or a scene starts them fresh). Names are lowercase with underscores. Units are
 meters, kilograms, radians for joints and degrees for yaw (the builder takes degrees for joints too).
 
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse,
