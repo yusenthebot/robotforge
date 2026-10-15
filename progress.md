@@ -157,9 +157,20 @@ Rounds 1-3 done, 2026-10-14.
   - A camera across the shove direction hid the shoves; MPC twins look from the front. The gait camera now covers the curb and beyond.
   - Result tables lost track of the settings that produced them once a knob moved; each result section shows "ran with".
 
+## Round 15 (2026-10-15): inverse kinematics II on six-joint arms (phase C part 1)
+
+- CI: the RL lesson test failed on Windows only: its waits shared one 60 s deadline and the slow runner checked the run record mid-training. Each training now waits up to 10 minutes and the test fails loudly if the thread is still alive.
+- `learn/ik_arm.py` (IK II): our template arm (dof 6, orange) and the PiPER side by side; `IKFollow` is resolved-rate IK (one DLS step per 20 ms tick, lambda from a choice, optional gripper-down axis) for the arm picked in "arm following the target"; live: hand, target, the SVD of the hand's position Jacobian; plots: error, manipulability (home = 100), largest joint step per tick.
+- Measured (pulling the target outward): our arm reaches ~0.45 m; with lambda 0.05 it stretches calmly and w falls to 0; lambda 0.0001 jumps 55-106 deg per tick beyond reach (flailing), 0.2 lags 22 mm behind; the PiPER reaches 0.7 m.
+- Steps: drag two targets, flatten the ellipsoid (w < 30), small vs large lambda at the edge, gripper down, the PiPER beyond our reach, a quiz on singularities.
+- Viewer: rig kind `arm3d` (target ball dragged on a camera-facing plane, mapped back to tx/ty/tz of the active arm; dashed error line; ellipsoid from the SVD axes and radii; name tags). The planar target drag sends a dict of controls now.
+- What did NOT work (and the fix):
+  - With the default lambda 0.01 the arm already flailed at the edge, so it never stretched out and the ellipsoid never flattened; the default is 0.05 and the learner tries 0.0001 on purpose.
+  - The "reached a new target" marker did not reset when the arm, lambda or gripper setting changed, so the gripper-down step could not count the same spot.
+
 ## Next-round seed
 
-Round 15 = phase C, lessons to the cart-pole standard (see the unified structure in docs/PLAY_PLAN.md v2): rebuild the PID lesson around the triplets and sweeps; IK on the AgileX PiPER (drag a 3D target, Jacobian steps, manipulability ellipsoid and singularities, compare its workspace with ours); sensors as a lidar autopilot (tune a threshold, odometry drift corrected by lidar); new gait and humanoid balance lessons. Templates first, then the real robot as the last step of each lesson.
+Round 16 = phase C part 2: sensors as a lidar autopilot (a rover that drives itself with a reactive rule on its rangefinders; the learner tunes the stop distance, speed and turn rate, twins with different thresholds in one walled arena; bumps counted by the touch sensor; then odometry drift with a noise slider, corrected by lidar). Measure the rule's behaviour first. Then the PID lesson rebuilt around triplets and sweeps, and new gait and humanoid balance lessons.
 
 ## Frontier
 
