@@ -56,14 +56,30 @@ Rounds 1-3 done, 2026-10-14.
   - Fake `Hub` objects in tests broke when the hub grew; tests use a real `ViewerHub`.
   - In the hidden browser pane, CSS transitions and rAF stall, so screenshots can show stale colors; not a user-facing bug.
 
+## Round 7 (2026-10-15): teaching mode, PID and IK lessons, studio lighting
+
+- User ask: the app only offers WASD; it needs a teaching mode where you learn control, IK, sensors while playing; assets look cheap.
+- `src/robotforge/learn/`: Lesson (controls incl. choice, plots, steps with physics checks or quizzes, rig facts for overlays, camera) and LessonRunner (swaps in the lesson rig, restores the world on exit, re-attaches on Reset, ends if the world is swapped, 20 Hz live updates via `hub.lesson_stream`).
+- Viewer: `lesson.js` (course picker, step panel, controls, canvas plots, overlays per rig kind, draggable target), `look.js` (studio env map + rf_* PBR presets), i18n strings in `i18n.js`.
+- Asset upgrade delegated to an agent on `feat/assets` (visual-only meshes, rf_* materials, physics unchanged).
+- What did NOT work (and the fix):
+  - PD rig crept at constant speed under full torque: the hub geom overlapped the motor housing, a permanent contact. Lesson arms touch nothing (contype 0).
+  - Every gain gave the same 27% overshoot until the grid search showed Kd needs ~3: the Kd slider now goes to 6; 3 stars need the +-1 degree band, which needs feedforward or I (the lesson's point).
+  - MjSpec reads joint `range` in degrees unless `spec.compiler.degree = False`: IK joints were pinned near 0.
+  - The IK forearm blew up (NaN qacc) under servo damping with explicit Euler; implicit integration + armature fixed it; a stress test guards it.
+  - Iterative IK had nothing to show when the analytic solution had already reached the target; switching to it now moves the target.
+  - Dragging the target lost the last position to the 30 Hz throttle; the release always sends it.
+  - A fast synthetic drag (left_click_drag) does not move a physics body; scripted checks hold the pointer for a second.
+
 ## Next-round seed
 
-Fix the open review findings on main, one at a time: builder HIGH 1-4 + MED 6-9, then UniLab 1-4 (numpy runtime for the shipped Go2 walker first, so the Learned walk mode works without onnxruntime) and naming A-E.
-Then: bound the MPPI walk mode (walk for a while, then stand), update the agent skill + lessons for builder/terrain/unilab and the viewer's World panel, re-render the showcase film from main.
+Round 8: the sensors lesson (encoders and odometry, IMU, lidar rays drawn in 3D, bumper, onboard camera picture-in-picture; quiz on drift and sensor fusion), with WASD driving inside lessons.
+Merge `feat/assets` when the agent reports: review the before/after contact sheets, run the suite, look at it in the browser, merge, delete the branch and worktree.
+Then: bound the MPPI walk mode, open review findings (builder HIGH 1-4, unilab numpy runtime), update the agent skill and MCP lessons to point at the viewer lessons.
 
 ## Frontier
 
-- Current ceiling: any robot (templates, parts, library, URDF) in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies, all pickable from the viewer.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies from the viewer, plus two interactive lessons that teach PID and IK by doing.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
