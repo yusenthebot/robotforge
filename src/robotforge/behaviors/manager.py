@@ -43,10 +43,10 @@ class BehaviorManager:
         reset, so a beginner never sees one hang limp from its servos or topple at the first nudge."""
         world = self._world()
         names = [r.name for r in world.robots] if world else sorted(self._prefixes())
-        templates = {r.name: r.template for r in world.robots} if world else {}
+        told = {r.name: _told_kind(r) for r in world.robots} if world else {}
         with self.session.lock:
             for name in names:
-                kind = robot_kind(self.session.model, name, templates.get(name))
+                kind = robot_kind(self.session.model, name, told.get(name))
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
                         self._mobile_controller(name, kind, create=True)
@@ -57,18 +57,22 @@ class BehaviorManager:
         m = self.session.model
         world = self._world()
         names = [r.name for r in world.robots] if world else sorted(self._prefixes())
-        templates = {r.name: r.template for r in world.robots} if world else {}
+        told = {r.name: _told_kind(r) for r in world.robots} if world else {}
         models = {r.name: library.get(r.library).title for r in world.robots if r.library} if world else {}
         out = []
         for name in names:
-            kind = robot_kind(m, name, templates.get(name))
+            kind = robot_kind(m, name, told.get(name))
             info: dict[str, Any] = {"name": name, "kind": kind.value}
             if name in models:
                 info["model"] = models[name]
             arms = self.arms(name)
             if arms and arms != [name]:  # e.g. an arm riding on a rover: drive the robot, work the arm
                 info["arms"] = arms
-            if kind in MOBILE:
+            if kind in MOBILE and self._real_humanoid(name):  # its policy's card says, without loading it
+                learned = self.learned_walkers().get(name)
+                if learned is not None:
+                    info["max_speed"] = round(learned["max_speed"], 3)
+            elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
             out.append(info)
@@ -86,7 +90,7 @@ class BehaviorManager:
             if entry is None:
                 names = ", ".join(r.name for r in world.robots) or "none"
                 raise BehaviorError(f"no robot named {robot!r}; robots in this world: {names}")
-            return robot_kind(self.session.model, robot, entry.template)
+            return robot_kind(self.session.model, robot, _told_kind(entry))
         if robot not in self._prefixes():
             raise BehaviorError(f"no robot named {robot!r}")
         return robot_kind(self.session.model, robot)
@@ -127,6 +131,9 @@ class BehaviorManager:
             return existing
         m = self.session.model
         try:
+            if kind == Kind.HUMANOID and self._real_humanoid(robot):
+                # A real humanoid (not built from our template) walks with its learned policy only.
+                return self._policy_walker(robot, "rl", existing, create)
             if kind == Kind.HUMANOID:
                 ctrl = humanoid.for_template(m, robot, self.home_qpos())
             elif kind in (Kind.QUADRUPED, Kind.HEXAPOD):
@@ -145,6 +152,12 @@ class BehaviorManager:
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _real_humanoid(self, robot: str) -> bool:
+        """A humanoid from the library (like G1), as opposed to one built from our template."""
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        return entry is not None and entry.library is not None and library.get(entry.library).kind == "humanoid"
 
     def _policy_walker(self, robot: str, walker: str, existing: Any, create: bool):
         """A learned walking policy (ONNX, optional extra `policy`) in place of the gait."""
@@ -172,7 +185,7 @@ class BehaviorManager:
         out = {}
         for entry in world.robots:
             found = policies.for_robot(entry.library)
-            if found is None or robot_kind(self.session.model, entry.name, entry.template) not in LEGGED:
+            if found is None or robot_kind(self.session.model, entry.name, _told_kind(entry)) not in LEGGED:
                 continue
             active = self.session.controllers.get(entry.name)
             out[entry.name] = {
@@ -385,6 +398,12 @@ class BehaviorManager:
 
     def status(self) -> list[dict[str, Any]]:
         return [c.status() for c in self.session.controllers.values()]
+
+
+def _told_kind(entry: Any) -> str | None:
+    """The kind a world entry declares: its template, or for a library robot what the catalog says
+    (G1's joints are not named like our template's, so its shape alone does not say humanoid)."""
+    return entry.template or (library.get(entry.library).kind if entry.library else None)
 
 
 def _is_mover(ctrl: Any) -> bool:

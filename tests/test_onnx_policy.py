@@ -480,7 +480,7 @@ async def test_mcp_lists_policies_walks_with_one_and_explains_unilab_setup(pg):
             return json.loads(result.content[0].text)
 
         listed = await call("list_walkers", {})
-        assert [p["name"] for p in listed["walkers"]] == ["go2_unilab_walk"]
+        assert sorted(p["name"] for p in listed["walkers"]) == ["g1_unilab_walk", "go2_unilab_walk"]
         assert "note" not in listed  # walkers run with numpy, so there is nothing to install first
         failed = await client.call_tool("unilab_check", {})
         assert failed.is_error and "ROBOTFORGE_UNILAB_DIR" in failed.content[0].text

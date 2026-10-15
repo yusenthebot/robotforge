@@ -30,6 +30,10 @@ INSTALL_HINT = "install the optional extra: uv sync --extra policy (or pip insta
 # A walker that tips past this (cosine of the tilt from upright) has fallen; the policy is then
 # out of its training distribution, so it is paused rather than left to thrash.
 FALLEN_UPRIGHTNESS = 0.3
+# Going straight, a learned policy's small turning error adds up (the 1-hour G1 policy drifts ~6 deg/s at
+# 0.5 m/s with no turn asked). Like Isaac Lab's heading commands, a turn of this many rad/s per radian
+# of heading error is asked instead, so "straight" stays straight.
+HEADING_GAIN = 1.5
 
 
 class PolicyUnavailable(RuntimeError):
@@ -154,6 +158,7 @@ class PolicyWalker:
         self.max_turn = float(max(abs(ranges.ang_vel_z[0]), abs(ranges.ang_vel_z[1])))
         self.command_speed = 0.0
         self.command_turn = 0.0
+        self.heading: float | None = None  # held while no turn is asked (set at the next policy step)
         self.last_action = np.zeros(n)
         self.targets = self.default_pos.copy()
         self._next_step = -math.inf
@@ -174,6 +179,8 @@ class PolicyWalker:
         r = self.spec.commands
         self.command_speed = float(np.clip(speed, max(r.lin_vel_x[0], -self.max_reverse), self.max_speed))
         self.command_turn = float(np.clip(turn, r.ang_vel_z[0], r.ang_vel_z[1]))
+        if self.command_turn != 0.0:
+            self.heading = None  # turning on purpose; a new heading is taken when the turn stops
 
     def status(self) -> dict[str, Any]:
         out = {
@@ -199,6 +206,7 @@ class PolicyWalker:
         self._apply_pd(data)
 
     def _restart(self) -> None:
+        self.heading = None
         self.observer.reset()
         self.last_action = np.zeros_like(self.last_action)
         self.targets = self.default_pos.copy()
@@ -213,7 +221,7 @@ class PolicyWalker:
             return
         if self.paused_reason:
             self._restart()
-        command = np.array([self.command_speed, 0.0, self.command_turn])
+        command = np.array([self.command_speed, 0.0, self._turn(data)])
         if abs(command[0]) <= self.spec.commands.planar_dead_zone:  # as in training: too slow means stand
             command[0] = 0.0
         obs = self.observer.build(model, data, self.last_action, command)
@@ -234,6 +242,18 @@ class PolicyWalker:
         self.targets = self.default_pos + self.scale * clipped
         self.observer.advance_phase(moving=bool(np.any(np.abs(command) > 1e-3)))
         self.steps += 1
+
+    def _turn(self, data: mujoco.MjData) -> float:
+        """The turn rate to ask the policy for: the commanded one, or with none, a hold on the heading."""
+        if self.command_turn != 0.0:
+            return self.command_turn
+        rot = data.xmat[self.binding.root_body]
+        yaw = math.atan2(float(rot[3]), float(rot[0]))
+        if self.heading is None:
+            self.heading = yaw
+        error = math.atan2(math.sin(self.heading - yaw), math.cos(self.heading - yaw))
+        r = self.spec.commands
+        return float(np.clip(HEADING_GAIN * error, r.ang_vel_z[0], r.ang_vel_z[1]))
 
     def _fallen(self, data: mujoco.MjData) -> bool:
         return float(data.xmat[self.binding.root_body][8]) < FALLEN_UPRIGHTNESS

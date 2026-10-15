@@ -132,7 +132,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "g1",
             "Unitree G1",
             "humanoid",
-            "1.3 m humanoid with 29 joints; stands in place (no walking yet).",
+            "1.3 m humanoid with 29 joints; walks with move and the keyboard on a learned (UniLab) policy.",
             "Unitree Robotics",
             "BSD-3-Clause",
             "unitree_g1",
