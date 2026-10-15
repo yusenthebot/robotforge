@@ -203,10 +203,15 @@ def _blank(value: Any, prop: Mapping[str, Any]) -> bool:
     do not mean to set. Only for a parameter that has a default, and only where the value could not mean anything."""
     variants = _variants(prop)
     nullable = len(variants) < len(prop.get("anyOf", variants))
+    takes_text = any(v.get("type") == "string" for v in variants)
     if value is None:
         return not nullable
+    # The text "null" is a null to the SDK, which reads it after this: where JSON null means "not given",
+    # the text does too. Where null is a value of its own (seconds=null: keep going) it is left for the SDK.
+    if isinstance(value, str) and value.strip().lower() in ("null", "none") and not (nullable or takes_text):
+        return True
     if value == "":
-        return any(v.get("type") == "string" for v in variants)
+        return takes_text
     return value == [] and any(
         v.get("type") == "array" and v.get("items", {}).get("type") == "number" for v in variants
     )
@@ -221,12 +226,22 @@ def tidy(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> 
         raise ToolError(unknown_parameters(tool, extra, list(props)))
     required = set(schema.get("required", []))
     out = {k: _read(k, v, props[k]) for k, v in arguments.items() if k in required or not _blank(v, props[k])}
-    # add_robot takes its robot from exactly one of template, file, library or build. A model that fills in every
-    # field sends build={} beside the source it means (or beside blank ones, when it means none): an empty build
-    # says nothing, so it is not a second source. build={} alone is still a bare box.
-    if tool == "add_robot" and out.get("build") == {} and any(k in arguments for k in ("template", "file", "library")):
-        del out["build"]
+    if out.get("build") == {}:
+        _drop_empty_build(tool, arguments, out)
     return out
+
+
+def _drop_empty_build(tool: str, arguments: Mapping[str, Any], out: dict[str, Any]) -> None:
+    """A model that fills in every field sends build={} beside the thing it means. An empty build says nothing:
+    it is not a second source for add_robot, and on update_robot it would take every part off a robot built
+    from parts, so it is dropped beside another change and refused alone. add_robot with build={} alone is a
+    bare box."""
+    if tool == "add_robot" and any(k in arguments for k in ("template", "file", "library")):
+        del out["build"]
+    elif tool == "update_robot":
+        if not (out.get("params") or out.get("pos") is not None or out.get("yaw") is not None):
+            raise ToolError("build={} would remove every part of the robot; leave build out to keep them")
+        del out["build"]
 
 
 def _read(name: str, value: Any, prop: Mapping[str, Any]) -> Any:

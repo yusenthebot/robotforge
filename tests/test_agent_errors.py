@@ -133,6 +133,7 @@ async def test_forms_with_one_meaning_are_accepted(lab, tool, args, yaml_has):
 async def test_a_call_that_leaves_fields_null_or_empty_gets_their_defaults(lab):
     await lab.accepted("move", robot="dog", speed=None, turn=None, seconds=0.2, walker="")
     await lab.accepted("observe", view="", include_image=False)
+    await lab.accepted("observe", include_image="null", width="None")  # the text null is a null, too
     await lab.accepted("add_object", name="b2", shape=None, size=[], pos=[0.4, 0.1], color="")
     await lab.restore()
 
@@ -319,6 +320,7 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("set_controls", {"controls": {"wing": 1}}, ["no actuator named 'wing'", "Names look like", "describe_model"]),
         ("simulate", {"seconds": 500}, ["seconds must be in (0, 60]", "got 500", "not milliseconds"]),
         ("simulate", {"seconds": 61}, ["seconds must be in (0, 60], got 61"]),
+        ("update_robot", {"name": "dog", "build": {}}, ["build={} would remove every part", "leave build out"]),
         ("sim_control", {"action": "stop"}, ["action", "'stop'", "play, pause, reset"]),
         ("observe", {"view": "sideways"}, ["unknown view 'sideways'", "Views:", "front", "overview"]),
         ("observe", {"view": "front", "width": 0}, ["image size 0x480 is out of range", "each at least 16"]),
@@ -379,6 +381,27 @@ async def test_text_that_python_cannot_read_as_a_value_is_explained_not_a_crash(
     text = await lab.refused(tool, **args, **{param: odd})
     assert "unhashable" not in text and "unexpected error" not in text, text
     assert param in text, text
+
+
+async def test_an_empty_build_beside_a_change_keeps_every_part_of_a_built_robot(lab):
+    """A model that fills in every field sends build={}: update_robot took it as "no parts", and 12 servos were gone."""
+    from robotforge.design.builder.guide import EXAMPLE_DOG
+
+    await lab.accepted("add_robot", name="spider", build=EXAMPLE_DOG, pos=[-2.0, 2.0])
+
+    def spider():
+        return next(r for r in lab.playground.current_world().robots if r.name == "spider")
+
+    parts, servos = len(spider().build["parts"]), lab.playground.session.model.nu
+    out = json.loads(await lab.accepted("update_robot", name="spider", pos=[1, 1], params={}, yaw=None, build={}))
+    assert spider().pos == [1, 1] and len(spider().build["parts"]) == parts
+    assert lab.playground.session.model.nu == servos
+    assert "(12 joints, 12 actuators)" in " ".join(out["notes"])  # not "built from 1 parts (0 joints, ...)"
+    text = await lab.refused("update_robot", name="spider", build={})
+    assert "build={} would remove every part" in text and len(spider().build["parts"]) == parts
+    moved = json.loads(await lab.accepted("update_robot", name="dog", pos=[0.5, 1.2], build={}))  # a template robot
+    assert moved["robots"][0] == "dog"
+    await lab.restore()
 
 
 def test_a_value_tidy_cannot_read_goes_on_as_given(monkeypatch, caplog):
