@@ -249,14 +249,24 @@ Rounds 1-3 done, 2026-10-14.
 - Engine guard: a test checks every lesson's controls unlock in some step (this lesson first shipped with Stop, Rounds and Frequency locked forever).
 - What did NOT work (and the fix): the camera framed the dog at the panel edge and the other robots out of view (side on to the active lane now, following); one seed for every training made each setting give the same number every time (per-training seeds, ranges in the text); name tags floated at one height for all bodies.
 
+## Round 22 (2026-10-15): reflexes for the learned rhythm (phase D part 2)
+
+- `control/cpg.py`: `Rhythm(reflexes=True)` adds 4 gains per joint on the trunk's roll, pitch and their rates (`trunk_senses`, the free joint's body-frame angular velocity); `Reward(survive=True)` makes a fall also cost the seconds not stayed up; `train(pushes=...)` shoves every try once at random (the same shove for both sides of a direction); `push_test` counts survivals under 12 random shoves; the live `RhythmController` reads the trunk too.
+- RL II: step 4 now tells the truth about the humanoid (with a distance-only reward it learns to lunge half a metre and fall, 5 of 6 trainings); new step 5 "给节律加上反射" with two switches (reflexes; shove it while training, points for staying up), a push test after every training (new record column), and the replay shoved at 2 s when shoving is on.
+- Measured (humanoid, 80 rounds, 6 seeds, test = 12 random 0.4 m/s shoves): distance only: 5 of 6 lunge and fall, 0 of 12 survived; survive + shoves, no reflexes: stands nearly still (-0.05 to 0.16 m), 2 to 10 of 12; survive + shoves + reflexes: 4 of 6 walk 0.26 to 0.55 m without falling and survive 6 to 12, 2 of 6 collapse (0 of 12); standing untrained: 8 of 12. In the browser: no reflexes 0.03 m / 7 of 12, reflexes 0.36 m (fell calm) / 8 of 12, a headless run 0.55 m / 12 of 12.
+- What did NOT work (and the fix):
+  - Round 21's claim "the humanoid falls whatever it learns" was a reward artefact: with a survival reward even the open-loop rhythm stops falling (it learns to stand still). The text now says what was really measured.
+  - Reflexes are not a clean win: 140 numbers instead of 60 make random search unreliable (2 of 6 trainings collapse). Kept, and taught as the reason deep RL uses gradients.
+  - A reflex test with large gains drifted as much calm as shoved; tests check the reflex arithmetic directly and the shove on a still rhythm.
+
 ## Next-round seed
 
-Round 22 = phase D part 2: reflexes for the rhythm, so two legs can try. Add linear feedback from the trunk's tilt and tilt rate to each joint (learned by the same search along with the rhythm), measure whether the template humanoid can stand and step with it, and whether it helps the dog on rough ground. If it works, add it to RL II as a step ("give the rhythm reflexes"); if not after real pushing, record why and move to obstacle-aware arm motion (RRT-Connect lesson).
+Round 23 = phase D part 3: obstacle-aware arm motion. Joint-space RRT-Connect with the arm's collision check (behaviors/arm.py already has `_collides`), shortcut smoothing, then a lesson: a box between the arm and the target, the straight joint-space move hits it, the planner finds a way round; knobs: step size, how many tries, smoothing; template arm first, then the PiPER. Measure planning time and success first.
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 10 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (done in round 21, open loop; next: reflexes); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
