@@ -650,16 +650,17 @@ function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "", yWi
   g.fillStyle = token("--muted");
   g.strokeStyle = token("--line");
   g.lineWidth = 1;
-  for (const v of niceTicks(y0, y1, 3)) {
+  const yt = niceTicks(y0, y1, 3);
+  for (const v of yt) {
     g.beginPath();
     g.moveTo(36, Math.round(Y(v)) + 0.5);
     g.lineTo(w - 8, Math.round(Y(v)) + 0.5);
     g.stroke();
-    g.fillText(formatTick(v), 2, Y(v) + 3);
+    g.fillText(formatTick(v, yt), 2, Y(v) + 3);
   }
   const xt = niceTicks(x0, x1, 4);
   xt.forEach((v, i) => {
-    const text = formatTick(v) + (i === xt.length - 1 && xUnit ? ` ${xUnit}` : "");
+    const text = formatTick(v, xt) + (i === xt.length - 1 && xUnit ? ` ${xUnit}` : "");
     g.fillText(text, Math.min(X(v) - 6, w - g.measureText(text).width - 2), height - 3);
   });
   if (reference !== null) {
@@ -987,6 +988,8 @@ const plots = {
     }
     if (!Number.isFinite(lo)) [lo, hi] = [-1, 1];
     if (hi - lo < 1e-6) [lo, hi] = [lo - 1, hi + 1];
+    const short = (spec.span ?? 0) - (hi - lo); // widen around the data up to the plot's smallest span
+    if (short > 0) [lo, hi] = [lo - short / 2, hi + short / 2];
     const pad = (hi - lo) * 0.12;
     // Grow at once, shrink slowly, so the axes do not jump around while you watch.
     const prev = this.ranges[k];
@@ -999,12 +1002,13 @@ const plots = {
     g.fillStyle = token("--muted");
     g.strokeStyle = token("--line");
     g.lineWidth = 1;
-    for (const v of niceTicks(range[0], range[1], 3)) {
+    const yt = niceTicks(range[0], range[1], 3);
+    for (const v of yt) {
       g.beginPath();
       g.moveTo(36, Math.round(y(v)) + 0.5);
       g.lineTo(w - 8, Math.round(y(v)) + 0.5);
       g.stroke();
-      g.fillText(formatTick(v), 2, y(v) + 3);
+      g.fillText(formatTick(v, yt), 2, y(v) + 3);
     }
     for (const series of spec.series) {
       g.strokeStyle = token(COLORS[series.color]);
@@ -1055,14 +1059,25 @@ function niceTicks(lo, hi, count) {
   const span = hi - lo;
   const step0 = span / count;
   const mag = 10 ** Math.floor(Math.log10(step0));
-  const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= step0) ?? 10 * mag;
-  const out = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(Math.abs(v) < step / 1e6 ? 0 : v);
-  return out;
+  // The roundest step near span / count; a finer one when that leaves a single line, which gives no scale.
+  const steps = [0.5, 1, 2, 5, 10].map((m) => m * mag);
+  let k = steps.findIndex((s) => s >= step0);
+  if (k < 0) k = steps.length - 1;
+  for (; k >= 0; k--) {
+    const step = steps[k];
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(Math.abs(v) < step / 1e6 ? 0 : v);
+    if (out.length >= 2 || k === 0) return out;
+  }
+  return [];
 }
 
-function formatTick(v) {
-  return Math.abs(v) >= 10 || v === 0 ? v.toFixed(0) : v.toFixed(1);
+// As many decimals as the tick spacing needs (0.02 apart reads 0.02 and 0.04, not 0.0 and 0.0), and never "-0".
+function formatTick(v, ticks = []) {
+  const step = ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : Math.abs(v);
+  const decimals = step > 0 ? Math.min(3, Math.max(0, -Math.floor(Math.log10(step) + 1e-9))) : 0;
+  const text = v.toFixed(decimals);
+  return Number(text) === 0 ? "0" : text;
 }
 
 // ---------------------------------------------------------------- overlays in the 3D view
@@ -1543,6 +1558,7 @@ function faceoffRig(rig) {
         const node = e.body !== undefined ? api.bodyNode(e.body) : null;
         if (node) tag.position.set(node.position.x, node.position.y, e.top + 0.12); // walking robots take theirs along
       }
+      if (labels.visible) declutter(tags.map(([tag]) => tag));
       workspace.visible = (state.values.workspace ?? 0) >= 1;
       const active = state.live?.active ?? [];
       balls.forEach((row, i) =>
@@ -1554,6 +1570,33 @@ function faceoffRig(rig) {
       );
     },
   };
+}
+
+// Name tags of robots standing in a row, seen down the row, land on top of each other. Keep the nearest
+// where it is and lift any farther tag that would cover one already placed, just clear of it.
+const tagPoint = new THREE.Vector3();
+function declutter(sprites) {
+  const cam = api.camera;
+  const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
+  const items = sprites
+    .map((s) => {
+      s.center.set(0.5, 0.5);
+      const p = tagPoint.copy(s.position).project(cam); // screen position, -1 to 1 across the view
+      return { s, x: p.x, y: p.y, z: p.z, w: s.scale.x * sx, h: s.scale.y * sy };
+    })
+    .filter((it) => it.z < 1)
+    .sort((a, b) => a.z - b.z);
+  const placed = [];
+  for (const it of items) {
+    let y = it.y;
+    for (let tries = 0; tries <= placed.length; tries++) {
+      const hit = placed.find((p) => Math.abs(p.x - it.x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
+      if (!hit) break;
+      y = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
+    }
+    it.s.center.y = 0.5 - (y - it.y) / it.h; // a lower anchor draws the sprite higher
+    placed.push({ ...it, y });
+  }
 }
 
 // A name tag that faces the camera: a coloured dot, the name and a small second line, on a pill.

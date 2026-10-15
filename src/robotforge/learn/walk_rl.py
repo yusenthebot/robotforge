@@ -70,6 +70,26 @@ def _text(zh: str, en: str) -> Text:
     return {"zh": zh, "en": en}
 
 
+def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
+    """How high each robot reaches standing at home (m), so its name tag floats just above it."""
+    data = mujoco.MjData(model)
+    if model.nkey:
+        data.qpos[:] = model.key("home").qpos
+    mujoco.mj_kinematics(model, data)
+    out = {}
+    for robot in robots:
+        prefix = f"{robot}/"
+        tops = []
+        for g in range(model.ngeom):
+            if not model.body(int(model.geom_bodyid[g])).name.startswith(prefix):
+                continue
+            rot = data.geom_xmat[g].reshape(3, 3)
+            center, half = model.geom_aabb[g][:3], model.geom_aabb[g][3:]
+            tops.append(float((data.geom_xpos[g] + rot @ center)[2] + np.abs(rot[2]) @ half))
+        out[robot] = round(max(tops), 3) if tops else 0.5
+    return out
+
+
 def _runs(ctx: LessonContext, **want: Any) -> list[dict[str, Any]]:
     return [r for r in ctx.runs if all(test(r["params"].get(k, 0.0)) for k, test in want.items())]
 
@@ -339,6 +359,7 @@ class LearnToWalkLesson(Lesson):
             "m",
             (Series("x", _text("前进", "forward"), "ink"),),
             window=6.0,
+            span=0.5,
         ),
     )
     steps = STEPS
@@ -723,6 +744,7 @@ class LearnToWalkLesson(Lesson):
 
     def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
         bodies = {key: Body.find(model, key) for key, _, _ in self.robots}
+        tops = _tops(model, [key for key, _, _ in self.robots])
         return {
             "kind": "faceoff",
             "entrants": [
@@ -733,7 +755,7 @@ class LearnToWalkLesson(Lesson):
                     "color": ("amber", "violet", "blue", "green")[i % 4],
                     "base": [START_X, (i - (len(self.robots) - 1) / 2) * LANE, 0.0],
                     "body": bodies[key].trunk,
-                    "top": {"dog": 0.45, "star": 0.25, "humanoid": 0.6}.get(key, 0.5),  # name tags just above each
+                    "top": tops[key],  # name tags just above each
                     "cloud": [],
                 }
                 for i, (key, label, _) in enumerate(self.robots)
@@ -746,4 +768,4 @@ class LearnToWalkLesson(Lesson):
         # walks with whichever robot learns. A page reloaded mid-lesson gets the lane of the one picked by then.
         index = int(self.ctx.values["robot"]) if self.ctx is not None else 0
         y = (index - (len(self.robots) - 1) / 2) * LANE
-        return {"eye": [START_X + 0.5, y - 2.4, 1.2], "target": [START_X + 0.5, y + 0.4, 0.1]}
+        return {"eye": [START_X + 0.3, y - 2.6, 1.3], "target": [START_X + 0.3, y, 0.15]}

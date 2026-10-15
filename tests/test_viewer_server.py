@@ -113,3 +113,16 @@ def test_scene_extras_are_asked_for_without_the_session_lock():
     hub.scene_extras = extras
     hub.scene_message()
     assert seen["free"]  # another thread could take the session lock while the extras were built
+
+
+def test_a_reconnecting_viewer_gets_the_extras_as_they_are_now():
+    """Regression: the extras (robots, the running lesson, its camera and record) were cached with the model
+    version, so a page reloaded mid-lesson got them as they were when the lesson started."""
+    session = SimSession.from_path(DEMO)
+    hub = ViewerHub(session)
+    state = {"runs": 0}
+    hub.scene_extras = lambda: {"lesson": {"runs": state["runs"]}}
+    assert hub.scene_message()["lesson"]["runs"] == 0
+    state["runs"] = 2  # a training finished: no new model version
+    assert hub.scene_message()["lesson"]["runs"] == 2
+    assert hub.scene_message()["version"] == session.version

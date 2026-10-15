@@ -74,6 +74,7 @@ class Plot:
     series: tuple[Series, ...]
     window: float = 6.0  # seconds shown
     kind: Literal["lines", "footfall"] = "lines"  # footfall: one row per series, filled while its value is 1
+    span: float = 0.0  # the smallest value range drawn, so a robot standing still does not plot its wobble
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -82,6 +83,7 @@ class Plot:
             "unit": self.unit,
             "window": self.window,
             "kind": self.kind,
+            "span": self.span,
             "series": [{"key": s.key, "label": s.label, "color": s.color, "dashed": s.dashed} for s in self.series],
         }
 

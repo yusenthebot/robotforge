@@ -1143,6 +1143,7 @@ function stopDriving() {
 // Follow the driven robot with the camera until the user orbits by hand.
 let follow = null; // { body, last: Vector3, z: smoothed height, t: last update ms }
 const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
+const FOLLOW_RECENTER = 1.0; // m: lessons aim a little beside the robot they follow; further off is an accident
 
 function startFollow() {
   startFollowBody(sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null);
@@ -1168,6 +1169,9 @@ function updateFollow() {
   follow.t = t;
   camera.position.add(delta);
   controls.target.add(delta);
+  // Mid-glide the tween sets the camera every frame: carry its ends along too, or a robot that moves (or is put
+  // back on its start line) while the camera glides leaves the view that far behind for good.
+  if (tween) for (const v of [tween.fromEye, tween.fromTarget, tween.toEye, tween.toTarget]) v.add(delta);
   follow.last.copy(now);
 }
 
@@ -1645,12 +1649,20 @@ initLessons({
         const delta = bodyNodes[body].position.clone().sub(from.position).setZ(0);
         moveCamera(camera.position.clone().add(delta), controls.target.clone().add(delta), true);
         follow = null;
+      } else if (!follow && bodyNodes[body]) {
+        // Starting to follow a robot well away from where the camera looks (a page reloaded while it was
+        // mid-walk): bring it to the middle first, or the camera would keep that offset for as long as it follows.
+        const aimEye = tween ? tween.toEye : camera.position;
+        const aimTarget = tween ? tween.toTarget : controls.target;
+        const off = bodyNodes[body].position.clone().sub(aimTarget).setZ(0);
+        if (off.length() > FOLLOW_RECENTER) moveCamera(aimEye.clone().add(off), aimTarget.clone().add(off), true);
       }
       startFollowBody(body, { keepTween: true });
     }
     return body === null || follow?.body === body; // false while the scene's bodies are still arriving
   },
   renderer,
+  camera,
   canvas,
   rayAt: (clientX, clientY) => {
     setPointer({ clientX, clientY });
@@ -1708,6 +1720,7 @@ window.__robotforge = {
     return { flips, perMegapixel: Math.round((flips / (frames[0].length * (steps - 2))) * 1e6) };
   },
   following: () => (follow ? follow.body : null),
+  tweening: () => tween !== null,
   selected: () => selected,
   lesson: () => lessonState(),
   busy: () => ({ busy, pending: pending.size }),

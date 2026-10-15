@@ -75,17 +75,20 @@ class ViewerHub:
             version = s.version
             payload = scene.build_mesh_payload(s.model)
             message = scene.describe(s.model, version, payload.entries, payload.hfields)
-        # The extras (world, lesson) take their own locks, so they are asked for after the session lock is
-        # released. Asking while holding it inverted the order of a lesson starting on another thread
-        # (lesson lock, then session lock): a big model's long mesh build left both waiting forever.
-        if self.scene_extras is not None:
-            message.update(self.scene_extras())
         self._scene_msg, self._mesh_payload, self._payload_version = message, payload, version
 
     def scene_message(self) -> dict:
+        """The model's description (cached per version) plus the extras, asked for afresh every time: the
+        robots, the running lesson and its experiment record change without a new model version, and a viewer
+        that reconnects mid-lesson must get them as they are now."""
         self._ensure_scene()
         assert self._scene_msg is not None
-        return self._scene_msg
+        if self.scene_extras is None:
+            return self._scene_msg
+        # The extras (world, lesson) take their own locks, so they are asked for with the session lock released.
+        # Asking while holding it inverted the order of a lesson starting on another thread (lesson lock, then
+        # session lock): a big model's long mesh build left both waiting forever.
+        return {**self._scene_msg, **self.scene_extras()}
 
     def mesh_blob(self, version: int) -> bytes | None:
         self._ensure_scene()
