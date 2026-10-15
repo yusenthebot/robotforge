@@ -3,7 +3,7 @@
     uv run python scripts/rhythm_bench.py forward [--robots dog,star,humanoid] [--seeds 1,2,3] [--jobs 4]
         [--rounds 30] [--energy 0.1] [--reflexes] [--shove] [--heading W]
     uv run python scripts/rhythm_bench.py switch [--robots dog,star] [--seeds 1,2,3] [--jobs 4] [--stress 4]
-        [--idle 3] [--keep DIR | --walks DIR]
+        [--idle 3] [--long 20] [--min-share 0.6] [--keep DIR | --walks DIR]
     add --import a1=path/to/a1.urdf (or any URDF or MJCF file) to bench a robot from a file too
 
 forward: each run teaches one robot to walk forward the way the RL II lesson's Learn button does
@@ -21,15 +21,19 @@ switch: each run teaches a walk, its heading hold and the turns the way "Keep th
 - idle: the same with --idle seconds (3) of sim time after each call, as when the viewer is open and the sim keeps
   running while the agent thinks;
 - keys: like holding W, pressing A for a second while W is still held, then letting go of A (the viewer's
-  teleop messages, no stop in between).
+  teleop messages, no stop in between);
+- long: forward for --long seconds (20) from standing, the heading reported every 4 s (leg "forward Ns").
 For every leg it reports the distance, the heading change and whether it stayed up (after the idle time too); for
 the 1 s turn also the share of what its learned turn rate promises in that second. Each path ends with a stop
-and 2 s of standing, reported as the leg "stop". With --stress N it then gives N runs of 60
+and 2 s of standing, reported as the leg "stop". It ends with a summary of the 1 s turns straight out of the walk
+(move and keys paths) and of the long walks, and exits with 1 if a turn got less than --min-share (0.6) of its
+rate. With --stress N it then gives N runs of 60
 random commands (forward, left, right or stop, each for 0.3 to 1.5 s, the next at once like a key change) and
 counts the falls (trunk past 60 degrees at the end of a command), with the switch each one came on. Those runs
 carry on from wherever the last command left the robot, so one fall changes everything after it; --trials N
 instead tries every switch out of walking or turning (F>L, L>F, R>S, ...) N times on its own, from standing:
-the first command for 2 to 2.5 s, the second for 1.5 s, and counts the falls after the switch (and any before).
+the first command for 2 to 2.5 s, the second for 1.5 s, and counts the falls after the switch (and any before),
+and the degrees turned after it: in the first second (a turn's share of its rate) and in all 1.5 s.
 --keep DIR saves each trained walk as DIR/<robot>_<seed>.json; --walks DIR plays those instead of training.
 """
 
@@ -90,6 +94,8 @@ class Switch:
     switches: int = 0  # in the stress runs
     falls: dict[str, int] = field(default_factory=dict)  # switch ("F>L": walking, then left) -> falls on it
     trials: dict[str, list[int]] = field(default_factory=dict)  # switch -> [falls after it, falls before it, tries]
+    # switch -> degrees turned in each try's first TURN_SECONDS after it, and in all its 1.5 s (tries that stayed up)
+    turned: dict[str, list[list[float]]] = field(default_factory=dict)
 
 
 def _entry(robot: str, opts: dict[str, Any]) -> dict:
@@ -161,12 +167,12 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
         model, trainer, rhythm, _ = _learn(robot, entry, seed, opts)
         learned = trainer.rollout(rhythm)["distance"]
         joints = joint_names(model, trainer.body)
-        # What it learned around, as the lesson keeps it (code from before kept no home).
-        home = {"home": dict(zip(joints, map(float, trainer.home), strict=True))}
+        # What it learned around and how it switches, as the lesson keeps it (code from before kept neither).
+        kept = {"home": dict(zip(joints, map(float, trainer.home), strict=True)), "switching": "fade"}
         walk = SavedWalk(
             robot=robot,
             joints=joints,
-            **(home if "home" in SavedWalk.model_fields else {}),
+            **{k: v for k, v in kept.items() if k in SavedWalk.model_fields},
             freq=rhythm.freq,
             reflexes=rhythm.reflexes,
             theta=[float(v) for v in rhythm.theta],
@@ -205,6 +211,11 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
         if rate > 0 and len(result.legs) > 2:
             result.legs[1].share = round(math.radians(result.legs[1].heading) / (rate * TURN_SECONDS), 2)
         out.append(result)
+    if opts["long"]:
+        pg = world("long")
+        result = Switch(robot, seed, "long", round(walk.distance, 3), round(math.degrees(rate), 1))
+        result.legs = _long(pg, robot, opts["long"])
+        out.append(result)
     for run in range(opts["stress"]):
         rng = np.random.default_rng(1000 * seed + run)
         pg, last = world(f"stress{run}"), "S"
@@ -231,8 +242,15 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
                     lead = 2.0 + float(rng.uniform(0.0, 0.5))
                     if not _leg(pg, robot, first, *COMMANDS[first], lead, stop=False).up:
                         count[1] += 1
-                    elif not _leg(pg, robot, then, *COMMANDS[then], 1.5, stop=False).up:
+                        continue
+                    head = _leg(pg, robot, then, *COMMANDS[then], TURN_SECONDS, stop=False)
+                    rest = _leg(pg, robot, then, *COMMANDS[then], 1.5 - TURN_SECONDS, stop=False) if head.up else head
+                    if not rest.up:
                         count[0] += 1
+                    else:
+                        out[0].turned.setdefault(f"{first}>{then}", []).append(
+                            [head.heading, round(head.heading + rest.heading, 1)]
+                        )
     return out
 
 
@@ -267,6 +285,41 @@ def _leg(pg, robot: str, name: str, speed: float, turn: float, seconds: float, s
     return Leg(name, round(moved, 3), round(turned, 1), after["upright"], up=up)
 
 
+def _long(pg, robot: str, seconds: float) -> list[Leg]:
+    """Forward for `seconds` from standing in one command: a leg every 4 s, each with the distance and heading
+    change from the start."""
+    legs = []
+    start = pg.behaviors.pose(robot)
+    pg.behaviors.move(robot, 0.2, 0.0, "rhythm")
+    heading = {"last": start["heading_deg"], "turned": 0.0}
+
+    def track() -> bool:
+        now = pg.behaviors.pose(robot)["heading_deg"]
+        heading["turned"] += (now - heading["last"] + 180) % 360 - 180
+        heading["last"] = now
+        return False
+
+    for k in range(math.ceil(seconds / 4.0)):
+        pg.run_fast(track, min(4.0, seconds - 4.0 * k))
+        track()
+        now = pg.behaviors.pose(robot)
+        up = float(pg.session.data.xmat[pg.behaviors._root_body(robot)][8]) >= FELL_COS
+        moved = math.dist(now["position"][:2], start["position"][:2])
+        legs.append(
+            Leg(
+                f"forward {min(4.0 * (k + 1), seconds):g}s",
+                round(moved, 3),
+                round(heading["turned"], 1),
+                now["upright"],
+                up=up,
+            )
+        )
+        if not up:
+            break
+    pg.behaviors.stop(robot)
+    return legs
+
+
 def _forward_job(args: tuple[str, int, dict[str, Any]]) -> dict:
     return asdict(run_forward(*args))
 
@@ -288,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--heading", type=float, default=None, help="override the reward's heading weight")
     parser.add_argument("--stress", type=int, default=0, help="switch: random-command runs to count falls in")
     parser.add_argument("--idle", type=float, default=3.0, help="switch: s of sim time after each call (idle path)")
+    parser.add_argument("--long", type=float, default=20.0, help="switch: s of the long forward walk (0: none)")
+    parser.add_argument("--min-share", type=float, default=0.6, help="switch: least share of the turn rate in 1 s")
     parser.add_argument("--trials", type=int, default=0, help="switch: tries of each switch on its own")
     parser.add_argument("--keep", help="switch: save the trained walks here")
     parser.add_argument("--walks", help="switch: play the walks saved here instead of training")
@@ -309,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         "heading": args.heading,
         "stress": args.stress,
         "idle": args.idle,
+        "long": args.long,
         "trials": args.trials,
         "keep": args.keep,
         "walks": args.walks,
@@ -321,9 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         results = list(pool.map(worker, jobs))
     if args.what == "forward":
         _print_forward(results, args.json)
-    else:
-        _print_switch([r for batch in results for r in batch], args.json)
-    return 0
+        return 0
+    flat = [r for batch in results for r in batch]
+    _print_switch(flat, args.json)
+    return 0 if _summary(flat, args.min_share, sys.stderr if args.json else sys.stdout) else 1
 
 
 def _print_forward(results: list[dict], as_json: bool) -> None:
@@ -371,6 +428,69 @@ def _print_switch(results: list[dict], as_json: bool) -> None:
             print(
                 f"  stress: {sum(r['falls'].values())} falls in {r['switches']} switches{': ' + where if where else ''}"
             )
+
+
+def _summary(results: list[dict], min_share: float, out) -> bool:
+    """Per robot: the 1 s turns straight out of the walk (move and keys paths; degrees and share of the rate), the
+    long walks' heading at their end; whether every turn got at least `min_share` of its rate."""
+    ok = True
+    for robot in dict.fromkeys(r["robot"] for r in results):
+        mine = [r for r in results if r["robot"] == robot]
+        for path in ("move", "keys"):
+            turns = [(r["seed"], r["legs"][1]) for r in mine if r["path"] == path and len(r["legs"]) > 2]
+            shares = [leg["share"] for _, leg in turns if leg["share"] is not None]
+            if not shares:
+                continue
+            low = [f"seed {seed} {leg['share']:.0%}" for seed, leg in turns if (leg["share"] or 0.0) < min_share]
+            ok = ok and not low
+            print(
+                f"{robot} {path}: 1 s turn out of the walk "
+                + ", ".join(f"{leg['heading']:+.0f} deg ({leg['share']:.0%})" for _, leg in turns)
+                + f"; mean {sum(shares) / len(shares):.0%}"
+                + (f"; under {min_share:.0%}: {', '.join(low)}" if low else ""),
+                file=out,
+            )
+        turned: dict[str, list[list[float]]] = {}
+        for r in mine:
+            for switch, tries in r.get("turned", {}).items():
+                turned.setdefault(switch, []).extend(tries)
+        rates = {r["seed"]: r["turn_rate"] for r in mine}
+        for switch in ("F>L", "F>R"):
+            sign = 1.0 if switch.endswith("L") else -1.0
+            shares = [
+                sign * t[0] / (rates[r["seed"]] * TURN_SECONDS)
+                for r in mine
+                for t in r.get("turned", {}).get(switch, [])
+                if rates[r["seed"]] > 0
+            ]
+            if shares:
+                low = sum(v < min_share for v in shares)
+                print(
+                    f"{robot} trials {switch}: 1 s turn out of the walk, mean {sum(shares) / len(shares):.0%} of the "
+                    f"rate; under {min_share:.0%} in {low} of {len(shares)} tries",
+                    file=out,
+                )
+        for switch in ("L>F", "R>F"):
+            ahead = [abs(t[1]) for t in turned.get(switch, [])]
+            if ahead:
+                print(
+                    f"{robot} trials {switch}: heading change in 1.5 s of walking after the turn, mean "
+                    f"{sum(ahead) / len(ahead):.0f} deg, over 30 in {sum(a > 30 for a in ahead)} of {len(ahead)}",
+                    file=out,
+                )
+        long = [r for r in mine if r["path"] == "long"]
+        if long:
+            ends = [r["legs"][-1] for r in long]
+            print(
+                f"{robot} long: "
+                + ", ".join(
+                    f"{leg['name']} {leg['heading']:+.0f} deg {leg['distance']:.1f} m" + ("" if leg["up"] else " FELL")
+                    for leg in ends
+                )
+                + f"; mean |heading| {sum(abs(leg['heading']) for leg in ends) / len(ends):.0f} deg",
+                file=out,
+            )
+    return ok
 
 
 if __name__ == "__main__":
