@@ -1284,10 +1284,15 @@ function freeRect() {
 // Lessons frame their rig for a big window. Where the free part of the window is short (a split screen, a phone
 // with the lesson sheet up), step back from the target so the rig still fits; a big window keeps the framing.
 const FRAMED_FOR = 600; // px of free height a lesson camera is framed for
+// Free width over window height a lesson camera is framed for (a rig's width on screen grows with the window's
+// height). At 1280 x 800 between the lesson panel and the plots (0.69), the third PID twin reached under the plots.
+const FRAMED_WIDE = 0.85;
 function fitToFree(eye, target) {
   if (!hasSize()) return eye;
   const r = freeRect();
-  const k = Math.min(1.6, Math.max(1, Math.sqrt(FRAMED_FOR / Math.max(120, r.bottom - r.top))));
+  const tall = Math.sqrt(FRAMED_FOR / Math.max(120, r.bottom - r.top));
+  const wide = Math.sqrt((FRAMED_WIDE * window.innerHeight) / Math.max(120, r.right - r.left));
+  const k = Math.min(1.6, Math.max(1, tall, wide));
   return target.clone().add(eye.clone().sub(target).multiplyScalar(k));
 }
 
