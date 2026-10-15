@@ -291,6 +291,11 @@ class QuadrupedGait:
 
         v_body, turn = self._corrected_velocity(dt)
         w = self._recovery
+        # The trunk is leveled while the robot walks, and while it stands only as much as it steps (recovering, or
+        # stopping): standing still, it holds the stance its servos would. Leveled standing on a 17 to 20 degree
+        # ramp, a Go2 that stood there on its servos pushed its downhill legs out, its feet slid, the pitch grew
+        # with them and it went over backwards.
+        leveling = self.attitude_gain * (1.0 if moving else max(self._amplitude, w))
         level = None
         if w > 1e-3:
             # Sideways strides follow the trunk, and the velocity correction lets go of that axis.
@@ -318,7 +323,7 @@ class QuadrupedGait:
                 target[:2] += stride * (s - 0.5)
                 target[2] += self._amplitude * self.lift * math.sin(math.pi * u)
             # Level the trunk: extend legs on the low side.
-            target[2] += self.attitude_gain * (-pitch * leg.hip[0] + roll * leg.hip[1])
+            target[2] += leveling * (-pitch * leg.hip[0] + roll * leg.hip[1])
             if level is not None and phase >= self.duty:
                 # A swinging foot aims where it would if the trunk were level (see PUSH_DRIFT).
                 target = (1.0 - w) * target + w * (level.T @ target)

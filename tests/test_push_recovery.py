@@ -151,20 +151,29 @@ def test_a_quadruped_never_moved_stands_as_it_did_without_a_gait(pg, tmp_path, r
     assert np.degrees(np.abs(pg.session.data.qpos[legs] - plain.session.data.qpos[legs])).max() < 0.5
 
 
-@pytest.mark.parametrize("robot", list(ROBOTS))
-def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot):
+@pytest.mark.parametrize(("robot", "angle"), [("dog", 15), ("go2", 15), ("go2", 18), ("go2", 20)])
+def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot, angle):
     """Regression found while measuring: on a 15 degree ramp a Go2 slid 12 cm down and back while it landed, and
     our dog creeps down at about 1 cm/s on its servos; both read as a push, and the robot stepped off the ramp
-    (0.9 m) or about it for half a minute. It stands there as it would on its servos alone."""
-    pg.add_terrain("ramp", pos=[0.0, 0.0], params={"angle": 15, "length": 1.5, "direction": "up"})
+    (0.9 m) or about it for half a minute. It stands there as it would on its servos alone.
+    Regression found in review: its gait leveled the trunk while it stood, and a Go2 on a 17 to 20 degree ramp that
+    stood there on its servos went over backwards (180 degrees); it holds the stance its servos would now."""
+    pg.add_terrain("ramp", pos=[0.0, 0.0], params={"angle": angle, "length": 1.5, "direction": "up"})
     pg.add_robot(robot, **ROBOTS[robot], pos=[-0.4, 0.0])
     gait = pg.session.controllers[robot]
-    stepped = 0.0
+    plain = Playground.with_demo()  # the same world, the robot on its servos alone
+    plain.open_world(str(pg.store.dir))
+    plain.session.set_controller(robot, None)
+    trunk = pg.behaviors._root_body(robot)
+    stepped = worst = 0.0
     for _ in range(400):  # 8 s
         pg.run_fast(lambda: False, 0.02)
         stepped = max(stepped, gait._amplitude)
+        worst = max(worst, _tilt(pg, trunk))
+    plain.run_fast(lambda: False, 8.0)
     assert stepped < 0.05
-    assert pg.behaviors.pose(robot)["upright"]
+    assert worst < 90 and pg.behaviors.pose(robot)["upright"]
+    assert _tilt(pg, trunk) == pytest.approx(_tilt(plain, trunk), abs=1.0)
 
 
 def test_a_nudge_the_stance_soaks_up_takes_no_steps(pg):
