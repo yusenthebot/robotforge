@@ -1,6 +1,7 @@
 """RL II: any body learns to walk in the viewer, trained on a background thread."""
 
 import time
+from pathlib import Path
 
 import pytest
 from importer_fixtures import critter_mjcf, critter_urdf, write
@@ -185,6 +186,35 @@ def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg
     assert pg.behaviors.move("critter", 0.0, 0.8)["turning"] == "left"
     pg.run_fast(lambda: False, 2.0)
     assert (pg.behaviors.pose("critter")["heading_deg"] - end["heading_deg"] + 540) % 360 - 180 > 10
+
+
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"
+# Which of the Menagerie stand-ins, added by file, RL II offers, and what the others are told instead.
+OFFERED = {
+    "unitree_g1": None,  # 29 position servos
+    "unitree_go2": "torque motors",  # the file's legs; the library turns them into servos, a file is kept as it is
+    "agilex_piper": "fixed to the world",
+    "franka_emika_panda": "fixed to the world",
+    "trs_so_arm100": "fixed to the world",
+}
+
+
+@pytest.mark.parametrize("path", sorted(MENAGERIE.glob("*/*.xml")), ids=lambda p: p.parent.name)
+def test_rl_ii_offers_a_robot_from_an_mjcf_file_only_if_it_can_learn_and_says_why_not(pg, path):
+    """Regression: the Go2's file drives its legs with torque motors, which a rhythm cannot aim, yet move told the
+    learner to teach it in RL II, which never listed it."""
+    why = OFFERED[path.parent.name]
+    pg.new_world("mine")
+    pg.add_robot("it", file=str(path))
+    if why != "fixed to the world":  # an arm on the floor is told it cannot move around at all
+        with pytest.raises(BehaviorError) as exc:
+            pg.behaviors.move("it", 0.2, 0.0, "rhythm")
+        assert ("Learn, pick 'RL II" in str(exc.value)) == (why is None)
+        assert why is None or why in str(exc.value)
+    described = pg.lessons.start("learn_to_walk")
+    robots = next(c for c in described["controls"] if c["id"] == "robot")["options"]
+    assert (robots[-1]["en"] == "Your robot: it") == (why is None)
+    pg.lessons.exit()
 
 
 def test_shoved_trainings_do_not_count_the_heading_and_the_panel_says_so(pg):

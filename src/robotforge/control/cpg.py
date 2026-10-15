@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
-from robotforge.sim.actuators import drives_joint, is_position_servo
+from robotforge.sim.actuators import drives_joint, is_position_servo, is_torque_motor
 
 CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
@@ -81,7 +81,22 @@ class Body:
         bounded = {a: span for a in hinges if (span := _servo_range(model, a)) is not None}
         servos = list(bounded)
         if len(servos) < 2:
-            raise CPGError(f"{robot} has {len(servos)} servo joints; walking by rhythm needs at least 2")
+            motors = [
+                a
+                for a in range(model.nu)
+                if (model.actuator(a).name or "").startswith(prefix)
+                and drives_joint(model, a)
+                and is_torque_motor(model, a)
+                and model.jnt_type[model.actuator_trnid[a, 0]] == mujoco.mjtJoint.mjJNT_HINGE
+            ]
+            # A Menagerie quadruped's file drives its legs with torque motors (the library turns them into servos).
+            why = (
+                f" (its {len(motors)} joint motors are torque motors; a rhythm sets joint angles through position "
+                "servos)"
+                if motors
+                else ""
+            )
+            raise CPGError(f"{robot} has {len(servos)} servo joints; walking by rhythm needs at least 2{why}")
         driven = [int(model.actuator_trnid[a, 0]) for a in servos]
         ranges = np.array(list(bounded.values()))
         qpos, qvel = [], []

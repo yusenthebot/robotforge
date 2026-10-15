@@ -482,13 +482,17 @@ class BehaviorManager:
         return out
 
     def _can_learn_walk(self, robot: str) -> bool:
+        return self._cannot_learn_walk(robot) is None
+
+    def _cannot_learn_walk(self, robot: str) -> str | None:
+        """Why `robot` cannot learn a walk of its own in RL II, None if it can."""
         from robotforge.control.cpg import Body, CPGError
 
         try:
             Body.find(self.session.model, robot)
-        except CPGError:
-            return False
-        return True
+        except CPGError as exc:
+            return str(exc)
+        return None
 
     def kept_walk(self, robot: str) -> SavedWalk | None:
         """The walk `robot` learned in the RL II lesson and kept in this world's folder, if any."""
@@ -509,7 +513,9 @@ class BehaviorManager:
     def _rhythm_walker(self, robot: str, existing: Any, create: bool) -> RhythmWalker:
         walk = self.kept_walk(robot)
         if walk is None:
-            raise BehaviorError(f"{robot} has not learned a walk of its own; {LEARN_A_WALK}")
+            why = self._cannot_learn_walk(robot)
+            how = LEARN_A_WALK if why is None else f"and it cannot learn one in the RL II lesson: {why}"
+            raise BehaviorError(f"{robot} has not learned a walk of its own; {how}")
         if isinstance(existing, RhythmWalker) and existing.walk == walk:
             return existing
         try:
