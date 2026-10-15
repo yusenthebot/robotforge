@@ -49,6 +49,13 @@ TASKS: dict[str, dict[str, Any]] = {
         "suggested_iterations": 1000,
         "seconds_per_iteration": 0.8,  # measured on an M5 Max, 1024 environments
     },
+    "g1_walk_flat": {
+        "robot": "g1",
+        "algo": "ppo",
+        "explain": "Unitree G1 humanoid learns to walk forward, sideways and turn on command on flat ground.",
+        "suggested_iterations": 2200,  # UniLab's own setting for this task (2048 environments)
+        "seconds_per_iteration": 1.6,  # measured on an M5 Max, 2048 environments
+    },
 }
 
 
