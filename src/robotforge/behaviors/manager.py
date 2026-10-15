@@ -146,16 +146,18 @@ class BehaviorManager:
         """The robots by name: the open world's, else those a loaded model names with a prefix."""
         return self._names(self._world())
 
-    def resolve(self, robot: str) -> str:
+    def resolve(self, robot: str, arm: bool = False) -> str:
         """The robot `robot` means: spelled exactly, in other capitals or as "the dog"; "Rover/Arm" for an arm
-        mounted on a robot. Raises BehaviorError listing the robots when there is no such one."""
+        mounted on a robot. Raises BehaviorError listing the robots when there is no such one. `arm` is for the
+        tools that work an arm: another part of a robot (a leg, "dog/trunk") is then refused as "not an arm"
+        and the arms it has are named, where any other tool is told that it is a part and to use the robot."""
         # Scripts poll pose() hundreds of times a second. An exact name that the compiled model knows is
         # enough, so only a name that needs matching pays for reading and parsing world.yaml.
         if robot in self._prefixes():
             return robot
-        return self._resolve(robot, self._world())
+        return self._resolve(robot, self._world(), arm)
 
-    def _resolve(self, robot: str, world: World | None) -> str:
+    def _resolve(self, robot: str, world: World | None, arm: bool = False) -> str:
         names = self._names(world)
         owner, slash, part = robot.partition("/")
         found = wording.match(owner, names)
@@ -163,16 +165,18 @@ class BehaviorManager:
             raise BehaviorError(wording.unknown("robot", robot, names))
         if not slash:
             return found
+        named = f"{found}/{part.strip()}"
         arms = self.arms(found)
-        arm = wording.match(robot, arms)
-        if arm is None:
-            if arms:
-                raise BehaviorError(f"'{found}/{part}' is not an arm of {found}; use {' or '.join(arms)}")
-            raise BehaviorError(
-                f"'{found}/{part}' is not an arm: {found} carries no arm (add_robot with build can mount one: "
-                "see builder_guide)"
-            )
-        return arm
+        mounted = wording.match(named, arms)
+        if mounted is not None:
+            return mounted
+        if not arm:
+            raise BehaviorError(f"{named!r} is a part of {found}, not a robot; use {found}")
+        if arms:
+            raise BehaviorError(f"{named!r} is not an arm of {found}; use {' or '.join(arms)}")
+        raise BehaviorError(
+            f"{named!r} is not an arm: {found} carries no arm (add_robot with build can mount one: see builder_guide)"
+        )
 
     def kind(self, robot: str) -> Kind:
         world = self._world()  # read once: it comes from the file
@@ -450,7 +454,7 @@ class BehaviorManager:
 
     def _arm_name(self, robot: str) -> str:
         """Which arm a command means: "rover/arm" names one; a robot with a single arm stands for it."""
-        robot = self.resolve(robot)  # unknown robots get the usual message
+        robot = self.resolve(robot, arm=True)  # unknown robots get the usual message
         if "/" in robot:
             return robot
         kind = self.kind(robot)

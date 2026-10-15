@@ -494,7 +494,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         gripper on the way. Fails with the distance and reach if the point cannot be reached. robot is an arm, or a
         robot carrying one ("rover", or "rover/arm" for the mounted arm)."""
         with _tool_errors():
-            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot), position, gripper)
+            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot, arm=True), position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
             return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
@@ -503,7 +503,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
         """Open or close an arm's gripper."""
         with _tool_errors():
-            arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot), state)
+            arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot, arm=True), state)
             run = await run_until(lambda: arm.done, 5.0)
             return _json({"gripper": state, **run})
 
@@ -513,7 +513,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         floor position [x, y]. Plans the motion, checks reach first, runs it and reports whether the object ended up
         there."""
         with _tool_errors():
-            arm, info = playground.behaviors.pick_and_place(playground.behaviors.resolve(robot), object, target)
+            arm, info = playground.behaviors.pick_and_place(
+                playground.behaviors.resolve(robot, arm=True), object, target
+            )
             object = info["object"]  # as the world spells it
             run = await run_until(lambda: arm.done, 40.0)
             settle = await run_until(lambda: False, 0.5)

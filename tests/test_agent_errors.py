@@ -323,6 +323,13 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("observe", {"include_image": []}, ["include_image must be true or false", "got []"]),
         ("load_scene", {"preset": "maze", "keep_robots": {}}, ["keep_robots must be true or false", "got {}"]),
         ("update_robot", {"name": "dog", "build": {}}, ["build={} would remove every part", "leave build out"]),
+        ("move", {"robot": "dog/trunk"}, ["'dog/trunk' is a part of dog, not a robot", "use dog"]),
+        ("stop", {"robot": "Dog / Trunk"}, ["'dog/Trunk' is a part of dog, not a robot", "use dog"]),
+        (
+            "move_arm",
+            {"robot": "dog/trunk", "position": [0.2, 0.0, 0.1]},
+            ["'dog/trunk' is not an arm", "dog carries no arm"],
+        ),
         ("simulate", {"seconds": 100}, ["seconds must be in (0, 60], got 100"]),
         ("sim_control", {"action": "stop"}, ["action", "'stop'", "play, pause, reset"]),
         ("observe", {"view": "sideways"}, ["unknown view 'sideways'", "Views:", "front", "overview"]),
