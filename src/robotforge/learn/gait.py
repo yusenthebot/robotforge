@@ -229,9 +229,9 @@ STEPS = (
             "Set Which dog to the Go2. Same trot, T 0.36, 0.6 m/s. Guess, then walk 5 s.",
         ),
         done=_text(
-            "Go2 走了 2.7 米，我们的狗 1.8 米。公式没变，变的是腿长：Go2 的腿 0.28 米，我们的 0.21 米，"
+            "Go2 走了 2.7 米，我们的狗 1.9 米。公式没变，变的是腿长：Go2 的腿 0.28 米，我们的 0.21 米，"
             "最大步幅跟着变大，同样的 T 就能走得更快。好的步态参数是按腿长来定的。",
-            "The Go2 covered 2.7 m, our dog 1.8 m. The formula is the same; the legs are not: 0.28 m on the Go2 "
+            "The Go2 covered 2.7 m, our dog 1.9 m. The formula is the same; the legs are not: 0.28 m on the Go2 "
             "against 0.21 m, so the longest stride grows and the same T goes faster. Good gait settings scale "
             "with leg length.",
         ),

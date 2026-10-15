@@ -8,6 +8,8 @@ template's names or, for any other robot (library, imported, built from parts), 
 its kinematic tree: four or six chains of three hinges from the floating trunk to a foot.
 A tripod gait is the trot's six-legged sibling: front and rear legs of one side step
 with the middle leg of the other, so three feet always hold the robot up.
+A push (a shove, or a drag in the viewer) makes the robot step along with it instead of
+fighting it, standing or walking; see PUSH_DRIFT.
 """
 
 from __future__ import annotations
@@ -62,6 +64,31 @@ SPEED_MARGIN = 0.7
 # motors these walk 3.2 m in 10 s at 0.3 m/s, straight.
 MOTOR_SATURATION = 0.15
 MOTOR_DAMPING_RATIO = 0.25
+# Push recovery. Standing still, the gait is a stiff table: dragged sideways by the viewer it pivoted on
+# the feet of that side once the pull passed about half its weight (Go2 at 0.46 g, our dog at 0.58 g)
+# and rolled onto its back. Trotting, its strides fought the drag and it tipped over the same way when
+# grabbed by the back. So a pushed robot steps, and while it recovers (1) its sideways strides follow
+# the trunk instead of fighting it and (2) its swinging feet aim at the ground as if the trunk were
+# level: on a tilted trunk that lands them lower on the high side and further out on the side it falls
+# to. Without (2) the Go2 still flipped; leveling roll alone left the dog drifting sideways for good.
+# A short shove that the stance soaks up does not start any of this.
+PUSH_DRIFT = 0.08  # standing: the trunk moved this many leg lengths from where it stood...
+DRIFT_TAU = 2.0  # ...lately (s; slow creep is forgotten)
+# Speeds are in units of sqrt(g * leg length), so one setting fits small and large robots.
+WALK_PUSH_SPEED = 0.08  # walking: sideways speed, averaged over a cycle (a straight trot stays under 0.012)
+PUSH_LEAN = math.radians(4.0)  # roll away from the usual that counts as a push (a straight trot: under 2)
+TURN_LEAN = math.radians(3.0)  # per rad/s of turn: turning leans the trunk and slips it sideways...
+TURN_SLIP = 0.5  # ...by up to this times turn rate times leg length (Go2 at 2 rad/s: 0.18 m/s)
+CALM_SPEED = 0.03  # recovered once the cycle-averaged speed off the command is this low...
+RECOVER_CYCLES = 2.0  # ...for this many cycles
+# s to blend recovery in: at once from a stand, gently while walking, where the trot soaks up much of a
+# shove by itself (blended in as fast, recovery added about 2 degrees of tilt to such shoves)
+RECOVER_RISE, RECOVER_RISE_WALKING = 0.05, 0.3
+RECOVER_FALL = 0.5  # cycles to blend back into the plain gait
+LATERAL_FOLLOW = 0.5  # share of the trunk's sideways velocity its strides follow (1 kept it drifting)
+FOLLOW_TAU = 0.25  # cycles: the sideways velocity the strides follow is smoothed this much
+REST_TAU = 1.0  # s: the usual roll (on a side slope, say) adapts this slowly
+SETTLE_TIME = 0.5  # s after a start or reset during which a robot settles onto its feet unwatched
 
 # (name, [hip, thigh, knee] joint ids, foot body id, foot point in that body's frame, phase offset)
 LegSpec = tuple[str, list[int], int, np.ndarray, float]
@@ -158,6 +185,14 @@ class QuadrupedGait:
         self._v_meas = np.zeros(3)
         self._v_int = np.zeros(3)
         self._saturated = False  # the last plan had to shorten a stride
+        # Push recovery (see PUSH_DRIFT), also updated by rebinding only.
+        self._own_pattern = [leg.phase_offset for leg in self.legs]  # recovery is tuned for this pattern
+        self._v_fast = np.zeros(3)  # the trunk velocity again, smoothed over a quarter cycle
+        self._rest_roll = 0.0  # the roll the trunk usually holds here
+        self._settled_at = -math.inf  # pushes count from this time on
+        self._drift = np.zeros(2)  # how far the trunk moved while standing still, lately (forward, left)
+        self._recover_until = -math.inf
+        self._recovery = 0.0  # 0 = the plain gait, 1 = recovering, blended in between
 
     def set_period(self, period: float) -> None:
         """Seconds per gait cycle; the fastest accepted speed follows from it and the longest stride."""
@@ -207,6 +242,8 @@ class QuadrupedGait:
 
     def _plan(self, data: mujoco.MjData) -> None:
         t = data.time
+        if self._last_t is None or t < self._last_t:  # a new start, or the data was reset under us
+            self._settled_at = t + SETTLE_TIME
         dt = 0.0 if self._last_t is None else max(0.0, t - self._last_t)
         self._last_t = t
         # Smooth command changes so the robot does not stumble on a sudden key press.
@@ -214,12 +251,27 @@ class QuadrupedGait:
         self.speed += alpha * (self.command_speed - self.speed)
         self.turn += alpha * (self.command_turn - self.turn)
         moving = abs(self.command_speed) > 1e-3 or abs(self.command_turn) > 1e-3
-        self._amplitude += alpha * ((1.0 if moving else 0.0) - self._amplitude)
-        self._phase = (self._phase + dt / self.period) % 1.0
 
         quat = data.xquat[self.trunk]
         roll, pitch = _roll_pitch(quat)
-        v_body, turn = self._corrected_velocity(data, dt)
+        measured = self._measure(data)
+        self._v_meas = self._v_meas + (1.0 - math.exp(-dt / self.period)) * (measured - self._v_meas)
+        self._v_fast = self._v_fast + (1.0 - math.exp(-dt / (FOLLOW_TAU * self.period))) * (measured - self._v_fast)
+        recovering = self._recovering(t, dt, measured, roll, moving)
+        if recovering and not moving:  # pushed while standing: start stepping right away
+            self._amplitude += (1.0 - math.exp(-dt / RECOVER_RISE)) * (1.0 - self._amplitude)
+        else:
+            self._amplitude += alpha * ((1.0 if moving else 0.0) - self._amplitude)
+        self._phase = (self._phase + dt / self.period) % 1.0
+
+        v_body, turn = self._corrected_velocity(dt)
+        w = self._recovery
+        level = None
+        if w > 1e-3:
+            # Sideways strides follow the trunk, and the velocity correction lets go of that axis.
+            v_body = np.array([v_body[0], (1.0 - w) * v_body[1] + w * LATERAL_FOLLOW * self._v_fast[1]])
+            self._v_int = np.array([self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
+            level = _tilt(quat)
         half_cycle = self.period * self.duty
         saturated = False
         for leg in self.legs:
@@ -242,12 +294,53 @@ class QuadrupedGait:
                 target[2] += self._amplitude * self.lift * math.sin(math.pi * u)
             # Level the trunk: extend legs on the low side.
             target[2] += self.attitude_gain * (-pitch * leg.hip[0] + roll * leg.hip[1])
+            if level is not None and phase >= self.duty:
+                # A swinging foot aims where it would if the trunk were level (see PUSH_DRIFT).
+                target = (1.0 - w) * target + w * (level.T @ target)
             leg.q, _ = self.ik.solve(leg.chain, target, leg.q, iterations=4)
         self._targets = np.concatenate([leg.q for leg in self.legs])
         self._saturated = saturated
 
-    def _corrected_velocity(self, data: mujoco.MjData, dt: float) -> tuple[np.ndarray, float]:
-        """The body velocity and turn rate to step for: the command plus a PI correction."""
+    def _recovering(self, t: float, dt: float, measured: np.ndarray, roll: float, moving: bool) -> bool:
+        """Whether the robot is recovering from a push; also eases the recovery in and out."""
+        if t < self._settled_at:  # still settling onto its feet: nothing to recover from yet
+            self._rest_roll = roll
+            recovering = False
+        else:
+            recovering = self._watch_for_pushes(t, roll - self._rest_roll, moving)
+        if moving or recovering or self._amplitude >= 0.05 or t < self._settled_at:
+            self._drift = np.zeros(2)
+        else:
+            self._drift = math.exp(-dt / DRIFT_TAU) * self._drift + dt * measured[:2]
+        if not recovering:
+            self._rest_roll += (1.0 - math.exp(-dt / REST_TAU)) * (roll - self._rest_roll)
+        rise = RECOVER_RISE_WALKING if moving else RECOVER_RISE
+        tau = rise if recovering else RECOVER_FALL * self.period
+        self._recovery += (1.0 - math.exp(-dt / tau)) * (float(recovering) - self._recovery)
+        return recovering
+
+    def _watch_for_pushes(self, t: float, lean: float, moving: bool) -> bool:
+        """Start (or keep up) a recovery when the trunk moves or leans in a way the gait does not."""
+        if [leg.phase_offset for leg in self.legs] != self._own_pattern:
+            return False  # tuned for the gait's own trot or tripod; a pace or a bound rocks by design
+        scale = math.sqrt(9.81 * self.leg_length)
+        slip = TURN_SLIP * abs(self.turn) * self.leg_length
+        if t < self._recover_until:  # keep at it until the trunk is calm again
+            off = abs(self._v_meas[1]) if moving else math.hypot(self._v_meas[0] - self.speed, self._v_meas[1])
+            pushed = off > CALM_SPEED * scale + slip
+        elif not moving and self._amplitude < 0.05:  # standing still
+            pushed = float(np.linalg.norm(self._drift)) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
+        elif moving:
+            pushed = abs(self._v_meas[1]) > WALK_PUSH_SPEED * scale + slip
+            pushed = pushed or abs(lean) > PUSH_LEAN + TURN_LEAN * abs(self.turn)
+        else:  # settling into a stand after a walk
+            pushed = False
+        if pushed:
+            self._recover_until = t + RECOVER_CYCLES * self.period
+        return t < self._recover_until
+
+    def _measure(self, data: mujoco.MjData) -> np.ndarray:
+        """The trunk's velocity (forward, left) in its heading frame and its yaw rate, right now."""
         rot = np.empty(9)
         mujoco.mju_quat2Mat(rot, data.xquat[self.trunk])
         rot = rot.reshape(3, 3)
@@ -255,9 +348,10 @@ class QuadrupedGait:
         c, s = math.cos(yaw), math.sin(yaw)
         lin = data.qvel[self.root_dof : self.root_dof + 3]  # world frame
         yaw_rate = (rot @ data.qvel[self.root_dof + 3 : self.root_dof + 6])[2]  # angular part is in body frame
-        measured = np.array([c * lin[0] + s * lin[1], -s * lin[0] + c * lin[1], yaw_rate])
-        beta = 1.0 - math.exp(-dt / self.period)  # average over about one gait cycle
-        self._v_meas = self._v_meas + beta * (measured - self._v_meas)
+        return np.array([c * lin[0] + s * lin[1], -s * lin[0] + c * lin[1], yaw_rate])
+
+    def _corrected_velocity(self, dt: float) -> tuple[np.ndarray, float]:
+        """The body velocity and turn rate to step for: the command plus a PI correction."""
         want = np.array([self.speed, 0.0, self.turn])
         limit = np.array([0.5 * self._stride_speed, 0.5 * self._stride_speed, 1.0])
         if self._amplitude < 0.05:  # standing: nothing to correct, and no windup for the next start
@@ -267,6 +361,16 @@ class QuadrupedGait:
         correction = self._amplitude * (VELOCITY_KP * (want - self._v_meas) + self._v_int)
         corrected = want + np.clip(correction, -limit, limit)
         return corrected[:2], float(corrected[2])
+
+
+def _tilt(quat: np.ndarray) -> np.ndarray:
+    """The trunk's rotation without its heading: the roll and pitch part, as a 3x3 matrix."""
+    rot = np.empty(9)
+    mujoco.mju_quat2Mat(rot, quat)
+    rot = rot.reshape(3, 3)
+    yaw = math.atan2(rot[1, 0], rot[0, 0])
+    c, s = math.cos(yaw), math.sin(yaw)
+    return np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]) @ rot
 
 
 def _roll_pitch(quat: np.ndarray) -> tuple[float, float]:
