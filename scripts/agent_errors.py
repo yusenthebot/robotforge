@@ -488,11 +488,13 @@ def leaves(value: Any) -> list[str]:
     return [text, Path(text).name] if "/" in text else [text]
 
 
-# What an agent must never be shown: Python's or pydantic's own wording, and paths into robotforge's source.
+# What an agent must never be shown: Python's or pydantic's own wording, a position inside robotforge's data
+# ("robots.3:") and paths into its source or its libraries.
 LEAK = re.compile(
-    r"Traceback|errors\.pydantic\.dev|For further information|\[type=|validation errors? for|pydantic|site-packages"
-    r"|UnexpectedToolError"
+    r"Traceback|errors\.pydantic\.dev|For further information|\[type=|validation errors? for|pydantic"
+    r"|UnexpectedToolError|Input should|Extra inputs|Field required|Value error|\b(?:robots|objects|terrain)\.\d+\b"
 )
+INTERNAL = re.compile(r"[\\/]src[\\/]robotforge[\\/]|site-packages")
 # Words that carry the way out: the valid choices, the right form, the allowed range.
 FIX = re.compile(
     r"\b(use|choose|one of|did you mean|e\.g\.|for example|try|call|give|put|say|must be|should be|expected|valid"
@@ -509,7 +511,7 @@ CHOICES = re.compile(
 
 def grade(case: Case, text: str, tool_names: set[str], params: set[str]) -> list[str]:
     problems = []
-    if LEAK.search(text) or str(REPO) in text:
+    if LEAK.search(text) or INTERNAL.search(text):
         problems.append("leak")
     tokens = {t for t in leaves(case.args) if t} | set(case.args) | params
     pointed = any(re.search(rf"(?<![\w.]){re.escape(t)}(?!\w|\.\d)", text) for t in tokens)
@@ -581,7 +583,7 @@ class Bench:
             self.restore()
         if accepted:
             problems = ["silent"] if case.note and not re.search(case.note, text, re.IGNORECASE) else []
-            if str(REPO) in text or "site-packages" in text:
+            if INTERNAL.search(text):
                 problems.append("noisy")  # a result that shows robotforge's own frames or paths
         else:
             problems = grade(case, text, set(self.schemas), self.schemas.get(case.tool, set()))
