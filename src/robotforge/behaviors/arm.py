@@ -18,6 +18,10 @@ from robotforge.sim.actuators import drives_joint
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
 APPROACH = 0.07  # m above a grasp or place point
+REACH_TOL = 0.008  # m: an IK answer further than this from the target means "cannot reach"
+RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nearest start gets stuck
+JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
+PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 
 
 @dataclass
@@ -26,6 +30,7 @@ class Waypoint:
     gripper: float | None  # gripper ctrl value; None = unchanged
     duration: float
     label: str
+    joints: np.ndarray | None = None  # a joint-space move to these angles instead of a tool position
 
 
 class ArmMotion:
@@ -55,6 +60,10 @@ class ArmMotion:
         self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
+        self.home = self.q.copy()
+        # Shapes that already overlap in the home pose (coarse collision shapes around a joint, common in
+        # imported models) are part of the model, not a collision to steer around.
+        self._touching_at_home = self._clashes(self.q)
         # An arm on a moving robot: IK must start from where that robot is now (see sync).
         root = _root_body(model, tool_body)
         free = [j for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])]
@@ -62,11 +71,18 @@ class ArmMotion:
         self.free_adr = int(model.jnt_qposadr[free[0]]) if free else None
         # Paths sweep around the base axis so the tool never cuts through the arm itself.
         self.base_body = int(model.jnt_bodyid[joints[0]])
+        # Bodies the arm's joints move, and the robot they belong to: IK answers must not run them into
+        # each other, into whatever carries the arm, or into the floor.
+        self._moving = {b for b in range(model.nbody) if _descends_from(model, b, self.base_body)}
+        self._robot_root = int(model.body_rootid[self.base_body])
+        self._touching_at_home: set[tuple[int, int]] = set()
         self._base_parent = int(model.body_parentid[self.base_body])
         self.ik.point(self.chain, self.q)
         self._read_base(self.ik.data)
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
+        self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
+        self._axis0 = DOWN  # where the tool pointed when the current move began
         self.current_label = "idle"
         self.log: list[str] = []
 
@@ -85,8 +101,62 @@ class ArmMotion:
     # ---- planning ------------------------------------------------------------------
 
     def reach_error(self, target: np.ndarray) -> float:
-        _, err = self.ik.solve(self.chain, target, self._seed(target), iterations=60, axis=(self.tool_axis, DOWN))
-        return err
+        return self._solve(target)[1]
+
+    def _solve(self, target: np.ndarray) -> tuple[np.ndarray, float, bool]:
+        """Joint values for the tool at `target` pointing down: (q, position error, needed a restart).
+
+        Damped least squares from the current pose can stall on a joint limit or in the wrong elbow
+        branch for points the arm reaches easily some other way, so a stuck solve tries again from
+        fixed random starts (the base still turned toward the target) and keeps the best answer.
+        """
+        seed = self._seed(target)
+        q, err = self.q, np.inf
+        # From the pose the arm is in, then with its base turned toward the target: the first keeps an arm
+        # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
+        for start in (self.q, seed):
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            if err2 <= REACH_TOL and not self._collides(q2):
+                return q2, err2, False
+            if err2 < err:
+                q, err = q2, err2
+        best: tuple[np.ndarray, float, float] | None = None  # (q, error, largest joint move from now)
+        rng = np.random.default_rng(0)
+        for _ in range(RESTARTS):
+            start = rng.uniform(self.chain.lower, self.chain.upper)
+            start[0] = seed[0]
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            if err2 <= REACH_TOL and not self._collides(q2):
+                travel = float(np.max(np.abs(q2 - self.q)))
+                if best is None or travel < best[2]:  # of the answers that work, the one nearest to now
+                    best = (q2, err2, travel)
+            elif err2 < err:
+                q, err = q2, err2
+        if best is not None:
+            return best[0], best[1], True
+        return q, max(err, REACH_TOL * 1.01), True  # nothing collision-free: as good as out of reach
+
+    def _collides(self, q: np.ndarray) -> bool:
+        """True when the arm at `q` runs into itself, its carrier or the floor (in the IK's own copy)."""
+        return bool(self._clashes(q) - self._touching_at_home)
+
+    def _clashes(self, q: np.ndarray) -> set[tuple[int, int]]:
+        """Geom pairs overlapping at `q` with a moving part of the arm on one side and the robot or the floor
+        on the other."""
+        m, d = self.ik.model, self.ik.data
+        self.ik.point(self.chain, q)  # poses every body
+        mujoco.mj_collision(m, d)
+        pairs = set()
+        for con in d.contact[: d.ncon]:
+            if con.dist > -PENETRATION:
+                continue
+            g1, g2 = int(con.geom1), int(con.geom2)
+            b1, b2 = int(m.geom_bodyid[g1]), int(m.geom_bodyid[g2])
+            if b1 not in self._moving:
+                b1, b2 = b2, b1
+            if b1 in self._moving and (b2 == 0 or int(m.body_rootid[b2]) == self._robot_root):
+                pairs.add((min(g1, g2), max(g1, g2)))
+        return pairs
 
     def _seed(self, target: np.ndarray) -> np.ndarray:
         """Start IK with the base already turned toward the target; DLS alone can stall on big turns."""
@@ -108,6 +178,17 @@ class ArmMotion:
 
     def set_gripper(self, state: str, wait: float = 0.5) -> None:
         self.queue.append(Waypoint(None, self._grip(state), wait, f"gripper {state}"))
+
+    def go_home(self) -> None:
+        """Back to the home pose joint by joint, e.g. so every run of a test starts from the same place."""
+        travel = float(np.max(np.abs(self.home - self._planned_joints())))
+        self.queue.append(Waypoint(None, None, max(0.5, travel / JOINT_SPEED), "home", joints=self.home.copy()))
+
+    def _planned_joints(self) -> np.ndarray:
+        for wp in reversed(self.queue):
+            if wp.joints is not None:
+                return wp.joints
+        return self.q
 
     def pick_and_place(
         self, obj_pos: np.ndarray, obj_half_height: float, place: np.ndarray, place_top: float | None = None
@@ -141,11 +222,13 @@ class ArmMotion:
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat"))
 
     def tool_target_end(self) -> np.ndarray:
-        for wp in reversed(self.queue):
+        """Where the tool will be once the queued moves are done."""
+        pending = [*([self._segment[1]] if self._segment is not None else []), *self.queue]
+        for wp in reversed(pending):
+            if wp.joints is not None:
+                return self.ik.point(self.chain, wp.joints)
             if wp.position is not None:
                 return wp.position
-        if self._segment is not None and self._segment[1].position is not None:
-            return self._segment[1].position
         return self.ik.point(self.chain, self.q)
 
     @property
@@ -170,7 +253,20 @@ class ArmMotion:
         if self._segment is None and self.queue:
             wp = self.queue.popleft()
             start = data.site_xpos[self.site].copy()
+            self._branch = None
+            if wp.joints is not None:
+                self._branch = (self.q.copy(), wp.joints)
+            elif wp.position is not None:
+                goal, err, restarted = self._solve(wp.position)
+                if restarted and err <= REACH_TOL:
+                    # The goal lies in another elbow or wrist branch, which no straight tool path reaches:
+                    # move joint by joint instead, as industrial arms do, slowly enough not to fling a load.
+                    self._branch = (self.q.copy(), goal)
+                    travel = float(np.max(np.abs(goal - self.q)))
+                    wp = Waypoint(wp.position, wp.gripper, max(wp.duration, travel / JOINT_SPEED), wp.label)
             self._segment = (start, wp, t)
+            rot = data.xmat[self.chain.body].reshape(3, 3) if self.free_adr is None else None
+            self._axis0 = rot @ self.tool_axis if rot is not None else DOWN
             self.current_label = wp.label
             if wp.gripper is not None and self.gripper >= 0:
                 data.ctrl[self.gripper] = wp.gripper
@@ -180,10 +276,15 @@ class ArmMotion:
             return
         start, wp, t0 = self._segment
         u = min(1.0, (t - t0) / wp.duration)
-        if wp.position is not None:
+        if wp.position is not None or wp.joints is not None:
             s = u * u * (3 - 2 * u)  # smoothstep
-            target = self._arc_point(start, wp.position, s)
-            self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=(self.tool_axis, DOWN))
+            if self._branch is not None:
+                q0, q1 = self._branch
+                self.q = q0 + (q1 - q0) * s
+            else:
+                target = self._arc_point(start, wp.position, s)
+                axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
+                self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
         data.ctrl[self.actuators] = self.q
         if u >= 1.0:
             self._segment = None
@@ -212,7 +313,7 @@ class ArmMotion:
             return float((to_angle - from_angle + np.pi) % (2 * np.pi) - np.pi)
         return float(min(options, key=lambda g: abs(g - start)) - start)
 
-    def unreachable(self, points: dict[str, np.ndarray], tol: float = 0.008) -> list[str]:
+    def unreachable(self, points: dict[str, np.ndarray], tol: float = REACH_TOL) -> list[str]:
         """Names of points the tool cannot reach while pointing down."""
         return [name for name, p in points.items() if self.reach_error(p) > tol]
 
@@ -237,6 +338,26 @@ def _path_hinges(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> l
         joints = own + joints
         body = int(model.body_parentid[body])
     return joints
+
+
+def _turn_toward(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
+    """The unit vector a fraction `s` of the way from direction `a` to direction `b` (spherical blend)."""
+    a = a / np.linalg.norm(a)
+    angle = float(np.arccos(np.clip(a @ b, -1.0, 1.0)))
+    if angle < 1e-6:
+        return b
+    if np.pi - angle < 1e-6:  # opposite: turn through any perpendicular direction
+        a = a + 1e-3 * np.array([1.0, 0.0, 0.0] if abs(a[0]) < 0.9 else [0.0, 1.0, 0.0])
+        a, angle = a / np.linalg.norm(a), float(np.arccos(np.clip(a @ b / np.linalg.norm(a), -1.0, 1.0)))
+    return (np.sin((1 - s) * angle) * a + np.sin(s * angle) * b) / np.sin(angle)
+
+
+def _descends_from(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
+    while body > 0:
+        if body == ancestor:
+            return True
+        body = int(model.body_parentid[body])
+    return False
 
 
 def _root_body(model: mujoco.MjModel, body: int) -> int:

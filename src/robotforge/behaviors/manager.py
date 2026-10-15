@@ -12,7 +12,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
-from robotforge.behaviors.arm import ArmMotion
+from robotforge.behaviors.arm import REACH_TOL, ArmMotion
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.snake import SnakeGait
@@ -290,7 +290,7 @@ class BehaviorManager:
             raise BehaviorError("position is [x, y, z] in meters (world frame)")
         with self.session.lock:
             arm = self._arm(robot)
-            if arm.reach_error(target) > 0.008:
+            if arm.reach_error(target) > REACH_TOL:
                 raise BehaviorError(
                     f"{robot} cannot reach {position} with its gripper pointing down; try a point closer to its base"
                 )
