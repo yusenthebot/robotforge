@@ -3,7 +3,7 @@
 import time
 
 import pytest
-from importer_fixtures import critter_urdf, write
+from importer_fixtures import critter_mjcf, critter_urdf, write
 
 from robotforge.behaviors import rhythm_walk
 from robotforge.behaviors.manager import BehaviorError
@@ -139,13 +139,16 @@ def test_the_robot_no_gait_code_knows_is_the_one_offered(pg):
     assert robots[-1]["en"] == "Your robot: crab"
 
 
-def test_a_robot_imported_from_a_urdf_learns_keeps_its_walk_and_walks_at_home(pg, monkeypatch):
+@pytest.mark.parametrize("file", ["critter.urdf", "critter.xml"])
+def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg, monkeypatch, file):
+    """A URDF, or an MJCF written by hand. Regression (MJCF): its unnamed motors belonged to no robot, so the lesson
+    never offered it, and its home keyframe was dropped."""
     # How well turns are learned is the starfish's test; this one is about the imported file finding its way.
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 8)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
     pg.new_world("mine")
-    write(pg.store.dir / "critter.urdf", critter_urdf())
-    pg.add_robot("critter", file="critter.urdf")  # a path relative to the world folder, as world.yaml keeps it
+    write(pg.store.dir / file, critter_urdf() if file.endswith(".urdf") else critter_mjcf())
+    pg.add_robot("critter", file=file)  # a path relative to the world folder, as world.yaml keeps it
     assert pg.behaviors.kind("critter").value == "other"  # two-joint legs: no gait code knows it
     with pytest.raises(BehaviorError, match="RL II"):
         pg.behaviors.move("critter", 0.2, 0.0)
