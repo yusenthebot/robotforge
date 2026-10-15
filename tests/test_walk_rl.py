@@ -3,7 +3,9 @@
 import time
 
 import pytest
+from importer_fixtures import critter_urdf, write
 
+from robotforge.behaviors import rhythm_walk
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.learn import walk_rl
 from robotforge.playground import Playground
@@ -119,3 +121,38 @@ def test_the_robot_no_gait_code_knows_is_the_one_offered(pg):
     described = pg.lessons.start("learn_to_walk")
     robots = next(c for c in described["controls"] if c["id"] == "robot")["options"]
     assert robots[-1]["en"] == "Your robot: crab"
+
+
+def test_a_robot_imported_from_a_urdf_learns_keeps_its_walk_and_walks_at_home(pg, monkeypatch):
+    # How well turns are learned is the starfish's test; this one is about the imported file finding its way.
+    monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 8)
+    monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
+    pg.new_world("mine")
+    write(pg.store.dir / "critter.urdf", critter_urdf())
+    pg.add_robot("critter", file="critter.urdf")  # a path relative to the world folder, as world.yaml keeps it
+    assert pg.behaviors.kind("critter").value == "other"  # two-joint legs: no gait code knows it
+    with pytest.raises(BehaviorError, match="RL II"):
+        pg.behaviors.move("critter", 0.2, 0.0)
+    described = pg.lessons.start("learn_to_walk")
+    robots = next(c for c in described["controls"] if c["id"] == "robot")["options"]
+    assert robots[-1]["en"] == "Your robot: critter"
+    lesson = pg.lessons.lesson
+    pg.lessons.handle({"action": "set", "control": "robot", "value": 3})
+    pg.lessons.handle({"action": "set", "control": "iterations", "value": 15})
+    trained = _train(pg)["results"]["training"]
+    assert trained["robot"] == "yours" and trained["distance"] > walk_rl.KEEP_MIN
+    pg.lessons.handle({"action": "press", "control": "keep"})
+    assert pg.lessons.ctx.results["kept"]["robot"] == "critter"
+    lesson.turning.join(timeout=120)
+    assert pg.lessons.ctx.results["kept"]["turns"], pg.lessons.ctx.results["summary"]["en"]
+    pg.lessons.exit()
+
+    start = pg.behaviors.pose("critter")
+    assert pg.behaviors.move("critter", 0.2, 0.0)["controller"] == "learned rhythm"
+    pg.run_fast(lambda: False, walk_rl.ATTEMPT)
+    end = pg.behaviors.pose("critter")
+    gone = end["position"][0] - start["position"][0]
+    assert gone > 0.5 * trained["distance"], f"learned {trained['distance']} m, walked {gone:.2f} m at home"
+    assert pg.behaviors.move("critter", 0.0, 0.8)["turning"] == "left"
+    pg.run_fast(lambda: False, 2.0)
+    assert (pg.behaviors.pose("critter")["heading_deg"] - end["heading_deg"] + 540) % 360 - 180 > 10

@@ -200,7 +200,8 @@ STEPS = (
             "「哪个机器人」选三脚海星：三条腿、每条两个关节，是用零件拼出来的。"
             "我们的步态程序只认 4 条或 6 条三关节的腿，"
             "它不会走。\n"
-            "如果你来这里之前的世界里有自己拼的机器人，它也在列表里。让它学会以后点「把这个走法存给我的机器人」，"
+            "如果你来这里之前的世界里有你自己的机器人（自己拼的，或者从文件导入的），它也在列表里。"
+            "让它学会以后点「把这个走法存给我的机器人」，"
             "回到你的世界，在聊天里叫它往前走，或者选中它按 W，它就用学到的走法走。\n先猜，再让海星学。",
             "Set Which robot to the three-legged starfish: three legs of two joints each, built from parts. Our gait "
             "code only knows four or six legs of three joints, so it cannot walk this one.\n"
@@ -451,8 +452,13 @@ class LearnToWalkLesson(Lesson):
             for i, (key, _, entry) in enumerate(self.robots)
         ]
         world = World.model_validate({"name": "learn_to_walk", "floor": {"style": "concrete"}, "robots": robots})
-        self.model = compile_world(world).model
+        self.model = compile_world(world, self._world_dir()).model
         return self.model
+
+    def _world_dir(self) -> Path | None:
+        """The learner's world folder, where a robot they imported from a file finds it (a relative path in their
+        world.yaml means one next to it), as their world itself compiles."""
+        return self.own[1] if self.own is not None else None
 
     def _your_robot_first(self, step: Step) -> Step:
         """A learner who came to teach their own robot (an agent sends them here) can from the first step."""
@@ -471,7 +477,8 @@ class LearnToWalkLesson(Lesson):
 
     def _own_robot(self) -> tuple[str, tuple[str, str], dict[str, Any]] | None:
         """A robot from the world the learner came from that can walk by rhythm, if there is one; one that no
-        gait code knows comes first, since that is the one that needs to learn."""
+        gait code knows comes first, since that is the one that needs to learn. Robots imported from a file count
+        too: their world compiles them against its folder, and so does the lesson."""
         store = getattr(self.playground, "store", None)
         if store is None:
             return None
@@ -481,12 +488,10 @@ class LearnToWalkLesson(Lesson):
             return None
         found = []
         for entry in world.robots:
-            if entry.file is not None:  # imported files resolve against their own world folder
-                continue
             spec = entry.model_dump(exclude={"name", "pos", "yaw"}, exclude_none=True)
             try:
                 solo = compile_world(
-                    World.model_validate({"name": "solo", "robots": [{"name": "yours", **spec}]})
+                    World.model_validate({"name": "solo", "robots": [{"name": "yours", **spec}]}), store.dir
                 ).model
                 Body.find(solo, "yours")
             except (CPGError, ValueError):
@@ -576,7 +581,7 @@ class LearnToWalkLesson(Lesson):
         if key not in self.solo:
             entry = next(e for k, _, e in self.robots if k == key)
             self.solo[key] = compile_world(
-                World.model_validate({"name": "solo", "robots": [{"name": key, **entry}]})
+                World.model_validate({"name": "solo", "robots": [{"name": key, **entry}]}), self._world_dir()
             ).model
         return self.solo[key]
 
