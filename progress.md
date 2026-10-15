@@ -361,9 +361,17 @@ Rounds 1-3 done, 2026-10-14.
   - A wander weight of 6: the tripod nearly stopped turning (7 deg/s); 3 keeps the spots tight (6 to 9 cm) at 45 to 87 deg/s.
   - One start per side: one run learned 16 deg/s, the next 87.
 
+## Round 30 (2026-10-15): edits keep the world where it is (phase D)
+
+- Every edit compiled the world again and loaded a fresh simulation, so robots jumped back to their start (a Codex session re-walked its Go2 after moving a bin). `sim/carry.py` reads the live state by name before an edit (free body poses, joint angles, motor targets) and gives it back afterwards to every robot and object the edit left unchanged, standing still. New terrain or a scene starts fresh; anything that would land deep inside something new starts fresh too. Leaving a lesson brings the world back as it was.
+- Verified in the browser: the tripod walked 1.2 m with W, then stayed put through a floor change and a lesson round trip.
+- A real Codex session then broke it: a crate placed where the Go2 had started sent the Go2 back to its start, inside the crate. Mid-stride the Go2's feet sink 26 mm into the ground (the template dog's 6 mm), which read as buried; ground contacts no longer count. A regression test reproduces the session.
+- The MCP instructions now say that edits keep what they do not change in place, so agents do not redo moves.
+- What did NOT work: a 1 cm overlap threshold against everything, the ground included.
+
 ## Next-round seed
 
-Round 30 = editing a world keeps the robots where they are (phase D). Codex's review task re-walked the Go2 because moving a bin reloaded the world and put every robot back at its start; a beginner sees robots jump back for no reason. Carry each robot's pose (and joint angles, matched by name) across a recompile when the robot itself did not change; verify in the browser (move a robot, edit an object) and with Codex. Waiting on the user: `learn_walk` tool, `claude auth login`.
+Round 31 = Review round (phase D milestone): rounds 28 to 30 changed what agents see (tool list, framing), how robots move (turns) and what edits do (carry); re-verify all three in one fresh Codex session plus the browser, sweep for dead code and stale docs, and run the ambition critic. Waiting on the user: `learn_walk` tool, `claude auth login`.
 
 ## Frontier
 
@@ -371,6 +379,7 @@ Round 30 = editing a world keeps the robots where they are (phase D). Codex's re
 - Done in round 25: learned walks kept with the user's robot and driven by `move` and the keyboard.
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
+- Done in round 30: edits and lesson round trips keep robots and objects where they are.
 - Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
