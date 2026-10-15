@@ -2,6 +2,7 @@
 
 Before push recovery, a standing template dog and a standing Go2 rolled onto their backs when dragged 0.4 m
 sideways, and trotting ones did when grabbed by the back; scripts/push_bench.py measures the whole table.
+Before they stood on their gait from the start, so did a dog or a Go2 dragged in a world just opened.
 The Go2 is the offline stand-in from tests/fixtures/menagerie.
 """
 
@@ -31,10 +32,12 @@ def pg(tmp_path, monkeypatch):
     return playground
 
 
-def _on_its_gait(pg: Playground, robot: str, speed: float) -> tuple[int, int]:
-    """Add `robot`, start its built-in gait at `speed` and let it settle; its trunk body and first dof."""
+def _on_its_gait(pg: Playground, robot: str, speed: float | None) -> tuple[int, int]:
+    """Add `robot`, start its built-in gait at `speed` (None: never move it) and let it settle; its trunk body and
+    first dof."""
     pg.add_robot(robot, **ROBOTS[robot])
-    pg.behaviors.move(robot, speed, 0.0, walker="gait")
+    if speed is not None:
+        pg.behaviors.move(robot, speed, 0.0, walker="gait")
     pg.run_fast(lambda: False, 2.0)
     m = pg.session.model
     for j in range(m.njnt):
@@ -49,10 +52,11 @@ def _tilt(pg: Playground, trunk: int) -> float:
 
 
 def _push(
-    pg: Playground, robot: str, speed: float, push: str, distance: float = 0.4, seconds: float = 2.0
+    pg: Playground, robot: str, speed: float | None, push: str, distance: float = 0.4, seconds: float = 2.0
 ) -> dict[str, float]:
-    """Push `robot` to its left while on its gait and watch 5 s: the worst tilt, and where and how it ended.
-    A drag pulls `distance` m over `seconds`."""
+    """Push `robot` to its left while on its gait (speed None: never moved) and watch 5 s: the worst tilt, and
+    where and how it ended. A shove is 0.5 m/s unless it says ("shove 0.7"); a drag pulls `distance` m over
+    `seconds`."""
     trunk, dof = _on_its_gait(pg, robot, speed)
     session, data = pg.session, pg.session.data
     rot = data.xmat[trunk].reshape(3, 3).copy()
@@ -67,14 +71,15 @@ def _push(
             session.step()
             worst = max(worst, _tilt(pg, trunk))
 
-    if push == "shove":
-        data.qvel[dof : dof + 3] += 0.5 * left
+    if push.startswith("shove"):
+        data.qvel[dof : dof + 3] += float(push.removeprefix("shove") or 0.5) * left
     else:  # with the viewer's drag spring, by the trunk's origin or by its back
         grab = data.xpos[trunk] + rot @ [0.0, 0.0, 0.04 if push == "drag by the back" else 0.0]
         session.start_drag(trunk, grab)
         steps = round(20 * seconds)
+        walked = ahead * (speed or 0.0) * seconds  # a hand that walks along
         for k in range(1, steps + 1):
-            session.move_drag(grab + (left * distance + ahead * speed * seconds) * k / steps)  # a hand that walks along
+            session.move_drag(grab + (left * distance + walked) * k / steps)
             run(0.05)
         session.end_drag()
     run(4.0)
@@ -101,6 +106,49 @@ def test_a_pushed_quadruped_steps_aside_and_stays_on_its_feet(pg, robot, speed, 
         assert out["last_second"] > 0.5 * TROT  # and trotting on
     if push != "shove":
         assert out["sideways"] > 0.25  # it went along with the hand instead of fighting it
+
+
+@pytest.mark.parametrize("push", ["drag", "drag by the back", "shove", "shove 0.7"])
+@pytest.mark.parametrize("robot", list(ROBOTS))
+def test_a_quadruped_never_moved_takes_a_push_from_the_moment_the_world_opens(pg, robot, push):
+    """Regression: a quadruped got its gait only with its first move, so a beginner who opened a world and dragged
+    the dog or the Go2 rolled it onto its back (180 degrees). It stands on its gait from the start now."""
+    out = _push(pg, robot, None, push)
+    assert out["worst"] < 30, f"tilted {out['worst']:.0f} degrees"
+    assert out["tilt"] < 5 and out["last_second"] < 0.03  # level and still again
+    if push.startswith("drag"):
+        assert out["sideways"] > 0.25  # it went along with the hand
+
+
+@pytest.mark.parametrize("robot", list(ROBOTS))
+def test_a_quadruped_never_moved_stands_as_it_did_without_a_gait(pg, tmp_path, robot):
+    """Its gait from the start stands it still: no steps, no drift, and the height and joint angles its servos
+    alone gave it before (a world opened again, its gait taken away, is that stand)."""
+    trunk, _ = _on_its_gait(pg, robot, None)
+    gait = pg.session.controllers[robot]
+    assert isinstance(gait, quadruped.QuadrupedGait)
+    plain = Playground.with_demo()
+    plain.open_world(str(pg.store.dir))
+    plain.session.set_controller(robot, None)
+    plain.run_fast(lambda: False, 2.0)
+    start, heading = pg.session.data.xpos[trunk].copy(), pg.behaviors.pose(robot)["heading_deg"]
+    stepped = 0.0
+    for _ in range(500):  # 10 s
+        pg.run_fast(lambda: False, 0.02)
+        stepped = max(stepped, gait._amplitude)
+    plain.run_fast(lambda: False, 10.0)
+    assert stepped < 0.05
+    assert np.linalg.norm(pg.session.data.xpos[trunk][:2] - start[:2]) < 0.002
+    assert abs(pg.behaviors.pose(robot)["heading_deg"] - heading) < 0.2
+    m = pg.session.model
+    hinge = mujoco.mjtJoint.mjJNT_HINGE
+    legs = [
+        int(m.jnt_qposadr[j])
+        for j in range(m.njnt)
+        if m.jnt_type[j] == hinge and m.joint(j).name.startswith(f"{robot}/")
+    ]
+    assert pg.session.data.xpos[trunk][2] == pytest.approx(plain.session.data.xpos[trunk][2], abs=0.001)
+    assert np.degrees(np.abs(pg.session.data.qpos[legs] - plain.session.data.qpos[legs])).max() < 0.5
 
 
 def test_a_nudge_the_stance_soaks_up_takes_no_steps(pg):
@@ -166,12 +214,13 @@ def test_a_rewind_mid_recovery_does_not_keep_it_stepping(pg):
     assert gait._recovery < 0.05 and gait._amplitude < 0.05
 
 
+@pytest.mark.parametrize("speed", [0.0, None], ids=["standing", "never moved"])
 @pytest.mark.parametrize("name", ["DOG", "HEXAPOD"])
-def test_robots_built_from_parts_go_along_with_a_drag(pg, monkeypatch, name):
+def test_robots_built_from_parts_go_along_with_a_drag(pg, monkeypatch, name, speed):
     import test_builder
 
     monkeypatch.setitem(ROBOTS, "built", {"build": getattr(test_builder, name)})
-    out = _push(pg, "built", 0.0, "drag by the back")
+    out = _push(pg, "built", speed, "drag by the back")
     assert out["worst"] < 30, f"tilted {out['worst']:.0f} degrees"  # the built dog rolled over before
     assert out["tilt"] < 5 and out["sideways"] > 0.25
 

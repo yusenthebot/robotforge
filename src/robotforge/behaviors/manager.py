@@ -27,6 +27,11 @@ from robotforge.sim.session import SimSession
 MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE)
 WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
+# Legged walkers stand on their servos alone, but dragged in the viewer before their first move they rolled onto
+# their backs (dog, Go2 and a dog built from parts: 180 degrees; scripts/push_bench.py --states fresh). Their gait
+# steps along with a push (quadruped.PUSH_DRIFT) and stands exactly as the servos do, so in an open world they
+# stand on it from the start.
+STEPPING = (Kind.QUADRUPED, Kind.HEXAPOD)
 LEGGED = (Kind.QUADRUPED, Kind.HUMANOID)  # can walk with a learned policy (move walker=...)
 RHYTHM = "rhythm"  # walker: the walk a robot learned for itself in the RL II lesson and kept with its world
 LEARN_A_WALK = (
@@ -85,21 +90,43 @@ class BehaviorManager:
         self.session = session
         self._world = world
         self._world_dir = world_dir  # where the open world keeps its files (walks/ among them); None in lessons
+        self._standing: dict[str, Any] = {}  # robot -> the gait start_balancing stood it on, until it is moved
         session.reset_hooks.append(self.start_balancing)
+        session.ctrl_hooks.append(self._set_by_hand)
         self.start_balancing()
 
     def start_balancing(self) -> None:
         """Humanoids and two-wheeled robots keep their balance from the moment they appear and after every
-        reset, so a beginner never sees one hang limp from its servos or topple at the first nudge."""
+        reset, so a beginner never sees one hang limp from its servos or topple at the first nudge.
+        In an open world, legged walkers stand on their gait from the start too (see STEPPING). Not in lessons,
+        which drive their robots themselves, nor in a plain model file."""
         world = self._world()
         names = [r.name for r in world.robots] if world else sorted(self._prefixes())
         told = {r.name: _told_kind(r) for r in world.robots} if world else {}
+        in_world = self._world_dir() is not None
         with self.session.lock:
+            self._standing = {}
             for name in names:
                 kind = robot_kind(self.session.model, name, told.get(name))
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
                         self._mobile_controller(name, kind, create=True)
+                elif kind in STEPPING and in_world:
+                    with contextlib.suppress(BehaviorError):
+                        self._standing[name] = self._mobile_controller(name, kind, create=True, walker="gait")
+
+    def _set_by_hand(self, actuator: int) -> None:
+        """A leg joint set by hand (a viewer slider, set_controls) on a robot still on the gait start_balancing
+        gave it: the gait lets go, so the joint moves as it did before that gait existed. Like the "Joints by
+        hand" mode. A gait the robot was moved with keeps its legs, as it always did."""
+        name = mujoco.mj_id2name(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator) or ""
+        robot = name.split("/", 1)[0]
+        gait = self._standing.get(robot)
+        if gait is None or not any(actuator in leg.actuators for leg in gait.legs):
+            return  # not a leg: an arm mounted on the robot, say
+        del self._standing[robot]
+        if self.session.controllers.get(robot) is gait:
+            self.session.set_controller(robot, None)
 
     # ---- robots in the session -------------------------------------------------------
 
@@ -225,6 +252,7 @@ class BehaviorManager:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             ctrl.command(speed, turn)
+            self._standing.pop(robot, None)  # moved: its gait is its own now
         notes = _clamp_notes(ctrl, speed, turn)
         return {**ctrl.status(), "notes": notes} if notes else ctrl.status()
 

@@ -77,6 +77,9 @@ class SimSession:
     clock_owner: str | None = None  # set while e.g. a script advances time itself
     # Run after a reset or a model swap clears the controllers, e.g. so humanoids keep their balance.
     reset_hooks: list[Callable[[], None]] = field(default_factory=list, repr=False)
+    # Run with the actuator's id after set_ctrl sets it by hand (a viewer slider, set_controls), e.g. so a robot
+    # standing on a gait it never asked for lets go of that joint.
+    ctrl_hooks: list[Callable[[int], None]] = field(default_factory=list, repr=False)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
@@ -137,6 +140,8 @@ class SimSession:
                 lo, hi = self.model.actuator_ctrlrange[actuator]
                 value = float(np.clip(value, lo, hi))
             self.data.ctrl[actuator] = value
+            for hook in self.ctrl_hooks:
+                hook(actuator)
 
     def start_drag(self, body: int, world_point: np.ndarray) -> None:
         with self.lock:

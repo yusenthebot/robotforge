@@ -62,6 +62,42 @@ def test_stop_settles_a_walking_dog_into_a_stand(pg):
     assert pg.behaviors.pose("dog")["upright"]
 
 
+def test_an_open_world_stands_its_legged_robots_on_their_gait_from_the_start(pg):
+    """So a dog dragged before its first move steps along instead of rolling over (tests/test_push_recovery.py).
+    Not a plain model file, nor a lesson: they run their robots their own way."""
+    import mujoco
+
+    from robotforge.behaviors.quadruped import QuadrupedGait
+
+    pg.add_robot("dog", template="quadruped")
+    assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
+    pg.add_object("crate", shape="box", pos=[-1.0, 1.0])  # an edit loads the world afresh
+    assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
+    pg.session.reset()
+    assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
+    model = pg.session.model
+    plain = Playground(session=SimSession(model=model, data=mujoco.MjData(model)))
+    assert "dog" not in plain.session.controllers
+
+
+def test_a_leg_set_by_hand_moves_as_it_did_before_the_dog_had_a_gait(pg):
+    """A viewer slider or set_controls on a dog still standing on the gait it opened with: the gait lets go (as
+    'Joints by hand' does) instead of pulling the joint back every step. A dog that was driven keeps its gait."""
+    from robotforge.viewer.server import ViewerHub
+
+    pg.add_robot("dog", template="quadruped")
+    m = pg.session.model
+    knee = m.actuator("dog/front_left_knee").id
+    ViewerHub(pg.session).handle({"type": "ctrl", "id": knee, "value": -1.2})  # the viewer's joint slider
+    _run(pg, 1.0)
+    assert "dog" not in pg.session.controllers
+    assert pg.session.data.qpos[m.jnt_qposadr[m.actuator_trnid[knee, 0]]] == pytest.approx(-1.2, abs=0.1)
+    pg.behaviors.move("dog", 0.0, 0.0)
+    gait = pg.session.controllers["dog"]
+    pg.set_controls({"dog/front_left_knee": -1.2})
+    assert pg.session.controllers["dog"] is gait
+
+
 def test_rover_drives_and_turns(pg):
     pg.add_robot("rover", template="rover")
     pg.behaviors.move("rover", 0.3, 0.0)
