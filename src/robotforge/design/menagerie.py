@@ -242,7 +242,7 @@ def usable_git() -> str | None:
     git = shutil.which("git")
     if git is None:
         return None
-    if sys.platform == "darwin" and Path(git).resolve() == Path("/usr/bin/git"):
+    if sys.platform == "darwin" and (git == "/usr/bin/git" or Path(git).resolve() == Path("/usr/bin/git")):
         # Apple's placeholder git pops up an installer dialog unless the command line tools exist.
         try:
             tools = subprocess.run(["xcode-select", "-p"], capture_output=True, stdin=subprocess.DEVNULL, timeout=10)
