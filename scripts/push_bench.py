@@ -14,7 +14,8 @@ flipped (upside down), its largest tilt, where it ended up sideways from where i
 trotting robot that includes any change of heading, also reported), the lowest its trunk sank, and
 whether it recovered: upright, at its usual height and, standing, still again; or trotting, still
 walking forward. The library Go2 needs ROBOTFORGE_MENAGERIE (the test fixtures work offline) or a
-download. "built_dog" and "hexapod" are robots built from parts, with the specs tests/test_builder.py uses.
+download. "built_dog" and "hexapod" are robots built from parts, with the specs tests/test_builder.py uses; any
+other name is a library robot (go1, a1, spot), downloaded on first use.
 """
 
 from __future__ import annotations
@@ -65,6 +66,8 @@ def _robot(robot: str) -> dict[str, Any]:
     """add_robot's arguments for `robot`."""
     if robot in ROBOTS:
         return ROBOTS[robot]
+    if robot not in BUILT:
+        return {"library": robot}
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
     import test_builder
 
@@ -168,7 +171,7 @@ def _run(args: tuple[str, str, str]) -> Result:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--robots", default=",".join(ROBOTS), help=f"also: {', '.join(BUILT)}")
+    parser.add_argument("--robots", default=",".join(ROBOTS), help=f"also: {', '.join(BUILT)}, go1, a1, spot")
     parser.add_argument("--states", default=",".join(STATES))
     parser.add_argument("--pushes", default=",".join(PUSHES))
     parser.add_argument("--jobs", type=int, default=4)
@@ -178,11 +181,11 @@ def main(argv: list[str] | None = None) -> int:
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(_run, jobs))
     print(
-        "robot      state  push        fell  flip  max tilt  displaced m  sank  recovered  final tilt  fwd m/s  turned"
+        "robot      state  push         fell  flip  max tilt  displaced m  sank  recovered  final tilt  fwd m/s  turned"
     )
     for r in results:
         print(
-            f"{r.robot:<10} {r.state:<6} {r.push:<11} {'yes' if r.fell else '-':<5} {'yes' if r.flipped else '-':<5} "
+            f"{r.robot:<10} {r.state:<6} {r.push:<12} {'yes' if r.fell else '-':<5} {'yes' if r.flipped else '-':<5} "
             f"{r.max_tilt:7.1f}  {r.displaced:11.3f}  {r.sank:4.2f}  {'yes' if r.recovered else 'no':<9}  "
             f"{r.final_tilt:10.1f}  {r.forward:7.3f}  {r.turned:6.1f}  {r.note}"
         )
