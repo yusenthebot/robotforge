@@ -41,7 +41,7 @@ Even with uv's cache warm it takes about 30 s on macOS, mostly the system scanni
 Clients do not always wait that long:
 
 - Claude Code: if the server is not up within `MCP_TIMEOUT`, reconnect it in `/mcp`.
-- Codex `exec` does not wait for MCP servers before the first model turn; a session started during the first install may not see the tools. The skill tells the agent to look again and not to work around missing tools.
+- Codex `exec`: of two sessions started on a cold install, one saw the tools after about 40 s and finished the task; the other looked for them too early, concluded they were missing and imported robotforge directly (no viewer). The skill now tells the agent to wait and look again and not to work around missing tools; the second cold run was made with that wording.
 
 A faster cold start would need the MCP handshake to answer before mujoco and numpy load (lazy imports in `mcp_server.py`).
 
