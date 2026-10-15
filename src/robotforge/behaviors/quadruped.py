@@ -89,6 +89,11 @@ LATERAL_FOLLOW = 0.5  # share of the trunk's sideways velocity its strides follo
 FOLLOW_TAU = 0.25  # cycles: the sideways velocity the strides follow is smoothed this much
 REST_TAU = 1.0  # s: the usual roll (on a side slope, say) adapts this slowly
 SETTLE_TIME = 0.5  # s after a start or reset during which a robot settles onto its feet unwatched
+# A walking robot blocked by a stair riser or a curb leans and wobbles like a pushed one, and kept on
+# recovering: its strides followed the wobble sideways and it never climbed (the obstacle course fell from
+# 12 m to 4.6 m). Walking recovery is cut off after a while and then held off, so it climbs on its plain gait.
+WALK_RECOVER_MAX = 3.0  # s of continuous recovery while walking...
+WALK_RECOVER_REST = 3.0  # ...then this long on the plain gait before another can start
 
 # (name, [hip, thigh, knee] joint ids, foot body id, foot point in that body's frame, phase offset)
 LegSpec = tuple[str, list[int], int, np.ndarray, float]
@@ -192,6 +197,8 @@ class QuadrupedGait:
         self._settled_at = -math.inf  # pushes count from this time on
         self._drift = np.zeros(2)  # how far the trunk moved while standing still, lately (forward, left)
         self._recover_until = -math.inf
+        self._walk_recover_since: float | None = None  # when the current recovery while walking started
+        self._walk_rest_until = -math.inf  # no recovery while walking before this
         self._recovery = 0.0  # 0 = the plain gait, 1 = recovering, blended in between
 
     def set_period(self, period: float) -> None:
@@ -244,6 +251,11 @@ class QuadrupedGait:
         t = data.time
         if self._last_t is None or t < self._last_t:  # a new start, or the data was reset under us
             self._settled_at = t + SETTLE_TIME
+            # Recovery times are absolute: after a rewind they would keep it stepping until the old clock
+            self._recover_until = self._walk_rest_until = -math.inf
+            self._walk_recover_since = None
+            self._recovery = 0.0
+            self._drift = np.zeros(2)
         dt = 0.0 if self._last_t is None else max(0.0, t - self._last_t)
         self._last_t = t
         # Smooth command changes so the robot does not stumble on a sudden key press.
@@ -337,7 +349,24 @@ class QuadrupedGait:
             pushed = False
         if pushed:
             self._recover_until = t + RECOVER_CYCLES * self.period
-        return t < self._recover_until
+        return self._limit_walking(t, t < self._recover_until, moving)
+
+    def _limit_walking(self, t: float, recovering: bool, moving: bool) -> bool:
+        """Cut a recovery while walking off after WALK_RECOVER_MAX, then rest from it (see WALK_RECOVER_MAX)."""
+        if not (recovering and moving):
+            self._walk_recover_since = None
+            return recovering
+        if t < self._walk_rest_until:
+            self._recover_until = -math.inf
+            return False
+        if self._walk_recover_since is None:
+            self._walk_recover_since = t
+        elif t - self._walk_recover_since > WALK_RECOVER_MAX:
+            self._recover_until = -math.inf
+            self._walk_rest_until = t + WALK_RECOVER_REST
+            self._walk_recover_since = None
+            return False
+        return True
 
     def _measure(self, data: mujoco.MjData) -> np.ndarray:
         """The trunk's velocity (forward, left) in its heading frame and its yaw rate, right now."""

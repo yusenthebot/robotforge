@@ -129,3 +129,44 @@ def test_walking_undisturbed_never_counts_as_a_push(pg, robot):
             seen = max(seen, gait._recovery)
     assert seen == 0.0
     assert pg.behaviors.pose(robot)["upright"]
+
+
+def test_a_dog_walking_into_a_wall_is_not_kept_recovering(pg):
+    """Regression found in review: blocked by a stair riser, a trotting dog leaned and wobbled like a pushed one,
+    recovered without end (its strides following the wobble sideways) and never climbed; the obstacle course fell
+    from 12 m to 4.6 m. Pinned against a wall it now recovers for at most WALK_RECOVER_MAX at a time (7.1 s before),
+    and spends the rests on its plain gait."""
+    pg.add_object("wall", shape="box", size=[0.6, 4.0, 0.3], pos=[1.0, 0.0])
+    _on_its_gait(pg, "dog", TROT)
+    gait = pg.session.controllers["dog"]
+    run = longest = 0.0
+    for _ in range(650):
+        pg.run_fast(lambda: False, 0.02)
+        run = run + 0.02 if gait._recovery > 0.5 else 0.0
+        longest = max(longest, run)
+    assert longest < quadruped.WALK_RECOVER_MAX + 0.5
+    assert pg.behaviors.pose("dog")["upright"]
+
+
+def test_a_rewind_mid_recovery_does_not_keep_it_stepping(pg):
+    """Recovery times are sim-clock times; a reset of the data under a live gait used to leave it stepping in place
+    until the old clock came round again (8 s in review)."""
+    trunk, dof = _on_its_gait(pg, "dog", 0.0)
+    gait, session = pg.session.controllers["dog"], pg.session
+    pg.run_fast(lambda: False, 8.0)
+    session.data.qvel[dof + 1] += 0.7  # a hard shove: it steps
+    pg.run_fast(lambda: False, 0.3)
+    assert gait._recovery > 0.5
+    mujoco.mj_resetDataKeyframe(session.model, session.data, 0)  # time back to 0, the gait object kept
+    pg.run_fast(lambda: False, quadruped.SETTLE_TIME + 1.5)
+    assert gait._recovery < 0.05 and gait._amplitude < 0.05
+
+
+@pytest.mark.parametrize("name", ["DOG", "HEXAPOD"])
+def test_robots_built_from_parts_go_along_with_a_drag(pg, monkeypatch, name):
+    import test_builder
+
+    monkeypatch.setitem(ROBOTS, "built", {"build": getattr(test_builder, name)})
+    out = _push(pg, "built", 0.0, "drag by the back")
+    assert out["worst"] < 30, f"tilted {out['worst']:.0f} degrees"  # the built dog rolled over before
+    assert out["tilt"] < 5 and out["sideways"] > 0.25
