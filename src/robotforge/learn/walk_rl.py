@@ -112,8 +112,9 @@ def _turn_seconds(trained: dict[str, Any]) -> int:
     ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns
     as many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk. With the
     sim running at real time, as in the viewer, an MJCF critter that trained 15 rounds in 4.4 s learned all that in
-    109 s, and this says 120; when the sim runs as fast as it can while it trains (as the tests drive it), a round
-    takes about twice as long and this says too much."""
+    109 s (this says 120), and an imported A1 that trained 30 rounds in 11.2 s in 139 s (this says 150). When the sim
+    runs as fast as it can while the robot trains, as the tests drive it, a round takes longer and this says too
+    much."""
     steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
     turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * 2 * rhythm_walk.WALKING_ROUNDS
     per_round = trained["seconds"] / max(1, trained["rounds"])
