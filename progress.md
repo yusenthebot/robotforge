@@ -307,15 +307,30 @@ Rounds 1-3 done, 2026-10-14.
   - My first lesson-camera fix silently did not land: a `grep ... &&` chain skipped the edit. Check the file after scripted edits.
   - Measuring the follow camera with timers while the pane was hidden showed a broken follow; frames do not render there. Measure on `requestAnimationFrame`.
 
+## Round 26 (2026-10-15): lessons in a small window (phase D part 5)
+
+- The user's split pane is 672 x 553. Under 700 px the lesson panel and plots covered the 3D view: no robot was visible in RL II, and IK II left a 67 px strip.
+- Layout by window size (style.css, measured in the browser at 375 x 812, 672 x 553 and 1280 x 800):
+  - Over 1100 px: unchanged (panel left, plots right).
+  - 601 to 1100 px: the panel keeps its left column, the plots sit compact at the top of the rest.
+  - Phones: the panel is a sheet along the bottom, the plots a strip on top.
+  - The panel folds to its title anywhere (chevron beside the exit button; on a phone it points down).
+- Plots in a small window (under 1100 px wide or 640 px tall) show one thing at a time behind tabs: live plots first, then the face-off table and the record, tall ones scrolling inside. At 672 x 553 all 20 lessons, benches and challenges leave at least 366 x 208 px of view (most 366 x 266).
+- The view centres on the part of the window the panels leave free, in both directions (`freeRect`, exposed on `window.__robotforge`); lesson cameras step back where that part is short (up to 1.6 x), so the robot fits on a phone.
+- Bug found on the way: the old sideways view shift never ran, because it tested `offsetParent`, which is null for every fixed panel.
+- Bug found in the sweep: the idle G1 drifted about 6.5 cm/s (4.15 m in 30 s headless) and walked into our humanoid's lane in the face-off. An idle policy walker now holds the spot where it stopped: it walks back past 0.2 m (faster than the policy's 0.2 m/s stand threshold) until within 5 cm. At most 0.2 m in 30 s; the G1 walk, push and balance tests still pass.
+- What did NOT work: capping the plots box height alone (IK II's three plots and the arm face-off's table still left 67 to 140 px); defaulting the tabs to the face-off table (tall, it hid the G1's head).
+
 ## Next-round seed
 
-Round 26 = the lesson in a narrow window (phase D part 5). The user's split pane is about 670 px wide, and below 700 px the lesson panel and the plots box cover almost all of the 3D view. Make lessons work there: a collapsible plots box (or one bottom sheet with tabs for the step, the controls and the record), the 3D view always showing the robot being taught, checked at 375, 670, 1024 and 1280 px. Waiting on the user: a `learn_walk(robot)` MCP tool (gated: a new tool; run 4 shows agents reaching the same thing through internals at 1.29M tokens).
+Round 27 = Review round (phase D milestone, every few rounds): read the codebase broadly, adversarially re-verify the claimed features in a real run (a fresh Codex session from the plugin on main; the viewer at 672 px and 1280 px), delete dead code and docs, refresh progress.md, and run an ambition critic. Candidates it should weigh: `learn_walk` tool (waiting on the user), learned walks that turn, agent token cost (321k for a 6-call task), a playtest agent.
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 11 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk, motion planning on the PiPER), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Done in round 25: learned walks kept with the user's robot and driven by `move` and the keyboard.
-- Next frontiers (2026-10-15, after round 25): lessons that work in a narrow window; a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
+- Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
