@@ -5,8 +5,9 @@
 Each run puts one robot 0.6 m before a terrain patch that crosses its path, commands it
 straight ahead with `move` (60 % of its top speed, like holding W in the viewer) and steps
 the physics. It reports the distance covered, whether it fell (trunk tilted past 45 degrees)
-and whether it made it: past the far end of the patch and still upright. The library Go2
-is skipped unless it is already downloaded.
+and whether it made it: past the far end of the patch, still upright and across the patch
+rather than around it (a robot that slides or turns off the side of a 1.2 m wide flight of
+stairs also gets past its far end). The library Go2 is skipped unless it is already downloaded.
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ class Result:
     fell: bool
     climbed: float  # highest trunk rise over its start height, m
     seconds: float
+    off: float = 0.0  # furthest the trunk got sideways from its start while level with the patch, m
     note: str = ""
 
 
@@ -59,28 +61,30 @@ def run(robot: str, terrain_name: str) -> Result:
     from robotforge.playground import Playground
 
     if robot == "go2" and not library.is_downloaded("go2"):
-        return Result(robot, terrain_name, False, 0.0, False, 0.0, 0.0, "skipped: Go2 not downloaded")
+        return Result(robot, terrain_name, False, 0.0, False, 0.0, 0.0, note="skipped: Go2 not downloaded")
     os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_bench_")
     pg = Playground.with_demo()
     pg.new_world(f"bench_{robot}_{terrain_name}")
     pg.add_robot(robot, **ROBOTS[robot])
     patch = TERRAINS[terrain_name]
-    end = FLAT_RUN
+    end, length, half_width = FLAT_RUN, 0.0, math.inf
     if patch is not None:
-        length = terrain.parse(dict(patch)).footprint()[0]
+        length, width = terrain.parse(dict(patch)).footprint()
         pg.add_terrain(pos=[GAP + length / 2, 0.0], **_split(patch))
-        end = GAP + length + 0.2
+        end, half_width = GAP + length + 0.2, width / 2
     behaviors = pg.behaviors
     start = behaviors.pose(robot)["position"]
     top = next(r["max_speed"] for r in behaviors.robots() if r["name"] == robot)
     speed = SPEED_SHARE * top
     limit = min(60.0, 2.5 * (end + 0.5) / speed + 3.0)
     behaviors.move(robot, speed, 0.0)
-    fell, climbed, t = False, 0.0, 0.0
+    fell, climbed, off, t = False, 0.0, 0.0, 0.0
     while t < limit:
         t += pg.run_fast(lambda: False, 0.1)
         pose = behaviors.pose(robot)
         climbed = max(climbed, pose["position"][2] - start[2])
+        if GAP <= pose["position"][0] - start[0] <= GAP + length:
+            off = max(off, abs(pose["position"][1] - start[1]))
         if not pose["upright"]:
             fell = True
             break
@@ -88,8 +92,12 @@ def run(robot: str, terrain_name: str) -> Result:
             break
     pose = behaviors.pose(robot)
     distance = pose["position"][0] - start[0]
-    success = not fell and distance > end
-    return Result(robot, terrain_name, success, round(distance, 2), fell, round(climbed, 3), round(t, 1))
+    around = off > half_width
+    success = not fell and distance > end and not around
+    note = "went around the patch" if around and distance > end else ""
+    return Result(
+        robot, terrain_name, success, round(distance, 2), fell, round(climbed, 3), round(t, 1), round(off, 2), note
+    )
 
 
 def _split(patch: dict) -> dict:
@@ -102,7 +110,7 @@ def _run(args: tuple[str, str]) -> Result:
     try:
         return run(*args)
     except Exception as exc:  # report the failure in the table rather than lose the whole batch
-        return Result(args[0], args[1], False, 0.0, False, 0.0, 0.0, f"error: {type(exc).__name__}: {exc}")
+        return Result(args[0], args[1], False, 0.0, False, 0.0, 0.0, note=f"error: {type(exc).__name__}: {exc}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,13 +124,13 @@ def main(argv: list[str] | None = None) -> int:
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(_run, jobs))
     width = max(len(t) for t in TERRAINS)
-    print(f"{'robot':<9} {'terrain':<{width}}  ok  dist m  fell  climb m  sim s  note")
+    print(f"{'robot':<9} {'terrain':<{width}}  ok  dist m  fell  climb m  off m  sim s  note")
     for r in results:
         ok = "yes" if r.success else "no"
         fell = "yes" if r.fell else "-"
         print(
             f"{r.robot:<9} {r.terrain:<{width}}  {ok:<3} {r.distance:6.2f}  {fell:<4}  {r.climbed:7.3f}  "
-            f"{r.seconds:5.1f}  {r.note}"
+            f"{r.off:5.2f}  {r.seconds:5.1f}  {r.note}"
         )
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
