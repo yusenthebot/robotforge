@@ -55,6 +55,9 @@ def pg(tmp_path, monkeypatch):
         ("grey", list(components.COLORS["gray"])),
         ([0.1, 0.2, 0.3], [0.1, 0.2, 0.3, 1.0]),
         ((0.1, 0.2, 0.3, 0.5), [0.1, 0.2, 0.3, 0.5]),
+        ([156, 107, 63], _hex("#9c6b3f")),  # a component above 1 can only be on the 0..255 scale
+        ([156, 107, 63, 255], _hex("#9c6b3f")),
+        ([1, 1, 1], [1.0, 1.0, 1.0, 1.0]),  # all in 0..1: white, not near-black
     ],
 )
 def test_a_color_is_a_name_a_hex_code_or_numbers(value, rgba):
@@ -69,7 +72,7 @@ def test_a_color_is_a_name_a_hex_code_or_numbers(value, rgba):
         ("#9c6b3f80", "6 or 3 digits"),
         ("#ggg", "6 or 3 digits"),
         ("9c6b3f", "unknown color '9c6b3f'"),
-        ([156, 107, 63], r"in 0\.\.1 \(or a hex code"),
+        ([300, 107, 63], r"in 0\.\.1 \(or a hex code"),
         ([0.1, 0.2], "3 or 4 numbers"),
     ],
 )

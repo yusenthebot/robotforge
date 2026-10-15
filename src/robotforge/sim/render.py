@@ -112,8 +112,8 @@ class SnapshotRenderer:
     def rgb(self, session: SimSession, view: str = "default", width: int = 640, height: int = 480) -> np.ndarray:
         if width * height > MAX_PIXELS or width < 16 or height < 16:
             raise ValueError(
-                f"width and height are pixels, each at least 16 and width*height at most {MAX_PIXELS}; "
-                f"got {width}x{height}"
+                f"image size {width}x{height} is out of range: width and height are pixels, each at least 16, "
+                f"and width*height is at most {MAX_PIXELS}"
             )
         with self._lock, session.lock:
             model, data = session.model, session.data

@@ -71,8 +71,9 @@ def find_policy(name: str, world_dir: Path | None = None) -> Path:
         folder = place / name
         if (folder / POLICY_FILE).exists():
             return folder
-    text = wording.unknown("policy", name, known, where="trained", many="policies")
-    raise TaskError(text if known else f"{text} train_policy makes one")
+    if not known:
+        raise TaskError(f"no policy named {name!r}; none trained yet (train_policy makes one)")
+    raise TaskError(wording.unknown("policy", name, known, where="trained", many="policies"))
 
 
 def read_json(path: Path) -> dict[str, Any]:

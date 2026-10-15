@@ -709,10 +709,11 @@ class Playground:
             return names.index(found)
         close = wording.near(name, names)
         hint = f" Did you mean {', '.join(close)}?" if close else ""
-        more = " (describe_model lists them all)" if len(names) > ACTUATORS_LISTED else ""
-        raise PlaygroundError(
-            f"no actuator named {name!r}.{hint} Available: {wording.choices(names, ACTUATORS_LISTED)}{more}"
-        )
+        if len(names) > ACTUATORS_LISTED:  # a few dozen names would only bury the one that was meant
+            listing = f"Names look like {names[0]!r}; describe_model lists them all"
+        else:
+            listing = f"Available: {', '.join(names)}"
+        raise PlaygroundError(f"no actuator named {name!r}.{hint} {listing}")
 
     def _free_body_positions(self) -> dict[str, list[float]]:
         m, d = self.session.model, self.session.data

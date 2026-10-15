@@ -83,7 +83,7 @@ class _Patch(BaseModel):
     @classmethod
     def _pos(cls, v: list[float]) -> list[float]:
         if len(v) != 2:
-            raise ValueError(f"pos must be the patch center [x, y] in meters, got {v}")
+            raise ValueError(f"must be the patch center [x, y] in meters, got {v}")
         return v
 
     @model_validator(mode="after")

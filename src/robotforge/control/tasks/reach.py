@@ -82,8 +82,9 @@ class Reach(Task):
         m = self.model
         self._fk.qpos[:] = qpos
         mujoco.mj_kinematics(m, self._fk)
-        kinds = ((mujoco.mjtObj.mjOBJ_BODY, m.nbody), (mujoco.mjtObj.mjOBJ_GEOM, m.ngeom))
-        names = [n for obj, count in kinds for i in range(count) if (n := mujoco.mj_id2name(m, obj, i))]
+        kinds = ((mujoco.mjtObj.mjOBJ_BODY, range(1, m.nbody)), (mujoco.mjtObj.mjOBJ_GEOM, range(m.ngeom)))
+        found = (mujoco.mj_id2name(m, obj, i) for obj, ids in kinds for i in ids)
+        names = list(dict.fromkeys(n for n in found if n and n != "floor"))  # a fixed object is a geom and a body
         name = wording.match(name, names) or name  # "Ball" is ball
         lookups = (
             (mujoco.mjtObj.mjOBJ_BODY, self._fk.xpos),
@@ -94,7 +95,7 @@ class Reach(Task):
             idx = mujoco.mj_name2id(m, obj, name)
             if idx >= 0:
                 return table[idx].copy()
-        objects = sorted({n for n in names if "/" not in n})
+        objects = [n for n in names if "/" not in n]
         raise TaskError(f"{wording.unknown('object', name, objects, many='objects')}. Or give [x, y, z] in meters")
 
     def random_target(self, qpos: np.ndarray, rng: np.random.Generator) -> np.ndarray:

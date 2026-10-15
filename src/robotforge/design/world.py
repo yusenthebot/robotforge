@@ -138,9 +138,8 @@ class World(_Strict):
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError(
-                f"{', '.join(map(repr, dupes))} already exists, and names must be unique across robots, objects "
-                "and terrain. Pick another name, or change the existing one with update_robot, update_object or "
-                "update_terrain"
+                f"{', '.join(map(repr, dupes))} already exists: names must be unique across robots, objects and "
+                "terrain. Pick another, or change it with update_robot, update_object or update_terrain"
             )
         return self
 

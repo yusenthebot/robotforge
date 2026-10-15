@@ -43,7 +43,7 @@ MESH_CACHE_BYTES = 1_000_000_000  # converted meshes are cheap to rebuild, but n
 
 def formats_hint() -> str:
     """The files a robot can be loaded from, for errors about a file of another kind."""
-    return f"an MJCF (.xml), a URDF/xacro, or a mesh ({', '.join(sorted(MESH_SUFFIXES))})"
+    return f"an MJCF (.xml), a URDF/xacro or a mesh ({' '.join(sorted(MESH_SUFFIXES))})"
 
 
 def is_importable(path: str | Path) -> bool:
