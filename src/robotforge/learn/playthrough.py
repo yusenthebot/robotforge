@@ -342,7 +342,8 @@ def play(playground: Playground, lesson_id: str, recipe: Recipe | None = None) -
             report.steps.append(result)
             if not result.passed:
                 break
-        report.results = json.loads(json.dumps(runner.ctx.results, default=str))
+        if runner.ctx is not None:  # None when the lesson ended under the player (its world was swapped)
+            report.results = json.loads(json.dumps(runner.ctx.results, default=str))
     finally:
         runner.exit()
     return report
