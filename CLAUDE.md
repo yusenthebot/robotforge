@@ -31,6 +31,8 @@ Plan of record: docs/OVERVIEW.md (Chinese).
   `flicker(eye, target, dir)` counts pixels that flip there and back while the camera slides: pause first, compare before and after a rendering change (2026-10-15: stairs 144k -> 327, grass 12k -> 0).
   The browser pane may be hidden and throttle `requestAnimationFrame`, so drive pointer tests with `screenOf` coordinates (CSS px, not screenshot px).
 - Tests: `uv run pytest -q`; lint: `uv run ruff check . && uv run ruff format --check .`.
+  Lesson playthroughs that train for a minute or more are marked `slow` and skipped by default: `uv run pytest -q -m slow` (CI runs them on Ubuntu).
+  `uv run python scripts/playtest.py` plays every lesson headless and prints which step each one reaches.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
