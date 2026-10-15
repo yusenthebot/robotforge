@@ -79,13 +79,24 @@ function updateViewShift() {
   applyViewShift();
 }
 
+// A page opened hidden (a collapsed panel, a background pane, a minimized window) has no size yet: 0 / 0
+// would make the aspect NaN and every framing after it NaN, and the view would stay black for good.
+// Keep the last real shape instead, and frame the camera once the page can be seen.
+let fitWhenSized = false;
+const hasSize = () => window.innerWidth > 0 && window.innerHeight > 0;
+
 function resize() {
+  if (!hasSize()) return;
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   applyViewShift();
+  if (fitWhenSized && sceneDesc) {
+    fitWhenSized = false;
+    frameCamera();
+  }
 }
 window.addEventListener("resize", resize);
 resize();
@@ -501,6 +512,10 @@ function fitDistance(r) {
 }
 
 function frameCamera({ animate = false } = {}) {
+  if (!hasSize()) {
+    fitWhenSized = true;
+    return;
+  }
   const sphere = contentSphere();
   const d = fitDistance(Math.max(sphere.radius, 0.08));
   // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
@@ -925,7 +940,7 @@ function select(name, { focus = false } = {}) {
 
 function focusRobot(name) {
   const box = robotBox(name);
-  if (!box) return;
+  if (!box || !hasSize()) return;
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const dir = camera.position.clone().sub(controls.target).normalize();
   const d = fitDistance(Math.max(sphere.radius, 0.15)) * 2.2; // room around it to see where it goes
@@ -1564,8 +1579,22 @@ function updateClock() {
   clock.title = t("clock_tip", { rtf: rtf.toFixed(2), fps });
 }
 
+// Last line of defence: a camera that went NaN draws nothing, forever. Frame the scene again instead.
+function healCamera() {
+  const p = camera.position;
+  const q = controls.target;
+  if ([p.x, p.y, p.z, q.x, q.y, q.z].every(Number.isFinite) || !sceneDesc || !hasSize()) return;
+  console.warn("robotforge: the camera position was not a number; framing the scene again");
+  tween = null;
+  follow = null;
+  camera.position.set(1.6, -1.6, 1);
+  controls.target.set(0, 0, 0);
+  frameCamera();
+}
+
 function loop() {
   requestAnimationFrame(loop);
+  healCamera();
   updateViewShift();
   updateTween();
   updateFollow();
