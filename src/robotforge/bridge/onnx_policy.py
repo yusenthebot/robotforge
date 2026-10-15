@@ -34,6 +34,13 @@ FALLEN_UPRIGHTNESS = 0.3
 # 0.5 m/s with no turn asked). Like Isaac Lab's heading commands, a turn of this many rad/s per radian
 # of heading error is asked instead, so "straight" stays straight.
 HEADING_GAIN = 1.5
+# Standing still: a learned policy told "speed 0" stands, but not perfectly; the G1's drifted 6.5 cm/s and walked
+# into the next lane within half a minute. An idle walker remembers where it stood and walks back once it has
+# drifted HOLD_START away, faster than the policy's stand threshold (or it would just stand), until HOLD_DONE.
+HOLD_START = 0.2  # m
+HOLD_DONE = 0.05  # m
+HOLD_GAIN = 1.0  # m/s per m of drift
+HOLD_TOP = 0.35  # m/s
 
 
 class PolicyUnavailable(RuntimeError):
@@ -159,6 +166,8 @@ class PolicyWalker:
         self.command_speed = 0.0
         self.command_turn = 0.0
         self.heading: float | None = None  # held while no turn is asked (set at the next policy step)
+        self.anchor: np.ndarray | None = None  # where it stood when it was last told to stop (set at the next step)
+        self.returning = False  # walking back to the anchor
         self.last_action = np.zeros(n)
         self.targets = self.default_pos.copy()
         self._next_step = -math.inf
@@ -181,6 +190,9 @@ class PolicyWalker:
         self.command_turn = float(np.clip(turn, r.ang_vel_z[0], r.ang_vel_z[1]))
         if self.command_turn != 0.0:
             self.heading = None  # turning on purpose; a new heading is taken when the turn stops
+        if self.command_speed != 0.0 or self.command_turn != 0.0:
+            self.anchor = None  # moving on purpose; where it stops next becomes the place to hold
+            self.returning = False
 
     def status(self) -> dict[str, Any]:
         out = {
@@ -207,6 +219,8 @@ class PolicyWalker:
 
     def _restart(self) -> None:
         self.heading = None
+        self.anchor = None
+        self.returning = False
         self.observer.reset()
         self.last_action = np.zeros_like(self.last_action)
         self.targets = self.default_pos.copy()
@@ -221,9 +235,9 @@ class PolicyWalker:
             return
         if self.paused_reason:
             self._restart()
-        command = np.array([self.command_speed, 0.0, self._turn(data)])
-        if abs(command[0]) <= self.spec.commands.planar_dead_zone:  # as in training: too slow means stand
-            command[0] = 0.0
+        command = np.array([*self._planar(data), self._turn(data)])
+        if math.hypot(command[0], command[1]) <= self.spec.commands.planar_dead_zone:  # as trained: too slow, stand
+            command[:2] = 0.0
         obs = self.observer.build(model, data, self.last_action, command)
         try:
             action = np.asarray(self.policy(obs), float).reshape(-1)
@@ -242,6 +256,32 @@ class PolicyWalker:
         self.targets = self.default_pos + self.scale * clipped
         self.observer.advance_phase(moving=bool(np.any(np.abs(command) > 1e-3)))
         self.steps += 1
+
+    def _planar(self, data: mujoco.MjData) -> tuple[float, float]:
+        """Forward and sideways speed to ask for: the commanded walk, or idle, a walk back to where it stood."""
+        if self.command_speed != 0.0 or self.command_turn != 0.0:
+            return self.command_speed, 0.0
+        here = data.xpos[self.binding.root_body][:2].copy()
+        if self.anchor is None:
+            self.anchor = here
+            return 0.0, 0.0
+        off = self.anchor - here
+        dist = float(np.linalg.norm(off))
+        if self.returning and dist < HOLD_DONE:
+            self.returning = False
+        elif not self.returning and dist > HOLD_START:
+            self.returning = True
+        if not self.returning:
+            return 0.0, 0.0
+        rot = data.xmat[self.binding.root_body]
+        yaw = math.atan2(float(rot[3]), float(rot[0]))
+        c, s = math.cos(yaw), math.sin(yaw)
+        ahead, left = c * off[0] + s * off[1], -s * off[0] + c * off[1]  # the way back, in the robot's frame
+        r = self.spec.commands
+        speed = float(np.clip(HOLD_GAIN * dist, r.planar_dead_zone + 0.05, HOLD_TOP))
+        vx = float(np.clip(ahead / dist * speed, r.lin_vel_x[0], r.lin_vel_x[1]))
+        vy = float(np.clip(left / dist * speed, r.lin_vel_y[0], r.lin_vel_y[1]))
+        return vx, vy
 
     def _turn(self, data: mujoco.MjData) -> float:
         """The turn rate to ask the policy for: the commanded one, or with none, a hold on the heading."""

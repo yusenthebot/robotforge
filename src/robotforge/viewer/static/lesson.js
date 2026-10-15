@@ -157,6 +157,8 @@ function openLesson(desc) {
   api.followBody(null);
   plots.reset(desc.plots);
   bench.setup(desc.bench, desc.bench_state);
+  plotTabs.pick = 0; // a new lesson starts on its first plot
+  plotTabs.sync();
   renderTable(null);
   overlays.build(desc.rig);
   setPicker(false);
@@ -414,8 +416,68 @@ function renderResult() {
 const RUN_COLORS = ["--plot-blue", "--plot-violet", "--plot-green", "--amber", "--ink"];
 const runColor = (id) => RUN_COLORS[(id - 1) % RUN_COLORS.length];
 
-// Below this width the lesson, its plots and the 3D view cannot all be shown in full: the record starts folded.
+// Below this width (or this height) the lesson, its plots and the 3D view cannot all be shown in full.
 const ROOMY = 1100;
+const ROOMY_HEIGHT = 640;
+
+// In such a window the plots box shows one thing at a time (a plot, the face-off table or the experiment record),
+// picked from a row of tabs, so the robot keeps most of the view. A big window shows them all, as before.
+const plotTabs = {
+  strip: null,
+  pick: 0,
+  sync() {
+    const box = $("lesson-plots");
+    // Live plots first: they are short, so the robots keep the view; the table and the record are a tap away.
+    const order = (el) => (el.classList.contains("plot") ? 0 : el.classList.contains("faceoff-table") ? 1 : 2);
+    const sections = [...box.children]
+      .filter((el) => el.tagName === "SECTION" && !el.hidden)
+      .sort((a, b) => order(a) - order(b));
+    const tabbed = sections.length > 1 && (window.innerWidth <= ROOMY || window.innerHeight <= ROOMY_HEIGHT);
+    box.classList.toggle("tabbed", tabbed);
+    if (!tabbed) {
+      this.strip?.remove();
+      for (const s of sections) s.classList.remove("off");
+      return;
+    }
+    if (!this.strip) {
+      this.strip = document.createElement("div");
+      this.strip.className = "plot-tabs";
+      this.strip.setAttribute("role", "tablist");
+    }
+    if (box.firstChild !== this.strip) box.prepend(this.strip);
+    this.pick = Math.min(this.pick, sections.length - 1);
+    const labels = sections.map(tabLabel);
+    if (this.strip.dataset.labels !== labels.join("|") || this.strip.childElementCount !== labels.length) {
+      this.strip.dataset.labels = labels.join("|");
+      this.strip.replaceChildren(
+        ...labels.map((label, k) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.setAttribute("role", "tab");
+          b.textContent = label;
+          b.title = label;
+          b.addEventListener("click", () => {
+            this.pick = k;
+            this.sync();
+            plots.draw();
+            bench.draw();
+          });
+          return b;
+        })
+      );
+    }
+    [...this.strip.children].forEach((b, k) => b.setAttribute("aria-selected", String(k === this.pick)));
+    sections.forEach((s, k) => s.classList.toggle("off", k !== this.pick));
+  },
+};
+
+function tabLabel(section) {
+  if (section.classList.contains("faceoff-table")) return t("plots_table");
+  if (section.classList.contains("bench")) return t("plots_record", { n: bench.state?.runs?.length ?? 0 });
+  const title = section.querySelector(".plot-title")?.textContent ?? "";
+  return title.replace(/\s*\([^)]*\)$/, ""); // the unit stays on the plot itself
+}
+window.addEventListener("resize", () => plotTabs.sync());
 
 // Fold the lesson panel down to its title, for a bigger view of the robot (on a phone it is a sheet along the bottom).
 function foldLesson(folded) {
@@ -432,14 +494,12 @@ const bench = {
   spec: null,
   state: null,
   box: null,
-  folded: false,
   setup(spec, initial) {
     this.box?.remove();
     this.box = null;
     this.spec = spec;
     this.state = initial ?? null;
     this.zoom = false; // the run chart shows the whole climb, or only the last degrees near the target
-    this.folded = window.innerWidth <= ROOMY;
     if (!spec) return;
     this.box = document.createElement("section");
     this.box.className = "bench";
@@ -485,29 +545,13 @@ const bench = {
       });
       head.append(zoom);
     }
-    if ((runs.length || this.state?.sweep) && !this.folded) {
+    if (runs.length || this.state?.sweep) {
       const clear = document.createElement("button");
       clear.type = "button";
       clear.className = "link-button";
       clear.textContent = t("bench_clear");
       clear.addEventListener("click", () => api.send({ type: "lesson", action: "clear_runs" }));
       head.append(clear);
-    }
-    const fold = document.createElement("button");
-    fold.type = "button";
-    fold.className = "link-button";
-    fold.textContent = this.folded ? t("bench_unfold", { n: runs.length }) : t("bench_fold");
-    fold.setAttribute("aria-expanded", String(!this.folded));
-    fold.addEventListener("click", () => {
-      this.folded = !this.folded;
-      this.render();
-      api.shift();
-    });
-    head.append(fold);
-    box.classList.toggle("folded", this.folded);
-    if (this.folded) {
-      box.replaceChildren(head);
-      return;
     }
     const parts = [head];
     if (!runs.length) {
@@ -525,6 +569,7 @@ const bench = {
     box.replaceChildren(...parts);
     this.syncLocks();
     this.draw();
+    plotTabs.sync(); // the record's tab shows how many runs it holds
   },
   table(runs) {
     const spec = this.spec;
@@ -758,6 +803,7 @@ function renderTable(table) {
   if (key === tableKey) return;
   tableKey = key;
   tableBox.hidden = !table;
+  plotTabs.sync();
   if (!table) return;
   $("lesson-plots").hidden = false;
   const head = document.createElement("tr");

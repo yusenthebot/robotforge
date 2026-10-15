@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import mujoco
+import numpy as np
 import pytest
 
 from robotforge.design import library
@@ -173,3 +174,19 @@ def test_a_hand_written_walk_against_a_learned_one(humanoids):
     assert shoves["ours"]["levels"] >= 2 and shoves["g1"]["levels"] >= 2
     _play(pg, 0.2)
     assert {"Froude number", "Levels survived"} <= set(_rows(update))
+
+
+def test_an_idle_g1_stays_where_it_stood(humanoids):
+    """Regression: told to stand, the learned policy drifted about 6.5 cm/s and walked into our humanoid's lane
+    within half a minute of the face-off opening."""
+    pg = humanoids
+    root = pg.lessons.lesson.facts["g1"]["root"]
+    data = pg.session.data
+    _play(pg, 1.0)
+    start = data.xpos[root][:2].copy()
+    worst = 0.0
+    for _ in range(30):
+        _play(pg, 1.0)
+        worst = max(worst, float(np.linalg.norm(data.xpos[root][:2] - start)))
+    assert worst < 0.35, f"drifted up to {worst:.2f} m"
+    assert data.xmat[root][8] > 0.9
