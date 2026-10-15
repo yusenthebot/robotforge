@@ -199,6 +199,7 @@ class HumanoidController:
         self._pose: tuple[str, list[Keyframe]] | None = None
         self._pose_t = 0.0
         self._pending: str | None = None
+        self._custom: dict[str, list[Keyframe]] = {}  # poses made on the fly, e.g. a crouch
         self._planned_for = (0.0, 0.0)  # the command the plan's future was made for
         self._idle = True  # nothing but standing still is planned (updated every tick)
         self._upper_from: dict[str, float] = dict(self.upper_home)
@@ -226,6 +227,14 @@ class HumanoidController:
             raise ValueError(f"unknown pose {name!r}; choose one of: {', '.join(POSES)}")
         self.command(0.0, 0.0)
         self._pending = name
+
+    def crouch(self, drop: float, seconds: float = 1.0) -> None:
+        """Sink the hips by `drop` (a share of the leg length, 0 to 0.35) and stay there, balancing."""
+        if not 0.0 <= drop <= 0.35:
+            raise ValueError(f"crouch drop must be between 0 and 0.35 of the leg length, got {drop}")
+        self.command(0.0, 0.0)
+        self._custom["crouch"] = [Keyframe(0.0), Keyframe(seconds, drop=drop)]
+        self._pending = "crouch"
 
     @property
     def done(self) -> bool:
@@ -304,7 +313,8 @@ class HumanoidController:
         if self._pending is not None and self._idle:
             self._upper_from = self._upper_targets()
             self._pose_level = self._level()
-            self._pose = (self._pending, POSES[self._pending][1])
+            frames = self._custom[self._pending] if self._pending in self._custom else POSES[self._pending][1]
+            self._pose = (self._pending, frames)
             self._pose_t = 0.0
             self._pending = None
         elif self._pose is not None:

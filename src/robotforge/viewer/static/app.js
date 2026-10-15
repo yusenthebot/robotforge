@@ -1605,7 +1605,16 @@ initLessons({
   // Keep the camera with a lesson's robot as it walks (null stops); the lesson's own camera move finishes first.
   followBody: (body) => {
     if (body === null) follow = null;
-    else startFollowBody(body, { keepTween: true });
+    else {
+      const from = follow && follow.body !== body ? bodyNodes[follow.body] : null;
+      if (from && bodyNodes[body]) {
+        // Switching robots: glide over by the distance between them, keeping the same view of the new one.
+        const delta = bodyNodes[body].position.clone().sub(from.position).setZ(0);
+        moveCamera(camera.position.clone().add(delta), controls.target.clone().add(delta), true);
+        follow = null;
+      }
+      startFollowBody(body, { keepTween: true });
+    }
     return body === null || follow?.body === body; // false while the scene's bodies are still arriving
   },
   renderer,

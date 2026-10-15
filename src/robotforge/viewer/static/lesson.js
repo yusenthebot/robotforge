@@ -31,6 +31,7 @@ export const lessonActive = () => lesson !== null;
 export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
 export const lessonDriveSpec = () => lesson?.drive ?? null;
 let followWanted = null; // the body the lesson last asked the camera to follow
+let viewWanted = null; // the framing the lesson last asked for, as JSON
 export const lessonKind = () => lesson?.kind ?? null;
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
@@ -149,7 +150,7 @@ function finishLesson() {
 function openLesson(desc) {
   lesson = desc;
   state = null;
-  followWanted = null;
+  followWanted = viewWanted = null;
   api.followBody(null);
   plots.reset(desc.plots);
   bench.setup(desc.bench, desc.bench_state);
@@ -175,7 +176,7 @@ function openLesson(desc) {
 function closeLesson() {
   lesson = null;
   state = null;
-  followWanted = null;
+  followWanted = viewWanted = null;
   api.followBody(null);
   overlays.clear();
   pip.teardown();
@@ -222,6 +223,14 @@ export function lessonUpdate(msg) {
   } else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
   $("lesson-readout").textContent = readout(msg.live);
+  // A lesson may frame each robot its own way (a small one close up, a tall one from further back).
+  const view = msg.live?.view ? JSON.stringify(msg.live.view) : null;
+  if (view && view !== viewWanted) {
+    viewWanted = view;
+    followWanted = null;
+    api.followBody(null);
+    api.moveCamera(msg.live.view.eye, msg.live.view.target);
+  }
   const follow = msg.live?.follow ?? null;
   // Only when the lesson asks for a different body, so orbiting the camera away stays yours.
   if (follow !== followWanted && api.followBody(follow)) followWanted = follow;
@@ -1700,7 +1709,10 @@ function gaitRig(rig) {
   for (let k = 0; k < 4; k++) feet.add(new THREE.Mesh(footDisc, footMat));
   const com = new THREE.Mesh(new THREE.CircleGeometry(0.03, 28), onTop(basic(amber, 1, true)));
   const drop = new THREE.Line(new THREE.BufferGeometry(), lineMat(amber, 0.7));
-  support.add(patch, feet, com, drop);
+  // The capture point (balance lesson): a hollow ring, joined to the centre of mass.
+  const capture = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.042, 32), onTop(basic(amber, 1, true)));
+  const reach = new THREE.Line(new THREE.BufferGeometry(), lineMat(amber, 0.85));
+  support.add(patch, feet, com, drop, capture, reach);
   support.traverse((o) => {
     o.renderOrder = 5; // after the robots, so the overlay draws over their legs
   });
@@ -1732,9 +1744,15 @@ function gaitRig(rig) {
       com.visible = drop.visible = !!c;
       if (c) {
         com.position.set(c[0], c[1], z + 0.001);
-        const trunk = api.bodyNode(rig.entrants[state.values.dog ?? 0]?.body);
+        const trunk = api.bodyNode(state.live?.follow); // the robot being tested
         const top = trunk ? trunk.position.z : 0.3;
         setPoints(drop, [new THREE.Vector3(c[0], c[1], top), new THREE.Vector3(c[0], c[1], z)]);
+      }
+      const cp = state.live?.capture;
+      capture.visible = reach.visible = !!(cp && c);
+      if (cp && c) {
+        capture.position.set(cp[0], cp[1], z + 0.002);
+        setPoints(reach, [new THREE.Vector3(c[0], c[1], z + 0.002), new THREE.Vector3(cp[0], cp[1], z + 0.002)]);
       }
     },
   };

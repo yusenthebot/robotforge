@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from robotforge.learn.autopilot import AutopilotLesson
+from robotforge.learn.balance import BalanceLesson
 from robotforge.learn.challenges import CourseChallenge, MazeChallenge, ShoveChallenge
 from robotforge.learn.compare import ArmFaceOff, HumanoidFaceOff
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
@@ -25,6 +26,7 @@ LESSONS: dict[str, type[Lesson]] = {
         SensorsLesson,
         AutopilotLesson,
         GaitLesson,
+        BalanceLesson,
         RLLesson,
         MazeChallenge,
         ShoveChallenge,
