@@ -121,9 +121,20 @@ Rounds 1-3 done, 2026-10-14.
   - A flicker metric with 2 cm camera steps aliased the test itself; realistic per-frame steps (5-10 mm) and an in-page A/B against rebuilt old textures gave trustworthy numbers. Cloning a three.js texture shares its image source (the first A/B compared old with old).
   - My `_real_humanoid` first only checked "from the library", so Go2 reported its RL top speed; it now also checks the catalog kind.
 
+## Round 12 (2026-10-15): the experiment bench (plan v2, phase B part 1)
+
+- Engine: `Bench` (title, curve axes, params with short names, `Metric`s with lower_is_better / ranked, a reference line, `Sweep`s); `LessonContext.record_run` keeps the last 5 runs; actions `clear_runs` and `sweep` (slow handler `lesson_bench`, on copies of the rig); the record goes to the viewer only when it changed, and with the scene on (re)connect.
+- Viewer: an "experiment record" section under the live plots: overlay chart (one colour per run, newest thicker, dashed target), table (run, settings, metrics, best underlined), sweep buttons (locked until the knob unlocks) and one small chart per swept metric (hollow marks: never got there).
+- PID: `grade()` scores a curve for live tests and sweeps alike; Kp sweep 2-80 shows overshoot 0 -> 36% (without feedforward it only settles at high Kp), Kd sweep shows overshoot damped to 0 from Kd 1.5; each sweep 40-50 ms.
+- RL: knobs α (step size), ν (noise), directions; fast-forward; every training starts from zero weights and is recorded; new "tune" step needs two differently tuned runs. Measured (30 rounds): α 0.1 learns at round 18-19, α 0.02 never, α 0.5 jumps around and learns at 27-28; ν 1.0 never; 2 directions noisy, 16 learn at 16 for twice the simulation.
+- What did NOT work (and the fix):
+  - "Fewest simulation steps" was marked best for the run that never learned: metrics can be unranked.
+  - A test helper returned the last of two ticks, and the record only rides on the first one after a change; tests read single ticks.
+  - In the browser pane a synthetic drag works when pointer events are dispatched on the canvas with moves spread over a second (the PID lesson's first step needs a drag).
+
 ## Next-round seed
 
-Round 12 = plan v2 phase B, the experiment bench: run history (every run keeps its parameters, curves and metrics; up to 5 overlaid with a metrics table), side-by-side twins (the same robot with different gains in one scene, reusing FaceOff), parameter sweeps (metric against parameter). First targets: PID gains on a joint, LQR Q/R on the balancer, MPC horizon/samples, gait step frequency, ARS step size/noise/directions. Then phase C (rebuild PID, IK on PiPER, sensors as lidar autopilot, gait and humanoid balance lessons).
+Round 13 = phase B part 2: twins (two or three copies of one robot with different settings, side by side and driven by the same command: PID gains on three joints, MPC horizons on two dogs, gait step frequency), then bench coverage for LQR (Q/R on the balancer), MPC (horizon, samples, noise) and the gait. Then phase C: rebuild the PID lesson around twins and sweeps, IK on the PiPER, sensors as a lidar autopilot, new gait and humanoid balance lessons.
 
 ## Frontier
 
