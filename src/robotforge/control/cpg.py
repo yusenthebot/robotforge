@@ -347,9 +347,12 @@ class Trainer:
         distance, drift = float(moved[0]), abs(float(moved[1]))
         cost = self.reward.energy * energy / (self.mass * 9.81)
         if self.reward.turn:
-            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off. A fall
-            # forfeits the turn: a fast spin that ends on its back scored more than a slower one that stays up.
-            turn = 0.0 if fell else self.reward.turn * turned
+            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off. Begun
+            # mid-stride, a fall forfeits the turn: a fast spin that ended on its back out of the walk scored more
+            # than a slower one that stays up. From standing it does not, so turns learned from standing are the
+            # ones they always were (forfeiting there too turned an imported A1's 1 s turns 165 degrees into 61 on
+            # one of 6 walks, and 132 into 109 on average, after the robot had stood still).
+            turn = 0.0 if fell and start is not None else self.reward.turn * turned
             reward = turn - WANDER_WEIGHT * wander - cost
         else:
             # Forward: the distance counts for less the more the heading turned, so a walk that curves round

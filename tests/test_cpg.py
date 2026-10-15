@@ -156,9 +156,10 @@ def test_a_rhythm_can_start_mid_stride_faded_in_from_the_targets_of_the_moment()
     assert from_stride["energy"] > 2 * trainer.rollout(still)["energy"]  # it had a stride to stop
 
 
-def test_a_fall_forfeits_a_turn():
+def test_a_fall_forfeits_a_turn_begun_mid_stride_but_not_one_from_standing():
     """Regression: a fall cost one point while a fast spin earned up to 14 rad in 4 s, so turns that spun the
-    imported A1 onto its back when started out of its walk still scored best."""
+    imported A1 onto its back when started out of its walk still scored best. From standing the reward is what it
+    always was, so the turns learned from standing do not change (forfeiting there too slowed the A1's)."""
     model = _solo("dog", template="quadruped")
     trainer = Trainer(model, "dog", Reward(turn=1.0), seconds=2.0)
     data = mujoco.MjData(model)
@@ -172,3 +173,7 @@ def test_a_fall_forfeits_a_turn():
     spun = trainer.rollout(Rhythm.still(trainer.body.joints), start=toppling)
     assert spun["fell"] and spun["turned"] > 1.0  # rad: it spun a long way before it went down
     assert spun["reward"] == pytest.approx(-FALL_PENALTY - WANDER_WEIGHT * spun["wander"])
+    model.key_qpos[0], model.key_qvel[0] = toppling.qpos, toppling.qvel  # the same, as the pose it stands in
+    standing = trainer.rollout(Rhythm.still(trainer.body.joints))
+    assert standing["fell"] and standing["turned"] > 1.0
+    assert standing["reward"] == pytest.approx(standing["turned"] - FALL_PENALTY - WANDER_WEIGHT * standing["wander"])
