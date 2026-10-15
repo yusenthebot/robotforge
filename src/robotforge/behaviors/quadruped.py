@@ -43,6 +43,10 @@ TRIPOD_LEGS = {
     "rear_right": 0.5,
 }
 PLAN_HZ = 100.0  # foot targets and IK; torque-motor PD runs every physics step
+# m: the IK's tolerance (its default). A foot target that stays this close to where the leg's joints already put it
+# is not solved again: the IK would return the same joints. Standing still, the targets do not move, and solving
+# them anyway halved the speed of a world with one dog in it (real-time factor 173 -> 90, six dogs 38 -> 15).
+IK_TOL = 1e-4
 TEMPLATE_PERIOD = 0.36  # s per gait cycle for our template dog
 # Bigger robots step slower: about 0.36 s per cycle for a Go2-sized leg (hip to foot 0.28 m),
 # scaled with leg length. Measured: Go2 walks best at 0.30-0.36 s, Spot (0.44 m legs) at 0.45-0.55 s.
@@ -130,6 +134,8 @@ class Leg:
     hip: np.ndarray  # hip position in the trunk frame
     home_foot: np.ndarray  # foot position in the trunk frame at the home pose
     q: np.ndarray  # last IK solution (warm start)
+    solved_for: np.ndarray  # the foot target q was solved for...
+    error: float = math.inf  # ...and how far q's foot is from it (inf: unknown, solve again)
 
 
 @dataclass(frozen=True)
@@ -181,7 +187,7 @@ class QuadrupedGait:
             foot = self.ik.point(chain, q0)
             hip = self.ik.data.xpos[model.jnt_bodyid[joints[0]]].copy()
             acts = np.array([joint_to_act[j] for j in joints])
-            self.legs.append(Leg(name, chain, acts, offset, hip, foot, q0))
+            self.legs.append(Leg(name, chain, acts, offset, hip, foot, q0, foot.copy()))
         self._actuators = np.concatenate([leg.actuators for leg in self.legs])
         self._targets = np.concatenate([leg.q for leg in self.legs])
         self.motors = _motor_drive(model, self._actuators)
@@ -309,6 +315,8 @@ class QuadrupedGait:
 
         v_body, turn = self._corrected_velocity(dt)
         w = self._recovery
+        if not moving and self._amplitude == 0.0 and w == 0.0 and self.speed == 0.0 and self.turn == 0.0:
+            return  # it has not stepped since it started: every foot target is still its home (see IK_TOL)
         # The trunk is leveled while the robot walks, and while it stands only as much as it steps (recovering, or
         # stopping): standing still, it holds the stance its servos would. Leveled standing on a 17 to 20 degree
         # ramp, a Go2 that stood there on its servos pushed its downhill legs out, its feet slid, the pitch grew
@@ -345,7 +353,11 @@ class QuadrupedGait:
             if level is not None and phase >= self.duty:
                 # A swinging foot aims where it would if the trunk were level (see PUSH_DRIFT).
                 target = (1.0 - w) * target + w * (level.T @ target)
-            leg.q, _ = self.ik.solve(leg.chain, target, leg.q, iterations=4)
+            # Solved again unless the IK would return the same joints at once (see IK_TOL).
+            if leg.error + float(np.linalg.norm(target - leg.solved_for)) >= IK_TOL:
+                leg.q, error = self.ik.solve(leg.chain, target, leg.q, iterations=4, tol=IK_TOL)
+                # The error is q's own only when the IK stopped on it; after its last iteration it is the step before.
+                leg.solved_for, leg.error = target, error if error < IK_TOL else math.inf
         self._targets = np.concatenate([leg.q for leg in self.legs])
         self._saturated = saturated
 

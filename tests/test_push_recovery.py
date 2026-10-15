@@ -151,6 +151,28 @@ def test_a_quadruped_never_moved_stands_as_it_did_without_a_gait(pg, tmp_path, r
     assert np.degrees(np.abs(pg.session.data.qpos[legs] - plain.session.data.qpos[legs])).max() < 0.5
 
 
+def test_a_quadruped_standing_still_on_its_gait_solves_no_ik(pg, monkeypatch):
+    """Found in review: every quadruped in a world stands on its gait, and solving the same foot targets 100 times a
+    second halved the sim's speed (one dog: real-time factor 173 -> 90). Standing still it solves nothing, also once a
+    shove it stepped for has died down; while it steps it solves as before."""
+    from robotforge.behaviors.ik import IKSolver
+
+    solves = []
+    solve = IKSolver.solve
+    monkeypatch.setattr(IKSolver, "solve", lambda self, *a, **k: solves.append(1) or solve(self, *a, **k))
+    _, dof = _on_its_gait(pg, "dog", None)
+    solves.clear()
+    pg.run_fast(lambda: False, 2.0)
+    assert not solves
+    pg.session.data.qvel[dof + 1] += 0.7  # a shove it steps for
+    pg.run_fast(lambda: False, 1.0)
+    assert len(solves) > 100
+    pg.run_fast(lambda: False, 6.0)
+    solves.clear()
+    pg.run_fast(lambda: False, 2.0)
+    assert not solves
+
+
 @pytest.mark.parametrize(("robot", "angle"), [("dog", 15), ("go2", 15), ("go2", 18), ("go2", 20)])
 def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot, angle):
     """Regression found while measuring: on a 15 degree ramp a Go2 slid 12 cm down and back while it landed, and
