@@ -380,9 +380,9 @@ def _mjcf_robot(name: str, path: Path) -> templates.BuiltRobot:
     except ValueError as exc:
         raise ValueError(f"robot {name!r}: MuJoCo could not read {path.name}: {exc}") from exc
     notes = [f"imported from {path.name}"]
-    named = _name_unnamed(child)
-    if named:
-        notes.append(f"gave names to {named} parts the file left unnamed, so they can be driven")
+    motors = _name_unnamed(child)
+    if motors:
+        notes.append(f"named the {motors} motors the file left unnamed after their joints, so they can be driven")
     key = _home_key(child)
     key_qpos, key_ctrl = library.read_key(child, key)
     _strip_world_extras(child)
@@ -416,9 +416,10 @@ def _home_key(spec: mujoco.MjSpec) -> str | None:
 
 
 def _name_unnamed(spec: mujoco.MjSpec) -> int:
-    """Name the bodies, joints and actuators a file left unnamed; returns how many. A world finds each robot's parts
-    by their names ("<robot>/..."), and attaching only prefixes names a file gave: a hand-written MJCF's unnamed
-    motors belonged to no robot, so nothing could drive them. A motor is named after the joint it moves."""
+    """Name the bodies, joints and actuators a file left unnamed; returns how many actuators. A world finds each
+    robot's parts by their names ("<robot>/..."), and attaching only prefixes names a file gave: a hand-written MJCF's
+    unnamed motors belonged to no robot, so nothing could drive them. A motor is named after the joint it moves. Free
+    joints stay as they are: nothing drives them, and a world finds a robot's base by its body."""
 
     def unique(base: str, taken: set[str]) -> str:
         name, k = base, 1
@@ -428,16 +429,16 @@ def _name_unnamed(spec: mujoco.MjSpec) -> int:
         taken.add(name)
         return name
 
-    count = 0
+    motors = 0
     for elements, kind in ((spec.bodies, "body"), (spec.joints, "joint"), (spec.actuators, "actuator")):
         taken = {e.name for e in elements if e.name}
         for i, element in enumerate(elements):
-            if element.name:
+            if element.name or (kind == "joint" and element.type == mujoco.mjtJoint.mjJNT_FREE):
                 continue
             on_joint = kind == "actuator" and element.trntype == mujoco.mjtTrn.mjTRN_JOINT and element.target
             element.name = unique(element.target if on_joint else f"{kind}{i}", taken)
-            count += 1
-    return count
+            motors += kind == "actuator"
+    return motors
 
 
 def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:

@@ -230,6 +230,9 @@ def test_an_mjcf_file_names_what_it_left_unnamed_and_starts_in_its_home_keyframe
         assert home.qpos[model.jnt_qposadr[model.joint(f"crab/knee{i}").id]] == pytest.approx(knee)
         assert home.ctrl[model.actuator(f"crab/hip{i}").id] == pytest.approx(hip)  # its motors aim at the crouch
     assert any("'home' keyframe" in n for n in compiled.notes)
+    assert any("named the 8 motors" in n for n in compiled.notes)
+    free = next(j for j in range(model.njnt) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE)
+    assert not model.joint(free).name  # nothing drives a free joint, so it is not counted or named
     trunk = model.body("crab/trunk").id
     start = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, start, 0)
