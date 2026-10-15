@@ -12,7 +12,8 @@ one rhythm each way from standing still, then each tuned again to begin straight
 Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts faded in from the stride
 as its walking version learned to, at once or at the next point of the stride it was checked to start from safely;
 any other switch while moving first steadies the robot on its home pose until it is calm, then fades the new rhythm
-in. It cannot back up or change speed, and the status says so.
+in (out of a turn checked to need it, it holds home at once until it stands still). It cannot back up or change
+speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -82,6 +83,10 @@ class SavedWalk(BaseModel):
     # How it switches rhythms while moving: "fade" (kept since steering and walking turns); None, as files kept
     # before: stop holds home at once, and another rhythm waits on home until the robot stands still.
     switching: Literal["fade"] | None = None
+    # How the robot steadies leaving each turn, checked after it is learned: "fade" its joints to home and wait until
+    # it is calm, or "hold" home at once until it stands still; None: as `switching` says.
+    turn_left_exit: Literal["fade", "hold"] | None = None
+    turn_right_exit: Literal["fade", "hold"] | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -182,11 +187,19 @@ STILL_JOINT = 0.1  # rad/s
 # CALM_TILT, at most CALM_MAX, and stop fades to home the same way. Holding home at once and until the robot stood
 # still (SETTLE_MAX at most), as walks kept before still do, took the whole of a 1 s command, and in 810 tries of
 # each switch on its own 6 A1 walks fell 119 times; steadying until calm and fading, 4 (6 template dog walks: none
-# and 8).
-CALM_SPIN = 2.0  # rad/s, the trunk's angular speed
+# and 8). Steadying until the trunk turned slower than 2 rad/s, 3 template dog walks fell 4 times in 405 tries of each
+# switch and 3 A1 walks 3; slower than 1 rad/s, 1 and 0.
+CALM_SPIN = 1.0  # rad/s, the trunk's angular speed
 CALM_TILT = math.radians(25.0)  # a walking A1 rocks up to 20 degrees
 CALM_MAX = 0.6  # s
 SETTLE_MAX = 1.0  # s
+# Which of the two steadies a robot out of each turn is checked after the turns are learned: stopping after EXIT_LEADS
+# seconds of turning, from standing and out of EXIT_WALK seconds of walking, each watched for EXIT_WAIT seconds; the
+# one that tips it over less is kept, fading if they tie. Fading every time, 6 template dog walks fell 8 times in 810
+# tries of each switch, 7 of them out of one walk's right turn; checked this way (that turn holds), 1.
+EXIT_LEADS = tuple(round(1.0 + 0.2 * k, 1) for k in range(11))  # s
+EXIT_WALK = 1.5  # s
+EXIT_WAIT = 2.0  # s
 
 
 class _Joints:
@@ -338,7 +351,48 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
             rhythm, result = _standing_turn(model, robot, joints, Reward(turn=sign, forfeit=True), seed)
         learned[side] = joints.to_saved(rhythm.theta)
         rates.append(max(0.0, sign * result["turned"]) / walk.seconds)
-    return learn_walking_turns(model, robot, walk.model_copy(update={**learned, "turn_rate": min(rates)}), seed)
+    turned = learn_walking_turns(model, robot, walk.model_copy(update={**learned, "turn_rate": min(rates)}), seed)
+    return learn_turn_exits(model, robot, turned)
+
+
+def learn_turn_exits(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedWalk:
+    """For each of the walk's turns, which way of steadying out of it (fading or holding home) tips the robot over
+    less when it stops (the robot alone in `model`), fading if they tie. Fading out of a turn tipped one template dog
+    walk's right turn over in 3 of 40 stops, holding in none; for an imported A1 holding was worse."""
+    if not walk.turns:
+        return walk
+    exits: dict[str, str] = {}
+    for side, turn in (("left", 1.0), ("right", -1.0)):
+        falls = {}
+        for style in ("fade", "hold"):
+            trial = walk.model_copy(update={f"turn_{side}_exit": style})
+            falls[style] = sum(
+                _falls_stopping(model, robot, trial, turn, lead, walked)
+                for lead in EXIT_LEADS
+                for walked in (0.0, EXIT_WALK)
+            )
+        exits[f"turn_{side}_exit"] = "hold" if falls["hold"] < falls["fade"] else "fade"
+    return walk.model_copy(update=exits)
+
+
+def _falls_stopping(
+    model: mujoco.MjModel, robot: str, walk: SavedWalk, turn: float, lead: float, walked: float
+) -> bool:
+    """Whether the robot (alone in `model`) falls in EXIT_WAIT seconds after stopping a turn played for `lead`
+    seconds, after `walked` seconds of walking from standing (0: from standing). A fall before the stop is not the
+    stop's."""
+    data, walker, substeps = _walker_alone(model, robot, walk)
+    steps = (round(walked * CONTROL_HZ), round(lead * CONTROL_HZ), round(EXIT_WAIT * CONTROL_HZ))
+    for leg, (count, (speed, angle)) in enumerate(zip(steps, ((1.0, 0.0), (0.0, turn), (0.0, 0.0)), strict=True)):
+        walker.command(speed, angle)
+        for _ in range(count):
+            walker.update(model, data)
+            for _ in range(substeps):
+                mujoco.mj_step(model, data)
+            walker.tilt_cos = float(data.xmat[walker.body.trunk][8])
+            if walker.fallen:
+                return leg == 2
+    return False
 
 
 def _standing_turn(
@@ -523,6 +577,10 @@ class RhythmWalker:
         # imported A1 kept first ended on its back in 7 of 8 move sequences with 0 to 5 s between the calls (in 1 as
         # before): a faded stop leaves its feet elsewhere, and its fast turn from there tips it over.
         self.kept_before = walk.switching is None
+        # How steadying goes: holding home at once until still (walks kept before, turns checked to need it) or
+        # fading to it until calm. What it leaves decides.
+        self.holding = self.kept_before
+        self.exits = {"left": walk.turn_left_exit, "right": walk.turn_right_exit}
         forward = Rhythm(np.array(walk.theta), walk.freq, walk.reflexes)
         self.rhythms: dict[str, Rhythm | Steering] = {
             "forward": forward if walk.steer is None else Steering(forward, np.array(walk.steer))
@@ -588,7 +646,7 @@ class RhythmWalker:
         if self.steady_from is not None and self._steadied(data, now - self.steady_from):
             self.steady_from = None
             assert self.mode is not None
-            self._start(data, now, self.mode, fade=not self.kept_before)
+            self._start(data, now, self.mode, fade=not self.holding)
         if self.turn_at is not None and now >= self.turn_at - 0.5 / CONTROL_HZ:
             self.turn_at = None
             self._start(data, now, f"{self.mode} walking", fade=True)
@@ -629,6 +687,9 @@ class RhythmWalker:
         16 degrees of the 88 it promised."""
         out_of_walk = now - self.walked_until <= FADE + 1.0 / CONTROL_HZ
         self.playing, self.steady_from, self.turn_at = self.mode, None, None
+        if self.rhythm is not None:  # what it leaves decides how it steadies (already steadying: as it is)
+            exit_ = self.exits.get(self.rhythm.split()[0])
+            self.holding = self.kept_before if exit_ is None else exit_ == "hold"
         if self.mode == "forward" and self.rhythm != "forward":
             # Where it faces now, not once steadied: an imported A1 coming out of a fast turn spun on by 47 degrees
             # while it steadied, and then walked that way.
@@ -663,14 +724,14 @@ class RhythmWalker:
         return max(0.0, ahead) / freq
 
     def _settle(self, data: mujoco.MjData, now: float) -> None:
-        """Go to the home pose: at once for a walk kept before, else faded in from the targets of the moment."""
-        if self.kept_before:
+        """Go to the home pose: at once when holding, else faded in from the targets of the moment."""
+        if self.holding:
             self.fade_from = None
         else:
             self._fade(data, now)
 
     def _steadied(self, data: mujoco.MjData, steadying: float) -> bool:
-        if self.kept_before:
+        if self.holding:
             return self._still(data) or steadying >= SETTLE_MAX
         return self._calm(data) or steadying >= CALM_MAX
 

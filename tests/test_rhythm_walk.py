@@ -257,6 +257,48 @@ def test_other_switches_while_moving_steady_on_home_until_calm(pg):
     assert pg.session.data.ctrl[walker.actuators] == pytest.approx(home)  # stop holds the home pose
 
 
+def test_a_turn_checked_to_need_it_is_left_by_holding_home_at_once(pg):
+    """Regression: fading to home out of a template dog walk's fast right turn tipped it over in 3 of 40 stops
+    (holding home at once, as before: none). How to leave each turn is checked after it is learned and kept."""
+    walker = _swinging(pg, turn_left_exit="hold", turn_right_exit="fade")
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: walker.rhythm == "left", CALM_MAX + 0.1)
+    pg.run_fast(lambda: False, 0.5)  # turning
+    pg.session.data.qvel[walker.body.qvel[5]] = 1.0  # rad/s of yaw: calm, but not still
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    home = np.clip(walker.home, walker.lower, walker.upper)
+    assert walker.holding and pg.session.data.ctrl[walker.actuators] == pytest.approx(home)  # home at once
+    pg.behaviors.move("crab", 0.0, -0.8)  # asked while it holds: it holds until still, then turns as learned
+    waited = pg.run_fast(lambda: walker.t0 is not None, 2 * SETTLE_MAX)
+    assert waited < SETTLE_MAX + 0.05 and walker.rhythm == "right" and walker.fade_from is None
+    pg.run_fast(lambda: False, 0.5)
+    pg.session.data.qvel[walker.body.qvel[5]] = 1.0
+    pg.behaviors.stop("crab")  # the right turn fades
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert not walker.holding and walker.fade_from is not None
+
+
+def test_turn_exits_keep_the_way_that_tips_the_robot_over_less(monkeypatch):
+    from robotforge.behaviors import rhythm_walk
+
+    tried = []
+
+    def falls(model, robot, walk, turn, lead, walked):
+        style = walk.turn_left_exit if turn > 0 else walk.turn_right_exit
+        tried.append((turn, style, walked))
+        return turn < 0 and style == "fade" and lead > 2.0  # fading out of the right turn tips it, late in it
+
+    monkeypatch.setattr(rhythm_walk, "_falls_stopping", falls)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    names = joint_names(solo, Body.find(solo, "crab"))
+    turns = {"turn_left": [0.0] * 3 * len(names), "turn_right": [0.0] * 3 * len(names), "turn_rate": 1.0}
+    kept = rhythm_walk.learn_turn_exits(solo, "crab", _walk("crab", names, **turns))
+    assert kept.turn_left_exit == "fade" and kept.turn_right_exit == "hold"  # a tie fades
+    assert len(tried) == 2 * 2 * 2 * len(rhythm_walk.EXIT_LEADS)  # each side, each way, from standing and walking
+    assert rhythm_walk.learn_turn_exits(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
+
+
 def test_a_walk_kept_before_switches_as_it_always_did(pg):
     """Regression: with faster switching (stop fading to home, rhythms starting once the robot is calm), the walk the
     imported A1 kept first ended on its back when the sim ran on between move calls, as it does with the viewer
