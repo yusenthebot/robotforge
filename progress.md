@@ -371,9 +371,42 @@ Rounds 1-3 done, 2026-10-14.
 - The MCP instructions now say that edits keep what they do not change in place, so agents do not redo moves.
 - What did NOT work: a 1 cm overlap threshold against everything, the ground included.
 
+## Round 31 (2026-10-15/16): phase E, first overnight multi-agent round
+
+- Four Workflow agents, each in its own worktree and branch, then an adversarial reviewer per branch; I reviewed the diffs, cherry-picked onto main and ran everything serially.
+- E1 playtester: `learn/playthrough.py` plays every lesson to the end the way a learner would (quiz answers, knob settings, button presses, WASD at the viewer's share), `scripts/playtest.py` prints the table.
+  It found 5 lesson problems, all fixed: RL I's push step could not pass after the tuning step left unlearned weights (Push now brings back the best ones and says so), the starfish step did not say to reset the energy cost, the PID twins feedforward step, the IK step count, and the obstacle course's W speed and closing text (keys alone finish it 7 runs in 20).
+  18 of 20 lessons finished before, 20 of 20 after.
+  Slow playthroughs are marked `slow`; CI runs them on Ubuntu.
+- E2 push recovery: a quadruped on its gait that is shoved or dragged steps along with it (swing feet aimed as if the trunk were level, sideways strides follow the trunk).
+  8 flips in 24 bench cases before, 0 after (`scripts/push_bench.py`).
+  Review found a high-severity regression: a dog blocked by a stair riser wobbled like a pushed one and recovered without end, so the obstacle course fell from 12 m to 4.6 m.
+  Walking recovery now stops after 3 s and rests 3 s (a dog pinned on a wall: 7.1 s of recovery before, 2.9 s now), and the course passes again.
+- E3 imported robots learn to walk: RL II offers a robot imported from a URDF as "Your robot"; joints a URDF leaves unlimited can learn, wheels never.
+- E4 colors: hex codes like "#9c6b3f" work everywhere a color does.
+- Real E2E with Codex installing the plugin from the public GitHub repo: session 1 created a world and imported the Unitree A1 URDF (the doctor fixed 5 problems), walked it 0.39 m on the gait and told the user how to make it learn its own walk.
+  In the browser pane I trained it in RL II (30 rounds, 13.8 s: 1.46 m in 4 s, 12 of 12 shoves survived), kept the walk and its turns (88 deg/s).
+  Session 2 opened the world, saw `learned_walk`, walked 1.54 m with `walker="rhythm"` and turned left, upright; 189k input tokens.
+- Found and fixed on the way:
+  - Ubuntu CI: the IK arm lesson stuck at the gripper-down step.
+    Flailing with lambda 1e-4 can throw the arm onto its yaw, shoulder and elbow limits, where every clipped step points out of range.
+    A 1e-9 nudge of the aimed joints jammed 7 runs in 20 on macOS too; a jammed arm now starts over from home (0 of 40).
+  - A data reset without `SimSession.reset()` left every controller idle until the old clock time came round; controllers now run when the clock goes back.
+  - The first-visit hint floated over the open Learn panel; the Learn panel ran under the raised drive chip on panes narrower than 820 px.
+  - Agent instructions said only robots without a gait can learn a walk; Codex read the plugin's source to find out (826k input tokens).
+    Any legged robot can.
+  - RL I's note about swapping in the best weights stayed up after new weights; a hex color in a YAML comment line stopped a world from opening; a hexapod refused `walker="gait"`.
+- What did NOT work:
+  - The round 31 workflow stalled after the E2 review (no fix agent started); I did the fix myself from the reviewer's tested recipe.
+  - Worktrees for workflow agents start from an older commit than local main; agents now check out the exact base first.
+  - `codex exec` without `< /dev/null` waits on stdin forever (lost 10 minutes again).
+  - The A1's learned forward walk arcs (42 degrees in 4 s) and a 1 s turn right after walking gets only 16 degrees of its 88 deg/s; round 32 works on both.
+
 ## Next-round seed
 
-Round 31 = Review round (phase D milestone): rounds 28 to 30 changed what agents see (tool list, framing), how robots move (turns) and what edits do (carry); re-verify all three in one fresh Codex session plus the browser, sweep for dead code and stale docs, and run the ambition critic. Waiting on the user: `learn_walk` tool, `claude auth login`.
+Round 32 is running as a Workflow (wf_428bfbd5-245): quadrupeds steady from the moment a world opens (a drag before any move still flips them), learned walks that go straight and switch to turning quickly plus MJCF imports in RL II and the sensors lesson's integrator warning, and an audit of every agent-facing error message and token cost.
+Then E5: README and lesson docs with screenshots.
+Waiting on the user: `learn_walk` tool, `claude auth login`, a licence, PyPI/.mcpb release.
 
 ## Frontier
 
@@ -382,6 +415,7 @@ Round 31 = Review round (phase D milestone): rounds 28 to 30 changed what agents
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Done in round 30: edits and lesson round trips keep robots and objects where they are.
+- Done in round 31: a playtester that plays every lesson (20 of 20 finish), quadrupeds that take a push on their gait, URDF imports that learn to walk, the public repo installed and driven by Codex end to end.
 - Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
