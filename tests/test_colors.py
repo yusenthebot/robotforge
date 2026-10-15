@@ -79,6 +79,8 @@ def test_a_color_is_a_name_a_hex_code_or_numbers(value, rgba):
         ([1, 1, 1.5], r"in 0\.\.1 \(or a hex code"),  # a fraction among 0..1 values is a slip, not 0..255
         ([0.5, 0.5, 2], r"in 0\.\.1 \(or a hex code"),
         ([255, 0, 0, 300], r"in 0\.\.1 \(or a hex code"),
+        ([255, 0, 0, 1.5], r"in 0\.\.1 \(or a hex code"),  # not 1.5/255: that would be invisible
+        ([255, 0, 0, 2.5], r"in 0\.\.1 \(or a hex code"),
         ([0.1, 0.2], "3 or 4 numbers"),
     ],
 )

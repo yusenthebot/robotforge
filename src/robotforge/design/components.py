@@ -123,14 +123,20 @@ def color(value: str | list[float] | tuple[float, ...]) -> list[float]:
     rgba = [float(v) for v in value]
     rgb = rgba[:3]
     # Whole numbers with one above 1 can only be on the 0..255 scale. Fractions or a stray 2 among 0..1
-    # values are a mistake to report, not a color to guess, and alpha is 0..1 (CSS) or 0..255 on its own.
+    # values are a mistake to report, not a color to guess; alpha follows the same rule on its own terms.
     if len(rgba) in (3, 4) and max(rgb) > 1 and all(0 <= v <= 255 and v.is_integer() for v in rgb):
-        rgba = [v / 255 for v in rgb] + [a / 255 if a > 1 else a for a in rgba[3:]]
+        rgba = [v / 255 for v in rgb] + [_alpha_beside_255(a) for a in rgba[3:]]
     if len(rgba) == 3:
         rgba.append(1.0)
     if len(rgba) != 4 or not all(0.0 <= v <= 1.0 for v in rgba):
         raise ValueError(f'color must be 3 or 4 numbers in 0..1 (or a hex code like "#9c6b3f"), got {value!r}')
     return rgba
+
+
+def _alpha_beside_255(alpha: float) -> float:
+    """Alpha next to 0..255 channels: 0..1 as CSS writes it, or a whole number up to 255. Anything else (1.5,
+    300) is left as it is for the range check to refuse, since dividing it would give an invisible color."""
+    return alpha / 255 if alpha > 1 and alpha.is_integer() else alpha
 
 
 def _color_text(value: str) -> list[float]:
