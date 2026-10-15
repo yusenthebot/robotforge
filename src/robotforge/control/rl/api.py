@@ -51,11 +51,13 @@ def train(
     push: float | None = None,
     residual_scale: float | None = None,
     hyperparams: dict[str, Any] | None = None,
+    replace: bool = False,
     quiet: bool = False,
 ) -> TrainedPolicy:
     """Train `algo` ("ppo" or "sac"; default per task) on `task` with the task's default robot (or
     `robot_template`), wait for it, and return the trained policy. Saved in `save_dir`/<name>
-    (default $ROBOTFORGE_HOME/policies/<name>)."""
+    (default $ROBOTFORGE_HOME/policies/<name>); an existing policy of that name is only overwritten
+    with replace=True."""
     if task not in DEFAULT_ROBOTS:
         raise TaskError(f"unknown task {task!r}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, robot = DEFAULT_ROBOTS[task]
@@ -76,7 +78,7 @@ def train(
         hyperparams=hyperparams,
     )
     folder = place / spec.name
-    started = JOBS.start(spec, folder, replace=name is not None)
+    started = JOBS.start(spec, folder, replace=replace)
     if not quiet:
         print(
             f"training {spec.algo.upper()} on {task} (about {started['estimate_seconds'] / 60:.1f} min), log: "

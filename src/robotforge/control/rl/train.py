@@ -9,9 +9,11 @@ and keeps the best one, and writes its progress to status.json for the MCP serve
 
 from __future__ import annotations
 
+import contextlib
 import os
 import platform
 import sys
+import threading
 import time
 import traceback
 from collections.abc import Callable
@@ -28,6 +30,7 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnv as BaseVecEnv
 from torch import nn
 
 from robotforge.control.rl import store, worker
+from robotforge.control.rl.jobs import log_tail
 from robotforge.control.rl.runtime import MlpPolicy
 from robotforge.control.rl.spec import DEFAULTS, TrainSpec, algo_settings
 
@@ -37,6 +40,7 @@ EVAL_EPISODES = 4
 FINAL_EPISODES = 10
 CURVE_POINTS = 200
 TAIL_LINES = 25
+HEARTBEAT_SECONDS = 5.0
 
 
 class LeanSubprocVecEnv(SubprocVecEnv):
@@ -304,10 +308,14 @@ def run_job(folder: Path) -> int:
     torch.set_num_threads(1)  # small networks: one thread is fastest (measured), and leaves cores to physics
     spec = TrainSpec.model_validate(store.read_json(folder / store.SPEC_FILE))
     meta = store.read_json(folder / store.POLICY_FILE)
+    threading.Thread(target=_heartbeat, args=(folder,), daemon=True).start()
     try:
         result = Trainer(spec, folder).run()
     except Exception as exc:  # recorded for the user, then re-raised into train.log
         tail = traceback.format_exc().strip().splitlines()[-TAIL_LINES:]
+        if isinstance(exc, EOFError | BrokenPipeError | ConnectionError):
+            # A simulation worker died; its own traceback went to train.log before this one.
+            tail = [*log_tail(folder, TAIL_LINES), "---", *tail]
         store.write_json(
             folder / store.STATUS_FILE,
             {
@@ -337,6 +345,16 @@ def run_job(folder: Path) -> int:
     (folder / store.STOP_FILE).unlink(missing_ok=True)
     print(f"{state}: {result['final']}", flush=True)
     return 0
+
+
+def _heartbeat(folder: Path) -> None:
+    """Touch the heartbeat file while this process lives, so a server can tell a long final test from a
+    process that died (a status file alone goes quiet during tests)."""
+    beat = folder / store.HEARTBEAT_FILE
+    while True:
+        with contextlib.suppress(OSError):  # the folder may be gone (replaced or deleted): nothing to tell
+            beat.touch()
+        time.sleep(HEARTBEAT_SECONDS)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -9,6 +9,11 @@ when no world is open):
     model.zip          the Stable-Baselines3 model, to keep training it or use it with SB3 directly
     vecnormalize.pkl   SB3's observation normalizer (its numbers are also inside policy.npz)
     train.log          everything the training process printed
+    heartbeat          touched every few seconds while the training process is alive
+
+model.zip and vecnormalize.pkl are Python pickles: loading one runs code from the file, so only
+load them from folders you trained yourself. robotforge itself only ever reads policy.npz (plain
+arrays, read without pickle) and the JSON files.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -30,9 +36,11 @@ NORM_FILE = "vecnormalize.pkl"
 LOG_FILE = "train.log"
 SPEC_FILE = "train.json"
 STOP_FILE = "stop.request"  # the training process checks for this file and stops cleanly
+HEARTBEAT_FILE = "heartbeat"
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
 FINAL_STATES = ("done", "stopped", "failed")
+WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(10)), *(f"lpt{i}" for i in range(10))}
 
 
 def robotforge_home() -> Path:
@@ -45,7 +53,7 @@ def policies_home(world_dir: Path | None) -> Path:
 
 
 def check_name(name: str) -> str:
-    if not NAME_RE.match(name or ""):
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name) or name in WINDOWS_RESERVED:
         raise TaskError("policy names use lowercase letters, digits and _, start with a letter (e.g. pole_ppo)")
     return name
 
@@ -65,27 +73,42 @@ def find_policy(name: str, world_dir: Path | None = None) -> Path:
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except (OSError, json.JSONDecodeError) as exc:
-        raise TaskError(f"could not read {Path(path).name}: {exc}") from exc
-    return data if isinstance(data, dict) else {}
-
-
-def write_json(path: Path, data: dict[str, Any]) -> None:
-    """Write atomically, so a reader never sees half a file."""
     path = Path(path)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False, default=_plain), encoding="utf-8")
-    for attempt in range(20):
+    for attempt in range(3):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except FileNotFoundError:
+            return {}
+        except (OSError, json.JSONDecodeError) as exc:  # Windows: the writer is swapping the file in
+            if attempt == 2:
+                raise TaskError(f"could not read {path.name} in {path.parent}: {exc}") from exc
+            time.sleep(0.05)
+    return {}
+
+
+def temp_path(path: Path) -> Path:
+    """A private temporary name next to `path` (unique per process and thread)."""
+    return path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+
+
+def replace_file(tmp: Path, path: Path) -> None:
+    """Move a finished temporary file into place, so a reader never sees half a file. On Windows the
+    move fails while someone has the target open, so retry for a moment (at most about a second)."""
+    for attempt in range(8):
         try:
             os.replace(tmp, path)
             return
-        except PermissionError:  # Windows: a reader has the file open for a moment
-            time.sleep(0.05 * (attempt + 1))
+        except PermissionError:
+            time.sleep(0.03 * (attempt + 1))
     os.replace(tmp, path)
+
+
+def write_json(path: Path, data: dict[str, Any]) -> None:
+    path = Path(path)
+    tmp = temp_path(path)
+    tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False, default=_plain), encoding="utf-8")
+    replace_file(tmp, path)
 
 
 def _plain(value: Any) -> Any:
@@ -99,8 +122,11 @@ def _plain(value: Any) -> Any:
 
 def summary(folder: Path) -> dict[str, Any]:
     """One line about a policy: what it does, how training went, whether it can run."""
-    meta = read_json(folder / POLICY_FILE)
-    status = read_json(folder / STATUS_FILE)
+    try:
+        meta = read_json(folder / POLICY_FILE)
+        status = read_json(folder / STATUS_FILE)
+    except TaskError as exc:  # one damaged folder must not hide all the others
+        return {"name": folder.name, "state": "unreadable", "error": str(exc), "runnable": False, "folder": str(folder)}
     final = meta.get("final") or {}
     out = {
         "name": folder.name,

@@ -9,7 +9,7 @@ install too (e.g. a policy folder someone shared).
 from __future__ import annotations
 
 import json
-import os
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,10 +52,26 @@ class MlpPolicy:
             raise TaskError(f"unknown activation {self.activation!r} in the policy file")
         if self.squash not in ("clip", "tanh"):
             raise TaskError(f"unknown output squash {self.squash!r} in the policy file")
-        if len(self.weights) != len(self.biases) or not self.weights:
-            raise TaskError("the policy file has a broken network (layers do not match)")
+        self._check_shapes()
         self._act = ACTIVATIONS[self.activation]
         self._scale = 1.0 / np.sqrt(self.obs_var + self.epsilon)
+
+    def _check_shapes(self) -> None:
+        """A shared or damaged file must fail here, readably, not later inside the physics loop."""
+        broken = "the policy file has a broken network"
+        if len(self.weights) != len(self.biases) or not self.weights:
+            raise TaskError(f"{broken} (layers and biases do not match)")
+        width = None
+        for w, b in zip(self.weights, self.biases, strict=True):
+            if w.ndim != 2 or b.shape != (w.shape[0],) or (width is not None and w.shape[1] != width):
+                raise TaskError(f"{broken} (layer sizes do not chain)")
+            width = w.shape[0]
+        n = self.weights[0].shape[1]
+        if self.obs_mean.shape != (n,) or self.obs_var.shape != (n,) or np.any(self.obs_var < 0):
+            raise TaskError(f"{broken} (the observation normalizer does not fit the first layer)")
+        values = [*self.weights, *self.biases, self.obs_mean, self.obs_var]
+        if not all(np.isfinite(v).all() for v in values):
+            raise TaskError(f"{broken} (it contains NaN or infinity)")
 
     @property
     def obs_dim(self) -> int:
@@ -86,10 +102,10 @@ class MlpPolicy:
         info = {"activation": self.activation, "squash": self.squash, "clip_obs": self.clip_obs, "eps": self.epsilon}
         arrays["info"] = np.frombuffer(json.dumps(info).encode("utf-8"), dtype=np.uint8)
         path = Path(path)
-        tmp = path.with_name(f".{path.name}.tmp")
+        tmp = store.temp_path(path)
         with tmp.open("wb") as f:
             np.savez(f, **arrays)
-        os.replace(tmp, path)
+        store.replace_file(tmp, path)
 
     @classmethod
     def load(cls, path: Path) -> MlpPolicy:
@@ -100,9 +116,12 @@ class MlpPolicy:
                 weights = [np.asarray(f[f"w{i}"], float) for i in range(n)]
                 biases = [np.asarray(f[f"b{i}"], float) for i in range(n)]
                 mean, var = np.asarray(f["obs_mean"], float), np.asarray(f["obs_var"], float)
-        except (OSError, KeyError, ValueError) as exc:
+            clip_obs, eps = float(info["clip_obs"]), float(info["eps"])
+            return cls(weights, biases, info["activation"], info["squash"], mean, var, clip_obs, eps)
+        except TaskError:
+            raise
+        except (OSError, KeyError, ValueError, TypeError, zipfile.BadZipFile) as exc:
             raise TaskError(f"could not read the trained network in {Path(path)}: {exc}") from exc
-        return cls(weights, biases, info["activation"], info["squash"], mean, var, info["clip_obs"], info["eps"])
 
 
 @dataclass
@@ -186,6 +205,8 @@ class LearnedPolicyController(PolicyController):
             from robotforge.control.methods import make_controller
 
             self.base_method = meta.get("base_method") or task.methods[0]
+            if self.base_method not in task.methods:  # never another policy: that could loop forever
+                raise TaskError(f"policy {policy.name!r} names an unknown base controller {self.base_method!r}")
             self.base = make_controller(self.base_method, task, model, data)
             self.residual_scale = float(meta.get("residual_scale", 0.2))
         # Run at the physics rate and schedule the network and the base controller inside, so both

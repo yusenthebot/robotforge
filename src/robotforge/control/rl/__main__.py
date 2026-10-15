@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--mode", choices=["direct", "residual"], dest="action_mode")
     t.add_argument("--task-params", type=json.loads, default=None, help="JSON, e.g. '{\"speed\": 0.4}'")
     t.add_argument("--save-dir", type=Path)
+    t.add_argument("--replace", action="store_true", help="overwrite an existing policy with this name")
     sub.add_parser("list", help="list trained policies")
     j = sub.add_parser("job", help=argparse.SUPPRESS)
     j.add_argument("folder", type=Path)
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             action_mode=args.action_mode,
             task_params=args.task_params,
             save_dir=args.save_dir,
+            replace=args.replace,
         )
     except TaskError as exc:
         print(f"error: {exc}", file=sys.stderr)

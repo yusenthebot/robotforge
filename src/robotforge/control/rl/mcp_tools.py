@@ -8,15 +8,18 @@ and compare_controllers(methods=["lqr", "mpc", "policy:<name>"]).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge.control.env import DEFAULT_ROBOTS
-from robotforge.control.mcp_tools import _tool_errors
+from robotforge.control.mcp_tools import _tool_errors as _task_errors
 from robotforge.control.rl import store
 from robotforge.control.rl.api import unused_name
 from robotforge.control.rl.jobs import JOBS
@@ -157,6 +160,16 @@ def register(server: MCPServer, playground: Playground) -> None:
                 state = JOBS.status(Path(item["folder"])).get("state", item["state"])
                 out.append({**item, "state": state, "method": f"policy:{item['name']}"})
             return _json({"policies": out, "train_more_with": "train_policy"})
+
+
+@contextlib.contextmanager
+def _tool_errors() -> Iterator[None]:
+    """Like the control tools, plus file errors: policy folders live on disk (permissions, a full disk)."""
+    with _task_errors():
+        try:
+            yield
+        except OSError as exc:
+            raise ToolError(f"file problem in the policy folder: {exc}") from exc
 
 
 def _robot_spec(playground: Playground, task: str, robot: str | None) -> tuple[dict[str, Any], dict, list[str]]:

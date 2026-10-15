@@ -22,7 +22,7 @@ dependencies = [
 # On Linux, PyPI's default torch wheel is the large CUDA build; docs/ALGORITHMS.md shows the CPU-only index.
 rl = [
     "gymnasium>=1.0",
-    "stable-baselines3>=2.4",
+    "stable-baselines3>=2.4,<3",  # control/rl/train.py builds on SubprocVecEnv internals
     "torch>=2.5",
 ]
 

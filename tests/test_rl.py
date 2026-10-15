@@ -34,6 +34,17 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def no_leftover_training():
+    """Training processes are detached on purpose; a failing test must not leave one running."""
+    yield
+    for folder, proc in list(JOBS.procs.items()):
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=10)
+        JOBS.procs.pop(folder, None)
+
+
 def _random_net(obs_dim: int, act_dim: int, rng: np.random.Generator, squash: str = "clip") -> MlpPolicy:
     sizes = [obs_dim, 16, 16, act_dim]
     weights = [rng.normal(0, 0.3, (b, a)) for a, b in zip(sizes, sizes[1:], strict=False)]
@@ -145,6 +156,52 @@ def test_job_status_notices_a_training_process_that_died(tmp_path):
     store.write_json(orphan / store.STATUS_FILE, {"state": "running", "updated": time.time() - 3600})
     assert "stopped without finishing" in jobs.status(orphan)["error"]
     assert store.read_json(orphan / store.STATUS_FILE)["state"] == "failed"  # recorded for everyone
+
+    testing = tmp_path / "testing"  # started by an earlier server, in a long final test: quiet status, live heartbeat
+    testing.mkdir()
+    store.write_json(testing / store.STATUS_FILE, {"state": "testing", "updated": time.time() - 3600})
+    (testing / store.HEARTBEAT_FILE).touch()
+    assert jobs.status(testing)["state"] == "testing"
+    assert jobs.running([tmp_path]) == [testing]  # it still counts against one-training-at-a-time
+
+    copied = tmp_path / "copied"  # a policy.json without status.json (copied by hand) must not wedge the name
+    copied.mkdir()
+    store.write_json(copied / store.POLICY_FILE, {"name": "copied", "task": "balance"})
+    assert jobs.status(copied)["state"] == "unknown" and jobs.stop(copied)["state"] == "unknown"
+    assert jobs.wait(copied, timeout=1)["state"] == "unknown"
+
+
+def test_damaged_or_hostile_policy_folders_fail_readably(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    home = store.policies_home(None)
+    good_net = _random_net(4, 1, np.random.default_rng(6))
+    _fake_policy(home / "good", "balance", good_net, robot="pole", template="cartpole")
+    broken = home / "broken"
+    broken.mkdir()
+    (broken / store.POLICY_FILE).write_text("{not json", encoding="utf-8")
+    listed = {p["name"]: p for p in list_policies()}
+    assert listed["good"]["runnable"] and listed["broken"]["state"] == "unreadable"
+
+    for name in ("abc\n", "con", "../up", "Pole"):
+        with pytest.raises(TaskError, match="policy names use lowercase"):
+            store.check_name(name)
+
+    rng = np.random.default_rng(7)
+    net = _random_net(4, 1, rng)
+    with pytest.raises(TaskError, match="normalizer does not fit"):
+        MlpPolicy(net.weights, net.biases, "tanh", "clip", np.zeros(5), np.ones(5))
+    with pytest.raises(TaskError, match="do not chain"):
+        MlpPolicy([net.weights[0], net.weights[0]], net.biases[:2], "tanh", "clip", net.obs_mean, net.obs_var)
+    (home / "good" / store.WEIGHTS_FILE).write_bytes(b"PK\x03\x04 not really a zip")
+    with pytest.raises(TaskError, match="could not read the trained network"):
+        TrainedPolicy.load(home / "good")
+
+    sneaky = home / "sneaky"  # residual policy whose base controller is itself
+    _fake_policy(sneaky, "balance", net, "residual", robot="pole", template="cartpole")
+    meta = store.read_json(sneaky / store.POLICY_FILE)
+    store.write_json(sneaky / store.POLICY_FILE, {**meta, "base_method": "policy:sneaky"})
+    with pytest.raises(TaskError, match="unknown base controller"):
+        compare_methods("balance", ["policy:sneaky"], seconds=1)
 
 
 def test_specs_take_task_defaults_and_reject_bad_settings():
@@ -262,7 +319,7 @@ def test_a_tiny_training_job_runs_in_its_own_process_and_its_policy_compares(tmp
     assert started["actuators"] == ["cart"] and started["estimate_seconds"] > 0
     with pytest.raises(TaskError, match="still training"):
         JOBS.start(spec.model_copy(update={"name": "other"}), tmp_path / "other")
-    status = JOBS.wait(folder)
+    status = JOBS.wait(folder, timeout=300)
     assert status["state"] == "done", status
     meta = json.loads((folder / store.POLICY_FILE).read_text(encoding="utf-8"))
     assert meta["timesteps"] >= 4096 and meta["final"]["episodes"] == 10 and "without_shoves" in meta["final"]
@@ -302,6 +359,10 @@ async def test_mcp_trains_follows_and_stops_a_policy(tmp_path, monkeypatch):
                 break
         assert status["state"] == "running", status
         stopped = json.loads((await client.call_tool("stop_training", {"name": "pole_balance"})).content[0].text)
+        while stopped["state"] not in ("stopped", "failed") and time.monotonic() < deadline + 120:
+            # A busy machine may need longer than stop_training waits for the final test.
+            args = {"name": "pole_balance", "wait_seconds": 5}
+            stopped = json.loads((await client.call_tool("training_status", args)).content[0].text)
         assert stopped["state"] == "stopped" and stopped["stopped_early"] == "stopped on request", stopped
         assert "run_controller" in stopped["next"]
         ran = await client.call_tool(

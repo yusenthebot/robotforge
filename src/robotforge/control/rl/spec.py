@@ -144,7 +144,7 @@ def make_spec(
             world_dir=world_dir,
             algo=algo,
             action_mode=action_mode or d.action_mode,
-            timesteps=timesteps or d.timesteps,
+            timesteps=d.timesteps if timesteps is None else timesteps,
             max_minutes=minutes,
             n_envs=n_envs or default_envs(algo),
             seed=seed,
@@ -218,6 +218,7 @@ def describe_env(spec: TrainSpec) -> dict[str, Any]:
         "observation": task.observation_labels(),
         "actuators": actuator_names(task),
         "control_dt": env.control_dt,
+        "physics_timestep": float(env.model.opt.timestep),
         "episode_seconds": env.episode_seconds,
         "base_method": task.methods[0] if spec.action_mode == "residual" else None,
     }
