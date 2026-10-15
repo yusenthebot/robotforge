@@ -25,7 +25,6 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 第一次启动会下载约 50 MB 的 Python 依赖（没有 Python 3.12 时还会顺便装一个），之后每次启动约 1 秒。
 国内网络慢的话可以先设置镜像：`export UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple`。
-仓库目前是私有的，下面用到 GitHub 的命令需要你的账号有访问权限（`gh auth login` 之后即可）。
 
 ### Claude Code
 
