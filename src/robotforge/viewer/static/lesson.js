@@ -173,7 +173,7 @@ function openLesson(desc) {
   renderControls();
   renderStep();
   needCamera = true;
-  if (desc.camera) api.moveCamera(desc.camera.eye, desc.camera.target);
+  if (desc.camera) api.moveCamera(desc.camera.eye, desc.camera.target, desc.camera.fit);
   foldLesson(false); // a new lesson opens unfolded (and shifts the view for its panels)
   api.retitle();
 }
@@ -206,7 +206,7 @@ export function lessonScene(desc) {
   // A new scene resets the camera's motion, so aim it at the lesson's rig once that scene is here.
   if (lesson && desc.lesson && needCamera) {
     needCamera = false;
-    if (lesson.camera) api.moveCamera(lesson.camera.eye, lesson.camera.target);
+    if (lesson.camera) api.moveCamera(lesson.camera.eye, lesson.camera.target, lesson.camera.fit);
   }
 }
 

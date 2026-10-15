@@ -408,8 +408,8 @@ class PIDTwins(TwinsLesson):
             "targets": [],
         }
 
-    def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.0, -3.0, 1.0], "target": [0.0, 0.0, 0.5]}
+    def camera(self) -> dict[str, Any]:
+        return {"eye": [0.0, -3.0, 1.0], "target": [0.0, 0.0, 0.5], "fit": True}
 
 
 # ---- LQR twins: two cart-poles, the same push ---------------------------------------------------------
@@ -681,8 +681,8 @@ class LQRTwins(TwinsLesson):
             "targets": [],
         }
 
-    def camera(self) -> dict[str, list[float]]:
-        return {"eye": [1.6, -2.6, 1.5], "target": [0.0, 0.0, 0.45]}
+    def camera(self) -> dict[str, Any]:
+        return {"eye": [1.6, -2.6, 1.5], "target": [0.0, 0.0, 0.45], "fit": True}
 
 
 # ---- dogs: shared helpers ----------------------------------------------------------------------------
@@ -1010,9 +1010,9 @@ class MPCTwins(DogTwins):
             ]
         return {"columns": self.columns(), "rows": rows}
 
-    def camera(self) -> dict[str, list[float]]:
+    def camera(self) -> dict[str, Any]:
         # From in front of the dogs: they stand side by side and the sideways shoves read as left and right.
-        return {"eye": [2.6, -0.5, 1.1], "target": [0.0, 0.0, 0.2]}
+        return {"eye": [2.6, -0.5, 1.1], "target": [0.0, 0.0, 0.2], "fit": True}
 
 
 # ---- gait twins: two dogs walking, the same speed ------------------------------------------------------

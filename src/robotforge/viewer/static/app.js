@@ -551,7 +551,8 @@ function applyPoses(buffer) {
     const own = lessonCamera();
     if (pendingFit === "camera" && own) {
       const goal = new THREE.Vector3().fromArray(own.target);
-      moveCamera(fitToFree(new THREE.Vector3().fromArray(own.eye), goal), goal, false);
+      const eye = fitToFree(new THREE.Vector3().fromArray(own.eye), goal);
+      moveCamera(own.fit ? fitRig(eye, goal) : eye, goal, false);
     }
     else if (pendingFit === "camera") frameCamera();
     pendingFit = null;
@@ -1296,6 +1297,42 @@ function fitToFree(eye, target) {
   return target.clone().add(eye.clone().sub(target).multiplyScalar(k));
 }
 
+// A lesson camera that asks for it (`fit`) steps back until every robot of its rig is inside the free part of the
+// window: on a phone the third PID twin's arm reached off the screen, framed for a wide window.
+const RIG_MARGIN = 0.9; // share of the free half-width and half-height the rig may fill
+function fitRig(eye, target) {
+  if (!hasSize() || !worldRoot) return eye;
+  const box = new THREE.Box3();
+  worldRoot.updateMatrixWorld(true);
+  worldRoot.traverse((o) => {
+    if (o.isMesh && o.visible && robotOfBody.has(o.userData.body)) box.expandByObject(o);
+  });
+  if (box.isEmpty()) return eye;
+  const corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  const r = freeRect();
+  const halfW = (RIG_MARGIN * (r.right - r.left)) / 2;
+  const halfH = (RIG_MARGIN * (r.bottom - r.top)) / 2;
+  const probe = camera.clone();
+  probe.clearViewOffset(); // the view offset only moves the picture's center into the free part
+  probe.updateProjectionMatrix();
+  const away = eye.clone().sub(target);
+  let k = 1;
+  for (let i = 0; i < 20; i++) {
+    probe.position.copy(target).addScaledVector(away, k);
+    probe.lookAt(target);
+    probe.updateMatrixWorld(true);
+    let worst = 0;
+    for (const c of corners) {
+      const p = c.clone().project(probe);
+      worst = Math.max(worst, (Math.abs(p.x) * window.innerWidth) / 2 / halfW, (Math.abs(p.y) * window.innerHeight) / 2 / halfH);
+    }
+    if (worst <= 1 || k >= 2.5) break;
+    k = Math.min(2.5, k * Math.min(1.2, Math.max(1.03, worst)));
+  }
+  return target.clone().addScaledVector(away, k);
+}
+
 // Slide the view's center into the free part of the window, so what you look at stays in the clear.
 function shiftForDrawers() {
   const r = freeRect();
@@ -1686,9 +1723,10 @@ initLessons({
   toast,
   bodyNode: (id) => bodyNodes[id],
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
-  moveCamera: (eye, target) => {
+  moveCamera: (eye, target, fit = false) => {
     const goal = new THREE.Vector3().fromArray(target);
-    moveCamera(fitToFree(new THREE.Vector3().fromArray(eye), goal), goal, true);
+    const away = fitToFree(new THREE.Vector3().fromArray(eye), goal);
+    moveCamera(fit ? fitRig(away, goal) : away, goal, true);
   },
   closePanels: () => {
     setHelp(false);

@@ -273,7 +273,9 @@ class Lesson:
         """Static facts the viewer needs to draw overlays (pivot points, body ids, lengths)."""
         return {}
 
-    def camera(self) -> dict[str, list[float]] | None:
+    def camera(self) -> dict[str, Any] | None:
+        """Where the viewer looks: {"eye": [x, y, z], "target": [x, y, z]}, and "fit": True to step back until
+        every robot of the rig shows between the panels (side-by-side rigs on a phone)."""
         return None
 
     def describe(self, model: mujoco.MjModel) -> dict[str, Any]:

@@ -354,9 +354,9 @@ class ArmFaceOff(FaceOff):
             "targets": [self.targets(i) for i in range(len(self.entrants))],
         }
 
-    def camera(self) -> dict[str, list[float]]:
+    def camera(self) -> dict[str, Any]:
         # From the front and to the side of our (smallest) arm, so the row foreshortens between the panels.
-        return {"eye": [3.15, -2.85, 1.9], "target": [-0.11, -0.1, 0.25]}
+        return {"eye": [3.15, -2.85, 1.9], "target": [-0.11, -0.1, 0.25], "fit": True}
 
     # ---- the tests ------------------------------------------------------------------------------
 
@@ -711,9 +711,9 @@ class HumanoidFaceOff(FaceOff):
         _, y = super().base(index)
         return START_X, y  # they walk toward +x, so the test happens in the middle of the view
 
-    def camera(self) -> dict[str, list[float]]:
+    def camera(self) -> dict[str, Any]:
         # From above the near lane: the far lane (the tall G1) shows above our small humanoid, not behind it.
-        return {"eye": [-0.2, -5.0, 3.2], "target": [-0.3, 0.0, 0.4]}
+        return {"eye": [-0.2, -5.0, 3.2], "target": [-0.3, 0.0, 0.4], "fit": True}
 
     def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
         return {
