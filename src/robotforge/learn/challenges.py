@@ -254,6 +254,7 @@ class CourseChallenge(Challenge):
             "m",
             (Series("x", {"zh": "距离", "en": "distance"}, "amber"),),
             window=30.0,
+            span=1.0,  # standing on the start pad it plotted its settling on a -0.002 m axis
         ),
     )
 
@@ -343,11 +344,12 @@ class CourseChallenge(Challenge):
                     f"in {self.elapsed(data):.0f} s",
                 }
                 self.playground.behaviors.stop(self.robot)
+        shown = round(x, 1) + 0.0  # settling a millimetre back on the start pad read "-0.0 m"
         return {
             "readout": self.retry(
                 {
-                    "zh": f"距离 {x:.1f} m  最远 {self.best:.1f} m  用时 {self.elapsed(data):.0f} s",
-                    "en": f"distance {x:.1f} m  best {self.best:.1f} m  time {self.elapsed(data):.0f} s",
+                    "zh": f"距离 {shown:.1f} m  最远 {self.best:.1f} m  用时 {self.elapsed(data):.0f} s",
+                    "en": f"distance {shown:.1f} m  best {self.best:.1f} m  time {self.elapsed(data):.0f} s",
                 }
             ),
         }
