@@ -443,7 +443,8 @@ class QuadrupedGait:
         Recoveries less than a rest apart count as one: on stones one ends and the trunk's roll starts the next."""
         if moving or held:  # walking has its own limit; a hand pulling it along gets steps for as long as it pulls
             self._stand_recover_since = None
-            self._stand_rest_until = -math.inf if held else self._stand_rest_until
+            if held:
+                self._stand_rest_until = -math.inf
             return recovering
         if t < self._stand_rest_until:
             self._recover_until = -math.inf
