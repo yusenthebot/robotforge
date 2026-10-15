@@ -82,3 +82,55 @@ def test_reset_puts_the_twins_controllers_back(pg):
     model, data = pg.session.model, pg.session.data
     for name in ("a", "b"):  # both still balancing their poles
         assert abs(data.qpos[model.joint(f"{name}/hinge").qposadr[0]]) < 0.05
+
+
+def _until(pg: Playground, key: str, busy, limit: float = 40.0) -> dict:
+    for _ in range(int(limit)):
+        update = _play(pg, 1.0)
+        if key in update["results"] and not busy(pg.lessons.lesson):
+            return _play(pg, 0.1)
+    raise AssertionError(f"no {key} result")
+
+
+def test_mpc_twins_show_that_a_too_short_horizon_falls_first(pg):
+    pg.lessons.start("mpc_twins")
+    _play(pg, 0.5)
+    pg.lessons.handle({"action": "press", "control": "shove"})
+    update = _until(pg, "shoves", lambda lesson: lesson.next_shove is not None)
+    first = update["results"]["shoves"]
+    assert {r["noise"] for r in first.values()} == {0.05, 0.3} and all(r["survived"] >= 2 for r in first.values())
+    assert "bold" in update["passed"]
+    pg.lessons.handle({"action": "next"})
+    for control, value in (("noise_a", 3), ("horizon_a", 0)):
+        pg.lessons.handle({"action": "set", "control": control, "value": value})
+    pg.lessons.handle({"action": "press", "control": "shove"})
+    update = _until(pg, "shoves", lambda lesson: lesson.next_shove is not None)
+    a, b = update["results"]["shoves"]["a"], update["results"]["shoves"]["b"]
+    # Shoving is chaotic and the tries random, so one run's order is not asserted; the lesson quotes the
+    # averages of six seeds instead (0.1 s: 6 levels, 0.35 s: 8.5, 0.6 s: 6.8).
+    assert (a["horizon"], b["horizon"]) == (0.1, 0.35) and min(a["survived"], b["survived"]) >= 1
+    assert "horizon" in update["passed"]
+    rows = {r["label"]["en"]: r for r in update["live"]["table"]["rows"] if "cells" in r}
+    assert rows["Physics steps per plan"]["cells"] == ["1,600", "5,600"]  # samples x horizon / step
+
+
+def test_gait_twins_trade_energy_for_speed_and_clearance(pg):
+    pg.lessons.start("gait_twins")
+    _play(pg, 0.5)
+    pg.lessons.handle({"action": "press", "control": "flat"})
+    update = _until(pg, "flat", lambda lesson: lesson.test is not None)
+    a, b = update["results"]["flat"]["a"], update["results"]["flat"]["b"]
+    assert a["top"] > 1.5 * b["top"] and b["cot"] < a["cot"]  # quick steps: faster, dearer
+    assert abs(a["speed"] - b["speed"]) < 0.03 and not (a["fell"] or b["fell"])  # both make the same speed
+    pg.lessons.handle({"action": "next"})
+    for control, value in (("period_a", 1), ("period_b", 1), ("lift_a", 0), ("lift_b", 2)):
+        pg.lessons.handle({"action": "set", "control": control, "value": value})
+    pg.lessons.handle({"action": "press", "control": "flat"})
+    update = _until(pg, "flat", lambda lesson: lesson.test is not None)
+    low, high = update["results"]["flat"]["a"], update["results"]["flat"]["b"]
+    assert low["cot"] < 0.5 * high["cot"]  # a low lift is cheap on the flat...
+    pg.lessons.handle({"action": "press", "control": "curb"})
+    update = _until(pg, "curb", lambda lesson: lesson.test is not None)
+    low, high = update["results"]["curb"]["a"], update["results"]["curb"]["b"]
+    assert not low["crossed"] and high["crossed"]  # ...and catches on the curb
+    assert "lift" in update["passed"]

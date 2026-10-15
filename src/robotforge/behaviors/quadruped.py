@@ -284,8 +284,14 @@ def _apply_pd(drive: MotorDrive, data: mujoco.MjData, targets: np.ndarray) -> No
 # ---- finding the legs -----------------------------------------------------------------------
 
 
-def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> QuadrupedGait:
-    """Build a gait for a robot made from the quadruped template."""
+def for_template(
+    model: mujoco.MjModel,
+    robot: str,
+    home_qpos: np.ndarray,
+    period: float = TEMPLATE_PERIOD,
+    lift: float | None = None,
+) -> QuadrupedGait:
+    """Build a gait for a robot made from the quadruped template (period: s per cycle, lift: m)."""
 
     def jid(name: str) -> int:
         j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{robot}/{name}")
@@ -298,7 +304,7 @@ def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Qu
         site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/{leg}_foot")
         joints = [jid(f"{leg}_hip"), jid(f"{leg}_thigh"), jid(f"{leg}_knee")]
         legs.append((leg, joints, int(model.site_bodyid[site]), model.site_pos[site].copy(), offset))
-    return QuadrupedGait(model, robot, legs, jid("root"), home_qpos, period=TEMPLATE_PERIOD)
+    return QuadrupedGait(model, robot, legs, jid("root"), home_qpos, period=period, lift=lift)
 
 
 def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> QuadrupedGait:

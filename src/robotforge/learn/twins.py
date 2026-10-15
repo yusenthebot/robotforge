@@ -6,6 +6,7 @@ the same moment, in the same plot, from the same push: the beginner sees cause a
 
 from __future__ import annotations
 
+import copy
 import math
 from collections import deque
 from collections.abc import Iterator, Mapping
@@ -15,6 +16,7 @@ from typing import Any, Literal
 import mujoco
 import numpy as np
 
+from robotforge.behaviors import quadruped
 from robotforge.control.methods import make_controller
 from robotforge.control.tasks import make_task
 from robotforge.design.world import World, compile_world
@@ -22,6 +24,7 @@ from robotforge.learn import pd
 from robotforge.learn.engine import Control, Lesson, LessonContext, Plot, Quiz, Series, Step, Text
 
 SAMPLE_DT = 0.01  # s between plot samples
+GRAVITY = 9.81
 
 
 def _text(zh: str, en: str) -> Text:
@@ -679,3 +682,592 @@ class LQRTwins(TwinsLesson):
 
     def camera(self) -> dict[str, list[float]]:
         return {"eye": [1.6, -2.6, 1.5], "target": [0.0, 0.0, 0.45]}
+
+
+# ---- dogs: shared helpers ----------------------------------------------------------------------------
+
+DOG_LANES = 1.2  # m between the two dogs
+TRUNK_DOWN = 0.5  # cosine of the trunk's tilt below which a dog is down
+
+
+def _dog_world(name: str, twins: tuple[Twin, ...], start_x: float, terrain: list[dict] | None = None) -> World:
+    robots = [
+        {"name": t.name, "template": "quadruped", "params": {"color": CART_COLORS[t.color]}, "pos": [start_x, y]}
+        for t, y in zip(twins, _lanes(len(twins)), strict=True)
+    ]
+    return World.model_validate(
+        {"name": name, "floor": {"style": "concrete"}, "terrain": terrain or [], "robots": robots}
+    )
+
+
+def _lanes(n: int) -> list[float]:
+    return [(i - (n - 1) / 2) * DOG_LANES for i in range(n)]
+
+
+class DogTwins(TwinsLesson):
+    """Twin dogs that can be put back on their start line, with controllers rebuilt from their settings."""
+
+    start_x = 0.0
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.model: mujoco.MjModel | None = None
+        self.start: np.ndarray | None = None
+        self.trunks: dict[str, int] = {}
+
+    def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        self.ctx = ctx
+        self.start = data.qpos.copy()
+        self.trunks = {t.name: int(model.body(f"{t.name}/trunk").id) for t in self.twins}
+        return {**{t.name: self.controller(model, data, t) for t in self.twins}, "watch": Watch(self, model)}
+
+    def controller(self, model: mujoco.MjModel, data: mujoco.MjData, twin: Twin) -> Any:
+        raise NotImplementedError
+
+    def restart(self, data: mujoco.MjData) -> None:
+        """Every dog back on its start line, still, with a fresh controller: each test starts the same."""
+        assert self.start is not None
+        session = self.playground.session
+        model = session.model
+        data.qpos[:] = self.start
+        data.qvel[:] = 0.0
+        mujoco.mj_forward(model, data)
+        for twin in self.twins:
+            session.set_controller(twin.name, self.controller(model, data, twin))
+
+    def tilt(self, data: mujoco.MjData, twin: Twin) -> float:
+        return math.degrees(math.acos(max(-1.0, min(1.0, float(data.xmat[self.trunks[twin.name]][8])))))
+
+    def down(self, data: mujoco.MjData, twin: Twin) -> bool:
+        return float(data.xmat[self.trunks[twin.name]][8]) < TRUNK_DOWN
+
+    def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
+        return {
+            "kind": "faceoff",
+            "entrants": [
+                {
+                    **c,
+                    "base": [self.start_x, y, 0.0],
+                    "body": int(model.body(f"{c['name']}/trunk").id),
+                    "top": 0.55,
+                    "cloud": [],
+                }
+                for c, y in zip(self.columns(), _lanes(len(self.twins)), strict=True)
+            ],
+            "targets": [],
+        }
+
+
+# ---- MPC twins: two dogs standing, the same shoves ----------------------------------------------------
+
+HORIZONS = (0.1, 0.2, 0.35, 0.6)  # s of future each plan looks at
+SAMPLES = (4, 16, 32, 64)  # random futures tried per plan
+NOISES = (0.02, 0.05, 0.1, 0.3)  # how bold those tries are, as a fraction of each motor's range
+SHOVE_EVERY = 2.5  # s between shoves
+SHOVE_STEP = 0.2  # m/s of sideways kick added per level
+SHOVE_LEVELS = 10
+
+MPC_TWINS = (
+    Twin("a", _text("A", "A"), "amber", {"horizon": 2, "samples": 2, "noise": 1}),
+    Twin("b", _text("B", "B"), "blue", {"horizon": 2, "samples": 2, "noise": 3}),
+)
+
+
+def _shoved(ctx: LessonContext) -> bool:
+    return "shoves" in ctx.results
+
+
+def _compared_horizons(ctx: LessonContext) -> bool:
+    shoves = ctx.results.get("shoves", {})
+    return len({shoves.get(t.name, {}).get("horizon") for t in MPC_TWINS}) > 1
+
+
+class MPCTwins(DogTwins):
+    id = "mpc_twins"
+    title = _text("MPC 双胞胎：预测多远、试得多大胆", "MPC twins: how far ahead, how bold")
+    summary = _text(
+        "两只机器狗都用 MPC 站着，各有一组预测时长、样本数和探索噪声。推得一次比一次狠，看哪组设置扛得住。",
+        "Two robot dogs stand with MPC, each with its own horizon, sample count and exploration noise. The "
+        "shoves get harder each time: see which settings hold.",
+    )
+    minutes = 7
+    twins = MPC_TWINS
+    knobs = (
+        Knob(
+            "horizon",
+            "choice",
+            _text("预测时长（秒）", "Horizon (s)"),
+            options=tuple(_text(f"{v:g}", f"{v:g}") for v in HORIZONS),
+        ),
+        Knob(
+            "samples",
+            "choice",
+            _text("每次试几种未来", "Futures tried per plan"),
+            options=tuple(_text(str(v), str(v)) for v in SAMPLES),
+        ),
+        Knob(
+            "noise",
+            "choice",
+            _text("探索噪声", "Exploration noise"),
+            options=tuple(_text(f"{v:g}", f"{v:g}") for v in NOISES),
+        ),
+    )
+    shared = (Control("shove", "button", _text("开始推（两只一起）", "Start shoving (both)")),)
+    plots = (
+        Plot(
+            "tilt",
+            _text("机身倾斜", "Body tilt"),
+            "°",
+            tuple(Series(f"tilt_{t.name}", t.label, t.color) for t in MPC_TWINS),
+        ),
+    )
+    steps = (
+        Step(
+            id="bold",
+            title=_text("MPC 在想什么", "What MPC is thinking"),
+            body=_text(
+                "MPC（模型预测控制）每 20 毫秒做一次计划：在脑子里把未来 0.35 秒模拟几十遍，每遍随机改一点电机指令，"
+                "挑一个最不容易摔的去执行。\n"
+                "A 和 B 只差一个设置：探索噪声，也就是每次随机改多大。A 是 0.05（只敢微调），"
+                "B 是 0.3（敢大改）。先猜谁扛得多，再点「开始推」。",
+                "Every 20 ms, MPC (model predictive control) makes a plan: it simulates the next 0.35 s dozens of "
+                "times "
+                "in its head, each time changing the motor commands at random, and carries out the one least likely "
+                "to fall.\nA and B differ in one setting only, the exploration noise: how big those random changes "
+                "are. A uses 0.05 (small tweaks), B uses 0.3 (bold changes). Guess who lasts longer, then press "
+                "Start shoving.",
+            ),
+            done=_text(
+                "B 通常扛得更多：我们各测了 6 次，噪声 0.05 扛 5 到 6 级，噪声 0.3 扛 6 到 10 级。"
+                "试的动作太小，被猛推时就想不到“大步迈出去”这种救法。每次结果有起伏（尝试是随机的），多推几次看看。"
+                "站着不动时 B 并不更抖：每次只执行试出来最好的那个，不好的尝试都被扔掉了。",
+                "B usually lasts longer: in six runs each, noise 0.05 survived 5 to 6 levels and noise 0.3 6 to 10. "
+                "With tiny tries, a hard shove never leads it to a bold rescue like a big step. Results vary from "
+                "run to run (the tries are random), so shove a few times. And B is no shakier when standing still: "
+                "only the best try is carried out, the bad ones are thrown away.",
+            ),
+            check=_shoved,
+            unlock=("shove",),
+            show=("labels",),
+        ),
+        Step(
+            id="horizon",
+            title=_text("预测越远越好吗？", "Is looking further always better?"),
+            body=_text(
+                "把两只的噪声都设成 0.3，A 的预测时长调到 0.1 秒，B 留在 0.35 秒，再推一次。然后可以试试 0.6 秒。",
+                "Set both noises to 0.3, A's horizon to 0.1 s and leave B at 0.35 s, then shove again. Afterwards "
+                "try 0.6 s.",
+            ),
+            done=_text(
+                "0.1 秒太短，摔倒的苗头还没出现在预测里，它就来不及了。"
+                "可 0.6 秒也不更好（我们各测 6 次，平均扛过：0.1 秒 6 级，0.35 秒 8.5 级，0.6 秒 6.8 级）："
+                "随机的未来越长越乱，同样几十个样本里更难挑出好计划，计算量也翻倍。预测时长要恰到好处。",
+                "0.1 s is too short: the coming fall is not in the prediction yet when it should act. But 0.6 s is "
+                "not better either (six runs each, average levels: 0.1 s 6, 0.35 s 8.5, 0.6 s 6.8): longer random "
+                "futures are messier, the same few dozen samples rarely contain a good plan, and the computing "
+                "doubles. The horizon has a sweet spot.",
+            ),
+            check=_compared_horizons,
+            unlock=("horizon_a", "samples_a", "noise_a", "horizon_b", "samples_b", "noise_b"),
+            show=("labels",),
+        ),
+        Step(
+            id="cost",
+            title=_text("算力账", "Counting the cost"),
+            body=_text(
+                "表里的“每次计划模拟几步”= 样本数 × 预测时长 ÷ 物理步长，而计划每 20 毫秒就要做一次。",
+                "'Physics steps per plan' in the table is samples x horizon / physics step, and a new plan is due "
+                "every 20 ms.",
+            ),
+            done=_text("", ""),
+            quiz=Quiz(
+                question=_text(
+                    "为什么真机器狗很少用这么“暴力”的 MPC？", "Why do real robot dogs rarely use MPC this brute-force?"
+                ),
+                options=(
+                    _text("真机没有电机", "Real robots have no motors"),
+                    _text(
+                        "机载电脑每 20 毫秒算不完上万步仿真，所以用简化模型，或者用学出来的策略",
+                        "Its onboard computer cannot simulate tens of thousands of steps every 20 ms, so it uses "
+                        "simplified models or a learned policy",
+                    ),
+                    _text("预测未来是不可能的", "Predicting the future is impossible"),
+                ),
+                answer=1,
+                explain=_text(
+                    "对。真机常用简化的模型（比如把身体当成一个质点）做 MPC，"
+                    "或者像 G1 那样，把“试错”提前在仿真里做完，学成一个神经网络。",
+                    "Right. Real robots often run MPC on a simplified model (such as treating the body as a single "
+                    "mass), or, like the G1, do the trial and error ahead of time in simulation and learn a neural "
+                    "network.",
+                ),
+            ),
+        ),
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.level = 0
+        self.next_shove: float | None = None
+        self.runs: dict[str, dict[str, Any]] = {}
+        self.trial = 0  # each shoving gets fresh random tries, so trying again can turn out differently
+
+    def build(self) -> mujoco.MjModel:
+        self.model = compile_world(_dog_world("mpc_twins", self.twins, self.start_x)).model
+        return self.model
+
+    def settings(self, twin: Twin) -> dict[str, float]:
+        v = self.view(twin)
+        return {
+            "horizon": HORIZONS[int(v["horizon"])],
+            "samples": SAMPLES[int(v["samples"])],
+            "noise": NOISES[int(v["noise"])],
+        }
+
+    def controller(self, model: mujoco.MjModel, data: mujoco.MjData, twin: Twin) -> Any:
+        snapshot = copy.copy(data)
+        task = make_task("stand", model, twin.name)
+        task.begin(snapshot)
+        seed = 2 * self.trial + self.twins.index(twin)
+        return make_controller("mpc", task, model, snapshot, {**self.settings(twin), "seed": seed})
+
+    def sample(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, float]:
+        return {f"tilt_{t.name}": self.tilt(data, t) for t in self.twins}
+
+    def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
+        twin = next((t for t in self.twins if control in self.knob_ids(t)), None)
+        if twin is not None:
+            self.playground.session.set_controller(
+                twin.name, self.controller(self.playground.session.model, data, twin)
+            )
+        elif control == "shove" and self.next_shove is None:
+            self.trial += 1
+            self.restart(data)
+            self.level = 0
+            self.next_shove = float(data.time) + 1.0
+            self.runs = {t.name: {**self.settings(t), "survived": None} for t in self.twins}
+
+    def measure(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if self.next_shove is None:
+            return
+        for twin in self.twins:
+            run = self.runs[twin.name]
+            if run["survived"] is None and self.down(data, twin):
+                run["survived"] = max(0, self.level - 1)
+        if all(r["survived"] is not None for r in self.runs.values()):
+            self._finish()
+        elif data.time >= self.next_shove:
+            if self.level >= SHOVE_LEVELS:
+                for run in self.runs.values():
+                    run["survived"] = SHOVE_LEVELS if run["survived"] is None else run["survived"]
+                self._finish()
+                return
+            self.level += 1
+            side = 1.0 if self.level % 2 else -1.0
+            for twin in self.twins:
+                if self.runs[twin.name]["survived"] is None:
+                    dof = int(model.jnt_dofadr[model.body_jntadr[self.trunks[twin.name]]])
+                    data.qvel[dof + 1] += side * SHOVE_STEP * self.level  # the same kick for both
+            self.next_shove = float(data.time) + SHOVE_EVERY
+
+    def _finish(self) -> None:
+        assert self.ctx is not None
+        self.ctx.results["shoves"] = {name: dict(run) for name, run in self.runs.items()}
+        self.next_shove = None
+
+    def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        readout = _text(f"第 {self.level} 级", f"level {self.level}") if self.next_shove is not None else _text("", "")
+        return {"table": self._table(model, ctx), "readout": readout}
+
+    def _table(self, model: mujoco.MjModel, ctx: LessonContext) -> dict[str, Any]:
+        settings = [self.settings(t) for t in self.twins]
+        rows: list[dict[str, Any]] = [
+            {"heading": _text("现在的设置", "Settings now")},
+            _row(_text("预测时长", "Horizon"), [f"{s['horizon']:g} s" for s in settings]),
+            _row(_text("每次试几种未来", "Futures per plan"), [str(s["samples"]) for s in settings]),
+            _row(_text("探索噪声", "Exploration noise"), [f"{s['noise']:g}" for s in settings]),
+            _row(
+                _text("每次计划模拟几步", "Physics steps per plan"),
+                [f"{round(s['samples'] * s['horizon'] / model.opt.timestep):,}" for s in settings],
+            ),
+        ]
+        shoves = ctx.results.get("shoves")
+        if shoves:
+            got = [shoves[t.name] for t in self.twins]
+            rows += [
+                {"heading": _text("上次推的结果", "Last shoving")},
+                _row(
+                    _text("当时的设置", "Ran with"),
+                    [f"{r['horizon']:g} s · {r['samples']} · {r['noise']:g}" for r in got],
+                ),
+                _row(
+                    _text("扛过的级数", "Levels survived"),
+                    [str(r["survived"]) for r in got],
+                    [r["survived"] for r in got],
+                    high=True,
+                ),
+            ]
+        return {"columns": self.columns(), "rows": rows}
+
+    def camera(self) -> dict[str, list[float]]:
+        # From in front of the dogs: they stand side by side and the sideways shoves read as left and right.
+        return {"eye": [2.6, -0.5, 1.1], "target": [0.0, 0.0, 0.2]}
+
+
+# ---- gait twins: two dogs walking, the same speed ------------------------------------------------------
+
+PERIODS = (0.25, 0.36, 0.5, 0.7)  # s per gait cycle
+LIFTS = (0.5, 1.0, 1.6)  # times the usual foot lift
+CURB_X = 1.0  # m: where the curb crosses both lanes
+CURB_HEIGHT = 0.03
+FLAT_SECONDS = 5.0
+CURB_SECONDS = 12.0
+SETTLE = 1.5  # s of walking before the measuring starts
+
+GAIT_TWINS = (
+    Twin("a", _text("A", "A"), "amber", {"period": 0, "lift": 1}),
+    Twin("b", _text("B", "B"), "blue", {"period": 2, "lift": 1}),
+)
+
+
+def _walked_flat(ctx: LessonContext) -> bool:
+    return "flat" in ctx.results
+
+
+def _tried_curb(ctx: LessonContext) -> bool:
+    curb = ctx.results.get("curb", {})
+    return len({curb.get(t.name, {}).get("lift") for t in GAIT_TWINS}) > 1
+
+
+class GaitTwins(DogTwins):
+    id = "gait_twins"
+    title = _text("步态双胞胎：步子的节奏和抬腿高度", "Gait twins: step rhythm and foot lift")
+    summary = _text(
+        "两只机器狗用同样的速度走，各有自己的步子周期和抬腿高度。看谁省力、谁稳、谁能跨过路沿。",
+        "Two robot dogs walk at the same speed, each with its own step period and foot lift. See who saves "
+        "energy, who is steady, and who gets over the curb.",
+    )
+    minutes = 7
+    twins = GAIT_TWINS
+    start_x = -0.5
+    knobs = (
+        Knob(
+            "period",
+            "choice",
+            _text("步子周期（秒）", "Step period (s)"),
+            options=tuple(_text(f"{v:g}", f"{v:g}") for v in PERIODS),
+        ),
+        Knob(
+            "lift", "choice", _text("抬腿高度", "Foot lift"), options=tuple(_text(f"×{v:g}", f"×{v:g}") for v in LIFTS)
+        ),
+    )
+    shared = (
+        Control("flat", "button", _text("平地走 5 秒", "Walk 5 s on the flat")),
+        Control("curb", "button", _text("走过路沿", "Walk over the curb")),
+        Control("speed", "slider", _text("速度（两只一起）", "Speed (both)"), 0.1, 0.3, 0.05, 0.2, "m/s"),
+    )
+    plots = (
+        Plot(
+            "speed",
+            _text("前进速度", "Forward speed"),
+            "m/s",
+            tuple(Series(f"v_{t.name}", t.label, t.color) for t in GAIT_TWINS),
+        ),
+        Plot(
+            "sway",
+            _text("机身晃动", "Body sway"),
+            "°/s",
+            tuple(Series(f"sway_{t.name}", t.label, t.color) for t in GAIT_TWINS),
+        ),
+    )
+    steps = (
+        Step(
+            id="rhythm",
+            title=_text("步子的节奏", "The rhythm of the steps"),
+            body=_text(
+                "两只用同样的速度走。A 的步子周期是 0.25 秒（小碎步），B 是 0.5 秒（慢而大步）。"
+                "点「平地走 5 秒」，看表里的“最快能走”“晃动”和“每米能耗”。",
+                "Both walk at the same speed. A's step period is 0.25 s (quick little steps), B's is 0.5 s (slow, long "
+                "steps). Press Walk 5 s on the flat and compare 'top speed', 'sway' and 'energy per metre'.",
+            ),
+            done=_text(
+                "小碎步能走得更快（腿迈得勤），但费力；慢大步更省力，可最高速度低。"
+                "周期太长（0.7 秒）连 0.2 米/秒都走不到，"
+                "还晃得厉害。动物也一样：跑得越快，步频越高。",
+                "Quick steps can go faster (the legs swing more often) but cost more; slow long steps save energy but "
+                "top out lower. Too long a period (0.7 s) cannot even reach 0.2 m/s and sways badly. Animals do the "
+                "same: the faster they go, the quicker their steps.",
+            ),
+            check=_walked_flat,
+            unlock=("flat", "speed"),
+            show=("labels",),
+        ),
+        Step(
+            id="lift",
+            title=_text("抬腿要多高？", "How high to lift the feet?"),
+            body=_text(
+                "把两只的周期都设成 0.36 秒，A 的抬腿调到 ×0.5，B 调到 ×1.6。先「平地走 5 秒」比能耗，"
+                "再点「走过路沿」：前面有一道 3 厘米高的坎。",
+                "Set both periods to 0.36 s, A's lift to x0.5 and B's to x1.6. First Walk 5 s on the flat and compare "
+                "energy, then press Walk over the curb: a 3 cm step lies ahead.",
+            ),
+            done=_text(
+                "平地上抬腿低最省力（我们测到能耗只有一半不到），可脚一碰到 3 厘米的坎就被卡住。抬得高费力，但过得去。"
+                "所以崎岖地形上的机器狗都抬腿高，平地上可以抬低省电。",
+                "On the flat a low lift saves the most (less than half the energy in our tests), but the foot catches "
+                "on the 3 cm curb and the dog is stuck. A high lift costs more but gets across. That is why dogs on "
+                "rough ground lift high, and on the flat can lift low to save battery.",
+            ),
+            check=_tried_curb,
+            unlock=("curb", "period_a", "lift_a", "period_b", "lift_b"),
+            show=("labels",),
+        ),
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.test: str | None = None
+        self.t0 = 0.0
+        self.runs: dict[str, dict[str, Any]] = {}
+        self.base_lift: float | None = None
+
+    def build(self) -> mujoco.MjModel:
+        curb = {"type": "curb", "pos": [CURB_X, 0.0], "size": [0.12, 3.0], "height": CURB_HEIGHT}
+        self.model = compile_world(_dog_world("gait_twins", self.twins, self.start_x, [curb])).model
+        return self.model
+
+    def settings(self, twin: Twin) -> dict[str, float]:
+        v = self.view(twin)
+        return {"period": PERIODS[int(v["period"])], "lift": LIFTS[int(v["lift"])]}
+
+    def controller(self, model: mujoco.MjModel, data: mujoco.MjData, twin: Twin) -> Any:
+        home = self.playground.behaviors.home_qpos()
+        if self.base_lift is None:
+            self.base_lift = quadruped.for_template(model, twin.name, home).lift
+        s = self.settings(twin)
+        return quadruped.for_template(model, twin.name, home, period=s["period"], lift=self.base_lift * s["lift"])
+
+    def sample(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, float]:
+        out = {}
+        for twin in self.twins:
+            trunk = self.trunks[twin.name]
+            dof = int(model.jnt_dofadr[model.body_jntadr[trunk]])
+            out[f"v_{twin.name}"] = float(data.qvel[dof])
+            out[f"sway_{twin.name}"] = math.degrees(float(np.linalg.norm(data.qvel[dof + 3 : dof + 5])))
+        return out
+
+    def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
+        session = self.playground.session
+        twin = next((t for t in self.twins if control in self.knob_ids(t)), None)
+        if twin is not None and self.test is None:
+            session.set_controller(twin.name, self.controller(session.model, data, twin))
+        elif control in ("flat", "curb") and self.test is None:
+            self.restart(data)
+            self.test, self.t0 = control, float(data.time)
+            for t in self.twins:
+                session.controllers[t.name].command(float(ctx.values["speed"]), 0.0)
+            self.runs = {
+                t.name: {
+                    **self.settings(t),
+                    "top": round(session.controllers[t.name].max_speed, 2),
+                    "energy": 0.0,
+                    "sway": [],
+                    "x0": None,
+                    "fell": False,
+                }
+                for t in self.twins
+            }
+
+    def measure(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if self.test is None:
+            return
+        t = float(data.time) - self.t0
+        for twin in self.twins:
+            run = self.runs[twin.name]
+            trunk = self.trunks[twin.name]
+            run["fell"] = run["fell"] or self.down(data, twin)
+            if t < SETTLE:
+                continue
+            if run["x0"] is None:
+                run["x0"] = float(data.xpos[trunk][0])
+            acts = [a for a in range(model.nu) if (model.actuator(a).name or "").startswith(f"{twin.name}/")]
+            run["energy"] += (
+                float(np.sum(np.abs(data.actuator_force[acts] * data.actuator_velocity[acts]))) * model.opt.timestep
+            )
+            dof = int(model.jnt_dofadr[model.body_jntadr[trunk]])
+            run["sway"].append(float(np.linalg.norm(data.qvel[dof + 3 : dof + 5])))
+        if t >= (FLAT_SECONDS if self.test == "flat" else CURB_SECONDS):
+            self._finish(model, data)
+
+    def _finish(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        assert self.ctx is not None
+        results = {}
+        for twin in self.twins:
+            run = self.runs[twin.name]
+            trunk = self.trunks[twin.name]
+            x = float(data.xpos[trunk][0])
+            distance = max(0.0, x - (run["x0"] if run["x0"] is not None else x))
+            seconds = (FLAT_SECONDS if self.test == "flat" else CURB_SECONDS) - SETTLE
+            mass = float(model.body_subtreemass[trunk])
+            results[twin.name] = {
+                "period": run["period"],
+                "lift": run["lift"],
+                "top": run["top"],
+                "speed": round(distance / seconds, 3),
+                "sway": round(math.degrees(float(np.mean(run["sway"]))) if run["sway"] else 0.0, 1),
+                "cot": round(run["energy"] / (mass * GRAVITY * distance), 1) if distance > 0.05 else None,
+                "crossed": x > CURB_X + 0.25,
+                "fell": run["fell"],
+            }
+            self.playground.session.controllers[twin.name].command(0.0, 0.0)
+        self.ctx.results[self.test] = results
+        self.test = None
+
+    def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        readout = _text("正在走……", "Walking...") if self.test else _text("", "")
+        return {"table": self._table(ctx), "readout": readout}
+
+    def _table(self, ctx: LessonContext) -> dict[str, Any]:
+        settings = [self.settings(t) for t in self.twins]
+        rows: list[dict[str, Any]] = [
+            {"heading": _text("现在的设置", "Settings now")},
+            _row(_text("步子周期", "Step period"), [f"{s['period']:g} s" for s in settings]),
+            _row(_text("抬腿高度", "Foot lift"), [f"×{s['lift']:g}" for s in settings]),
+        ]
+        for key, heading in (
+            ("flat", _text("平地 5 秒", "5 s on the flat")),
+            ("curb", _text("过路沿", "Over the curb")),
+        ):
+            got_all = ctx.results.get(key)
+            if not got_all:
+                continue
+            got = [got_all[t.name] for t in self.twins]
+            rows += [
+                {"heading": heading},
+                _row(_text("当时的设置", "Ran with"), [f"{r['period']:g} s · ×{r['lift']:g}" for r in got]),
+                _row(
+                    _text("最快能走", "Top speed"),
+                    [f"{r['top']:.2f} m/s" for r in got],
+                    [r["top"] for r in got],
+                    high=True,
+                ),
+                _row(
+                    _text("实际速度", "Speed reached"),
+                    [f"{r['speed']:.2f} m/s" for r in got],
+                    [r["speed"] for r in got],
+                    high=True,
+                ),
+                _row(_text("晃动", "Sway"), [f"{r['sway']:.0f} °/s" for r in got], [r["sway"] for r in got]),
+                _row(_text("每米能耗", "Energy per metre"), [_num(r["cot"]) for r in got], [r["cot"] for r in got]),
+            ]
+            if key == "curb":
+                rows.append(
+                    _row(
+                        _text("跨过路沿", "Got over"),
+                        [_text("过去了", "yes") if r["crossed"] else _text("卡住了", "stuck") for r in got],
+                    )
+                )
+        return {"columns": self.columns(), "rows": rows}
+
+    def camera(self) -> dict[str, list[float]]:
+        return {"eye": [0.8, -3.7, 1.5], "target": [0.8, 0.0, 0.15]}  # the start, the curb and beyond it
