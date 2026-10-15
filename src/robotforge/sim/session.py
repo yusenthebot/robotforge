@@ -181,7 +181,9 @@ class SimSession:
     def _run_controllers(self) -> None:
         t = self.data.time
         for name, controller in list(self.controllers.items()):
-            if t + 1e-9 >= self._next_update.get(name, 0.0):
+            due = self._next_update.get(name, 0.0)
+            # Due, or the clock was turned back under it (data reset without reset()): it would sit idle until then.
+            if t + 1e-9 >= due or t < due - 2.0 / controller.rate_hz:
                 controller.update(self.model, self.data)
                 self._next_update[name] = t + 1.0 / controller.rate_hz
 
