@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import mujoco
 
+from robotforge.sim import carry
+
 if TYPE_CHECKING:
     from robotforge.playground import Playground
 
@@ -319,6 +321,7 @@ class LessonRunner:
         self._version = -1
         self._bench_sent = -1
         self._saved: tuple[Any, mujoco.MjModel, str] | None = None  # (store, model, source) to return to
+        self._left: carry.Snapshot | None = None  # where everything in that world was, to put it back
         self._lock = threading.RLock()
 
     # ---- catalog and lifecycle -----------------------------------------------------
@@ -343,6 +346,8 @@ class LessonRunner:
         with self._lock:
             if self.lesson is None:  # switching lessons keeps the world we came from
                 self._saved = (pg.store, session.model, session.source)
+                with session.lock:
+                    self._left = carry.take(session.model, session.data)
             else:
                 self.lesson.close()
             pg.store = None
@@ -370,8 +375,15 @@ class LessonRunner:
             if store is not None:
                 pg.store = store
                 pg.reload_world()
+                world = store.load()
+                left_as = self._left
+                if left_as is not None:  # the robots and objects come back where they were, not to their start
+                    with pg.session.lock:
+                        names = [r.name for r in world.robots] + [o.name for o in world.objects]
+                        carry.restore(pg.session.model, pg.session.data, left_as, names)
             else:
                 pg.session.load_model(model, source)
+        self._left = None
         return {"left": left}
 
     def _close(self) -> None:

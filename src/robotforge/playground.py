@@ -25,6 +25,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height
 from robotforge.learn import LESSONS, LessonRunner
+from robotforge.sim import carry
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
 from robotforge.viewer.server import ViewerHub
@@ -384,11 +385,22 @@ class Playground:
 
     def _edit(self, change) -> dict[str, Any]:
         store = self._require_store()
+        before = store.load()
+        with self.session.lock:
+            live = carry.take(self.session.model, self.session.data)
         try:
-            _, compiled = store.apply(change)
+            after, compiled = store.apply(change)
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
-        return self._load_world(compiled)
+        result = self._load_world(compiled)
+        # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
+        # New ground under them (terrain, a scene) starts everything fresh: their heights would no longer fit.
+        if before.terrain == after.terrain:
+            unchanged = [r.name for r in after.robots if r in before.robots]
+            unchanged += [o.name for o in after.objects if o in before.objects]
+            with self.session.lock:
+                carry.restore(self.session.model, self.session.data, live, unchanged)
+        return result
 
     def _unchanged(self, note: str) -> dict[str, Any]:
         """The world summary without recompiling: the simulation keeps running as it is."""
