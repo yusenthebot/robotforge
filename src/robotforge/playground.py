@@ -24,6 +24,7 @@ from robotforge.design import importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height
+from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
 from robotforge.viewer.server import ViewerHub
@@ -69,10 +70,13 @@ class Playground:
     last_doctor: dict[str, Any] = field(default_factory=dict)  # robot name -> import doctor report
     behaviors: BehaviorManager = field(init=False)
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
+    lessons: LessonRunner = field(init=False)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(self.session, self.current_world)
+        self.lessons = LessonRunner(self, LESSONS)
+        self.session.reset_hooks.append(self.lessons.after_reset)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -94,6 +98,8 @@ class Playground:
                 "terrain": [t.type for t in world.terrain] if world is not None else [],
                 "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in robots},
                 "catalog": viewer_catalog(),
+                "lessons": self.lessons.catalog(),
+                "lesson": self.lessons.describe_active(),
             }
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
@@ -108,7 +114,17 @@ class Playground:
                 return _short(self.set_floor(str(msg["style"])))
             raise PlaygroundError(f"unknown world action {action!r}")
 
+        def lesson_open(msg: dict[str, Any]) -> dict[str, Any]:
+            if msg.get("action") == "start":
+                return self.lessons.start(str(msg["lesson"]))
+            if msg.get("action") == "exit":
+                return self.lessons.exit()
+            raise PlaygroundError(f"unknown lesson action {msg.get('action')!r}")
+
         hub.handlers["teleop"] = teleop
+        hub.handlers["lesson"] = self.lessons.handle
+        hub.slow_handlers["lesson_open"] = lesson_open
+        hub.lesson_stream = self.lessons.tick
         hub.slow_handlers["world"] = world_request
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
@@ -315,6 +331,11 @@ class Playground:
                 raise PlaygroundError(f"nothing named {name!r} in this world")
 
         return self._edit(change)
+
+    @_one_edit_at_a_time
+    def reload_world(self) -> dict[str, Any]:
+        """Compile the open world again and load it, e.g. when coming back from a lesson."""
+        return self._load_world(self._require_store().compile())
 
     @_one_edit_at_a_time
     def clear_scene(self) -> dict[str, Any]:

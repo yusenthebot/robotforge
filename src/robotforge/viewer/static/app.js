@@ -3,6 +3,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
+import { initLessons, lessonFrame, lessonScene, lessonUpdate } from "./lesson.js";
+import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -29,12 +31,17 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.12;
 
-const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3328, 1.1);
+// Most light comes from the studio environment (soft, reflected in every surface); the sun adds
+// direction and shadows, and a faint sky/ground fill keeps shadowed sides from going black.
+scene3.environment = studioEnvironment(renderer);
+scene3.environmentIntensity = 0.85;
+const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3328, 0.35);
 hemi.position.set(0, 0, 1);
 scene3.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+const sun = new THREE.DirectionalLight(0xfff6ec, 1.9);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.radius = 3;
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.02;
 scene3.add(sun, sun.target);
@@ -352,15 +359,9 @@ async function applyScene(desc) {
     } else {
       const g = geometryFor(geom, meshGeometries);
       if (!g) continue;
-      const transparent = geom.rgba[3] < 1;
-      const mat = new THREE.MeshStandardMaterial({
-        color: rgbaColor(geom.rgba),
-        roughness: look ? 0.95 : 0.55,
-        metalness: look ? 0 : 0.05,
-        transparent,
-        opacity: geom.rgba[3],
-        depthWrite: !transparent,
-      });
+      const mat = look
+        ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
+        : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3]);
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface; tile it by the block's size.
         mat.map = groundTexture(look.pattern === "checker" ? "speckle" : look.pattern);
@@ -744,6 +745,7 @@ function connect() {
     if (msg.type === "scene") applyScene(msg);
     else if (msg.type === "state") applyState(msg);
     else if (msg.type === "reply") onReply(msg);
+    else if (msg.type === "lesson") lessonUpdate(msg);
     else if (msg.type === "error") toast(msg.message);
   };
 }
@@ -797,6 +799,7 @@ function onScene(desc) {
   renderRobotList();
   renderSelection();
   renderWorldPanel();
+  lessonScene(desc);
   $("empty").hidden = !(desc.world && robots.length === 0);
 }
 
@@ -1126,8 +1129,11 @@ function setWorldPanel(open) {
 
 // Slide the view's center away from open side panels, so what you look at stays in the clear.
 function shiftForDrawers() {
-  const half = (id) => (!$(id).hidden && !narrow() ? ($(id).offsetWidth + 16) / 2 : 0);
-  viewShiftTarget = half("drawer") - half("world-panel");
+  const half = (id) => {
+    const el = $(id);
+    return !el.hidden && el.offsetParent !== null && !narrow() ? (el.offsetWidth + 16) / 2 : 0;
+  };
+  viewShiftTarget = Math.max(half("drawer"), half("lesson-plots")) - Math.max(half("world-panel"), half("lesson-panel"));
 }
 window.addEventListener("resize", shiftForDrawers);
 
@@ -1472,6 +1478,7 @@ function loop() {
   controls.update();
   updateRing();
   refreshDragVisual();
+  lessonFrame();
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();
@@ -1482,6 +1489,25 @@ function loop() {
     fpsT0 = now;
   }
 }
+
+initLessons({
+  scene: scene3,
+  request,
+  send,
+  toast,
+  bodyNode: (id) => bodyNodes[id],
+  color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
+  moveCamera: (eye, target) => moveCamera(new THREE.Vector3().fromArray(eye), new THREE.Vector3().fromArray(target), true),
+  closePanels: () => {
+    setHelp(false);
+    setDrawer(false);
+    setWorldPanel(false);
+  },
+  wantFrame: () => {
+    wantFrame = true;
+  },
+  shift: () => shiftForDrawers(),
+});
 
 connect();
 loop();
@@ -1503,6 +1529,13 @@ window.__robotforge = {
   ring: () => (ring.visible ? { center: ring.position.toArray(), radius: ringState?.radius ?? null } : null),
   marker: () => (markerDot.visible ? markerDot.position.toArray() : markerPad.visible ? markerPad.position.toArray() : null),
   select: (name) => select(name, { focus: true }),
+  // CSS-pixel position of a world point, for scripted pointer tests.
+  screenOfPoint: (xyz) => {
+    camera.updateMatrixWorld();
+    const v = new THREE.Vector3().fromArray(xyz).project(camera);
+    const rect = canvas.getBoundingClientRect();
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+  },
   // CSS-pixel position of a body's origin, for scripted pointer tests.
   screenOf: (id) => {
     const node = bodyNodes[id];

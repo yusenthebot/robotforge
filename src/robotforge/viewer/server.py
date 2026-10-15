@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 FRAME_HZ = 60.0
 STATE_HZ = 4.0
+LESSON_HZ = 20.0
 
 
 # Revalidate on every load (cheap 304s) so an upgraded robotforge never shows a stale UI.
@@ -60,6 +61,8 @@ class ViewerHub:
         self.slow_handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
         self.scene_extras: Callable[[], dict[str, Any]] | None = None
         self.state_extras: Callable[[], dict[str, Any]] | None = None
+        # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
+        self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
 
     # ---- scene description (cached per model version) -------------------------------
@@ -178,6 +181,7 @@ class ViewerHub:
         """Step physics in real time and stream poses until cancelled."""
         last = time.perf_counter()
         last_state = 0.0
+        last_lesson = 0.0
         while True:
             tick_start = time.perf_counter()
             # The real-time clock only runs while someone is watching, so an agent's
@@ -193,6 +197,11 @@ class ViewerHub:
                 if tick_start - last_state > 1.0 / STATE_HZ:
                     last_state = tick_start
                     await self._send_all(text=json.dumps(self.state_message()))
+                if self.lesson_stream is not None and tick_start - last_lesson > 1.0 / LESSON_HZ:
+                    last_lesson = tick_start
+                    update = self.lesson_stream()
+                    if update is not None:
+                        await self._send_all(text=json.dumps(update))
             elapsed = time.perf_counter() - tick_start
             await asyncio.sleep(max(0.0, 1.0 / FRAME_HZ - elapsed))
 

@@ -19,6 +19,10 @@
         <span class="brand">robotforge</span>
         <span class="world" id="world"></span>
       </div>
+      <button class="pill learn" id="learn-toggle" type="button" aria-expanded="false" aria-controls="learn-panel" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5 12 3l9 3.5-9 3.5z"/><path d="M7 8.5v5c0 1.4 2.2 3 5 3s5-1.6 5-3v-5"/><path d="M21 6.5v6"/></svg>
+        <span data-i18n="learn">Learn</span>
+      </button>
       <button class="pill" id="world-toggle" type="button" aria-expanded="false" aria-controls="world-panel">
         <span data-i18n="world_button">Maps, terrain, modes</span>
         <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg>
@@ -33,6 +37,57 @@
       <button class="pill round" id="help-toggle" type="button" aria-expanded="false" aria-controls="help" data-i18n-label="help_tip">?</button>
     </div>
   </header>
+
+  <div class="learn-panel" id="learn-panel" hidden>
+    <h2 class="learn-heading" data-i18n="learn_title">Learn robotics by doing</h2>
+    <p class="note" data-i18n="learn_lead">Each lesson sets up a small experiment. You change something, watch what the robot does, and the lesson explains why.</p>
+    <div class="course-list" id="lesson-list"></div>
+    <p class="note" data-i18n="more_lessons">More lessons are on the way: inverse kinematics and sensors.</p>
+  </div>
+
+  <aside class="drawer left lesson-panel" id="lesson-panel" hidden>
+    <header class="lesson-head">
+      <div>
+        <span class="lesson-chapter" id="lesson-chapter"></span>
+        <h2 class="lesson-title" id="lesson-title"></h2>
+      </div>
+      <button class="close" id="lesson-exit" type="button" data-i18n-label="exit_lesson">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="lesson-progress"><span id="lesson-step-count"></span><div class="dots" id="lesson-dots"></div></div>
+    <section class="lesson-step">
+      <h3 class="lesson-step-title" id="lesson-step-title"></h3>
+      <div class="lesson-body" id="lesson-step-body"></div>
+      <div class="quiz" id="lesson-quiz" hidden>
+        <p class="quiz-question" id="lesson-quiz-question"></p>
+        <div class="quiz-options" id="lesson-quiz-options"></div>
+        <p class="quiz-feedback" id="lesson-quiz-feedback" hidden></p>
+      </div>
+      <div class="lesson-result" id="lesson-result" hidden></div>
+      <p class="lesson-waiting" id="lesson-waiting"><span class="spinner" aria-hidden="true"></span><span data-i18n="waiting">Waiting for you to try it</span></p>
+      <div class="step-done" id="lesson-step-done" hidden>
+        <strong data-i18n="done_label">You did it</strong>
+        <p id="lesson-step-done-text"></p>
+      </div>
+      <button class="primary-button" id="lesson-next" type="button" hidden></button>
+    </section>
+    <section id="lesson-controls-wrap" hidden>
+      <h2 class="section-title"><span data-i18n="controls_title">Try changing</span></h2>
+      <div class="joints" id="lesson-controls"></div>
+    </section>
+    <p class="lesson-readout" id="lesson-readout"></p>
+    <div class="lesson-finished" id="lesson-finished" hidden>
+      <strong data-i18n="finished_title">Lesson complete</strong>
+      <p id="lesson-finished-body"></p>
+      <div class="lesson-buttons">
+        <button class="primary-button" id="lesson-finished-exit" type="button" data-i18n="finished_exit">Back to my world</button>
+        <button class="pill-button" id="lesson-finished-stay" type="button" data-i18n="finished_stay">Keep experimenting</button>
+      </div>
+    </div>
+  </aside>
+
+  <aside class="lesson-plots" id="lesson-plots" hidden></aside>
 
   <aside class="drawer left" id="world-panel" hidden>
     <div class="tabs" role="tablist">
