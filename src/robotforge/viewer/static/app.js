@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonFrame, lessonScene, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
@@ -804,8 +804,9 @@ function onScene(desc) {
 }
 
 function renderTitle() {
-  $("world").textContent = worldName;
-  document.title = worldName ? `${worldName} · robotforge` : "robotforge";
+  const name = lessonTitle() ?? worldName;
+  $("world").textContent = name;
+  document.title = name ? `${name} · robotforge` : "robotforge";
 }
 
 function renderRobotList() {
@@ -961,7 +962,7 @@ function applyState(s) {
   play.setAttribute("aria-label", tip);
   play.title = tip;
   for (const b of $("speed").children) b.setAttribute("aria-pressed", String(Number(b.dataset.speed) === s.speed));
-  if (!worldName && s.source) {
+  if (!worldName && s.source && !s.source.startsWith("lesson:")) {
     worldName = s.source.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
     renderTitle();
   }
@@ -1507,6 +1508,12 @@ initLessons({
     wantFrame = true;
   },
   shift: () => shiftForDrawers(),
+  retitle: () => renderTitle(),
+  canvas,
+  rayAt: (clientX, clientY) => {
+    setPointer({ clientX, clientY });
+    return raycaster;
+  },
 });
 
 connect();
@@ -1525,6 +1532,7 @@ window.__robotforge = {
   },
   following: () => (follow ? follow.body : null),
   selected: () => selected,
+  lesson: () => lessonState(),
   busy: () => ({ busy, pending: pending.size }),
   ring: () => (ring.visible ? { center: ring.position.toArray(), radius: ringState?.radius ?? null } : null),
   marker: () => (markerDot.visible ? markerDot.position.toArray() : markerPad.visible ? markerPad.position.toArray() : null),

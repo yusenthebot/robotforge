@@ -28,6 +28,8 @@ export function initLessons(hooks) {
 }
 
 export const lessonActive = () => lesson !== null;
+export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
+export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
 // ---------------------------------------------------------------- picker
 
@@ -143,6 +145,7 @@ function openLesson(desc) {
   needCamera = true;
   if (desc.camera) api.moveCamera(desc.camera.eye, desc.camera.target);
   api.shift();
+  api.retitle();
 }
 
 function closeLesson() {
@@ -153,6 +156,7 @@ function closeLesson() {
   $("lesson-panel").hidden = true;
   $("lesson-plots").hidden = true;
   api.shift();
+  api.retitle();
 }
 
 const passedAll = () => lesson && state && lesson.steps.every((s) => state.passed.includes(s.id));
@@ -191,8 +195,14 @@ export function lessonUpdate(msg) {
 }
 
 function readout(live) {
-  if (!live || live.angle === undefined) return "";
-  return t("readout_joint", { angle: live.angle.toFixed(1), error: live.error.toFixed(1), torque: live.torque.toFixed(2) });
+  if (!live) return "";
+  if (live.angle !== undefined) {
+    return t("readout_joint", { angle: live.angle.toFixed(1), error: live.error.toFixed(1), torque: live.torque.toFixed(2) });
+  }
+  if (live.err_cm !== undefined) {
+    return t("readout_arm", { q1: live.q1.toFixed(0), q2: live.q2.toFixed(0), err: live.err_cm.toFixed(1), d: (live.d * 100).toFixed(0) });
+  }
+  return "";
 }
 
 function renderStep() {
@@ -301,6 +311,26 @@ function renderControls() {
 
 function controlRow(c) {
   const value = state?.values[c.id] ?? c.value;
+  if (c.kind === "choice") {
+    const row = document.createElement("div");
+    row.className = "lesson-choice";
+    const name = document.createElement("span");
+    name.className = "joint-name";
+    name.textContent = pick(c.label);
+    const seg = document.createElement("div");
+    seg.className = "seg";
+    seg.dataset.choice = c.id;
+    c.options.forEach((option, k) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = pick(option);
+      b.setAttribute("aria-pressed", String(k === value));
+      b.addEventListener("click", () => api.send({ type: "lesson", action: "set", control: c.id, value: k }));
+      seg.append(b);
+    });
+    row.append(name, seg);
+    return row;
+  }
   if (c.kind === "toggle") {
     const label = document.createElement("label");
     label.className = "check";
@@ -347,6 +377,10 @@ function controlRow(c) {
 
 function syncControls() {
   if (!state) return;
+  for (const seg of $("lesson-controls").querySelectorAll("[data-choice]")) {
+    const v = state.values[seg.dataset.choice];
+    [...seg.children].forEach((b, k) => b.setAttribute("aria-pressed", String(k === v)));
+  }
   for (const input of $("lesson-controls").querySelectorAll("input[data-control]")) {
     if (input === activeSlider) continue;
     const v = state.values[input.dataset.control];
@@ -493,137 +527,323 @@ function formatTick(v) {
 
 // ---------------------------------------------------------------- overlays in the 3D view
 
-// For a "joint" rig: a protractor around the pivot, the target as a ghost arm, the error as a
-// shaded wedge, the motor's torque as a curved arrow and gravity as a straight one.
+// Each rig kind draws its own explanation on top of the physics. A rig overlay is
+// { group, parts: {name: Object3D}, frame() } and lives until the lesson or its scene ends.
 const overlays = {
-  group: null,
-  rig: null,
-  parts: {},
+  current: null,
   clear() {
-    if (this.group) {
-      this.group.traverse((o) => {
-        o.geometry?.dispose();
-        o.material?.map?.dispose();
-        o.material?.dispose();
+    const o = this.current;
+    if (o) {
+      o.group.traverse((x) => {
+        x.geometry?.dispose();
+        x.material?.map?.dispose();
+        x.material?.dispose();
       });
-      api.scene.remove(this.group);
+      api.scene.remove(o.group);
     }
-    this.group = null;
-    this.rig = null;
-    this.parts = {};
+    this.current = null;
   },
   build(rig) {
     this.clear();
-    if (!rig || rig.kind !== "joint") return;
-    this.rig = {
-      pivot: new THREE.Vector3().fromArray(rig.pivot),
-      zero: new THREE.Vector3().fromArray(rig.zero).normalize(),
-      swing: new THREE.Vector3().fromArray(rig.swing).normalize(),
-      length: rig.length,
-      body: rig.body,
-      weight: new THREE.Vector3().fromArray(rig.weight),
-    };
-    this.group = new THREE.Group();
-    this.group.renderOrder = 5;
-    api.scene.add(this.group);
-    const amber = api.color("--amber");
-    const ink = api.color("--ink");
-    this.parts.scale = this.protractor(ink);
-    this.parts.target = this.ghostArm(amber);
-    this.parts.error = new THREE.Mesh(new THREE.BufferGeometry(), basic(amber, 0.22, true));
-    this.parts.torque = new THREE.Group();
-    this.parts.torque.add(new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ink, depthTest: false, transparent: true })));
-    this.parts.torque.add(new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.04, 16), basic(ink, 0.95)));
-    this.parts.gravity = arrow(new THREE.Vector3(0, 0, -1), 0.16, api.color("--plot-blue"));
-    this.parts.gravity.add(label("mg", api.color("--plot-blue")));
-    this.parts.gravity.children[this.parts.gravity.children.length - 1].position.set(0.035, 0, -0.1);
-    for (const p of Object.values(this.parts)) {
-      p.visible = false;
-      this.group.add(p);
-    }
+    const make = RIGS[rig?.kind];
+    if (!make) return;
+    this.current = make(rig);
+    for (const part of Object.values(this.current.parts)) part.visible = false;
+    api.scene.add(this.current.group);
   },
-  point(angleDeg, radius) {
-    const a = THREE.MathUtils.degToRad(angleDeg);
-    return this.rig.pivot.clone()
-      .addScaledVector(this.rig.zero, Math.cos(a) * radius)
-      .addScaledVector(this.rig.swing, Math.sin(a) * radius);
+  frame() {
+    const o = this.current;
+    if (!o || !state) return;
+    const shown = new Set(state.shown);
+    for (const [name, part] of Object.entries(o.parts)) part.visible = shown.has(name);
+    o.frame();
   },
-  protractor(color) {
-    const g = new THREE.Group();
-    const r = this.rig.length * 1.22;
+  target() {
+    return this.current?.dragTarget ?? null;
+  },
+};
+
+// One motor joint: a protractor, the target as a ghost arm, the error as a wedge, the motor's torque as a
+// curved arrow and gravity as a straight one.
+function jointRig(rig) {
+  const pivot = new THREE.Vector3().fromArray(rig.pivot);
+  const zero = new THREE.Vector3().fromArray(rig.zero).normalize();
+  const swing = new THREE.Vector3().fromArray(rig.swing).normalize();
+  const L = rig.length;
+  const point = (deg, radius) => {
+    const a = THREE.MathUtils.degToRad(deg);
+    return pivot.clone().addScaledVector(zero, Math.cos(a) * radius).addScaledVector(swing, Math.sin(a) * radius);
+  };
+  const group = new THREE.Group();
+  const amber = api.color("--amber");
+  const ink = api.color("--ink");
+  const blue = api.color("--plot-blue");
+  const scale = new THREE.Group();
+  {
+    const r = L * 1.22;
     const pts = [];
     for (let deg = -90; deg <= 180; deg += 15) {
       const long = deg % 45 === 0;
-      pts.push(this.point(deg, r), this.point(deg, r - (long ? 0.04 : 0.02)));
+      pts.push(point(deg, r), point(deg, r - (long ? 0.04 : 0.02)));
       if (long) {
-        const tag = label(`${deg}°`, color);
-        tag.position.copy(this.point(deg, r + 0.045));
-        g.add(tag);
+        const tag = label(`${deg}°`, ink);
+        tag.position.copy(point(deg, r + 0.045));
+        scale.add(tag);
       }
     }
-    const ticks = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55 }));
     const arc = [];
-    for (let deg = -90; deg <= 180; deg += 3) arc.push(this.point(deg, r));
-    const rim = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arc), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.35 }));
-    g.add(ticks, rim);
-    return g;
-  },
-  ghostArm(color) {
-    const g = new THREE.Group();
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 12), basic(color, 0.45));
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.045, 24, 12), basic(color, 0.35));
-    g.add(rod, ball);
-    g.userData = { rod, ball };
-    return g;
-  },
-  angleNow() {
-    const node = api.bodyNode(this.rig.body);
+    for (let deg = -90; deg <= 180; deg += 3) arc.push(point(deg, r));
+    scale.add(
+      new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), lineMat(ink, 0.55)),
+      new THREE.Line(new THREE.BufferGeometry().setFromPoints(arc), lineMat(ink, 0.35))
+    );
+  }
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 12), basic(amber, 0.45));
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.045, 24, 12), basic(amber, 0.35));
+  const target = new THREE.Group();
+  target.add(rod, ball);
+  const error = new THREE.Mesh(new THREE.BufferGeometry(), basic(amber, 0.22, true));
+  const torqueLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ink, depthTest: false, transparent: true }));
+  const torqueHead = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.04, 16), basic(ink, 0.95));
+  const torque = new THREE.Group();
+  torque.add(torqueLine, torqueHead);
+  const gravity = arrow(new THREE.Vector3(0, 0, -1), 0.16, blue);
+  const mg = label("mg", blue);
+  mg.position.set(0.035, 0, -0.1);
+  gravity.add(mg);
+  const parts = { scale, target, error, torque, gravity };
+  group.add(...Object.values(parts));
+  const weight = new THREE.Vector3().fromArray(rig.weight);
+  const angleNow = () => {
+    const node = api.bodyNode(rig.body);
     if (!node) return 0;
-    const dir = this.rig.zero.clone().applyQuaternion(node.quaternion);
-    return THREE.MathUtils.radToDeg(Math.atan2(dir.dot(this.rig.swing), dir.dot(this.rig.zero)));
-  },
-  frame() {
-    if (!this.rig || !state) return;
-    const shown = new Set(state.shown);
-    for (const [name, part] of Object.entries(this.parts)) part.visible = shown.has(name);
-    const now = this.angleNow();
-    const target = state.values.target ?? 0;
-    const L = this.rig.length;
-    // ghost arm at the target angle
-    const { rod, ball } = this.parts.target.userData;
-    const tip = this.point(target, L);
-    rod.position.copy(this.rig.pivot.clone().lerp(tip, 0.5));
-    rod.scale.set(1, L, 1);
-    rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tip.clone().sub(this.rig.pivot).normalize());
-    ball.position.copy(tip);
-    // the error: a wedge from where the arm is to where it should be
-    const wedge = [];
-    const steps = Math.max(2, Math.ceil(Math.abs(target - now) / 3));
-    for (let k = 0; k <= steps; k++) {
-      const a = now + ((target - now) * k) / steps;
-      if (k > 0) wedge.push(this.rig.pivot, this.point(a - (target - now) / steps, L * 0.82), this.point(a, L * 0.82));
+    const dir = zero.clone().applyQuaternion(node.quaternion);
+    return THREE.MathUtils.radToDeg(Math.atan2(dir.dot(swing), dir.dot(zero)));
+  };
+  return {
+    group,
+    parts,
+    frame() {
+      const now = angleNow();
+      const goal = state.values.target ?? 0;
+      const tip = point(goal, L);
+      rod.position.copy(pivot.clone().lerp(tip, 0.5));
+      rod.scale.set(1, L, 1);
+      rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tip.clone().sub(pivot).normalize());
+      ball.position.copy(tip);
+      const wedge = [];
+      const steps = Math.max(2, Math.ceil(Math.abs(goal - now) / 3));
+      for (let k = 1; k <= steps; k++) {
+        const a0 = now + ((goal - now) * (k - 1)) / steps;
+        const a1 = now + ((goal - now) * k) / steps;
+        wedge.push(pivot.clone(), point(a0, L * 0.82), point(a1, L * 0.82));
+      }
+      setPoints(error, wedge);
+      const sweep = ((state.live?.torque ?? 0) / (state.live?.torque_max ?? 1)) * 140;
+      const arc = [];
+      for (let k = 0; k <= 24; k++) arc.push(point(now + (sweep * k) / 24, 0.11));
+      setPoints(torqueLine, arc);
+      const end = arc[arc.length - 1];
+      torqueHead.position.copy(end);
+      torqueHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(arc[arc.length - 2]).normalize());
+      torqueHead.visible = Math.abs(sweep) > 4;
+      const node = api.bodyNode(rig.body);
+      if (node) gravity.position.copy(weight.clone().applyQuaternion(node.quaternion).add(node.position));
+    },
+  };
+}
+
+// A two-link arm in a plane: the draggable target, the joint angles, the L1-L2-d triangle, the workspace
+// ring, the other elbow solution and the error arrow of iterative IK.
+function planarArmRig(rig) {
+  const S = new THREE.Vector3().fromArray(rig.shoulder);
+  const X = new THREE.Vector3().fromArray(rig.x_axis).normalize();
+  const Z = new THREE.Vector3().fromArray(rig.z_axis).normalize();
+  const toward = new THREE.Vector3().crossVectors(X, Z).normalize(); // from the arm toward the camera side
+  const front = toward.clone().multiplyScalar(0.035); // overlays float just in front of the links
+  const at = (x, z, lift = front) => S.clone().addScaledVector(X, x).addScaledVector(Z, z).add(lift);
+  const amber = api.color("--amber");
+  const ink = api.color("--ink");
+  const blue = api.color("--plot-blue");
+  const violet = api.color("--plot-violet");
+  const group = new THREE.Group();
+
+  const targetBall = new THREE.Mesh(new THREE.SphereGeometry(0.028, 24, 12), basic(amber, 0.95));
+  const targetHalo = new THREE.Mesh(new THREE.RingGeometry(0.04, 0.05, 40), basic(amber, 0.6, true));
+  targetHalo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), toward);
+  const target = new THREE.Group();
+  target.add(targetBall, targetHalo);
+
+  const angles = new THREE.Group();
+  const ref1 = dashedLine(ink, 0.5);
+  const arc1 = new THREE.Line(new THREE.BufferGeometry(), lineMat(ink, 0.9));
+  const ref2 = dashedLine(ink, 0.5);
+  const arc2 = new THREE.Line(new THREE.BufferGeometry(), lineMat(violet, 0.95));
+  const t1 = label("θ1", ink);
+  const t2 = label("θ2", violet);
+  angles.add(ref1, arc1, ref2, arc2, t1, t2);
+
+  const triangle = new THREE.Group();
+  const sideD = dashedLine(ink, 0.7);
+  const lab1 = label("L1", ink);
+  const lab2 = label("L2", ink);
+  const labD = label("d", ink);
+  triangle.add(sideD, lab1, lab2, labD);
+
+  const workspace = new THREE.Group();
+  const behind = toward.clone().multiplyScalar(-0.03);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(Math.abs(rig.l1 - rig.l2), rig.l1 + rig.l2, 96), basic(amber, 0.1, true));
+  ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), toward);
+  ring.position.copy(S.clone().add(behind));
+  const rim = [];
+  for (let k = 0; k <= 96; k++) {
+    const a = (k / 96) * Math.PI * 2;
+    rim.push(at(Math.cos(a) * (rig.l1 + rig.l2), Math.sin(a) * (rig.l1 + rig.l2), behind));
+  }
+  workspace.add(ring, new THREE.Line(new THREE.BufferGeometry().setFromPoints(rim), lineMat(amber, 0.6)));
+
+  const other = dashedLine(violet, 0.85);
+  const error = new THREE.Group();
+  const errLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: blue, depthTest: false, transparent: true }));
+  const errHead = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.035, 16), basic(blue, 0.95));
+  error.add(errLine, errHead);
+
+  const parts = { target, angles, triangle, workspace, other, error };
+  group.add(...Object.values(parts));
+
+  const joints = () => {
+    const upper = api.bodyNode(rig.upper);
+    const fore = api.bodyNode(rig.fore);
+    if (!upper || !fore) return null;
+    const elbow = fore.position.clone().add(front);
+    const hand = new THREE.Vector3(rig.l2, 0, 0).applyQuaternion(fore.quaternion).add(fore.position).add(front);
+    return { shoulder: S.clone().add(front), elbow, hand };
+  };
+  const arcPoints = (center, from, to, radius) => {
+    // from and to are directions in the plane; sweep the short way between them
+    const a0 = Math.atan2(from.dot(Z), from.dot(X));
+    let a1 = Math.atan2(to.dot(Z), to.dot(X));
+    while (a1 - a0 > Math.PI) a1 -= 2 * Math.PI;
+    while (a1 - a0 < -Math.PI) a1 += 2 * Math.PI;
+    const pts = [];
+    for (let k = 0; k <= 24; k++) {
+      const a = a0 + ((a1 - a0) * k) / 24;
+      pts.push(center.clone().addScaledVector(X, Math.cos(a) * radius).addScaledVector(Z, Math.sin(a) * radius));
     }
-    this.parts.error.geometry.dispose();
-    this.parts.error.geometry = new THREE.BufferGeometry().setFromPoints(wedge.map((p) => p.clone()));
-    // torque: a curved arrow around the pivot, as long as the push is strong
-    const torque = state.live?.torque ?? 0;
-    const max = state.live?.torque_max ?? 1;
-    const sweep = (torque / max) * 140;
-    const [line, head] = this.parts.torque.children;
-    const arc = [];
-    for (let k = 0; k <= 24; k++) arc.push(this.point(now + (sweep * k) / 24, 0.11));
-    line.geometry.dispose();
-    line.geometry = new THREE.BufferGeometry().setFromPoints(arc);
-    const end = arc[arc.length - 1];
-    const before = arc[arc.length - 2];
-    head.position.copy(end);
-    head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(before).normalize());
-    head.visible = Math.abs(sweep) > 4;
-    // gravity on the weight
-    const node = api.bodyNode(this.rig.body);
-    if (node) this.parts.gravity.position.copy(this.rig.weight.clone().applyQuaternion(node.quaternion).add(node.position));
-  },
-};
+    return { pts, mid: a0 + (a1 - a0) / 2 };
+  };
+
+  return {
+    group,
+    parts,
+    dragTarget: { mesh: targetBall, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(toward, S), origin: S, X, Z },
+    frame() {
+      const tx = state.values.tx ?? 0;
+      const tz = state.values.tz ?? 0;
+      target.position.copy(at(tx, tz));
+      const j = joints();
+      if (!j) return;
+      const dir1 = j.elbow.clone().sub(j.shoulder).normalize();
+      const dir2 = j.hand.clone().sub(j.elbow).normalize();
+      // angles: theta1 from the x axis, theta2 from the upper link's line
+      setPoints(ref1, [j.shoulder, j.shoulder.clone().addScaledVector(X, 0.13)]);
+      const a1 = arcPoints(j.shoulder, X, dir1, 0.085);
+      setPoints(arc1, a1.pts);
+      t1.position.copy(j.shoulder.clone().addScaledVector(X, Math.cos(a1.mid) * 0.12).addScaledVector(Z, Math.sin(a1.mid) * 0.12));
+      setPoints(ref2, [j.elbow, j.elbow.clone().addScaledVector(dir1, 0.11)]);
+      const a2 = arcPoints(j.elbow, dir1, dir2, 0.065);
+      setPoints(arc2, a2.pts);
+      t2.position.copy(j.elbow.clone().addScaledVector(X, Math.cos(a2.mid) * 0.1).addScaledVector(Z, Math.sin(a2.mid) * 0.1));
+      // triangle: the two links and the distance to the target
+      const tgt = at(tx, tz);
+      setPoints(sideD, [j.shoulder, tgt]);
+      lab1.position.copy(j.shoulder.clone().lerp(j.elbow, 0.5).addScaledVector(Z, 0.035));
+      lab2.position.copy(j.elbow.clone().lerp(j.hand, 0.5).addScaledVector(Z, 0.035));
+      labD.position.copy(j.shoulder.clone().lerp(tgt, 0.5).addScaledVector(Z, -0.03));
+      // the other solution, from the server's numbers
+      const oe = state.live?.other_elbow;
+      const oh = state.live?.other_hand;
+      if (oe && oh) setPoints(other, [j.shoulder, at(oe[0], oe[1]), at(oh[0], oh[1])]);
+      // iterative IK: the error the next step will shrink
+      const gap = tgt.clone().sub(j.hand);
+      const len = gap.length();
+      error.visible = error.visible && len > 0.012;
+      if (len > 0.012) {
+        const end = j.hand.clone().addScaledVector(gap, (len - 0.03) / len);
+        setPoints(errLine, [j.hand, end]);
+        errHead.position.copy(end.clone().addScaledVector(gap, 0.0175 / len));
+        errHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), gap.clone().normalize());
+      }
+    },
+  };
+}
+
+const RIGS = { joint: jointRig, planar_arm: planarArmRig };
+
+function lineMat(color, opacity) {
+  return new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
+}
+
+function dashedLine(color, opacity) {
+  const line = new THREE.Line(
+    new THREE.BufferGeometry(),
+    new THREE.LineDashedMaterial({ color, transparent: true, opacity, dashSize: 0.018, gapSize: 0.012, depthTest: false })
+  );
+  line.userData.dashed = true;
+  return line;
+}
+
+function setPoints(obj, points) {
+  obj.geometry.dispose();
+  obj.geometry = new THREE.BufferGeometry().setFromPoints(points);
+  if (obj.userData.dashed) obj.computeLineDistances();
+}
+
+// ---------------------------------------------------------------- dragging a lesson's target
+
+let targetDrag = null; // { last send time }
+
+function startTargetDrag(e) {
+  const t = overlays.target();
+  if (!t || !lesson || !state || !state.unlocked.includes("tx") || !overlays.current.parts.target.visible) return;
+  if (e.target !== api.canvas || e.button !== 0) return;
+  const ray = api.rayAt(e.clientX, e.clientY);
+  if (!ray.intersectObject(t.mesh, false).length) return;
+  e.stopPropagation(); // not a camera orbit, and not a body drag
+  e.preventDefault();
+  targetDrag = { sent: 0 };
+  api.canvas.classList.add("dragging");
+}
+
+function moveTargetDrag(e) {
+  if (!targetDrag) return;
+  const t = overlays.target();
+  const hit = new THREE.Vector3();
+  if (!api.rayAt(e.clientX, e.clientY).ray.intersectPlane(t.plane, hit)) return;
+  const rel = hit.sub(t.origin);
+  targetDrag.at = [Number(rel.dot(t.X).toFixed(3)), Number(rel.dot(t.Z).toFixed(3))];
+  const now = performance.now();
+  if (now - targetDrag.sent < 33) return; // about 30 updates a second is plenty
+  targetDrag.sent = now;
+  sendTarget(targetDrag.at);
+}
+
+function sendTarget([x, z]) {
+  api.send({ type: "lesson", action: "set", control: "tx", value: x });
+  api.send({ type: "lesson", action: "set", control: "tz", value: z });
+}
+
+function endTargetDrag() {
+  if (!targetDrag) return;
+  if (targetDrag.at) sendTarget(targetDrag.at); // the last move may have been skipped by the throttle
+  targetDrag = null;
+  api.canvas.classList.remove("dragging");
+}
+
+window.addEventListener("pointerdown", startTargetDrag, { capture: true });
+window.addEventListener("pointermove", moveTargetDrag);
+window.addEventListener("pointerup", endTargetDrag);
+window.addEventListener("pointercancel", endTargetDrag);
 
 function basic(color, opacity, doubleSided = false) {
   return new THREE.MeshBasicMaterial({
@@ -662,7 +882,7 @@ function label(text, color) {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.scale.set(0.08, 0.03, 1);
+  sprite.scale.set(0.1, 0.0375, 1);
   return sprite;
 }
 

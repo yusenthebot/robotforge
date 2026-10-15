@@ -152,3 +152,65 @@ def test_the_viewer_starts_a_lesson_and_receives_its_updates(pg):
                 break
         assert got_reply and got_update
     assert hub.scene_message()["lesson"]["id"] == "pd_control"
+
+
+def test_the_ik_lesson_can_be_walked_end_to_end(pg):
+    from robotforge.learn import ik
+
+    described = pg.lessons.start("inverse_kinematics")
+    assert described["rig"]["kind"] == "planar_arm"
+    lessons = pg.lessons
+    # 1: forward kinematics with the angle sliders
+    q1, q2 = ik.analytic(*ik.START_TARGET, elbow_up=True)
+    _set(pg, theta1=round(np.degrees(q1)), theta2=round(np.degrees(q2)))
+    assert "fk" in _play(pg, 1.0)["passed"]
+    lessons.handle({"action": "next"})
+    # 2: analytic IK follows the target to three places
+    _set(pg, method=1)
+    for tx, tz in ((0.35, 0.05), (0.05, 0.4), (-0.25, 0.25)):
+        _set(pg, tx=tx, tz=tz)
+        update = _play(pg, 1.0)
+        assert update["live"]["err_cm"] < 2
+    assert "ik" in update["passed"]
+    lessons.handle({"action": "next"})
+    # 3: out of reach, the arm points straight at the target
+    _set(pg, tx=0.6, tz=0.45)
+    update = _play(pg, 1.2)
+    assert update["live"]["reachable"] is False and "workspace" in update["passed"]
+    assert abs(update["live"]["q2"]) < 4  # stretched (nearly) straight
+    lessons.handle({"action": "next"})
+    # 4: both elbow solutions reach the same point
+    _set(pg, tx=0.3, tz=0.05)
+    up = _play(pg, 1.0)["live"]["q2"]
+    _set(pg, elbow_up=0)
+    update = _play(pg, 1.2)
+    assert up < 0 < update["live"]["q2"] and update["live"]["err_cm"] < 2 and "elbow" in update["passed"]
+    lessons.handle({"action": "next"})
+    # 5: iterative IK closes a fresh error step by step
+    _set(pg, method=2)
+    errors = [_play(pg, 0.5)["live"]["err_cm"]]
+    for _ in range(8):
+        lessons.handle({"action": "press", "control": "iterate"})
+        errors.append(_play(pg, 0.4)["live"]["err_cm"])
+    assert errors[0] > 20 and errors[-1] < 1 and all(b <= a + 0.5 for a, b in zip(errors, errors[1:], strict=False))
+    lessons.handle({"action": "next"})
+    # 6: the quiz
+    lessons.handle({"action": "answer", "choice": 1})
+    assert _play(pg, 0.1)["passed"][-1] == "why_iterate"
+
+
+def test_choice_controls_reject_options_that_do_not_exist(pg):
+    pg.lessons.start("inverse_kinematics")
+    pg.lessons.step = 1  # where the method unlocks
+    with pytest.raises(LessonError, match="options 0 to 2"):
+        pg.lessons.handle({"action": "set", "control": "method", "value": 5})
+
+
+def test_the_ik_rig_stays_stable_under_wild_input(pg):
+    pg.lessons.start("inverse_kinematics")
+    rng = np.random.default_rng(1)
+    for k in range(200):
+        if k % 10 == 0:
+            _set(pg, theta1=float(rng.uniform(-90, 180)), theta2=float(rng.uniform(-150, 150)))
+        _play(pg, 0.05)
+    assert np.isfinite(pg.session.data.qacc).all() and pg.session.data.time > 9.9

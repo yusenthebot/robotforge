@@ -30,16 +30,17 @@ class LessonError(ValueError):
 @dataclass(frozen=True)
 class Control:
     id: str
-    kind: Literal["slider", "toggle", "button"]
+    kind: Literal["slider", "toggle", "button", "choice"]
     label: Text
     min: float = 0.0
     max: float = 1.0
     step: float = 0.1
     value: float = 0.0
     unit: str = ""
+    options: tuple[Text, ...] = ()  # for "choice": the value is the chosen option's index
 
     def describe(self) -> dict[str, Any]:
-        return {
+        out = {
             "id": self.id,
             "kind": self.kind,
             "label": self.label,
@@ -49,6 +50,9 @@ class Control:
             "value": self.value,
             "unit": self.unit,
         }
+        if self.options:
+            out["options"] = list(self.options)
+        return out
 
 
 @dataclass(frozen=True)
@@ -305,7 +309,13 @@ class LessonRunner:
             raise LessonError(f"{control_id} is a button; press it instead")
         if control_id not in self._unlocked():
             raise LessonError(f"{control_id} unlocks in a later step")
-        value = min(max(value, c.min), c.max) if c.kind == "slider" else float(bool(value))
+        if c.kind == "slider":
+            value = min(max(value, c.min), c.max)
+        elif c.kind == "choice":
+            if value != int(value) or not 0 <= value < len(c.options):
+                raise LessonError(f"{control_id} has options 0 to {len(c.options) - 1}")
+        else:
+            value = float(bool(value))
         assert self.ctx is not None and self.lesson is not None
         self.ctx.values[control_id] = value
         with self.playground.session.lock:

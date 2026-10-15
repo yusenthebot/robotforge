@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
+from robotforge.learn.ik import IKLesson
 from robotforge.learn.pd import PDLesson
 
-LESSONS: dict[str, type[Lesson]] = {cls.id: cls for cls in (PDLesson,)}
+LESSONS: dict[str, type[Lesson]] = {cls.id: cls for cls in (PDLesson, IKLesson)}
 
 __all__ = ["LESSONS", "Lesson", "LessonError", "LessonRunner"]

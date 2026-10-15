@@ -1043,3 +1043,7 @@ input[type="range"]::-moz-range-thumb {
   .plot canvas { height: 72px; }
   .drawer.lesson-panel { max-height: 42%; }
 }
+
+.lesson-choice { display: grid; gap: 6px; }
+.lesson-choice .seg { display: flex; }
+.lesson-choice .seg button { flex: 1; }
