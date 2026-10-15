@@ -1,8 +1,9 @@
 """Learning to walk by rhythm and random search (control/cpg.py)."""
 
+import numpy as np
 import pytest
 
-from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, Trainer
+from robotforge.control.cpg import Body, CPGError, Push, Reward, Rhythm, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.walk_rl import STAR
 
@@ -37,3 +38,20 @@ def test_an_energy_price_makes_the_search_save_energy():
     free.train(rhythm, iterations=6, seed=2)
     walk = free.rollout(rhythm)
     assert thrifty.rollout(rhythm)["reward"] < walk["reward"]  # the same walk scores less when energy costs
+
+
+def test_reflexes_turn_body_tilt_into_joint_corrections_and_shoves_land():
+    model = _solo("dog", template="quadruped")
+    trainer = Trainer(model, "dog", Reward(survive=True), seconds=2.0)
+    n = trainer.body.joints
+    rhythm = Rhythm.still(n, reflexes=True)
+    assert len(rhythm.theta) == 7 * n
+    rhythm.theta[3 * n :] = 0.1  # each joint adds 0.1 rad per unit of each sense
+    tilted = rhythm.targets(trainer.home, 0.0, senses=np.array([0.2, 0.0, 0.0, 0.0]))
+    assert tilted == pytest.approx(trainer.home + 0.02)
+    still = Rhythm.still(n)
+    calm = trainer.rollout(still)
+    shoved = trainer.rollout(still, push=Push(0.5, (0.0, 1.5)))
+    assert shoved["drift"] > calm["drift"] + 0.05  # the shove really moved it sideways
+    result = trainer.push_test(still, 0.4, trials=3)
+    assert result["trials"] == 3 and 0 <= result["survived"] <= 3

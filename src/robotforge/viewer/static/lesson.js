@@ -268,7 +268,7 @@ function renderFormula(rows) {
     const [label, expr, value, note] = row.children;
     label.textContent = text(r.label);
     expr.textContent = text(r.expr);
-    value.textContent = r.value;
+    value.textContent = text(r.value);
     note.textContent = r.note ? text(r.note) : "";
     note.hidden = !r.note;
   });

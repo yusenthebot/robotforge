@@ -5,8 +5,12 @@ so the rhythm is built in and only 3 numbers per joint are learned. Augmented Ra
 recipe as control/ars.py: try nudges both ways, step toward the best) tunes them for a reward: how far the
 robot gets in a few seconds, minus drifting sideways and, if asked, the energy it spends. No model of the
 robot and no neural network: it works on a dog, a three-legged starfish built from parts, or whatever a
-learner made, in seconds on a laptop. What it cannot do is balance on two legs: the rhythm is open loop,
-it never looks at a sensor.
+learner made, in seconds on a laptop.
+
+The rhythm alone is open loop: it never reads a sensor. Reflexes add feedback, 4 more numbers per joint
+that turn the trunk's roll, pitch and their rates into joint corrections, learned by the same search.
+Training can also shove the robot at random and count surviving as reward, so the search has a reason to
+learn them.
 """
 
 from __future__ import annotations
@@ -86,26 +90,58 @@ class Body:
         return len(self.actuators)
 
 
+SENSES = 4  # what reflexes read: trunk roll, pitch, roll rate, pitch rate
+
+
+def trunk_senses(data: mujoco.MjData, body: Body) -> np.ndarray:
+    """Roll and pitch of the trunk (rad) and their rates (rad/s, body frame), what an IMU gives."""
+    rot = data.xmat[body.trunk].reshape(3, 3)
+    roll = math.atan2(rot[2, 1], rot[2, 2])
+    pitch = math.asin(-max(-1.0, min(1.0, rot[2, 0])))
+    spin = data.qvel[body.qvel[3:5]]  # the free joint's angular velocity is in the body frame
+    return np.array([roll, pitch, spin[0], spin[1]])
+
+
 @dataclass
 class Rhythm:
-    """The learned numbers: an offset, an amplitude and a phase per joint, and the shared frequency."""
+    """The learned numbers: an offset, an amplitude and a phase per joint and the shared frequency, and with
+    reflexes a gain per joint for each of the trunk's senses."""
 
-    theta: np.ndarray  # [offsets..., amplitudes..., phases...]
+    theta: np.ndarray  # [offsets, amplitudes, phases] per joint, then the reflex gains [joint x sense]
     freq: float = 2.0
+    reflexes: bool = False
 
     @classmethod
-    def still(cls, joints: int, freq: float = 2.0) -> Rhythm:
-        return cls(np.zeros(3 * joints), freq)
+    def still(cls, joints: int, freq: float = 2.0, reflexes: bool = False) -> Rhythm:
+        return cls(np.zeros((3 + (SENSES if reflexes else 0)) * joints), freq, reflexes)
 
-    def targets(self, home: np.ndarray, t: float, theta: np.ndarray | None = None) -> np.ndarray:
+    def targets(
+        self, home: np.ndarray, t: float, theta: np.ndarray | None = None, senses: np.ndarray | None = None
+    ) -> np.ndarray:
         th = self.theta if theta is None else theta
         n = len(home)
-        return home + th[:n] + th[n : 2 * n] * np.sin(2 * math.pi * self.freq * t + th[2 * n :])
+        out = home + th[:n] + th[n : 2 * n] * np.sin(2 * math.pi * self.freq * t + th[2 * n : 3 * n])
+        if self.reflexes and senses is not None:
+            out = out + th[3 * n :].reshape(n, SENSES) @ senses
+        return out
 
 
 @dataclass(frozen=True)
 class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
+    survive: bool = False  # a fall also costs the seconds it did not stay up
+
+
+@dataclass(frozen=True)
+class Push:
+    at: float  # s into the walk
+    velocity: tuple[float, float]  # m/s added to the trunk, (forward, left)
+
+
+def random_push(rng: np.random.Generator, strength: float, seconds: float) -> Push:
+    """A shove of `strength` m/s in a random direction, somewhere in the middle of the walk."""
+    angle = rng.uniform(0.0, 2 * math.pi)
+    return Push(rng.uniform(0.25, 0.75) * seconds, (strength * math.cos(angle), strength * math.sin(angle)))
 
 
 @dataclass
@@ -129,30 +165,36 @@ class Trainer:
         self.mass = float(sum(model.body_mass))
         self.substeps = max(1, round(1.0 / (CONTROL_HZ * model.opt.timestep)))
 
-    def rollout(self, rhythm: Rhythm, theta: np.ndarray | None = None) -> dict[str, float]:
-        """Walk for `seconds` from the home pose: distance, sideways drift, energy, fell, and the reward."""
+    def rollout(self, rhythm: Rhythm, theta: np.ndarray | None = None, push: Push | None = None) -> dict[str, float]:
+        """Walk for `seconds` from the home pose (shoved once if `push`): distance, sideways drift, energy,
+        how long it stayed up, fell, and the reward."""
         m, b = self.model, self.body
         d = mujoco.MjData(m)
         if m.nkey:
             mujoco.mj_resetDataKeyframe(m, d, 0)
         mujoco.mj_forward(m, d)
         start = d.xpos[b.trunk][:2].copy()
-        energy, fell = 0.0, False
-        for k in range(round(self.seconds * CONTROL_HZ)):
-            target = rhythm.targets(self.home, k / CONTROL_HZ, theta)
-            d.ctrl[b.actuators] = np.clip(target, b.lower, b.upper)
+        energy, fell, up = 0.0, False, self.seconds
+        steps = round(self.seconds * CONTROL_HZ)
+        for k in range(steps):
+            t = k / CONTROL_HZ
+            if push is not None and push.at <= t < push.at + 1.0 / CONTROL_HZ:
+                d.qvel[b.qvel[0]] += push.velocity[0]
+                d.qvel[b.qvel[1]] += push.velocity[1]
+            senses = trunk_senses(d, b) if rhythm.reflexes else None
+            d.ctrl[b.actuators] = np.clip(rhythm.targets(self.home, t, theta, senses), b.lower, b.upper)
             for _ in range(self.substeps):
                 mujoco.mj_step(m, d)
                 energy += float(np.abs(d.actuator_force[b.actuators] * d.qvel[b.dadr]).sum()) * m.opt.timestep
             if float(d.xmat[b.trunk][8]) < FELL:
-                fell = True
+                fell, up = True, t
                 break
         moved = d.xpos[b.trunk][:2] - start
         distance, drift = float(moved[0]), abs(float(moved[1]))
         reward = distance - DRIFT_WEIGHT * drift - self.reward.energy * energy / (self.mass * 9.81)
         if fell:
-            reward -= FALL_PENALTY
-        return {"distance": distance, "drift": drift, "energy": energy, "fell": float(fell), "reward": reward}
+            reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
+        return {"distance": distance, "drift": drift, "energy": energy, "up": up, "fell": float(fell), "reward": reward}
 
     def train(
         self,
@@ -163,11 +205,13 @@ class Trainer:
         noise: float = 0.08,
         step_size: float = 0.04,
         seed: int = 0,
+        pushes: float = 0.0,
         callback: Callable[[int, dict[str, float]], None] | None = None,
         stop: Callable[[], bool] | None = None,
     ) -> TrainingLog:
-        """ARS on the rhythm, in place (a live controller may be playing it). After each iteration the
-        current rhythm walks once more for the log and the callback."""
+        """ARS on the rhythm, in place (a live controller may be playing it). With `pushes` (m/s) every try is
+        shoved once at random, the same shove for both sides of a direction. After each iteration the current
+        rhythm walks once more, unshoved, for the log and the callback."""
         if not 1 <= top <= directions:
             raise CPGError("top must be between 1 and the number of directions")
         rng = np.random.default_rng(seed)
@@ -177,9 +221,11 @@ class Trainer:
             if stop is not None and stop():
                 break
             deltas = rng.standard_normal((directions, len(rhythm.theta)))
+            shoves = [random_push(rng, pushes, self.seconds) if pushes > 0 else None for _ in deltas]
             base = rhythm.theta.copy()
-            plus = np.array([self.rollout(rhythm, base + noise * dl)["reward"] for dl in deltas])
-            minus = np.array([self.rollout(rhythm, base - noise * dl)["reward"] for dl in deltas])
+            pairs = list(zip(deltas, shoves, strict=True))
+            plus = np.array([self.rollout(rhythm, base + noise * dl, p)["reward"] for dl, p in pairs])
+            minus = np.array([self.rollout(rhythm, base - noise * dl, p)["reward"] for dl, p in pairs])
             best = np.argsort(-np.maximum(plus, minus))[:top]
             spread = np.concatenate([plus[best], minus[best]]).std() + 1e-8
             rhythm.theta = base + step_size / (top * spread) * np.tensordot(
@@ -194,9 +240,19 @@ class Trainer:
         log.seconds = time.perf_counter() - started
         return log
 
+    def push_test(self, rhythm: Rhythm, strength: float, trials: int = 12, seed: int = 99) -> dict[str, float]:
+        """Walk `trials` times, each shoved once at random: how many stayed up, and how far they got."""
+        rng = np.random.default_rng(seed)
+        walks = [self.rollout(rhythm, push=random_push(rng, strength, self.seconds)) for _ in range(trials)]
+        return {
+            "survived": float(sum(1 for w in walks if not w["fell"])),
+            "trials": float(trials),
+            "distance": float(np.mean([w["distance"] for w in walks])),
+        }
+
 
 class RhythmController:
-    """Plays a rhythm on a robot in the live world; `restart` puts the clock back to zero."""
+    """Plays a rhythm (and its reflexes) on a robot in the live world; `restart` puts the clock back to zero."""
 
     rate_hz = CONTROL_HZ
 
@@ -211,8 +267,9 @@ class RhythmController:
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         b = self.body
-        target = self.rhythm.targets(self.home, float(data.time) - self.t0)
+        senses = trunk_senses(data, b) if self.rhythm.reflexes else None
+        target = self.rhythm.targets(self.home, float(data.time) - self.t0, senses=senses)
         data.ctrl[b.actuators] = np.clip(target, b.lower, b.upper)
 
     def status(self) -> dict[str, object]:
-        return {"controller": "rhythm", "robot": self.body.robot}
+        return {"controller": "rhythm", "robot": self.body.robot, "reflexes": self.rhythm.reflexes}

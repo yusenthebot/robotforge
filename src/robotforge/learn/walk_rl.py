@@ -20,10 +20,14 @@ from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmControl
 from robotforge.design.world import World, compile_world
 from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
 
+SETTINGS = ("robot", "energy", "freq", "iterations", "reflexes", "shove")  # what each training records
 START_X = -0.8
 LANE = 0.9
 ATTEMPT = 4.0  # s: the viewer replays the newest rhythm from the start line this often (and trains on this long)
 ENERGY = (0.0, 0.1, 0.3)  # reward weight on energy, per (m g)
+SHOVE = 0.4  # m/s: the random shove in training, in the push test after it and in the replay
+SHOVE_AT = 2.0  # s into each replay
+PUSH_TRIALS = 12
 SAMPLE_DT = 0.02
 STAR = {
     "color": "purple",
@@ -79,6 +83,12 @@ def _star_learned(ctx: LessonContext) -> bool:
 
 def _humanoid_tried(ctx: LessonContext) -> bool:
     return bool(_runs(ctx, robot=lambda v: v == 2))
+
+
+def _reflexes_tried(ctx: LessonContext) -> bool:
+    """The humanoid trained with shoves, with and without reflexes."""
+    shoved = _runs(ctx, robot=lambda v: v == 2, shove=lambda v: v > 0)
+    return {r["params"]["reflexes"] for r in shoved} >= {0.0, 1.0}
 
 
 STEPS = (
@@ -192,22 +202,71 @@ STEPS = (
             "Pick the humanoid and learn again. Guess first.",
         ),
         done=_text(
-            "怎么学都会摔。节律是“盲”的：它从不看传感器，身体歪了也照摆不误。四条腿、三条腿站得稳，盲走也行；"
-            "两条腿每一刻都要根据身体的倾斜调整。G1 的走路策略是一个神经网络，每秒看 50 次 IMU 和关节，"
-            "在仿真里用 PPO 练了一个小时，这就是深度强化学习。",
-            "It falls whatever it learns. The rhythm is blind: it never reads a sensor and keeps swinging while the "
-            "body tips. On four or three legs a blind walk is fine; on two, every moment needs a correction from "
-            "how the body leans. The G1's walk is a neural network that reads the IMU and joints 50 times a second, "
-            "trained with PPO for an hour in simulation: deep reinforcement learning.",
+            "它学会了往前一扑：扑出去半米左右就倒（我们学了 6 次，5 次都是这样）。奖励只看走了多远，"
+            "倒下扣的那一分比扑出去的半米还少，那就扑。又是一次钻空子。"
+            "下一步给它两样东西：站住也算分，和能看身体倾斜的“反射”。",
+            "It learns to lunge: half a metre forward, then down (5 of our 6 trainings). The reward only counts "
+            "distance, and the point a fall costs is less than the half metre the lunge earns, so it lunges: "
+            "another loophole. Next it gets two things: points for staying up, and reflexes that feel the body "
+            "tilt.",
         ),
         quiz=Quiz(
-            question=_text("人形能用这个方法学会走吗？", "Can the humanoid learn to walk this way?"),
-            options=(_text("能", "Yes"), _text("会摔", "It falls")),
+            question=_text("人形用这个方法会学出什么？", "What does the humanoid learn this way?"),
+            options=(
+                _text("像人一样走", "To walk like a person"),
+                _text("往前一扑，然后倒", "To lunge forward, then fall"),
+                _text("站着不动", "To stand still"),
+            ),
             answer=1,
-            explain=_text("两条腿要靠反馈。", "Two legs need feedback."),
+            explain=_text("奖励只看距离，扑一下最划算。", "The reward only counts distance, and a lunge pays best."),
             predict=True,
         ),
         check=_humanoid_tried,
+    ),
+    Step(
+        id="reflexes",
+        title=_text("给节律加上反射", "Give the rhythm reflexes"),
+        body=_text(
+            "节律是“盲”的，从不看传感器。反射让每个关节再多看 4 个数：身体的横滚、俯仰和它们的变化速度，"
+            "每个数乘一个也要学的系数，加到关节目标上。\n"
+            "打开「训练时推它，站住也算分」：每次试都被随机推一把（0.4 m/s），倒了就扣掉没站住的那几秒。"
+            "先关着反射学一次，再打开反射学一次（各 80 轮，二十秒左右）。学完会自动推 12 次，看站住几次。先猜。",
+            "The rhythm is blind: it never reads a sensor. Reflexes give every joint 4 more numbers to look at: "
+            "the body's roll, pitch and how fast they change, each times a gain that is learned too, added to the "
+            "joint's target.\n"
+            "Switch on Shove it while training, points for staying up: every try gets one random shove (0.4 m/s), "
+            "and a fall costs the seconds it did not stay up. Learn once without reflexes, then once with them "
+            "(80 rounds each, about twenty seconds). Afterwards it is shoved 12 times to count how often it stays "
+            "up. Guess first.",
+        ),
+        done=_text(
+            "不带反射：它学会了几乎站着不动，推 12 次站住 2 到 10 次（原地站着不学是 8 次）。"
+            "带反射：我们学了 6 次，4 次学出了边走边稳的步子，走 0.3 到 0.55 米不倒，推 12 次站住 6 到 12 次；"
+            "另外 2 次学崩了，一推就倒。反射让它能应付意外，可要学的数从 60 个变成 140 个，随机搜索就不稳了。"
+            "G1 的神经网络有几万个数，所以要用梯度、在仿真里试几千万次：这就是深度强化学习。",
+            "Without reflexes it learns to stand nearly still and stays up for 2 to 10 of 12 shoves (standing "
+            "untrained manages 8). With reflexes, 4 of our 6 trainings found a steady walk, 0.3 to 0.55 m without "
+            "falling, staying up for 6 to 12 of 12 shoves; the other 2 collapsed and fell at the first shove. "
+            "Reflexes let it handle surprises, but the numbers to learn grow from 60 to 140 and random search gets "
+            "unreliable. The G1's network has tens of thousands of numbers, so it is trained with gradients over "
+            "tens of millions of tries: deep reinforcement learning.",
+        ),
+        quiz=Quiz(
+            question=_text("加了反射，被推的时候会怎样？", "With reflexes, what happens when it is shoved?"),
+            options=(
+                _text("一定更稳", "It is always steadier"),
+                _text("常常更稳，但有时学崩", "Often steadier, but some trainings collapse"),
+                _text("没区别", "No difference"),
+            ),
+            answer=1,
+            explain=_text(
+                "反馈有用，可要学的数多了，搜索就难了。", "Feedback helps, but more numbers make the search harder."
+            ),
+            predict=True,
+        ),
+        check=_reflexes_tried,
+        unlock=("reflexes", "shove"),
+        show=("f_reflex",),
     ),
     Step(
         id="quiz",
@@ -279,10 +338,18 @@ class LearnToWalkLesson(Lesson):
         x_unit="",
         y=_text("4 秒走了", "distance in 4 s"),
         y_unit="m",
-        params=("robot", "energy", "freq", "iterations"),
-        short=(_text("机器人", "robot"), _text("能耗代价", "energy"), _text("频率", "freq"), _text("轮", "rounds")),
+        params=SETTINGS,
+        short=(
+            _text("机器人", "robot"),
+            _text("能耗代价", "energy"),
+            _text("频率", "freq"),
+            _text("轮", "rounds"),
+            _text("反射", "reflexes"),
+            _text("推", "shove"),
+        ),
         metrics=(
             Metric("distance", _text("走了", "covered"), "m", lower_is_better=False),
+            Metric("survived", _text(f"推{PUSH_TRIALS}次站住", f"up of {PUSH_TRIALS}"), "", lower_is_better=False),
             Metric("energy", _text("能量", "energy"), "J", ranked=False),
             Metric("seconds", _text("学了", "trained"), "s", ranked=False),
         ),
@@ -307,6 +374,8 @@ class LearnToWalkLesson(Lesson):
         self.stopping = threading.Event()
         self.progress: dict[str, Any] | None = None  # {"robot", "round", "of", "distance"} while training
         self.trainings = 0
+        self.replays = 0
+        self.shoved = False
 
     def _controls(self) -> tuple[Control, ...]:
         return (
@@ -325,7 +394,11 @@ class LearnToWalkLesson(Lesson):
                 options=tuple(_text(f"{w:g}", f"{w:g}") for w in ENERGY),
             ),
             Control("freq", "slider", _text("节律频率", "Rhythm frequency"), 1.0, 3.0, 0.5, 2.0, "Hz"),
-            Control("iterations", "slider", _text("学多少轮", "Rounds"), 10, 60, 5, 30),
+            Control("iterations", "slider", _text("学多少轮", "Rounds"), 10, 100, 5, 30),
+            Control("reflexes", "toggle", _text("反射（看身体倾斜）", "Reflexes (feel the body tilt)")),
+            Control(
+                "shove", "toggle", _text("训练时推它，站住也算分", "Shove it while training, points for staying up")
+            ),
         )
 
     # ---- the world -------------------------------------------------------------------------------------
@@ -395,11 +468,20 @@ class LearnToWalkLesson(Lesson):
         self.attempt_t0 = float(data.time)
         self.attempt_x0 = float(self.start[b.qpos[0]])  # the free joint's x comes first
         self.players[self.active].restart(self.attempt_t0)
+        self.shoved = False
+        self.replays += 1
 
     def tick(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        if float(data.time) - self.attempt_t0 >= ATTEMPT:
+        elapsed = float(data.time) - self.attempt_t0
+        if elapsed >= ATTEMPT:
             self._new_attempt(data)
             mujoco.mj_forward(model, data)
+        elif self.ctx is not None and self.ctx.values.get("shove") and not self.shoved and elapsed >= SHOVE_AT:
+            b = self.bodies[self.active]  # the replay gets shoved too, so you can see what the reflexes do
+            angle = self.replays * 2.399  # a different direction every time (the golden angle)
+            data.qvel[b.qvel[0]] += SHOVE * np.cos(angle)
+            data.qvel[b.qvel[1]] += SHOVE * np.sin(angle)
+            self.shoved = True
 
     def sample(self, data: mujoco.MjData) -> dict[str, float]:
         b = self.bodies[self.active]
@@ -418,8 +500,9 @@ class LearnToWalkLesson(Lesson):
             self._new_attempt(data)
         elif control == "train" and (self.thread is None or not self.thread.is_alive()):
             key = self.active
-            settings = {k: float(ctx.values[k]) for k in ("robot", "energy", "freq", "iterations")}
-            rhythm = Rhythm.still(self.bodies[key].joints, settings["freq"])  # every training starts from zero
+            settings = {k: float(ctx.values[k]) for k in SETTINGS}
+            # Every training starts from standing still.
+            rhythm = Rhythm.still(self.bodies[key].joints, settings["freq"], reflexes=bool(settings["reflexes"]))
             self.rhythms[key] = rhythm
             self.players[key].rhythm = rhythm
             self.stopping.clear()
@@ -437,7 +520,9 @@ class LearnToWalkLesson(Lesson):
         return self.solo[key]
 
     def _train(self, key: str, rhythm: Rhythm, settings: dict[str, float], ctx: LessonContext) -> None:
-        trainer = Trainer(self._solo(key), key, Reward(energy=ENERGY[int(settings["energy"])]), ATTEMPT, rhythm.freq)
+        shove = bool(settings["shove"])
+        reward = Reward(energy=ENERGY[int(settings["energy"])], survive=shove)
+        trainer = Trainer(self._solo(key), key, reward, ATTEMPT, rhythm.freq)
         curve: list[float] = []
 
         def progress(round_: int, walk: dict[str, float]) -> None:
@@ -454,10 +539,12 @@ class LearnToWalkLesson(Lesson):
             rhythm,
             iterations=int(settings["iterations"]),
             seed=self.trainings,
+            pushes=SHOVE if shove else 0.0,
             callback=progress,
             stop=self.stopping.is_set,
         )
         final = trainer.rollout(rhythm)
+        shoved = trainer.push_test(rhythm, SHOVE, PUSH_TRIALS)  # how it copes with surprises it may never have met
         self.progress = None
         result = {
             "robot": key,
@@ -466,16 +553,17 @@ class LearnToWalkLesson(Lesson):
             "fell": bool(final["fell"]),
             "seconds": round(log.seconds, 1),
             "rounds": len(curve),
+            "survived": int(shoved["survived"]),
         }
         ctx.results["training"] = result
         fell = _text("，摔倒了", ", and fell") if result["fell"] else _text("", "")
         ctx.results["summary"] = {
             "zh": f"学了 {result['rounds']} 轮（{result['seconds']:g} 秒）：4 秒走 {result['distance']:g} 米，"
-            f"用了 {result['energy']:g} J{fell['zh']}",
+            f"用了 {result['energy']:g} J{fell['zh']}；推 {PUSH_TRIALS} 次站住 {result['survived']} 次",
             "en": f"{result['rounds']} rounds ({result['seconds']:g} s): {result['distance']:g} m in 4 s "
-            f"on {result['energy']:g} J{fell['en']}",
+            f"on {result['energy']:g} J{fell['en']}; stayed up for {result['survived']} of {PUSH_TRIALS} shoves",
         }
-        metrics = {k: result[k] for k in ("distance", "energy", "seconds")}
+        metrics = {k: result[k] for k in ("distance", "survived", "energy", "seconds")}
         ctx.record_run(settings, metrics, list(range(1, len(curve) + 1)), curve)
 
     def close(self) -> None:
@@ -523,6 +611,18 @@ class LearnToWalkLesson(Lesson):
                     "expr": _text("8 个方向 × 正反 2 次 + 1 次看效果", "8 directions * both ways + 1 to check"),
                     "value": "17",
                     "color": "blue",
+                },
+                {
+                    "show": "f_reflex",
+                    "label": _text("反射", "Reflexes"),
+                    "expr": _text(
+                        "关节修正 = 系数 × (横滚, 俯仰, 横滚速度, 俯仰速度)",
+                        "joint correction = gains * (roll, pitch, roll rate, pitch rate)",
+                    ),
+                    "value": _text(f"多 {4 * joints} 个数", f"+{4 * joints} numbers")
+                    if ctx.values["reflexes"]
+                    else _text("关", "off"),
+                    "color": "green",
                 },
                 {
                     "show": "f_reward",
