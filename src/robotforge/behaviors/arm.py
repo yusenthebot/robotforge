@@ -62,9 +62,6 @@ class ArmMotion:
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
-        # Shapes that already overlap in the home pose (coarse collision shapes around a joint, common in
-        # imported models) are part of the model, not a collision to steer around.
-        self._touching_at_home = self._clashes(self.q)
         # An arm on a moving robot: IK must start from where that robot is now (see sync).
         root = _root_body(model, tool_body)
         free = [j for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])]
@@ -76,7 +73,11 @@ class ArmMotion:
         # each other, into whatever carries the arm, or into the floor.
         self._moving = {b for b in range(model.nbody) if _descends_from(model, b, self.base_body)}
         self._robot_root = int(model.body_rootid[self.base_body])
+        # Shapes that already overlap in the home pose (coarse collision shapes around a joint, common in
+        # imported models) are part of the model, not a collision to steer around. Worked out once the
+        # moving bodies are known: before that it crashed on any overlap and was then thrown away.
         self._touching_at_home: set[tuple[int, int]] = set()
+        self._touching_at_home = self._clashes(self.q)
         self._base_parent = int(model.body_parentid[self.base_body])
         self.ik.point(self.chain, self.q)
         self._read_base(self.ik.data)

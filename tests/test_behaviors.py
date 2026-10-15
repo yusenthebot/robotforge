@@ -118,3 +118,40 @@ async def test_move_and_pick_tools_report_results(pg):
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+def test_an_arm_whose_shapes_overlap_at_home_still_plans():
+    """Regression: overlaps in the home pose (coarse imported shapes) were looked for before the arm knew
+    which bodies move, crashing on any overlap, and the result was then discarded."""
+    import mujoco
+
+    from robotforge.behaviors.arm import ArmMotion
+
+    xml = """
+    <mujoco>
+      <worldbody>
+        <geom name="floor" type="plane" size="1 1 0.1"/>
+        <body name="arm/base" pos="0 0 0.05">
+          <geom type="cylinder" size="0.04 0.05"/>
+          <body name="arm/link1" pos="0 0 0.06">
+            <joint name="arm/j1" axis="0 0 1" range="-3 3"/>
+            <geom type="capsule" fromto="0 0 0 0 0 0.2" size="0.02"/>
+            <body name="arm/link2" pos="0 0 0.2">
+              <joint name="arm/j2" axis="0 1 0" range="-2 2"/>
+              <geom type="box" pos="0 0 -0.01" size="0.03 0.03 0.03"/>
+              <geom type="capsule" fromto="0 0 0 0.2 0 0" size="0.015"/>
+              <site name="arm/tcp" pos="0.2 0 0"/>
+            </body>
+          </body>
+        </body>
+      </worldbody>
+      <actuator>
+        <position name="arm/a1" joint="arm/j1" kp="20"/>
+        <position name="arm/a2" joint="arm/j2" kp="20"/>
+      </actuator>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    arm = ArmMotion(model, "arm", model.qpos0.copy())
+    assert arm._touching_at_home  # the elbow box overlaps the upper link at home...
+    assert not arm._collides(arm.home)  # ...which is the model, not a collision
