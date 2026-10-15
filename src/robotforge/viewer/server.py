@@ -72,12 +72,15 @@ class ViewerHub:
         if self._payload_version == s.version:
             return
         with s.lock:
+            version = s.version
             payload = scene.build_mesh_payload(s.model)
-            self._scene_msg = scene.describe(s.model, s.version, payload.entries, payload.hfields)
-            if self.scene_extras is not None:
-                self._scene_msg.update(self.scene_extras())
-            self._mesh_payload = payload
-            self._payload_version = s.version
+            message = scene.describe(s.model, version, payload.entries, payload.hfields)
+        # The extras (world, lesson) take their own locks, so they are asked for after the session lock is
+        # released. Asking while holding it inverted the order of a lesson starting on another thread
+        # (lesson lock, then session lock): a big model's long mesh build left both waiting forever.
+        if self.scene_extras is not None:
+            message.update(self.scene_extras())
+        self._scene_msg, self._mesh_payload, self._payload_version = message, payload, version
 
     def scene_message(self) -> dict:
         self._ensure_scene()

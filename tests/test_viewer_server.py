@@ -88,3 +88,28 @@ def test_model_reload_pushes_a_new_scene():
         second = _next_text(ws, "scene")
         assert second["version"] == first["version"] + 1
         assert client.get(f"/mesh/{first['version']}.bin").status_code == 409
+
+
+def test_scene_extras_are_asked_for_without_the_session_lock():
+    """Regression: extras take the lesson lock; asked for under the session lock, they deadlocked with a
+    lesson starting on another thread (lesson lock first, then the session lock)."""
+    import threading
+
+    session = SimSession.from_path(DEMO)
+    hub = ViewerHub(session)
+    seen = {}
+
+    def try_lock():
+        seen["free"] = session.lock.acquire(timeout=1.0)
+        if seen["free"]:
+            session.lock.release()
+
+    def extras():
+        other = threading.Thread(target=try_lock)
+        other.start()
+        other.join()
+        return {}
+
+    hub.scene_extras = extras
+    hub.scene_message()
+    assert seen["free"]  # another thread could take the session lock while the extras were built
