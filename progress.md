@@ -224,14 +224,30 @@ Rounds 1-3 done, 2026-10-14.
   - Robots side by side across the view hid the small one in front of the G1; they now stand along the push direction, and each robot has its own framing (the G1's head was cut off with the small robot's).
   - The G1's policy treads in place even at zero command (it drifted 19 cm sideways in 3 s), so its support patch changes from moment to moment.
 
+## Round 20 (2026-10-15): Review round (phase C milestone)
+
+- Every lesson, challenge, face-off and bench started headless with its buttons pressed (18 of 18 run), and each opened in the browser and looked at.
+- Fixed: the picker now reads as one course (PID I and II, IK I and II both under 运动学, Sensing I and II) and no longer says "next is gaits"; the humanoid face-off showed the G1 standing on top of our small humanoid (lanes 1.8 m apart, camera higher); the gait twins started half behind the panel (camera moved, then follows them); a new scene silently dropped a lesson's follow camera (the lesson asks again).
+- Pruned definitions nothing used: three mesh helpers, inverse action scaling, `TorqueMap.max_torque`, `reward_rate`, `_pose_distance`, `joint_of`, `look_direction`, `SimSession.load_xml`, five stale constants. Dynamic dispatch (`script_runner._op_*`) and SB3 callbacks kept.
+- README describes the in-viewer courses (it only listed the written chat lessons).
+- What did NOT work: nothing new broke; one screenshot showed the picker over a started lesson, but repeating the steps by hand showed the normal flow is fine (a timing artefact of the scripted batch).
+
+### Ambition critic (what an expert would find missing)
+
+- The promise is "any robot, make it do anything", yet nothing in the viewer teaches a robot the user built to move by learning; RL stops at the cart-pole.
+- Lessons cannot be checked as a beginner would play them except by hand: there is no playtest agent.
+- The agent (Claude or GPT) cannot see lesson progress to tutor (needs new MCP tools: a gate).
+- Floor A5 (MCP App embed in Claude Desktop) and A6 (Claude Code session, blocked by the expired CLI login) are still not verified.
+- No obstacle-aware arm motion, no crawl gait, no terrain policy.
+
 ## Next-round seed
 
-Round 20 = Review round (milestone: phase C lessons done): walk every lesson and bench as a beginner in the browser, try to break each, prune dead code and stale docs, check the lesson picker order and wording, and run an ambition critic over the whole teaching mode. Then phase D (custom-morphology RL, a terrain policy, a crawl gait).
+Round 21 = phase D part 1, a Frontier round: teach a robot the user builds to walk by learning, live in the viewer. Measure first: ARS with linear policies (Mania et al. 2018 trained MuJoCo walkers this way on CPUs) on our quadruped template and a builder-made robot, reward = forward speed minus energy and falls, observation from joint state and IMU; how many minutes to a forward walk on this Mac. If it learns, build a lesson around it (reward shaping knobs, the training curve, the learned gait next to the hand-written one).
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 9 lessons (PID on the PiPER, gaits on the Go2, balance on the G1), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15): a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (ARS on CPU, live in the viewer); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.

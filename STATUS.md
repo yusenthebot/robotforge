@@ -3,7 +3,7 @@
 - Goal: docs/GOAL.md (evolving; Floor = A1-A9; vision 2026-10-14: any robot, scenes, terrains, algorithm adapters)
 - Plan: docs/PLAY_PLAN.md, "第二版" (user 2026-10-15: real robots vs our templates, lessons up to the cart-pole standard, tuning that shows a difference, terrain flicker); phase order A -> B -> C
 - Mode: evolving, /loop running; trunk-based on main (only `main` exists)
-- Round: 19 done (phase C part 5: humanoid balance lesson, capture point, our humanoid then the G1; a viewer deadlock fixed); round 20 next = Review round
+- Round: 20 done (Review round: every lesson opened in the browser, picker tidied, two lessons reframed, dead code pruned); round 21 next = phase D, learned walking for user-built robots
 - Real robots: AgileX PiPER added (Menagerie, MIT); library arms get a tool point + gripper (PiPER, Panda pick and place); Unitree G1 walks on a learned UniLab policy shipped in `walkers/g1_unilab_walk` (trained 62 min here, heading hold)
 - Face-offs (Learn -> 真机对比): arms (ours / PiPER / Panda: spec table, workspace clouds, reach-out test, gravity compensation switch, pick race) and humanoids (ours ZMP / G1 RL: walk test scored by size and energy, shove test, quiz)
 - Teaching mode otherwise: 9 lessons (balance: support, capture point, crouch, the G1 stepping; gaits: trot / pace / bound and step period, template dog then Go2; PID I small arm, PID II PiPER shoulder with damping ratio and an unknown load, IK I planar, IK II six-joint 3D with manipulability ellipsoid and damping, sensors I, sensors II robot vacuums with stop distance / speed / noise / median filter twins and painted coverage, RL) + 3 challenges (maze, shove, obstacle course)
@@ -13,6 +13,6 @@
 - Fixed this round: the release fling (arc turn judged from clipped tool angles), IK stalls on library arms (restarts, collision-free nearest answer), wrist snap out of home poses
 - Verified for real: both face-offs and the bench (PID tests + Kp sweep, three RL trainings) run end to end in the browser (screens sent); 532 passed / 20 skipped (default install) + smoke green; IK II walked in the browser (3D drag, flattened ellipsoid); vacuums cleaned in the browser (A 7% and 21.9 s against walls, B 24%); both PID lessons, the gait and the balance lesson walked in the browser; CI green through 45f43ad
 - Floor status: A1 [x GPT via codex exec] A2 [x] A3 [x] A4 [x] A5 [~ MCP App embed untested] A6 [~ Claude Code blocked by expired CLI login] A7 [x] A8 [x] A9 [x]
-- Open: builder MED 6-9; unilab findings 1, 2, 4 + naming A-E; joint-space branch moves do not avoid obstacles (motion planning is a frontier item); G1 is not trained against shoves
+- Open (review 20): no learned walking for user-built robots, no playtest agent, tutor tools need a yes; builder MED 6-9; unilab findings 1, 2, 4 + naming A-E; joint-space branch moves do not avoid obstacles (motion planning is a frontier item); G1 is not trained against shoves
 - Pending for user: new MCP lesson tools need a yes; license + publish timing; `claude auth login`
 - Updated: 2026-10-15
