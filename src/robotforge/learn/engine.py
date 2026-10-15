@@ -150,6 +150,9 @@ class Lesson:
     def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
         """A slider moved or a button was pressed; settings are already in ctx.values."""
 
+    def close(self) -> None:
+        """The lesson is over (left, replaced or its world swapped): stop any background work."""
+
     def on_drive(self, speed: float, turn: float, ctx: LessonContext) -> None:
         """W A S D: forward speed in m/s and turn rate in rad/s, for lessons with `drive`."""
 
@@ -234,6 +237,8 @@ class LessonRunner:
         with self._lock:
             if self.lesson is None:  # switching lessons keeps the world we came from
                 self._saved = (pg.store, session.model, session.source)
+            else:
+                self.lesson.close()
             pg.store = None
             pg.modes.clear()
             session.load_model(model, f"lesson:{lesson.id}")
@@ -263,6 +268,8 @@ class LessonRunner:
         return {"left": left}
 
     def _close(self) -> None:
+        if self.lesson is not None:
+            self.lesson.close()
         self.lesson = None
         self.ctx = None
         self._controllers = {}

@@ -105,13 +105,18 @@ def train_ars(
     noise: float = 0.3,
     seed: int = 0,
     callback: Callable[[int, dict[str, float]], None] | None = None,
+    policy: LinearPolicy | None = None,
+    stop: Callable[[], bool] | None = None,
 ) -> tuple[LinearPolicy, TrainingLog]:
-    """Train a linear policy on `env` with ARS (V2-t: scaled inputs, only the best directions count)."""
+    """Train a linear policy on `env` with ARS (V2-t: scaled inputs, only the best directions count).
+
+    Pass `policy` to train it in place (e.g. so a live controller runs the newest weights while training
+    goes on) and `stop` to end early (checked between iterations)."""
     if not 1 <= top <= directions:
         raise TaskError("top must be between 1 and the number of directions")
     rng = np.random.default_rng(seed)
     obs_dim, act_dim = env.observation_space.shape[0], env.action_space.shape[0]
-    policy = LinearPolicy.zeros(obs_dim, act_dim)
+    policy = policy if policy is not None else LinearPolicy.zeros(obs_dim, act_dim)
     stats = _RunningStats(obs_dim)
     log = TrainingLog()
     started = time.perf_counter()
@@ -128,6 +133,8 @@ def train_ars(
                 return total
 
     for it in range(iterations):
+        if stop is not None and stop():
+            break
         deltas = rng.standard_normal((directions, act_dim, obs_dim + 1))
         # Each +/- pair starts from the same random state, so their difference measures the nudge, not luck.
         starts = rng.integers(0, 2**31, size=directions)

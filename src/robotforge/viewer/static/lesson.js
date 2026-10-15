@@ -444,7 +444,7 @@ const plots = {
       head.className = "plot-head";
       const title = document.createElement("span");
       title.className = "plot-title";
-      title.textContent = `${pick(spec.title)} (${spec.unit})`;
+      title.textContent = spec.unit ? `${pick(spec.title)} (${spec.unit})` : pick(spec.title);
       const legend = document.createElement("span");
       legend.className = "plot-legend";
       for (const s of spec.series) {

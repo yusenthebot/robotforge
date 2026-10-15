@@ -303,3 +303,39 @@ def test_driving_is_only_for_lessons_with_a_robot_to_drive(pg):
     pg.lessons.start("pd_control")
     with pytest.raises(LessonError, match="no driving"):
         pg.lessons.handle({"action": "drive", "speed": 0.2, "turn": 0})
+
+
+def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
+    import time
+
+    from robotforge.learn import rl
+
+    monkeypatch.setattr(rl, "PACE", 0.0)  # no need to slow it down for a test
+    pg.lessons.start("reinforcement_learning")
+    lessons = pg.lessons
+    with pytest.raises(LessonError, match="later step"):
+        lessons.handle({"action": "press", "control": "train"})
+    lessons.handle({"action": "press", "control": "release"})
+    assert "fall" in _play(pg, 3.0)["passed"]  # no control: it falls
+    lessons.handle({"action": "next"})
+    lessons.handle({"action": "answer", "choice": 1})
+    _play(pg, 0.1)
+    lessons.handle({"action": "next"})
+    for _ in range(3):
+        lessons.handle({"action": "press", "control": "random"})
+        _play(pg, 1.0)
+    lessons.handle({"action": "next"})
+    lessons.handle({"action": "press", "control": "train"})
+    lesson = lessons.lesson
+    deadline = time.monotonic() + 60
+    while lesson.thread.is_alive() and time.monotonic() < deadline:
+        _play(pg, 0.2)
+    update = _play(pg, 0.5)
+    assert "train" in update["passed"] and update["results"]["train"]["mean"] >= rl.TRAINED_RETURN
+    update = _play(pg, 2 * rl.SHOW_SECONDS)
+    assert update["results"]["last_attempt"] >= rl.SHOW_SECONDS - 0.1  # up for a whole attempt, not fallen
+    lessons.handle({"action": "next"})
+    lessons.handle({"action": "press", "control": "push"})
+    assert "push" in _play(pg, 4.0)["passed"]
+    pg.lessons.exit()
+    assert lesson.stopping.is_set()
