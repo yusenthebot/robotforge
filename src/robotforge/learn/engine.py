@@ -39,6 +39,7 @@ class Control:
     value: float = 0.0
     unit: str = ""
     options: tuple[Text, ...] = ()  # for "choice": the value is the chosen option's index
+    group: str = ""  # controls of one twin share a group; the viewer heads each group (see Lesson.groups)
 
     def describe(self) -> dict[str, Any]:
         out = {
@@ -53,6 +54,8 @@ class Control:
         }
         if self.options:
             out["options"] = list(self.options)
+        if self.group:
+            out["group"] = self.group
         return out
 
 
@@ -224,6 +227,7 @@ class Lesson:
     plots: tuple[Plot, ...] = ()
     steps: tuple[Step, ...] = ()
     bench: Bench | None = None
+    groups: dict[str, dict[str, Any]] = {}  # control group -> {"label": Text, "color": series colour key}
 
     def build(self) -> mujoco.MjModel:
         raise NotImplementedError
@@ -274,6 +278,7 @@ class Lesson:
             "camera": self.camera(),
             "drive": self.drive,
             "bench": self.bench.describe() if self.bench else None,
+            "groups": self.groups,
         }
 
     def card(self) -> dict[str, Any]:
@@ -376,10 +381,20 @@ class LessonRunner:
                 session.set_controller(name, ctrl)
 
     def after_reset(self) -> None:
-        """Session reset hook: a reset clears controllers, so put the lesson's back."""
-        with self._lock:
-            if self.lesson is not None and self.playground.session.version == self._version:
-                self._attach()
+        """Session reset hook: a reset clears controllers, so put the lesson's back.
+
+        It runs inside the reset, which holds the session lock, so it must not wait for the runner lock:
+        everything else takes the runner lock first and the session lock second, and the opposite order
+        here could deadlock against a lesson update on another thread. Reading the two references is safe.
+        """
+        lesson, ctx = self.lesson, self.ctx
+        if lesson is None or ctx is None or self.playground.session.version != self._version:
+            return
+        session = self.playground.session
+        with session.lock:
+            self._controllers = lesson.attach(session.model, session.data, ctx)
+            for name, ctrl in self._controllers.items():
+                session.set_controller(name, ctrl)
 
     # ---- learner input ---------------------------------------------------------------
 
