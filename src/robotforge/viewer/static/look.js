@@ -68,7 +68,9 @@ const GUESSES = [
 
 export function presetFor(materialName) {
   if (!materialName) return DEFAULT;
-  if (PRESETS[materialName]) return PRESETS[materialName];
+  // Robots put into a world get their name as a prefix: "dog/rf_shell".
+  const base = materialName.slice(materialName.lastIndexOf("/") + 1);
+  if (PRESETS[base]) return PRESETS[base];
   for (const [pattern, preset] of GUESSES) if (pattern.test(materialName)) return PRESETS[preset];
   return DEFAULT;
 }
