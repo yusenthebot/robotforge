@@ -706,6 +706,9 @@ async def _download_with_progress(name: str, ctx: Context) -> None:
     task.result()  # re-raises a failed download
 
 
+MAX_CRASH_TEXT = 200  # characters of an unexpected error's own text that an agent is shown
+
+
 @contextlib.contextmanager
 def _tool_errors() -> Iterator[None]:
     """Turn failures into ToolError so the agent sees the actual message. The MCP SDK would answer anything
@@ -718,8 +721,11 @@ def _tool_errors() -> Iterator[None]:
         raise
     except Exception as exc:
         log.exception("unexpected error in a tool")
+        what = f"{type(exc).__name__}: {exc}"
+        if len(what) > MAX_CRASH_TEXT:  # an OSError repeats the whole path it was given, a page long for a pasted blob
+            what = what[:MAX_CRASH_TEXT] + "..."
         raise ToolError(
-            f"robotforge hit an unexpected error: {type(exc).__name__}: {exc}. Other tools still work; if it "
+            f"robotforge hit an unexpected error: {what}. Other tools still work; if it "
             "repeats, it is worth reporting with this message"
         ) from exc
 

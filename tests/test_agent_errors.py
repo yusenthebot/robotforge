@@ -16,7 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import tool_input, wording
 from robotforge.cli import find_free_port
-from robotforge.mcp_server import build_server
+from robotforge.mcp_server import _tool_errors, build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
 
@@ -114,7 +114,12 @@ async def test_a_name_with_capitals_and_spaces_is_saved_tidy_and_found_again(lab
             "name: pup\n  template: quadruped",
         ),
         ("add_robot", {"name": "pup", "template": "arms", "pos": [2, 0]}, "name: pup\n  template: arm"),
-        ("add_robot", {"name": "pup", "template": "", "library": "", "build": {}, "pos": [2, 0]}, "name: pup"),
+        (
+            "add_robot",
+            {"name": "pup", "template": "quadruped", "library": "", "build": {}, "pos": [2, 0]},
+            "name: pup\n  template: quadruped",
+        ),
+        ("add_robot", {"name": "pup", "build": {}, "pos": [2, 0]}, "name: pup"),  # build alone: a bare box
         ("add_terrain", {"type": "slope", "pos": "2, 0"}, "type: ramp"),
         ("set_floor", {"style": "Concrete"}, "style: concrete"),
     ],
@@ -189,6 +194,11 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             ["no parameter 'world_name'", "did you mean name", "parameters: name, floor"],
         ),
         ("list_templates", {"kind": "arm"}, ["takes no parameters", "'kind'"]),
+        (
+            "add_robot",
+            {"name": "p", "template": "", "library": "", "build": {}},
+            ["give exactly one of", "'template'", "'build'"],
+        ),
         ("add_robot", {"name": "p", "template": "dog"}, ["unknown template 'dog'", "Did you mean quadruped", "rover"]),
         (
             "add_robot",
@@ -346,6 +356,41 @@ async def test_a_refusal_names_the_mistake_and_the_way_out(lab, tool, args, says
     for piece in says:
         assert piece in text, f"{piece!r} not in {text!r}"
     assert len(text) < 320, f"{len(text)} characters: {text}"
+
+
+@pytest.mark.parametrize("odd", ["{[1]: 2}", "{1, [2]}", "{{}: 1}", "[{[1]: 2}]"])
+@pytest.mark.parametrize(
+    ("tool", "args", "param"),
+    [
+        ("add_robot", {"name": "p", "template": "rover"}, "params"),
+        ("add_robot", {"name": "p", "template": "rover"}, "pos"),
+        ("add_robot", {"name": "p"}, "build"),
+        ("set_controls", {}, "controls"),
+        ("move_arm", {"robot": "arm"}, "position"),
+    ],
+)
+async def test_text_that_python_cannot_read_as_a_value_is_explained_not_a_crash(lab, tool, args, param, odd):
+    """ast.literal_eval raises TypeError for an unhashable key, which escaped tidy as a bare "unhashable type"."""
+    text = await lab.refused(tool, **args, **{param: odd})
+    assert "unhashable" not in text and "unexpected error" not in text, text
+    assert param in text, text
+
+
+def test_a_value_tidy_cannot_read_goes_on_as_given(monkeypatch, caplog):
+    def broken(name, value, prop):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tool_input, "_tidy_value", broken)
+    assert tool_input.tidy("t", SCHEMA, {"name": "x", "pos": "2, 0"}) == {"name": "x", "pos": "2, 0"}
+    assert "could not read 'pos' forgivingly" in caplog.text
+
+
+def test_an_unexpected_error_shows_a_short_text_not_the_whole_path_it_was_given():
+    with pytest.raises(ToolError) as caught, _tool_errors():
+        raise OSError(63, "File name too long", "/x" * 2000)
+    text = str(caught.value)
+    assert text.startswith("robotforge hit an unexpected error: OSError: [Errno 63] File name too long")
+    assert len(text) < 400, len(text)
 
 
 async def test_code_in_a_markdown_fence_is_saved_without_it(lab):

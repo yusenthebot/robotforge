@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -18,6 +19,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import ValidationError
 
 from robotforge import wording
+
+log = logging.getLogger(__name__)
 
 # Words that name the same choice in a tool's own vocabulary, by parameter. Only readings with one meaning are
 # here: the shape of a ball is a sphere, but "stop" could be pause or reset, so that one is left to the error.
@@ -145,7 +148,7 @@ def _literal(text: str) -> Any:
     for parse in (json.loads, ast.literal_eval):
         try:
             return parse(text)
-        except (ValueError, SyntaxError, MemoryError, RecursionError):
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):  # TypeError: "{[1]: 2}"
             continue
     return None
 
@@ -217,7 +220,24 @@ def tidy(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> 
     if extra:
         raise ToolError(unknown_parameters(tool, extra, list(props)))
     required = set(schema.get("required", []))
-    return {k: _tidy_value(k, v, props[k]) for k, v in arguments.items() if k in required or not _blank(v, props[k])}
+    out = {k: _read(k, v, props[k]) for k, v in arguments.items() if k in required or not _blank(v, props[k])}
+    # add_robot takes its robot from exactly one of template, file, library or build. A model that fills in every
+    # field sends build={} beside the source it means (or beside blank ones, when it means none): an empty build
+    # says nothing, so it is not a second source. build={} alone is still a bare box.
+    if tool == "add_robot" and out.get("build") == {} and any(k in arguments for k in ("template", "file", "library")):
+        del out["build"]
+    return out
+
+
+def _read(name: str, value: Any, prop: Mapping[str, Any]) -> Any:
+    """`_tidy_value`, which only ever improves a value: should it fail on some odd input, the value goes on as
+    given and the tool's own check explains it. tidy runs before the server's error handling, so a crash here
+    would reach the agent as a bare exception."""
+    try:
+        return _tidy_value(name, value, prop)
+    except Exception:
+        log.warning("could not read %r forgivingly; passed as given", name, exc_info=True)
+        return value
 
 
 def unknown_parameters(tool: str, extra: Sequence[str], params: Sequence[str]) -> str:
