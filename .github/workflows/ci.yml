@@ -17,7 +17,7 @@ jobs:
   test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40  # Windows runs the suite in about 20 min; a cancelled run reads as a failure
     strategy:
       fail-fast: false
       matrix:
