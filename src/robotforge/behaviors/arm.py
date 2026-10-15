@@ -93,7 +93,11 @@ class ArmMotion:
         q = self.q.copy()
         d = np.asarray(target)[:2] - self.base_xy
         if np.linalg.norm(d) > 1e-3:
-            q[0] = np.clip(np.arctan2(d[1], d[0]) - self.base_yaw, self.chain.lower[0], self.chain.upper[0])
+            lo, hi = self.chain.lower[0], self.chain.upper[0]
+            want = float((np.arctan2(d[1], d[0]) - self.base_yaw + np.pi) % (2 * np.pi) - np.pi)
+            # The same heading, one turn either way: take the one inside the limits closest to now.
+            inside = [a for a in (want, want - 2 * np.pi, want + 2 * np.pi) if lo - 1e-9 <= a <= hi + 1e-9]
+            q[0] = min(inside, key=lambda a: abs(a - q[0])) if inside else np.clip(want, lo, hi)
         return q
 
     def move_to(self, target, gripper: str | None = None, from_point: np.ndarray | None = None) -> None:

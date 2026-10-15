@@ -298,6 +298,19 @@ def test_mobile_manipulator_drives_then_picks_with_its_mounted_arm(pg):
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
+def test_an_arm_carried_at_a_heading_reaches_targets_on_either_side(pg):
+    """Review HIGH 4: the IK seed did not wrap angles, so with the rover facing +y the place to its left
+    (a world heading near 180 degrees) seeded at -268 degrees, clipped to the joint limit, and was refused."""
+    pg.add_robot("mm", build=MOBILE_ARM, yaw=90)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, 0.30])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[-0.32, 0.05], fixed=True)
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("mm", "cube", "bin")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
 def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
     pg.add_robot("dog", build=DOG)
     with pytest.raises(ValueError, match="not an arm, and carries none"):
