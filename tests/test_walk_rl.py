@@ -70,7 +70,13 @@ def test_your_own_robot_joins_the_list(pg):
     assert pg.store.load().name == "mine"  # the learner's world comes back untouched
 
 
-def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
+def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg, monkeypatch):
+    # The flow, not the quality of the turns (test_rhythm_walk checks that): a lighter turn search keeps a slow
+    # CI machine inside the wait below (Windows took over 120 s for the full two starts of 30 rounds a side).
+    from robotforge.behaviors import rhythm_walk
+
+    monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 20)
+    monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
     pg.new_world("mine")
     pg.add_robot("crab", build=walk_rl.STAR)
     with pytest.raises(BehaviorError, match="RL II"):  # no gait code knows a starfish
@@ -90,7 +96,8 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
     pg.lessons.handle({"action": "press", "control": "keep"})
     kept = pg.lessons.ctx.results["kept"]
     assert kept["robot"] == "crab" and kept["speed"] == pytest.approx(trained["distance"] / walk_rl.ATTEMPT, abs=1e-3)
-    lesson.turning.join(timeout=120)  # then it learns to turn, on its own, and keeps that too
+    lesson.turning.join(timeout=600)  # then it learns to turn, on its own, and keeps that too
+    assert not lesson.turning.is_alive(), "turn learning did not finish"  # say so, rather than a bare False
     assert pg.lessons.ctx.results["kept"]["turns"]
     pg.lessons.exit()
 
