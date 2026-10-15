@@ -373,6 +373,8 @@ class RLLesson(Lesson):
 
     def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
         assert self.live_ctrl is not None and self.model is not None
+        if control in ("release", "random", "train"):
+            ctx.results.pop("summary", None)  # a note about swapping in the best weights is stale once they change
         if control == "release":
             ctx.events.add("released")
             self.policy = self.score = None

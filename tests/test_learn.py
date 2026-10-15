@@ -419,6 +419,8 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     assert "push" in update["passed"]
     lessons.handle({"action": "press", "control": "push"})  # weights that learned are pushed at once, as before
     assert lesson.live_ctrl.pushed_at == pg.session.data.time and not lesson.live_ctrl.pending_restart
+    lessons.handle({"action": "press", "control": "random"})  # new weights: the note about the swap goes away
+    assert "summary" not in _play(pg, 0.1)["results"]
     pg.lessons.exit()
     assert lesson.stopping.is_set()
 
