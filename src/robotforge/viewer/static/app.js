@@ -1050,7 +1050,10 @@ let follow = null; // { body, last: Vector3, z: smoothed height, t: last update 
 const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
 
 function startFollow() {
-  const body = sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null;
+  startFollowBody(sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null);
+}
+
+function startFollowBody(body) {
   if (body === null || !bodyNodes[body]) return;
   if (follow && follow.body === body) return;
   tween = null;
@@ -1086,6 +1089,7 @@ function driveKey(e, down) {
   e.preventDefault();
   if (down) {
     if (!lessonDrive) startFollow();
+    else if (lessonDrive.follow) startFollowBody(sceneDesc?.bodies.find((b) => b.name === lessonDrive.follow)?.id ?? null);
     pressed.add(dir);
   } else {
     pressed.delete(dir);

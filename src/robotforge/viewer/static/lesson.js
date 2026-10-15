@@ -30,6 +30,7 @@ export function initLessons(hooks) {
 export const lessonActive = () => lesson !== null;
 export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
 export const lessonDriveSpec = () => lesson?.drive ?? null;
+export const lessonKind = () => lesson?.kind ?? null;
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
 // ---------------------------------------------------------------- picker
@@ -61,32 +62,42 @@ function saveProgress(id, entry) {
 function renderPicker() {
   const done = progress();
   const list = $("lesson-list");
-  list.replaceChildren(
-    ...catalog.map((c) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "course";
-      const chapter = document.createElement("span");
-      chapter.className = "course-chapter";
-      chapter.textContent = pick(c.chapter);
-      const title = document.createElement("span");
-      title.className = "course-title";
-      title.textContent = pick(c.title);
-      const summary = document.createElement("span");
-      summary.className = "course-summary";
-      summary.textContent = pick(c.summary);
-      const meta = document.createElement("span");
-      meta.className = "course-meta";
-      const stars = done[c.id]?.stars ?? 0;
-      meta.textContent = [t("lesson_minutes", { n: c.minutes }), done[c.id]?.done ? t("lesson_done_badge") : ""]
-        .filter(Boolean)
-        .join(" · ");
-      if (stars) meta.append(starSpan(stars));
-      b.append(chapter, title, summary, meta);
-      b.addEventListener("click", () => startLesson(c.id, b));
-      return b;
-    })
-  );
+  const groups = [["lesson", t("lessons_heading")], ["challenge", t("challenges_heading")]];
+  const sections = [];
+  for (const [kind, heading] of groups) {
+    const items = catalog.filter((c) => (c.kind ?? "lesson") === kind);
+    if (!items.length) continue;
+    const h = document.createElement("h3");
+    h.className = "course-group";
+    h.textContent = heading;
+    sections.push(h, ...items.map((c) => courseCard(c, done)));
+  }
+  list.replaceChildren(...sections);
+}
+
+function courseCard(c, done) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "course";
+  const chapter = document.createElement("span");
+  chapter.className = "course-chapter";
+  chapter.textContent = pick(c.chapter);
+  const title = document.createElement("span");
+  title.className = "course-title";
+  title.textContent = pick(c.title);
+  const summary = document.createElement("span");
+  summary.className = "course-summary";
+  summary.textContent = pick(c.summary);
+  const meta = document.createElement("span");
+  meta.className = "course-meta";
+  const stars = done[c.id]?.stars ?? 0;
+  meta.textContent = [t("lesson_minutes", { n: c.minutes }), done[c.id]?.done ? t("lesson_done_badge") : ""]
+    .filter(Boolean)
+    .join(" · ");
+  if (stars) meta.append(starSpan(stars));
+  b.append(chapter, title, summary, meta);
+  b.addEventListener("click", () => startLesson(c.id, b));
+  return b;
 }
 
 function starSpan(n) {
@@ -121,7 +132,7 @@ async function exitLesson() {
 }
 
 function finishLesson() {
-  const stars = state?.results?.test?.stars ?? 0;
+  const stars = state?.results?.stars ?? state?.results?.test?.stars ?? 0;
   saveProgress(lesson.id, { done: true, stars: Math.max(stars, progress()[lesson.id]?.stars ?? 0) });
   $("lesson-finished").hidden = false;
   $("lesson-finished-body").textContent = t("lesson_done_body", { title: pick(lesson.title) });
@@ -200,6 +211,7 @@ export function lessonUpdate(msg) {
 
 function readout(live) {
   if (!live) return "";
+  if (live.readout) return pick(live.readout);
   if (live.angle !== undefined) {
     return t("readout_joint", { angle: live.angle.toFixed(1), error: live.error.toFixed(1), torque: live.torque.toFixed(2) });
   }
@@ -243,7 +255,7 @@ function renderStep() {
   const last = i === lesson.steps.length - 1;
   const next = $("lesson-next");
   next.hidden = !(passed || step.manual);
-  next.textContent = last ? t("finish_lesson") : t("next_step");
+  next.textContent = last ? t(lesson.kind === "challenge" ? "finish_challenge" : "finish_lesson") : t("next_step");
   $("lesson-waiting").hidden = passed || step.manual || !!step.quiz;
 }
 
@@ -277,6 +289,15 @@ function renderQuiz(step) {
 
 function renderResult() {
   const box = $("lesson-result");
+  const summary = state?.results?.summary;
+  if (summary) {
+    box.hidden = false;
+    box.replaceChildren();
+    const line = document.createElement("span");
+    line.textContent = pick(summary);
+    box.append(line, starSpan(state.results.stars ?? 0));
+    return;
+  }
   const test = state?.results?.test;
   box.hidden = !test;
   if (!test) return;

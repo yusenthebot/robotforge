@@ -130,6 +130,7 @@ class Lesson:
     """One course. Subclasses fill in the class attributes and the rig hooks."""
 
     id: str = ""
+    kind: str = "lesson"  # "lesson" teaches step by step; "challenge" is a goal to beat for stars
     chapter: Text = {}
     title: Text = {}
     summary: Text = {}
@@ -170,6 +171,7 @@ class Lesson:
     def describe(self, model: mujoco.MjModel) -> dict[str, Any]:
         return {
             "id": self.id,
+            "kind": self.kind,
             "chapter": self.chapter,
             "title": self.title,
             "summary": self.summary,
@@ -184,6 +186,7 @@ class Lesson:
     def card(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "kind": self.kind,
             "chapter": self.chapter,
             "title": self.title,
             "summary": self.summary,
@@ -225,6 +228,8 @@ class LessonRunner:
         pg = self.playground
         session = pg.session
         lesson = cls()
+        if hasattr(lesson, "playground"):
+            lesson.playground = pg  # challenges drive the real behaviors (gaits, wheels)
         model = lesson.build()
         with self._lock:
             if self.lesson is None:  # switching lessons keeps the world we came from
