@@ -76,6 +76,19 @@ def c(tool: str, why: str, want: str = "reject", setup=(), no_world: bool = Fals
 
 HUMANOID = ("add_robot", {"name": "hum", "template": "humanoid", "pos": [2.0, 2.0]})
 BUILT = ("add_robot", {"name": "spider", "build": EXAMPLE_DOG, "pos": [-2.0, 2.0]})
+# A rover that carries an arm: "mm/arm" is the arm, and a tool that wants a whole robot gets it by mistake.
+MOBILE_ARM = {
+    "color": "yellow",
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.34, 0.22, 0.06], "mass": 3.0, "sensors": ["imu"]},
+    "parts": [
+        {"name": "left_wheel", "at": [0, 0.13, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "front_caster", "at": [0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "rear_caster", "at": [-0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "arm", "at": "top", "shift": [0.06, 0, 0], "robot": {"template": "arm", "params": {"reach": 0.45}}},
+    ],
+}
+MOBILE = ("add_robot", {"name": "mm", "build": MOBILE_ARM, "pos": [-2.0, -2.0]})
 RAMP = ("add_terrain", {"type": "ramp", "name": "ramp1", "pos": [3.0, 3.0]})
 SCRIPT_OK = ("write_script", {"name": "hello", "code": "print('hi')\n"})
 
@@ -503,6 +516,19 @@ CASES: list[Case] = [
     c("add_robot", "name empty", name="", template="rover"),
     c("remove", "name empty", name=""),
     c("add_part", "part given as a list", setup=[BUILT], robot="spider", part=[{"name": "tail"}]),
+    # -- found in review: values that look like one thing and mean another, text Python cannot read
+    c("add_object", "color as CSS rgba", "accept", name="b2", color=[255, 0, 0, 1], pos=[0.4, 0.1]),
+    c("add_object", "color with a fraction among 0 to 255 values", name="b2", color=[1, 1, 1.5], pos=[0.4, 0.1]),
+    c("add_object", "color with a stray 2 among 0 to 1 values", name="b2", color=[0.5, 0.5, 2], pos=[0.4, 0.1]),
+    c("add_robot", "every source field sent, three of them empty", name="pup", template="", library="", build={}),
+    c("add_robot", "template with an empty build beside it", "accept", name="pup", template="quadruped", build={}),
+    c("add_robot", "params as text with an unhashable key", name="pup", template="rover", params="{[1]: 2}"),
+    c("add_robot", "pos as text with an unhashable key", name="pup", template="rover", pos="{[1]: 2}"),
+    c("set_controls", "controls as text with an unhashable key", controls="{[1]: 2}"),
+    c("move", "the arm mounted on a rover", setup=[MOBILE], robot="mm/arm", speed=0.2),
+    c("pose", "the arm mounted on a rover", setup=[MOBILE], robot="mm/arm", name="wave"),
+    c("move", "an arm mounted on a rover that does not exist", setup=[MOBILE], robot="mm/claw", speed=0.2),
+    c("simulate", "seconds in milliseconds for a long run", seconds=60000),
 ]
 
 
