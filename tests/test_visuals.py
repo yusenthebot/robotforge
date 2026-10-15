@@ -233,3 +233,15 @@ def test_every_prop_and_object_look_compiles_and_keeps_physics():
         assert has_look == (obj["name"] != "lane"), obj["name"]
     lane = dressed.geom("lane")
     assert lane.group[0] < visuals.HIDDEN_GROUP
+
+
+@pytest.mark.parametrize("name", ["DOG", "HEXAPOD", "MOBILE_ARM", "BALANCER"])
+def test_robots_built_from_parts_keep_their_physics_under_their_looks(name):
+    import test_builder
+
+    world = {"robots": [{"name": "r", "build": getattr(test_builder, name)}]}
+    with visuals.disabled():
+        bare = compile_world(World.model_validate(world)).model
+    dressed = compile_world(World.model_validate(world)).model
+    assert dressed.nmesh > bare.nmesh
+    assert_same_physics(bare, dressed, steps=200)
