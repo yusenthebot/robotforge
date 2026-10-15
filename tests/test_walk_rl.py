@@ -7,6 +7,7 @@ from importer_fixtures import critter_mjcf, critter_urdf, write
 
 from robotforge.behaviors import rhythm_walk
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.control.cpg import HEADING_WEIGHT, Reward
 from robotforge.learn import walk_rl
 from robotforge.playground import Playground
 
@@ -175,3 +176,20 @@ def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg
     assert pg.behaviors.move("critter", 0.0, 0.8)["turning"] == "left"
     pg.run_fast(lambda: False, 2.0)
     assert (pg.behaviors.pose("critter")["heading_deg"] - end["heading_deg"] + 540) % 360 - 180 > 10
+
+
+def test_shoved_trainings_do_not_count_the_heading_and_the_panel_says_so(pg):
+    """A shove turns the robot whatever its rhythm does: counting the heading then made the humanoid's reflex
+    trainings worse (a steady walk in 1 of 12 instead of 5). Shoved, the reward leaves the heading out."""
+    assert walk_rl.lesson_reward(0.0, shove=False).heading == HEADING_WEIGHT
+    assert walk_rl.lesson_reward(0.1, shove=True) == Reward(energy=0.1, survive=True, heading=0.0)
+    pg.lessons.start("learn_to_walk")
+    lesson, ctx = pg.lessons.lesson, pg.lessons.ctx
+    model, data = pg.session.model, pg.session.data
+
+    def reward_shown() -> str:
+        return next(f for f in lesson.live(model, data, ctx)["formula"] if f["show"] == "f_reward")["expr"]["en"]
+
+    assert reward_shown().startswith(f"distance * (1 - {HEADING_WEIGHT:g} * turn)")
+    ctx.values["shove"] = 1.0
+    assert reward_shown().startswith("distance - ")

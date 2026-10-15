@@ -109,6 +109,13 @@ def _turn_seconds(trained: dict[str, Any]) -> int:
     return max(10, int(round(1.25 * per_round * rounds / 10.0)) * 10)
 
 
+def lesson_reward(energy: float, shove: bool) -> Reward:
+    """What a training in this lesson is rewarded for. Shoved, the heading does not count: a shove turns the robot
+    whatever its rhythm does, and counting it made the search worse (humanoid with reflexes, 80 rounds: a steady walk
+    in 1 of 12 trainings instead of 5, a fall in the replay in 8 instead of 3)."""
+    return Reward(energy=energy, survive=shove, heading=0.0 if shove else HEADING_WEIGHT)
+
+
 def _runs(ctx: LessonContext, **want: Any) -> list[dict[str, Any]]:
     return [r for r in ctx.runs if all(test(r["params"].get(k, 0.0)) for k, test in want.items())]
 
@@ -156,13 +163,14 @@ STEPS = (
             "Guess, then press Learn with the template dog (30 rounds, a dozen seconds).",
         ),
         done=_text(
-            "30 轮之后，4 秒能走 1.1 到 1.8 米（我们从 4 个不同的随机起点各学了一次），和手写小跑的最快速度"
-            "（0.36 m/s，4 秒 1.4 米）差不多，学 60 轮能到两米多。姿势有点怪：奖励只说了“走得远”，没说“走得好看”。"
+            "30 轮之后，4 秒能走 1.3 到 1.9 米（我们从 4 个不同的随机起点各学了一次），和手写小跑的最快速度"
+            "（0.36 m/s，4 秒 1.4 米）差不多，学 60 轮能到 1.8 到 2.2 米。"
+            "姿势有点怪：奖励只说了“走得远、走得直”，没说“走得好看”。"
             "每次学都从一个新的随机起点开始，所以结果会不一样。",
-            "After 30 rounds it covers 1.1 to 1.8 m in 4 s (we learned from 4 different random starts), about as fast "
-            "as the hand-written trot's top speed (0.36 m/s, 1.4 m in 4 s); 60 rounds get past two metres. It looks "
-            "odd: the reward only said 'get far', not 'look nice'. Every training starts from a new random seed, so "
-            "results differ.",
+            "After 30 rounds it covers 1.3 to 1.9 m in 4 s (we learned from 4 different random starts), about as fast "
+            "as the hand-written trot's top speed (0.36 m/s, 1.4 m in 4 s); 60 rounds reach 1.8 to 2.2 m. It looks "
+            "odd: the reward only said 'get far and straight', not 'look nice'. Every training starts from a new "
+            "random seed, so results differ.",
         ),
         quiz=Quiz(
             question=_text("学 30 轮以后，4 秒能走多远？", "After 30 rounds, how far does it get in 4 s?"),
@@ -192,12 +200,12 @@ STEPS = (
             "Guess, then set Energy cost to 0.1 and learn again, then 0.3.",
         ),
         done=_text(
-            "w = 0.1：走 1.0 到 1.4 米，能量只用了 50 J 左右（不算能量时是 75 到 150 J），步子变小。"
-            "w = 0.3：我们学了 4 次，有 3 次干脆学会了站着不动：挪一步的代价比走出的距离还大。"
+            "w = 0.1：走 0.55 到 1.25 米，能量只用了 35 到 55 J（不算能量时是 70 到 115 J），步子变小。"
+            "w = 0.3：我们学了 4 次，4 次都干脆学会了站着不动：挪一步的代价比走出的距离还大。"
             "机器人只会照着奖励去做，奖励没写清楚，它就会钻空子。",
-            "w = 0.1: 1.0 to 1.4 m on about 50 J (75 to 150 J when energy was free), with smaller steps. "
-            "w = 0.3: in 3 of our 4 trainings it learned to stand still: a step costs more than the distance earns. A "
-            "robot does exactly what the reward says; if the reward is loose, it finds the loophole.",
+            "w = 0.1: 0.55 to 1.25 m on 35 to 55 J (70 to 115 J when energy was free), with smaller steps. "
+            "w = 0.3: in all 4 of our trainings it learned to stand still: a step costs more than the distance earns. "
+            "A robot does exactly what the reward says; if the reward is loose, it finds the loophole.",
         ),
         quiz=Quiz(
             question=_text("能耗的代价调到 0.1，会学出什么？", "With energy cost 0.1, what does it learn?"),
@@ -233,10 +241,10 @@ STEPS = (
             "starfish learn.",
         ),
         done=_text(
-            "它也学会了往前挪（我们测到 4 秒 0.5 到 0.85 米）。"
+            "它也学会了往前挪（我们测到 4 秒 0.55 到 0.8 米）。"
             "同一套方法，不管几条腿、腿长什么样，都能自己找到一种走法。"
             "这就是学习比手写强的地方。",
-            "It learns to shuffle forward too (0.5 to 0.85 m in 4 s in our runs). The same method finds a way to walk "
+            "It learns to shuffle forward too (0.55 to 0.8 m in 4 s in our runs). The same method finds a way to walk "
             "for any number and shape of legs, which is where learning beats writing gaits by hand.",
         ),
         quiz=Quiz(
@@ -257,13 +265,13 @@ STEPS = (
             "Pick the humanoid and learn again. Guess first.",
         ),
         done=_text(
-            "它学会了往前一扑：扑出去半米左右就倒（我们学了 6 次，5 次都是这样）。奖励只看走了多远，"
-            "倒下扣的那一分比扑出去的半米还少，那就扑。又是一次钻空子。"
+            "它学会了往前一扑：扑出去三分之一米左右就倒（我们学了 6 次，6 次都是这样）。"
+            "两条腿一碰就倒，每轮试的大多都会倒，搜索只能在倒法里挑扑得最远的。奖励只看走了多远，又被钻了空子。"
             "下一步给它两样东西：站住也算分，和能看身体倾斜的“反射”。",
-            "It learns to lunge: half a metre forward, then down (5 of our 6 trainings). The reward only counts "
-            "distance, and the point a fall costs is less than the half metre the lunge earns, so it lunges: "
-            "another loophole. Next it gets two things: points for staying up, and reflexes that feel the body "
-            "tilt.",
+            "It learns to lunge: a third of a metre forward, then down (all 6 of our trainings). Two legs topple at "
+            "the slightest nudge, so most tries fall, and of those the search keeps whichever falls furthest forward: "
+            "another loophole of a reward that counts distance. Next it gets two things: points for staying up, and "
+            "reflexes that feel the body tilt.",
         ),
         quiz=Quiz(
             question=_text("人形用这个方法会学出什么？", "What does the humanoid learn this way?"),
@@ -273,7 +281,10 @@ STEPS = (
                 _text("站着不动", "To stand still"),
             ),
             answer=1,
-            explain=_text("奖励只看距离，扑一下最划算。", "The reward only counts distance, and a lunge pays best."),
+            explain=_text(
+                "奖励只看距离，搜索碰到的大多是倒法，扑得最远的那种分最高。",
+                "The reward only counts distance, and of the falls the search meets, a lunge scores best.",
+            ),
             predict=True,
         ),
         check=_humanoid_tried,
@@ -284,15 +295,16 @@ STEPS = (
         body=_text(
             "节律是“盲”的，从不看传感器。反射让每个关节再多看 4 个数：身体的横滚、俯仰和它们的变化速度，"
             "每个数乘一个也要学的系数，加到关节目标上。\n"
-            "打开「训练时推它，站住也算分」：每次试都被随机推一把（0.4 m/s），倒了就扣掉没站住的那几秒。"
+            "打开「训练时推它，站住也算分」：每次试都被随机推一把（0.4 m/s），倒了就扣掉没站住的那几秒；"
+            "朝向不再算分，推一把本来就会让它转。"
             "先关着反射学一次，再打开反射学一次（各 80 轮，二十秒左右）。学完会自动推 12 次，看站住几次。先猜。",
             "The rhythm is blind: it never reads a sensor. Reflexes give every joint 4 more numbers to look at: "
             "the body's roll, pitch and how fast they change, each times a gain that is learned too, added to the "
             "joint's target.\n"
             "Switch on Shove it while training, points for staying up: every try gets one random shove (0.4 m/s), "
-            "and a fall costs the seconds it did not stay up. Learn once without reflexes, then once with them "
-            "(80 rounds each, about twenty seconds). Afterwards it is shoved 12 times to count how often it stays "
-            "up. Guess first.",
+            "and a fall costs the seconds it did not stay up; the heading no longer counts, as a shove turns it "
+            "anyway. Learn once without reflexes, then once with them (80 rounds each, about twenty seconds). "
+            "Afterwards it is shoved 12 times to count how often it stays up. Guess first.",
         ),
         done=_text(
             "不带反射：它学会了几乎站着不动，推 12 次站住 2 到 10 次（原地站着不学是 8 次）。"
@@ -610,7 +622,7 @@ class LearnToWalkLesson(Lesson):
 
     def _train(self, key: str, rhythm: Rhythm, settings: dict[str, float], ctx: LessonContext) -> None:
         shove = bool(settings["shove"])
-        reward = Reward(energy=ENERGY[int(settings["energy"])], survive=shove)
+        reward = lesson_reward(ENERGY[int(settings["energy"])], shove)
         trainer = Trainer(self._solo(key), key, reward, ATTEMPT, rhythm.freq)
         curve: list[float] = []
 
@@ -760,6 +772,12 @@ class LearnToWalkLesson(Lesson):
                 f"newest rhythm walks {progress['distance']:.2f} m",
             )
         joints, w = b.joints, ENERGY[int(ctx.values["energy"])]
+        heading = lesson_reward(w, bool(ctx.values["shove"])).heading
+        distance = (
+            _text(f"距离 × (1 − {heading:g} × 转向)", f"distance * (1 - {heading:g} * turn)")
+            if heading
+            else _text("距离", "distance")  # shoved, the heading does not count
+        )
         return {
             "follow": b.trunk,
             "readout": readout,
@@ -803,9 +821,8 @@ class LearnToWalkLesson(Lesson):
                     "show": "f_reward",
                     "label": _text("奖励", "Reward"),
                     "expr": _text(
-                        f"距离 × (1 − {HEADING_WEIGHT:g} × 转向) − {DRIFT_WEIGHT:g} × 横偏 − {w:g} × 能量 ÷ 体重",
-                        f"distance * (1 - {HEADING_WEIGHT:g} * turn) - {DRIFT_WEIGHT:g} * drift "
-                        f"- {w:g} * energy / weight",
+                        f"{distance['zh']} − {DRIFT_WEIGHT:g} × 横偏 − {w:g} × 能量 ÷ 体重",
+                        f"{distance['en']} - {DRIFT_WEIGHT:g} * drift - {w:g} * energy / weight",
                     ),
                     "value": f"w = {w:g}",
                     "color": "violet",

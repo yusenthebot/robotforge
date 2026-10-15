@@ -183,6 +183,7 @@ class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
     survive: bool = False  # a fall also costs the seconds it did not stay up
     turn: float = 0.0  # 0: walk forward; +1 or -1: turn on the spot to the left or right (rad turned, less wander)
+    heading: float = HEADING_WEIGHT  # walking forward: share of the distance lost per rad turned; 0 ignores it
 
 
 @dataclass(frozen=True)
@@ -268,7 +269,7 @@ class Trainer:
         else:
             # Forward: the distance counts for less the more the heading turned, so a walk that curves round
             # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight.
-            reward = distance - HEADING_WEIGHT * abs(turned) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
+            reward = distance - self.reward.heading * abs(turned) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
         if fell:
             reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
         return {

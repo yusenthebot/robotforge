@@ -11,7 +11,8 @@ forward: each run teaches one robot to walk forward the way the RL II lesson's L
 training, with the lesson's energy cost, reflexes and shoves when asked) and then replays the learned rhythm
 once for 4 s: how far it got, how much its heading changed (degrees, positive is to the left), how far it
 drifted sideways, the energy it spent, whether it fell and, trained with shoves, how many of 12 shoves it
-stayed up for. --heading overrides the reward's weight on the heading (for tuning it).
+stayed up for. --heading overrides the reward's weight on the heading (for tuning it; shoved trainings
+do not count the heading, as in the lesson).
 
 switch: each run teaches a walk and the turns the way "Keep this walk for my robot" does (learn_turns), keeps
 them in a world and drives the robot through it twice:
@@ -34,7 +35,7 @@ import os
 import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -102,10 +103,11 @@ def _learn(robot: str, entry: dict, seed: int, opts: dict[str, Any]):
     from robotforge.control import cpg
     from robotforge.learn import walk_rl
 
-    if opts["heading"] is not None:
-        cpg.HEADING_WEIGHT = opts["heading"]
+    reward = walk_rl.lesson_reward(opts["energy"], opts["shove"])  # as the lesson's Learn button trains
+    if opts["heading"] is not None and reward.heading:
+        reward = replace(reward, heading=opts["heading"])
     model = _solo(robot, entry)
-    trainer = cpg.Trainer(model, robot, cpg.Reward(energy=opts["energy"], survive=opts["shove"]), SECONDS, FREQ)
+    trainer = cpg.Trainer(model, robot, reward, SECONDS, FREQ)
     rhythm = cpg.Rhythm.still(trainer.body.joints, FREQ, reflexes=opts["reflexes"])
     pushes = walk_rl.SHOVE if opts["shove"] else 0.0
     log = trainer.train(rhythm, iterations=opts["rounds"], seed=seed, pushes=pushes)
