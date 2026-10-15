@@ -180,6 +180,28 @@ def test_a_world_yaml_with_a_mistake_is_explained_by_entry_not_by_position(tmp_p
         World.from_yaml("name: w\nfloor: [1\n  style: checker\n")
 
 
+@pytest.mark.parametrize(
+    ("text", "says"),
+    [
+        ("name: w\nterrain:\n- type: ramp\n  angle: 80\n", "terrain patch number 1: angle must be at most 45"),
+        (
+            "name: w\nterrain:\n- type: mountain\n",
+            "terrain patch number 1: type 'mountain' is not one of: hills, rough",
+        ),
+        ("name: w\nterrain:\n- angle: 3\n", "terrain patch number 1: type null is not one of: hills, rough"),
+        ("name: w\nrobots:\n- 7\n", "robot number 1: must be an object, got 7"),
+        ("name: w\nobjects:\n- {name: b, shape: pyramid}\n", "object b: shape 'pyramid' is not one of: box, sphere"),
+        ("name: w\nrobots: 5\n", "robots must be a list, got 5"),
+    ],
+)
+def test_other_mistakes_in_a_world_yaml_are_worded_by_entry_too(text, says):
+    with pytest.raises(ValueError) as caught:
+        World.from_yaml(text)
+    said = str(caught.value)
+    assert said.startswith("world.yaml is not valid, fix it in the file. ") and says in said, said
+    assert "tag" not in said and "pydantic" not in said
+
+
 def test_world_files_are_utf8_with_lf_endings(tmp_path):
     store = WorldStore.create("Plain", parent=tmp_path)
     store.apply(lambda w: w.robots.append(_entry("dog", "quadruped")))

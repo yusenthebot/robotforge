@@ -189,6 +189,22 @@ ENTRY_KINDS = {"robots": "robot", "objects": "object", "terrain": "terrain patch
 MAX_ENTRIES = 3  # entries named in one answer; fix these and the rest follow
 
 
+def _inside_entry(err: dict[str, Any], tag: object) -> dict[str, Any]:
+    """An error with the entry's position in its list dropped. A terrain patch is a union picked by its type:
+    pydantic words a wrong or missing type as a mismatch of tags, which is a type that is not one of the types."""
+    ctx = err.get("ctx", {})
+    if err["type"] in ("union_tag_invalid", "union_tag_not_found"):
+        expected = ", ".join(f"'{name}'" for name in terrain.TYPES)
+        return {
+            **err,
+            "type": "literal_error",
+            "loc": ("type",),
+            "input": ctx.get("tag"),
+            "ctx": {"expected": expected},
+        }
+    return {**err, "loc": tuple(part for part in err["loc"][2:] if part != tag)}
+
+
 def _file_problems(exc: ValidationError, data: dict[str, Any]) -> str:
     """What is wrong with a world.yaml, entry by entry: "object ball: 'colour' is not a known field; did you mean
     color?". pydantic names an entry by its position in the list, which means nothing to someone reading the answer."""
@@ -213,10 +229,11 @@ def _file_problems(exc: ValidationError, data: dict[str, Any]) -> str:
             f"{kind} {given['name']}" if isinstance(given, dict) and "name" in given else f"{kind} number {index + 1}"
         )
         tag = given.get("type") if isinstance(given, dict) else None
-        inner = [{**e, "loc": tuple(part for part in e["loc"][2:] if part != tag)} for e in errors]
-        text = wording.validation_message(inner, valid=fields.get(collection), list_fields=False)
+        inner = [_inside_entry(e, tag) for e in errors]
+        text = wording.validation_message(inner, valid=fields.get(collection), list_fields=False).strip()
         # A check of the whole entry already names it ("object 'ball': ..."); a field's problem does not.
-        sentences.append(text if all(not e["loc"] for e in inner) else f"{label}: {text}")
+        named = all(e["type"] == "value_error" and not e["loc"] for e in inner)
+        sentences.append(text if named else f"{label}: {text}")
     more = len(by_entry) - MAX_ENTRIES
     return "; ".join(sentences) + (f"; and {more} more" if more > 0 else "")
 
