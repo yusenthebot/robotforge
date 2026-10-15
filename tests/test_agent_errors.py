@@ -269,7 +269,11 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("simulate", {"steps": 100}, ["no parameter 'steps'", "give seconds"]),
         ("move", {"robot": "dog", "seconds": 3000}, ["seconds must be in (0, 60]", "got 3000", "not milliseconds"]),
         ("move", {"robot": "arm"}, ["arm is an arm", "move_arm"]),
-        ("move", {"robot": "dog", "walker": "sprint"}, ["no policy named 'sprint'", "'gait'"]),
+        (
+            "move",
+            {"robot": "dog", "walker": "sprint"},
+            ["no policy named 'sprint'", "Installed: ", "; or use walker 'gait'"],
+        ),
         ("stop", {"robot": "cat"}, ["no robot named 'cat'"]),
         ("pose", {"robot": "dog", "name": "wave"}, ["dog is a quadruped", "only humanoids", "move"]),
         (
@@ -313,7 +317,8 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("set_controls", {"controls": {"sholder": 1.0}}, ["no actuator named 'sholder'", "Did you mean arm/shoulder"]),
         ("set_controls", {"controls": ["arm/shoulder", 0.3]}, ["controls must be an object like", "arm/shoulder"]),
         ("set_controls", {"controls": {"wing": 1}}, ["no actuator named 'wing'", "Names look like", "describe_model"]),
-        ("simulate", {"seconds": 500}, ["seconds must be in (0, 60]"]),
+        ("simulate", {"seconds": 500}, ["seconds must be in (0, 60]", "got 500", "not milliseconds"]),
+        ("simulate", {"seconds": 61}, ["seconds must be in (0, 60], got 61"]),
         ("sim_control", {"action": "stop"}, ["action", "'stop'", "play, pause, reset"]),
         ("observe", {"view": "sideways"}, ["unknown view 'sideways'", "Views:", "front", "overview"]),
         ("observe", {"view": "front", "width": 0}, ["image size 0x480 is out of range", "each at least 16"]),
@@ -398,6 +403,12 @@ async def test_code_in_a_markdown_fence_is_saved_without_it(lab):
     assert "fence" in out["note"] and out["lines"] == 2
     assert await lab.accepted("read_script", name="fenced") == "print('hi')\n"
     await lab.restore()
+
+
+async def test_a_script_run_for_too_long_says_the_limit_and_the_unit(lab):
+    await lab.accepted("write_script", name="idle", code="print('hi')\n")
+    text = await lab.refused("run_script", name="idle", max_sim_seconds=1000)
+    assert "max_sim_seconds must be in (0, 300], got 1000 (it is seconds, not milliseconds)" in text, text
 
 
 async def test_a_script_that_does_not_parse_is_not_saved(lab):

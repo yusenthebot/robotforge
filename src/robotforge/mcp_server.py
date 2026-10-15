@@ -35,7 +35,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
-from robotforge.playground import Playground, PlaygroundError
+from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -423,10 +423,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         driving uses the same walker."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
-            if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
-                unit = " (it is seconds, not milliseconds)" if seconds >= 100 else ""
+            if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
                 raise PlaygroundError(
-                    f"seconds must be in (0, 60], got {seconds:g}{unit}; seconds=null keeps moving until stop"
+                    f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; "
+                    "seconds=null keeps moving until stop"
                 )
             before = playground.behaviors.pose(robot)
             status = playground.behaviors.move(robot, speed, turn, walker)
@@ -583,7 +583,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             if not path.exists():
                 raise PlaygroundError(_no_script(name, path))
             if not 0 < max_sim_seconds <= 300:
-                raise PlaygroundError(f"max_sim_seconds must be in (0, 300], got {max_sim_seconds:g}")
+                raise PlaygroundError(wording.seconds_range("max_sim_seconds", max_sim_seconds, 300))
             runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
             return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
 

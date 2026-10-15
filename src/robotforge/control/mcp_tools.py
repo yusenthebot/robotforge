@@ -198,7 +198,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
 
 def _seconds(seconds: float | None, limit: float) -> float | None:
     if seconds is not None and not 0 < seconds <= limit:
-        raise TaskError(f"seconds must be in (0, {limit:.0f}], got {seconds:g}")
+        raise TaskError(wording.seconds_range("seconds", seconds, limit))
     return seconds
 
 

@@ -107,6 +107,15 @@ def unit_hint(value: Any, high: float) -> str:
     return ""
 
 
+MILLISECONDS = 100  # a duration this long in seconds is more likely a count of milliseconds (a 3 s move is 3000)
+
+
+def seconds_range(name: str, value: float, high: float) -> str:
+    """ "seconds must be in (0, 60], got 3000 (it is seconds, not milliseconds)": the limit, the value, the unit."""
+    unit = " (it is seconds, not milliseconds)" if value >= MILLISECONDS else ""
+    return f"{name} must be in (0, {high:g}], got {value:g}{unit}"
+
+
 def where(loc: Sequence[Any]) -> str:
     """A pydantic location as the agent wrote it: pos[0], params.leg_length."""
     out = ""

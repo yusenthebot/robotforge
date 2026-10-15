@@ -630,7 +630,7 @@ class Playground:
 
     def simulate(self, seconds: float, controls: dict[str, float] | None = None) -> dict[str, Any]:
         if not 0 < seconds <= MAX_SIM_SECONDS:
-            raise PlaygroundError(f"seconds must be in (0, {MAX_SIM_SECONDS:g}]")
+            raise PlaygroundError(wording.seconds_range("seconds", seconds, MAX_SIM_SECONDS))
         notes: list[str] = []
         with self.session.lock:
             if controls:

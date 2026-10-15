@@ -342,7 +342,7 @@ class BehaviorManager:
         try:
             ctrl = walker_for(self.session.model, robot, entry.library if entry else None, walker)
         except (PolicyUnavailable, ValueError) as exc:
-            other = " Or use walker 'gait' (built in), 'rl' or 'rhythm'." if "no policy named" in str(exc) else ""
+            other = "; or use walker 'gait' (built in), 'rl' or 'rhythm'" if "no policy named" in str(exc) else ""
             raise BehaviorError(f"{exc}{other}") from exc
         if create:
             self.session.set_controller(robot, ctrl)
@@ -441,7 +441,7 @@ class BehaviorManager:
         return found
 
     def _check_mounted_arm(self, robot: str) -> None:
-        """"owner/part" must be one of the arms mounted on the owner; otherwise say which arms it carries."""
+        """ "owner/part" must be one of the arms mounted on the owner; otherwise say which arms it carries."""
         owner = robot.split("/", 1)[0]
         arms = self.arms(owner)
         if robot not in arms:
