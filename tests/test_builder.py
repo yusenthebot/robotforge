@@ -369,6 +369,28 @@ def test_two_wheeled_robot_balances_by_itself_and_drives(pg):
     assert end["upright"] and end["position"][0] > 0.8
 
 
+def test_two_wheels_and_a_caster_that_sits_a_little_high_is_a_rover(pg):
+    """Review HIGH 1: a caster a few millimetres above the wheels' lowest point (common in imported URDFs;
+    the robot tips onto it) made a plain rover look like a self-balancer, which then fought its own caster."""
+    build = {
+        "color": "blue",
+        "motor": "jga25",
+        "base": {"shape": "box", "size": [0.24, 0.16, 0.05]},
+        "parts": [
+            {"name": "left_wheel", "at": [0.06, 0.095, -0.01], "shape": "wheel", "size": [0.08, 0.025], "mirror": True},
+            {"name": "caster", "at": [-0.1, 0, -0.031], "joint": "fixed", "shape": "sphere", "size": [0.012]},
+        ],
+    }
+    pg.add_robot("cart", build=build)
+    assert pg.behaviors.robots()[0]["kind"] == "rover"
+    pg.behaviors.move("cart", 0.3, 0.0)
+    _run(pg, 3.0)
+    pg.behaviors.stop("cart")
+    _run(pg, 1.0)
+    end = pg.behaviors.pose("cart")
+    assert end["upright"] and end["position"][0] > 0.5
+
+
 def test_balance_task_compares_lqr_with_doing_nothing(pg):
     from robotforge.control.compare import compare_methods
 

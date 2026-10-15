@@ -12,6 +12,7 @@ Driving is the same balancing with a moving reference: lean, roll, keep up.
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
 
 import mujoco
@@ -75,6 +76,8 @@ def find_balancer(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray | Non
     support = {int(model.geom_bodyid[g]) for g, z in low.items() if z < bottom + SUPPORT_TOLERANCE}
     if not support <= set(bodies):
         return None  # a caster, a foot or the body itself touches the floor too: it stands on its own
+    if _stands_on_its_own(model, data.qpos.copy(), root, set(bodies), int(model.jnt_qposadr[free[0]])):
+        return None  # e.g. a caster a few millimetres up: tipped a little, it comes to rest on it
     return Balancer(
         robot=robot,
         root=root,
@@ -88,6 +91,52 @@ def find_balancer(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray | Non
         track=wheels.track,
         top_speed=float(min(model.actuator_ctrlrange[left][1], model.actuator_ctrlrange[right][1])),
     )
+
+
+_SETTLE_CACHE: OrderedDict[tuple[int, int], tuple[mujoco.MjModel, bool]] = OrderedDict()
+SETTLE_TIP_DEG = 4.0  # how far the robot is tipped before letting go
+SETTLE_SECONDS = 1.0
+SETTLE_MAX_TILT_DEG = 30.0  # resting this upright on something of its own: it does not need balancing
+
+
+def _stands_on_its_own(model: mujoco.MjModel, qpos: np.ndarray, root: int, wheel_bodies: set[int], qadr: int) -> bool:
+    """Tip the robot a little either way with its wheels held and let physics decide: a self-balancer
+    falls over, a robot with a caster (or a foot) comes to rest at a small tilt, touching the ground with it."""
+    key = (id(model), root)
+    cached = _SETTLE_CACHE.get(key)
+    if cached is not None and cached[0] is model:
+        return cached[1]
+    data = mujoco.MjData(model)
+    data.qpos[:] = qpos
+    mujoco.mj_kinematics(model, data)
+    lateral = data.xmat[root].reshape(3, 3)[:, 1]  # the robot's left: the wheel axle's direction
+    stands = False
+    for sign in (1.0, -1.0):
+        mujoco.mj_resetData(model, data)
+        data.qpos[:] = qpos
+        tip = np.zeros(4)
+        mujoco.mju_axisAngle2Quat(tip, lateral, math.radians(SETTLE_TIP_DEG) * sign)
+        quat = np.array(data.qpos[qadr + 3 : qadr + 7])
+        mujoco.mju_mulQuat(quat, tip, quat.copy())
+        data.qpos[qadr + 3 : qadr + 7] = quat
+        data.qpos[qadr + 2] += 0.002  # start just above the floor, not inside it
+        for _ in range(round(SETTLE_SECONDS / model.opt.timestep)):
+            mujoco.mj_step(model, data)
+        up = data.xmat[root].reshape(3, 3)[:, 2]
+        tilt = math.degrees(math.acos(max(-1.0, min(1.0, float(up[2])))))
+        own_contact = False
+        for c in data.contact[: data.ncon]:
+            bodies = (int(model.geom_bodyid[c.geom1]), int(model.geom_bodyid[c.geom2]))
+            mine = [b for b in bodies if model.body_rootid[b] == root]
+            if len(mine) == 1 and mine[0] not in wheel_bodies:
+                own_contact = True
+        if tilt < SETTLE_MAX_TILT_DEG and own_contact:
+            stands = True
+            break
+    _SETTLE_CACHE[key] = (model, stands)
+    while len(_SETTLE_CACHE) > 16:
+        _SETTLE_CACHE.popitem(last=False)
+    return stands
 
 
 # ---- the planar state: lean, lean rate, axle position, axle speed --------------------------------------
