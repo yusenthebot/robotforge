@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "robotforge": {
+      "command": "uv",
+      "args": ["run", "--project", ".", "--frozen", "--no-dev", "robotforge", "mcp"],
+      "cwd": ".",
+      "env_vars": [
+        "ROBOTFORGE_HOME",
+        "ROBOTFORGE_NO_BROWSER",
+        "MUJOCO_GL",
+        "UV_CACHE_DIR",
+        "UV_PYTHON_INSTALL_DIR",
+        "UV_DEFAULT_INDEX",
+        "UV_INDEX_URL",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "SSL_CERT_FILE"
+      ],
+      "default_tools_approval_mode": "approve",
+      "startup_timeout_sec": 300,
+      "tool_timeout_sec": 600
+    }
+  }
+}

@@ -25,6 +25,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
+from robotforge import lessons
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
@@ -73,8 +74,13 @@ Algorithms: the same robot and task can be solved by different control methods (
 MPC, ...). list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss with the user.
 
+Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
+sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
+"第三课"), call lessons(number) and follow its plan.
+
 Explain what you are doing in plain language and briefly teach the idea behind it
-(joints, actuators, control): the user may be new to robotics.
+(joints, actuators, control): the user may be new to robotics. Check results (numbers, observe) before
+saying something worked.
 """
 
 
@@ -343,6 +349,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
+    lessons.register(server)
 
     @server.tool()
     def stop(robot: str) -> str:

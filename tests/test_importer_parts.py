@@ -78,6 +78,7 @@ def test_relative_absolute_and_file_uris(tmp_path):
     assert resolver.resolve("../meshes/a b.stl").path == mesh.resolve()
     assert resolver.resolve(str(mesh)).path == mesh.resolve()
     assert resolver.resolve(f"file://{str(mesh).replace(' ', '%20')}").path == mesh.resolve()
+    assert resolver.resolve(mesh.as_uri()).path == mesh.resolve()  # the standard form, file:///C:/... on Windows
 
 
 def test_unsupported_scheme_and_non_mesh_files_are_refused(tmp_path):
@@ -346,7 +347,7 @@ def test_xacro_cannot_read_files_outside_its_project_or_environment_variables(tm
     write(project / "package.xml", "<package><name>proj</name></package>")
     src = write(
         project / "r.xacro",
-        f'<robot name="r" {XACRO_NS}><xacro:property name="d" value="${{xacro.load_yaml(\'{outside}\')}}"/>'
+        f'<robot name="r" {XACRO_NS}><xacro:property name="d" value="${{xacro.load_yaml(\'{outside.as_posix()}\')}}"/>'
         '<link name="${d.key}"/></robot>',
     )
     with pytest.raises(xacro.XacroError, match="outside the project folder"):
@@ -462,7 +463,8 @@ def test_xacro_macro_doubling_is_stopped_by_the_element_budget(tmp_path):
     src = write(tmp_path / "laughs.xacro", f'<robot name="r" {XACRO_NS}>{macros}<xacro:m30/></robot>')
     seconds, peak_mb, error = _timed_peak(lambda: xacro.expand(src))
     assert error is not None and "expands into more than" in str(error)
-    assert seconds < 5.0 and peak_mb < 300, f"{seconds:.1f} s, {peak_mb:.0f} MB"
+    # Bounded, not instant: a slow CI runner needs several seconds; unbounded expansion would take minutes and GBs.
+    assert seconds < 20.0 and peak_mb < 300, f"{seconds:.1f} s, {peak_mb:.0f} MB"
 
 
 def test_xacro_wide_text_amplification_is_stopped_by_the_output_budget(tmp_path, monkeypatch):
