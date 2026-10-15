@@ -115,9 +115,11 @@ class _Server(MCPServer):
     """An MCPServer that reads a call forgivingly and answers a failed one briefly (see tool_input)."""
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None):
+        names = [t.name for t in self._tool_manager.list_tools()]
+        name = name if name in names else tool_input.tool_name(name, names) or name
         tool = self._tool_manager.get_tool(name)
         if tool is None:
-            raise ToolError(tool_input.unknown_tool(name, [t.name for t in self._tool_manager.list_tools()]))
+            raise ToolError(tool_input.unknown_tool(name, names))
         arguments = tool_input.tidy(name, tool.parameters, arguments)
         try:
             return await super().call_tool(name, arguments, context)

@@ -44,6 +44,12 @@ _JOINT_TYPES = {
 }
 
 
+# Positions and sizes are meters. The largest scene is 20 m across, so a number beyond these can only be
+# centimetres or millimetres; refusing it beats a robot placed 150 m away that nobody can find.
+MAX_POSITION = 100.0
+MAX_OBJECT_SIZE = 50.0
+PLURAL = {"pos": "positions", "size": "sizes"}
+
 AREA_TERRAIN = ("hills", "rough")  # terrain types that cover the ground rather than sit on it
 FEATURE_GAP = 0.6  # m of flat floor between a robot and a feature put in front of it
 
@@ -242,6 +248,7 @@ class Playground:
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
+        _check_meters("pos", pos, MAX_POSITION)
         try:
             entry = RobotEntry(
                 name=name,
@@ -278,6 +285,8 @@ class Playground:
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _check_meters("pos", pos, MAX_POSITION)
+
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
             if not params and pos is None and yaw is None and build is None:
@@ -326,6 +335,8 @@ class Playground:
     @_one_edit_at_a_time
     def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
         given, name = name, tidy_name(name)
+        _check_meters("pos", fields.get("pos"), MAX_POSITION)
+        _check_meters("size", fields.get("size"), MAX_OBJECT_SIZE)
         try:
             entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
         except ValidationError as exc:  # pydantic's own wording buries the fix under types and a docs link
@@ -338,6 +349,9 @@ class Playground:
 
     @_one_edit_at_a_time
     def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
+        _check_meters("pos", fields.get("pos"), MAX_POSITION)
+        _check_meters("size", fields.get("size"), MAX_OBJECT_SIZE)
+
         def change(w: World) -> None:
             obj = _find(w.objects, name, "object")
             if all(value is None for value in fields.values()):
@@ -543,6 +557,7 @@ class Playground:
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name) if name else None
+        _check_meters("pos", pos, MAX_POSITION)
         fields = {"name": name, "pos": pos, "yaw": yaw, "style": style}
         patch = self._patch({**(params or {}), "type": type, **{k: v for k, v in fields.items() if v is not None}})
 
@@ -561,6 +576,8 @@ class Playground:
         style: str | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        _check_meters("pos", pos, MAX_POSITION)
+
         def change(w: World) -> None:
             old = _find(w.terrain, name, "terrain patch")
             fields = {"pos": pos, "yaw": yaw, "style": style}
@@ -756,6 +773,16 @@ def _find(items: list, name: str, kind: str):
     if found is None:
         raise PlaygroundError(wording.unknown(kind, name, names))
     return items[names.index(found)]
+
+
+def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
+    """Refuse a position or size too big to be anything but centimetres or millimetres taken for meters."""
+    if not values or not all(isinstance(v, int | float) for v in values) or max(abs(v) for v in values) <= limit:
+        return
+    text = f"{label} {list(values)} is out of range: {PLURAL[label]} are meters, at most {limit:g} in a scene"
+    if max(abs(v) for v in values) / 100 <= limit:
+        text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
+    raise PlaygroundError(text)
 
 
 def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:

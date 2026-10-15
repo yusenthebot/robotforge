@@ -449,6 +449,34 @@ CASES: list[Case] = [
     c("describe_model", "unknown parameter", robot="dog"),
     c("no_such_tool", "tool name that does not exist"),
     c("move_robot", "tool name that is close to move", robot="dog", speed=0.2),
+    c("Move", "tool name in capitals", "accept", robot="dog", speed=0.2, seconds=1),
+    c("robotforge.move", "tool name with the server in front", "accept", robot="dog", speed=0.2, seconds=1),
+    # -- numbers in centimetres, fields a strict model fills in, settings in the wrong place
+    c("add_robot", "pos in centimetres", name="pup", template="rover", pos=[150, 80]),
+    c("add_object", "pos in centimetres", name="b2", pos=[150, 80]),
+    c("add_object", "size in centimetres", name="b2", shape="table", size=[120, 60, 75]),
+    c("update_object", "pos in centimetres", name="ball", pos=[250, 0]),
+    c("add_terrain", "pos in centimetres", type="ramp", pos=[300, 0]),
+    c("move", "speed null", "accept", robot="dog", speed=None, seconds=1),
+    c("new_world", "floor null", "accept", name="w1", floor=None),
+    c(
+        "add_robot",
+        "template empty text with a library robot",
+        "accept",
+        name="go",
+        template="",
+        library="go2",
+        pos=[3, 0],
+    ),
+    c("add_object", "size an empty list", "accept", name="b2", size=[], pos=[0.4, 0.1]),
+    c("observe", "view empty text", "accept", view="", width=160, height=120),
+    c("add_robot", "settings at the top level", name="pup", template="quadruped", leg_length=0.3),
+    c("pick_and_place", "target as a dict", "accept", robot="arm", object="ball", target={"x": 0.2, "y": 0.2}),
+    c("sim_control", "action with spaces around it", "accept", action=" Pause "),
+    c("add_object", "name that is not Latin letters", name="\u7403", pos=[0.4, 0.1]),
+    c("add_robot", "name empty", name="", template="rover"),
+    c("remove", "name empty", name=""),
+    c("add_part", "part given as a list", setup=[BUILT], robot="spider", part=[{"name": "tail"}]),
 ]
 
 
@@ -495,6 +523,8 @@ def leaves(value: Any) -> list[str]:
     if value is None:
         return []
     text = str(value)
+    if not text:
+        return ["''"]  # an empty text is pointed at by its quotes
     if "/" in text:
         return [text, Path(text).name]
     return [text, text.split(":")[-1]] if ":" in text else [text]  # "policy:nope" is pointed at by "nope"

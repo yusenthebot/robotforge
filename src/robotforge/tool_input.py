@@ -115,6 +115,7 @@ FORMS = {
 }
 NUMBERS = re.compile(r"[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)*\s*[\])]?")
 COORDINATES = ("x", "y", "z")
+SETTINGS = ("params", "options", "task_params")  # the parameters that hold a thing's own settings
 MAX_ERRORS = 3  # problems named in one answer; fix these and the rest follow
 
 
@@ -180,6 +181,20 @@ def _tidy_value(name: str, value: Any, prop: Mapping[str, Any]) -> Any:
     return value
 
 
+def _blank(value: Any, prop: Mapping[str, Any]) -> bool:
+    """A value that says "not given": models that must fill in every field send null, "" or [] for the ones they
+    do not mean to set. Only for a parameter that has a default, and only where the value could not mean anything."""
+    variants = _variants(prop)
+    nullable = len(variants) < len(prop.get("anyOf", variants))
+    if value is None:
+        return not nullable
+    if value == "":
+        return any(v.get("type") == "string" for v in variants)
+    return value == [] and any(
+        v.get("type") == "array" and v.get("items", {}).get("type") == "number" for v in variants
+    )
+
+
 def tidy(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> dict[str, Any]:
     """The arguments with every form that has one meaning turned into the form the tool takes.
     Raises ToolError for a parameter the tool does not have: ignoring it would make the agent think it applied."""
@@ -187,16 +202,26 @@ def tidy(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> 
     extra = [k for k in arguments if k not in props]
     if extra:
         raise ToolError(unknown_parameters(tool, extra, list(props)))
-    return {k: _tidy_value(k, v, props[k]) for k, v in arguments.items()}
+    required = set(schema.get("required", []))
+    return {k: _tidy_value(k, v, props[k]) for k, v in arguments.items() if k in required or not _blank(v, props[k])}
 
 
 def unknown_parameters(tool: str, extra: Sequence[str], params: Sequence[str]) -> str:
     named = ", ".join(repr(k) for k in extra)
     if not params:
         return f"{tool} takes no parameters (got {named})"
-    hints = [f"{k!r} -> {close[0]}" for k in extra if (close := wording.near(k, params, SYNONYMS, n=1))]
-    maybe = f"; did you mean {', '.join(h.split(' -> ')[1] for h in hints)}?" if hints else ""
-    return f"{tool} has no parameter {named}{maybe} (parameters: {', '.join(params)})"
+    close = [c[0] for k in extra if (c := wording.near(k, params, SYNONYMS, n=1))]
+    text = f"{tool} has no parameter {named}"
+    if close:
+        text += f"; did you mean {', '.join(close)}?"
+    elif settings := next((p for p in SETTINGS if p in params), None):
+        text += f"; settings of the thing itself go in {settings}"
+    return f"{text} (parameters: {', '.join(params)})"
+
+
+def tool_name(name: str, tools: Sequence[str]) -> str | None:
+    """The tool `name` means: in other capitals, or with the server's name in front ("robotforge.move")."""
+    return wording.match(name, tools) or wording.match(re.split(r"[./:]|__", name)[-1], tools)
 
 
 def unknown_tool(name: str, tools: Sequence[str]) -> str:
