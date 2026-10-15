@@ -350,15 +350,27 @@ Rounds 1-3 done, 2026-10-14.
 - `claude -p` is still logged out (needs the user).
 - What did NOT work: comparing single runs is noisy (the agent takes different paths); per-call tokens are the steadier measure.
 
+## Round 29 (2026-10-15): learned walks that turn (phase D)
+
+- Keeping a walk in RL II now goes on, in the background, to learn a turn each way (`learn_turns`): the same random search with a reward for the angle turned less 3 x how far the body strays at its farthest. Two starts per side, the better one kept. Saved as optional fields of walks/<robot>.json (walks kept before still load). `move(turn=...)` and A/D turn the robot on the spot; `robots` reports `turns` and `turn_deg_s`.
+- Verified in the browser with the keyboard (Codex's tripod): A for 2 s turned it 88 degrees left while it moved 11 cm, D turned it back 110 degrees, W walked 0.95 m.
+- Verified with a real Codex session: it read the turn rate from `robots`, asked for a 4 s left turn (182 degrees, 19 cm drift), then walked 1.16 m in 3 s, upright; 6 tool calls, 505k input tokens (463k cached).
+- That session also found a bug, fixed: `move` reported `turned_deg` as the difference of the two headings, so a half turn left read as -177.6 (a right turn). The heading is now followed while the robot moves.
+- What did NOT work:
+  - Net displacement after the turn as the wander measure: a tripod circled round a point and came back (0.01 m net, 0.5 m away mid-turn in the browser). Measured at its farthest now.
+  - A wander weight of 6: the tripod nearly stopped turning (7 deg/s); 3 keeps the spots tight (6 to 9 cm) at 45 to 87 deg/s.
+  - One start per side: one run learned 16 deg/s, the next 87.
+
 ## Next-round seed
 
-Round 29 = learned walks that turn (phase D). Probe this round: a rhythm learns to turn in place in 30 rounds (6 s): starfish about 60 deg/s each way, a tripod 90 left and 38 right (wandering 0.57 m). Keeping a walk in RL II also learns a left and a right turn (Reward gains a turn mode: yaw turned minus wander), saved as optional fields of walks/<robot>.json (old files still load); `move` and A/D turn the robot in place; `robots` says it turns. Verify in the browser (WASD) and with Codex. Also open: editing a world reloads it and puts robots back at their start.
+Round 30 = editing a world keeps the robots where they are (phase D). Codex's review task re-walked the Go2 because moving a bin reloaded the world and put every robot back at its start; a beginner sees robots jump back for no reason. Carry each robot's pose (and joint angles, matched by name) across a recompile when the robot itself did not change; verify in the browser (move a robot, edit an object) and with Codex. Waiting on the user: `learn_walk` tool, `claude auth login`.
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 11 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk, motion planning on the PiPER), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Done in round 25: learned walks kept with the user's robot and driven by `move` and the keyboard.
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
+- Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
