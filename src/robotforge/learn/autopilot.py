@@ -285,11 +285,14 @@ class AutopilotLesson(TwinsLesson):
         spec = mujoco.MjSpec()
         spec.modelname = "lidar_autopilot"
         spec.compiler.degree = False
-        spec.option.timestep = 0.002
-        spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-        for twin, (x, y) in zip(self.twins, CENTRES, strict=True):
+        arenas = [sensors.sensors_spec(floor=False) for _ in self.twins]
+        # Attaching keeps the parent's physics options: one left at MuJoCo's defaults ran the rovers with the
+        # Euler integrator instead of the arena's implicitfast (and logged an attach conflict). Take the arena's.
+        spec.option.timestep = arenas[0].option.timestep
+        spec.option.integrator = arenas[0].option.integrator
+        for twin, arena, (x, y) in zip(self.twins, arenas, CENTRES, strict=True):
             frame = spec.worldbody.add_frame(pos=[x, y, 0])
-            spec.attach(sensors.sensors_spec(floor=False), prefix=f"{twin.name}/", frame=frame)
+            spec.attach(arena, prefix=f"{twin.name}/", frame=frame)
         spec.worldbody.add_geom(
             name="floor",
             type=mujoco.mjtGeom.mjGEOM_PLANE,

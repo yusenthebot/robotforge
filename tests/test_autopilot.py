@@ -1,8 +1,11 @@
 """Sensing II: two robot vacuums on the same lidar rule, each with its own stop distance, speed, noise and filter."""
 
+import warnings
+
+import mujoco
 import pytest
 
-from robotforge.learn import autopilot
+from robotforge.learn import autopilot, sensors
 from robotforge.learn.engine import LessonError
 from robotforge.playground import Playground
 
@@ -61,3 +64,16 @@ def test_each_run_starts_both_rovers_from_scratch(pg):
     assert again["a"]["stop"] == 0.9 and again["a"]["bumps"] == 0  # far too careful to touch anything
     assert again["b"] == first["b"]  # B's noise-free run repeats exactly: the start and odometry were reset
     assert "timid" in update["passed"]
+
+
+def test_both_arenas_run_on_the_sensors_lessons_integrator():
+    """Attaching keeps the parent's physics options: a parent left at MuJoCo's defaults ran both rovers on the Euler
+    integrator and logged "Attach conflict when attaching 'sensors_lesson' ... integrator: parent has 0 (default),
+    child has 3". The arena's own options must win."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        model = autopilot.AutopilotLesson().build()
+    assert not [w for w in caught if "Attach conflict" in str(w.message)]
+    alone = sensors.SensorsLesson().build()
+    assert model.opt.integrator == alone.opt.integrator == mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    assert model.opt.timestep == alone.opt.timestep
