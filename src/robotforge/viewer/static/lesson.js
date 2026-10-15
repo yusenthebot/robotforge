@@ -216,7 +216,10 @@ export function lessonUpdate(msg) {
   if (msg.bench) bench.update(msg.bench);
   const quizChanged = JSON.stringify(state?.quiz) !== JSON.stringify(msg.quiz);
   const resultChanged = JSON.stringify(state?.results) !== JSON.stringify(msg.results);
+  // A drawing comes with one update only (when it changes): keep it, or a slow frame may miss it.
+  const drawing = msg.live?.drawing ?? state?.drawing ?? null;
   state = msg;
+  state.drawing = drawing;
   plots.add(msg.samples);
   if (unlockChanged) {
     renderControls();
@@ -1759,8 +1762,87 @@ function gaitRig(rig) {
   };
 }
 
+// Motion planning: the straight joint-space sweep (and where it hits), the two trees growing in, the path
+// as a tube, all drawn where the hand would be. Drawings arrive only when they change; the newest stays.
+function planRig(rig) {
+  const tags = faceoffRig(rig);
+  const amber = api.color("--amber");
+  const violet = api.color("--plot-violet");
+  const blue = api.color("--plot-blue");
+  const red = api.color("--bad");
+  const straight = new THREE.Group();
+  const trees = new THREE.Group();
+  const path = new THREE.Group();
+  const sweep = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: violet, dashSize: 0.02, gapSize: 0.012, transparent: true, opacity: 0.9, depthTest: false }));
+  sweep.userData.dashed = true;
+  // Dots along the sweep as well: a one-pixel dashed line is hard to see.
+  const sweepDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: violet, size: 0.012, map: dotTexture(), alphaTest: 0.05, transparent: true, depthTest: false, toneMapped: false }));
+  const clash = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 10), Object.assign(basic(red, 0.95), { depthTest: false }));
+  clash.renderOrder = 6; // seen through the fence it is inside of
+  const goal = new THREE.Mesh(new THREE.SphereGeometry(0.018, 20, 12), basic(amber, 0.9));
+  straight.add(sweep, sweepDots, clash, goal);
+  const branches = [blue, violet].map((c) => new THREE.LineSegments(new THREE.BufferGeometry(), lineMat(c, 0.75)));
+  // The nodes as dots too: one-pixel lines alone vanish at this distance.
+  const nodes = [blue, violet].map(
+    (c) => new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: c, size: 0.02, map: dotTexture(), alphaTest: 0.05, transparent: true, depthTest: false, toneMapped: false }))
+  );
+  trees.add(...branches, ...nodes);
+  const tube = new THREE.Mesh(new THREE.BufferGeometry(), basic(amber, 0.85));
+  path.add(tube);
+  const parts = { ...tags.parts, straight, trees, path };
+  tags.group.add(straight, trees, path);
+  let shown = null; // the drawing on screen
+  let grownAt = 0; // when its trees started growing in
+  const GROW_MS = 1400;
+  const draw = (d) => {
+    shown = d;
+    grownAt = performance.now();
+    goal.position.fromArray(d.goal);
+    const pts = (d.straight ?? []).map((p) => new THREE.Vector3().fromArray(p));
+    sweep.visible = sweepDots.visible = pts.length > 1;
+    if (sweep.visible) {
+      setPoints(sweep, pts);
+      sweepDots.geometry.dispose();
+      sweepDots.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    }
+    clash.visible = !!d.clash;
+    if (d.clash) clash.position.fromArray(d.clash);
+    (d.trees ?? [[], []]).forEach((edges, k) => {
+      const flat = edges.flatMap(([a, b]) => [new THREE.Vector3().fromArray(a), new THREE.Vector3().fromArray(b)]);
+      setPoints(branches[k], flat);
+      branches[k].geometry.setDrawRange(0, 0);
+      branches[k].userData.count = flat.length;
+      const tips = edges.map(([, b]) => new THREE.Vector3().fromArray(b));
+      nodes[k].geometry.dispose();
+      nodes[k].geometry = new THREE.BufferGeometry().setFromPoints(tips);
+      nodes[k].geometry.setDrawRange(0, 0);
+      nodes[k].userData.count = tips.length;
+    });
+    tube.geometry.dispose();
+    const way = (d.path ?? []).map((p) => new THREE.Vector3().fromArray(p));
+    tube.geometry = way.length > 1 ? new THREE.TubeGeometry(new THREE.CatmullRomCurve3(way), Math.min(400, way.length * 3), 0.005, 8) : new THREE.BufferGeometry();
+    tube.visible = false;
+  };
+  return {
+    group: tags.group,
+    parts,
+    frame() {
+      tags.frame();
+      const d = state.drawing;
+      if (d && d !== shown) draw(d);
+      if (!shown) return;
+      // The trees grow in edge by edge, in the order they were found; the path appears once they meet.
+      const u = Math.min(1, (performance.now() - grownAt) / GROW_MS);
+      for (const b of branches) b.geometry.setDrawRange(0, 2 * Math.floor(((b.userData.count ?? 0) / 2) * u));
+      for (const n of nodes) n.geometry.setDrawRange(0, Math.floor((n.userData.count ?? 0) * u));
+      tube.visible = u >= 1 && (shown.path?.length ?? 0) > 1;
+    },
+  };
+}
+
 const RIGS = {
   gait: gaitRig,
+  plan: planRig,
   joint: jointRig,
   planar_arm: planarArmRig,
   rover: roverRig,
