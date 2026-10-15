@@ -12,6 +12,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import mujoco
 import numpy as np
 
 from robotforge.behaviors import Kind
@@ -29,6 +30,8 @@ class Mode:
     params: dict[str, Any] = field(default_factory=dict)
     drivable: bool = False  # the keyboard drives the robot in this mode
     follows: bool = False  # the robot travels on its own, so the camera should follow it
+    then: str | None = None  # after `seconds` of sim time, switch to this mode (e.g. stop walking and stand)
+    seconds: float = 0.0
 
 
 DRIVE = Mode("drive", drivable=True)
@@ -39,7 +42,7 @@ MANUAL = Mode("manual")
 CONTROL: tuple[Mode, ...] = (
     Mode("hold", "stand", "hold"),
     Mode("stand_mpc", "stand", "mpc"),
-    Mode("walk_mppi", "walk", "mppi", {"speed": 0.3}, follows=True),
+    Mode("walk_mppi", "walk", "mppi", {"speed": 0.3}, follows=True, then="stand_mpc", seconds=8.0),
     Mode("balance_lqr", "balance", "lqr"),
     Mode("balance_mpc", "balance", "mpc"),
     Mode("balance_none", "balance", "none"),
@@ -132,15 +135,44 @@ def _attach(playground: Playground, robot: str, mode: Mode) -> dict[str, Any]:
     task = make_task(mode.task, model, robot, params)
     task.begin(snapshot)
     controller = make_controller(mode.method, task, model, snapshot, None)
+    if mode.then is not None:
+        after = MODES[mode.then]
+        later_task = make_task(after.task, model, robot, dict(after.params))
+        later_task.begin(snapshot)
+        later = make_controller(after.method, later_task, model, snapshot, None)
+        controller = Then(controller, later, later_task, float(snapshot.time) + mode.seconds)
     with session.lock:
         if session.version != version:
             raise ModeError("the world changed while the controller was being set up; pick the mode again")
         task.begin(session.data)
+        if isinstance(controller, Then):
+            controller.until = float(session.data.time) + mode.seconds
         session.set_controller(robot, controller)
     playground.modes[robot] = (mode.key, controller)
     described = task.describe()
     marker = described.get("target") or described.get("goal")
     return {"robot": robot, "mode": mode.key, "follows": mode.follows, **({"marker": marker} if marker else {})}
+
+
+class Then:
+    """Run one controller until a moment in sim time, then hand over to another (walk a while, then stand)."""
+
+    def __init__(self, first: Any, second: Any, second_task: Any, until: float) -> None:
+        self.first, self.second, self.second_task, self.until = first, second, second_task, until
+        self.switched = False
+
+    @property
+    def rate_hz(self) -> float:
+        return (self.second if self.switched else self.first).rate_hz
+
+    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if not self.switched and data.time >= self.until:
+            self.switched = True
+            self.second_task.begin(data)  # stand where it stopped, not where it started
+        (self.second if self.switched else self.first).update(model, data)
+
+    def status(self) -> dict[str, Any]:
+        return {**(self.second if self.switched else self.first).status(), "then": self.switched}
 
 
 def current(playground: Playground) -> dict[str, str]:
@@ -151,7 +183,8 @@ def current(playground: Playground) -> dict[str, str]:
     for robot, ctrl in list(playground.session.controllers.items()):
         tracked = playground.modes.get(robot)
         if tracked is not None and tracked[1] is ctrl:
-            out[robot] = tracked[0]
+            mode = MODES[tracked[0]]
+            out[robot] = mode.then if isinstance(ctrl, Then) and ctrl.switched and mode.then else tracked[0]
         elif _is_mover(ctrl):
             out[robot] = "learned" if ctrl.status().get("walker") == "rl" else "drive"
     return out

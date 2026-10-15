@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 from starlette.testclient import TestClient
 
@@ -111,3 +112,20 @@ def test_viewer_requests_change_the_world_and_get_answers(playground):
         assert _reply(ws, 3)["data"]["mode"] == "hold"
     assert playground.store.load().floor.style == "grass"
     assert hub.state_message()["mode"]["dog"] == "hold"
+
+
+def test_mppi_walking_stops_and_stands_after_a_while(playground):
+    out = modes.apply(playground, "dog", "walk_mppi")
+    assert out["follows"] is True
+    session = playground.session
+    trunk = session.model.body("dog/trunk").id
+    start = session.data.xpos[trunk][:2].copy()
+    session.step(round(4.0 / session.model.opt.timestep))
+    assert modes.current(playground)["dog"] == "walk_mppi"
+    session.step(round(5.0 / session.model.opt.timestep))  # past the 8 s walk
+    assert modes.current(playground)["dog"] == "stand_mpc"
+    stopped = session.data.xpos[trunk][:2].copy()
+    session.step(round(2.0 / session.model.opt.timestep))
+    assert np.linalg.norm(stopped - start) > 0.5  # it walked
+    assert np.linalg.norm(session.data.xpos[trunk][:2] - stopped) < 0.15  # and now stands its ground
+    assert session.data.xmat[trunk][8] > 0.9  # upright
