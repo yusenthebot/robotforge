@@ -151,6 +151,22 @@ def test_a_quadruped_never_moved_stands_as_it_did_without_a_gait(pg, tmp_path, r
     assert np.degrees(np.abs(pg.session.data.qpos[legs] - plain.session.data.qpos[legs])).max() < 0.5
 
 
+@pytest.mark.parametrize("robot", list(ROBOTS))
+def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot):
+    """Regression found while measuring: on a 15 degree ramp a Go2 slid 12 cm down and back while it landed, and
+    our dog creeps down at about 1 cm/s on its servos; both read as a push, and the robot stepped off the ramp
+    (0.9 m) or about it for half a minute. It stands there as it would on its servos alone."""
+    pg.add_terrain("ramp", pos=[0.0, 0.0], params={"angle": 15, "length": 1.5, "direction": "up"})
+    pg.add_robot(robot, **ROBOTS[robot], pos=[-0.4, 0.0])
+    gait = pg.session.controllers[robot]
+    stepped = 0.0
+    for _ in range(400):  # 8 s
+        pg.run_fast(lambda: False, 0.02)
+        stepped = max(stepped, gait._amplitude)
+    assert stepped < 0.05
+    assert pg.behaviors.pose(robot)["upright"]
+
+
 def test_a_nudge_the_stance_soaks_up_takes_no_steps(pg):
     """Stepping lifts feet, so a robot that can simply stand through a push stays planted, as it always did."""
     trunk, dof = _on_its_gait(pg, "dog", 0.0)

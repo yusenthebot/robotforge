@@ -74,6 +74,9 @@ MOTOR_DAMPING_RATIO = 0.25
 # A short shove that the stance soaks up does not start any of this.
 PUSH_DRIFT = 0.08  # standing: the trunk moved this many leg lengths from where it stood...
 DRIFT_TAU = 2.0  # ...lately (s; slow creep is forgotten)
+# Drift is motion off the usual (adapting at REST_TAU, like the roll). Standing on a slope, servo legs creep: our
+# dog on a 15 degree ramp slid down at 8-11 mm/s, as it does without a gait. Counted as drift, that read as a
+# push after 4 s and it stepped about the ramp for half a minute; a creep that slow is how it stands there.
 # Speeds are in units of sqrt(g * leg length), so one setting fits small and large robots.
 WALK_PUSH_SPEED = 0.08  # walking: sideways speed, averaged over a cycle (a straight trot stays under 0.012)
 PUSH_LEAN = math.radians(4.0)  # roll away from the usual that counts as a push (a straight trot: under 2)
@@ -88,7 +91,10 @@ RECOVER_FALL = 0.5  # cycles to blend back into the plain gait
 LATERAL_FOLLOW = 0.5  # share of the trunk's sideways velocity its strides follow (1 kept it drifting)
 FOLLOW_TAU = 0.25  # cycles: the sideways velocity the strides follow is smoothed this much
 REST_TAU = 1.0  # s: the usual roll (on a side slope, say) adapts this slowly
-SETTLE_TIME = 0.5  # s after a start or reset during which a robot settles onto its feet unwatched
+SETTLE_TIME = 0.5  # s after a start or reset during which a robot settles onto its feet unwatched...
+# ...and longer, up to this many s, until its trunk is calm: put down on a 15 degree ramp, a Go2 slid 12 cm down
+# and back for 0.9 s; watched from 0.5 s on, that read as a push and it stepped 0.9 m down the ramp.
+SETTLE_MAX = 3.0
 # A walking robot blocked by a stair riser or a curb leans and wobbles like a pushed one, and kept on
 # recovering: its strides followed the wobble sideways and it never climbed (the obstacle course fell from
 # 12 m to 4.6 m). Walking recovery is cut off after a while and then held off, so it climbs on its plain gait.
@@ -197,8 +203,11 @@ class QuadrupedGait:
         self._own_pattern = [leg.phase_offset for leg in self.legs]  # recovery is tuned for this pattern
         self._v_fast = np.zeros(3)  # the trunk velocity again, smoothed over a quarter cycle
         self._rest_roll = 0.0  # the roll the trunk usually holds here
-        self._settled_at = -math.inf  # pushes count from this time on
+        self._started_at = -math.inf  # sim time of the start, or of the last reset under it
+        self._calm_since = -math.inf  # while settling: since when the trunk has been calm
+        self._settled_at = -math.inf  # pushes count from this time on (inf: not settled yet)
         self._drift = np.zeros(2)  # how far the trunk moved while standing still, lately (forward, left)
+        self._creep = np.zeros(2)  # how it usually moves standing here: a slow creep down a slope, say
         self._recover_until = -math.inf
         self._walk_recover_since: float | None = None  # when the current recovery while walking started
         self._walk_rest_until = -math.inf  # no recovery while walking before this
@@ -253,7 +262,8 @@ class QuadrupedGait:
     def _plan(self, data: mujoco.MjData) -> None:
         t = data.time
         if self._last_t is None or t < self._last_t:  # a new start, or the data was reset under us
-            self._settled_at = t + SETTLE_TIME
+            self._started_at = self._calm_since = t
+            self._settled_at = math.inf
             # Recovery times are absolute: after a rewind they would keep it stepping until the old clock
             self._recover_until = self._walk_rest_until = -math.inf
             self._walk_recover_since = None
@@ -318,15 +328,22 @@ class QuadrupedGait:
 
     def _recovering(self, t: float, dt: float, measured: np.ndarray, roll: float, moving: bool) -> bool:
         """Whether the robot is recovering from a push; also eases the recovery in and out."""
+        if self._settled_at == math.inf:  # settled once calm for a whole cycle (see SETTLE_MAX)
+            if not self._calm(moving):
+                self._calm_since = t
+            since = t - self._started_at
+            if since >= SETTLE_MAX or (since >= SETTLE_TIME and t - self._calm_since >= self.period):
+                self._settled_at = t
         if t < self._settled_at:  # still settling onto its feet: nothing to recover from yet
             self._rest_roll = roll
             recovering = False
         else:
             recovering = self._watch_for_pushes(t, roll - self._rest_roll, moving)
         if moving or recovering or self._amplitude >= 0.05 or t < self._settled_at:
-            self._drift = np.zeros(2)
-        else:
-            self._drift = math.exp(-dt / DRIFT_TAU) * self._drift + dt * measured[:2]
+            self._drift, self._creep = np.zeros(2), np.zeros(2)
+        else:  # how it moves off its usual slow creep (see DRIFT_TAU)
+            self._creep = self._creep + (1.0 - math.exp(-dt / REST_TAU)) * (measured[:2] - self._creep)
+            self._drift = math.exp(-dt / DRIFT_TAU) * self._drift + dt * (measured[:2] - self._creep)
         if not recovering:
             self._rest_roll += (1.0 - math.exp(-dt / REST_TAU)) * (roll - self._rest_roll)
         rise = RECOVER_RISE_WALKING if moving else RECOVER_RISE
@@ -342,8 +359,7 @@ class QuadrupedGait:
         slip = TURN_SLIP * abs(self.turn) * self.leg_length
         sideways_push = WALK_PUSH_SPEED * scale + slip  # how fast a push that starts a walking recovery moves it
         if t < self._recover_until:  # keep at it until the trunk is calm again
-            off = abs(self._v_meas[1]) if moving else math.hypot(self._v_meas[0] - self.speed, self._v_meas[1])
-            pushed = off > CALM_SPEED * scale + slip
+            pushed = not self._calm(moving)
         elif not moving and self._amplitude < 0.05:  # standing still
             pushed = float(np.linalg.norm(self._drift)) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
         elif moving:
@@ -354,6 +370,12 @@ class QuadrupedGait:
         if pushed:
             self._recover_until = t + RECOVER_CYCLES * self.period
         return self._limit_walking(t, t < self._recover_until, moving, sideways_push)
+
+    def _calm(self, moving: bool) -> bool:
+        """The trunk moves as told, averaged over a cycle: sideways (and standing, forwards) under CALM_SPEED."""
+        off = abs(self._v_meas[1]) if moving else math.hypot(self._v_meas[0] - self.speed, self._v_meas[1])
+        slip = TURN_SLIP * abs(self.turn) * self.leg_length
+        return off <= CALM_SPEED * math.sqrt(9.81 * self.leg_length) + slip
 
     def _limit_walking(self, t: float, recovering: bool, moving: bool, sideways_push: float) -> bool:
         """Cut a recovery while walking off after WALK_RECOVER_MAX, then rest from it (see WALK_RECOVER_MAX)."""
