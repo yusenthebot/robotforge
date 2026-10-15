@@ -86,9 +86,18 @@ Rounds 1-3 done, 2026-10-14.
 - Builder review HIGH 1-4 fixed with failing-first tests: rangefinder bitmask (HIGH 2), mirrored slides keep their direction (HIGH 3), IK seed wraps into the base limits (HIGH 4, the -268 degree seed), balancer detection asks physics when a caster sits a few mm high (HIGH 1).
 - Open, found while verifying HIGH 4: after the rover drives a turn and stops at an unplanned heading, pick-and-place grasps and carries fine but at release the rover twists 10 degrees and the cube is flung (0.39 m up). Likely gripper or cube against the bin wall; trace in scratchpad/arm_turn_trace.py. Not the same failure as HIGH 4.
 
+## Round 9 (2026-10-15): challenges
+
+- `learn/challenges.py`: Challenge base on the lesson engine (kind "challenge", real scenes via `scene_model`, real behaviors via `lesson.playground`, timer from the first key, stars, Reset retries). Maze escape (seeded, par from the shortest path at 0.35 m/s), shove survival (hold / step in place / MPC stand; 0.2 m/s more per level), obstacle course (stars at the ends of the ramp, stairs, rough ground).
+- Viewer: the picker groups lessons and challenges, generic `live.readout` and `results.summary` + stars, best stars kept per browser, the camera follows `drive.follow`.
+- CI: the walkers note test failed on CI only; my venv still had onnxruntime from rendering the film. `uv sync` (default install) before trusting a local run.
+- What did NOT work (and the fix):
+  - Nothing finishes the obstacle course yet: template dog gait falls at the 4 cm curbs (~11-12 m), Go2 gait on the stairs (5.9 m), the Go2 learned walk stalls on the ramp (trained on flat ground). Scored by distance instead; a terrain-trained policy is a frontier item.
+  - Shove robustness differs less than hoped between controllers (hold 4, gait 5, MPC 5-7 levels); thresholds and text match the measurements.
+
 ## Next-round seed
 
-Round 9: playability phase 3 from docs/PLAY_PLAN.md (challenges with stars on the existing scenes: obstacle course time trial, maze, push-recovery, a controller race) or more lessons (walking gaits, RL) depending on the user's answers; investigate the release fling; builder MED 6-9.
+Round 10: phase 4 of docs/PLAY_PLAN.md, "train your robot": a lesson where reinforcement learning trains live in the viewer (ARS or PPO on a small robot, reward curve and rollouts of each generation), so the learner sees a policy go from flailing to working. Then: the release fling (systematic debugging), builder MED 6-9, a gait lesson.
 
 ## Frontier
 
