@@ -27,7 +27,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - The repo sits in an iCloud-synced Desktop, which sets the macOS `hidden` flag on `.venv/**/*.pth`; Python 3.12 then skips the editable-install `.pth` and `import robotforge` fails.
   Fix in place: `.venv` is a symlink to `.venv.nosync/` (iCloud ignores `*.nosync`). Recreate the same way if the venv is ever deleted.
 - Run the viewer: `uv run robotforge demo` or `uv run robotforge open path/to/model.xml` (MJCF or URDF). Browser-pane preview config `robotforge-demo` lives in `~/Desktop/.claude/launch.json`.
-- The viewer exposes `window.__robotforge` (`scene`, `time`, `bodyPosition`, `pick`, `screenOf`) for scripted checks. The browser pane may be hidden and throttle `requestAnimationFrame`, so drive pointer tests with `screenOf` coordinates (CSS px, not screenshot px).
+- The viewer exposes `window.__robotforge` (`scene`, `time`, `bodyPosition`, `pick`, `screenOf`, `lookAt`, `pixels`, `flicker`) for scripted checks.
+  `flicker(eye, target, dir)` counts pixels that flip there and back while the camera slides: pause first, compare before and after a rendering change (2026-10-15: stairs 144k -> 327, grass 12k -> 0).
+  The browser pane may be hidden and throttle `requestAnimationFrame`, so drive pointer tests with `screenOf` coordinates (CSS px, not screenshot px).
 - Tests: `uv run pytest -q`; lint: `uv run ruff check . && uv run ruff format --check .`.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.

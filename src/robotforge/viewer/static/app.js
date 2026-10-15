@@ -155,6 +155,10 @@ function geometryFor(geom, meshGeometries) {
 // The floor is drawn a little "behind" in depth, so whatever lies on it (a heightfield's flat parts, paths,
 // start marks, a pond a few millimetres up) always wins instead of flickering against it.
 const FLOOR_OFFSET = { polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 4 };
+// Heightfields sit 2 mm under the floor in the physics, so their flat cells and the floor were nearly
+// coplanar: at a low camera the two traded places pixel by pixel (streaky flicker). Drawn this much
+// higher, a field is always in front inside its footprint; a foot sinking 2 mm into it is invisible.
+const HFIELD_LIFT = 0.004; // m
 let floorFrame = null; // { x, y, half, halfY, material } of the scene's floor, for lining up textures with it
 
 function planeHalf(geom, extent) {
@@ -212,28 +216,44 @@ function groundCanvas(pattern) {
       g.fillRect(((r % 2) + 0.5) * (size / 2) * rand(), (r * size) / rows, 2, size / rows); // butt joint
     }
   } else {
-    // speckle: soft blotches plus fine grain, like grass, soil or concrete seen from standing height
-    const blotch = document.createElement("canvas");
-    blotch.width = blotch.height = 16;
-    const b = blotch.getContext("2d");
-    for (let y = 0; y < 16; y++) {
-      for (let x = 0; x < 16; x++) {
-        const v = Math.round(228 + 27 * rand());
-        b.fillStyle = `rgb(${v},${v},${v})`;
-        b.fillRect(x, y, 1, 1);
-      }
-    }
-    g.imageSmoothingEnabled = true;
-    g.drawImage(blotch, 0, 0, size, size);
-    const img = g.getImageData(0, 0, size, size);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const grain = (rand() - 0.5) * 12; // fine grain shimmers at grazing angles; keep it subtle
-      for (let k = 0; k < 3; k++) img.data[i + k] = Math.max(0, Math.min(255, img.data[i + k] + grain));
+    // speckle: soft blotches plus finer mottling, like grass, soil or concrete seen from standing height.
+    // Both layers wrap around (so tiles meet without a seam) and are smooth over several texels: per-texel
+    // noise is finer than mipmapping can filter and shimmers when a low camera moves.
+    const blotches = periodicNoise(16, size, rand);
+    const mottle = periodicNoise(64, size, rand);
+    const img = g.createImageData(size, size);
+    for (let i = 0; i < size * size; i++) {
+      const v = Math.round(228 + 27 * blotches[i] + 10 * (mottle[i] - 0.5));
+      img.data.fill(Math.max(0, Math.min(255, v)), 4 * i, 4 * i + 3);
+      img.data[4 * i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
   }
   groundCanvases.set(pattern, c);
   return c;
+}
+
+// Value noise on a `cells` x `cells` grid that wraps around, sampled at `size` x `size` with smooth
+// (smoothstep) interpolation: values in 0..1, seamless when tiled.
+function periodicNoise(cells, size, rand) {
+  const grid = Float32Array.from({ length: cells * cells }, () => rand());
+  const at = (x, y) => grid[((y + cells) % cells) * cells + ((x + cells) % cells)];
+  const smooth = (t) => t * t * (3 - 2 * t);
+  const out = new Float32Array(size * size);
+  for (let py = 0; py < size; py++) {
+    const fy = (py / size) * cells;
+    const y0 = Math.floor(fy);
+    const ty = smooth(fy - y0);
+    for (let px = 0; px < size; px++) {
+      const fx = (px / size) * cells;
+      const x0 = Math.floor(fx);
+      const tx = smooth(fx - x0);
+      const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * tx;
+      const bottom = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * tx;
+      out[py * size + px] = top + (bottom - top) * ty;
+    }
+  }
+  return out;
 }
 
 function groundTexture(pattern) {
@@ -246,6 +266,21 @@ function groundTexture(pattern) {
 
 // A MuJoCo heightfield as a displaced grid. Rows run from -y to +y (MuJoCo's order); PlaneGeometry
 // lists vertices from +y down, hence the flipped row. Tops are tinted a little lighter than valleys.
+// Scale a BoxGeometry's UVs so its texture repeats every `tile` meters on each face. three.js lists the
+// faces +x, -x, +y, -y, +z, -z with 4 vertices each; u and v run along (z, y), (x, z) and (x, y).
+function boxUvsInMeters(geometry, half, tile) {
+  const uv = geometry.attributes.uv;
+  const [x, y, z] = half.map((h) => (2 * h) / tile);
+  const spans = [[z, y], [z, y], [x, z], [x, z], [x, y], [x, y]];
+  for (let face = 0; face < 6; face++) {
+    for (let k = 0; k < 4; k++) {
+      const i = face * 4 + k;
+      uv.setXY(i, uv.getX(i) * spans[face][0], uv.getY(i) * spans[face][1]);
+    }
+  }
+  uv.needsUpdate = true;
+}
+
 function hfieldObject(geom, desc, floats, look) {
   const h = desc.hfields.find((x) => x.id === geom.hfield);
   if (!h) return null;
@@ -283,12 +318,13 @@ function hfieldObject(geom, desc, floats, look) {
   const mesh = new THREE.Mesh(g, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  mesh.userData.lift = HFIELD_LIFT;
   // Sides down to the base only where the edge stands above the floor; terrain that blends into the
   // floor at its rim would only show them as a dark seam.
   const edge = []; // the field's border samples, as heights
   for (let c = 0; c < h.ncol; c++) edge.push(floats[h.offset + c], floats[h.offset + (h.nrow - 1) * h.ncol + c]);
   for (let r = 0; r < h.nrow; r++) edge.push(floats[h.offset + r * h.ncol], floats[h.offset + r * h.ncol + h.ncol - 1]);
-  if (geom.pos[2] + Math.max(...edge) * top > 0.005) mesh.add(hfieldSkirt(h, floats, top, base, mat));
+  if (geom.pos[2] + HFIELD_LIFT + Math.max(...edge) * top > 0.005) mesh.add(hfieldSkirt(h, floats, top, base, mat));
   return mesh;
 }
 
@@ -399,16 +435,17 @@ async function applyScene(desc) {
         ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3]);
       if (look && geom.type === "box") {
-        // Terrain blocks (stairs, ramps, stones) share the ground's surface; tile it by the block's size.
+        // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
+        // one repeat for the whole box squeezed the pattern on thin faces (risers, sides) into shimmer.
         mat.map = groundTexture(look.pattern === "checker" ? "speckle" : look.pattern);
-        const span = Math.max(geom.size[0], geom.size[1]) * 2;
-        mat.map.repeat.set(span / look.tile, span / look.tile);
+        boxUvsInMeters(g, geom.size, look.tile);
       }
       obj = new THREE.Mesh(g, mat);
       obj.castShadow = true;
       obj.receiveShadow = true;
     }
     obj.position.fromArray(geom.pos);
+    obj.position.z += obj.userData.lift ?? 0;
     obj.quaternion.set(geom.quat[1], geom.quat[2], geom.quat[3], geom.quat[0]);
     obj.userData.body = geom.body;
     obj.userData.group = geom.group;
@@ -1585,6 +1622,41 @@ window.__robotforge = {
   // Place the camera for scripted screenshots: eye and target in world meters.
   lookAt: (eye, target) => {
     moveCamera(new THREE.Vector3().fromArray(eye), new THREE.Vector3().fromArray(target), false);
+  },
+  // Render now and read the frame back (RGBA, bottom row first), for scripted image checks.
+  pixels: () => {
+    controls.update();
+    renderer.render(scene3, camera);
+    const gl = renderer.getContext();
+    const w = gl.drawingBufferWidth;
+    const h = gl.drawingBufferHeight;
+    const data = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    return { w, h, data };
+  },
+  three: () => ({ scene: scene3, camera, renderer, sun }), // for experiments in scripted checks
+  // Flicker check: slide the camera `steps` times by `step` m along `dir` and count pixels whose brightness
+  // flips there and back (A, B, A) by more than `threshold`. Steady motion shifts edges one way; depth
+  // fighting and texture shimmer flip back. Pause the simulation first so only the camera moves.
+  flicker: (eye, target, dir, { step = 0.005, steps = 16, threshold = 5 } = {}) => {
+    const shot = (k) => {
+      window.__robotforge.lookAt(eye.map((v, i) => v + dir[i] * step * k), target.map((v, i) => v + dir[i] * step * k));
+      const { w, h, data } = window.__robotforge.pixels();
+      const lum = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) lum[i] = 0.299 * data[4 * i] + 0.587 * data[4 * i + 1] + 0.114 * data[4 * i + 2];
+      return lum;
+    };
+    const frames = Array.from({ length: steps }, (_, k) => shot(k));
+    let flips = 0;
+    for (let k = 1; k + 1 < steps; k++) {
+      const [a, b, c] = [frames[k - 1], frames[k], frames[k + 1]];
+      for (let i = 0; i < b.length; i++) {
+        const d1 = b[i] - a[i];
+        const d2 = c[i] - b[i];
+        if (Math.abs(d1) > threshold && Math.abs(d2) > threshold && Math.sign(d1) !== Math.sign(d2) && Math.abs(c[i] - a[i]) < threshold / 2) flips++;
+      }
+    }
+    return { flips, perMegapixel: Math.round((flips / (frames[0].length * (steps - 2))) * 1e6) };
   },
   following: () => (follow ? follow.body : null),
   selected: () => selected,
