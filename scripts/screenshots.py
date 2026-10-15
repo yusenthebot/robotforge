@@ -1,0 +1,307 @@
+"""Take the README's screenshots of the real viewer, the same way every time.
+
+    uv run python scripts/screenshots.py [--only NAME ...] [--out docs/images] [--lang zh-CN]
+
+Each shot builds a world in a fresh ROBOTFORGE_HOME, serves it with `robotforge open`, puts it in the
+state the picture needs (a lesson started, knobs set, buttons pressed, a robot walking) over the viewer's
+own WebSocket, then drives a headless Google Chrome over the DevTools protocol: it waits until the scene
+has streamed in and the page is idle, optionally runs a little JavaScript (open a panel, place the camera)
+and captures the page. Virtual time cannot be used for this: it runs ahead of the WebSocket.
+
+Needs Google Chrome (or CHROME=/path/to/chrome) and the `websockets` package, which comes with the
+viewer's server. Maintainer tool, not part of robotforge.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import base64
+import contextlib
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+CHROME_PATHS = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "/usr/bin/google-chrome",
+)
+WIDTH, HEIGHT, SCALE = 1280, 800, 2  # CSS px and device pixel ratio
+READY_TIMEOUT = 60.0  # s for a world to compile, stream in and draw
+
+
+@dataclass(frozen=True)
+class Shot:
+    name: str
+    world: Callable[[Any], None]  # builds the world on a Playground
+    viewer: list[dict[str, Any]] = field(default_factory=list)  # WebSocket messages, or {"wait": s}
+    page: str = ""  # JavaScript run in the page before the capture
+    # The page's remembered settings: a returning visitor, so no first-visit hint and no scene panel unless asked
+    storage: dict[str, str] = field(default_factory=lambda: {"robotforge.coached": "1", "robotforge.world": "0"})
+    settle: float = 2.0  # s after the page is ready
+    size: tuple[int, int] = (WIDTH, HEIGHT)  # CSS px
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _chrome() -> str:
+    for path in (os.environ.get("CHROME"), *CHROME_PATHS, shutil.which("google-chrome"), shutil.which("chromium")):
+        if path and Path(path).exists():
+            return path
+    raise SystemExit("Google Chrome not found; set CHROME=/path/to/chrome")
+
+
+def _wait_http(url: str, timeout: float) -> bytes:
+    """The body of `url` once it answers."""
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as resp:
+                return resp.read()
+        except OSError:
+            if time.monotonic() > end:
+                raise
+            time.sleep(0.3)
+
+
+class Page:
+    """Chrome over the DevTools protocol: browser-level calls without a session, a tab's with its flat session."""
+
+    def __init__(self, ws: Any, session: str | None = None) -> None:
+        self.ws, self.session, self._id = ws, session, 0
+
+    async def call(self, method: str, **params: Any) -> dict[str, Any]:
+        self._id += 1
+        msg: dict[str, Any] = {"id": self._id, "method": method, "params": params}
+        if self.session:
+            msg["sessionId"] = self.session
+        await self.ws.send(json.dumps(msg))
+        while True:
+            reply = json.loads(await self.ws.recv())
+            if reply.get("id") == self._id and reply.get("sessionId") == self.session:
+                if "error" in reply:
+                    raise RuntimeError(f"{method}: {reply['error']}")
+                return reply.get("result", {})
+
+    async def eval(self, expression: str) -> Any:
+        out = await self.call("Runtime.evaluate", expression=expression, awaitPromise=True, returnByValue=True)
+        if "exceptionDetails" in out:
+            raise RuntimeError(f"page script failed: {out['exceptionDetails']}")
+        return out.get("result", {}).get("value")
+
+
+async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
+    import websockets
+
+    async with websockets.connect(f"ws://127.0.0.1:{port}/ws", max_size=None) as ws:
+        for k, msg in enumerate(messages):
+            if "wait" in msg:
+                await asyncio.sleep(msg["wait"])
+                continue
+            await ws.send(json.dumps({"id": f"shot{k}", **msg}))
+            if msg.get("type") == "lesson_open":  # a slow request: wait for its reply
+                while True:
+                    raw = await ws.recv()
+                    if isinstance(raw, bytes):  # body poses stream as binary frames
+                        continue
+                    reply = json.loads(raw)
+                    if reply.get("type") == "reply" and reply.get("id") == f"shot{k}":
+                        if not reply.get("ok"):
+                            raise RuntimeError(f"viewer refused {msg}: {reply.get('message')}")
+                        break
+
+
+async def _capture(chrome_port: int, port: int, shot: Shot, out: Path) -> None:
+    """Open the viewer in a tab, wait until it has drawn, put the world in the shot's state while the page
+    watches (so plots have their history), and capture it."""
+    import websockets
+
+    version = json.loads(_wait_http(f"http://127.0.0.1:{chrome_port}/json/version", 20))
+    async with websockets.connect(version["webSocketDebuggerUrl"], max_size=None) as ws:
+        browser = Page(ws)
+        target = (await browser.call("Target.createTarget", url="about:blank"))["targetId"]
+        session = (await browser.call("Target.attachToTarget", targetId=target, flatten=True))["sessionId"]
+        page = Page(ws, session)
+        width, height = shot.size
+        await page.call(
+            "Emulation.setDeviceMetricsOverride",
+            width=width,
+            height=height,
+            deviceScaleFactor=SCALE,
+            mobile=width < 600,
+        )
+        await page.call("Page.enable")  # scripts for new documents need the Page domain on
+        # A background tab gets its animation frames throttled, and the lesson plots draw on them
+        await page.call("Page.bringToFront")
+        await page.call("Emulation.setFocusEmulationEnabled", enabled=True)
+        settings = "".join(f"localStorage.setItem({k!r}, {v!r});" for k, v in shot.storage.items())
+        await page.call("Page.addScriptToEvaluateOnNewDocument", source=f"try {{ {settings} }} catch (e) {{}}")
+        await page.call("Page.navigate", url=f"http://127.0.0.1:{port}/")
+        end = time.monotonic() + READY_TIMEOUT
+        drawn = "!!(window.__robotforge && window.__robotforge.scene && window.__robotforge.time > 0)"
+        while not await page.eval(drawn):
+            if time.monotonic() > end:
+                raise TimeoutError(f"{shot.name}: the viewer never drew its scene")
+            await asyncio.sleep(0.25)
+        if shot.viewer:
+            await _drive_viewer(port, shot.viewer)
+        await asyncio.sleep(shot.settle)
+        if shot.page:
+            await page.eval(f"(async () => {{ {shot.page} }})()")
+            await asyncio.sleep(1.0)
+        data = (await page.call("Page.captureScreenshot", format="png", captureBeyondViewport=False))["data"]
+        out.write_bytes(base64.b64decode(data))
+        await browser.call("Target.closeTarget", targetId=target)
+
+
+def take(shot: Shot, out_dir: Path, lang: str) -> Path:
+    home = Path(tempfile.mkdtemp(prefix="rf-shot-"))
+    os.environ["ROBOTFORGE_HOME"] = str(home)  # the real Menagerie models (downloaded once), not the test stand-ins
+    env = dict(os.environ)
+    from robotforge.playground import Playground
+
+    pg = Playground.with_demo()
+    pg.new_world(shot.name)
+    shot.world(pg)
+    world_dir = home / "worlds" / shot.name
+    port, chrome_port = _free_port(), _free_port()
+    server = subprocess.Popen(
+        [sys.executable, "-m", "robotforge", "open", str(world_dir), "--no-browser", "--port", str(port)],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    chrome = subprocess.Popen(
+        [
+            _chrome(),
+            "--headless=new",
+            f"--remote-debugging-port={chrome_port}",
+            f"--user-data-dir={home / 'chrome'}",
+            f"--lang={lang}",
+            "--hide-scrollbars",
+            "--no-first-run",
+            "--use-angle=metal" if sys.platform == "darwin" else "--use-gl=angle",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    out = out_dir / f"{shot.name}.png"
+    try:
+        _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
+        asyncio.run(_capture(chrome_port, port, shot, out))
+    finally:
+        for proc in (chrome, server):
+            proc.terminate()
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.wait(timeout=10)
+        shutil.rmtree(home, ignore_errors=True)
+    return out
+
+
+# ---- the shots ---------------------------------------------------------------------------------------------
+
+
+def _park(pg: Any) -> None:
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.35])
+    pg.add_robot("dog", template="quadruped", pos=[0.2, -0.35])
+    pg.load_scene("park")  # the scene puts kept robots on its free spots
+
+
+# Lessons are played in the page, the way a learner does: the page that starts a lesson is the one that shows it.
+_SLEEP = "await new Promise((r) => setTimeout(r, {ms}));"
+
+
+def _lesson(lesson: str, *steps: str) -> str:
+    """Page script: open Learn, start `lesson`, then run the steps (_press, _wait)."""
+    start = f"""
+        document.getElementById("learn-toggle").click();
+        {_SLEEP.format(ms=500)}
+        document.querySelector('[data-lesson="{lesson}"]').click();
+        for (let k = 0; k < 100 && !document.getElementById("lesson-panel").checkVisibility(); k++) {{
+            {_SLEEP.format(ms=100)}
+        }}
+        {_SLEEP.format(ms=1500)}
+    """
+    return start + "\n".join(steps)
+
+
+def _press(control: str) -> str:
+    return f"document.querySelector('button[data-control=\"{control}\"]').click();"
+
+
+def _wait(seconds: float) -> str:
+    return _SLEEP.format(ms=round(seconds * 1000))
+
+
+def _walk(robot: str, speed: float) -> dict[str, Any]:
+    return {"type": "teleop", "robot": robot, "speed": speed, "turn": 0.0}
+
+
+def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
+    """Page script: aim the camera at the middle of these robots, from `offset` metres away."""
+    return f"""
+        const rf = window.__robotforge;
+        const at = {json.dumps(robots)}.map((r) => rf.bodyPosition(
+            rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
+        const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
+        rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+    """
+
+
+def _nothing(pg: Any) -> None:
+    """Lessons build their own world."""
+
+
+SHOTS = [
+    Shot(
+        "hero",
+        _park,
+        viewer=[_walk("go2", 0.35), _walk("dog", 0.35), {"wait": 3.0}],
+        page=_look_at(["go2", "dog"], (3.2, -1.9, 1.5)),
+        settle=1.0,
+    ),
+    Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen")),
+    Shot("lesson_learn_to_walk", _nothing, page=_lesson("learn_to_walk", _press("train"), _wait(25.0))),
+    Shot(  # the plots show 6 s: capture while the step response is still in them
+        "bench_pid_twins",
+        _nothing,
+        page=_lesson("pid_twins", _wait(0.5), _press("test"), _wait(3.0)),
+        settle=0.2,
+    ),
+    Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
+]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--only", nargs="*", help="names of the shots to take")
+    parser.add_argument("--out", type=Path, default=ROOT / "docs" / "images")
+    parser.add_argument("--lang", default="zh-CN")
+    args = parser.parse_args()
+    args.out.mkdir(parents=True, exist_ok=True)
+    for shot in SHOTS:
+        if args.only and shot.name not in args.only:
+            continue
+        t0 = time.monotonic()
+        path = take(shot, args.out, args.lang)
+        print(f"{shot.name}: {path} ({time.monotonic() - t0:.0f} s)")
+
+
+if __name__ == "__main__":
+    main()

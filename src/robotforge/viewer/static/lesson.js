@@ -88,6 +88,7 @@ function courseCard(c, done) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "course";
+  b.dataset.lesson = c.id;
   const chapter = document.createElement("span");
   chapter.className = "course-chapter";
   chapter.textContent = pick(c.chapter);
@@ -878,6 +879,7 @@ function renderControls() {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "pill-button";
+      b.dataset.control = c.id; // for scripted checks, as the sliders and toggles have
       b.textContent = pick(c.label);
       b.addEventListener("click", () => api.send({ type: "lesson", action: "press", control: c.id }));
       return b;
