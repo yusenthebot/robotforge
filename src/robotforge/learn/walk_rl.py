@@ -174,11 +174,11 @@ STEPS = (
             "Guess, then press Learn with the template dog (30 rounds, a dozen seconds).",
         ),
         done=_text(
-            "30 轮之后，4 秒能走 1.3 到 1.9 米（我们从 4 个不同的随机起点各学了一次），和手写小跑的最快速度"
+            "30 轮之后，4 秒能走 1.2 到 1.8 米（我们从 4 个不同的随机起点各学了一次），和手写小跑的最快速度"
             "（0.36 m/s，4 秒 1.4 米）差不多，学 60 轮能到 1.8 到 2.2 米。"
             "姿势有点怪：奖励只说了“走得远、走得直”，没说“走得好看”。"
             "每次学都从一个新的随机起点开始，所以结果会不一样。",
-            "After 30 rounds it covers 1.3 to 1.9 m in 4 s (we learned from 4 different random starts), about as fast "
+            "After 30 rounds it covers 1.2 to 1.8 m in 4 s (we learned from 4 different random starts), about as fast "
             "as the hand-written trot's top speed (0.36 m/s, 1.4 m in 4 s); 60 rounds reach 1.8 to 2.2 m. It looks "
             "odd: the reward only said 'get far and straight', not 'look nice'. Every training starts from a new "
             "random seed, so results differ.",
@@ -211,10 +211,10 @@ STEPS = (
             "Guess, then set Energy cost to 0.1 and learn again, then 0.3.",
         ),
         done=_text(
-            "w = 0.1：走 0.55 到 1.25 米，能量只用了 35 到 55 J（不算能量时是 70 到 115 J），步子变小。"
+            "w = 0.1：走 1.0 到 1.4 米，能量只用了 40 到 60 J（不算能量时是 75 到 140 J），步子变小。"
             "w = 0.3：我们学了 4 次，4 次都干脆学会了站着不动：挪一步的代价比走出的距离还大。"
             "机器人只会照着奖励去做，奖励没写清楚，它就会钻空子。",
-            "w = 0.1: 0.55 to 1.25 m on 35 to 55 J (70 to 115 J when energy was free), with smaller steps. "
+            "w = 0.1: 1.0 to 1.4 m on 40 to 60 J (75 to 140 J when energy was free), with smaller steps. "
             "w = 0.3: in all 4 of our trainings it learned to stand still: a step costs more than the distance earns. "
             "A robot does exactly what the reward says; if the reward is loose, it finds the loophole.",
         ),
@@ -252,10 +252,10 @@ STEPS = (
             "starfish learn.",
         ),
         done=_text(
-            "它也学会了往前挪（我们测到 4 秒 0.55 到 0.8 米）。"
+            "它也学会了往前挪（我们测到 4 秒 0.55 到 0.75 米）。"
             "同一套方法，不管几条腿、腿长什么样，都能自己找到一种走法。"
             "这就是学习比手写强的地方。",
-            "It learns to shuffle forward too (0.55 to 0.8 m in 4 s in our runs). The same method finds a way to walk "
+            "It learns to shuffle forward too (0.55 to 0.75 m in 4 s in our runs). The same method finds a way to walk "
             "for any number and shape of legs, which is where learning beats writing gaits by hand.",
         ),
         quiz=Quiz(
