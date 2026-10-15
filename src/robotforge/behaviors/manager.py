@@ -149,6 +149,10 @@ class BehaviorManager:
     def resolve(self, robot: str) -> str:
         """The robot `robot` means: spelled exactly, in other capitals or as "the dog"; "Rover/Arm" for an arm
         mounted on a robot. Raises BehaviorError listing the robots when there is no such one."""
+        # Scripts poll pose() hundreds of times a second. An exact name that the compiled model knows is
+        # enough, so only a name that needs matching pays for reading and parsing world.yaml.
+        if robot in self._prefixes():
+            return robot
         return self._resolve(robot, self._world())
 
     def _resolve(self, robot: str, world: World | None) -> str:

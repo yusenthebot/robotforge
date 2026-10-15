@@ -170,3 +170,18 @@ def test_robots_can_be_listed_while_the_policy_module_is_still_importing(pg, mon
     pg.add_robot("dog", template="quadruped")
     assert not _is_policy_walker(object())
     assert [r["name"] for r in pg.behaviors.robots()] == ["dog"]
+
+
+def test_a_robot_named_exactly_is_found_without_reading_world_yaml(pg, monkeypatch):
+    """Scripts poll position and heading hundreds of times; reading and parsing world.yaml for each one made a
+    loop in the warehouse scene about 9x slower. Only a name that needs matching ("Dog") reads the file."""
+    pg.add_robot("dog", template="quadruped")
+
+    def unreadable():
+        raise AssertionError("world.yaml was read")
+
+    monkeypatch.setattr(pg.behaviors, "_world", unreadable)
+    assert pg.behaviors.pose("dog")["robot"] == "dog"
+    assert pg.behaviors.stop("dog")["robot"] == "dog"
+    with pytest.raises(AssertionError, match="world.yaml was read"):
+        pg.behaviors.pose("Dog")
