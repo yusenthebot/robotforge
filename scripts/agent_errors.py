@@ -50,6 +50,7 @@ from robotforge.design.builder.guide import EXAMPLE_DOG  # noqa: E402
 from robotforge.design.store import WorldStore, worlds_home  # noqa: E402
 from robotforge.mcp_server import INSTRUCTIONS, build_server  # noqa: E402
 from robotforge.playground import Playground  # noqa: E402
+from robotforge.wording import SHORT  # noqa: E402
 
 LONG_ERROR = 300  # characters; longer is fine only when the text lists the valid choices
 CALL_TIMEOUT = 180.0  # s per call
@@ -529,6 +530,81 @@ CASES: list[Case] = [
     c("pose", "the arm mounted on a rover", setup=[MOBILE], robot="mm/arm", name="wave"),
     c("move", "an arm mounted on a rover that does not exist", setup=[MOBILE], robot="mm/claw", speed=0.2),
     c("simulate", "seconds in milliseconds for a long run", seconds=60000),
+    c(
+        "update_robot",
+        "empty build beside a change on a built robot",
+        "accept",
+        setup=[BUILT],
+        name="spider",
+        pos=[1, 1],
+        params={},
+        yaw=None,
+        build={},
+        note=r"12 actuators",
+    ),
+    c("update_robot", "empty build alone on a built robot", setup=[BUILT], name="spider", build={}),
+    c(
+        "update_robot",
+        "empty build beside a change on a template robot",
+        "accept",
+        name="dog",
+        pos=[0.5, 1.2],
+        build={},
+    ),
+    c("observe", "include_image as the text null", "accept", view="front", include_image="null"),
+    c("observe", "include_image as an empty list", view="front", include_image=[]),
+    c("load_scene", "keep_robots as an empty object", preset="maze", keep_robots={}),
+    c("add_object", "fixed as an empty object", name="b2", fixed={}),
+    c("add_object", "fixed as a fraction", name="b2", fixed=1.5),
+    c("unilab_job", "cancel as an empty list", cancel=[]),
+    c("move", "a part of a robot, not a robot", robot="dog/trunk", speed=0.2),
+    c("stop", "a part of a robot with stray spaces", robot="Dog / Trunk"),
+    c("run_controller", "a part of a robot", robot="dog/trunk", task="reach", method="ik"),
+    c("move_arm", "a part of a robot that has no arm", robot="dog/trunk", position=[0.2, 0.0, 0.1]),
+    c("move", "the mounted arm with stray spaces", setup=[MOBILE], robot="mm / arm", speed=0.2),
+    c("move", "a run of two minutes", robot="dog", speed=0.2, seconds=120),
+    c("run_script", "four hundred seconds", setup=[SCRIPT_OK], name="hello", max_sim_seconds=400),
+    c("add_object", "color with a fractional alpha above 1", name="b2", color=[255, 0, 0, 1.5], pos=[0.4, 0.1]),
+    c(
+        "remove",
+        "the plural of a name",
+        setup=[("add_robot", {"name": "dog2", "template": "quadruped", "pos": [3.0, 3.0]})],
+        name="dogs",
+    ),
+    c("remove", "a name with an article and capitals", "accept", name="The Ball"),
+    c("pick_and_place", "target in centimetres", robot="arm", object="ball", target=[30, 10]),
+    c("run_controller", "learned method in capitals", robot="arm", task="reach", method="PPO"),
+    c("move", "a very long robot name", robot="x" * 400, speed=0.2),
+    c("remove", "a very long name", name="x" * 400),
+    c("update_terrain", "a very long patch name", name="x" * 400, yaw=3),
+    c("new_world", "name in Chinese", "accept", name="机器人乐园"),
+    c(
+        "new_world",
+        "a second name in Chinese",
+        "accept",
+        setup=[("new_world", {"name": "机器人乐园"})],
+        name="我的世界",
+        note=r'(?s)"world":"world_[0-9a-f]{6}".*"created":true',
+    ),
+    c("new_world", "name of a world that exists", "accept", name="Lab", note="already existed"),
+    c(
+        "robots",
+        "world.yaml edited by hand with an unknown field",
+        setup=[("@write", {"path": "world.yaml", "text": "name: lab\nobjects:\n- name: ball\n  colour: red\n"})],
+    ),
+    c(
+        "move",
+        "world.yaml edited by hand without a robot name",
+        setup=[("@write", {"path": "world.yaml", "text": "name: lab\nrobots:\n- template: quadruped\n"})],
+        robot="dog",
+        speed=0.2,
+    ),
+    c(
+        "add_object",
+        "world.yaml edited by hand into broken YAML",
+        setup=[("@write", {"path": "world.yaml", "text": "name: lab\nfloor: [1\n  style: checker\n"})],
+        name="b2",
+    ),
 ]
 
 
@@ -579,6 +655,8 @@ def leaves(value: Any) -> list[str]:
         return ["''"]  # an empty text is pointed at by its quotes
     if "/" in text:
         return [text, Path(text).name]
+    if len(text) > SHORT:
+        return [text[: SHORT - 4]]  # a long value is shown cut after its opening quote, as wording.short cuts it
     return [text, text.split(":")[-1]] if ":" in text else [text]  # "policy:nope" is pointed at by "nope"
 
 
@@ -597,7 +675,7 @@ FIX = re.compile(
     re.IGNORECASE,
 )
 CHOICES = re.compile(
-    r"one of|choose|available|did you mean|installed|existing|in this world|here:|"
+    r"one of|choose|available|did you mean|installed|existing|in this world:|here:|"
     r"\b(?:parts|jobs|options|names|scenes|worlds|views|robots|objects|actuators|templates|methods|tasks|lessons"
     r"|scripts|patches|policies|walkers|arms|shapes|poses|joints|fields|parameters|views):",
     re.IGNORECASE,
@@ -609,6 +687,8 @@ def grade(case: Case, args: dict[str, Any], text: str, tool_names: set[str], par
     if LEAK.search(text) or INTERNAL.search(text):
         problems.append("leak")
     tokens = {t for t in leaves(args) if t} | set(args) | params | {case.tool}
+    # An error about a file the case wrote by hand points at the file, not at an argument.
+    tokens |= {Path(a["path"]).name for tool, a in case.setup if tool == "@write"}
     pointed = any(re.search(rf"(?<![\w.]){re.escape(t)}(?!\w|\.\d)", text) for t in tokens)
     if not case.no_world and not pointed:
         problems.append("vague")
