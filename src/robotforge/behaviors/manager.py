@@ -91,6 +91,8 @@ class BehaviorManager:
             if walk is not None:
                 info["learned_walk"] = walk.describe()
                 info.setdefault("max_speed", round(walk.speed, 3))  # robots no gait code knows drive with it
+            elif kind not in MOBILE and self._can_learn_walk(name):
+                info["walk_hint"] = f"no gait code knows this body, so move cannot walk it yet; {LEARN_A_WALK}"
             out.append(info)
         return out
 
@@ -145,6 +147,25 @@ class BehaviorManager:
         if self._can_learn_walk(robot):
             text += f". {robot} has no walk yet, but {LEARN_A_WALK}"
         return text
+
+    def walk_notes(self) -> list[str]:
+        """For a world's load result: robots that walk only with a walk they learned, or could learn one."""
+        world = self._world()
+        if world is None:
+            return []
+        out = []
+        for entry in world.robots:
+            if robot_kind(self.session.model, entry.name, _told_kind(entry)) in MOBILE:
+                continue
+            walk = self._kept_walk_or_none(entry.name)
+            if walk is not None:
+                out.append(
+                    f"{entry.name} walks with the walk it learned: move drives it forward at its own pace "
+                    f"(about {walk.speed:.2f} m/s), without turning"
+                )
+            elif self._can_learn_walk(entry.name):
+                out.append(f"{entry.name}: no gait code knows this body, so move cannot walk it yet; {LEARN_A_WALK}")
+        return out
 
     def _can_learn_walk(self, robot: str) -> bool:
         from robotforge.control.cpg import Body, CPGError

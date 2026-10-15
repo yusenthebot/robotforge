@@ -78,7 +78,7 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
     described = pg.lessons.start("learn_to_walk")
     assert any(c["id"] == "keep" for c in described["controls"])
     lesson = pg.lessons.lesson
-    pg.lessons.step = 2  # where your robot and the keep button unlock
+    assert "crab" in described["steps"][0]["body"]["en"]  # sent here to teach crab: it can from the first step
     pg.lessons.handle({"action": "press", "control": "keep"})
     assert "Pick your robot" in pg.lessons.ctx.results["summary"]["en"]
     pg.lessons.handle({"action": "set", "control": "robot", "value": 3})
@@ -97,3 +97,12 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
     pg.run_fast(lambda: False, walk_rl.ATTEMPT)
     gone = pg.behaviors.pose("crab")["position"][0] - start["position"][0]
     assert gone > 0.5 * trained["distance"], f"learned {trained['distance']} m, walked {gone:.2f} m at home"
+
+
+def test_the_robot_no_gait_code_knows_is_the_one_offered(pg):
+    pg.new_world("mixed")
+    pg.add_robot("rex", template="quadruped")
+    pg.add_robot("crab", build=walk_rl.STAR, pos=[0, 1])
+    described = pg.lessons.start("learn_to_walk")
+    robots = next(c for c in described["controls"] if c["id"] == "robot")["options"]
+    assert robots[-1]["en"] == "Your robot: crab"

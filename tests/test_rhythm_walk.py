@@ -61,7 +61,9 @@ def test_a_kept_walk_survives_the_round_trip(tmp_path):
 
 
 def test_a_robot_no_gait_knows_is_told_how_to_learn_a_walk(pg):
-    pg.add_robot("crab", build=STAR)
+    added = pg.add_robot("crab", build=STAR)
+    assert any("crab: no gait code knows this body" in n and "RL II" in n for n in added["notes"])
+    assert "RL II" in next(r for r in pg.behaviors.robots() if r["name"] == "crab")["walk_hint"]
     assert pg.behaviors.kind("crab").value == "other"
     with pytest.raises(BehaviorError, match="RL II"):
         pg.behaviors.move("crab", 0.2, 0.0)
@@ -92,6 +94,8 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     save_walk(pg.store.dir, walk)
 
     listed = next(r for r in pg.behaviors.robots() if r["name"] == "crab")
+    assert "walk_hint" not in listed
+    assert any("crab walks with the walk it learned" in n for n in pg.reload_world()["notes"])
     assert listed["learned_walk"]["forward_only"] and listed["max_speed"] == pytest.approx(learned / 4.0, abs=1e-3)
     assert modes.available(pg, listed, learned=False)[0] == "drive"  # the keyboard can drive it now
 

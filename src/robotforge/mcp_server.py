@@ -573,6 +573,14 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                         f"No image. {exc} Everything else in this state is accurate, "
                         "and open_viewer shows the live 3D view in a browser."
                     )
+                except PlaygroundError:
+                    raise  # a wrong view name: the message says which views exist
+                except Exception as exc:  # the state is still worth having when drawing fails
+                    log.exception("rendering failed")
+                    state["note"] = (
+                        f"No image: rendering failed ({type(exc).__name__}: {exc}). Everything else in this state "
+                        "is accurate, and open_viewer shows the live 3D view in a browser."
+                    )
             content: list = [_json(state)]
             if image is not None:
                 content.append(Image(data=image, format="png"))
@@ -620,11 +628,20 @@ async def _download_with_progress(name: str, ctx: Context) -> None:
 
 @contextlib.contextmanager
 def _tool_errors() -> Iterator[None]:
-    """Turn anticipated failures into ToolError so the agent sees the actual message."""
+    """Turn failures into ToolError so the agent sees the actual message. The MCP SDK would answer anything
+    else with a bare "Error executing tool" and keep the reason in a log the agent and user never see."""
     try:
         yield
     except (PlaygroundError, BehaviorError, ModelLoadError, IndexError, ValueError) as exc:
         raise ToolError(str(exc)) from exc
+    except ToolError:
+        raise
+    except Exception as exc:
+        log.exception("unexpected error in a tool")
+        raise ToolError(
+            f"robotforge hit an unexpected error: {type(exc).__name__}: {exc}. Other tools still work; if it "
+            "repeats, it is worth reporting with this message"
+        ) from exc
 
 
 SCRIPT_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}$")

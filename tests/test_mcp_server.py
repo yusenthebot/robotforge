@@ -62,6 +62,28 @@ async def test_tool_errors_reach_the_agent_with_guidance():
         assert view.is_error and "unknown view" in _text(view)
 
 
+async def test_a_crash_inside_a_tool_says_what_happened(monkeypatch):
+    """The SDK answers crashes with a bare "Error executing tool"; a Codex session saw only that for observe and
+    run_script and fell back to stepping the simulation by hand, 150 calls deep."""
+    playground = Playground.with_demo()
+    server = build_server(playground, find_free_port(8790))
+
+    def broken_render(*_args, **_kwargs):
+        raise RuntimeError("no GL context today")
+
+    def broken_simulate(*_args, **_kwargs):
+        raise KeyError("lost")
+
+    monkeypatch.setattr(playground, "snapshot", broken_render)
+    monkeypatch.setattr(playground, "simulate", broken_simulate)
+    async with Client(server) as client:
+        obs = await client.call_tool("observe", {})
+        assert not obs.is_error  # the state is still worth having
+        assert "rendering failed (RuntimeError: no GL context today)" in json.loads(_text(obs))["note"]
+        crashed = await client.call_tool("simulate", {"seconds": 0.1})
+        assert crashed.is_error and "KeyError: 'lost'" in _text(crashed)
+
+
 async def test_viewer_app_resource_points_at_the_local_viewer():
     port = find_free_port(8790)
     server = build_server(Playground.with_demo(), port)

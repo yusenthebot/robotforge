@@ -12,12 +12,14 @@ world's folder, and `move` and the keyboard then walk it that way (behaviors/rhy
 from __future__ import annotations
 
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import mujoco
 import numpy as np
 
+from robotforge.behaviors import Kind, robot_kind
 from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, save_walk
 from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
 from robotforge.design.world import World, compile_world
@@ -420,6 +422,7 @@ class LearnToWalkLesson(Lesson):
         if own is not None:
             self.robots.append(own)
             self.controls = self._controls()
+            self.steps = (self._your_robot_first(STEPS[0]), *STEPS[1:])
         robots = [
             {"name": key, **entry, "pos": [START_X, (i - (len(self.robots) - 1) / 2) * LANE]}
             for i, (key, _, entry) in enumerate(self.robots)
@@ -428,8 +431,24 @@ class LearnToWalkLesson(Lesson):
         self.model = compile_world(world).model
         return self.model
 
+    def _your_robot_first(self, step: Step) -> Step:
+        """A learner who came to teach their own robot (an agent sends them here) can from the first step."""
+        assert self.own is not None
+        name = self.own[0]
+        return replace(
+            step,
+            body=_text(
+                f"{step.body['zh']}\n你自己的机器人 {name} 也在「哪个机器人」里：想直接教它，选它、点「开始学」，"
+                "学好了点「把这个走法存给我的机器人」。",
+                f"{step.body['en']}\nYour own robot, {name}, is under Which robot too: to teach it right away, pick "
+                "it, press Learn, and once it walks press Keep this walk for my robot.",
+            ),
+            unlock=(*step.unlock, "robot", "keep"),
+        )
+
     def _own_robot(self) -> tuple[str, tuple[str, str], dict[str, Any]] | None:
-        """A robot from the world the learner came from that can walk by rhythm, if there is one."""
+        """A robot from the world the learner came from that can walk by rhythm, if there is one; one that no
+        gait code knows comes first, since that is the one that needs to learn."""
         store = getattr(self.playground, "store", None)
         if store is None:
             return None
@@ -437,6 +456,7 @@ class LearnToWalkLesson(Lesson):
             world = store.load()
         except (OSError, ValueError):
             return None
+        found = []
         for entry in world.robots:
             if entry.file is not None:  # imported files resolve against their own world folder
                 continue
@@ -448,10 +468,13 @@ class LearnToWalkLesson(Lesson):
                 Body.find(solo, "yours")
             except (CPGError, ValueError):
                 continue
-            self.solo["yours"] = solo
-            self.own = (entry.name, store.dir)
-            return "yours", (f"你的机器人：{entry.name}", f"Your robot: {entry.name}"), spec
-        return None
+            found.append((robot_kind(solo, "yours", entry.template) != Kind.OTHER, entry.name, spec, solo))
+        if not found:
+            return None
+        _, name, spec, solo = min(found, key=lambda f: f[0])  # stable: the first gait-less one, else the first
+        self.solo["yours"] = solo
+        self.own = (name, store.dir)
+        return "yours", (f"你的机器人：{name}", f"Your robot: {name}"), spec
 
     def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
         self.ctx = ctx
