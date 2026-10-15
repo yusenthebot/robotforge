@@ -280,7 +280,7 @@ STEPS = (
 class RLLesson(Lesson):
     id = "reinforcement_learning"
     chapter = {"zh": "强化学习", "en": "Reinforcement learning"}
-    title = {"zh": "让机器人自己学会平衡：强化学习", "en": "Let the robot teach itself: reinforcement learning"}
+    title = {"zh": "强化学习（一）：让倒立摆自己学会平衡", "en": "RL I: a cart-pole teaches itself to balance"}
     summary = {
         "zh": "倒立摆从一碰就倒，到自己学会平衡：看奖励、试错和训练曲线是怎么回事。",
         "en": "A cart-pole goes from falling at once to balancing by itself: "
