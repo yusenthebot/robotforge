@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>robotforge</title>
   <link rel="stylesheet" href="static/style.css">
   <script type="importmap">
@@ -12,66 +13,119 @@
 <body>
   <canvas id="view"></canvas>
 
-  <header class="hud hud-top">
-    <div class="brand">robotforge</div>
-    <div class="source" id="source" title=""></div>
-    <div class="drive" id="drive" hidden>
-      <label class="drive-pick" title="Robot to drive with the keyboard">
-        <span>Drive</span>
-        <select id="drive-robot"></select>
-      </label>
-      <select id="drive-walker" title="How it walks: the built-in gait, or a learned policy (reinforcement learning)" hidden>
-        <option value="gait">gait</option>
-        <option value="rl">learned</option>
-      </select>
-      <span class="keys" aria-label="Use W A S D or arrow keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
-      <span class="drive-status" id="drive-status"></span>
+  <header class="top">
+    <div class="top-left">
+      <div class="title">
+        <span class="brand">robotforge</span>
+        <span class="world" id="world"></span>
+      </div>
+      <button class="pill" id="world-toggle" type="button" aria-expanded="false" aria-controls="world-panel">
+        <span data-i18n="world_button">Maps, terrain, modes</span>
+        <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg>
+      </button>
     </div>
-    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting</span></div>
+    <div class="top-actions">
+      <button class="pill" id="drawer-toggle" type="button" aria-expanded="false" aria-controls="drawer">
+        <span id="drawer-label" data-i18n="robots">Robots</span>
+        <span class="count" id="drawer-count"></span>
+        <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg>
+      </button>
+      <button class="pill round" id="help-toggle" type="button" aria-expanded="false" aria-controls="help" data-i18n-label="help_tip">?</button>
+    </div>
   </header>
 
-  <aside class="panel" id="panel">
-    <button class="panel-toggle" id="panel-toggle" aria-expanded="true" aria-controls="panel-content">
-      <span>Controls</span>
-      <span class="count" id="act-count"></span>
-      <span class="chev" aria-hidden="true"></span>
-    </button>
-    <div class="panel-content" id="panel-content">
-      <div class="panel-body" id="actuators"></div>
-      <div class="panel-sub">Display</div>
-      <div class="panel-body toggles">
-        <label><input type="checkbox" id="show-collision"> Collision geoms</label>
-        <label><input type="checkbox" id="show-shadows" checked> Shadows</label>
-      </div>
+  <aside class="drawer left" id="world-panel" hidden>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="maps" aria-selected="true" data-i18n="tab_maps">Maps</button>
+      <button type="button" role="tab" data-tab="terrain" aria-selected="false" data-i18n="tab_terrain">Terrain</button>
+      <button type="button" role="tab" data-tab="modes" aria-selected="false" data-i18n="tab_modes">Modes</button>
     </div>
+    <section class="tab-body" data-body="maps">
+      <p class="note lead" data-i18n="maps_lead">Pick a place for your robots. They come along.</p>
+      <div class="choices" id="map-list"></div>
+    </section>
+    <section class="tab-body" data-body="terrain" hidden>
+      <h2 class="section-title"><span data-i18n="ground">Ground</span></h2>
+      <div class="swatches" id="ground-list"></div>
+      <h2 class="section-title spaced"><span data-i18n="terrain">Terrain</span></h2>
+      <div class="choices" id="terrain-list"></div>
+      <p class="note" id="terrain-note" hidden data-i18n="terrain_needs_world">This is a model file, not a world. Pick a map first to change the ground.</p>
+    </section>
+    <section class="tab-body" data-body="modes" hidden>
+      <div class="chips" id="mode-robots"></div>
+      <p class="note lead" id="mode-lead"></p>
+      <div class="choices" id="mode-list"></div>
+    </section>
   </aside>
 
-  <footer class="hud hud-bottom">
-    <div class="transport">
-      <button id="btn-play" class="btn primary" title="Play / pause (Space)">Pause</button>
-      <button id="btn-step" class="btn" title="Step one physics tick (.)">Step</button>
-      <button id="btn-reset" class="btn" title="Reset (R)">Reset</button>
-      <button id="btn-frame" class="btn" title="Frame everything (F)">Frame</button>
-      <label class="speed" title="Simulation speed">
-        <span>Speed</span>
-        <select id="speed">
-          <option value="0.1">0.1x</option>
-          <option value="0.25">0.25x</option>
-          <option value="0.5">0.5x</option>
-          <option value="1" selected>1x</option>
-          <option value="2">2x</option>
-        </select>
-      </label>
-    </div>
-    <div class="stats">
-      <span>t <b id="stat-time">0.00</b> s</span>
-      <span>realtime <b id="stat-rtf">-</b></span>
-      <span>fps <b id="stat-fps">-</b></span>
-    </div>
-    <div class="hint">Drag the robot to push it. Drag empty space to orbit, scroll to zoom.</div>
-  </footer>
+  <aside class="drawer" id="drawer" hidden>
+    <section id="robot-section">
+      <h2 class="section-title"><span data-i18n="robots">Robots</span></h2>
+      <div class="robot-list" id="robot-list"></div>
+    </section>
+    <section id="detail-section">
+      <h2 class="section-title"><span id="detail-title" data-i18n="joints">Joints</span><span class="count" id="joint-count"></span></h2>
+      <div class="joints" id="joints"></div>
+    </section>
+    <section>
+      <h2 class="section-title"><span data-i18n="display">Display</span></h2>
+      <label class="check"><input type="checkbox" id="show-collision"><span data-i18n="collision">Show collision shapes</span></label>
+      <label class="check"><input type="checkbox" id="show-shadows" checked><span data-i18n="shadows">Shadows</span></label>
+    </section>
+  </aside>
 
-  <div class="toast" id="toast"></div>
+  <div class="help" id="help" hidden>
+    <p class="help-lead" data-i18n="help_lead">This page shows your robot world live. Build robots and change the world by chatting with Claude or ChatGPT.</p>
+    <dl class="keys">
+      <dt data-i18n="mouse_drag_robot">Drag a robot</dt><dd data-i18n="mouse_push">Push it</dd>
+      <dt data-i18n="mouse_drag_empty">Drag empty space</dt><dd data-i18n="mouse_orbit">Look around</dd>
+      <dt data-i18n="mouse_right_drag">Right-drag</dt><dd data-i18n="mouse_pan">Slide the view</dd>
+      <dt data-i18n="mouse_scroll">Scroll</dt><dd data-i18n="mouse_zoom">Zoom</dd>
+      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="key_drive">Drive the selected robot</dd>
+      <dt><kbd data-i18n="key_space">Space</kbd></dt><dd data-i18n="key_play">Play or pause</dd>
+      <dt><kbd>R</kbd></dt><dd data-i18n="reset">Reset</dd>
+      <dt><kbd>.</kbd></dt><dd data-i18n="key_step">Step once</dd>
+      <dt><kbd>F</kbd></dt><dd data-i18n="fit">Fit view</dd>
+    </dl>
+  </div>
+
+  <div class="center-note" id="loading"><span class="spinner" aria-hidden="true"></span><span data-i18n="loading">Starting the simulator</span></div>
+  <div class="center-note empty" id="empty" hidden>
+    <strong data-i18n="empty_title">No robots here yet</strong>
+    <span data-i18n="empty_hint">Ask Claude or ChatGPT to add one, for example "add a robot dog".</span>
+  </div>
+  <div class="banner" id="banner" role="status" hidden data-i18n="disconnected">Lost the connection to the simulator. Reconnecting.</div>
+  <div class="toast" id="toast" role="alert"></div>
+  <div class="coach" id="coach" hidden data-i18n="coach">Drag a robot to push it. Drag empty space to look around.</div>
+
+  <div class="drive" id="drive" hidden>
+    <span class="keys" aria-hidden="true"><kbd data-key="fwd">W</kbd><kbd data-key="left">A</kbd><kbd data-key="back">S</kbd><kbd data-key="right">D</kbd></span>
+    <span class="drive-text" id="drive-text"></span>
+    <span class="drive-speed" id="drive-speed"></span>
+  </div>
+
+  <footer class="dock">
+    <button class="play" id="btn-play" type="button" data-i18n-label="pause_tip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/><path class="i-play" d="M8 5.2v13.6a.6.6 0 0 0 .9.5l10.6-6.8a.6.6 0 0 0 0-1L8.9 4.7a.6.6 0 0 0-.9.5z"/></svg>
+    </button>
+    <span class="rule" aria-hidden="true"></span>
+    <button class="tool" id="btn-reset" type="button" data-i18n-label="reset_tip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></svg>
+      <span data-i18n="reset">Reset</span>
+    </button>
+    <div class="seg speed" id="speed" role="group" data-i18n-label="speed">
+      <button type="button" data-speed="0.25">&frac14;&times;</button>
+      <button type="button" data-speed="0.5">&frac12;&times;</button>
+      <button type="button" data-speed="1">1&times;</button>
+      <button type="button" data-speed="2">2&times;</button>
+    </div>
+    <button class="tool" id="btn-frame" type="button" data-i18n-label="fit_tip">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+      <span data-i18n="fit">Fit view</span>
+    </button>
+    <span class="rule" aria-hidden="true"></span>
+    <span class="clock" id="clock">0.0 s</span>
+  </footer>
 
   <script type="module" src="static/app.js"></script>
 </body>

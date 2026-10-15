@@ -29,6 +29,7 @@ from robotforge.bridge.onnx_policy import PolicyWalker, onnxruntime_available
 from robotforge.bridge.spec import PolicySpec, SpecError, load_spec, save_spec
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
+from robotforge.viewer.server import ViewerHub
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GO2_XML = FIXTURES / "menagerie" / "unitree_go2" / "go2.xml"
@@ -285,9 +286,9 @@ def test_library_go2_walks_turns_and_stops_with_the_unilab_policy(pg):
 
 def test_the_viewer_learns_which_robots_have_a_learned_walker(pg):
     assert pg.behaviors.learned_walkers() == {"go2": {"policy": "go2_unilab_walk", "max_speed": 1.0, "active": False}}
-    handlers = {}
-    hub = type("Hub", (), {"handlers": handlers, "scene_extras": None})()
+    hub = ViewerHub(pg.session)
     pg.attach_viewer(hub)
+    handlers = hub.handlers
     assert hub.scene_extras()["learned"]["go2"]["policy"] == "go2_unilab_walk"
     handlers["teleop"]({"type": "teleop", "robot": "go2", "speed": 0.2, "turn": 0.0, "walker": "gait"})
     assert isinstance(pg.session.controllers["go2"], quadruped.QuadrupedGait)
@@ -295,8 +296,9 @@ def test_the_viewer_learns_which_robots_have_a_learned_walker(pg):
 
 @needs_onnxruntime
 def test_keyboard_driving_switches_to_and_keeps_the_learned_walker(pg):
-    handlers = {}
-    pg.attach_viewer(type("Hub", (), {"handlers": handlers, "scene_extras": None})())
+    hub = ViewerHub(pg.session)
+    pg.attach_viewer(hub)
+    handlers = hub.handlers
     handlers["teleop"]({"type": "teleop", "robot": "go2", "speed": 0.0, "turn": 0.0, "walker": "rl"})  # the toggle
     handlers["teleop"]({"type": "teleop", "robot": "go2", "speed": 0.6, "turn": 0.0})  # W held
     walker = pg.session.controllers["go2"]

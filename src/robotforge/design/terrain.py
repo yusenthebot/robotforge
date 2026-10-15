@@ -38,7 +38,7 @@ class Style:
 
 
 STYLES: dict[str, Style] = {
-    "checker": Style((0.3, 0.33, 0.37, 1.0), 1.0, "checker", 1.0),
+    "checker": Style((0.56, 0.6, 0.64, 1.0), 1.0, "checker", 1.0),
     "grass": Style((0.33, 0.52, 0.27, 1.0), 1.0, "speckle", 0.6),
     "wood": Style((0.55, 0.42, 0.3, 1.0), 0.8, "planks", 1.2),
     "concrete": Style((0.5, 0.5, 0.5, 1.0), 1.0, "speckle", 1.0),

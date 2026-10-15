@@ -53,9 +53,14 @@ class ViewerHub:
         self._mesh_payload: scene.MeshPayload | None = None
         self._scene_msg: dict | None = None
         self._announced_version = session.version
-        # Hooks the playground installs: extra message types (e.g. teleop) and extra scene info.
+        # Hooks the playground installs: extra message types (e.g. teleop) and extra scene and state info.
         self.handlers: dict[str, Callable[[dict[str, Any]], None]] = {}
+        # Messages whose work takes a while (loading a scene, setting up MPC): run in a worker thread so
+        # the stream keeps flowing, then answered with {"type": "reply", "id", "ok", "data" | "message"}.
+        self.slow_handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
         self.scene_extras: Callable[[], dict[str, Any]] | None = None
+        self.state_extras: Callable[[], dict[str, Any]] | None = None
+        self._slow_tasks: set[asyncio.Task] = set()
 
     # ---- scene description (cached per model version) -------------------------------
 
@@ -93,7 +98,8 @@ class ViewerHub:
             "ctrl": [float(c) for c in s.data.ctrl],
             "source": s.source,
             "clients": len(self.clients),
-            "behaviors": [c.status() for c in list(s.controllers.values())],
+            "behaviors": [{"robot": name, **c.status()} for name, c in list(s.controllers.items())],
+            **(self.state_extras() if self.state_extras is not None else {}),
         }
 
     # ---- client messages ------------------------------------------------------------
@@ -128,6 +134,30 @@ class ViewerHub:
             self.handlers[kind](msg)
         else:
             raise ValueError(f"unknown message type {kind!r}")
+
+    def start_slow(self, ws: WebSocket, msg: dict[str, Any]) -> bool:
+        """Run a slow message's handler off the event loop; False if `msg` is not a slow one."""
+        if not isinstance(msg, dict):
+            raise ValueError("viewer messages are JSON objects")
+        handler = self.slow_handlers.get(msg.get("type"))
+        if handler is None:
+            return False
+        task = asyncio.create_task(self._run_slow(ws, msg, handler))
+        self._slow_tasks.add(task)
+        task.add_done_callback(self._slow_tasks.discard)
+        return True
+
+    async def _run_slow(self, ws: WebSocket, msg: dict[str, Any], handler: Callable[[dict[str, Any]], Any]) -> None:
+        reply: dict[str, Any] = {"type": "reply", "id": msg.get("id")}
+        try:
+            reply.update(ok=True, data=await asyncio.to_thread(handler, msg))
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            reply.update(ok=False, message=str(exc))
+        except Exception as exc:  # a bug: log it in full, and still tell the page so it does not wait forever
+            log.exception("viewer request %r failed", msg.get("type"))
+            reply.update(ok=False, message=f"internal error: {exc}")
+        with contextlib.suppress(WebSocketDisconnect, RuntimeError):
+            await ws.send_text(json.dumps(reply))
 
     # ---- broadcasting ---------------------------------------------------------------
 
@@ -189,7 +219,9 @@ def create_app(hub: ViewerHub) -> Starlette:
             while True:
                 raw = await ws.receive_text()
                 try:
-                    hub.handle(json.loads(raw))
+                    msg = json.loads(raw)
+                    if not hub.start_slow(ws, msg):
+                        hub.handle(msg)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
         except WebSocketDisconnect:

@@ -18,6 +18,7 @@ import mujoco
 import numpy as np
 from pydantic import ValidationError
 
+from robotforge import modes
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
@@ -37,6 +38,10 @@ _JOINT_TYPES = {
     int(mujoco.mjtJoint.mjJNT_SLIDE): "slide",
     int(mujoco.mjtJoint.mjJNT_HINGE): "hinge",
 }
+
+
+AREA_TERRAIN = ("hills", "rough")  # terrain types that cover the ground rather than sit on it
+FEATURE_GAP = 0.6  # m of flat floor between a robot and a feature put in front of it
 
 
 class PlaygroundError(ValueError):
@@ -63,6 +68,7 @@ class Playground:
     store: WorldStore | None = None
     last_doctor: dict[str, Any] = field(default_factory=dict)  # robot name -> import doctor report
     behaviors: BehaviorManager = field(init=False)
+    modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -76,8 +82,37 @@ class Playground:
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
 
+        def extras() -> dict[str, Any]:
+            world = self.current_world()
+            robots = self.behaviors.robots()
+            learned = self.behaviors.learned_walkers()
+            return {
+                "robots": robots,
+                "learned": learned,
+                "world": world.name if world is not None else None,  # the page title; None for a loaded file
+                "floor": world.floor.style if world is not None else None,
+                "terrain": [t.type for t in world.terrain] if world is not None else [],
+                "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in robots},
+                "catalog": viewer_catalog(),
+            }
+
+        def world_request(msg: dict[str, Any]) -> dict[str, Any]:
+            action = msg.get("action")
+            if action == "scene":
+                if msg.get("preset") == "empty":
+                    return _short(self.clear_scene())
+                return _short(self.load_scene(str(msg["preset"]), seed=int(msg.get("seed", 0))))
+            if action == "terrain":
+                return _short(self.terrain_for_play(str(msg["terrain"]), msg.get("robot")))
+            if action == "floor":
+                return _short(self.set_floor(str(msg["style"])))
+            raise PlaygroundError(f"unknown world action {action!r}")
+
         hub.handlers["teleop"] = teleop
-        hub.scene_extras = lambda: {"robots": self.behaviors.robots(), "learned": self.behaviors.learned_walkers()}
+        hub.slow_handlers["world"] = world_request
+        hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
+        hub.scene_extras = extras
+        hub.state_extras = lambda: {"mode": modes.current(self)}
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
@@ -282,6 +317,19 @@ class Playground:
         return self._edit(change)
 
     @_one_edit_at_a_time
+    def clear_scene(self) -> dict[str, Any]:
+        """Back to an empty checker floor: no terrain, no objects. Robots stay where they are."""
+        if self.store is None:
+            self.store = WorldStore.create("playground")
+
+        def change(w: World) -> None:
+            w.floor = Floor()
+            w.terrain = []
+            w.objects = []
+
+        return self._edit(change)
+
+    @_one_edit_at_a_time
     def set_floor(self, style: str) -> dict[str, Any]:
         def change(w: World) -> None:
             w.floor.style = style
@@ -404,6 +452,24 @@ class Playground:
             w.terrain = patches
 
         return self._edit(change)
+
+    def terrain_for_play(self, type: str, robot: str | None = None) -> dict[str, Any]:
+        """The viewer's terrain picker: hills and rough ground cover the area around the origin; a feature
+        (stairs, ramp, stones, curb, platform) is put just in front of `robot`, facing the way it looks."""
+        if type in ("flat", *AREA_TERRAIN):
+            return self.set_terrain(type)
+        try:
+            length = terrain.parse({"type": type}).footprint()[0]
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+        world = self._require_store().load()
+        entry = next((r for r in world.robots if r.name == robot), None)
+        x, y = entry.pos if entry is not None else (0.0, 0.0)
+        yaw = entry.yaw if entry is not None else 0.0
+        ahead = FEATURE_GAP + length / 2
+        heading = np.radians(yaw)
+        pos = [round(x + ahead * np.cos(heading), 3), round(y + ahead * np.sin(heading), 3)]
+        return self.set_terrain(type, params={"pos": pos, "yaw": yaw})
 
     @_one_edit_at_a_time
     def add_terrain(
@@ -622,3 +688,17 @@ def _limit_dict(d: dict) -> dict:
         return d
     keys = list(d)[:_LIST_LIMIT]
     return {**{k: d[k] for k in keys}, "...": f"{len(d) - _LIST_LIMIT} more"}
+
+
+def viewer_catalog() -> dict[str, Any]:
+    """What the viewer's World panel offers: scene presets, ground styles with their colors, terrain types."""
+    return {
+        "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
+        "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
+        "terrains": ["flat", *terrain.TYPES],
+    }
+
+
+def _short(result: dict[str, Any]) -> dict[str, Any]:
+    """The viewer only needs what changed, not the full world summary."""
+    return {k: result[k] for k in ("world", "robots", "terrain", "notes") if k in result}

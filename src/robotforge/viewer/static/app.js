@@ -2,8 +2,12 @@
 // this page draws the bodies it streams and sends user input back.
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
+import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+translatePage();
 
 // ---------------------------------------------------------------- renderer setup
 
@@ -16,10 +20,6 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene3 = new THREE.Scene();
-const BG_TOP = "#2b323c";
-const BG_BOTTOM = "#1a1f26";
-const BG_HORIZON = "#232931";
-scene3.background = makeGradientTexture(BG_TOP, BG_BOTTOM);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 500);
 camera.up.set(0, 0, 1); // MuJoCo is Z-up
@@ -54,12 +54,31 @@ function makeGradientTexture(top, bottom) {
   return tex;
 }
 
+// While the drawer is open, the view's center slides left so what you look at is not under it.
+let viewShift = 0;
+let viewShiftTarget = 0;
+
+function applyViewShift() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (Math.abs(viewShift) < 0.5) camera.clearViewOffset();
+  else camera.setViewOffset(w, h, viewShift, 0, w, h);
+}
+
+function updateViewShift() {
+  if (viewShift === viewShiftTarget) return;
+  viewShift += (viewShiftTarget - viewShift) * (reduceMotion ? 1 : 0.2);
+  if (Math.abs(viewShiftTarget - viewShift) < 0.5) viewShift = viewShiftTarget;
+  applyViewShift();
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  applyViewShift();
 }
 window.addEventListener("resize", resize);
 resize();
@@ -363,11 +382,12 @@ async function applyScene(desc) {
   scene3.add(worldRoot);
 
   // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
-  pendingFit = firstScene ? "camera" : "lights";
+  pendingFit = firstScene || wantFrame ? "camera" : "lights";
   firstScene = false;
-  renderActuators(desc.actuators);
-  renderDrive(desc.robots || [], desc.learned || {});
+  wantFrame = false;
   follow = null;
+  tween = null;
+  onScene(desc);
 }
 
 function contentSphere() {
@@ -388,7 +408,7 @@ function fitLights(sphere) {
   const c = sphere.center;
   const r = Math.max(sphere.radius, 0.2) * 1.5;
   // Fade the (often infinite) floor into the background instead of a hard horizon.
-  scene3.fog = new THREE.Fog(BG_HORIZON, r * 5, r * 18);
+  scene3.fog = new THREE.Fog(theme.fog, r * 5, r * 18);
   sun.position.copy(c).add(new THREE.Vector3(0.6, -0.8, 1.6).multiplyScalar(r * 1.5));
   sun.target.position.copy(c);
   const cam = sun.shadow.camera;
@@ -399,18 +419,21 @@ function fitLights(sphere) {
   cam.updateProjectionMatrix();
 }
 
-function frameCamera() {
-  const sphere = contentSphere();
-  const r = Math.max(sphere.radius, 0.08);
+// Distance at which a sphere of radius r fills the view.
+function fitDistance(r) {
   const vfov = THREE.MathUtils.degToRad(camera.fov);
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
-  const d = (r / Math.sin(Math.min(vfov, hfov) / 2)) * 1.05;
-  camera.position.copy(sphere.center).add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
-  controls.target.copy(sphere.center);
+  return (r / Math.sin(Math.min(vfov, hfov) / 2)) * 1.05;
+}
+
+function frameCamera({ animate = false } = {}) {
+  const sphere = contentSphere();
+  const d = fitDistance(Math.max(sphere.radius, 0.08));
   camera.near = Math.max(d / 1000, 0.001);
   camera.far = d * 200;
   camera.updateProjectionMatrix();
-  controls.update();
+  const eye = sphere.center.clone().add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
+  moveCamera(eye, sphere.center, animate);
 }
 
 function applyPoses(buffer) {
@@ -430,363 +453,141 @@ function applyPoses(buffer) {
     fitLights(sphere);
     if (pendingFit === "camera") frameCamera();
     pendingFit = null;
+    $("loading").hidden = true;
   }
 }
 
-// ---------------------------------------------------------------- connection
+// ---------------------------------------------------------------- camera moves
 
-let ws = null;
-let retryMs = 500;
-let latestTime = 0;
+let tween = null; // { fromEye, fromTarget, toEye, toTarget, t0 }
+const TWEEN_MS = 450;
 
-function setConn(state, text) {
-  const el = $("conn");
-  el.classList.toggle("ok", state === "ok");
-  el.classList.toggle("bad", state === "bad");
-  $("conn-text").textContent = text;
-}
-
-function send(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-}
-
-function connect() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const base = location.pathname.replace(/[^/]*$/, "");
-  ws = new WebSocket(`${proto}://${location.host}${base}ws`);
-  ws.binaryType = "arraybuffer";
-  ws.onopen = () => {
-    retryMs = 500;
-    setConn("ok", "live");
-  };
-  ws.onclose = () => {
-    setConn("bad", "reconnecting");
-    setTimeout(connect, retryMs);
-    retryMs = Math.min(retryMs * 2, 5000);
-  };
-  ws.onmessage = (ev) => {
-    if (typeof ev.data !== "string") {
-      applyPoses(ev.data);
-      return;
-    }
-    const msg = JSON.parse(ev.data);
-    if (msg.type === "scene") applyScene(msg);
-    else if (msg.type === "state") applyState(msg);
-    else if (msg.type === "error") toast(msg.message);
-  };
-}
-
-// ---------------------------------------------------------------- UI
-
-let paused = false;
-const sliderEls = new Map();
-let activeSlider = null;
-
-function applyState(s) {
-  paused = s.paused;
-  const active = (s.behaviors || []).find((b) => b.robot === $("drive-robot").value);
-  $("drive-status").textContent =
-    active && "speed" in active ? `${active.speed >= 0 ? " " : ""}${active.speed.toFixed(2)} m/s` : "";
-  syncWalker(active);
-  $("btn-play").textContent = paused ? "Play" : "Pause";
-  $("stat-rtf").textContent = paused ? "paused" : `${s.rtf.toFixed(2)}x`;
-  const src = s.source || "";
-  $("source").textContent = src.split(/[\\/]/).pop();
-  $("source").title = src;
-  $("speed").value = String(s.speed);
-  s.ctrl.forEach((v, i) => {
-    const el = sliderEls.get(i);
-    if (el && el.input !== activeSlider) {
-      el.input.value = v;
-      el.value.textContent = v.toFixed(2);
-    }
-  });
-}
-
-function sliderRow(a, label) {
-  const row = document.createElement("div");
-  row.className = "slider-row";
-  const name = document.createElement("span");
-  name.className = "name";
-  name.textContent = label.replaceAll("_", " ");
-  name.title = a.name;
-  const value = document.createElement("span");
-  value.className = "value";
-  value.textContent = "0.00";
-  const input = document.createElement("input");
-  input.type = "range";
-  input.min = a.range[0];
-  input.max = a.range[1];
-  input.step = (a.range[1] - a.range[0]) / 500 || 0.001;
-  input.value = Math.min(Math.max(0, a.range[0]), a.range[1]);
-  input.setAttribute("aria-label", a.name);
-  input.addEventListener("pointerdown", () => (activeSlider = input));
-  input.addEventListener("pointerup", () => (activeSlider = null));
-  input.addEventListener("input", () => {
-    value.textContent = Number(input.value).toFixed(2);
-    send({ type: "ctrl", id: a.id, value: Number(input.value) });
-  });
-  row.append(name, value, input);
-  sliderEls.set(a.id, { input, value });
-  return row;
-}
-
-function renderActuators(actuators) {
-  const box = $("actuators");
-  box.replaceChildren();
-  sliderEls.clear();
-  $("act-count").textContent = actuators.length ? String(actuators.length) : "";
-  if (!actuators.length) {
-    const p = document.createElement("div");
-    p.className = "empty";
-    p.textContent = "Nothing to control yet. Robots you add will show their joints here.";
-    box.append(p);
+function moveCamera(eye, target, animate) {
+  follow = null;
+  if (!animate || reduceMotion) {
+    tween = null;
+    camera.position.copy(eye);
+    controls.target.copy(target);
+    controls.update();
     return;
   }
-  // "dog/front_left_hip" -> group "dog"; names without a prefix go in one unnamed group.
-  const groups = new Map();
-  for (const a of actuators) {
-    const cut = a.name.indexOf("/");
-    const group = cut > 0 ? a.name.slice(0, cut) : "";
-    const label = cut > 0 ? a.name.slice(cut + 1) : a.name;
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push([a, label]);
+  tween = { fromEye: camera.position.clone(), fromTarget: controls.target.clone(), toEye: eye, toTarget: target, t0: performance.now() };
+}
+
+function updateTween() {
+  if (!tween) return;
+  const k = Math.min(1, (performance.now() - tween.t0) / TWEEN_MS);
+  const e = 1 - (1 - k) ** 3; // ease out
+  camera.position.lerpVectors(tween.fromEye, tween.toEye, e);
+  controls.target.lerpVectors(tween.fromTarget, tween.toTarget, e);
+  if (k >= 1) tween = null;
+}
+
+// ---------------------------------------------------------------- theme
+
+// Scene colors come from the CSS tokens, so the 3D view and the panels always agree (light or dark).
+const theme = { fog: "#e2e7ec", amber: "#f2a900" };
+const accentMaterials = [];
+
+function readTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  const old = scene3.background;
+  scene3.background = makeGradientTexture(token("--scene-top", "#f4f6f8"), token("--scene-bottom", "#d6dde5"));
+  if (old) old.dispose();
+  theme.fog = token("--scene-fog", theme.fog);
+  theme.amber = token("--amber", theme.amber);
+  if (scene3.fog) scene3.fog.color.set(theme.fog);
+  for (const m of accentMaterials) m.color.set(theme.amber);
+}
+
+function accentMaterial(opts) {
+  // Pulled toward the camera in depth so a ring lying on the floor never sinks into it at a distance.
+  const m = new THREE.MeshBasicMaterial({
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -8,
+    ...opts,
+  });
+  accentMaterials.push(m);
+  return m;
+}
+
+// ---------------------------------------------------------------- selection ring
+
+// An amber ring on the ground under the selected robot; a notch on its rim points the way it drives.
+const ring = new THREE.Group();
+ring.visible = false;
+ring.renderOrder = 2;
+const ringLine = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 96), accentMaterial({ opacity: 0.95, side: THREE.DoubleSide }));
+const ringDisc = new THREE.Mesh(new THREE.CircleGeometry(0.9, 96), accentMaterial({ opacity: 0.16 }));
+const notchShape = new THREE.Shape([new THREE.Vector2(1.06, 0.09), new THREE.Vector2(1.22, 0), new THREE.Vector2(1.06, -0.09)]);
+const ringNotch = new THREE.Mesh(new THREE.ShapeGeometry(notchShape), accentMaterial({ opacity: 0.95, side: THREE.DoubleSide }));
+for (const m of [ringLine, ringDisc, ringNotch]) m.renderOrder = 2;
+ring.add(ringDisc, ringLine, ringNotch);
+scene3.add(ring);
+
+let ringState = null; // { radius, center: Vector3 } for the current selection, measured on first use
+let groundMeshes = []; // static scenery (floor, terrain, furniture) the ring can rest on
+const groundRay = new THREE.Raycaster();
+const DOWN = new THREE.Vector3(0, 0, -1);
+
+// Height of the ground under (x, y): the robot's feet can sink a little into it, so measure the scenery.
+function groundHeight(x, y, top, fallback) {
+  groundRay.set(new THREE.Vector3(x, y, top), DOWN);
+  const hit = groundRay.intersectObjects(groundMeshes, false).find((h) => h.object.visible);
+  return hit ? hit.point.z : fallback;
+}
+
+const hasMesh = (id) => bodyNodes[id]?.children.some((o) => o.isMesh && o.visible);
+
+function robotBox(name, { baseOnly = false } = {}) {
+  const all = robotBodies.get(name);
+  if (!all || !worldRoot) return null;
+  const base = all.find(hasMesh); // the first body you can see; a robot's root may be a bare frame
+  const ids = baseOnly && base !== undefined ? [base] : all;
+  worldRoot.updateMatrixWorld();
+  const box = new THREE.Box3();
+  for (const id of ids) {
+    bodyNodes[id]?.traverse((o) => {
+      if (o.isMesh && o.visible) box.expandByObject(o);
+    });
   }
-  if (groups.size === 1 && groups.has("")) {
-    for (const [a, label] of groups.get("")) box.append(sliderRow(a, label));
+  return box.isEmpty() ? null : box;
+}
+
+function updateRing() {
+  const robot = robotByName(selected);
+  // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
+  const box = selected ? robotBox(selected, { baseOnly: !robot?.max_speed }) : null;
+  if (!box) {
+    ring.visible = false;
     return;
   }
-  let first = true;
-  for (const [group, items] of groups) {
-    const details = document.createElement("details");
-    details.className = "group";
-    details.open = first;
-    first = false;
-    const summary = document.createElement("summary");
-    const title = document.createElement("span");
-    title.textContent = group || "other";
-    const n = document.createElement("span");
-    n.className = "n";
-    n.textContent = String(items.length);
-    summary.append(title, n);
-    details.append(summary);
-    for (const [a, label] of items) details.append(sliderRow(a, label));
-    box.append(details);
+  const center = box.getCenter(new THREE.Vector3());
+  const now = performance.now();
+  if (!ringState) {
+    const size = box.getSize(new THREE.Vector3());
+    const pad = robot?.max_speed ? 1.05 : 1.6;
+    ringState = { radius: Math.max(0.12, Math.hypot(size.x, size.y) * 0.5 * pad), center: center.clone(), t: now };
   }
-}
-
-function setPanelCollapsed(collapsed) {
-  $("panel").classList.toggle("collapsed", collapsed);
-  $("panel-toggle").setAttribute("aria-expanded", String(!collapsed));
-  try {
-    localStorage.setItem("robotforge.panelCollapsed", collapsed ? "1" : "0");
-  } catch {
-    // storage may be unavailable (private mode, sandboxed iframe); the panel still works
+  // Smooth out the swing of legs and arms, by time so a throttled tab does not leave the ring behind.
+  ringState.center.lerp(center, 1 - Math.exp(-(now - ringState.t) / 80));
+  ringState.t = now;
+  const whole = robot?.max_speed ? box : robotBox(selected);
+  const z = groundHeight(ringState.center.x, ringState.center.y, whole.max.z + 0.05, whole.min.z);
+  ring.position.set(ringState.center.x, ringState.center.y, z + 0.006);
+  ring.scale.setScalar(ringState.radius);
+  ringNotch.visible = !!robot?.max_speed;
+  const root = bodyNodes[robotBodies.get(selected)[0]];
+  if (root) {
+    const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(root.quaternion);
+    ring.rotation.set(0, 0, Math.atan2(fwd.y, fwd.x));
   }
+  ring.visible = true;
 }
-
-function initialPanelCollapsed() {
-  try {
-    const saved = localStorage.getItem("robotforge.panelCollapsed");
-    if (saved !== null) return saved === "1";
-  } catch {
-    // ignore and fall back to the width rule
-  }
-  return window.innerWidth < 900;
-}
-
-setPanelCollapsed(initialPanelCollapsed());
-$("panel-toggle").addEventListener("click", () => setPanelCollapsed(!$("panel").classList.contains("collapsed")));
-
-// ---------------------------------------------------------------- keyboard driving
-
-const DRIVE_KEYS = {
-  w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
-};
-const pressed = new Set();
-let mobileRobots = [];
-let lastDrive = "";
-
-let learnedWalkers = {}; // robot -> {policy, max_speed, active}: robots that can walk with a learned policy
-
-function renderDrive(robots, learned = {}) {
-  learnedWalkers = learned;
-  mobileRobots = robots.filter((r) => ["quadruped", "rover", "humanoid"].includes(r.kind));
-  const box = $("drive");
-  box.hidden = mobileRobots.length === 0;
-  const select = $("drive-robot");
-  const previous = select.value;
-  select.replaceChildren(
-    ...mobileRobots.map((r) => {
-      const o = document.createElement("option");
-      o.value = r.name;
-      o.textContent = r.name;
-      return o;
-    })
-  );
-  if (mobileRobots.some((r) => r.name === previous)) select.value = previous;
-  lastDrive = "";
-  renderWalker();
-}
-
-let walkerPendingUntil = 0; // after a switch, trust the user's pick until the server has answered
-
-function renderWalker() {
-  const learned = learnedWalkers[$("drive-robot").value];
-  const pick = $("drive-walker");
-  pick.hidden = !learned;
-  if (learned) {
-    pick.value = learned.active ? "rl" : "gait";
-    pick.options[1].title = learned.policy;
-  }
-}
-
-function syncWalker(active) {
-  // Show what really drives the robot (a switch can fail, e.g. without the optional onnxruntime).
-  const learned = learnedWalkers[$("drive-robot").value];
-  if (!learned || performance.now() < walkerPendingUntil) return;
-  learned.active = active?.walker === "rl";
-  $("drive-walker").value = learned.active ? "rl" : "gait";
-}
-
-function setWalker(walker) {
-  const robot = mobileRobots.find((r) => r.name === $("drive-robot").value);
-  const learned = learnedWalkers[robot?.name];
-  if (!robot || !learned) return;
-  learned.active = walker === "rl";
-  walkerPendingUntil = performance.now() + 1000;
-  lastDrive = "";
-  send({ type: "teleop", robot: robot.name, speed: 0, turn: 0, walker });
-}
-
-function driveCommand() {
-  const robot = mobileRobots.find((r) => r.name === $("drive-robot").value);
-  if (!robot) return null;
-  const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
-  const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
-  const learned = learnedWalkers[robot.name];
-  const top = (learned?.active ? learned.max_speed : robot.max_speed) ?? 0.3;
-  const turnRate = robot.kind === "rover" ? 2.0 : 1.0;
-  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * turnRate };
-}
-
-function sendDrive() {
-  const cmd = driveCommand();
-  if (!cmd) return;
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
-  if (key === lastDrive) return;
-  lastDrive = key;
-  send(cmd);
-  for (const k of document.querySelectorAll("#drive kbd")) {
-    const dir = { W: "fwd", A: "left", S: "back", D: "right" }[k.textContent];
-    k.classList.toggle("on", pressed.has(dir));
-  }
-}
-
-// Follow the driven robot with the camera until the user orbits by hand.
-let follow = null; // { body, last: Vector3, z: smoothed height, t: last update ms }
-const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
-
-function rootBodyOf(robot) {
-  return sceneDesc?.bodies.find((b) => b.name.startsWith(`${robot}/`) && b.dynamic)?.id ?? null;
-}
-
-function startFollow() {
-  const body = rootBodyOf($("drive-robot").value);
-  if (body === null || !bodyNodes[body]) return;
-  if (follow && follow.body === body) return;
-  const start = bodyNodes[body].position;
-  follow = { body, last: start.clone(), z: start.z, t: performance.now() };
-}
-
-function updateFollow() {
-  if (!follow || !bodyNodes[follow.body]) return;
-  const now = bodyNodes[follow.body].position;
-  const delta = now.clone().sub(follow.last);
-  const t = performance.now();
-  const alpha = 1 - Math.exp(-Math.min(t - follow.t, 200) / 1000 / FOLLOW_Z_SECONDS);
-  const z = follow.z + (now.z - follow.z) * alpha;
-  delta.z = z - follow.z; // across the ground at once; up and down slowly, so the gait does not bob the view
-  follow.z = z;
-  follow.t = t;
-  camera.position.add(delta);
-  controls.target.add(delta);
-  follow.last.copy(now);
-}
-
-controls.addEventListener("start", () => {
-  follow = null;
-});
-
-function driveKey(e, down) {
-  if (mobileRobots.length === 0) return false;
-  const dir = DRIVE_KEYS[e.key.toLowerCase()];
-  if (!dir) return false;
-  e.preventDefault();
-  if (down) startFollow();
-  if (down) pressed.add(dir);
-  else pressed.delete(dir);
-  sendDrive();
-  return true;
-}
-
-window.addEventListener("keyup", (e) => driveKey(e, false));
-window.addEventListener("blur", () => {
-  pressed.clear();
-  sendDrive();
-});
-$("drive-robot").addEventListener("change", (e) => {
-  e.target.blur(); // keep arrow keys for driving, not for changing the selection
-  lastDrive = "";
-  follow = null;
-  renderWalker();
-});
-$("drive-walker").addEventListener("change", (e) => {
-  e.target.blur();
-  setWalker(e.target.value);
-});
-
-let toastTimer = null;
-function toast(text) {
-  const el = $("toast");
-  el.textContent = text;
-  el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 4000);
-}
-
-$("btn-play").addEventListener("click", () => send({ type: "cmd", cmd: paused ? "play" : "pause" }));
-$("btn-step").addEventListener("click", () => send({ type: "cmd", cmd: "step" }));
-$("btn-reset").addEventListener("click", () => send({ type: "cmd", cmd: "reset" }));
-$("btn-frame").addEventListener("click", () => frameCamera());
-$("speed").addEventListener("change", (e) => send({ type: "speed", value: Number(e.target.value) }));
-$("show-collision").addEventListener("change", (e) => {
-  showCollision = e.target.checked;
-  if (!worldRoot || !sceneDesc) return;
-  worldRoot.traverse((o) => {
-    if (o.isMesh && !o.userData.isPlane) {
-      o.visible = o.userData.group < sceneDesc.visibleGroupLimit || showCollision;
-    }
-  });
-});
-$("show-shadows").addEventListener("change", (e) => {
-  sun.castShadow = e.target.checked;
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
-  if (driveKey(e, true)) return;
-  if (e.code === "Space") {
-    e.preventDefault();
-    send({ type: "cmd", cmd: paused ? "play" : "pause" });
-  } else if (e.key === "r" || e.key === "R") {
-    send({ type: "cmd", cmd: "reset" });
-  } else if (e.key === ".") {
-    send({ type: "cmd", cmd: "step" });
-  } else if (e.key === "f" || e.key === "F") {
-    frameCamera();
-  }
-});
 
 // ---------------------------------------------------------------- dragging bodies
 
@@ -796,17 +597,18 @@ const dragPlane = new THREE.Plane();
 let drag = null; // { body, local: Vector3 }
 const dragLine = new THREE.Line(
   new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-  new THREE.LineBasicMaterial({ color: 0x5aa9ff, depthTest: false, transparent: true })
+  new THREE.LineBasicMaterial({ color: theme.amber, depthTest: false, transparent: true })
 );
+accentMaterials.push(dragLine.material);
 dragLine.renderOrder = 10;
 dragLine.visible = false;
-const dragDot = new THREE.Mesh(
-  new THREE.SphereGeometry(1, 16, 8),
-  new THREE.MeshBasicMaterial({ color: 0x5aa9ff, depthTest: false, transparent: true })
-);
+const dragDot = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), accentMaterial({ depthTest: false }));
 dragDot.renderOrder = 11;
 dragDot.visible = false;
 scene3.add(dragLine, dragDot);
+
+readTheme();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readTheme);
 
 function setPointer(e) {
   // Matrices are normally refreshed by render(); refresh here too so picking never
@@ -834,6 +636,7 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
+    dismissCoach();
     if (e.button !== 0) return;
     const hit = pickBody(e);
     if (!hit) return;
@@ -844,6 +647,8 @@ canvas.addEventListener(
       // synthetic or already-released pointers cannot be captured; dragging still works
     }
     canvas.classList.add("dragging");
+    const owner = robotOfBody.get(hit.body);
+    if (owner && owner !== selected) select(owner);
     const node = bodyNodes[hit.body];
     const local = node.worldToLocal(hit.point.clone());
     drag = { body: hit.body, local };
@@ -879,7 +684,7 @@ function endDrag(e) {
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 
-let dragTarget = new THREE.Vector3();
+const dragTarget = new THREE.Vector3();
 function updateDragVisual(target) {
   dragTarget.copy(target);
   dragLine.visible = dragDot.visible = true;
@@ -897,22 +702,782 @@ function refreshDragVisual() {
   dragDot.scale.setScalar(Math.max(camera.position.distanceTo(dragTarget), 0.1) * 0.006);
 }
 
+// ---------------------------------------------------------------- connection
+
+let ws = null;
+let retryMs = 500;
+let latestTime = 0;
+let bannerTimer = null;
+
+function setConnected(ok) {
+  clearTimeout(bannerTimer);
+  if (ok) $("banner").hidden = true;
+  else bannerTimer = setTimeout(() => ($("banner").hidden = false), 800); // a quick reload should not flash it
+}
+
+function send(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const base = location.pathname.replace(/[^/]*$/, "");
+  ws = new WebSocket(`${proto}://${location.host}${base}ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => {
+    retryMs = 500;
+    setConnected(true);
+  };
+  ws.onclose = () => {
+    setConnected(false);
+    for (const p of pending.values()) p.reject(new Error(t("disconnected")));
+    pending.clear();
+    setTimeout(connect, retryMs);
+    retryMs = Math.min(retryMs * 2, 5000);
+  };
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== "string") {
+      applyPoses(ev.data);
+      return;
+    }
+    const msg = JSON.parse(ev.data);
+    if (msg.type === "scene") applyScene(msg);
+    else if (msg.type === "state") applyState(msg);
+    else if (msg.type === "reply") onReply(msg);
+    else if (msg.type === "error") toast(msg.message);
+  };
+}
+
+// ---------------------------------------------------------------- robots and selection
+
+let robots = []; // [{name, kind, model?, arms?, max_speed?}] from the server
+let learnedWalkers = {}; // robot -> {policy, max_speed}: robots that can walk with a learned policy
+let robotModes = {}; // robot -> the mode keys it offers (see modes.py)
+let currentModes = {}; // robot -> the mode running now, as the server reports it
+let worldInfo = { isWorld: false, floor: null, terrain: [], catalog: null };
+let wantFrame = false; // frame the camera on the next scene (after picking a map or terrain)
+let robotBodies = new Map(); // robot -> body ids, root first
+let robotOfBody = new Map(); // body id -> robot
+let selected = null; // robot name, or null when the world has no robots
+let behaviors = [];
+let worldName = "";
+
+const robotByName = (name) => robots.find((r) => r.name === name) ?? null;
+
+function onScene(desc) {
+  robots = desc.robots || [];
+  learnedWalkers = desc.learned || {};
+  robotModes = desc.modes || {};
+  worldInfo = {
+    isWorld: !!desc.world,
+    floor: desc.floor ?? null,
+    terrain: desc.terrain || [],
+    catalog: desc.catalog || worldInfo.catalog,
+  };
+  hideMarker();
+  robotBodies = new Map();
+  robotOfBody = new Map();
+  for (const b of desc.bodies) {
+    const cut = b.name.indexOf("/");
+    const owner = cut > 0 ? b.name.slice(0, cut) : null;
+    if (!owner || !robots.some((r) => r.name === owner)) continue;
+    if (!robotBodies.has(owner)) robotBodies.set(owner, []);
+    robotBodies.get(owner).push(b.id);
+    robotOfBody.set(b.id, owner);
+  }
+  groundMeshes = [];
+  worldRoot.traverse((o) => {
+    const body = o.userData.body;
+    if (o.isMesh && body !== undefined && !desc.bodies[body]?.dynamic && !robotOfBody.has(body)) groundMeshes.push(o);
+  });
+  if (!robotByName(selected)) selected = (robots.find((r) => r.max_speed) ?? robots[0])?.name ?? null;
+  ringState = null;
+  worldName = desc.world || worldName;
+  renderTitle();
+  renderRobotList();
+  renderSelection();
+  renderWorldPanel();
+  $("empty").hidden = !(desc.world && robots.length === 0);
+}
+
+function renderTitle() {
+  $("world").textContent = worldName;
+  document.title = worldName ? `${worldName} · robotforge` : "robotforge";
+}
+
+function renderRobotList() {
+  const list = $("robot-list");
+  list.replaceChildren(
+    ...robots.map((r) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "choice";
+      b.dataset.robot = r.name;
+      b.setAttribute("aria-pressed", String(r.name === selected));
+      const name = document.createElement("span");
+      name.className = "choice-title";
+      name.textContent = r.name;
+      const meta = document.createElement("span");
+      meta.className = "choice-desc";
+      meta.textContent = [t(`kind_${r.kind}`), r.model].filter(Boolean).join(" · ");
+      b.append(name, meta);
+      b.addEventListener("click", () => select(r.name, { focus: true }));
+      return b;
+    })
+  );
+  $("robot-section").hidden = robots.length === 0;
+  const n = robots.length || (sceneDesc?.actuators.length ?? 0);
+  $("drawer-label").textContent = robots.length ? t("robots") : t("joints");
+  $("drawer-count").textContent = n ? String(n) : "";
+}
+
+function select(name, { focus = false } = {}) {
+  if (name !== selected) {
+    stopDriving();
+    selected = name;
+    ringState = null;
+    follow = null;
+  }
+  for (const b of $("robot-list").children) b.setAttribute("aria-pressed", String(b.dataset.robot === selected));
+  renderSelection();
+  if (focus) focusRobot(name);
+}
+
+function focusRobot(name) {
+  const box = robotBox(name);
+  if (!box) return;
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const d = fitDistance(Math.max(sphere.radius, 0.15)) * 2.2; // room around it to see where it goes
+  moveCamera(sphere.center.clone().add(dir.multiplyScalar(d)), sphere.center, true);
+}
+
+function renderSelection() {
+  renderJoints();
+  renderModes();
+  renderDrive();
+}
+
+// ---------------------------------------------------------------- joint sliders
+
+const sliderEls = new Map();
+let activeSlider = null;
+
+function humanize(label) {
+  return label.replaceAll("_", " ").replace(/\s+/g, " ").trim();
+}
+
+function setFill(input) {
+  const min = Number(input.min);
+  const max = Number(input.max);
+  const p = max > min ? ((Number(input.value) - min) / (max - min)) * 100 : 0;
+  input.style.setProperty("--p", `${p}%`);
+}
+
+function sliderRow(a, label) {
+  const row = document.createElement("label");
+  row.className = "joint";
+  const name = document.createElement("span");
+  name.className = "joint-name";
+  name.textContent = humanize(label);
+  name.title = a.name;
+  const value = document.createElement("span");
+  value.className = "joint-value";
+  value.textContent = "0.00";
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = a.range[0];
+  input.max = a.range[1];
+  input.step = (a.range[1] - a.range[0]) / 500 || 0.001;
+  input.value = Math.min(Math.max(0, a.range[0]), a.range[1]);
+  input.setAttribute("aria-label", a.name);
+  setFill(input);
+  input.addEventListener("pointerdown", () => (activeSlider = input));
+  input.addEventListener("pointerup", () => (activeSlider = null));
+  input.addEventListener("input", () => {
+    value.textContent = Number(input.value).toFixed(2);
+    setFill(input);
+    send({ type: "ctrl", id: a.id, value: Number(input.value) });
+  });
+  row.append(name, value, input);
+  sliderEls.set(a.id, { input, value });
+  return row;
+}
+
+function renderJoints() {
+  const box = $("joints");
+  box.replaceChildren();
+  sliderEls.clear();
+  const actuators = sceneDesc?.actuators ?? [];
+  const split = (a) => {
+    const cut = a.name.indexOf("/");
+    return cut > 0 ? [a.name.slice(0, cut), a.name.slice(cut + 1)] : ["", a.name];
+  };
+  const mine = selected ? actuators.filter((a) => split(a)[0] === selected) : [];
+  const loose = actuators.filter((a) => !robotByName(split(a)[0]));
+  const title = $("detail-title");
+  title.textContent = t("joints");
+  if (selected) {
+    const subject = document.createElement("span");
+    subject.className = "subject";
+    subject.textContent = ` · ${selected}`;
+    title.append(subject);
+  }
+  $("joint-count").textContent = (selected ? mine.length : loose.length) || "";
+  $("detail-section").hidden = !selected && loose.length === 0;
+  const rows = selected ? mine : loose;
+  for (const a of rows) box.append(sliderRow(a, split(a)[1]));
+  if (selected && rows.length === 0) {
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = t("no_joints");
+    box.append(p);
+  }
+  if (selected && loose.length) {
+    // motors that belong to no robot (e.g. a hand-written model next to a robot)
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `${t("other")} (${loose.length})`;
+    details.append(summary, ...loose.map((a) => sliderRow(a, split(a)[1])));
+    box.append(details);
+  }
+}
+
+// ---------------------------------------------------------------- simulation state
+
+let paused = false;
+let rtf = 1;
+
+function applyState(s) {
+  paused = s.paused;
+  rtf = s.rtf;
+  behaviors = s.behaviors || [];
+  const play = $("btn-play");
+  play.classList.toggle("is-paused", paused);
+  const tip = t(paused ? "play_tip" : "pause_tip");
+  play.setAttribute("aria-label", tip);
+  play.title = tip;
+  for (const b of $("speed").children) b.setAttribute("aria-pressed", String(Number(b.dataset.speed) === s.speed));
+  if (!worldName && s.source) {
+    worldName = s.source.split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+    renderTitle();
+  }
+  $("world").title = s.source || "";
+  const active = behaviors.find((b) => b.robot === selected);
+  $("drive-speed").textContent = active && "speed" in active && Math.abs(active.speed) > 0.005 ? `${active.speed.toFixed(2)} m/s` : "";
+  const modes = s.mode || {};
+  if (JSON.stringify(modes) !== JSON.stringify(currentModes)) {
+    currentModes = modes;
+    renderModes();
+    if (markerFor && currentModes[markerFor.robot] !== markerFor.mode) hideMarker();
+  }
+  s.ctrl.forEach((v, i) => {
+    const el = sliderEls.get(i);
+    if (el && el.input !== activeSlider) {
+      el.input.value = v;
+      el.value.textContent = v.toFixed(2);
+      setFill(el.input);
+    }
+  });
+}
+
+// ---------------------------------------------------------------- keyboard driving
+
+const DRIVE_KEYS = {
+  w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
+};
+const TURN_RATE = { rover: 2.0, balancer: 1.5 }; // rad/s at full key; walkers turn at 1.0
+const pressed = new Set();
+let lastDrive = "";
+
+function driveTarget() {
+  const robot = robotByName(selected);
+  return robot?.max_speed ? robot : null;
+}
+
+function renderDrive() {
+  const robot = driveTarget();
+  $("drive").hidden = !robot;
+  if (robot) $("drive-text").innerHTML = t("drive", { name: escapeHtml(robot.name) });
+  lastDrive = "";
+}
+
+function driveCommand(robot) {
+  const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
+  const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+  const learned = learnedWalkers[robot.name];
+  const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
+  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+}
+
+function sendDrive() {
+  const robot = driveTarget();
+  for (const k of $("drive").querySelectorAll("kbd")) k.classList.toggle("on", pressed.has(k.dataset.key));
+  if (!robot) return;
+  const cmd = driveCommand(robot);
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
+  if (key === lastDrive) return;
+  lastDrive = key;
+  send(cmd);
+}
+
+function stopDriving() {
+  // Switching robots mid-drive must not leave the old one walking off on its own.
+  const robot = driveTarget();
+  if (robot && pressed.size) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
+  pressed.clear();
+  lastDrive = "";
+}
+
+// Follow the driven robot with the camera until the user orbits by hand.
+let follow = null; // { body, last: Vector3, z: smoothed height, t: last update ms }
+const FOLLOW_Z_SECONDS = 0.6; // height follows this slowly: up stairs and hills, not every stride
+
+function startFollow() {
+  const body = sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null;
+  if (body === null || !bodyNodes[body]) return;
+  if (follow && follow.body === body) return;
+  tween = null;
+  const start = bodyNodes[body].position;
+  follow = { body, last: start.clone(), z: start.z, t: performance.now() };
+}
+
+function updateFollow() {
+  if (!follow || !bodyNodes[follow.body]) return;
+  const now = bodyNodes[follow.body].position;
+  const delta = now.clone().sub(follow.last);
+  const t = performance.now();
+  const alpha = 1 - Math.exp(-Math.min(t - follow.t, 200) / 1000 / FOLLOW_Z_SECONDS);
+  const z = follow.z + (now.z - follow.z) * alpha;
+  delta.z = z - follow.z; // across the ground at once; up and down slowly, so the gait does not bob the view
+  follow.z = z;
+  follow.t = t;
+  camera.position.add(delta);
+  controls.target.add(delta);
+  follow.last.copy(now);
+}
+
+controls.addEventListener("start", () => {
+  follow = null;
+  tween = null;
+});
+
+function driveKey(e, down) {
+  if (!driveTarget()) return false;
+  const dir = DRIVE_KEYS[e.key.toLowerCase()];
+  if (!dir) return false;
+  e.preventDefault();
+  if (down) {
+    startFollow();
+    pressed.add(dir);
+  } else {
+    pressed.delete(dir);
+  }
+  sendDrive();
+  return true;
+}
+
+window.addEventListener("keyup", (e) => driveKey(e, false));
+window.addEventListener("blur", () => {
+  pressed.clear();
+  sendDrive();
+});
+
+// ---------------------------------------------------------------- panels, buttons and keys
+
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null; // storage may be unavailable (private mode, sandboxed iframe); the page still works
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // see storageGet
+  }
+}
+
+function setOpen(toggleId, panelId, open) {
+  $(panelId).hidden = !open;
+  $(toggleId).setAttribute("aria-expanded", String(open));
+}
+
+const narrow = () => window.innerWidth <= 700; // panels span the width; one at a time
+
+function setDrawer(open) {
+  setOpen("drawer-toggle", "drawer", open);
+  if (open) setOpen("help-toggle", "help", false);
+  if (open && narrow()) setOpen("world-toggle", "world-panel", false);
+  storageSet("robotforge.drawer", open ? "1" : "0");
+  shiftForDrawers();
+}
+
+function setWorldPanel(open) {
+  setOpen("world-toggle", "world-panel", open);
+  if (open) setOpen("help-toggle", "help", false);
+  if (open && narrow()) setOpen("drawer-toggle", "drawer", false);
+  storageSet("robotforge.world", open ? "1" : "0");
+  shiftForDrawers();
+}
+
+// Slide the view's center away from open side panels, so what you look at stays in the clear.
+function shiftForDrawers() {
+  const half = (id) => (!$(id).hidden && !narrow() ? ($(id).offsetWidth + 16) / 2 : 0);
+  viewShiftTarget = half("drawer") - half("world-panel");
+}
+window.addEventListener("resize", shiftForDrawers);
+
+function setHelp(open) {
+  setOpen("help-toggle", "help", open);
+  if (open) {
+    setOpen("drawer-toggle", "drawer", false);
+    setOpen("world-toggle", "world-panel", false);
+    shiftForDrawers();
+  }
+}
+
+$("drawer-toggle").addEventListener("click", () => setDrawer($("drawer").hidden));
+$("help-toggle").addEventListener("click", () => setHelp($("help").hidden));
+$("world-toggle").addEventListener("click", () => setWorldPanel($("world-panel").hidden));
+setDrawer(storageGet("robotforge.drawer") === "1");
+const savedWorld = storageGet("robotforge.world"); // first visit on a big screen: show what you can pick
+setWorldPanel(savedWorld === null ? window.innerWidth > 900 : savedWorld === "1");
+
+let toastTimer = null;
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 5000);
+}
+
+// A one-time hint for first visits; it leaves on the first touch, or by itself.
+function showCoach() {
+  if (storageGet("robotforge.coached")) return;
+  $("coach").hidden = false;
+  setTimeout(dismissCoach, 9000);
+}
+
+function dismissCoach() {
+  const el = $("coach");
+  if (el.hidden || el.classList.contains("fade")) return;
+  storageSet("robotforge.coached", "1");
+  el.classList.add("fade");
+  setTimeout(() => (el.hidden = true), 700);
+}
+showCoach();
+
+const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
+$("btn-play").addEventListener("click", togglePlay);
+$("btn-reset").addEventListener("click", () => send({ type: "cmd", cmd: "reset" }));
+$("btn-frame").addEventListener("click", () => frameCamera({ animate: true }));
+for (const b of $("speed").children) {
+  b.addEventListener("click", () => send({ type: "speed", value: Number(b.dataset.speed) }));
+}
+$("show-collision").addEventListener("change", (e) => {
+  showCollision = e.target.checked;
+  ringState = null;
+  if (!worldRoot || !sceneDesc) return;
+  worldRoot.traverse((o) => {
+    if (o.isMesh && !o.userData.isPlane) {
+      o.visible = o.userData.group < sceneDesc.visibleGroupLimit || showCollision;
+    }
+  });
+});
+$("show-shadows").addEventListener("change", (e) => {
+  sun.castShadow = e.target.checked;
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
+  dismissCoach();
+  if (driveKey(e, true)) return;
+  if (e.target instanceof HTMLButtonElement && (e.key === " " || e.key === "Enter")) return; // let buttons click
+  if (e.code === "Space") {
+    e.preventDefault();
+    togglePlay();
+  } else if (e.key === "r" || e.key === "R") {
+    send({ type: "cmd", cmd: "reset" });
+  } else if (e.key === ".") {
+    send({ type: "cmd", cmd: "step" });
+  } else if (e.key === "f" || e.key === "F") {
+    frameCamera({ animate: true });
+  } else if (e.key === "?") {
+    setHelp($("help").hidden);
+  } else if (e.key === "Escape") {
+    setHelp(false);
+    setDrawer(false);
+    setWorldPanel(false);
+  }
+});
+
+// ---------------------------------------------------------------- world panel: maps, terrain, modes
+
+let requestSeq = 0;
+const pending = new Map(); // request id -> { resolve, reject }
+
+// Ask the server for something slow (a new map, a control mode); resolves with its reply.
+function request(msg) {
+  return new Promise((resolve, reject) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      reject(new Error(t("disconnected")));
+      return;
+    }
+    const id = ++requestSeq;
+    pending.set(id, { resolve, reject });
+    ws.send(JSON.stringify({ ...msg, id }));
+  });
+}
+
+function onReply(msg) {
+  const waiting = pending.get(msg.id);
+  if (!waiting) return;
+  pending.delete(msg.id);
+  if (msg.ok) waiting.resolve(msg.data);
+  else waiting.reject(new Error(msg.message));
+}
+
+let busy = false;
+
+async function runChoice(button, msg, { frame = false, done } = {}) {
+  if (busy) return;
+  busy = true;
+  wantFrame = frame;
+  button.classList.add("busy");
+  setPanelBusy(true);
+  try {
+    const data = await request(msg); // not inside done?.(...): that skips its arguments when done is unset
+    done?.(data);
+  } catch (err) {
+    wantFrame = false;
+    toast(err.message);
+  } finally {
+    busy = false;
+    button.classList.remove("busy");
+    setPanelBusy(false);
+  }
+}
+
+function setPanelBusy(on) {
+  $("world-panel").setAttribute("aria-busy", String(on));
+  for (const b of $("world-panel").querySelectorAll(".choice, .swatch")) b.disabled = on || b.dataset.off === "1";
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function choice({ title, desc, pressed, off = false, onClick }) {
+  const b = el("button", "choice");
+  b.type = "button";
+  b.setAttribute("aria-pressed", String(!!pressed));
+  b.dataset.off = off ? "1" : "0";
+  b.disabled = off || busy;
+  const spinner = el("span", "spinner");
+  spinner.setAttribute("aria-hidden", "true");
+  b.append(el("span", "choice-title", title), spinner, el("span", "choice-desc", desc));
+  b.addEventListener("click", () => onClick(b));
+  return b;
+}
+
+function selectTab(name) {
+  for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+  for (const body of $("world-panel").querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
+  storageSet("robotforge.tab", name);
+}
+
+for (const tab of $("world-panel").querySelectorAll("[role=tab]")) tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+selectTab(storageGet("robotforge.tab") || "maps");
+
+let lastMap = null; // the map picked here; a world does not remember which preset it came from
+
+function renderWorldPanel() {
+  renderMaps();
+  renderGround();
+  renderTerrain();
+  renderModes();
+}
+
+function renderMaps() {
+  const cat = worldInfo.catalog;
+  if (!cat) return;
+  const names = ["empty", ...cat.scenes.map((sc) => sc.name)];
+  $("map-list").replaceChildren(
+    ...names.map((name) => {
+      const scene = cat.scenes.find((sc) => sc.name === name);
+      return choice({
+        title: tOr(`map_${name}`, scene?.title ?? name),
+        desc: tOr(`map_${name}_desc`, scene?.summary ?? ""),
+        pressed: name === lastMap,
+        onClick: (b) =>
+          runChoice(b, { type: "world", action: "scene", preset: name }, { frame: true, done: () => {
+            lastMap = name;
+            renderMaps();
+          } }),
+      });
+    })
+  );
+}
+
+function renderGround() {
+  const cat = worldInfo.catalog;
+  if (!cat) return;
+  $("ground-list").replaceChildren(
+    ...Object.entries(cat.grounds).map(([name, rgb]) => {
+      const b = el("button", "swatch");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(worldInfo.floor === name));
+      b.dataset.off = worldInfo.isWorld ? "0" : "1";
+      b.disabled = !worldInfo.isWorld || busy;
+      const dot = el("i");
+      dot.style.setProperty("--c", `rgb(${rgb.map((c) => Math.round(c * 255)).join(",")})`);
+      b.append(dot, el("span", "", tOr(`ground_${name}`, name)));
+      b.addEventListener("click", () => runChoice(b, { type: "world", action: "floor", style: name }));
+      return b;
+    })
+  );
+}
+
+function renderTerrain() {
+  const cat = worldInfo.catalog;
+  if (!cat) return;
+  const placed = worldInfo.terrain;
+  const now = placed.length === 0 ? "flat" : placed.length === 1 ? placed[0] : null;
+  $("terrain-list").replaceChildren(
+    ...cat.terrains.map((type) =>
+      choice({
+        title: tOr(`terrain_${type}`, type),
+        desc: tOr(`terrain_${type}_desc`, ""),
+        pressed: worldInfo.isWorld && type === now,
+        off: !worldInfo.isWorld,
+        onClick: (b) => runChoice(b, { type: "world", action: "terrain", terrain: type, robot: selected }, { frame: true }),
+      })
+    )
+  );
+  $("terrain-note").hidden = worldInfo.isWorld;
+}
+
+const RETARGETS = new Set(["reach_ik", "reach_cartesian", "reach_mpc", "goto_mpc"]); // a new random target each time
+
+function renderModes() {
+  const chips = $("mode-robots");
+  chips.replaceChildren(
+    ...robots.map((r) => {
+      const b = el("button", "", r.name);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(r.name === selected));
+      b.addEventListener("click", () => select(r.name, { focus: true }));
+      return b;
+    })
+  );
+  chips.hidden = robots.length < 2;
+  if (!selected) {
+    $("mode-lead").textContent = t("modes_none");
+    $("mode-list").replaceChildren();
+    return;
+  }
+  $("mode-lead").textContent = t("modes_lead", { name: selected });
+  const robot = robotByName(selected);
+  const now = currentModes[selected] ?? (robot?.max_speed ? "drive" : "manual");
+  $("mode-list").replaceChildren(
+    ...(robotModes[selected] || []).map((key) =>
+      choice({
+        title: tOr(`mode_${key}`, key),
+        desc: [tOr(`mode_${key}_desc`, ""), RETARGETS.has(key) ? t("again") : ""].filter(Boolean).join(" "),
+        pressed: key === now,
+        onClick: (b) => runChoice(b, { type: "mode", robot: selected, mode: key }, { done: onModeSet }),
+      })
+    )
+  );
+}
+
+function onModeSet(data) {
+  currentModes = { ...currentModes, [data.robot]: data.mode };
+  renderModes();
+  if (data.marker) showMarker(data.robot, data.mode, data.marker);
+  else hideMarker();
+  if (data.follows && data.robot === selected) startFollow();
+}
+
+// ---------------------------------------------------------------- target marker
+
+// Where a reaching arm or a rover driving to a goal is headed: an amber dot, or a pad on the ground.
+const markerDot = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), accentMaterial({ opacity: 0.95 }));
+const markerPin = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({ color: theme.amber, transparent: true, opacity: 0.8 })
+);
+accentMaterials.push(markerPin.material);
+markerPin.visible = false;
+scene3.add(markerPin);
+const markerPad = new THREE.Mesh(new THREE.RingGeometry(0.55, 1, 48), accentMaterial({ opacity: 0.95, side: THREE.DoubleSide }));
+markerDot.visible = markerPad.visible = false;
+markerDot.renderOrder = markerPad.renderOrder = 3;
+scene3.add(markerDot, markerPad);
+let markerFor = null; // { robot, mode } the marker belongs to
+
+function showMarker(robot, mode, point) {
+  markerFor = { robot, mode };
+  if (point.length === 3) {
+    markerDot.position.fromArray(point);
+    markerDot.scale.setScalar(0.025);
+    const floor = groundHeight(point[0], point[1], point[2], 0);
+    const pin = markerPin.geometry.attributes.position;
+    pin.setXYZ(0, point[0], point[1], point[2]);
+    pin.setXYZ(1, point[0], point[1], floor);
+    pin.needsUpdate = true;
+    markerPin.geometry.computeBoundingSphere();
+    markerDot.visible = markerPin.visible = true;
+    markerPad.visible = false;
+  } else {
+    const [x, y] = point;
+    markerPad.position.set(x, y, groundHeight(x, y, 5, 0) + 0.008);
+    markerPad.scale.setScalar(0.12);
+    markerPad.visible = true;
+    markerDot.visible = markerPin.visible = false;
+  }
+}
+
+function hideMarker() {
+  markerFor = null;
+  markerDot.visible = markerPad.visible = markerPin.visible = false;
+}
+
 // ---------------------------------------------------------------- render loop
 
 let frames = 0;
+let fps = 0;
 let fpsT0 = performance.now();
+
+function updateClock() {
+  const clock = $("clock");
+  clock.textContent = paused ? t("paused") : `${latestTime.toFixed(1)} s`;
+  clock.classList.toggle("paused", paused);
+  clock.title = t("clock_tip", { rtf: rtf.toFixed(2), fps });
+}
 
 function loop() {
   requestAnimationFrame(loop);
+  updateViewShift();
+  updateTween();
   updateFollow();
   controls.update();
+  updateRing();
   refreshDragVisual();
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();
   if (now - fpsT0 > 500) {
-    $("stat-fps").textContent = String(Math.round((frames * 1000) / (now - fpsT0)));
-    $("stat-time").textContent = latestTime.toFixed(2);
+    fps = Math.round((frames * 1000) / (now - fpsT0));
+    updateClock();
     frames = 0;
     fpsT0 = now;
   }
@@ -930,12 +1495,14 @@ window.__robotforge = {
   cameraTarget: () => controls.target.toArray(),
   // Place the camera for scripted screenshots: eye and target in world meters.
   lookAt: (eye, target) => {
-    follow = null;
-    camera.position.fromArray(eye);
-    controls.target.fromArray(target);
-    controls.update();
+    moveCamera(new THREE.Vector3().fromArray(eye), new THREE.Vector3().fromArray(target), false);
   },
   following: () => (follow ? follow.body : null),
+  selected: () => selected,
+  busy: () => ({ busy, pending: pending.size }),
+  ring: () => (ring.visible ? { center: ring.position.toArray(), radius: ringState?.radius ?? null } : null),
+  marker: () => (markerDot.visible ? markerDot.position.toArray() : markerPad.visible ? markerPad.position.toArray() : null),
+  select: (name) => select(name, { focus: true }),
   // CSS-pixel position of a body's origin, for scripted pointer tests.
   screenOf: (id) => {
     const node = bodyNodes[id];
