@@ -61,6 +61,22 @@ def test_the_dog_learns_and_the_viewer_replays_the_newest_rhythm(pg):
     assert max(s["x"] for s in walk) > 0.2  # and really walks in the viewer
 
 
+def test_the_starfish_step_drops_the_energy_cost_and_a_walk_lost_to_it_says_why(pg):
+    """Regression: the energy cost of 0.3 from the reward step carried over, so the starfish learned to stand still
+    and its step could never pass. The step now says to set the cost back to 0, and a training lost to it says so."""
+    described = pg.lessons.start("learn_to_walk")
+    body = next(s for s in described["steps"] if s["id"] == "body")["body"]
+    assert "Set Energy cost back to 0" in body["en"] and "「能耗的代价」调回 0" in body["zh"]
+    lessons = pg.lessons
+    lessons.passed.update({"rhythm", "reward"})
+    lessons.handle({"action": "goto", "step": 2})
+    for control, value in (("robot", 1), ("energy", 2), ("iterations", 10)):  # what the reward step left behind
+        lessons.handle({"action": "set", "control": control, "value": value})
+    update = _train(pg)
+    assert update["results"]["training"]["distance"] < walk_rl.KEEP_MIN and "body" not in update["passed"]
+    assert update["results"]["summary"]["en"].endswith("set Energy cost back to 0 and learn again.")
+
+
 def test_your_own_robot_joins_the_list(pg):
     pg.new_world("mine")
     pg.add_robot("crab", build=walk_rl.STAR)

@@ -199,15 +199,17 @@ STEPS = (
         body=_text(
             "「哪个机器人」选三脚海星：三条腿、每条两个关节，是用零件拼出来的。"
             "我们的步态程序只认 4 条或 6 条三关节的腿，"
-            "它不会走。\n"
+            "它不会走。「能耗的代价」调回 0，不然它多半学会站着不动。\n"
             "如果你来这里之前的世界里有你自己的机器人（自己拼的，或者从文件导入的），它也在列表里。"
             "让它学会以后点「把这个走法存给我的机器人」，"
             "回到你的世界，在聊天里叫它往前走，或者选中它按 W，它就用学到的走法走。\n先猜，再让海星学。",
             "Set Which robot to the three-legged starfish: three legs of two joints each, built from parts. Our gait "
-            "code only knows four or six legs of three joints, so it cannot walk this one.\n"
-            "If the world you came from has a robot of your own, it is in the list too. Once it has learned, press "
-            "Keep this walk for my robot: back in your world, ask for it to walk in the chat, or select it and press "
-            "W, and it walks the way it learned.\nGuess, then let the starfish learn.",
+            "code only knows four or six legs of three joints, so it cannot walk this one. Set Energy cost back to "
+            "0, or it will most likely learn to stand still.\n"
+            "If the world you came from has a robot of your own (built from parts or imported from a file), it is in "
+            "the list too. Once it has learned, press Keep this walk for my robot: back in your world, ask for it to "
+            "walk in the chat, or select it and press W, and it walks the way it learned.\nGuess, then let the "
+            "starfish learn.",
         ),
         done=_text(
             "它也学会了往前挪（我们测到 4 秒 0.5 到 0.85 米）。"
@@ -623,11 +625,23 @@ class LearnToWalkLesson(Lesson):
         }
         ctx.results["training"] = result
         fell = _text("，摔倒了", ", and fell") if result["fell"] else _text("", "")
+        # Outside the reward step, where standing still is the point, a walk lost to the energy cost is a slip
+        # (the cost carried over from that step), so say how to get the walk back.
+        lost_to_energy = result["distance"] < KEEP_MIN and reward.energy > 0 and ctx.step != "reward"
+        hint = (
+            _text(
+                "。能耗有代价时，站着不动最划算：把「能耗的代价」调回 0 再学。",
+                ". With an energy cost, standing still pays best: set Energy cost back to 0 and learn again.",
+            )
+            if lost_to_energy
+            else _text("", "")
+        )
         ctx.results["summary"] = {
             "zh": f"学了 {result['rounds']} 轮（{result['seconds']:g} 秒）：4 秒走 {result['distance']:g} 米，"
-            f"用了 {result['energy']:g} J{fell['zh']}；推 {PUSH_TRIALS} 次站住 {result['survived']} 次",
+            f"用了 {result['energy']:g} J{fell['zh']}；推 {PUSH_TRIALS} 次站住 {result['survived']} 次{hint['zh']}",
             "en": f"{result['rounds']} rounds ({result['seconds']:g} s): {result['distance']:g} m in 4 s "
-            f"on {result['energy']:g} J{fell['en']}; stayed up for {result['survived']} of {PUSH_TRIALS} shoves",
+            f"on {result['energy']:g} J{fell['en']}; stayed up for {result['survived']} of {PUSH_TRIALS} shoves"
+            f"{hint['en']}",
         }
         metrics = {k: result[k] for k in ("distance", "survived", "energy", "seconds")}
         ctx.record_run(settings, metrics, list(range(1, len(curve) + 1)), curve)
