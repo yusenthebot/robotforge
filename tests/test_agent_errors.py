@@ -8,6 +8,7 @@ scripts/agent_errors.py runs a larger battery of these and grades it; this file 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 
@@ -497,6 +498,37 @@ async def test_a_name_that_exists_reopens_the_world_and_a_new_name_in_chinese_is
 async def test_an_unknown_name_is_echoed_in_a_few_words_not_in_full(lab, tool, args):
     text = await lab.refused(tool, **args)
     assert "no " in text and "xxxxxxxx..." in text and len(text) < 300, len(text)
+
+
+async def test_a_library_robot_asked_for_in_another_spelling_joins_the_download_in_progress(monkeypatch):
+    import threading
+    from pathlib import Path
+
+    from robotforge import mcp_server
+    from robotforge.design import library
+
+    started, release = [], threading.Event()
+
+    def slow(robot, progress):
+        started.append(robot.name)
+        release.wait(5)
+        return Path(".")
+
+    class Context:
+        async def report_progress(self, *args):
+            pass
+
+    monkeypatch.setattr(library, "model_dir", slow)
+    monkeypatch.setattr(library, "is_downloaded", lambda name: False)
+    monkeypatch.setattr(mcp_server, "PROGRESS_INTERVAL", 0.05)
+    monkeypatch.setattr(mcp_server, "_downloads", {})
+    first = asyncio.ensure_future(mcp_server._download_with_progress("Go2", Context()))
+    await asyncio.sleep(0.2)
+    second = asyncio.ensure_future(mcp_server._download_with_progress("Unitree Go2", Context()))
+    await asyncio.sleep(0.2)
+    release.set()
+    await asyncio.gather(first, second)
+    assert started == ["go2"], started
 
 
 def test_a_value_tidy_cannot_read_goes_on_as_given(monkeypatch, caplog):

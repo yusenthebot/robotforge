@@ -682,6 +682,7 @@ async def _download_with_progress(name: str, ctx: Context) -> None:
     from robotforge.design import library
 
     robot = library.get(name)
+    name = robot.name  # "Go2" and "Unitree Go2" are one download: a retry in another spelling joins the running one
     if library.is_downloaded(name):
         return
     running = _downloads.get(name)
