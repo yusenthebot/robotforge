@@ -329,8 +329,8 @@ def walker_for(
             names = ", ".join(sorted(policies.all_policies())) or "none"
             what = f"the library robot {library_robot!r}" if library_robot else "robots that are not from the library"
             raise SpecError(
-                f"no learned walking policy is installed for {what}; installed policies: {names}. "
-                "Train one with UniLab (unilab_train) or walk with the built-in gait (walker='gait')."
+                f"no learned walk fits {what} (installed policies: {names}); walk with the built-in gait "
+                "(walker='gait') or train one with unilab_train"
             )
     else:
         found = policies.load(choice)

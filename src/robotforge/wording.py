@@ -124,6 +124,7 @@ def validation_message(
     exc: ValidationError | Iterable[Mapping[str, Any]],
     valid: Sequence[str] | None = None,
     forms: Mapping[str, str] | None = None,
+    list_fields: bool = True,
 ) -> str:
     """A pydantic error as short sentences: which field, what was wrong with it, what is allowed.
 
@@ -142,7 +143,7 @@ def validation_message(
             close = near(str(loc[-1]), valid or [])
             if close:
                 text += f"; did you mean {', '.join(close)}?"
-            if valid:
+            if valid and list_fields:
                 text += f" (fields: {choices(list(valid))})"
             parts.append(text)
         elif kind == "literal_error":

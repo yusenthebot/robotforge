@@ -32,7 +32,7 @@ class ImportOptions(BaseModel):
             return cls.model_validate(params or {})
         except ValidationError as exc:
             allowed = list(cls.model_fields)
-            problems = wording.validation_message(exc, valid=allowed)
+            problems = wording.validation_message(exc, valid=allowed, list_fields=False)
             raise ValueError(f"bad import option: {problems}. Import options are: {', '.join(allowed)}") from None
 
 
