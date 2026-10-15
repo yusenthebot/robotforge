@@ -260,13 +260,27 @@ Rounds 1-3 done, 2026-10-14.
   - A reflex test with large gains drifted as much calm as shoved; tests check the reflex arithmetic directly and the shove on a still rhythm.
   - CI failed on d320f40 (Ubuntu and Windows): the RL II test judged the replay by the last tick's 50 ms of samples, and slower runners ended training at another phase of the replay (0 m right after a restart). It now collects a whole attempt; locally the old check read 0.07 to 1.07 m by phase, the new one 0.94 to 1.14.
 
+## Round 23 (2026-10-15): obstacle-aware arm motion (phase D part 3)
+
+- `behaviors/motion_plan.py`: `ArmSpace` (joint space and collision check in a private model copy; fixed geoms kept `CLEARANCE` 4.5 cm away by `mj_geomDistance`, the floor `FLOOR_CLEARANCE` 5 mm, other overlaps by contact, the robot's own home overlaps ignored but never an obstacle's), `rrt_connect` (Kuffner and LaValle), `shortcut`, `resample`, `joint_length`.
+- `learn/arm_plan.py` ("arm_planning", chapter 运动学): our six-joint arm and the PiPER, each with a fence and a target on each side; Straight (every joint at once) hits; Plan and go (RRT-Connect, optional shortcuts, step size 0.1 to 0.8 rad) goes round; the PiPER step; a quiz on the curse of dimensionality. Arms follow paths with motor gravity compensation (`body_gravcomp` + `jnt_actgravcomp`, switchable at run time because the PiPER compiled with it) and the path waits whenever a joint lags more than 0.1 rad; a straight run ends a second after it hits.
+- Viewer: rig kind `plan` (straight sweep as dots and a dashed line, the clash point drawn through the fence, both trees growing in edge by edge with node dots, the path as an amber tube, the goal); drawings come once per change and are latched in the viewer; the lesson resends on (re)describe.
+- Measured (8 seeds): ours, straight hits at 27% of the sweep; step 0.1 rad: 69 to 145 nodes, 13 to 29 ms; 0.2: 25 to 73, 8 to 23 ms; 0.8: 8 to 13 nodes; shortcuts save 18 to 48% (0.2 rad). PiPER: straight hits at 30%; 0.2 rad: 49 to 93 nodes, 15 to 28 ms. Followed in physics: 24 of 24 plans never touched a fence (ours 1.2 to 2.5 s per move, PiPER 1.9 to 6.1 s).
+- Fixed on the way: `ArmMotion` worked out home-pose overlaps before it knew which bodies move (AttributeError on any overlap, then discarded); failing-first test with an arm whose shapes overlap at home.
+- What did NOT work (and the fix):
+  - The first planner treated an obstacle overlapping the home pose as part of the robot (it ignored the fence's pairs); only the robot's own overlaps are ignored now.
+  - Plans that cleared the fence scraped it when followed: the template's P-only servos lagged up to 47 degrees on a fast base turn and sagged about 5 under gravity. Fix in three parts, each measured: 4.5 cm clearance, gravity compensation through the motors, the path waiting for a lagging arm (0.05 rad stalled the PiPER's normal velocity lag, 0.1 works).
+  - Clearance by contact margins set at run time missed some pairs in the lesson world (a PiPER finger box 9 mm from its fence made no contact with a 4.5 cm or even 10 cm margin; a two-box model at run time did); measured distances instead. Cause not pinned down.
+  - Drawings sent with one update were missed when two updates arrived between frames (hidden pane, throttled frames): latched in the viewer.
+  - One-pixel lines for the trees and the sweep vanished at lesson distance: dots and a tube.
+
 ## Next-round seed
 
-Round 23 = phase D part 3: obstacle-aware arm motion. Joint-space RRT-Connect with the arm's collision check (behaviors/arm.py already has `_collides`), shortcut smoothing, then a lesson: a box between the arm and the target, the straight joint-space move hits it, the planner finds a way round; knobs: step size, how many tries, smoothing; template arm first, then the PiPER. Measure planning time and success first.
+Round 24 = a Review round (milestone: phase D parts 1 to 3): walk RL II and motion planning as a beginner, check the picker and README, prune, and run the ambition critic again. Candidates after it: the playtest agent (a scripted beginner that plays every lesson from its text and reports where it gets stuck; needs `claude -p` login or `codex exec`), a statically stable crawl, tutor MCP tools (gate).
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 10 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 11 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk, motion planning on the PiPER), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
