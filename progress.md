@@ -274,14 +274,26 @@ Rounds 1-3 done, 2026-10-14.
   - Drawings sent with one update were missed when two updates arrived between frames (hidden pane, throttled frames): latched in the viewer.
   - One-pixel lines for the trees and the sweep vanished at lesson distance: dots and a tube.
 
+## Round 24 (2026-10-15): Review round (phase D milestone)
+
+- Real agent check: `codex exec` works again (the old "workspace routing discovery" failure is gone); with the plugin installed from GitHub main into a scratch `CODEX_HOME` (docs/PLUGINS.md), Codex built a grass world, added the template dog, opened the viewer and walked it 10 s: 3.05 m, upright (A1 re-verified on GPT). It used 430k input tokens (385k cached) for that small task. `claude -p` still fails: OAuth session expired (needs `claude auth login`).
+- Picker: RL I renamed to match RL II; the footnote no longer promises learned walking (shipped in round 21) and says what the record does; README lists motion planning and RL II. No dead code found by the scan.
+
+### Ambition critic (round 24)
+
+- The core promise is "any robot, make it do anything" from chat, but what the viewer now teaches does not reach the agent: a rhythm learned for "your robot" in RL II cannot be kept, and `move` cannot use it. Closing that loop (save the learned walk to the robot, `move` and WASD use it when no gait exists) needs no new tool.
+- Agent cost: 430k input tokens for A1 suggests the tool list and instructions are heavy; worth measuring what the agent is sent.
+- Learned reflexes are unreliable (2 of 6 collapse) and only random search is offered for walking; no gradient-based option in-viewer for user robots.
+- Tutor tools (the agent reading lesson progress) and a lesson MCP surface are gated; a playtest agent is now feasible with `codex exec`.
+
 ## Next-round seed
 
-Round 24 = a Review round (milestone: phase D parts 1 to 3): walk RL II and motion planning as a beginner, check the picker and README, prune, and run the ambition critic again. Candidates after it: the playtest agent (a scripted beginner that plays every lesson from its text and reports where it gets stuck; needs `claude -p` login or `codex exec`), a statically stable crawl, tutor MCP tools (gate).
+Round 25 = phase D part 4: keep what a robot learned. In RL II, a "use this walk for my robot" button saves the learned rhythm (and reflexes) into the learner's world folder; `move` and WASD then drive that robot with it (forward by the rhythm, stop by holding home), so a robot built in chat that no gait code knows can walk on command. Verify with a real Codex session: build a three-legged robot by chat, learn its walk in the viewer, then ask Codex to move it.
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 11 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk, motion planning on the PiPER), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15, ranked by ambition x feasibility after the round 20 critic): learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Next frontiers (2026-10-15, re-ranked after the round 24 critic: keep learned walks for the user's robot first): learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
