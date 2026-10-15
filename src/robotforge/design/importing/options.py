@@ -8,6 +8,7 @@ from typing import Any, Literal
 import mujoco
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from robotforge import wording
 from robotforge.design.importing.report import DoctorReport
 
 
@@ -30,9 +31,9 @@ class ImportOptions(BaseModel):
         try:
             return cls.model_validate(params or {})
         except ValidationError as exc:
-            parts = [f"{'.'.join(str(x) for x in e['loc']) or 'value'}: {e['msg']}" for e in exc.errors()]
-            allowed = ", ".join(cls.model_fields)
-            raise ValueError(f"bad import option ({'; '.join(parts)}). Import options are: {allowed}") from exc
+            allowed = list(cls.model_fields)
+            problems = wording.validation_message(exc, valid=allowed)
+            raise ValueError(f"bad import option: {problems}. Import options are: {', '.join(allowed)}") from None
 
 
 @dataclass

@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from robotforge import wording
 from robotforge.design.builder.assemble import assemble
 from robotforge.design.builder.checks import check
 from robotforge.design.builder.expand import expand
@@ -78,15 +79,14 @@ def readable(exc: ValidationError, data: dict[str, Any]) -> str:
             else:
                 where.append(str(key))
         label = " ".join(where).replace(" [", "[")
-        msg = err["msg"].removeprefix("Value error, ")
-        if err["type"] == "missing":
-            msg = "is required"
-        elif err["type"] == "extra_forbidden":
-            msg = "is not a known field (check the spelling; see builder_guide)"
+        if err["type"] == "extra_forbidden":
+            msg = f"{label} is not a known field (check the spelling; see builder_guide)"
+        else:
+            msg = wording.validation_message([{**err, "loc": (label,)}])
         seen.setdefault(label, [])
         if msg not in seen[label]:
             seen[label].append(msg)
-    lines = [f"{label}: {' or '.join(msgs)}" if label else " or ".join(msgs) for label, msgs in seen.items()]
+    lines = [" or ".join(msgs) for msgs in seen.values()]
     more = f" (and {len(lines) - 4} more)" if len(lines) > 4 else ""
     return "; ".join(lines[:4]) + more
 

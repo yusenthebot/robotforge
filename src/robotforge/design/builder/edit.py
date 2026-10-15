@@ -7,8 +7,9 @@ afterwards and saves nothing if that fails, so a bad edit never breaks a robot.
 from __future__ import annotations
 
 import copy
-import difflib
 from typing import Any
+
+from robotforge import wording
 
 ROBOT_SETTINGS = ("color", "material", "servo", "motor", "linear", "servo_caps")
 
@@ -36,6 +37,7 @@ def update_part(build: dict[str, Any], name: str, changes: dict[str, Any]) -> di
     if not isinstance(changes, dict) or not changes:
         raise ValueError('changes is a mapping of fields to new values, e.g. {"joint": {"home": 30}}')
     out = copy.deepcopy(build)
+    name = name.lower() if name.lower() in ("robot", "base") else name
     if name == "robot":
         unknown = sorted(set(changes) - set(ROBOT_SETTINGS))
         if unknown:
@@ -46,6 +48,7 @@ def update_part(build: dict[str, Any], name: str, changes: dict[str, Any]) -> di
         out["base"] = _merge(dict(out.get("base") or {}), changes)
         return out
     part = _find(out, name)
+    name = part["name"]  # as the robot spells it
     if "name" in changes and changes["name"] != name:
         _rename(out, name, changes["name"])
     _merge(part, changes)
@@ -55,7 +58,7 @@ def update_part(build: dict[str, Any], name: str, changes: dict[str, Any]) -> di
 def remove_part(build: dict[str, Any], name: str) -> tuple[dict[str, Any], list[str]]:
     """Remove a part and everything that hangs on it; returns the new build and the removed names."""
     out = copy.deepcopy(build)
-    _find(out, name)
+    name = _find(out, name)["name"]  # as the robot spells it
     removed = {name}
     grew = True
     while grew:  # parts hanging on removed parts go too
@@ -85,13 +88,16 @@ def _find(build: dict[str, Any], name: str) -> dict[str, Any]:
         if isinstance(p, dict) and p.get("name") == name:
             return p
     names = part_names(build)
+    found = wording.match(name, [n for n in names if isinstance(n, str)])
+    if found is not None:  # "Left_Shin" is left_shin
+        return next(p for p in build["parts"] if isinstance(p, dict) and p.get("name") == found)
     source = _copied_from(build).get(name)
     if source is not None:
         raise ValueError(
             f"{name!r} is a copy made by mirror or repeat; edit the part it comes from, {source!r}, "
             "and every copy follows"
         )
-    close = difflib.get_close_matches(name, names, n=3)
+    close = wording.near(name, names)
     hint = f" Did you mean {', '.join(close)}?" if close else ""
     raise ValueError(f"no part named {name!r}.{hint} Parts: {', '.join(names) or 'none'} (and base, robot)")
 

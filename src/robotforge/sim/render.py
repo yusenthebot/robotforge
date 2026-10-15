@@ -15,6 +15,7 @@ import mujoco
 import numpy as np
 from PIL import Image
 
+from robotforge import wording
 from robotforge.sim.session import SimSession
 
 # Free-camera presets as (azimuth deg, elevation deg, share of the image the content spans).
@@ -110,7 +111,10 @@ class SnapshotRenderer:
 
     def rgb(self, session: SimSession, view: str = "default", width: int = 640, height: int = 480) -> np.ndarray:
         if width * height > MAX_PIXELS or width < 16 or height < 16:
-            raise ValueError(f"image size {width}x{height} out of range (max {MAX_PIXELS} pixels)")
+            raise ValueError(
+                f"width and height are pixels, each at least 16 and width*height at most {MAX_PIXELS}; "
+                f"got {width}x{height}"
+            )
         with self._lock, session.lock:
             model, data = session.model, session.data
             width = min(width, model.vis.global_.offwidth)
@@ -136,6 +140,9 @@ class SnapshotRenderer:
 def _camera_for(
     model: mujoco.MjModel, view: str, data: mujoco.MjData | None = None, aspect: float = 4 / 3
 ) -> mujoco.MjvCamera | str:
+    cameras = [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
+    if view not in VIEWS and view not in cameras:
+        view = wording.match(view, [*VIEWS, *cameras]) or view  # "Front", "Dog/Front_Cam"
     if view in VIEWS:
         azimuth, elevation, fill = VIEWS[view]
         cam = mujoco.MjvCamera()
@@ -155,8 +162,10 @@ def _camera_for(
         return cam
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, view) >= 0:
         return view
-    options = sorted(VIEWS) + [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
-    raise ValueError(f"unknown view {view!r}; choose one of: {', '.join(options)}")
+    options = [*sorted(VIEWS), *cameras]
+    close = wording.near(view, options)
+    hint = f" Did you mean {', '.join(close)}?" if close else ""
+    raise ValueError(f"unknown view {view!r}.{hint} Views: {', '.join(options)}")
 
 
 def _fit_distance(

@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from robotforge import wording
+
 
 @dataclass(frozen=True)
 class Actuator:
@@ -106,10 +108,12 @@ COLOR_HINT = 'a name like red or brown, a hex code like "#9c6b3f", or [r, g, b] 
 
 
 def actuator(name: str) -> Actuator:
-    try:
-        return ACTUATORS[name]
-    except KeyError:
-        raise ValueError(f"unknown actuator {name!r}; choose one of: {', '.join(ACTUATORS)}") from None
+    found = wording.match(name, ACTUATORS)
+    if found is None:
+        close = wording.near(name, ACTUATORS)
+        hint = f" Did you mean {', '.join(close)}?" if close else ""
+        raise ValueError(f"unknown actuator {name!r}.{hint} Choose one of: {', '.join(ACTUATORS)}")
+    return ACTUATORS[found]
 
 
 def color(value: str | list[float] | tuple[float, ...]) -> list[float]:
@@ -117,6 +121,8 @@ def color(value: str | list[float] | tuple[float, ...]) -> list[float]:
     if isinstance(value, str):
         return _color_text(value)
     rgba = [float(v) for v in value]
+    if len(rgba) in (3, 4) and max(rgba) > 1 and all(0 <= v <= 255 for v in rgba):
+        rgba = [v / 255 for v in rgba]  # a component above 1 can only be on the 0..255 scale
     if len(rgba) == 3:
         rgba.append(1.0)
     if len(rgba) != 4 or not all(0.0 <= v <= 1.0 for v in rgba):

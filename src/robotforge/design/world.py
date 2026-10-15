@@ -19,6 +19,7 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from robotforge import wording
 from robotforge.design import builder, components, importer, library, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
@@ -35,8 +36,18 @@ class _Strict(BaseModel):
 
 def _check_name(value: str) -> str:
     if not NAME_RE.match(value):
-        raise ValueError("names use lowercase letters, digits and _, start with a letter, max 32 chars")
+        raise ValueError(
+            f"{value!r} must use lowercase letters, digits and _, start with a letter and have at most 32 characters, "
+            "e.g. 'red_cube'"
+        )
     return value
+
+
+def tidy_name(name: str) -> str:
+    """ "Red Cube" as red_cube: capitals and spaces have one reading. A name that is still not valid is returned
+    as given, so the check says what is wrong with it."""
+    loose = wording.squash(name)
+    return loose if NAME_RE.match(loose) else name
 
 
 class Floor(_Strict):
@@ -126,7 +137,11 @@ class World(_Strict):
         names = [r.name for r in self.robots] + [o.name for o in self.objects] + [t.name for t in self.terrain]
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
-            raise ValueError(f"names must be unique across robots, objects and terrain: {', '.join(dupes)}")
+            raise ValueError(
+                f"{', '.join(map(repr, dupes))} already exists, and names must be unique across robots, objects "
+                "and terrain. Pick another name, or change the existing one with update_robot, update_object or "
+                "update_terrain"
+            )
         return self
 
     # ---- persistence ----------------------------------------------------------------
@@ -264,7 +279,7 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
     if not path.is_absolute() and base_dir is not None:
         path = base_dir / path
     if not path.exists():
-        raise ValueError(f"robot {entry.name!r}: file not found: {path}")
+        raise ValueError(f"robot {entry.name!r}: file not found: {path} (give the path of {importer.formats_hint()})")
     if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
         try:
             result = importer.import_file(path, entry.params)
@@ -279,6 +294,10 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
             notes=[f"imported {path.name}. {result.report.summary}"],
             doctor=result.report.to_dict(),
         )
+    if path.is_dir():
+        raise ValueError(f"robot {entry.name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
+    if path.suffix.lower() not in (".xml", ".mjcf"):
+        raise ValueError(f"robot {entry.name!r}: {path.name}: expected {importer.formats_hint()}")
     try:
         child = mujoco.MjSpec.from_file(str(path))
     except ValueError as exc:

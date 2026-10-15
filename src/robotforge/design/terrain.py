@@ -22,6 +22,7 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator, model_validator
 
+from robotforge import wording
 from robotforge.sim.geometry import collides, lowest_point
 
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")  # same rule as robot and object names
@@ -82,7 +83,7 @@ class _Patch(BaseModel):
     @classmethod
     def _pos(cls, v: list[float]) -> list[float]:
         if len(v) != 2:
-            raise ValueError("terrain pos is the patch center [x, y] in meters")
+            raise ValueError(f"pos must be the patch center [x, y] in meters, got {v}")
         return v
 
     @model_validator(mode="after")
@@ -255,11 +256,11 @@ def parse(data: dict) -> _Patch:
     except ValidationError as exc:
         parts = []
         for err in exc.errors():
-            where = ".".join(str(x) for x in err["loc"][1:])  # drop the union tag
-            msg = err["msg"].removeprefix("Value error, ")
-            if where:
-                parts.append(f"{kind} {where}: {msg}")
+            err = {**err, "loc": err["loc"][1:]}  # drop the union tag
+            if err["loc"]:
+                parts.append(f"{kind} {wording.validation_message([err], valid=list(TYPES[kind].model_fields))}")
             else:
+                msg = wording.validation_message([err])
                 parts.append(msg if msg.startswith(kind) else f"{kind}: {msg}")
         raise ValueError("; ".join(parts)) from None
 

@@ -41,6 +41,11 @@ CACHE_LIMIT = 40
 MESH_CACHE_BYTES = 1_000_000_000  # converted meshes are cheap to rebuild, but not worth gigabytes of disk
 
 
+def formats_hint() -> str:
+    """The files a robot can be loaded from, for errors about a file of another kind."""
+    return f"an MJCF (.xml), a URDF/xacro, or a mesh ({', '.join(sorted(MESH_SUFFIXES))})"
+
+
 def is_importable(path: str | Path) -> bool:
     """True for files this module handles (URDF, xacro and plain meshes), judged by extension."""
     return Path(path).suffix.lower() in IMPORT_SUFFIXES

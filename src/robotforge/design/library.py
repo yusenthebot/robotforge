@@ -8,7 +8,6 @@ floor and, for torque-motor robots, position servos.
 
 from __future__ import annotations
 
-import difflib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -16,6 +15,7 @@ from typing import Any, Literal
 import mujoco
 import numpy as np
 
+from robotforge import wording
 from robotforge.design import menagerie
 from robotforge.design.templates.base import BuiltRobot
 from robotforge.sim.actuators import is_position_servo
@@ -144,12 +144,13 @@ CATALOG: dict[str, LibraryRobot] = {
 
 
 def get(name: str) -> LibraryRobot:
-    try:
-        return CATALOG[name]
-    except KeyError:
-        close = difflib.get_close_matches(name, list(CATALOG), n=3)
+    titles = {wording.squash(r.title): r.name for r in CATALOG.values()}  # "Unitree Go2" is go2
+    found = wording.match(name, CATALOG, titles)
+    if found is None:
+        close = wording.near(name, CATALOG, titles)
         hint = f" Did you mean {', '.join(close)}?" if close else ""
-        raise LibraryError(f"no robot {name!r} in the library.{hint} Choose one of: {', '.join(CATALOG)}") from None
+        raise LibraryError(f"no robot {name!r} in the library.{hint} Choose one of: {', '.join(CATALOG)}")
+    return CATALOG[found]
 
 
 def catalog() -> list[dict[str, Any]]:
