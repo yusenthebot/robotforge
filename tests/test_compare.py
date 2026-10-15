@@ -190,3 +190,23 @@ def test_an_idle_g1_stays_where_it_stood(humanoids):
         worst = max(worst, float(np.linalg.norm(data.xpos[root][:2] - start)))
     assert worst < 0.35, f"drifted up to {worst:.2f} m"
     assert data.xmat[root][8] > 0.9
+
+
+def test_a_g1_dragged_by_hand_stays_where_it_is_let_go(humanoids):
+    """The hold is for drift: a learner who drags the G1 somewhere else means it."""
+    pg = humanoids
+    root = pg.lessons.lesson.facts["g1"]["root"]
+    data, session = pg.session.data, pg.session
+    _play(pg, 1.0)
+    start = data.xpos[root].copy()
+    session.start_drag(root, start.copy())
+    for k in range(1, 41):
+        session.move_drag(start + [0.0, 0.01 * k, 0.0])  # 0.4 m sideways over two seconds, a nudge by hand
+        _play(pg, 0.05)
+    session.end_drag()
+    _play(pg, 1.0)
+    let_go = data.xpos[root][:2].copy()
+    assert np.linalg.norm(let_go - start[:2]) > 0.3
+    _play(pg, 10.0)
+    assert np.linalg.norm(data.xpos[root][:2] - let_go) < 0.3  # it holds the new spot, not the old one
+    assert data.xmat[root][8] > 0.9

@@ -168,6 +168,8 @@ class PolicyWalker:
         self.heading: float | None = None  # held while no turn is asked (set at the next policy step)
         self.anchor: np.ndarray | None = None  # where it stood when it was last told to stop (set at the next step)
         self.returning = False  # walking back to the anchor
+        root_dof = int(model.body_dofadr[self.binding.root_body])
+        self.root_dofs = slice(root_dof, root_dof + 6) if root_dof >= 0 else slice(0, 0)
         self.last_action = np.zeros(n)
         self.targets = self.default_pos.copy()
         self._next_step = -math.inf
@@ -262,6 +264,9 @@ class PolicyWalker:
         if self.command_speed != 0.0 or self.command_turn != 0.0:
             return self.command_speed, 0.0
         here = data.xpos[self.binding.root_body][:2].copy()
+        if np.any(data.qfrc_applied[self.root_dofs]):  # a hand in the viewer is moving it: hold where it is let go
+            self.anchor = None
+            self.returning = False
         if self.anchor is None:
             self.anchor = here
             return 0.0, 0.0

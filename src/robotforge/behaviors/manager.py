@@ -501,9 +501,11 @@ def _is_mover(ctrl: Any) -> bool:
 
 
 def _is_policy_walker(ctrl: Any) -> bool:
-    # No import here: the bridge pulls in the control layer. Without the module loaded, no walker exists.
-    bridge = sys.modules.get("robotforge.bridge.onnx_policy")
-    return bridge is not None and isinstance(ctrl, bridge.PolicyWalker)
+    # No import here: the bridge pulls in the control layer. Without the module loaded, no walker exists; nor
+    # while another thread is still importing it (a lesson with the G1 starting): the module is listed already
+    # but has no PolicyWalker yet, and asking for it then killed the viewer's stream.
+    walker = getattr(sys.modules.get("robotforge.bridge.onnx_policy"), "PolicyWalker", None)
+    return walker is not None and isinstance(ctrl, walker)
 
 
 def _check_standing(ctrl) -> None:

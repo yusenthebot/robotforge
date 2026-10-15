@@ -23,6 +23,23 @@ _DRAG_ZETA = 1.0
 _MAX_TICK_SECONDS = 0.1
 
 
+def _stands_on_its_own(model: mujoco.MjModel, body: int) -> bool:
+    """A part of a free-moving robot with motors (a dog, a humanoid, a rover). Dragging one is a push: holding
+    its weight as well would float the whole robot off its feet while its legs kept pushing, and it toppled
+    (a G1, the template humanoid, a Go2 on its gait). A loose object or a bolted-down arm is carried."""
+    root = int(model.body_rootid[body])
+    if not any(
+        model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for j in range(model.njnt) if model.jnt_bodyid[j] == root
+    ):
+        return False
+    for a in range(model.nu):
+        if model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT:
+            joint_body = int(model.jnt_bodyid[model.actuator_trnid[a, 0]])
+            if int(model.body_rootid[joint_body]) == root:
+                return True
+    return False
+
+
 class ModelLoadError(RuntimeError):
     """Raised when MuJoCo cannot compile a model; carries the compiler message."""
 
@@ -32,6 +49,7 @@ class Drag:
     body: int
     local_point: np.ndarray  # anchor in body frame
     target: np.ndarray  # desired anchor position in world frame
+    hold_weight: bool = True  # carry the dragged part's weight (objects, arm links); not a robot that stands
 
 
 class Controller(Protocol):
@@ -126,7 +144,12 @@ class SimSession:
                 raise IndexError(f"body {body} is not draggable")
             rot = self.data.xmat[body].reshape(3, 3)
             local = rot.T @ (np.asarray(world_point, float) - self.data.xpos[body])
-            self.drag = Drag(body=body, local_point=local, target=np.asarray(world_point, float))
+            self.drag = Drag(
+                body=body,
+                local_point=local,
+                target=np.asarray(world_point, float),
+                hold_weight=not _stands_on_its_own(self.model, body),
+            )
 
     def move_drag(self, world_target: np.ndarray) -> None:
         with self.lock:
@@ -190,6 +213,8 @@ class SimSession:
         mass = max(float(m.body_subtreemass[body]), 1e-6)
         force = mass * (_DRAG_OMEGA**2 * (self.drag.target - anchor) - 2 * _DRAG_ZETA * _DRAG_OMEGA * anchor_vel)
         mujoco.mj_applyFT(m, d, force, np.zeros(3), anchor, body, d.qfrc_applied)
+        if not self.drag.hold_weight:
+            return
         # Hold the dragged subtree's weight so it follows the cursor instead of sagging g/omega^2 below it.
         mujoco.mj_applyFT(m, d, -mass * m.opt.gravity, np.zeros(3), d.subtree_com[body], body, d.qfrc_applied)
 

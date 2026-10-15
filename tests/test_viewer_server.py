@@ -152,3 +152,22 @@ def test_other_web_pages_cannot_drive_the_viewer():
         assert client.get("/scene.json", headers={"host": "evil.example:8737"}).status_code == 403
         assert client.get("/scene.json", headers={"host": "localhost:8737"}).status_code == 200
         assert client.get("/scene.json", headers={"host": "192.168.1.20:8737"}).status_code == 200  # --host on a LAN
+
+
+def test_a_failing_tick_does_not_end_the_stream():
+    """Regression: one exception in the stream loop ended it for good; the page kept the old world on screen
+    while the server had moved on, and no pose arrived again."""
+    session, client = _client()
+    calls = {"n": 0}
+    original = session.body_poses
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise RuntimeError("one bad tick")
+        return original()
+
+    session.body_poses = flaky
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
+        frames = [_next_frame(ws) for _ in range(5)]  # frames keep coming after the failure
+    assert calls["n"] > 3 and len(frames) == 5

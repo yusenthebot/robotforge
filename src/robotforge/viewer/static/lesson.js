@@ -35,7 +35,6 @@ export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
 export const lessonDriveSpec = () => lesson?.drive ?? null;
 let followWanted = null; // the body the lesson last asked the camera to follow
 let viewWanted = null; // the framing the lesson last asked for, as JSON
-export const lessonKind = () => lesson?.kind ?? null;
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
 // ---------------------------------------------------------------- picker

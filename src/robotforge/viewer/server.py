@@ -11,6 +11,7 @@ import contextlib
 import ipaddress
 import json
 import logging
+import math
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,6 +35,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 FRAME_HZ = 60.0
 STATE_HZ = 4.0
 LESSON_HZ = 20.0
+REPORT_EVERY = 5.0  # s between log reports of a failing tick
 
 
 # Revalidate on every load (cheap 304s) so an upgraded robotforge never shows a stale UI.
@@ -230,30 +232,43 @@ class ViewerHub:
             self.clients.discard(ws)
 
     async def run(self) -> None:
-        """Step physics in real time and stream poses until cancelled."""
+        """Step physics in real time and stream poses until cancelled.
+
+        One failing tick must not end the stream: it used to, silently, and the page then showed the old
+        world for good while the server had moved on to a lesson. It is logged (with its traceback, at most
+        every few seconds) and the next tick tries again."""
         last = time.perf_counter()
         last_state = 0.0
         last_lesson = 0.0
+        last_report = -math.inf
         while True:
             tick_start = time.perf_counter()
-            # The real-time clock only runs while someone is watching, so an agent's
-            # world does not drift between tool calls.
-            if self.clients and self.session.clock_owner is None:
-                self.session.advance(tick_start - last)
-            last = tick_start
-            if self.clients:
-                if self.session.version != self._announced_version:
-                    self._announced_version = self.session.version
-                    await self._send_all(text=json.dumps(self.scene_message()))
-                await self._send_all(data=self.session.body_poses().tobytes())
-                if tick_start - last_state > 1.0 / STATE_HZ:
-                    last_state = tick_start
-                    await self._send_all(text=json.dumps(self.state_message()))
-                if self.lesson_stream is not None and tick_start - last_lesson > 1.0 / LESSON_HZ:
-                    last_lesson = tick_start
-                    update = self.lesson_stream()
-                    if update is not None:
-                        await self._send_all(text=json.dumps(update))
+            try:
+                # The real-time clock only runs while someone is watching, so an agent's
+                # world does not drift between tool calls.
+                if self.clients and self.session.clock_owner is None:
+                    self.session.advance(tick_start - last)
+                last = tick_start
+                if self.clients:
+                    version = self.session.version
+                    if version != self._announced_version:
+                        message = self.scene_message()  # built first: announced only once it was
+                        self._announced_version = version
+                        await self._send_all(text=json.dumps(message))
+                    await self._send_all(data=self.session.body_poses().tobytes())
+                    if tick_start - last_state > 1.0 / STATE_HZ:
+                        last_state = tick_start
+                        await self._send_all(text=json.dumps(self.state_message()))
+                    if self.lesson_stream is not None and tick_start - last_lesson > 1.0 / LESSON_HZ:
+                        last_lesson = tick_start
+                        update = self.lesson_stream()
+                        if update is not None:
+                            await self._send_all(text=json.dumps(update))
+            except Exception:
+                last = tick_start
+                if tick_start - last_report > REPORT_EVERY:
+                    last_report = tick_start
+                    log.exception("a viewer tick failed; the stream carries on")
             elapsed = time.perf_counter() - tick_start
             await asyncio.sleep(max(0.0, 1.0 / FRAME_HZ - elapsed))
 

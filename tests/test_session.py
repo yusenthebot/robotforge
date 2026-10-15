@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import mujoco
 import numpy as np
 import pytest
 
@@ -89,3 +90,41 @@ def test_snapshots_frame_bodies_where_they_are_now():
     session.step(1)
     center, _extent = _framing(session.model, session.data)
     assert np.allclose(center[:2], [5.0, -2.0], atol=0.01)
+
+
+def test_dragging_a_standing_robot_pushes_it_and_a_loose_object_is_carried():
+    """Holding the weight of a robot's whole body floated it off its feet while its legs kept pushing, and a G1
+    or our humanoid toppled at a gentle tug. A robot that stands is pushed; a cube or an arm link is carried."""
+    from robotforge.sim.session import _stands_on_its_own
+
+    xml = """
+    <mujoco>
+      <worldbody>
+        <geom type="plane" size="2 2 0.1"/>
+        <body name="bot/trunk" pos="0 0 0.3">
+          <freejoint/>
+          <geom type="box" size="0.1 0.05 0.03"/>
+          <body name="bot/leg">
+            <joint name="bot/hip" axis="0 1 0"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.02"/>
+          </body>
+        </body>
+        <body name="cube" pos="0.5 0 0.05"><freejoint/><geom type="box" size="0.03 0.03 0.03"/></body>
+        <body name="arm/link" pos="-0.5 0 0.1">
+          <joint name="arm/j" axis="0 0 1"/>
+          <geom type="capsule" fromto="0 0 0 0.2 0 0" size="0.02"/>
+        </body>
+      </worldbody>
+      <actuator><position joint="bot/hip" kp="10"/><position joint="arm/j" kp="10"/></actuator>
+    </mujoco>
+    """
+    session = SimSession.from_xml(xml)
+    m = session.model
+    body = lambda name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)  # noqa: E731
+    assert _stands_on_its_own(m, body("bot/trunk")) and _stands_on_its_own(m, body("bot/leg"))
+    assert not _stands_on_its_own(m, body("cube"))
+    assert not _stands_on_its_own(m, body("arm/link"))
+    session.start_drag(body("cube"), session.data.xpos[body("cube")].copy())
+    assert session.drag.hold_weight
+    session.start_drag(body("bot/trunk"), session.data.xpos[body("bot/trunk")].copy())
+    assert not session.drag.hold_weight

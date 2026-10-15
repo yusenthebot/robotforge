@@ -155,3 +155,18 @@ def test_an_arm_whose_shapes_overlap_at_home_still_plans():
     arm = ArmMotion(model, "arm", model.qpos0.copy())
     assert arm._touching_at_home  # the elbow box overlaps the upper link at home...
     assert not arm._collides(arm.home)  # ...which is the model, not a collision
+
+
+def test_robots_can_be_listed_while_the_policy_module_is_still_importing(pg, monkeypatch):
+    """Regression: a lesson starting the G1 imports the policy module on a worker thread; mid-import the module
+    is in sys.modules without PolicyWalker, and listing robots then raised and killed the viewer's stream."""
+    import sys
+    import types
+
+    from robotforge.behaviors.manager import _is_policy_walker
+
+    half = types.ModuleType("robotforge.bridge.onnx_policy")  # what another thread's import looks like early on
+    monkeypatch.setitem(sys.modules, "robotforge.bridge.onnx_policy", half)
+    pg.add_robot("dog", template="quadruped")
+    assert not _is_policy_walker(object())
+    assert [r["name"] for r in pg.behaviors.robots()] == ["dog"]
