@@ -22,7 +22,7 @@ import math
 import os
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import mujoco
 import numpy as np
@@ -76,6 +76,9 @@ class SavedWalk(BaseModel):
     steer: list[float] | None = None  # how the walk holds its heading (cpg.Steering): 3 numbers per joint
     turn_left_walking: list[float] | None = None  # the turns tuned again to begin straight out of the walk
     turn_right_walking: list[float] | None = None
+    # How it switches rhythms while moving: "fade" (kept since steering and walking turns); None, as files kept
+    # before: stop holds home at once, and another rhythm waits on home until the robot stands still.
+    switching: Literal["fade"] | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -369,11 +372,11 @@ class RhythmWalker:
             self.home = np.array([walk.home[j] for j in walk.joints])
         else:
             self.home = np.asarray(home_qpos)[body.qadr[order]].copy()
-        # A walk kept before files said their home switches exactly as it always did: stop holds home at once, and a
-        # rhythm asked for while moving waits on home until the robot stands still. Switched the new way, the walk the
+        # A walk kept before files said how it switches does as it always did: stop holds home at once, and a rhythm
+        # asked for while moving waits on home until the robot stands still. Switched the new way, the walk the
         # imported A1 kept first ended on its back in 7 of 8 move sequences with 0 to 5 s between the calls (in 1 as
         # before): a faded stop leaves its feet elsewhere, and its fast turn from there tips it over.
-        self.kept_before = walk.home is None
+        self.kept_before = walk.switching is None
         forward = Rhythm(np.array(walk.theta), walk.freq, walk.reflexes)
         self.rhythms: dict[str, Rhythm | Steering] = {
             "forward": forward if walk.steer is None else Steering(forward, np.array(walk.steer))

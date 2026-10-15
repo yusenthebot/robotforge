@@ -732,6 +732,7 @@ class LearnToWalkLesson(Lesson):
             seconds=ATTEMPT,
             survived=result["survived"],
             shoves=PUSH_TRIALS,
+            switching="fade",
         )
         try:
             path = save_walk(folder, walk)

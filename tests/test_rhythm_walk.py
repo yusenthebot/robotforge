@@ -78,8 +78,13 @@ def test_a_saved_walk_checks_its_numbers():
     with pytest.raises(ValidationError, match="home pose"):
         _walk("crab", ["a", "b"], home={"a": 0.0, "c": 0.0})
     both = _walk("crab", ["a", "b"], turn_left=[0.0] * 6, turn_right=[0.0] * 6)
-    walking = both.model_copy(update={"turn_left_walking": [0.0] * 6, "turn_right_walking": [0.0] * 6})
+    walking = both.model_copy(
+        update={"turn_left_walking": [0.0] * 6, "turn_right_walking": [0.0] * 6, "switching": "fade"}
+    )
     assert walking.turns_from_walking and SavedWalk.model_validate(walking.model_dump()) == walking
+    assert old.switching is None  # switches as walks kept before did
+    with pytest.raises(ValidationError):
+        _walk("crab", ["a", "b"], switching="snap")
 
 
 def test_a_kept_walk_survives_the_round_trip(tmp_path):
@@ -149,15 +154,17 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
 
 def _swinging(pg, walking: bool = False, kept_before: bool = False) -> RhythmWalker:
     """The starfish with a made-up walk and turns (big swings, all in step; the turns' walking versions swing the
-    other way round, if `walking`), walking mid-stride. A walk kept now names its home pose; `kept_before` leaves
-    it out, as files kept before did."""
+    other way round, if `walking`), walking mid-stride. A walk kept now names its home pose and how it switches;
+    `kept_before` leaves both out, as files kept before did."""
     pg.add_robot("crab", build=STAR)
     model = pg.session.model
     body = Body.find(model, "crab")
     names = joint_names(model, body)
     swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)
     turn = [0.0] * len(names) + [0.3] * len(names) + [1.0] * len(names)
-    extra: dict = {} if kept_before else {"home": dict(zip(names, pg.behaviors.home_qpos()[body.qadr], strict=True))}
+    extra: dict = {}
+    if not kept_before:
+        extra |= {"home": dict(zip(names, pg.behaviors.home_qpos()[body.qadr], strict=True)), "switching": "fade"}
     if walking:
         out_of_walk = [0.0] * len(names) + [0.3] * len(names) + [-1.0] * len(names)
         extra |= {"turn_left_walking": out_of_walk, "turn_right_walking": out_of_walk}
