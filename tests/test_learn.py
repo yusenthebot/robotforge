@@ -100,6 +100,34 @@ def test_the_pd_lesson_can_be_walked_end_to_end(pg):
     update = _play(pg, 3.5)
     assert update["results"]["test"]["stars"] == 3 and "challenge" in update["passed"]
 
+    # the experiment record kept both tests, with their settings and curves, to lay over each other
+    runs = lessons.ctx.runs
+    assert [r["params"]["gravity"] for r in runs] == [0, 1]
+    assert runs[0]["metrics"]["overshoot_pct"] == update["results"]["test"]["overshoot_pct"] or len(runs[0]["y"]) > 250
+    assert runs[1]["metrics"]["stars"] == 3 and runs[1]["x"][0] == pytest.approx(0, abs=0.02)
+
+
+def test_a_sweep_shows_what_one_gain_does(pg):
+    pg.lessons.start("pd_control")
+    lessons = pg.lessons
+    with pytest.raises(LessonError, match="later step"):
+        lessons.handle({"action": "sweep", "control": "kp"})  # the gains unlock later
+    for step in ("feel", "p", "d", "why_low", "ff_i"):  # jump to the challenge, where every knob is open
+        lessons.passed.add(step)
+    lessons.handle({"action": "goto", "step": 5})
+    _set(pg, kd=1.0)
+    started = pg.session.data.time
+    lessons.handle({"action": "sweep", "control": "kp"})
+    assert pg.session.data.time == started  # sweeps run on copies; the live joint is not disturbed
+    sweep = lessons.ctx.sweep
+    overshoot = [p["overshoot_pct"] for p in sweep["points"]]
+    assert sweep["control"] == "kp" and len(overshoot) == 9
+    assert overshoot[0] < 1 and overshoot[-1] > 25 and overshoot == sorted(overshoot)  # more Kp, more overshoot
+    assert pg.lessons.tick()["bench"]["sweep"]["control"] == "kp"  # sent with the next update after a change
+    assert pg.lessons.tick()["bench"] is None  # and not again until the record changes
+    lessons.handle({"action": "clear_runs"})
+    assert lessons.ctx.sweep is None and not lessons.ctx.runs
+
 
 def test_reset_keeps_the_lesson_running_and_exit_brings_the_world_back(pg):
     pg.lessons.start("pd_control")
@@ -334,6 +362,25 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     assert "train" in update["passed"] and update["results"]["train"]["mean"] >= rl.TRAINED_RETURN
     update = _play(pg, 2 * rl.SHOW_SECONDS)
     assert update["results"]["last_attempt"] >= rl.SHOW_SECONDS - 0.1  # up for a whole attempt, not fallen
+    runs = lessons.ctx.runs
+    assert len(runs) == 1 and runs[0]["metrics"]["learned_at"] is not None and len(runs[0]["y"]) == rl.ITERATIONS
+    lessons.handle({"action": "next"})
+    lessons.handle({"action": "set", "control": "lr", "value": 0.02})  # too small a step to learn in time
+    lessons.handle({"action": "set", "control": "fast", "value": 1})
+    lessons.handle({"action": "press", "control": "train"})
+    deadline = time.monotonic() + 60
+    while lesson.thread.is_alive() and time.monotonic() < deadline:
+        _play(pg, 0.2)
+    update = _play(pg, 0.3)
+    assert "tune" in update["passed"]
+    slow = lessons.ctx.runs[-1]
+    assert slow["params"]["lr"] == 0.02 and slow["metrics"]["learned_at"] is None
+    assert update["bench"] is None  # the record goes out once per change, not on every update
+    lessons.handle({"action": "set", "control": "lr", "value": 0.1})
+    lessons.handle({"action": "press", "control": "train"})  # a good policy again for the push
+    while lesson.thread.is_alive() and time.monotonic() < deadline:
+        _play(pg, 0.2)
+    _play(pg, 2 * rl.SHOW_SECONDS)
     lessons.handle({"action": "next"})
     lessons.handle({"action": "press", "control": "push"})
     assert "push" in _play(pg, 4.0)["passed"]

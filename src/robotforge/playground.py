@@ -124,6 +124,13 @@ class Playground:
         hub.handlers["teleop"] = teleop
         hub.handlers["lesson"] = self.lessons.handle
         hub.slow_handlers["lesson_open"] = lesson_open
+
+        def lesson_bench(msg: dict[str, Any]) -> dict[str, Any]:
+            """Sweeps run many tests on copies of the rig: off the hub thread, answered when done."""
+            self.lessons.handle(msg)
+            return {"done": msg.get("action")}
+
+        hub.slow_handlers["lesson_bench"] = lesson_bench
         hub.lesson_stream = self.lessons.tick
         hub.slow_handlers["world"] = world_request
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))

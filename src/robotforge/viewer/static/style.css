@@ -1049,6 +1049,50 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .faceoff-table tr.group:first-child th { padding-top: 0; }
+
+/* experiment record: runs laid over each other, their table, sweeps */
+.bench { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.bench canvas { display: block; width: 100%; }
+.bench-empty { margin: 4px 0 2px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.link-button { font-size: 11px; color: var(--muted); }
+.link-button:hover { color: var(--ink); text-decoration: underline; }
+
+.bench-table {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-table th,
+.bench-table td { padding: 3px 4px; text-align: right; vertical-align: top; line-height: 1.35; }
+.bench-table thead th { font-size: 10.5px; font-weight: 600; color: var(--muted); word-break: keep-all; }
+.bench-table tbody th { width: 46%; }
+.bench-table thead th:first-child,
+.bench-table tbody th { padding-left: 0; text-align: left; }
+.bench-table tbody th { font-weight: 500; }
+.bench-table tbody tr + tr { border-top: 1px solid var(--line); }
+.bench-table td[data-best] { font-weight: 650; color: var(--ink); box-shadow: inset 0 -2px 0 var(--amber); }
+
+.run-chip { margin-right: 6px; font-weight: 650; }
+.run-chip::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  margin-right: 4px;
+  vertical-align: middle;
+  border-top: 2px solid var(--c);
+}
+.run-settings { color: var(--ink-2); }
+
+.bench-sweeps { margin-top: 8px; }
+.sweep-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.sweep-buttons .pill-button { height: 26px; font-size: 12px; }
+.sweep-buttons .pill-button:disabled { opacity: 0.45; cursor: default; }
+.sweep-buttons .pill-button.busy { opacity: 0.6; }
+.sweep-title { margin: 8px 0 2px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+.sweep-metric { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--ink-2); }
 .faceoff-table td[data-best] { font-weight: 650; color: var(--ink); }
 .faceoff-table td[data-best]::after { content: ""; display: block; height: 2px; margin-top: 1px; border-radius: 1px; background: var(--amber); }
 .plot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }

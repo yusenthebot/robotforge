@@ -20,7 +20,7 @@ from robotforge.control.ars import LinearPolicy, train_ars
 from robotforge.control.env import RobotEnv
 from robotforge.control.tasks import make_task
 from robotforge.design.world import World, compile_world
-from robotforge.learn.engine import Control, Lesson, LessonContext, Plot, Quiz, Series, Step
+from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step
 
 EPISODE_SECONDS = 5.0  # training episodes
 SHOW_SECONDS = 8.0  # live attempts end after this long (a good policy just keeps going)
@@ -28,6 +28,7 @@ FALLEN_RAD = 0.6  # pole angle at which an attempt counts as fallen
 ITERATIONS = 30
 PACE = 0.7  # s per training round, so the learner can watch it improve
 TRAINED_RETURN = 8.0  # mean score per training round that counts as "learned" (10 is a full episode)
+PARAMS = ("lr", "noise", "dirs")  # the training knobs each recorded run remembers
 
 
 class Live:
@@ -93,6 +94,12 @@ def _tried_random(ctx: LessonContext) -> bool:
 
 def _trained(ctx: LessonContext) -> bool:
     return ctx.results.get("train", {}).get("mean", 0.0) >= TRAINED_RETURN
+
+
+def _compared_settings(ctx: LessonContext) -> bool:
+    """At least two training runs in the record, with different settings."""
+    settings = {tuple(sorted(run["params"].items())) for run in ctx.runs}
+    return len(settings) >= 2
 
 
 def _survived_push(ctx: LessonContext) -> bool:
@@ -188,6 +195,37 @@ STEPS = (
         show=("training",),
     ),
     Step(
+        id="tune",
+        title={"zh": "调一调超参数", "en": "Tune the hyperparameters"},
+        body={
+            "zh": "训练本身也有旋钮，叫“超参数”。打开「快进」省得等，然后换一个设置再训练一次，"
+            "右下角的实验记录会把每次的训练曲线叠在一起：\n"
+            "· 步长 α：每轮朝好方向走多大一步。\n"
+            "· 探索噪声 ν：每次试的时候把权重晃多大。\n"
+            "· 方向数：每轮试几个方向（每个方向正反各试一次）。\n"
+            "先猜一猜：步长调到 0.02 会怎样？噪声调到 1.0 呢？",
+            "en": "Training has knobs of its own, called hyperparameters. Turn on Fast-forward to skip the waiting, "
+            "then train again with another setting; the experiment record at the bottom right lays every "
+            "training curve over the others:\n"
+            "· Step size α: how far each round moves toward the good directions.\n"
+            "· Exploration noise ν: how much the weights are shaken for each try.\n"
+            "· Directions: how many directions each round tries (each one both ways).\n"
+            "Guess first: what happens with a step size of 0.02? With noise at 1.0?",
+        },
+        done={
+            "zh": "步长太小，30 轮都学不会；太大，得分忽高忽低、反而学得晚。噪声太大，每次尝试都太随机，"
+            "分不出哪个方向真的好。方向越多，每一轮的判断越准，但要跑的仿真也成倍增加。"
+            "调超参数没有标准答案，就是这样一次次做实验、对比曲线。",
+            "en": "Too small a step and 30 rounds are not enough; too big and the score jumps around and it learns "
+            "later, not sooner. Too much noise and every try is so random that no direction stands out. More "
+            "directions make each round's judgement better but multiply the simulation to run. There is no "
+            "formula for hyperparameters: you run experiments like these and compare the curves.",
+        },
+        check=_compared_settings,
+        unlock=("train", "lr", "noise", "dirs", "fast"),
+        show=("training",),
+    ),
+    Step(
         id="push",
         title={"zh": "推一下试试", "en": "Give it a push"},
         body={
@@ -253,7 +291,26 @@ class RLLesson(Lesson):
         Control("release", "button", {"zh": "放手", "en": "Let go"}),
         Control("random", "button", {"zh": "随机试一次", "en": "Try random weights"}),
         Control("train", "button", {"zh": "开始训练", "en": "Start training"}),
+        Control("lr", "slider", {"zh": "步长 α", "en": "Step size α"}, 0.02, 1.0, 0.02, 0.1),
+        Control("noise", "slider", {"zh": "探索噪声 ν", "en": "Exploration noise ν"}, 0.05, 1.0, 0.05, 0.3),
+        Control("dirs", "slider", {"zh": "每轮方向数", "en": "Directions per round"}, 2, 16, 2, 8),
+        Control("fast", "toggle", {"zh": "快进（不放慢）", "en": "Fast-forward (no slow motion)"}),
         Control("push", "button", {"zh": "推一下", "en": "Push"}),
+    )
+    bench = Bench(
+        title={"zh": "实验记录：训练曲线", "en": "Experiment record: training curves"},
+        x={"zh": "训练轮数", "en": "training round"},
+        x_unit="",
+        y={"zh": "平均得分", "en": "average score"},
+        y_unit="",
+        params=("lr", "noise", "dirs"),
+        short=({"zh": "α", "en": "α"}, {"zh": "ν", "en": "ν"}, {"zh": "方向", "en": "dirs"}),
+        metrics=(
+            Metric("learned_at", {"zh": "第几轮学会", "en": "learned at round"}),
+            Metric("final", {"zh": "最后得分", "en": "final score"}, lower_is_better=False),
+            Metric("steps", {"zh": "仿真步数", "en": "simulation steps"}, ranked=False),
+        ),
+        reference=TRAINED_RETURN,
     )
     plots = (
         Plot(
@@ -309,8 +366,10 @@ class RLLesson(Lesson):
             self.policy = LinearPolicy(rng.normal(0, 1.0, size=(1, n_obs + 1)), np.ones(n_obs))
             ctx.results["random_tries"] = ctx.results.get("random_tries", 0) + 1
             self.live_ctrl.pending_restart = True
-        elif control == "train" and self.thread is None:
-            self.policy = LinearPolicy.zeros(4, 1)
+        elif control == "train" and (self.thread is None or not self.thread.is_alive()):
+            self.policy = LinearPolicy.zeros(4, 1)  # every run starts from scratch, so runs compare fairly
+            with self.lock:
+                self.samples.append({"t": 0.0})  # time goes back: the plot starts a fresh curve
             self.thread = threading.Thread(target=self._train, args=(self.policy, ctx), daemon=True)
             self.thread.start()
         elif control == "push":
@@ -319,16 +378,38 @@ class RLLesson(Lesson):
 
     def _train(self, policy: LinearPolicy, ctx: LessonContext) -> None:
         env = RobotEnv(make_task("balance", self.model, "pole"), episode_seconds=EPISODE_SECONDS)
+        settings = {k: float(ctx.values[k]) for k in PARAMS}
+        rounds: list[float] = []
+        means: list[float] = []
 
         def round_done(iteration: int, entry: dict[str, float]) -> None:
             with self.lock:
                 self.samples.append({"t": float(iteration), "mean": entry["mean_return"], "best": entry["best_return"]})
+            rounds.append(float(iteration))
+            means.append(entry["mean_return"])
             ctx.results["train"] = {"round": iteration, "mean": round(entry["mean_return"], 2)}
             if entry["mean_return"] >= TRAINED_RETURN:
                 ctx.events.add("trained")
-            self.stopping.wait(PACE)  # slow enough to watch; returns at once when the lesson closes
+            if not ctx.values.get("fast"):
+                self.stopping.wait(PACE)  # slow enough to watch; returns at once when the lesson closes
 
-        train_ars(env, iterations=ITERATIONS, seed=0, callback=round_done, policy=policy, stop=self.stopping.is_set)
+        dirs = int(settings["dirs"])
+        _, log = train_ars(
+            env,
+            iterations=ITERATIONS,
+            directions=dirs,
+            top=max(1, dirs // 2),
+            step_size=settings["lr"],
+            noise=settings["noise"],
+            seed=0,
+            callback=round_done,
+            policy=policy,
+            stop=self.stopping.is_set,
+        )
+        if len(means) == ITERATIONS:  # a run cut short by leaving the lesson is not a result
+            learned = next((r for r, m in zip(rounds, means, strict=True) if m >= TRAINED_RETURN), None)
+            metrics = {"learned_at": learned, "final": round(means[-1], 1), "steps": log.env_steps}
+            ctx.record_run(settings, metrics, rounds, means)
 
     def close(self) -> None:
         self.stopping.set()

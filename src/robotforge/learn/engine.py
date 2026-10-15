@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 Text = dict[str, str]  # {"zh": ..., "en": ...}
 SAMPLE_SECONDS = 12.0  # how much plot history the lesson keeps for its checks
+MAX_RUNS = 5  # the experiment record keeps this many runs to compare
 
 
 class LessonError(ValueError):
@@ -82,6 +83,67 @@ class Plot:
 
 
 @dataclass(frozen=True)
+class Metric:
+    key: str
+    label: Text
+    unit: str = ""
+    lower_is_better: bool = True
+    ranked: bool = True  # mark the best run; off for costs that a failed run "wins" (fewest steps)
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "key": self.key,
+            "label": self.label,
+            "unit": self.unit,
+            "lower_is_better": self.lower_is_better,
+            "ranked": self.ranked,
+        }
+
+
+@dataclass(frozen=True)
+class Sweep:
+    """Run the lesson's test once per setting of one knob, the others as they are, and plot the metrics."""
+
+    control: str
+    values: tuple[float, ...]
+    metrics: tuple[str, ...]
+
+    def describe(self) -> dict[str, Any]:
+        return {"control": self.control, "values": list(self.values), "metrics": list(self.metrics)}
+
+
+@dataclass(frozen=True)
+class Bench:
+    """A lesson's experiment record: every run keeps its knob settings, its metrics and its curve, so
+    the learner can lay runs over each other and see what a change of setting did."""
+
+    title: Text
+    x: Text  # the curve's horizontal axis, e.g. time since the step
+    x_unit: str
+    y: Text
+    y_unit: str
+    params: tuple[str, ...]  # controls shown for each run
+    short: tuple[Text, ...]  # their short names for the narrow record table, in the same order
+    metrics: tuple[Metric, ...]
+    reference: float | None = None  # a dashed line on the curve chart, e.g. the target
+    sweeps: tuple[Sweep, ...] = ()
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "title": self.title,
+            "x": self.x,
+            "x_unit": self.x_unit,
+            "y": self.y,
+            "y_unit": self.y_unit,
+            "params": list(self.params),
+            "short": list(self.short),
+            "metrics": [m.describe() for m in self.metrics],
+            "reference": self.reference,
+            "sweeps": [w.describe() for w in self.sweeps],
+        }
+
+
+@dataclass(frozen=True)
 class Quiz:
     question: Text
     options: tuple[Text, ...]
@@ -118,6 +180,28 @@ class LessonContext:
     samples: deque[dict[str, float]] = field(default_factory=lambda: deque(maxlen=4096))
     answers: dict[str, int] = field(default_factory=dict)
     results: dict[str, Any] = field(default_factory=dict)  # e.g. the last challenge run
+    runs: list[dict[str, Any]] = field(default_factory=list)  # the experiment record, oldest first
+    sweep: dict[str, Any] | None = None  # the last sweep: {"control", "points": [{"x", metric: value}]}
+    bench_version: int = 0  # bumped on every change, so the viewer is sent the record only then
+    run_count: int = 0
+
+    def record_run(self, params: dict[str, float], metrics: dict[str, Any], x: list[float], y: list[float]) -> None:
+        """Keep a finished run (its settings, results and curve) in the experiment record."""
+        self.run_count += 1
+        self.runs.append(
+            {
+                "id": self.run_count,
+                "params": {k: round(float(v), 4) for k, v in params.items()},
+                "metrics": metrics,
+                "x": [round(float(v), 3) for v in x],
+                "y": [round(float(v), 3) for v in y],
+            }
+        )
+        del self.runs[:-MAX_RUNS]
+        self.bench_version += 1
+
+    def bench_state(self) -> dict[str, Any]:
+        return {"version": self.bench_version, "runs": self.runs, "sweep": self.sweep}
 
     def recent(self, seconds: float) -> list[dict[str, float]]:
         if not self.samples:
@@ -139,6 +223,7 @@ class Lesson:
     controls: tuple[Control, ...] = ()
     plots: tuple[Plot, ...] = ()
     steps: tuple[Step, ...] = ()
+    bench: Bench | None = None
 
     def build(self) -> mujoco.MjModel:
         raise NotImplementedError
@@ -155,6 +240,10 @@ class Lesson:
 
     def on_drive(self, speed: float, turn: float, ctx: LessonContext) -> None:
         """W A S D: forward speed in m/s and turn rate in rad/s, for lessons with `drive`."""
+
+    def run_sweep(self, sweep: Sweep, ctx: LessonContext) -> list[dict[str, Any]]:
+        """The lesson's test once per value of `sweep.control`: [{"x": value, metric: result, ...}]."""
+        raise LessonError("this lesson has no sweeps")
 
     def drain_samples(self) -> list[dict[str, float]]:
         """Plot samples recorded by the controller since the last call."""
@@ -184,6 +273,7 @@ class Lesson:
             "rig": self.rig(model),
             "camera": self.camera(),
             "drive": self.drive,
+            "bench": self.bench.describe() if self.bench else None,
         }
 
     def card(self) -> dict[str, Any]:
@@ -212,6 +302,7 @@ class LessonRunner:
         self.passed: set[str] = set()
         self._controllers: dict[str, Any] = {}
         self._version = -1
+        self._bench_sent = -1
         self._saved: tuple[Any, mujoco.MjModel, str] | None = None  # (store, model, source) to return to
         self._lock = threading.RLock()
 
@@ -246,6 +337,7 @@ class LessonRunner:
             self.ctx = LessonContext(values={c.id: c.value for c in lesson.controls if c.kind != "button"})
             self.step = 0
             self.passed = set()
+            self._bench_sent = -1
             self._attach()
             self._version = session.version
             return lesson.describe(model)
@@ -306,6 +398,12 @@ class LessonRunner:
                 self._advance(force=True)
             elif action == "goto":
                 self._goto(int(msg["step"]))
+            elif action == "clear_runs":
+                self.ctx.runs.clear()
+                self.ctx.sweep = None
+                self.ctx.bench_version += 1
+            elif action == "sweep":
+                self._sweep(str(msg["control"]))
             elif action == "drive":
                 if not self.lesson.drive:
                     raise LessonError("this lesson has no driving")
@@ -353,6 +451,19 @@ class LessonRunner:
         self.ctx.events.add(f"pressed:{control_id}")
         with self.playground.session.lock:
             self.lesson.on_control(control_id, 1.0, self.playground.session.data, self.ctx)
+
+    def _sweep(self, control_id: str) -> None:
+        assert self.lesson is not None and self.ctx is not None
+        bench = self.lesson.bench
+        sweep = next((w for w in bench.sweeps if w.control == control_id), None) if bench else None
+        if sweep is None:
+            raise LessonError(f"this lesson cannot sweep {control_id!r}")
+        if control_id not in self._unlocked():
+            raise LessonError(f"{control_id} unlocks in a later step")
+        points = self.lesson.run_sweep(sweep, self.ctx)  # on copies of the model: the live run goes on
+        self.ctx.sweep = {"control": control_id, "points": points}
+        self.ctx.bench_version += 1
+        self.ctx.events.add(f"swept:{control_id}")
 
     def _answer(self, choice: int) -> None:
         assert self.lesson is not None and self.ctx is not None
@@ -408,9 +519,14 @@ class LessonRunner:
             if step.quiz is not None and step.id in self.ctx.answers:
                 chosen = self.ctx.answers[step.id]
                 quiz = {"chosen": chosen, "right": chosen == step.quiz.answer, "explain": step.quiz.explain}
+            bench = None
+            if self.ctx.bench_version != self._bench_sent:  # the record goes out only when it changed
+                self._bench_sent = self.ctx.bench_version
+                bench = self.ctx.bench_state()
             return {
                 "type": "lesson",
                 "lesson": self.lesson.id,
+                "bench": bench,
                 "step": self.step,
                 "passed": [s.id for s in self.lesson.steps if s.id in self.passed],
                 "unlocked": sorted(self._unlocked()),
@@ -424,9 +540,11 @@ class LessonRunner:
 
     def describe_active(self) -> dict[str, Any] | None:
         with self._lock:
-            if self.lesson is None:
+            if self.lesson is None or self.ctx is None:
                 return None
-            return self.lesson.describe(self.playground.session.model)
+            out = self.lesson.describe(self.playground.session.model)
+            out["bench_state"] = self.ctx.bench_state()  # a viewer that (re)connects gets the record too
+            return out
 
 
 def _round(sample: dict[str, float]) -> dict[str, float]:

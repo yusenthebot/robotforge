@@ -13,7 +13,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.learn.engine import Control, Lesson, LessonContext, Plot, Quiz, Series, Step
+from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Sweep
 
 PIVOT = (0.0, 0.0, 0.62)  # shoulder height, m
 LENGTH = 0.36  # pivot to the weight, m
@@ -75,6 +75,35 @@ class JointPD:
 
     def status(self) -> dict[str, Any]:
         return {"controller": "lesson-pd", **{k: round(x, 3) for k, x in self.terms.items()}}
+
+
+def grade(times: list[float], angles: list[float]) -> dict[str, Any]:
+    """Score a step test from its curve (seconds since the step, degrees): overshoot, the time it settles
+    into the +-3 and +-1 degree bands for good, and stars. Live tests and sweeps grade the same way."""
+    peak = max(angles, default=0.0)
+    overshoot = max(0.0, (peak - TEST_TARGET) / TEST_TARGET * 100)
+
+    def settled(band: float) -> float | None:
+        since = None  # when it last came inside the band, if it stayed there
+        for t, q in zip(times, angles, strict=True):
+            inside = abs(q - TEST_TARGET) <= band
+            since = (since if since is not None else t) if inside else None
+        return since
+
+    settle, fine = settled(SETTLE_BAND), settled(FINE_BAND)
+    stars = 0
+    if settle is not None:
+        stars = 1
+        if settle <= 1.5 and overshoot <= 15:
+            stars = 2
+        if fine is not None and fine <= 1.0 and overshoot <= 5:
+            stars = 3
+    return {
+        "settle_s": None if settle is None else round(settle, 2),
+        "fine_s": None if fine is None else round(fine, 2),
+        "overshoot_pct": round(overshoot, 1),
+        "stars": stars,
+    }
 
 
 def _oscillating(ctx: LessonContext) -> bool:
@@ -304,10 +333,35 @@ class PDLesson(Lesson):
         ),
     )
     steps = STEPS
+    bench = Bench(
+        title={"zh": "实验记录：阶跃响应", "en": "Experiment record: step responses"},
+        x={"zh": "测试开始后", "en": "since the step"},
+        x_unit="s",
+        y={"zh": "角度", "en": "angle"},
+        y_unit="°",
+        params=("kp", "kd", "ki", "gravity"),
+        short=(
+            {"zh": "Kp", "en": "Kp"},
+            {"zh": "Kd", "en": "Kd"},
+            {"zh": "Ki", "en": "Ki"},
+            {"zh": "前馈", "en": "FF"},
+        ),
+        metrics=(
+            Metric("overshoot_pct", {"zh": "超调", "en": "overshoot"}, "%"),
+            Metric("settle_s", {"zh": "稳到 ±3°", "en": "settled to ±3°"}, "s"),
+            Metric("fine_s", {"zh": "稳到 ±1°", "en": "settled to ±1°"}, "s"),
+        ),
+        reference=TEST_TARGET,
+        sweeps=(
+            Sweep("kp", (2, 5, 10, 15, 20, 30, 40, 60, 80), ("overshoot_pct", "settle_s")),
+            Sweep("kd", (0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6), ("overshoot_pct", "settle_s")),
+        ),
+    )
 
     def __init__(self) -> None:
         self.pd: JointPD | None = None
         self.test: dict[str, Any] | None = None
+        self.model: mujoco.MjModel | None = None
 
     def build(self) -> mujoco.MjModel:
         spec = mujoco.MjSpec()
@@ -395,7 +449,8 @@ class PDLesson(Lesson):
         motor.ctrllimited = True
         motor.ctrlrange = [-TORQUE_MAX, TORQUE_MAX]
         motor.gear = [1, 0, 0, 0, 0, 0]
-        return spec.compile()
+        self.model = spec.compile()
+        return self.model
 
     def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
         self.pd = JointPD(model, ctx)
@@ -410,7 +465,7 @@ class PDLesson(Lesson):
             data.qvel[self.pd.dadr] = 0.0
             self.pd.restart_integral()
             ctx.values["target"] = TEST_TARGET
-            self.test = {"t0": data.time, "peak": 0.0, "inside": {SETTLE_BAND: None, FINE_BAND: None}}
+            self.test = {"t0": data.time, "times": [], "angles": []}
             ctx.results["test"] = {"running": True}
         elif control in ("ki", "gravity"):
             self.pd.restart_integral()
@@ -424,7 +479,7 @@ class PDLesson(Lesson):
         return out
 
     def _grade(self, samples: list[dict[str, float]]) -> None:
-        """Follow a running challenge: peak angle, and when it entered the band for good."""
+        """Follow a running test: collect its curve until it has run TEST_SECONDS."""
         test = self.test
         if test is None or not samples:
             return
@@ -432,38 +487,39 @@ class PDLesson(Lesson):
             t = s["t"] - test["t0"]
             if t < 0:
                 continue
-            test["peak"] = max(test["peak"], s["q"])
-            for band, since in test["inside"].items():
-                inside = abs(s["q"] - TEST_TARGET) <= band
-                if inside and since is None:
-                    test["inside"][band] = t
-                elif not inside:
-                    test["inside"][band] = None
-            if t >= TEST_SECONDS:
+            if t > TEST_SECONDS:
                 self._finish_test()
                 return
+            test["times"].append(t)
+            test["angles"].append(s["q"])
 
     def _finish_test(self) -> None:
-        assert self.test is not None
+        assert self.test is not None and self.pd is not None
         test, self.test = self.test, None
-        settle, fine = test["inside"][SETTLE_BAND], test["inside"][FINE_BAND]
-        overshoot = max(0.0, (test["peak"] - TEST_TARGET) / TEST_TARGET * 100)
-        stars = 0
-        if settle is not None:
-            stars = 1
-            if settle <= 1.5 and overshoot <= 15:
-                stars = 2
-            if fine is not None and fine <= 1.0 and overshoot <= 5:
-                stars = 3
-        result = {
-            "running": False,
-            "settle_s": None if settle is None else round(settle, 2),
-            "fine_s": None if fine is None else round(fine, 2),
-            "overshoot_pct": round(overshoot, 1),
-            "stars": stars,
-        }
-        if self.pd is not None:
-            self.pd.ctx.results["test"] = result
+        result = grade(test["times"], test["angles"])
+        ctx = self.pd.ctx
+        ctx.results["test"] = {"running": False, **result}
+        params = {k: ctx.values[k] for k in ("kp", "kd", "ki", "gravity")}
+        ctx.record_run(params, result, test["times"], test["angles"])
+
+    def run_sweep(self, sweep: Sweep, ctx: LessonContext) -> list[dict[str, Any]]:
+        """The step test once per value, on a fresh copy of the rig: the live joint keeps running."""
+        assert self.model is not None
+        model = self.model
+        points = []
+        for value in sweep.values:
+            values = {**ctx.values, sweep.control: float(value), "target": TEST_TARGET}
+            pd = JointPD(model, LessonContext(values=values))
+            data = mujoco.MjData(model)
+            times, angles = [], []
+            while data.time <= TEST_SECONDS:
+                pd.update(model, data)
+                mujoco.mj_step(model, data)
+            for sample in pd.samples:
+                times.append(sample["t"])
+                angles.append(sample["q"])
+            points.append({"x": float(value), **grade(times, angles)})
+        return points
 
     def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
         assert self.pd is not None

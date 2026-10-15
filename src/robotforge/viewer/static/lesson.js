@@ -144,6 +144,7 @@ function openLesson(desc) {
   lesson = desc;
   state = null;
   plots.reset(desc.plots);
+  bench.setup(desc.bench, desc.bench_state);
   renderTable(null);
   overlays.build(desc.rig);
   setPicker(false);
@@ -200,12 +201,15 @@ export function lessonUpdate(msg) {
   if (!lesson || msg.lesson !== lesson.id) return;
   const stepChanged = !state || state.step !== msg.step || state.passed.length !== msg.passed.length;
   const unlockChanged = !state || state.unlocked.join() !== msg.unlocked.join();
+  if (msg.bench) bench.update(msg.bench);
   const quizChanged = JSON.stringify(state?.quiz) !== JSON.stringify(msg.quiz);
   const resultChanged = JSON.stringify(state?.results) !== JSON.stringify(msg.results);
   state = msg;
   plots.add(msg.samples);
-  if (unlockChanged) renderControls();
-  else syncControls();
+  if (unlockChanged) {
+    renderControls();
+    bench.syncLocks();
+  } else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
   $("lesson-readout").textContent = readout(msg.live);
   renderTable(msg.live?.table ?? null);
@@ -313,6 +317,290 @@ function renderResult() {
     ? t("test_not_settled", { overshoot: test.overshoot_pct })
     : t("test_result", { settle: test.settle_s, overshoot: test.overshoot_pct });
   box.append(line, starSpan(test.stars));
+}
+
+// ---------------------------------------------------------------- experiment record
+
+// Every finished test keeps its settings, its metrics and its curve: up to five runs laid over each
+// other with a table to compare them, plus sweeps that try one knob across its range (metric vs setting).
+const RUN_COLORS = ["--plot-blue", "--plot-violet", "--plot-green", "--amber", "--ink"];
+const runColor = (id) => RUN_COLORS[(id - 1) % RUN_COLORS.length];
+
+const bench = {
+  spec: null,
+  state: null,
+  box: null,
+  setup(spec, initial) {
+    this.box?.remove();
+    this.box = null;
+    this.spec = spec;
+    this.state = initial ?? null;
+    if (!spec) return;
+    this.box = document.createElement("section");
+    this.box.className = "bench";
+    $("lesson-plots").append(this.box);
+    this.render();
+  },
+  update(next) {
+    this.state = next;
+    this.render();
+  },
+  label(control) {
+    const k = this.spec.params.indexOf(control);
+    if (k >= 0 && this.spec.short[k]) return pick(this.spec.short[k]);
+    const c = lesson?.controls.find((x) => x.id === control);
+    return c ? pick(c.label) : control;
+  },
+  value(control, v) {
+    const c = lesson?.controls.find((x) => x.id === control);
+    if (c?.kind === "toggle") return t(v ? "on" : "off");
+    return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
+  },
+  render() {
+    const box = this.box;
+    if (!box) return;
+    const spec = this.spec;
+    const runs = this.state?.runs ?? [];
+    const head = document.createElement("div");
+    head.className = "plot-head";
+    const title = document.createElement("span");
+    title.className = "plot-title";
+    title.textContent = pick(spec.title);
+    head.append(title);
+    if (runs.length || this.state?.sweep) {
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "link-button";
+      clear.textContent = t("bench_clear");
+      clear.addEventListener("click", () => api.send({ type: "lesson", action: "clear_runs" }));
+      head.append(clear);
+    }
+    const parts = [head];
+    if (!runs.length) {
+      const empty = document.createElement("p");
+      empty.className = "bench-empty";
+      empty.textContent = t("bench_empty");
+      parts.push(empty);
+    } else {
+      const chart = document.createElement("canvas");
+      chart.className = "bench-chart";
+      chart.dataset.kind = "runs";
+      parts.push(chart, this.table(runs));
+    }
+    if (spec.sweeps.length) parts.push(this.sweeps());
+    box.replaceChildren(...parts);
+    this.syncLocks();
+    this.draw();
+  },
+  table(runs) {
+    const spec = this.spec;
+    const grid = document.createElement("table");
+    grid.className = "bench-table";
+    const head = document.createElement("tr");
+    const first = document.createElement("th");
+    first.scope = "col";
+    first.textContent = t("bench_run");
+    head.append(first);
+    for (const m of spec.metrics) {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.textContent = m.unit ? `${pick(m.label)} (${m.unit})` : pick(m.label);
+      head.append(th);
+    }
+    const best = spec.metrics.map((m) => {
+      if (!m.ranked) return null;
+      const values = runs.map((r) => r.metrics[m.key]).filter((v) => v !== null && v !== undefined);
+      if (values.length < 2 || values.every((v) => v === values[0])) return null;
+      return m.lower_is_better ? Math.min(...values) : Math.max(...values);
+    });
+    const body = document.createElement("tbody");
+    for (const run of runs) {
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.scope = "row";
+      const chip = document.createElement("span");
+      chip.className = "run-chip";
+      chip.style.setProperty("--c", `var(${runColor(run.id)})`);
+      chip.textContent = `#${run.id}`;
+      const settings = document.createElement("span");
+      settings.className = "run-settings";
+      settings.textContent = spec.params.map((p) => `${this.label(p)} ${this.value(p, run.params[p])}`).join(" · ");
+      th.append(chip, settings);
+      tr.append(th);
+      spec.metrics.forEach((m, k) => {
+        const td = document.createElement("td");
+        const v = run.metrics[m.key];
+        td.textContent = v === null || v === undefined ? "-" : String(v);
+        if (best[k] !== null && v === best[k]) td.dataset.best = "true";
+        tr.append(td);
+      });
+      body.append(tr);
+    }
+    const thead = document.createElement("thead");
+    thead.append(head);
+    grid.append(thead, body);
+    return grid;
+  },
+  sweeps() {
+    const wrap = document.createElement("div");
+    wrap.className = "bench-sweeps";
+    const row = document.createElement("div");
+    row.className = "sweep-buttons";
+    for (const sw of this.spec.sweeps) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "pill-button";
+      b.dataset.control = sw.control;
+      b.textContent = t("sweep_button", { name: this.label(sw.control) });
+      b.addEventListener("click", async () => {
+        b.classList.add("busy");
+        try {
+          await api.request({ type: "lesson_bench", action: "sweep", control: sw.control });
+        } catch (err) {
+          api.toast(err.message);
+        } finally {
+          b.classList.remove("busy");
+        }
+      });
+      row.append(b);
+    }
+    wrap.append(row);
+    const sweep = this.state?.sweep;
+    const spec = sweep ? this.spec.sweeps.find((w) => w.control === sweep.control) : null;
+    if (sweep && spec) {
+      const xs = sweep.points.map((p) => p.x);
+      const note = document.createElement("p");
+      note.className = "sweep-title";
+      note.textContent = t("sweep_title", { name: this.label(sweep.control), lo: xs[0], hi: xs[xs.length - 1] });
+      wrap.append(note);
+      for (const key of spec.metrics) {
+        const m = this.spec.metrics.find((x) => x.key === key);
+        const label = document.createElement("span");
+        label.className = "sweep-metric";
+        label.textContent = m ? (m.unit ? `${pick(m.label)} (${m.unit})` : pick(m.label)) : key;
+        const chart = document.createElement("canvas");
+        chart.className = "sweep-chart";
+        chart.dataset.kind = "sweep";
+        chart.dataset.metric = key;
+        wrap.append(label, chart);
+      }
+    }
+    return wrap;
+  },
+  syncLocks() {
+    if (!this.box) return;
+    const open = new Set(state?.unlocked ?? []);
+    for (const b of this.box.querySelectorAll(".sweep-buttons button")) {
+      b.disabled = !open.has(b.dataset.control);
+      b.title = b.disabled ? t("sweep_locked") : "";
+    }
+  },
+  draw() {
+    if (!this.box) return;
+    const runs = this.state?.runs ?? [];
+    const newest = runs.length ? runs[runs.length - 1].id : null;
+    for (const canvas of this.box.querySelectorAll("canvas")) {
+      if (canvas.dataset.kind === "runs") {
+        const lines = runs.map((r) => ({ xs: r.x, ys: r.y, color: runColor(r.id), width: r.id === newest ? 2.2 : 1.3 }));
+        drawXY(canvas, lines, { reference: this.spec.reference, height: 120, xUnit: this.spec.x_unit });
+      } else {
+        const sweep = this.state.sweep;
+        const key = canvas.dataset.metric;
+        const lines = [{ xs: sweep.points.map((p) => p.x), ys: sweep.points.map((p) => p[key] ?? null), color: "--ink", width: 1.6, dots: true }];
+        drawXY(canvas, lines, { height: 74 });
+      }
+    }
+  },
+};
+
+window.addEventListener("resize", () => bench.draw());
+
+// A static chart: lines of (x, y) with gaps where y is null, optional dots and a dashed reference level.
+function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "" } = {}) {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name) => css.getPropertyValue(name).trim();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth || 300;
+  canvas.style.height = `${height}px`;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(height * dpr);
+  const g = canvas.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, height);
+  let [x0, x1, y0, y1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (const line of lines) {
+    line.xs.forEach((x, i) => {
+      const y = line.ys[i];
+      if (y === null || y === undefined) return;
+      [x0, x1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(y0, y), Math.max(y1, y)];
+    });
+  }
+  if (!Number.isFinite(x0)) return;
+  if (reference !== null) [y0, y1] = [Math.min(y0, reference), Math.max(y1, reference)];
+  if (x1 - x0 < 1e-9) [x0, x1] = [x0 - 1, x1 + 1];
+  if (y1 - y0 < 1e-9) [y0, y1] = [y0 - 1, y1 + 1];
+  const pad = (y1 - y0) * 0.1;
+  [y0, y1] = [y0 - pad, y1 + pad];
+  const X = (v) => 36 + ((v - x0) / (x1 - x0)) * (w - 46);
+  const Y = (v) => 6 + (1 - (v - y0) / (y1 - y0)) * (height - 22);
+  g.font = `10px ${token("--mono") || "monospace"}`;
+  g.fillStyle = token("--muted");
+  g.strokeStyle = token("--line");
+  g.lineWidth = 1;
+  for (const v of niceTicks(y0, y1, 3)) {
+    g.beginPath();
+    g.moveTo(36, Math.round(Y(v)) + 0.5);
+    g.lineTo(w - 8, Math.round(Y(v)) + 0.5);
+    g.stroke();
+    g.fillText(formatTick(v), 2, Y(v) + 3);
+  }
+  const xt = niceTicks(x0, x1, 4);
+  xt.forEach((v, i) => {
+    const text = formatTick(v) + (i === xt.length - 1 && xUnit ? ` ${xUnit}` : "");
+    g.fillText(text, Math.min(X(v) - 6, w - g.measureText(text).width - 2), height - 3);
+  });
+  if (reference !== null) {
+    g.strokeStyle = token("--muted");
+    g.setLineDash([4, 4]);
+    g.beginPath();
+    g.moveTo(36, Y(reference));
+    g.lineTo(w - 8, Y(reference));
+    g.stroke();
+    g.setLineDash([]);
+  }
+  for (const line of lines) {
+    g.strokeStyle = token(line.color);
+    g.fillStyle = token(line.color);
+    g.lineWidth = line.width ?? 1.5;
+    g.beginPath();
+    let open = false;
+    line.xs.forEach((x, i) => {
+      const y = line.ys[i];
+      if (y === null || y === undefined) {
+        open = false;
+        return;
+      }
+      if (!open) g.moveTo(X(x), Y(y));
+      else g.lineTo(X(x), Y(y));
+      open = true;
+    });
+    g.stroke();
+    if (line.dots) {
+      line.xs.forEach((x, i) => {
+        const y = line.ys[i];
+        g.beginPath();
+        if (y === null || y === undefined) {
+          g.strokeStyle = token("--muted"); // never reached: a hollow mark along the top
+          g.arc(X(x), 9, 2.5, 0, Math.PI * 2);
+          g.stroke();
+          g.strokeStyle = token(line.color);
+        } else {
+          g.arc(X(x), Y(y), 2.5, 0, Math.PI * 2);
+          g.fill();
+        }
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------- face-off table
