@@ -95,9 +95,17 @@ Rounds 1-3 done, 2026-10-14.
   - Nothing finishes the obstacle course yet: template dog gait falls at the 4 cm curbs (~11-12 m), Go2 gait on the stairs (5.9 m), the Go2 learned walk stalls on the ramp (trained on flat ground). Scored by distance instead; a terrain-trained policy is a frontier item.
   - Shove robustness differs less than hoped between controllers (hold 4, gait 5, MPC 5-7 levels); thresholds and text match the measurements.
 
+## Round 10 (2026-10-15): reinforcement learning, trained live
+
+- `learn/rl.py`: cart-pole; release (it falls), reward quiz, random weights (they fail), ARS training in a background thread paced at 0.7 s per round (reaches an average of 9.7/10 in ~20 rounds, ~17 s), push test, quiz on scale (Go2 walk: 24.6 M steps). The live cart runs the policy being trained; attempts restart when the pole falls.
+- `control/ars.py`: `train_ars(policy=..., stop=...)`; `Lesson.close()` stops background work on exit or swap.
+- What did NOT work (and the fix):
+  - The push step was flaky (4 of 6 runs): a push late in an 8 s attempt was cut off by the attempt timeout before its 3 s answer. Attempts now wait 4 s after a push; 6 of 6 pass. A real user would have hit the same "I pushed and nothing happened".
+  - In the browser pane, an emulated viewport can render into a corner after the pane resizes; reset with preset desktop before trusting a screenshot.
+
 ## Next-round seed
 
-Round 10: phase 4 of docs/PLAY_PLAN.md, "train your robot": a lesson where reinforcement learning trains live in the viewer (ARS or PPO on a small robot, reward curve and rollouts of each generation), so the learner sees a policy go from flailing to working. Then: the release fling (systematic debugging), builder MED 6-9, a gait lesson.
+Round 11: a walking-gait lesson (what a trot is: phases, swing and stance, foot paths drawn in 3D, step frequency vs speed), then the release fling (systematic debugging), builder MED 6-9. Frontier after that: let the learner train their own built robot to walk (custom-morphology RL), and a MuJoCo WASM share page.
 
 ## Frontier
 
