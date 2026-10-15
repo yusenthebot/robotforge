@@ -11,6 +11,7 @@ from robotforge.control.cpg import (
     FADE,
     FALL_PENALTY,
     HEADING_WEIGHT,
+    STEER_SPAN,
     WANDER_WEIGHT,
     Body,
     CPGError,
@@ -18,6 +19,7 @@ from robotforge.control.cpg import (
     Reward,
     Rhythm,
     Start,
+    Steering,
     Trainer,
     fade_in,
 )
@@ -105,6 +107,38 @@ def test_a_forward_walk_counts_less_the_more_its_heading_turned():
     # Never less than nothing: past 1 / weight rad of turning, walking further would have scored worse.
     harsh = Trainer(model, "dog", Reward(heading=2.0 / abs(walk["turned"])), seconds=2.0).rollout(rhythm)
     assert harsh["reward"] == pytest.approx(-DRIFT_WEIGHT * walk["drift"])
+
+
+def test_a_steering_moves_the_walk_by_its_gains_as_far_as_the_heading_is_off():
+    model = _solo("star", build=STAR)
+    trainer = Trainer(model, "star", Reward(), seconds=1.0)
+    n = trainer.body.joints
+    walk = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.3), np.zeros(n)]))
+    steering = Steering(walk, np.concatenate([np.full(n, 0.1), np.zeros(2 * n)]))  # offsets only
+    home, t = trainer.home, 0.3
+    assert steering.targets(home, t) == pytest.approx(walk.targets(home, t))  # on course: the walk as learned
+    assert steering.targets(home, t, error=STEER_SPAN / 2) == pytest.approx(walk.targets(home, t) + 0.05)
+    assert steering.targets(home, t, error=-3.0) == pytest.approx(walk.targets(home, t) - 0.1)  # at most its gains
+    assert walk.targets(home, t, error=1.0) == pytest.approx(walk.targets(home, t))  # a rhythm does not steer
+
+
+def test_holding_a_heading_scores_the_mean_over_its_aims_measured_along_each():
+    model = _solo("dog", template="quadruped")
+    trainer = Trainer(model, "dog", Reward(), seconds=2.0)
+    rhythm = Rhythm.still(trainer.body.joints)
+    trainer.train(rhythm, iterations=4, seed=1)
+    ahead = trainer.rollout(rhythm)
+    aside = trainer.rollout(rhythm, aim=math.pi / 2)  # the same walk aiming to the left: forward is across the aim
+    assert abs(aside["distance"]) == pytest.approx(ahead["drift"])
+    assert aside["drift"] == pytest.approx(ahead["distance"])
+    hold = Trainer(model, "dog", Reward(hold=1.0, aims=(0.3, -0.3)), seconds=2.0)
+    steering = Steering.still(rhythm, trainer.body.joints)
+    tries = [hold.rollout(steering, aim=a) for a in (0.3, -0.3)]
+    assert hold._score(steering, steering.theta, None, None) == pytest.approx(np.mean([t["reward"] for t in tries]))
+    for t in tries:  # progress along the aim, less the share it strayed from it on average
+        assert t["stray"] > 0.1 and t["reward"] == pytest.approx(
+            t["distance"] - min(t["stray"], 1.0) * max(t["distance"], 0.0) - DRIFT_WEIGHT * t["drift"]
+        )
 
 
 def test_a_rhythm_can_start_mid_stride_faded_in_from_the_targets_of_the_moment():

@@ -3,7 +3,7 @@
     uv run python scripts/rhythm_bench.py forward [--robots dog,star,humanoid] [--seeds 1,2,3] [--jobs 4]
         [--rounds 30] [--energy 0.1] [--reflexes] [--shove] [--heading W]
     uv run python scripts/rhythm_bench.py switch [--robots dog,star] [--seeds 1,2,3] [--jobs 4] [--stress 4]
-        [--keep DIR | --walks DIR]
+        [--idle 3] [--keep DIR | --walks DIR]
     add --import a1=path/to/a1.urdf (or any URDF or MJCF file) to bench a robot from a file too
 
 forward: each run teaches one robot to walk forward the way the RL II lesson's Learn button does
@@ -14,15 +14,22 @@ drifted sideways, the energy it spent, whether it fell and, trained with shoves,
 stayed up for. --heading overrides the reward's weight on the heading (for tuning it; shoved trainings
 do not count the heading, as in the lesson).
 
-switch: each run teaches a walk and the turns the way "Keep this walk for my robot" does (learn_turns), keeps
-them in a world and drives the robot through it twice:
-- move: like the MCP move tool, forward 4 s, turn left 1 s, forward 2 s, each call ending with a stop;
+switch: each run teaches a walk, its heading hold and the turns the way "Keep this walk for my robot" does
+(learn_steering, learn_turns), keeps them in a world and drives the robot through it three times:
+- move: like the MCP move tool, forward 4 s, turn left 1 s, forward 2 s, each call ending with a stop, the next
+  call at once (no viewer open: the sim waits for the next call);
+- idle: the same with --idle seconds (3) of sim time after each call, as when the viewer is open and the sim keeps
+  running while the agent thinks;
 - keys: like holding W, pressing A for a second while W is still held, then letting go of A (the viewer's
   teleop messages, no stop in between).
-For every leg it reports the distance, the heading change and whether it stayed up; for the 1 s turn also
-the share of what its learned turn rate promises in that second. With --stress N it then gives N runs of 60
+For every leg it reports the distance, the heading change and whether it stayed up (after the idle time too); for
+the 1 s turn also the share of what its learned turn rate promises in that second. Each path ends with a stop
+and 2 s of standing, reported as the leg "stop". With --stress N it then gives N runs of 60
 random commands (forward, left, right or stop, each for 0.3 to 1.5 s, the next at once like a key change) and
-counts the falls (trunk past 60 degrees at the end of a command), with the switch each one came on.
+counts the falls (trunk past 60 degrees at the end of a command), with the switch each one came on. Those runs
+carry on from wherever the last command left the robot, so one fall changes everything after it; --trials N
+instead tries every switch out of walking or turning (F>L, L>F, R>S, ...) N times on its own, from standing:
+the first command for 2 to 2.5 s, the second for 1.5 s, and counts the falls after the switch (and any before).
 --keep DIR saves each trained walk as DIR/<robot>_<seed>.json; --walks DIR plays those instead of training.
 """
 
@@ -44,6 +51,7 @@ SECONDS = 4.0  # s per try, as in the lesson (walk_rl.ATTEMPT)
 FELL_COS = 0.5  # control/cpg.py FELL: cosine of the trunk's tilt below which the robot is down
 FREQ = 2.0  # Hz, the lesson's default
 TURN_SECONDS = 1.0  # the short turn command between two walks
+STAND_SECONDS = 2.0  # after the last command's stop
 STRESS_COMMANDS = 60  # per stress run
 COMMANDS = {"F": (0.2, 0.0), "L": (0.0, 1.0), "R": (0.0, -1.0), "S": (0.0, 0.0)}
 
@@ -81,6 +89,7 @@ class Switch:
     legs: list[Leg] = field(default_factory=list)
     switches: int = 0  # in the stress runs
     falls: dict[str, int] = field(default_factory=dict)  # switch ("F>L": walking, then left) -> falls on it
+    trials: dict[str, list[int]] = field(default_factory=dict)  # switch -> [falls after it, falls before it, tries]
 
 
 def _entry(robot: str, opts: dict[str, Any]) -> dict:
@@ -103,8 +112,11 @@ def _learn(robot: str, entry: dict, seed: int, opts: dict[str, Any]):
     from robotforge.control import cpg
     from robotforge.learn import walk_rl
 
-    reward = walk_rl.lesson_reward(opts["energy"], opts["shove"])  # as the lesson's Learn button trains
-    if opts["heading"] is not None and reward.heading:
+    if hasattr(walk_rl, "lesson_reward"):  # as the lesson's Learn button trains
+        reward = walk_rl.lesson_reward(opts["energy"], opts["shove"])
+    else:  # code from before the heading counted, for before-and-after numbers
+        reward = cpg.Reward(energy=opts["energy"], survive=opts["shove"])
+    if opts["heading"] is not None and getattr(reward, "heading", 0.0):
         reward = replace(reward, heading=opts["heading"])
     model = _solo(robot, entry)
     trainer = cpg.Trainer(model, robot, reward, SECONDS, FREQ)
@@ -137,6 +149,7 @@ def run_forward(robot: str, seed: int, opts: dict[str, Any]) -> Forward:
 def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
     import numpy as np
 
+    from robotforge.behaviors import rhythm_walk
     from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, learn_turns, save_walk
     from robotforge.playground import Playground
 
@@ -147,9 +160,13 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
     else:
         model, trainer, rhythm, _ = _learn(robot, entry, seed, opts)
         learned = trainer.rollout(rhythm)["distance"]
+        joints = joint_names(model, trainer.body)
+        # What it learned around, as the lesson keeps it (code from before kept no home).
+        home = {"home": dict(zip(joints, map(float, trainer.home), strict=True))}
         walk = SavedWalk(
             robot=robot,
-            joints=joint_names(model, trainer.body),
+            joints=joints,
+            **(home if "home" in SavedWalk.model_fields else {}),
             freq=rhythm.freq,
             reflexes=rhythm.reflexes,
             theta=[float(v) for v in rhythm.theta],
@@ -157,6 +174,8 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
             distance=learned,
             seconds=SECONDS,
         )
+        if hasattr(rhythm_walk, "learn_steering"):  # absent before the heading hold, for benching older code
+            walk = rhythm_walk.learn_steering(model, robot, walk, seed=seed)
         walk = learn_turns(model, robot, walk, seed=seed)
         if opts["keep"]:
             Path(opts["keep"]).mkdir(parents=True, exist_ok=True)
@@ -171,16 +190,19 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
         return pg
 
     out = []
-    for path in ("move", "keys"):
+    for path in ("move", "idle", "keys"):
         pg = world(path)
         result = Switch(robot, seed, path, round(walk.distance, 3), round(math.degrees(rate), 1))
         legs = (("forward", 0.2, 0.0, SECONDS), ("left", 0.0, 1.0, TURN_SECONDS), ("forward again", 0.2, 0.0, 2.0))
+        idle = opts["idle"] if path == "idle" else 0.0
         for name, speed, turn, seconds in legs:
             if path == "keys" and name == "left":
                 speed = 0.2  # W is still held while A is down: the turn wins
-            result.legs.append(_leg(pg, robot, name, speed, turn, seconds, stop=path == "move"))
-        pg.behaviors.stop(robot)
-        if rate > 0:
+            result.legs.append(_leg(pg, robot, name, speed, turn, seconds, stop=path != "keys", idle=idle))
+            if not result.legs[-1].up:
+                break
+        result.legs.append(_leg(pg, robot, "stop", 0.0, 0.0, STAND_SECONDS, stop=True))
+        if rate > 0 and len(result.legs) > 2:
             result.legs[1].share = round(math.radians(result.legs[1].heading) / (rate * TURN_SECONDS), 2)
         out.append(result)
     for run in range(opts["stress"]):
@@ -195,11 +217,28 @@ def run_switch(robot: str, seed: int, opts: dict[str, Any]) -> list[Switch]:
                 out[0].falls[switch] = out[0].falls.get(switch, 0) + 1
                 pg.session.reset()
                 last = "S"
+    if opts["trials"]:
+        pg = world("trials")
+        rng = np.random.default_rng(7000 + seed)
+        for first in "FLR":
+            for then in "FLRS":
+                if then == first:
+                    continue
+                count = out[0].trials.setdefault(f"{first}>{then}", [0, 0, 0])
+                for _ in range(opts["trials"]):
+                    pg.session.reset()
+                    count[2] += 1
+                    lead = 2.0 + float(rng.uniform(0.0, 0.5))
+                    if not _leg(pg, robot, first, *COMMANDS[first], lead, stop=False).up:
+                        count[1] += 1
+                    elif not _leg(pg, robot, then, *COMMANDS[then], 1.5, stop=False).up:
+                        count[0] += 1
     return out
 
 
-def _leg(pg, robot: str, name: str, speed: float, turn: float, seconds: float, stop: bool) -> Leg:
-    """One command for `seconds`, the heading followed as it goes (the ends alone wrap at 180)."""
+def _leg(pg, robot: str, name: str, speed: float, turn: float, seconds: float, stop: bool, idle: float = 0.0) -> Leg:
+    """One command for `seconds`, the heading followed as it goes (the ends alone wrap at 180). Distance and
+    heading are the command's; with `idle`, uprightness is judged after that much more sim time with no command."""
     from robotforge.behaviors.manager import BehaviorError
 
     before = pg.behaviors.pose(robot)
@@ -220,8 +259,12 @@ def _leg(pg, robot: str, name: str, speed: float, turn: float, seconds: float, s
         pg.behaviors.stop(robot)
     after = pg.behaviors.pose(robot)
     moved = math.dist(after["position"][:2], before["position"][:2])
+    turned = heading["turned"]
+    if idle:
+        pg.run_fast(lambda: False, idle)
+        after = pg.behaviors.pose(robot)
     up = float(pg.session.data.xmat[pg.behaviors._root_body(robot)][8]) >= FELL_COS
-    return Leg(name, round(moved, 3), round(heading["turned"], 1), after["upright"], up=up)
+    return Leg(name, round(moved, 3), round(turned, 1), after["upright"], up=up)
 
 
 def _forward_job(args: tuple[str, int, dict[str, Any]]) -> dict:
@@ -244,6 +287,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--shove", action="store_true", help="shove every try, points for staying up")
     parser.add_argument("--heading", type=float, default=None, help="override the reward's heading weight")
     parser.add_argument("--stress", type=int, default=0, help="switch: random-command runs to count falls in")
+    parser.add_argument("--idle", type=float, default=3.0, help="switch: s of sim time after each call (idle path)")
+    parser.add_argument("--trials", type=int, default=0, help="switch: tries of each switch on its own")
     parser.add_argument("--keep", help="switch: save the trained walks here")
     parser.add_argument("--walks", help="switch: play the walks saved here instead of training")
     parser.add_argument("--jobs", type=int, default=4)
@@ -263,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         "shove": args.shove,
         "heading": args.heading,
         "stress": args.stress,
+        "idle": args.idle,
+        "trials": args.trials,
         "keep": args.keep,
         "walks": args.walks,
     }
@@ -315,6 +362,10 @@ def _print_switch(results: list[dict], as_json: bool) -> None:
             f"{r['robot']} seed {r['seed']} {r['path']}: learned {r['learned']:.2f} m, {r['turn_rate']:.0f} deg/s; "
             f"{legs}"
         )
+        if r["trials"]:
+            where = ", ".join(f"{k} {n[0]}" + (f" (+{n[1]} before)" if n[1] else "") for k, n in r["trials"].items())
+            falls, tries = (sum(n[i] for n in r["trials"].values()) for i in (0, 2))
+            print(f"  trials: {falls} falls in {tries} switches: {where}")
         if r["switches"]:
             where = ", ".join(f"{k} {n}" for k, n in sorted(r["falls"].items()))
             print(

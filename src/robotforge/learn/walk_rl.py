@@ -21,7 +21,15 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors import Kind, rhythm_walk, robot_kind
-from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, learn_turns, save_walk
+from robotforge.behaviors.rhythm_walk import (
+    SavedWalk,
+    heading_drift,
+    joint_names,
+    learn_steering,
+    learn_turns,
+    needs_steering,
+    save_walk,
+)
 from robotforge.control.cpg import (
     DRIFT_WEIGHT,
     HEADING_WEIGHT,
@@ -100,11 +108,14 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
     return out
 
 
-def _turn_seconds(trained: dict[str, Any]) -> int:
-    """About how long learning both turns takes, from the robot's own training pace: the turns search as many
-    rounds as two sides times their starts, and each round costs about what a walk round did (a quarter more
-    for the extra rollouts). An imported A1 (12 joints, 13.8 s for 30 walk rounds) took 70 s."""
-    rounds = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS
+def _turn_seconds(trained: dict[str, Any], steer: bool) -> int:
+    """About how long learning what follows a kept walk takes, from the robot's own training pace: the turns search
+    as many rounds as two sides times their starts, plus two sides of tuning them to begin out of the walk, and a
+    curving walk's steering its rounds once per aim. Each round costs about what a walk round did (a quarter more
+    for the extra rollouts). An imported A1 (12 joints, 13.8 s for 30 walk rounds) took 70 s for the turns alone."""
+    rounds = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * rhythm_walk.WALKING_ROUNDS
+    if steer:
+        rounds += rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS)
     per_round = trained["seconds"] / max(1, trained["rounds"])
     return max(10, int(round(1.25 * per_round * rounds / 10.0)) * 10)
 
@@ -727,24 +738,39 @@ class LearnToWalkLesson(Lesson):
         except OSError as exc:
             return _text(f"没存上：{exc}", f"Could not keep it: {exc}")
         ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3), "turns": False}
+        drift = heading_drift(self._solo("yours"), "yours", walk)
+        steer = needs_steering(drift)
         self.turning = threading.Thread(target=self._learn_turns, args=(walk, folder, ctx), daemon=True)
         self.turning.start()
-        wait = _turn_seconds(result)
+        wait = _turn_seconds(result, steer)
+        curve = abs(math.degrees(drift or 0.0))
+        then = (
+            _text(
+                f"它的走法走着走着会拐（8 秒拐了 {curve:.0f} 度），所以先学怎么保持方向，再学原地转弯，",
+                f"Its walk curves ({curve:.0f} degrees in 8 s), so it first learns to hold its heading, then ",
+            )
+            if steer
+            else _text("现在它接着学原地转弯，", "It ")
+        )
         return _text(
             f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
-            "现在它接着学原地转弯，站着起转和边走边转都学，"
-            f"向左、向右各学两次留下好的那次（约 {wait} 秒），学完也会存好。"
+            f"{then['zh']}向左、向右各学两次留下好的那次，再练从走路中直接起转（一共约 {wait} 秒），学完也会存好。"
             f"退出课程回到你的世界，在聊天里让 {name} 走，或者选中它按 W 往前、A 和 D 原地转。",
             f"Kept: {name}'s walk ({result['distance']:g} m in 4 s, about {walk.speed:.2f} m/s) is in your world now. "
-            "It goes on to learn to turn on the spot, from standing and straight out of its walk, each way twice "
-            f"keeping the better (about {wait} s), kept as well when done. "
+            f"{then['en']}goes on to learn to turn on the spot, each way twice keeping the better, then to start "
+            f"each turn straight out of its walk (about {wait} s in all), kept as well when done. "
             f"Leave the lesson, then ask for {name} to walk in the chat, or select it and press W to go forward and "
             "A or D to turn on the spot.",
         )
 
     def _learn_turns(self, walk: SavedWalk, folder: Path, ctx: LessonContext) -> None:
-        """After the walk is kept: learn to turn on the spot each way, on the robot alone, and keep that too."""
+        """After the walk is kept: a curving walk learns to hold its heading, then the robot learns to turn on the
+        spot each way, on the robot alone, each kept as soon as it is learned."""
         try:
+            walk = learn_steering(self._solo("yours"), "yours", walk, seed=self.trainings)
+            save_walk(folder, walk)
+            if walk.steer is not None:
+                ctx.results["kept"] = {**ctx.results.get("kept", {}), "holds_heading": True}
             turned = learn_turns(self._solo("yours"), "yours", walk, seed=self.trainings)
             save_walk(folder, turned)
         except (OSError, ValueError, CPGError) as exc:

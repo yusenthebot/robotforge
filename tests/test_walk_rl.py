@@ -96,6 +96,8 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg, monkeyp
 
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 20)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
+    monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 10)
+    monkeypatch.setattr(rhythm_walk, "STEER_ROUNDS", 10)
     pg.new_world("mine")
     pg.add_robot("crab", build=walk_rl.STAR)
     with pytest.raises(BehaviorError, match="RL II"):  # no gait code knows a starfish
@@ -147,6 +149,8 @@ def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg
     # How well turns are learned is the starfish's test; this one is about the imported file finding its way.
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 8)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
+    monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 4)
+    monkeypatch.setattr(rhythm_walk, "STEER_ROUNDS", 4)
     pg.new_world("mine")
     write(pg.store.dir / file, critter_urdf() if file.endswith(".urdf") else critter_mjcf())
     pg.add_robot("critter", file=file)  # a path relative to the world folder, as world.yaml keeps it
