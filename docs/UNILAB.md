@@ -51,7 +51,7 @@ walker.command(0.5, 0.0)  # 前进 0.5 m/s，不转弯
 
 | 做什么 | macOS（Apple Silicon） | Linux | Windows |
 |---|---|---|---|
-| 在 robotforge 里运行学习型策略 | 支持，本机实测 | 支持（onnxruntime 有官方安装包） | 支持（onnxruntime 有官方安装包），尚未在 Windows 上实测 |
+| 在 robotforge 里运行学习型策略 | 支持，本机实测 | 支持，GitHub Actions 的 Ubuntu 上测试通过 | 支持，GitHub Actions 的 Windows 上测试通过（含 Go2 走路的测试） |
 | 用 UniLab 训练 | 支持，本机实测（M5 Max，MuJoCo 后端，学习器在 MPS 上） | UniLab 官方支持 x86_64 和 aarch64，有 NVIDIA 显卡时学习器用 CUDA；robotforge 的桥接按同样的方式工作，尚未实测 | UniLab 的 MuJoCo 后端依赖的 mjbatch 没有 Windows 安装包，训练请在 WSL2 的 Linux 里进行 |
 
 UniLab 的文档里写了 Windows 的安装方式，但它的 MuJoCo 训练后端在 Windows 上不可用，这一点以 UniLab 的安装文档为准。
@@ -177,8 +177,40 @@ robotforge 的做法：策略每 0.02 秒给出目标角度，之间每个物理
 还有一处已知的细小差别：UniLab 的角速度和重力来自 MuJoCo 传感器，读到的是上一个物理步（10 毫秒前）的值。
 robotforge 读到的是 2 毫秒前的值，实测这点差别对走路没有可见影响。
 
+## 实验：让自己设计的四足学会走路
+
+robotforge 的四足模板（约 1 千克，12 个 STS3215 级舵机）也可以交给 UniLab 训练，这一步还是实验功能：
+
+```bash
+uv run python scripts/unilab_export_quadruped.py --out ~/robotforge/unilab/tasks/my_dog
+robotforge unilab train --task my_dog --conf-dir ~/robotforge/unilab/tasks/my_dog/conf --iterations 400 --name my_dog_walk --wait
+```
+
+导出脚本写出两样东西：只含这台机器人的 MJCF（加上地面、IMU 和脚底传感器、home 关键帧），以及一份 UniLab 任务配置。
+任务配置照搬 UniLab 里 Go2 走路任务的观测和奖励，换成这台机器人的关节名、舵机参数和尺寸（站立高度、抬脚高度、速度范围按站立高度相对 Go2 缩放）。
+UniLab 本身不用改：训练时在它的进程里用通用的 manager-based 环境注册这个任务名，配置文件通过 Hydra 的搜索路径找到。
+MuJoCo 3.15 写出的 MJCF 在 UniLab 的 MuJoCo 3.11 里能直接加载。
+
+训练 400 轮（980 万步）以后，在 robotforge 里用 `move(robot="dog", speed=0.3, walker="my_dog_walk")` 驱动，实测（每项 10 秒）：
+
+| 指令 | 学出来的策略 | 内置步态 |
+|---|---|---|
+| 前进 0.3 m/s | 0.20 m/s | 0.30 m/s |
+| 前进 0.5 m/s | 0.35 m/s | 0.37 m/s（步态的上限） |
+| 后退 0.3 m/s | -0.20 m/s | -0.30 m/s |
+| 左转 0.8 rad/s | 0.65 rad/s | 0.81 rad/s |
+| 原地站立 | 10 秒漂移 0.18 米 | 不动 |
+
+全程直立，能前进、后退、转弯，但速度只跟到指令的七成左右；内置步态带速度闭环，跟得更准。
+奖励里的速度跟踪宽度沿用 Go2 的数值，对这只小狗偏宽松，按尺寸调奖励是下一步。
+通过 `move(..., walker="my_dog_walk")` 驱动时，10 秒前进 2.2 米、后退 2.2 米、原地左转 410 度。
+训练速度：机器空闲时每轮约 0.7 秒，400 轮约 5 分钟；5 轮的流程检查从启动到安装共 20 秒（训练 6 秒，导出 11 秒）。
+
 ## 限制和下一步
 
-- 目前能在 robotforge 里训练的 UniLab 任务是 `go2_joystick_flat`；G1 人形机器人的 `g1_walk_flat` 在 UniLab 里默认要训练 2200 轮（本机约 2 小时）。
+- 内置的可训练任务是 `go2_joystick_flat`；自己设计的四足走上面的实验路线，人形和轮式机器人还不能导出。
+- G1 人形机器人：UniLab 的 `g1_walk_flat` 可以导出成策略卡（躯干 IMU、以弧度计的双脚步态时钟、低速指令死区都已支持）。
+  它默认要训练 2200 轮，本机空闲时每轮约 3 秒，约 2 小时；训练到 250 轮的策略在 UniLab 自己的仿真里也站不住。
+  完整训练还没有跑完，robotforge 库里的 G1 也还没有接上 `move`。
 - 策略只在平地上训练过，robotforge 的草地、坡道和台阶对它是没见过的情况。
-- 用 robotforge 自己设计的机器人去 UniLab 训练，需要把它导出成 UniLab 的任务配置（MJCF、关节名单、传感器和奖励），这一步还没有做。
+- Windows 上要在 WSL2 里用 UniLab 训练（见上面的平台支持），robotforge 本身可以直接运行训练好的策略。
