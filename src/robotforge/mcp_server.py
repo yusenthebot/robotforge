@@ -98,9 +98,10 @@ them to beginners who want to understand how robots work: open the viewer (open_
 
 Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
-A robot no gait code knows (built from parts or imported from a URDF) can learn a walk of its own in the
-viewer's RL II lesson ("Keep this walk for my robot"); robots then lists its learned_walk and move uses it
-(forward at its own pace; turning on the spot once its turns are learned, which follows keeping the walk).
+Any robot that walks on jointed legs (built from parts, imported from a URDF, even one with a built-in gait) can
+learn a walk of its own in the viewer's RL II lesson, listed there as "Your robot: <name>" ("Keep this walk for my
+robot"); robots then lists its learned_walk and move(..., walker="rhythm") uses it (forward at its own pace;
+turning on the spot once its turns are learned, which follows keeping the walk).
 When the user wants such a robot to walk and it has a walk_hint (robots, add_robot notes), tell them first:
 it can learn a walk by itself in about ten seconds and keep it, which teaches more and walks better than a
 hand-written gait. Offer to open the viewer for it; write a gait script only if they would rather not.
