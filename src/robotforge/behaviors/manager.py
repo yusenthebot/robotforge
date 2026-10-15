@@ -163,13 +163,17 @@ class BehaviorManager:
             raise BehaviorError(wording.unknown("robot", robot, names))
         if not slash:
             return found
-        return wording.match(robot, self.arms(found)) or f"{found}/{part}"  # a wrong part is named by _arm_name
+        arms = self.arms(found)
+        arm = wording.match(robot, arms)
+        if arm is None:
+            carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
+            raise BehaviorError(f"'{found}/{part}' is not an arm: {found} carries {carries}")
+        return arm
 
     def kind(self, robot: str) -> Kind:
         world = self._world()  # read once: it comes from the file
         robot = self._resolve(robot, world)
         if "/" in robot:  # "rover/arm": an arm mounted on a robot is an arm, whatever carries it
-            self._check_mounted_arm(robot)
             return Kind.ARM
         if world is not None:
             entry = next(r for r in world.robots if r.name == robot)
@@ -440,19 +444,10 @@ class BehaviorManager:
                 found.append(name.removesuffix("/tcp"))
         return found
 
-    def _check_mounted_arm(self, robot: str) -> None:
-        """ "owner/part" must be one of the arms mounted on the owner; otherwise say which arms it carries."""
-        owner = robot.split("/", 1)[0]
-        arms = self.arms(owner)
-        if robot not in arms:
-            carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
-            raise BehaviorError(f"{robot!r} is not an arm: {owner} carries {carries}")
-
     def _arm_name(self, robot: str) -> str:
         """Which arm a command means: "rover/arm" names one; a robot with a single arm stands for it."""
         robot = self.resolve(robot)  # unknown robots get the usual message
         if "/" in robot:
-            self._check_mounted_arm(robot)
             return robot
         kind = self.kind(robot)
         arms = self.arms(robot)

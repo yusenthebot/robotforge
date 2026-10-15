@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import copy
 
 import mujoco
 import numpy as np
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge.cli import find_free_port
 from robotforge.design import builder
 from robotforge.design.world import World, compile_world
+from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim.geometry import collides, lowest_point
 from robotforge.sim.session import SimSession
@@ -368,6 +372,25 @@ def test_the_arm_on_a_rover_is_an_arm_to_move_and_pose_and_says_who_carries_it(p
         pg.behaviors.strike_pose("mm/arm", "wave")
     with pytest.raises(ValueError, match=r"'mm/claw' is not an arm: mm carries mm/arm"):
         pg.behaviors.move("mm/claw", 0.2, 0.0)
+
+
+def test_the_tools_name_the_arms_a_rover_carries_and_say_what_fits_them(pg):
+    """The move tool read the robot's pose before anything else, so "mm/claw" was answered with "no robot named"."""
+    pg.add_robot("mm", build=MOBILE_ARM)
+    server = build_server(pg, find_free_port(8790))
+
+    def refused(tool, **args) -> str:
+        async def call():
+            with pytest.raises(ToolError) as caught:
+                await server.call_tool(tool, args)
+            return str(caught.value)
+
+        return asyncio.run(call())
+
+    assert "the arm mounted on mm: drive mm with move" in refused("move", robot="mm/arm", speed=0.2)
+    assert "'mm/claw' is not an arm: mm carries mm/arm" in refused("move", robot="mm/claw", speed=0.2)
+    assert "'mm/claw' is not an arm: mm carries mm/arm" in refused("move_arm", robot="mm/claw", position=[0.3, 0, 0.2])
+    assert "mm/arm is an arm, and only humanoids strike poses" in refused("pose", robot="mm/arm", name="wave")
 
 
 def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
