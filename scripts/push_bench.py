@@ -1,9 +1,10 @@
 """Do our quadrupeds take a push? Measure it.
 
-    uv run python scripts/push_bench.py [--robots dog,go2] [--states stand,trot] [--pushes ...] [--jobs 4]
+    uv run python scripts/push_bench.py [--robots dog,go2] [--states fresh,stand,trot] [--pushes ...] [--jobs 4]
 
 Each run puts one robot on flat ground under its built-in gait (`move(robot, ..., walker="gait")`),
-standing still or trotting at 0.3 m/s, lets it settle for two seconds and then pushes it:
+standing still or trotting at 0.3 m/s, or leaves it as the world opened it, never moved ("fresh": what a
+beginner who opens a world and grabs the dog gets), lets it settle for two seconds and then pushes it:
 - shove0.5: 0.5 m/s added to the trunk's sideways velocity in one go (front0.5: forwards);
 - drag0.4: the viewer's drag spring pulls the trunk origin 0.4 m to the left over 2 s, then lets go
   (dragtop0.4: grabbed 4 cm higher, on its back, where a mouse usually picks it; dragrear0.4 and
@@ -13,7 +14,7 @@ flipped (upside down), its largest tilt, where it ended up sideways from where i
 trotting robot that includes any change of heading, also reported), the lowest its trunk sank, and
 whether it recovered: upright, at its usual height and, standing, still again; or trotting, still
 walking forward. The library Go2 needs ROBOTFORGE_MENAGERIE (the test fixtures work offline) or a
-download.
+download. "built_dog" and "hexapod" are robots built from parts, with the specs tests/test_builder.py uses.
 """
 
 from __future__ import annotations
@@ -26,9 +27,13 @@ import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
 
 ROBOTS = {"dog": {"template": "quadruped"}, "go2": {"library": "go2"}}
-STATES = {"stand": 0.0, "trot": 0.3}  # commanded forward speed, m/s
+BUILT = {"built_dog": "DOG", "hexapod": "HEXAPOD"}  # robot -> its build spec in tests/test_builder.py
+# Commanded forward speed, m/s; None: never moved, on whatever the world gave it when it opened.
+STATES: dict[str, float | None] = {"fresh": None, "stand": 0.0, "trot": 0.3}
 PUSHES = ("shove0.3", "shove0.5", "shove0.7", "front0.7", "drag0.4", "dragtop0.4")
 SETTLE = 2.0  # s on the gait before the push
 WATCH = 5.0  # s watched after the push (after letting go, for a drag)
@@ -56,6 +61,16 @@ class Result:
     note: str = ""
 
 
+def _robot(robot: str) -> dict[str, Any]:
+    """add_robot's arguments for `robot`."""
+    if robot in ROBOTS:
+        return ROBOTS[robot]
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+    import test_builder
+
+    return {"build": getattr(test_builder, BUILT[robot])}
+
+
 def run(robot: str, state: str, push: str) -> Result:
     import mujoco
     import numpy as np
@@ -65,7 +80,7 @@ def run(robot: str, state: str, push: str) -> Result:
     os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_push_")
     pg = Playground.with_demo()
     pg.new_world(f"push_{robot}_{state}_{push}".replace(".", "_"))
-    pg.add_robot(robot, **ROBOTS[robot])
+    pg.add_robot(robot, **_robot(robot))
     session, behaviors = pg.session, pg.behaviors
     model, data = session.model, session.data
     trunk = next(
@@ -75,9 +90,11 @@ def run(robot: str, state: str, push: str) -> Result:
         and model.body(int(model.jnt_bodyid[j])).name.startswith(f"{robot}/")
     )
     dof = int(model.jnt_dofadr[model.body_jntadr[trunk]])
-    speed = STATES[state]
-    legged = behaviors.kind(robot).value == "quadruped"  # a hexapod has only the built-in gait
-    behaviors.move(robot, speed, 0.0, walker="gait" if legged else None)
+    command = STATES[state]
+    speed = command or 0.0
+    if command is not None:
+        legged = behaviors.kind(robot).value == "quadruped"  # a hexapod has only the built-in gait
+        behaviors.move(robot, speed, 0.0, walker="gait" if legged else None)
     pg.run_fast(lambda: False, SETTLE)
 
     rot = data.xmat[trunk].reshape(3, 3)
@@ -151,7 +168,7 @@ def _run(args: tuple[str, str, str]) -> Result:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--robots", default=",".join(ROBOTS))
+    parser.add_argument("--robots", default=",".join(ROBOTS), help=f"also: {', '.join(BUILT)}")
     parser.add_argument("--states", default=",".join(STATES))
     parser.add_argument("--pushes", default=",".join(PUSHES))
     parser.add_argument("--jobs", type=int, default=4)
@@ -160,10 +177,12 @@ def main(argv: list[str] | None = None) -> int:
     jobs = [(r, s, p) for r in args.robots.split(",") for s in args.states.split(",") for p in args.pushes.split(",")]
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(_run, jobs))
-    print("robot    state  push        fell  flip  max tilt  displaced m  sank  recovered  final tilt  fwd m/s  turned")
+    print(
+        "robot      state  push        fell  flip  max tilt  displaced m  sank  recovered  final tilt  fwd m/s  turned"
+    )
     for r in results:
         print(
-            f"{r.robot:<8} {r.state:<6} {r.push:<11} {'yes' if r.fell else '-':<5} {'yes' if r.flipped else '-':<5} "
+            f"{r.robot:<10} {r.state:<6} {r.push:<11} {'yes' if r.fell else '-':<5} {'yes' if r.flipped else '-':<5} "
             f"{r.max_tilt:7.1f}  {r.displaced:11.3f}  {r.sank:4.2f}  {'yes' if r.recovered else 'no':<9}  "
             f"{r.final_tilt:10.1f}  {r.forward:7.3f}  {r.turned:6.1f}  {r.note}"
         )
