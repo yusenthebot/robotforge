@@ -499,3 +499,18 @@ def test_a_task_of_our_own_needs_both_its_config_folder_and_its_name(tmp_path, c
     with pytest.raises(SystemExit):
         unilab_tool.main([*args, "--conf-dir", str(tmp_path)])
     assert "--conf-dir and --task-name go together" in capsys.readouterr().err
+
+
+def test_a_custom_task_folder_is_checked_before_anything_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(unilab, "checkout", lambda: pytest.fail("must not get as far as UniLab"))
+    with pytest.raises(unilab.UniLabError, match="has no task/my_dog/mujoco.yaml"):
+        unilab.start_training("my_dog", 10, "my_dog_walk", conf_dir=tmp_path)
+    owner = tmp_path / "task" / "my_dog" / "mujoco.yaml"
+    owner.parent.mkdir(parents=True)
+    owner.write_text("# @package _global_\nenv: {}\n", encoding="utf-8")
+    with pytest.raises(unilab.UniLabError, match="does not name its task"):
+        unilab.start_training("my_dog", 10, "my_dog_walk", conf_dir=tmp_path)
+    owner.write_text("training:\n  task_name: RobotforgeMyDog\n", encoding="utf-8")
+    assert unilab._custom_task(tmp_path, "my_dog") == "RobotforgeMyDog"
+    with pytest.raises(unilab.UniLabError, match="task names"):
+        unilab.start_training("../my_dog", 10, "my_dog_walk", conf_dir=tmp_path)

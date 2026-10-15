@@ -129,9 +129,15 @@ def jobs_dir() -> Path:
     return policies.user_dir().parent / "unilab" / "jobs"
 
 
-def start_training(task: str, iterations: int, name: str, num_envs: int | None = None) -> dict[str, Any]:
-    """Launch a UniLab training run in the background; returns the job id and where to watch it."""
-    if task not in TASKS:
+def start_training(
+    task: str, iterations: int, name: str, num_envs: int | None = None, conf_dir: Path | None = None
+) -> dict[str, Any]:
+    """Launch a UniLab training run in the background; returns the job id and where to watch it.
+
+    `conf_dir` trains a task of our own (e.g. a robotforge robot exported by
+    scripts/unilab_export_quadruped.py): it holds task/<task>/mujoco.yaml, outside UniLab's tree."""
+    custom = _custom_task(conf_dir, task) if conf_dir is not None else None
+    if custom is None and task not in TASKS:
         raise UniLabError(f"robotforge can train {', '.join(TASKS)} with UniLab, not {task!r}")
     if not 1 <= iterations <= MAX_ITERATIONS:
         raise UniLabError(f"iterations must be 1..{MAX_ITERATIONS} (UniLab's default for {task} is 151)")
@@ -144,7 +150,7 @@ def start_training(task: str, iterations: int, name: str, num_envs: int | None =
     job = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
     folder = jobs_dir() / job
     folder.mkdir(parents=True)
-    spec = TASKS[task]
+    spec = TASKS[task] if custom is None else {"algo": "ppo", "robot": None}
     args = [
         str(python),
         str(TOOL),
@@ -163,9 +169,11 @@ def start_training(task: str, iterations: int, name: str, num_envs: int | None =
         str(folder / "policy"),
         "--name",
         name,
-        "--robot",
-        spec["robot"],
     ]
+    if spec["robot"]:
+        args += ["--robot", spec["robot"]]
+    if custom is not None:
+        args += ["--conf-dir", str(conf_dir), "--task-name", custom]
     if num_envs:
         args += ["--num-envs", str(num_envs)]
     try:
@@ -179,7 +187,7 @@ def start_training(task: str, iterations: int, name: str, num_envs: int | None =
     _STARTED[proc.pid] = proc
     job_info = {"job": job, "task": task, "iterations": iterations, "name": name, "pid": proc.pid, "command": args}
     (folder / "job.json").write_text(json.dumps(job_info, indent=1), encoding="utf-8")
-    estimate = iterations * spec["seconds_per_iteration"]
+    estimate = iterations * spec.get("seconds_per_iteration", 0.8)
     return {
         "job": job,
         "pid": proc.pid,
@@ -189,6 +197,21 @@ def start_training(task: str, iterations: int, name: str, num_envs: int | None =
         "estimated_minutes": round(estimate / 60 + 0.5, 1),  # plus about 30 s to start and export
         "status_file": str(folder / "status.json"),
     }
+
+
+def _custom_task(conf_dir: Path, task: str) -> str:
+    """The training.task_name of conf_dir/task/<task>/mujoco.yaml, checked before UniLab starts."""
+    if not NAME_RE.match(task):
+        raise UniLabError("task names use lowercase letters, digits and _, start with a letter")
+    owner = conf_dir / "task" / task / "mujoco.yaml"
+    try:
+        text = owner.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise UniLabError(f"{conf_dir} has no task/{task}/mujoco.yaml (the UniLab task config)") from None
+    found = re.search(r"^\s+task_name:\s*([A-Za-z][A-Za-z0-9_]*)\s*$", text, re.M)
+    if found is None:
+        raise UniLabError(f"{owner} does not name its task (training.task_name)")
+    return found.group(1)
 
 
 def _detached() -> dict[str, Any]:

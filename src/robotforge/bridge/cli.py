@@ -21,7 +21,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     usub = p.add_subparsers(dest="unilab_command", required=True)
     usub.add_parser("check", help=f"check the UniLab checkout named by ${unilab.ENV_VAR}")
     t = usub.add_parser("train", help="train a policy in the background, export it to ONNX and install it")
-    t.add_argument("--task", default="go2_joystick_flat", choices=sorted(unilab.TASKS))
+    t.add_argument(
+        "--task", default="go2_joystick_flat", help=f"one of {', '.join(sorted(unilab.TASKS))}, or a task in --conf-dir"
+    )
+    t.add_argument(
+        "--conf-dir", type=Path, default=None, help="folder with task/<task>/mujoco.yaml (a robot of your own)"
+    )
     t.add_argument("--iterations", type=int, default=1000)
     t.add_argument("--name", default="go2_walk_trained", help="name of the installed policy")
     t.add_argument("--num-envs", type=int, default=None, help="parallel simulations (UniLab's default: 1024)")
@@ -45,7 +50,7 @@ def run(args: argparse.Namespace) -> int:
         if command == "check":
             return _print(unilab.check())
         if command == "train":
-            started = unilab.start_training(args.task, args.iterations, args.name, args.num_envs)
+            started = unilab.start_training(args.task, args.iterations, args.name, args.num_envs, args.conf_dir)
             _print(started)
             return _follow(started["job"]) if args.wait else 0
         if command == "status":
