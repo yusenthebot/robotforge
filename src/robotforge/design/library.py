@@ -204,7 +204,7 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         spec = mujoco.MjSpec.from_file(str(path))
     except ValueError as exc:
         raise LibraryError(f"MuJoCo could not read {path}: {exc}") from exc
-    key_qpos, key_ctrl = _read_key(spec, robot.home_key)
+    key_qpos, key_ctrl = read_key(spec, robot.home_key)
     notes = [f"{robot.title} from MuJoCo Menagerie ({robot.license}, {robot.maker})"]
     if robot.servo_kp is not None:
         converted = _motors_to_servos(spec, robot.servo_kp)
@@ -220,19 +220,29 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         spec.delete(light)
     for key in list(spec.keys):
         spec.delete(key)
-    root = spec.worldbody.first_body()
-    if root is None:
+    if spec.worldbody.first_body() is None:
         raise LibraryError(f"{robot.title}: the model has no bodies")
+    home_qpos, home_ctrl, spawn, floating = stand_at_home(spec, key_qpos, key_ctrl)
+    return BuiltRobot(
+        spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
+    )
+
+
+def stand_at_home(
+    spec: mujoco.MjSpec, key_qpos: np.ndarray | None, key_ctrl: np.ndarray | None
+) -> tuple[dict[str, float], dict[str, float], float, bool]:
+    """Ready a robot's spec (with at least one body) to stand in a world in its home pose: a floating base moves to
+    the origin, turned the way its keyframe has it. Returns the home joint values, the actuator values, the height
+    that puts it on the floor and whether its base floats."""
+    root = spec.worldbody.first_body()
     floating = any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints)
     if floating:
         # Place the base by its keyframe orientation; height comes from the lowest point below.
         root.pos = [0.0, 0.0, 0.0]
         if key_qpos is not None:
             root.quat = key_qpos[3:7].tolist()
-    home_qpos, home_ctrl, spawn = _home_pose(spec, key_qpos, key_ctrl, floating)
-    return BuiltRobot(
-        spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
-    )
+    home_qpos, home_ctrl, spawn = home_pose(spec, key_qpos, key_ctrl, floating)
+    return home_qpos, home_ctrl, spawn, floating
 
 
 def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
@@ -248,7 +258,7 @@ def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
         actuator.name = "gripper"
 
 
-def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:
+def read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:
     if name is None:
         return None, None
     key = next((k for k in spec.keys if k.name == name), None)
@@ -295,7 +305,7 @@ def _motors_to_servos(spec: mujoco.MjSpec, kp: float) -> int:
     return count
 
 
-def _home_pose(
+def home_pose(
     spec: mujoco.MjSpec, key_qpos: np.ndarray | None, key_ctrl: np.ndarray | None, floating: bool
 ) -> tuple[dict[str, float], dict[str, float], float]:
     """Joint and actuator values of the home pose, and the base height that puts it on the floor."""

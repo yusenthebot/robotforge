@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import mujoco
 import numpy as np
 import pytest
+from importer_fixtures import CRITTER_HOME, critter_mjcf, write
 from pydantic import ValidationError
 
 from robotforge.design import templates
@@ -8,6 +11,8 @@ from robotforge.design.store import WorldStore, slug
 from robotforge.design.world import World, compile_world
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim.session import SimSession
+
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"
 
 
 def _settle(model: mujoco.MjModel, seconds: float = 2.0) -> mujoco.MjData:
@@ -207,3 +212,45 @@ def test_world_files_are_utf8_with_lf_endings(tmp_path):
     store.apply(lambda w: w.robots.append(_entry("dog", "quadruped")))
     for path in (store.file, store.build_dir / "world.xml", *store.history.glob("*.yaml")):
         assert b"\r" not in path.read_bytes(), path
+
+
+def test_an_mjcf_file_names_what_it_left_unnamed_and_starts_in_its_home_keyframe(tmp_path):
+    """Regression: attaching prefixes only the names a file gave, so the unnamed motors of a hand-written MJCF belonged
+    to no robot and nothing could find or drive them; and its home keyframe was dropped with the file's other keys,
+    so it started straight-legged instead of crouched."""
+    write(tmp_path / "critter.xml", critter_mjcf())
+    compiled = compile_world(World.model_validate({"robots": [{"name": "crab", "file": "critter.xml"}]}), tmp_path)
+    model = compiled.model
+    motors = sorted(model.actuator(a).name for a in range(model.nu))
+    assert motors == sorted(f"crab/{joint}{i}" for i in range(4) for joint in ("hip", "knee"))  # after their joints
+    assert model.body("crab/thigh0").id > 0 and all(model.body(b).name for b in range(model.nbody))
+    hip, knee = CRITTER_HOME
+    home = model.key("home")
+    for i in range(4):
+        assert home.qpos[model.jnt_qposadr[model.joint(f"crab/knee{i}").id]] == pytest.approx(knee)
+        assert home.ctrl[model.actuator(f"crab/hip{i}").id] == pytest.approx(hip)  # its motors aim at the crouch
+    assert any("'home' keyframe" in n for n in compiled.notes)
+    trunk = model.body("crab/trunk").id
+    start = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, start, 0)
+    mujoco.mj_forward(model, start)
+    data = _settle(model, 1.0)
+    assert data.xmat[trunk][8] > 0.95  # stands on the world's floor (the file's own floor is gone)
+    assert abs(data.xpos[trunk][2] - start.xpos[trunk][2]) < 0.02  # placed on its feet, not dropped
+    assert data.qpos[model.jnt_qposadr[model.joint("crab/knee0").id]] == pytest.approx(knee, abs=0.1)
+
+
+@pytest.mark.parametrize("path", sorted(MENAGERIE.glob("*/*.xml")), ids=lambda p: p.parent.name)
+def test_menagerie_models_load_from_their_mjcf_file_in_their_home_pose(path):
+    """The offline Menagerie stand-ins, added by file rather than from the library: every motor belongs to the robot,
+    the home pose is the file's (the G1's first keyframe is called stand) and the world runs."""
+    alone = mujoco.MjModel.from_xml_path(str(path))
+    key = next((k for k in range(alone.nkey) if alone.key(k).name == "home"), 0)
+    model = compile_world(World.model_validate({"robots": [{"name": "it", "file": str(path)}]})).model
+    assert model.nu == alone.nu and all(model.actuator(a).name.startswith("it/") for a in range(model.nu))
+    joints = [j for j in range(alone.njnt) if int(alone.jnt_type[j]) != mujoco.mjtJoint.mjJNT_FREE]
+    want = [alone.key(key).qpos[alone.jnt_qposadr[j]] for j in joints]
+    mine = [model.key("home").qpos[model.jnt_qposadr[model.joint(f"it/{alone.joint(j).name}").id]] for j in joints]
+    assert joints and mine == pytest.approx(want)
+    data = _settle(model, 0.5)
+    assert np.isfinite(data.qacc).all()
