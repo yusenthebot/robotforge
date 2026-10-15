@@ -177,3 +177,23 @@ def test_a_fall_forfeits_a_turn_begun_mid_stride_but_not_one_from_standing():
     standing = trainer.rollout(Rhythm.still(trainer.body.joints))
     assert standing["fell"] and standing["turned"] > 1.0
     assert standing["reward"] == pytest.approx(standing["turned"] - FALL_PENALTY - WANDER_WEIGHT * standing["wander"])
+    forfeit = Trainer(model, "dog", Reward(turn=1.0, forfeit=True), seconds=2.0)  # asked to, from standing too
+    assert forfeit.rollout(Rhythm.still(trainer.body.joints))["reward"] == pytest.approx(
+        -FALL_PENALTY - WANDER_WEIGHT * standing["wander"]
+    )
+
+
+def test_a_turn_can_be_rewarded_for_its_first_moments_only():
+    """Turns tuned to begin out of the walk were slow to get going when rewarded for all 4 s: rewarded for their
+    first second only (a fall in any of the 4 s still losing it), more of them reached 60% of their rate in it."""
+    model = _solo("dog", template="quadruped")
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    spinning = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
+    spinning.qvel[Body.find(model, "dog").qvel[5]] = 4.0  # rad/s of yaw, slowing down on its feet
+    still = Rhythm.still(Body.find(model, "dog").joints)
+    short = Trainer(model, "dog", Reward(turn=1.0), seconds=0.5).rollout(still, start=spinning)
+    whole = Trainer(model, "dog", Reward(turn=1.0), seconds=2.0).rollout(still, start=spinning)
+    early = Trainer(model, "dog", Reward(turn=1.0, early=0.5), seconds=2.0).rollout(still, start=spinning)
+    assert not whole["fell"] and short["turned"] > 0.1 and abs(whole["turned"] - short["turned"]) > 0.001
+    assert early["reward"] == pytest.approx(short["turned"] - WANDER_WEIGHT * whole["wander"])

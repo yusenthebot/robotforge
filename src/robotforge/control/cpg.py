@@ -256,6 +256,8 @@ class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
     survive: bool = False  # a fall also costs the seconds it did not stay up
     turn: float = 0.0  # 0: walk forward; +1 or -1: turn on the spot to the left or right (rad turned, less wander)
+    forfeit: bool = False  # turning: a fall forfeits the turn from standing too (begun mid-stride, it always does)
+    early: float = 0.0  # turning: count the angle turned in only the first this many seconds (0: all); falls count all
     heading: float = HEADING_WEIGHT  # walking forward: share of the distance lost per rad turned; 0 ignores it
     # Learning to hold a heading (a Steering): every try walks toward each of `aims` (rad from the heading it starts
     # at) and loses `hold` of its progress that way per rad it strayed from it on average, instead of `heading`.
@@ -333,6 +335,7 @@ class Trainer:
         origin = d.xpos[b.trunk][:2].copy()
         energy, fell, up = 0.0, False, self.seconds
         heading, turned, wander, stray = trunk_yaw(d, b), 0.0, 0.0, 0.0
+        early = 0.0
         steps = round(self.seconds * CONTROL_HZ)
         for k in range(steps):
             t = k / CONTROL_HZ
@@ -350,6 +353,8 @@ class Trainer:
             now = trunk_yaw(d, b)
             turned += math.atan2(math.sin(now - heading), math.cos(now - heading))  # unwrapped: whole turns count
             heading = now
+            if k + 1 == round(self.reward.early * CONTROL_HZ):
+                early = turned
             stray += abs(aim - turned) / steps
             # The farthest it got, not where it ended: circling round a point comes back to the start.
             wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - origin)))
@@ -364,10 +369,11 @@ class Trainer:
         if self.reward.turn:
             # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off. Begun
             # mid-stride, a fall forfeits the turn: a fast spin that ended on its back out of the walk scored more
-            # than a slower one that stays up. From standing it does not, so turns learned from standing are the
-            # ones they always were (forfeiting there too turned an imported A1's 1 s turns 165 degrees into 61 on
-            # one of 6 walks, and 132 into 109 on average, after the robot had stood still).
-            turn = 0.0 if fell and start is not None else self.reward.turn * turned
+            # than a slower one that stays up. From standing only if asked: forfeiting there always turned an
+            # imported A1's 1 s turns 165 degrees into 61 on one of 6 walks, and 132 into 109 on average, after
+            # the robot had stood still.
+            forfeit = fell and (start is not None or self.reward.forfeit)
+            turn = 0.0 if forfeit else self.reward.turn * (early if self.reward.early else turned)
             reward = turn - WANDER_WEIGHT * wander - cost
         else:
             # Forward: the distance counts for less the more the heading turned, so a walk that curves round
