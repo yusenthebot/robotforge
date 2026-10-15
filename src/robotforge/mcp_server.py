@@ -550,6 +550,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             store = playground._require_store()
             path = _script_path(store.dir, name)
+            code, fenced = _unfence(code)
             try:
                 compile(code, path.name, "exec")  # parses only: nothing runs
             except (SyntaxError, ValueError) as exc:
@@ -561,7 +562,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             path.parent.mkdir(exist_ok=True)
             with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
                 f.write(code)
-            return _json({"saved": str(path), "lines": code.count("\n") + 1})
+            saved = {"saved": str(path), "lines": code.count("\n") + 1}
+            return _json({**saved, "note": "the ``` fence around the code was removed"} if fenced else saved)
 
     @server.tool()
     def read_script(name: str) -> str:
@@ -723,6 +725,14 @@ def _tool_errors() -> Iterator[None]:
 
 
 SCRIPT_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
+CODE_FENCE = re.compile(r"\A\s*```[\w-]*[ \t]*\n(.*?)\n?[ \t]*```\s*\Z", re.DOTALL)
+
+
+def _unfence(code: str) -> tuple[str, bool]:
+    """Code as an agent often sends it, inside a markdown fence. Python cannot start with backticks, so the
+    fence is never part of the script."""
+    fenced = CODE_FENCE.match(code)
+    return (fenced[1] + "\n", True) if fenced else (code, False)
 
 
 def _script_path(world_dir: Path, name: str) -> Path:

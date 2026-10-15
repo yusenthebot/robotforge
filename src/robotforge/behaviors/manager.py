@@ -66,7 +66,7 @@ def _clamp_notes(ctrl: Any, speed: float, turn: float) -> list[str]:
     got_turn = getattr(ctrl, "command_turn", getattr(ctrl, "turn", turn))
     notes = []
     if top is not None and abs(speed) > top + 1e-9 and abs(got_speed - speed) > 1e-9:
-        notes.append(f"speed {speed:g} m/s is above max_speed {top:g}, so it moves at {got_speed:g}")
+        notes.append(f"speed {speed:g} m/s is above max_speed {top:.3g}, so it moves at {got_speed:.3g}")
     if abs(got_turn - turn) > 1e-9:
         note = f"turn {turn:g} rad/s is above the limit for this robot, so it turns at {got_turn:g}"
         if abs(turn) > 2 * math.pi:

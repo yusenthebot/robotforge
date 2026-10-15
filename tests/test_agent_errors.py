@@ -250,6 +250,13 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             {"robot": "dog", "velocity": 0.2},
             ["no parameter 'velocity'", "did you mean speed", "robot, speed, turn"],
         ),
+        ("move", {"robot": "dog", "distance": 2}, ["no parameter 'distance'", "speed (m/s) and seconds", "distance_m"]),
+        (
+            "move_arm",
+            {"robot": "arm", "x": 0.2, "y": 0, "z": 0.1},
+            ["no parameter 'x'", "position is one list [x, y, z]"],
+        ),
+        ("simulate", {"steps": 100}, ["no parameter 'steps'", "give seconds"]),
         ("move", {"robot": "dog", "seconds": 3000}, ["seconds must be in (0, 60]", "got 3000", "not milliseconds"]),
         ("move", {"robot": "arm"}, ["arm is an arm", "move_arm"]),
         ("move", {"robot": "dog", "walker": "sprint"}, ["no policy named 'sprint'", "'gait'"]),
@@ -339,6 +346,13 @@ async def test_a_refusal_names_the_mistake_and_the_way_out(lab, tool, args, says
     for piece in says:
         assert piece in text, f"{piece!r} not in {text!r}"
     assert len(text) < 320, f"{len(text)} characters: {text}"
+
+
+async def test_code_in_a_markdown_fence_is_saved_without_it(lab):
+    out = json.loads(await lab.accepted("write_script", name="fenced", code="```python\nprint('hi')\n```\n"))
+    assert "fence" in out["note"] and out["lines"] == 2
+    assert await lab.accepted("read_script", name="fenced") == "print('hi')\n"
+    await lab.restore()
 
 
 async def test_a_script_that_does_not_parse_is_not_saved(lab):

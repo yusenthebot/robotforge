@@ -116,6 +116,20 @@ FORMS = {
 NUMBERS = re.compile(r"[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)*\s*[\])]?")
 COORDINATES = ("x", "y", "z")
 SETTINGS = ("params", "options", "task_params")  # the parameters that hold a thing's own settings
+# What to say about a parameter an agent reaches for that a tool does not have, by (tool, parameter).
+HINTS = {
+    ("move", "distance"): "give speed (m/s) and seconds; the result reports distance_m",
+    ("move", "direction"): "speed is negative for backwards and turn (rad/s) is positive for left",
+    ("add_object", "radius"): "size is [diameter] for a sphere, [diameter, height] for a cylinder",
+    ("add_object", "diameter"): "size is [diameter] for a sphere, [diameter, height] for a cylinder",
+    ("add_object", "length"): "size is [length, width, height] in meters",
+    ("add_object", "width"): "size is [length, width, height] in meters",
+    ("add_object", "height"): "size is [length, width, height] in meters",
+    ("move_arm", "x"): "position is one list [x, y, z]",
+    ("move_arm", "y"): "position is one list [x, y, z]",
+    ("move_arm", "z"): "position is one list [x, y, z]",
+    ("simulate", "steps"): "give seconds (time passes in steps of the model's timestep)",
+}
 MAX_ERRORS = 3  # problems named in one answer; fix these and the rest follow
 
 
@@ -212,7 +226,10 @@ def unknown_parameters(tool: str, extra: Sequence[str], params: Sequence[str]) -
         return f"{tool} takes no parameters (got {named})"
     close = [c[0] for k in extra if (c := wording.near(k, params, SYNONYMS, n=1))]
     text = f"{tool} has no parameter {named}"
-    if close:
+    hint = next((HINTS[tool, k] for k in extra if (tool, k) in HINTS), None)
+    if hint:
+        text += f"; {hint}"
+    elif close:
         text += f"; did you mean {', '.join(close)}?"
     elif settings := next((p for p in SETTINGS if p in params), None):
         text += f"; settings of the thing itself go in {settings}"
