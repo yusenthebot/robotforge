@@ -20,6 +20,7 @@ from pydantic import ValidationError
 
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import importer, scenes, terrain
+from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height
 from robotforge.sim.render import VIEWS, SnapshotRenderer
@@ -166,6 +167,7 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float = 0.0,
         library: str | None = None,
+        build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
             entry = RobotEntry(
@@ -173,6 +175,7 @@ class Playground:
                 template=template,
                 file=file,
                 library=library,
+                build=build,
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw,
@@ -200,6 +203,7 @@ class Playground:
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float | None = None,
+        build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -209,6 +213,38 @@ class Playground:
                 robot.pos = pos
             if yaw is not None:
                 robot.yaw = yaw
+            if build is not None:
+                _built(robot).build = build
+
+        return self._edit(change)
+
+    # ---- robots built from parts ------------------------------------------------------
+
+    @_one_edit_at_a_time
+    def add_part(self, robot: str, part: dict[str, Any]) -> dict[str, Any]:
+        return self._edit_build(robot, lambda b: build_edit.add_part(b, part))
+
+    @_one_edit_at_a_time
+    def update_part(self, robot: str, part: str, changes: dict[str, Any]) -> dict[str, Any]:
+        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes))
+
+    @_one_edit_at_a_time
+    def remove_part(self, robot: str, part: str) -> dict[str, Any]:
+        removed: list[str] = []
+
+        def change(b: dict[str, Any]) -> dict[str, Any]:
+            new, gone = build_edit.remove_part(b, part)
+            removed.extend(gone)
+            return new
+
+        result = self._edit_build(robot, change)
+        result["removed_parts"] = removed
+        return result
+
+    def _edit_build(self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+        def change(w: World) -> None:
+            entry = _built(_find(w.robots, robot, "robot"))
+            entry.build = change_build(entry.build)
 
         return self._edit(change)
 
@@ -530,6 +566,23 @@ def _unused(name: str, taken: set[str]) -> str:
         n += 1
         out = f"{name}_{n}"
     return out
+
+
+def _built(robot: RobotEntry) -> RobotEntry:
+    if robot.build is None:
+        source = (
+            f"the {robot.template} template"
+            if robot.template
+            else f"the robot library ({robot.library})"
+            if robot.library
+            else "a file"
+        )
+        raise PlaygroundError(
+            f"{robot.name} comes from {source}; parts can only be edited on robots built from parts "
+            "(add_robot with build=...). To build on a template, mount it as a part: "
+            '{"name": "arm", "robot": {"template": "arm"}}'
+        )
+    return robot
 
 
 def _find(items: list, name: str, kind: str):

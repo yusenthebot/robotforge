@@ -30,6 +30,8 @@ from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
+from robotforge.design.builder import edit as build_edit
+from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
 from robotforge.playground import Playground, PlaygroundError
@@ -48,14 +50,17 @@ INSTRUCTIONS = """\
 robotforge is a robot playground backed by the MuJoCo physics engine, made for beginners.
 
 Design: new_world creates a world (saved as world.yaml). list_templates shows the robot templates
-(arm, quadruped, humanoid, rover) and their parameters; list_library shows real robots (Unitree Go2,
-Franka Panda, ...); add_robot builds one from a template, takes one from the library or imports a file
-(URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; URDFs and meshes are repaired by the
-import doctor, whose report comes back in the result's "doctor" field). add_object places boxes, balls,
-cylinders, tables and bins, and furniture and architecture (walls, shelves, counters, pallets, trees,
-benches, rocks, flat ground markers). update_robot, update_object, remove, set_floor and undo edit the
-world; every edit is validated and the live viewer updates immediately. Names are lowercase with
-underscores. Units are meters, kilograms, radians for joints and degrees for yaw.
+(arm, quadruped, humanoid, rover, cartpole, gripper) and their parameters; list_library shows real
+robots (Unitree Go2, Franka Panda, ...); add_robot builds one from a template, takes one from the
+library or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; URDFs and
+meshes are repaired by the import doctor, whose report comes back in the result's "doctor" field).
+Templates are only a starting point: add_robot(build=...) builds any robot from parts (a hexapod, a
+snake, a self-balancing robot, an arm on a rover); read builder_guide first, then add_part /
+update_part / remove_part edit it piece by piece. add_object places boxes, balls, cylinders, tables
+and bins, and furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks,
+flat ground markers). update_robot, update_object, remove, set_floor and undo edit the world; every edit is
+validated and the live viewer updates immediately. Names are lowercase with underscores. Units are
+meters, kilograms, radians for joints and degrees for yaw (the builder takes degrees for joints too).
 
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse,
 park, maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground
@@ -63,8 +68,10 @@ with hills, rough ground, stairs, ramps, stepping stones, curbs and platforms; r
 on whatever ground is under them. To build a scene from a sentence, combine load_scene, add_terrain and
 add_object, then check it with observe(view="overview").
 
-Behavior: move walks a quadruped or a humanoid or drives a rover; pose makes a humanoid wave, squat,
-bow or cheer; pick_and_place, move_arm and gripper work arms; robots lists robots with their positions.
+Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or a two-wheeled balancer and
+makes a snake slither; pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and
+gripper work arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots
+with their kind, arms and positions.
 For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
 prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer
 gives the user a live 3D view (they can also drive with WASD); offer it early, and when it is open,
@@ -148,8 +155,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover) with their parameters, defaults and limits,
-        and the parts catalog (servos and motors) that templates can use."""
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper) with their parameters,
+        defaults and limits, and the parts catalog (servos, motors, linear actuators) that robots can use.
+        For robots that no template fits, build one from parts (builder_guide)."""
         from robotforge.design import components, templates
 
         parts = {
@@ -191,9 +199,14 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         pos: list[float] | None = None,
         yaw: float = 0.0,
         library: str | None = None,
+        build: dict[str, Any] | None = None,
     ) -> str:
         """Add a robot to the open world: from a template (see list_templates), from the robot library
-        (see list_library, e.g. library="go2") or from a file.
+        (see list_library, e.g. library="go2"), from a file, or built from parts (build, see builder_guide).
+
+        build describes any robot as a base and parts, e.g. a two-wheeled balancer:
+        {"base": {"size": [0.07, 0.14, 0.22]}, "motor": "jga25", "parts": [{"name": "left_wheel",
+        "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025], "mirror": true}]}.
 
         file can be an MJCF (.xml), a URDF, a xacro, or a plain mesh (.stl .obj .dae .glb ...). URDFs and
         meshes go through the import doctor, which repairs mesh paths, formats, mass and inertia, adds motors
@@ -210,22 +223,28 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         pos is [x, y] in meters (height is automatic for templates, library robots and imports); yaw is in degrees.
         """
         with _tool_errors():
-            if library is not None:
-                await _download_with_progress(library, ctx)
+            for wanted in [library, *build_edit.libraries_in(build)]:
+                if wanted is not None:
+                    await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
             added = await asyncio.to_thread(
-                playground.add_robot, name, template, file, params, pos, yaw, library=library
+                playground.add_robot, name, template, file, params, pos, yaw, library=library, build=build
             )
             return _json(added)
 
     @server.tool()
     def update_robot(
-        name: str, params: dict[str, Any] | None = None, pos: list[float] | None = None, yaw: float | None = None
+        name: str,
+        params: dict[str, Any] | None = None,
+        pos: list[float] | None = None,
+        yaw: float | None = None,
+        build: dict[str, Any] | None = None,
     ) -> str:
-        """Change a robot's template parameters (merged into existing ones), position or heading."""
+        """Change a robot's template parameters (merged into existing ones), position or heading. For a robot
+        built from parts, build replaces its whole description (add_part / update_part change one part)."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw))
+            return _json(playground.update_robot(name, params, pos, yaw, build))
 
     @server.tool()
     def add_object(
@@ -316,7 +335,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
-        """Walk a quadruped or a humanoid, or drive a rover. speed in m/s (negative = backwards), turn in rad/s
+        """Walk a quadruped, hexapod or humanoid, drive a rover or a two-wheeled balancer, or make a snake
+        slither. speed in m/s (negative = backwards), turn in rad/s
         (positive = left); each robot's max_speed is listed by `robots` (humanoids are slow, about 0.1 m/s, and
         take a moment to start and stop stepping). With `seconds`, moves for that long then stops and reports
         how far it went; with seconds=null it keeps moving until `stop`. If the viewer is open the user
@@ -351,6 +371,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
+    builder_tools.register(server, playground)
     lessons.register(server)
 
     @server.tool()
@@ -373,7 +394,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
         """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or
-        closing the gripper on the way. Fails with an explanation if the point is out of reach."""
+        closing the gripper on the way. Fails with an explanation if the point is out of reach. robot is an
+        arm, or a robot carrying one ("rover", or "rover/arm" to name the mounted arm)."""
         with _tool_errors():
             arm = playground.behaviors.move_arm(robot, position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
@@ -459,8 +481,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def robots() -> str:
-        """List robots in the world with their kind (arm, quadruped, humanoid, rover), where they are, which way they
-        face, whether they are upright, and any behavior running on them."""
+        """List robots in the world with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake,
+        other), the arms they carry, where they are, which way they face, whether they are upright, and any
+        behavior running on them."""
         with _tool_errors():
             out = []
             for info in playground.behaviors.robots():

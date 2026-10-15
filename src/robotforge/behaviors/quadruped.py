@@ -1,11 +1,13 @@
-"""Trot gait for four-legged robots: diagonal legs move together, feet follow simple arcs.
+"""Trot gait for four-legged robots (diagonal legs move together) and tripod gait for six-legged ones.
 
 Foot paths are planned open loop, with light feedback from the trunk: its attitude
 levels the body and its measured velocity corrects the stride. Foot targets are
 expressed in the trunk frame and turned into joint targets with numerical IK, so
 the gait only needs to know which joints form each leg. Legs come from our
-template's names or, for any other robot (library, imported), from its kinematic
-tree: four chains of three hinges from the floating trunk to a foot.
+template's names or, for any other robot (library, imported, built from parts), from
+its kinematic tree: four or six chains of three hinges from the floating trunk to a foot.
+A tripod gait is the trot's six-legged sibling: front and rear legs of one side step
+with the middle leg of the other, so three feet always hold the robot up.
 """
 
 from __future__ import annotations
@@ -22,6 +24,15 @@ from robotforge.sim.geometry import collides, lowest_point
 
 # Trot phase offset of each leg (diagonal pairs in phase). Also our template's leg names.
 TEMPLATE_LEGS = {"front_left": 0.0, "rear_right": 0.0, "front_right": 0.5, "rear_left": 0.5}
+# Tripod: two triangles of feet take turns.
+TRIPOD_LEGS = {
+    "front_left": 0.0,
+    "middle_right": 0.0,
+    "rear_left": 0.0,
+    "front_right": 0.5,
+    "middle_left": 0.5,
+    "rear_right": 0.5,
+}
 PLAN_HZ = 100.0  # foot targets and IK; torque-motor PD runs every physics step
 TEMPLATE_PERIOD = 0.36  # s per gait cycle for our template dog
 # Bigger robots step slower: about 0.36 s per cycle for a Go2-sized leg (hip to foot 0.28 m),
@@ -291,14 +302,14 @@ def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Qu
 
 
 def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> QuadrupedGait:
-    """Build a gait for any four-legged robot: our template by name, others by their kinematic tree."""
+    """Build a gait for any four- or six-legged robot: our template by name, others by their kinematic tree."""
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/front_left_foot") >= 0:
         return for_template(model, robot, home_qpos)
     found = discover_legs(model, robot, home_qpos)
     if found is None:
         raise ValueError(
-            f"robot {robot!r} does not look like a four-legged walker "
-            "(expected a floating trunk with four legs of three hinge joints each)"
+            f"robot {robot!r} does not look like a legged walker "
+            "(expected a floating trunk with four or six legs of three hinge joints each)"
         )
     root, legs = found
     return QuadrupedGait(model, robot, legs, root, home_qpos)
@@ -307,13 +318,14 @@ def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Quadr
 def discover_legs(
     model: mujoco.MjModel, robot: str, home_qpos: np.ndarray | None = None
 ) -> tuple[int, list[LegSpec]] | None:
-    """Find the four legs of a floating robot named `robot`, or None if it has no such legs.
+    """Find the four (or six) legs of a floating robot named `robot`, or None if it has no such legs.
 
     A leg is a chain of exactly three hinge joints from the trunk to a leaf body whose lowest
     collision geom (the foot) is at least 5 cm below the trunk origin at the home pose. Legs are
     named by where their hips are, assuming the trunk's +x points forward and +y left (the
-    convention of MuJoCo Menagerie and URDF). Robots with two-joint or four-joint legs, wheels on
-    the legs, or an extra leaf with three hinges that reaches the floor are not recognized.
+    convention of MuJoCo Menagerie and URDF); six legs are three per side, front to rear. Robots
+    with two-joint or four-joint legs, wheels on the legs, or an extra leaf with three hinges that
+    reaches the floor are not recognized.
     """
     prefix = f"{robot}/"
     bodies = [b for b in range(1, model.nbody) if _name(model, mujoco.mjtObj.mjOBJ_BODY, b).startswith(prefix)]
@@ -343,16 +355,22 @@ def discover_legs(
         if foot is None or foot[2][2] > -0.05:  # a leg reaches down below the trunk
             continue
         candidates.append((joints, foot[0], foot[1], data.xpos[model.jnt_bodyid[joints[0]]].copy()))
-    if len(candidates) != 4:
+    if len(candidates) not in (4, 6):
         return None
 
     center = np.mean([hip for *_, hip in candidates], axis=0)
-    legs: list[LegSpec] = []
-    for joints, body, point, hip in candidates:
-        name = f"{'front' if hip[0] > center[0] else 'rear'}_{'left' if hip[1] > center[1] else 'right'}"
-        legs.append((name, joints, body, point, TEMPLATE_LEGS[name]))
-    if len({leg[0] for leg in legs}) != 4:
+    sides: dict[str, list] = {"left": [], "right": []}
+    for leg in candidates:
+        sides["left" if leg[3][1] > center[1] else "right"].append(leg)
+    per_side = len(candidates) // 2
+    if any(len(side) != per_side for side in sides.values()):
         return None
+    rows = ("front", "rear") if per_side == 2 else ("front", "middle", "rear")
+    phases = TEMPLATE_LEGS if per_side == 2 else TRIPOD_LEGS
+    legs: list[LegSpec] = []
+    for side, members in sides.items():
+        for row, (joints, body, point, _hip) in zip(rows, sorted(members, key=lambda c: -c[3][0]), strict=True):
+            legs.append((f"{row}_{side}", joints, body, point, phases[f"{row}_{side}"]))
     return root_joint, legs
 
 

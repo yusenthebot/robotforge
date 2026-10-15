@@ -1,10 +1,10 @@
 """world.yaml: the single source of truth for a playground world, and its compiler to MuJoCo.
 
-A world has a floor, terrain (hills, stairs, ramps, ... see terrain.py), robots
-(from templates, the robot library or imported files) and loose or fixed objects
-(including furniture and architecture, see props.py). Every robot's names are
-prefixed with "<robot>/" so several robots can share a world without clashing.
-Robots and objects without an explicit height rest on the ground under them.
+A world has a floor, terrain (hills, stairs, ramps, ... see terrain.py), robots (from templates,
+the robot library, imported files or built from parts) and loose or fixed objects (including
+furniture and architecture, see props.py). Every robot's names are prefixed with "<robot>/" so
+several robots can share a world without clashing. Robots and objects without an explicit height
+rest on the ground under them.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import numpy as np
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from robotforge.design import components, importer, library, props, templates, terrain
+from robotforge.design import builder, components, importer, library, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
@@ -47,6 +47,7 @@ class RobotEntry(_Strict):
     template: str | None = None
     file: str | None = None  # MJCF or URDF path, relative to the world directory
     library: str | None = None  # a robot from the library, e.g. "go2" (see library.CATALOG)
+    build: dict[str, Any] | None = None  # built from parts: {"base": {...}, "parts": [...]} (see builder)
     params: dict[str, Any] = Field(default_factory=dict)
     pos: list[float] = Field(default_factory=lambda: [0.0, 0.0])  # x, y (and optional z) in meters
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
@@ -58,10 +59,17 @@ class RobotEntry(_Strict):
 
     @model_validator(mode="after")
     def _one_source(self) -> RobotEntry:
-        if [self.template, self.file, self.library].count(None) != 2:
-            raise ValueError(f"robot {self.name!r}: give exactly one of 'template', 'library' or 'file'")
+        if [self.template, self.file, self.library, self.build].count(None) != 3:
+            raise ValueError(f"robot {self.name!r}: give exactly one of 'template', 'library', 'file' or 'build'")
         if self.library is not None:
             library.get(self.library)
+        if self.build is not None:
+            if self.params:
+                raise ValueError(f"robot {self.name!r}: a built robot has no params; put everything in 'build'")
+            try:
+                builder.parse(self.build)
+            except ValueError as exc:
+                raise ValueError(f"robot {self.name!r}: {exc}") from None
         if len(self.pos) not in (2, 3):
             raise ValueError(f"robot {self.name!r}: pos is [x, y] or [x, y, z]")
         return self
@@ -231,6 +239,11 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
     if entry.library is not None:
         try:
             return library.build(entry.library, entry.params)
+        except ValueError as exc:
+            raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+    if entry.build is not None:
+        try:
+            return builder.build_robot(entry.build)
         except ValueError as exc:
             raise ValueError(f"robot {entry.name!r}: {exc}") from exc
     path = Path(entry.file).expanduser()

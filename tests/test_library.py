@@ -70,7 +70,7 @@ def test_unknown_library_robot_suggests_close_names(pg):
 
 
 def test_a_robot_has_exactly_one_source():
-    with pytest.raises(ValueError, match="exactly one of 'template', 'library' or 'file'"):
+    with pytest.raises(ValueError, match="exactly one of 'template', 'library', 'file' or 'build'"):
         RobotEntry(name="dog", template="quadruped", library="go2")
 
 
@@ -188,7 +188,7 @@ def test_legs_are_found_from_the_kinematic_tree(pg):
 def test_arms_are_not_mistaken_for_quadrupeds(pg):
     pg.add_robot("arm", library="so_arm100")
     assert robot_kind(pg.session.model, "arm") == Kind.OTHER
-    with pytest.raises(ValueError, match="only quadrupeds, humanoids and rovers"):
+    with pytest.raises(ValueError, match="only legged robots"):
         pg.behaviors.move("arm", 0.2, 0.0)
 
 

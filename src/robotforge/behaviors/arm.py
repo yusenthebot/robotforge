@@ -13,9 +13,9 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.sim.actuators import drives_joint
 
 DOWN = np.array([0.0, 0.0, -1.0])
-TOOL_AXIS = np.array([0.0, 0.0, 1.0])  # the hand's +z points out through the fingers
 SPEED = 0.18  # m/s tool speed
 APPROACH = 0.07  # m above a grasp or place point
 
@@ -32,40 +32,60 @@ class ArmMotion:
     rate_hz = 100.0
 
     def __init__(self, model: mujoco.MjModel, robot: str, home_qpos: np.ndarray):
+        """`robot` names the arm: a robot ("arm") or an arm mounted on one ("rover/arm")."""
         self.robot = robot
         site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/tcp")
         if site < 0:
             raise ValueError(f"robot {robot!r} has no tool point; is it an arm?")
         self.site = site
-        joints = [
-            j
-            for j in range(model.njnt)
-            if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or "").startswith(f"{robot}/")
-            and model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE
-        ]
-        self.chain = Chain.from_joints(model, joints, int(model.site_bodyid[site]), model.site_pos[site].copy())
-        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu)}
+        tool_body = int(model.site_bodyid[site])
+        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
+        # The arm is the powered hinges between the robot's root and the tool: that leaves out wheels,
+        # legs or a second arm of the same robot, and works for arms built from parts too.
+        joints = _path_hinges(model, tool_body, joint_to_act)
+        if not joints:
+            raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
+        self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
         self.actuators = np.array([joint_to_act[j] for j in joints])
+        # The tool points along the tcp site's +z (for the templates that is the hand's +z).
+        rot = np.zeros(9)
+        mujoco.mju_quat2Mat(rot, model.site_quat[site])
+        self.tool_axis = rot.reshape(3, 3)[:, 2].copy()
         self.gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
         self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
+        # An arm on a moving robot: IK must start from where that robot is now (see sync).
+        root = _root_body(model, tool_body)
+        free = [j for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])]
+        free = [j for j in free if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
+        self.free_adr = int(model.jnt_qposadr[free[0]]) if free else None
         # Paths sweep around the base axis so the tool never cuts through the arm itself.
-        base_body = model.jnt_bodyid[joints[0]]
+        self.base_body = int(model.jnt_bodyid[joints[0]])
+        self._base_parent = int(model.body_parentid[self.base_body])
         self.ik.point(self.chain, self.q)
-        self.base_xy = self.ik.data.xpos[base_body][:2].copy()
-        # Heading of the arm's zero yaw in the world (the arm may be placed with a yaw).
-        parent_rot = self.ik.data.xmat[model.body_parentid[base_body]].reshape(3, 3)
-        self.base_yaw = float(np.arctan2(parent_rot[1, 0], parent_rot[0, 0]))
+        self._read_base(self.ik.data)
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self.current_label = "idle"
         self.log: list[str] = []
 
+    def _read_base(self, data: mujoco.MjData) -> None:
+        self.base_xy = data.xpos[self.base_body][:2].copy()
+        # Heading of the arm's zero yaw in the world (the arm may be placed or carried with a yaw).
+        parent_rot = data.xmat[self._base_parent].reshape(3, 3)
+        self.base_yaw = float(np.arctan2(parent_rot[1, 0], parent_rot[0, 0]))
+
+    def sync(self, data: mujoco.MjData) -> None:
+        """Follow the robot carrying the arm: IK and path planning start from where it is now."""
+        if self.free_adr is not None:
+            self.ik.base_qpos[self.free_adr : self.free_adr + 7] = data.qpos[self.free_adr : self.free_adr + 7]
+        self._read_base(data)
+
     # ---- planning ------------------------------------------------------------------
 
     def reach_error(self, target: np.ndarray) -> float:
-        _, err = self.ik.solve(self.chain, target, self._seed(target), iterations=60, axis=(TOOL_AXIS, DOWN))
+        _, err = self.ik.solve(self.chain, target, self._seed(target), iterations=60, axis=(self.tool_axis, DOWN))
         return err
 
     def _seed(self, target: np.ndarray) -> np.ndarray:
@@ -140,6 +160,8 @@ class ArmMotion:
     # ---- control -------------------------------------------------------------------
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if self.free_adr is not None:
+            self.sync(data)
         t = data.time
         if self._segment is None and self.queue:
             wp = self.queue.popleft()
@@ -157,7 +179,7 @@ class ArmMotion:
         if wp.position is not None:
             s = u * u * (3 - 2 * u)  # smoothstep
             target = self._arc_point(start, wp.position, s)
-            self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=(TOOL_AXIS, DOWN))
+            self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=(self.tool_axis, DOWN))
         data.ctrl[self.actuators] = self.q
         if u >= 1.0:
             self._segment = None
@@ -198,3 +220,22 @@ class ArmMotion:
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
+
+
+def _path_hinges(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> list[int]:
+    """Powered hinge joints from the root of `body`'s robot down to `body`, in that order."""
+    joints: list[int] = []
+    while body > 0:
+        start, count = model.body_jntadr[body], model.body_jntnum[body]
+        own = [
+            j for j in range(start, start + count) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE and j in powered
+        ]
+        joints = own + joints
+        body = int(model.body_parentid[body])
+    return joints
+
+
+def _root_body(model: mujoco.MjModel, body: int) -> int:
+    while model.body_parentid[body] > 0:
+        body = int(model.body_parentid[body])
+    return body

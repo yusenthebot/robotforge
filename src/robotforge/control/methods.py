@@ -83,6 +83,8 @@ def make_controller(
         if method == "cartesian":
             return classic.CartesianPD(task, model, data, **params)
         if method == "lqr":
+            if hasattr(task, "lqr_controller"):  # tasks with their own model-based design (wheel balancers)
+                return task.lqr_controller(model, data, **params)
             return classic.LQR(task, model, data, **{**_LQR_WEIGHTS.get(task.name, {}), **params})
         if method == "pd":
             if task.name == "reach":
@@ -121,7 +123,7 @@ def _gait(task: Task, model: mujoco.MjModel, params: dict[str, Any]):
     try:
         gait = quadruped.for_robot(model, task.robot.name, home_qpos(model))
     except ValueError as exc:
-        raise TaskError(f"the built-in gait needs a four-legged robot: {exc}") from exc
+        raise TaskError(f"the built-in gait needs a four- or six-legged robot: {exc}") from exc
     speed = float(params.get("speed", getattr(task.params, "speed", 0.0)))
     turn = float(params.get("turn", getattr(task.params, "turn", 0.0)))
     gait.command(speed, turn)
