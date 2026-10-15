@@ -17,7 +17,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - Physics is authoritative in Python (MuJoCo); the browser viewer is a thin three.js client over WebSocket.
 - No dependencies outside the approved list in docs/GOAL.md without asking.
 - Commit email for this repo: GitHub noreply (set in repo-local git config).
-- Push in real time (user request, 2026-10-14): push main after every merge, and push feature branches after every commit (`git push origin feat/<name>`). Never force-push; once a branch is on GitHub, bring main in with `git merge main`, not a rebase.
+- Trunk-based (user request, 2026-10-15): work on `main`. No long-lived feature branches; parallel branches made merging painful.
+  If a task truly needs isolation, use one short-lived branch, merge it the same day and delete it. Never run two branches that touch the same shared files.
+- Push in real time: push main after every commit. Never force-push.
 - Docs: one sentence per line in long Markdown; no em dashes; no emojis.
 
 ## Dev notes
