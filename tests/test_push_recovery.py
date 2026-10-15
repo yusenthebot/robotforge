@@ -217,6 +217,23 @@ def test_a_quadruped_walked_on_a_slope_and_stopped_stands_leveled(pg, robot, ang
         assert np.linalg.norm(np.array(pg.behaviors.pose(robot)["position"][:2]) - stopped) < 0.025
 
 
+def test_a_go2_standing_on_a_steep_ramp_and_then_moved_settles_into_its_leveled_stand(pg):
+    """Its first move (here at speed 0) turns the leveling on under a gait that had settled long before; the stance
+    changing under it read as a push, and a Go2 on a 20 degree ramp stepped down it and off (worst 37 degrees). It
+    settles anew, as the gait base 7a4aa92 started at that move did: worst 19.8, then 14 degrees on the ramp."""
+    pg.add_terrain("ramp", pos=[0.0, 0.0], params={"angle": 20, "length": 1.5, "direction": "up"})
+    pg.add_robot("go2", **ROBOTS["go2"], pos=[-0.4, 0.0])
+    pg.run_fast(lambda: False, 3.0)
+    pg.behaviors.move("go2", 0.0, 0.0, walker="gait")
+    trunk = pg.behaviors._root_body("go2")
+    worst = 0.0
+    for _ in range(250):  # 5 s
+        pg.run_fast(lambda: False, 0.02)
+        worst = max(worst, _tilt(pg, trunk))
+    assert worst < 25
+    assert _tilt(pg, trunk) > 10  # still standing on the ramp, not walked off it
+
+
 def _stepping(pg: Playground, robot: str, seconds: float) -> tuple[float, float]:
     """Run `seconds` and return how long `robot`'s gait stepped in all, and in its longest stretch."""
     gait = pg.session.controllers[robot]

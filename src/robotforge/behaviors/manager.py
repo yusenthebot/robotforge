@@ -271,7 +271,7 @@ class BehaviorManager:
             ctrl.command(speed, turn)
             standing = self._standing.pop(robot, None)
             if standing is not None:  # moved: its gait is its own now, and stands as any gait it was moved with
-                standing.level_standing = True
+                standing.stand_leveled()
         notes = _clamp_notes(ctrl, speed, turn)
         return {**ctrl.status(), "notes": notes} if notes else ctrl.status()
 

@@ -254,6 +254,17 @@ class QuadrupedGait:
         for leg in self.legs:
             leg.phase_offset = offsets[leg.name]
 
+    def stand_leveled(self) -> None:
+        """Level the trunk standing still from now on too (see level_standing). Its legs then change the stance under
+        it, so a robot not recovering from a push settles anew, as on a gait started now: read as a push, that change
+        sent a Go2 standing on a 17 to 20 degree ramp stepping down it and off."""
+        if self.level_standing:
+            return
+        self.level_standing = True
+        if self._recovery == 0.0 and self._last_t is not None:
+            self._started_at = self._calm_since = self._last_t
+            self._settled_at = math.inf
+
     def limit_speed(self, top: float) -> None:
         """Lower the fastest accepted speed to what this robot is known to reach (m/s)."""
         self._top = top
