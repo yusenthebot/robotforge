@@ -382,3 +382,87 @@ def test_snake_slithers_forward_and_steers(pg):
     _run(pg, 4.0)
     turned = (pg.behaviors.pose("snake")["heading_deg"] - before + 180) % 360 - 180
     assert turned > 30  # positive turn = left, like every other robot
+
+
+# ---- MCP tools ------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_agents_build_and_edit_robots_through_mcp(tmp_path, monkeypatch):
+    import json
+
+    from mcp import Client
+
+    from robotforge.cli import find_free_port
+    from robotforge.mcp_server import build_server
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_NO_BROWSER", "1")
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    server = build_server(playground, find_free_port(8890))
+
+    def text(result) -> str:
+        return "".join(c.text for c in result.content if getattr(c, "type", "") == "text")
+
+    async with Client(server) as client:
+        names = {t.name for t in (await client.list_tools()).tools}
+        assert {"builder_guide", "add_part", "update_part", "remove_part"} <= names
+        guide = json.loads(text(await client.call_tool("builder_guide", {})))
+        assert guide["example"]["build"]["parts"]
+
+        await client.call_tool("new_world", {"name": "lab"})
+        added = await client.call_tool("add_robot", {"name": "dog", "build": DOG})
+        assert not added.is_error, text(added)
+        head = {"name": "head", "at": "front", "shape": "sphere", "size": [0.05], "direction": "forward"}
+        head["joint"] = {"axis": "z", "range": [-60, 60]}
+        head["sensors"] = ["camera"]
+        result = await client.call_tool("add_part", {"robot": "dog", "part": head})
+        assert not result.is_error, text(result)
+        assert "dog/head" in [a["name"] for a in json.loads(text(result))["actuators"]]
+
+        result = await client.call_tool(
+            "update_part", {"robot": "dog", "part": "left_thigh", "changes": {"joint": {"home": 40}}}
+        )
+        assert not result.is_error, text(result)
+        world = playground.current_world().robots[0].build
+        thigh = next(p for p in world["parts"] if p["name"] == "left_thigh")
+        assert thigh["joint"] == {"axis": "y", "range": [-70, 140], "home": 40}  # merged, not replaced
+
+        copy_edit = await client.call_tool("update_part", {"robot": "dog", "part": "right_thigh_2", "changes": {}})
+        assert copy_edit.is_error
+        bad = await client.call_tool(
+            "update_part", {"robot": "dog", "part": "right_thigh_2", "changes": {"color": "red"}}
+        )
+        assert bad.is_error and "left_thigh" in text(bad)  # edit the part the copy comes from
+
+        robot_wide = await client.call_tool(
+            "update_part", {"robot": "dog", "part": "robot", "changes": {"servo": "xl430"}}
+        )
+        assert not robot_wide.is_error, text(robot_wide)
+
+        overlap = await client.call_tool(
+            "add_part",
+            {
+                "robot": "dog",
+                "part": {
+                    "name": "fender",
+                    "at": [0.12, -0.105, 0],
+                    "joint": "fixed",
+                    "shape": "box",
+                    "size": [0.04] * 3,
+                },
+            },
+        )
+        assert overlap.is_error and "overlap" in text(overlap) and "right_thigh_1" in text(overlap), text(overlap)
+        assert "fender" not in [p["name"] for p in playground.current_world().robots[0].build["parts"]]
+
+        removed = json.loads(text(await client.call_tool("remove_part", {"robot": "dog", "part": "left_thigh"})))
+        assert removed["removed_parts"] == ["left_thigh", "left_shin"]
+        # mirror copies come from the removed parts, so they go too
+        model = playground.session.model
+        assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "dog/right_thigh_1") < 0
