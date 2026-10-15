@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+from robotforge.sim.actuators import drives_joint, is_position_servo
+
 CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
 FALL_PENALTY = 1.0  # m of progress a fall costs
@@ -55,18 +57,21 @@ class Body:
         free = [j for j in joints if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
         if not free:
             raise CPGError(f"{robot} is fixed to the world; only robots that move freely can learn to walk")
-        servos = [
+        hinges = [
             a
             for a in range(model.nu)
             if (model.actuator(a).name or "").startswith(prefix)
-            and model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT
-            and model.actuator_biastype[a] == mujoco.mjtBias.mjBIAS_AFFINE  # position servos
+            and drives_joint(model, a)
+            # Not velocity servos: an imported wheel's speed command is bounded too, but it is no angle to aim at.
+            and is_position_servo(model, a)
             and model.jnt_type[model.actuator_trnid[a, 0]] == mujoco.mjtJoint.mjJNT_HINGE
-            and model.jnt_limited[model.actuator_trnid[a, 0]]
         ]
+        bounded = {a: span for a in hinges if (span := _servo_range(model, a)) is not None}
+        servos = list(bounded)
         if len(servos) < 2:
             raise CPGError(f"{robot} has {len(servos)} servo joints; walking by rhythm needs at least 2")
         driven = [int(model.actuator_trnid[a, 0]) for a in servos]
+        ranges = np.array(list(bounded.values()))
         qpos, qvel = [], []
         for j in joints:
             width = {0: 7, 1: 4}.get(int(model.jnt_type[j]), 1)
@@ -80,8 +85,8 @@ class Body:
             actuators=np.array(servos),
             qadr=np.array([model.jnt_qposadr[j] for j in driven]),
             dadr=np.array([model.jnt_dofadr[j] for j in driven]),
-            lower=np.array([model.jnt_range[j][0] for j in driven]),
-            upper=np.array([model.jnt_range[j][1] for j in driven]),
+            lower=ranges[:, 0],
+            upper=ranges[:, 1],
             qpos=np.array(qpos),
             qvel=np.array(qvel),
         )
@@ -89,6 +94,20 @@ class Body:
     @property
     def joints(self) -> int:
         return len(self.actuators)
+
+
+def _servo_range(model: mujoco.MjModel, actuator: int) -> tuple[float, float] | None:
+    """Where a position servo can put its joint: the joint's limits and the servo's command range, whichever
+    are set (both: the overlap). A URDF joint without limits imports unlimited, its servo commanded within half
+    a turn either way, so the servo's range is what bounds it. None when nothing bounds it."""
+    joint = int(model.actuator_trnid[actuator, 0])
+    lo, hi = -math.inf, math.inf
+    if model.jnt_limited[joint]:
+        lo, hi = (float(v) for v in model.jnt_range[joint])
+    if model.actuator_ctrllimited[actuator]:
+        low, high = model.actuator_ctrlrange[actuator]
+        lo, hi = max(lo, float(low)), min(hi, float(high))
+    return (lo, hi) if math.isfinite(lo) and math.isfinite(hi) and lo < hi else None
 
 
 SENSES = 4  # what reflexes read: trunk roll, pitch, roll rate, pitch rate

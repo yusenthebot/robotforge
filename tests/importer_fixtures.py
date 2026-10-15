@@ -82,6 +82,27 @@ def rover_urdf(caster: bool = True) -> str:
     )
 
 
+def critter_urdf(leg: float = 0.12) -> str:
+    """A box on four legs of two joints each, which no gait code knows: it can only walk by learning. The hips
+    are continuous (no limits), as URDFs often leave them; the knees are limited."""
+    body = box_link("trunk", (0.3, 0.2, 0.05), 2.0)
+    for i, (x, y) in enumerate(((0.12, 0.1), (0.12, -0.1), (-0.12, 0.1), (-0.12, -0.1))):
+        body += box_link(f"thigh{i}", (0.03, 0.03, leg), 0.15, f"0 0 {-leg / 2}")
+        body += box_link(f"shin{i}", (0.025, 0.025, leg), 0.1, f"0 0 {-leg / 2}")
+        body += (
+            f'<joint name="hip{i}" type="continuous"><parent link="trunk"/><child link="thigh{i}"/>'
+            f'<origin xyz="{x} {y} -0.025"/><axis xyz="0 1 0"/></joint>'
+        )
+        body += revolute(
+            f"knee{i}",
+            f"thigh{i}",
+            f"shin{i}",
+            f"0 0 {-leg}",
+            limit='<limit lower="-1.2" upper="1.2" effort="10" velocity="5"/>',
+        )
+    return robot(body, "critter")
+
+
 def write(path: Path, text: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")

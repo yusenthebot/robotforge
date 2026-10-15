@@ -55,3 +55,20 @@ def test_reflexes_turn_body_tilt_into_joint_corrections_and_shoves_land():
     assert shoved["drift"] > calm["drift"] + 0.05  # the shove really moved it sideways
     result = trainer.push_test(still, 0.4, trials=3)
     assert result["trials"] == 3 and 0 <= result["survived"] <= 3
+
+
+def test_an_imported_robot_drives_its_unlimited_joints_but_not_its_wheels(tmp_path, monkeypatch):
+    """A URDF joint without limits imports unlimited, its servo commanded within half a turn either way: it is a
+    servo joint like any other, bounded by that. Wheels get speed servos with bounded commands too, but a speed
+    is no angle to aim at, so they are not driven."""
+    from importer_fixtures import critter_urdf, rover_urdf, write
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
+    model = _solo("critter", file=str(write(tmp_path / "critter.urdf", critter_urdf())))
+    body = Body.find(model, "critter")
+    hips = [i for i, a in enumerate(body.actuators) if "hip" in model.actuator(int(a)).name]
+    assert body.joints == 8 and len(hips) == 4
+    assert not model.jnt_limited[model.joint("critter/hip0").id]
+    assert body.lower[hips] == pytest.approx(-np.pi) and body.upper[hips] == pytest.approx(np.pi)
+    with pytest.raises(CPGError, match="0 servo joints"):
+        Body.find(_solo("rover", file=str(write(tmp_path / "rover.urdf", rover_urdf()))), "rover")
