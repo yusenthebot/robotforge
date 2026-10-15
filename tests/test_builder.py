@@ -370,7 +370,7 @@ def test_the_arm_on_a_rover_is_an_arm_to_move_and_pose_and_says_who_carries_it(p
         pg.behaviors.move("mm/arm", 0.2, 0.0)
     with pytest.raises(ValueError, match=r"mm/arm is an arm, and only humanoids strike poses; .*move_arm"):
         pg.behaviors.strike_pose("mm/arm", "wave")
-    with pytest.raises(ValueError, match=r"'mm/claw' is not an arm: mm carries mm/arm"):
+    with pytest.raises(ValueError, match=r"'mm/claw' is not an arm of mm; use mm/arm"):
         pg.behaviors.move("mm/claw", 0.2, 0.0)
 
 
@@ -388,8 +388,8 @@ def test_the_tools_name_the_arms_a_rover_carries_and_say_what_fits_them(pg):
         return asyncio.run(call())
 
     assert "the arm mounted on mm: drive mm with move" in refused("move", robot="mm/arm", speed=0.2)
-    assert "'mm/claw' is not an arm: mm carries mm/arm" in refused("move", robot="mm/claw", speed=0.2)
-    assert "'mm/claw' is not an arm: mm carries mm/arm" in refused("move_arm", robot="mm/claw", position=[0.3, 0, 0.2])
+    assert "'mm/claw' is not an arm of mm; use mm/arm" in refused("move", robot="mm/claw", speed=0.2)
+    assert "'mm/claw' is not an arm of mm; use mm/arm" in refused("move_arm", robot="mm/claw", position=[0.3, 0, 0.2])
     assert "mm/arm is an arm, and only humanoids strike poses" in refused("pose", robot="mm/arm", name="wave")
 
 

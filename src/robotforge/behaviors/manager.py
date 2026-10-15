@@ -166,8 +166,12 @@ class BehaviorManager:
         arms = self.arms(found)
         arm = wording.match(robot, arms)
         if arm is None:
-            carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
-            raise BehaviorError(f"'{found}/{part}' is not an arm: {found} carries {carries}")
+            if arms:
+                raise BehaviorError(f"'{found}/{part}' is not an arm of {found}; use {' or '.join(arms)}")
+            raise BehaviorError(
+                f"'{found}/{part}' is not an arm: {found} carries no arm (add_robot with build can mount one: "
+                "see builder_guide)"
+            )
         return arm
 
     def kind(self, robot: str) -> Kind:
