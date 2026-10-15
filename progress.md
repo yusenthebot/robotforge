@@ -168,13 +168,25 @@ Rounds 1-3 done, 2026-10-14.
   - With the default lambda 0.01 the arm already flailed at the edge, so it never stretched out and the ellipsoid never flattened; the default is 0.05 and the learner tries 0.0001 on purpose.
   - The "reached a new target" marker did not reset when the arm, lambda or gripper setting changed, so the gripper-down step could not count the same spot.
 
+## Round 16 (2026-10-15): sensing II, robot vacuums on a lidar rule (phase C part 2)
+
+- `learn/autopilot.py` ("lidar_autopilot", chapter 感知): two rovers in walled rooms, one behind the other, run the same reactive rule at 50 Hz (drive on unless the lidar sees something closer than the stop distance ahead, then turn on the spot toward the more open side); each twin has its own stop distance, speed, lidar noise and median filter (5 readings).
+- A 30 s run paints the floor cells each rover covered in its colour (viewer rig `cleaner`, InstancedMesh tiles); the bumper counts bumps and the seconds spent pressed against something; the table shows "ran with" settings per run.
+- `sensors.Rover` takes a name prefix and `sensors_spec(floor=)` builds the room, so two rovers share one world; twin knobs gained a `toggle` kind.
+- Measured (30 s, noise 0): stop 0.15 m covers 6.9% and spends 22 s pressed against walls (the lidar sits 12 cm behind the nose); 0.3 m covers 25.7% with no bumps; 0.9 m covers 20.1% (corners and edges stay dirty); 0.45 m/s covers 31.2% with 9 bumps; with noise 0.3 m the filtered rover covers 22.2% vs 18.8% unfiltered.
+- Steps: stop distance, too careful, a little faster, sensors lie (noise + filter), a quiz on why vacuums still carry bumpers (sensor fusion).
+- What did NOT work (and the fix):
+  - Odometry counted the jump back to the start line as driving: the restart clears the rover's last encoder and pose readings. A test now checks a noise-free rerun repeats exactly.
+  - Rooms side by side put rover A under the lesson panel: the free area between the panels is portrait-shaped, so the rooms stack front to back under a near top-down camera.
+  - The browser pane again rendered an emulated viewport into a corner after the server restarted; reset with preset desktop, then set the size again.
+
 ## Next-round seed
 
-Round 16 = phase C part 2: sensors as a lidar autopilot (a rover that drives itself with a reactive rule on its rangefinders; the learner tunes the stop distance, speed and turn rate, twins with different thresholds in one walled arena; bumps counted by the touch sensor; then odometry drift with a noise slider, corrected by lidar). Measure the rule's behaviour first. Then the PID lesson rebuilt around triplets and sweeps, and new gait and humanoid balance lessons.
+Round 17 = phase C part 3: the PID lesson rebuilt to the cart-pole standard around triplets and sweeps (what each knob does, seen on three joints at once, then the learner tunes one to stars, then the bench sweep), and plan the gait lesson (template dog, then Go2) and a humanoid balance lesson (our template, then G1). Odometry drift corrected by lidar stays optional.
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 4 lessons, 3 challenges and 2 real-robot face-offs with measured comparisons.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 6 lessons, 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Next frontiers (2026-10-15): the experiment bench (phase B); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
