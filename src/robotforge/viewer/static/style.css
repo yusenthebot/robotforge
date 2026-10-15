@@ -1050,6 +1050,20 @@ input[type="range"]::-moz-range-thumb {
 
 .faceoff-table tr.group:first-child th { padding-top: 0; }
 
+/* twins: each one's settings under its own heading, in its plot colour */
+.control-group { margin: 12px 0 2px; font-size: 12px; font-weight: 650; }
+.control-group::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--c);
+  vertical-align: 0;
+}
+#lesson-controls .lesson-buttons:first-child { margin: 0 0 4px; }
+
 /* experiment record: runs laid over each other, their table, sweeps */
 .bench { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .bench canvas { display: block; width: 100%; }

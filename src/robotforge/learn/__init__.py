@@ -9,6 +9,7 @@ from robotforge.learn.ik import IKLesson
 from robotforge.learn.pd import PDLesson
 from robotforge.learn.rl import RLLesson
 from robotforge.learn.sensors import SensorsLesson
+from robotforge.learn.twins import LQRTwins, PIDTwins
 
 LESSONS: dict[str, type[Lesson]] = {
     cls.id: cls
@@ -22,6 +23,8 @@ LESSONS: dict[str, type[Lesson]] = {
         CourseChallenge,
         ArmFaceOff,
         HumanoidFaceOff,
+        PIDTwins,
+        LQRTwins,
     )
 }
 

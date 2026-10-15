@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from collections.abc import Mapping
 from typing import Any
 
 import mujoco
@@ -36,12 +37,16 @@ class JointPD:
 
     rate_hz = 500.0
 
-    def __init__(self, model: mujoco.MjModel, ctx: LessonContext) -> None:
+    def __init__(
+        self, model: mujoco.MjModel, ctx: LessonContext, prefix: str = "", values: Mapping[str, float] | None = None
+    ) -> None:
+        """`prefix` names one rig among several; `values` (default: the lesson's) gives its gains and target."""
         self.ctx = ctx
-        self.joint = model.joint("shoulder")
+        self.values = values if values is not None else ctx.values
+        self.joint = model.joint(f"{prefix}shoulder")
         self.qadr = int(self.joint.qposadr[0])
         self.dadr = int(self.joint.dofadr[0])
-        self.act = model.actuator("motor").id
+        self.act = model.actuator(f"{prefix}motor").id
         self.integral = 0.0
         self.last_t = None
         self.next_sample = 0.0
@@ -49,7 +54,7 @@ class JointPD:
         self.terms = {"u": 0.0, "p": 0.0, "d": 0.0, "i": 0.0, "ff": 0.0}
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        v = self.ctx.values
+        v = self.values
         q, w = float(data.qpos[self.qadr]), float(data.qvel[self.dadr])
         target = math.radians(v["target"])
         e = target - q
@@ -292,6 +297,101 @@ STEPS = (
 )
 
 
+def rig_spec(name: str) -> mujoco.MjSpec:
+    """An empty stage for joint rigs: floor, light and the materials the viewer styles."""
+    spec = mujoco.MjSpec()
+    spec.modelname = name
+    spec.option.timestep = 0.002
+    w = spec.worldbody
+    w.add_light(pos=[0.5, -1.0, 2.5], dir=[-0.2, 0.4, -1.0], diffuse=[0.8, 0.8, 0.8])
+    floor = spec.add_material(name="rf_floor", rgba=[0.62, 0.66, 0.7, 1])
+    w.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[3, 3, 0.05], material=floor.name)
+    for material in ("rf_dark", "rf_metal", "rf_shell", "rf_rubber"):
+        spec.add_material(name=material)
+    return spec
+
+
+def add_rig(spec: mujoco.MjSpec, prefix: str = "", x: float = 0.0, weight_rgba: list[float] | None = None) -> None:
+    """One motor joint swinging a weighted arm, named with `prefix` and standing at `x` (several fit side by side)."""
+    G = mujoco.mjtGeom
+    w = spec.worldbody
+    # A weighted pedestal and a pillar up to the shoulder; the motor sits on top, facing the camera.
+    w.add_geom(
+        name=f"{prefix}foot",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.16, 0.02, 0],
+        pos=[x, 0, 0.02],
+        rgba=[0.16, 0.18, 0.21, 1],
+        material="rf_dark",
+    )
+    w.add_geom(
+        name=f"{prefix}pillar",
+        type=G.mjGEOM_BOX,
+        size=[0.035, 0.035, PIVOT[2] / 2],
+        pos=[x, 0.05, PIVOT[2] / 2],
+        rgba=[0.78, 0.8, 0.83, 1],
+        material="rf_metal",
+    )
+    w.add_geom(
+        name=f"{prefix}motor",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.05, 0.035, 0],
+        pos=[x, 0.0, PIVOT[2]],
+        quat=[0.7071068, 0.7071068, 0, 0],
+        rgba=[0.16, 0.18, 0.21, 1],
+        material="rf_dark",
+    )
+    arm = w.add_body(name=f"{prefix}arm", pos=[PIVOT[0] + x, PIVOT[1], PIVOT[2]])  # its parts touch nothing
+    # Axis -y: positive angles swing the arm toward +x, to the right as the camera sees it.
+    arm.add_joint(
+        name=f"{prefix}shoulder",
+        type=mujoco.mjtJoint.mjJNT_HINGE,
+        axis=[0, -1, 0],
+        damping=0.004,
+        frictionloss=0.002,
+        armature=0.002,
+    )
+    arm.add_geom(
+        name=f"{prefix}hub",
+        contype=0,
+        conaffinity=0,
+        type=G.mjGEOM_CYLINDER,
+        size=[0.03, 0.02, 0],
+        pos=[0, -0.05, 0],
+        quat=[0.7071068, 0.7071068, 0, 0],
+        rgba=[0.85, 0.87, 0.9, 1],
+        material="rf_metal",
+        mass=0.01,
+    )
+    arm.add_geom(
+        name=f"{prefix}link",
+        contype=0,
+        conaffinity=0,
+        type=G.mjGEOM_CAPSULE,
+        fromto=[0, -0.06, 0, 0, -0.06, -LENGTH],
+        size=[0.018, 0, 0],
+        rgba=[0.95, 0.96, 0.97, 1],
+        material="rf_shell",
+        mass=LINK_MASS,
+    )
+    arm.add_geom(
+        name=f"{prefix}weight",
+        contype=0,
+        conaffinity=0,
+        type=G.mjGEOM_SPHERE,
+        size=[0.045, 0, 0],
+        pos=[0, -0.06, -LENGTH],
+        rgba=weight_rgba or [0.95, 0.66, 0.0, 1],
+        material="rf_shell",
+        mass=TIP_MASS,
+    )
+    arm.add_site(name=f"{prefix}tip", pos=[0, -0.06, -LENGTH], size=[0.01, 0, 0])
+    motor = spec.add_actuator(name=f"{prefix}motor", target=f"{prefix}shoulder", trntype=mujoco.mjtTrn.mjTRN_JOINT)
+    motor.ctrllimited = True
+    motor.ctrlrange = [-TORQUE_MAX, TORQUE_MAX]
+    motor.gear = [1, 0, 0, 0, 0, 0]
+
+
 class PDLesson(Lesson):
     id = "pd_control"
     chapter = {"zh": "控制原理", "en": "Control"}
@@ -364,91 +464,8 @@ class PDLesson(Lesson):
         self.model: mujoco.MjModel | None = None
 
     def build(self) -> mujoco.MjModel:
-        spec = mujoco.MjSpec()
-        spec.modelname = "pd_lesson"
-        spec.option.timestep = 0.002
-        G = mujoco.mjtGeom
-        w = spec.worldbody
-        w.add_light(pos=[0.5, -1.0, 2.5], dir=[-0.2, 0.4, -1.0], diffuse=[0.8, 0.8, 0.8])
-        floor = spec.add_material(name="rf_floor", rgba=[0.62, 0.66, 0.7, 1])
-        w.add_geom(name="floor", type=G.mjGEOM_PLANE, size=[3, 3, 0.05], material=floor.name)
-        for name in ("rf_dark", "rf_metal", "rf_shell", "rf_rubber"):
-            spec.add_material(name=name)
-        # A weighted pedestal and a pillar up to the shoulder; the motor sits on top, facing the camera.
-        w.add_geom(
-            name="foot",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.16, 0.02, 0],
-            pos=[0, 0, 0.02],
-            rgba=[0.16, 0.18, 0.21, 1],
-            material="rf_dark",
-        )
-        w.add_geom(
-            name="pillar",
-            type=G.mjGEOM_BOX,
-            size=[0.035, 0.035, PIVOT[2] / 2],
-            pos=[0, 0.05, PIVOT[2] / 2],
-            rgba=[0.78, 0.8, 0.83, 1],
-            material="rf_metal",
-        )
-        w.add_geom(
-            name="motor",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.05, 0.035, 0],
-            pos=[0, 0.0, PIVOT[2]],
-            quat=[0.7071068, 0.7071068, 0, 0],
-            rgba=[0.16, 0.18, 0.21, 1],
-            material="rf_dark",
-        )
-        arm = w.add_body(name="arm", pos=list(PIVOT))  # swings in free air: its parts touch nothing
-        # Axis -y: positive angles swing the arm toward +x, to the right as the camera sees it.
-        arm.add_joint(
-            name="shoulder",
-            type=mujoco.mjtJoint.mjJNT_HINGE,
-            axis=[0, -1, 0],
-            damping=0.004,
-            frictionloss=0.002,
-            armature=0.002,
-        )
-        arm.add_geom(
-            name="hub",
-            contype=0,
-            conaffinity=0,
-            type=G.mjGEOM_CYLINDER,
-            size=[0.03, 0.02, 0],
-            pos=[0, -0.05, 0],
-            quat=[0.7071068, 0.7071068, 0, 0],
-            rgba=[0.85, 0.87, 0.9, 1],
-            material="rf_metal",
-            mass=0.01,
-        )
-        arm.add_geom(
-            name="link",
-            contype=0,
-            conaffinity=0,
-            type=G.mjGEOM_CAPSULE,
-            fromto=[0, -0.06, 0, 0, -0.06, -LENGTH],
-            size=[0.018, 0, 0],
-            rgba=[0.95, 0.96, 0.97, 1],
-            material="rf_shell",
-            mass=LINK_MASS,
-        )
-        arm.add_geom(
-            name="weight",
-            contype=0,
-            conaffinity=0,
-            type=G.mjGEOM_SPHERE,
-            size=[0.045, 0, 0],
-            pos=[0, -0.06, -LENGTH],
-            rgba=[0.95, 0.66, 0.0, 1],
-            material="rf_shell",
-            mass=TIP_MASS,
-        )
-        arm.add_site(name="tip", pos=[0, -0.06, -LENGTH], size=[0.01, 0, 0])
-        motor = spec.add_actuator(name="motor", target="shoulder", trntype=mujoco.mjtTrn.mjTRN_JOINT)
-        motor.ctrllimited = True
-        motor.ctrlrange = [-TORQUE_MAX, TORQUE_MAX]
-        motor.gear = [1, 0, 0, 0, 0, 0]
+        spec = rig_spec("pd_lesson")
+        add_rig(spec)
         self.model = spec.compile()
         return self.model
 

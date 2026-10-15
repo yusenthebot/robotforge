@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonDriveSpec, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonActive, lessonDriveSpec, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
@@ -638,7 +638,8 @@ function updateRing() {
   const robot = robotByName(selected);
   // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
   const box = selected ? robotBox(selected, { baseOnly: !robot?.max_speed }) : null;
-  if (!box) {
+  // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise.
+  if (!box || (lessonActive() && !lessonDriveSpec())) {
     ring.visible = false;
     return;
   }

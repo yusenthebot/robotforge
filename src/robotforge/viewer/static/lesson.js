@@ -62,7 +62,12 @@ function saveProgress(id, entry) {
 function renderPicker() {
   const done = progress();
   const list = $("lesson-list");
-  const groups = [["lesson", t("lessons_heading")], ["compare", t("compare_heading")], ["challenge", t("challenges_heading")]];
+  const groups = [
+    ["lesson", t("lessons_heading")],
+    ["bench", t("bench_heading")],
+    ["compare", t("compare_heading")],
+    ["challenge", t("challenges_heading")],
+  ];
   const sections = [];
   for (const [kind, heading] of groups) {
     const items = catalog.filter((c) => (c.kind ?? "lesson") === kind);
@@ -627,10 +632,13 @@ function renderTable(table) {
     const name = document.createElement("span");
     name.className = "who";
     name.textContent = pick(c.label);
-    const kind = document.createElement("span");
-    kind.className = "kind";
-    kind.textContent = t(c.real ? "real_robot" : "our_template");
-    th.append(name, kind);
+    th.append(name);
+    if (c.sub !== null) {
+      const kind = document.createElement("span"); // twins have no subtitle: they are the same robot
+      kind.className = "kind";
+      kind.textContent = c.sub ? pick(c.sub) : t(c.real ? "real_robot" : "our_template");
+      th.append(kind);
+    }
     head.append(th);
   }
   const thead = document.createElement("thead");
@@ -671,7 +679,16 @@ function renderControls() {
   const usable = lesson.controls.filter((c) => unlocked.has(c.id));
   $("lesson-controls-wrap").hidden = usable.length === 0;
   const buttons = usable.filter((c) => c.kind === "button");
-  const rows = usable.filter((c) => c.kind !== "button").map(controlRow);
+  const rows = [];
+  let group = null;
+  for (const c of usable.filter((x) => x.kind !== "button")) {
+    if ((c.group ?? "") !== group) {
+      group = c.group ?? "";
+      const info = lesson.groups?.[group];
+      if (info) rows.push(groupHeading(info)); // one twin's own settings start here
+    }
+    rows.push(controlRow(c));
+  }
   const bar = document.createElement("div");
   bar.className = "lesson-buttons";
   bar.append(
@@ -684,8 +701,18 @@ function renderControls() {
       return b;
     })
   );
-  box.replaceChildren(...rows, ...(buttons.length ? [bar] : []));
+  const twins = Object.keys(lesson.groups ?? {}).length > 0; // the shared test goes first, then each twin
+  const bars = buttons.length ? [bar] : [];
+  box.replaceChildren(...(twins ? [...bars, ...rows] : [...rows, ...bars]));
   syncControls();
+}
+
+function groupHeading(info) {
+  const h = document.createElement("p");
+  h.className = "control-group";
+  h.style.setProperty("--c", `var(${COLORS[info.color]})`);
+  h.textContent = pick(info.label);
+  return h;
 }
 
 function controlRow(c) {
@@ -1340,7 +1367,8 @@ function faceoffRig(rig) {
   const tags = [];
   rig.entrants.forEach((e, i) => {
     const color = api.color(COLORS[e.color]);
-    const tag = nameTag(pick(e.label), t(e.real ? "real_robot" : "our_template"), color);
+    const sub = e.sub === null ? "" : e.sub ? pick(e.sub) : t(e.real ? "real_robot" : "our_template");
+    const tag = nameTag(pick(e.label), sub, color);
     tag.position.set(e.base[0], e.base[1], e.top + 0.12);
     labels.add(tag);
     tags.push([tag, e]);
@@ -1404,7 +1432,7 @@ function nameTag(name, sub, color) {
   const pad = 11 * px;
   const dot = 8 * px;
   const width = Math.ceil(pad * 2 + dot + 7 * px + Math.max(nameWidth, subWidth));
-  const height = 44 * px;
+  const height = (sub ? 44 : 30) * px; // one line when there is no subtitle
   canvas.width = width;
   canvas.height = height;
   g.fillStyle = `#${api.color("--panel-solid").getHexString()}`;
@@ -1421,17 +1449,19 @@ function nameTag(name, sub, color) {
   g.textBaseline = "alphabetic";
   g.fillStyle = `#${api.color("--ink").getHexString()}`;
   g.font = font(650, 15);
-  g.fillText(name, x, 20 * px);
-  g.fillStyle = `#${api.color("--muted").getHexString()}`;
-  g.font = font(500, 11);
-  g.fillText(sub, x, 35 * px);
+  g.fillText(name, x, (sub ? 20 : 20.5) * px);
+  if (sub) {
+    g.fillStyle = `#${api.color("--muted").getHexString()}`;
+    g.font = font(500, 11);
+    g.fillText(sub, x, 35 * px);
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false })
   );
-  const tall = 0.034; // of the view's height (sizeAttenuation off): about 30 px on a laptop screen
+  const tall = (0.034 * height) / (44 * px); // of the view's height (sizeAttenuation off): ~30 px for two lines
   sprite.scale.set((tall * width) / height, tall, 1);
   sprite.renderOrder = 10;
   return sprite;
