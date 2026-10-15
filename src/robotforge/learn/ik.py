@@ -241,8 +241,8 @@ STEPS = (
             "en": "A six-joint arm has no formula this simple. The general method is to iterate:\n"
             "look at the error e (the blue arrow from hand to target), and use the Jacobian J to work out how much "
             "each joint should turn to shrink it: dq = J^T (J J^T + lambda^2 I)^-1 e.\n"
-            "Switch the method to Iterative IK (the target jumps somewhere new) and press Step a few times. "
-            "Watch the error fall below 1 cm.",
+            "Switch the method to Iterative IK (the target jumps somewhere new) and press Step again and again, "
+            "watching the error curve fall, until it is under 1 cm.",
         },
         done={
             "zh": "每一步只是“往对的方向挪一点”，几步之后就到了。"
