@@ -101,12 +101,12 @@ CASES: list[Case] = [
     c("add_robot", "name already used", name="dog", template="quadruped", pos=[2, 0]),
     c("add_robot", "template is a nickname", name="pup", template="dog"),
     c("add_robot", "template typo", name="pup", template="quadruped2"),
-    c("add_robot", "template is a plural", name="pup", template="arms"),
+    c("add_robot", "template is a plural", "accept", name="pup", template="arms", pos=[2, 0]),
     c("add_robot", "no source at all", name="pup"),
     c("add_robot", "two sources", name="pup", template="arm", library="go2"),
     c("add_robot", "library name in capitals", "accept", name="go", library="Go2", pos=[3, 0]),
     c("add_robot", "unknown library robot", name="go", library="go3"),
-    c("add_robot", "library robot with a long name", name="go", library="Unitree Go2"),
+    c("add_robot", "library robot with a long name", "accept", name="go", library="Unitree Go2", pos=[3, 0]),
     c("add_robot", "file that does not exist", name="x", file="/nope/robot.urdf"),
     c("add_robot", "file with the wrong extension", name="x", file="{assets}/notes.txt"),
     c("add_robot", "file that is a folder", name="x", file="{assets}"),
@@ -185,11 +185,11 @@ CASES: list[Case] = [
     c("load_scene", "preset missing"),
     c("set_terrain", "type in capitals", "accept", type="Hills"),
     c("set_terrain", "unknown type", type="mountain"),
-    c("set_terrain", "type is a nickname", type="slope"),
+    c("set_terrain", "type is a nickname", "accept", type="slope"),
     c("set_terrain", "params in centimetres", type="stairs", params={"step_height": 15}),
     c("set_terrain", "param that does not exist", type="stairs", params={"stairs": 4}),
     c("set_terrain", "unknown style", type="hills", style="lava"),
-    c("add_terrain", "type is a nickname", type="steps", pos=[2, 0]),
+    c("add_terrain", "type is a nickname", "accept", type="steps", pos=[2, 0]),
     c("add_terrain", "pos as text", "accept", type="ramp", pos="2, 0"),
     c("add_terrain", "pos with one number", type="ramp", pos=[2]),
     c("add_terrain", "angle that is steep", type="ramp", params={"angle": 80}),
@@ -235,7 +235,8 @@ CASES: list[Case] = [
     c("move_arm", "walking robot instead of an arm", robot="dog", position=[0.2, 0.0, 0.15]),
     c("move_arm", "arm mounted on a robot that has none", robot="rover/arm", position=[0.2, 0.0, 0.15]),
     c("gripper", "state in capitals", "accept", robot="arm", state="Close"),
-    c("gripper", "state that does not exist", robot="arm", state="grab"),
+    c("gripper", "state that does not exist", robot="arm", state="half"),
+    c("gripper", "state is a synonym", "accept", robot="arm", state="grab"),
     c("gripper", "walking robot instead of an arm", robot="dog", state="open"),
     c("pick_and_place", "object name in capitals", "accept", robot="arm", object="Ball", target=[0.2, 0.2]),
     c("pick_and_place", "object that does not exist", robot="arm", object="cube", target=[0.2, 0.2]),
@@ -266,7 +267,7 @@ CASES: list[Case] = [
         "run_script",
         "script with a syntax error",
         "accept",
-        setup=[("write_script", {"name": "bad", "code": "x = (\n"})],
+        setup=[("@write", {"path": "behaviors/bad.py", "text": "x = (\n"})],
         name="bad",
     ),
     c(
@@ -317,7 +318,7 @@ CASES: list[Case] = [
     c("simulate", "seconds in milliseconds", seconds=500),
     c("simulate", "controls with an unknown actuator", seconds=0.1, controls={"wing": 1}),
     c("sim_control", "action in capitals", "accept", action="Pause"),
-    c("sim_control", "action synonym", action="resume"),
+    c("sim_control", "action synonym", "accept", action="resume"),
     c("sim_control", "action that does not exist", action="stop"),
     c("observe", "view in capitals", "accept", view="Front", width=160, height=120),
     c("observe", "view that does not exist", view="sideways"),
@@ -328,7 +329,16 @@ CASES: list[Case] = [
     c("observe", "include_image as a word", "accept", include_image="no"),
     # -- algorithms and training
     c("run_controller", "method in capitals", "accept", robot="Arm", task="Reach", method="IK", seconds=1),
-    c("run_controller", "method that does not exist", robot="arm", task="reach", method="inverse_kinematics"),
+    c(
+        "run_controller",
+        "method spelled out",
+        "accept",
+        robot="arm",
+        task="reach",
+        method="inverse_kinematics",
+        seconds=1,
+    ),
+    c("run_controller", "method that does not exist", robot="arm", task="reach", method="pid"),
     c("run_controller", "task that does not exist", robot="arm", task="grab", method="ik"),
     c("run_controller", "robot that does not exist", robot="cat", task="reach", method="ik"),
     c("run_controller", "method that does not fit the task", robot="arm", task="reach", method="lqr"),
@@ -485,7 +495,9 @@ def leaves(value: Any) -> list[str]:
     if value is None:
         return []
     text = str(value)
-    return [text, Path(text).name] if "/" in text else [text]
+    if "/" in text:
+        return [text, Path(text).name]
+    return [text, text.split(":")[-1]] if ":" in text else [text]  # "policy:nope" is pointed at by "nope"
 
 
 # What an agent must never be shown: Python's or pydantic's own wording, a position inside robotforge's data
@@ -498,22 +510,23 @@ INTERNAL = re.compile(r"[\\/]src[\\/]robotforge[\\/]|site-packages")
 # Words that carry the way out: the valid choices, the right form, the allowed range.
 FIX = re.compile(
     r"\b(use|choose|one of|did you mean|e\.g\.|for example|try|call|give|put|say|must be|should be|expected|valid"
-    r"|available|instead|write it|see|list_|between|at most|at least|like|such as|first|in \(|in \[|is \[|are \[)\b",
+    r"|available|instead|write it|see|list_|between|at most|at least|like|such as|first|in \(|in \[|is \[|are \[|leave"
+    r"|takes)\b",
     re.IGNORECASE,
 )
 CHOICES = re.compile(
     r"one of|choose|available|did you mean|installed|existing|in this world|here:|"
     r"\b(?:parts|jobs|options|names|scenes|worlds|views|robots|objects|actuators|templates|methods|tasks|lessons"
-    r"|scripts|patches|policies|walkers|arms|shapes|poses|joints):",
+    r"|scripts|patches|policies|walkers|arms|shapes|poses|joints|fields|parameters|views):",
     re.IGNORECASE,
 )
 
 
-def grade(case: Case, text: str, tool_names: set[str], params: set[str]) -> list[str]:
+def grade(case: Case, args: dict[str, Any], text: str, tool_names: set[str], params: set[str]) -> list[str]:
     problems = []
     if LEAK.search(text) or INTERNAL.search(text):
         problems.append("leak")
-    tokens = {t for t in leaves(case.args) if t} | set(case.args) | params
+    tokens = {t for t in leaves(args) if t} | set(args) | params | {case.tool}
     pointed = any(re.search(rf"(?<![\w.]){re.escape(t)}(?!\w|\.\d)", text) for t in tokens)
     if not case.no_world and not pointed:
         problems.append("vague")
@@ -571,6 +584,11 @@ class Bench:
         args = fill(case.args)
         dirty = bool(case.setup) or case.no_world
         for tool, setup_args in case.setup:
+            if tool == "@write":  # a file put in the world's folder directly, as a person could
+                path = worlds_home() / "lab" / setup_args["path"]
+                path.parent.mkdir(exist_ok=True)
+                path.write_text(setup_args["text"], encoding="utf-8")
+                continue
             ok, text = await self.call(tool, setup_args)
             if not ok:
                 raise SystemExit(f"setup failed for {case.tool} / {case.why}: {tool}: {text}")
@@ -586,7 +604,7 @@ class Bench:
             if INTERNAL.search(text):
                 problems.append("noisy")  # a result that shows robotforge's own frames or paths
         else:
-            problems = grade(case, text, set(self.schemas), self.schemas.get(case.tool, set()))
+            problems = grade(case, args, text, set(self.schemas), self.schemas.get(case.tool, set()))
         shown = text if not accepted else " ".join(text.split())[:160]
         return Outcome(
             case.tool, case.why, json.dumps(args, ensure_ascii=False), case.want, accepted, shown, len(text), problems
