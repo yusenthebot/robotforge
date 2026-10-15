@@ -132,9 +132,21 @@ Rounds 1-3 done, 2026-10-14.
   - A test helper returned the last of two ticks, and the record only rides on the first one after a change; tests read single ticks.
   - In the browser pane a synthetic drag works when pointer events are dispatched on the canvas with moves spread over a second (the PID lesson's first step needs a drag).
 
+## Round 13 (2026-10-15): twins on a tuning bench (plan v2, phase B part 2)
+
+- `learn/twins.py`: TwinsLesson (kind "bench", picker group 调参台): `Twin`s (name, label, colour, starting values), per-twin `Knob`s become controls `<knob>_<twin>` in a group the viewer heads in the twin's colour, `shared` controls (the test, the target) come first; `TwinValues` gives each controller its own view (own knobs, shared, fixed); a `Watch` controller measures every physics step and samples plots at 100 Hz.
+- PID triplets (A Kp 10 Kd 0.3, B Kp 40 Kd 0.5, C Kp 40 Kd 3, weights in their colours): step to 120 deg: A 24.8% and never settles, B 36.2% and 2.95 s, C 0% and 0.41 s; steps: compare, tune A to two stars, feedforward for all (A and C 0.36 s).
+- LQR twins (cart-poles in their colours, Q in {1, 10, 50, 200, 1000}, R in {0.02, 0.2, 2, 20}): push 0.6 rad/s: R 20 uses 44% vs 100% effort for 3.40 vs 3.29 deg and 1.18 vs 1.04 s; Q 1000 vs 1: 1.92 vs 3.86 deg, cart 17.1 vs 11.9 cm; the table also shows the angle gain LQR worked out.
+- Engine: `Control.group`, `Lesson.groups`; `pd.rig_spec` / `pd.add_rig` build named rigs; JointPD takes a prefix and a values view.
+- What did NOT work (and the fix):
+  - Peak effort read backwards (A 10%, B 21%) when measured at the 20 Hz lesson tick: LQR's answer to a push is a spike of a few ms. Measured every physics step now (100% vs 44%).
+  - The results key "test" collided with the PID lesson's result banner ("秒到位，超调 %"); the twins use "triplet".
+  - Lock order: the reset hook took the runner lock inside the session lock while ticks and input take them the other way round (a latent deadlock). Fixed in the hook.
+  - The selection ring and "our template" subtitles made no sense on twins: hidden in lessons without driving; twin tags are one line.
+
 ## Next-round seed
 
-Round 13 = phase B part 2: twins (two or three copies of one robot with different settings, side by side and driven by the same command: PID gains on three joints, MPC horizons on two dogs, gait step frequency), then bench coverage for LQR (Q/R on the balancer), MPC (horizon, samples, noise) and the gait. Then phase C: rebuild the PID lesson around twins and sweeps, IK on the PiPER, sensors as a lidar autopilot, new gait and humanoid balance lessons.
+Round 14: MPC twins (two dogs standing with MPC, horizon and samples each, one shove; check the CPU budget of two MPCs in real time first) and gait twins (two dogs walking at one command with different step frequency / lift height; speed reached, sway, energy). Then phase C: rebuild the PID lesson around the triplets and sweeps, IK on the PiPER (3D target, Jacobian, manipulability), sensors as a lidar autopilot, gait and humanoid balance lessons.
 
 ## Frontier
 
