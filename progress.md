@@ -210,13 +210,27 @@ Rounds 1-3 done, 2026-10-14.
   - The support line drawn as a 1 px line under the dog was invisible: it is a 3 cm strip with foot discs, drawn without depth test after the robots.
   - The stride formula used the asked-for speed even when the period capped it; it uses the speed the gait really steps for and notes the cap.
 
+## Round 19 (2026-10-15): humanoid balance lesson, and a viewer deadlock (phase C part 5)
+
+- `learn/balance.py` ("balance", chapter 走路): our template humanoid and the G1 stand side by side along the push direction, seen side on; each push puts both back on their marks with fresh controllers, lets them settle (ours crouches first if asked) and kicks the chosen one at a set speed, forward or to the left; the floor shows the support patch, the centre of mass and the capture point x + v sqrt(z / g); a live formula compares it with the foot edge; plots show that margin and the body tilt; the record keeps tilt after the push.
+- Steps (each starts with a guess): stand (0.1 m/s), push until it falls, sideways, crouch, the G1 steps, a quiz on stepping.
+- Measured (ours, 0.45 m, centre of mass 22.8 cm): forward 0.3 m/s stands (capture point 4.6 cm, toes 5.1 cm), 0.4 falls (6.1 cm); sideways 0.5 stands (7.6 against 7.3: the ankles save a little), 0.6 falls; crouched 0.3 (centre of mass 17.6 cm) 0.4 stands (5.4 against 5.2), 0.5 falls. G1 (centre of mass 66.6 cm): forward 0.6, 0.8 and 1.0 m/s all stand with capture points 16 to 27 cm against a 10 cm foot edge, because it steps (feet 40 cm forward at 0.6, 117 cm at 1.0); sideways 0.6 fell in the lesson run (stood in one probe).
+- `HumanoidController.crouch(drop)` sinks the hips and holds them (custom poses next to POSES).
+- Viewer: the gait rig draws the capture point (ring joined to the centre of mass) when a lesson sends one; `live.view` frames each robot its own way; switching the followed robot glides the camera over.
+- What did NOT work (and the fix):
+  - Ankle feedback gains, the obvious knob, make no visible difference to pushes (off: 4 forward levels, default 3, four times 3): the lesson is built on the capture point instead, which predicted every outcome to the centimetre.
+  - Crouching via `_pose_level` did nothing: the controller's opening stand pose overwrote it. A real `crouch()` pose instead.
+  - The viewer hung opening the lesson: a lock-order inversion between the lesson start (lesson lock, then session lock) and the hub's scene build (session lock, then the lesson's description). The G1's long mesh build widened the window. Extras are now built after the session lock is released; a regression test checks another thread can take the session lock meanwhile. Found by reproducing through the websocket with `faulthandler.dump_traceback_later`.
+  - Robots side by side across the view hid the small one in front of the G1; they now stand along the push direction, and each robot has its own framing (the G1's head was cut off with the small robot's).
+  - The G1's policy treads in place even at zero command (it drifted 19 cm sideways in 3 s), so its support patch changes from moment to moment.
+
 ## Next-round seed
 
-Round 19 = phase C part 5: a humanoid balance lesson (centre of mass over the support polygon, standing on one foot, ankle vs hip strategy against a push; our ZMP template, then the G1). Then a Review round: walk every lesson as a beginner in the browser, prune dead code, ambition critic.
+Round 20 = Review round (milestone: phase C lessons done): walk every lesson and bench as a beginner in the browser, try to break each, prune dead code and stale docs, check the lesson picker order and wording, and run an ambition critic over the whole teaching mode. Then phase D (custom-morphology RL, a terrain policy, a crawl gait).
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 8 lessons (PID on the PiPER, gaits on the Go2), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 9 lessons (PID on the PiPER, gaits on the Go2, balance on the G1), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
 - Next frontiers (2026-10-15): a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
