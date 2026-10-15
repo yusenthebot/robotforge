@@ -22,11 +22,15 @@ from robotforge.design.templates.base import (
     BuiltRobot,
     Template,
     TemplateParams,
+    dress_servo,
     imu,
     new_spec,
     servo_case,
     servo_joint,
 )
+from robotforge.design.visuals import Visuals
+from robotforge.design.visuals import mesh as M
+from robotforge.design.visuals import parts as P
 
 SIDES = (("left", 1), ("right", -1))
 LEG_JOINTS = ("hip_yaw", "hip_roll", "hip_pitch", "knee", "ankle_pitch", "ankle_roll")
@@ -93,11 +97,14 @@ class Humanoid(Template):
         spec = new_spec()
         depth, width, tall = d.torso
 
+        vis = Visuals(spec)
         torso = spec.worldbody.add_body(name="torso")
         torso.add_freejoint(name="root")
         # Printed torsos are hollow shells; ~25 % of a solid block is a fair mass estimate.
-        torso.add_geom(type=GEOM.mjGEOM_BOX, size=[depth / 2, width / 2, tall / 2], rgba=accent, density=density * 0.25)
-        torso.add_geom(
+        hull = torso.add_geom(
+            type=GEOM.mjGEOM_BOX, size=[depth / 2, width / 2, tall / 2], rgba=accent, density=density * 0.25
+        )
+        chest = torso.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[0.004 * d.scale, width / 2 * 0.72, tall / 2 * 0.62],
             pos=[depth / 2 + 0.002 * d.scale, 0, tall * 0.06],
@@ -105,7 +112,7 @@ class Humanoid(Template):
             density=density,
         )
         pelvis_h = 0.022 * d.scale
-        torso.add_geom(
+        pelvis = torso.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[depth / 2 * 0.92, width / 2 * 0.94, pelvis_h / 2],
             pos=[0, 0, -tall / 2 + pelvis_h / 2 - 0.004 * d.scale],
@@ -113,18 +120,22 @@ class Humanoid(Template):
             density=density,
         )
         # Battery and controller board ride inside the torso (a 2S pack plus a small board at 0.45 m).
-        _hidden_mass(torso, 0.2 * d.scale**3, [0, 0, 0], [depth * 0.3, width * 0.3, tall * 0.25])
+        battery = _hidden_mass(torso, 0.2 * d.scale**3, [0, 0, 0], [depth * 0.3, width * 0.3, tall * 0.25])
         imu(spec, torso)
+        for geom in (hull, chest, pelvis, battery):
+            vis.hide(geom)
+        _dress_torso(vis, torso, d, accent, pelvis_h)
 
         home: dict[str, float] = {}
         for side, sy in SIDES:
-            home.update(self._leg(spec, torso, side, sy, d, part, density, accent))
+            home.update(self._leg(spec, vis, torso, side, sy, d, part, density, accent))
             if p.arms:
-                home.update(self._arm(spec, torso, side, sy, d, part, density, accent))
+                home.update(self._arm(spec, vis, torso, side, sy, d, part, density, accent))
         if p.head:
-            self._head(spec, torso, d, part, density)
+            self._head(spec, vis, torso, d, part, density)
 
-        model = spec.compile()
+        model = spec.compile()  # before the looks are added: the notes only need masses
+        vis.finish()
         mass = float(model.body_subtreemass[1])
         notes = [
             f"humanoid, {p.height:.2f} m tall, {mass:.2f} kg, {model.nu} {part.name} servos ({part.stall_torque} N*m)"
@@ -140,11 +151,11 @@ class Humanoid(Template):
         )
 
     @staticmethod
-    def _leg(spec, torso, side: str, sy: int, d: Dims, part, density: float, accent) -> dict[str, float]:
+    def _leg(spec, vis, torso, side: str, sy: int, d: Dims, part, density: float, accent) -> dict[str, float]:
         depth, width, tall = d.torso
         s = d.scale
         # The hip yaw servo sits upright inside the pelvis, right above its leg.
-        servo_case(torso, part, [0, sy * d.hip_y, -tall / 2 + part.size[2] / 2 + 0.004 * s])
+        vis.hide(servo_case(torso, part, [0, sy * d.hip_y, -tall / 2 + part.size[2] / 2 + 0.004 * s]))
         _visual_only(torso)
 
         # Hip yaw, roll and pitch axes cross at one point, so the whole thigh hangs off a 3-axis hip.
@@ -152,8 +163,8 @@ class Humanoid(Template):
         servo_joint(spec, thigh, f"{side}_hip_yaw", [0, 0, sy], (-0.6, 0.6), part)
         servo_joint(spec, thigh, f"{side}_hip_roll", [sy, 0, 0], (-0.4, 0.6), part)
         servo_joint(spec, thigh, f"{side}_hip_pitch", [0, -1, 0], (-1.0, 1.9), part)
-        _joint_cap(thigh, part, 2, d.leg_r * 1.3, part.size[1] / 2 + 0.006 * s, _Y_CYL)
-        thigh.add_geom(
+        hip_cap = _joint_cap(thigh, part, 2, d.leg_r * 1.3, part.size[1] / 2 + 0.006 * s, _Y_CYL)
+        thigh_tube = thigh.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
             fromto=[0, 0, -0.012 * s, 0, 0, -d.thigh + 0.012 * s],
             size=[d.leg_r, 0, 0],
@@ -163,8 +174,8 @@ class Humanoid(Template):
 
         shin = thigh.add_body(name=f"{side}_shin", pos=[0, 0, -d.thigh])
         servo_joint(spec, shin, f"{side}_knee", [0, 1, 0], (0.0, 2.4), part)
-        _joint_cap(shin, part, 1, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s, _Y_CYL)
-        shin.add_geom(
+        knee_cap = _joint_cap(shin, part, 1, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s, _Y_CYL)
+        shin_tube = shin.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
             fromto=[0, 0, -0.012 * s, 0, 0, -d.shin + 0.016 * s],
             size=[d.leg_r * 0.9, 0, 0],
@@ -177,13 +188,13 @@ class Humanoid(Template):
         servo_joint(spec, foot, f"{side}_ankle_pitch", [0, -1, 0], (-0.9, 1.2), part)
         servo_joint(spec, foot, f"{side}_ankle_roll", [sy, 0, 0], (-0.5, 0.5), part)
         case_z = max(-d.ankle + d.foot[2] + part.size[2] / 2 + 0.001 * s, -part.size[2] / 2)
-        servo_case(foot, part, [0, 0, case_z])
+        ankle_case = servo_case(foot, part, [0, 0, case_z])
         _visual_only(foot)
         # The ankle roll servo nests inside the pitch servo's housing (hidden, but it weighs as much).
-        _hidden_mass(foot, part.mass, [0, 0, case_z], [v * 0.8 for v in part.size])
+        ankle_mass = _hidden_mass(foot, part.mass, [0, 0, case_z], [v * 0.8 for v in part.size])
         length, wide, plate = d.foot
         sole = [0.006 * s, sy * 0.003 * s, -d.ankle]  # slightly toe-heavy and outboard, like a real foot
-        foot.add_geom(
+        sole_geom = foot.add_geom(
             name=f"{side}_sole",
             type=GEOM.mjGEOM_BOX,
             size=[length / 2, wide / 2, plate / 2],
@@ -192,7 +203,7 @@ class Humanoid(Template):
             friction=[1.0, 0.02, 0.002],
             density=components.MATERIALS["pla"],
         )
-        foot.add_geom(
+        top_plate = foot.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[length / 2 * 0.86, wide / 2 * 0.8, 0.002 * s],
             pos=[sole[0] + 0.002 * s, sole[1], sole[2] + plate + 0.0015 * s],
@@ -208,6 +219,9 @@ class Humanoid(Template):
             size=[length / 2 + 0.002, wide / 2 + 0.002, 0.004 * s],
             rgba=[0, 0, 0, 0],
         )
+        for geom in (hip_cap, thigh_tube, knee_cap, shin_tube, ankle_case, ankle_mass, sole_geom, top_plate):
+            vis.hide(geom)
+        _dress_leg(vis, thigh, shin, foot, sy, d, part, case_z, sole, accent)
         spec.add_sensor(
             name=f"{side}_foot_touch",
             type=mujoco.mjtSensor.mjSENS_TOUCH,
@@ -221,24 +235,26 @@ class Humanoid(Template):
         }
 
     @staticmethod
-    def _arm(spec, torso, side: str, sy: int, d: Dims, part, density: float, accent) -> dict[str, float]:
+    def _arm(spec, vis, torso, side: str, sy: int, d: Dims, part, density: float, accent) -> dict[str, float]:
         depth, width, tall = d.torso
         s = d.scale
         shoulder_y = width / 2 + d.arm_r + 0.008 * s
         shoulder_z = tall / 2 - 0.022 * s
         # Shoulder pitch servo inside the torso side, shaft pointing out.
-        servo_case(
-            torso,
-            part,
-            [0, sy * (width / 2 - part.size[1] / 2 - 0.002 * s), shoulder_z],
-            quat=[0.7071068, 0, 0, 0.7071068],
+        vis.hide(
+            servo_case(
+                torso,
+                part,
+                [0, sy * (width / 2 - part.size[1] / 2 - 0.002 * s), shoulder_z],
+                quat=[0.7071068, 0, 0, 0.7071068],
+            )
         )
         _visual_only(torso)
         upper = torso.add_body(name=f"{side}_upper_arm", pos=[0, sy * shoulder_y, shoulder_z])
         servo_joint(spec, upper, f"{side}_shoulder_pitch", [0, -1, 0], (-1.0, 3.1), part)
         servo_joint(spec, upper, f"{side}_shoulder_roll", [sy, 0, 0], (-0.15, 2.8), part)
-        _joint_cap(upper, part, 1, d.arm_r * 1.45, d.arm_r * 1.2, _Y_CYL)
-        upper.add_geom(
+        shoulder_cap = _joint_cap(upper, part, 1, d.arm_r * 1.45, d.arm_r * 1.2, _Y_CYL)
+        upper_tube = upper.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
             fromto=[0, 0, -0.008 * s, 0, 0, -d.upper_arm + 0.008 * s],
             size=[d.arm_r, 0, 0],
@@ -247,42 +263,49 @@ class Humanoid(Template):
         )
         fore = upper.add_body(name=f"{side}_forearm", pos=[0, 0, -d.upper_arm])
         servo_joint(spec, fore, f"{side}_elbow", [0, -1, 0], (-0.1, 2.4), part)
-        _joint_cap(fore, part, 1, d.arm_r * 1.3, d.arm_r * 1.1, _Y_CYL)
-        fore.add_geom(
+        elbow_cap = _joint_cap(fore, part, 1, d.arm_r * 1.3, d.arm_r * 1.1, _Y_CYL)
+        fore_tube = fore.add_geom(
             type=GEOM.mjGEOM_CAPSULE,
             fromto=[0, 0, -0.008 * s, 0, 0, -d.forearm],
             size=[d.arm_r * 0.9, 0, 0],
             rgba=accent,
             density=density,
         )
-        fore.add_geom(
+        hand = fore.add_geom(
             type=GEOM.mjGEOM_SPHERE,
             size=[d.arm_r * 1.25, 0, 0],
             pos=[0, 0, -d.forearm - d.arm_r * 0.6],
             rgba=DARK,
             density=components.MATERIALS["rubber"],
         )
+        for geom in (shoulder_cap, upper_tube, elbow_cap, fore_tube, hand):
+            vis.hide(geom)
+        _dress_arm(vis, torso, upper, fore, sy, d, shoulder_z, accent)
         fore.add_site(
             name=f"{side}_hand", pos=[0, 0, -d.forearm - d.arm_r * 0.6], size=[0.005, 0, 0], rgba=[0, 0, 0, 0]
         )
         return {f"{side}_{j}": v for j, v in HOME_ARM.items()}
 
     @staticmethod
-    def _head(spec, torso, d: Dims, part, density: float) -> None:
+    def _head(spec, vis, torso, d: Dims, part, density: float) -> None:
         depth, width, tall = d.torso
         s = d.scale
         rx, ry, rz = d.head
         # Neck yaw servo stands on the shoulders like a short neck.
-        servo_case(torso, part, [0, 0, tall / 2 - part.size[2] / 2 + 0.01 * s], quat=[0.7071068, 0, 0, 0.7071068])
+        vis.hide(
+            servo_case(torso, part, [0, 0, tall / 2 - part.size[2] / 2 + 0.01 * s], quat=[0.7071068, 0, 0, 0.7071068])
+        )
         _visual_only(torso)
         head = torso.add_body(name="head", pos=[0, 0, tall / 2 + 0.012 * s])
         servo_joint(spec, head, "neck_yaw", [0, 0, 1], (-1.4, 1.4), part)
         servo_joint(spec, head, "neck_pitch", [0, 1, 0], (-0.6, 0.8), part)
-        _joint_cap(head, part, 1, 0.009 * s, part.size[1] / 2, _Y_CYL)
+        neck_cap = _joint_cap(head, part, 1, 0.009 * s, part.size[1] / 2, _Y_CYL)
         center = [0.004 * s, 0, rz + 0.004 * s]
-        head.add_geom(type=GEOM.mjGEOM_ELLIPSOID, size=[rx, ry, rz], pos=center, rgba=SHELL, density=density * 0.3)
+        skull = head.add_geom(
+            type=GEOM.mjGEOM_ELLIPSOID, size=[rx, ry, rz], pos=center, rgba=SHELL, density=density * 0.3
+        )
         # Dark visor with two glowing eyes, so it is obvious which way the robot faces.
-        head.add_geom(
+        visor = head.add_geom(
             type=GEOM.mjGEOM_ELLIPSOID,
             size=[rx * 0.5, ry * 0.78, rz * 0.5],
             pos=[center[0] + rx * 0.58, 0, center[2] + rz * 0.05],
@@ -291,8 +314,9 @@ class Humanoid(Template):
             contype=0,
             conaffinity=0,
         )
+        covered = [neck_cap, skull, visor]
         for side in (1, -1):
-            head.add_geom(
+            eye = head.add_geom(
                 type=GEOM.mjGEOM_SPHERE,
                 size=[rz * 0.17, 0, 0],
                 pos=[center[0] + rx * 0.98, side * ry * 0.3, center[2] + rz * 0.08],
@@ -301,6 +325,10 @@ class Humanoid(Template):
                 contype=0,
                 conaffinity=0,
             )
+            covered.append(eye)
+        for geom in covered:
+            vis.hide(geom)
+        _dress_head(vis, torso, head, d, center)
         head.add_camera(name="head_cam", pos=[center[0] + rx * 1.02, 0, center[2]], xyaxes=[0, -1, 0, 0, 0, 1], fovy=70)
 
 
@@ -341,9 +369,9 @@ def _visual_only(body: mujoco.MjsBody) -> None:
     geom.conaffinity = 0
 
 
-def _joint_cap(body, part, servos: int, radius: float, half_len: float, quat) -> None:
+def _joint_cap(body, part, servos: int, radius: float, half_len: float, quat) -> mujoco.MjsGeom:
     """A dark cylinder along a joint axis carrying the mass of the servos at that joint."""
-    body.add_geom(
+    return body.add_geom(
         type=GEOM.mjGEOM_CYLINDER,
         size=[radius, half_len, 0],
         quat=quat,
@@ -354,8 +382,8 @@ def _joint_cap(body, part, servos: int, radius: float, half_len: float, quat) ->
     )
 
 
-def _hidden_mass(body, mass: float, pos: list[float], size: list[float]) -> None:
-    body.add_geom(
+def _hidden_mass(body, mass: float, pos: list[float], size: list[float]) -> mujoco.MjsGeom:
+    return body.add_geom(
         type=GEOM.mjGEOM_BOX,
         size=[v / 2 for v in size],
         pos=pos,
@@ -364,3 +392,120 @@ def _hidden_mass(body, mass: float, pos: list[float], size: list[float]) -> None
         contype=0,
         conaffinity=0,
     )
+
+
+# ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
+
+
+def _drum(vis: Visuals, body, r: float, half: float, cap_r: float, pos=(0.0, 0.0, 0.0)) -> None:
+    for preset, mesh in P.drum(r, half, cap_r).items():
+        vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, pos, M.Z_TO_Y)
+
+
+def _dress_torso(vis: Visuals, torso, d: Dims, accent, pelvis_h: float) -> None:
+    depth, width, tall = d.torso
+    s = d.scale
+    hx, hy, hz = depth / 2, width / 2, tall / 2
+    shell = M.rounded_box(hx, hy, hz, 0.012 * s, segments=4, corner=0.018 * s)
+    vis.add(torso, "shell", accent, shell)
+    plate = M.rounded_box(0.004 * s, hy * 0.72, hz * 0.62, 0.0035 * s, segments=3, corner=0.02 * s)
+    vis.add(torso, "shell", SHELL, plate, (hx + 0.002 * s, 0, tall * 0.06))
+    # A fine dark gap around the chest plate, so it reads as a fitted cover rather than a sticker.
+    gap = M.rounded_box(
+        0.0032 * s, hy * 0.72 + 0.0014 * s, hz * 0.62 + 0.0014 * s, 0.002 * s, segments=2, corner=0.021 * s
+    )
+    vis.add(torso, "dark", DARK, gap, (hx + 0.0012 * s, 0, tall * 0.06))
+    vis.add(
+        torso,
+        "led",
+        P.LED_CYAN,
+        P.led(0.0045 * s, 0.0012 * s)["led"],
+        (hx + 0.006 * s, 0, tall * 0.06 + hz * 0.34),
+        M.Z_TO_X,
+    )
+    pelvis = M.rounded_box(hx * 0.92, hy * 0.94, pelvis_h / 2, pelvis_h * 0.3, segments=3, corner=0.012 * s)
+    vis.add(torso, "dark", DARK, pelvis, (0, 0, -hz + pelvis_h / 2 - 0.004 * s))
+    # Battery hatch with vent slats on the back.
+    hatch = M.rounded_box(0.0025 * s, hy * 0.6, hz * 0.5, 0.0015 * s, segments=2, corner=0.008 * s)
+    vis.add(torso, "dark", DARK, hatch, (-hx - 0.001 * s, 0, tall * 0.04))
+    vents = P.slats(hy * 0.42, hz * 0.3, 4, 0.0012 * s)
+    vis.add(torso, "dark", DARK, vents, (-hx - 0.0035 * s, 0, tall * 0.04), M.rot_z(math.pi / 2))
+
+
+def _dress_leg(vis: Visuals, thigh, shin, foot, sy: int, d: Dims, part, case_z: float, sole, accent) -> None:
+    s = d.scale
+    down = M.rot_x(math.pi)
+    hip_half = part.size[1] / 2 + 0.006 * s
+    _drum(vis, thigh, d.leg_r * 1.3, hip_half, d.leg_r * 0.95)
+    limb = M.link(d.thigh, (d.leg_r * 1.15, d.leg_r * 1.02), (d.leg_r * 1.02, d.leg_r * 0.98), roundness=0.8)
+    vis.add(thigh, "shell", SHELL, limb, (0, 0, 0), down)
+    _drum(vis, shin, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s, d.leg_r * 0.85)
+    reach = d.shin - 0.012 * s
+    limb = M.link(reach, (d.leg_r * 1.02, d.leg_r * 0.92), (d.leg_r * 0.9, d.leg_r * 0.86), roundness=0.8)
+    vis.add(shin, "shell", accent, limb, (0, 0, 0), down)
+    # Ankle: the pitch servo with its horn facing out, above a layered foot.
+    dress_servo(vis, foot, part, [0, 0, case_z], horn=(1, sy))
+    length, wide, plate = d.foot
+    x, y, z = sole
+    rubber = 0.004 * s
+    vis.add(
+        foot,
+        "rubber",
+        P.RUBBER,
+        M.rounded_box(length / 2, wide / 2, rubber / 2, rubber * 0.4, 2, 0.01 * s),
+        (x, y, z + rubber / 2),
+    )
+    body = plate - rubber
+    vis.add(
+        foot,
+        "dark",
+        DARK,
+        M.rounded_box(length / 2 - 0.0006, wide / 2 - 0.0006, body / 2, body * 0.35, 2, 0.01 * s),
+        (x, y, z + rubber + body / 2 - 0.0002),
+    )
+    cover = M.rounded_box(length / 2 * 0.86, wide / 2 * 0.8, 0.0022 * s, 0.0016 * s, 3, 0.008 * s)
+    vis.add(foot, "shell", accent, cover, (x + 0.002 * s, y, z + plate + 0.0015 * s))
+
+
+def _dress_arm(vis: Visuals, torso, upper, fore, sy: int, d: Dims, shoulder_z: float, accent) -> None:
+    depth, width, tall = d.torso
+    s = d.scale
+    down = M.rot_x(math.pi)
+    # The shoulder servo's horn shows on the torso side, under the arm.
+    out = M.Z_TO_Y if sy > 0 else M.rot_x(math.pi / 2)
+    for preset, mesh in P.horn(d.arm_r * 1.05, 0.0022 * s, screws=4).items():
+        vis.add(torso, preset, DARK if preset == "dark" else P.METAL, mesh, (0, sy * width / 2, shoulder_z), out)
+    _drum(vis, upper, d.arm_r * 1.45, d.arm_r * 1.2, d.arm_r * 1.0)
+    limb = M.link(d.upper_arm, (d.arm_r * 1.12, d.arm_r * 1.02), (d.arm_r * 1.0, d.arm_r * 0.98), roundness=0.8)
+    vis.add(upper, "shell", SHELL, limb, (0, 0, 0), down)
+    _drum(vis, fore, d.arm_r * 1.3, d.arm_r * 1.1, d.arm_r * 0.9)
+    limb = M.link(d.forearm, (d.arm_r * 0.98, d.arm_r * 0.92), (d.arm_r * 0.92, d.arm_r * 0.88), roundness=0.8)
+    vis.add(fore, "shell", accent, limb, (0, 0, 0), down)
+    r = d.arm_r * 1.25
+    mitt = M.rounded_box(r * 1.0, r * 0.82, r * 1.2, r * 0.7, segments=4, corner=r * 0.75)
+    vis.add(fore, "dark", DARK, mitt, (0, 0, -d.forearm - d.arm_r * 0.6))
+
+
+def _dress_head(vis: Visuals, torso, head, d: Dims, center) -> None:
+    depth, width, tall = d.torso
+    s = d.scale
+    rx, ry, rz = d.head
+    # A short neck column rising from the shoulders.
+    neck = M.cylinder(0.013 * s, 0.016 * s, segments=28, bevel=0.002 * s, z0=tall / 2 - 0.004 * s)
+    vis.add(torso, "dark", DARK, neck)
+    _drum(vis, head, 0.009 * s, 0.0124 * s, 0.006 * s)
+    skull = M.rounded_box(rx, ry, rz, rz * 0.62, segments=5, corner=ry * 0.62)
+    vis.add(head, "shell", SHELL, skull, center)
+    cx, _, cz = center
+    visor = M.rounded_box(0.004 * s, ry * 0.74, rz * 0.48, 0.003 * s, segments=3, corner=rz * 0.4)
+    vis.add(head, "glass", P.GLASS, visor, (cx + rx - 0.0022 * s, 0, cz + rz * 0.05))
+    for side in (1, -1):
+        eye = M.rounded_box(0.001 * s, 0.0042 * s, 0.0058 * s, 0.0008 * s, segments=2, corner=0.0036 * s)
+        vis.add(head, "led", P.LED_CYAN, eye, (cx + rx + 0.0018 * s, side * ry * 0.32, cz + rz * 0.12))
+        for preset, mesh in P.horn(rz * 0.38, 0.0025 * s, screws=0).items():
+            rot = M.Z_TO_Y if side > 0 else M.rot_x(math.pi / 2)
+            color = DARK if preset == "dark" else P.METAL
+            vis.add(head, preset, color, mesh, (cx * 0.5, side * (ry - 0.0012 * s), cz), rot)
+    for preset, mesh in P.lens(0.0042 * s, 0.0018 * s).items():
+        color = {"dark": DARK, "glass": P.GLASS, "metal": P.METAL}[preset]
+        vis.add(head, preset, color, mesh, (cx + rx + 0.0016 * s, 0, cz - rz * 0.2), M.Z_TO_X)

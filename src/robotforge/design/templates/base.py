@@ -10,9 +10,13 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 import mujoco
+import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from robotforge.design import components
+from robotforge.design.visuals import Visuals
+from robotforge.design.visuals import mesh as M
+from robotforge.design.visuals import parts as P
 
 GEOM = mujoco.mjtGeom
 # Joint modules run a velocity loop in their driver; model it as damping of at least this fraction of the
@@ -85,10 +89,10 @@ def servo_joint(
     return joint
 
 
-def servo_case(body: mujoco.MjsBody, part: components.Actuator, pos: list[float], quat=None) -> None:
+def servo_case(body: mujoco.MjsBody, part: components.Actuator, pos: list[float], quat=None) -> mujoco.MjsGeom:
     """The visible, massive servo housing at a joint."""
     sx, sy, sz = part.size
-    body.add_geom(
+    return body.add_geom(
         type=GEOM.mjGEOM_BOX,
         size=[sx / 2, sy / 2, sz / 2],
         pos=pos,
@@ -118,3 +122,27 @@ def imu(spec: mujoco.MjSpec, body: mujoco.MjsBody, prefix: str = "") -> None:
         objtype=mujoco.mjtObj.mjOBJ_SITE,
         objname=f"{prefix}imu",
     )
+
+
+def dress_servo(
+    vis: Visuals,
+    body: mujoco.MjsBody,
+    part: components.Actuator,
+    pos: list[float],
+    quat=None,
+    horn: tuple[int, int] = (2, 1),
+) -> None:
+    """Draw a servo case (as placed by `servo_case`) as a rounded housing with its round horn on the
+    face `horn` = (axis, sign) of the case frame, e.g. (0, -1) for the case's -x face."""
+    axis, sign = horn
+    half = [v / 2 for v in part.size]
+    e = np.eye(3)
+    x_l = e[(axis + 1) % 3]
+    z_l = sign * e[axis]
+    rot = np.column_stack([x_l, np.cross(z_l, x_l), z_l])
+    if quat is not None:
+        rot = M.quat_to_mat(quat) @ rot
+    hx, hy, hz = half[(axis + 1) % 3], half[(axis + 2) % 3], half[axis]
+    horn_r = 0.78 * min(hx, hy)
+    for preset, mesh in P.servo_box(hx, hy, hz, horn_r).items():
+        vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, pos, rot)

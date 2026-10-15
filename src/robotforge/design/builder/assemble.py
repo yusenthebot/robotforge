@@ -26,6 +26,9 @@ from robotforge.design.builder.schema import (
     control_of,
 )
 from robotforge.design.templates.base import DARK, GEOM, SHELL, new_spec, servo_joint
+from robotforge.design.visuals import Visuals
+from robotforge.design.visuals import mesh as M
+from robotforge.design.visuals import parts as P
 
 LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator pushes with full force
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
@@ -51,23 +54,28 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     spec = new_spec()
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
+    vis = Visuals(spec)
     base = spec.worldbody.add_body(name="base")
     if not build.base.fixed:
         base.add_freejoint(name="root")
-    _shape(base, build.base, build, np.eye(3), accent, "base")
+    _shape(base, build.base, build, np.eye(3), accent, "base", vis)
     _sensors(spec, base, "base", build.base, np.eye(3))
     bodies: dict[str, mujoco.MjsBody] = {"base": base}
     for part in placed:
         parent = bodies[part.parent]
         body = parent.add_body(name=part.name, pos=part.pos.tolist(), quat=_quat(part.rot))
         bodies[part.name] = body
-        _joint(spec, parent, body, part, build, out)
-        _shape(body, part.spec, build, part.local, accent, part.name)
+        _joint(spec, parent, body, part, build, out, vis)
+        outward = part.local @ np.array([0.0, 1.0, 0.0])
+        if float((part.rot @ outward) @ part.pos) < 0:  # wheels show their rim on the outside
+            outward = -outward
+        _shape(body, part.spec, build, part.local, accent, part.name, vis, outward)
         if part.spec.foot:
             _foot(body, part)
         _sensors(spec, body, part.name, part.spec, part.local)
         if part.spec.robot is not None:
             _mount(spec, body, part, out)
+    vis.finish()
     return out
 
 
@@ -75,7 +83,13 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
 
 
 def _joint(
-    spec: mujoco.MjSpec, parent: mujoco.MjsBody, body: mujoco.MjsBody, part: Placed, build: BuildSpec, out: Assembly
+    spec: mujoco.MjSpec,
+    parent: mujoco.MjsBody,
+    body: mujoco.MjsBody,
+    part: Placed,
+    build: BuildSpec,
+    out: Assembly,
+    vis: Visuals,
 ) -> None:
     j = part.spec.joint
     if j.type == "fixed":
@@ -151,7 +165,7 @@ def _joint(
         act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
         act.forcerange = [-actuator.stall_torque, actuator.stall_torque]
     out.home_qpos[name] = home
-    _actuator_housing(parent, body, part, actuator, np.asarray(axis), build.servo_caps)
+    _actuator_housing(parent, body, part, actuator, np.asarray(axis), build.servo_caps, vis)
 
 
 def _geared(part: components.Actuator, gear: float) -> components.Actuator:
@@ -180,6 +194,7 @@ def _actuator_housing(
     actuator: components.Actuator,
     axis: np.ndarray,
     visible: bool,
+    vis: Visuals,
 ) -> None:
     """The servo or motor itself: drawn where a builder would put it and carrying its mass, never colliding."""
     rgba = DARK if visible else INVISIBLE
@@ -217,7 +232,7 @@ def _actuator_housing(
         )
         return
     # A rotary servo as a knuckle around its output axis at the joint.
-    body.add_geom(
+    knuckle = body.add_geom(
         type=GEOM.mjGEOM_CYLINDER,
         size=[min(sx, sy) / 2 + 0.002, sz / 2, 0],
         quat=_z_to(axis),
@@ -226,6 +241,11 @@ def _actuator_housing(
         contype=0,
         conaffinity=0,
     )
+    if visible:  # drawn as a joint drum with metal horns on both faces
+        vis.hide(knuckle)
+        r = min(sx, sy) / 2 + 0.002
+        for preset, mesh in P.drum(r, sz / 2, r * 0.7).items():
+            vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), M.z_to(axis))
 
 
 def _min_mass(body: mujoco.MjsBody) -> None:
@@ -242,6 +262,8 @@ def _shape(
     local: np.ndarray,
     accent: list[float],
     owner: str,
+    vis: Visuals,
+    outward: np.ndarray | None = None,
 ) -> None:
     shape = spec.shape
     if shape == "none":
@@ -272,15 +294,20 @@ def _shape(
     center = local @ ((low + high) / 2)
     size = spec.size
     if shape == "box":
-        body.add_geom(type=GEOM.mjGEOM_BOX, size=[s / 2 for s in size], pos=center.tolist(), **kwargs)
+        g = body.add_geom(type=GEOM.mjGEOM_BOX, size=[s / 2 for s in size], pos=center.tolist(), **kwargs)
+        half = [s / 2 for s in size]  # the box is axis-aligned in the body frame, like its collision box
+        vis.hide(g)
+        vis.add(body, "shell", rgba, M.rounded_box(*half, min(min(half) * 0.25, 0.006), segments=3), center)
     elif shape in ("sphere", "caster"):
         body.add_geom(type=GEOM.mjGEOM_SPHERE, size=[size[0] / 2, 0, 0], pos=center.tolist(), **kwargs)
     elif shape == "wheel":
         axis = local @ np.array([0.0, 1.0, 0.0])
         r, half_w = size[0] / 2, size[1] / 2
-        body.add_geom(type=GEOM.mjGEOM_CYLINDER, size=[r, half_w, 0], pos=center.tolist(), quat=_z_to(axis), **kwargs)
+        tyre = body.add_geom(
+            type=GEOM.mjGEOM_CYLINDER, size=[r, half_w, 0], pos=center.tolist(), quat=_z_to(axis), **kwargs
+        )
         # Hub cap: a light disc on the outside face so you can see the wheel turn.
-        body.add_geom(
+        cap = body.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[r * 0.5, half_w + 0.0008, 0],
             pos=center.tolist(),
@@ -290,7 +317,7 @@ def _shape(
             contype=0,
             conaffinity=0,
         )
-        body.add_geom(
+        bar = body.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[r * 0.42, r * 0.07, half_w + 0.0012],  # a bar across both faces: you see the wheel turn
             pos=center.tolist(),
@@ -300,10 +327,23 @@ def _shape(
             contype=0,
             conaffinity=0,
         )
+        for geom in (tyre, cap, bar):
+            vis.hide(geom)
+        rim = accent if spec.color is None else rgba
+        face = outward if outward is not None else axis
+        colors = {"rubber": P.RUBBER, "shell": rim, "dark": DARK, "metal": P.METAL}
+        for preset, mesh in P.tyre(r, half_w).items():  # spokes on the rim show the wheel turn
+            vis.add(body, preset, colors[preset], mesh, center, M.z_to(face))
     else:  # capsule or cylinder from end to end
         start, end = _segment(spec)
         gtype = GEOM.mjGEOM_CAPSULE if shape == "capsule" else GEOM.mjGEOM_CYLINDER
-        body.add_geom(type=gtype, size=[size[0] / 2, 0, 0], fromto=[*(local @ start), *(local @ end)], **kwargs)
+        g = body.add_geom(type=gtype, size=[size[0] / 2, 0, 0], fromto=[*(local @ start), *(local @ end)], **kwargs)
+        if shape == "cylinder":  # a softened rim instead of a knife edge
+            a, b = local @ start, local @ end
+            length, r = float(np.linalg.norm(b - a)), size[0] / 2
+            vis.hide(g)
+            rim = min(0.006, r * 0.2, length * 0.2)
+            vis.add(body, "shell", rgba, M.cylinder(r, length, segments=48, bevel=rim), (a + b) / 2, M.z_to(b - a))
 
 
 def _segment(spec: BaseSpec | PartSpec) -> tuple[np.ndarray, np.ndarray]:

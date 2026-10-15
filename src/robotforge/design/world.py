@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from robotforge.design import builder, components, importer, library, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
+from robotforge.design.visuals import props as looks
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 FLOOR_STYLES = {name: list(style.rgba) for name, style in terrain.STYLES.items()}
@@ -369,11 +370,13 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     z = obj.pos[2] if len(obj.pos) == 3 else ground_z + rest_z
     mass = obj.mass if obj.mass is not None else volume * PLASTIC_DENSITY
     if obj.fixed:
-        spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], quat=quat, rgba=rgba, **geom)
+        g = spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], quat=quat, rgba=rgba, **geom)
+        looks.dress(spec, spec.worldbody, obj.shape, obj.size, rgba, obj.name, [g], pos=[x, y, z], quat=quat)
         return
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
     body.add_freejoint(name=obj.name)
-    body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=4, **geom)
+    g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=4, **geom)
+    looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g])
 
 
 def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
@@ -381,7 +384,7 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: f
     top = 0.025
     x, y = obj.pos[0], obj.pos[1]
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z], quat=quat)
-    body.add_geom(
+    top_geom = body.add_geom(
         name=obj.name,
         type=mujoco.mjtGeom.mjGEOM_BOX,
         size=[length / 2, width / 2, top / 2],
@@ -389,14 +392,18 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: f
         rgba=rgba,
     )
     leg = min(0.025, length / 10, width / 10)
+    geoms = [top_geom]
     for sx in (1, -1):
         for sy in (1, -1):
-            body.add_geom(
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                size=[leg, leg, (height - top) / 2],
-                pos=[sx * (length / 2 - 2 * leg), sy * (width / 2 - 2 * leg), (height - top) / 2],
-                rgba=[c * 0.7 for c in rgba[:3]] + [1],
+            geoms.append(
+                body.add_geom(
+                    type=mujoco.mjtGeom.mjGEOM_BOX,
+                    size=[leg, leg, (height - top) / 2],
+                    pos=[sx * (length / 2 - 2 * leg), sy * (width / 2 - 2 * leg), (height - top) / 2],
+                    rgba=[c * 0.7 for c in rgba[:3]] + [1],
+                )
             )
+    looks.dress(spec, body, "table", obj.size, rgba, obj.name, geoms)
 
 
 def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
@@ -422,9 +429,10 @@ def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: flo
         ([length / 2, t / 2, height / 2], [0, -width / 2 + t / 2, height / 2]),
     ]
     mass = obj.mass if obj.mass is not None else 0.15
+    geoms = []
     for i, (size, pos) in enumerate(parts):
         kwargs = {} if obj.fixed else {"mass": mass / len(parts)}
-        parent.add_geom(
+        g = parent.add_geom(
             name=obj.name if i == 0 else f"{obj.name}_wall{i}",
             type=G,
             size=size,
@@ -432,6 +440,8 @@ def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: flo
             rgba=rgba,
             **kwargs,
         )
+        geoms.append(g)
+    looks.dress(spec, parent, "bin", obj.size, rgba, obj.name, geoms, pos=[x, y, z])
 
 
 def _home_qpos(model: mujoco.MjModel, homes) -> np.ndarray:
