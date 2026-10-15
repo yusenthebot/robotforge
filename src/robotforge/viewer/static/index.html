@@ -53,9 +53,14 @@
         <span class="lesson-chapter" id="lesson-chapter"></span>
         <h2 class="lesson-title" id="lesson-title"></h2>
       </div>
-      <button class="close" id="lesson-exit" type="button" data-i18n-label="exit_lesson">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
+      <div class="lesson-head-actions">
+        <button class="close" id="lesson-fold" type="button" aria-expanded="true" data-i18n-label="fold_lesson">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+        </button>
+        <button class="close" id="lesson-exit" type="button" data-i18n-label="exit_lesson">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
     </header>
     <div class="lesson-progress"><span id="lesson-step-count"></span><div class="dots" id="lesson-dots"></div></div>
     <section class="lesson-step">

@@ -61,21 +61,25 @@ function makeGradientTexture(top, bottom) {
   return tex;
 }
 
-// While the drawer is open, the view's center slides left so what you look at is not under it.
-let viewShift = 0;
-let viewShiftTarget = 0;
+// With panels open, the view's center slides into the part of the window they leave free, so what you look at
+// is not under them: sideways for side panels, up or down for a strip of plots or a sheet along the bottom.
+const viewShift = { x: 0, y: 0 };
+const viewShiftTarget = { x: 0, y: 0 };
 
 function applyViewShift() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  if (Math.abs(viewShift) < 0.5) camera.clearViewOffset();
-  else camera.setViewOffset(w, h, viewShift, 0, w, h);
+  if (Math.abs(viewShift.x) < 0.5 && Math.abs(viewShift.y) < 0.5) camera.clearViewOffset();
+  else camera.setViewOffset(w, h, viewShift.x, viewShift.y, w, h);
 }
 
 function updateViewShift() {
-  if (viewShift === viewShiftTarget) return;
-  viewShift += (viewShiftTarget - viewShift) * (reduceMotion ? 1 : 0.2);
-  if (Math.abs(viewShiftTarget - viewShift) < 0.5) viewShift = viewShiftTarget;
+  if (viewShift.x === viewShiftTarget.x && viewShift.y === viewShiftTarget.y) return;
+  const k = reduceMotion ? 1 : 0.2;
+  for (const axis of ["x", "y"]) {
+    viewShift[axis] += (viewShiftTarget[axis] - viewShift[axis]) * k;
+    if (Math.abs(viewShiftTarget[axis] - viewShift[axis]) < 0.5) viewShift[axis] = viewShiftTarget[axis];
+  }
   applyViewShift();
 }
 
@@ -545,7 +549,10 @@ function applyPoses(buffer) {
     // Reloaded mid-lesson: aim at the lesson's rig, not the whole scene (its animated move may have been
     // cut short by the scene arriving again).
     const own = lessonCamera();
-    if (pendingFit === "camera" && own) moveCamera(new THREE.Vector3().fromArray(own.eye), new THREE.Vector3().fromArray(own.target), false);
+    if (pendingFit === "camera" && own) {
+      const goal = new THREE.Vector3().fromArray(own.target);
+      moveCamera(fitToFree(new THREE.Vector3().fromArray(own.eye), goal), goal, false);
+    }
     else if (pendingFit === "camera") frameCamera();
     pendingFit = null;
     $("loading").hidden = true;
@@ -1244,15 +1251,60 @@ function setWorldPanel(open) {
   shiftForDrawers();
 }
 
-// Slide the view's center away from open side panels, so what you look at stays in the clear.
-function shiftForDrawers() {
-  const half = (id) => {
-    const el = $(id);
-    return !el.hidden && el.offsetParent !== null && !narrow() ? (el.offsetWidth + 16) / 2 : 0;
+// The part of the window no panel covers. Left panels and right columns bound it sideways; a panel spanning most
+// of the width (a phone's sheet, plots across the top of what is left) bounds it from above or below.
+function freeRect() {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  // Shown at all (offsetParent cannot tell: it is null for every fixed panel, shown or not).
+  const box = (el) => (el && !el.hidden && el.getClientRects().length ? el.getBoundingClientRect() : null);
+  let [left, right, top, bottom] = [0, W, 0, H];
+  const across = (r) => {
+    if (r.top + r.height / 2 > H / 2) bottom = Math.min(bottom, r.top);
+    else top = Math.max(top, r.bottom);
   };
-  viewShiftTarget = Math.max(half("drawer"), half("lesson-plots")) - Math.max(half("world-panel"), half("lesson-panel"));
+  for (const id of ["world-panel", "lesson-panel"]) {
+    const r = box($(id));
+    if (!r) continue;
+    if (r.width > W * 0.7) across(r);
+    else left = Math.max(left, r.right);
+  }
+  for (const id of ["drawer", "lesson-plots"]) {
+    const r = box($(id));
+    if (!r) continue;
+    if (r.width < W * 0.7 && r.left > left + 160) right = Math.min(right, r.left); // a column beside the view
+    else across(r); // a strip over what is left
+  }
+  const bar = box(document.querySelector(".top"));
+  if (bar) top = Math.max(top, bar.bottom);
+  const dock = box(document.querySelector(".dock"));
+  if (dock) bottom = Math.min(bottom, dock.top);
+  return { left, right, top, bottom };
+}
+
+// Lessons frame their rig for a big window. Where the free part of the window is short (a split screen, a phone
+// with the lesson sheet up), step back from the target so the rig still fits; a big window keeps the framing.
+const FRAMED_FOR = 600; // px of free height a lesson camera is framed for
+function fitToFree(eye, target) {
+  if (!hasSize()) return eye;
+  const r = freeRect();
+  const k = Math.min(1.6, Math.max(1, Math.sqrt(FRAMED_FOR / Math.max(120, r.bottom - r.top))));
+  return target.clone().add(eye.clone().sub(target).multiplyScalar(k));
+}
+
+// Slide the view's center into the free part of the window, so what you look at stays in the clear.
+function shiftForDrawers() {
+  const r = freeRect();
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const roomy = r.right - r.left > 80 && r.bottom - r.top > 80; // panels everywhere: no place to slide to
+  viewShiftTarget.x = roomy ? W / 2 - (r.left + r.right) / 2 : 0;
+  viewShiftTarget.y = roomy ? H / 2 - (r.top + r.bottom) / 2 : 0;
 }
 window.addEventListener("resize", shiftForDrawers);
+// Panels change size with what they show (a quiz answered, the record unfolded): follow them.
+const panelWatch = new ResizeObserver(() => shiftForDrawers());
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -1628,7 +1680,10 @@ initLessons({
   toast,
   bodyNode: (id) => bodyNodes[id],
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
-  moveCamera: (eye, target) => moveCamera(new THREE.Vector3().fromArray(eye), new THREE.Vector3().fromArray(target), true),
+  moveCamera: (eye, target) => {
+    const goal = new THREE.Vector3().fromArray(target);
+    moveCamera(fitToFree(new THREE.Vector3().fromArray(eye), goal), goal, true);
+  },
   closePanels: () => {
     setHelp(false);
     setDrawer(false);
@@ -1721,6 +1776,7 @@ window.__robotforge = {
   },
   following: () => (follow ? follow.body : null),
   tweening: () => tween !== null,
+  freeRect: () => freeRect(), // the part of the window no panel covers; the view centres there
   selected: () => selected,
   lesson: () => lessonState(),
   busy: () => ({ busy, pending: pending.size }),

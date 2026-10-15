@@ -1163,15 +1163,48 @@ input[type="range"]::-moz-range-thumb {
 .in-lesson #world-panel,
 .in-lesson #drawer { display: none !important; }
 
-@media (max-width: 900px) {
-  .lesson-plots { width: 280px; }
+.lesson-head-actions { display: flex; gap: 2px; }
+#lesson-fold svg { transition: transform 0.2s ease; }
+.lesson-panel.folded #lesson-fold svg { transform: rotate(180deg); }
+/* Folded: only the title and the step dots stay, so the robot gets the room. */
+.lesson-panel.folded > :not(.lesson-head, .lesson-progress) { display: none !important; }
+.lesson-panel.folded .lesson-progress { border-bottom: 0; }
+
+/* A window too small for the lesson, its plots and the robot side by side (a split screen, a small laptop
+   window): the lesson keeps its column on the left and the plots sit at the top of what is left, compact,
+   with the experiment record folded until asked for. The view centres on the space below them. */
+@media (max-width: 1100px) {
   .drawer.lesson-panel { width: 320px; }
+  .lesson-plots {
+    left: calc(var(--gutter) + 320px + 10px);
+    width: auto;
+    max-width: 420px;
+    margin-left: auto;
+    padding: 8px 12px;
+  }
+  .plot canvas { height: 76px; }
 }
 
-@media (max-width: 700px) {
-  .lesson-plots { top: auto; bottom: calc(var(--gutter) + 72px); left: var(--gutter); width: auto; }
-  .plot canvas { height: 72px; }
-  .drawer.lesson-panel { max-height: 42%; }
+@media (max-width: 760px) {
+  .drawer.lesson-panel { width: 290px; }
+  .lesson-plots { left: calc(var(--gutter) + 290px + 10px); }
+}
+
+/* Phones: the lesson is a sheet along the bottom (fold it to see more), the plot a strip along the top. */
+@media (max-width: 600px) {
+  .drawer.lesson-panel {
+    top: auto;
+    bottom: calc(var(--gutter) + 68px);
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+    max-height: 40%;
+  }
+  .lesson-plots { left: var(--gutter); right: var(--gutter); max-width: none; margin-left: 0; }
+  .plot canvas { height: 58px; }
+  /* The sheet folds downward: its chevron points down while it is open. */
+  #lesson-fold svg { transform: rotate(180deg); }
+  .lesson-panel.folded #lesson-fold svg { transform: none; }
 }
 
 .lesson-choice { display: grid; gap: 6px; min-width: 0; }

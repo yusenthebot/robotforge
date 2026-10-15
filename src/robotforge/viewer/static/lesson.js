@@ -18,6 +18,7 @@ export function initLessons(hooks) {
   api = hooks;
   $("learn-toggle").addEventListener("click", () => setPicker($("learn-panel").hidden));
   $("lesson-exit").addEventListener("click", () => exitLesson());
+  $("lesson-fold").addEventListener("click", () => foldLesson(!$("lesson-panel").classList.contains("folded")));
   $("lesson-finished-exit").addEventListener("click", () => exitLesson());
   $("lesson-finished-stay").addEventListener("click", () => ($("lesson-finished").hidden = true));
   $("lesson-next").addEventListener("click", () => {
@@ -171,7 +172,7 @@ function openLesson(desc) {
   renderStep();
   needCamera = true;
   if (desc.camera) api.moveCamera(desc.camera.eye, desc.camera.target);
-  api.shift();
+  foldLesson(false); // a new lesson opens unfolded (and shifts the view for its panels)
   api.retitle();
 }
 
@@ -413,16 +414,32 @@ function renderResult() {
 const RUN_COLORS = ["--plot-blue", "--plot-violet", "--plot-green", "--amber", "--ink"];
 const runColor = (id) => RUN_COLORS[(id - 1) % RUN_COLORS.length];
 
+// Below this width the lesson, its plots and the 3D view cannot all be shown in full: the record starts folded.
+const ROOMY = 1100;
+
+// Fold the lesson panel down to its title, for a bigger view of the robot (on a phone it is a sheet along the bottom).
+function foldLesson(folded) {
+  $("lesson-panel").classList.toggle("folded", folded);
+  const button = $("lesson-fold");
+  button.setAttribute("aria-expanded", String(!folded));
+  button.dataset.i18nLabel = folded ? "unfold_lesson" : "fold_lesson";
+  button.setAttribute("aria-label", t(button.dataset.i18nLabel));
+  button.title = t(button.dataset.i18nLabel);
+  api.shift();
+}
+
 const bench = {
   spec: null,
   state: null,
   box: null,
+  folded: false,
   setup(spec, initial) {
     this.box?.remove();
     this.box = null;
     this.spec = spec;
     this.state = initial ?? null;
     this.zoom = false; // the run chart shows the whole climb, or only the last degrees near the target
+    this.folded = window.innerWidth <= ROOMY;
     if (!spec) return;
     this.box = document.createElement("section");
     this.box.className = "bench";
@@ -468,13 +485,29 @@ const bench = {
       });
       head.append(zoom);
     }
-    if (runs.length || this.state?.sweep) {
+    if ((runs.length || this.state?.sweep) && !this.folded) {
       const clear = document.createElement("button");
       clear.type = "button";
       clear.className = "link-button";
       clear.textContent = t("bench_clear");
       clear.addEventListener("click", () => api.send({ type: "lesson", action: "clear_runs" }));
       head.append(clear);
+    }
+    const fold = document.createElement("button");
+    fold.type = "button";
+    fold.className = "link-button";
+    fold.textContent = this.folded ? t("bench_unfold", { n: runs.length }) : t("bench_fold");
+    fold.setAttribute("aria-expanded", String(!this.folded));
+    fold.addEventListener("click", () => {
+      this.folded = !this.folded;
+      this.render();
+      api.shift();
+    });
+    head.append(fold);
+    box.classList.toggle("folded", this.folded);
+    if (this.folded) {
+      box.replaceChildren(head);
+      return;
     }
     const parts = [head];
     if (!runs.length) {
@@ -1002,7 +1035,7 @@ const plots = {
     g.fillStyle = token("--muted");
     g.strokeStyle = token("--line");
     g.lineWidth = 1;
-    const yt = niceTicks(range[0], range[1], 3);
+    const yt = niceTicks(range[0], range[1], h < 80 ? 2 : 3); // a compact plot has room for two labels
     for (const v of yt) {
       g.beginPath();
       g.moveTo(36, Math.round(y(v)) + 0.5);
