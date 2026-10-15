@@ -110,9 +110,12 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
 def _turn_seconds(trained: dict[str, Any]) -> int:
     """About how long learning what follows a kept walk takes, from the robot's own training pace (a round of
     ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns
-    as many rounds as two sides times their starts, then each side is tuned to begin out of the walk."""
+    as many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk. With the
+    sim running at real time, as in the viewer, an MJCF critter that trained 15 rounds in 4.4 s learned all that in
+    109 s, and this says 120; when the sim runs as fast as it can while it trains (as the tests drive it), a round
+    takes about twice as long and this says too much."""
     steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
-    turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * rhythm_walk.WALKING_ROUNDS
+    turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * 2 * rhythm_walk.WALKING_ROUNDS
     per_round = trained["seconds"] / max(1, trained["rounds"])
     return max(10, int(round(per_round * (steer + turns) / 10.0)) * 10)
 

@@ -79,10 +79,18 @@ def test_a_saved_walk_checks_its_numbers():
         _walk("crab", ["a", "b"], home={"a": 0.0, "c": 0.0})
     both = _walk("crab", ["a", "b"], turn_left=[0.0] * 6, turn_right=[0.0] * 6)
     walking = both.model_copy(
-        update={"turn_left_walking": [0.0] * 6, "turn_right_walking": [0.0] * 6, "switching": "fade"}
+        update={
+            "turn_left_walking": [0.0] * 6,
+            "turn_right_walking": [0.0] * 6,
+            "turn_left_walking_at": [0.0, 0.4],
+            "switching": "fade",
+        }
     )
     assert walking.turns_from_walking and SavedWalk.model_validate(walking.model_dump()) == walking
-    assert old.switching is None  # switches as walks kept before did
+    assert old.switching is None and old.turn_left_walking_at is None  # switches as walks kept before did
+    for bad in ([], [1.0], [math.nan]):
+        with pytest.raises(ValidationError, match="stride phases"):
+            _walk("crab", ["a", "b"], turn_left_walking_at=bad)
     with pytest.raises(ValidationError):
         _walk("crab", ["a", "b"], switching="snap")
 
@@ -152,7 +160,7 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     assert not pg.session.controllers["crab"].walking  # holds its home pose
 
 
-def _swinging(pg, walking: bool = False, kept_before: bool = False) -> RhythmWalker:
+def _swinging(pg, walking: bool = False, kept_before: bool = False, **more) -> RhythmWalker:
     """The starfish with a made-up walk and turns (big swings, all in step; the turns' walking versions swing the
     other way round, if `walking`), walking mid-stride. A walk kept now names its home pose and how it switches;
     `kept_before` leaves both out, as files kept before did."""
@@ -162,7 +170,7 @@ def _swinging(pg, walking: bool = False, kept_before: bool = False) -> RhythmWal
     names = joint_names(model, body)
     swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)
     turn = [0.0] * len(names) + [0.3] * len(names) + [1.0] * len(names)
-    extra: dict = {}
+    extra: dict = more
     if not kept_before:
         extra |= {"home": dict(zip(names, pg.behaviors.home_qpos()[body.qadr], strict=True)), "switching": "fade"}
     if walking:
@@ -191,6 +199,38 @@ def test_a_turn_out_of_the_walk_starts_at_once_faded_in_from_the_stride(pg):
     pg.run_fast(lambda: False, FADE)
     turn = walker.rhythms["left walking"].targets(walker.home, walker.clock - walker.t0)  # as of its last update
     assert pg.session.data.ctrl[walker.actuators] == pytest.approx(np.clip(turn, walker.lower, walker.upper), abs=0.05)
+
+
+def test_a_turn_that_fell_from_some_points_of_the_stride_waits_for_one_it_did_not(pg):
+    """Regression: a turn that tipped the template dog over from 2 of 21 moments of its walk was not kept for
+    starting out of the walk at all, so the robot steadied first and a 1 s turn straight after walking turned 14% of
+    its rate. It now walks on to the next point of the stride it never fell from (less than a stride) and turns
+    there."""
+    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    assert walker.walking_at == {"left": [0.3], "right": None}
+    walked_from, freq = walker.t0, walker.walk.freq
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.playing == "left" and walker.rhythm == "forward" and walker.turn_at is not None  # walking on
+    pg.behaviors.move("crab", 0.2, 0.0)  # let go before it began: it walks on, as it was
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.rhythm == "forward" and walker.t0 == walked_from and walker.turn_at is None
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    asked = walker.clock
+    phase = ((asked - walked_from) * freq) % 1.0
+    assert walker.turn_at - asked == pytest.approx(((0.3 - phase) % 1.0) / freq, abs=0.011)
+    began = pg.run_fast(lambda: walker.rhythm == "left walking", 1.0)
+    assert began < 1.0 / freq + 0.05  # within a stride
+    assert ((walker.t0 - walked_from) * freq) % 1.0 == pytest.approx(0.3, abs=0.03)  # at the point it was safe from
+    assert walker.fade_from is not None  # faded in from the stride
+
+
+def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
+    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    pg.behaviors.move("crab", 0.0, -0.8)  # the right turn may begin anywhere
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.rhythm == "right walking" and walker.turn_at is None
 
 
 def test_other_switches_while_moving_steady_on_home_until_calm(pg):
@@ -299,15 +339,17 @@ def test_a_dog_keeps_its_gait_and_offers_its_learned_walk_as_a_mode(pg):
     assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
 
 
-def test_a_turn_starts_straight_out_of_the_walk_only_if_it_fell_from_no_moment_of_it():
+def test_a_walking_turn_begins_only_at_points_of_the_stride_it_fell_from_at_no_moment():
     """Turns tuned to begin out of the walk spin faster, but some tipped robots over from moments they were not tuned
-    on: a walking version is kept only if it falls from none of the checked moments, else the robot steadies first."""
-    from robotforge.behaviors.rhythm_walk import _safest
+    on. Each is checked from moments of the walk; the points of the stride it fell from are left out (at 2 Hz a
+    moment 0.6 s in is 0.2 of a stride along), and one that fell from every point is not kept."""
+    from robotforge.behaviors.rhythm_walk import _mean_wait, _walking_turn
     from robotforge.control.cpg import Start
 
     solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "dog", "template": "quadruped"}]}))
     model = solo.model
     check = Trainer(model, "dog", Reward(turn=1.0), 2.0)
+    first = Trainer(model, "dog", Reward(turn=1.0), 1.0)
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, 0)
     standing = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
@@ -317,10 +359,15 @@ def test_a_turn_starts_straight_out_of_the_walk_only_if_it_fell_from_no_moment_o
     data.qvel[vel[3]], data.qvel[vel[5]] = 2.0, 8.0  # rolling over and spinning: nothing it does keeps it up
     toppling = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
     n = check.body.joints
-    still = Rhythm.still(n)
     swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.3), np.zeros(n)]))
-    assert _safest((swing, still), check, [standing]) is not None
-    assert _safest((swing, still), check, [standing, toppling]) is None
+    times = (0.5, 0.6, 1.0, 0.7)  # stride points 0, 0.2, 0 again and 0.4
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times)[1] is None  # anywhere
+    assert _walking_turn((swing,), 1.0, check, first, [standing, toppling, standing, standing], times)[1] == [0.0, 0.4]
+    assert _walking_turn((swing,), 1.0, check, first, [standing, standing, toppling, standing], times)[1] == [0.2, 0.4]
+    assert _walking_turn((swing,), 1.0, check, first, [toppling, standing, standing, toppling], times) is None  # 1 of 3
+    assert _walking_turn((swing,), 1.0, check, first, [toppling] * 4, times) is None
+    assert _mean_wait([0.0]) == pytest.approx(0.5)  # half a stride on average
+    assert _mean_wait([0.0, 0.5]) == pytest.approx(0.25)
 
 
 def test_a_walk_that_falls_before_its_first_moment_keeps_no_walking_turns(monkeypatch):
@@ -330,10 +377,31 @@ def test_a_walk_that_falls_before_its_first_moment_keeps_no_walking_turns(monkey
 
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 2)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
-    monkeypatch.setattr(Trainer, "moments", lambda self, rhythm, times: [])  # down before 0.5 s
+    monkeypatch.setattr(rhythm_walk, "walk_moments", lambda model, robot, walk, times: [])  # down before 0.5 s
     solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
     turned = rhythm_walk.learn_turns(solo, "crab", _walk("crab", joint_names(solo, Body.find(solo, "crab"))), seed=1)
     assert turned.turns and turned.turn_left_walking is None and turned.turn_right_walking is None
+
+
+def test_a_turn_from_standing_that_ends_on_its_back_is_learned_again_with_the_fall_forfeiting_it(monkeypatch):
+    """Regression: a fall cost a point while a fast spin earned many, so the imported A1 kept a left turn that put it
+    on its back from standing in all of 15 tries (1 of 6 walks). Such a side learns again, a fall forfeiting the
+    turn; the others learn as they always did."""
+    from robotforge.behaviors import rhythm_walk
+
+    calls = []
+
+    def learned(model, robot, joints, reward, seed):
+        calls.append((reward.turn, reward.forfeit))
+        fell = reward.turn > 0 and not reward.forfeit  # the left turn falls until the fall forfeits it
+        return Rhythm.still(joints.body.joints), {"fell": float(fell), "turned": reward.turn * (6.0 if fell else 4.0)}
+
+    monkeypatch.setattr(rhythm_walk, "_standing_turn", learned)
+    monkeypatch.setattr(rhythm_walk, "learn_walking_turns", lambda model, robot, walk, seed=0: walk)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    turned = rhythm_walk.learn_turns(solo, "crab", _walk("crab", joint_names(solo, Body.find(solo, "crab"))))
+    assert calls == [(1.0, False), (1.0, True), (-1.0, False)]
+    assert turned.turn_rate == pytest.approx(4.0 / 4.0)  # rad/s, from the turn kept
 
 
 def test_a_kept_walk_that_curves_learns_to_hold_its_heading(pg, monkeypatch):

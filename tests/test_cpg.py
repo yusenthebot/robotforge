@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from robotforge.control.cpg import (
+    CONTROL_HZ,
     DRIFT_WEIGHT,
     FADE,
     FALL_PENALTY,
@@ -146,8 +147,13 @@ def test_a_rhythm_can_start_mid_stride_faded_in_from_the_targets_of_the_moment()
     trainer = Trainer(model, "star", Reward(), seconds=1.0)
     n = trainer.body.joints
     swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.5), np.zeros(n)]))
-    moments = trainer.moments(swing, (0.5, 0.8))
-    assert len(moments) == 2 and np.abs(moments[0].qvel).max() > 0.1  # mid-stride: moving
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    for k in range(round(0.5 * CONTROL_HZ)):  # half a second of the swing
+        data.ctrl[trainer.body.actuators] = swing.targets(trainer.home, k / CONTROL_HZ)
+        mujoco.mj_step(model, data, trainer.substeps)
+    moments = [Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())]
+    assert np.abs(moments[0].qvel).max() > 0.1  # mid-stride: moving
     a, b = np.zeros(3), np.ones(3)
     assert fade_in(a, b, 0.0) == pytest.approx(a) and fade_in(a, b, FADE) == pytest.approx(b)
     assert fade_in(a, b, FADE / 2) == pytest.approx(0.5 * b)

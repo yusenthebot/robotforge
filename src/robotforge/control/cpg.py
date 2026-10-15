@@ -448,32 +448,6 @@ class Trainer:
         aims = self.reward.aims
         return sum(self.rollout(rhythm, theta, push, start, aim)["reward"] for aim in aims) / len(aims)
 
-    def moments(self, rhythm: Rhythm | Steering, times: Sequence[float]) -> list[Start]:
-        """Play `rhythm` from the home pose (a Steering holding the heading it starts with) and keep the moments
-        `times` seconds into it, to start other rhythms from; none past a fall."""
-        m, b = self.model, self.body
-        d = mujoco.MjData(m)
-        if m.nkey:
-            mujoco.mj_resetDataKeyframe(m, d, 0)
-        mujoco.mj_forward(m, d)
-        out: list[Start] = []
-        heading, turned = trunk_yaw(d, b), 0.0
-        for k in range(round(max(times, default=0.0) * CONTROL_HZ) + 1):
-            t = k / CONTROL_HZ
-            if float(d.xmat[b.trunk][8]) < FELL:
-                break
-            if any(abs(t - when) < 0.5 / CONTROL_HZ for when in times):
-                out.append(Start(d.qpos.copy(), d.qvel.copy(), d.ctrl.copy()))
-            senses = trunk_senses(d, b) if rhythm.reflexes else None
-            target = rhythm.targets(self.home, t, senses=senses, error=-turned)
-            d.ctrl[b.actuators] = np.clip(target, b.lower, b.upper)
-            for _ in range(self.substeps):
-                mujoco.mj_step(m, d)
-            now = trunk_yaw(d, b)
-            turned += math.atan2(math.sin(now - heading), math.cos(now - heading))
-            heading = now
-        return out
-
     def push_test(self, rhythm: Rhythm, strength: float, trials: int = 12, seed: int = 99) -> dict[str, float]:
         """Walk `trials` times, each shoved once at random: how many stayed up, and how far they got."""
         rng = np.random.default_rng(seed)

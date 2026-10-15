@@ -9,9 +9,10 @@ knows its body.
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
 its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
-Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts at once, faded in from
-the stride, as its walking version learned to; any other switch while moving first steadies the robot on its home
-pose until it is calm, then fades the new rhythm in. It cannot back up or change speed, and the status says so.
+Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts faded in from the stride
+as its walking version learned to, at once or at the next point of the stride it was checked to start from safely;
+any other switch while moving first steadies the robot on its home pose until it is calm, then fades the new rhythm
+in. It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -75,6 +76,9 @@ class SavedWalk(BaseModel):
     steer: list[float] | None = None  # how the walk holds its heading (cpg.Steering): 3 numbers per joint
     turn_left_walking: list[float] | None = None  # the turns tuned again to begin straight out of the walk
     turn_right_walking: list[float] | None = None
+    # Where in its stride (0 to 1, from where the walk's rhythm starts) each walking turn may begin; None: anywhere.
+    turn_left_walking_at: list[float] | None = None
+    turn_right_walking_at: list[float] | None = None
     # How it switches rhythms while moving: "fade" (kept since steering and walking turns); None, as files kept
     # before: stop holds home at once, and another rhythm waits on home until the robot stands still.
     switching: Literal["fade"] | None = None
@@ -93,6 +97,9 @@ class SavedWalk(BaseModel):
         for side in (self.turn_left, self.turn_right, self.turn_left_walking, self.turn_right_walking):
             if side is not None and not _finite(side, 3 * len(self.joints)):
                 raise ValueError(f"a turn rhythm needs {3 * len(self.joints)} finite numbers")
+        for at in (self.turn_left_walking_at, self.turn_right_walking_at):
+            if at is not None and (not at or not _finite(at) or not all(0.0 <= v < 1.0 for v in at)):
+                raise ValueError("a walking turn begins at stride phases from 0 up to 1")
         if self.steer is not None and not _finite(self.steer, 3 * len(self.joints)):
             raise ValueError(f"steering needs {3 * len(self.joints)} finite numbers")
         if self.home is not None and (sorted(self.home) != sorted(self.joints) or not _finite(self.home.values())):
@@ -129,14 +136,21 @@ TURN_STARTS = 2  # random starts per side; the better one is kept
 # Moments of the walk (s after it starts from standing) the walking version of a turn learns to begin at: its first
 # steps, then its stride at different points of a step (0.3 s apart at the usual 2 Hz).
 WALK_STARTS = (0.5, 0.8, 1.1, 1.4, 1.7, 2.0)
-WALKING_ROUNDS = 20  # search rounds per side tuning a turn learned from standing to begin out of the walk
-# A turn's walking version is checked from more moments of the walk, a tenth of a second apart, each for TURN_CHECK
-# seconds: of the tuned turn and the one from standing (faded in from the stride too), the one that falls from none
-# of them and turns more begins straight out of the walk. If both fall from some moment, the robot steadies first.
-# Always starting the tuned turn, 6 template dog walks fell 16 times and 6 A1 walks 11 in 810 tries of each switch
-# on its own (scripts/rhythm_bench.py switch --trials 15); choosing this way, 12 and 8.
-WALK_CHECKS = tuple(round(0.5 + 0.1 * k, 1) for k in range(21))  # s after the walk starts
+# Search rounds per side tuning a turn learned from standing to begin out of the walk. With 20, a 1 s left turn out
+# of the walk reached 67% of the rate on average over 90 tries on 6 template dog walks and 70% on 6 A1 walks; with 40,
+# 72% and 84% (scripts/rhythm_bench.py switch --trials 15).
+WALKING_ROUNDS = 40
+# A turn's walking version is checked from more moments of the walk as move plays it, a tenth of a second apart (at
+# 2 Hz, each of 5 points of the stride 8 or 9 times), each for TURN_CHECK seconds. Of the tuned turn and the one from
+# standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the walk,
+# at any point of the stride if it fell from none of the moments, else only at the points it never fell from (at
+# least MIN_SAFE of them), the robot walking on until the next one. If neither, the robot steadies first. Checked on
+# 21 moments of the walk as the trainer played it, an A1 left turn kept for 1 of the 5 points fell in 4 of 15 tries
+# straight out of the walk; checked like this, the left turns of 6 A1 walks fell in 1 of 90.
+WALK_CHECKS = tuple(round(1.0 + 0.1 * k, 1) for k in range(41))  # s after the walk starts
+MIN_SAFE = 0.5  # share of the points of the stride checked
 TURN_CHECK = 2.0  # s
+FIRST_SECOND = 1.0  # s: what a short turn command gets
 # After keeping, the walk learns to hold its heading: STEER_ROUNDS rounds aiming STEER_AIMS (rad, 17 degrees to either
 # side, so it learns to correct both ways), losing HOLD_WEIGHT of its progress per rad it strays on average. Its
 # steering is kept if, played as move plays it for STEER_CHECK seconds toward each aim and straight ahead, it falls
@@ -203,10 +217,6 @@ class _Joints:
         walk = self.walk
         return Rhythm(self.rhythm(walk.theta, walk.reflexes), walk.freq, walk.reflexes)
 
-    def forward(self) -> Rhythm | Steering:
-        rhythm = self.walk_rhythm()
-        return rhythm if self.walk.steer is None else Steering(rhythm, self.rhythm(self.walk.steer))
-
 
 def _walker_alone(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> tuple[mujoco.MjData, RhythmWalker, int]:
     """The robot alone in `model` (never the live world) standing at home, a RhythmWalker asked to walk it forward
@@ -249,6 +259,23 @@ def walk_alone(
     moved = data.xpos[trunk][:2] - origin
     along = math.cos(aim) * float(moved[0]) + math.sin(aim) * float(moved[1])
     return {"distance": along, "turned": turned, "stray": stray, "fell": float(fell)}
+
+
+def walk_moments(model: mujoco.MjModel, robot: str, walk: SavedWalk, times: Sequence[float]) -> list[Start]:
+    """Moments `times` seconds into walking forward with `walk` as move plays it (walk_alone), to start other rhythms
+    from as they would be asked for mid-stride; none past a fall."""
+    data, walker, substeps = _walker_alone(model, robot, walk)
+    out: list[Start] = []
+    for k in range(round(max(times, default=0.0) * CONTROL_HZ) + 1):
+        if any(abs(k / CONTROL_HZ - when) < 0.5 / CONTROL_HZ for when in times):
+            out.append(Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy()))
+        walker.update(model, data)
+        for _ in range(substeps):
+            mujoco.mj_step(model, data)
+        walker.tilt_cos = float(data.xmat[walker.body.trunk][8])
+        if walker.fallen:
+            break
+    return out
 
 
 def heading_drift(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> float | None:
@@ -298,58 +325,120 @@ def learn_steering(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int
 def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
     """Teach the robot (alone in `model`, never the live world) to turn on the spot each way, by the same random
     search as the walk with a reward for the angle turned, from standing still; then tune each again to begin
-    straight out of the walk. Returns the walk with the turns added."""
+    straight out of the walk (learn_walking_turns). Returns the walk with the turns added."""
     joints = _Joints(model, robot, walk)
-    home = joints.home()
-    learned: dict[str, list[float]] = {}
+    learned: dict[str, Any] = {}
     rates = []
-    standing: dict[str, Rhythm] = {}
     for side, sign in (("turn_left", 1.0), ("turn_right", -1.0)):
-        trainer = Trainer(model, robot, Reward(turn=sign), walk.seconds, walk.freq, home=home)
-        # Random search lands somewhere different from every start (one tripod turn came out at 16 deg/s, the
-        # next at 87): two starts each way, the better one kept.
-        best: tuple[float, Rhythm, dict[str, float]] | None = None
-        for start in range(TURN_STARTS):
-            rhythm = Rhythm.still(joints.body.joints, walk.freq)
-            trainer.train(rhythm, iterations=TURN_ROUNDS, seed=seed + 10 * start + (1 if sign > 0 else 2))
-            result = trainer.rollout(rhythm)
-            if best is None or result["reward"] > best[0]:
-                best = (result["reward"], rhythm, result)
-        assert best is not None
-        _, rhythm, result = best
-        standing[side] = rhythm
+        rhythm, result = _standing_turn(model, robot, joints, Reward(turn=sign), seed)
+        if result["fell"]:
+            # A fall costs a point while a fast spin earns many, so the search can keep a turn that ends on its back
+            # (an imported A1's left turn did on 1 of 6 walks, in all of 15 tries); it learns again, a fall
+            # forfeiting the turn. Forfeiting always would slow the turns that stay up.
+            rhythm, result = _standing_turn(model, robot, joints, Reward(turn=sign, forfeit=True), seed)
         learned[side] = joints.to_saved(rhythm.theta)
         rates.append(max(0.0, sign * result["turned"]) / walk.seconds)
-    # Learned only from standing still, a turn asked for mid-stride either waited for the robot to stand still (a
-    # 1 s turn right after walking turned the imported A1 16 degrees of the 88 it promised) or started from a pose
-    # and speed it never met. So each is tuned again on moments of the walk and kept apart: tuning the turns
-    # themselves on both left them slower to start from standing (5 of 6 walks turned less in a 1 s command after
-    # the robot had stood still).
-    stride = Trainer(model, robot, Reward(), walk.seconds, walk.freq, home=home)
-    walking = stride.moments(joints.forward(), WALK_STARTS)
-    checks = stride.moments(joints.forward(), WALK_CHECKS)
+    return learn_walking_turns(model, robot, walk.model_copy(update={**learned, "turn_rate": min(rates)}), seed)
+
+
+def _standing_turn(
+    model: mujoco.MjModel, robot: str, joints: _Joints, reward: Reward, seed: int
+) -> tuple[Rhythm, dict[str, float]]:
+    """A turn on the spot learned from standing still for `reward`, and how its rollout went."""
+    walk = joints.walk
+    trainer = Trainer(model, robot, reward, walk.seconds, walk.freq, home=joints.home())
+    # Random search lands somewhere different from every start (one tripod turn came out at 16 deg/s, the next
+    # at 87): two starts each way, the better one kept.
+    best: tuple[float, Rhythm, dict[str, float]] | None = None
+    for start in range(TURN_STARTS):
+        rhythm = Rhythm.still(joints.body.joints, walk.freq)
+        trainer.train(rhythm, iterations=TURN_ROUNDS, seed=seed + 10 * start + (1 if reward.turn > 0 else 2))
+        result = trainer.rollout(rhythm)
+        if best is None or result["reward"] > best[0]:
+            best = (result["reward"], rhythm, result)
+    assert best is not None
+    return best[1], best[2]
+
+
+def learn_walking_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
+    """The walk's turns, learned from standing, tuned again to begin straight out of the walk (the robot alone in
+    `model`), and checked from more moments of it (_walking_turn). Learned only from standing still, a turn asked for
+    mid-stride either waited for the robot to stand still (a 1 s turn right after walking turned the imported A1 16
+    degrees of the 88 it promised) or started from a pose and speed it never met. They are kept apart: tuning the
+    turns themselves on both left them slower to start from standing (5 of 6 walks turned less in a 1 s command
+    after the robot had stood still)."""
+    cleared = {f"turn_{side}_walking{part}": None for side in ("left", "right") for part in ("", "_at")}
+    walk = walk.model_copy(update=cleared)
+    if not walk.turns:
+        return walk
+    joints = _Joints(model, robot, walk)
+    home = joints.home()
+    walking = walk_moments(model, robot, walk, WALK_STARTS)
+    checks = walk_moments(model, robot, walk, WALK_CHECKS)
+    if not walking or not checks:  # it falls before its first moments: nothing to begin from
+        return walk
+    learned: dict[str, Any] = {}
     for side, sign in (("turn_left", 1.0), ("turn_right", -1.0)):
-        if not walking or not checks:  # it falls before its first moments: nothing to begin from
-            break
-        trainer = Trainer(model, robot, Reward(turn=sign), walk.seconds, walk.freq, home=home)
-        tuned = Rhythm(standing[side].theta.copy(), walk.freq)
-        trainer.train(tuned, iterations=WALKING_ROUNDS, seed=seed + 100 + (1 if sign > 0 else 2), starts=walking)
+        standing = Rhythm(joints.rhythm(getattr(walk, side)), walk.freq)
+        # Tuned twice: rewarded for the angle it turns in all its tries, and for the angle of its first second only
+        # (staying up all its tries). Either can come out ahead: the second took one A1 walk's left turn from 50 to
+        # 80% of its rate in a first second out of the walk, another's from 161% to 55%.
+        tuned = []
+        for k, early in enumerate((0.0, FIRST_SECOND)):
+            reward = Reward(turn=sign, early=early)
+            turn = Rhythm(standing.theta.copy(), walk.freq)
+            Trainer(model, robot, reward, walk.seconds, walk.freq, home=home).train(
+                turn, iterations=WALKING_ROUNDS, seed=seed + 100 * (k + 1) + (1 if sign > 0 else 2), starts=walking
+            )
+            tuned.append(turn)
         check = Trainer(model, robot, Reward(turn=sign), TURN_CHECK, walk.freq, home=home)
-        safest = _safest((tuned, standing[side]), check, checks)
-        if safest is not None:
-            learned[f"{side}_walking"] = joints.to_saved(safest.theta)
-    return walk.model_copy(update={**learned, "turn_rate": min(rates)})
+        first = Trainer(model, robot, Reward(turn=sign), FIRST_SECOND, walk.freq, home=home)
+        chosen = _walking_turn((*tuned, standing), sign, check, first, checks, WALK_CHECKS)
+        if chosen is not None:
+            learned[f"{side}_walking"] = joints.to_saved(chosen[0].theta)
+            learned[f"{side}_walking_at"] = chosen[1]
+    return walk.model_copy(update=learned)
 
 
-def _safest(turns: Sequence[Rhythm], check: Trainer, moments: Sequence[Start]) -> Rhythm | None:
-    """Of `turns`, the one that falls from the fewest `moments` (then turns the most), None if every one falls from
-    some."""
-    scored = []
+def stride_phase(t: float, freq: float) -> float:
+    """Where in its stride (0 up to 1) a rhythm is `t` seconds after it started, to a thousandth."""
+    return round((t * freq) % 1.0, 3) % 1.0
+
+
+def _mean_wait(phases: Sequence[float]) -> float:
+    """How long (in strides) the next of `phases` is away from a point of the stride picked at random, on average."""
+    ring = sorted(phases)
+    gaps = [((ring[(i + 1) % len(ring)] - p) % 1.0) or 1.0 for i, p in enumerate(ring)]
+    return sum(g * g for g in gaps) / 2.0
+
+
+def _walking_turn(
+    turns: Sequence[Rhythm],
+    sign: float,
+    check: Trainer,
+    first: Trainer,
+    moments: Sequence[Start],
+    times: Sequence[float],
+) -> tuple[Rhythm, list[float] | None] | None:
+    """Of `turns`, the one to begin out of the walk, and the points of the stride it may begin at (None: any). Each is
+    started from `moments` (`times` s into the walk) for `check`'s seconds; a point of the stride it fell from at any
+    of them is left out. Of the turns with at least MIN_SAFE of the points left, the one that turns the most in
+    `first`'s seconds wins, counting the wait for its next point. None if each falls from more."""
+    freq = check.freq
+    phases = [stride_phase(t, freq) for t in times[: len(moments)]]
+    best: tuple[float, Rhythm, list[float] | None] | None = None
     for turn in turns:
-        tries = [check.rollout(turn, start=m) for m in moments]
-        scored.append((sum(t["fell"] for t in tries), -sum(t["reward"] for t in tries), turn))
-    falls, _, best = min(scored, key=lambda s: s[:2])
-    return best if falls == 0 else None
+        unsafe = {p for p, m in zip(phases, moments, strict=True) if check.rollout(turn, start=m)["fell"]}
+        safe = sorted(set(phases) - unsafe)
+        if not safe or len(safe) < MIN_SAFE * len(set(phases)):  # fell from most: too close to falling anywhere
+            continue
+        angles = [sign * first.rollout(turn, start=m)["turned"] for p, m in zip(phases, moments, strict=True)]
+        angle = float(np.mean([a for a, p in zip(angles, phases, strict=True) if p not in unsafe]))
+        wait = _mean_wait(safe) / freq if unsafe else 0.0
+        score = angle * max(0.0, 1.0 - wait / first.seconds)
+        if best is None or score > best[0]:
+            best = (score, turn, safe if unsafe else None)
+    return None if best is None else (best[1], best[2])
 
 
 def _wrapped(angle: float) -> float:
@@ -438,21 +527,29 @@ class RhythmWalker:
         self.rhythms: dict[str, Rhythm | Steering] = {
             "forward": forward if walk.steer is None else Steering(forward, np.array(walk.steer))
         }
+        self.walking_at: dict[str, list[float] | None] = {}
         if walk.turns:
             self.rhythms["left"] = Rhythm(np.array(walk.turn_left), walk.freq)
             self.rhythms["right"] = Rhythm(np.array(walk.turn_right), walk.freq)
-            for side, theta in (("left", walk.turn_left_walking), ("right", walk.turn_right_walking)):
+            for side, theta, at in (
+                ("left", walk.turn_left_walking, walk.turn_left_walking_at),
+                ("right", walk.turn_right_walking, walk.turn_right_walking_at),
+            ):
                 if theta is not None:
                     self.rhythms[f"{side} walking"] = Rhythm(np.array(theta), walk.freq)
+                    self.walking_at[side] = at
         self.max_speed = walk.speed
         self.mode: str | None = None  # forward, left, right, or None: standing
         self.asked: tuple[float, float] = (0.0, 0.0)
-        self.playing: str | None = None  # the mode the joints follow now (its rhythm, or home while steadying)
+        # The mode asked for last that the joints follow, or will once steadied or at the next point of the stride
+        # its turn may begin at (`turn_at`).
+        self.playing: str | None = None
         self.rhythm: str | None = None  # the rhythm playing (a key of `rhythms`); None while standing or steadying
         self.t0: float | None = None  # when it started
         self.course = 0.0  # rad: the heading the walk holds, where the robot faced when asked to walk
         self.aim = 0.0  # rad: the heading it steers for now, at most STEER_LEASH from where it faces
         self.steady_from: float | None = None  # steadying on home since then, before the asked rhythm starts
+        self.turn_at: float | None = None  # sim time the asked turn begins out of the walk, which plays on until then
         self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
         self.fade_t0 = 0.0
         self.walked_until = -math.inf  # sim time the walk last played
@@ -483,6 +580,7 @@ class RhythmWalker:
         dt = now - self.clock if now >= self.clock > -math.inf else 0.0
         if now < self.clock:  # the clock was turned back (a reset): times kept from before lie in the future
             self.playing, self.rhythm, self.t0, self.steady_from, self.fade_from = None, None, None, None, None
+            self.turn_at = None
             self.walked_until = -math.inf
         self.clock = now
         if self.mode != self.playing:
@@ -491,6 +589,9 @@ class RhythmWalker:
             self.steady_from = None
             assert self.mode is not None
             self._start(data, now, self.mode, fade=not self.kept_before)
+        if self.turn_at is not None and now >= self.turn_at - 0.5 / CONTROL_HZ:
+            self.turn_at = None
+            self._start(data, now, f"{self.mode} walking", fade=True)
         if self.rhythm is None or self.t0 is None:  # standing, or steadying before a rhythm starts
             target = self.home
         else:
@@ -522,25 +623,44 @@ class RhythmWalker:
 
     def _switch(self, data: mujoco.MjData, now: float) -> None:
         """The asked mode takes over. Each rhythm was learned from standing still, and the turns' walking versions
-        (in files that have them) right out of the walk; those start at once. Any other switch while moving steadies
-        on home first. When every switch waited until the robot stood still, a 1 s turn right after walking turned
-        the imported A1 16 degrees of the 88 it promised."""
+        (in files that have them) right out of the walk; those start at once, or at the next point of the stride they
+        were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
+        When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
+        16 degrees of the 88 it promised."""
         out_of_walk = now - self.walked_until <= FADE + 1.0 / CONTROL_HZ
-        self.playing, self.steady_from = self.mode, None
-        if self.mode == "forward":
+        self.playing, self.steady_from, self.turn_at = self.mode, None, None
+        if self.mode == "forward" and self.rhythm != "forward":
             # Where it faces now, not once steadied: an imported A1 coming out of a fast turn spun on by 47 degrees
             # while it steadied, and then walked that way.
             self.course = self.aim = trunk_yaw(data, self.body)
         if self.mode is None:  # stop
             self.rhythm, self.t0 = None, None
             self._settle(data, now)
+        elif self.mode == "forward" and self.rhythm == "forward":  # it was walking on to a turn, now not asked for
+            return
         elif self._still(data):
             self._start(data, now, self.mode, fade=False)
         elif self.mode != "forward" and out_of_walk and f"{self.mode} walking" in self.rhythms:
-            self._start(data, now, f"{self.mode} walking", fade=True)
+            wait = self._wait_for_stride(now)
+            if wait > 0.0:
+                self.turn_at = now + wait
+            else:
+                self._start(data, now, f"{self.mode} walking", fade=True)
         else:
             self.rhythm, self.t0, self.steady_from = None, None, now
             self._settle(data, now)
+
+    def _wait_for_stride(self, now: float) -> float:
+        """How long (s) the walk plays on before the asked turn may begin out of it: until the next point of the
+        stride the turn was checked to begin at safely, within half an update; 0 if it may begin anywhere."""
+        at = self.walking_at.get(self.mode or "")
+        if at is None or self.rhythm != "forward" or self.t0 is None:
+            return 0.0
+        freq = self.walk.freq
+        phase = ((now - self.t0) * freq) % 1.0
+        slack = 0.5 * freq / CONTROL_HZ  # half an update, in strides
+        ahead = min((p - phase + slack) % 1.0 for p in at) - slack
+        return max(0.0, ahead) / freq
 
     def _settle(self, data: mujoco.MjData, now: float) -> None:
         """Go to the home pose: at once for a walk kept before, else faded in from the targets of the moment."""
