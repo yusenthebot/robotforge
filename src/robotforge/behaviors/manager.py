@@ -131,8 +131,12 @@ class BehaviorManager:
                 raise BehaviorError(self._cannot_move(robot, kind))
         elif kind not in MOBILE:
             raise BehaviorError(self._cannot_move(robot, kind))
+        if walker == "gait" and kind == Kind.HEXAPOD:
+            walker = None  # its built-in gait is the only one it has
         if walker not in (None, RHYTHM) and kind not in LEGGED:
-            raise BehaviorError(f"{robot} is a {kind.value}; walker only applies to legged robots")
+            raise BehaviorError(
+                f"{robot} is a {kind.value}; walker {walker!r} needs a quadruped or a humanoid, leave it out"
+            )
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
