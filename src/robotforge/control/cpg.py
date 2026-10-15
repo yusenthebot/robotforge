@@ -32,10 +32,11 @@ CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
 FALL_PENALTY = 1.0  # m of progress a fall costs
 DRIFT_WEIGHT = 0.5  # m of progress per m of sideways drift
-# Share of a forward walk's distance lost per rad its heading turned by the end. Over 6 trainings each (30 rounds),
-# 0.25 cut the mean heading change in 4 s from 40 to 18 degrees (template dog), 26 to 3 (starfish), 32 to 18
-# (humanoid) and 48 to 42 (imported A1), for 0 to 13 percent less distance; 0.5 cost the A1 a third of its distance.
-HEADING_WEIGHT = 0.25
+# Share of a forward walk's distance lost per rad its heading turned by the end. Over 20 trainings each (30 rounds,
+# scripts/rhythm_bench.py forward), 0.15 cut the mean heading change in 4 s from 40 to 23 degrees (template dog), 20
+# to 12 (starfish) and 29 to 21 (humanoid), for 3 to 9 percent less distance. It never straightened the imported A1
+# (46 degrees at 0, 45 at 0.15, 46 at 0.25), and 0.25 cost it and the humanoid a sixth of their distance.
+HEADING_WEIGHT = 0.15
 WANDER_WEIGHT = 3.0  # rad of turning per m the trunk wanders (at its farthest) while learning to turn on the spot
 
 
@@ -282,8 +283,10 @@ class Trainer:
             reward = turn - WANDER_WEIGHT * wander - cost
         else:
             # Forward: the distance counts for less the more the heading turned, so a walk that curves round
-            # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight.
-            reward = distance - self.reward.heading * abs(turned) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
+            # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight. Never less
+            # than nothing: past 1 / HEADING_WEIGHT rad, walking further would score worse.
+            straying = self.reward.heading * abs(turned)
+            reward = distance - min(straying, 1.0) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
         if fell:
             reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
         return {

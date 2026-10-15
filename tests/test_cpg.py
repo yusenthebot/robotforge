@@ -102,6 +102,9 @@ def test_a_forward_walk_counts_less_the_more_its_heading_turned():
     assert not walk["fell"] and walk["distance"] > 0.1 and abs(walk["turned"]) > 0.01
     straight = walk["distance"] - DRIFT_WEIGHT * walk["drift"]
     assert walk["reward"] == pytest.approx(straight - HEADING_WEIGHT * abs(walk["turned"]) * walk["distance"])
+    # Never less than nothing: past 1 / weight rad of turning, walking further would have scored worse.
+    harsh = Trainer(model, "dog", Reward(heading=2.0 / abs(walk["turned"])), seconds=2.0).rollout(rhythm)
+    assert harsh["reward"] == pytest.approx(-DRIFT_WEIGHT * walk["drift"])
 
 
 def test_a_rhythm_can_start_mid_stride_faded_in_from_the_targets_of_the_moment():
