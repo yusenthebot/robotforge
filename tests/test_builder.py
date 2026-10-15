@@ -233,6 +233,34 @@ def test_slide_joints_need_a_linear_actuator():
     assert "linear actuator" in _error(bad)
 
 
+def test_mirrored_slides_move_as_mirror_images():
+    """Review HIGH 3: a slide axis is a direction, not a rotation axis, so a mirror must not flip it like one.
+    Two mirrored slides pushed the same way should move apart (y) and both forward (x)."""
+    build = {
+        "base": {"fixed": True, "shape": "box", "size": [0.2, 0.2, 0.05]},
+        "parts": [
+            {
+                "name": "left_jaw",
+                "at": [0, 0.06, 0.05],
+                "joint": {"type": "slide", "axis": [0.6, 0.8, 0], "range": [0, 0.05]},
+                "actuator": "l16",
+                "shape": "box",
+                "size": [0.02, 0.02, 0.02],
+                "mirror": True,
+            }
+        ],
+    }
+    model = _model(build)
+    data = mujoco.MjData(model)
+    data.ctrl[:] = 0.04
+    for _ in range(1500):
+        mujoco.mj_step(model, data)
+    left, right = data.body("r/left_jaw").xpos, data.body("r/right_jaw").xpos
+    assert data.qpos[model.joint("r/left_jaw").qposadr[0]] > 0.03
+    assert left[0] == pytest.approx(right[0], abs=1e-3)  # both moved forward alike
+    assert left[1] == pytest.approx(-right[1], abs=1e-3) and left[1] > 0.06  # and apart, mirrored
+
+
 # ---- behaviors on built robots -----------------------------------------------------------------------
 
 

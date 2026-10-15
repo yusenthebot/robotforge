@@ -98,8 +98,9 @@ def _joint(
         if part.spec.shape == "none" and part.spec.robot is None:
             _min_mass(body)
         return
-    axis = part.axis(axis_vector(j.axis)).tolist()
     hinge = j.type == "hinge"
+    # A hinge axis is a rotation (a mirror flips it with the motion); a slide axis is a plain direction.
+    axis = (part.axis(axis_vector(j.axis)) if hinge else part.vec(axis_vector(j.axis))).tolist()
     scale = math.radians(1.0) if hinge else 1.0
     if j.continuous:
         joint_range = None
