@@ -88,13 +88,16 @@ Learning path: lessons lists nine short beginner lessons (joints, driving, gaits
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
 "第三课"), call lessons(number) and follow its plan.
 The viewer also has hands-on lessons behind its Learn button (学习): PID control, inverse kinematics,
-sensors and reinforcement learning (a cart-pole trains live), real-robot face-offs (our arm next to the
+motion planning, sensors, gaits, balance and reinforcement learning (a cart-pole, then any body learning
+to walk), real-robot face-offs (our arm next to the
 AgileX PiPER and Franka Panda; our humanoid next to the Unitree G1), plus challenges with stars (maze
 escape, shove survival, obstacle course). Each is a guided experiment with live plots and checks; suggest
 them to beginners who want to understand how robots work: open the viewer (open_viewer) and press Learn.
 
 Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
+A robot built from parts that no gait code knows can learn a walk of its own in the viewer's RL II lesson
+("Keep this walk for my robot"); robots then lists its learned_walk and move uses it (forward only).
 UniLab, an external RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
@@ -348,14 +351,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     async def move(
         robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0, walker: str | None = None
     ) -> str:
-        """Walk a quadruped, hexapod or humanoid, drive a rover or a two-wheeled balancer, or make a snake
-        slither. speed in m/s (negative = backwards), turn in rad/s
-        (positive = left); each robot's max_speed is listed by `robots` (humanoids are slow, about 0.1 m/s, and
-        take a moment to start and stop stepping). With `seconds`, moves for that long then stops and reports
-        how far it went; with seconds=null it keeps moving until `stop`. If the viewer is open the user
-        watches it happen in real time. walker (legged robots): "gait" = the built-in walking controller,
-        "rl" = the learned policy for this robot (list_walkers), or a policy name; omitted keeps the current
-        one. Keyboard driving then uses the same walker."""
+        """Walk a quadruped, hexapod or humanoid, drive a rover or a two-wheeled balancer, make a snake slither, or walk
+        a robot with the walk it learned for itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
+        (positive = left); each robot's max_speed is listed by `robots` (humanoids are slow, about 0.1 m/s, and take a
+        moment to start and stop stepping). With `seconds`, moves for that long then stops and reports how far it
+        went; with seconds=null it keeps moving until `stop`. If the viewer is open the user watches it happen in real
+        time. walker (legged robots): "gait" = the built-in walking controller, "rl" = the learned policy for this
+        robot (list_walkers), or a policy name; omitted keeps the current one. walker "rhythm" (any robot with a
+        learned_walk in `robots`): the walk it learned in the viewer, forward only at its own pace. Keyboard driving
+        then uses the same walker."""
         with _tool_errors():
             if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
                 raise PlaygroundError("seconds must be in (0, 60]")

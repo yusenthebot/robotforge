@@ -36,6 +36,7 @@ class Mode:
 
 DRIVE = Mode("drive", drivable=True)
 LEARNED = Mode("learned", drivable=True)
+RHYTHM = Mode("rhythm", drivable=True)  # a walk the robot learned itself (RL II lesson), next to its own gait
 MANUAL = Mode("manual")
 
 # In the order the viewer lists them; each is offered only where its task fits the robot.
@@ -51,7 +52,7 @@ CONTROL: tuple[Mode, ...] = (
     Mode("reach_mpc", "reach", "mpc"),
     Mode("goto_mpc", "drive_to", "mpc", follows=True),
 )
-MODES: dict[str, Mode] = {m.key: m for m in (DRIVE, LEARNED, MANUAL, *CONTROL)}
+MODES: dict[str, Mode] = {m.key: m for m in (DRIVE, LEARNED, RHYTHM, MANUAL, *CONTROL)}
 
 # Robots each task is offered for. A task's own check is looser (stand fits anything that moves freely,
 # a rover included), so the viewer only lists pairs that make sense and have been tried.
@@ -76,9 +77,12 @@ def available(playground: Playground, robot: dict[str, Any], learned: bool) -> l
     from robotforge.control.tasks import TaskError, make_task
 
     kind = Kind(robot["kind"])
-    keys = ["drive"] if kind in MOBILE and robot.get("max_speed") else ["manual"]
+    kept = "learned_walk" in robot  # robots no gait code knows drive with their kept walk
+    keys = ["drive"] if (kind in MOBILE or kept) and robot.get("max_speed") else ["manual"]
     if learned:
         keys.append("learned")
+    if kept and kind in MOBILE:
+        keys.append("rhythm")
     model = playground.session.model
     fits: dict[str, bool] = {}
     for mode in CONTROL:
@@ -103,10 +107,12 @@ def apply(playground: Playground, robot: str, key: str) -> dict[str, Any]:
     behaviors = playground.behaviors
     session = playground.session
     try:
-        if mode is DRIVE or mode is LEARNED:
+        if mode in (DRIVE, LEARNED, RHYTHM):
             walker = None if behaviors.kind(robot) not in (Kind.QUADRUPED, Kind.HUMANOID) else "gait"
             if mode is LEARNED:
                 walker = "rl"
+            elif mode is RHYTHM:
+                walker = "rhythm"
             behaviors.move(robot, 0.0, 0.0, walker)
             return {"robot": robot, "mode": key}
         if mode is MANUAL:
@@ -178,6 +184,7 @@ class Then:
 def current(playground: Playground) -> dict[str, str]:
     """{robot: mode key} for robots whose controller the viewer can name; robots with none are left out."""
     from robotforge.behaviors.manager import _is_mover
+    from robotforge.behaviors.rhythm_walk import RhythmWalker
 
     out = {}
     for robot, ctrl in list(playground.session.controllers.items()):
@@ -185,6 +192,11 @@ def current(playground: Playground) -> dict[str, str]:
         if tracked is not None and tracked[1] is ctrl:
             mode = MODES[tracked[0]]
             out[robot] = mode.then if isinstance(ctrl, Then) and ctrl.switched and mode.then else tracked[0]
+        elif isinstance(ctrl, RhythmWalker):
+            try:
+                out[robot] = "rhythm" if playground.behaviors.kind(robot) in MOBILE else "drive"
+            except BehaviorError:
+                continue
         elif _is_mover(ctrl):
             out[robot] = "learned" if ctrl.status().get("walker") == "rl" else "drive"
     return out

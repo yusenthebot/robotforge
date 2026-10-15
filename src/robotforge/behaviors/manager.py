@@ -6,6 +6,7 @@ import contextlib
 import math
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import mujoco
@@ -15,6 +16,7 @@ from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
 from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
@@ -24,6 +26,11 @@ MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER
 WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
 LEGGED = (Kind.QUADRUPED, Kind.HUMANOID)  # can walk with a learned policy (move walker=...)
+RHYTHM = "rhythm"  # walker: the walk a robot learned for itself in the RL II lesson and kept with its world
+LEARN_A_WALK = (
+    "it can learn one: open the viewer, press Learn, pick 'RL II: any body can learn to walk', choose your "
+    "robot, press Learn, then 'Keep this walk for my robot'"
+)
 
 
 class BehaviorError(ValueError):
@@ -31,9 +38,15 @@ class BehaviorError(ValueError):
 
 
 class BehaviorManager:
-    def __init__(self, session: SimSession, world: Callable[[], World | None]):
+    def __init__(
+        self,
+        session: SimSession,
+        world: Callable[[], World | None],
+        world_dir: Callable[[], Path | None] = lambda: None,
+    ):
         self.session = session
         self._world = world
+        self._world_dir = world_dir  # where the open world keeps its files (walks/ among them); None in lessons
         session.reset_hooks.append(self.start_balancing)
         self.start_balancing()
 
@@ -74,6 +87,10 @@ class BehaviorManager:
             elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
+            walk = self._kept_walk_or_none(name)
+            if walk is not None:
+                info["learned_walk"] = walk.describe()
+                info.setdefault("max_speed", round(walk.speed, 3))  # robots no gait code knows drive with it
             out.append(info)
         return out
 
@@ -107,12 +124,12 @@ class BehaviorManager:
         if not (math.isfinite(speed) and math.isfinite(turn)):
             raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         kind = self.kind(robot)
-        if kind not in MOBILE:
-            raise BehaviorError(
-                f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids), wheeled "
-                "robots (rovers, balancers) and snakes can move around"
-            )
-        if walker is not None and kind not in LEGGED:
+        if kind not in MOBILE and walker in (None, RHYTHM):
+            if self.kept_walk(robot) is None:
+                raise BehaviorError(self._cannot_move(robot, kind))
+        elif kind not in MOBILE:
+            raise BehaviorError(self._cannot_move(robot, kind))
+        if walker not in (None, RHYTHM) and kind not in LEGGED:
             raise BehaviorError(f"{robot} is a {kind.value}; walker only applies to legged robots")
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
@@ -120,10 +137,60 @@ class BehaviorManager:
             ctrl.command(speed, turn)
         return ctrl.status()
 
+    def _cannot_move(self, robot: str, kind: Kind) -> str:
+        text = (
+            f"{robot} is a {kind.value} robot; only legged robots (quadrupeds, hexapods, humanoids), wheeled "
+            "robots (rovers, balancers), snakes and robots that learned a walk of their own can move around"
+        )
+        if self._can_learn_walk(robot):
+            text += f". {robot} has no walk yet, but {LEARN_A_WALK}"
+        return text
+
+    def _can_learn_walk(self, robot: str) -> bool:
+        from robotforge.control.cpg import Body, CPGError
+
+        try:
+            Body.find(self.session.model, robot)
+        except CPGError:
+            return False
+        return True
+
+    def kept_walk(self, robot: str) -> SavedWalk | None:
+        """The walk `robot` learned in the RL II lesson and kept in this world's folder, if any."""
+        directory = self._world_dir()
+        if directory is None:
+            return None
+        try:
+            return load_walk(directory, robot)
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+
+    def _kept_walk_or_none(self, robot: str) -> SavedWalk | None:
+        try:
+            return self.kept_walk(robot)
+        except BehaviorError:
+            return None  # listing robots should not fail on a damaged file; moving it says what is wrong
+
+    def _rhythm_walker(self, robot: str, existing: Any, create: bool) -> RhythmWalker:
+        walk = self.kept_walk(robot)
+        if walk is None:
+            raise BehaviorError(f"{robot} has not learned a walk of its own; {LEARN_A_WALK}")
+        if isinstance(existing, RhythmWalker) and existing.walk == walk:
+            return existing
+        try:
+            ctrl = RhythmWalker(self.session.model, robot, walk, self.home_qpos())
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        if create:
+            self.session.set_controller(robot, ctrl)
+        return ctrl
+
     def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
         existing = self.session.controllers.get(robot)
         if walker is None and _is_mover(existing):  # keep whatever walks it now, e.g. for WASD driving
             return existing
+        if walker == RHYTHM or kind not in MOBILE:
+            return self._rhythm_walker(robot, existing, create)
         if walker not in (None, "gait") and kind in LEGGED:
             return self._policy_walker(robot, walker, existing, create)
         if isinstance(existing, WALKERS):
@@ -144,6 +211,8 @@ class BehaviorManager:
             else:
                 ctrl = DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
+            if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
+                return self._rhythm_walker(robot, existing, create)
             raise BehaviorError(str(exc)) from exc
         top = self._library_top_speed(robot)
         if top is not None and isinstance(ctrl, quadruped.QuadrupedGait):
@@ -406,8 +475,8 @@ def _told_kind(entry: Any) -> str | None:
 
 
 def _is_mover(ctrl: Any) -> bool:
-    """A controller that walks or drives on speed and turn commands (gaits, wheels, learned policies)."""
-    return isinstance(ctrl, WALKERS) or _is_policy_walker(ctrl)
+    """A controller that walks or drives on speed and turn commands (gaits, wheels, learned walks)."""
+    return isinstance(ctrl, (*WALKERS, RhythmWalker)) or _is_policy_walker(ctrl)
 
 
 def _is_policy_walker(ctrl: Any) -> bool:

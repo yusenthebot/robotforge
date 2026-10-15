@@ -34,6 +34,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - `set_controls` + `simulate`: raw actuator targets;
    - `write_script` + `run_script`: custom sequences, loops and logic the user can keep;
    - learned walkers: `list_walkers`, then `move(robot, speed, walker="rl")` walks with a policy trained by reinforcement learning (a Go2 walk ships with robotforge; `walker="gait"` goes back);
+   - a robot built from parts that no gait code knows (`move` says so) can learn a walk of its own in the viewer's RL II lesson ("Keep this walk for my robot"); `robots` then lists its `learned_walk` and `move` uses it, forward only at its own pace (no turning);
    - `train_policy` when the tool list has it: reinforcement learning (optional `rl` extra); `unilab_check` / `unilab_train` for the UniLab backend.
 6. **Check, then explain.** Verify with numbers and an image (next section), explain what happened and why, offer a next step.
 
@@ -79,7 +80,7 @@ Report real numbers, including disappointing ones.
 `lessons()` lists nine beginner lessons; `lessons(number)` returns one lesson's plan: ideas to teach, tool steps, checks and a closing challenge.
 Follow the plan and adapt it to the learner. MCP clients with prompt support also list them as prompts `lesson_1` to `lesson_9`, plus `start`.
 
-The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, sensors and reinforcement learning (a cart-pole trains live), real-robot face-offs (our arm next to the AgileX PiPER and Franka Panda, our humanoid next to the Unitree G1), plus challenges with stars (maze escape, shove survival, obstacle course).
+The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, motion planning, sensors, gaits, balance and reinforcement learning (a cart-pole, then any body learning to walk, the user's own robot included), real-robot face-offs (our arm next to the AgileX PiPER and Franka Panda, our humanoid next to the Unitree G1), plus challenges with stars (maze escape, shove survival, obstacle course).
 Each is a guided experiment with live plots, quizzes and checks that run on the physics, and it works without you.
 When a beginner wants to understand how robots work, open the viewer and suggest one; afterwards, offer to build on it in their own world.
 

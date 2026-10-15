@@ -4,6 +4,7 @@ import time
 
 import pytest
 
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.learn import walk_rl
 from robotforge.playground import Playground
 
@@ -67,3 +68,32 @@ def test_your_own_robot_joins_the_list(pg):
     assert pg.session.model.body("yours/base") is not None
     pg.lessons.exit()
     assert pg.store.load().name == "mine"  # the learner's world comes back untouched
+
+
+def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
+    pg.new_world("mine")
+    pg.add_robot("crab", build=walk_rl.STAR)
+    with pytest.raises(BehaviorError, match="RL II"):  # no gait code knows a starfish
+        pg.behaviors.move("crab", 0.2, 0.0)
+    described = pg.lessons.start("learn_to_walk")
+    assert any(c["id"] == "keep" for c in described["controls"])
+    lesson = pg.lessons.lesson
+    pg.lessons.step = 2  # where your robot and the keep button unlock
+    pg.lessons.handle({"action": "press", "control": "keep"})
+    assert "Pick your robot" in pg.lessons.ctx.results["summary"]["en"]
+    pg.lessons.handle({"action": "set", "control": "robot", "value": 3})
+    assert lesson.active == "yours"
+    pg.lessons.handle({"action": "press", "control": "keep"})
+    assert "press Learn first" in pg.lessons.ctx.results["summary"]["en"]
+    pg.lessons.handle({"action": "set", "control": "iterations", "value": 30})
+    trained = _train(pg)["results"]["training"]
+    pg.lessons.handle({"action": "press", "control": "keep"})
+    kept = pg.lessons.ctx.results["kept"]
+    assert kept["robot"] == "crab" and kept["speed"] == pytest.approx(trained["distance"] / walk_rl.ATTEMPT, abs=1e-3)
+    pg.lessons.exit()
+
+    start = pg.behaviors.pose("crab")
+    assert pg.behaviors.move("crab", 0.2, 0.0)["controller"] == "learned rhythm"
+    pg.run_fast(lambda: False, walk_rl.ATTEMPT)
+    gone = pg.behaviors.pose("crab")["position"][0] - start["position"][0]
+    assert gone > 0.5 * trained["distance"], f"learned {trained['distance']} m, walked {gone:.2f} m at home"

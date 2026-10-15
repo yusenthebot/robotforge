@@ -5,17 +5,20 @@ humanoid and, when the learner came from a world with a robot of their own, that
 "Learn" trains the chosen one from standing still, in its own private copy of the world on a background
 thread, while the viewer replays the newest rhythm every four seconds. Each training lands in the record
 as a learning curve. Knobs: the rhythm's frequency, how much the reward charges for energy, how long to
-train. The search itself is control/cpg.py.
+train. The search itself is control/cpg.py. What the learner's own robot learned can be kept in their
+world's folder, and `move` and the keyboard then walk it that way (behaviors/rhythm_walk.py).
 """
 
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any
 
 import mujoco
 import numpy as np
 
+from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, save_walk
 from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
@@ -29,6 +32,7 @@ SHOVE = 0.4  # m/s: the random shove in training, in the push test after it and 
 SHOVE_AT = 2.0  # s into each replay
 PUSH_TRIALS = 12
 SAMPLE_DT = 0.02
+KEEP_MIN = 0.1  # m in an attempt: a walk that gets less than this is not worth keeping
 STAR = {
     "color": "purple",
     "base": {"shape": "cylinder", "size": [0.2, 0.05], "sensors": ["imu"]},
@@ -172,10 +176,14 @@ STEPS = (
         body=_text(
             "「哪个机器人」选三脚海星：三条腿、每条两个关节，是用零件拼出来的。"
             "我们的步态程序只认 4 条或 6 条三关节的腿，"
-            "它不会走。（如果你来这里之前的世界里有自己拼的机器人，它也在列表里。）\n先猜，再让它学。",
+            "它不会走。\n"
+            "如果你来这里之前的世界里有自己拼的机器人，它也在列表里。让它学会以后点「把这个走法存给我的机器人」，"
+            "回到你的世界，在聊天里叫它往前走，或者选中它按 W，它就用学到的走法走。\n先猜，再让海星学。",
             "Set Which robot to the three-legged starfish: three legs of two joints each, built from parts. Our gait "
-            "code only knows four or six legs of three joints, so it cannot walk this one. (If the world you came "
-            "from has a robot of your own, it is in the list too.)\nGuess, then let it learn.",
+            "code only knows four or six legs of three joints, so it cannot walk this one.\n"
+            "If the world you came from has a robot of your own, it is in the list too. Once it has learned, press "
+            "Keep this walk for my robot: back in your world, ask for it to walk in the chat, or select it and press "
+            "W, and it walks the way it learned.\nGuess, then let the starfish learn.",
         ),
         done=_text(
             "它也学会了往前挪（我们测到 4 秒 0.5 到 0.85 米）。"
@@ -192,7 +200,7 @@ STEPS = (
             predict=True,
         ),
         check=_star_learned,
-        unlock=("robot", "freq"),
+        unlock=("robot", "freq", "keep"),
     ),
     Step(
         id="two_legs",
@@ -359,6 +367,7 @@ class LearnToWalkLesson(Lesson):
         self.playground = None
         self.ctx: LessonContext | None = None
         self.robots: list[tuple[str, tuple[str, str], dict[str, Any]]] = list(BUILT_IN)
+        self.own: tuple[str, Path] | None = None  # the learner's robot: (its name in their world, the world folder)
         self.controls = self._controls()
         self.model: mujoco.MjModel | None = None
         self.start: np.ndarray | None = None
@@ -376,8 +385,10 @@ class LearnToWalkLesson(Lesson):
         self.trainings = 0
         self.replays = 0
         self.shoved = False
+        self.trained: dict[str, dict[str, Any]] = {}  # robot key -> its last training's result
 
     def _controls(self) -> tuple[Control, ...]:
+        keep = (Control("keep", "button", _text("把这个走法存给我的机器人", "Keep this walk for my robot")),)
         return (
             Control("train", "button", _text("开始学", "Learn")),
             Control("stop", "button", _text("停", "Stop")),
@@ -399,6 +410,7 @@ class LearnToWalkLesson(Lesson):
             Control(
                 "shove", "toggle", _text("训练时推它，站住也算分", "Shove it while training, points for staying up")
             ),
+            *(keep if self.own is not None else ()),
         )
 
     # ---- the world -------------------------------------------------------------------------------------
@@ -437,6 +449,7 @@ class LearnToWalkLesson(Lesson):
             except (CPGError, ValueError):
                 continue
             self.solo["yours"] = solo
+            self.own = (entry.name, store.dir)
             return "yours", (f"你的机器人：{entry.name}", f"Your robot: {entry.name}"), spec
         return None
 
@@ -496,6 +509,8 @@ class LearnToWalkLesson(Lesson):
     def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
         if control == "stop":
             self.stopping.set()
+        elif control == "keep":
+            ctx.results["summary"] = self._keep(ctx)
         elif control == "robot":
             self._new_attempt(data)
         elif control == "train" and (self.thread is None or not self.thread.is_alive()):
@@ -565,6 +580,53 @@ class LearnToWalkLesson(Lesson):
         }
         metrics = {k: result[k] for k in ("distance", "survived", "energy", "seconds")}
         ctx.record_run(settings, metrics, list(range(1, len(curve) + 1)), curve)
+        self.trained[key] = result
+
+    def _keep(self, ctx: LessonContext) -> Text:
+        """Write what the learner's robot learned into their world's folder, or say why not yet."""
+        if self.own is None or self.active != "yours":
+            return _text(
+                "先在「哪个机器人」里选你的机器人，让它学一次。",
+                "Pick your robot under Which robot and let it learn first.",
+            )
+        if self.thread is not None and self.thread.is_alive():
+            return _text("等它学完再存。", "Wait until it has finished learning.")
+        result = self.trained.get("yours")
+        if result is None:
+            return _text("你的机器人还没学过，先点「开始学」。", "Your robot has not learned yet: press Learn first.")
+        if result["distance"] < KEEP_MIN:
+            return _text(
+                f"它学到的走法 4 秒只走了 {result['distance']:g} 米，存了也走不动。多学几轮再存。",
+                f"What it learned covers only {result['distance']:g} m in 4 s, too little to keep. Learn for more "
+                "rounds first.",
+            )
+        name, folder = self.own
+        rhythm = self.rhythms["yours"]
+        assert self.model is not None
+        walk = SavedWalk(
+            robot=name,
+            joints=joint_names(self.model, self.bodies["yours"]),
+            freq=rhythm.freq,
+            reflexes=rhythm.reflexes,
+            theta=[float(v) for v in rhythm.theta],
+            speed=max(0.0, result["distance"]) / ATTEMPT,
+            distance=result["distance"],
+            seconds=ATTEMPT,
+            survived=result["survived"],
+            shoves=PUSH_TRIALS,
+        )
+        try:
+            path = save_walk(folder, walk)
+        except OSError as exc:
+            return _text(f"没存上：{exc}", f"Could not keep it: {exc}")
+        ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3)}
+        return _text(
+            f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
+            f"退出课程回到你的世界，在聊天里让 {name} 往前走，或者选中它按 W，它就这样走（只会往前，不会转弯）。",
+            f"Kept: {name}'s walk ({result['distance']:g} m in 4 s, about {walk.speed:.2f} m/s) is in your world now. "
+            f"Leave the lesson, then ask for {name} to walk forward in the chat, or select it and press W: it walks "
+            "this way (forward only, no turning).",
+        )
 
     def close(self) -> None:
         self.stopping.set()

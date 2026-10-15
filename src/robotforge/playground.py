@@ -74,7 +74,9 @@ class Playground:
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.behaviors = BehaviorManager(self.session, self._acting_world)
+        self.behaviors = BehaviorManager(
+            self.session, self._acting_world, lambda: self.store.dir if self.store is not None else None
+        )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
 
