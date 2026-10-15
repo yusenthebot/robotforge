@@ -92,7 +92,9 @@ Rounds 1-3 done, 2026-10-14.
 - Viewer: the picker groups lessons and challenges, generic `live.readout` and `results.summary` + stars, best stars kept per browser, the camera follows `drive.follow`.
 - CI: the walkers note test failed on CI only; my venv still had onnxruntime from rendering the film. `uv sync` (default install) before trusting a local run.
 - What did NOT work (and the fix):
-  - Nothing finishes the obstacle course yet: template dog gait falls at the 4 cm curbs (~11-12 m), Go2 gait on the stairs (5.9 m), the Go2 learned walk stalls on the ramp (trained on flat ground). Scored by distance instead; a terrain-trained policy is a frontier item.
+  - In round 9 nothing finished the obstacle course: template dog gait falls at the 4 cm curbs (~11-12 m), Go2 gait on the stairs (5.9 m), the Go2 learned walk stalls on the ramp (trained on flat ground). Scored by distance instead; a terrain-trained policy is a frontier item.
+    - Phase E: with W at 0.3 m/s a key-driven run can now finish, with luck: 7 of 20 runs over a sweep of A/D tap timing finished, 7 fell on the stairs and 6 on the curbs and stones.
+      The closing text says it can be finished, just not every time; finishing every run is still the frontier item (a terrain-trained policy).
   - Shove robustness differs less than hoped between controllers (hold 4, gait 5, MPC 5-7 levels); thresholds and text match the measurements.
 
 ## Round 10 (2026-10-15): reinforcement learning, trained live

@@ -244,7 +244,8 @@ class CourseChallenge(Challenge):
     robot = "dog"
     # Holding W walks at 70% of max_speed (the viewer's share). At 0.35 m/s the dog fell on the stairs in all 8 of
     # our key-driven runs (W held, A and D tapped to stay in the middle), and the keys have no slower setting; at
-    # 0.3 m/s 6 of 8 got past them and 3 finished. Only distance earns stars, so the slower walk costs nothing.
+    # 0.3 m/s 6 of 8 got past them and 3 finished (a wider sweep of tap timing: 13 of 20 past, 7 finished). Only
+    # distance earns stars, so the slower walk costs nothing.
     drive = {"max_speed": 0.43, "turn": 1.2, "follow": "dog/trunk"}
     plots = (
         Plot(
@@ -284,12 +285,17 @@ class CourseChallenge(Challenge):
                     f"A fall ends the run; press Reset to try again.\nStars: {en}.\n"
                     "Tip: line up before the stairs and take them straight, not at an angle.",
                 },
+                # Not "out of reach": with keys alone 7 of our 20 runs finished (7 fell on the stairs, 6 on the curbs
+                # and stones), and a learner who just finished reads this next to "Finished!".
                 done={
-                    "zh": "路沿和梅花桩对内置步态来说太难了：它是按固定节奏抬腿的，不会“看路”。"
-                    "能看地形、学过崎岖地面的控制器（比如用强化学习训练的）才能走完全程。",
-                    "en": "The curbs and stepping stones are too much for the built-in gait: it lifts its feet on a "
-                    "fixed rhythm and does not look at the ground. A controller that sees the terrain, or one trained "
-                    "on rough ground with reinforcement learning, is what finishes the course.",
+                    "zh": "台阶、路沿和梅花桩对内置步态来说很难：它按固定节奏抬腿，不会“看路”，"
+                    "脚能不能跨过边沿有一部分靠运气。走完全程是做得到的，只是不能每次都成功。"
+                    "能看地形的控制器，或者在崎岖地面上用强化学习训练过的控制器，才是真实四足机器人稳稳走过这种路的办法。",
+                    "en": "The stairs, curbs and stepping stones are hard for the built-in gait: it lifts its feet on "
+                    "a fixed rhythm and does not look at the ground, so whether a foot clears an edge is partly luck. "
+                    "The course can be finished, just not every time. A controller that sees the terrain, or one "
+                    "trained on rough ground with reinforcement learning, is how real legged robots get across "
+                    "reliably.",
                 },
                 check=_run_scored,
             ),

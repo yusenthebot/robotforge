@@ -94,6 +94,24 @@ def test_holding_w_takes_the_dog_past_the_stairs(pg):
     assert run["stars"] >= 2, f"fell at {run['distance']} m, before the end of the stairs"
 
 
+def test_keys_alone_can_finish_the_obstacle_course(pg):
+    """The course's closing text says it can be finished, just not every time; 7 of our 20 key-driven runs did.
+    It said the built-in gait could never get through, next to a summary reading "Finished! 17.6 m"."""
+    import functools
+
+    from robotforge.learn import playthrough
+
+    runs = []
+    for every in (0.1, 0.15, 0.2):  # how often the learner looks again and taps A or D: all three finished
+        move = playthrough.Do(functools.partial(playthrough._along_the_course, every=every), "W, A and D")
+        recipe = playthrough.Recipe({"course": (move,)}, sim_limit=180.0)
+        runs.append(playthrough.play(pg, "obstacle_course", recipe).results["run"])
+        if runs[-1]["finished"]:
+            break
+    assert runs[-1]["finished"], f"no key-driven run finished: {runs}"
+    assert runs[-1]["distance"] >= 17.6 and runs[-1]["stars"] == 3
+
+
 def test_the_obstacle_course_scores_how_far_the_dog_gets(pg):
     pg.lessons.start("obstacle_course")
     lesson = pg.lessons.lesson

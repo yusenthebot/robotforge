@@ -513,15 +513,16 @@ def _out_of_the_maze(p: Player) -> None:
     p.play(0.5)
 
 
-def _along_the_course(p: Player) -> None:
-    """Hold W down the middle of the course, tapping A or D whenever the dog drifts off the centre line."""
+def _along_the_course(p: Player, every: float = 0.25, off_line: float = 0.2) -> None:
+    """Hold W down the middle of the course, tapping A or D whenever the dog drifts off the centre line. A learner
+    looks again `every` s and steers once the drift passes `off_line`; small changes to either change the run."""
     body = p.session.model.body("dog/trunk").id
-    for _ in range(600):
+    for _ in range(round(150 / every)):
         data = p.session.data
         heading = math.atan2(data.xmat[body][3], data.xmat[body][0])
         back = -2 * float(data.xpos[body][1]) - 1.5 * heading  # turn this way to come back to the line
-        _hold(p, "W" + ("A" if back > 0.2 else "D" if back < -0.2 else ""))
-        p.play(0.25)
+        _hold(p, "W" + ("A" if back > off_line else "D" if back < -off_line else ""))
+        p.play(every)
         if "run" in p.ctx.results:
             break
     _hold(p, "")
