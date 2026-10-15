@@ -29,6 +29,8 @@ ITERATIONS = 30
 PACE = 0.7  # s per training round, so the learner can watch it improve
 TRAINED_RETURN = 8.0  # mean score per training round that counts as "learned" (10 is a full episode)
 PARAMS = ("lr", "noise", "dirs")  # the training knobs each recorded run remembers
+PUSH_SPEED = 1.2  # rad/s added to the pole by Push
+PUSH_AFTER = 1.0  # s into a fresh attempt: a push waiting for the cart to start over comes then
 
 
 class Live:
@@ -41,6 +43,7 @@ class Live:
         self.task = make_task("balance", model, "pole")
         self.scale = ActionScale(model, self.task.actuators)
         self.hinge = int(model.joint("pole/hinge").qposadr[0])
+        self.hinge_dof = int(model.joint("pole/hinge").dofadr[0])
         self.slider = int(model.joint("pole/slider").qposadr[0])
         self.home = data.qpos.copy()
         self.rng = np.random.default_rng(0)
@@ -49,6 +52,7 @@ class Live:
         self.last_survived = 0.0
         self.pending_restart = True
         self.pushed_at: float | None = None
+        self.push_in: float | None = None  # s into the next attempt to push, when the push waits for a restart
 
     def restart(self, data: mujoco.MjData) -> None:
         data.qpos[:] = self.home
@@ -61,10 +65,17 @@ class Live:
     def angle(self, data: mujoco.MjData) -> float:
         return float(data.qpos[self.hinge])
 
+    def push(self, data: mujoco.MjData) -> None:
+        data.qvel[self.hinge_dof] += PUSH_SPEED
+        self.pushed_at = float(data.time)
+        self.push_in = None
+
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         if self.pending_restart:
             self.restart(data)
         elapsed = float(data.time) - self.started
+        if self.push_in is not None and elapsed >= self.push_in:
+            self.push(data)
         # A push gets its full answer before the attempt can time out: did the policy catch it or not?
         just_pushed = self.pushed_at is not None and float(data.time) - self.pushed_at < 4.0
         timed_out = elapsed > SHOW_SECONDS and not just_pushed
@@ -229,8 +240,11 @@ STEPS = (
         id="push",
         title={"zh": "推一下试试", "en": "Give it a push"},
         body={
-            "zh": "点「推一下」。学到的策略能不能接住？",
-            "en": "Press Push. Can the learned policy catch it?",
+            "zh": "点「推一下」。学到的策略能不能接住？\n"
+            "如果最新一次训练没学会（曲线一直在虚线下面），推之前小车会先换回你学得最好的那组权重。",
+            "en": "Press Push. Can the learned policy catch it?\n"
+            "If your newest training did not learn (its curve stayed under the dashed line), the cart first goes "
+            "back to the best weights you have trained.",
         },
         done={
             "zh": "它能接住小的推力：训练时每次开局都有随机的倾斜，所以它学会的是“怎么救回来”，而不只是“怎么站着”。",
@@ -330,6 +344,9 @@ class RLLesson(Lesson):
         self.model: mujoco.MjModel | None = None
         self.live_ctrl: Live | None = None
         self.policy: LinearPolicy | None = None  # what the live cart-pole runs; None = no control
+        self.score: float | None = None  # the final score of the training that made `policy`, once it is done
+        self.newest: LinearPolicy | None = None  # the latest training's weights
+        self.best: tuple[float, LinearPolicy, int] | None = None  # the best finished training: score, weights, run
         self.ctx: LessonContext | None = None
         self.samples: deque[dict[str, float]] = deque(maxlen=256)
         self.thread: threading.Thread | None = None
@@ -358,23 +375,47 @@ class RLLesson(Lesson):
         assert self.live_ctrl is not None and self.model is not None
         if control == "release":
             ctx.events.add("released")
-            self.policy = None
+            self.policy = self.score = None
             self.live_ctrl.pending_restart = True
         elif control == "random":
             n_obs = 4
             rng = np.random.default_rng()
             self.policy = LinearPolicy(rng.normal(0, 1.0, size=(1, n_obs + 1)), np.ones(n_obs))
+            self.score = None
             ctx.results["random_tries"] = ctx.results.get("random_tries", 0) + 1
             self.live_ctrl.pending_restart = True
-        elif control == "train" and (self.thread is None or not self.thread.is_alive()):
+        elif control == "train" and not self.training:
             self.policy = LinearPolicy.zeros(4, 1)  # every run starts from scratch, so runs compare fairly
+            self.newest, self.score = self.policy, None
             with self.lock:
                 self.samples.append({"t": 0.0})  # time goes back: the plot starts a fresh curve
             self.thread = threading.Thread(target=self._train, args=(self.policy, ctx), daemon=True)
             self.thread.start()
         elif control == "push":
-            data.qvel[int(self.model.joint("pole/hinge").dofadr[0])] += 1.2
-            self.live_ctrl.pushed_at = float(data.time)
+            self._push(data, ctx)
+
+    @property
+    def training(self) -> bool:
+        return self.thread is not None and self.thread.is_alive()
+
+    def _push(self, data: mujoco.MjData, ctx: LessonContext) -> None:
+        """Push the pole. Weights that never learned to balance cannot catch it, and following the lesson (a step
+        size of 0.02 in the tuning step) leaves the cart on exactly such weights: then the cart first goes back to
+        the best weights trained so far, and the push comes once it has started over."""
+        assert self.live_ctrl is not None
+        best = self.best
+        learned = self.score is not None and self.score >= TRAINED_RETURN
+        if learned or best is None or self.training:
+            self.live_ctrl.push(data)
+            return
+        self.score, self.policy, run = best
+        self.live_ctrl.pending_restart = True
+        self.live_ctrl.push_in = PUSH_AFTER
+        ctx.results["summary"] = {
+            "zh": f"最新的权重没学会平衡，先换回学得最好的那组（第 {run} 次训练，最后得分 {self.score:.1f}），再推。",
+            "en": f"The newest weights never learned to balance, so the cart goes back to the best ones (training "
+            f"{run}, final score {self.score:.1f}) before the push.",
+        }
 
     def _train(self, policy: LinearPolicy, ctx: LessonContext) -> None:
         env = RobotEnv(make_task("balance", self.model, "pole"), episode_seconds=EPISODE_SECONDS)
@@ -410,6 +451,11 @@ class RLLesson(Lesson):
             learned = next((r for r, m in zip(rounds, means, strict=True) if m >= TRAINED_RETURN), None)
             metrics = {"learned_at": learned, "final": round(means[-1], 1), "steps": log.env_steps}
             ctx.record_run(settings, metrics, rounds, means)
+            final = means[-1]
+            if self.policy is policy:
+                self.score = final
+            if final >= TRAINED_RETURN and (self.best is None or final > self.best[0]):
+                self.best = (final, policy, ctx.run_count)
 
     def close(self) -> None:
         self.stopping.set()
@@ -430,10 +476,12 @@ class RLLesson(Lesson):
         train = ctx.results.get("train")
         if self.policy is None:
             mode = {"zh": "没有控制", "en": "no control"}
-        elif self.thread is None:
-            mode = {"zh": "随机权重", "en": "random weights"}
-        else:
+        elif self.policy is self.newest:
             mode = {"zh": "最新学到的权重", "en": "newest learned weights"}
+        elif self.best is not None and self.policy is self.best[1]:
+            mode = {"zh": "学得最好的权重", "en": "best learned weights"}
+        else:
+            mode = {"zh": "随机权重", "en": "random weights"}
         zh = f"第 {live.attempt} 次  立住 {up:.1f} 秒  上次 {ctx.results.get('last_attempt', 0):.1f} 秒  {mode['zh']}"
         en = f"attempt {live.attempt}  up {up:.1f} s  last {ctx.results.get('last_attempt', 0):.1f} s  {mode['en']}"
         if train:

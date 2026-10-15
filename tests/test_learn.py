@@ -408,13 +408,17 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     slow = lessons.ctx.runs[-1]
     assert slow["params"]["lr"] == 0.02 and slow["metrics"]["learned_at"] is None
     assert update["bench"] is None  # the record goes out once per change, not on every update
-    lessons.handle({"action": "set", "control": "lr", "value": 0.1})
-    lessons.handle({"action": "press", "control": "train"})  # a good policy again for the push
-    _until_trained(pg, lesson)
-    _play(pg, 2 * rl.SHOW_SECONDS)
+    # The cart now runs the step-0.02 weights, which never learned. Pushing them used to be a dead end: the step
+    # could not pass and nothing said why. Push puts the best trained weights back first, then pushes.
     lessons.handle({"action": "next"})
     lessons.handle({"action": "press", "control": "push"})
-    assert "push" in _play(pg, 4.0)["passed"]
+    update = _play(pg, 0.1)
+    assert update["results"]["summary"]["en"].startswith("The newest weights never learned")
+    assert "best learned weights" in update["live"]["readout"]["en"]
+    update = _play(pg, rl.PUSH_AFTER + 4.0)
+    assert "push" in update["passed"]
+    lessons.handle({"action": "press", "control": "push"})  # weights that learned are pushed at once, as before
+    assert lesson.live_ctrl.pushed_at == pg.session.data.time and not lesson.live_ctrl.pending_restart
     pg.lessons.exit()
     assert lesson.stopping.is_set()
 
