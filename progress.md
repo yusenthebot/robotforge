@@ -341,9 +341,18 @@ Rounds 1-3 done, 2026-10-14.
 - Learned walks cannot turn, and agents cannot learn one without driving the viewer's internals (`learn_walk` is waiting on the user).
 - No automated playtest: every bug this round and last was found by hand in the browser.
 
+## Round 28 (2026-10-15): a cheaper, sharper agent (frontier)
+
+- Measured first: replaying round 27's 18 tool calls returned only about 26k characters of text and 4 images in total. Most of the 1.12M input tokens was context re-sent on each of about 25 model turns (95% cached); the largest part we send is the tool list, read every turn.
+- `observe` views now step back just far enough for what they show to fill a set share of the image (a projected fit of the bounding box, per view direction and aspect), instead of a fixed multiple of the scene's diagonal. The round 27 top view showed the Go2, arm and cube about half as large.
+- Tools return text only (an output schema made the SDK send each result twice, as text and as structured content), descriptions lose the docstring indentation, and argument schemas lose a title per parameter that repeated its name: 45.1k to 32.5k characters. Arguments, their checking and result text are unchanged.
+- Same Codex task on the leaner plugin (installed from the local checkout): success, 24 tool calls (18 before) for 918k input tokens (1.12M before), about 38k per call against 62k. The extra calls were its own detours: a bin placed out of the arm's downward reach (the error said so; it moved the bin) and a second walk because editing the bin reloaded the world.
+- `claude -p` is still logged out (needs the user).
+- What did NOT work: comparing single runs is noisy (the agent takes different paths); per-call tokens are the steadier measure.
+
 ## Next-round seed
 
-Round 28 = make the agent cheaper and sharper (frontier). Measure what a session is sent and returned, then: `observe` frames its views on the robots and objects, not a fixed patch of floor; results lose what an agent rarely needs (all joints of every robot by default); tool descriptions get shorter where they repeat the skill. Re-run the round 27 Codex task and compare tool calls, tokens and success. Gate check first: anything that changes an existing tool's arguments or result fields incompatibly needs the user's yes.
+Round 29 = learned walks that turn (phase D). Probe this round: a rhythm learns to turn in place in 30 rounds (6 s): starfish about 60 deg/s each way, a tripod 90 left and 38 right (wandering 0.57 m). Keeping a walk in RL II also learns a left and a right turn (Reward gains a turn mode: yaw turned minus wander), saved as optional fields of walks/<robot>.json (old files still load); `move` and A/D turn the robot in place; `robots` says it turns. Verify in the browser (WASD) and with Codex. Also open: editing a world reloads it and puts robots back at their start.
 
 ## Frontier
 
