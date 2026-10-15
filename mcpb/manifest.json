@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.4",
+  "name": "robotforge",
+  "display_name": "robotforge",
+  "version": "0.1.0",
+  "description": "Beginner robot playground: build robots in plain language, simulate them in MuJoCo and watch them in a live 3D viewer.",
+  "long_description": "Describe a robot in plain words and Claude builds it with robotforge: arms, robot dogs, rovers, humanoids, real robots such as the Unitree Go2 and the Franka Panda, or your own URDF. Make it walk, drive or pick things up, watch it live in a 3D viewer, compare PD, LQR and MPC, write Python scripts, and follow nine short lessons into embodied AI.\n\nThe first start installs the Python packages (about 50 MB) with uv; later starts take about a second. Worlds are saved in ~/robotforge/worlds.",
+  "author": {
+    "name": "yusenthebot",
+    "url": "https://github.com/yusenthebot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yusenthebot/robotforge"
+  },
+  "homepage": "https://github.com/yusenthebot/robotforge",
+  "documentation": "https://github.com/yusenthebot/robotforge/tree/main/docs/lessons",
+  "icon": "icon.png",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/robotforge/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "--frozen", "--no-dev", "robotforge", "mcp"]
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": ["robotics", "mujoco", "simulation", "embodied-ai", "education", "urdf"],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  }
+}
