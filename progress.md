@@ -144,9 +144,22 @@ Rounds 1-3 done, 2026-10-14.
   - Lock order: the reset hook took the runner lock inside the session lock while ticks and input take them the other way round (a latent deadlock). Fixed in the hook.
   - The selection ring and "our template" subtitles made no sense on twins: hidden in lessons without driving; twin tags are one line.
 
+## Round 14 (2026-10-15): MPC and gait twins (phase B complete)
+
+- `DogTwins`: twin template dogs in coloured lanes, put back on their start line with fresh controllers for every test (`restart`), name tags on the trunks.
+- MPC twins: stand MPC per dog (horizon {0.1, 0.2, 0.35, 0.6} s, futures {4, 16, 32, 64}, noise {0.02, 0.05, 0.1, 0.3}); escalating sideways shoves (0.2 m/s more per level, every 2.5 s); the table counts physics steps per plan. Two MPC dogs run 2.5-4.6x faster than real time on the Mac.
+- Measured over six seeds (noise in levels survived): noise 0.05 -> 5-6, 0.3 -> 6-10; horizon 0.1 / 0.35 / 0.6 s -> 6 / 8.5 / 6.8 on average. Calm standing is no shakier with big noise (only the best try is executed). Each shoving gets fresh seeds.
+- Gait twins: `quadruped.for_template(period=, lift=)`; walks at one shared speed on the flat (5 s) and over a 3 cm curb (12 s). Period 0.25 s: top 0.52 m/s, energy 13.1 per metre; 0.5 s: 0.26 m/s, 8.4; 0.7 s cannot reach 0.2 m/s. Lift x0.5 costs 4.6 vs 15.8 at x1.6 on the flat and is stuck at the curb (x1 and x1.6 cross).
+- Finding worth a decision later: the stand task's default MPC noise (0.05) is the weakest setting for shoves; 0.3 survives more with no calm jitter. Changing the default would also change the shove challenge's balance.
+- What did NOT work (and the fix):
+  - One run per setting is not evidence: a single seed said noise 0.05 vs 0.3 was 5 vs 10 levels, the lesson's own run said 6 vs 7. Measured six seeds and the text quotes ranges and averages; the test asserts mechanics, not one chaotic run's order.
+  - Re-running a shove gave the identical outcome (seed 0 every time), contradicting "shove a few times": seeds now change per run.
+  - A camera across the shove direction hid the shoves; MPC twins look from the front. The gait camera now covers the curb and beyond.
+  - Result tables lost track of the settings that produced them once a knob moved; each result section shows "ran with".
+
 ## Next-round seed
 
-Round 14: MPC twins (two dogs standing with MPC, horizon and samples each, one shove; check the CPU budget of two MPCs in real time first) and gait twins (two dogs walking at one command with different step frequency / lift height; speed reached, sway, energy). Then phase C: rebuild the PID lesson around the triplets and sweeps, IK on the PiPER (3D target, Jacobian, manipulability), sensors as a lidar autopilot, gait and humanoid balance lessons.
+Round 15 = phase C, lessons to the cart-pole standard (see the unified structure in docs/PLAY_PLAN.md v2): rebuild the PID lesson around the triplets and sweeps; IK on the AgileX PiPER (drag a 3D target, Jacobian steps, manipulability ellipsoid and singularities, compare its workspace with ours); sensors as a lidar autopilot (tune a threshold, odometry drift corrected by lidar); new gait and humanoid balance lessons. Templates first, then the real robot as the last step of each lesson.
 
 ## Frontier
 
