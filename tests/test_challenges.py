@@ -81,6 +81,19 @@ def test_shoves_topple_a_held_pose_before_mpc(pg):
     assert update["results"]["stars"] >= 2
 
 
+def test_holding_w_takes_the_dog_past_the_stairs(pg):
+    """Regression: W walked the dog at 0.35 m/s, where it fell on the stairs in all 8 of our key-driven runs, and the
+    tip to slow down there asked for a speed no key gives. At 0.3 m/s 6 of 8 got past them."""
+    from robotforge.learn import playthrough
+
+    described = pg.lessons.start("obstacle_course")
+    assert described["drive"]["max_speed"] * playthrough.KEY_SHARE == pytest.approx(0.3, abs=0.01)
+    assert "slow down" not in described["steps"][0]["body"]["en"]
+    pg.lessons.exit()
+    run = playthrough.play(pg, "obstacle_course").results["run"]  # W held, A and D tapped back to the middle
+    assert run["stars"] >= 2, f"fell at {run['distance']} m, before the end of the stairs"
+
+
 def test_the_obstacle_course_scores_how_far_the_dog_gets(pg):
     pg.lessons.start("obstacle_course")
     lesson = pg.lessons.lesson

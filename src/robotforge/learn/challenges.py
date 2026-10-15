@@ -242,7 +242,10 @@ class CourseChallenge(Challenge):
     }
     minutes = 5
     robot = "dog"
-    drive = {"max_speed": 0.5, "turn": 1.2, "follow": "dog/trunk"}
+    # Holding W walks at 70% of max_speed (the viewer's share). At 0.35 m/s the dog fell on the stairs in all 8 of
+    # our key-driven runs (W held, A and D tapped to stay in the middle), and the keys have no slower setting; at
+    # 0.3 m/s 6 of 8 got past them and 3 finished. Only distance earns stars, so the slower walk costs nothing.
+    drive = {"max_speed": 0.43, "turn": 1.2, "follow": "dog/trunk"}
     plots = (
         Plot(
             "progress",
@@ -276,10 +279,10 @@ class CourseChallenge(Challenge):
                 body={
                     "zh": "用 W A S D 驾驶机器狗沿赛道往前走（往 +x，红色终点在 17.6 米）。"
                     "摔倒就结束，按「重置」再来。\n"
-                    f"星星：{zh}。\n提示：台阶前放慢速度，走正，不要斜着上。",
+                    f"星星：{zh}。\n提示：上台阶前把方向摆正，直着上，不要斜着上。",
                     "en": "Walk the robot dog along the course with W A S D (toward +x; the red finish is at 17.6 m). "
                     f"A fall ends the run; press Reset to try again.\nStars: {en}.\n"
-                    "Tip: slow down before the stairs and take them straight, not at an angle.",
+                    "Tip: line up before the stairs and take them straight, not at an angle.",
                 },
                 done={
                     "zh": "路沿和梅花桩对内置步态来说太难了：它是按固定节奏抬腿的，不会“看路”。"
