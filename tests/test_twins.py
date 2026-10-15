@@ -49,6 +49,22 @@ def test_three_joints_take_the_same_step_and_show_what_kd_does(pg):
     assert "tune_a" in _play(pg, 0.1)["passed"]  # tuned like C, A earns its stars
 
 
+def test_feedforward_brings_soft_a_onto_the_target(pg):
+    """The step ends on "even soft A now stops on target", but A was tuned in the step before; it now asks for A to
+    be made soft again first, and soft A with the feedforward does stop on target."""
+    pg.lessons.start("pid_twins")
+    pg.lessons.passed.update({"compare", "tune_a"})
+    pg.lessons.handle({"action": "goto", "step": 2})
+    assert "Kp 10, Kd 0.3" in pg.lessons.lesson.steps[2].body["en"]
+    for control, value in (("kp_a", 10), ("kd_a", 0.3), ("gravity", 1)):
+        pg.lessons.handle({"action": "set", "control": control, "value": value})
+    pg.lessons.handle({"action": "press", "control": "test"})
+    update = _play(pg, twins.pd.TEST_SECONDS + 0.5)
+    a = update["results"]["triplet"]["a"]
+    assert a["kp"] == 10 and a["fine_s"] is not None  # within 1 degree before the test ends (11.7 off without it)
+    assert "feedforward" in update["passed"]
+
+
 def test_lqr_twins_trade_error_for_effort(pg):
     pg.lessons.start("lqr_twins")
     _play(pg, 1.0)

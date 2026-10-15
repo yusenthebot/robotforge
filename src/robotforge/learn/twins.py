@@ -275,9 +275,10 @@ class PIDTwins(TwinsLesson):
             id="feedforward",
             title=_text("三个一起加上前馈", "Feedforward for all three"),
             body=_text(
-                "打开「重力补偿」再测一次：控制器先算出重力要多少力矩并直接加上，三个关节会怎样？",
-                "Turn on Gravity compensation and test again: the controller works out what gravity needs and adds "
-                "it up front. What happens to all three?",
+                "把 A 调回软的（Kp 10，Kd 0.3），打开「重力补偿」再测一次：控制器先算出重力要多少力矩并直接加上，"
+                "三个关节会怎样？",
+                "Set A back to soft (Kp 10, Kd 0.3), turn on Gravity compensation and test again: the controller works "
+                "out what gravity needs and adds it up front. What happens to all three?",
             ),
             done=_text(
                 "连最软的 A 都能停准了：反馈（PID）负责纠正误差，前馈负责提前算好的部分，两者配合最好。",
