@@ -93,7 +93,7 @@ def test_skill_follows_the_agent_skills_format():
     meta = yaml.safe_load(front)
     assert meta["name"] == SKILL.name
     assert re.fullmatch(r"[a-z0-9-]{1,64}", meta["name"])
-    assert 50 < len(meta["description"]) <= 500  # Codex shows at most 500 characters
+    assert 50 < len(meta["description"]) <= 250  # Codex cuts skill descriptions after about 280 characters
     assert len(body.splitlines()) < 150, "keep SKILL.md short; details go in references/"
     for link in re.findall(r"\]\(([^)#]+)\)", body):
         if not link.startswith("http"):

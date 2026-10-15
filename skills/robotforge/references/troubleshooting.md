@@ -10,7 +10,7 @@ The MCP server did not start.
 - It runs with `uv` (`uv run ... robotforge mcp`). If `uv` is not installed, ask the user to install it (https://docs.astral.sh/uv/getting-started/installation/), then restart the client.
 - The first start downloads Python packages (about 50 MB, plus Python 3.12 if missing) and can take a minute or more on a slow network, which can exceed the client's startup timeout. Ask the user to reconnect: `/mcp` in Claude Code, a new session in Codex, or disable and enable the extension in Claude Desktop. Later starts take about a second.
 - Behind a firewall or in mainland China, a PyPI mirror helps: `UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple` in the environment, or `index-url` in `~/.config/uv/uv.toml`.
-- In Codex, tool calls refused with an approval message mean the server's tools are not approved; the plugin approves them by default, a hand-written config needs `default_tools_approval_mode = "approve"`.
+- In Codex the tools are named `mcp__robotforge__<tool>` and may be listed only once the server is up; `/mcp` in the Codex TUI shows its status. Tool calls refused with an approval message mean the tools are not approved: the plugin approves them, a hand-written `config.toml` entry needs `default_tools_approval_mode = "approve"`.
 
 ## Common mistakes
 

@@ -1,14 +1,15 @@
 ---
 name: robotforge
-description: Build, simulate and teach robots with the robotforge MCP tools, a MuJoCo robot playground for beginners. Use when the user wants to design, load or import (URDF) a robot (arm, robot dog, rover, humanoid, Unitree Go2), make it walk, drive or pick things up, compare controllers (PD, LQR, MPC, RL), write robot scripts, or learn embodied AI step by step. 机器人仿真，具身智能入门。
+description: Use for robots and embodied AI with the robotforge MCP tools (a MuJoCo playground for beginners) to build, load or import (URDF) robots, make them walk, drive or grasp, compare controllers, write robot scripts and teach lessons. 机器人仿真，具身智能入门。
 ---
 
 # robotforge
 
 robotforge is a robot playground on the MuJoCo physics engine, made for beginners.
 The user describes a robot and a goal in plain words; you build it with the robotforge MCP tools, make it move, check the result and explain the idea behind each step.
-The tools come from the `robotforge` MCP server (Claude Code shows them as `mcp__plugin_robotforge_robotforge__<tool>`).
-If they are missing, read [references/troubleshooting.md](references/troubleshooting.md) first.
+The tools come from the `robotforge` MCP server: Claude Code names them `mcp__plugin_robotforge_robotforge__<tool>`, Codex `mcp__robotforge__<tool>`; search your tool list for `robotforge`.
+The very first start installs the server's Python packages and can take a minute, so if the tools are not there yet, wait and look again before anything else.
+Do not work around missing tools by importing robotforge's Python modules yourself: nothing would show in the user's viewer. Follow [references/troubleshooting.md](references/troubleshooting.md) instead.
 
 ## Workflow
 
