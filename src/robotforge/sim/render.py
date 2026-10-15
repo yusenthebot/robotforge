@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import io
-import math
 import sys
 import threading
 import warnings
@@ -189,10 +188,3 @@ def _scene_framing(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[n
         return _framing(model, data)
     low, high = box
     return (low + high) / 2, max(0.3, float(np.linalg.norm(high - low)))
-
-
-def look_direction(view: str) -> tuple[float, float, float]:
-    """Unit vector the preset camera looks along (for tests and docs)."""
-    azimuth, elevation, _ = VIEWS[view]
-    a, e = math.radians(azimuth), math.radians(elevation)
-    return (math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), math.sin(e))

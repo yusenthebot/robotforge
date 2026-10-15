@@ -20,7 +20,6 @@ from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
-MAX_RUN_SECONDS = 60.0
 MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE)
 WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller

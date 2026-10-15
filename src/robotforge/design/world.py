@@ -24,7 +24,6 @@ from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-FLOOR_STYLES = {name: list(style.rgba) for name, style in terrain.STYLES.items()}
 ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, wall, shelf, ...
 
 

@@ -1225,7 +1225,8 @@ class GaitTwins(DogTwins):
 
     def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
         readout = _text("正在走……", "Walking...") if self.test else _text("", "")
-        return {"table": self._table(ctx), "readout": readout}
+        follow = self.trunks.get(self.twins[0].name)  # both walk at one speed: the camera goes with them
+        return {"table": self._table(ctx), "readout": readout, "follow": follow}
 
     def _table(self, ctx: LessonContext) -> dict[str, Any]:
         settings = [self.settings(t) for t in self.twins]
@@ -1270,4 +1271,4 @@ class GaitTwins(DogTwins):
         return {"columns": self.columns(), "rows": rows}
 
     def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.8, -3.7, 1.5], "target": [0.8, 0.0, 0.15]}  # the start, the curb and beyond it
+        return {"eye": [0.1, -3.7, 1.5], "target": [0.1, 0.0, 0.15]}  # the start and the curb; then it follows

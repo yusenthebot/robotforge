@@ -15,7 +15,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-FORMAT = "robotforge-policy/1"
 NAME_RE = re.compile(r"\A[a-z][a-z0-9_]{0,47}\Z")
 
 # Observation terms robotforge can rebuild from a MuJoCo state. Base terms are measured at

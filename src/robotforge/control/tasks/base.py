@@ -262,10 +262,6 @@ class Task(ABC):
     def step_cost(self, data: mujoco.MjData) -> float:
         return float(self.cost(Batch.from_data(self.model, data))[0, 0])
 
-    def reward_rate(self, data: mujoco.MjData) -> float:
-        """Reward per second right now: alive bonus minus cost."""
-        return self.alive_bonus - self.step_cost(data)
-
     def failed(self, data: mujoco.MjData) -> bool:
         """True once the attempt cannot recover (the robot fell, the pole dropped...)."""
         return False

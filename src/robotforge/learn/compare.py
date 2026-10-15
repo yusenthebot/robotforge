@@ -562,6 +562,7 @@ GRAVITY = 9.81
 
 class HumanoidFaceOff(FaceOff):
     id = "humanoid_faceoff"
+    spacing = 1.8  # m: wide lanes, so from the camera the 1.3 m G1 does not stand on top of ours
     chapter = _text("真机对比", "Real robots")
     title = _text("人形：我们的、Unitree G1", "Humanoids: ours and the Unitree G1")
     summary = _text(
@@ -711,7 +712,8 @@ class HumanoidFaceOff(FaceOff):
         return START_X, y  # they walk toward +x, so the test happens in the middle of the view
 
     def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.2, -5.6, 1.8], "target": [0.1, 0.0, 0.5]}
+        # From above the near lane: the far lane (the tall G1) shows above our small humanoid, not behind it.
+        return {"eye": [-0.2, -5.0, 3.2], "target": [-0.3, 0.0, 0.4]}
 
     def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
         return {

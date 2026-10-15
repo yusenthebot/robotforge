@@ -252,7 +252,7 @@ STEPS = (
 
 class IKArmLesson(Lesson):
     id = "ik_arm"
-    chapter = _text("逆运动学", "Inverse kinematics")
+    chapter = _text("运动学", "Kinematics")
     title = _text(
         "逆运动学（二）：六轴机械臂，从模板到 PiPER", "Inverse kinematics II: six-joint arms, template to PiPER"
     )

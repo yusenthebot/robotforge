@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from robotforge.playground import Playground
 
 Text = dict[str, str]  # {"zh": ..., "en": ...}
-SAMPLE_SECONDS = 12.0  # how much plot history the lesson keeps for its checks
 MAX_RUNS = 5  # the experiment record keeps this many runs to compare
 
 

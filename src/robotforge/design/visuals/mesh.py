@@ -196,13 +196,6 @@ def rounded_rect(hx: float, hy: float, r: float, per_corner: int = 4) -> np.ndar
     return np.array(pts)
 
 
-def superellipse(a: float, b: float, power: float, n: int) -> np.ndarray:
-    t = np.linspace(0.0, 2 * math.pi, n, endpoint=False)
-    c, s = np.cos(t), np.sin(t)
-    e = 2.0 / power
-    return np.stack([a * np.sign(c) * np.abs(c) ** e, b * np.sign(s) * np.abs(s) ** e], axis=1)
-
-
 def at_z(ring2: np.ndarray, z: float) -> np.ndarray:
     return np.column_stack([ring2, np.full(len(ring2), z)])
 
@@ -511,16 +504,6 @@ def blob(
     return base.displaced(pts - base.vertices)
 
 
-def bent_lathe(profile: Sequence[tuple[float, float]], segments: int, bend: Sequence[float]) -> Mesh:
-    """A lathe whose rings slide sideways by `bend[i]` (x) per profile point, for crooked trunks."""
-    rings = []
-    for (r, z), dx in zip(profile, bend, strict=True):
-        ring = at_z(circle(max(r, 0.0), segments), z)
-        ring[:, 0] += dx
-        rings.append(ring)
-    return loft(rings)
-
-
 def tube(path: np.ndarray, radii: Sequence[float], segments: int = 12) -> Mesh:
     """A tube along a 3D polyline with a radius per point (branches, handles, rails)."""
     path = np.asarray(path, dtype=float)
@@ -539,20 +522,6 @@ def tube(path: np.ndarray, radii: Sequence[float], segments: int = 12) -> Mesh:
         ring2 = circle(radii[k], segments)
         rings.append(p + ring2[:, :1] * u + ring2[:, 1:] * v)
     return loft(rings)
-
-
-def extrude(polygon: np.ndarray, depth: float) -> Mesh:
-    """Prism of a convex counter-clockwise 2D polygon (x, y), from z = -depth/2 to depth/2, crisp edges."""
-    poly = np.asarray(polygon, dtype=float)
-    n = len(poly)
-    parts = []
-    for k in range(n):
-        p0, p1 = poly[k], poly[(k + 1) % n]
-        quad = np.array([[*p0, -depth / 2], [*p1, -depth / 2], [*p1, depth / 2], [*p0, depth / 2]])
-        parts.append(_quad(quad))
-    parts.append(_cap(at_z(poly, -depth / 2), reverse=True))
-    parts.append(_cap(at_z(poly, depth / 2), reverse=False))
-    return _finish(merge(parts))
 
 
 @cached

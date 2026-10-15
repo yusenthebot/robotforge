@@ -32,9 +32,6 @@ class ActionScale:
     def to_ctrl(self, action: np.ndarray) -> np.ndarray:
         return self.mid + np.clip(action, -1.0, 1.0) * self.half
 
-    def to_action(self, ctrl: np.ndarray) -> np.ndarray:
-        return np.clip((np.asarray(ctrl) - self.mid) / np.where(self.half > 0, self.half, 1.0), -1.0, 1.0)
-
     def clip(self, ctrl: np.ndarray) -> np.ndarray:
         return np.clip(ctrl, self.low, self.high)
 
@@ -67,11 +64,6 @@ class TorqueMap:
         self.scale = ActionScale(model, self.actuators)
         self.force_limited = model.actuator_forcelimited[self.actuators].astype(bool)
         self.force_range = model.actuator_forcerange[self.actuators].copy()
-
-    def max_torque(self) -> np.ndarray:
-        """Largest joint torque each actuator can give (inf when unlimited)."""
-        lim = np.where(self.force_limited, np.abs(self.force_range).max(axis=1), np.inf)
-        return lim * np.abs(self.gear)
 
     def ctrl(self, data: mujoco.MjData, torque: np.ndarray) -> np.ndarray:
         """The ctrl values that make each actuator apply `torque` to its joint right now (clipped)."""

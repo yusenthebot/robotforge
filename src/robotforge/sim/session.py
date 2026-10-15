@@ -79,9 +79,6 @@ class SimSession:
     def load_path(self, path: str | Path) -> None:
         self._swap(_compile_path(Path(path)), str(path))
 
-    def load_xml(self, xml: str, assets: dict[str, bytes] | None = None) -> None:
-        self._swap(_compile_xml(xml, assets), "<memory>")
-
     def load_model(self, model: mujoco.MjModel, source: str) -> None:
         """Swap in an already compiled model (e.g. from a world.yaml)."""
         self._swap(model, source)

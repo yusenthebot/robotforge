@@ -60,9 +60,6 @@ class StagedUrdf:
     visual_triangles: int = 0
     collision_triangles: int = 0
 
-    def joint_of(self, link: str) -> JointInfo | None:
-        return next((j for j in self.joints if j.child == link), None)
-
 
 def stage_urdf(
     robot: ET.Element, resolver: MeshResolver, work_dir: Path, report: DoctorReport, decompose: bool

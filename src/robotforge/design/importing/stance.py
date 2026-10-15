@@ -280,7 +280,3 @@ def _asymmetry(foot_offsets: np.ndarray, hips: np.ndarray) -> float:
                 total += abs(foot_offsets[a, 0] - foot_offsets[b, 0]) + abs(foot_offsets[a, 1] + foot_offsets[b, 1])
                 pairs += 1
     return total / pairs if pairs else 0.0
-
-
-def _pose_distance(a: dict[str, float], b: dict[str, float]) -> float:
-    return max((abs(a.get(k, 0.0) - b.get(k, 0.0)) for k in set(a) | set(b)), default=0.0)

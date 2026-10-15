@@ -482,7 +482,7 @@ def sensors_spec(name: str = "sensors_lesson", floor: bool = True) -> mujoco.MjS
 class SensorsLesson(Lesson):
     id = "sensors"
     chapter = {"zh": "感知", "en": "Sensing"}
-    title = {"zh": "机器人怎么感知世界：传感器", "en": "How a robot senses the world: sensors"}
+    title = {"zh": "感知（一）：机器人怎么感知世界", "en": "Sensing I: how a robot senses the world"}
     summary = {
         "zh": "开一台小车，看编码器、IMU、激光雷达、碰撞开关和相机各自回答什么问题。",
         "en": "Drive a rover and see what encoders, the IMU, lidar, a bumper and a camera each tell it.",

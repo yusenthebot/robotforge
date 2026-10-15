@@ -775,7 +775,7 @@ def step_bench(sweeps: tuple[Sweep, ...], reference: float, extra: tuple[tuple[s
 class PDLesson(JointLesson):
     id = "pd_control"
     chapter = _text("控制原理", "Control")
-    title = _text("让关节停在目标角度：PID 控制", "Holding a joint on target: PID control")
+    title = _text("PID（一）：让关节停在目标角度", "PID I: holding a joint on target")
     summary = _text(
         "先猜再试：弹簧、阻尼、稳态误差、前馈和积分，每一次测试都留在记录里叠着比。",
         "Guess, then try: springs, damping, steady-state error, feedforward and integral, every test kept "

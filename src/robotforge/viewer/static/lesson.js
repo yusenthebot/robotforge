@@ -192,6 +192,7 @@ const passedAll = () => lesson && state && lesson.steps.every((s) => state.passe
 // The scene description says which lessons exist and whether one is running (e.g. after a reconnect).
 export function lessonScene(desc) {
   catalog = desc.lessons || [];
+  followWanted = null; // a new scene drops the camera's follow: ask again with the next update
   renderPicker();
   $("learn-toggle").hidden = catalog.length === 0;
   if (desc.lesson && (!lesson || lesson.id !== desc.lesson.id)) openLesson(desc.lesson);

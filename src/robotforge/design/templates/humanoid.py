@@ -33,9 +33,6 @@ from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
 SIDES = (("left", 1), ("right", -1))
-LEG_JOINTS = ("hip_yaw", "hip_roll", "hip_pitch", "knee", "ankle_pitch", "ankle_roll")
-ARM_JOINTS = ("shoulder_pitch", "shoulder_roll", "elbow")
-HEAD_JOINTS = ("neck_yaw", "neck_pitch")
 HOME_BEND = 0.35  # rad on hip and ankle pitch (knee bends twice as much): knees soft, ready to step
 HOME_ARM = {"shoulder_pitch": 0.1, "shoulder_roll": 0.12, "elbow": 0.35}
 EYE = [0.55, 0.85, 1.0, 1.0]
