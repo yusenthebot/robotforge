@@ -11,13 +11,16 @@ The rhythm alone is open loop: it never reads a sensor. Reflexes add feedback, 4
 that turn the trunk's roll, pitch and their rates into joint corrections, learned by the same search.
 Training can also shove the robot at random and count surviving as reward, so the search has a reason to
 learn them.
+
+A rhythm can also be learned to start mid-stride of another (a turn right out of a walk): its tries then begin
+from moments of that one, the new rhythm fading in from the targets the joints had, as RhythmWalker plays it.
 """
 
 from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 import mujoco
@@ -155,6 +158,26 @@ class Rhythm:
         return out
 
 
+FADE = 0.25  # s: a rhythm started mid-stride fades in from the joint targets of the moment, over this long
+
+
+def fade_in(source: np.ndarray, target: np.ndarray, elapsed: float) -> np.ndarray:
+    """`target`, faded in from `source` over FADE seconds (eased at both ends), `elapsed` seconds after the switch."""
+    x = min(1.0, max(0.0, elapsed / FADE))
+    w = x * x * (3.0 - 2.0 * x)
+    return target if w >= 1.0 else (1.0 - w) * source + w * target
+
+
+@dataclass(frozen=True)
+class Start:
+    """A moment to begin a rollout from instead of standing still at home: the whole model's positions, velocities
+    and joint targets, say mid-stride of a walk. The rhythm tried from it fades in from those targets."""
+
+    qpos: np.ndarray
+    qvel: np.ndarray
+    ctrl: np.ndarray
+
+
 @dataclass(frozen=True)
 class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
@@ -196,15 +219,20 @@ class Trainer:
         self.mass = float(sum(model.body_mass))
         self.substeps = max(1, round(1.0 / (CONTROL_HZ * model.opt.timestep)))
 
-    def rollout(self, rhythm: Rhythm, theta: np.ndarray | None = None, push: Push | None = None) -> dict[str, float]:
-        """Walk for `seconds` from the home pose (shoved once if `push`): distance, sideways drift, energy,
-        how long it stayed up, fell, and the reward."""
+    def rollout(
+        self, rhythm: Rhythm, theta: np.ndarray | None = None, push: Push | None = None, start: Start | None = None
+    ) -> dict[str, float]:
+        """Walk for `seconds` from the home pose, or from `start` (shoved once if `push`): distance, sideways drift,
+        energy, how long it stayed up, fell, and the reward."""
         m, b = self.model, self.body
         d = mujoco.MjData(m)
-        if m.nkey:
+        if start is not None:
+            d.qpos[:], d.qvel[:], d.ctrl[:] = start.qpos, start.qvel, start.ctrl
+        elif m.nkey:
             mujoco.mj_resetDataKeyframe(m, d, 0)
         mujoco.mj_forward(m, d)
-        start = d.xpos[b.trunk][:2].copy()
+        before = d.ctrl[b.actuators].copy()  # what a rhythm started mid-stride fades in from
+        origin = d.xpos[b.trunk][:2].copy()
         energy, fell, up = 0.0, False, self.seconds
         heading, turned, wander = _yaw(d, b), 0.0, 0.0
         steps = round(self.seconds * CONTROL_HZ)
@@ -214,7 +242,10 @@ class Trainer:
                 d.qvel[b.qvel[0]] += push.velocity[0]
                 d.qvel[b.qvel[1]] += push.velocity[1]
             senses = trunk_senses(d, b) if rhythm.reflexes else None
-            d.ctrl[b.actuators] = np.clip(rhythm.targets(self.home, t, theta, senses), b.lower, b.upper)
+            target = rhythm.targets(self.home, t, theta, senses)
+            if start is not None:
+                target = fade_in(before, target, t)
+            d.ctrl[b.actuators] = np.clip(target, b.lower, b.upper)
             for _ in range(self.substeps):
                 mujoco.mj_step(m, d)
                 energy += float(np.abs(d.actuator_force[b.actuators] * d.qvel[b.dadr]).sum()) * m.opt.timestep
@@ -222,16 +253,18 @@ class Trainer:
             turned += math.atan2(math.sin(now - heading), math.cos(now - heading))  # unwrapped: whole turns count
             heading = now
             # The farthest it got, not where it ended: circling round a point comes back to the start.
-            wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - start)))
+            wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - origin)))
             if float(d.xmat[b.trunk][8]) < FELL:
                 fell, up = True, t
                 break
-        moved = d.xpos[b.trunk][:2] - start
+        moved = d.xpos[b.trunk][:2] - origin
         distance, drift = float(moved[0]), abs(float(moved[1]))
         cost = self.reward.energy * energy / (self.mass * 9.81)
         if self.reward.turn:
-            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off.
-            reward = self.reward.turn * turned - WANDER_WEIGHT * wander - cost
+            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off. A fall
+            # forfeits the turn: a fast spin that ends on its back scored more than a slower one that stays up.
+            turn = 0.0 if fell else self.reward.turn * turned
+            reward = turn - WANDER_WEIGHT * wander - cost
         else:
             # Forward: the distance counts for less the more the heading turned, so a walk that curves round
             # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight.
@@ -261,10 +294,12 @@ class Trainer:
         pushes: float = 0.0,
         callback: Callable[[int, dict[str, float]], None] | None = None,
         stop: Callable[[], bool] | None = None,
+        starts: Sequence[Start | None] | None = None,
     ) -> TrainingLog:
         """ARS on the rhythm, in place (a live controller may be playing it). With `pushes` (m/s) every try is
-        shoved once at random, the same shove for both sides of a direction. After each iteration the current
-        rhythm walks once more, unshoved, for the log and the callback."""
+        shoved once at random, the same shove for both sides of a direction; with `starts`, it begins from one of
+        them picked at random (None: standing still at home), the same for both sides. After each iteration the
+        current rhythm walks once more, from home and unshoved, for the log and the callback."""
         if not 1 <= top <= directions:
             raise CPGError("top must be between 1 and the number of directions")
         rng = np.random.default_rng(seed)
@@ -275,10 +310,11 @@ class Trainer:
                 break
             deltas = rng.standard_normal((directions, len(rhythm.theta)))
             shoves = [random_push(rng, pushes, self.seconds) if pushes > 0 else None for _ in deltas]
+            begins = [starts[int(rng.integers(len(starts)))] for _ in deltas] if starts else [None] * len(deltas)
             base = rhythm.theta.copy()
-            pairs = list(zip(deltas, shoves, strict=True))
-            plus = np.array([self.rollout(rhythm, base + noise * dl, p)["reward"] for dl, p in pairs])
-            minus = np.array([self.rollout(rhythm, base - noise * dl, p)["reward"] for dl, p in pairs])
+            tries = list(zip(deltas, shoves, begins, strict=True))
+            plus = np.array([self.rollout(rhythm, base + noise * dl, p, s)["reward"] for dl, p, s in tries])
+            minus = np.array([self.rollout(rhythm, base - noise * dl, p, s)["reward"] for dl, p, s in tries])
             best = np.argsort(-np.maximum(plus, minus))[:top]
             spread = np.concatenate([plus[best], minus[best]]).std() + 1e-8
             rhythm.theta = base + step_size / (top * spread) * np.tensordot(
@@ -292,6 +328,27 @@ class Trainer:
                 callback(it + 1, walk)
         log.seconds = time.perf_counter() - started
         return log
+
+    def moments(self, rhythm: Rhythm, times: Sequence[float]) -> list[Start]:
+        """Play `rhythm` from the home pose and keep the moments `times` seconds into it, to start other
+        rhythms from; none past a fall."""
+        m, b = self.model, self.body
+        d = mujoco.MjData(m)
+        if m.nkey:
+            mujoco.mj_resetDataKeyframe(m, d, 0)
+        mujoco.mj_forward(m, d)
+        out: list[Start] = []
+        for k in range(round(max(times, default=0.0) * CONTROL_HZ) + 1):
+            t = k / CONTROL_HZ
+            if float(d.xmat[b.trunk][8]) < FELL:
+                break
+            if any(abs(t - when) < 0.5 / CONTROL_HZ for when in times):
+                out.append(Start(d.qpos.copy(), d.qvel.copy(), d.ctrl.copy()))
+            senses = trunk_senses(d, b) if rhythm.reflexes else None
+            d.ctrl[b.actuators] = np.clip(rhythm.targets(self.home, t, senses=senses), b.lower, b.upper)
+            for _ in range(self.substeps):
+                mujoco.mj_step(m, d)
+        return out
 
     def push_test(self, rhythm: Rhythm, strength: float, trials: int = 12, seed: int = 99) -> dict[str, float]:
         """Walk `trials` times, each shoved once at random: how many stayed up, and how far they got."""

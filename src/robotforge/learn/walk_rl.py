@@ -715,11 +715,12 @@ class LearnToWalkLesson(Lesson):
         wait = _turn_seconds(result)
         return _text(
             f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
-            f"现在它接着学转弯，向左、向右各从两个起点学，留下转得好的那个（约 {wait} 秒），学完也会存好。"
+            "现在它接着学原地转弯，站着起转和边走边转都学，"
+            f"向左、向右各学两次留下好的那次（约 {wait} 秒），学完也会存好。"
             f"退出课程回到你的世界，在聊天里让 {name} 走，或者选中它按 W 往前、A 和 D 原地转。",
             f"Kept: {name}'s walk ({result['distance']:g} m in 4 s, about {walk.speed:.2f} m/s) is in your world now. "
-            f"It goes on to learn to turn, each way from two starts keeping the better (about {wait} s), "
-            "kept as well when done. "
+            "It goes on to learn to turn on the spot, from standing and straight out of its walk, each way twice "
+            f"keeping the better (about {wait} s), kept as well when done. "
             f"Leave the lesson, then ask for {name} to walk in the chat, or select it and press W to go forward and "
             "A or D to turn on the spot.",
         )

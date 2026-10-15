@@ -1,9 +1,26 @@
 """Learning to walk by rhythm and random search (control/cpg.py)."""
 
+import math
+
+import mujoco
 import numpy as np
 import pytest
 
-from robotforge.control.cpg import DRIFT_WEIGHT, HEADING_WEIGHT, Body, CPGError, Push, Reward, Rhythm, Trainer
+from robotforge.control.cpg import (
+    DRIFT_WEIGHT,
+    FADE,
+    FALL_PENALTY,
+    HEADING_WEIGHT,
+    WANDER_WEIGHT,
+    Body,
+    CPGError,
+    Push,
+    Reward,
+    Rhythm,
+    Start,
+    Trainer,
+    fade_in,
+)
 from robotforge.design.world import World, compile_world
 from robotforge.learn.walk_rl import STAR
 
@@ -85,3 +102,36 @@ def test_a_forward_walk_counts_less_the_more_its_heading_turned():
     assert not walk["fell"] and walk["distance"] > 0.1 and abs(walk["turned"]) > 0.01
     straight = walk["distance"] - DRIFT_WEIGHT * walk["drift"]
     assert walk["reward"] == pytest.approx(straight - HEADING_WEIGHT * abs(walk["turned"]) * walk["distance"])
+
+
+def test_a_rhythm_can_start_mid_stride_faded_in_from_the_targets_of_the_moment():
+    model = _solo("star", build=STAR)
+    trainer = Trainer(model, "star", Reward(), seconds=1.0)
+    n = trainer.body.joints
+    swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.5), np.zeros(n)]))
+    moments = trainer.moments(swing, (0.5, 0.8))
+    assert len(moments) == 2 and np.abs(moments[0].qvel).max() > 0.1  # mid-stride: moving
+    a, b = np.zeros(3), np.ones(3)
+    assert fade_in(a, b, 0.0) == pytest.approx(a) and fade_in(a, b, FADE) == pytest.approx(b)
+    assert fade_in(a, b, FADE / 2) == pytest.approx(0.5 * b)
+    still = Rhythm.still(n)
+    from_stride = trainer.rollout(still, start=moments[0])
+    assert from_stride["energy"] > 2 * trainer.rollout(still)["energy"]  # it had a stride to stop
+
+
+def test_a_fall_forfeits_a_turn():
+    """Regression: a fall cost one point while a fast spin earned up to 14 rad in 4 s, so turns that spun the
+    imported A1 onto its back when started out of its walk still scored best."""
+    model = _solo("dog", template="quadruped")
+    trainer = Trainer(model, "dog", Reward(turn=1.0), seconds=2.0)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    pos, vel = trainer.body.qpos, trainer.body.qvel
+    data.qpos[pos[2]] += 0.1
+    data.qpos[pos[3:7]] = [math.cos(math.radians(20)), math.sin(math.radians(20)), 0.0, 0.0]  # leaning 40 degrees
+    data.qvel[vel[5]] = 8.0  # spinning to the left
+    data.qvel[vel[3]] = 2.0  # and rolling over
+    toppling = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
+    spun = trainer.rollout(Rhythm.still(trainer.body.joints), start=toppling)
+    assert spun["fell"] and spun["turned"] > 1.0  # rad: it spun a long way before it went down
+    assert spun["reward"] == pytest.approx(-FALL_PENALTY - WANDER_WEIGHT * spun["wander"])

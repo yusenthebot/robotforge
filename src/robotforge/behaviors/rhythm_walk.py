@@ -5,9 +5,12 @@ it to walks/<robot>.json in the world's folder: the rhythm's numbers, the joint 
 the robot's name, so the file does not care what the robot is called in the lesson) and how fast it went.
 From then on `move` and the keyboard drive that robot with it, even when no gait code knows its body.
 
-A rhythm is learned going forward, at its own pace: any forward command plays it from the start. After
-keeping it the robot also learns to turn on the spot, one rhythm each way (`learn_turns`), saved in the same
-file once learned; a turn command plays those. It cannot back up or change speed, and the status says so.
+A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot also
+learns to turn on the spot, one rhythm each way (`learn_turns`), from standing still and right out of its walk,
+saved in the same file once learned. Commands switch between them in a fraction of a second: standing still, a
+rhythm starts as it was learned; a turn out of the walk starts at once, faded in from the stride, as it learned
+to; any other switch while moving first steadies the robot on its home pose until it is calm, then fades the
+new rhythm in. It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -22,7 +25,20 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from robotforge.control.cpg import CONTROL_HZ, FELL, SENSES, Body, CPGError, Reward, Rhythm, Trainer, trunk_senses
+from robotforge.control.cpg import (
+    CONTROL_HZ,
+    FADE,
+    FELL,
+    SENSES,
+    Body,
+    CPGError,
+    Reward,
+    Rhythm,
+    Start,
+    Trainer,
+    fade_in,
+    trunk_senses,
+)
 from robotforge.design.world import NAME_RE
 
 WALKS_DIR = "walks"
@@ -49,6 +65,7 @@ class SavedWalk(BaseModel):
     turn_left: list[float] | None = None
     turn_right: list[float] | None = None
     turn_rate: float | None = Field(None, ge=0)  # rad/s, the slower of the two turns
+    turns_from_walking: bool = False  # the turns also learned to start right out of the walk (older files: no)
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -81,18 +98,26 @@ class SavedWalk(BaseModel):
 
 
 TURN_ROUNDS = 30  # search rounds per start: 6 s on a laptop for the starfish
-TURN_STARTS = 2  # random starts per side; the better one is kept
-# A rhythm starts once the robot stands still, as in training: trunk and joint speeds under these, or after
-# SETTLE_MAX seconds of holding the home pose at most.
+TURN_STARTS = 2  # random starts per side; the one that turns best from its worst beginning is kept
+# Moments of the walk (s after it starts from standing) a turn also learns to begin at: its first steps, then its
+# stride at different points of a step (0.3 s apart at the usual 2 Hz). Half of each round's tries begin at one.
+WALK_STARTS = (0.5, 0.8, 1.1, 1.4, 1.7, 2.0)
+# Standing still (trunk and joint speeds under these), a rhythm starts exactly as it was learned.
 STILL_SPEED = 0.02  # m/s
 STILL_SPIN = 0.1  # rad/s
 STILL_JOINT = 0.1  # rad/s
-SETTLE_MAX = 1.0  # s
+# Before a switch it never learned (out of a turn, or into one with turns learned only from standing) the robot
+# steadies on its home pose until its trunk turns slower than CALM_SPIN and leans less than CALM_TILT, at most
+# CALM_MAX; standing on home until perfectly still took the whole of a 1 s command.
+CALM_SPIN = 2.0  # rad/s, the trunk's angular speed
+CALM_TILT = math.radians(25.0)  # a walking A1 rocks up to 20 degrees
+CALM_MAX = 0.6  # s
 
 
 def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
     """Teach the robot (alone in `model`, never the live world) to turn on the spot each way, by the same random
-    search as the walk with a reward for the angle turned, and return the walk with both turns added."""
+    search as the walk with a reward for the angle turned, from standing still and from moments of its walk, and
+    return the walk with both turns added."""
     body = Body.find(model, robot)
     names = joint_names(model, body)
     if sorted(names) != sorted(walk.joints):
@@ -101,23 +126,43 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
     rates = []
     order = [names.index(j) for j in walk.joints]  # the trainer's order is the model's; the file keeps the walk's
     n = body.joints
+    in_model_order = [walk.joints.index(j) for j in names]
+    forward = Rhythm(_reordered(walk.theta, in_model_order, walk.reflexes), walk.freq, walk.reflexes)
+    # Learned only from standing still, a turn asked for mid-stride either waited for the robot to stand still (a
+    # 1 s turn right after walking turned the imported A1 16 degrees of the 88 it promised) or started from a
+    # pose and speed it never met (3 A1 walks tipped past 45 degrees in 64 of 561 random switches started at once).
+    # So half the tries begin out of the walk.
+    walking = Trainer(model, robot, Reward(), walk.seconds, walk.freq).moments(forward, WALK_STARTS)
+    starts: list[Start | None] = [None] * len(walking) + list(walking)
     for side, sign in (("turn_left", 1.0), ("turn_right", -1.0)):
         trainer = Trainer(model, robot, Reward(turn=sign), walk.seconds, walk.freq)
         # Random search lands somewhere different from every start (one tripod turn came out at 16 deg/s, the
-        # next at 87): two starts each way, the better one kept.
+        # next at 87): two starts each way, keeping the one whose worst beginning (standing or walking) is best.
         best: tuple[float, Rhythm, dict[str, float]] | None = None
         for start in range(TURN_STARTS):
             rhythm = Rhythm.still(body.joints, walk.freq)
-            trainer.train(rhythm, iterations=TURN_ROUNDS, seed=seed + 10 * start + (1 if sign > 0 else 2))
-            result = trainer.rollout(rhythm)
-            if best is None or result["reward"] > best[0]:
-                best = (result["reward"], rhythm, result)
+            trainer.train(
+                rhythm, iterations=TURN_ROUNDS, seed=seed + 10 * start + (1 if sign > 0 else 2), starts=starts
+            )
+            standing = trainer.rollout(rhythm)
+            worst = min([standing["reward"]] + [trainer.rollout(rhythm, start=s)["reward"] for s in walking])
+            if best is None or worst > best[0]:
+                best = (worst, rhythm, standing)
         assert best is not None
-        _, rhythm, result = best
+        _, rhythm, standing = best
         theta = np.concatenate([rhythm.theta[k * n : (k + 1) * n][order] for k in range(3)])
         learned[side] = [float(v) for v in theta]
-        rates.append(max(0.0, sign * result["turned"]) / walk.seconds)
-    return walk.model_copy(update={**learned, "turn_rate": min(rates)})
+        rates.append(max(0.0, sign * standing["turned"]) / walk.seconds)
+    return walk.model_copy(update={**learned, "turn_rate": min(rates), "turns_from_walking": True})
+
+
+def _reordered(theta: list[float], order: list[int], reflexes: bool) -> np.ndarray:
+    """A rhythm's numbers with its joints put in `order`: offsets, amplitudes and phases, then any reflex gains."""
+    n = len(order)
+    parts = [np.asarray(theta[k * n : (k + 1) * n])[order] for k in range(3)]
+    if reflexes:
+        parts.append(np.asarray(theta[3 * n :]).reshape(n, SENSES)[order].ravel())
+    return np.concatenate(parts)
 
 
 def walk_file(world_dir: Path, robot: str) -> Path:
@@ -185,8 +230,13 @@ class RhythmWalker:
         self.max_speed = walk.speed
         self.mode: str | None = None  # forward, left, right, or None: standing
         self.asked: tuple[float, float] = (0.0, 0.0)
-        self.t0: float | None = None  # when the playing rhythm started; None while standing or settling
-        self.settle_from: float | None = None
+        self.playing: str | None = None  # the mode the joints follow now (its rhythm, or home while steadying)
+        self.t0: float | None = None  # when the playing rhythm started; None while standing or steadying
+        self.steady_from: float | None = None  # steadying on home since then, before the asked rhythm starts
+        self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
+        self.fade_t0 = 0.0
+        self.walked_until = -math.inf  # sim time the walk last played
+        self.clock = -math.inf  # sim time of the last update
         self.tilt_cos = 1.0
 
     @property
@@ -194,7 +244,8 @@ class RhythmWalker:
         return self.mode is not None
 
     def command(self, speed: float, turn: float) -> None:
-        """A turn wins over going forward (it turns on the spot); without learned turns it is ignored."""
+        """A turn wins over going forward (it turns on the spot); without learned turns it is ignored. The switch
+        happens on the next update, so a stop followed at once by another command (as `move` gives) is skipped."""
         if turn > 0 and "left" in self.rhythms:
             mode = "left"
         elif turn < 0 and "right" in self.rhythms:
@@ -203,39 +254,77 @@ class RhythmWalker:
             mode = "forward"
         else:
             mode = None
-        if mode != self.mode:
-            self.t0 = self.settle_from = None  # the new rhythm starts from its beginning, as in training
         self.mode = mode
         self.asked = (speed, turn)
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        now = float(data.time)
         self.tilt_cos = float(data.xmat[self.body.trunk][8])
-        if self.mode is not None and self.t0 is None and self._ready(data):
-            self.t0 = float(data.time)
-        if self.t0 is None:  # standing, or settling before a rhythm starts
-            data.ctrl[self.actuators] = np.clip(self.home, self.lower, self.upper)
-            return
-        assert self.mode is not None
-        rhythm = self.rhythms[self.mode]
-        senses = trunk_senses(data, self.body) if rhythm.reflexes else None
-        target = rhythm.targets(self.home, float(data.time) - self.t0, senses=senses)
+        if now < self.clock:  # the clock was turned back (a reset): times kept from before lie in the future
+            self.playing, self.t0, self.steady_from, self.fade_from = None, None, None, None
+            self.walked_until = -math.inf
+        self.clock = now
+        if self.mode != self.playing:
+            self._switch(data, now)
+        if self.steady_from is not None and (self._calm(data) or now - self.steady_from >= CALM_MAX):
+            self.steady_from = None
+            self._start(data, now, fade=True)
+        if self.t0 is None:  # standing, or steadying before a rhythm starts
+            target = self.home
+        else:
+            assert self.playing is not None
+            rhythm = self.rhythms[self.playing]
+            senses = trunk_senses(data, self.body) if rhythm.reflexes else None
+            target = rhythm.targets(self.home, now - self.t0, senses=senses)
+            if self.playing == "forward":
+                self.walked_until = now
+        if self.fade_from is not None:
+            target = fade_in(self.fade_from, target, now - self.fade_t0)
+            if now - self.fade_t0 >= FADE:
+                self.fade_from = None
         data.ctrl[self.actuators] = np.clip(target, self.lower, self.upper)
 
-    def _ready(self, data: mujoco.MjData) -> bool:
-        """Whether the asked rhythm may start. Each was learned from standing still at home. Started mid-stride
-        (walking straight into a turn, one turn into the other, a turn into walking), the imported A1 fell in 4 of
-        10 switches over two learned walks; holding its home pose until it was still first (at once if it already
-        is), in none."""
-        now = float(data.time)
-        if self.settle_from is None:
-            self.settle_from = now
+    def _switch(self, data: mujoco.MjData, now: float) -> None:
+        """The asked mode takes over. Each rhythm was learned from standing still, and the turns (in files that say
+        so) also right out of the walk; those start at once. Any other switch while moving steadies on home first.
+        When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
+        16 degrees of the 88 it promised. Over 6 learned A1 walks (scripts/rhythm_bench.py switch --stress 4) that
+        turn now reaches 67 to 100 percent of the promise (12 to 107 before), and 1440 random switches made it
+        fall 13 times (94 before); the template dog fell 11 times (none before) and the starfish never."""
+        out_of_walk = now - self.walked_until <= FADE + 1.0 / CONTROL_HZ
+        self.playing, self.steady_from = self.mode, None
+        if self.mode is None:  # stop: fade to the home pose
+            self.t0 = None
+            self._fade(data, now)
+        elif self._still(data):
+            self._start(data, now, fade=False)
+        elif self.mode != "forward" and out_of_walk and self.walk.turns_from_walking:
+            self._start(data, now, fade=True)
+        else:
+            self.t0, self.steady_from = None, now
+            self._fade(data, now)
+
+    def _start(self, data: mujoco.MjData, now: float, fade: bool) -> None:
+        self.t0 = now
+        if fade:
+            self._fade(data, now)
+        else:
+            self.fade_from = None
+
+    def _fade(self, data: mujoco.MjData, now: float) -> None:
+        self.fade_from, self.fade_t0 = data.ctrl[self.actuators].copy(), now
+
+    def _still(self, data: mujoco.MjData) -> bool:
         b = self.body
-        still = (
+        return (
             float(np.linalg.norm(data.qvel[b.qvel[:3]])) < STILL_SPEED
             and float(np.linalg.norm(data.qvel[b.qvel[3:6]])) < STILL_SPIN
             and float(np.abs(data.qvel[b.dadr]).max()) < STILL_JOINT
         )
-        return still or now - self.settle_from >= SETTLE_MAX
+
+    def _calm(self, data: mujoco.MjData) -> bool:
+        spin = float(np.linalg.norm(data.qvel[self.body.qvel[3:6]]))
+        return spin < CALM_SPIN and self.tilt_cos > math.cos(CALM_TILT)
 
     @property
     def fallen(self) -> bool:

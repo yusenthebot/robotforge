@@ -2,6 +2,7 @@
 
 import math
 
+import mujoco
 import numpy as np
 import pytest
 from pydantic import ValidationError
@@ -10,7 +11,7 @@ from robotforge import modes
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.quadruped import QuadrupedGait
 from robotforge.behaviors.rhythm_walk import (
-    SETTLE_MAX,
+    CALM_MAX,
     RhythmWalker,
     SavedWalk,
     joint_names,
@@ -18,7 +19,7 @@ from robotforge.behaviors.rhythm_walk import (
     save_walk,
     walk_file,
 )
-from robotforge.control.cpg import Body, Reward, Rhythm, Trainer
+from robotforge.control.cpg import FADE, Body, Reward, Rhythm, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.walk_rl import STAR
 from robotforge.playground import Playground
@@ -57,6 +58,19 @@ def test_a_saved_walk_checks_its_numbers():
     with pytest.raises(ValidationError, match="turn rhythm needs 6"):
         _walk("crab", ["a", "b"], turn_left=[0.0] * 4, turn_right=[0.0] * 6)
     assert _walk("crab", ["a", "b"], turn_left=[0.0] * 6, turn_right=[0.0] * 6).turns
+    kept_before = {
+        "robot": "crab",
+        "joints": ["a", "b"],
+        "freq": 2.0,
+        "theta": [0.0] * 6,
+        "speed": 0.2,
+        "distance": 0.8,
+        "seconds": 4.0,
+        "turn_left": [0.0] * 6,
+        "turn_right": [0.0] * 6,
+        "turn_rate": 1.0,
+    }
+    assert not SavedWalk.model_validate(kept_before).turns_from_walking  # format 1 files from before still load
 
 
 def test_a_kept_walk_survives_the_round_trip(tmp_path):
@@ -124,28 +138,72 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     assert not pg.session.controllers["crab"].walking  # holds its home pose
 
 
-def test_a_new_rhythm_starts_from_standing_still_as_it_was_learned(pg):
-    """Regression: switched mid-stride, straight from walking into a turn, a rhythm started from a pose and speed
-    it never learned from, and the imported A1 fell. Now the robot holds home until it stands still first."""
+def _swinging(pg, **extra) -> RhythmWalker:
+    """The starfish with a made-up walk and turns (big swings, all in step), walking mid-stride."""
     pg.add_robot("crab", build=STAR)
     model = pg.session.model
     names = joint_names(model, Body.find(model, "crab"))
-    swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)  # big swings, all in step
-    save_walk(pg.store.dir, _walk("crab", names, swing, turn_left=swing, turn_right=swing))
+    swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)
+    turn = [0.0] * len(names) + [0.3] * len(names) + [1.0] * len(names)
+    save_walk(pg.store.dir, _walk("crab", names, swing, turn_left=turn, turn_right=turn, **extra))
     pg.behaviors.move("crab", 0.2, 0.0)
     walker = pg.session.controllers["crab"]
     pg.run_fast(lambda: False, 0.1)
-    assert walker.t0 == pytest.approx(0.0, abs=0.03)  # standing still already: the walk starts at once
+    assert walker.t0 == pytest.approx(0.0, abs=0.03)  # standing still already: the walk starts at once, as learned
     pg.run_fast(lambda: False, 1.1)  # mid-stride
+    return walker
+
+
+def test_a_turn_out_of_the_walk_starts_at_once_faded_in_from_the_stride(pg):
+    """Regression: every switch held home until the robot stood still (1 s at most), since each rhythm was learned
+    from standing: a 1 s turn right after walking turned the imported A1 16 degrees of the 88 it promised. Turns
+    that also learned to start out of the walk now start at once, faded in from the stride."""
+    walker = _swinging(pg, turns_from_walking=True)
+    stride = pg.session.data.ctrl[walker.actuators].copy()
+    pg.behaviors.stop("crab")  # what the move tool does between commands: the next comes at once
     pg.behaviors.move("crab", 0.0, 0.8)
-    pg.run_fast(lambda: False, 0.05)
-    assert walker.mode == "left" and walker.t0 is None  # still swinging: it holds home first
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.playing == "left" and walker.t0 is not None and walker.steady_from is None
+    assert pg.session.data.ctrl[walker.actuators] == pytest.approx(stride, abs=0.05)  # no jump to home
+    pg.run_fast(lambda: False, FADE)
+    turn = walker.rhythms["left"].targets(walker.home, pg.session.data.time - walker.t0)
+    assert pg.session.data.ctrl[walker.actuators] == pytest.approx(np.clip(turn, walker.lower, walker.upper), abs=0.05)
+
+
+def test_other_switches_while_moving_steady_on_home_until_calm(pg):
+    """Out of a turn, or into one learned only from standing (files kept before turns learned out of the walk), the
+    robot steadies on its home pose first, but only until it is calm: CALM_MAX at most, not until it stands still."""
+    walker = _swinging(pg)
+    spin = walker.body.qvel[5]  # the trunk's yaw rate: 5 rad/s is far from calm
+    pg.session.data.qvel[spin] = 5.0
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.playing == "left" and walker.t0 is None and walker.steady_from is not None  # steadying on home
+    assert pg.run_fast(lambda: walker.t0 is not None, 2 * CALM_MAX) <= CALM_MAX + 0.05  # then it turns
+    pg.run_fast(lambda: False, 0.6)
+    pg.session.data.qvel[spin] = 5.0
+    pg.behaviors.move("crab", 0.2, 0.0)  # out of the turn into the walk
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.playing == "forward" and walker.t0 is None
+    assert pg.run_fast(lambda: walker.t0 is not None, 2 * CALM_MAX) <= CALM_MAX + 0.05
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 1.0)
     home = np.clip(walker.home, walker.lower, walker.upper)
-    assert pg.session.data.ctrl[walker.actuators] == pytest.approx(home)
-    waited = pg.run_fast(lambda: walker.t0 is not None, 2 * SETTLE_MAX)
-    assert 0.0 < waited <= SETTLE_MAX + 0.05
-    pg.run_fast(lambda: False, 0.1)
-    assert pg.session.data.ctrl[walker.actuators] != pytest.approx(home)  # and then it turns
+    assert pg.session.data.ctrl[walker.actuators] == pytest.approx(home)  # stop fades back to the home pose
+
+
+def test_a_clock_turned_back_mid_switch_starts_the_rhythm_afresh(pg):
+    """A data reset under the walker (without SimSession.reset) left the end of a fade in the future: the joints
+    would have held the old targets until the clock came round again. It starts the asked rhythm afresh instead."""
+    walker = _swinging(pg, turns_from_walking=True)
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 0.1)  # fading into the turn
+    assert walker.fade_from is not None
+    model, data = pg.session.model, pg.session.data
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    pg.run_fast(lambda: False, 0.04)
+    assert walker.playing == "left" and walker.t0 == pytest.approx(0.0) and walker.fade_from is None  # as learned
 
 
 def test_a_walk_for_other_joints_asks_to_learn_again(pg):
@@ -192,6 +250,7 @@ def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg):
     walk = _walk("crab", joint_names(solo, body))
     turned = learn_turns(solo, "crab", walk, seed=1)
     assert turned.turns and turned.turn_rate > 0.5  # rad/s; the starfish learns about 1 in 30 rounds
+    assert turned.turns_from_walking
     save_walk(pg.store.dir, turned)
     assert next(r for r in pg.behaviors.robots() if r["name"] == "crab")["learned_walk"]["turns"]
 
