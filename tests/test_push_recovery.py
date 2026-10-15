@@ -48,8 +48,11 @@ def _tilt(pg: Playground, trunk: int) -> float:
     return math.degrees(math.acos(float(np.clip(pg.session.data.xmat[trunk][8], -1.0, 1.0))))
 
 
-def _push(pg: Playground, robot: str, speed: float, push: str) -> dict[str, float]:
-    """Push `robot` to its left while on its gait and watch 5 s: the worst tilt, and where and how it ended."""
+def _push(
+    pg: Playground, robot: str, speed: float, push: str, distance: float = 0.4, seconds: float = 2.0
+) -> dict[str, float]:
+    """Push `robot` to its left while on its gait and watch 5 s: the worst tilt, and where and how it ended.
+    A drag pulls `distance` m over `seconds`."""
     trunk, dof = _on_its_gait(pg, robot, speed)
     session, data = pg.session, pg.session.data
     rot = data.xmat[trunk].reshape(3, 3).copy()
@@ -66,11 +69,12 @@ def _push(pg: Playground, robot: str, speed: float, push: str) -> dict[str, floa
 
     if push == "shove":
         data.qvel[dof : dof + 3] += 0.5 * left
-    else:  # 0.4 m over 2 s with the viewer's drag spring, by the trunk's origin or by its back
+    else:  # with the viewer's drag spring, by the trunk's origin or by its back
         grab = data.xpos[trunk] + rot @ [0.0, 0.0, 0.04 if push == "drag by the back" else 0.0]
         session.start_drag(trunk, grab)
-        for k in range(1, 41):
-            session.move_drag(grab + 0.01 * k * left + 0.05 * k * speed * ahead)  # a hand that walks along
+        steps = round(20 * seconds)
+        for k in range(1, steps + 1):
+            session.move_drag(grab + (left * distance + ahead * speed * seconds) * k / steps)  # a hand that walks along
             run(0.05)
         session.end_drag()
     run(4.0)
@@ -170,3 +174,39 @@ def test_robots_built_from_parts_go_along_with_a_drag(pg, monkeypatch, name):
     out = _push(pg, "built", 0.0, "drag by the back")
     assert out["worst"] < 30, f"tilted {out['worst']:.0f} degrees"  # the built dog rolled over before
     assert out["tilt"] < 5 and out["sideways"] > 0.25
+
+
+def test_a_curb_in_the_way_is_climbed_not_taken_for_a_push(pg):
+    """The obstacle-course regression on a single 4 cm curb: taken for a push, the dog's strides followed the wobble
+    along the curb instead of up it until it rolled over. With recovery cut off it climbs, and across the top
+    rather than around it."""
+    curb = {"steps": 1, "step_height": 0.04, "step_depth": 0.3, "direction": "up", "landing": 1.5}
+    pg.add_terrain("stairs", pos=[1.35, 0.0], params=curb)  # 0.6 m ahead; the top is 1.5 m long and 1.2 m wide
+    pg.add_robot("dog", **ROBOTS["dog"])
+    top = next(r["max_speed"] for r in pg.behaviors.robots() if r["name"] == "dog")
+    pg.behaviors.move("dog", 0.6 * top, 0.0, walker="gait")  # as in scripts/terrain_bench.py
+    gait, data = pg.session.controllers["dog"], pg.session.data
+    trunk = pg.session.model.body("dog/trunk").id
+    height = float(data.xpos[trunk][2])
+    worst = rise = aside = run = longest = 0.0
+    while data.time < 25.0 and data.xpos[trunk][0] < 2.3:  # until past the far end of the top
+        pg.run_fast(lambda: False, 0.05)
+        worst = max(worst, _tilt(pg, trunk))
+        rise = max(rise, float(data.xpos[trunk][2]) - height)
+        aside = max(aside, abs(float(data.xpos[trunk][1])))
+        run = run + 0.05 if gait._recovery > 0.5 else 0.0
+        longest = max(longest, run)
+    assert worst < 30, f"tilted {worst:.0f} degrees"  # before the cut-off: rolled over at the curb
+    assert data.xpos[trunk][0] > 2.3, "stalled at the curb"
+    assert rise > 0.025 and aside < 0.6  # up and across the top, not around it
+    assert longest < quadruped.WALK_RECOVER_MAX + 0.5
+
+
+def test_a_long_drag_keeps_a_trotting_dog_recovering(pg):
+    """The cut-off is for a robot that is blocked, not for one a hand is still dragging: cut off regardless, a
+    trotting dog dragged 0.8 m by its back over 6 s fought the hand once its recovery ran out and rolled over."""
+    out = _push(pg, "dog", TROT, "drag by the back", distance=0.8, seconds=6.0)
+    assert out["worst"] < 30, f"tilted {out['worst']:.0f} degrees"
+    assert out["tilt"] < 5
+    assert out["last_second"] > 0.5 * TROT
+    assert out["sideways"] > 0.5

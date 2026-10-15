@@ -92,6 +92,9 @@ SETTLE_TIME = 0.5  # s after a start or reset during which a robot settles onto 
 # A walking robot blocked by a stair riser or a curb leans and wobbles like a pushed one, and kept on
 # recovering: its strides followed the wobble sideways and it never climbed (the obstacle course fell from
 # 12 m to 4.6 m). Walking recovery is cut off after a while and then held off, so it climbs on its plain gait.
+# It is cut off only once nothing moves the trunk sideways as fast as a fresh push would: a hand that keeps
+# dragging is still a push, and cut off regardless, a trotting dog dragged 0.8 m by its back over 6 s fought the
+# hand and rolled over.
 WALK_RECOVER_MAX = 3.0  # s of continuous recovery while walking...
 WALK_RECOVER_REST = 3.0  # ...then this long on the plain gait before another can start
 
@@ -337,21 +340,22 @@ class QuadrupedGait:
             return False  # tuned for the gait's own trot or tripod; a pace or a bound rocks by design
         scale = math.sqrt(9.81 * self.leg_length)
         slip = TURN_SLIP * abs(self.turn) * self.leg_length
+        sideways_push = WALK_PUSH_SPEED * scale + slip  # how fast a push that starts a walking recovery moves it
         if t < self._recover_until:  # keep at it until the trunk is calm again
             off = abs(self._v_meas[1]) if moving else math.hypot(self._v_meas[0] - self.speed, self._v_meas[1])
             pushed = off > CALM_SPEED * scale + slip
         elif not moving and self._amplitude < 0.05:  # standing still
             pushed = float(np.linalg.norm(self._drift)) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
         elif moving:
-            pushed = abs(self._v_meas[1]) > WALK_PUSH_SPEED * scale + slip
+            pushed = abs(self._v_meas[1]) > sideways_push
             pushed = pushed or abs(lean) > PUSH_LEAN + TURN_LEAN * abs(self.turn)
         else:  # settling into a stand after a walk
             pushed = False
         if pushed:
             self._recover_until = t + RECOVER_CYCLES * self.period
-        return self._limit_walking(t, t < self._recover_until, moving)
+        return self._limit_walking(t, t < self._recover_until, moving, sideways_push)
 
-    def _limit_walking(self, t: float, recovering: bool, moving: bool) -> bool:
+    def _limit_walking(self, t: float, recovering: bool, moving: bool, sideways_push: float) -> bool:
         """Cut a recovery while walking off after WALK_RECOVER_MAX, then rest from it (see WALK_RECOVER_MAX)."""
         if not (recovering and moving):
             self._walk_recover_since = None
@@ -361,7 +365,7 @@ class QuadrupedGait:
             return False
         if self._walk_recover_since is None:
             self._walk_recover_since = t
-        elif t - self._walk_recover_since > WALK_RECOVER_MAX:
+        elif t - self._walk_recover_since > WALK_RECOVER_MAX and abs(self._v_meas[1]) <= sideways_push:
             self._recover_until = -math.inf
             self._walk_rest_until = t + WALK_RECOVER_REST
             self._walk_recover_since = None
