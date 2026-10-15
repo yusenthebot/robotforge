@@ -321,9 +321,29 @@ Rounds 1-3 done, 2026-10-14.
 - Bug found in the sweep: the idle G1 drifted about 6.5 cm/s (4.15 m in 30 s headless) and walked into our humanoid's lane in the face-off. An idle policy walker now holds the spot where it stopped: it walks back past 0.2 m (faster than the policy's 0.2 m/s stand threshold) until within 5 cm. At most 0.2 m in 30 s; the G1 walk, push and balance tests still pass.
 - What did NOT work: capping the plots box height alone (IK II's three plots and the arm face-off's table still left 67 to 140 px); defaulting the tabs to the face-off table (tall, it hid the G1's head).
 
+## Round 27 (2026-10-15): Review round (phase D milestone)
+
+- CI: every run since 60c46c5 had been cancelled by the next push. Ubuntu passed on 0156aa7 with all of rounds 25 and 26 (the security change included); pushes now wait for a run to finish.
+- Real agent check: a fresh Codex session (plugin from main) did a beginner's four-part task in 18 tool calls. It built a world with a Go2 from the library, a template arm, a cube and a bin; the Go2 walked 42 cm in 2 s upright; pick-and-place succeeded; it checked the result in a top view. Its oversized screenshot got a clear error and it retried. Cost: 1.12M input tokens (1.07M cached), about 45k per model turn; ours of that is about 11k of tool definitions, 1.2k of instructions and up to 7.5k of skill files.
+- Found by using the viewer as a learner would, and fixed:
+  - Opening the G1 face-off from a world could freeze the viewer: the lesson imports the policy module on a worker thread, the stream thread met it half imported, raised, and the stream task died for good (old world on screen, no poses). A half-imported module now means no policy walker yet; a failing tick is logged and the stream carries on; a scene is announced only once built.
+  - Dragging a robot held the whole robot's weight, floating it off its feet: the G1 fell at a 10 cm/s tug. A standing robot is now pushed, not carried (objects and arm links still are), and a dragged learned walker holds the spot where it is let go.
+- Dead code: `lessonKind` (exported, never used). The other 29 single-use names are validators, `_op_*` handlers dispatched by name and callbacks.
+- Docs: the plan's phase D and its decisions now match what was done.
+- What did NOT work:
+  - Four scripted races of a lesson start against the stream loop did not reproduce the freeze; the traceback only showed when the old server shut down. The stream now logs failures as they happen.
+  - Measuring drags on robots with hand-written gaits: the template humanoid tips at a 15 cm drag and the Go2 on its gait flips at a 40 cm one; a softer drag spring stops the flip but then barely moves it. Left open.
+
+### Ambition critic (round 27)
+
+- Agent cost is the weakest part of the chat experience: 45k input tokens per turn. Tool results are verbose (observe lists every joint of every robot), screenshots frame a fixed patch of floor so the robots are small, and 50 tool definitions are sent every turn.
+- Robots with hand-written controllers do not take a push like a real robot (the humanoid tips, the Go2 gait flips); the learned policies do. A push-recovery step for the template humanoid and dog would match what the balance lesson teaches.
+- Learned walks cannot turn, and agents cannot learn one without driving the viewer's internals (`learn_walk` is waiting on the user).
+- No automated playtest: every bug this round and last was found by hand in the browser.
+
 ## Next-round seed
 
-Round 27 = Review round (phase D milestone, every few rounds): read the codebase broadly, adversarially re-verify the claimed features in a real run (a fresh Codex session from the plugin on main; the viewer at 672 px and 1280 px), delete dead code and docs, refresh progress.md, and run an ambition critic. Candidates it should weigh: `learn_walk` tool (waiting on the user), learned walks that turn, agent token cost (321k for a 6-call task), a playtest agent.
+Round 28 = make the agent cheaper and sharper (frontier). Measure what a session is sent and returned, then: `observe` frames its views on the robots and objects, not a fixed patch of floor; results lose what an agent rarely needs (all joints of every robot by default); tool descriptions get shorter where they repeat the skill. Re-run the round 27 Codex task and compare tool calls, tokens and success. Gate check first: anything that changes an existing tool's arguments or result fields incompatibly needs the user's yes.
 
 ## Frontier
 
