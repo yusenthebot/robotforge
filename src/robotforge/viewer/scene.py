@@ -6,10 +6,12 @@ geom hangs off. Per-frame traffic is only body poses (see SimSession.body_poses)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mujoco
 import numpy as np
+
+from robotforge.design.terrain import STYLES, material_name
 
 # MuJoCo's default geom rgba; when a geom keeps it and has a material, the material color wins.
 _DEFAULT_RGBA = np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32)
@@ -30,10 +32,12 @@ _GEOM_TYPE_NAMES = {
 
 @dataclass(frozen=True)
 class MeshPayload:
-    """All mesh triangles as one binary blob of float32 (positions then normals per mesh)."""
+    """All mesh triangles as one binary blob of float32 (positions then normals per mesh),
+    followed by every heightfield's elevation grid (0..1, row by row from -y to +y)."""
 
     blob: bytes
     entries: list[dict]  # per mesh: {"id", "offset", "count"} in float32 units, count = vertices
+    hfields: list[dict] = field(default_factory=list)  # per hfield: {"id", "offset", "nrow", "ncol", "size"}
 
 
 def _name(model: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
@@ -69,11 +73,22 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
         entries.append({"id": mesh_id, "offset": offset, "count": int(positions.shape[0])})
         chunks.append(block)
         offset += block.size
+    hfields = []
+    for h in range(model.nhfield):
+        nrow, ncol = int(model.hfield_nrow[h]), int(model.hfield_ncol[h])
+        adr = int(model.hfield_adr[h])
+        grid = model.hfield_data[adr : adr + nrow * ncol].astype(np.float32)
+        size = [round(float(v), 6) for v in model.hfield_size[h]]
+        hfields.append({"id": h, "offset": offset, "nrow": nrow, "ncol": ncol, "size": size})
+        chunks.append(grid)
+        offset += grid.size
     blob = np.concatenate(chunks).tobytes() if chunks else b""
-    return MeshPayload(blob=blob, entries=entries)
+    return MeshPayload(blob=blob, entries=entries, hfields=hfields)
 
 
-def describe(model: mujoco.MjModel, version: int, mesh_entries: list[dict]) -> dict:
+def describe(
+    model: mujoco.MjModel, version: int, mesh_entries: list[dict], hfield_entries: list[dict] | None = None
+) -> dict:
     """JSON-ready scene description for the viewer."""
     geoms = []
     for g in range(model.ngeom):
@@ -91,6 +106,11 @@ def describe(model: mujoco.MjModel, version: int, mesh_entries: list[dict]) -> d
                 "quat": [float(q) for q in model.geom_quat[g]],
                 "rgba": _geom_rgba(model, g),
                 "mesh": int(model.geom_dataid[g]) if gtype == "mesh" else -1,
+                "hfield": int(model.geom_dataid[g]) if gtype == "hfield" else -1,
+                # Ground materials ("ground_grass", ...) tell the viewer which surface texture to draw.
+                "material": _name(model, mujoco.mjtObj.mjOBJ_MATERIAL, int(model.geom_matid[g]))
+                if model.geom_matid[g] >= 0
+                else "",
                 "group": int(model.geom_group[g]),
             }
         )
@@ -127,10 +147,22 @@ def describe(model: mujoco.MjModel, version: int, mesh_entries: list[dict]) -> d
         "bodies": bodies,
         "geoms": geoms,
         "meshes": mesh_entries,
+        "hfields": hfield_entries or [],
+        "grounds": _ground_looks(model),
         "actuators": actuators,
         "visibleGroupLimit": VISIBLE_GROUP_LIMIT,
         "stat": {"center": [float(c) for c in model.stat.center], "extent": float(model.stat.extent)},
     }
+
+
+def _ground_looks(model: mujoco.MjModel) -> dict[str, dict]:
+    """Texture pattern and tile size for each ground material in the model, by material name."""
+    looks = {}
+    for style, look in STYLES.items():
+        name = material_name(style)
+        if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_MATERIAL, name) >= 0:
+            looks[name] = {"pattern": look.pattern, "tile": look.tile}
+    return looks
 
 
 def _has_moving_ancestor(model: mujoco.MjModel, body: int) -> bool:

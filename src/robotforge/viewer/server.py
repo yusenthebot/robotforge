@@ -65,7 +65,7 @@ class ViewerHub:
             return
         with s.lock:
             payload = scene.build_mesh_payload(s.model)
-            self._scene_msg = scene.describe(s.model, s.version, payload.entries)
+            self._scene_msg = scene.describe(s.model, s.version, payload.entries, payload.hfields)
             if self.scene_extras is not None:
                 self._scene_msg.update(self.scene_extras())
             self._mesh_payload = payload
