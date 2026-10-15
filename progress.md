@@ -71,11 +71,21 @@ Rounds 1-3 done, 2026-10-14.
   - Dragging the target lost the last position to the 30 Hz throttle; the release always sends it.
   - A fast synthetic drag (left_click_drag) does not move a physics body; scripted checks hold the pointer for a second.
 
+## Round 8 (2026-10-15): sensors lesson, learned walk without extras, bounded MPPI walk
+
+- `learn/sensors.py`: rover in a walled arena with encoders, IMU, 24 rangefinders, a bumper touch sensor and a camera; lessons can declare `drive` and the viewer routes W A S D to them; overlays draw lidar rays by distance, the bumper on contact, the filtered acceleration and the camera cone; a picture-in-picture renders the robot's camera view (render target + readPixels at ~12 Hz).
+- `bridge/onnx_numpy.py`: minimal ONNX protobuf decoder + numpy evaluator (Gemm, MatMul, Elu, Relu, Tanh, ...); the shipped Go2 walk runs without onnxruntime, matching it to 1e-4 at ~23 us per call.
+- `modes.py`: `Then` hands over from one controller to another; MPPI walking walks 8 s, then stands with MPC.
+- Agent skill and MCP instructions point at scenes, terrain, the parts builder, learned walkers and the viewer lessons.
+- What did NOT work (and the fix):
+  - MuJoCo 3.15 rangefinders refuse to compile with `intprm[0] = 0` (the ray data bitmask); set it to the distance bit. The parts builder has the same bug (review HIGH 2), fixed after the asset merge.
+  - The raw accelerometer buzzes +-5 m/s^2 from contact chatter at constant speed; the plot shows a 0.12 s low-pass, as real robots filter it.
+  - A test of a lesson rig must hold actions long enough for physics; scripted pilots steer from the true pose.
+
 ## Next-round seed
 
-Round 8: the sensors lesson (encoders and odometry, IMU, lidar rays drawn in 3D, bumper, onboard camera picture-in-picture; quiz on drift and sensor fusion), with WASD driving inside lessons.
 Merge `feat/assets` when the agent reports: review the before/after contact sheets, run the suite, look at it in the browser, merge, delete the branch and worktree.
-Then: bound the MPPI walk mode, open review findings (builder HIGH 1-4, unilab numpy runtime), update the agent skill and MCP lessons to point at the viewer lessons.
+Then the builder review findings (HIGH 1-4 incl. the rangefinder bitmask, MED 6-9), then playability phase 3 from docs/PLAY_PLAN.md (challenges with stars, controller races) or more lessons (gaits, RL) depending on the user's answers.
 
 ## Frontier
 
