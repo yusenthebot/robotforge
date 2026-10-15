@@ -20,7 +20,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.behaviors import Kind, robot_kind
+from robotforge.behaviors import Kind, rhythm_walk, robot_kind
 from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, learn_turns, save_walk
 from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
 from robotforge.design.world import World, compile_world
@@ -89,6 +89,15 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
             tops.append(float((data.geom_xpos[g] + rot @ center)[2] + np.abs(rot[2]) @ half))
         out[robot] = round(max(tops), 3) if tops else 0.5
     return out
+
+
+def _turn_seconds(trained: dict[str, Any]) -> int:
+    """About how long learning both turns takes, from the robot's own training pace: the turns search as many
+    rounds as two sides times their starts, and each round costs about what a walk round did (a quarter more
+    for the extra rollouts). An imported A1 (12 joints, 13.8 s for 30 walk rounds) took 70 s."""
+    rounds = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS
+    per_round = trained["seconds"] / max(1, trained["rounds"])
+    return max(10, int(round(1.25 * per_round * rounds / 10.0)) * 10)
 
 
 def _runs(ctx: LessonContext, **want: Any) -> list[dict[str, Any]]:
@@ -691,12 +700,13 @@ class LearnToWalkLesson(Lesson):
         ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3), "turns": False}
         self.turning = threading.Thread(target=self._learn_turns, args=(walk, folder, ctx), daemon=True)
         self.turning.start()
+        wait = _turn_seconds(result)
         return _text(
             f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
-            "现在它接着学转弯，向左、向右各从两个起点学，留下转得好的那个（二三十秒），学完也会存好。"
+            f"现在它接着学转弯，向左、向右各从两个起点学，留下转得好的那个（约 {wait} 秒），学完也会存好。"
             f"退出课程回到你的世界，在聊天里让 {name} 走，或者选中它按 W 往前、A 和 D 原地转。",
             f"Kept: {name}'s walk ({result['distance']:g} m in 4 s, about {walk.speed:.2f} m/s) is in your world now. "
-            "It goes on to learn to turn, each way from two starts keeping the better (twenty or thirty seconds), "
+            f"It goes on to learn to turn, each way from two starts keeping the better (about {wait} s), "
             "kept as well when done. "
             f"Leave the lesson, then ask for {name} to walk in the chat, or select it and press W to go forward and "
             "A or D to turn on the spot.",
