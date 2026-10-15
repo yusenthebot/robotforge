@@ -40,15 +40,30 @@ Rounds 1-3 done, 2026-10-14.
 - So the "<= 100 MB core install" target holds for download size, not for unpacked size; mujoco alone is 74 MB unpacked and cannot be avoided.
 - Cold start to a served scene: 0.19 s. World recompile with 5 library robots + a template: < 0.5 s. Viewer: 120 fps / realtime 1.00 on the Mac; 37-57 fps streamed on CI runners.
 
+## Round 6 (2026-10-15): one trunk, a viewer beginners understand
+
+- All feature branches merged into main and deleted; work is trunk-based from here (CLAUDE.md).
+- Viewer rebuilt: light/dark tokens, amber = what you control (play button, selection ring with heading notch, drag tether, slider fill, targets).
+  Bottom dock (play, reset, speed, fit view), Robots drawer (pick robot, joints), help popover, first-run hint, reconnect banner, English + Chinese (`static/i18n.js`).
+- World panel in the app: Maps (6 scene presets + empty floor), Terrain (9 ground styles, 8 terrain types; features go in front of the selected robot), Modes (per robot type, `src/robotforge/modes.py`).
+- Server: `hub.slow_handlers` run viewer requests in a worker thread and answer with `{"type": "reply", "id", "ok"}`; state carries each robot's mode; scene carries world, floor, terrain, modes, catalog.
+- What did NOT work (and the fix):
+  - `done?.(await request(msg))` never sent the request when `done` was unset: an optional call skips evaluating its arguments. Await first, then call.
+  - Selection ring vanished under Go2: its foot meshes dip 2 cm below the floor, so "lowest point of the robot" was under the floor. Now a downward ray finds the scenery under the robot.
+  - Ring lagged behind a walking robot in a throttled tab: per-frame smoothing. Now time-based.
+  - The stand/walk tasks accept a rover (any free-moving robot); the Modes list filters by robot kind (`TASK_KINDS`).
+  - Reach / drive-to "random" targets repeat: tasks seed their RNG with 0. Modes draw a fresh point and pass it explicitly.
+  - Fake `Hub` objects in tests broke when the hub grew; tests use a real `ViewerHub`.
+  - In the hidden browser pane, CSS transitions and rAF stall, so screenshots can show stale colors; not a user-facing bug.
+
 ## Next-round seed
 
-Round 5 (now): wave 1 agents are running on feat/humanoid, feat/import-doctor, feat/robot-library, feat/ci, feat/control.
-As each reports: review its diff, run the full suite in its worktree, merge into main serially (resolve shared-file conflicts in world.py, manager.py, mcp_server.py, app.js), re-run the suite on main, verify in the browser pane, push.
-Wave 2 after that: free-form parts builder ("any robot"), scenes + terrains (heightfield, slopes, stairs, obstacles, preset scenes), RL tier 1 (SB3 extra on RobotEnv), UniLab bridge (export task, train externally, ONNX playback; start with pretrained Go2/G1 policies).
+Fix the open review findings on main, one at a time: builder HIGH 1-4 + MED 6-9, then UniLab 1-4 (numpy runtime for the shipped Go2 walker first, so the Learned walk mode works without onnxruntime) and naming A-E.
+Then: bound the MPPI walk mode (walk for a while, then stand), update the agent skill + lessons for builder/terrain/unilab and the viewer's World panel, re-render the showcase film from main.
 
 ## Frontier
 
-- Current ceiling: design + inspect + manual control of three template robots; no autonomous behavior yet.
+- Current ceiling: any robot (templates, parts, library, URDF) in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies, all pickable from the viewer.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
