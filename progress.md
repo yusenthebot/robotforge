@@ -82,10 +82,13 @@ Rounds 1-3 done, 2026-10-14.
   - The raw accelerometer buzzes +-5 m/s^2 from contact chatter at constant speed; the plot shows a 0.12 s low-pass, as real robots filter it.
   - A test of a lesson rig must hold actions long enough for physics; scripted pilots steer from the true pose.
 
+- Later in round 8: merged `feat/assets` (agent): `design/visuals/` mesh library + collector, looks for 6 templates, all props and parts-built robots; physics unchanged bit for bit on 18 models; budgets 30k tris per robot, 200k per scene. The viewer matches `rf_` presets after the last `/` (robots arrive as `dog/rf_shell`).
+- Builder review HIGH 1-4 fixed with failing-first tests: rangefinder bitmask (HIGH 2), mirrored slides keep their direction (HIGH 3), IK seed wraps into the base limits (HIGH 4, the -268 degree seed), balancer detection asks physics when a caster sits a few mm high (HIGH 1).
+- Open, found while verifying HIGH 4: after the rover drives a turn and stops at an unplanned heading, pick-and-place grasps and carries fine but at release the rover twists 10 degrees and the cube is flung (0.39 m up). Likely gripper or cube against the bin wall; trace in scratchpad/arm_turn_trace.py. Not the same failure as HIGH 4.
+
 ## Next-round seed
 
-Merge `feat/assets` when the agent reports: review the before/after contact sheets, run the suite, look at it in the browser, merge, delete the branch and worktree.
-Then the builder review findings (HIGH 1-4 incl. the rangefinder bitmask, MED 6-9), then playability phase 3 from docs/PLAY_PLAN.md (challenges with stars, controller races) or more lessons (gaits, RL) depending on the user's answers.
+Round 9: playability phase 3 from docs/PLAY_PLAN.md (challenges with stars on the existing scenes: obstacle course time trial, maze, push-recovery, a controller race) or more lessons (walking gaits, RL) depending on the user's answers; investigate the release fling; builder MED 6-9.
 
 ## Frontier
 
