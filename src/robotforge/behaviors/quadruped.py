@@ -304,7 +304,7 @@ class QuadrupedGait:
         measured = self._measure(data)
         self._v_meas = self._v_meas + (1.0 - math.exp(-dt / self.period)) * (measured - self._v_meas)
         self._v_fast = self._v_fast + (1.0 - math.exp(-dt / (FOLLOW_TAU * self.period))) * (measured - self._v_fast)
-        fallen = data.xmat[self.trunk][8] < math.cos(FALLEN_TILT)
+        fallen = 1.0 - 2.0 * (quat[1] ** 2 + quat[2] ** 2) < math.cos(FALLEN_TILT)  # its z axis that far from up
         held = bool(np.any(data.qfrc_applied[self.root_dof : self.root_dof + 6]))  # a hand pulls it (a viewer drag)
         recovering = self._recovering(t, dt, measured, roll, moving, fallen, held)
         if recovering and not moving:  # pushed while standing: start stepping right away
