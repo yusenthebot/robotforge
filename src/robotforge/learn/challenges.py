@@ -336,9 +336,9 @@ class CourseChallenge(Challenge):
                     stars = 3
                 ctx.results["stars"] = stars
                 ctx.results["run"] = {"distance": round(self.best, 2), "stars": stars, "finished": not down}
-                done = "走完全程！" if not down else "摔倒了"
+                done = "走完全程！" if not down else "摔倒了，"
                 ctx.results["summary"] = {
-                    "zh": f"{done} 走了 {self.best:.1f} 米，用时 {self.elapsed(data):.0f} 秒",
+                    "zh": f"{done}走了 {self.best:.1f} 米，用时 {self.elapsed(data):.0f} 秒",
                     "en": f"{'Finished!' if not down else 'Fell over.'} {self.best:.1f} m "
                     f"in {self.elapsed(data):.0f} s",
                 }
