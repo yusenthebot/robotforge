@@ -422,8 +422,12 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         learned_walk in `robots`): the walk it learned in the viewer, forward at its own pace, turns on the spot.
         Keyboard driving then uses the same walker."""
         with _tool_errors():
+            robot = playground.behaviors.resolve(robot)
             if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
-                raise PlaygroundError("seconds must be in (0, 60]")
+                raise PlaygroundError(
+                    f"seconds must be in (0, 60] (seconds, not milliseconds), got {seconds:g}; "
+                    "seconds=null keeps moving until stop"
+                )
             before = playground.behaviors.pose(robot)
             status = playground.behaviors.move(robot, speed, turn, walker)
             if seconds is None:
@@ -470,7 +474,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     def stop(robot: str) -> str:
         """Stop a robot's current behavior (a walking robot settles into a stand)."""
         with _tool_errors():
-            return _json(playground.behaviors.stop(robot))
+            return _json(playground.behaviors.stop(playground.behaviors.resolve(robot)))
 
     @server.tool()
     async def pose(robot: str, name: Literal["wave", "squat", "arms_up", "bow", "look_around", "stand"]) -> str:
@@ -478,6 +482,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         bow, look_around (turns its head) or stand (back to neutral). A walking humanoid stops first; the
         robot keeps its balance throughout. Waits until the pose is done and reports whether it stayed up."""
         with _tool_errors():
+            robot = playground.behaviors.resolve(robot)
             ctrl = playground.behaviors.strike_pose(robot, name)
             run = await run_until(lambda: ctrl.done, 20.0)
             after = playground.behaviors.pose(robot)
@@ -489,7 +494,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         closing the gripper on the way. Fails with an explanation if the point is out of reach. robot is an
         arm, or a robot carrying one ("rover", or "rover/arm" to name the mounted arm)."""
         with _tool_errors():
-            arm = playground.behaviors.move_arm(robot, position, gripper)
+            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot), position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
             return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
@@ -498,7 +503,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
         """Open or close an arm's gripper."""
         with _tool_errors():
-            arm = playground.behaviors.set_gripper(robot, state)
+            arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot), state)
             run = await run_until(lambda: arm.done, 5.0)
             return _json({"gripper": state, **run})
 
@@ -508,7 +513,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         or box) or a floor position [x, y]. Plans the whole motion, checks reach first, runs it and reports
         whether the object really ended up there."""
         with _tool_errors():
-            arm, info = playground.behaviors.pick_and_place(robot, object, target)
+            arm, info = playground.behaviors.pick_and_place(playground.behaviors.resolve(robot), object, target)
+            object = info["object"]  # as the world spells it
             run = await run_until(lambda: arm.done, 40.0)
             settle = await run_until(lambda: False, 0.5)
             result = playground.behaviors.placed(object, info["region"])
@@ -543,6 +549,14 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             store = playground._require_store()
             path = _script_path(store.dir, name)
+            try:
+                compile(code, path.name, "exec")  # parses only: nothing runs
+            except (SyntaxError, ValueError) as exc:
+                where = f"line {exc.lineno}: " if isinstance(exc, SyntaxError) and exc.lineno else ""
+                raise PlaygroundError(
+                    f"the code has a syntax error ({where}{getattr(exc, 'msg', exc)}); nothing was saved. "
+                    "Fix it and send the whole script again"
+                ) from None
             path.parent.mkdir(exist_ok=True)
             with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
                 f.write(code)
@@ -554,7 +568,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
-                raise PlaygroundError(f"no script named {name!r}")
+                raise PlaygroundError(_no_script(name, path))
             return path.read_text(encoding="utf-8")
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
@@ -565,9 +579,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
-                raise PlaygroundError(f"no script named {name!r}; write it with write_script first")
+                raise PlaygroundError(_no_script(name, path))
             if not 0 < max_sim_seconds <= 300:
-                raise PlaygroundError("max_sim_seconds must be in (0, 300]")
+                raise PlaygroundError(f"max_sim_seconds must be in (0, 300], got {max_sim_seconds:g}")
             runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
             return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
 
@@ -721,10 +735,18 @@ SCRIPT_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
 
 
 def _script_path(world_dir: Path, name: str) -> Path:
-    stem = name[:-3] if name.endswith(".py") else name
+    stem = wording.squash(name[:-3] if name.lower().endswith(".py") else name)  # "Pick Cube" is pick_cube
     if not SCRIPT_NAME.match(stem):
-        raise PlaygroundError("script names use lowercase letters, digits and _, e.g. pick_cube")
+        raise PlaygroundError(
+            f"script name {name!r} must use lowercase letters, digits and _, start with a letter, e.g. pick_cube"
+        )
     return world_dir / "behaviors" / f"{stem}.py"
+
+
+def _no_script(name: str, path: Path) -> str:
+    have = sorted(p.stem for p in path.parent.glob("*.py"))
+    text = wording.unknown("script", name, have, where="saved in this world")
+    return text if have else f"{text} write_script saves one"
 
 
 def _json(data: object) -> str:

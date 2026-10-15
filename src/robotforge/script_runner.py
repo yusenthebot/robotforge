@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -24,12 +25,27 @@ from typing import Any
 import mujoco
 import numpy as np
 
+import robotforge
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script import ENV_PORT, ENV_TOKEN
 
 OUTPUT_LIMIT = 6000  # characters of script output returned to the agent
 FRAME = 1 / 60
+# One frame of a Python traceback: its "File ..." line and the source lines under it.
+TRACEBACK_FRAME = re.compile(r'  File "(?P<file>[^"\n]+)", line \d+, in [^\n]*\n(?:    [^\n]*\n)*')
+
+
+def tidy_output(text: str, script_dir: Path) -> str:
+    """A script's output as an agent should read it: the traceback keeps the script's own lines and the error,
+    without frames inside robotforge's script client (a wrong robot name showed three of them) or the long
+    path to the world folder."""
+    package = Path(robotforge.__file__).parent
+
+    def drop_internal(frame: re.Match[str]) -> str:
+        return "" if Path(frame["file"]).is_relative_to(package) else frame[0]
+
+    return TRACEBACK_FRAME.sub(drop_internal, text).replace(f"{script_dir}{os.sep}", "")
 
 
 class ScriptRunner:
@@ -103,7 +119,7 @@ class ScriptRunner:
             with contextlib.suppress(Exception):
                 await server.wait_closed()
 
-        text = output.decode("utf-8", errors="replace")
+        text = tidy_output(output.decode("utf-8", errors="replace"), path.parent)
         if len(text) > OUTPUT_LIMIT:
             text = "...\n" + text[-OUTPUT_LIMIT:]
         result: dict[str, Any] = {
