@@ -472,7 +472,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def stop(robot: str) -> str:
-        """Stop a robot's current behavior (a walking robot settles into a stand)."""
+        """Stop a robot's current behavior (a walking robot settles into a stand; a quadruped or hexapod keeps its
+        walking controller at speed 0, so it still steps along with a push)."""
         with _tool_errors():
             return _json(playground.behaviors.stop(playground.behaviors.resolve(robot)))
 
@@ -592,7 +593,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     def robots() -> str:
         """List robots with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake, other), the arms
-        they carry, position, heading, whether upright, and any running behavior."""
+        they carry, position, heading, whether upright, and any running behavior. A quadruped or hexapod in a world
+        stands on its walking controller from the start: "walk" at speed 0 means standing (it steps along if pushed)."""
         with _tool_errors():
             out = []
             for info in playground.behaviors.robots():
