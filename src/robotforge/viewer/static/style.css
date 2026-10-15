@@ -1009,7 +1009,48 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--radius);
 }
 
-.plot + .plot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.plot + .plot,
+.faceoff-table:not([hidden]) + .plot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+.lesson-plots { max-height: calc(100% - 2 * var(--gutter) - 56px); overflow-y: auto; }
+
+.faceoff-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.faceoff-table th,
+.faceoff-table td { padding: 3px 4px; text-align: right; vertical-align: top; line-height: 1.35; }
+.faceoff-table tbody th { width: 31%; padding-left: 0; text-align: left; font-weight: 500; color: var(--muted); }
+.faceoff-table thead th { padding-bottom: 6px; font-weight: 650; }
+.faceoff-table .who { display: block; }
+.faceoff-table .who::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--c);
+  vertical-align: 1px;
+}
+.faceoff-table .kind { display: block; font-size: 10px; font-weight: 500; color: var(--muted); }
+
+.faceoff-table tr.group th {
+  padding: 9px 0 3px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+
+.faceoff-table tr.group:first-child th { padding-top: 0; }
+.faceoff-table td[data-best] { font-weight: 650; color: var(--ink); }
+.faceoff-table td[data-best]::after { content: ""; display: block; height: 2px; margin-top: 1px; border-radius: 1px; background: var(--amber); }
 .plot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .plot-title { font-size: 12px; font-weight: 600; }
 .plot-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; font-size: 11px; color: var(--muted); }

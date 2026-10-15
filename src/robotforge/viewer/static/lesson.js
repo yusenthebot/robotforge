@@ -62,7 +62,7 @@ function saveProgress(id, entry) {
 function renderPicker() {
   const done = progress();
   const list = $("lesson-list");
-  const groups = [["lesson", t("lessons_heading")], ["challenge", t("challenges_heading")]];
+  const groups = [["lesson", t("lessons_heading")], ["compare", t("compare_heading")], ["challenge", t("challenges_heading")]];
   const sections = [];
   for (const [kind, heading] of groups) {
     const items = catalog.filter((c) => (c.kind ?? "lesson") === kind);
@@ -144,6 +144,7 @@ function openLesson(desc) {
   lesson = desc;
   state = null;
   plots.reset(desc.plots);
+  renderTable(null);
   overlays.build(desc.rig);
   setPicker(false);
   document.body.classList.add("in-lesson");
@@ -207,6 +208,7 @@ export function lessonUpdate(msg) {
   else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
   $("lesson-readout").textContent = readout(msg.live);
+  renderTable(msg.live?.table ?? null);
 }
 
 function readout(live) {
@@ -311,6 +313,66 @@ function renderResult() {
     ? t("test_not_settled", { overshoot: test.overshoot_pct })
     : t("test_result", { settle: test.settle_s, overshoot: test.overshoot_pct });
   box.append(line, starSpan(test.stars));
+}
+
+// ---------------------------------------------------------------- face-off table
+
+// Robots side by side: one column each, the best value in a row marked. It sits above the plots.
+const tableBox = document.createElement("section");
+tableBox.className = "faceoff-table";
+tableBox.hidden = true;
+let tableKey = "";
+
+function renderTable(table) {
+  const key = table ? LANG + JSON.stringify(table) : "";
+  if (key === tableKey) return;
+  tableKey = key;
+  tableBox.hidden = !table;
+  if (!table) return;
+  $("lesson-plots").hidden = false;
+  const head = document.createElement("tr");
+  head.append(document.createElement("td"));
+  for (const c of table.columns) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.style.setProperty("--c", `var(${COLORS[c.color]})`);
+    const name = document.createElement("span");
+    name.className = "who";
+    name.textContent = pick(c.label);
+    const kind = document.createElement("span");
+    kind.className = "kind";
+    kind.textContent = t(c.real ? "real_robot" : "our_template");
+    th.append(name, kind);
+    head.append(th);
+  }
+  const thead = document.createElement("thead");
+  thead.append(head);
+  const tbody = document.createElement("tbody");
+  for (const row of table.rows) {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    if (row.heading) {
+      tr.className = "group";
+      th.colSpan = table.columns.length + 1;
+      th.scope = "colgroup";
+      th.textContent = pick(row.heading);
+      tr.append(th);
+    } else {
+      th.scope = "row";
+      th.textContent = pick(row.label);
+      tr.append(th);
+      row.cells.forEach((cell, k) => {
+        const td = document.createElement("td");
+        td.textContent = typeof cell === "string" ? cell : pick(cell);
+        if (row.best === k) td.dataset.best = "true";
+        tr.append(td);
+      });
+    }
+    tbody.append(tr);
+  }
+  const grid = document.createElement("table");
+  grid.append(thead, tbody);
+  tableBox.replaceChildren(grid);
 }
 
 // ---------------------------------------------------------------- controls
@@ -436,7 +498,7 @@ const plots = {
     this.data = [];
     this.ranges = specs.map(() => null);
     const box = $("lesson-plots");
-    box.replaceChildren();
+    box.replaceChildren(tableBox);
     this.canvases = specs.map((spec) => {
       const wrap = document.createElement("section");
       wrap.className = "plot";
@@ -978,7 +1040,122 @@ const pip = {
   },
 };
 
-const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig };
+// Robots side by side: a name tag over each, its workspace as a cloud of reachable points, and the
+// targets of the running test (the one each robot is on drawn larger, done ones faded).
+function faceoffRig(rig) {
+  const group = new THREE.Group();
+  const labels = new THREE.Group();
+  const workspace = new THREE.Group();
+  const targets = new THREE.Group();
+  const amber = api.color("--amber");
+  const balls = [];
+  rig.entrants.forEach((e, i) => {
+    const color = api.color(COLORS[e.color]);
+    const tag = nameTag(pick(e.label), t(e.real ? "real_robot" : "our_template"), color);
+    tag.position.set(e.base[0], e.base[1], e.top + 0.12);
+    labels.add(tag);
+    if (e.cloud.length) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(e.cloud.flat(), 3));
+      const material = new THREE.PointsMaterial({
+        color,
+        size: 0.024,
+        map: dotTexture(),
+        alphaTest: 0.05,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+        toneMapped: false, // keep the robot's colour, as in the table and the plot
+      });
+      workspace.add(new THREE.Points(geometry, material));
+    }
+    balls.push(
+      (rig.targets[i] ?? []).map((p) => {
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.014, 18, 10), basic(amber, 0.8));
+        ball.position.fromArray(p);
+        targets.add(ball);
+        return ball;
+      })
+    );
+  });
+  const parts = { labels, workspace, targets };
+  group.add(labels, workspace, targets);
+  return {
+    group,
+    parts,
+    frame() {
+      workspace.visible = (state.values.workspace ?? 0) >= 1;
+      const active = state.live?.active ?? [];
+      balls.forEach((row, i) =>
+        row.forEach((ball, k) => {
+          const now = active[i] === k;
+          ball.scale.setScalar(now ? 1.7 : 1);
+          ball.material.opacity = now ? 1 : active[i] > k ? 0.25 : 0.8;
+        })
+      );
+    },
+  };
+}
+
+// A name tag that faces the camera: a coloured dot, the name and a small second line, on a pill.
+function nameTag(name, sub, color) {
+  const px = 2; // canvas pixels per CSS pixel, for crisp text
+  const canvas = document.createElement("canvas");
+  const g = canvas.getContext("2d");
+  const font = (weight, size) => `${weight} ${size * px}px -apple-system, "Segoe UI", "PingFang SC", sans-serif`;
+  g.font = font(650, 15);
+  const nameWidth = g.measureText(name).width;
+  g.font = font(500, 11);
+  const subWidth = g.measureText(sub).width;
+  const pad = 11 * px;
+  const dot = 8 * px;
+  const width = Math.ceil(pad * 2 + dot + 7 * px + Math.max(nameWidth, subWidth));
+  const height = 44 * px;
+  canvas.width = width;
+  canvas.height = height;
+  g.fillStyle = `#${api.color("--panel-solid").getHexString()}`;
+  g.globalAlpha = 0.92;
+  g.beginPath();
+  g.roundRect(0, 0, width, height, height / 2);
+  g.fill();
+  g.globalAlpha = 1;
+  g.fillStyle = `#${color.getHexString()}`;
+  g.beginPath();
+  g.arc(pad + dot / 2, height / 2, dot / 2, 0, Math.PI * 2);
+  g.fill();
+  const x = pad + dot + 7 * px;
+  g.textBaseline = "alphabetic";
+  g.fillStyle = `#${api.color("--ink").getHexString()}`;
+  g.font = font(650, 15);
+  g.fillText(name, x, 20 * px);
+  g.fillStyle = `#${api.color("--muted").getHexString()}`;
+  g.font = font(500, 11);
+  g.fillText(sub, x, 35 * px);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false })
+  );
+  const tall = 0.034; // of the view's height (sizeAttenuation off): about 30 px on a laptop screen
+  sprite.scale.set((tall * width) / height, tall, 1);
+  sprite.renderOrder = 10;
+  return sprite;
+}
+
+// A round point for THREE.Points (a fresh one per overlay: clearing an overlay disposes its textures).
+function dotTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const g = c.getContext("2d");
+  g.fillStyle = "#fff";
+  g.beginPath();
+  g.arc(16, 16, 14, 0, Math.PI * 2);
+  g.fill();
+  return new THREE.CanvasTexture(c);
+}
+
+const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig, faceoff: faceoffRig };
 
 function lineMat(color, opacity) {
   return new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });

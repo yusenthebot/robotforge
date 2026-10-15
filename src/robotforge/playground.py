@@ -74,7 +74,7 @@ class Playground:
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.behaviors = BehaviorManager(self.session, self.current_world)
+        self.behaviors = BehaviorManager(self.session, self._acting_world)
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
 
@@ -132,6 +132,12 @@ class Playground:
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
+
+    def _acting_world(self) -> World | None:
+        """The world behaviors act in: a running lesson's own world (its objects to pick), else the open one."""
+        lessons = getattr(self, "lessons", None)
+        world = getattr(lessons.lesson, "world", None) if lessons is not None and lessons.lesson else None
+        return world if world is not None else self.current_world()
 
     @classmethod
     def with_demo(cls) -> Playground:

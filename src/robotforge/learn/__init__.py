@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from robotforge.learn.challenges import CourseChallenge, MazeChallenge, ShoveChallenge
+from robotforge.learn.compare import ArmFaceOff
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
 from robotforge.learn.ik import IKLesson
 from robotforge.learn.pd import PDLesson
@@ -19,6 +20,7 @@ LESSONS: dict[str, type[Lesson]] = {
         MazeChallenge,
         ShoveChallenge,
         CourseChallenge,
+        ArmFaceOff,
     )
 }
 
