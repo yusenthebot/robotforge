@@ -176,6 +176,79 @@ def test_a_quadruped_put_down_on_a_slope_does_not_take_it_for_a_push(pg, robot, 
     assert _tilt(pg, trunk) == pytest.approx(_tilt(plain, trunk), abs=1.0)
 
 
+def _stepping(pg: Playground, robot: str, seconds: float) -> tuple[float, float]:
+    """Run `seconds` and return how long `robot`'s gait stepped in all, and in its longest stretch."""
+    gait = pg.session.controllers[robot]
+    total = run = longest = 0.0
+    for _ in range(round(seconds / 0.02)):
+        pg.run_fast(lambda: False, 0.02)
+        run = run + 0.02 if gait._amplitude > 0.05 else 0.0
+        total, longest = total + (0.02 if run else 0.0), max(longest, run)
+    return total, longest
+
+
+def test_a_dog_never_moved_stands_still_on_stepping_stones(pg):
+    """Regression found in review: put down on the stepping stones, our dog slid off a stone's edge at 3 cm/s while it
+    landed; it settled while still sliding, that read as a push, and it stepped for 28 s, 0.5 m about the stones and
+    55 degrees over (on its servos it stood: 11 mm). It settles once still now."""
+    pg.add_terrain("stones", pos=[0.0, 0.0])
+    pg.add_robot("dog", **ROBOTS["dog"])
+    trunk = pg.behaviors._root_body("dog")
+    pg.run_fast(lambda: False, 2.0)
+    start = pg.session.data.xpos[trunk][:2].copy()
+    total, _ = _stepping(pg, "dog", 20.0)
+    assert total == 0.0
+    assert np.linalg.norm(pg.session.data.xpos[trunk][:2] - start) < 0.03
+
+
+def test_a_standing_recovery_that_never_calms_is_cut_off(pg, monkeypatch):
+    """On stones stepping rocks the trunk itself, so a recovery started there may never calm; standing, it is cut off
+    after STAND_RECOVER_MAX like a walking one. Settling as loosely as before brings back the false start above."""
+    monkeypatch.setattr(quadruped, "SETTLE_CALM", 1.0)
+    pg.add_terrain("stones", pos=[0.0, 0.0])
+    pg.add_robot("dog", **ROBOTS["dog"])
+    total, longest = _stepping(pg, "dog", 25.0)
+    assert total > 1.0  # it did take the slide for a push
+    assert longest < quadruped.STAND_RECOVER_MAX + 1.0 and total < 2 * quadruped.STAND_RECOVER_MAX
+    assert pg.behaviors.pose("dog")["upright"]
+
+
+@pytest.mark.parametrize("robot", list(ROBOTS))
+def test_a_quadruped_on_its_back_lies_still(pg, robot):
+    """Regression found in review: a fresh dog flipped by a fast drag kicked its legs on its back for good (stepping
+    29.9 s of 30); a robot that is down has nothing to step for. It lies still, as it did on its servos alone."""
+    trunk, dof = _on_its_gait(pg, robot, None)
+    data = pg.session.data
+    adr = pg.session.model.jnt_qposadr[pg.session.model.body_jntadr[trunk]]
+    data.qpos[adr + 2] += 0.15
+    data.qpos[adr + 3 : adr + 7] = [0.0, 1.0, 0.0, 0.0]  # upside down, dropped onto its back
+    data.qvel[dof : dof + 6] = 0.0
+    _stepping(pg, robot, 3.0)
+    assert _tilt(pg, trunk) > 90
+    total, _ = _stepping(pg, robot, 10.0)
+    assert total == 0.0
+
+
+def test_a_dog_dragged_longer_than_a_recovery_may_last_keeps_stepping_along(pg):
+    """The cut-off is for recoveries nobody is causing: a hand that pulls the robot along gets steps for as long as it
+    pulls (here 1.6 m over 8 s; a cut-off at STAND_RECOVER_MAX would leave it a stiff table under the hand)."""
+    trunk, _ = _on_its_gait(pg, "dog", None)
+    session, data = pg.session, pg.session.data
+    grab = data.xpos[trunk] + data.xmat[trunk].reshape(3, 3) @ [0.0, 0.0, 0.04]
+    left = data.xmat[trunk].reshape(3, 3)[:, 1].copy()
+    session.start_drag(trunk, grab)
+    worst = 0.0
+    for k in range(1, 161):
+        session.move_drag(grab + 0.01 * k * left)
+        pg.run_fast(lambda: False, 0.05)
+        worst = max(worst, _tilt(pg, trunk))
+    session.end_drag()
+    assert pg.session.controllers["dog"]._recovery > 0.5  # still stepping with the hand after 8 s
+    pg.run_fast(lambda: False, 4.0)
+    assert worst < 30 and _tilt(pg, trunk) < 5
+    assert float((data.xpos[trunk] - grab) @ left) > 1.2
+
+
 def test_a_nudge_the_stance_soaks_up_takes_no_steps(pg):
     """Stepping lifts feet, so a robot that can simply stand through a push stays planted, as it always did."""
     trunk, dof = _on_its_gait(pg, "dog", 0.0)
