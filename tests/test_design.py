@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from robotforge.design import templates
-from robotforge.design.store import WorldStore
+from robotforge.design.store import WorldStore, slug
 from robotforge.design.world import World, compile_world
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim.session import SimSession
@@ -145,6 +145,39 @@ def test_undo_steps_back_one_edit_at_a_time_even_if_the_clock_stands_still(tmp_p
     for _ in range(3):
         seen.append([r.name for r in store.undo().robots])
     assert seen == [["a", "b"], ["a"], []]
+
+
+def test_worlds_named_in_another_script_get_a_folder_each(tmp_path):
+    """Both names cleaned to nothing, so the second new_world reopened the first world and said it created it."""
+    first = WorldStore.create("机器人乐园", parent=tmp_path)
+    second = WorldStore.create("我的世界", parent=tmp_path)
+    assert first.dir != second.dir and not first.reopened and not second.reopened
+    assert first.dir.name.startswith("world_") and first.dir.name == slug("机器人乐园")  # stable: open finds it
+    assert slug("机器人乐园 ") == slug("机器人乐园") and slug("robot 机器人").startswith("robot_")
+    assert WorldStore.create("机器人乐园", parent=tmp_path).reopened
+    assert slug("My Cool World") == "my_cool_world" and slug("???") == "world"  # Latin names stay as they were
+
+
+def test_new_world_on_a_name_that_exists_reopens_it_and_says_so(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    assert pg.new_world("garden")["created"] is True
+    pg.add_object("ball", shape="sphere", size=[0.08], pos=[0.5, 0])
+    again = pg.new_world("Garden", floor="grass")
+    assert again["created"] is False and again["objects"] == ["ball"]
+    assert "already existed" in again["notes"][0] and "floor and contents unchanged" in again["notes"][0]
+
+
+def test_a_world_yaml_with_a_mistake_is_explained_by_entry_not_by_position(tmp_path):
+    text = "name: w\nrobots:\n- template: rover\nobjects:\n- name: ball\n  colour: red\n"
+    with pytest.raises(ValueError) as caught:
+        World.from_yaml(text)
+    said = str(caught.value)
+    assert "robot number 1: name is required" in said
+    assert "object ball: 'colour' is not a known field; did you mean color?" in said
+    assert "pydantic" not in said and "robots.0" not in said and "objects.0" not in said
+    with pytest.raises(ValueError, match=r"world.yaml is not valid YAML at line 3: expected ',' or '\]'"):
+        World.from_yaml("name: w\nfloor: [1\n  style: checker\n")
 
 
 def test_world_files_are_utf8_with_lf_endings(tmp_path):

@@ -6,6 +6,7 @@ touched, so a bad edit never leaves a broken world behind.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import time
@@ -24,8 +25,16 @@ def worlds_home() -> Path:
     return root / "worlds"
 
 
+CODE_LENGTH = 6  # hex digits of the code that tells apart worlds whose names are not in Latin letters
+
+
 def slug(name: str) -> str:
+    """The folder a world lives in: a-z, 0-9 and underscores. A name in another script (a Chinese world name) would
+    clean to nothing, and two such names must not be one world, so a short code of the name stands in for it."""
     s = _SAFE.sub("_", name.strip().lower()).strip("_")
+    if any(c.isalnum() and not c.isascii() for c in name):
+        code = hashlib.sha1(name.strip().encode("utf-8")).hexdigest()[:CODE_LENGTH]
+        s = f"{s[:24]}_{code}" if s else f"world_{code}"
     if not s or not s[0].isalpha():
         s = f"world_{s}" if s else "world"
     return s[:32]
@@ -37,13 +46,15 @@ class WorldStore:
         self.file = directory / "world.yaml"
         self.history = directory / ".history"
         self.build_dir = directory / "build"
+        self.reopened = False  # set by create() when the world was already on disk
 
     @classmethod
     def create(cls, name: str, floor_style: str = "checker", parent: Path | None = None) -> WorldStore:
         directory = (parent or worlds_home()) / slug(name)
         store = cls(directory)
         if store.file.exists():
-            return store  # reopening an existing world is friendlier than failing
+            store.reopened = True  # reopening an existing world is friendlier than failing
+            return store
         world = World.model_validate({"name": slug(name), "floor": {"style": floor_style}})
         compiled = compile_world(world, directory)
         directory.mkdir(parents=True, exist_ok=True)

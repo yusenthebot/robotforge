@@ -455,6 +455,34 @@ async def test_a_part_is_not_removed_under_its_plural_either(lab):
     await lab.restore()
 
 
+async def test_a_world_file_edited_by_hand_is_explained_by_every_tool_that_reads_it(lab):
+    file = lab.playground.store.file
+    file.write_text(lab.baseline.replace("shape: sphere", "colour: red\n  shape: sphere", 1), encoding="utf-8")
+    for tool, args in (("robots", {}), ("move", {"robot": "dog", "speed": 0.1}), ("add_object", {"name": "b2"})):
+        text = await lab.refused(tool, **args)
+        assert text == (
+            "world.yaml is not valid, fix it in the file. object ball: 'colour' is not a known field; "
+            "did you mean color?"
+        )
+    file.write_text(lab.baseline.replace("- name: dog\n", "- template: quadruped\n", 1), encoding="utf-8")
+    assert "robot number 1: name is required" in await lab.refused("remove", name="ball")
+    file.write_text("name: lab\nfloor: [1\n", encoding="utf-8")
+    assert "world.yaml is not valid YAML at line" in await lab.refused("robots")
+    await lab.restore()
+
+
+async def test_a_name_that_exists_reopens_the_world_and_a_new_name_in_chinese_is_a_new_world(lab):
+    again = json.loads(await lab.accepted("new_world", name="Lab"))
+    assert again["created"] is False and "already existed" in again["notes"][0]
+    first = json.loads(await lab.accepted("new_world", name="机器人乐园"))
+    second = json.loads(await lab.accepted("new_world", name="我的世界"))
+    assert first["created"] is second["created"] is True and first["world"] != second["world"]
+    assert f"saved as {first['world']!r}; open_world takes either name" in first["notes"][0]
+    assert json.loads(await lab.accepted("open_world", name_or_path="机器人乐园"))["world"] == first["world"]
+    lab.playground.store = type(lab.playground.store)(lab.playground.store.dir.parent / "lab")
+    await lab.restore()
+
+
 @pytest.mark.parametrize(
     ("tool", "args"),
     [

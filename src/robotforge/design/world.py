@@ -17,7 +17,7 @@ from typing import Any, Literal
 import mujoco
 import numpy as np
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from robotforge import wording
 from robotforge.design import builder, components, importer, library, props, templates, terrain
@@ -169,14 +169,56 @@ class World(_Strict):
         try:
             data = yaml.safe_load(text) or {}
         except yaml.YAMLError as exc:
-            raise ValueError(f"world.yaml is not valid YAML: {exc}") from exc
+            mark = getattr(exc, "problem_mark", None)  # the parser's own report quotes the lines around it
+            at = f" at line {mark.line + 1}" if mark is not None else ""
+            problem = getattr(exc, "problem", None) or str(exc).splitlines()[0]
+            raise ValueError(f"world.yaml is not valid YAML{at}: {problem}") from exc
         if not isinstance(data, dict):
             raise ValueError("world.yaml must be a mapping")
-        return cls.model_validate(data)
+        try:
+            return cls.model_validate(data)
+        except ValidationError as exc:  # a hand edit; the agent reads this, not pydantic's report
+            raise ValueError(f"world.yaml is not valid, fix it in the file. {_file_problems(exc, data)}") from exc
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
         return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
+
+
+ENTRY_KINDS = {"robots": "robot", "objects": "object", "terrain": "terrain patch"}  # the lists of a world.yaml
+MAX_ENTRIES = 3  # entries named in one answer; fix these and the rest follow
+
+
+def _file_problems(exc: ValidationError, data: dict[str, Any]) -> str:
+    """What is wrong with a world.yaml, entry by entry: "object ball: 'colour' is not a known field; did you mean
+    color?". pydantic names an entry by its position in the list, which means nothing to someone reading the answer."""
+    fields = {"robots": list(RobotEntry.model_fields), "objects": list(ObjectEntry.model_fields)}
+    by_entry: dict[tuple[str, int] | None, list[dict[str, Any]]] = {}
+    for err in exc.errors():
+        loc = err["loc"]
+        entry = (loc[0], loc[1]) if len(loc) >= 2 and loc[0] in ENTRY_KINDS and isinstance(loc[1], int) else None
+        by_entry.setdefault(entry, []).append(err)
+    sentences = []
+    for entry, errors in list(by_entry.items())[:MAX_ENTRIES]:
+        if entry is None:
+            sentences.append(wording.validation_message(errors))
+            continue
+        collection, index = entry
+        try:
+            given = data[collection][index]
+        except (KeyError, IndexError, TypeError):
+            given = None
+        kind = ENTRY_KINDS[collection]
+        label = (
+            f"{kind} {given['name']}" if isinstance(given, dict) and "name" in given else f"{kind} number {index + 1}"
+        )
+        tag = given.get("type") if isinstance(given, dict) else None
+        inner = [{**e, "loc": tuple(part for part in e["loc"][2:] if part != tag)} for e in errors]
+        text = wording.validation_message(inner, valid=fields.get(collection), list_fields=False)
+        # A check of the whole entry already names it ("object 'ball': ..."); a field's problem does not.
+        sentences.append(text if all(not e["loc"] for e in inner) else f"{label}: {text}")
+    more = len(by_entry) - MAX_ENTRIES
+    return "; ".join(sentences) + (f"; and {more} more" if more > 0 else "")
 
 
 # ---- compiler -------------------------------------------------------------------------

@@ -228,7 +228,15 @@ class Playground:
     @_one_edit_at_a_time
     def new_world(self, name: str, floor: str = "checker") -> dict[str, Any]:
         self.store = WorldStore.create(name, floor)
-        return self._load_world(self.store.compile(), created=True)
+        result = self._load_world(self.store.compile(), created=not self.store.reopened)
+        saved = result["world"]
+        if self.store.reopened:
+            note = f"{saved} already existed: opened as it was, floor and contents unchanged"
+        elif saved != name:
+            note = f"saved as {saved!r}; open_world takes either name"  # a name in Chinese, or with spaces
+        else:
+            return result
+        return {**result, "notes": [note, *result["notes"]]}
 
     @_one_edit_at_a_time
     def open_world(self, name_or_path: str) -> dict[str, Any]:
@@ -773,6 +781,9 @@ def _built(robot: RobotEntry) -> RobotEntry:
     return robot
 
 
+CREATED_BY = {"robot": "add_robot", "object": "add_object", "terrain patch": "add_terrain"}
+
+
 def _find(items: list, name: str, kind: str):
     """The entry called `name` (in other capitals too); an error listing what there is when none is."""
     names = [i.name for i in items]
@@ -780,9 +791,6 @@ def _find(items: list, name: str, kind: str):
     if found is None:
         raise PlaygroundError(wording.unknown(kind, name, names, make=CREATED_BY[kind]))
     return items[names.index(found)]
-
-CREATED_BY = {"robot": "add_robot", "object": "add_object", "terrain patch": "add_terrain"}
-
 
 
 def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
