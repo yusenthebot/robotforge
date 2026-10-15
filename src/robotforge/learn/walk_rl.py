@@ -22,7 +22,16 @@ import numpy as np
 
 from robotforge.behaviors import Kind, rhythm_walk, robot_kind
 from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, learn_turns, save_walk
-from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
+from robotforge.control.cpg import (
+    DRIFT_WEIGHT,
+    HEADING_WEIGHT,
+    Body,
+    CPGError,
+    Reward,
+    Rhythm,
+    RhythmController,
+    Trainer,
+)
 from robotforge.design.world import World, compile_world
 from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
 
@@ -174,9 +183,12 @@ STEPS = (
         id="reward",
         title=_text("奖励说了算", "The reward decides"),
         body=_text(
-            "奖励 = 走的距离 − 0.5 × 横着偏的距离 − w × 用掉的能量 ÷ (体重)。现在 w 是 0：怎么费劲都行。\n"
+            f"奖励 = 走的距离 × (1 − {HEADING_WEIGHT:g} × 转向) − {DRIFT_WEIGHT:g} × 横着偏的距离 − w × 用掉的能量 ÷ "
+            "(体重)。转向是朝向转了多少（弧度）：走成弧线就少算。现在 w 是 0：怎么费劲都行。\n"
             "先猜，再把「能耗的代价」调到 0.1 学一次，再调到 0.3 学一次。",
-            "Reward = distance - 0.5 * sideways drift - w * energy spent / (weight). Now w is 0: any effort goes.\n"
+            f"Reward = distance * (1 - {HEADING_WEIGHT:g} * turn) - {DRIFT_WEIGHT:g} * sideways drift - w * energy "
+            "spent / (weight), where turn is how far its heading turned, in radians: a walk that curves counts for "
+            "less. Now w is 0: any effort goes.\n"
             "Guess, then set Energy cost to 0.1 and learn again, then 0.3.",
         ),
         done=_text(
@@ -790,7 +802,9 @@ class LearnToWalkLesson(Lesson):
                     "show": "f_reward",
                     "label": _text("奖励", "Reward"),
                     "expr": _text(
-                        f"距离 − 0.5 × 横偏 − {w:g} × 能量 ÷ 体重", f"distance - 0.5 * drift - {w:g} * energy / weight"
+                        f"距离 × (1 − {HEADING_WEIGHT:g} × 转向) − {DRIFT_WEIGHT:g} × 横偏 − {w:g} × 能量 ÷ 体重",
+                        f"distance * (1 - {HEADING_WEIGHT:g} * turn) - {DRIFT_WEIGHT:g} * drift "
+                        f"- {w:g} * energy / weight",
                     ),
                     "value": f"w = {w:g}",
                     "color": "violet",

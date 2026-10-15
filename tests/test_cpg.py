@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from robotforge.control.cpg import Body, CPGError, Push, Reward, Rhythm, Trainer
+from robotforge.control.cpg import DRIFT_WEIGHT, HEADING_WEIGHT, Body, CPGError, Push, Reward, Rhythm, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.walk_rl import STAR
 
@@ -72,3 +72,16 @@ def test_an_imported_robot_drives_its_unlimited_joints_but_not_its_wheels(tmp_pa
     assert body.lower[hips] == pytest.approx(-np.pi) and body.upper[hips] == pytest.approx(np.pi)
     with pytest.raises(CPGError, match="0 servo joints"):
         Body.find(_solo("rover", file=str(write(tmp_path / "rover.urdf", rover_urdf()))), "rover")
+
+
+def test_a_forward_walk_counts_less_the_more_its_heading_turned():
+    """An imported A1 learned a walk of 1.46 m in 4 s that turned 42 degrees: forward was an arc. The distance now
+    counts for less the more the heading turned (HEADING_WEIGHT of it per radian)."""
+    model = _solo("dog", template="quadruped")
+    trainer = Trainer(model, "dog", Reward(), seconds=2.0)
+    rhythm = Rhythm.still(trainer.body.joints)
+    trainer.train(rhythm, iterations=4, seed=1)
+    walk = trainer.rollout(rhythm)
+    assert not walk["fell"] and walk["distance"] > 0.1 and abs(walk["turned"]) > 0.01
+    straight = walk["distance"] - DRIFT_WEIGHT * walk["drift"]
+    assert walk["reward"] == pytest.approx(straight - HEADING_WEIGHT * abs(walk["turned"]) * walk["distance"])

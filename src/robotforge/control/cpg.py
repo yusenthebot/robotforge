@@ -3,9 +3,9 @@
 Every servo joint swings around its home angle, target = home + offset + amplitude * sin(2 pi f t + phase),
 so the rhythm is built in and only 3 numbers per joint are learned. Augmented Random Search (the same
 recipe as control/ars.py: try nudges both ways, step toward the best) tunes them for a reward: how far the
-robot gets in a few seconds, minus drifting sideways and, if asked, the energy it spends. No model of the
-robot and no neural network: it works on a dog, a three-legged starfish built from parts, or whatever a
-learner made, in seconds on a laptop.
+robot gets in a few seconds, counted for less the more its heading turned, minus drifting sideways and, if
+asked, the energy it spends. No model of the robot and no neural network: it works on a dog, a three-legged
+starfish built from parts, or whatever a learner made, in seconds on a laptop.
 
 The rhythm alone is open loop: it never reads a sensor. Reflexes add feedback, 4 more numbers per joint
 that turn the trunk's roll, pitch and their rates into joint corrections, learned by the same search.
@@ -29,6 +29,10 @@ CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
 FALL_PENALTY = 1.0  # m of progress a fall costs
 DRIFT_WEIGHT = 0.5  # m of progress per m of sideways drift
+# Share of a forward walk's distance lost per rad its heading turned by the end. Over 6 trainings each (30 rounds),
+# 0.25 cut the mean heading change in 4 s from 40 to 18 degrees (template dog), 26 to 3 (starfish), 32 to 18
+# (humanoid) and 48 to 42 (imported A1), for 0 to 13 percent less distance; 0.5 cost the A1 a third of its distance.
+HEADING_WEIGHT = 0.25
 WANDER_WEIGHT = 3.0  # rad of turning per m the trunk wanders (at its farthest) while learning to turn on the spot
 
 
@@ -229,7 +233,9 @@ class Trainer:
             # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off.
             reward = self.reward.turn * turned - WANDER_WEIGHT * wander - cost
         else:
-            reward = distance - DRIFT_WEIGHT * drift - cost
+            # Forward: the distance counts for less the more the heading turned, so a walk that curves round
+            # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight.
+            reward = distance - HEADING_WEIGHT * abs(turned) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
         if fell:
             reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
         return {
