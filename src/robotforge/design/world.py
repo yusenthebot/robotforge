@@ -133,8 +133,10 @@ class World(_Strict):
 
     @classmethod
     def from_yaml(cls, text: str) -> World:
-        bare = BARE_HEX_COLOR.search(text)
-        if bare:
+        for bare in BARE_HEX_COLOR.finditer(text):
+            line_start = text.rfind("\n", 0, bare.start()) + 1
+            if "#" in text[line_start : bare.start()]:
+                continue  # inside a comment: YAML ignores it, and so do we
             line = text.count("\n", 0, bare.start()) + 1
             raise ValueError(
                 f'world.yaml line {line}: put the hex color in quotes, color: "{bare[1]}"; '

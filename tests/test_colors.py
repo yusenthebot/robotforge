@@ -193,6 +193,9 @@ def test_an_unquoted_hex_color_in_a_hand_written_world_says_to_quote_it(text, li
 def test_a_hex_code_inside_a_comment_is_left_alone():
     world = World.from_yaml("name: w\nobjects:\n- name: crate  # brown like #9C6B3F\n  color: brown\n")
     assert world.objects[0].color == "brown"
+    # A comment that itself reads like a setting, found by review: it used to stop the world from opening.
+    world = World.from_yaml("name: w\nobjects:\n- name: a\n  color: red\n# note, color: #fff here\n")
+    assert world.objects[0].color == "red"
 
 
 def test_a_world_yaml_that_is_not_yaml_is_a_value_error():
