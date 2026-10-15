@@ -99,6 +99,14 @@ agent 会尽早打开 3D 查看器：你可以拖动机器人、拉滑条控制�
 8. [训练一个策略](docs/lessons/08-train-a-policy.md)
 9. [导入你自己的机器人](docs/lessons/09-import-a-urdf.md)
 
+## 架构
+
+![robotforge 架构图：agent 通过 MCP 调用本地 Python 进程，物理只在一个 MuJoCo 会话里运行，浏览器只显示位姿](docs/diagrams/architecture.png)
+
+agent 通过 MCP 调用 robotforge 的工具，所有物理都在本地 Python 进程里的同一个 MuJoCo 会话中运行。
+浏览器只负责显示：它通过 WebSocket 接收每个刚体的位姿，再把键盘和拖拽操作传回来。
+图的源文件是单文件 HTML：[docs/diagrams/architecture.html](docs/diagrams/architecture.html)，下载后用浏览器打开即可。
+
 ## 文档
 
 - 方案：[docs/OVERVIEW.md](docs/OVERVIEW.md)
