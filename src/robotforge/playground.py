@@ -6,8 +6,8 @@ without an MCP client. Methods return plain dicts that serialize to JSON.
 
 from __future__ import annotations
 
-import difflib
 import functools
+import math
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -18,14 +18,15 @@ import mujoco
 import numpy as np
 from pydantic import ValidationError
 
-from robotforge import modes
+from robotforge import modes, wording
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height
+from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry
+from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
 from robotforge.viewer.server import ViewerHub
@@ -33,6 +34,7 @@ from robotforge.viewer.server import ViewerHub
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
 MAX_SIM_SECONDS = 60.0
 _LIST_LIMIT = 40
+ACTUATORS_LISTED = 8  # actuator names shown in an error; a robot has a dozen, a world several robots
 
 _JOINT_TYPES = {
     int(mujoco.mjtJoint.mjJNT_FREE): "free",
@@ -161,7 +163,7 @@ class Playground:
         p = Path(path).expanduser()
         if importer.is_importable(p):
             if not p.is_file():
-                raise PlaygroundError(f"file not found: {p}")
+                raise PlaygroundError(f"file not found: {p} (give the path of {importer.formats_hint()})")
             try:
                 compiled = importer.compile_standalone(p, options)
             except ValueError as exc:
@@ -172,9 +174,10 @@ class Playground:
             result = self.describe()
             result["doctor"] = next(iter(compiled.doctor.values()), None)
             return result
+        if p.is_dir():
+            raise PlaygroundError(f"{p.name} is a folder; give a file: {importer.formats_hint()}")
         if p.suffix.lower() not in {".xml", ".mjcf"}:
-            meshes = ", ".join(sorted(importer.MESH_SUFFIXES))
-            raise PlaygroundError(f"{p.name}: expected an MJCF (.xml), a URDF/xacro, or a mesh ({meshes})")
+            raise PlaygroundError(f"{p.name}: expected {importer.formats_hint()}")
         self.session.load_path(p.resolve())
         return self.describe()
 
@@ -238,6 +241,7 @@ class Playground:
         library: str | None = None,
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        given, name = name, tidy_name(name)
         try:
             entry = RobotEntry(
                 name=name,
@@ -263,7 +267,7 @@ class Playground:
         result = self._edit(change)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
-        return result
+        return _renamed(result, given, name)
 
     @_one_edit_at_a_time
     def update_robot(
@@ -276,6 +280,8 @@ class Playground:
     ) -> dict[str, Any]:
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
+            if not params and pos is None and yaw is None and build is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
@@ -319,6 +325,7 @@ class Playground:
 
     @_one_edit_at_a_time
     def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
+        given, name = name, tidy_name(name)
         try:
             entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
         except ValidationError as exc:  # pydantic's own wording buries the fix under types and a docs link
@@ -327,12 +334,14 @@ class Playground:
         def change(w: World) -> None:
             w.objects.append(entry)
 
-        return self._edit(change)
+        return _renamed(self._edit(change), given, name)
 
     @_one_edit_at_a_time
     def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
         def change(w: World) -> None:
             obj = _find(w.objects, name, "object")
+            if all(value is None for value in fields.values()):
+                raise PlaygroundError(f"nothing to change: give {', '.join(fields)}")
             for key, value in fields.items():
                 if value is not None:
                     setattr(obj, key, value)
@@ -342,12 +351,13 @@ class Playground:
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
         def change(w: World) -> None:
-            before = len(w.robots) + len(w.objects) + len(w.terrain)
-            w.robots = [r for r in w.robots if r.name != name]
-            w.objects = [o for o in w.objects if o.name != name]
-            w.terrain = [t for t in w.terrain if t.name != name]
-            if len(w.robots) + len(w.objects) + len(w.terrain) == before:
-                raise PlaygroundError(f"nothing named {name!r} in this world")
+            names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
+            found = wording.match(name, names)
+            if found is None:
+                raise PlaygroundError(wording.unknown("robot, object or terrain patch", name, names, many="names"))
+            w.robots = [r for r in w.robots if r.name != found]
+            w.objects = [o for o in w.objects if o.name != found]
+            w.terrain = [t for t in w.terrain if t.name != found]
 
         return self._edit(change)
 
@@ -532,13 +542,15 @@ class Playground:
         style: str | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        given, name = name, tidy_name(name) if name else None
         fields = {"name": name, "pos": pos, "yaw": yaw, "style": style}
         patch = self._patch({**(params or {}), "type": type, **{k: v for k, v in fields.items() if v is not None}})
 
         def change(w: World) -> None:
             w.terrain.append(patch)
 
-        return self._edit(change)
+        result = self._edit(change)
+        return _renamed(result, given, name) if name else result
 
     @_one_edit_at_a_time
     def update_terrain(
@@ -552,9 +564,11 @@ class Playground:
         def change(w: World) -> None:
             old = _find(w.terrain, name, "terrain patch")
             fields = {"pos": pos, "yaw": yaw, "style": style}
+            if not params and all(value is None for value in fields.values()):
+                raise PlaygroundError("nothing to change: give pos, yaw, style or params")
             data = {**old.model_dump(), **(params or {}), **{k: v for k, v in fields.items() if v is not None}}
             data["type"], data["name"] = old.type, old.name  # a patch keeps its type and name
-            w.terrain = [self._patch(data) if t.name == name else t for t in w.terrain]
+            w.terrain = [self._patch(data) if t.name == old.name else t for t in w.terrain]
 
         return self._edit(change)
 
@@ -570,20 +584,36 @@ class Playground:
     # ---- control and simulation ----------------------------------------------------
 
     def set_controls(self, controls: dict[str, float]) -> dict[str, Any]:
-        applied = {}
+        applied, notes = self._apply_controls(controls)
+        return {"applied": applied, **({"notes": notes} if notes else {})}
+
+    def _apply_controls(self, controls: dict[str, float]) -> tuple[dict[str, float], list[str]]:
+        """Set the targets; the values as applied (an actuator clamps to its range), and a note for each clamp."""
+        applied: dict[str, float] = {}
+        notes: list[str] = []
+        m = self.session.model
         with self.session.lock:
             for name, value in controls.items():
                 a = self._actuator_id(name)
-                self.session.set_ctrl(a, float(value))
-                applied[name] = round(float(self.session.data.ctrl[a]), 4)
-        return {"applied": applied}
+                asked = float(value)
+                self.session.set_ctrl(a, asked)
+                actual = self._actuator_info(a)["name"]
+                applied[actual] = round(float(self.session.data.ctrl[a]), 4)
+                if m.actuator_ctrllimited[a] and abs(applied[actual] - asked) > 1e-6:
+                    low, high = (float(x) for x in m.actuator_ctrlrange[a])
+                    note = f"{actual}: {asked:g} is outside {low:g} to {high:g}; clamped to {applied[actual]:g}"
+                    if is_position_servo(m, a) and abs(asked) <= 360 and abs(asked) > 5 * max(abs(low), abs(high)):
+                        note += f" (joint targets are radians; {asked:g} degrees is {math.radians(asked):.2f})"
+                    notes.append(note)
+        return applied, notes
 
     def simulate(self, seconds: float, controls: dict[str, float] | None = None) -> dict[str, Any]:
         if not 0 < seconds <= MAX_SIM_SECONDS:
-            raise PlaygroundError(f"seconds must be in (0, {MAX_SIM_SECONDS}]")
+            raise PlaygroundError(f"seconds must be in (0, {MAX_SIM_SECONDS:g}]")
+        notes: list[str] = []
         with self.session.lock:
             if controls:
-                self.set_controls(controls)
+                _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))
             before = self._free_body_positions()
             self.session.step(steps)
@@ -599,6 +629,8 @@ class Playground:
             "steps": steps,
             "moved": moved,
         }
+        if notes:
+            result["notes"] = notes
         if unstable:
             result["warning"] = "simulation became unstable (NaN state); reset and check the model"
         return result
@@ -661,14 +693,26 @@ class Playground:
     # ---- helpers ----------------------------------------------------------------------
 
     def _actuator_id(self, name: str) -> int:
+        """The actuator called `name`: exactly, in other capitals, or without its robot's prefix ("shoulder" for
+        "arm/shoulder") when only one robot has it."""
         m = self.session.model
         a = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
         if a >= 0:
             return a
         names = [self._actuator_info(i)["name"] for i in range(m.nu)]
-        close = difflib.get_close_matches(name, names, n=3)
+        found = wording.match(name, names)
+        if found is None:
+            tail = "/" + wording.squash(name)
+            ends = [n for n in names if wording.squash(n).endswith(tail)]
+            found = ends[0] if len(ends) == 1 else None
+        if found is not None:
+            return names.index(found)
+        close = wording.near(name, names)
         hint = f" Did you mean {', '.join(close)}?" if close else ""
-        raise PlaygroundError(f"no actuator named {name!r}.{hint} Available: {', '.join(names) or 'none'}")
+        more = " (describe_model lists them all)" if len(names) > ACTUATORS_LISTED else ""
+        raise PlaygroundError(
+            f"no actuator named {name!r}.{hint} Available: {wording.choices(names, ACTUATORS_LISTED)}{more}"
+        )
 
     def _free_body_positions(self) -> dict[str, list[float]]:
         m, d = self.session.model, self.session.data
@@ -705,20 +749,23 @@ def _built(robot: RobotEntry) -> RobotEntry:
 
 
 def _find(items: list, name: str, kind: str):
-    for item in items:
-        if item.name == name:
-            return item
-    names = ", ".join(i.name for i in items) or "none"
-    raise PlaygroundError(f"no {kind} named {name!r}; {kind}s in this world: {names}")
+    """The entry called `name` (in other capitals too); an error listing what there is when none is."""
+    names = [i.name for i in items]
+    found = wording.match(name, names)
+    if found is None:
+        raise PlaygroundError(wording.unknown(kind, name, names))
+    return items[names.index(found)]
+
+
+def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
+    """Say so when a name was saved in its tidy form ("Red Cube" as red_cube), since later calls may use either."""
+    if given != name:
+        result["notes"] = [*result.get("notes", []), f"{given!r} is saved as {name!r}: names are lowercase with _"]
+    return result
 
 
 def _validation_message(exc: ValidationError) -> str:
-    parts = []
-    for err in exc.errors():
-        msg = err["msg"].removeprefix("Value error, ")  # pydantic's prefix means nothing to a beginner
-        where = ".".join(str(x) for x in err["loc"])
-        parts.append(f"{where}: {msg}" if where else msg)
-    return "; ".join(parts)
+    return wording.validation_message(exc)
 
 
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:

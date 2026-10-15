@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from robotforge import wording
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion
 from robotforge.behaviors.balance import WheelBalancer
@@ -33,8 +35,41 @@ LEARN_A_WALK = (
 )
 
 
+GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
+NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
+
+
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
+
+
+def _a(kind: Kind) -> str:
+    return f"an {kind.value}" if kind.value[0] in "aeiou" else f"a {kind.value}"
+
+
+def _how_to_move(kind: Kind) -> str:
+    """What to call for a robot of this kind when the agent used the wrong tool for it."""
+    if kind == Kind.ARM:
+        return "it works with move_arm, gripper and pick_and_place"
+    if kind in MOBILE:
+        return "it moves with move" + (" and strikes poses with pose" if kind == Kind.HUMANOID else "")
+    return "robots lists what each robot can do"
+
+
+def _clamp_notes(ctrl: Any, speed: float, turn: float) -> list[str]:
+    """Say so when a robot was asked for more than it can do: the controllers clip speed and turn silently."""
+    top = getattr(ctrl, "max_speed", None)
+    got_speed = getattr(ctrl, "command_speed", getattr(ctrl, "speed", speed))
+    got_turn = getattr(ctrl, "command_turn", getattr(ctrl, "turn", turn))
+    notes = []
+    if top is not None and abs(speed) > top + 1e-9 and abs(got_speed - speed) > 1e-9:
+        notes.append(f"speed {speed:g} m/s is above max_speed {top:g}, so it moves at {got_speed:g}")
+    if abs(got_turn - turn) > 1e-9:
+        note = f"turn {turn:g} rad/s is above the limit for this robot, so it turns at {got_turn:g}"
+        if abs(turn) > 2 * math.pi:
+            note += f" (turn is in rad/s; {turn:g} degrees/s is {math.radians(turn):.2f})"
+        notes.append(note)
+    return notes
 
 
 class BehaviorManager:
@@ -101,16 +136,29 @@ class BehaviorManager:
         names = (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or "" for a in range(m.nu))
         return {n.split("/", 1)[0] for n in names if "/" in n}
 
+    def robot_names(self) -> list[str]:
+        """The robots by name: the open world's, else those a loaded model names with a prefix."""
+        world = self._world()
+        return [r.name for r in world.robots] if world else sorted(self._prefixes())
+
+    def resolve(self, robot: str) -> str:
+        """The robot `robot` means: spelled exactly, in other capitals or as "the dog"; "Rover/Arm" for an arm
+        mounted on a robot. Raises BehaviorError listing the robots when there is no such one."""
+        names = self.robot_names()
+        owner, slash, part = robot.partition("/")
+        found = wording.match(owner, names)
+        if found is None:
+            raise BehaviorError(wording.unknown("robot", robot, names))
+        if not slash:
+            return found
+        return wording.match(robot, self.arms(found)) or f"{found}/{part}"  # a wrong part is named by _arm_name
+
     def kind(self, robot: str) -> Kind:
+        robot = self.resolve(robot).split("/", 1)[0]  # an arm on a robot is part of the robot
         world = self._world()
         if world is not None:
-            entry = next((r for r in world.robots if r.name == robot), None)
-            if entry is None:
-                names = ", ".join(r.name for r in world.robots) or "none"
-                raise BehaviorError(f"no robot named {robot!r}; robots in this world: {names}")
+            entry = next(r for r in world.robots if r.name == robot)
             return robot_kind(self.session.model, robot, _told_kind(entry))
-        if robot not in self._prefixes():
-            raise BehaviorError(f"no robot named {robot!r}")
         return robot_kind(self.session.model, robot)
 
     def home_qpos(self) -> np.ndarray:
@@ -125,6 +173,9 @@ class BehaviorManager:
         installed for this robot, or a policy name; None keeps the robot's current walker."""
         if not (math.isfinite(speed) and math.isfinite(turn)):
             raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
+        robot = self.resolve(robot)
+        if walker is not None:
+            walker = wording.match(walker, GAIT_WALKERS) or walker
         kind = self.kind(robot)
         if kind not in MOBILE and walker in (None, RHYTHM):
             if self.kept_walk(robot) is None:
@@ -135,18 +186,24 @@ class BehaviorManager:
             walker = None  # its built-in gait is the only one it has
         if walker not in (None, RHYTHM) and kind not in LEGGED:
             raise BehaviorError(
-                f"{robot} is a {kind.value}; walker {walker!r} needs a quadruped or a humanoid, leave it out"
+                f"{robot} is {_a(kind)}; walker {walker!r} is for quadrupeds and humanoids, so leave walker out"
             )
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             ctrl.command(speed, turn)
-        return ctrl.status()
+        notes = _clamp_notes(ctrl, speed, turn)
+        return {**ctrl.status(), "notes": notes} if notes else ctrl.status()
 
     def _cannot_move(self, robot: str, kind: Kind) -> str:
+        if kind == Kind.ARM:
+            return (
+                f"{robot} is an arm, and only legged robots, wheeled robots and snakes move around; "
+                f"{_how_to_move(kind)}"
+            )
         text = (
-            f"{robot} is a {kind.value} robot; only legged robots (quadrupeds, hexapods, humanoids), wheeled "
-            "robots (rovers, balancers), snakes and robots that learned a walk of their own can move around"
+            f"{robot} is {_a(kind)} robot, which has no built-in way to move: only legged robots, wheeled robots, "
+            "snakes and robots that learned a walk of their own do"
         )
         if self._can_learn_walk(robot):
             text += f". {robot} has no walk yet, but {LEARN_A_WALK}"
@@ -295,6 +352,7 @@ class BehaviorManager:
         return library.get(entry.library).max_speed if entry is not None and entry.library else None
 
     def stop(self, robot: str) -> dict[str, Any]:
+        robot = self.resolve(robot)
         with self.session.lock:
             ctrl = self.session.controllers.get(robot)
             if _is_mover(ctrl):
@@ -313,9 +371,10 @@ class BehaviorManager:
 
     def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
         """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
+        robot = self.resolve(robot)
         kind = self.kind(robot)
         if kind != Kind.HUMANOID:
-            raise BehaviorError(f"{robot} is a {kind.value}; only humanoids strike poses")
+            raise BehaviorError(f"{robot} is {_a(kind)}, and only humanoids strike poses; {_how_to_move(kind)}")
         if name not in humanoid.POSES:
             raise BehaviorError(f"unknown pose {name!r}; choose one of: {', '.join(humanoid.POSES)}")
         with self.session.lock:
@@ -326,6 +385,7 @@ class BehaviorManager:
 
     def pose(self, robot: str) -> dict[str, Any]:
         """Where a robot is and which way it faces (degrees, counter-clockwise from +x)."""
+        robot = self.resolve(robot)
         d = self.session.data
         root = self._root_body(robot)
         rot = d.xmat[root].reshape(3, 3)
@@ -360,17 +420,18 @@ class BehaviorManager:
 
     def _arm_name(self, robot: str) -> str:
         """Which arm a command means: "rover/arm" names one; a robot with a single arm stands for it."""
+        robot = self.resolve(robot)  # unknown robots get the usual message
         if "/" in robot:
             owner = robot.split("/", 1)[0]
-            self.kind(owner)  # unknown robots get the usual message
             arms = self.arms(owner)
             if robot not in arms:
-                raise BehaviorError(f"{robot!r} is not an arm; arms on {owner}: {', '.join(arms) or 'none'}")
+                carries = ", ".join(arms) or "no arm (add_robot with build can mount one: see builder_guide)"
+                raise BehaviorError(f"{robot!r} is not an arm: {owner} carries {carries}")
             return robot
         kind = self.kind(robot)
         arms = self.arms(robot)
         if not arms:
-            raise BehaviorError(f"{robot} is a {kind.value}, not an arm, and carries none")
+            raise BehaviorError(f"{robot} is {_a(kind)}, not an arm, and carries none; {_how_to_move(kind)}")
         if len(arms) > 1:
             raise BehaviorError(f"{robot} has {len(arms)} arms; name the one you mean: {', '.join(arms)}")
         return arms[0]
@@ -394,15 +455,26 @@ class BehaviorManager:
     def move_arm(self, robot: str, position: list[float], gripper: str | None = None) -> ArmMotion:
         target = np.asarray(position, float)
         if target.shape != (3,):
-            raise BehaviorError("position is [x, y, z] in meters (world frame)")
+            raise BehaviorError(f"position must be [x, y, z] in meters (world frame), got {list(position)}")
         with self.session.lock:
             arm = self._arm(robot)
             if arm.reach_error(target) > REACH_TOL:
-                raise BehaviorError(
-                    f"{robot} cannot reach {position} with its gripper pointing down; try a point closer to its base"
-                )
+                raise BehaviorError(self._out_of_reach(arm, target))
             arm.move_to(target, gripper)
         return arm
+
+    def _out_of_reach(self, arm: ArmMotion, target: np.ndarray) -> str:
+        """Why a point cannot be reached, in numbers: how far it is, how far the arm goes, and whether the
+        numbers look like centimetres (the usual mistake)."""
+        point = [round(float(v), 3) for v in target]
+        base, reach = arm.base_and_reach(self.session.data)
+        distance = float(np.linalg.norm(target - base))
+        head = f"{arm.robot} cannot reach {point}"
+        if target[2] < 0:
+            return f"{head}: z is below the floor; give z of 0 or more"
+        if distance > reach * 1.05:
+            return f"{head}: {wording.too_far(point, distance, reach)}"
+        return f"{head} with its gripper pointing down, though it is within the arm's {reach:.2f} m reach; try nearer"
 
     def set_gripper(self, robot: str, state: str) -> ArmMotion:
         with self.session.lock:
@@ -415,6 +487,7 @@ class BehaviorManager:
     def pick_and_place(self, robot: str, obj: str, target: str | list[float]) -> tuple[ArmMotion, dict[str, Any]]:
         with self.session.lock:
             arm = self._arm(robot)
+            obj = self._object_name(obj)
             pick = self._object_geometry(obj)
             place, place_top, region = self._place_target(target)
             try:
@@ -432,10 +505,29 @@ class BehaviorManager:
         inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half) and pos[2] >= region["min_z"])
         return {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
 
+    def _movable(self) -> list[str]:
+        """Names of the loose objects: bodies with a free joint that are not part of a robot."""
+        m = self.session.model
+        found = []
+        for b in range(1, m.nbody):
+            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or ""
+            if name and "/" not in name and m.body_dofnum[b]:
+                found.append(name)
+        return found
+
+    def _object_name(self, name: str) -> str:
+        """The object `name` means (other capitals too), or an error listing the objects."""
+        world = self._world()
+        names = [o.name for o in world.objects] if world else self._movable()
+        found = wording.match(name, names)
+        if found is None:
+            raise BehaviorError(wording.unknown("object", name, names))
+        return found
+
     def _body(self, name: str) -> int:
         b = mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_BODY, name)
         if b < 0:
-            raise BehaviorError(f"no movable object named {name!r}")
+            raise BehaviorError(wording.unknown("movable object", name, self._movable(), many="movable objects"))
         return b
 
     def _object_entry(self, name: str) -> ObjectEntry | None:
@@ -461,14 +553,20 @@ class BehaviorManager:
 
     def _place_target(self, target: str | list[float]) -> tuple[np.ndarray, float, dict[str, Any]]:
         """(place point for the object's bottom, highest point around it, success region)."""
+        if isinstance(target, str) and NUMBER_LIST.fullmatch(target):  # "0.2, 0.2": a position, not an object
+            target = [float(w) for w in re.split(r"[^\d.+-]+", target.strip(" []()")) if w]
         if isinstance(target, list):
             if len(target) not in (2, 3):
-                raise BehaviorError("target is an object name or a position [x, y]")
+                raise BehaviorError(f"target must be an object name or a position [x, y] in meters, got {target}")
             p = np.array([target[0], target[1], target[2] if len(target) == 3 else 0.0])
             return p, p[2], {"center": p.tolist(), "half_xy": [0.04, 0.04], "min_z": p[2] - 0.01}
-        entry = self._object_entry(target)
+        world = self._world()
+        names = [o.name for o in world.objects] if world else []
+        found = wording.match(target, names)
+        entry = self._object_entry(found) if found else None
         if entry is None:
-            raise BehaviorError(f"no object named {target!r} to place onto")
+            raise BehaviorError(wording.unknown("object", target, names) + " (or give a position [x, y])")
+        target = found
         m, d = self.session.model, self.session.data
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
         if b >= 0:

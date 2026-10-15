@@ -8,7 +8,10 @@ import mujoco
 import numpy as np
 from pydantic import Field
 
+from robotforge import wording
 from robotforge.control.tasks.base import Batch, Task, TaskError, TaskParams, home_qpos, smooth_abs
+
+MAX_REACH_RATIO = 2.0  # a target farther than this many arm lengths away is a wrong unit, not a hard reach
 
 
 class ReachParams(TaskParams):
@@ -55,17 +58,33 @@ class Reach(Task):
         t = self.params.target
         if isinstance(t, list):
             if len(t) != 3:
-                raise TaskError("reach target is [x, y, z] in meters")
+                raise TaskError(f"reach target must be [x, y, z] in meters, got {t}")
             self.target = np.asarray(t, float)
+            self._check_distance(qpos)
         elif isinstance(t, str):
             self.target = self._object_position(t, qpos)
         else:
             self.target = self.random_target(qpos, rng)
 
+    def _check_distance(self, qpos: np.ndarray) -> None:
+        """Refuse a target so far off that the numbers must be in the wrong unit (centimetres for meters)."""
+        d = self._fk
+        d.qpos[:] = qpos
+        mujoco.mj_kinematics(self.model, d)
+        points = [*(d.xanchor[j] for j in self.joints), d.site_xpos[self.site]]
+        reach = sum(float(np.linalg.norm(b - a)) for a, b in zip(points, points[1:], strict=False))
+        distance = float(np.linalg.norm(self.target - points[0]))
+        if distance > MAX_REACH_RATIO * reach:
+            where = [round(float(v), 3) for v in self.target]
+            raise TaskError(f"reach target {where} is out of reach: {wording.too_far(where, distance, reach)}")
+
     def _object_position(self, name: str, qpos: np.ndarray) -> np.ndarray:
         m = self.model
         self._fk.qpos[:] = qpos
         mujoco.mj_kinematics(m, self._fk)
+        kinds = ((mujoco.mjtObj.mjOBJ_BODY, m.nbody), (mujoco.mjtObj.mjOBJ_GEOM, m.ngeom))
+        names = [n for obj, count in kinds for i in range(count) if (n := mujoco.mj_id2name(m, obj, i))]
+        name = wording.match(name, names) or name  # "Ball" is ball
         lookups = (
             (mujoco.mjtObj.mjOBJ_BODY, self._fk.xpos),
             (mujoco.mjtObj.mjOBJ_GEOM, self._fk.geom_xpos),  # fixed objects are plain geoms
@@ -75,7 +94,8 @@ class Reach(Task):
             idx = mujoco.mj_name2id(m, obj, name)
             if idx >= 0:
                 return table[idx].copy()
-        raise TaskError(f"no object named {name!r} to reach; give [x, y, z] or an object name")
+        objects = sorted({n for n in names if "/" not in n})
+        raise TaskError(f"{wording.unknown('object', name, objects, many='objects')}. Or give [x, y, z] in meters")
 
     def random_target(self, qpos: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         """A point the tool can certainly reach: the tool position of a random joint configuration."""

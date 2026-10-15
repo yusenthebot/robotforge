@@ -52,6 +52,7 @@ class ArmMotion:
         if not joints:
             raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
         self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
+        self.joints = joints
         self.actuators = np.array([joint_to_act[j] for j in joints])
         # The tool points along the tcp site's +z (for the templates that is the hand's +z).
         rot = np.zeros(9)
@@ -100,6 +101,13 @@ class ArmMotion:
         if self.free_adr is not None:
             self.ik.base_qpos[self.free_adr : self.free_adr + 7] = data.qpos[self.free_adr : self.free_adr + 7]
         self._read_base(data)
+
+    def base_and_reach(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
+        """Where the arm's first joint is, and about how far the arm reaches from it: the spacing of its
+        joints along the chain plus the tool offset, as for an arm stretched out straight."""
+        points = [*(data.xanchor[j] for j in self.joints), data.site_xpos[self.site]]
+        reach = sum(float(np.linalg.norm(b - a)) for a, b in zip(points, points[1:], strict=False))
+        return np.array(points[0], float), reach
 
     # ---- planning ------------------------------------------------------------------
 

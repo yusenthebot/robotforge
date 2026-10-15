@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from robotforge import wording
 from robotforge.control.tasks import TaskError
 
 POLICY_FILE = "policy.json"
@@ -54,22 +55,24 @@ def policies_home(world_dir: Path | None) -> Path:
 
 def check_name(name: str) -> str:
     if not isinstance(name, str) or not NAME_RE.fullmatch(name) or name in WINDOWS_RESERVED:
-        raise TaskError("policy names use lowercase letters, digits and _, start with a letter (e.g. pole_ppo)")
+        raise TaskError(
+            f"policy names use lowercase letters, digits and _, start with a letter (e.g. pole_ppo), got {name!r}"
+        )
     return name
 
 
 def find_policy(name: str, world_dir: Path | None = None) -> Path:
     """The folder of policy `name`: in the open world first, then the shared folder. Raises with the known names."""
-    check_name(name)
     places = [policies_home(world_dir)] if world_dir is not None else []
     places.append(policies_home(None))
+    known = sorted({p["name"] for place in places for p in _summaries(place)})
+    name = wording.match(name, known) or check_name(name)  # "Pole_PPO" is pole_ppo
     for place in places:
         folder = place / name
         if (folder / POLICY_FILE).exists():
             return folder
-    known = sorted({p["name"] for place in places for p in _summaries(place)})
-    hint = f"; trained policies: {', '.join(known)}" if known else "; none trained yet (train_policy makes one)"
-    raise TaskError(f"no policy named {name!r}{hint}")
+    text = wording.unknown("policy", name, known, where="trained", many="policies")
+    raise TaskError(text if known else f"{text} train_policy makes one")
 
 
 def read_json(path: Path) -> dict[str, Any]:

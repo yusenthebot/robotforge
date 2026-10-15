@@ -20,6 +20,8 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from robotforge import wording
+
 FULLPHYSICS = mujoco.mjtState.mjSTATE_FULLPHYSICS
 
 
@@ -31,10 +33,9 @@ class TaskParams(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
-def readable(exc: ValidationError, what: str) -> str:
+def readable(exc: ValidationError, what: str, valid: list[str] | None = None) -> str:
     """A pydantic error as one line a beginner (or an agent) can act on."""
-    parts = [f"{'.'.join(str(x) for x in e['loc']) or 'value'}: {e['msg']}" for e in exc.errors()]
-    return f"{what}: {'; '.join(parts)}"
+    return f"{what}: {wording.validation_message(exc, valid=valid)}"
 
 
 # ---- states in bulk ------------------------------------------------------------------------
@@ -145,7 +146,10 @@ class Robot:
     def need(self, obj: mujoco.mjtObj, name: str, what: str) -> int:
         idx = self.find(obj, name)
         if idx < 0:
-            raise TaskError(f"robot {self.name!r} has no {name!r}; this task needs {what}")
+            raise TaskError(
+                f"robot {self.name!r} has no {name!r}, so it does not fit this task, which needs {what}; "
+                "robots shows each robot's kind"
+            )
         return idx
 
     @property
@@ -234,7 +238,7 @@ class Task(ABC):
         try:
             self.params = self.Params.model_validate(params or {})
         except ValidationError as exc:
-            raise TaskError(readable(exc, f"task {self.name!r}")) from exc
+            raise TaskError(readable(exc, f"task {self.name!r}", list(self.Params.model_fields))) from exc
         self.model = model
         self.robot = Robot(model, robot)
         self.actuators: np.ndarray = self.robot.actuators

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,6 +17,7 @@ from typing import Any, Literal
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge import wording
 from robotforge.control.env import DEFAULT_ROBOTS
 from robotforge.control.mcp_tools import _tool_errors as _task_errors
 from robotforge.control.rl import store
@@ -184,10 +184,10 @@ def _robot_spec(playground: Playground, task: str, robot: str | None) -> tuple[d
         return {"name": name, "template": template}, {}, [note]
     if robot is None:
         raise TaskError(f"say which robot to train; robots in this world: {', '.join(r.name for r in world.robots)}")
-    entry = next((r for r in world.robots if r.name == robot), None)
+    names = [r.name for r in world.robots]
+    entry = next((r for r in world.robots if r.name == wording.match(robot, names)), None)
     if entry is None:
-        names = ", ".join(r.name for r in world.robots) or "none"
-        raise TaskError(f"no robot named {robot!r}; robots in this world: {names}")
+        raise TaskError(wording.unknown("robot", robot, names))
     fields = entry.model_dump(include={"name", "template", "library", "file", "params", "pos", "yaw"})
     return fields, world.floor.model_dump(), []
 
@@ -250,4 +250,4 @@ def _status_view(name: str, folder: Path, status: dict[str, Any]) -> dict[str, A
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1, default=float)
+    return wording.dumps(data, default=float)

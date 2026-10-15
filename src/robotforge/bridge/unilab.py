@@ -145,7 +145,7 @@ def start_training(
     scripts/unilab_export_quadruped.py): it holds task/<task>/mujoco.yaml, outside UniLab's tree."""
     custom = _custom_task(conf_dir, task) if conf_dir is not None else None
     if custom is None and task not in TASKS:
-        raise UniLabError(f"robotforge can train {', '.join(TASKS)} with UniLab, not {task!r}")
+        raise UniLabError(f"unknown task {task!r}; choose one of: {', '.join(TASKS)}")
     if not 1 <= iterations <= MAX_ITERATIONS:
         raise UniLabError(f"iterations must be 1..{MAX_ITERATIONS} (UniLab's default for {task} is 151)")
     if num_envs is not None and not 16 <= num_envs <= 16384:

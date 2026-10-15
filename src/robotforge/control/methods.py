@@ -8,11 +8,16 @@ import mujoco
 import numpy as np
 from pydantic import ValidationError
 
+from robotforge import wording
 from robotforge.control import classic
 from robotforge.control.mpc import MPCConfig, SamplingMPC
 from robotforge.control.tasks import Task, TaskError
 from robotforge.control.tasks.base import home_ctrl, readable
 
+# Full names of methods, taken for the short name. Other names agents use are only offered as "did you mean":
+# a PID controller is not quite the PD one here, and "sampling MPC" could be mpc or mppi.
+LONG_NAMES = {"inverse_kinematics": "ik", "model_predictive_control": "mpc"}
+NICKNAMES = {"pid": "pd", "pid_control": "pd", "sampling_mpc": "mppi", "jacobian": "cartesian", "hold_position": "hold"}
 METHODS: dict[str, str] = {
     "ik": "Inverse kinematics + servo position control: solve for joint angles once and send them to the servos.",
     "pd": "PD feedback: push back in proportion to the error and its rate (with gravity compensation for arms).",
@@ -55,7 +60,9 @@ def check(task: Task, method: str) -> None:
     if method in ("ppo", "sac"):
         raise TaskError(LEARNED_HINT.format(method=method))
     if method not in METHODS:
-        raise TaskError(f"unknown method {method!r}; choose one of: {', '.join(METHODS)}")
+        close = wording.near(method, METHODS, NICKNAMES)
+        hint = f" Did you mean {', '.join(close)}?" if close else ""
+        raise TaskError(f"unknown method {method!r}.{hint} Choose one of: {', '.join(METHODS)}")
     if method not in task.methods:
         raise TaskError(
             f"{method} does not fit the {task.name} task; for {task.name} use one of: {', '.join(task.methods)}"

@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
-import json
 import uuid
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
@@ -17,9 +16,10 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge import wording
 from robotforge.control import tasks as task_catalog
 from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
-from robotforge.control.methods import METHODS, explain, make_controller
+from robotforge.control.methods import LONG_NAMES, METHODS, explain, make_controller
 from robotforge.control.rl.runtime import policy_params
 from robotforge.control.tasks import TaskError, make_task
 from robotforge.playground import Playground
@@ -75,6 +75,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         Returns reward, success, effort (joules), the task's own numbers and, for MPC, planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
+            robot, task, method = _robot(playground, robot), _task(task), _method(method)
             with session.lock:
                 model, snapshot, version = session.model, copy.copy(session.data), session.version
             bound = make_task(task, model, robot, task_params)
@@ -153,8 +154,13 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         or lost."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_COMPARE_SECONDS)
+            robot, task = _robot(playground, robot), _task(task)
+            if methods is not None:
+                methods = [_method(m) for m in methods]
             if methods is not None and not 1 <= len(methods) <= MAX_METHODS:
-                raise TaskError(f"compare 1 to {MAX_METHODS} methods at a time")
+                raise TaskError(
+                    f"methods must list 1 to {MAX_METHODS} names, got {len(methods)}; leave it out for all that fit"
+                )
             with session.lock:
                 model, start = session.model, copy.copy(session.data)
             method_params = dict(method_params or {})
@@ -194,8 +200,27 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
 
 def _seconds(seconds: float | None, limit: float) -> float | None:
     if seconds is not None and not 0 < seconds <= limit:
-        raise TaskError(f"seconds must be in (0, {limit:.0f}]")
+        raise TaskError(f"seconds must be in (0, {limit:.0f}], got {seconds:g}")
     return seconds
+
+
+def _robot(playground: Playground, robot: str) -> str:
+    """The robot's name as the world spells it. A loaded model whose robots have no names (the demo arm) is
+    left to the task, which looks the name up itself."""
+    names = playground.behaviors.robot_names()
+    return playground.behaviors.resolve(robot) if names else robot
+
+
+def _task(task: str) -> str:
+    return wording.match(task, task_catalog.TASKS) or task
+
+
+def _method(method: str) -> str:
+    """ "IK" is ik; a policy is "policy:<name>"."""
+    prefix, colon, rest = method.partition(":")
+    if colon:
+        return f"{prefix.lower()}:{rest}"
+    return wording.match(method, METHODS, LONG_NAMES) or method
 
 
 def _same_world(session, version: int) -> None:
@@ -219,4 +244,4 @@ def _tool_errors() -> Iterator[None]:
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1, default=float)
+    return wording.dumps(data, default=float)
