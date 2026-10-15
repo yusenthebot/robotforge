@@ -286,14 +286,36 @@ Rounds 1-3 done, 2026-10-14.
 - Learned reflexes are unreliable (2 of 6 collapse) and only random search is offered for walking; no gradient-based option in-viewer for user robots.
 - Tutor tools (the agent reading lesson progress) and a lesson MCP surface are gated; a playtest agent is now feasible with `codex exec`.
 
+## Round 25 (2026-10-15): keep what a robot learned (phase D part 4)
+
+- Feature: RL II has "Keep this walk for my robot" (把这个走法存给我的机器人). It writes the learned rhythm to `walks/<robot>.json` in the learner's world (`behaviors/rhythm_walk.py`: `SavedWalk`, validated with pydantic, joint names without the robot prefix; `RhythmWalker`).
+- `move`, the keyboard and the Modes tab drive a gait-less robot with its kept walk, forward only at its own pace; robots with a gait keep it and get the walk as walker or mode `rhythm`. `robots` lists `learned_walk` (or a `walk_hint` that says how to learn one); world loads say it in their notes. The learner's own robot is selectable from RL II's first step, and a gait-less robot is the one offered.
+- Verified in the browser: Codex's tripod trained in RL II (30 rounds in 7.9 s, 1.65 m in 4 s, 12 of 12 shoves), kept, driven with W (the user drove it into a kitchen scene).
+- Verified with real Codex sessions (plugin from GitHub main, scratch `CODEX_HOME`):
+  - Run 1, before the round's fixes: Codex never called `move`, wrote its own gait, got a bare "Error executing tool" from `observe` and `run_script`, then stepped the simulation by hand: about 180 calls, 646k input tokens, 4.4 cm in 3 s.
+  - Run 2, crash messages fixed: no errors, 23 calls, but a hand-written gait again (9.2 cm forward, 9.3 cm sideways) and the `walk_hint` ignored.
+  - Run 3, kept walk: `open_world`, `robots`, `move`: 1.657 m in 4.02 s, upright, 18.4 degrees off heading; 6 tool calls, 321k input tokens (291k cached).
+  - Run 4, fresh tripod after the guidance change: Codex told the user it can learn a walk in RL II, then drove the viewer's own WebSocket from a Node script to train (1.12 m in 4 s), keep and walk it: 0.831 m in 3 s. It worked, but cost 1.29M input tokens spent reading our source.
+- Viewer bugs found in the browser and fixed:
+  - Black screen: a page that loads with no size (hidden pane, collapsed panel, minimized window) made the camera aspect 0/0 = NaN and the camera position NaN forever. Zero sizes are ignored, framing waits for a size, a NaN camera reframes itself.
+  - The lesson panel slid sideways (the four-choice row could not wrap); drawers never scroll sideways now.
+  - Reloading mid-lesson: the whole-scene framing replaced the lesson's camera; the scene message cached the extras (robots, lesson, record) per model version, so a reloaded page got stale ones; the follow camera kept any offset it started with, and a glide lost the replay's jump back to the start line. All fixed, measured frame by frame (the tripod stays at x = 634 px through whole replays).
+  - Plot ticks read -0.0 (one decimal for any spacing) or showed a single line; name tags overlapped and floated at guessed heights (now from the model, decluttered); RL II aimed at the dog's lane for every robot; `/favicon.ico` 404 in every console.
+- Security: the viewer accepted WebSockets from any web page (cross-site WebSocket hijacking): a site visited while it ran could load scenes into the user's world. Browser sockets must now come from a page this server served (Origin = Host), every request must name this machine or an IP (no DNS rebinding); scripts, agents and `--host` on a LAN still work.
+- What did NOT work:
+  - The bare Codex errors from `observe` and `run_script` were never reproduced: the same 13 calls replayed over stdio, with Codex's minimal environment, and with a browser attached all worked. Crashes now reach the agent with their type and message, so the next occurrence will say what it was.
+  - My first lesson-camera fix silently did not land: a `grep ... &&` chain skipped the edit. Check the file after scripted edits.
+  - Measuring the follow camera with timers while the pane was hidden showed a broken follow; frames do not render there. Measure on `requestAnimationFrame`.
+
 ## Next-round seed
 
-Round 25 = phase D part 4: keep what a robot learned. In RL II, a "use this walk for my robot" button saves the learned rhythm (and reflexes) into the learner's world folder; `move` and WASD then drive that robot with it (forward by the rhythm, stop by holding home), so a robot built in chat that no gait code knows can walk on command. Verify with a real Codex session: build a three-legged robot by chat, learn its walk in the viewer, then ask Codex to move it.
+Round 26 = the lesson in a narrow window (phase D part 5). The user's split pane is about 670 px wide, and below 700 px the lesson panel and the plots box cover almost all of the 3D view. Make lessons work there: a collapsible plots box (or one bottom sheet with tabs for the step, the controls and the record), the 3D view always showing the robot being taught, checked at 375, 670, 1024 and 1280 px. Waiting on the user: a `learn_walk(robot)` MCP tool (gated: a new tool; run 4 shows agents reaching the same thing through internals at 1.29M tokens).
 
 ## Frontier
 
 - Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 11 lessons (PID on the PiPER, gaits on the Go2, balance on the G1, any body learning to walk, motion planning on the PiPER), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15, re-ranked after the round 24 critic: keep learned walks for the user's robot first): learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Done in round 25: learned walks kept with the user's robot and driven by `move` and the keyboard.
+- Next frontiers (2026-10-15, after round 25): lessons that work in a narrow window; a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
