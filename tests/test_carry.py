@@ -82,3 +82,18 @@ def test_leaving_a_lesson_brings_the_world_back_as_it_was(pg):
     pg.lessons.exit()
     assert pg.store.load().name == "lab"
     assert np.allclose(pg.behaviors.pose("dog")["position"][:2], walked[:2], atol=0.02)
+
+
+def test_a_go2_mid_stride_is_carried_past_a_crate_put_where_it_started(pg, monkeypatch):
+    """Regression from a real Codex session: a Go2 walking on its learned policy sinks its feet 26 mm into the
+    ground mid-stride; that read as buried, so the edit sent it back to its start, inside the new crate."""
+    from pathlib import Path
+
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(Path(__file__).parent / "fixtures" / "menagerie"))
+    pg.add_robot("go2", library="go2", pos=[0, 0])
+    pg.behaviors.move("go2", 0.4, 0.0, walker="rl")
+    pg.run_fast(lambda: False, 3.0)
+    walked = pg.behaviors.pose("go2")["position"]
+    assert walked[0] > 0.8
+    pg.add_object("crate", shape="box", size=[0.4, 0.4, 0.4], pos=[0.05, 0.04])  # where it started
+    assert np.allclose(pg.behaviors.pose("go2")["position"][:2], walked[:2], atol=0.03)

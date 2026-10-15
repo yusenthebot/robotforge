@@ -83,11 +83,15 @@ def _apply(model: mujoco.MjModel, data: mujoco.MjData, snap: Snapshot, chosen: C
             data.ctrl[a] = snap.controls[name]
 
 
+GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
+
+
 def _deep_overlaps(model: mujoco.MjModel, data: mujoco.MjData) -> set[str]:
-    """Owners with a geom pressed DEEP into something that is not their own."""
+    """Owners with a geom pressed DEEP into something that is not their own. The ground does not count: a
+    walking Go2's feet sink 26 mm into it mid-stride, which flagged it buried and sent it back to its start."""
     found = set()
     for con in data.contact[: data.ncon]:
-        if con.dist > -DEEP:
+        if con.dist > -DEEP or any(int(model.geom_type[g]) in GROUND for g in (con.geom1, con.geom2)):
             continue
         a, b = (owner(model.body(int(model.geom_bodyid[g])).name) for g in (con.geom1, con.geom2))
         if a != b:
