@@ -43,6 +43,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Slow tests (lessons that train for a minute or more) stay out of the default run; `-m slow` runs them.
+addopts = "-m 'not slow'"
+markers = ["slow: plays something that takes a minute or more; run with -m slow"]
 
 [tool.ruff]
 line-length = 120
