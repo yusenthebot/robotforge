@@ -203,6 +203,12 @@ class ScriptRunner:
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
 
+    def _op_run_policy(self, req) -> dict:
+        from robotforge.control.rl.runtime import attach_policy
+
+        world_dir = self.pg.store.dir if self.pg.store is not None else None
+        return attach_policy(self.pg.session, req["robot"], req["name"], world_dir, req.get("task_params"))
+
     async def _advance(self, done: Callable[[], bool], max_seconds: float) -> None:
         """Advance physics, paced to real time when watched, within the script's time budget."""
         session = self.pg.session
