@@ -739,7 +739,6 @@ function pickBody(e) {
 canvas.addEventListener(
   "pointerdown",
   (e) => {
-    dismissCoach();
     if (e.button !== 0) return;
     const hit = pickBody(e);
     if (!hit) return;
@@ -1346,6 +1345,8 @@ function dismissCoach() {
   setTimeout(() => (el.hidden = true), 700);
 }
 showCoach();
+// Any first touch counts, a button as much as the canvas: opening Learn left the hint floating over the panel.
+document.addEventListener("pointerdown", dismissCoach, { capture: true });
 
 const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
 $("btn-play").addEventListener("click", togglePlay);
