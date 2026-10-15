@@ -102,7 +102,10 @@ def test_viewer_requests_change_the_world_and_get_answers(playground):
     scene = hub.scene_message()
     assert scene["world"] == "modes" and scene["floor"] == "checker"
     assert scene["modes"]["arm"][0] == "manual" and scene["catalog"]["terrains"][0] == "flat"
-    with TestClient(create_app(hub)) as client, client.websocket_connect("/ws") as ws:
+    with (
+        TestClient(create_app(hub), base_url="http://127.0.0.1:8737") as client,
+        client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws,
+    ):
         ws.send_text(json.dumps({"type": "world", "action": "floor", "style": "grass", "id": 1}))
         assert _reply(ws, 1)["ok"] is True
         ws.send_text(json.dumps({"type": "world", "action": "floor", "style": "lava", "id": 2}))

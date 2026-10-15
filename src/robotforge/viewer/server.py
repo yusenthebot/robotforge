@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import numpy as np
 from starlette.applications import Starlette
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.middleware import Middleware
+from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -35,6 +38,49 @@ LESSON_HZ = 20.0
 
 # Revalidate on every load (cheap 304s) so an upgraded robotforge never shows a stale UI.
 NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+def safe_host(host_header: str) -> bool:
+    """The Host a request was sent to is this machine by name or an IP address (the viewer on a LAN). A domain
+    name means DNS rebinding: a web page whose name was pointed at 127.0.0.1 to reach the viewer."""
+    host = urlsplit(f"//{host_header}").hostname or ""
+    if host == "localhost":
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def same_origin(origin: str | None, host_header: str) -> bool:
+    """A browser says which page opened a WebSocket; only the viewer's own pages may. Without an Origin it is
+    not a browser (a script or an agent on this machine, which can reach the port anyway)."""
+    return origin is None or urlsplit(origin).netloc == host_header
+
+
+class LocalOnly:
+    """Browsers let any web page open a WebSocket to 127.0.0.1, so without this a site visited while the viewer
+    runs could load scenes into the user's world or drive their robots."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        if scope["type"] in ("http", "websocket"):
+            headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+            host = headers.get("host", "")
+            allowed = safe_host(host) and (scope["type"] == "http" or same_origin(headers.get("origin"), host))
+            if not allowed:
+                log.warning(
+                    "refused a %s request for host %r from origin %r", scope["type"], host, headers.get("origin")
+                )
+                if scope["type"] == "websocket":
+                    await send({"type": "websocket.close", "code": 1008})
+                else:
+                    await PlainTextResponse("forbidden", status_code=403)(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 class RevalidatingStaticFiles(StaticFiles):
@@ -262,5 +308,6 @@ def create_app(hub: ViewerHub) -> Starlette:
             WebSocketRoute("/ws", ws_endpoint),
             Mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static"),
         ],
+        middleware=[Middleware(LocalOnly)],
         lifespan=lifespan,
     )

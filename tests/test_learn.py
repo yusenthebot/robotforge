@@ -188,7 +188,10 @@ def test_the_viewer_starts_a_lesson_and_receives_its_updates(pg):
     hub = ViewerHub(pg.session)
     pg.attach_viewer(hub)
     assert hub.scene_message()["lessons"][0]["id"] == "pd_control"
-    with TestClient(create_app(hub)) as client, client.websocket_connect("/ws") as ws:
+    with (
+        TestClient(create_app(hub), base_url="http://127.0.0.1:8737") as client,
+        client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws,
+    ):
         ws.send_text(json.dumps({"type": "lesson_open", "action": "start", "lesson": "pd_control", "id": 7}))
         got_reply = got_update = False
         for _ in range(600):

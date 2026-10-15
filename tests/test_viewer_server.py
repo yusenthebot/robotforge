@@ -13,7 +13,7 @@ DEMO = Path(__file__).parents[1] / "src" / "robotforge" / "assets" / "demo.xml"
 def _client():
     session = SimSession.from_path(DEMO)
     hub = ViewerHub(session)
-    return session, TestClient(create_app(hub))
+    return session, TestClient(create_app(hub), base_url="http://127.0.0.1:8737")
 
 
 def _next_text(ws, kind):
@@ -47,7 +47,7 @@ def test_index_and_static_assets_are_served():
 
 def test_websocket_streams_scene_then_frames():
     session, client = _client()
-    with client, client.websocket_connect("/ws") as ws:
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
         desc = _next_text(ws, "scene")
         assert desc["nbody"] == session.model.nbody
         assert [a["name"] for a in desc["actuators"]] == ["yaw", "shoulder", "elbow"]
@@ -57,7 +57,7 @@ def test_websocket_streams_scene_then_frames():
 
 def test_control_messages_reach_the_simulation():
     session, client = _client()
-    with client, client.websocket_connect("/ws") as ws:
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
         _next_text(ws, "scene")
         ws.send_text(json.dumps({"type": "ctrl", "id": 1, "value": 0.5}))
         ws.send_text(json.dumps({"type": "cmd", "cmd": "pause"}))
@@ -72,7 +72,7 @@ def test_control_messages_reach_the_simulation():
 
 def test_bad_messages_return_errors_without_dropping_the_socket():
     _, client = _client()
-    with client, client.websocket_connect("/ws") as ws:
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
         _next_text(ws, "scene")
         ws.send_text(json.dumps({"type": "nope"}))
         assert "unknown message type" in _next_text(ws, "error")["message"]
@@ -82,7 +82,7 @@ def test_bad_messages_return_errors_without_dropping_the_socket():
 
 def test_model_reload_pushes_a_new_scene():
     session, client = _client()
-    with client, client.websocket_connect("/ws") as ws:
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
         first = _next_text(ws, "scene")
         session.load_path(DEMO)
         second = _next_text(ws, "scene")
@@ -126,3 +126,29 @@ def test_a_reconnecting_viewer_gets_the_extras_as_they_are_now():
     state["runs"] = 2  # a training finished: no new model version
     assert hub.scene_message()["lesson"]["runs"] == 2
     assert hub.scene_message()["version"] == session.version
+
+
+def test_other_web_pages_cannot_drive_the_viewer():
+    """Browsers let any site open a WebSocket to 127.0.0.1: without a check, a page visited while the viewer
+    runs could load scenes into the user's world. A name pointed at 127.0.0.1 (DNS rebinding) is refused too."""
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    _, client = _client()
+    with client:
+        host = {"host": "127.0.0.1:8737"}
+        with client.websocket_connect("/ws", headers={**host, "origin": "http://127.0.0.1:8737"}) as ws:
+            assert _next_text(ws, "scene")  # the viewer's own page
+        with client.websocket_connect("/ws", headers=host) as ws:
+            assert _next_text(ws, "scene")  # no Origin: a script or agent on this machine
+        with (
+            pytest.raises(WebSocketDisconnect),
+            client.websocket_connect("/ws", headers={**host, "origin": "https://evil.example"}),
+        ):
+            pass
+        rebound = {"host": "evil.example:8737", "origin": "http://evil.example:8737"}
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws", headers=rebound):
+            pass
+        assert client.get("/scene.json", headers={"host": "evil.example:8737"}).status_code == 403
+        assert client.get("/scene.json", headers={"host": "localhost:8737"}).status_code == 200
+        assert client.get("/scene.json", headers={"host": "192.168.1.20:8737"}).status_code == 200  # --host on a LAN
