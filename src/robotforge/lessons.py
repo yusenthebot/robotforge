@@ -393,10 +393,9 @@ def register(server: MCPServer) -> None:
     @server.tool()
     def lessons(number: int | None = None) -> str:
         """The beginner learning path: 9 short lessons (joints, driving, walking gaits, inverse kinematics and
-        pick-and-place, sensors and cameras, PD vs LQR vs MPC, scripts, training a policy, importing your own
-        URDF). Without a number, lists them; with a number, returns that lesson's teaching plan (ideas, tool
-        steps, checks). When the user asks for a lesson ("teach me lesson 3", "第三课"), call this and follow
-        the plan."""
+        pick-and-place, sensors and cameras, PD vs LQR vs MPC, scripts, training a policy, importing a URDF).
+        Without a number it lists them; with a number it returns that lesson's teaching plan (ideas, tool steps,
+        checks). When the user asks for a lesson ("teach me lesson 3", "第三课"), call this and follow the plan."""
         if number is None:
             return _json(
                 {

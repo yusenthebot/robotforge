@@ -35,13 +35,13 @@ def register(server: MCPServer, playground: Playground) -> None:
         starter: bool = True,
         options: dict[str, float] | None = None,
     ) -> str:
-        """Fill the open world with a ready-made scene, replacing its floor, terrain and objects (undo restores
-        them). With no world open, opens one named after the scene. Robots in the world are kept and moved to
-        the scene's places (arms onto the desk or counter); with keep_robots=false they are removed. A world
-        left without robots gets the scene's starter robot unless starter=false. seed changes the layout (maze
-        paths, tree spots, crates); options size some scenes, e.g. load_scene("maze", seed=3,
-        options={"rows": 7, "cols": 7}). Everything is ordinary world.yaml content afterwards: move, remove or
-        add objects freely. The result's "scene" field says where robots went and what to try."""
+        """Fill the open world with a ready-made scene, replacing its floor, terrain and objects (undo restores them);
+        with no world open, opens one named after the scene. Robots are kept and moved to the scene's places (arms
+        onto the desk or counter); keep_robots=false removes them. A world left without robots gets the scene's
+        starter robot unless starter=false. seed changes the layout (maze paths, tree spots, crates); options size
+        some scenes, e.g. load_scene("maze", seed=3, options={"rows": 7, "cols": 7}). Afterwards it is ordinary
+        world.yaml content: move, remove or add objects freely. The result's "scene" field says where robots went
+        and what to try."""
         with _tool_errors():
             return _json(playground.load_scene(preset, seed, keep_robots, starter, options))
 
@@ -49,10 +49,9 @@ def register(server: MCPServer, playground: Playground) -> None:
     def set_terrain(
         type: Literal["flat", *TYPES], style: StyleName | None = None, params: dict[str, Any] | None = None
     ) -> str:
-        """Make the ground one kind of terrain around the origin, replacing all terrain patches; "flat" removes
-        them all. Robots and objects are lifted onto the new ground. Examples: set_terrain("hills");
-        set_terrain("rough", params={"size": [6, 6], "height": 0.04}); set_terrain("flat").
-        list_scenes shows every type's parameters; for several patches use add_terrain."""
+        """Make the ground one kind of terrain around the origin, replacing all terrain patches; "flat" removes them.
+        Robots and objects are lifted onto it. Examples: set_terrain("hills"); set_terrain("rough", params={"size":
+        [6, 6], "height": 0.04}). list_scenes shows each type's parameters; for several patches use add_terrain."""
         with _tool_errors():
             return _json(playground.set_terrain(type, style, params))
 

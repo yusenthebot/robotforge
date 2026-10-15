@@ -40,10 +40,10 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
 
     @server.tool()
     def list_algorithms() -> str:
-        """List the control tasks (reach, balance, stand, walk, drive_to), which robots and algorithms fit
-        each, their parameters, and a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc,
-        mppi, hold, gait, none), plus reinforcement learning (ppo, sac: train_policy first) and the policies
-        trained so far. Use it to explain the options before running or comparing them."""
+        """List the control tasks (reach, balance, stand, walk, drive_to) with the robots, algorithms and parameters
+        that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc, mppi, hold, gait,
+        none), reinforcement learning (ppo, sac: train_policy first) and the trained policies. Use it to explain the
+        options."""
         from robotforge.control.rl.mcp_tools import ALGOS
         from robotforge.control.rl.store import list_policies
 
@@ -65,14 +65,13 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
     ) -> str:
         """Drive a robot with a control algorithm on a task and report how well it did.
 
-        Examples: robot="arm", task="reach", method="mpc", task_params={"target": [0.3, 0.1, 0.2]};
-        robot="pole", task="balance", method="lqr", push_at=2 (shoves it at 2 s to show recovery);
-        robot="dog", task="stand", method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}.
-        list_algorithms says which methods fit which task; method="policy:<name>" runs a policy trained with
-        train_policy. Plays out in real time when the viewer is open.
-        The controller stays attached afterwards (e.g. keeps the pole balanced; the result says
-        keeps_running) until you call stop(robot).
-        Returns reward, success, effort (joules), the task's own numbers and, for MPC, planning speed."""
+        Examples: robot="arm", task="reach", method="mpc", task_params={"target": [0.3, 0.1, 0.2]}; robot="pole",
+        task="balance", method="lqr", push_at=2 (shoves it at 2 s to show recovery); robot="dog", task="stand",
+        method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}. list_algorithms says which
+        methods fit which task; method="policy:<name>" runs a policy from train_policy. Plays in real time when the
+        viewer is open. The controller stays attached afterwards (e.g. keeps the pole balanced; keeps_running says
+        so) until stop(robot). Returns reward, success, effort (joules), the task's own numbers and, for MPC,
+        planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
             robot, task, method = _robot(playground, robot), _task(task), _method(method)
@@ -143,15 +142,14 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         method_params: dict[str, dict[str, Any]] | None = None,
         push_at: float | None = None,
     ) -> str:
-        """Run several algorithms on the same robot and task, each from the current state of the world, and
-        return a comparison table: reward (higher is better), success, the task's key number, effort in
-        joules and computer time per simulated second. Runs off-screen (the live world is not changed).
+        """Run several algorithms on the same robot and task from the world's current state and return a table: reward
+        (higher is better), success, the task's key number, effort in joules and computer time per simulated second.
+        Runs off-screen; the live world is unchanged.
 
-        methods defaults to every algorithm that fits the task (see list_algorithms) and may include trained
-        policies, e.g. ["lqr", "mpc", "policy:pole_balance"]; method_params maps a method to its settings,
-        e.g. {"mpc": {"samples": 64}}. push_at adds the same shove to every run
-        to compare how they recover. Explain the table to the user: what each method does and why it won
-        or lost."""
+        methods defaults to every algorithm that fits the task (list_algorithms) and may include trained policies,
+        e.g. ["lqr", "mpc", "policy:pole_balance"]; method_params maps a method to its settings, e.g. {"mpc":
+        {"samples": 64}}. push_at adds the same shove to every run to compare recovery. Explain the table: what each
+        method does and why it won or lost."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_COMPARE_SECONDS)
             robot, task = _robot(playground, robot), _task(task)

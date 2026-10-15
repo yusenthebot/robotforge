@@ -151,9 +151,10 @@ def validation_message(
         elif kind in BOUNDS:
             bound = BOUNDS[kind]
             hint = unit_hint(value, ctx[bound]) if bound in ("le", "lt") else ""
-            parts.append(f"{at} is {value!r} but must be {BOUND_TEXT[bound]} {ctx[bound]}{hint}")
+            parts.append(f"{at} must be {BOUND_TEXT[bound]} {ctx[bound]}, got {value!r}{hint}")
         elif kind.endswith(("_parsing", "_type")) and kind.split("_")[0] in ("float", "int", "decimal"):
-            parts.append(f"{at} must be a plain number (no units), got {short(value)}")
+            what = "a whole number" if kind.startswith("int") else "a plain number (no units)"
+            parts.append(f"{at} must be {what}, got {short(value)}")
         elif kind == "int_from_float":
             parts.append(f"{at} must be a whole number, got {short(value)}")
         elif kind == "bool_parsing":
@@ -171,6 +172,14 @@ def validation_message(
     return "; ".join(parts)
 
 
+def unwrap(text: str) -> str:
+    """Hard-wrapped prose as one line per paragraph: the model pays for every line break. A paragraph with an
+    indented line (code, a table) keeps its lines."""
+    paragraphs = text.strip("\n").split("\n\n")
+    kept = (p if any(line[:1] in (" ", "\t") for line in p.split("\n")) else " ".join(p.split()) for p in paragraphs)
+    return "\n\n".join(kept)
+
+
 def too_far(point: Sequence[float], distance: float, reach: float) -> str:
     """ "it is 25.0 m from the arm's base, which reaches about 0.45 m", and what the point would be in meters if
     its numbers were centimetres (the usual mistake)."""
@@ -180,10 +189,22 @@ def too_far(point: Sequence[float], distance: float, reach: float) -> str:
     return text
 
 
+def _lean(value: Any) -> Any:
+    """Whole floats as ints (0.0 is 0, 1.0 is 1): the same JSON number, two characters shorter."""
+    if isinstance(value, float):
+        return int(value) if value.is_integer() and abs(value) < 1e15 else value
+    if isinstance(value, dict):
+        return {k: _lean(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_lean(v) for v in value]
+    return value
+
+
 def dumps(data: object, default: Callable[[Any], Any] | None = None) -> str:
     """JSON for an agent: every top-level key on its own line, everything inside it compact.
     Indenting each list item and number (the default) roughly doubled the size of what the model reads."""
     flat = {"separators": (",", ":"), "ensure_ascii": False, "default": default}
+    data = _lean(data)
     if not isinstance(data, dict) or not data:
         return json.dumps(data, **flat)
     lines = [f"{json.dumps(str(key), ensure_ascii=False)}:{json.dumps(value, **flat)}" for key, value in data.items()]

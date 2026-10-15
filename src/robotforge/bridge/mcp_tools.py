@@ -22,9 +22,9 @@ from robotforge.bridge.spec import SpecError
 def register(server: MCPServer) -> None:
     @server.tool()
     def list_walkers() -> str:
-        """List the learned walking policies robotforge can play (neural networks trained with reinforcement
-        learning, e.g. in UniLab), which library robot each fits and the speeds it learned. Use one with
-        move(robot, speed, turn, walker="rl"); walker="gait" goes back to the built-in trot."""
+        """List the learned walking policies (neural networks trained with reinforcement learning, e.g. in UniLab),
+        which library robot each fits and the speeds it learned. Use one with move(robot, speed, turn, walker="rl");
+        walker="gait" is the built-in trot."""
         with _tool_errors():
             found = [p.describe() for p in policies.all_policies().values()]
             out: dict[str, Any] = {"walkers": found, "user_folder": str(policies.user_dir())}
@@ -32,19 +32,19 @@ def register(server: MCPServer) -> None:
 
     @server.tool()
     def unilab_check() -> str:
-        """Check whether the UniLab training backend is set up ($ROBOTFORGE_UNILAB_DIR, its own Python
-        environment) and which tasks robotforge can train with it. UniLab is an external reinforcement
-        learning framework: it simulates about a thousand robots at once to learn a walking policy in minutes."""
+        """Check whether the UniLab training backend is set up ($ROBOTFORGE_UNILAB_DIR, its own Python environment) and
+        which tasks robotforge can train with it. UniLab is an external RL framework that simulates about a thousand
+        robots at once to learn a walking policy in minutes."""
         with _tool_errors():
             return _json(unilab.check())
 
     @server.tool()
     def unilab_train(task: str = "go2_joystick_flat", iterations: int = 1000, name: str = "go2_walk_trained") -> str:
-        """Start training a walking policy with UniLab in the background and return at once with a job id.
-        Each iteration simulates 1024 robots for about half a second; 1000 iterations take about 13 minutes on
-        a recent Mac and learn a good walk with turning, 150 learn to walk forward, 20 prove the pipeline.
-        When it finishes the policy is exported to ONNX and installed under `name`; follow it with unilab_job,
-        then try it with move(robot, speed, turn, walker=name)."""
+        """Start training a walking policy with UniLab in the background; returns a job id at once. Each iteration
+        simulates 1024 robots for about half a second: 1000 iterations take about 13 minutes on a recent Mac and
+        learn a good walk with turning, 150 learn to walk forward, 20 prove the pipeline. The finished policy is
+        exported to ONNX and installed as `name`; follow it with unilab_job, then move(robot, speed, turn,
+        walker=name)."""
         with _tool_errors():
             started = unilab.start_training(task, iterations, name)
             started["next"] = f"unilab_job(job={started['job']!r}) shows progress"

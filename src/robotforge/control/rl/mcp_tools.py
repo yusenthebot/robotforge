@@ -64,18 +64,17 @@ def register(server: MCPServer, playground: Playground) -> None:
         shoves: float | None = None,
         replace: bool = False,
     ) -> str:
-        """Teach a robot a task by reinforcement learning (trial and error with a neural network), in the
-        background. Returns at once with the policy name and a time estimate; the viewer keeps running.
+        """Teach a robot a task by reinforcement learning (trial and error with a neural network) in the background;
+        returns at once with the policy name and a time estimate.
 
         Examples: task="balance", robot="pole" (PPO, about a minute); task="walk", robot="dog",
-        task_params={"speed": 0.4}, minutes=5 (PPO learning corrections on top of the trot gait);
-        task="reach", robot="arm", algo="sac". Defaults per task need no tuning. Give minutes (a time budget)
-        or timesteps (simulation steps), or neither for the task's default. shoves sets how hard the robot is
-        pushed now and then while it learns (0 = never; harder shoves teach recovery but make it cautious).
-        The robot is rebuilt from this world's description and trained alone on the same floor.
-        Needs the optional rl extra.
-        Then: training_status(name) to follow it, and run_controller(method="policy:<name>") or
-        compare_controllers(methods=["lqr", "mpc", "policy:<name>"]) to use it."""
+        task_params={"speed": 0.4}, minutes=5 (PPO learning corrections on top of the trot gait); task="reach",
+        robot="arm", algo="sac". Defaults need no tuning. Give minutes (a time budget) or timesteps, or neither for
+        the default. shoves sets how hard the robot is pushed now and then while it learns (0 = never; harder shoves
+        teach recovery but make it cautious). The robot is rebuilt from this world's description and trained alone
+        on the same floor. Needs the optional rl extra. Then training_status(name) to follow it, and
+        run_controller(method="policy:<name>") or compare_controllers(methods=["lqr", "mpc", "policy:<name>"]) to
+        use it."""
         with _tool_errors():
             if minutes is not None and not 0 < minutes <= MAX_MINUTES:
                 raise TaskError(f"minutes must be in (0, {MAX_MINUTES:.0f}]")
@@ -125,9 +124,9 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     async def training_status(ctx: Context, name: str, wait_seconds: float = 0.0) -> str:
-        """How a training run is going: state (starting, running, testing, done, stopped, failed), progress,
-        average episode reward (higher is better), success rate, time left, and the final test scores when done.
-        With wait_seconds, waits until it finishes or that much time passes, sending progress updates."""
+        """How a training run is going: state (starting, running, testing, done, stopped, failed), progress, average
+        episode reward (higher is better), success rate, time left, and the final test scores when done.
+        wait_seconds waits until it finishes or that long passes, sending progress updates."""
         with _tool_errors():
             if not 0 <= wait_seconds <= MAX_WAIT_SECONDS:
                 raise TaskError(f"wait_seconds must be in [0, {MAX_WAIT_SECONDS:.0f}]")
@@ -143,8 +142,8 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     async def stop_training(name: str) -> str:
-        """Stop a training run early. It keeps the best policy found so far (usable right away) and runs its
-        final test; stopping in the first seconds, before anything was learned, leaves nothing to keep."""
+        """Stop a training run early. It keeps the best policy so far (usable at once) and runs its final test;
+        stopping in the first seconds leaves nothing to keep."""
         with _tool_errors():
             folder = store.find_policy(name, world_dir())
             status = await asyncio.to_thread(JOBS.stop, folder)
@@ -152,8 +151,8 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     def list_policies() -> str:
-        """List trained policies (this world's first, then shared ones): task, robot, algorithm, training state,
-        final success rate, and whether it can run. Run one with run_controller(method="policy:<name>")."""
+        """List trained policies (this world's, then shared): task, robot, algorithm, state, final success rate and
+        whether it can run. Run one with run_controller(method="policy:<name>")."""
         with _tool_errors():
             out = []
             for item in store.list_policies(world_dir()):
