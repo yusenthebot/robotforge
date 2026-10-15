@@ -217,7 +217,43 @@ export function lessonUpdate(msg) {
   } else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
   $("lesson-readout").textContent = readout(msg.live);
+  renderFormula(msg.live?.formula ?? null);
   renderTable(msg.live?.table ?? null);
+}
+
+// The controller's sum with live numbers, one row per term; a row appears once its step shows it.
+function renderFormula(rows) {
+  const box = $("lesson-formula");
+  const shown = new Set(state?.shown ?? []);
+  const visible = (rows ?? []).filter((r) => shown.has(r.show));
+  box.hidden = visible.length === 0;
+  if (box.hidden) return;
+  const text = (x) => (typeof x === "string" ? x : pick(x));
+  const list = $("lesson-formula-rows");
+  if (list.childElementCount !== visible.length) {
+    list.replaceChildren(
+      ...visible.map(() => {
+        const row = document.createElement("div");
+        row.className = "formula-row";
+        for (const part of ["label", "expr", "value", "note"]) {
+          const cell = document.createElement("span");
+          cell.className = `formula-${part}`;
+          row.append(cell);
+        }
+        return row;
+      })
+    );
+  }
+  visible.forEach((r, k) => {
+    const row = list.children[k];
+    row.style.setProperty("--term", `var(${COLORS[r.color] ?? "--ink"})`);
+    const [label, expr, value, note] = row.children;
+    label.textContent = text(r.label);
+    expr.textContent = text(r.expr);
+    value.textContent = r.value;
+    note.textContent = r.note ? text(r.note) : "";
+    note.hidden = !r.note;
+  });
 }
 
 function readout(live) {
@@ -267,7 +303,8 @@ function renderStep() {
   const next = $("lesson-next");
   next.hidden = !(passed || step.manual);
   next.textContent = last ? t(lesson.kind === "challenge" ? "finish_challenge" : "finish_lesson") : t("next_step");
-  $("lesson-waiting").hidden = passed || step.manual || !!step.quiz;
+  const guessed = state?.quiz?.chosen !== undefined;
+  $("lesson-waiting").hidden = passed || step.manual || (!!step.quiz && !(step.quiz.predict && guessed));
 }
 
 function paragraph(line) {
@@ -280,7 +317,11 @@ function renderQuiz(step) {
   const box = $("lesson-quiz");
   box.hidden = !step.quiz;
   if (!step.quiz) return;
-  const chosen = state?.quiz?.chosen;
+  const quiz = state?.quiz;
+  const chosen = quiz?.chosen;
+  const pending = !!quiz?.pending; // a guess, waiting for the experiment
+  const locked = step.quiz.predict && chosen !== undefined; // a guess is made once
+  box.dataset.kind = step.quiz.predict ? "predict" : "quiz";
   $("lesson-quiz-question").textContent = pick(step.quiz.question);
   $("lesson-quiz-options").replaceChildren(
     ...step.quiz.options.map((option, k) => {
@@ -288,14 +329,22 @@ function renderQuiz(step) {
       b.type = "button";
       b.className = "quiz-option";
       b.textContent = pick(option);
-      if (chosen === k) b.dataset.verdict = state.quiz.right ? "right" : "wrong";
-      b.addEventListener("click", () => api.send({ type: "lesson", action: "answer", choice: k }));
+      if (chosen === k) b.dataset.verdict = pending ? "guess" : quiz.right ? "right" : "wrong";
+      else if (!pending && quiz?.answer === k) b.dataset.verdict = "right"; // after a wrong guess, show the answer
+      if (locked) b.disabled = true;
+      else b.addEventListener("click", () => api.send({ type: "lesson", action: "answer", choice: k }));
       return b;
     })
   );
   const feedback = $("lesson-quiz-feedback");
   feedback.hidden = chosen === undefined;
-  if (chosen !== undefined) feedback.textContent = state.quiz.right ? pick(state.quiz.explain) : t("quiz_try_again");
+  if (chosen === undefined) return;
+  if (pending) feedback.textContent = t("predict_pending");
+  else if (step.quiz.predict) {
+    const verdict = document.createElement("strong");
+    verdict.textContent = t(quiz.right ? "predict_right" : "predict_wrong");
+    feedback.replaceChildren(verdict, pick(quiz.explain));
+  } else feedback.textContent = quiz.right ? pick(quiz.explain) : t("quiz_try_again");
 }
 
 function renderResult() {
@@ -318,10 +367,19 @@ function renderResult() {
     return;
   }
   const line = document.createElement("span");
-  line.textContent = test.settle_s === null
-    ? t("test_not_settled", { overshoot: test.overshoot_pct })
-    : t("test_result", { settle: test.settle_s, overshoot: test.overshoot_pct });
+  if (test.settle_s !== null) {
+    const off = test.end_err >= 0.5 ? t("test_result_off", { err: test.end_err }) : ""; // inside the band, but not on target
+    line.textContent = t("test_result", { settle: test.settle_s, overshoot: test.overshoot_pct }) + off;
+  }
+  else if (test.end_err !== null && test.end_err !== undefined) line.textContent = t("test_stuck", { err: test.end_err });
+  else line.textContent = t("test_not_settled", { overshoot: test.overshoot_pct });
   box.append(line, starSpan(test.stars));
+  if (test.note) {
+    const note = document.createElement("p");
+    note.className = "lesson-result-note";
+    note.textContent = pick(test.note);
+    box.append(note);
+  }
 }
 
 // ---------------------------------------------------------------- experiment record
@@ -340,6 +398,7 @@ const bench = {
     this.box = null;
     this.spec = spec;
     this.state = initial ?? null;
+    this.zoom = false; // the run chart shows the whole climb, or only the last degrees near the target
     if (!spec) return;
     this.box = document.createElement("section");
     this.box.className = "bench";
@@ -372,6 +431,18 @@ const bench = {
     title.className = "plot-title";
     title.textContent = pick(spec.title);
     head.append(title);
+    if (runs.length && spec.zoom && spec.reference !== null) {
+      const zoom = document.createElement("button");
+      zoom.type = "button";
+      zoom.className = "link-button";
+      zoom.textContent = t(this.zoom ? "bench_zoom_out" : "bench_zoom_in", { span: `${spec.zoom}${spec.y_unit}` });
+      zoom.setAttribute("aria-pressed", String(this.zoom));
+      zoom.addEventListener("click", () => {
+        this.zoom = !this.zoom;
+        this.render();
+      });
+      head.append(zoom);
+    }
     if (runs.length || this.state?.sweep) {
       const clear = document.createElement("button");
       clear.type = "button";
@@ -507,7 +578,9 @@ const bench = {
     for (const canvas of this.box.querySelectorAll("canvas")) {
       if (canvas.dataset.kind === "runs") {
         const lines = runs.map((r) => ({ xs: r.x, ys: r.y, color: runColor(r.id), width: r.id === newest ? 2.2 : 1.3 }));
-        drawXY(canvas, lines, { reference: this.spec.reference, height: 120, xUnit: this.spec.x_unit });
+        const ref = this.spec.reference;
+        const yWindow = this.zoom && ref !== null ? [ref - this.spec.zoom, ref + this.spec.zoom] : null;
+        drawXY(canvas, lines, { reference: ref, height: 120, xUnit: this.spec.x_unit, yWindow });
       } else {
         const sweep = this.state.sweep;
         const key = canvas.dataset.metric;
@@ -521,7 +594,7 @@ const bench = {
 window.addEventListener("resize", () => bench.draw());
 
 // A static chart: lines of (x, y) with gaps where y is null, optional dots and a dashed reference level.
-function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "" } = {}) {
+function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "", yWindow = null } = {}) {
   const css = getComputedStyle(document.documentElement);
   const token = (name) => css.getPropertyValue(name).trim();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -545,7 +618,7 @@ function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "" } = 
   if (x1 - x0 < 1e-9) [x0, x1] = [x0 - 1, x1 + 1];
   if (y1 - y0 < 1e-9) [y0, y1] = [y0 - 1, y1 + 1];
   const pad = (y1 - y0) * 0.1;
-  [y0, y1] = [y0 - pad, y1 + pad];
+  [y0, y1] = yWindow ?? [y0 - pad, y1 + pad]; // a fixed window clips whatever lies outside it
   const X = (v) => 36 + ((v - x0) / (x1 - x0)) * (w - 46);
   const Y = (v) => 6 + (1 - (v - y0) / (y1 - y0)) * (height - 22);
   g.font = `10px ${token("--mono") || "monospace"}`;
@@ -573,6 +646,10 @@ function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "" } = 
     g.stroke();
     g.setLineDash([]);
   }
+  g.save();
+  g.beginPath();
+  g.rect(36, 0, w - 44, height - 16);
+  g.clip();
   for (const line of lines) {
     g.strokeStyle = token(line.color);
     g.fillStyle = token(line.color);
@@ -606,6 +683,7 @@ function drawXY(canvas, lines, { reference = null, height = 100, xUnit = "" } = 
       });
     }
   }
+  g.restore();
 }
 
 // ---------------------------------------------------------------- face-off table
@@ -975,6 +1053,8 @@ function jointRig(rig) {
   const pivot = new THREE.Vector3().fromArray(rig.pivot);
   const zero = new THREE.Vector3().fromArray(rig.zero).normalize();
   const swing = new THREE.Vector3().fromArray(rig.swing).normalize();
+  // The arm's direction in its own body frame; the simple rig's body frame is the world's at 0 degrees.
+  const local = rig.local ? new THREE.Vector3().fromArray(rig.local).normalize() : zero.clone();
   const L = rig.length;
   const point = (deg, radius) => {
     const a = THREE.MathUtils.degToRad(deg);
@@ -987,8 +1067,9 @@ function jointRig(rig) {
   const scale = new THREE.Group();
   {
     const r = L * 1.22;
+    const [lo, hi] = rig.range ?? [-90, 180]; // the part of the dial worth drawing
     const pts = [];
-    for (let deg = -90; deg <= 180; deg += 15) {
+    for (let deg = Math.ceil(lo / 15) * 15; deg <= hi; deg += 15) {
       const long = deg % 45 === 0;
       pts.push(point(deg, r), point(deg, r - (long ? 0.04 : 0.02)));
       if (long) {
@@ -998,7 +1079,7 @@ function jointRig(rig) {
       }
     }
     const arc = [];
-    for (let deg = -90; deg <= 180; deg += 3) arc.push(point(deg, r));
+    for (let deg = lo; deg <= hi; deg += 3) arc.push(point(deg, r));
     scale.add(
       new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), lineMat(ink, 0.55)),
       new THREE.Line(new THREE.BufferGeometry().setFromPoints(arc), lineMat(ink, 0.35))
@@ -1023,7 +1104,7 @@ function jointRig(rig) {
   const angleNow = () => {
     const node = api.bodyNode(rig.body);
     if (!node) return 0;
-    const dir = zero.clone().applyQuaternion(node.quaternion);
+    const dir = local.clone().applyQuaternion(node.quaternion);
     return THREE.MathUtils.radToDeg(Math.atan2(dir.dot(swing), dir.dot(zero)));
   };
   return {

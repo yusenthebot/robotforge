@@ -923,10 +923,36 @@ input[type="range"]::-moz-range-thumb {
 .quiz-option:hover { background: var(--hover); }
 .quiz-option[data-verdict="right"] { border-color: var(--plot-green); box-shadow: inset 0 0 0 1px var(--plot-green); }
 .quiz-option[data-verdict="wrong"] { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+.quiz-option[data-verdict="guess"] { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); background: var(--amber-soft); }
+.quiz-option:disabled { cursor: default; color: var(--ink); }
+.quiz-option:disabled:not([data-verdict]) { opacity: 0.55; }
+.quiz-option:disabled:hover { background: transparent; }
+.quiz-option[data-verdict="guess"]:disabled:hover { background: var(--amber-soft); }
+
+.lesson-formula { padding: 0 14px 10px; }
+.lesson-formula .section-title { margin-bottom: 6px; }
+.formula-rows {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 11.5px;
+}
+.formula-row { display: contents; }
+.formula-label { display: flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 600; white-space: nowrap; }
+.formula-label::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--term); }
+.formula-expr { color: var(--ink-2); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+.formula-value { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.formula-note { grid-column: 1 / -1; margin: -2px 0 2px 9px; color: var(--bad); font-size: 11px; }
+.formula-note[hidden] { display: none; }
 .quiz-feedback { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+.quiz-feedback strong { margin-right: 4px; color: var(--ink); }
 
 .lesson-result {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   margin: 6px 0;
@@ -936,6 +962,8 @@ input[type="range"]::-moz-range-thumb {
   font-family: var(--mono);
   font-size: 12px;
 }
+
+.lesson-result-note { flex-basis: 100%; margin: 0; color: var(--bad); font-size: 11.5px; }
 
 .lesson-waiting {
   display: flex;

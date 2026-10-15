@@ -9,6 +9,7 @@ from robotforge.learn.engine import Lesson, LessonError, LessonRunner
 from robotforge.learn.ik import IKLesson
 from robotforge.learn.ik_arm import IKArmLesson
 from robotforge.learn.pd import PDLesson
+from robotforge.learn.pd_piper import PiperPIDLesson
 from robotforge.learn.rl import RLLesson
 from robotforge.learn.sensors import SensorsLesson
 from robotforge.learn.twins import GaitTwins, LQRTwins, MPCTwins, PIDTwins
@@ -17,6 +18,7 @@ LESSONS: dict[str, type[Lesson]] = {
     cls.id: cls
     for cls in (
         PDLesson,
+        PiperPIDLesson,
         IKLesson,
         IKArmLesson,
         SensorsLesson,

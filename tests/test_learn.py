@@ -40,10 +40,18 @@ def _step_id(pg: Playground) -> str:
     return pg.lessons.lesson.steps[pg.lessons.step].id
 
 
+def _test(pg: Playground) -> dict:
+    """Press Run test and play it out; returns the update after the result came in."""
+    pg.lessons.handle({"action": "press", "control": "test"})
+    _play(pg, 3.3)
+    return _play(pg, 0.1)
+
+
 def test_the_pd_lesson_can_be_walked_end_to_end(pg):
     described = pg.lessons.start("pd_control")
     assert [s["id"] for s in described["steps"]] == ["feel", "p", "d", "why_low", "ff_i", "challenge"]
     assert described["rig"]["kind"] == "joint" and described["camera"]["eye"]
+    assert described["steps"][1]["quiz"]["predict"] is True
     lessons = pg.lessons
 
     # 1: swing the arm by hand (a drag, and the arm really moves)
@@ -57,54 +65,71 @@ def test_the_pd_lesson_can_be_walked_end_to_end(pg):
     pg.session.end_drag()
     update = _play(pg, 0.2)
     assert "feel" in update["passed"]
+    assert update["live"]["readout"]["en"].startswith("Controller off")
     with pytest.raises(LessonError, match="not open yet"):
         lessons.handle({"action": "goto", "step": 3})  # skipping ahead is not allowed
     lessons.handle({"action": "next"})
 
-    # 2: P only swings back and forth
+    # 2: P only: two tests with different Kp both swing; the step waits for a guess first
     assert _step_id(pg) == "p"
-    _set(pg, kp=20, target=90)
-    update = _play(pg, 4.0)
-    assert "p" in update["passed"] and update["samples"]
-    lessons.handle({"action": "next"})
-
-    # 3: D calms it down, but it stops short of the target
-    _set(pg, kd=0.8)
-    update = _play(pg, 3.0)
-    assert "d" in update["passed"]
-    assert 2 < update["live"]["error"] < 10  # the steady-state error the next step asks about
-    lessons.handle({"action": "next"})
-
-    # 4: the quiz: a wrong answer does not pass, the right one does
-    lessons.handle({"action": "answer", "choice": 0})
+    _set(pg, kp=10)
+    first = _test(pg)
+    _set(pg, kp=40)
+    second = _test(pg)
+    assert "p" not in second["passed"]  # no guess yet
+    assert first["results"]["test"]["settle_s"] is None and second["results"]["test"]["settle_s"] is None
+    lessons.handle({"action": "answer", "choice": 2})  # a wrong guess still counts as a guess...
+    with pytest.raises(LessonError, match="already made your guess"):
+        lessons.handle({"action": "answer", "choice": 1})
     update = _play(pg, 0.1)
-    assert update["quiz"]["right"] is False and "why_low" not in update["passed"]
+    assert "p" in update["passed"]
+    assert update["quiz"]["right"] is False and update["quiz"]["explain"]  # ...and is told afterwards
+    rows = {r["show"] for r in update["live"]["formula"]}
+    assert {"f_p", "f_d", "f_i", "f_g"} <= rows and "f_p" in update["shown"] and "f_d" not in update["shown"]
+    lessons.handle({"action": "next"})
+
+    # 3: D: guess, sweep Kd, then a run that settles fast without overshoot
     lessons.handle({"action": "answer", "choice": 1})
     update = _play(pg, 0.1)
-    assert update["quiz"]["right"] is True and "why_low" in update["passed"]
+    assert update["quiz"] == {"chosen": 1, "pending": True}  # no verdict before the experiment
+    lessons.handle({"action": "sweep", "control": "kd"})
+    settle = {p["x"]: p["settle_s"] for p in lessons.ctx.sweep["points"]}
+    assert settle[3] < settle[6] and settle[3] < settle[1]  # a sweet spot: too little wobbles, too much creeps
+    _set(pg, kd=3)
+    update = _test(pg)
+    assert "d" in update["passed"] and update["quiz"]["right"] is True
+    pd_end = update["results"]["test"]["end_err"]
     lessons.handle({"action": "next"})
 
-    # 5: gravity compensation removes the error
-    _set(pg, gravity=1)
-    update = _play(pg, 2.0)
-    assert "ff_i" in update["passed"] and abs(update["live"]["error"]) < 1
+    # 4: steady-state error: twice the Kp, half the error
+    lessons.handle({"action": "answer", "choice": 0})
+    _set(pg, kp=80, kd=5)
+    update = _test(pg)
+    assert "why_low" in update["passed"]
+    assert update["results"]["test"]["end_err"] == pytest.approx(pd_end / 2, rel=0.15)
+    lessons.handle({"action": "next"})
+
+    # 5: feedforward removes the error at once, the integral only slowly
+    lessons.handle({"action": "answer", "choice": 0})
+    _set(pg, kp=40, kd=3, gravity=1)
+    ff = _test(pg)["results"]["test"]
+    _set(pg, gravity=0, ki=10)
+    update = _test(pg)
+    assert "ff_i" in update["passed"]
+    assert ff["end_err"] < 0.2 < update["results"]["test"]["end_err"] < pd_end
     lessons.handle({"action": "next"})
 
     # 6: the challenge: P+D alone gets two stars, adding the feedforward gets three
-    _set(pg, gravity=0, kp=40, kd=3)
-    lessons.handle({"action": "press", "control": "test"})
-    update = _play(pg, 3.5)
-    assert update["results"]["test"]["stars"] == 2
+    _set(pg, ki=0)
+    assert _test(pg)["results"]["test"]["stars"] == 2
     _set(pg, gravity=1)
-    lessons.handle({"action": "press", "control": "test"})
-    update = _play(pg, 3.5)
+    update = _test(pg)
     assert update["results"]["test"]["stars"] == 3 and "challenge" in update["passed"]
 
-    # the experiment record kept both tests, with their settings and curves, to lay over each other
+    # the experiment record keeps the last five tests, with their settings and curves, to lay over each other
     runs = lessons.ctx.runs
-    assert [r["params"]["gravity"] for r in runs] == [0, 1]
-    assert runs[0]["metrics"]["overshoot_pct"] == update["results"]["test"]["overshoot_pct"] or len(runs[0]["y"]) > 250
-    assert runs[1]["metrics"]["stars"] == 3 and runs[1]["x"][0] == pytest.approx(0, abs=0.02)
+    assert len(runs) == 5 and [r["params"]["gravity"] for r in runs[-2:]] == [0, 1]
+    assert runs[-1]["metrics"]["stars"] == 3 and runs[-1]["x"][0] == pytest.approx(0, abs=0.02)
 
 
 def test_a_sweep_shows_what_one_gain_does(pg):

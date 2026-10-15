@@ -130,6 +130,7 @@ class Bench:
     metrics: tuple[Metric, ...]
     reference: float | None = None  # a dashed line on the curve chart, e.g. the target
     sweeps: tuple[Sweep, ...] = ()
+    zoom: float | None = None  # offer a closer look: the reference plus and minus this much
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -143,15 +144,20 @@ class Bench:
             "metrics": [m.describe() for m in self.metrics],
             "reference": self.reference,
             "sweeps": [w.describe() for w in self.sweeps],
+            "zoom": self.zoom,
         }
 
 
 @dataclass(frozen=True)
 class Quiz:
+    """A question. With `predict`, it is a guess made before an experiment: any answer is taken, the
+    step's check then waits for the experiment, and only afterwards does the learner see if they were right."""
+
     question: Text
     options: tuple[Text, ...]
     answer: int
     explain: Text
+    predict: bool = False
 
 
 @dataclass(frozen=True)
@@ -169,7 +175,7 @@ class Step:
         out: dict[str, Any] = {"id": self.id, "title": self.title, "body": self.body, "done": self.done}
         if self.quiz is not None:
             q = self.quiz
-            out["quiz"] = {"question": q.question, "options": list(q.options)}
+            out["quiz"] = {"question": q.question, "options": list(q.options), "predict": q.predict}
         out["manual"] = self.check is None and self.quiz is None
         return out
 
@@ -187,6 +193,7 @@ class LessonContext:
     sweep: dict[str, Any] | None = None  # the last sweep: {"control", "points": [{"x", metric: value}]}
     bench_version: int = 0  # bumped on every change, so the viewer is sent the record only then
     run_count: int = 0
+    step: str = ""  # the id of the step the learner is on, for lessons that word things per step
 
     def record_run(self, params: dict[str, float], metrics: dict[str, Any], x: list[float], y: list[float]) -> None:
         """Keep a finished run (its settings, results and curve) in the experiment record."""
@@ -487,8 +494,10 @@ class LessonRunner:
             raise LessonError("this step has no question")
         if not 0 <= choice < len(step.quiz.options):
             raise LessonError("no such answer")
+        if step.quiz.predict and step.id in self.ctx.answers:
+            raise LessonError("you already made your guess; now try it")
         self.ctx.answers[step.id] = choice
-        if choice == step.quiz.answer:
+        if choice == step.quiz.answer and not step.quiz.predict:
             self.passed.add(step.id)
 
     def _advance(self, force: bool) -> None:
@@ -519,12 +528,14 @@ class LessonRunner:
                 self._close()
                 self._saved = None
                 return {"type": "lesson", "ended": True}
+            self.ctx.step = self.lesson.steps[self.step].id
             new = self.lesson.drain_samples()
             self.ctx.samples.extend(new)
             if session.drag is not None:
                 self.ctx.events.add("dragged")
             step = self.lesson.steps[self.step]
-            if step.check is not None and step.id not in self.passed:
+            guessed = step.quiz is None or not step.quiz.predict or step.id in self.ctx.answers
+            if step.check is not None and step.id not in self.passed and guessed:  # a guess comes first
                 with session.lock:
                     if step.check(self.ctx):
                         self.passed.add(step.id)
@@ -534,6 +545,12 @@ class LessonRunner:
             if step.quiz is not None and step.id in self.ctx.answers:
                 chosen = self.ctx.answers[step.id]
                 quiz = {"chosen": chosen, "right": chosen == step.quiz.answer, "explain": step.quiz.explain}
+                if step.quiz.predict:  # no verdict before the experiment; afterwards, the answer too
+                    quiz = (
+                        quiz | {"answer": step.quiz.answer}
+                        if step.id in self.passed
+                        else {"chosen": chosen, "pending": True}
+                    )
             bench = None
             if self.ctx.bench_version != self._bench_sent:  # the record goes out only when it changed
                 self._bench_sent = self.ctx.bench_version
