@@ -214,3 +214,92 @@ def test_the_ik_rig_stays_stable_under_wild_input(pg):
             _set(pg, theta1=float(rng.uniform(-90, 180)), theta2=float(rng.uniform(-150, 150)))
         _play(pg, 0.05)
     assert np.isfinite(pg.session.data.qacc).all() and pg.session.data.time > 9.9
+
+
+def test_the_sensors_lesson_can_be_driven_end_to_end(pg):
+    """A scripted driver plays the sensors lesson: encoders, IMU, lidar, bumper, camera, quiz."""
+    import math
+
+    from robotforge.learn import sensors
+
+    described = pg.lessons.start("sensors")
+    assert described["drive"] == {"max_speed": sensors.MAX_SPEED, "turn": sensors.MAX_TURN}
+    lessons, session = pg.lessons, pg.session
+    body = session.model.body("rover").id
+
+    def drive(speed: float, turn: float) -> None:
+        lessons.handle({"action": "drive", "speed": speed, "turn": turn})
+
+    def heading_error(point) -> float:
+        x, y = session.data.xpos[body][:2]
+        heading = math.atan2(session.data.xmat[body][3], session.data.xmat[body][0])
+        want = math.atan2(point[1] - y, point[0] - x)
+        return math.atan2(math.sin(want - heading), math.cos(want - heading))
+
+    def face(point) -> None:
+        for _ in range(200):
+            err = heading_error(point)
+            if abs(math.degrees(err)) < 3:
+                break
+            drive(0, max(-1.5, min(1.5, 2.5 * err)))
+            _play(pg, 0.05)
+        drive(0, 0)
+        _play(pg, 0.3)
+
+    drive(0.3, 0)
+    _play(pg, 3.5)
+    drive(0, 0)
+    update = _play(pg, 0.5)
+    assert "encoders" in update["passed"] and abs(update["live"]["odom"] - update["live"]["true"]) < 0.05
+    lessons.handle({"action": "next"})
+
+    drive(0, 2.0)
+    _play(pg, 3.6)
+    drive(0, 0)
+    update = _play(pg, 0.5)
+    assert "imu" in update["passed"]
+    assert abs(update["live"]["accel"][2] - 9.81) < 0.3  # an accelerometer at rest feels gravity
+    lessons.handle({"action": "next"})
+
+    x, _ = session.data.xpos[body][:2]
+    face((x, -sensors.ARENA))
+    for _ in range(300):
+        update = _play(pg, 0.05)
+        if 0 <= update["live"]["ranges"][0] < 0.3:
+            break
+        drive(0.15, 0)
+    drive(0, 0)
+    update = _play(pg, 2.5)
+    assert "lidar" in update["passed"] and update["live"]["touch"] == 0
+    lessons.handle({"action": "next"})
+
+    drive(-0.2, 0)
+    _play(pg, 1.0)
+    face(sensors.CRATE)
+    drive(0.25, 0)
+    for _ in range(200):
+        if "bumper" in _play(pg, 0.05)["passed"]:
+            break
+    drive(0, 0)
+    lessons.handle({"action": "next"})
+
+    drive(-0.2, 0)
+    _play(pg, 1.0)
+    face(sensors.BALL)
+    for _ in range(400):
+        update = _play(pg, 0.05)
+        if update["results"]["ball"]["distance"] < 1.0:
+            break
+        drive(0.3, max(-1.0, min(1.0, 2 * heading_error(sensors.BALL))))
+    drive(0, 0)
+    update = _play(pg, 0.5)
+    assert "camera" in update["passed"]
+    lessons.handle({"action": "next"})
+    lessons.handle({"action": "answer", "choice": 1})
+    assert _play(pg, 0.1)["passed"][-1] == "drift"
+
+
+def test_driving_is_only_for_lessons_with_a_robot_to_drive(pg):
+    pg.lessons.start("pd_control")
+    with pytest.raises(LessonError, match="no driving"):
+        pg.lessons.handle({"action": "drive", "speed": 0.2, "turn": 0})

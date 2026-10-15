@@ -29,6 +29,7 @@ export function initLessons(hooks) {
 
 export const lessonActive = () => lesson !== null;
 export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
+export const lessonDriveSpec = () => lesson?.drive ?? null;
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
 // ---------------------------------------------------------------- picker
@@ -140,6 +141,8 @@ function openLesson(desc) {
   $("lesson-finished").hidden = true;
   $("lesson-chapter").textContent = pick(desc.chapter);
   $("lesson-title").textContent = pick(desc.title);
+  $("lesson-drive").hidden = !desc.drive;
+  pip.setup(desc.rig);
   renderControls();
   renderStep();
   needCamera = true;
@@ -152,6 +155,7 @@ function closeLesson() {
   lesson = null;
   state = null;
   overlays.clear();
+  pip.teardown();
   document.body.classList.remove("in-lesson");
   $("lesson-panel").hidden = true;
   $("lesson-plots").hidden = true;
@@ -198,6 +202,10 @@ function readout(live) {
   if (!live) return "";
   if (live.angle !== undefined) {
     return t("readout_joint", { angle: live.angle.toFixed(1), error: live.error.toFixed(1), torque: live.torque.toFixed(2) });
+  }
+  if (live.ranges !== undefined) {
+    const front = live.ranges[0] >= 0 ? live.ranges[0].toFixed(2) : "> 4";
+    return t("readout_rover", { odom: live.odom.toFixed(2), heading: live.heading_gyro.toFixed(0), front, touch: live.touch.toFixed(1) });
   }
   if (live.err_cm !== undefined) {
     return t("readout_arm", { q1: live.q1.toFixed(0), q2: live.q2.toFixed(0), err: live.err_cm.toFixed(1), d: (live.d * 100).toFixed(0) });
@@ -778,7 +786,178 @@ function planarArmRig(rig) {
   };
 }
 
-const RIGS = { joint: jointRig, planar_arm: planarArmRig };
+
+// A rover with sensors: lidar rays coloured by distance, the bumper lighting up on contact, the measured
+// acceleration as an arrow, and the camera's view cone.
+function roverRig(rig) {
+  const group = new THREE.Group();
+  const amber = api.color("--amber");
+  const muted = api.color("--muted");
+  const blue = api.color("--plot-blue");
+  const bad = api.color("--bad");
+  const ink = api.color("--ink");
+  const n = rig.rays.length;
+  const rayGeo = new THREE.BufferGeometry();
+  rayGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n * 6), 3));
+  rayGeo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(n * 6), 3));
+  const rayLines = new THREE.LineSegments(rayGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, depthTest: true }));
+  const hitGeo = new THREE.BufferGeometry();
+  hitGeo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+  hitGeo.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+  const hits = new THREE.Points(hitGeo, new THREE.PointsMaterial({ size: 0.035, vertexColors: true, transparent: true, depthTest: true }));
+  const rays = new THREE.Group();
+  rays.add(rayLines, hits);
+  const bumperGlow = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.05), basic(bad, 0.55));
+  const bumper = new THREE.Group();
+  bumper.add(bumperGlow);
+  const imuArrow = arrow(new THREE.Vector3(1, 0, 0), 0.2, blue);
+  const imuLabel = label("a", blue);
+  imuLabel.position.set(0.22, 0, 0.03);
+  imuArrow.add(imuLabel);
+  const imu = new THREE.Group();
+  imu.add(imuArrow);
+  const cone = new THREE.LineSegments(new THREE.BufferGeometry(), lineMat(ink, 0.55));
+  const camera = new THREE.Group();
+  camera.add(cone);
+  const parts = { rays, bumper, imu, camera };
+  group.add(...Object.values(parts));
+
+  const lidar = new THREE.Vector3().fromArray(rig.lidar);
+  const camPos = new THREE.Vector3().fromArray(rig.camera.pos);
+  const camQuat = new THREE.Quaternion(rig.camera.quat[1], rig.camera.quat[2], rig.camera.quat[3], rig.camera.quat[0]);
+  const near = new THREE.Color().copy(bad);
+  const far = new THREE.Color().copy(muted);
+  return {
+    group,
+    parts,
+    camera: { pos: camPos, quat: camQuat, fovy: rig.camera.fovy, body: rig.body },
+    frame() {
+      const node = api.bodyNode(rig.body);
+      if (!node) return;
+      const ranges = state.live?.ranges;
+      if (ranges && rays.visible) {
+        const origin = lidar.clone().applyQuaternion(node.quaternion).add(node.position);
+        const pos = rayGeo.attributes.position;
+        const col = rayGeo.attributes.color;
+        const hp = hitGeo.attributes.position;
+        const hc = hitGeo.attributes.color;
+        rig.rays.forEach((angle, i) => {
+          const dir = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).applyQuaternion(node.quaternion);
+          const r = ranges[i];
+          const len = r >= 0 ? r : 4;
+          const end = origin.clone().addScaledVector(dir, len);
+          pos.setXYZ(2 * i, origin.x, origin.y, origin.z);
+          pos.setXYZ(2 * i + 1, end.x, end.y, end.z);
+          const c = new THREE.Color().lerpColors(near, far, Math.min(1, Math.max(0, (len - 0.2) / 1.6)));
+          col.setXYZ(2 * i, c.r, c.g, c.b);
+          col.setXYZ(2 * i + 1, c.r, c.g, c.b);
+          hp.setXYZ(i, end.x, end.y, end.z);
+          const h = r >= 0 ? c : new THREE.Color(0, 0, 0);
+          hc.setXYZ(i, h.r, h.g, h.b);
+        });
+        pos.needsUpdate = col.needsUpdate = hp.needsUpdate = hc.needsUpdate = true;
+        rayGeo.computeBoundingSphere();
+        hitGeo.computeBoundingSphere();
+      }
+      bumperGlow.position.copy(new THREE.Vector3().fromArray(rig.bumper).applyQuaternion(node.quaternion).add(node.position));
+      bumperGlow.quaternion.copy(node.quaternion);
+      bumperGlow.visible = (state.live?.touch ?? 0) > 0.05;
+      // the accelerometer, minus gravity, in the floor's plane
+      const a = state.live?.accel;
+      if (a) {
+        const world = new THREE.Vector3(a[0], a[1], 0).applyQuaternion(node.quaternion);
+        world.z = 0;
+        const mag = world.length();
+        imuArrow.visible = mag > 0.15;
+        imuArrow.position.copy(node.position).add(new THREE.Vector3(0, 0, 0.16));
+        imuArrow.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), world.clone().normalize());
+        imuArrow.scale.setScalar(Math.min(2.5, 0.4 + mag * 0.35));
+      }
+      if (camera.visible) {
+        const eye = camPos.clone().applyQuaternion(node.quaternion).add(node.position);
+        const q = node.quaternion.clone().multiply(camQuat);
+        const h = Math.tan(THREE.MathUtils.degToRad(rig.camera.fovy / 2)) * 0.45;
+        const w = h * 1.6;
+        const corners = [[-w, -h], [w, -h], [w, h], [-w, h]].map(([x, y]) => new THREE.Vector3(x, y, -0.45).applyQuaternion(q).add(eye));
+        const pts = [];
+        for (let k = 0; k < 4; k++) pts.push(eye, corners[k], corners[k], corners[(k + 1) % 4]);
+        setPoints(cone, pts);
+      }
+    },
+  };
+}
+
+// What the robot's camera sees: the scene drawn again from the camera on the rover, a dozen times a second.
+const pip = {
+  wrap: null,
+  canvas: null,
+  ctx: null,
+  target: null,
+  cam: null,
+  pixels: null,
+  image: null,
+  last: 0,
+  setup(rig) {
+    this.teardown();
+    if (!rig?.camera) return;
+    const w = 320;
+    const h = 200;
+    this.wrap = document.createElement("section");
+    this.wrap.className = "plot pip";
+    const head = document.createElement("div");
+    head.className = "plot-head";
+    const title = document.createElement("span");
+    title.className = "plot-title";
+    title.textContent = t("robot_camera");
+    head.append(title);
+    this.canvas = document.createElement("canvas");
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.ctx = this.canvas.getContext("2d");
+    this.wrap.append(head, this.canvas);
+    this.wrap.hidden = true;
+    $("lesson-plots").append(this.wrap);
+    this.target = new THREE.WebGLRenderTarget(w, h);
+    this.target.texture.colorSpace = THREE.SRGBColorSpace;
+    this.cam = new THREE.PerspectiveCamera(rig.camera.fovy, w / h, 0.02, 50);
+    this.pixels = new Uint8Array(w * h * 4);
+    this.image = this.ctx.createImageData(w, h);
+  },
+  teardown() {
+    this.wrap?.remove();
+    this.target?.dispose();
+    this.wrap = this.canvas = this.ctx = this.target = this.cam = null;
+  },
+  frame() {
+    const rigCam = overlays.current?.camera;
+    if (!this.cam || !rigCam || !state) return;
+    const show = state.shown.includes("camera");
+    this.wrap.hidden = !show;
+    if (!show) return;
+    const now = performance.now();
+    if (now - this.last < 80) return;
+    this.last = now;
+    const node = api.bodyNode(rigCam.body);
+    if (!node) return;
+    this.cam.position.copy(rigCam.pos.clone().applyQuaternion(node.quaternion).add(node.position));
+    this.cam.quaternion.copy(node.quaternion.clone().multiply(rigCam.quat));
+    this.cam.updateMatrixWorld();
+    const renderer = api.renderer;
+    const helpers = overlays.current.group;
+    helpers.visible = false; // the robot does not see our drawings
+    renderer.setRenderTarget(this.target);
+    renderer.render(api.scene, this.cam);
+    renderer.setRenderTarget(null);
+    helpers.visible = true;
+    const { width: w, height: h } = this.target;
+    renderer.readRenderTargetPixels(this.target, 0, 0, w, h, this.pixels);
+    const rows = this.image.data;
+    for (let y = 0; y < h; y++) rows.set(this.pixels.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    this.ctx.putImageData(this.image, 0, 0);
+  },
+};
+
+const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig };
 
 function lineMat(color, opacity) {
   return new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
@@ -890,4 +1069,5 @@ function label(text, color) {
 export function lessonFrame() {
   overlays.frame();
   plots.draw();
+  pip.frame();
 }

@@ -1047,3 +1047,24 @@ input[type="range"]::-moz-range-thumb {
 .lesson-choice { display: grid; gap: 6px; }
 .lesson-choice .seg { display: flex; }
 .lesson-choice .seg button { flex: 1; }
+
+.lesson-drive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0 14px 12px;
+  color: var(--ink-2);
+}
+
+.lesson-drive .keys { display: inline-flex; gap: 3px; }
+.lesson-drive kbd.on { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+
+.pip canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  height: auto;
+  border-radius: 8px;
+  background: var(--hover);
+}

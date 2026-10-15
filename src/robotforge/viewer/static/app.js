@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonDriveSpec, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
@@ -1016,7 +1016,19 @@ function driveCommand(robot) {
 
 function sendDrive() {
   const robot = driveTarget();
-  for (const k of $("drive").querySelectorAll("kbd")) k.classList.toggle("on", pressed.has(k.dataset.key));
+  for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has(k.dataset.key));
+  const lessonDrive = lessonDriveSpec();
+  if (lessonDrive) {
+    // A lesson with a robot to drive takes the keys; the lesson's own controller turns them into wheel speeds.
+    const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
+    const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+    const cmd = { type: "lesson", action: "drive", speed: fwd * lessonDrive.max_speed * 0.7, turn: left * lessonDrive.turn * 0.7 };
+    const key = `lesson:${cmd.speed}:${cmd.turn}`;
+    if (key === lastDrive) return;
+    lastDrive = key;
+    send(cmd);
+    return;
+  }
   if (!robot) return;
   const cmd = driveCommand(robot);
   const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
@@ -1067,12 +1079,13 @@ controls.addEventListener("start", () => {
 });
 
 function driveKey(e, down) {
-  if (!driveTarget()) return false;
+  const lessonDrive = lessonDriveSpec();
+  if (!driveTarget() && !lessonDrive) return false;
   const dir = DRIVE_KEYS[e.key.toLowerCase()];
   if (!dir) return false;
   e.preventDefault();
   if (down) {
-    startFollow();
+    if (!lessonDrive) startFollow();
     pressed.add(dir);
   } else {
     pressed.delete(dir);
@@ -1509,6 +1522,7 @@ initLessons({
   },
   shift: () => shiftForDrawers(),
   retitle: () => renderTitle(),
+  renderer,
   canvas,
   rayAt: (clientX, clientY) => {
     setPointer({ clientX, clientY });

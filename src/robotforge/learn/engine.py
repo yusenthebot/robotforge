@@ -134,6 +134,7 @@ class Lesson:
     title: Text = {}
     summary: Text = {}
     minutes: int = 10
+    drive: dict[str, float] | None = None  # {"max_speed", "turn"}: the keyboard drives the lesson's robot
     controls: tuple[Control, ...] = ()
     plots: tuple[Plot, ...] = ()
     steps: tuple[Step, ...] = ()
@@ -147,6 +148,9 @@ class Lesson:
 
     def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
         """A slider moved or a button was pressed; settings are already in ctx.values."""
+
+    def on_drive(self, speed: float, turn: float, ctx: LessonContext) -> None:
+        """W A S D: forward speed in m/s and turn rate in rad/s, for lessons with `drive`."""
 
     def drain_samples(self) -> list[dict[str, float]]:
         """Plot samples recorded by the controller since the last call."""
@@ -174,6 +178,7 @@ class Lesson:
             "steps": [s.describe() for s in self.steps],
             "rig": self.rig(model),
             "camera": self.camera(),
+            "drive": self.drive,
         }
 
     def card(self) -> dict[str, Any]:
@@ -289,6 +294,11 @@ class LessonRunner:
                 self._advance(force=True)
             elif action == "goto":
                 self._goto(int(msg["step"]))
+            elif action == "drive":
+                if not self.lesson.drive:
+                    raise LessonError("this lesson has no driving")
+                with self.playground.session.lock:
+                    self.lesson.on_drive(float(msg["speed"]), float(msg["turn"]), self.ctx)
             else:
                 raise LessonError(f"unknown lesson action {action!r}")
 
