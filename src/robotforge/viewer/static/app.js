@@ -1197,8 +1197,8 @@ function driveKey(e, down) {
     if (!lessonDrive) startFollow();
     else if (lessonDrive.follow) startFollowBody(sceneDesc?.bodies.find((b) => b.name === lessonDrive.follow)?.id ?? null);
     pressed.add(dir);
-  } else {
-    pressed.delete(dir);
+  } else if (!pressed.delete(dir)) {
+    return true; // a key that was not held here (typed into a field, say): nothing to stop
   }
   sendDrive();
   return true;
@@ -1206,6 +1206,9 @@ function driveKey(e, down) {
 
 window.addEventListener("keyup", (e) => driveKey(e, false));
 window.addEventListener("blur", () => {
+  // Only a robot being driven is stopped. A stop sent for nothing counted as moving the selected robot, which
+  // takes a quadruped off the stance it stands in before anyone moves it.
+  if (!pressed.size) return;
   pressed.clear();
   sendDrive();
 });
