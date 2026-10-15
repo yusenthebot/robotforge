@@ -2,13 +2,22 @@
 
 import math
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
 from robotforge import modes
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.quadruped import QuadrupedGait
-from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, joint_names, load_walk, save_walk, walk_file
+from robotforge.behaviors.rhythm_walk import (
+    SETTLE_MAX,
+    RhythmWalker,
+    SavedWalk,
+    joint_names,
+    load_walk,
+    save_walk,
+    walk_file,
+)
 from robotforge.control.cpg import Body, Reward, Rhythm, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.walk_rl import STAR
@@ -113,6 +122,30 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     assert end["upright"]
     assert pg.behaviors.stop("crab")["stopped"]
     assert not pg.session.controllers["crab"].walking  # holds its home pose
+
+
+def test_a_new_rhythm_starts_from_standing_still_as_it_was_learned(pg):
+    """Regression: switched mid-stride, straight from walking into a turn, a rhythm started from a pose and speed
+    it never learned from, and the imported A1 fell. Now the robot holds home until it stands still first."""
+    pg.add_robot("crab", build=STAR)
+    model = pg.session.model
+    names = joint_names(model, Body.find(model, "crab"))
+    swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)  # big swings, all in step
+    save_walk(pg.store.dir, _walk("crab", names, swing, turn_left=swing, turn_right=swing))
+    pg.behaviors.move("crab", 0.2, 0.0)
+    walker = pg.session.controllers["crab"]
+    pg.run_fast(lambda: False, 0.1)
+    assert walker.t0 == pytest.approx(0.0, abs=0.03)  # standing still already: the walk starts at once
+    pg.run_fast(lambda: False, 1.1)  # mid-stride
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 0.05)
+    assert walker.mode == "left" and walker.t0 is None  # still swinging: it holds home first
+    home = np.clip(walker.home, walker.lower, walker.upper)
+    assert pg.session.data.ctrl[walker.actuators] == pytest.approx(home)
+    waited = pg.run_fast(lambda: walker.t0 is not None, 2 * SETTLE_MAX)
+    assert 0.0 < waited <= SETTLE_MAX + 0.05
+    pg.run_fast(lambda: False, 0.1)
+    assert pg.session.data.ctrl[walker.actuators] != pytest.approx(home)  # and then it turns
 
 
 def test_a_walk_for_other_joints_asks_to_learn_again(pg):

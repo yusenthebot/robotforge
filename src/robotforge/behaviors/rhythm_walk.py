@@ -82,6 +82,12 @@ class SavedWalk(BaseModel):
 
 TURN_ROUNDS = 30  # search rounds per start: 6 s on a laptop for the starfish
 TURN_STARTS = 2  # random starts per side; the better one is kept
+# A rhythm starts once the robot stands still, as in training: trunk and joint speeds under these, or after
+# SETTLE_MAX seconds of holding the home pose at most.
+STILL_SPEED = 0.02  # m/s
+STILL_SPIN = 0.1  # rad/s
+STILL_JOINT = 0.1  # rad/s
+SETTLE_MAX = 1.0  # s
 
 
 def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
@@ -150,7 +156,7 @@ def joint_names(model: mujoco.MjModel, body: Body) -> list[str]:
 
 class RhythmWalker:
     """Drives a robot with a kept walk: forward plays the walk, a turn plays a turn (once learned), each from
-    its start as in training; stop holds the home pose."""
+    its start as in training, standing still at home; stop holds the home pose."""
 
     rate_hz = CONTROL_HZ
 
@@ -179,7 +185,8 @@ class RhythmWalker:
         self.max_speed = walk.speed
         self.mode: str | None = None  # forward, left, right, or None: standing
         self.asked: tuple[float, float] = (0.0, 0.0)
-        self.t0: float | None = None
+        self.t0: float | None = None  # when the playing rhythm started; None while standing or settling
+        self.settle_from: float | None = None
         self.tilt_cos = 1.0
 
     @property
@@ -197,21 +204,38 @@ class RhythmWalker:
         else:
             mode = None
         if mode != self.mode:
-            self.t0 = None  # the new rhythm starts from its beginning at the next tick, as in training
+            self.t0 = self.settle_from = None  # the new rhythm starts from its beginning, as in training
         self.mode = mode
         self.asked = (speed, turn)
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         self.tilt_cos = float(data.xmat[self.body.trunk][8])
-        if self.mode is None:
+        if self.mode is not None and self.t0 is None and self._ready(data):
+            self.t0 = float(data.time)
+        if self.t0 is None:  # standing, or settling before a rhythm starts
             data.ctrl[self.actuators] = np.clip(self.home, self.lower, self.upper)
             return
-        if self.t0 is None:
-            self.t0 = float(data.time)
+        assert self.mode is not None
         rhythm = self.rhythms[self.mode]
         senses = trunk_senses(data, self.body) if rhythm.reflexes else None
         target = rhythm.targets(self.home, float(data.time) - self.t0, senses=senses)
         data.ctrl[self.actuators] = np.clip(target, self.lower, self.upper)
+
+    def _ready(self, data: mujoco.MjData) -> bool:
+        """Whether the asked rhythm may start. Each was learned from standing still at home. Started mid-stride
+        (walking straight into a turn, one turn into the other, a turn into walking), the imported A1 fell in 4 of
+        10 switches over two learned walks; holding its home pose until it was still first (at once if it already
+        is), in none."""
+        now = float(data.time)
+        if self.settle_from is None:
+            self.settle_from = now
+        b = self.body
+        still = (
+            float(np.linalg.norm(data.qvel[b.qvel[:3]])) < STILL_SPEED
+            and float(np.linalg.norm(data.qvel[b.qvel[3:6]])) < STILL_SPIN
+            and float(np.abs(data.qvel[b.dadr]).max()) < STILL_JOINT
+        )
+        return still or now - self.settle_from >= SETTLE_MAX
 
     @property
     def fallen(self) -> bool:
