@@ -98,7 +98,8 @@ them to beginners who want to understand how robots work: open the viewer (open_
 Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
 A robot built from parts that no gait code knows can learn a walk of its own in the viewer's RL II lesson
-("Keep this walk for my robot"); robots then lists its learned_walk and move uses it (forward only).
+("Keep this walk for my robot"); robots then lists its learned_walk and move uses it (forward at its own
+pace; turning on the spot once its turns are learned, which follows keeping the walk).
 When the user wants such a robot to walk and it has a walk_hint (robots, add_robot notes), tell them first:
 it can learn a walk by itself in about ten seconds and keep it, which teaches more and walks better than a
 hand-written gait. Offer to open the viewer for it; write a gait script only if they would rather not.
@@ -400,8 +401,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         went; with seconds=null it keeps moving until `stop`. If the viewer is open the user watches it happen in real
         time. walker (legged robots): "gait" = the built-in walking controller, "rl" = the learned policy for this
         robot (list_walkers), or a policy name; omitted keeps the current one. walker "rhythm" (any robot with a
-        learned_walk in `robots`): the walk it learned in the viewer, forward only at its own pace. Keyboard driving
-        then uses the same walker."""
+        learned_walk in `robots`): the walk it learned in the viewer, forward at its own pace, turns on the spot.
+        Keyboard driving then uses the same walker."""
         with _tool_errors():
             if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
                 raise PlaygroundError("seconds must be in (0, 60]")

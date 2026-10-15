@@ -45,6 +45,9 @@ def test_a_saved_walk_checks_its_numbers():
     with pytest.raises(ValidationError, match="not a robotforge name"):
         _walk("../crab", ["a", "b"])
     assert len(_walk("crab", ["a", "b"], [0.0] * 14, reflexes=True).theta) == 14  # 3 + 4 reflex gains per joint
+    with pytest.raises(ValidationError, match="turn rhythm needs 6"):
+        _walk("crab", ["a", "b"], turn_left=[0.0] * 4, turn_right=[0.0] * 6)
+    assert _walk("crab", ["a", "b"], turn_left=[0.0] * 6, turn_right=[0.0] * 6).turns
 
 
 def test_a_kept_walk_survives_the_round_trip(tmp_path):
@@ -96,12 +99,12 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     listed = next(r for r in pg.behaviors.robots() if r["name"] == "crab")
     assert "walk_hint" not in listed
     assert any("crab walks with the walk it learned" in n for n in pg.reload_world()["notes"])
-    assert listed["learned_walk"]["forward_only"] and listed["max_speed"] == pytest.approx(learned / 4.0, abs=1e-3)
+    assert not listed["learned_walk"]["turns"] and listed["max_speed"] == pytest.approx(learned / 4.0, abs=1e-3)
     assert modes.available(pg, listed, learned=False)[0] == "drive"  # the keyboard can drive it now
 
     start = pg.behaviors.pose("crab")
     status = pg.behaviors.move("crab", 0.2, 0.5)
-    assert status["controller"] == "learned rhythm" and "cannot turn" in status["note"]
+    assert status["controller"] == "learned rhythm" and "not learned to turn" in status["note"]
     assert modes.current(pg)["crab"] == "drive"
     pg.run_fast(lambda: False, 4.0)
     end = pg.behaviors.pose("crab")
@@ -144,3 +147,30 @@ def test_a_dog_keeps_its_gait_and_offers_its_learned_walk_as_a_mode(pg):
     assert isinstance(pg.session.controllers["dog"], RhythmWalker)
     modes.apply(pg, "dog", "drive")
     assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
+
+
+def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg):
+    """Turning on the spot is learned after the walk (one rhythm each way); a turn command then plays it."""
+    from robotforge.behaviors.rhythm_walk import learn_turns
+
+    pg.add_robot("crab", build=STAR)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    body = Body.find(solo, "crab")
+    walk = _walk("crab", joint_names(solo, body))
+    turned = learn_turns(solo, "crab", walk, seed=1)
+    assert turned.turns and turned.turn_rate > 0.5  # rad/s; the starfish learns about 1 in 30 rounds
+    save_walk(pg.store.dir, turned)
+    assert next(r for r in pg.behaviors.robots() if r["name"] == "crab")["learned_walk"]["turns"]
+
+    def heading_after(turn: float) -> float:
+        before = pg.behaviors.pose("crab")["heading_deg"]
+        status = pg.behaviors.move("crab", 0.0, turn)
+        assert status["turning"] == ("left" if turn > 0 else "right")
+        pg.run_fast(lambda: False, 2.0)  # under half a turn, so the wrapped heading keeps its sign
+        pg.behaviors.stop("crab")
+        pg.run_fast(lambda: False, 0.5)
+        return (pg.behaviors.pose("crab")["heading_deg"] - before + 540) % 360 - 180
+
+    assert heading_after(0.8) > 40  # degrees, to the left
+    assert heading_after(-0.8) < -40
+    assert pg.behaviors.pose("crab")["upright"]

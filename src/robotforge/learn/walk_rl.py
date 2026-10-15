@@ -11,6 +11,7 @@ world's folder, and `move` and the keyboard then walk it that way (behaviors/rhy
 
 from __future__ import annotations
 
+import math
 import threading
 from dataclasses import replace
 from pathlib import Path
@@ -20,7 +21,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors import Kind, robot_kind
-from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, save_walk
+from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, learn_turns, save_walk
 from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
 from robotforge.design.world import World, compile_world
 from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
@@ -391,6 +392,7 @@ class LearnToWalkLesson(Lesson):
         self.ctx: LessonContext | None = None
         self.robots: list[tuple[str, tuple[str, str], dict[str, Any]]] = list(BUILT_IN)
         self.own: tuple[str, Path] | None = None  # the learner's robot: (its name in their world, the world folder)
+        self.turning: threading.Thread | None = None  # learning to turn after a walk was kept
         self.controls = self._controls()
         self.model: mujoco.MjModel | None = None
         self.start: np.ndarray | None = None
@@ -635,6 +637,10 @@ class LearnToWalkLesson(Lesson):
             )
         if self.thread is not None and self.thread.is_alive():
             return _text("等它学完再存。", "Wait until it has finished learning.")
+        if self.turning is not None and self.turning.is_alive():
+            return _text(
+                "它还在学转弯，学完会自动存好。", "It is still learning to turn; that is kept by itself when done."
+            )
         result = self.trained.get("yours")
         if result is None:
             return _text("你的机器人还没学过，先点「开始学」。", "Your robot has not learned yet: press Learn first.")
@@ -663,13 +669,34 @@ class LearnToWalkLesson(Lesson):
             path = save_walk(folder, walk)
         except OSError as exc:
             return _text(f"没存上：{exc}", f"Could not keep it: {exc}")
-        ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3)}
+        ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3), "turns": False}
+        self.turning = threading.Thread(target=self._learn_turns, args=(walk, folder, ctx), daemon=True)
+        self.turning.start()
         return _text(
             f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
-            f"退出课程回到你的世界，在聊天里让 {name} 往前走，或者选中它按 W，它就这样走（只会往前，不会转弯）。",
+            "现在它接着学转弯，向左、向右各从两个起点学，留下转得好的那个（二三十秒），学完也会存好。"
+            f"退出课程回到你的世界，在聊天里让 {name} 走，或者选中它按 W 往前、A 和 D 原地转。",
             f"Kept: {name}'s walk ({result['distance']:g} m in 4 s, about {walk.speed:.2f} m/s) is in your world now. "
-            f"Leave the lesson, then ask for {name} to walk forward in the chat, or select it and press W: it walks "
-            "this way (forward only, no turning).",
+            "It goes on to learn to turn, each way from two starts keeping the better (twenty or thirty seconds), "
+            "kept as well when done. "
+            f"Leave the lesson, then ask for {name} to walk in the chat, or select it and press W to go forward and "
+            "A or D to turn on the spot.",
+        )
+
+    def _learn_turns(self, walk: SavedWalk, folder: Path, ctx: LessonContext) -> None:
+        """After the walk is kept: learn to turn on the spot each way, on the robot alone, and keep that too."""
+        try:
+            turned = learn_turns(self._solo("yours"), "yours", walk, seed=self.trainings)
+            save_walk(folder, turned)
+        except (OSError, ValueError, CPGError) as exc:
+            ctx.results["summary"] = _text(f"转弯没学成：{exc}", f"Turning was not learned: {exc}")
+            return
+        rate = math.degrees(turned.turn_rate or 0.0)
+        ctx.results["kept"] = {**ctx.results.get("kept", {}), "turns": True, "turn_deg_s": round(rate)}
+        ctx.results["summary"] = _text(
+            f"{walk.robot} 也学会了原地转弯：慢的那边每秒约 {rate:.0f} 度。回到你的世界，选中它按 A、D 就能转。",
+            f"{walk.robot} also learned to turn on the spot: about {rate:.0f} degrees a second on its slower side. "
+            "Back in your world, select it and press A or D to turn.",
         )
 
     def close(self) -> None:

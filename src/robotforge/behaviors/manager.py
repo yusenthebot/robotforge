@@ -159,9 +159,10 @@ class BehaviorManager:
                 continue
             walk = self._kept_walk_or_none(entry.name)
             if walk is not None:
+                turning = "and turns on the spot" if walk.turns else "without turning (no turns learned yet)"
                 out.append(
                     f"{entry.name} walks with the walk it learned: move drives it forward at its own pace "
-                    f"(about {walk.speed:.2f} m/s), without turning"
+                    f"(about {walk.speed:.2f} m/s) {turning}"
                 )
             elif self._can_learn_walk(entry.name):
                 out.append(f"{entry.name}: no gait code knows this body, so move cannot walk it yet; {LEARN_A_WALK}")

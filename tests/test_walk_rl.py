@@ -90,6 +90,8 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
     pg.lessons.handle({"action": "press", "control": "keep"})
     kept = pg.lessons.ctx.results["kept"]
     assert kept["robot"] == "crab" and kept["speed"] == pytest.approx(trained["distance"] / walk_rl.ATTEMPT, abs=1e-3)
+    lesson.turning.join(timeout=120)  # then it learns to turn, on its own, and keeps that too
+    assert pg.lessons.ctx.results["kept"]["turns"]
     pg.lessons.exit()
 
     start = pg.behaviors.pose("crab")
@@ -97,6 +99,10 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg):
     pg.run_fast(lambda: False, walk_rl.ATTEMPT)
     gone = pg.behaviors.pose("crab")["position"][0] - start["position"][0]
     assert gone > 0.5 * trained["distance"], f"learned {trained['distance']} m, walked {gone:.2f} m at home"
+    heading = pg.behaviors.pose("crab")["heading_deg"]
+    assert pg.behaviors.move("crab", 0.0, 0.8)["turning"] == "left"
+    pg.run_fast(lambda: False, 2.0)
+    assert (pg.behaviors.pose("crab")["heading_deg"] - heading + 540) % 360 - 180 > 30
 
 
 def test_the_robot_no_gait_code_knows_is_the_one_offered(pg):

@@ -27,6 +27,7 @@ CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
 FALL_PENALTY = 1.0  # m of progress a fall costs
 DRIFT_WEIGHT = 0.5  # m of progress per m of sideways drift
+WANDER_WEIGHT = 3.0  # rad of turning per m the trunk wanders (at its farthest) while learning to turn on the spot
 
 
 class CPGError(ValueError):
@@ -93,6 +94,11 @@ class Body:
 SENSES = 4  # what reflexes read: trunk roll, pitch, roll rate, pitch rate
 
 
+def _yaw(data: mujoco.MjData, body: Body) -> float:
+    rot = data.xmat[body.trunk]
+    return math.atan2(float(rot[3]), float(rot[0]))
+
+
 def trunk_senses(data: mujoco.MjData, body: Body) -> np.ndarray:
     """Roll and pitch of the trunk (rad) and their rates (rad/s, body frame), what an IMU gives."""
     rot = data.xmat[body.trunk].reshape(3, 3)
@@ -130,6 +136,7 @@ class Rhythm:
 class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
     survive: bool = False  # a fall also costs the seconds it did not stay up
+    turn: float = 0.0  # 0: walk forward; +1 or -1: turn on the spot to the left or right (rad turned, less wander)
 
 
 @dataclass(frozen=True)
@@ -146,7 +153,8 @@ def random_push(rng: np.random.Generator, strength: float, seconds: float) -> Pu
 
 @dataclass
 class TrainingLog:
-    distances: list[float] = field(default_factory=list)  # after each iteration, the current rhythm's walk
+    # After each iteration, the current rhythm's progress: metres walked, or radians turned the asked way.
+    distances: list[float] = field(default_factory=list)
     energies: list[float] = field(default_factory=list)
     seconds: float = 0.0
     attempts: int = 0
@@ -175,6 +183,7 @@ class Trainer:
         mujoco.mj_forward(m, d)
         start = d.xpos[b.trunk][:2].copy()
         energy, fell, up = 0.0, False, self.seconds
+        heading, turned, wander = _yaw(d, b), 0.0, 0.0
         steps = round(self.seconds * CONTROL_HZ)
         for k in range(steps):
             t = k / CONTROL_HZ
@@ -186,15 +195,34 @@ class Trainer:
             for _ in range(self.substeps):
                 mujoco.mj_step(m, d)
                 energy += float(np.abs(d.actuator_force[b.actuators] * d.qvel[b.dadr]).sum()) * m.opt.timestep
+            now = _yaw(d, b)
+            turned += math.atan2(math.sin(now - heading), math.cos(now - heading))  # unwrapped: whole turns count
+            heading = now
+            # The farthest it got, not where it ended: circling round a point comes back to the start.
+            wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - start)))
             if float(d.xmat[b.trunk][8]) < FELL:
                 fell, up = True, t
                 break
         moved = d.xpos[b.trunk][:2] - start
         distance, drift = float(moved[0]), abs(float(moved[1]))
-        reward = distance - DRIFT_WEIGHT * drift - self.reward.energy * energy / (self.mass * 9.81)
+        cost = self.reward.energy * energy / (self.mass * 9.81)
+        if self.reward.turn:
+            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off.
+            reward = self.reward.turn * turned - WANDER_WEIGHT * wander - cost
+        else:
+            reward = distance - DRIFT_WEIGHT * drift - cost
         if fell:
             reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
-        return {"distance": distance, "drift": drift, "energy": energy, "up": up, "fell": float(fell), "reward": reward}
+        return {
+            "distance": distance,
+            "drift": drift,
+            "turned": turned,
+            "wander": wander,
+            "energy": energy,
+            "up": up,
+            "fell": float(fell),
+            "reward": reward,
+        }
 
     def train(
         self,
@@ -233,7 +261,7 @@ class Trainer:
             )
             walk = self.rollout(rhythm)
             log.attempts += 2 * directions + 1
-            log.distances.append(walk["distance"])
+            log.distances.append(self.reward.turn * walk["turned"] if self.reward.turn else walk["distance"])
             log.energies.append(walk["energy"])
             if callback is not None:
                 callback(it + 1, walk)
