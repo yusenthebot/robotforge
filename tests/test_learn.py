@@ -333,9 +333,17 @@ def test_driving_is_only_for_lessons_with_a_robot_to_drive(pg):
         pg.lessons.handle({"action": "drive", "speed": 0.2, "turn": 0})
 
 
-def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
+def _until_trained(pg: Playground, lesson, limit: float = 600.0) -> None:
+    """Keep the physics going until the lesson's training thread ends (slow CI runners need minutes)."""
     import time
 
+    deadline = time.monotonic() + limit
+    while lesson.thread.is_alive() and time.monotonic() < deadline:
+        _play(pg, 0.2)
+    assert not lesson.thread.is_alive(), f"training did not finish within {limit:.0f} s"
+
+
+def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     from robotforge.learn import rl
 
     monkeypatch.setattr(rl, "PACE", 0.0)  # no need to slow it down for a test
@@ -355,9 +363,7 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     lessons.handle({"action": "next"})
     lessons.handle({"action": "press", "control": "train"})
     lesson = lessons.lesson
-    deadline = time.monotonic() + 60
-    while lesson.thread.is_alive() and time.monotonic() < deadline:
-        _play(pg, 0.2)
+    _until_trained(pg, lesson)
     update = _play(pg, 0.5)
     assert "train" in update["passed"] and update["results"]["train"]["mean"] >= rl.TRAINED_RETURN
     update = _play(pg, 2 * rl.SHOW_SECONDS)
@@ -368,9 +374,7 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     lessons.handle({"action": "set", "control": "lr", "value": 0.02})  # too small a step to learn in time
     lessons.handle({"action": "set", "control": "fast", "value": 1})
     lessons.handle({"action": "press", "control": "train"})
-    deadline = time.monotonic() + 60
-    while lesson.thread.is_alive() and time.monotonic() < deadline:
-        _play(pg, 0.2)
+    _until_trained(pg, lesson)
     update = _play(pg, 0.3)
     assert "tune" in update["passed"]
     slow = lessons.ctx.runs[-1]
@@ -378,8 +382,7 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     assert update["bench"] is None  # the record goes out once per change, not on every update
     lessons.handle({"action": "set", "control": "lr", "value": 0.1})
     lessons.handle({"action": "press", "control": "train"})  # a good policy again for the push
-    while lesson.thread.is_alive() and time.monotonic() < deadline:
-        _play(pg, 0.2)
+    _until_trained(pg, lesson)
     _play(pg, 2 * rl.SHOW_SECONDS)
     lessons.handle({"action": "next"})
     lessons.handle({"action": "press", "control": "push"})
