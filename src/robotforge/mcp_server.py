@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import inspect
-import json
 import logging
 import os
 import re
@@ -22,11 +21,11 @@ import numpy as np
 import uvicorn
 from mcp.server.apps import Apps, ResourceCsp
 from mcp.server.mcpserver import Context, MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
-from robotforge import lessons
+from robotforge import lessons, tool_input, wording
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
@@ -111,6 +110,22 @@ Explain what you are doing in plain language and briefly teach the idea behind i
 (joints, actuators, control): the user may be new to robotics. Check results (numbers, observe) before
 saying something worked.
 """
+
+
+class _Server(MCPServer):
+    """An MCPServer that reads a call forgivingly and answers a failed one briefly (see tool_input)."""
+
+    async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None):
+        tool = self._tool_manager.get_tool(name)
+        if tool is None:
+            raise ToolError(tool_input.unknown_tool(name, [t.name for t in self._tool_manager.list_tools()]))
+        arguments = tool_input.tidy(name, tool.parameters, arguments)
+        try:
+            return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError:
+            raise
+        except ToolError as exc:
+            raise ToolError(tool_input.error_text(name, tool.parameters, exc)) from exc
 
 
 def _viewer_page(port: int) -> str:
@@ -202,7 +217,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 await task
             playground.renderer.close()
 
-    server = MCPServer(
+    server = _Server(
         "robotforge",
         title="robotforge robot playground",
         instructions=INSTRUCTIONS,
@@ -713,7 +728,7 @@ def _script_path(world_dir: Path, name: str) -> Path:
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1)
+    return wording.dumps(data)
 
 
 def run(model: Path | None = None, port: int | None = None) -> None:

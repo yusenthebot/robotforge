@@ -8,13 +8,13 @@ file, so nothing from the trainer ever reaches the MCP stdout.
 from __future__ import annotations
 
 import contextlib
-import json
 from collections.abc import Iterator
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge import wording
 from robotforge.bridge import policies, unilab
 from robotforge.bridge.spec import SpecError
 
@@ -72,4 +72,4 @@ def _tool_errors() -> Iterator[None]:
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1, default=str)
+    return wording.dumps(data, default=str)

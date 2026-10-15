@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 from collections.abc import Iterator
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge import wording
 from robotforge.design.builder.guide import guide
 from robotforge.playground import Playground
 
@@ -70,4 +70,4 @@ def _tool_errors() -> Iterator[None]:
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1)
+    return wording.dumps(data)

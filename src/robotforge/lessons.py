@@ -8,11 +8,12 @@ prompt support, such as Codex) and one prompt per lesson (Claude Desktop and Cla
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+
+from robotforge import wording
 
 REPO_URL = "https://github.com/yusenthebot/robotforge"
 
@@ -428,4 +429,4 @@ def _lesson_prompt(lesson: Lesson):
 
 
 def _json(data: object) -> str:
-    return json.dumps(data, ensure_ascii=False, indent=1)
+    return wording.dumps(data)
