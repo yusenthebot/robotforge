@@ -11,10 +11,13 @@ accepted and, if not, the error text.
 
 Each case says what it ought to do: "accept" when the intent is unambiguous and safe to act on (a name in the
 wrong case), "reject" otherwise. A rejection is graded on four things an agent needs from the text alone:
-  leak     a Python traceback, a pydantic URL or type tag, or an internal path
+  leak     a Python traceback, pydantic's URL, type tag or sentences, a position inside world.yaml, or an internal path
   vague    nothing in the text points at the argument or value that was wrong
   no_fix   no valid choices, form or range to correct it with
   long     over LONG_ERROR characters without listing choices (agents pay for every word)
+An accepted call is checked as well: "silent" when the case needs the answer to say something (a value was
+clamped) and it does not, "noisy" when the answer shows robotforge's own frames. The grading is a rubric, not
+a judge: read the texts (--bad prints the ones that need work, the rest are in --json) before trusting a number.
 "--sizes" prints the size in tokens (characters / 4) of every tool description and schema, the server
 instructions and typical responses instead.
 """
