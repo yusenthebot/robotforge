@@ -515,3 +515,27 @@ def test_arm_built_from_parts_with_a_mounted_gripper_picks_and_places(pg):
     pg.run_fast(lambda: arm.done, 40)
     _run(pg, 0.5)
     assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+def test_range_sensors_compile_and_measure_distance():
+    """A rangefinder and a lidar ring on a built robot compile (MuJoCo 3.15 needs their data spec set) and read
+    the distance to a wall."""
+    build = copy.deepcopy(DOG)
+    build["base"]["sensors"] = [
+        "imu",
+        {"type": "rangefinder", "at": "front"},
+        {"type": "lidar", "at": "top", "rays": 8},
+    ]
+    world = World.model_validate(
+        {
+            "robots": [{"name": "r", "build": build}],
+            "objects": [{"name": "wall", "shape": "box", "size": [0.05, 1.0, 0.3], "pos": [1.0, 0.0]}],
+        }
+    )
+    model = compile_world(world).model
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    ahead = data.sensor("r/base_range").data[0]
+    assert 0.6 < ahead < 1.0  # the wall's face is about 0.85 m ahead of the body's front
+    ring = [data.sensor(f"r/base_lidar_{i}").data[0] for i in range(8)]
+    assert 0.6 < ring[0] < 1.0 and all(r == -1 or r > 0 for r in ring)

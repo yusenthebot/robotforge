@@ -30,6 +30,8 @@ from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
+# MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
+RANGE_DIST = 1 << int(mujoco.mjtRayDataField.mjRAYDATA_DIST)
 LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator pushes with full force
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
 WHEEL_DAMPING = 0.002
@@ -444,7 +446,10 @@ def _add_sensor(
         return
     if sensor.type == "rangefinder":
         body.add_site(name=name, pos=where.tolist(), quat=_z_to(look), size=[0.004, 0, 0], rgba=[1, 0.3, 0.2, 0.8])
-        spec.add_sensor(name=name, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=name, cutoff=sensor.range)
+        ray = spec.add_sensor(
+            name=name, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=name, cutoff=sensor.range
+        )
+        ray.intprm[0] = RANGE_DIST
         return
     # lidar: a spinning puck, modelled as a ring of rangefinders in the owner's horizontal plane
     up = np.array([0.0, 0.0, 1.0])
@@ -462,7 +467,10 @@ def _add_sensor(
         ray = np.array([math.cos(angle), math.sin(angle), 0.0])
         site = f"{name}_{i}"
         body.add_site(name=site, pos=(where + up * 0.012).tolist(), quat=_z_to(ray), size=[0.002, 0, 0], rgba=INVISIBLE)
-        spec.add_sensor(name=site, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=site, cutoff=sensor.range)
+        ray = spec.add_sensor(
+            name=site, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=site, cutoff=sensor.range
+        )
+        ray.intprm[0] = RANGE_DIST
 
 
 def _camera_axes(look: np.ndarray) -> list[float]:
