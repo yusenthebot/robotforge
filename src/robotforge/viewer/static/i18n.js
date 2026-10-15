@@ -272,7 +272,7 @@ const STRINGS = {
     readout_joint: "角度 {angle}°  误差 {error}°  电机 {torque} N·m",
     readout_arm: "θ1 {q1}°  θ2 {q2}°  d {d} cm  误差 {err} cm",
     readout_rover: "里程 {odom} m  陀螺仪朝向 {heading}°  前方 {front} m  碰撞 {touch} N",
-    lesson_drive: "驾驶小车",
+    lesson_drive: "驾驶机器人",
     robot_camera: "机器人相机",
     finished_title: "课程完成",
     lesson_done_body: "你学完了「{title}」。可以回到自己的世界，也可以留在这里继续试。",
