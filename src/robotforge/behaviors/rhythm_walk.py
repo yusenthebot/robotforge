@@ -7,12 +7,11 @@ around and how fast it went. From then on `move` and the keyboard drive that rob
 knows its body.
 
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
-its own, each saved in the same file once learned: a walk that curves learns to hold its heading
-(`learn_steering`), and it learns to turn on the spot, one rhythm each way from standing still, then each tuned
-again to begin straight out of its walk (`learn_turns`). Standing still, a rhythm starts exactly as it was learned;
-a turn asked for mid-stride starts at once, faded in from the stride, as its walking version learned to; any other
-switch while moving first steadies the robot on its home pose until it is calm, then fades the new rhythm in. It
-cannot back up or change speed, and the status says so.
+its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
+one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
+Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts at once, faded in from
+the stride, as its walking version learned to; any other switch while moving first steadies the robot on its home
+pose until it is calm, then fades the new rhythm in. It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -138,20 +137,28 @@ WALKING_ROUNDS = 20  # search rounds per side tuning a turn learned from standin
 # on its own (scripts/rhythm_bench.py switch --trials 15); choosing this way, 12 and 8.
 WALK_CHECKS = tuple(round(0.5 + 0.1 * k, 1) for k in range(21))  # s after the walk starts
 TURN_CHECK = 2.0  # s
-# A kept walk whose heading turns more than STEER_FROM in STEER_CHECK seconds (twice a training's, since a slow curve
-# shows late) learns to hold it, STEER_ROUNDS rounds aiming STEER_AIMS (rad, 17 degrees to either side, so it learns
-# to correct both ways), losing HOLD_WEIGHT of its progress per rad it strays on average.
-STEER_FROM = math.radians(15.0)
-STEER_CHECK = 8.0  # s
+# After keeping, the walk learns to hold its heading: STEER_ROUNDS rounds aiming STEER_AIMS (rad, 17 degrees to either
+# side, so it learns to correct both ways), losing HOLD_WEIGHT of its progress per rad it strays on average. Its
+# steering is kept if, played as move plays it for STEER_CHECK seconds toward each aim and straight ahead, it falls
+# in none, strays less on average than the walk alone and loses at most STEER_COST of its distance. With tries as
+# long as the walk's (4 s), 6 A1 walks ended 20 degrees off on average after 20 s of walking, the worst 46 (its
+# steering fell in the check); with 8 s tries, 4 and 6 (the template dog's and the starfish's: 2 either way).
 STEER_ROUNDS = 30
+STEER_SECONDS = 8.0  # s per try
 STEER_AIMS = (0.3, -0.3)
 HOLD_WEIGHT = 1.0
-# Playing it, the aim follows a robot spun or pushed further off than it learned to come back from (rad), and the
-# steering comes in over the walk's first STEER_RAMP seconds. At full strength from the start it threw an A1 still
-# swinging out of a turn from side to side until it fell: of 810 tries of each switch on its own (6 A1 walks,
-# scripts/rhythm_bench.py switch --trials 15), 8 fell at once, 7 eased in over 1 s and 4 over 2 s.
+STEER_CHECK = 20.0  # s
+STEER_COST = 0.15  # share of the distance
+# Playing it, the steering comes in over the walk's first STEER_RAMP seconds. At full strength from the start it
+# threw an A1 still swinging out of a turn from side to side until it fell: of 810 tries of each switch on its own (6
+# A1 walks, scripts/rhythm_bench.py switch --trials 15), 8 fell at once, 7 eased in over 1 s and 4 over 2 s. It aims
+# back at the heading the walk started with, but never further than STEER_LEASH (rad) from where the robot faces, so
+# a robot spun or pushed far off corrects fully without its aim running away, and the aim comes back by at most
+# STEER_RELAX (rad/s). With the aim following the robot for good once it was 17 degrees off, an A1 walk that drifted
+# while its steering eased in held -26 to -35 degrees for the rest of a 20 s walk.
 STEER_LEASH = max(abs(a) for a in STEER_AIMS)
 STEER_RAMP = 2.0  # s
+STEER_RELAX = 0.1  # rad/s
 # Standing still (trunk and joint speeds under these), a rhythm starts exactly as it was learned.
 STILL_SPEED = 0.02  # m/s
 STILL_SPIN = 0.1  # rad/s
@@ -192,50 +199,100 @@ class _Joints:
         home = self.walk.home
         return None if home is None else np.array([home[self.walk.joints[i]] for i in self.to_model])
 
-    def forward(self) -> Rhythm | Steering:
+    def walk_rhythm(self) -> Rhythm:
         walk = self.walk
-        rhythm = Rhythm(self.rhythm(walk.theta, walk.reflexes), walk.freq, walk.reflexes)
-        return rhythm if walk.steer is None else Steering(rhythm, self.rhythm(walk.steer))
+        return Rhythm(self.rhythm(walk.theta, walk.reflexes), walk.freq, walk.reflexes)
+
+    def forward(self) -> Rhythm | Steering:
+        rhythm = self.walk_rhythm()
+        return rhythm if self.walk.steer is None else Steering(rhythm, self.rhythm(self.walk.steer))
 
 
-def _check(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> tuple[Trainer, Rhythm, dict[str, float]]:
-    """The walk played as it was learned for STEER_CHECK seconds from standing, the robot alone in `model`."""
-    joints = _Joints(model, robot, walk)
-    forward = Rhythm(joints.rhythm(walk.theta, walk.reflexes), walk.freq, walk.reflexes)
-    check = Trainer(model, robot, Reward(), STEER_CHECK, walk.freq, home=joints.home())
-    return check, forward, check.rollout(forward)
+def _walker_alone(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> tuple[mujoco.MjData, RhythmWalker, int]:
+    """The robot alone in `model` (never the live world) standing at home, a RhythmWalker asked to walk it forward
+    with `walk` as move and the keyboard do, and the physics steps per update."""
+    data = mujoco.MjData(model)
+    if model.nkey:
+        mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_forward(model, data)
+    walker = RhythmWalker(model, robot, walk, data.qpos.copy())
+    walker.command(1.0, 0.0)  # any speed forward: it walks at its own pace
+    return data, walker, max(1, round(1.0 / (CONTROL_HZ * model.opt.timestep)))
+
+
+def walk_alone(
+    model: mujoco.MjModel, robot: str, walk: SavedWalk, seconds: float, aim: float = 0.0
+) -> dict[str, float]:
+    """Walk forward with `walk` as move and the keyboard play it (a RhythmWalker), from standing at home, the robot
+    alone in `model` (never the live world), for `seconds`, holding a heading `aim` rad from the one it starts with:
+    how far it got along the aim, how far its heading turned (rad, positive to the left, whole turns counted), how far
+    it strayed from the aim on average (rad), and whether it fell."""
+    data, walker, substeps = _walker_alone(model, robot, walk)
+    trunk = walker.body.trunk
+    origin, heading, turned, stray, fell = data.xpos[trunk][:2].copy(), trunk_yaw(data, walker.body), 0.0, 0.0, False
+    steps = round(seconds * CONTROL_HZ)
+    for k in range(steps):
+        walker.update(model, data)
+        if k == 0:  # the walk has started where the robot faces: aim off to the side of that
+            walker.course += aim
+            walker.aim += aim
+        for _ in range(substeps):
+            mujoco.mj_step(model, data)
+        now = trunk_yaw(data, walker.body)
+        turned += _wrapped(now - heading)
+        heading = now
+        stray += abs(aim - turned) / steps
+        walker.tilt_cos = float(data.xmat[trunk][8])
+        if walker.fallen:
+            fell = True
+            break
+    moved = data.xpos[trunk][:2] - origin
+    along = math.cos(aim) * float(moved[0]) + math.sin(aim) * float(moved[1])
+    return {"distance": along, "turned": turned, "stray": stray, "fell": float(fell)}
 
 
 def heading_drift(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> float | None:
-    """How far the walk's heading turns (rad, positive to the left) in STEER_CHECK seconds from standing, played as
-    it was learned (the robot alone in `model`); None if it falls."""
-    loose = _check(model, robot, walk)[2]
+    """How far the walk's heading turns (rad, positive to the left) in STEER_CHECK seconds from standing without
+    steering, the robot alone in `model`; None if it falls."""
+    loose = walk_alone(model, robot, walk.model_copy(update={"steer": None}), STEER_CHECK)
     return None if loose["fell"] else loose["turned"]
 
 
-def needs_steering(drift: float | None) -> bool:
-    """Whether a walk whose heading turns `drift` (heading_drift) learns to hold it."""
-    return drift is not None and abs(drift) >= STEER_FROM
+def train_steering(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
+    """The walk with steering learned for it (alone in `model`) by the same random search, the walk itself fixed
+    (cpg.Steering), whether or not it helps."""
+    joints = _Joints(model, robot, walk)
+    steering = Steering.still(joints.walk_rhythm(), joints.body.joints)
+    reward = Reward(hold=HOLD_WEIGHT, aims=STEER_AIMS)
+    Trainer(model, robot, reward, STEER_SECONDS, walk.freq, home=joints.home()).train(
+        steering, iterations=STEER_ROUNDS, seed=seed + 7
+    )
+    return walk.model_copy(update={"steer": joints.to_saved(steering.theta)})
+
+
+def holds_heading(model: mujoco.MjModel, robot: str, held: SavedWalk, loose: SavedWalk) -> bool:
+    """Whether `held` (a walk with steering) beats `loose` (the same without) played as move plays it for STEER_CHECK
+    seconds toward each of STEER_AIMS and straight ahead: it falls in none, strays less on average, and loses at most
+    STEER_COST of the distance."""
+    aims = (0.0, *STEER_AIMS)
+    steered = [walk_alone(model, robot, held, STEER_CHECK, aim) for aim in aims]
+    alone = [walk_alone(model, robot, loose, STEER_CHECK, aim) for aim in aims]
+    if any(r["fell"] for r in steered):
+        return False
+    stray, stray_alone = (float(np.mean([r["stray"] for r in rs])) for rs in (steered, alone))
+    distance, distance_alone = (float(np.mean([r["distance"] for r in rs])) for rs in (steered, alone))
+    return stray < stray_alone and distance >= (1.0 - STEER_COST) * distance_alone
 
 
 def learn_steering(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
-    """Teach a walk that curves (alone in `model`, never the live world) to hold its heading, by the same random
-    search with the walk itself fixed (cpg.Steering), and return it with the steering added. A walk that goes
-    straight, falls, or is not helped (it scores no better over STEER_CHECK seconds) comes back as it was. The
-    reward's heading term straightened most walks, but not the imported A1's: open loop, its walks turned 46 degrees
-    in 4 s on average over 20 trainings, with or without the term."""
-    check, forward, loose = _check(model, robot, walk)
-    if not needs_steering(None if loose["fell"] else loose["turned"]):
-        return walk
-    steering = Steering.still(forward, check.body.joints)
-    reward = Reward(hold=HOLD_WEIGHT, aims=STEER_AIMS)
-    Trainer(model, robot, reward, walk.seconds, walk.freq, home=check.home).train(
-        steering, iterations=STEER_ROUNDS, seed=seed + 7
-    )
-    held = check.rollout(steering)
-    if held["fell"] or held["reward"] <= loose["reward"]:
-        return walk
-    return walk.model_copy(update={"steer": _Joints(model, robot, walk).to_saved(steering.theta)})
+    """Teach the walk (alone in `model`, never the live world) to hold its heading, and return it with the steering
+    added if that holds it better (holds_heading), else as it was. The reward's heading term straightened most walks,
+    but not the imported A1's: open loop, its walks turned 46 degrees in 4 s on average over 20 trainings, with or
+    without the term. And a walk that goes straight from standing can still swing off course starting out of a turn
+    (a starfish walk that turned 2 degrees in 20 s turned 48 in the first 4 s after a right turn)."""
+    loose = walk.model_copy(update={"steer": None})
+    held = train_steering(model, robot, loose, seed)
+    return held if holds_heading(model, robot, held, loose) else loose
 
 
 def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 0) -> SavedWalk:
@@ -393,7 +450,8 @@ class RhythmWalker:
         self.playing: str | None = None  # the mode the joints follow now (its rhythm, or home while steadying)
         self.rhythm: str | None = None  # the rhythm playing (a key of `rhythms`); None while standing or steadying
         self.t0: float | None = None  # when it started
-        self.aim = 0.0  # rad: the heading the walk holds, where the robot faced as it started walking
+        self.course = 0.0  # rad: the heading the walk holds, where the robot faced when asked to walk
+        self.aim = 0.0  # rad: the heading it steers for now, at most STEER_LEASH from where it faces
         self.steady_from: float | None = None  # steadying on home since then, before the asked rhythm starts
         self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
         self.fade_t0 = 0.0
@@ -422,6 +480,7 @@ class RhythmWalker:
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         now = float(data.time)
         self.tilt_cos = float(data.xmat[self.body.trunk][8])
+        dt = now - self.clock if now >= self.clock > -math.inf else 0.0
         if now < self.clock:  # the clock was turned back (a reset): times kept from before lie in the future
             self.playing, self.rhythm, self.t0, self.steady_from, self.fade_from = None, None, None, None, None
             self.walked_until = -math.inf
@@ -439,7 +498,7 @@ class RhythmWalker:
             senses = trunk_senses(data, self.body) if rhythm.reflexes else None
             error = 0.0
             if self.rhythm == "forward":
-                error = self._heading_error(data, now - self.t0)
+                error = self._heading_error(data, now - self.t0, dt)
                 self.walked_until = now
             target = rhythm.targets(self.home, now - self.t0, senses=senses, error=error)
         if self.fade_from is not None:
@@ -448,10 +507,13 @@ class RhythmWalker:
                 self.fade_from = None
         data.ctrl[self.actuators] = np.clip(target, self.lower, self.upper)
 
-    def _heading_error(self, data: mujoco.MjData, walked: float) -> float:
-        """How far (rad) the walk should steer back, `walked` seconds after it started: the aim follows a robot
-        further off than STEER_LEASH, and the correction comes in over STEER_RAMP."""
+    def _heading_error(self, data: mujoco.MjData, walked: float, dt: float) -> float:
+        """How far (rad) the walk should steer back, `walked` seconds after it started: toward an aim that comes back
+        to the course by STEER_RELAX, never more than STEER_LEASH away, with the correction coming in over
+        STEER_RAMP."""
         yaw = trunk_yaw(data, self.body)
+        back = _wrapped(self.course - self.aim)
+        self.aim += max(-STEER_RELAX * dt, min(STEER_RELAX * dt, back))
         error = _wrapped(self.aim - yaw)
         if abs(error) > STEER_LEASH:
             error = math.copysign(STEER_LEASH, error)
@@ -465,6 +527,10 @@ class RhythmWalker:
         the imported A1 16 degrees of the 88 it promised."""
         out_of_walk = now - self.walked_until <= FADE + 1.0 / CONTROL_HZ
         self.playing, self.steady_from = self.mode, None
+        if self.mode == "forward":
+            # Where it faces now, not once steadied: an imported A1 coming out of a fast turn spun on by 47 degrees
+            # while it steadied, and then walked that way.
+            self.course = self.aim = trunk_yaw(data, self.body)
         if self.mode is None:  # stop
             self.rhythm, self.t0 = None, None
             self._settle(data, now)
@@ -490,8 +556,6 @@ class RhythmWalker:
 
     def _start(self, data: mujoco.MjData, now: float, rhythm: str, fade: bool) -> None:
         self.rhythm, self.t0 = rhythm, now
-        if rhythm == "forward":
-            self.aim = trunk_yaw(data, self.body)
         if fade:
             self._fade(data, now)
         else:

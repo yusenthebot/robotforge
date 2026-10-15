@@ -338,7 +338,8 @@ def test_a_walk_that_falls_before_its_first_moment_keeps_no_walking_turns(monkey
 
 def test_a_kept_walk_that_curves_learns_to_hold_its_heading(pg, monkeypatch):
     """The reward's heading term straightened most learned walks, but not the imported A1's: open loop they turned
-    42 degrees in 4 s on average. A kept walk that curves learns to steer back toward where it was asked to go."""
+    42 degrees in 4 s on average. A kept walk learns to steer back toward where it was asked to go, kept if that
+    holds its heading better over 20 s played as move plays it."""
     from robotforge.behaviors import rhythm_walk
 
     monkeypatch.setattr(rhythm_walk, "STEER_ROUNDS", 8)  # a short search is enough for this starfish walk
@@ -359,9 +360,56 @@ def test_a_kept_walk_that_curves_learns_to_hold_its_heading(pg, monkeypatch):
         pg.run_fast(lambda: False, seconds)
         return (pg.behaviors.pose("crab")["heading_deg"] - before + 540) % 360 - 180
 
-    assert abs(heading_change(rhythm_walk.STEER_CHECK)) < 15  # degrees
-    straight = _walk("crab", walk.joints)  # standing still never curves: nothing to learn
-    assert rhythm_walk.learn_steering(solo, "crab", straight, seed=1) is straight
+    assert abs(heading_change(rhythm_walk.STEER_CHECK)) < 15  # degrees, over 20 s
+    still = _walk("crab", walk.joints)  # standing still cannot steer: nothing is kept
+    assert rhythm_walk.learn_steering(solo, "crab", still, seed=1) == still
+
+
+def test_a_walk_thrown_off_course_steers_back_to_the_heading_it_started_with(pg):
+    """Regression: the aim followed a robot more than 17 degrees off for good, and steering came in over the walk's
+    first 2 s, so a walk that drifted early held the new heading: an A1 walk went -35 degrees in 8 s and stayed
+    there. The aim stays within STEER_LEASH of the robot but comes back to the course by STEER_RELAX."""
+    from robotforge.behaviors import rhythm_walk
+
+    walker = _swinging(pg)
+    model, data = pg.session.model, pg.session.data
+
+    def face(yaw: float) -> None:
+        data.qpos[walker.body.qpos[3:7]] = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
+        mujoco.mj_kinematics(model, data)
+
+    walker.course = walker.aim = 0.0
+    face(-1.0)  # spun a long way to the right
+    assert walker._heading_error(data, 10.0, 0.02) == pytest.approx(rhythm_walk.STEER_SPAN)  # corrects fully
+    assert walker.aim == pytest.approx(-1.0 + rhythm_walk.STEER_LEASH)  # its aim no further off than the leash
+    face(-0.1)  # back near the course: the aim is never further than the leash either way, then comes back
+    for _ in range(50):
+        walker._heading_error(data, 10.0, 0.02)
+    assert walker.aim == pytest.approx(-0.1 - rhythm_walk.STEER_LEASH + rhythm_walk.STEER_RELAX, abs=0.003)
+    for _ in range(500):
+        walker._heading_error(data, 10.0, 0.02)
+    assert walker.aim == pytest.approx(0.0)  # all the way back
+    assert walker._heading_error(data, 1.0, 0.02) == pytest.approx(0.1 / rhythm_walk.STEER_RAMP)  # easing in
+
+
+def test_a_walk_asked_for_out_of_a_turn_holds_the_heading_it_was_asked_at(pg):
+    """Regression: the walk held the heading the robot faced once it had steadied, so an imported A1 coming out of a
+    fast turn walked off 47 degrees further round than where it was when asked to walk."""
+    walker = _swinging(pg)
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: walker.rhythm == "left", CALM_MAX + 0.1)
+    pg.run_fast(lambda: False, 0.5)
+    from robotforge.control.cpg import trunk_yaw
+
+    pg.session.data.qvel[walker.body.qvel[5]] = 12.0  # still spinning hard to the left
+    asked = trunk_yaw(pg.session.data, walker.body)
+    pg.behaviors.move("crab", 0.2, 0.0)
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.rhythm is None  # steadying
+    pg.run_fast(lambda: walker.t0 is not None, 2 * CALM_MAX)
+    started = trunk_yaw(pg.session.data, walker.body)
+    assert walker.course == pytest.approx(asked, abs=0.05)  # rad: where it was asked, not where it steadied
+    assert abs(started - asked) > 0.15  # it spun on while it steadied
 
 
 def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg):

@@ -27,7 +27,6 @@ from robotforge.behaviors.rhythm_walk import (
     joint_names,
     learn_steering,
     learn_turns,
-    needs_steering,
     save_walk,
 )
 from robotforge.control.cpg import (
@@ -108,16 +107,14 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
     return out
 
 
-def _turn_seconds(trained: dict[str, Any], steer: bool) -> int:
-    """About how long learning what follows a kept walk takes, from the robot's own training pace: the turns search
-    as many rounds as two sides times their starts, plus two sides of tuning them to begin out of the walk, and a
-    curving walk's steering its rounds once per aim. Each round costs about what a walk round did (a quarter more
-    for the extra rollouts). An imported A1 (12 joints, 13.8 s for 30 walk rounds) took 70 s for the turns alone."""
-    rounds = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * rhythm_walk.WALKING_ROUNDS
-    if steer:
-        rounds += rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS)
+def _turn_seconds(trained: dict[str, Any]) -> int:
+    """About how long learning what follows a kept walk takes, from the robot's own training pace (a round of
+    ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns
+    as many rounds as two sides times their starts, then each side is tuned to begin out of the walk."""
+    steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
+    turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * rhythm_walk.WALKING_ROUNDS
     per_round = trained["seconds"] / max(1, trained["rounds"])
-    return max(10, int(round(1.25 * per_round * rounds / 10.0)) * 10)
+    return max(10, int(round(per_round * (steer + turns) / 10.0)) * 10)
 
 
 def lesson_reward(energy: float, shove: bool) -> Reward:
@@ -740,19 +737,17 @@ class LearnToWalkLesson(Lesson):
             return _text(f"没存上：{exc}", f"Could not keep it: {exc}")
         ctx.results["kept"] = {"robot": name, "file": str(path), "speed": round(walk.speed, 3), "turns": False}
         drift = heading_drift(self._solo("yours"), "yours", walk)
-        steer = needs_steering(drift)
         self.turning = threading.Thread(target=self._learn_turns, args=(walk, folder, ctx), daemon=True)
         self.turning.start()
-        wait = _turn_seconds(result, steer)
-        curve = abs(math.degrees(drift or 0.0))
-        then = (
-            _text(
-                f"它的走法走着走着会拐（8 秒拐了 {curve:.0f} 度），所以先学怎么保持方向，再学原地转弯，",
-                f"Its walk curves ({curve:.0f} degrees in 8 s), so it first learns to hold its heading, then ",
-            )
-            if steer
-            else _text("现在它接着学原地转弯，", "It ")
+        wait = _turn_seconds(result)
+        curve, check = abs(math.degrees(drift or 0.0)), rhythm_walk.STEER_CHECK
+        then = _text(
+            f"它先学怎么保持方向（不管的话，它的走法 {check:.0f} 秒会拐 {curve:.0f} 度），再学原地转弯，",
+            f"It first learns to hold its heading (left alone, its walk turns {curve:.0f} degrees in {check:.0f} s), "
+            "then ",
         )
+        if drift is None:
+            then = _text("它先学怎么保持方向，再学原地转弯，", "It first learns to hold its heading, then ")
         return _text(
             f"存好了：{name} 学会的走法（4 秒 {result['distance']:g} 米，约 {walk.speed:.2f} 米/秒）放进了你的世界。"
             f"{then['zh']}向左、向右各学两次留下好的那次，再练从走路中直接起转（一共约 {wait} 秒），学完也会存好。"
@@ -765,8 +760,8 @@ class LearnToWalkLesson(Lesson):
         )
 
     def _learn_turns(self, walk: SavedWalk, folder: Path, ctx: LessonContext) -> None:
-        """After the walk is kept: a curving walk learns to hold its heading, then the robot learns to turn on the
-        spot each way, on the robot alone, each kept as soon as it is learned."""
+        """After the walk is kept: it learns to hold its heading, then the robot learns to turn on the spot each way,
+        on the robot alone, each kept as soon as it is learned."""
         try:
             walk = learn_steering(self._solo("yours"), "yours", walk, seed=self.trainings)
             save_walk(folder, walk)
