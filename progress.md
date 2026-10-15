@@ -196,14 +196,28 @@ Rounds 1-3 done, 2026-10-14.
   - Swinging runs reported a meaningless "ended off by 42 degrees" and won "best"; end_err is now None unless the arm came to rest.
   - The PiPER challenge passed instantly with the previous step's settings; it now has to be done without the model, and a run with feedforward says it does not count.
 
+## Round 18 (2026-10-15): quadruped gaits lesson (phase C part 4)
+
+- `learn/gait.py` ("gait", chapter 走路): our template dog and the Menagerie Go2 in two lanes on the same gait code; every "走 5 秒" puts both back on the start line with fresh gaits and walks the chosen one; the record keeps distance over time, roll and pitch (RMS after the first second); a summary line reports each walk.
+- `behaviors/quadruped.py`: `PATTERNS` (trot, pace, bound as phase offsets), `QuadrupedGait.set_pattern`, `set_period` (top speed follows; a library robot's known top speed still caps it), `leg_length`.
+- Engine and viewer: `Plot(kind="footfall")` (one row per foot, filled while it touches the floor, from real contacts); rig kind `gait` (name tags, the support strip between two feet or the patch under three or four, foot discs, the centre of mass dropped to the floor, drawn over the robots); `live.follow` makes the camera walk along with a body (retried until the scene's bodies exist; orbiting away stays the learner's); summaries without stars show no empty stars; record tables show choice labels.
+- Steps (each starts with a guess): trot (diagonal feet together), pace (rocks sideways), bound (nods, hardly moves), step period at 0.6 m/s, the Go2 with the same settings, a challenge (Go2: 2.7 m in 5 s, roll and pitch under 2 degrees), a quiz on why robots trot.
+- Measured at 0.2 m/s, T 0.36: our dog trot 1.03 m, roll 0.63, pitch 0.43; pace 0.86 m, roll 4.2; bound -0.14 m, pitch 3.9 (Go2 bound pitch 13.3, 0.26 m). At 0.6 m/s: T 0.25 2.6 m, T 0.36 1.76 m, T 0.5 1.31 m (our dog); Go2 T 0.36 2.66 m, T 0.25 2.83 m.
+- What did NOT work (and the fix):
+  - A statically stable crawl (one leg at a time, duty 0.75) does not work on our gait: the centre of mass is inside the support triangle only 12 to 38% of the time, it stalls at 0.1 m/s, and a quick body-sway attempt (feet shifted toward the centroid of the feet that stay down) made it fall. Left out of the lesson; a real crawl with planned body shifts is a frontier item.
+  - The Go2's free joint has no name, so finding the trunk by joint name failed; it goes by the body under the free joint.
+  - A fixed camera over the whole 3 m walk made the dogs and the support overlay tiny, and a closer one lost the end of the walk behind the panels: the camera now follows the dog being tested.
+  - The support line drawn as a 1 px line under the dog was invisible: it is a 3 cm strip with foot discs, drawn without depth test after the robots.
+  - The stride formula used the asked-for speed even when the period capped it; it uses the speed the gait really steps for and notes the cap.
+
 ## Next-round seed
 
-Round 18 = phase C part 4: a gait lesson (template dog: phase, swing and stance, step period; then the Go2) built the same way (guess, recorded test, live formula), and plan the humanoid balance lesson (centre of mass and support polygon, our template then G1). Then a Review round: walk every lesson as a beginner in the browser, prune dead code, ambition critic.
+Round 19 = phase C part 5: a humanoid balance lesson (centre of mass over the support polygon, standing on one foot, ankle vs hip strategy against a push; our ZMP template, then the G1). Then a Review round: walk every lesson as a beginner in the browser, prune dead code, ambition critic.
 
 ## Frontier
 
-- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 7 lessons (two on real robots' joints), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
-- Next frontiers (2026-10-15): the experiment bench (phase B); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
+- Current ceiling: any robot in 6 scenes and 8 terrains, driven by gait, MPC/MPPI, LQR, IK or learned policies (Go2, G1) from the viewer; 8 lessons (PID on the PiPER, gaits on the Go2), 3 challenges, 2 real-robot face-offs and 4 tuning benches with measured comparisons.
+- Next frontiers (2026-10-15): a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
