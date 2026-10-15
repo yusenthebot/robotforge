@@ -152,19 +152,28 @@ function geometryFor(geom, meshGeometries) {
   }
 }
 
+// The floor is drawn a little "behind" in depth, so whatever lies on it (a heightfield's flat parts, paths,
+// start marks, a pond a few millimetres up) always wins instead of flickering against it.
+const FLOOR_OFFSET = { polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 4 };
+let floorFrame = null; // { x, y, half, halfY, material } of the scene's floor, for lining up textures with it
+
+function planeHalf(geom, extent) {
+  const half = geom.size[0] > 0 ? geom.size[0] : Math.max(20, extent * 20); // infinite planes: big enough
+  return [half, geom.size[1] > 0 ? geom.size[1] : half];
+}
+
 function planeObject(geom, extent, look) {
-  const half = geom.size[0] > 0 ? geom.size[0] : Math.max(20, extent * 20);
-  const halfY = geom.size[1] > 0 ? geom.size[1] : half;
+  const [half, halfY] = planeHalf(geom, extent);
   let mat;
   if (look && look.pattern !== "checker") {
     const tex = groundTexture(look.pattern);
     tex.repeat.set((2 * half) / look.tile, (2 * halfY) / look.tile);
-    mat = new THREE.MeshStandardMaterial({ map: tex, color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 });
+    mat = new THREE.MeshStandardMaterial({ map: tex, color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0, ...FLOOR_OFFSET });
   } else {
     const tex = checkerTexture(geom.rgba);
     const cell = Math.max(0.25, extent / 4);
     tex.repeat.set((2 * half) / (2 * cell), (2 * halfY) / (2 * cell));
-    mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0 });
+    mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0, ...FLOOR_OFFSET });
   }
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * half, 2 * halfY), mat);
   mesh.receiveShadow = true;
@@ -209,7 +218,7 @@ function groundCanvas(pattern) {
     const b = blotch.getContext("2d");
     for (let y = 0; y < 16; y++) {
       for (let x = 0; x < 16; x++) {
-        const v = Math.round(222 + 33 * rand());
+        const v = Math.round(228 + 27 * rand());
         b.fillStyle = `rgb(${v},${v},${v})`;
         b.fillRect(x, y, 1, 1);
       }
@@ -218,7 +227,7 @@ function groundCanvas(pattern) {
     g.drawImage(blotch, 0, 0, size, size);
     const img = g.getImageData(0, 0, size, size);
     for (let i = 0; i < img.data.length; i += 4) {
-      const grain = (rand() - 0.5) * 26;
+      const grain = (rand() - 0.5) * 12; // fine grain shimmers at grazing angles; keep it subtle
       for (let k = 0; k < 3; k++) img.data[i + k] = Math.max(0, Math.min(255, img.data[i + k] + grain));
     }
     g.putImageData(img, 0, 0);
@@ -258,6 +267,12 @@ function hfieldObject(geom, desc, floats, look) {
   const tex = groundTexture(look ? look.pattern : "speckle");
   const tile = look ? look.tile : 0.6;
   tex.repeat.set((2 * rx) / tile, (2 * ry) / tile);
+  const f = floorFrame;
+  if (f && look && f.material === geom.material) {
+    // Same surface as the floor: line the pattern up with the floor's, so the two meet without a seam.
+    const shift = (a) => ((a % 1) + 1) % 1;
+    tex.offset.set(shift((f.half - f.x + geom.pos[0] - rx) / tile), shift((f.halfY - f.y + geom.pos[1] - ry) / tile));
+  }
   const mat = new THREE.MeshStandardMaterial({
     color: rgbaColor(geom.rgba),
     map: tex,
@@ -268,7 +283,12 @@ function hfieldObject(geom, desc, floats, look) {
   const mesh = new THREE.Mesh(g, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.add(hfieldSkirt(h, floats, top, base, mat));
+  // Sides down to the base only where the edge stands above the floor; terrain that blends into the
+  // floor at its rim would only show them as a dark seam.
+  const edge = []; // the field's border samples, as heights
+  for (let c = 0; c < h.ncol; c++) edge.push(floats[h.offset + c], floats[h.offset + (h.nrow - 1) * h.ncol + c]);
+  for (let r = 0; r < h.nrow; r++) edge.push(floats[h.offset + r * h.ncol], floats[h.offset + r * h.ncol + h.ncol - 1]);
+  if (geom.pos[2] + Math.max(...edge) * top > 0.005) mesh.add(hfieldSkirt(h, floats, top, base, mat));
   return mesh;
 }
 
@@ -291,7 +311,17 @@ function hfieldSkirt(h, floats, top, base, mat) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
   g.computeVertexNormals();
-  const skirt = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: mat.color.clone().multiplyScalar(0.7), roughness: 1, side: THREE.DoubleSide }));
+  const skirt = new THREE.Mesh(
+    g,
+    new THREE.MeshStandardMaterial({
+      color: mat.color.clone().multiplyScalar(0.7),
+      roughness: 1,
+      side: THREE.DoubleSide,
+      polygonOffset: true, // behind the floor where it dips under it: only the part above the floor shows
+      polygonOffsetFactor: 4,
+      polygonOffsetUnits: 8,
+    })
+  );
   skirt.receiveShadow = true;
   return skirt;
 }
@@ -348,6 +378,12 @@ async function applyScene(desc) {
   });
 
   const extent = Math.max(desc.stat.extent, 0.1);
+  const floorGeom = desc.geoms.find((g) => g.type === "plane");
+  floorFrame = null;
+  if (floorGeom) {
+    const [half, halfY] = planeHalf(floorGeom, extent);
+    floorFrame = { x: floorGeom.pos[0], y: floorGeom.pos[1], half, halfY, material: floorGeom.material };
+  }
   for (const geom of desc.geoms) {
     let obj;
     const look = grounds[geom.material];
@@ -430,8 +466,10 @@ function fitDistance(r) {
 function frameCamera({ animate = false } = {}) {
   const sphere = contentSphere();
   const d = fitDistance(Math.max(sphere.radius, 0.08));
-  camera.near = Math.max(d / 1000, 0.001);
-  camera.far = d * 200;
+  // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
+  // surfaces that nearly touch flicker); fog hides everything well before the far plane.
+  camera.near = Math.min(Math.max(d / 400, 0.004), 0.05);
+  camera.far = d * 40;
   camera.updateProjectionMatrix();
   const eye = sphere.center.clone().add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
   moveCamera(eye, sphere.center, animate);
