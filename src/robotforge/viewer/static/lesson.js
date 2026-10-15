@@ -30,6 +30,7 @@ export function initLessons(hooks) {
 export const lessonActive = () => lesson !== null;
 export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
 export const lessonDriveSpec = () => lesson?.drive ?? null;
+let followWanted = null; // the body the lesson last asked the camera to follow
 export const lessonKind = () => lesson?.kind ?? null;
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
 
@@ -148,6 +149,8 @@ function finishLesson() {
 function openLesson(desc) {
   lesson = desc;
   state = null;
+  followWanted = null;
+  api.followBody(null);
   plots.reset(desc.plots);
   bench.setup(desc.bench, desc.bench_state);
   renderTable(null);
@@ -172,6 +175,8 @@ function openLesson(desc) {
 function closeLesson() {
   lesson = null;
   state = null;
+  followWanted = null;
+  api.followBody(null);
   overlays.clear();
   pip.teardown();
   document.body.classList.remove("in-lesson");
@@ -217,6 +222,9 @@ export function lessonUpdate(msg) {
   } else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
   $("lesson-readout").textContent = readout(msg.live);
+  const follow = msg.live?.follow ?? null;
+  // Only when the lesson asks for a different body, so orbiting the camera away stays yours.
+  if (follow !== followWanted && api.followBody(follow)) followWanted = follow;
   renderFormula(msg.live?.formula ?? null);
   renderTable(msg.live?.table ?? null);
 }
@@ -355,7 +363,8 @@ function renderResult() {
     box.replaceChildren();
     const line = document.createElement("span");
     line.textContent = pick(summary);
-    box.append(line, starSpan(state.results.stars ?? 0));
+    box.append(line);
+    if (state.results.stars !== undefined) box.append(starSpan(state.results.stars)); // lessons report without stars
     return;
   }
   const test = state?.results?.test;
@@ -418,6 +427,7 @@ const bench = {
   value(control, v) {
     const c = lesson?.controls.find((x) => x.id === control);
     if (c?.kind === "toggle") return t(v ? "on" : "off");
+    if (c?.kind === "choice" && c.options?.[v]) return pick(c.options[v]);
     return Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
   },
   render() {
@@ -902,7 +912,8 @@ const plots = {
       title.textContent = spec.unit ? `${pick(spec.title)} (${spec.unit})` : pick(spec.title);
       const legend = document.createElement("span");
       legend.className = "plot-legend";
-      for (const s of spec.series) {
+      const named = spec.kind === "footfall" ? [] : spec.series; // footfall rows carry their own names
+      for (const s of named) {
         const item = document.createElement("span");
         item.className = "legend-item";
         item.style.setProperty("--c", `var(${COLORS[s.color]})`);
@@ -947,6 +958,10 @@ const plots = {
     const end = this.data.length ? this.data[this.data.length - 1].t : 0;
     const start = end - spec.window;
     const shown = this.data.filter((s) => s.t >= start);
+    if (spec.kind === "footfall") {
+      this.drawFootfall(spec, g, w, h, shown, start, token);
+      return;
+    }
     let lo = Infinity;
     let hi = -Infinity;
     for (const s of shown) for (const series of spec.series) {
@@ -992,6 +1007,32 @@ const plots = {
       g.stroke();
     }
     g.setLineDash([]);
+  },
+  // One row per foot, filled while it is on the ground: the classic gait diagram, newest on the right.
+  drawFootfall(spec, g, w, h, shown, start, token) {
+    const rows = spec.series.length;
+    const left = 44;
+    const rowH = (h - 10) / rows;
+    const x = (t) => left + ((t - start) / spec.window) * (w - left - 8);
+    g.font = `10px ${token("--font") || "sans-serif"}`;
+    spec.series.forEach((series, r) => {
+      const top = 4 + r * rowH;
+      g.fillStyle = token("--muted");
+      g.fillText(pick(series.label), 2, top + rowH / 2 + 3);
+      g.fillStyle = token("--track");
+      g.fillRect(left, top + 2, w - left - 8, rowH - 4);
+      g.fillStyle = token(COLORS[series.color]);
+      let from = null;
+      shown.forEach((s, i) => {
+        const on = s[series.key] > 0.5;
+        if (on && from === null) from = s.t;
+        const last = i === shown.length - 1;
+        if (from !== null && (!on || last)) {
+          g.fillRect(x(from), top + 2, Math.max(1, x(s.t) - x(from)), rowH - 4);
+          from = null;
+        }
+      });
+    });
   },
 };
 
@@ -1644,7 +1685,63 @@ function cleanerRig(rig) {
   };
 }
 
+// Walking dogs: name tags that follow them, and under the dog being tested the support (the line or
+// patch between the feet on the ground) with the centre of mass dropped onto the floor.
+function gaitRig(rig) {
+  const tags = faceoffRig(rig);
+  const support = new THREE.Group();
+  const violet = api.color("--plot-violet");
+  const amber = api.color("--amber");
+  const onTop = (material) => Object.assign(material, { depthTest: false }); // seen through the dog's body
+  const patch = new THREE.Mesh(new THREE.BufferGeometry(), onTop(basic(violet, 0.32, true)));
+  const feet = new THREE.Group();
+  const footDisc = new THREE.CircleGeometry(0.022, 20);
+  const footMat = onTop(basic(violet, 0.9, true));
+  for (let k = 0; k < 4; k++) feet.add(new THREE.Mesh(footDisc, footMat));
+  const com = new THREE.Mesh(new THREE.CircleGeometry(0.03, 28), onTop(basic(amber, 1, true)));
+  const drop = new THREE.Line(new THREE.BufferGeometry(), lineMat(amber, 0.7));
+  support.add(patch, feet, com, drop);
+  support.traverse((o) => {
+    o.renderOrder = 5; // after the robots, so the overlay draws over their legs
+  });
+  const z = 0.004; // just above the floor
+  const parts = { ...tags.parts, support };
+  tags.group.add(support);
+  const WIDTH = 0.03; // two feet make a line: drawn as a strip this wide
+  return {
+    group: tags.group,
+    parts,
+    frame() {
+      tags.frame();
+      const pts = (state.live?.support ?? []).map(([px, py]) => new THREE.Vector3(px, py, z));
+      feet.children.forEach((disc, k) => {
+        disc.visible = k < pts.length;
+        if (disc.visible) disc.position.copy(pts[k]);
+      });
+      const tri = [];
+      if (pts.length === 2) {
+        const along = pts[1].clone().sub(pts[0]);
+        const side = new THREE.Vector3(-along.y, along.x, 0).normalize().multiplyScalar(WIDTH / 2);
+        const [a, b] = pts;
+        tri.push(a.clone().add(side), b.clone().add(side), b.clone().sub(side), a.clone().add(side), b.clone().sub(side), a.clone().sub(side));
+      }
+      for (let k = 1; k + 1 < pts.length; k++) tri.push(pts[0], pts[k], pts[k + 1]);
+      patch.visible = tri.length > 0;
+      if (tri.length) setPoints(patch, tri);
+      const c = state.live?.com;
+      com.visible = drop.visible = !!c;
+      if (c) {
+        com.position.set(c[0], c[1], z + 0.001);
+        const trunk = api.bodyNode(rig.entrants[state.values.dog ?? 0]?.body);
+        const top = trunk ? trunk.position.z : 0.3;
+        setPoints(drop, [new THREE.Vector3(c[0], c[1], top), new THREE.Vector3(c[0], c[1], z)]);
+      }
+    },
+  };
+}
+
 const RIGS = {
+  gait: gaitRig,
   joint: jointRig,
   planar_arm: planarArmRig,
   rover: roverRig,

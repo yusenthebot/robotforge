@@ -74,6 +74,7 @@ class Plot:
     unit: str
     series: tuple[Series, ...]
     window: float = 6.0  # seconds shown
+    kind: Literal["lines", "footfall"] = "lines"  # footfall: one row per series, filled while its value is 1
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -81,6 +82,7 @@ class Plot:
             "title": self.title,
             "unit": self.unit,
             "window": self.window,
+            "kind": self.kind,
             "series": [{"key": s.key, "label": s.label, "color": s.color, "dashed": s.dashed} for s in self.series],
         }
 

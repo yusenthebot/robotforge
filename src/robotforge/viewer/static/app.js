@@ -1129,10 +1129,10 @@ function startFollow() {
   startFollowBody(sceneDesc?.bodies.find((b) => b.name.startsWith(`${selected}/`) && b.dynamic)?.id ?? null);
 }
 
-function startFollowBody(body) {
+function startFollowBody(body, { keepTween = false } = {}) {
   if (body === null || !bodyNodes[body]) return;
   if (follow && follow.body === body) return;
-  tween = null;
+  if (!keepTween) tween = null;
   const start = bodyNodes[body].position;
   follow = { body, last: start.clone(), z: start.z, t: performance.now() };
 }
@@ -1602,6 +1602,12 @@ initLessons({
   },
   shift: () => shiftForDrawers(),
   retitle: () => renderTitle(),
+  // Keep the camera with a lesson's robot as it walks (null stops); the lesson's own camera move finishes first.
+  followBody: (body) => {
+    if (body === null) follow = null;
+    else startFollowBody(body, { keepTween: true });
+    return body === null || follow?.body === body; // false while the scene's bodies are still arriving
+  },
   renderer,
   canvas,
   rayAt: (clientX, clientY) => {

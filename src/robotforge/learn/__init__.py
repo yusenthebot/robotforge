@@ -6,6 +6,7 @@ from robotforge.learn.autopilot import AutopilotLesson
 from robotforge.learn.challenges import CourseChallenge, MazeChallenge, ShoveChallenge
 from robotforge.learn.compare import ArmFaceOff, HumanoidFaceOff
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
+from robotforge.learn.gait import GaitLesson
 from robotforge.learn.ik import IKLesson
 from robotforge.learn.ik_arm import IKArmLesson
 from robotforge.learn.pd import PDLesson
@@ -23,6 +24,7 @@ LESSONS: dict[str, type[Lesson]] = {
         IKArmLesson,
         SensorsLesson,
         AutopilotLesson,
+        GaitLesson,
         RLLesson,
         MazeChallenge,
         ShoveChallenge,

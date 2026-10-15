@@ -24,6 +24,13 @@ from robotforge.sim.geometry import collides, lowest_point
 
 # Trot phase offset of each leg (diagonal pairs in phase). Also our template's leg names.
 TEMPLATE_LEGS = {"front_left": 0.0, "rear_right": 0.0, "front_right": 0.5, "rear_left": 0.5}
+# Which legs step together, as each leg's phase offset in the cycle: trot (diagonal pairs), pace
+# (same-side pairs) and bound (front pair, then rear pair).
+PATTERNS = {
+    "trot": TEMPLATE_LEGS,
+    "pace": {"front_left": 0.0, "rear_left": 0.0, "front_right": 0.5, "rear_right": 0.5},
+    "bound": {"front_left": 0.0, "front_right": 0.0, "rear_left": 0.5, "rear_right": 0.5},
+}
 # Tripod: two triangles of feet take turns.
 TRIPOD_LEGS = {
     "front_left": 0.0,
@@ -131,12 +138,12 @@ class QuadrupedGait:
         leg_len = float(np.mean([np.linalg.norm(leg.home_foot - leg.hip) for leg in self.legs]))
         if period is None:
             period = float(np.clip(REFERENCE_PERIOD * leg_len / REFERENCE_LEG, 0.3, 0.7))
-        self.period = period
+        self.leg_length = leg_len
         self.lift = lift if lift is not None else 0.25 * leg_len
         # Stride is limited to what the legs can reach comfortably.
         self.max_stride = 0.55 * leg_len
-        self._stride_speed = self.max_stride / (self.period * self.duty)  # body speed at the longest stride
-        self.max_speed = SPEED_MARGIN * self._stride_speed
+        self._top: float | None = None  # a known top speed for this robot, if any
+        self.set_period(period)
         self.command_speed = 0.0
         self.command_turn = 0.0
         self.speed = 0.0
@@ -152,8 +159,25 @@ class QuadrupedGait:
         self._v_int = np.zeros(3)
         self._saturated = False  # the last plan had to shorten a stride
 
+    def set_period(self, period: float) -> None:
+        """Seconds per gait cycle; the fastest accepted speed follows from it and the longest stride."""
+        self.period = period
+        self._stride_speed = self.max_stride / (self.period * self.duty)  # body speed at the longest stride
+        self.max_speed = SPEED_MARGIN * self._stride_speed
+        if self._top is not None:
+            self.max_speed = min(self.max_speed, self._top)
+
+    def set_pattern(self, offsets: dict[str, float]) -> None:
+        """Which legs step together: a phase offset per leg name (see PATTERNS)."""
+        missing = [leg.name for leg in self.legs if leg.name not in offsets]
+        if missing:
+            raise ValueError(f"the pattern has no phase for {', '.join(missing)}")
+        for leg in self.legs:
+            leg.phase_offset = offsets[leg.name]
+
     def limit_speed(self, top: float) -> None:
         """Lower the fastest accepted speed to what this robot is known to reach (m/s)."""
+        self._top = top
         self.max_speed = min(self.max_speed, top)
         self.command(self.command_speed, self.command_turn)
 
