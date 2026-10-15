@@ -200,7 +200,7 @@ def test_balance_env_terminates_when_the_pole_falls_and_residual_mode_keeps_it_u
     assert total == pytest.approx(2.0 * 4.0, rel=0.05)  # alive bonus x seconds, almost no cost
 
 
-def test_env_renders_rgb_frames():
+def test_env_renders_rgb_frames(needs_gl):
     env = make_env("drive_to", render_mode="rgb_array")
     env.reset(seed=0)
     frame = env.render()

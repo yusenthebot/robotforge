@@ -78,6 +78,7 @@ def test_relative_absolute_and_file_uris(tmp_path):
     assert resolver.resolve("../meshes/a b.stl").path == mesh.resolve()
     assert resolver.resolve(str(mesh)).path == mesh.resolve()
     assert resolver.resolve(f"file://{str(mesh).replace(' ', '%20')}").path == mesh.resolve()
+    assert resolver.resolve(mesh.as_uri()).path == mesh.resolve()  # the standard form, file:///C:/... on Windows
 
 
 def test_unsupported_scheme_and_non_mesh_files_are_refused(tmp_path):
@@ -346,7 +347,7 @@ def test_xacro_cannot_read_files_outside_its_project_or_environment_variables(tm
     write(project / "package.xml", "<package><name>proj</name></package>")
     src = write(
         project / "r.xacro",
-        f'<robot name="r" {XACRO_NS}><xacro:property name="d" value="${{xacro.load_yaml(\'{outside}\')}}"/>'
+        f'<robot name="r" {XACRO_NS}><xacro:property name="d" value="${{xacro.load_yaml(\'{outside.as_posix()}\')}}"/>'
         '<link name="${d.key}"/></robot>',
     )
     with pytest.raises(xacro.XacroError, match="outside the project folder"):
