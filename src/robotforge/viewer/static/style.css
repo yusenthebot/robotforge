@@ -263,6 +263,7 @@ kbd {
   right: var(--gutter);
   width: 300px;
   max-height: calc(100% - var(--gutter) * 2 - 44px - 84px);
+  overflow-x: hidden; /* a panel never scrolls sideways: clicking a control would slide every line under the edge */
   overflow-y: auto;
   border-radius: var(--radius);
   padding: 6px 0;
@@ -1173,9 +1174,10 @@ input[type="range"]::-moz-range-thumb {
   .drawer.lesson-panel { max-height: 42%; }
 }
 
-.lesson-choice { display: grid; gap: 6px; }
-.lesson-choice .seg { display: flex; }
-.lesson-choice .seg button { flex: 1; }
+.lesson-choice { display: grid; gap: 6px; min-width: 0; }
+/* Long option lists (four robots, one named by the learner) wrap onto a second row instead of widening the panel. */
+.lesson-choice .seg { display: flex; flex-wrap: wrap; gap: 2px; }
+.lesson-choice .seg button { flex: 1 1 auto; }
 
 .lesson-drive {
   display: flex;

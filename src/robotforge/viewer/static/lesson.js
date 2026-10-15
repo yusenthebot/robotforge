@@ -28,6 +28,8 @@ export function initLessons(hooks) {
 }
 
 export const lessonActive = () => lesson !== null;
+// Where a lesson aims the camera at its rig, if it does: the viewer's whole-scene framing must not override it.
+export const lessonCamera = () => lesson?.camera ?? null;
 export const lessonTitle = () => (lesson ? pick(lesson.title) : null);
 export const lessonDriveSpec = () => lesson?.drive ?? null;
 let followWanted = null; // the body the lesson last asked the camera to follow

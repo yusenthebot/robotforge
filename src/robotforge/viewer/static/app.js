@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonActive, lessonDriveSpec, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
@@ -542,7 +542,11 @@ function applyPoses(buffer) {
   if (pendingFit) {
     const sphere = contentSphere();
     fitLights(sphere);
-    if (pendingFit === "camera") frameCamera();
+    // Reloaded mid-lesson: aim at the lesson's rig, not the whole scene (its animated move may have been
+    // cut short by the scene arriving again).
+    const own = lessonCamera();
+    if (pendingFit === "camera" && own) moveCamera(new THREE.Vector3().fromArray(own.eye), new THREE.Vector3().fromArray(own.target), false);
+    else if (pendingFit === "camera") frameCamera();
     pendingFit = null;
     $("loading").hidden = true;
   }

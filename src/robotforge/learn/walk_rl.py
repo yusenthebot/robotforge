@@ -742,6 +742,8 @@ class LearnToWalkLesson(Lesson):
         }
 
     def camera(self) -> dict[str, list[float]]:
-        # Side on to the dog's lane, a little ahead of it; the camera then walks with whichever robot learns.
-        y = -(len(self.robots) - 1) / 2 * LANE
+        # Side on to the lane of the robot being taught (the dog at first), a little ahead of it; the camera then
+        # walks with whichever robot learns. A page reloaded mid-lesson gets the lane of the one picked by then.
+        index = int(self.ctx.values["robot"]) if self.ctx is not None else 0
+        y = (index - (len(self.robots) - 1) / 2) * LANE
         return {"eye": [START_X + 0.5, y - 2.4, 1.2], "target": [START_X + 0.5, y + 0.4, 0.1]}
