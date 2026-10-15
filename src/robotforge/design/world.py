@@ -70,6 +70,16 @@ class RobotEntry(_Strict):
     def _name(cls, v: str) -> str:
         return _check_name(v)
 
+    @field_validator("template")
+    @classmethod
+    def _template(cls, v: str | None) -> str | None:
+        return templates.canonical(v) if v is not None else None
+
+    @field_validator("library")
+    @classmethod
+    def _library(cls, v: str | None) -> str | None:
+        return library.canonical(v) if v is not None else None
+
     @model_validator(mode="after")
     def _one_source(self) -> RobotEntry:
         if [self.template, self.file, self.library, self.build].count(None) != 3:

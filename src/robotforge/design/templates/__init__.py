@@ -35,6 +35,11 @@ NICKNAMES = {
 }
 
 
+def canonical(name: str) -> str:
+    """The template `name` means ("Quadruped", "arms"), or `name` itself when there is none."""
+    return wording.match(name, TEMPLATES) or name
+
+
 def get(name: str) -> Template:
     found = wording.match(name, TEMPLATES)
     if found is None:

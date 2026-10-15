@@ -143,11 +143,19 @@ CATALOG: dict[str, LibraryRobot] = {
 }
 
 
+def _titles() -> dict[str, str]:
+    return {wording.squash(r.title): r.name for r in CATALOG.values()}  # "Unitree Go2" is go2
+
+
+def canonical(name: str) -> str:
+    """The library robot `name` means ("Go2", "Unitree Go2"), or `name` itself when there is none."""
+    return wording.match(name, CATALOG, _titles()) or name
+
+
 def get(name: str) -> LibraryRobot:
-    titles = {wording.squash(r.title): r.name for r in CATALOG.values()}  # "Unitree Go2" is go2
-    found = wording.match(name, CATALOG, titles)
+    found = wording.match(name, CATALOG, _titles())
     if found is None:
-        close = wording.near(name, CATALOG, titles)
+        close = wording.near(name, CATALOG, _titles())
         hint = f" Did you mean {', '.join(close)}?" if close else ""
         raise LibraryError(f"no robot {name!r} in the library.{hint} Choose one of: {', '.join(CATALOG)}")
     return CATALOG[found]
