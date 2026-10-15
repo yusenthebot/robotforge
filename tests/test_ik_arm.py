@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from robotforge.learn import ik_arm
@@ -66,3 +67,23 @@ def test_the_same_steps_work_on_the_piper(pg):
     update = _play(pg, 3.0)
     assert update["live"]["arm"] == "piper" and update["samples"][-1]["err"] < ik_arm.REACHED * 1000
     assert "piper" in update["passed"]
+
+
+def test_an_arm_jammed_on_its_joint_limits_starts_over_from_home(pg):
+    """Regression from Ubuntu CI: flailing with a tiny damping threw our arm onto its limits (yaw, shoulder and
+    elbow all at the end of their range), every clipped step then pointed out of range, and the arm never reached
+    a target again: the lesson's later steps could not pass."""
+    pg.lessons.passed.update({"drag", "ellipsoid", "damping"})
+    pg.lessons.handle({"action": "goto", "step": 3})
+    _play(pg, 0.5)
+    follow = pg.lessons.lesson.follow
+    chain = follow.arms["ours"].chain
+    follow.q["ours"] = np.array([chain.lower[0], chain.upper[1], chain.upper[2], 0.211, 0.0, 0.0])  # as CI left it
+    _set(pg, down=1, tx=0.3, ty=0.0, tz=0.1)
+    update = _play(pg, 0.3)
+    assert update["samples"][-1]["err"] > ik_arm.JAMMED * 1000 and "summary" not in update["results"]
+    update = _play(pg, 2.0)
+    assert update["samples"][-1]["err"] < ik_arm.REACHED * 1000
+    assert update["results"]["summary"]["en"].startswith("The arm was thrown onto its joint limits")
+    update = _play(pg, ik_arm.JAM_NOTE + 0.5)
+    assert "summary" not in update["results"]  # the note comes down once it has been read

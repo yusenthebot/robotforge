@@ -27,6 +27,13 @@ MOVED = 0.08  # m a target must move to count as a new one
 FLAIL = 30.0  # deg per tick: a joint jumping this far is flailing
 CALM = 5.0  # deg per tick
 EDGE = 30.0  # % of the home pose's manipulability: near a singular pose
+# Flailing with a tiny λ can throw the joints onto their limits, the arm folded away from the target; the
+# clipped steps then point out of range and it never moves again (CI caught it: a 1e-9 difference in the
+# aimed joints jammed 7 runs in 20). Stalled that far off with a joint on a limit, it starts over from home.
+JAMMED = 0.05  # m off the target...
+STALLED = 0.05  # ...with no joint turning more than this many degrees a tick...
+JAM_TICKS = 25  # ...for this many ticks (0.5 s)
+JAM_NOTE = 4.0  # s the note about starting over stays up
 ELLIPSOID_SCALE = 0.25  # drawn size per m/rad of hand speed
 START = (0.25, 0.0, 0.25)  # target relative to the active arm's base
 
@@ -46,6 +53,9 @@ class IKFollow:
         home = lesson.playground.behaviors.home_qpos()
         self.arms = {name: ArmMotion(model, name, home) for name in ARMS}
         self.q = {name: arm.q.copy() for name, arm in self.arms.items()}
+        self.home = {name: q.copy() for name, q in self.q.items()}
+        self.stalled = 0  # ticks the active arm has been jammed
+        self.note_until = -1.0  # sim time the starting-over note comes down
         self.w_home = {name: max(self.manipulability(name)[0], 1e-9) for name in ARMS}
         self.step_deg = 0.0
         self.error = 0.0
@@ -82,6 +92,7 @@ class IKFollow:
         )
         self.step_deg = math.degrees(float(np.max(np.abs(q - self.q[name]))))
         self.q[name] = q
+        self._unjam(name, target, float(data.time))
         for other, a in self.arms.items():
             data.ctrl[a.actuators] = self.q[other]
         hand = arm.ik.point(arm.chain, q)
@@ -91,6 +102,27 @@ class IKFollow:
         self.samples.append(
             {"t": float(data.time), "err": 1000 * self.error, "w": min(w, 400.0), "step": min(self.step_deg, 180.0)}
         )
+
+    def _unjam(self, name: str, target: np.ndarray, now: float) -> None:
+        """Start the active arm over from home when it is stuck on its joint limits far from the target."""
+        if 0 <= self.note_until < now:
+            self.ctx.results.pop("summary", None)
+            self.note_until = -1.0
+        arm = self.arms[name]
+        q = self.q[name]
+        on_limit = bool(np.any((q <= arm.chain.lower + 1e-6) | (q >= arm.chain.upper - 1e-6)))
+        far = float(np.linalg.norm(arm.ik.point(arm.chain, q) - target)) > JAMMED
+        self.stalled = self.stalled + 1 if on_limit and far and self.step_deg < STALLED else 0
+        if self.stalled < JAM_TICKS:
+            return
+        self.stalled = 0
+        self.q[name] = self.home[name].copy()
+        self.ctx.results["summary"] = _text(
+            "臂甩到关节极限上卡住了，一步也挪不动：从初始姿态重新解。真正的 IK 求解器也常靠换个起点重来。",
+            "The arm was thrown onto its joint limits and stuck there, unable to move a step: it starts over "
+            "from its home pose. Real IK solvers restart from another pose too.",
+        )
+        self.note_until = now + JAM_NOTE
 
     def status(self) -> dict[str, Any]:
         return {"controller": "lesson-ik", "arm": self.active(), "error_mm": round(1000 * self.error, 1)}
@@ -173,12 +205,13 @@ STEPS = (
             "then set λ to 0.05 or 0.2 and pull again.",
         ),
         done=_text(
-            "λ 太小，在边上关节会一步甩出几十上百度，整条臂乱抽；λ 大，动作平稳，代价是离目标远一点、跟得慢一点。"
+            "λ 太小，在边上关节会一步甩出几十上百度，整条臂乱抽，甩到关节极限上还可能卡死（这时它从初始姿态重新解）；"
+            "λ 大，动作平稳，代价是离目标远一点、跟得慢一点。"
             "真实机器人都会加阻尼或限速，安全比那几毫秒的精度要紧。",
             "With too small a λ, at the edge a joint jumps tens or hundreds of degrees in one step and the whole "
-            "arm thrashes; with a large λ the motion stays smooth, at the price of ending a little further from "
-            "the target and following more slowly. Real robots always add damping or speed limits: safety matters "
-            "more than those few millimetres.",
+            "arm thrashes, and may jam on its joint limits (then it starts over from home); with a large λ the "
+            "motion stays smooth, at the price of ending a little further from the target and following more "
+            "slowly. Real robots always add damping or speed limits: safety matters more than those few millimetres.",
         ),
         check=_tried_damping,
         unlock=("damping",),
