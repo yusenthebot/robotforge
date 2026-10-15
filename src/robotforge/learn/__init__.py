@@ -15,6 +15,7 @@ from robotforge.learn.pd_piper import PiperPIDLesson
 from robotforge.learn.rl import RLLesson
 from robotforge.learn.sensors import SensorsLesson
 from robotforge.learn.twins import GaitTwins, LQRTwins, MPCTwins, PIDTwins
+from robotforge.learn.walk_rl import LearnToWalkLesson
 
 LESSONS: dict[str, type[Lesson]] = {
     cls.id: cls
@@ -28,6 +29,7 @@ LESSONS: dict[str, type[Lesson]] = {
         GaitLesson,
         BalanceLesson,
         RLLesson,
+        LearnToWalkLesson,
         MazeChallenge,
         ShoveChallenge,
         CourseChallenge,

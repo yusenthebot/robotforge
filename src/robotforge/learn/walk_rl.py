@@ -1,0 +1,562 @@
+"""Lesson: reinforcement learning II. Any body learns to walk: a rhythm per joint, tuned by random search.
+
+Our template dog, a three-legged starfish built from parts (no hand-written gait knows it), our template
+humanoid and, when the learner came from a world with a robot of their own, that robot, stand in lanes.
+"Learn" trains the chosen one from standing still, in its own private copy of the world on a background
+thread, while the viewer replays the newest rhythm every four seconds. Each training lands in the record
+as a learning curve. Knobs: the rhythm's frequency, how much the reward charges for energy, how long to
+train. The search itself is control/cpg.py.
+"""
+
+from __future__ import annotations
+
+import threading
+from typing import Any
+
+import mujoco
+import numpy as np
+
+from robotforge.control.cpg import Body, CPGError, Reward, Rhythm, RhythmController, Trainer
+from robotforge.design.world import World, compile_world
+from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
+
+START_X = -0.8
+LANE = 0.9
+ATTEMPT = 4.0  # s: the viewer replays the newest rhythm from the start line this often (and trains on this long)
+ENERGY = (0.0, 0.1, 0.3)  # reward weight on energy, per (m g)
+SAMPLE_DT = 0.02
+STAR = {
+    "color": "purple",
+    "base": {"shape": "cylinder", "size": [0.2, 0.05], "sensors": ["imu"]},
+    "parts": [
+        {
+            "name": "hip",
+            "at": [0.1, 0, 0],
+            "joint": {"axis": "z", "range": [-40, 40]},
+            "shape": "box",
+            "size": [0.05, 0.03, 0.025],
+            "direction": "forward",
+            "repeat": {"count": 3, "around": "z"},
+        },
+        {
+            "name": "leg",
+            "parent": "hip",
+            "at": "end",
+            "joint": {"range": [-60, 90], "home": 40},
+            "size": [0.02, 0.1],
+            "direction": "forward",
+            "foot": True,
+        },
+    ],
+}
+BUILT_IN = (
+    ("dog", ("模板狗", "Template dog"), {"template": "quadruped", "params": {"color": "orange"}}),
+    ("star", ("三脚海星（零件拼的）", "Three-legged starfish (built from parts)"), {"build": STAR}),
+    ("humanoid", ("人形", "Humanoid"), {"template": "humanoid"}),
+)
+
+
+def _text(zh: str, en: str) -> Text:
+    return {"zh": zh, "en": en}
+
+
+def _runs(ctx: LessonContext, **want: Any) -> list[dict[str, Any]]:
+    return [r for r in ctx.runs if all(test(r["params"].get(k, 0.0)) for k, test in want.items())]
+
+
+def _dog_learned(ctx: LessonContext) -> bool:
+    return bool(_runs(ctx, robot=lambda v: v == 0, energy=lambda v: v == 0, iterations=lambda v: v >= 20))
+
+
+def _reward_changed(ctx: LessonContext) -> bool:
+    dog = _runs(ctx, robot=lambda v: v == 0)
+    return {r["params"]["energy"] for r in dog} >= {1.0, 2.0}
+
+
+def _star_learned(ctx: LessonContext) -> bool:
+    return any(r["metrics"]["distance"] > 0.3 for r in _runs(ctx, robot=lambda v: v == 1))
+
+
+def _humanoid_tried(ctx: LessonContext) -> bool:
+    return bool(_runs(ctx, robot=lambda v: v == 2))
+
+
+STEPS = (
+    Step(
+        id="rhythm",
+        title=_text("节律加随机搜索", "A rhythm and a random search"),
+        body=_text(
+            "这次不写步态，让机器人自己学。每个关节按一个正弦节律来回摆："
+            "目标角 = 初始角 + 偏置 + 幅度 × sin(2π·f·t + 相位)。"
+            "节律是现成的，要学的只有每个关节的偏置、幅度和相位。\n"
+            "学法和倒立摆那课一样是随机搜索：每一轮把这些数往 8 个随机方向各推一下、正反各试一次，"
+            "谁走得远就往谁那边挪。机器人每 4 秒从起跑线重放一次最新学到的节律。\n"
+            "先猜，再用模板狗点「开始学」（30 轮，十几秒）。",
+            "No gait is written this time: the robot learns one. Every joint swings to a sine rhythm: target = home + "
+            "offset + amplitude * sin(2 pi f t + phase). The rhythm is given; only each joint's offset, amplitude "
+            "and phase are learned.\n"
+            "The learning is the random search from the cart-pole lesson: every round nudges these numbers in 8 "
+            "random directions, tries each both ways, and moves toward whatever walked furthest. Every 4 s the "
+            "robot replays the newest rhythm from the start line.\n"
+            "Guess, then press Learn with the template dog (30 rounds, a dozen seconds).",
+        ),
+        done=_text(
+            "30 轮之后，4 秒能走 1.1 到 1.8 米（我们从 4 个不同的随机起点各学了一次），和手写小跑的最快速度"
+            "（0.36 m/s，4 秒 1.4 米）差不多，学 60 轮能到两米多。姿势有点怪：奖励只说了“走得远”，没说“走得好看”。"
+            "每次学都从一个新的随机起点开始，所以结果会不一样。",
+            "After 30 rounds it covers 1.1 to 1.8 m in 4 s (we learned from 4 different random starts), about as fast "
+            "as the hand-written trot's top speed (0.36 m/s, 1.4 m in 4 s); 60 rounds get past two metres. It looks "
+            "odd: the reward only said 'get far', not 'look nice'. Every training starts from a new random seed, so "
+            "results differ.",
+        ),
+        quiz=Quiz(
+            question=_text("学 30 轮以后，4 秒能走多远？", "After 30 rounds, how far does it get in 4 s?"),
+            options=(
+                _text("还不会动", "It does not move yet"),
+                _text("半米左右", "About half a metre"),
+                _text("一米多，和手写的小跑差不多快", "Over a metre, about as fast as the hand-written trot"),
+            ),
+            answer=2,
+            explain=_text("只学 36 个数，搜索很快就找到了。", "Only 36 numbers to learn: the search finds them fast."),
+            predict=True,
+        ),
+        check=_dog_learned,
+        unlock=("train", "stop", "iterations"),
+        show=("labels", "f_rhythm", "f_search"),
+    ),
+    Step(
+        id="reward",
+        title=_text("奖励说了算", "The reward decides"),
+        body=_text(
+            "奖励 = 走的距离 − 0.5 × 横着偏的距离 − w × 用掉的能量 ÷ (体重)。现在 w 是 0：怎么费劲都行。\n"
+            "先猜，再把「能耗的代价」调到 0.1 学一次，再调到 0.3 学一次。",
+            "Reward = distance - 0.5 * sideways drift - w * energy spent / (weight). Now w is 0: any effort goes.\n"
+            "Guess, then set Energy cost to 0.1 and learn again, then 0.3.",
+        ),
+        done=_text(
+            "w = 0.1：走 1.0 到 1.4 米，能量只用了 50 J 左右（不算能量时是 75 到 150 J），步子变小。"
+            "w = 0.3：我们学了 4 次，有 3 次干脆学会了站着不动：挪一步的代价比走出的距离还大。"
+            "机器人只会照着奖励去做，奖励没写清楚，它就会钻空子。",
+            "w = 0.1: 1.0 to 1.4 m on about 50 J (75 to 150 J when energy was free), with smaller steps. "
+            "w = 0.3: in 3 of our 4 trainings it learned to stand still: a step costs more than the distance earns. A "
+            "robot does exactly what the reward says; if the reward is loose, it finds the loophole.",
+        ),
+        quiz=Quiz(
+            question=_text("能耗的代价调到 0.1，会学出什么？", "With energy cost 0.1, what does it learn?"),
+            options=(
+                _text("和原来一样", "The same as before"),
+                _text("走得近一点，但省一大半力气", "A shorter walk on far less energy"),
+                _text("跑得更快", "It runs faster"),
+            ),
+            answer=1,
+            explain=_text("距离和能量在奖励里拔河。", "Distance and energy pull against each other in the reward."),
+            predict=True,
+        ),
+        check=_reward_changed,
+        unlock=("energy",),
+        show=("f_reward",),
+    ),
+    Step(
+        id="body",
+        title=_text("换一个身体", "Another body"),
+        body=_text(
+            "「哪个机器人」选三脚海星：三条腿、每条两个关节，是用零件拼出来的。"
+            "我们的步态程序只认 4 条或 6 条三关节的腿，"
+            "它不会走。（如果你来这里之前的世界里有自己拼的机器人，它也在列表里。）\n先猜，再让它学。",
+            "Set Which robot to the three-legged starfish: three legs of two joints each, built from parts. Our gait "
+            "code only knows four or six legs of three joints, so it cannot walk this one. (If the world you came "
+            "from has a robot of your own, it is in the list too.)\nGuess, then let it learn.",
+        ),
+        done=_text(
+            "它也学会了往前挪（我们测到 4 秒 0.5 到 0.85 米）。"
+            "同一套方法，不管几条腿、腿长什么样，都能自己找到一种走法。"
+            "这就是学习比手写强的地方。",
+            "It learns to shuffle forward too (0.5 to 0.85 m in 4 s in our runs). The same method finds a way to walk "
+            "for any number and shape of legs, which is where learning beats writing gaits by hand.",
+        ),
+        quiz=Quiz(
+            question=_text("三脚海星能学会走吗？", "Can the starfish learn to walk?"),
+            options=(_text("不能，没有现成的步态", "No, there is no gait for it"), _text("能", "Yes")),
+            answer=1,
+            explain=_text("学习不需要现成的步态。", "Learning needs no ready-made gait."),
+            predict=True,
+        ),
+        check=_star_learned,
+        unlock=("robot", "freq"),
+    ),
+    Step(
+        id="two_legs",
+        title=_text("两条腿呢", "And on two legs?"),
+        body=_text(
+            "选人形，再学一次。先猜。",
+            "Pick the humanoid and learn again. Guess first.",
+        ),
+        done=_text(
+            "怎么学都会摔。节律是“盲”的：它从不看传感器，身体歪了也照摆不误。四条腿、三条腿站得稳，盲走也行；"
+            "两条腿每一刻都要根据身体的倾斜调整。G1 的走路策略是一个神经网络，每秒看 50 次 IMU 和关节，"
+            "在仿真里用 PPO 练了一个小时，这就是深度强化学习。",
+            "It falls whatever it learns. The rhythm is blind: it never reads a sensor and keeps swinging while the "
+            "body tips. On four or three legs a blind walk is fine; on two, every moment needs a correction from "
+            "how the body leans. The G1's walk is a neural network that reads the IMU and joints 50 times a second, "
+            "trained with PPO for an hour in simulation: deep reinforcement learning.",
+        ),
+        quiz=Quiz(
+            question=_text("人形能用这个方法学会走吗？", "Can the humanoid learn to walk this way?"),
+            options=(_text("能", "Yes"), _text("会摔", "It falls")),
+            answer=1,
+            explain=_text("两条腿要靠反馈。", "Two legs need feedback."),
+            predict=True,
+        ),
+        check=_humanoid_tried,
+    ),
+    Step(
+        id="quiz",
+        title=_text("想一想", "Think about it"),
+        body=_text("节律加随机搜索又快又简单。", "A rhythm plus random search is quick and simple."),
+        done=_text("", ""),
+        quiz=Quiz(
+            question=_text("G1 为什么不用这种方法走路？", "Why does the G1 not walk this way?"),
+            options=(
+                _text("太慢了", "It is too slow"),
+                _text(
+                    "它要随时看传感器调整，节律是盲的",
+                    "It must correct from its sensors all the time; a rhythm is blind",
+                ),
+                _text("G1 的关节太多", "The G1 has too many joints"),
+            ),
+            answer=1,
+            explain=_text(
+                "对。会看传感器的策略才能站稳，这就需要神经网络和深度强化学习。",
+                "Right. Only a policy that reads its sensors can stay up, and that takes a neural network and deep RL.",
+            ),
+        ),
+    ),
+)
+
+
+class Watch:
+    """Replays the newest rhythm from the start line every ATTEMPT seconds and samples the live walk."""
+
+    rate_hz = 50.0
+
+    def __init__(self, lesson: LearnToWalkLesson) -> None:
+        self.lesson = lesson
+        self.next_sample = 0.0
+
+    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        self.lesson.tick(model, data)
+        if data.time >= self.next_sample:
+            self.next_sample = data.time + SAMPLE_DT
+            self.lesson.samples.append(self.lesson.sample(data))
+
+    def status(self) -> dict[str, Any]:
+        return {"controller": "learn-to-walk-watch"}
+
+
+class LearnToWalkLesson(Lesson):
+    id = "learn_to_walk"
+    chapter = _text("强化学习", "Reinforcement learning")
+    title = _text("强化学习（二）：任何形状的机器人都能学会走", "RL II: any body can learn to walk")
+    summary = _text(
+        "不写步态：狗、零件拼的三脚海星、你自己的机器人，各自学出一种走法；再看奖励怎么左右它，两条腿为什么学不会。",
+        "No gait written: a dog, a starfish built from parts and your own robot each learn a way to walk; then see "
+        "how the reward steers it, and why two legs will not learn this way.",
+    )
+    minutes = 15
+    plots = (
+        Plot(
+            "walk",
+            _text("这一趟走了多远", "This attempt's distance"),
+            "m",
+            (Series("x", _text("前进", "forward"), "ink"),),
+            window=6.0,
+        ),
+    )
+    steps = STEPS
+    bench = Bench(
+        title=_text("实验记录：学习曲线", "Experiment record: learning curves"),
+        x=_text("训练轮数", "round"),
+        x_unit="",
+        y=_text("4 秒走了", "distance in 4 s"),
+        y_unit="m",
+        params=("robot", "energy", "freq", "iterations"),
+        short=(_text("机器人", "robot"), _text("能耗代价", "energy"), _text("频率", "freq"), _text("轮", "rounds")),
+        metrics=(
+            Metric("distance", _text("走了", "covered"), "m", lower_is_better=False),
+            Metric("energy", _text("能量", "energy"), "J", ranked=False),
+            Metric("seconds", _text("学了", "trained"), "s", ranked=False),
+        ),
+    )
+
+    def __init__(self) -> None:
+        self.playground = None
+        self.ctx: LessonContext | None = None
+        self.robots: list[tuple[str, tuple[str, str], dict[str, Any]]] = list(BUILT_IN)
+        self.controls = self._controls()
+        self.model: mujoco.MjModel | None = None
+        self.start: np.ndarray | None = None
+        self.bodies: dict[str, Body] = {}
+        self.homes: dict[str, np.ndarray] = {}
+        self.rhythms: dict[str, Rhythm] = {}
+        self.players: dict[str, RhythmController] = {}
+        self.attempt_t0 = 0.0
+        self.attempt_x0 = 0.0
+        self.samples: list[dict[str, float]] = []
+        self.solo: dict[str, mujoco.MjModel] = {}
+        self.thread: threading.Thread | None = None
+        self.stopping = threading.Event()
+        self.progress: dict[str, Any] | None = None  # {"robot", "round", "of", "distance"} while training
+        self.trainings = 0
+
+    def _controls(self) -> tuple[Control, ...]:
+        return (
+            Control("train", "button", _text("开始学", "Learn")),
+            Control("stop", "button", _text("停", "Stop")),
+            Control(
+                "robot",
+                "choice",
+                _text("哪个机器人", "Which robot"),
+                options=tuple(_text(*label) for _, label, _ in self.robots),
+            ),
+            Control(
+                "energy",
+                "choice",
+                _text("能耗的代价 w", "Energy cost w"),
+                options=tuple(_text(f"{w:g}", f"{w:g}") for w in ENERGY),
+            ),
+            Control("freq", "slider", _text("节律频率", "Rhythm frequency"), 1.0, 3.0, 0.5, 2.0, "Hz"),
+            Control("iterations", "slider", _text("学多少轮", "Rounds"), 10, 60, 5, 30),
+        )
+
+    # ---- the world -------------------------------------------------------------------------------------
+
+    def build(self) -> mujoco.MjModel:
+        own = self._own_robot()
+        if own is not None:
+            self.robots.append(own)
+            self.controls = self._controls()
+        robots = [
+            {"name": key, **entry, "pos": [START_X, (i - (len(self.robots) - 1) / 2) * LANE]}
+            for i, (key, _, entry) in enumerate(self.robots)
+        ]
+        world = World.model_validate({"name": "learn_to_walk", "floor": {"style": "concrete"}, "robots": robots})
+        self.model = compile_world(world).model
+        return self.model
+
+    def _own_robot(self) -> tuple[str, tuple[str, str], dict[str, Any]] | None:
+        """A robot from the world the learner came from that can walk by rhythm, if there is one."""
+        store = getattr(self.playground, "store", None)
+        if store is None:
+            return None
+        try:
+            world = store.load()
+        except (OSError, ValueError):
+            return None
+        for entry in world.robots:
+            if entry.file is not None:  # imported files resolve against their own world folder
+                continue
+            spec = entry.model_dump(exclude={"name", "pos", "yaw"}, exclude_none=True)
+            try:
+                solo = compile_world(
+                    World.model_validate({"name": "solo", "robots": [{"name": "yours", **spec}]})
+                ).model
+                Body.find(solo, "yours")
+            except (CPGError, ValueError):
+                continue
+            self.solo["yours"] = solo
+            return "yours", (f"你的机器人：{entry.name}", f"Your robot: {entry.name}"), spec
+        return None
+
+    def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        self.ctx = ctx
+        self.start = data.qpos.copy()
+        home = model.key("home").qpos if model.nkey else model.qpos0
+        self.bodies = {key: Body.find(model, key) for key, _, _ in self.robots}
+        self.homes = {key: home[b.qadr].copy() for key, b in self.bodies.items()}
+        for key, b in self.bodies.items():
+            self.rhythms.setdefault(key, Rhythm.still(b.joints))
+        self.players = {key: RhythmController(model, key, self.rhythms[key], self.homes[key]) for key in self.bodies}
+        self._new_attempt(data)
+        return {**{key: p for key, p in self.players.items()}, "watch": Watch(self)}
+
+    @property
+    def active(self) -> str:
+        assert self.ctx is not None
+        return self.robots[int(self.ctx.values["robot"])][0]
+
+    # ---- the live replay ---------------------------------------------------------------------------------
+
+    def _new_attempt(self, data: mujoco.MjData) -> None:
+        """The robot being taught back on its start line, still; its rhythm starts over."""
+        assert self.start is not None
+        b = self.bodies[self.active]
+        data.qpos[b.qpos] = self.start[b.qpos]
+        data.qvel[b.qvel] = 0.0
+        self.attempt_t0 = float(data.time)
+        self.attempt_x0 = float(self.start[b.qpos[0]])  # the free joint's x comes first
+        self.players[self.active].restart(self.attempt_t0)
+
+    def tick(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if float(data.time) - self.attempt_t0 >= ATTEMPT:
+            self._new_attempt(data)
+            mujoco.mj_forward(model, data)
+
+    def sample(self, data: mujoco.MjData) -> dict[str, float]:
+        b = self.bodies[self.active]
+        return {"t": float(data.time), "x": float(data.xpos[b.trunk][0]) - self.attempt_x0}
+
+    def drain_samples(self) -> list[dict[str, float]]:
+        out, self.samples = self.samples, []
+        return out
+
+    # ---- training --------------------------------------------------------------------------------------
+
+    def on_control(self, control: str, value: float, data: mujoco.MjData, ctx: LessonContext) -> None:
+        if control == "stop":
+            self.stopping.set()
+        elif control == "robot":
+            self._new_attempt(data)
+        elif control == "train" and (self.thread is None or not self.thread.is_alive()):
+            key = self.active
+            settings = {k: float(ctx.values[k]) for k in ("robot", "energy", "freq", "iterations")}
+            rhythm = Rhythm.still(self.bodies[key].joints, settings["freq"])  # every training starts from zero
+            self.rhythms[key] = rhythm
+            self.players[key].rhythm = rhythm
+            self.stopping.clear()
+            self.progress = {"robot": key, "round": 0, "of": int(settings["iterations"]), "distance": 0.0}
+            self.thread = threading.Thread(target=self._train, args=(key, rhythm, settings, ctx), daemon=True)
+            self.thread.start()
+
+    def _solo(self, key: str) -> mujoco.MjModel:
+        """The robot alone at the origin, for training away from the live world."""
+        if key not in self.solo:
+            entry = next(e for k, _, e in self.robots if k == key)
+            self.solo[key] = compile_world(
+                World.model_validate({"name": "solo", "robots": [{"name": key, **entry}]})
+            ).model
+        return self.solo[key]
+
+    def _train(self, key: str, rhythm: Rhythm, settings: dict[str, float], ctx: LessonContext) -> None:
+        trainer = Trainer(self._solo(key), key, Reward(energy=ENERGY[int(settings["energy"])]), ATTEMPT, rhythm.freq)
+        curve: list[float] = []
+
+        def progress(round_: int, walk: dict[str, float]) -> None:
+            curve.append(walk["distance"])
+            self.progress = {
+                "robot": key,
+                "round": round_,
+                "of": int(settings["iterations"]),
+                "distance": walk["distance"],
+            }
+
+        self.trainings += 1  # a new random start every time: results differ, as they do in real training
+        log = trainer.train(
+            rhythm,
+            iterations=int(settings["iterations"]),
+            seed=self.trainings,
+            callback=progress,
+            stop=self.stopping.is_set,
+        )
+        final = trainer.rollout(rhythm)
+        self.progress = None
+        result = {
+            "robot": key,
+            "distance": round(final["distance"], 2),
+            "energy": round(final["energy"], 1),
+            "fell": bool(final["fell"]),
+            "seconds": round(log.seconds, 1),
+            "rounds": len(curve),
+        }
+        ctx.results["training"] = result
+        fell = _text("，摔倒了", ", and fell") if result["fell"] else _text("", "")
+        ctx.results["summary"] = {
+            "zh": f"学了 {result['rounds']} 轮（{result['seconds']:g} 秒）：4 秒走 {result['distance']:g} 米，"
+            f"用了 {result['energy']:g} J{fell['zh']}",
+            "en": f"{result['rounds']} rounds ({result['seconds']:g} s): {result['distance']:g} m in 4 s "
+            f"on {result['energy']:g} J{fell['en']}",
+        }
+        metrics = {k: result[k] for k in ("distance", "energy", "seconds")}
+        ctx.record_run(settings, metrics, list(range(1, len(curve) + 1)), curve)
+
+    def close(self) -> None:
+        self.stopping.set()
+        if self.thread is not None:
+            self.thread.join(timeout=10.0)
+
+    # ---- what the panel shows ------------------------------------------------------------------------------
+
+    def live(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
+        key = self.active
+        b = self.bodies[key]
+        progress = self.progress
+        readout = _text("", "")
+        if progress is not None:
+            readout = _text(
+                f"正在学：第 {progress['round']} / {progress['of']} 轮，最新的节律走 {progress['distance']:.2f} 米",
+                f"Learning: round {progress['round']} of {progress['of']}, "
+                f"newest rhythm walks {progress['distance']:.2f} m",
+            )
+        joints, w = b.joints, ENERGY[int(ctx.values["energy"])]
+        return {
+            "follow": b.trunk,
+            "readout": readout,
+            "formula": [
+                {
+                    "show": "f_rhythm",
+                    "label": _text("关节目标", "Joint target"),
+                    "expr": _text(
+                        "初始 + 偏置 + 幅度 × sin(2π·f·t + 相位)", "home + offset + amplitude * sin(2 pi f t + phase)"
+                    ),
+                    "value": f"f = {ctx.values['freq']:g} Hz",
+                    "color": "ink",
+                },
+                {
+                    "show": "f_rhythm",
+                    "label": _text("要学的数", "Numbers to learn"),
+                    "expr": _text(f"3 × {joints} 个关节", f"3 * {joints} joints"),
+                    "value": f"{3 * joints}",
+                    "color": "amber",
+                },
+                {
+                    "show": "f_search",
+                    "label": _text("每轮试几次", "Tries per round"),
+                    "expr": _text("8 个方向 × 正反 2 次 + 1 次看效果", "8 directions * both ways + 1 to check"),
+                    "value": "17",
+                    "color": "blue",
+                },
+                {
+                    "show": "f_reward",
+                    "label": _text("奖励", "Reward"),
+                    "expr": _text(
+                        f"距离 − 0.5 × 横偏 − {w:g} × 能量 ÷ 体重", f"distance - 0.5 * drift - {w:g} * energy / weight"
+                    ),
+                    "value": f"w = {w:g}",
+                    "color": "violet",
+                },
+            ],
+        }
+
+    def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
+        bodies = {key: Body.find(model, key) for key, _, _ in self.robots}
+        return {
+            "kind": "faceoff",
+            "entrants": [
+                {
+                    "name": key,
+                    "label": _text(*label),
+                    "sub": None,
+                    "color": ("amber", "violet", "blue", "green")[i % 4],
+                    "base": [START_X, (i - (len(self.robots) - 1) / 2) * LANE, 0.0],
+                    "body": bodies[key].trunk,
+                    "top": {"dog": 0.45, "star": 0.25, "humanoid": 0.6}.get(key, 0.5),  # name tags just above each
+                    "cloud": [],
+                }
+                for i, (key, label, _) in enumerate(self.robots)
+            ],
+            "targets": [],
+        }
+
+    def camera(self) -> dict[str, list[float]]:
+        # Side on to the dog's lane, a little ahead of it; the camera then walks with whichever robot learns.
+        y = -(len(self.robots) - 1) / 2 * LANE
+        return {"eye": [START_X + 0.5, y - 2.4, 1.2], "target": [START_X + 0.5, y + 0.4, 0.1]}

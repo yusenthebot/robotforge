@@ -414,3 +414,16 @@ def test_the_rl_lesson_trains_a_balancer_while_you_watch(pg, monkeypatch):
     assert "push" in _play(pg, 4.0)["passed"]
     pg.lessons.exit()
     assert lesson.stopping.is_set()
+
+
+def test_every_control_of_every_lesson_unlocks_in_some_step(pg):
+    """A knob no step unlocks can never be used (the learn-to-walk lesson shipped with two such)."""
+    from robotforge.learn import LESSONS
+
+    for lesson_id in LESSONS:
+        described = pg.lessons.start(lesson_id)
+        lesson = pg.lessons.lesson
+        unlocked = {c for step in lesson.steps for c in step.unlock}
+        controls = {c["id"] for c in described["controls"]}
+        assert controls <= unlocked, f"{lesson_id}: {sorted(controls - unlocked)} never unlock"
+    pg.lessons.exit()
