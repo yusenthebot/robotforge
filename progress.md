@@ -258,6 +258,7 @@ Rounds 1-3 done, 2026-10-14.
   - Round 21's claim "the humanoid falls whatever it learns" was a reward artefact: with a survival reward even the open-loop rhythm stops falling (it learns to stand still). The text now says what was really measured.
   - Reflexes are not a clean win: 140 numbers instead of 60 make random search unreliable (2 of 6 trainings collapse). Kept, and taught as the reason deep RL uses gradients.
   - A reflex test with large gains drifted as much calm as shoved; tests check the reflex arithmetic directly and the shove on a still rhythm.
+  - CI failed on d320f40 (Ubuntu and Windows): the RL II test judged the replay by the last tick's 50 ms of samples, and slower runners ended training at another phase of the replay (0 m right after a restart). It now collects a whole attempt; locally the old check read 0.07 to 1.07 m by phase, the new one 0.94 to 1.14.
 
 ## Next-round seed
 
