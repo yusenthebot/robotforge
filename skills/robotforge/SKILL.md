@@ -35,6 +35,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - `write_script` + `run_script`: custom sequences, loops and logic the user can keep;
    - learned walkers: `list_walkers`, then `move(robot, speed, walker="rl")` walks with a policy trained by reinforcement learning (a Go2 walk ships with robotforge; `walker="gait"` goes back);
    - a robot built from parts that no gait code knows (`move` says so) can learn a walk of its own in the viewer's RL II lesson ("Keep this walk for my robot"); `robots` then lists its `learned_walk` and `move` uses it, forward only at its own pace (no turning);
+   - when the user asks such a robot (it has a `walk_hint`) to walk, say so before anything else and offer that lesson: about ten seconds of learning, and the walk is kept; a hand-written gait script is the fallback if they decline;
    - `train_policy` when the tool list has it: reinforcement learning (optional `rl` extra); `unilab_check` / `unilab_train` for the UniLab backend.
 6. **Check, then explain.** Verify with numbers and an image (next section), explain what happened and why, offer a next step.
 

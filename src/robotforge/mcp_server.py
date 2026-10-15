@@ -98,6 +98,9 @@ Learned walkers: list_walkers shows neural-network walking policies trained with
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
 A robot built from parts that no gait code knows can learn a walk of its own in the viewer's RL II lesson
 ("Keep this walk for my robot"); robots then lists its learned_walk and move uses it (forward only).
+When the user wants such a robot to walk and it has a walk_hint (robots, add_robot notes), tell them first:
+it can learn a walk by itself in about ten seconds and keep it, which teaches more and walks better than a
+hand-written gait. Offer to open the viewer for it; write a gait script only if they would rather not.
 UniLab, an external RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
