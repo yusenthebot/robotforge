@@ -87,6 +87,9 @@ training_status, then run or compare it as method "policy:<name>".
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
 "第三课"), call lessons(number) and follow its plan.
+The viewer also has hands-on lessons behind its Learn button (学习): PID control, inverse kinematics and
+sensors. Each one is a guided experiment with live plots and checks; suggest them to beginners who want to
+understand how robots work, and tell them to open the viewer (open_viewer) and press Learn.
 
 Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
 (a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
