@@ -44,6 +44,9 @@ class BehaviorError(ValueError):
 
 
 def _a(kind: Kind) -> str:
+    """ "a quadruped", "an arm"; a robot no behavior code recognizes is "a robot of no known kind"."""
+    if kind == Kind.OTHER:
+        return "a robot of no known kind"
     return f"an {kind.value}" if kind.value[0] in "aeiou" else f"a {kind.value}"
 
 
@@ -207,7 +210,7 @@ class BehaviorManager:
                 f"{_how_to_move(kind)}"
             )
         text = (
-            f"{robot} is {_a(kind)} robot, which has no built-in way to move: only legged robots, wheeled robots, "
+            f"{robot} is {_a(kind)}, which has no built-in way to move: only legged robots, wheeled robots, "
             "snakes and robots that learned a walk of their own do"
         )
         if self._can_learn_walk(robot):
