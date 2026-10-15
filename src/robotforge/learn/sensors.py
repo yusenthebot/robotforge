@@ -52,15 +52,16 @@ class Rover:
 
     rate_hz = 100.0
 
-    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> None:
+    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext, prefix: str = "") -> None:
+        """`prefix` names one rover among several (see sensors_spec and the autopilot lesson)."""
         self.ctx = ctx
-        self.body = model.body("rover").id
-        self.acts = [model.actuator(n).id for n in ("left", "right")]
+        self.body = model.body(f"{prefix}rover").id
+        self.acts = [model.actuator(f"{prefix}{n}").id for n in ("left", "right")]
         self.adr = {
-            s: (int(model.sensor(s).adr[0]), int(model.sensor(s).dim[0]))
+            s: (int(model.sensor(f"{prefix}{s}").adr[0]), int(model.sensor(f"{prefix}{s}").dim[0]))
             for s in ("enc_l", "enc_r", "accel", "gyro", "bumper")
         }
-        self.lidar = [int(model.sensor(f"ray{i}").adr[0]) for i in range(RAYS)]
+        self.lidar = [int(model.sensor(f"{prefix}ray{i}").adr[0]) for i in range(RAYS)]
         self.speed = 0.0
         self.turn = 0.0
         self.last_enc: tuple[float, float] | None = None
@@ -264,6 +265,220 @@ STEPS = (
 )
 
 
+def sensors_spec(name: str = "sensors_lesson", floor: bool = True) -> mujoco.MjSpec:
+    """The walled arena with its rover and sensors, not yet compiled (the autopilot attaches two)."""
+    spec = mujoco.MjSpec()
+    spec.modelname = name
+    spec.compiler.degree = False
+    spec.option.timestep = 0.002
+    spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    G = mujoco.mjtGeom
+    w = spec.worldbody
+    w.add_light(pos=[0.5, -1.0, 3.0], dir=[-0.2, 0.3, -1.0], diffuse=[0.8, 0.8, 0.8])
+    spec.add_material(name="rf_floor", rgba=[0.66, 0.7, 0.74, 1])
+    for name in ("rf_dark", "rf_metal", "rf_shell", "rf_rubber", "rf_glass", "rf_paint", "rf_wood"):
+        spec.add_material(name=name)
+    if floor:
+        w.add_geom(name="floor", type=G.mjGEOM_PLANE, size=[ARENA + 0.5, ARENA + 0.5, 0.05], material="rf_floor")
+    wall = [0.86, 0.87, 0.88, 1]
+    for name, pos, size in (
+        ("wall_n", [0, ARENA, 0.1], [ARENA, 0.025, 0.1]),
+        ("wall_s", [0, -ARENA, 0.1], [ARENA, 0.025, 0.1]),
+        ("wall_e", [ARENA, 0, 0.1], [0.025, ARENA, 0.1]),
+        ("wall_w", [-ARENA, 0, 0.1], [0.025, ARENA, 0.1]),
+    ):
+        w.add_geom(name=name, type=G.mjGEOM_BOX, pos=pos, size=size, rgba=wall, material="rf_paint")
+    w.add_geom(
+        name="crate",
+        type=G.mjGEOM_BOX,
+        pos=[*CRATE, 0.12],
+        size=[0.16, 0.16, 0.12],
+        rgba=[0.72, 0.53, 0.32, 1],
+        material="rf_wood",
+    )
+    w.add_geom(
+        name="ball",
+        type=G.mjGEOM_SPHERE,
+        pos=[*BALL, 0.09],
+        size=[0.09, 0, 0],
+        rgba=[0.88, 0.16, 0.14, 1],
+        material="rf_shell",
+    )
+    w.add_geom(
+        name="post",
+        type=G.mjGEOM_CYLINDER,
+        pos=[0.9, -0.85, 0.15],
+        size=[0.06, 0.15, 0],
+        rgba=[0.2, 0.45, 0.85, 1],
+        material="rf_shell",
+    )
+
+    dark, shell, metal, rubber = (
+        [0.16, 0.18, 0.21, 1],
+        [0.95, 0.96, 0.97, 1],
+        [0.8, 0.82, 0.85, 1],
+        [0.08, 0.08, 0.09, 1],
+    )
+    rover = w.add_body(name="rover", pos=[-0.6, -0.5, WHEEL_R + 0.012])
+    rover.add_freejoint(name="rover_free")
+    rover.add_geom(
+        name="chassis",
+        type=G.mjGEOM_BOX,
+        size=[0.11, 0.07, 0.025],
+        pos=[0, 0, 0.02],
+        rgba=shell,
+        material="rf_shell",
+        mass=0.6,
+    )
+    rover.add_geom(
+        name="deck",
+        type=G.mjGEOM_BOX,
+        size=[0.08, 0.055, 0.012],
+        pos=[-0.01, 0, 0.055],
+        rgba=dark,
+        material="rf_dark",
+        mass=0.05,
+    )
+    rover.add_geom(
+        name="bumper",
+        type=G.mjGEOM_BOX,
+        size=[0.012, 0.075, 0.018],
+        pos=[0.122, 0, 0.018],
+        rgba=[0.2, 0.22, 0.25, 1],
+        material="rf_rubber",
+        mass=0.02,
+    )
+    rover.add_site(
+        name="bumper_zone", type=G.mjGEOM_BOX, size=[0.03, 0.085, 0.03], pos=[0.125, 0, 0.018], rgba=[0, 0, 0, 0]
+    )
+    rover.add_geom(
+        name="caster",
+        type=G.mjGEOM_SPHERE,
+        size=[0.012, 0, 0],
+        pos=[-0.085, 0, -0.023],
+        rgba=metal,
+        material="rf_metal",
+        friction=[0.05, 0.005, 0.0001],
+        mass=0.01,
+    )
+    rover.add_geom(
+        name="mast",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.012, 0.02, 0],
+        pos=[0, 0, 0.085],
+        rgba=dark,
+        material="rf_dark",
+        mass=0.01,
+    )
+    rover.add_geom(
+        name="lidar",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.03, 0.014, 0],
+        pos=[0, 0, LIDAR_Z],
+        rgba=dark,
+        material="rf_dark",
+        mass=0.03,
+    )
+    rover.add_geom(
+        name="lidar_window",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.031, 0.006, 0],
+        pos=[0, 0, LIDAR_Z],
+        rgba=[0.25, 0.55, 0.95, 0.85],
+        material="rf_glass",
+        contype=0,
+        conaffinity=0,
+        mass=0,
+    )
+    rover.add_geom(
+        name="camera_body",
+        type=G.mjGEOM_BOX,
+        size=[0.012, 0.02, 0.012],
+        pos=[0.095, 0, 0.068],
+        rgba=dark,
+        material="rf_dark",
+        mass=0.01,
+    )
+    rover.add_geom(
+        name="lens",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.008, 0.004, 0],
+        pos=[0.108, 0, 0.068],
+        quat=[0.7071068, 0, 0.7071068, 0],
+        rgba=[0.1, 0.15, 0.25, 1],
+        material="rf_glass",
+        contype=0,
+        conaffinity=0,
+        mass=0,
+    )
+    rover.add_camera(name="eye", pos=[0.115, 0, 0.068], quat=_camera_quat(), fovy=60)
+    rover.add_site(name="imu", pos=[0, 0, 0.02], size=[0.01, 0, 0])
+    for i in range(RAYS):
+        rover.add_site(
+            name=f"ray{i}",
+            pos=[0, 0, LIDAR_Z],
+            quat=_quat_z_out(2 * math.pi * i / RAYS),
+            size=[0.005, 0, 0],
+            rgba=[0, 0, 0, 0],
+        )
+    for side, y in (("left", 0.09), ("right", -0.09)):
+        wheel = rover.add_body(name=f"{side}_wheel", pos=[0.02, y, 0])
+        wheel.add_joint(name=side, type=mujoco.mjtJoint.mjJNT_HINGE, axis=[0, 1, 0], damping=0.001)
+        wheel.add_geom(
+            name=f"{side}_tyre",
+            type=G.mjGEOM_CYLINDER,
+            size=[WHEEL_R, 0.012, 0],
+            quat=[0.7071068, 0.7071068, 0, 0],
+            rgba=rubber,
+            material="rf_rubber",
+            mass=0.05,
+            friction=[1.2, 0.01, 0.001],
+        )
+        wheel.add_geom(
+            name=f"{side}_hub",
+            type=G.mjGEOM_CYLINDER,
+            size=[0.016, 0.0135, 0],
+            quat=[0.7071068, 0.7071068, 0, 0],
+            rgba=metal,
+            material="rf_metal",
+            contype=0,
+            conaffinity=0,
+            mass=0,
+        )
+        motor = spec.add_actuator(name=side, target=side, trntype=mujoco.mjtTrn.mjTRN_JOINT)
+        motor.gaintype = mujoco.mjtGain.mjGAIN_FIXED
+        motor.biastype = mujoco.mjtBias.mjBIAS_AFFINE
+        motor.gainprm[0] = 0.08
+        motor.biasprm[:3] = [0.0, 0.0, -0.08]
+        motor.ctrllimited = True
+        motor.ctrlrange = [-20, 20]
+        motor.forcelimited = True
+        motor.forcerange = [-0.5, 0.5]
+        spec.add_sensor(
+            name=f"enc_{side[0]}",
+            type=mujoco.mjtSensor.mjSENS_JOINTPOS,
+            objtype=mujoco.mjtObj.mjOBJ_JOINT,
+            objname=side,
+        )
+    spec.add_sensor(
+        name="accel", type=mujoco.mjtSensor.mjSENS_ACCELEROMETER, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu"
+    )
+    spec.add_sensor(name="gyro", type=mujoco.mjtSensor.mjSENS_GYRO, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu")
+    spec.add_sensor(
+        name="bumper", type=mujoco.mjtSensor.mjSENS_TOUCH, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="bumper_zone"
+    )
+    for i in range(RAYS):
+        ray = spec.add_sensor(
+            name=f"ray{i}",
+            type=mujoco.mjtSensor.mjSENS_RANGEFINDER,
+            objtype=mujoco.mjtObj.mjOBJ_SITE,
+            objname=f"ray{i}",
+            cutoff=4.0,
+        )
+        ray.intprm[0] = RANGE_DIST  # MuJoCo 3.15 asks which ray data to report: just the distance
+    return spec
+
+
 class SensorsLesson(Lesson):
     id = "sensors"
     chapter = {"zh": "感知", "en": "Sensing"}
@@ -307,215 +522,7 @@ class SensorsLesson(Lesson):
         self.rover: Rover | None = None
 
     def build(self) -> mujoco.MjModel:
-        spec = mujoco.MjSpec()
-        spec.modelname = "sensors_lesson"
-        spec.compiler.degree = False
-        spec.option.timestep = 0.002
-        spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
-        G = mujoco.mjtGeom
-        w = spec.worldbody
-        w.add_light(pos=[0.5, -1.0, 3.0], dir=[-0.2, 0.3, -1.0], diffuse=[0.8, 0.8, 0.8])
-        spec.add_material(name="rf_floor", rgba=[0.66, 0.7, 0.74, 1])
-        for name in ("rf_dark", "rf_metal", "rf_shell", "rf_rubber", "rf_glass", "rf_paint", "rf_wood"):
-            spec.add_material(name=name)
-        w.add_geom(name="floor", type=G.mjGEOM_PLANE, size=[ARENA + 0.5, ARENA + 0.5, 0.05], material="rf_floor")
-        wall = [0.86, 0.87, 0.88, 1]
-        for name, pos, size in (
-            ("wall_n", [0, ARENA, 0.1], [ARENA, 0.025, 0.1]),
-            ("wall_s", [0, -ARENA, 0.1], [ARENA, 0.025, 0.1]),
-            ("wall_e", [ARENA, 0, 0.1], [0.025, ARENA, 0.1]),
-            ("wall_w", [-ARENA, 0, 0.1], [0.025, ARENA, 0.1]),
-        ):
-            w.add_geom(name=name, type=G.mjGEOM_BOX, pos=pos, size=size, rgba=wall, material="rf_paint")
-        w.add_geom(
-            name="crate",
-            type=G.mjGEOM_BOX,
-            pos=[*CRATE, 0.12],
-            size=[0.16, 0.16, 0.12],
-            rgba=[0.72, 0.53, 0.32, 1],
-            material="rf_wood",
-        )
-        w.add_geom(
-            name="ball",
-            type=G.mjGEOM_SPHERE,
-            pos=[*BALL, 0.09],
-            size=[0.09, 0, 0],
-            rgba=[0.88, 0.16, 0.14, 1],
-            material="rf_shell",
-        )
-        w.add_geom(
-            name="post",
-            type=G.mjGEOM_CYLINDER,
-            pos=[0.9, -0.85, 0.15],
-            size=[0.06, 0.15, 0],
-            rgba=[0.2, 0.45, 0.85, 1],
-            material="rf_shell",
-        )
-
-        dark, shell, metal, rubber = (
-            [0.16, 0.18, 0.21, 1],
-            [0.95, 0.96, 0.97, 1],
-            [0.8, 0.82, 0.85, 1],
-            [0.08, 0.08, 0.09, 1],
-        )
-        rover = w.add_body(name="rover", pos=[-0.6, -0.5, WHEEL_R + 0.012])
-        rover.add_freejoint(name="rover_free")
-        rover.add_geom(
-            name="chassis",
-            type=G.mjGEOM_BOX,
-            size=[0.11, 0.07, 0.025],
-            pos=[0, 0, 0.02],
-            rgba=shell,
-            material="rf_shell",
-            mass=0.6,
-        )
-        rover.add_geom(
-            name="deck",
-            type=G.mjGEOM_BOX,
-            size=[0.08, 0.055, 0.012],
-            pos=[-0.01, 0, 0.055],
-            rgba=dark,
-            material="rf_dark",
-            mass=0.05,
-        )
-        rover.add_geom(
-            name="bumper",
-            type=G.mjGEOM_BOX,
-            size=[0.012, 0.075, 0.018],
-            pos=[0.122, 0, 0.018],
-            rgba=[0.2, 0.22, 0.25, 1],
-            material="rf_rubber",
-            mass=0.02,
-        )
-        rover.add_site(
-            name="bumper_zone", type=G.mjGEOM_BOX, size=[0.03, 0.085, 0.03], pos=[0.125, 0, 0.018], rgba=[0, 0, 0, 0]
-        )
-        rover.add_geom(
-            name="caster",
-            type=G.mjGEOM_SPHERE,
-            size=[0.012, 0, 0],
-            pos=[-0.085, 0, -0.023],
-            rgba=metal,
-            material="rf_metal",
-            friction=[0.05, 0.005, 0.0001],
-            mass=0.01,
-        )
-        rover.add_geom(
-            name="mast",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.012, 0.02, 0],
-            pos=[0, 0, 0.085],
-            rgba=dark,
-            material="rf_dark",
-            mass=0.01,
-        )
-        rover.add_geom(
-            name="lidar",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.03, 0.014, 0],
-            pos=[0, 0, LIDAR_Z],
-            rgba=dark,
-            material="rf_dark",
-            mass=0.03,
-        )
-        rover.add_geom(
-            name="lidar_window",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.031, 0.006, 0],
-            pos=[0, 0, LIDAR_Z],
-            rgba=[0.25, 0.55, 0.95, 0.85],
-            material="rf_glass",
-            contype=0,
-            conaffinity=0,
-            mass=0,
-        )
-        rover.add_geom(
-            name="camera_body",
-            type=G.mjGEOM_BOX,
-            size=[0.012, 0.02, 0.012],
-            pos=[0.095, 0, 0.068],
-            rgba=dark,
-            material="rf_dark",
-            mass=0.01,
-        )
-        rover.add_geom(
-            name="lens",
-            type=G.mjGEOM_CYLINDER,
-            size=[0.008, 0.004, 0],
-            pos=[0.108, 0, 0.068],
-            quat=[0.7071068, 0, 0.7071068, 0],
-            rgba=[0.1, 0.15, 0.25, 1],
-            material="rf_glass",
-            contype=0,
-            conaffinity=0,
-            mass=0,
-        )
-        rover.add_camera(name="eye", pos=[0.115, 0, 0.068], quat=_camera_quat(), fovy=60)
-        rover.add_site(name="imu", pos=[0, 0, 0.02], size=[0.01, 0, 0])
-        for i in range(RAYS):
-            rover.add_site(
-                name=f"ray{i}",
-                pos=[0, 0, LIDAR_Z],
-                quat=_quat_z_out(2 * math.pi * i / RAYS),
-                size=[0.005, 0, 0],
-                rgba=[0, 0, 0, 0],
-            )
-        for side, y in (("left", 0.09), ("right", -0.09)):
-            wheel = rover.add_body(name=f"{side}_wheel", pos=[0.02, y, 0])
-            wheel.add_joint(name=side, type=mujoco.mjtJoint.mjJNT_HINGE, axis=[0, 1, 0], damping=0.001)
-            wheel.add_geom(
-                name=f"{side}_tyre",
-                type=G.mjGEOM_CYLINDER,
-                size=[WHEEL_R, 0.012, 0],
-                quat=[0.7071068, 0.7071068, 0, 0],
-                rgba=rubber,
-                material="rf_rubber",
-                mass=0.05,
-                friction=[1.2, 0.01, 0.001],
-            )
-            wheel.add_geom(
-                name=f"{side}_hub",
-                type=G.mjGEOM_CYLINDER,
-                size=[0.016, 0.0135, 0],
-                quat=[0.7071068, 0.7071068, 0, 0],
-                rgba=metal,
-                material="rf_metal",
-                contype=0,
-                conaffinity=0,
-                mass=0,
-            )
-            motor = spec.add_actuator(name=side, target=side, trntype=mujoco.mjtTrn.mjTRN_JOINT)
-            motor.gaintype = mujoco.mjtGain.mjGAIN_FIXED
-            motor.biastype = mujoco.mjtBias.mjBIAS_AFFINE
-            motor.gainprm[0] = 0.08
-            motor.biasprm[:3] = [0.0, 0.0, -0.08]
-            motor.ctrllimited = True
-            motor.ctrlrange = [-20, 20]
-            motor.forcelimited = True
-            motor.forcerange = [-0.5, 0.5]
-            spec.add_sensor(
-                name=f"enc_{side[0]}",
-                type=mujoco.mjtSensor.mjSENS_JOINTPOS,
-                objtype=mujoco.mjtObj.mjOBJ_JOINT,
-                objname=side,
-            )
-        spec.add_sensor(
-            name="accel", type=mujoco.mjtSensor.mjSENS_ACCELEROMETER, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu"
-        )
-        spec.add_sensor(name="gyro", type=mujoco.mjtSensor.mjSENS_GYRO, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="imu")
-        spec.add_sensor(
-            name="bumper", type=mujoco.mjtSensor.mjSENS_TOUCH, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="bumper_zone"
-        )
-        for i in range(RAYS):
-            ray = spec.add_sensor(
-                name=f"ray{i}",
-                type=mujoco.mjtSensor.mjSENS_RANGEFINDER,
-                objtype=mujoco.mjtObj.mjOBJ_SITE,
-                objname=f"ray{i}",
-                cutoff=4.0,
-            )
-            ray.intprm[0] = RANGE_DIST  # MuJoCo 3.15 asks which ray data to report: just the distance
-        return spec.compile()
+        return sensors_spec().compile()
 
     def attach(self, model: mujoco.MjModel, data: mujoco.MjData, ctx: LessonContext) -> dict[str, Any]:
         self.rover = Rover(model, data, ctx)

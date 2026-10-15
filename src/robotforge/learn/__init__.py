@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from robotforge.learn.autopilot import AutopilotLesson
 from robotforge.learn.challenges import CourseChallenge, MazeChallenge, ShoveChallenge
 from robotforge.learn.compare import ArmFaceOff, HumanoidFaceOff
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
@@ -19,6 +20,7 @@ LESSONS: dict[str, type[Lesson]] = {
         IKLesson,
         IKArmLesson,
         SensorsLesson,
+        AutopilotLesson,
         RLLesson,
         MazeChallenge,
         ShoveChallenge,

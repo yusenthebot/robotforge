@@ -1524,7 +1524,53 @@ function arm3dRig(rig) {
   };
 }
 
-const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig, faceoff: faceoffRig, arm3d: arm3dRig };
+// Robot vacuums: the floor each one has covered, painted square by square in its colour.
+function cleanerRig(rig) {
+  const tags = faceoffRig(rig);
+  const floor = new THREE.Group();
+  const painted = {};
+  for (const e of rig.entrants) {
+    const material = basic(api.color(COLORS[e.color]), 0.38, true);
+    Object.assign(material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    const tile = new THREE.PlaneGeometry(rig.cell * 0.92, rig.cell * 0.92);
+    const mesh = new THREE.InstancedMesh(tile, material, rig.cells * rig.cells);
+    mesh.count = 0;
+    floor.add(mesh);
+    painted[e.name] = { mesh, shown: -1, trial: -1, origin: rig.arenas[e.name] };
+  }
+  const parts = { ...tags.parts, floor };
+  tags.group.add(floor);
+  const place = new THREE.Matrix4();
+  return {
+    group: tags.group,
+    parts,
+    frame() {
+      tags.frame();
+      const cells = state.live?.cells ?? {};
+      const trial = state.live?.trial ?? 0;
+      for (const [name, p] of Object.entries(painted)) {
+        const list = cells[name] ?? [];
+        if (list.length === p.shown && trial === p.trial) continue; // nothing new to paint
+        list.forEach(([ix, iy], k) => {
+          place.makeTranslation(p.origin[0] + (ix + 0.5) * rig.cell, p.origin[1] + (iy + 0.5) * rig.cell, 0.004);
+          p.mesh.setMatrixAt(k, place);
+        });
+        p.mesh.count = list.length;
+        p.mesh.instanceMatrix.needsUpdate = true;
+        [p.shown, p.trial] = [list.length, trial];
+      }
+    },
+  };
+}
+
+const RIGS = {
+  joint: jointRig,
+  planar_arm: planarArmRig,
+  rover: roverRig,
+  faceoff: faceoffRig,
+  arm3d: arm3dRig,
+  cleaner: cleanerRig,
+};
 
 function lineMat(color, opacity) {
   return new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });

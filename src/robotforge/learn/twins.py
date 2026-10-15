@@ -44,7 +44,7 @@ class Knob:
     """A setting every twin has its own copy of."""
 
     id: str
-    kind: Literal["slider", "choice"]
+    kind: Literal["slider", "choice", "toggle"]
     label: Text
     min: float = 0.0
     max: float = 1.0
