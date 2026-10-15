@@ -1,0 +1,160 @@
+{
+ "format": "robotforge-policy/1",
+ "name": "go2_unilab_walk",
+ "title": "Go2 walking (UniLab PPO)",
+ "robot": "go2",
+ "summary": "Learned walk for the Unitree Go2: follows forward speeds from -0.6 to 1.0 m/s and turns up to 0.8 rad/s on flat ground. Trained with UniLab's PPO in MuJoCo, 1000 iterations (24.6 M steps).",
+ "onnx": "policy.onnx",
+ "input_name": "obs",
+ "output_name": "actions",
+ "policy_dt": 0.02,
+ "joints": [
+  "FL_hip_joint",
+  "FL_thigh_joint",
+  "FL_calf_joint",
+  "FR_hip_joint",
+  "FR_thigh_joint",
+  "FR_calf_joint",
+  "RL_hip_joint",
+  "RL_thigh_joint",
+  "RL_calf_joint",
+  "RR_hip_joint",
+  "RR_thigh_joint",
+  "RR_calf_joint"
+ ],
+ "default_joint_pos": [
+  0.0,
+  0.8,
+  -1.5,
+  0.0,
+  0.8,
+  -1.5,
+  0.0,
+  1.0,
+  -1.5,
+  0.0,
+  1.0,
+  -1.5
+ ],
+ "action_scale": 0.25,
+ "action_clip": null,
+ "pd": {
+  "kp": [
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0,
+   35.0
+  ],
+  "kd": [
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5
+  ],
+  "joint_damping": [
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5,
+   0.5
+  ],
+  "torque_limit": [
+   23.7,
+   23.7,
+   45.43,
+   23.7,
+   23.7,
+   45.43,
+   23.7,
+   23.7,
+   45.43,
+   23.7,
+   23.7,
+   45.43
+  ]
+ },
+ "base_site": "imu",
+ "observations": [
+  {
+   "term": "base_ang_vel"
+  },
+  {
+   "term": "neg_up_axis_world"
+  },
+  {
+   "term": "joint_pos_rel"
+  },
+  {
+   "term": "joint_vel"
+  },
+  {
+   "term": "last_action"
+  },
+  {
+   "term": "velocity_command"
+  },
+  {
+   "term": "gait_phase",
+   "frequency": 2.0,
+   "offsets": [
+    0.0,
+    0.5,
+    0.5,
+    0.0
+   ],
+   "always_advance": true
+  }
+ ],
+ "commands": {
+  "lin_vel_x": [
+   -0.6,
+   1.0
+  ],
+  "lin_vel_y": [
+   -0.4,
+   0.4
+  ],
+  "ang_vel_z": [
+   -0.8,
+   0.8
+  ]
+ },
+ "trained_with": {
+  "framework": "UniLab",
+  "unilab_version": "1.3.5",
+  "task": "go2_joystick_flat",
+  "algo": "ppo",
+  "sim": "mujoco",
+  "sim_dt": 0.01,
+  "iterations": 1000,
+  "env_steps": 24576000,
+  "final_mean_reward": 54.6,
+  "training_wall_seconds": 813.2,
+  "run": "go2_joystick_flat, 1024 envs, seed 1",
+  "exported": "2026-10-14T11:46:48+00:00",
+  "machine": "Apple M5 Max: MuJoCo on the CPU cores, PPO learner on the GPU (MPS)"
+ }
+}

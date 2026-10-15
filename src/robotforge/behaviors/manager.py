@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import math
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -23,6 +24,7 @@ MAX_RUN_SECONDS = 60.0
 MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE)
 WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
+LEGGED = (Kind.QUADRUPED, Kind.HUMANOID)  # can walk with a learned policy (move walker=...)
 
 
 class BehaviorError(ValueError):
@@ -96,7 +98,9 @@ class BehaviorManager:
 
     # ---- moving robots (legs and wheels) ---------------------------------------------
 
-    def move(self, robot: str, speed: float, turn: float) -> dict[str, Any]:
+    def move(self, robot: str, speed: float, turn: float, walker: str | None = None) -> dict[str, Any]:
+        """walker (legged robots): "gait" = the built-in walking controller, "rl" = the learned policy
+        installed for this robot, or a policy name; None keeps the robot's current walker."""
         if not (math.isfinite(speed) and math.isfinite(turn)):
             raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         kind = self.kind(robot)
@@ -105,14 +109,20 @@ class BehaviorManager:
                 f"{robot} is a {kind.value}; only legged robots (quadrupeds, hexapods, humanoids), wheeled "
                 "robots (rovers, balancers) and snakes can move around"
             )
+        if walker is not None and kind not in LEGGED:
+            raise BehaviorError(f"{robot} is a {kind.value}; walker only applies to legged robots")
         with self.session.lock:
-            ctrl = self._mobile_controller(robot, kind, create=True)
+            ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             ctrl.command(speed, turn)
         return ctrl.status()
 
-    def _mobile_controller(self, robot: str, kind: Kind, create: bool):
+    def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
         existing = self.session.controllers.get(robot)
+        if walker is None and _is_mover(existing):  # keep whatever walks it now, e.g. for WASD driving
+            return existing
+        if walker not in (None, "gait") and kind in LEGGED:
+            return self._policy_walker(robot, walker, existing, create)
         if isinstance(existing, WALKERS):
             return existing
         m = self.session.model
@@ -136,6 +146,42 @@ class BehaviorManager:
             self.session.set_controller(robot, ctrl)
         return ctrl
 
+    def _policy_walker(self, robot: str, walker: str, existing: Any, create: bool):
+        """A learned walking policy (ONNX, optional extra `policy`) in place of the gait."""
+        from robotforge.bridge.onnx_policy import PolicyUnavailable, PolicyWalker, walker_for
+
+        if isinstance(existing, PolicyWalker) and walker in ("rl", existing.spec.name):
+            return existing
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        try:
+            ctrl = walker_for(self.session.model, robot, entry.library if entry else None, walker)
+        except (PolicyUnavailable, ValueError) as exc:
+            raise BehaviorError(str(exc)) from exc
+        if create:
+            self.session.set_controller(robot, ctrl)
+        return ctrl
+
+    def learned_walkers(self) -> dict[str, dict[str, Any]]:
+        """Legged robots that have a learned walking policy: {robot: {policy, max_speed, active}}."""
+        from robotforge.bridge import policies  # light: cards only, no onnxruntime
+
+        world = self._world()
+        if world is None:
+            return {}
+        out = {}
+        for entry in world.robots:
+            found = policies.for_robot(entry.library)
+            if found is None or robot_kind(self.session.model, entry.name, entry.template) not in LEGGED:
+                continue
+            active = self.session.controllers.get(entry.name)
+            out[entry.name] = {
+                "policy": found.spec.name,
+                "max_speed": found.spec.commands.lin_vel_x[1],
+                "active": _is_policy_walker(active),
+            }
+        return out
+
     def _library_top_speed(self, robot: str) -> float | None:
         world = self._world()
         entry = next((r for r in world.robots if r.name == robot), None) if world else None
@@ -144,7 +190,7 @@ class BehaviorManager:
     def stop(self, robot: str) -> dict[str, Any]:
         with self.session.lock:
             ctrl = self.session.controllers.get(robot)
-            if isinstance(ctrl, WALKERS):
+            if _is_mover(ctrl):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
                 return {"robot": robot, "stopped": True}
             if ctrl is not None:
@@ -166,7 +212,7 @@ class BehaviorManager:
         if name not in humanoid.POSES:
             raise BehaviorError(f"unknown pose {name!r}; choose one of: {', '.join(humanoid.POSES)}")
         with self.session.lock:
-            ctrl = self._mobile_controller(robot, kind, create=True)
+            ctrl = self._mobile_controller(robot, kind, create=True, walker="gait")  # poses need the built-in one
             _check_standing(ctrl)
             ctrl.play(name)
         return ctrl
@@ -339,6 +385,17 @@ class BehaviorManager:
 
     def status(self) -> list[dict[str, Any]]:
         return [c.status() for c in self.session.controllers.values()]
+
+
+def _is_mover(ctrl: Any) -> bool:
+    """A controller that walks or drives on speed and turn commands (gaits, wheels, learned policies)."""
+    return isinstance(ctrl, WALKERS) or _is_policy_walker(ctrl)
+
+
+def _is_policy_walker(ctrl: Any) -> bool:
+    # No import here: the bridge pulls in the control layer. Without the module loaded, no walker exists.
+    bridge = sys.modules.get("robotforge.bridge.onnx_policy")
+    return bridge is not None and isinstance(ctrl, bridge.PolicyWalker)
 
 
 def _check_standing(ctrl) -> None:

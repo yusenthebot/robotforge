@@ -93,6 +93,8 @@ html, body {
 
 .drive-pick { display: flex; align-items: center; gap: 6px; }
 
+.drive select[hidden] { display: none; }
+
 .drive select {
   background: var(--surface-strong);
   color: var(--text);

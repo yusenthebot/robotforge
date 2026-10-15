@@ -27,6 +27,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge import lessons
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
@@ -86,6 +87,10 @@ training_status, then run or compare it as method "policy:<name>".
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
 "第三课"), call lessons(number) and follow its plan.
+
+Learned walkers: list_walkers shows neural-network walking policies trained with reinforcement learning
+(a Go2 walk ships with robotforge); move(..., walker="rl") walks with one instead of the built-in gait.
+UniLab, an external RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
 Explain what you are doing in plain language and briefly teach the idea behind it
 (joints, actuators, control): the user may be new to robotics. Check results (numbers, observe) before
@@ -334,20 +339,24 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
     @server.tool()
-    async def move(robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0) -> str:
+    async def move(
+        robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0, walker: str | None = None
+    ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover or a two-wheeled balancer, or make a snake
         slither. speed in m/s (negative = backwards), turn in rad/s
         (positive = left); each robot's max_speed is listed by `robots` (humanoids are slow, about 0.1 m/s, and
         take a moment to start and stop stepping). With `seconds`, moves for that long then stops and reports
         how far it went; with seconds=null it keeps moving until `stop`. If the viewer is open the user
-        watches it happen in real time."""
+        watches it happen in real time. walker (legged robots): "gait" = the built-in walking controller,
+        "rl" = the learned policy for this robot (list_walkers), or a policy name; omitted keeps the current
+        one. Keyboard driving then uses the same walker."""
         with _tool_errors():
+            if seconds is not None and not 0 < seconds <= 60:  # before starting, or the robot keeps going
+                raise PlaygroundError("seconds must be in (0, 60]")
             before = playground.behaviors.pose(robot)
-            status = playground.behaviors.move(robot, speed, turn)
+            status = playground.behaviors.move(robot, speed, turn, walker)
             if seconds is None:
                 return _json({"started": status, "pose": before})
-            if not 0 < seconds <= 60:
-                raise PlaygroundError("seconds must be in (0, 60]")
             run = await run_until(lambda: False, seconds)
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)
@@ -373,6 +382,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     lessons.register(server)
+    policy_tools.register(server)
 
     @server.tool()
     def stop(robot: str) -> str:

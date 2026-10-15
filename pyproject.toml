@@ -25,6 +25,8 @@ rl = [
     "stable-baselines3>=2.4,<3",  # control/rl/train.py builds on SubprocVecEnv internals
     "torch>=2.5",
 ]
+# Play learned policies (ONNX), e.g. ones trained with UniLab: uv sync --extra policy
+policy = ["onnxruntime>=1.20"]
 
 [project.scripts]
 robotforge = "robotforge:main"

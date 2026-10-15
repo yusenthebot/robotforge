@@ -366,7 +366,7 @@ async function applyScene(desc) {
   pendingFit = firstScene ? "camera" : "lights";
   firstScene = false;
   renderActuators(desc.actuators);
-  renderDrive(desc.robots || []);
+  renderDrive(desc.robots || [], desc.learned || {});
   follow = null;
 }
 
@@ -487,6 +487,7 @@ function applyState(s) {
   const active = (s.behaviors || []).find((b) => b.robot === $("drive-robot").value);
   $("drive-status").textContent =
     active && "speed" in active ? `${active.speed >= 0 ? " " : ""}${active.speed.toFixed(2)} m/s` : "";
+  syncWalker(active);
   $("btn-play").textContent = paused ? "Play" : "Pause";
   $("stat-rtf").textContent = paused ? "paused" : `${s.rtf.toFixed(2)}x`;
   const src = s.source || "";
@@ -606,7 +607,10 @@ const pressed = new Set();
 let mobileRobots = [];
 let lastDrive = "";
 
-function renderDrive(robots) {
+let learnedWalkers = {}; // robot -> {policy, max_speed, active}: robots that can walk with a learned policy
+
+function renderDrive(robots, learned = {}) {
+  learnedWalkers = learned;
   mobileRobots = robots.filter((r) => ["quadruped", "rover", "humanoid"].includes(r.kind));
   const box = $("drive");
   box.hidden = mobileRobots.length === 0;
@@ -622,6 +626,37 @@ function renderDrive(robots) {
   );
   if (mobileRobots.some((r) => r.name === previous)) select.value = previous;
   lastDrive = "";
+  renderWalker();
+}
+
+let walkerPendingUntil = 0; // after a switch, trust the user's pick until the server has answered
+
+function renderWalker() {
+  const learned = learnedWalkers[$("drive-robot").value];
+  const pick = $("drive-walker");
+  pick.hidden = !learned;
+  if (learned) {
+    pick.value = learned.active ? "rl" : "gait";
+    pick.options[1].title = learned.policy;
+  }
+}
+
+function syncWalker(active) {
+  // Show what really drives the robot (a switch can fail, e.g. without the optional onnxruntime).
+  const learned = learnedWalkers[$("drive-robot").value];
+  if (!learned || performance.now() < walkerPendingUntil) return;
+  learned.active = active?.walker === "rl";
+  $("drive-walker").value = learned.active ? "rl" : "gait";
+}
+
+function setWalker(walker) {
+  const robot = mobileRobots.find((r) => r.name === $("drive-robot").value);
+  const learned = learnedWalkers[robot?.name];
+  if (!robot || !learned) return;
+  learned.active = walker === "rl";
+  walkerPendingUntil = performance.now() + 1000;
+  lastDrive = "";
+  send({ type: "teleop", robot: robot.name, speed: 0, turn: 0, walker });
 }
 
 function driveCommand() {
@@ -629,7 +664,8 @@ function driveCommand() {
   if (!robot) return null;
   const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
   const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
-  const top = robot.max_speed ?? 0.3;
+  const learned = learnedWalkers[robot.name];
+  const top = (learned?.active ? learned.max_speed : robot.max_speed) ?? 0.3;
   const turnRate = robot.kind === "rover" ? 2.0 : 1.0;
   return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * turnRate };
 }
@@ -703,6 +739,11 @@ $("drive-robot").addEventListener("change", (e) => {
   e.target.blur(); // keep arrow keys for driving, not for changing the selection
   lastDrive = "";
   follow = null;
+  renderWalker();
+});
+$("drive-walker").addEventListener("change", (e) => {
+  e.target.blur();
+  setWalker(e.target.value);
 });
 
 let toastTimer = null;

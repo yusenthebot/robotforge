@@ -105,4 +105,5 @@ agent 会尽早打开 3D 查看器：你可以拖动机器人、拉滑条控制�
 - 目标与验收：[docs/GOAL.md](docs/GOAL.md)
 - 算法对比：[docs/ALGORITHMS.md](docs/ALGORITHMS.md)
 - 插件打包与验证（维护者）：[docs/PLUGINS.md](docs/PLUGINS.md)
+- 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
 - 进度：[STATUS.md](STATUS.md)，[progress.md](progress.md)
