@@ -408,8 +408,13 @@ def _dress_torso(vis: Visuals, torso, d: Dims, accent, pelvis_h: float) -> None:
     hx, hy, hz = depth / 2, width / 2, tall / 2
     shell = M.rounded_box(hx, hy, hz, 0.012 * s, segments=4, corner=0.018 * s)
     vis.add(torso, "shell", accent, shell)
-    plate = M.rounded_box(0.004 * s, hy * 0.72, hz * 0.62, 0.0035 * s, segments=3, corner=0.012 * s)
+    plate = M.rounded_box(0.004 * s, hy * 0.72, hz * 0.62, 0.0035 * s, segments=3, corner=0.02 * s)
     vis.add(torso, "shell", SHELL, plate, (hx + 0.002 * s, 0, tall * 0.06))
+    # A fine dark gap around the chest plate, so it reads as a fitted cover rather than a sticker.
+    gap = M.rounded_box(
+        0.0032 * s, hy * 0.72 + 0.0014 * s, hz * 0.62 + 0.0014 * s, 0.002 * s, segments=2, corner=0.021 * s
+    )
+    vis.add(torso, "dark", DARK, gap, (hx + 0.0012 * s, 0, tall * 0.06))
     vis.add(
         torso,
         "led",

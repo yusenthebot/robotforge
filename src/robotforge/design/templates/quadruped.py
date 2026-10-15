@@ -188,7 +188,7 @@ def _dress_trunk(vis: Visuals, trunk, L: float, W: float, H: float, accent, face
         for side in (1, -1):
             eye = M.rounded_box(0.0012, H * 0.075, H * 0.11, 0.001, segments=2, corner=H * 0.07)
             vis.add(trunk, "led", P.LED_CYAN, eye, (front + 0.0006, side * W * 0.17, H * 0.1))
-    for preset, mesh in P.lens(H * 0.085, 0.003).items():
+    for preset, mesh in P.lens(H * 0.1, 0.003).items():
         color = {"dark": DARK, "glass": P.GLASS, "metal": P.METAL}[preset]
         vis.add(trunk, preset, color, mesh, (front, 0, -H * 0.12), M.Z_TO_X)
 
@@ -205,7 +205,7 @@ def _dress_leg(vis: Visuals, upper, lower, sy: int, thigh: float, shin: float, l
     for preset, mesh in P.drum(knee_r, leg_r * 0.95, leg_r * 0.8).items():
         vis.add(lower, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), side)
     reach = shin - foot_r * 0.8
-    shin_link = M.link(reach, (leg_r * 0.92, leg_r * 0.7), (leg_r * 0.72, leg_r * 0.66), roundness=0.9)
+    shin_link = M.link(reach, (leg_r * 1.08, leg_r * 0.74), (leg_r * 0.78, leg_r * 0.68), roundness=0.9)
     vis.add(lower, "dark", DARK, shin_link, (0, 0, 0), down)
     for preset, mesh in P.ball_foot(foot_r, leg_r * 0.72).items():
         vis.add(lower, preset, P.RUBBER if preset == "rubber" else P.METAL, mesh, (0, 0, -shin))
