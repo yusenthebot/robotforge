@@ -324,6 +324,7 @@ class LessonRunner:
         self._bench_sent = -1
         self._saved: tuple[Any, mujoco.MjModel, str] | None = None  # (store, model, source) to return to
         self._left: carry.Snapshot | None = None  # where everything in that world was, to put it back
+        self._hands_off: set[str] = set()  # its robots no controller ran (legs set by hand): they come back so
         self._lock = threading.RLock()
 
     # ---- catalog and lifecycle -----------------------------------------------------
@@ -350,6 +351,7 @@ class LessonRunner:
                 self._saved = (pg.store, session.model, session.source)
                 with session.lock:
                     self._left = carry.take(session.model, session.data)
+                    self._hands_off = pg.behaviors.hands_off()
             else:
                 self.lesson.close()
             pg.store = None
@@ -382,10 +384,12 @@ class LessonRunner:
                 if left_as is not None:  # the robots and objects come back where they were, not to their start
                     with pg.session.lock:
                         names = [r.name for r in world.robots] + [o.name for o in world.objects]
-                        carry.restore(pg.session.model, pg.session.data, left_as, names)
+                        carried = carry.restore(pg.session.model, pg.session.data, left_as, names)
+                        pg.behaviors.let_go(self._hands_off.intersection(carried))
             else:
                 pg.session.load_model(model, source)
         self._left = None
+        self._hands_off = set()
         return {"left": left}
 
     def _close(self) -> None:

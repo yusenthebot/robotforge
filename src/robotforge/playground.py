@@ -430,6 +430,7 @@ class Playground:
         before = store.load()
         with self.session.lock:
             live = carry.take(self.session.model, self.session.data)
+            hands_off = self.behaviors.hands_off()
         try:
             after, compiled = store.apply(change)
         except ValidationError as exc:
@@ -441,7 +442,8 @@ class Playground:
             unchanged = [r.name for r in after.robots if r in before.robots]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
-                carry.restore(self.session.model, self.session.data, live, unchanged)
+                carried = carry.restore(self.session.model, self.session.data, live, unchanged)
+                self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
         return result
 
     def _unchanged(self, note: str) -> dict[str, Any]:

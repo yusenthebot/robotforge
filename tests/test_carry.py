@@ -97,3 +97,36 @@ def test_a_go2_mid_stride_is_carried_past_a_crate_put_where_it_started(pg, monke
     assert walked[0] > 0.8
     pg.add_object("crate", shape="box", size=[0.4, 0.4, 0.4], pos=[0.05, 0.04])  # where it started
     assert np.allclose(pg.behaviors.pose("go2")["position"][:2], walked[:2], atol=0.03)
+
+
+def _knee(pg: Playground) -> float:
+    m = pg.session.model
+    return float(pg.session.data.qpos[m.jnt_qposadr[m.actuator_trnid[m.actuator("dog/front_left_knee").id, 0]]])
+
+
+@pytest.mark.parametrize("trip", ["edit", "lesson", "joints by hand"])
+def test_a_leg_set_by_hand_holds_its_angle_through_an_edit_or_a_lesson(pg, trip):
+    """Regression found in review: a dog in a world stands on its gait from the start, and a leg set by hand takes
+    it off; an edit or a lesson brought the world back with a fresh gait, which swung the knee home (22.9 degrees).
+    The gait stays off, as for the arm above; a robot added in the same edit still gets its own."""
+    from robotforge import modes
+
+    pg.add_robot("dog", template="quadruped")
+    pg.run_fast(lambda: False, 1.0)
+    if trip == "joints by hand":
+        modes.apply(pg, "dog", "manual")
+    pg.set_controls({"dog/front_left_knee": -1.2})
+    pg.run_fast(lambda: False, 1.5)
+    posed = _knee(pg)
+    assert posed == pytest.approx(-1.2, abs=0.05) and "dog" not in pg.session.controllers
+    if trip == "lesson":
+        pg.lessons.start("pd_control")
+        pg.lessons.exit()
+    else:
+        pg.add_robot("pup", template="quadruped", pos=[1.5, 1.5])
+        assert "pup" in pg.session.controllers
+    pg.run_fast(lambda: False, 2.0)
+    assert _knee(pg) == pytest.approx(posed, abs=0.02)
+    assert "dog" not in pg.session.controllers
+    pg.session.reset()  # a reset starts everything fresh, on its gait
+    assert "dog" in pg.session.controllers
