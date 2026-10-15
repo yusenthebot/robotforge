@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 
 import mujoco
 import numpy as np
@@ -830,6 +831,8 @@ def test_cache_file_names_never_contain_characters_from_the_mesh_name(tmp_path, 
     dumbbell = trimesh.util.concatenate([a, b])
     out = home / "meshes"
     names = ("my robot; rm -rf $HOME`x`.stl", "..stl", "...stl", "\u00e9l\u00e9ment\n.stl", "a b'c\".stl")
+    if sys.platform == "win32":  # Windows cannot even create files named with a newline or a double quote
+        names = tuple(n for n in names if "\n" not in n and '"' not in n) + ("\u00e9l\u00e9ment.stl",)
     for name in names:
         src = tmp_path / name
         dumbbell.export(src)
