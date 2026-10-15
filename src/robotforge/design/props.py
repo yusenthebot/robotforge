@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+from robotforge.design.visuals import props as looks
+
 G = mujoco.mjtGeom
 PANEL = 0.02  # m, board and panel thickness
 WOOD = [0.72, 0.58, 0.4, 1.0]
@@ -147,13 +149,14 @@ def build(
         body.add_freejoint(name=name)
     total = mass if mass is not None else DEFAULT_MASS.get(shape, 5.0)
     volumes = [_volume(p) for p in parts]
+    geoms = []
     for i, part in enumerate(parts):
         kwargs = {}
         if movable:
             kwargs["mass"] = total * volumes[i] / sum(volumes)
         if not part.collide:
             kwargs.update(contype=0, conaffinity=0)
-        body.add_geom(
+        geom = body.add_geom(
             name=name if i == 0 else f"{name}/{i}",
             type=part.type,
             size=part.size,
@@ -163,6 +166,9 @@ def build(
             material=MATTE,
             **kwargs,
         )
+        geoms.append(geom)
+    # Meshes over the primitives (visual only); the primitives stay for contacts and mass.
+    looks.dress(spec, body, shape, size, rgba, name, geoms)
 
 
 def _volume(p: Part) -> float:
@@ -244,7 +250,7 @@ def _pallet(size: list[float], rgba: list[float]) -> list[Part]:
 
 # A crown is a cluster of balls (offset x, y, z and radius, as fractions of the crown radius, and a shade),
 # which reads as foliage where one big ball reads as a balloon.
-_CROWN = (
+CROWN = (
     (0.0, 0.0, 0.05, 0.62, 1.0),
     (0.42, 0.12, -0.12, 0.5, 0.9),
     (-0.4, 0.22, -0.08, 0.5, 0.84),
@@ -262,7 +268,7 @@ def _tree(size: list[float], rgba: list[float]) -> list[Part]:
     center = height - 0.55 * r
     trunk_h = max(0.3, center - 0.2 * r)
     parts = [Part(G.mjGEOM_CYLINDER, [trunk_r, trunk_h / 2, 0], [0, 0, trunk_h / 2], BARK)]
-    for dx, dy, dz, k, shade in _CROWN:
+    for dx, dy, dz, k, shade in CROWN:
         parts.append(Part(G.mjGEOM_SPHERE, [r * k, 0, 0], [dx * r, dy * r, center + dz * r], _shade(rgba, shade)))
     return parts
 
@@ -279,13 +285,17 @@ def _bench(size: list[float], rgba: list[float]) -> list[Part]:
     return parts
 
 
+# A boulder is three overlapping squashed balls: offset x, y (fractions of the radius), width and
+# height factors, and a shade.
+ROCK_LUMPS = ((0.0, 0.0, 1.0, 1.0, 1.0), (0.3, 0.2, 0.7, 0.75, 0.92), (-0.25, -0.22, 0.65, 0.7, 0.86))
+
+
 def _rock(size: list[float], rgba: list[float]) -> list[Part]:
     """Three overlapping squashed balls, sunk a little into the ground like a boulder."""
     d, h = size
     r = d / 2
-    lumps = ((0.0, 0.0, 1.0, 1.0, 1.0), (0.3, 0.2, 0.7, 0.75, 0.92), (-0.25, -0.22, 0.65, 0.7, 0.86))
     parts = []
-    for dx, dy, kxy, kz, shade in lumps:
+    for dx, dy, kxy, kz, shade in ROCK_LUMPS:
         half = [r * kxy, r * kxy * 0.85, h * kz * 0.6]
         parts.append(Part(G.mjGEOM_ELLIPSOID, half, [dx * r, dy * r, h * kz * 0.4], _shade(rgba, shade)))
     return parts
