@@ -274,7 +274,7 @@ class Playground:
         result = self._edit(change)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
-        return _renamed(result, given, name)
+        return _noted(_renamed(result, given, name), _yaw_note(yaw))
 
     @_one_edit_at_a_time
     def update_robot(
@@ -300,7 +300,7 @@ class Playground:
             if build is not None:
                 _built(robot).build = build
 
-        return self._edit(change)
+        return _noted(self._edit(change), _yaw_note(yaw))
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -337,6 +337,10 @@ class Playground:
         given, name = name, tidy_name(name)
         _check_meters("pos", fields.get("pos"), MAX_POSITION)
         _check_meters("size", fields.get("size"), MAX_OBJECT_SIZE)
+        size, cube = fields.get("size"), None
+        if fields.get("shape", "box") == "box" and size is not None and len(size) == 1:
+            fields = {**fields, "size": [size[0]] * 3}  # one number is the edge of a cube
+            cube = f"box size {size} is a cube of {size[0]:g} m"
         try:
             entry = ObjectEntry(name=name, **{k: v for k, v in fields.items() if v is not None})
         except ValidationError as exc:  # pydantic's own wording buries the fix under types and a docs link
@@ -345,7 +349,7 @@ class Playground:
         def change(w: World) -> None:
             w.objects.append(entry)
 
-        return _renamed(self._edit(change), given, name)
+        return _noted(_renamed(self._edit(change), given, name), cube, _yaw_note(fields.get("yaw")))
 
     @_one_edit_at_a_time
     def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
@@ -360,7 +364,7 @@ class Playground:
                 if value is not None:
                     setattr(obj, key, value)
 
-        return self._edit(change)
+        return _noted(self._edit(change), _yaw_note(fields.get("yaw")))
 
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
@@ -564,7 +568,7 @@ class Playground:
         def change(w: World) -> None:
             w.terrain.append(patch)
 
-        result = self._edit(change)
+        result = _noted(self._edit(change), _yaw_note(yaw))
         return _renamed(result, given, name) if name else result
 
     @_one_edit_at_a_time
@@ -587,7 +591,7 @@ class Playground:
             data["type"], data["name"] = old.type, old.name  # a patch keeps its type and name
             w.terrain = [self._patch(data) if t.name == old.name else t for t in w.terrain]
 
-        return self._edit(change)
+        return _noted(self._edit(change), _yaw_note(yaw))
 
     @staticmethod
     def _patch(data: dict[str, Any]) -> Any:
@@ -783,6 +787,21 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
     if max(abs(v) for v in values) / 100 <= limit:
         text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
     raise PlaygroundError(text)
+
+
+def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
+    """Add the notes that are not None to the result's "notes"."""
+    added = [n for n in notes if n]
+    if added:
+        result["notes"] = [*result.get("notes", []), *added]
+    return result
+
+
+def _yaw_note(yaw: float | None) -> str | None:
+    """yaw is degrees; a fraction of a radian-sized number (1.57, 3.14) is almost surely radians."""
+    if yaw is None or yaw == round(yaw) or not 0 < abs(yaw) <= 2 * math.pi + 0.01:
+        return None
+    return f"yaw {yaw:g} is degrees, so it turns only {yaw:g} degrees; if that was radians, use {math.degrees(yaw):.0f}"
 
 
 def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:

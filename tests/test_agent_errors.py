@@ -154,6 +154,17 @@ async def test_tool_names_in_other_forms_find_the_tool(lab):
     await lab.accepted("sim_control", action=" Resume ")
 
 
+async def test_a_yaw_that_looks_like_radians_and_a_one_number_box_are_explained(lab):
+    robot = json.loads(await lab.accepted("add_robot", name="pup", template="rover", pos=[2, 0], yaw=1.57))
+    assert any("yaw 1.57 is degrees" in n and "use 90" in n for n in robot["notes"])
+    cube = json.loads(await lab.accepted("add_object", name="b2", shape="box", size=[0.1], pos=[0.4, 0.1]))
+    assert any("cube of 0.1 m" in n for n in cube["notes"])
+    assert "size:\n  - 0.1\n  - 0.1\n  - 0.1" in lab.playground.show_world()["world_yaml"]
+    quiet = json.loads(await lab.accepted("update_object", name="b2", yaw=90))
+    assert not any("yaw" in n for n in quiet["notes"])
+    await lab.restore()
+
+
 async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
     fast = json.loads(await lab.accepted("move", robot="dog", speed=50, seconds=0.2))
     assert "max_speed" in fast["behavior"]["notes"][0] and "moves at" in fast["behavior"]["notes"][0]
