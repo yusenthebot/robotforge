@@ -339,6 +339,24 @@ def test_an_arm_carried_at_a_heading_reaches_targets_on_either_side(pg):
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
+def test_an_arm_on_a_rover_that_turned_lowers_straight_into_the_bin(pg):
+    """The release fling: after the rover drove a turn, the bin sat near the arm's +-180 degree base limit
+    and a straight lowering was taken for a full circle about the base, which threw the cube out."""
+    pg.add_robot("mm", build=MOBILE_ARM)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, 0.30])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[-0.32, 0.05], fixed=True)
+    pg.behaviors.move("mm", 0.0, 1.0)
+    _run(pg, 1.45)
+    pg.behaviors.stop("mm")
+    _run(pg, 1.0)
+    heading = pg.behaviors.pose("mm")["heading_deg"]
+    arm, placed = pg.behaviors.pick_and_place("mm", "cube", "bin")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+    assert abs(pg.behaviors.pose("mm")["heading_deg"] - heading) < 2  # nothing yanked the rover round
+
+
 def test_arm_commands_say_which_arm_when_a_robot_has_none(pg):
     pg.add_robot("dog", build=DOG)
     with pytest.raises(ValueError, match="not an arm, and carries none"):

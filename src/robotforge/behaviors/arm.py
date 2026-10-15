@@ -22,6 +22,7 @@ REACH_TOL = 0.008  # m: an IK answer further than this from the target means "ca
 RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nearest start gets stuck
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
+GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 
 
 @dataclass
@@ -83,6 +84,7 @@ class ArmMotion:
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._axis0 = DOWN  # where the tool pointed when the current move began
+        self._turn: float | None = None  # how far the current move turns about the base, rad
         self.current_label = "idle"
         self.log: list[str] = []
 
@@ -141,8 +143,9 @@ class ArmMotion:
         return bool(self._clashes(q) - self._touching_at_home)
 
     def _clashes(self, q: np.ndarray) -> set[tuple[int, int]]:
-        """Geom pairs overlapping at `q` with a moving part of the arm on one side and the robot or the floor
-        on the other."""
+        """Geom pairs overlapping at `q` with a moving part of the arm on one side and the robot or the ground
+        on the other. Fixed props (bins, tables, walls) do not count: placing into a bin or onto a shelf
+        means working right against them, and the moves are not planned around obstacles anyway."""
         m, d = self.ik.model, self.ik.data
         self.ik.point(self.chain, q)  # poses every body
         mujoco.mj_collision(m, d)
@@ -151,10 +154,11 @@ class ArmMotion:
             if con.dist > -PENETRATION:
                 continue
             g1, g2 = int(con.geom1), int(con.geom2)
+            if int(m.geom_bodyid[g1]) not in self._moving:
+                g1, g2 = g2, g1
             b1, b2 = int(m.geom_bodyid[g1]), int(m.geom_bodyid[g2])
-            if b1 not in self._moving:
-                b1, b2 = b2, b1
-            if b1 in self._moving and (b2 == 0 or int(m.body_rootid[b2]) == self._robot_root):
+            ground = b2 == 0 and int(m.geom_type[g2]) in GROUND
+            if b1 in self._moving and (ground or (b2 != 0 and int(m.body_rootid[b2]) == self._robot_root)):
                 pairs.add((min(g1, g2), max(g1, g2)))
         return pairs
 
@@ -254,10 +258,13 @@ class ArmMotion:
             wp = self.queue.popleft()
             start = data.site_xpos[self.site].copy()
             self._branch = None
+            self._turn = None
             if wp.joints is not None:
                 self._branch = (self.q.copy(), wp.joints)
             elif wp.position is not None:
                 goal, err, restarted = self._solve(wp.position)
+                if err <= REACH_TOL:
+                    self._turn = self._path_turn(start, wp.position, float(goal[0] - self.q[0]))
                 if restarted and err <= REACH_TOL:
                     # The goal lies in another elbow or wrist branch, which no straight tool path reaches:
                     # move joint by joint instead, as industrial arms do, slowly enough not to fling a load.
@@ -296,8 +303,17 @@ class ArmMotion:
         if min(ra, rb) < 1e-3:
             return a + (b - a) * s
         ta = np.arctan2(da[1], da[0])
-        r, t = ra + (rb - ra) * s, ta + self._sweep(ta, np.arctan2(db[1], db[0])) * s
+        turn = self._turn if self._turn is not None else self._sweep(ta, np.arctan2(db[1], db[0]))
+        r, t = ra + (rb - ra) * s, ta + turn * s
         return np.array([*(self.base_xy + r * np.array([np.cos(t), np.sin(t)])), a[2] + (b[2] - a[2]) * s])
+
+    def _path_turn(self, a: np.ndarray, b: np.ndarray, joint_turn: float) -> float:
+        """How far the path turns about the base: the tool's change in angle, taken around the side the
+        base joint really turns. Judging it from tool angles alone mistook a straight lowering near the
+        joint's +-180 degree limit for a full circle, which flung the cube."""
+        da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
+        step = float(np.arctan2(da[0] * db[1] - da[1] * db[0], da @ db))  # signed, -pi..pi
+        return min((step + k * 2 * np.pi for k in (-1, 0, 1)), key=lambda turn: abs(turn - joint_turn))
 
     def _sweep(self, from_angle: float, to_angle: float) -> float:
         """Signed turn from one world heading to another that keeps the base joint inside its limits."""
