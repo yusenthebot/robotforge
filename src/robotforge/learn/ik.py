@@ -292,7 +292,7 @@ STEPS = (
 class IKLesson(Lesson):
     id = "inverse_kinematics"
     chapter = {"zh": "运动学", "en": "Kinematics"}
-    title = {"zh": "手怎么够到目标：逆运动学", "en": "Reaching a target: inverse kinematics"}
+    title = {"zh": "逆运动学（一）：手怎么够到目标", "en": "Inverse kinematics I: reaching a target"}
     summary = {
         "zh": "从关节角到手的位置，再反过来：余弦定理、工作空间、两个解和雅可比迭代。",
         "en": "From joint angles to hand position and back: law of cosines, workspace, two solutions, Jacobian steps.",

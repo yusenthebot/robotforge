@@ -1479,7 +1479,52 @@ function dotTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig, faceoff: faceoffRig };
+// Six-joint arms in 3D: the draggable target, the line from hand to target, and the manipulability
+// ellipsoid at the hand (its axes are the directions the hand moves easily, its radii how easily).
+function arm3dRig(rig) {
+  const tags = faceoffRig(rig); // the name tags over the arms
+  const amber = api.color("--amber");
+  const blue = api.color("--plot-blue");
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.03, 24, 12), basic(amber, 0.95));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.05, 24, 12), basic(amber, 0.18));
+  const target = new THREE.Group();
+  target.add(ball, halo);
+  const error = dashedLine(amber, 0.9);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), basic(blue, 0.22, true));
+  const rim = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.SphereGeometry(1, 12, 6)), lineMat(blue, 0.35));
+  const ellipsoid = new THREE.Group();
+  ellipsoid.add(shell, rim);
+  ellipsoid.matrixAutoUpdate = false;
+  const parts = { ...tags.parts, target, error, ellipsoid };
+  tags.group.add(target, error, ellipsoid);
+  const round = (v) => Number(v.toFixed(3));
+  return {
+    group: tags.group,
+    parts,
+    dragTarget: {
+      mesh: ball,
+      // Back to the sliders: forward and sideways from the active arm's base, height from the floor.
+      toControls(hit) {
+        const base = rig.bases[state.live?.arm ?? "ours"];
+        return { tx: round(hit.x - base[0]), ty: round(hit.y - base[1]), tz: round(hit.z) };
+      },
+    },
+    frame() {
+      tags.frame();
+      const live = state.live;
+      if (!live?.target) return;
+      const goal = new THREE.Vector3().fromArray(live.target);
+      const hand = new THREE.Vector3().fromArray(live.hand);
+      target.position.copy(goal);
+      setPoints(error, [hand, goal]);
+      const [a, b, c] = [0, 1, 2].map((k) => new THREE.Vector3(...live.ellipsoid.axes.map((row) => row[k])));
+      const [ra, rb, rc] = live.ellipsoid.radii.map((r) => Math.max(r, 0.004));
+      ellipsoid.matrix.makeBasis(a.multiplyScalar(ra), b.multiplyScalar(rb), c.multiplyScalar(rc)).setPosition(hand);
+    },
+  };
+}
+
+const RIGS = { joint: jointRig, planar_arm: planarArmRig, rover: roverRig, faceoff: faceoffRig, arm3d: arm3dRig };
 
 function lineMat(color, opacity) {
   return new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
@@ -1512,6 +1557,11 @@ function startTargetDrag(e) {
   if (!ray.intersectObject(t.mesh, false).length) return;
   e.stopPropagation(); // not a camera orbit, and not a body drag
   e.preventDefault();
+  if (t.toControls) {
+    // A target in 3D slides on the plane facing the camera through it, where the pointer can follow it.
+    const at = t.mesh.getWorldPosition(new THREE.Vector3());
+    t.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(ray.ray.direction.clone().negate(), at);
+  }
   targetDrag = { sent: 0 };
   api.canvas.classList.add("dragging");
 }
@@ -1521,17 +1571,19 @@ function moveTargetDrag(e) {
   const t = overlays.target();
   const hit = new THREE.Vector3();
   if (!api.rayAt(e.clientX, e.clientY).ray.intersectPlane(t.plane, hit)) return;
-  const rel = hit.sub(t.origin);
-  targetDrag.at = [Number(rel.dot(t.X).toFixed(3)), Number(rel.dot(t.Z).toFixed(3))];
+  if (t.toControls) targetDrag.at = t.toControls(hit);
+  else {
+    const rel = hit.sub(t.origin);
+    targetDrag.at = { tx: Number(rel.dot(t.X).toFixed(3)), tz: Number(rel.dot(t.Z).toFixed(3)) };
+  }
   const now = performance.now();
   if (now - targetDrag.sent < 33) return; // about 30 updates a second is plenty
   targetDrag.sent = now;
   sendTarget(targetDrag.at);
 }
 
-function sendTarget([x, z]) {
-  api.send({ type: "lesson", action: "set", control: "tx", value: x });
-  api.send({ type: "lesson", action: "set", control: "tz", value: z });
+function sendTarget(values) {
+  for (const [control, value] of Object.entries(values)) api.send({ type: "lesson", action: "set", control, value });
 }
 
 function endTargetDrag() {

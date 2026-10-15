@@ -6,6 +6,7 @@ from robotforge.learn.challenges import CourseChallenge, MazeChallenge, ShoveCha
 from robotforge.learn.compare import ArmFaceOff, HumanoidFaceOff
 from robotforge.learn.engine import Lesson, LessonError, LessonRunner
 from robotforge.learn.ik import IKLesson
+from robotforge.learn.ik_arm import IKArmLesson
 from robotforge.learn.pd import PDLesson
 from robotforge.learn.rl import RLLesson
 from robotforge.learn.sensors import SensorsLesson
@@ -16,6 +17,7 @@ LESSONS: dict[str, type[Lesson]] = {
     for cls in (
         PDLesson,
         IKLesson,
+        IKArmLesson,
         SensorsLesson,
         RLLesson,
         MazeChallenge,
