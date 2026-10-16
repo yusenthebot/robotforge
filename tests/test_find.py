@@ -100,3 +100,13 @@ async def test_without_opengl_find_returns_the_state_and_says_why(pg, monkeypatc
         state = _state(result)
         assert "Cannot look for red" in state["note"] and "no display" in state["note"]
         assert "cube_a" in state["free_bodies"]
+
+
+async def test_finds_are_named_from_the_world_that_was_seen(needs_gl, pg):
+    """The picture and the names must come from one model: a world swapped in between has other geoms."""
+    from robotforge.sim import finder, vision
+
+    layers = pg.renderer.layers(pg.session, "top", 320, 240, geoms=True, exposure=vision.EXPOSURE)
+    pg.new_world("empty")  # another agent call, between the picture and the naming
+    found = finder.find(layers, "red")
+    assert found[0]["object"] == "cube_a"

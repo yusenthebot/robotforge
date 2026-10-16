@@ -204,18 +204,20 @@ class SnapshotRenderer:
             finally:
                 r.disable_segmentation_rendering()
             seen = np.where(seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM), seg[..., 0], -1).astype(np.int32)
-        return Layers(rgb, depth, seen, pinhole)
+        return Layers(rgb, depth, seen, pinhole, model)
 
 
 @dataclass(frozen=True)
 class Layers:
     """One look through a camera: the picture, the depth camera's reading (m along the view direction) and,
-    when asked, the geom each pixel shows (-1 for the sky), with the camera they were taken with."""
+    when asked, the geom each pixel shows (-1 for the sky), with the camera they were taken with and the model
+    they show (a world swapped since has other geoms)."""
 
     rgb: np.ndarray
     depth: np.ndarray
     geoms: np.ndarray | None
     camera: vision.Pinhole
+    model: mujoco.MjModel
 
 
 CLIP_CONTROL = "ARB_clip_control unavailable"  # macOS OpenGL 4.1 has no reverse-Z depth; MuJoCo says so

@@ -39,14 +39,14 @@ def colors(color: str) -> list[str]:
     return [color]
 
 
-def find(layers: Layers, color: str, model: mujoco.MjModel) -> list[dict[str, Any]]:
+def find(layers: Layers, color: str) -> list[dict[str, Any]]:
     """Every blob of `color` (or of every named color) in the picture, biggest first, located and named."""
     found = [f for c in colors(color) for f in vision.find(layers.rgb, layers.depth, layers.camera, c)]
     found.sort(key=lambda f: -f.blob.area)
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
     for f in found:
-        what = _what(f.blob, layers.geoms, model)
+        what = _what(f.blob, layers.geoms, layers.model)
         loose = what.get("object")
         if loose is not None:
             if loose in seen:  # a smaller piece of an object already reported

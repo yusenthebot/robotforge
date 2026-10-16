@@ -733,7 +733,7 @@ class Playground:
             layers = self.renderer.layers(self.session, view, width, height, geoms=True, exposure=vision.EXPOSURE)
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
-        found = finder.find(layers, color, self.session.model)
+        found = finder.find(layers, color)
         return finder.summary(view, color, found), finder.marked_png(layers.rgb, found)
 
     # ---- helpers ----------------------------------------------------------------------
