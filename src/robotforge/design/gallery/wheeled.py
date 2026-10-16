@@ -1,4 +1,4 @@
-"""Gallery designs that roll: a wheel-legged biped and rovers."""
+"""Gallery designs that roll: a wheel-legged biped, a robot dog on wheels, rovers and mobile manipulators."""
 
 from __future__ import annotations
 
@@ -187,7 +187,8 @@ def mobile_panda() -> dict[str, Any]:
 
 def mars_rover() -> dict[str, Any]:
     """Six wheels on a rocker-bogie, like the Mars rovers: each side's rocker and bogie pivot freely, so all six wheels
-    keep the ground over rocks and steps. A camera mast with a pan-tilt head and a small arm ride on the deck.
+    keep the ground over rocks and steps. A camera mast with a pan-tilt head rides on the deck, and a sampling arm
+    on the front of the body reaches the ground.
 
     Points are where the parts meet, in the body's frame (meters): the rocker pivots at P, carries the front wheel at F
     and the bogie's pivot at B; the bogie carries the middle and rear wheels at M and R. A spring on each rocker holds

@@ -192,7 +192,7 @@ def go2_arm() -> dict[str, Any]:
     AgileX PiPER arm (Menagerie, MIT) on a plate bolted to its back.
 
     The plate is the robot's base; the Go2 hangs under it (its trunk's top is 57 mm above its frame) and walks on the
-    quadruped gait, the PiPER rides on top, folded back over the dog until it is used.
+    quadruped gait, the PiPER rides on top, folded up with its gripper over the dog's head until it is used.
     """
     return {
         "color": GRAPHITE,
