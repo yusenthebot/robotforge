@@ -360,6 +360,9 @@ def slab(
     segments: int = 3,
     per_corner: int = 3,
     fence: bool = True,
+    bottom_cap: bool = True,
+    top_cap: bool = True,
+    rims: tuple[float, float] = (0.0, 0.0),
 ) -> Mesh:
     """A rounded-rectangle block from z0 to z1 with its own edge radius at the bottom and at the top.
 
@@ -367,6 +370,10 @@ def slab(
     crisp seam, which one rounded box cannot do. `corner` is the radius of the vertical edges.
     With `fence` every flat face is bordered by a thin strip (see _fenced), so a big face shades
     flat instead of fading into the curve beside it; small parts can do without.
+
+    Without `bottom_cap` or `top_cap` that end is open: the faces at a parting line look into the
+    shell, where only a camera inside it could see them. `rims` keeps a flat border that wide round
+    the open bottom and top, so a narrow gap beside it still closes.
     """
     h = (z1 - z0) / 2
     rb = max(min(bottom, hx, hy, h), 1e-5)
@@ -382,7 +389,15 @@ def slab(
     if fence and straight > 1e-5:  # fence the flat sides top and bottom as well
         rings += [ring(0.0, z0 + rb + straight * _FENCE), ring(0.0, z1 - rt - straight * _FENCE)]
     rings += [ring(rt * (1 - math.sin(a)), z1 - rt * (1 - math.cos(a))) for a in angles[::-1]]
-    return loft(rings)
+    inner = 0.8 * min(hx, hy)  # a rim never closes the opening
+    creases = []  # a rim is creased off its edge, so the edge shades as it does next to a cap
+    if not bottom_cap and rims[0] > 0:
+        rings.insert(0, ring(min(rb + rims[0], inner), z0))
+        creases.append(1)
+    if not top_cap and rims[1] > 0:
+        rings.append(ring(min(rt + rims[1], inner), z1))
+        creases.append(len(rings) - 2)
+    return loft(rings, sharp=creases, cap_start=bottom_cap, cap_end=top_cap)
 
 
 _FENCE = 0.004  # share of a flat face given to the strip that fences it off from the curve next to it

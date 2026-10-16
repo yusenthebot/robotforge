@@ -93,8 +93,12 @@ def lens(r: float, depth: float) -> Parts:
 
 
 @M.cached
-def led(r: float, depth: float = 0.0015) -> Parts:
+def led(r: float, depth: float = 0.0015, underside: bool = True) -> Parts:
+    """A dome LED sunk `depth` into a surface at z = 0. Without its `underside` the part below the surface is
+    left out, so a camera inside the shell does not see it."""
     dome = [(r * math.cos(a), depth * math.sin(a)) for a in np.linspace(0, math.pi / 2, 4)]
+    if not underside:
+        return {"led": M.loft([M.at_z(M.circle(rr, 20), z) for rr, z in [(r, -depth), *dome]], cap_start=False)}
     return {"led": M.lathe([(0, -depth), (r, -depth), *dome], segments=20, sharp=(1,))}
 
 
@@ -162,8 +166,12 @@ def tyre(r: float, half_w: float, segments: int = 60, spokes: int = 5) -> Parts:
 
 
 @M.cached
-def bolt(r: float, h: float) -> M.Mesh:
-    """A hex bolt head standing on the z = 0 plane."""
+def bolt(r: float, h: float, underside: bool = True) -> M.Mesh:
+    """A hex bolt head standing on the z = 0 plane. Without its `underside` (a head sunk a little into a
+    shell) it is open below, so a camera inside the shell does not see it."""
+    if not underside:
+        rings = [M.at_z(M.circle(rr, 6), z) for rr, z in ((r, 0), (r, h * 0.7), (r * 0.8, h), (0, h))]
+        return M.loft(rings, sharp=(1, 2), cap_start=False)
     return M.lathe([(0, 0), (r, 0), (r, h * 0.7), (r * 0.8, h), (0, h)], segments=6, sharp=(1, 2, 3))
 
 
@@ -176,13 +184,21 @@ def bolt_circle(radius: float, n: int, r: float, h: float, start: float = 0.0) -
 
 
 @M.cached
-def slats(hx: float, hz: float, count: int, depth: float) -> M.Mesh:
-    """Horizontal vent slats in the x-z plane, `depth` thick along y."""
+def slats(hx: float, hz: float, count: int, depth: float, open_back: bool = False) -> M.Mesh:
+    """Horizontal vent slats in the x-z plane, `depth` thick along y. With `open_back` their -y side (sunk
+    into a shell) is left open, so a camera inside the shell does not see them."""
     out = []
     pitch = 2 * hz / count
+    edge = pitch * 0.12
+    # slab x along the slat, its y up the face and its z (the open bottom first) along +y
+    turn = np.column_stack([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
     for k in range(count):
         z = -hz + pitch * (k + 0.5)
-        out.append(M.rounded_box(hx, depth, pitch * 0.25, pitch * 0.12, segments=2).moved((0, 0, z)))
+        if open_back:
+            slat = M.slab(hx, pitch * 0.25, -depth, depth, edge, edge, edge, 2, 2, fence=False, bottom_cap=False)
+            out.append(slat.moved((0, 0, z), turn))
+        else:
+            out.append(M.rounded_box(hx, depth, pitch * 0.25, edge, segments=2).moved((0, 0, z)))
     return M.merge(out)
 
 

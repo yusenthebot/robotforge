@@ -446,7 +446,7 @@ def _sensors(
         if along is None and normal is not None and np.linalg.norm(np.cross(up, normal)) > 1e-6:
             along = np.cross(up, normal)  # a board on a side face lies level
         mount = _Mount(where, look, up, normal, seat, along)
-        _add_sensor(spec, body, name, sensor, mount, part, vis)
+        _add_sensor(spec, body, name, sensor, mount, part, vis, layout, owner)
 
 
 @dataclass(frozen=True)
@@ -486,7 +486,11 @@ def _add_sensor(
     mount: _Mount,
     part: BaseSpec | PartSpec,
     vis: Visuals,
+    layout: looks.Layout,
+    owner: str,
 ) -> None:
+    """The sensor, its site or camera, and its module drawn round it. A module inside the part's shell is left
+    out: nobody sees it from outside, and a camera inside the part would see its back."""
     S, OBJ = mujoco.mjtSensor, mujoco.mjtObj
     where, look, up = mount.where, mount.look, mount.up
     if sensor.type == "imu":
@@ -501,7 +505,10 @@ def _add_sensor(
         ):
             spec.add_sensor(name=f"{prefix}{kind}", type=stype, objtype=OBJ.mjOBJ_SITE, objname=site)
         if mount.normal is None:  # inside the body (it is usually hidden there) or at given numbers: level
-            looks.imu(vis, body, where, np.array([0.0, 0.0, 1.0]), None)
+            level = np.array([0.0, 0.0, 1.0])
+            middle = where + level * (looks.IMU_BOX[2] - 0.0003)
+            if not layout.hidden(owner, middle, np.eye(3), looks.IMU_BOX):
+                looks.imu(vis, body, where, level, None)
         else:  # flat on its face
             looks.imu(vis, body, mount.seat, mount.normal, mount.along)
         return
@@ -514,7 +521,8 @@ def _add_sensor(
     if sensor.type == "camera":
         # A camera on a face it does not look out of (on top, looking forward) stands on that face: from
         # halfway into the shell it saw the inside of the robot.
-        lifted = mount.lift(looks.CAMERA_HALF, looks.CAMERA_HALF, looks.camera_frame(look, up))
+        frame = looks.camera_frame(look, up)
+        lifted = mount.lift(looks.CAMERA_HALF, looks.CAMERA_HALF, frame)
         eye = where if lifted is None else lifted
         body.add_camera(name=name, pos=eye.tolist(), xyaxes=_camera_axes(look), fovy=sensor.fov)
         # The camera's mass, where it has always been (drawn as the board camera round the camera point).
@@ -529,7 +537,9 @@ def _add_sensor(
             conaffinity=0,
         )
         vis.hide(lens)
-        looks.camera(vis, body, eye, look, up)
+        middle, half = looks.camera_box(eye, look)
+        if not layout.hidden(owner, middle, frame, half):
+            looks.camera(vis, body, eye, look, up)
         return
     if sensor.type == "rangefinder":
         body.add_site(name=name, pos=where.tolist(), quat=_z_to(look), size=[0.004, 0, 0], rgba=[1, 0.3, 0.2, 0.8])
@@ -540,7 +550,9 @@ def _add_sensor(
         # The board stands on its face; the ray still starts where the sensor is.
         frame = looks.rangefinder_frame(look, up)
         lifted = mount.lift(looks.RANGE_HALF, looks.RANGE_HALF * looks.RANGE_ASPECT, frame)
-        looks.rangefinder(vis, body, mount.seat if lifted is None else lifted, frame)
+        board = mount.seat if lifted is None else lifted
+        if not layout.hidden(owner, board + frame[:, 2] * (looks.RANGE_BOX[2] - 0.0006), frame, looks.RANGE_BOX):
+            looks.rangefinder(vis, body, board, frame)
         return
     # lidar: a spinning puck, modelled as a ring of rangefinders in the owner's horizontal plane
     up = np.array([0.0, 0.0, 1.0])

@@ -191,6 +191,51 @@ def test_a_robot_camera_never_sees_its_own_housing(needs_gl):
     assert own == []
 
 
+def _own_pixels(model: mujoco.MjModel, cam: int, height: int = 120, width: int = 160) -> int:
+    """Pixels of the camera's own body in its picture at the home pose."""
+    data = _home(model)
+    renderer = mujoco.Renderer(model, height, width)
+    try:
+        renderer.enable_segmentation_rendering()
+        renderer.update_scene(data, camera=cam)
+        seg = renderer.render()
+    finally:
+        renderer.close()
+    geoms = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
+    ids = seg[..., 0][geoms]
+    return int(
+        np.sum([np.sum(ids == g) for g in np.unique(ids) if g >= 0 and model.geom_bodyid[g] == model.cam_bodyid[cam]])
+    )
+
+
+ON_TOP = {"at": "top", "shift": [0, 0, 0.05], "joint": {"axis": "z", "range": [-90, 90]}, "color": "white"}
+INSIDE = {  # a part with a camera at its middle (the default "camera" shorthand)
+    "box base": {"base": {"shape": "box", "size": [0.24, 0.16, 0.06]}},
+    "cylinder base": {"base": {"shape": "cylinder", "size": [0.26, 0.05]}},
+    "box part": {"parts": [{"name": "head", **ON_TOP, "shape": "box", "size": [0.08, 0.1, 0.05]}]},
+    "sphere part": {"parts": [{"name": "head", **ON_TOP, "shape": "sphere", "size": [0.08]}]},
+}
+
+
+@pytest.mark.parametrize("direction", ["forward", "down", "back"])
+@pytest.mark.parametrize("shape", list(INSIDE))
+def test_a_camera_inside_its_part_sees_out_of_it(needs_gl, shape, direction):
+    """The default camera sits in the middle of its part. The dressing drew faces that look into the shell (a
+    dark pan's lid, the core behind a parting line, a hemisphere's rim, the backs of a vent, a screw's and an
+    LED's undersides) and the camera filmed them: up to all of its picture was the robot's dark insides. A
+    camera sees out through its own shell, as through the primitive it had before. Screw heads and vent slats
+    outside the shell may show through it, a few pixels of them."""
+    build = {"color": "blue", "base": {"shape": "box", "size": [0.2, 0.16, 0.06], "fixed": True}}
+    extra = copy.deepcopy(INSIDE[shape])
+    build["base"].update(extra.get("base", {}))
+    build["parts"] = extra.get("parts", [])
+    holder = build["parts"][0] if build["parts"] else build["base"]
+    holder["sensors"] = [{"type": "camera", "direction": direction, "fov": 90}]
+    model = _compile(build)
+    cam = next(c for c in range(model.ncam) if model.camera(c).name.startswith("r/"))
+    assert _own_pixels(model, cam) <= 0.015 * 120 * 160
+
+
 # ---- where details sit -------------------------------------------------------------------------------------
 
 FACES = {"top": (0, 0, 1), "bottom": (0, 0, -1), "front": (1, 0, 0), "back": (-1, 0, 0), "left": (0, 1, 0)}

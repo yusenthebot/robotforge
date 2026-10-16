@@ -46,7 +46,11 @@ SEAM_INSET = 0.0007  # m the dark core under a parting line sits inside the shel
 PAN_INSET = 0.0012  # m a base's dark lower pan steps in from its colored upper shell
 BASE_SEAM = 0.36  # share of a base's height taken by its dark pan (the templates' trunk uses about a third)
 PAN_MAX = 0.015  # m: a tall base keeps its color; only its bottom 15 mm is the dark pan
+# m of flat rim round the bottom of a base's open seam core: with the core's rounded edge it reaches over the
+# pan's step, so looking up into the parting line from below never finds a way through the hollow shell
+SEAM_RIM = PAN_INSET - SEAM_INSET
 LINK_ROUNDNESS = 0.85  # corner radius of a hinged link's section, as a share of its smaller half extent
+LINK_SHRINK = 0.25  # a hinged link's drawn shell lies at most this share of its radius inside its capsule (LinkShape)
 LID_SEAM = 0.74  # a box part's lid line, as a share of its height from the bottom
 KEEPOUT_MARGIN = 0.003  # m kept clear around whatever is attached to a face before a screw goes there
 SENSOR_KEEPOUT = 0.016  # m around a sensor's mounting point
@@ -196,6 +200,15 @@ class Layout:
             return bool(np.all((t >= margin) & (t <= length - margin) & (radial <= r - margin)))
         nearest = a + np.outer(np.clip(t, 0.0, length), d / length if length > 1e-9 else np.zeros(3))
         return bool(np.all(np.linalg.norm(pts - nearest, axis=1) <= r - margin))
+
+    def hidden(self, body: str, center: np.ndarray, rot: np.ndarray, half: Sequence[float]) -> bool:
+        """True when a box (its middle, rotation and half extents) lies inside the body's drawn shell, where
+        nobody sees it: not from outside, and not a camera inside (it would only hide the view)."""
+        solid = self.solids.get(body)
+        if solid is None:
+            return False
+        margin = 0.0005 + (LINK_SHRINK * solid[3] if body in self.links else 0.0)
+        return self.inside(body, _box_corners(np.asarray(center, float), rot, half), margin)
 
     def _keep(self, body: str, low: np.ndarray, high: np.ndarray) -> None:
         self.keepouts.setdefault(body, []).append((low - KEEPOUT_MARGIN, high + KEEPOUT_MARGIN))
@@ -467,17 +480,23 @@ def box(
     zs = -hz + (min(2 * hz * BASE_SEAM, PAN_MAX) if base else 2 * hz * LID_SEAM)
     # A base is big on screen: smoother edges and fenced flat faces. A part makes do with less.
     seg, fence = (3, True) if base else (2, False)
-    upper = M.slab(hx, hy, zs + SEAM_GAP, hz, SEAM_EDGE, rb, rc, segments=seg, per_corner=per, fence=fence)
+    # The two halves are open toward each other and the dark core behind the parting line is a bare band:
+    # from outside the core closes the gap, and a camera inside the part sees out as through one shell.
+    # Under a base's core a narrow rim closes the step above the pan.
+    finish = {"segments": seg, "per_corner": per, "fence": fence}
+    upper = M.slab(hx, hy, zs + SEAM_GAP, hz, SEAM_EDGE, rb, rc, **finish, bottom_cap=False)
     vis.add(body, preset, rgba, upper, c)
     if base:
-        pan = M.slab(hx - PAN_INSET, hy - PAN_INSET, -hz, zs - SEAM_GAP, rb, SEAM_EDGE, rc - PAN_INSET, per_corner=per)
+        pan_half = (hx - PAN_INSET, hy - PAN_INSET)
+        pan = M.slab(*pan_half, -hz, zs - SEAM_GAP, rb, SEAM_EDGE, rc - PAN_INSET, per_corner=per, top_cap=False)
         vis.add(body, "dark", DARK, pan, c)
     else:
-        lower = M.slab(hx, hy, -hz, zs - SEAM_GAP, rb, SEAM_EDGE, rc, segments=seg, per_corner=per, fence=fence)
+        lower = M.slab(hx, hy, -hz, zs - SEAM_GAP, rb, SEAM_EDGE, rc, **finish, top_cap=False)
         vis.add(body, preset, rgba, lower, c)
     depth = SEAM_GAP + 0.0012
     inner = (hx - SEAM_INSET, hy - SEAM_INSET, zs - depth, zs + depth, 0.0003, 0.0003, rc - SEAM_INSET)
-    core = M.slab(*inner, segments=1, per_corner=per, fence=False)
+    rims = (SEAM_RIM if base else 0.0, 0.0)
+    core = M.slab(*inner, segments=1, per_corner=per, fence=False, bottom_cap=False, top_cap=False, rims=rims)
     vis.add(body, "dark", DARK, core, c)
     if base or (hx >= 0.015 and hy >= 0.015):
         _corner_screws(vis, body, name, hx, hy, hz, c, layout)
@@ -488,7 +507,7 @@ def box(
 def _corner_screws(vis: Visuals, body, name: str, hx: float, hy: float, hz: float, c: np.ndarray, layout: Layout):
     inset = float(np.clip(min(hx, hy) * 0.22, 0.0045, 0.018))
     r = float(np.clip(min(hx, hy) * 0.07, 0.0012, 0.0028))
-    head = P.bolt(r, r * 0.75)
+    head = P.bolt(r, r * 0.75, underside=False)
     for sx in (1, -1):
         for sy in (1, -1):
             # Into the corner, or along the long side when something is attached at the corner.
@@ -506,26 +525,43 @@ def _base_details(vis: Visuals, body, name: str, hx: float, hy: float, hz: float
     if grille_h >= 0.005 and hy >= 0.03:
         at = c + np.array([-hx - 0.0002, 0.0, upper_mid])
         if layout.free(name, at, (0.002, grille_w, grille_h)):
-            slats = P.slats(grille_w, grille_h, 4 if grille_h > 0.008 else 3, 0.0016)
+            slats = P.slats(grille_w, grille_h, 4 if grille_h > 0.008 else 3, 0.0016, open_back=True)
             vis.add(body, "dark", DARK, slats, at, M.rot_z(math.pi / 2))
     if hx < 0.03:
         return
     for fx, fy in ((-0.78, 0.55), (-0.78, -0.55), (-0.5, 0.0), (0.0, 0.55)):
         light = c + np.array([hx * fx, hy * fy, hz])
         if layout.free(name, light, 0.006):
-            vis.add(body, "led", P.LED_GREEN, P.led(0.0028)["led"], light)
+            vis.add(body, "led", P.LED_GREEN, P.led(0.0028, underside=False)["led"], light)
             return
 
 
 @M.cached
-def _disc(r: float, z0: float, z1: float, bottom: float, top: float, segments: int) -> M.Mesh:
-    """A solid cylinder along z with its own edge radius at each end (a slab, but round)."""
+def _disc(
+    r: float,
+    z0: float,
+    z1: float,
+    bottom: float,
+    top: float,
+    segments: int,
+    lids: tuple[bool, bool] = (True, True),
+    rims: tuple[float, float] = (0.0, 0.0),
+) -> M.Mesh:
+    """A solid cylinder along z with its own edge radius at each end (a slab, but round). An end without its
+    lid is open, keeping a flat rim `rims` wide round it (see M.slab)."""
     h = (z1 - z0) / 2
     rb, rt = min(bottom, r, h), min(top, r, h)
     prof = [(r - rb + rb * math.sin(t), z0 + rb - rb * math.cos(t)) for t in np.linspace(0, math.pi / 2, 3)]
     prof += [(r - rt + rt * math.sin(t), z1 - rt + rt * math.cos(t)) for t in np.linspace(math.pi / 2, 0, 3)]
+    creases = []
+    if not lids[0] and rims[0] > 0:
+        prof.insert(0, (max(r - rb - rims[0], 0.2 * r), z0))
+        creases.append(1)
+    if not lids[1] and rims[1] > 0:
+        prof.append((max(r - rt - rims[1], 0.2 * r), z1))
+        creases.append(len(prof) - 2)
     rings = [M.at_z(M.circle(rr, segments), z) for rr, z in prof]
-    return M.loft(rings)
+    return M.loft(rings, sharp=creases, cap_start=lids[0], cap_end=lids[1])
 
 
 def cylinder(
@@ -555,18 +591,20 @@ def cylinder(
         vis.add(body, "dark", DARK, collar, a - d * 0.0003, rot)
         vis.add(body, "dark", DARK, collar, b - d * (h - 0.0003), rot)
         return
-    if base and length >= 0.016:
+    if base and length >= 0.016:  # open toward the parting line, as box() explains
         zs = min(length * BASE_SEAM, PAN_MAX)
-        vis.add(body, preset, rgba, _disc(r, zs + SEAM_GAP, length, SEAM_EDGE, rim, n), a, rot)
-        vis.add(body, "dark", DARK, _disc(r - PAN_INSET, 0.0, zs - SEAM_GAP, rim, SEAM_EDGE, n), a, rot)
+        upper = _disc(r, zs + SEAM_GAP, length, SEAM_EDGE, rim, n, (False, True))
+        vis.add(body, preset, rgba, upper, a, rot)
+        vis.add(body, "dark", DARK, _disc(r - PAN_INSET, 0.0, zs - SEAM_GAP, rim, SEAM_EDGE, n, (True, False)), a, rot)
         depth = SEAM_GAP + 0.0012
-        vis.add(body, "dark", DARK, _disc(r - SEAM_INSET, zs - depth, zs + depth, 0.0003, 0.0003, n), a, rot)
+        core = _disc(r - SEAM_INSET, zs - depth, zs + depth, 0.0003, 0.0003, n, (False, False), (SEAM_RIM, 0.0))
+        vis.add(body, "dark", DARK, core, a, rot)
     else:
         vis.add(body, preset, rgba, M.cylinder(r, length, segments=n, bevel=rim, z0=0.0), a, rot)
     if r >= 0.02:  # a bolt circle on the far face, skipping bolts under anything attached there
         count = 8 if r > 0.06 else 6
         bolt_r = float(np.clip(r * 0.05, 0.0014, 0.003))
-        head = P.bolt(bolt_r, bolt_r * 0.75)
+        head = P.bolt(bolt_r, bolt_r * 0.75, underside=False)
         ring = r * 0.8 - rim * 0.5
         # Of the two ways to turn the circle, the one that leaves more bolts clear of attached parts.
         layouts = []
@@ -583,7 +621,7 @@ def cylinder(
     if base and r >= 0.04:
         light = a + rot @ np.array([-r * 0.62, 0.0, length])
         if layout.free(name, light, 0.006):
-            vis.add(body, "led", P.LED_GREEN, P.led(0.0028)["led"], light, rot)
+            vis.add(body, "led", P.LED_GREEN, P.led(0.0028, underside=False)["led"], light, rot)
 
 
 def sphere(
@@ -600,13 +638,13 @@ def sphere(
 @M.cached
 def _hemisphere(r: float, segments: int, half: int) -> M.Mesh:
     """The upper (half = 1) or lower (-1) half of a sphere, its rim turned in by SEAM_EDGE so the parting line
-    shows the dark core rather than a bright lip."""
+    shows the dark core rather than a bright lip. It is open at the rim: a camera inside the ball sees out."""
     gap = min(SEAM_GAP / r, 0.2)
     edge = min(SEAM_EDGE / r, 0.2)
     prof = [(r * math.cos(gap) - SEAM_EDGE, r * math.sin(gap))]
     prof += [(r * math.cos(t), r * math.sin(t)) for t in np.linspace(gap + edge, math.pi / 2, 9)]
     rings = [M.at_z(M.circle(rr, segments), half * z) for rr, z in prof]
-    return M.loft(rings, sharp=(1,))
+    return M.loft(rings, sharp=(1,), cap_start=False)
 
 
 def link(
@@ -829,6 +867,12 @@ def camera_frame(look: np.ndarray, up: np.ndarray) -> np.ndarray:
     return np.column_stack([_cross(y, z), y, z])
 
 
+def camera_box(where: np.ndarray, look: np.ndarray) -> tuple[np.ndarray, Sequence[float]]:
+    """The middle and half extents (in camera_frame) of the board camera drawn round `where`."""
+    back, front = CAMERA_DEPTH - CAMERA_PROUD, CAMERA_PROUD + CAMERA_BARREL * 1.5  # the glass dome stands proud
+    return np.asarray(where, float) + _unit(look) * (front - back) / 2, (CAMERA_HALF, CAMERA_HALF, (front + back) / 2)
+
+
 def camera(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarray, up: np.ndarray) -> None:
     """A board camera around the camera point, its lens looking where the camera looks."""
     front = np.asarray(where, float) + _unit(look) * CAMERA_PROUD
@@ -838,6 +882,9 @@ def camera(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarr
 
 def lidar(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, up: np.ndarray) -> None:
     _add(vis, body, P.lidar_head(LIDAR_RADIUS, LIDAR_HEIGHT), NEUTRAL, where, M.z_to(up))
+
+
+IMU_BOX = (IMU_HALF, IMU_HALF, 0.0013)  # m, half extents of the IMU board with its chip (2.6 mm tall, P.imu_board)
 
 
 def imu(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, normal: np.ndarray, along: np.ndarray | None) -> None:
@@ -851,6 +898,9 @@ def rangefinder_frame(look: np.ndarray, up: np.ndarray) -> np.ndarray:
     """A range finder board's frame: z where it looks, x (its long side, the two cans) level."""
     side = _cross(np.asarray(up, float), _unit(look))
     return _frame(look, side if np.linalg.norm(side) > 1e-6 else None)
+
+
+RANGE_BOX = (RANGE_HALF * 0.9, RANGE_HALF * RANGE_ASPECT, 0.003)  # m, half extents of the board and its cans
 
 
 def rangefinder(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, rot: np.ndarray) -> None:
