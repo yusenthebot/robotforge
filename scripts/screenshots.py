@@ -397,6 +397,32 @@ _KEYS = """
     if (!(wy < -10 && Math.abs(wx) < -wy / 2)) throw new Error(`W moved the ball ${wx}, ${wy} px: not up`);
 """
 
+# Dragging the ball in the imitation lesson: it slides level, so a drag to the point over the cube (at the ball's
+# height) lands right over it, and a Shift-drag lowers it there (on the plane facing the camera it ended 4 cm off).
+_DRAG = """
+    await sleep(800);
+    const canvas = document.querySelector("canvas");
+    const ev = (type, x, y, el, shiftKey) => el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y,
+        button: 0, buttons: type === "pointerup" ? 0 : 1, pointerId: 1, bubbles: true, isPrimary: true, shiftKey }));
+    const drag = async (to, shift) => {
+        const at = rf.screenOfPoint(live().target);
+        ev("pointerdown", at[0], at[1], canvas, shift);
+        for (let k = 1; k <= 30; k++) {
+            ev("pointermove", at[0] + ((to[0] - at[0]) * k) / 30, at[1] + ((to[1] - at[1]) * k) / 30, window, shift);
+            await sleep(40);
+        }
+        ev("pointerup", to[0], to[1], window, shift);
+        await sleep(2500);
+        return [...live().target];
+    };
+    const [x, y, z] = live().cube;
+    const over = await drag(rf.screenOfPoint([x, y, live().target[2]]), false);
+    const down = await drag(rf.screenOfPoint([x, y, z + 0.005]), true);
+    const off = (p) => Math.hypot(p[0] - x, p[1] - y);
+    if (off(over) > 0.005) throw new Error(`the drag ended ${off(over)} m off the cube across the desk`);
+    if (off(down) > 0.005 || down[2] - z > 0.015) throw new Error(`the Shift-drag ended at ${down}, cube ${[x, y, z]}`);
+"""
+
 
 SHOTS = [
     Shot(
@@ -438,6 +464,7 @@ SHOTS = [
     Shot("lesson_imitation_correct", _nothing, page=_imitation("correct"), settle=1.0),
     Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
     Shot("lesson_imitation_keys", _nothing, page=_lesson("imitation", _TEACH, _KEYS), settle=0.3),
+    Shot("lesson_imitation_drag", _nothing, page=_lesson("imitation", _TEACH, _DRAG), settle=0.3),
 ]
 
 
