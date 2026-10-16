@@ -7,8 +7,11 @@
 Each trial puts the robot at a start with update_robot (the world is compiled afresh, so every controller starts
 clean), sends it to a goal as move(to=...) does (BehaviorManager.navigate) and runs the physics headless until it
 arrives or stops. Starts and goals are drawn from the floor the robot's own map calls free, inside the scene (not
-the margin round it), at least MIN_APART apart; about one goal in four is a named object of the scene. A goal the
-planner finds no way to is counted under "no way" with its cause: that is the planner's answer, not a failed trip.
+the margin round it), at least MIN_APART apart; about one goal in four is a named object of the scene. With
+--anywhere SHARE, that share of the goals is any point of the scene instead (in a counter, on a rack, behind a
+wall): those are reported apart, by what the robot made of them (arrived, stopped at the nearest free spot, no
+way and why). A goal the planner finds no way to is counted under "no way" with its cause: that is the
+planner's answer, not a failed trip.
 The time limit is generous (TIME_SLACK plus three times the path at the robot's pace), so a trip that runs out
 of it really got stuck. Uses the real Menagerie Go2 (downloaded once into the cache). Maintainer tool.
 """
@@ -117,7 +120,9 @@ def trial(pg: Any, robot: str, start: tuple[float, float], yaw: float, goal: Any
     return record
 
 
-def run(scene: str, robot: str, source: dict[str, Any], trials: int, seed: int, out) -> list[dict[str, Any]]:
+def run(
+    scene: str, robot: str, source: dict[str, Any], trials: int, seed: int, out, anywhere: float = 0.0
+) -> list[dict[str, Any]]:
     from robotforge.playground import Playground
     from robotforge.sim.session import SimSession
 
@@ -131,16 +136,26 @@ def run(scene: str, robot: str, source: dict[str, Any], trials: int, seed: int, 
     rng = np.random.default_rng(seed)
     far = MAX_APART.get(robot, math.inf)
     records = []
+    edge = nav_map_edge()
+    low = (nav.grid.x0 + edge, nav.grid.y0 + edge)
+    high = (
+        nav.grid.x0 + (nav.grid.cols - 1) * nav.grid.res - edge,
+        nav.grid.y0 + (nav.grid.rows - 1) * nav.grid.res - edge,
+    )
     for k in range(trials):
         start = pick(rng, nav, spots, None, far)
-        if rng.random() < OBJECT_SHARE:
-            goal: Any = str(rng.choice(objects))
+        kind = "anywhere" if rng.random() < anywhere else "object" if rng.random() < OBJECT_SHARE else "spot"
+        if kind == "anywhere":
+            goal: Any = [round(float(rng.uniform(low[0], high[0])), 2), round(float(rng.uniform(low[1], high[1])), 2)]
+        elif kind == "object":
+            goal = str(rng.choice(objects))
         else:
             point = pick(rng, nav, spots, start, far)
             goal = [round(point[0], 2), round(point[1], 2)] if point else None
         if start is None or goal is None:
             continue
-        record = {"scene": scene, "robot": robot, "trial": k, **trial(pg, robot, start, rng.uniform(-180, 180), goal)}
+        outcome = trial(pg, robot, start, rng.uniform(-180, 180), goal)
+        record = {"scene": scene, "robot": robot, "trial": k, "goal_kind": kind, **outcome}
         records.append(record)
         out.write(json.dumps(record) + "\n")
         out.flush()
@@ -152,8 +167,16 @@ def run(scene: str, robot: str, source: dict[str, Any], trials: int, seed: int, 
 # ---- the report ------------------------------------------------------------------------------------------------
 
 
-def report(records: list[dict[str, Any]]) -> str:
-    """Markdown tables: per scene and robot, then failures and no-way answers by cause."""
+def nav_map_edge() -> float:
+    from robotforge.behaviors import nav_map
+
+    return nav_map.EDGE
+
+
+def report(all_records: list[dict[str, Any]]) -> str:
+    """Markdown tables: per scene and robot, then failures and no-way answers by cause; goals anywhere apart."""
+    records = [r for r in all_records if r.get("goal_kind") != "anywhere"]
+    anywhere = [r for r in all_records if r.get("goal_kind") == "anywhere"]
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in records:
         groups[(r["scene"], r["robot"])].append(r)
@@ -181,10 +204,22 @@ def report(records: list[dict[str, Any]]) -> str:
     arrived = sum(r["outcome"] == "arrived" for r in total)
     if total:
         lines.append(f"Overall: {arrived} of {len(total)} trips arrived ({100 * arrived / len(total):.1f}%).")
-    plans = [r["plan_ms"] for r in records if "plan_ms" in r]
+    plans = [r["plan_ms"] for r in all_records if "plan_ms" in r]
     if plans:
         lines.append(f"Planning took {statistics.median(plans):.0f} ms at the median, {max(plans):.0f} ms at most.")
+    if anywhere:
+        answers = Counter(
+            "arrived"
+            if r["outcome"] == "arrived"
+            else f"{'no way' if r['outcome'] == 'no_way' else 'stopped'}: {r['why']}"
+            for r in anywhere
+        )
+        lines += ["", f"Goals anywhere in the scene: {len(anywhere)}; " + _plain(answers) + "."]
     return "\n".join(lines)
+
+
+def _plain(counter: Counter) -> str:
+    return ", ".join(f"{what} {n}" for what, n in counter.most_common())
 
 
 def _median(values: list[float]) -> str:
@@ -201,6 +236,7 @@ def main() -> None:
     parser.add_argument("--robots", nargs="*", default=None)
     parser.add_argument("--trials", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--anywhere", type=float, default=0.0, help="share of goals at any point of the scene")
     parser.add_argument("--json", type=Path, default=None, help="write one JSON line per trial here")
     parser.add_argument("--report", nargs="*", type=Path, help="print the tables for these JSON line files")
     args = parser.parse_args()
@@ -215,7 +251,7 @@ def main() -> None:
     with out_path.open("w", encoding="utf-8") as out:
         for scene in args.scenes:
             for name in names:
-                records += run(scene, name, sources[name], args.trials, args.seed, out)
+                records += run(scene, name, sources[name], args.trials, args.seed, out, args.anywhere)
     print(report(records))
     print(f"trials written to {out_path}")
 
