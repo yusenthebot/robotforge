@@ -177,16 +177,24 @@ class Planner:
         self.layers = layers if layers is not None else {}  # robot -> StaticLayer, shared per compiled world
         self.root = nav_map.root_body(model, robot)
         self.last_map: NavMap | None = None
+        self._own: StaticLayer | None = None  # a coarser layer that reaches a far destination, for this trip only
 
     def _layer(self, data: mujoco.MjData, start: tuple[float, float]) -> StaticLayer:
-        key = self.robot  # what never moves is the same whatever shape the robot is in: only its geoms are left out
-        layer = self.layers.get(key)
+        # What never moves is the same whatever shape the robot is in (only its geoms are left out), so one layer
+        # per robot serves every trip in this world.
         points = [start, self.destination.point]
-        if layer is not None and all(_inside_margin(layer.grid, p) for p in points):
-            return layer
+        for layer in (self._own, self.layers.get(self.robot)):
+            if layer is not None and all(_inside_margin(layer.grid, p) for p in points):
+                return layer
         grid = nav_map.bounds(self.model, data, self.robot, points)
         layer = nav_map.static_layer(self.model, data, self.robot, grid)
-        self.layers[key] = layer
+        # A point far outside the scene stretches the map, and a map wider than MAX_CELLS gets coarser cells. Shared,
+        # one far trip made every later trip plan on it: after a trip to [60, 60] in the kitchen (9.3 cm cells), a
+        # humanoid sent to the fridge stopped 0.45 m short of it. Only a layer as fine as the scene's own is shared.
+        if grid.res <= nav_map.bounds(self.model, data, self.robot, [start]).res + 1e-9:
+            self.layers[self.robot] = layer
+        else:
+            self._own = layer
         return layer
 
     def plan(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> Plan:
@@ -304,7 +312,9 @@ class Planner:
             nearest = float(to_point[candidates].min())
             return [candidates & (to_point <= nearest + 0.1)], None
         away = clearance(self._object_mask(nav, data), grid.res, 3.0)
-        want = self.body.front + GAP
+        # Its front a hand's width from the object; at least a row of cells beyond the room it needs, or on coarse
+        # cells (a map stretched to a far point) no cell falls between the two for a robot with a short front.
+        want = max(self.body.front + GAP, self.body.need + grid.res)
         goals = []
         if self.arm is not None and d.loose:
             reach = self._reach_mask(xs, ys)

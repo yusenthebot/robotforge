@@ -448,6 +448,20 @@ def test_trips_share_one_map_of_the_furniture_per_robot(pg):
     assert len(pg.behaviors._layers(pg.session.version)) == 1
 
 
+def test_a_far_destination_does_not_make_later_maps_coarser(pg):
+    """Regression: a point far outside the scene stretches the map, and over MAX_CELLS cells a side it gets coarser.
+    That map was kept for every later trip of the robot: after one trip to [60, 60] in the kitchen, a humanoid sent
+    to the fridge stopped 0.45 m short of it on 9 cm cells."""
+    pg.add_robot("rover", template="rover")
+    pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.0, 0.1, 0.5], yaw=90)
+    far = pg.behaviors.navigate("rover", [60.0, 0.0])
+    pg.behaviors.stop("rover")
+    assert far.planner.last_map.grid.res > nav_map.RES
+    near = pg.behaviors.navigate("rover", [2.0, 0.0])
+    pg.behaviors.stop("rover")
+    assert near.planner.last_map.grid.res == nav_map.RES
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])
