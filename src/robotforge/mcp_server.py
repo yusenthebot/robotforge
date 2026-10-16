@@ -73,7 +73,8 @@ under them. To build a scene from a sentence, combine load_scene, add_terrain an
 with observe(view="overview").
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
-snake slither; pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
+snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
+the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots with kind, arms and
 positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
 prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer gives the
