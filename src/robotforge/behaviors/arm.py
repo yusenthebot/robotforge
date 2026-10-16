@@ -77,11 +77,6 @@ class ArmMotion:
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
-        # An arm on a moving robot: IK must start from where that robot is now (see sync).
-        root = _root_body(model, tool_body)
-        free = [j for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])]
-        free = [j for j in free if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
-        self.free_adr = int(model.jnt_qposadr[free[0]]) if free else None
         # Paths sweep around the base axis so the tool never cuts through the arm itself: the arm's first hinge,
         # when it turns about an upright axis (an arm with none, like one hanging from a shoulder, moves in
         # straight lines).
@@ -443,9 +438,3 @@ def _descends_from(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
             return True
         body = int(model.body_parentid[body])
     return False
-
-
-def _root_body(model: mujoco.MjModel, body: int) -> int:
-    while model.body_parentid[body] > 0:
-        body = int(model.body_parentid[body])
-    return body
