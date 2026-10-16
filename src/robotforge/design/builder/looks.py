@@ -698,13 +698,16 @@ def servo(
         colors = {"shell": MOTOR_YELLOW, "metal": P.METAL, "dark": DARK}
         motor = P.gear_motor(r, length, actuator.name in YELLOW_GEARBOX)
         _add(vis, parent, motor, colors, part.pos - side * axis_parent * 0.002, M.z_to(-side * axis_parent))
-        _add(vis, child, P.horn(r * 0.6, max(0.0015, r * 0.12)), NEUTRAL, (0.0, 0.0, 0.0), M.z_to(face))
+        t = max(0.0015, r * 0.12)
+        if not _buried(layout, part.name, np.zeros(3), face, r * 0.6, t):
+            _add(vis, child, P.horn(r * 0.6, t), NEUTRAL, (0.0, 0.0, 0.0), M.z_to(face))
         return
     if not is_servo_case(actuator):  # a round joint module
         r, half = min(sx, sy) / 2 + 0.002, sz / 2
         _add(vis, parent, P.joint_module(r, half, r * 0.72), NEUTRAL, part.pos, M.z_to(side * axis_parent))
-        flange = P.horn(r * 0.72, max(0.0012, half * 0.16), screws=4)
-        _add(vis, child, flange, NEUTRAL, face * (half - 0.0006), M.z_to(face))
+        t = max(0.0012, half * 0.16)
+        if not _buried(layout, part.name, face * (half - 0.0006), face, r * 0.72, t):
+            _add(vis, child, P.horn(r * 0.72, t, screws=4), NEUTRAL, face * (half - 0.0006), M.z_to(face))
         return
     hx, hy, hz = sx / 2, sy / 2, sz / 2
     center, rot, _ = layout.servo_pose(part, actuator, axis)
@@ -716,11 +719,21 @@ def servo(
     flush = layout.inside(part.parent, _box_corners(sunk, rot, outline))
     if not flush and not layout.inside(part.parent, _box_corners(center, rot, outline)):
         _add(vis, parent, P.servo_case(hx, hy, hz, horn_r, -SHAFT_OFFSET * sx), NEUTRAL, center, rot)
-    horn = P.horn(horn_r, max(0.0016, hz * 0.09))
-    _add(vis, child, horn, NEUTRAL, face * (0.0 if flush else hz * 1.12 - 0.0012), M.z_to(face))
-    if not flush:
-        cap = M.cylinder(horn_r * 0.5, max(0.0012, hz * 0.06), segments=12, bevel=0.0004, z0=0.0, arc=1)
+    # The horn and the idler turn with the part; inside a part thicker than the servo they cannot be seen.
+    t = max(0.0016, hz * 0.09)
+    at = face * (0.0 if flush else hz * 1.12 - 0.0012)
+    if not _buried(layout, part.name, at, face, horn_r, t):
+        _add(vis, child, P.horn(horn_r, t), NEUTRAL, at, M.z_to(face))
+    t = max(0.0012, hz * 0.06)
+    if not flush and not _buried(layout, part.name, -face * (hz - 0.0004), -face, horn_r * 0.5, t):
+        cap = M.cylinder(horn_r * 0.5, t, segments=12, bevel=0.0004, z0=0.0, arc=1)
         vis.add(child, "metal", P.METAL, cap, -face * (hz - 0.0004), M.z_to(-face))  # the idler on the far side
+
+
+def _buried(layout: Layout, body: str, at: np.ndarray, z: np.ndarray, r: float, t: float) -> bool:
+    """True when a disc of radius r and thickness t standing on `at` along z lies inside the body's shape."""
+    rot = _frame(z)
+    return layout.inside(body, _box_corners(np.asarray(at, float) + rot[:, 2] * t / 2, rot, (r, r, t / 2)))
 
 
 def wheel_motor(
