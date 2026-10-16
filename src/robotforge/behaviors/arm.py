@@ -6,6 +6,7 @@ tool point along a smooth path and solves IK with the gripper pointing down.
 
 from __future__ import annotations
 
+import dataclasses
 from collections import deque
 from dataclasses import dataclass
 
@@ -59,7 +60,8 @@ class ArmMotion:
         joints = _path_hinges(model, tool_body, joint_to_act)
         if not joints:
             raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
-        self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
+        chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
+        self.chain = _around_home(model, chain, joints, home_qpos)
         self.joints = joints
         self.actuators = np.array([joint_to_act[j] for j in joints])
         # The tool points along the tcp site's +z (for the templates that is the hand's +z).
@@ -67,7 +69,10 @@ class ArmMotion:
         mujoco.mju_quat2Mat(rot, model.site_quat[site])
         self.tool_axis = rot.reshape(3, 3)[:, 2].copy()
         self.gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
-        self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
+        # A gripper opens at the top of its control range and closes at the bottom, which is not always 0 (a Unitree
+        # Z1's is -1.52 rad).
+        grip_range = model.actuator_ctrlrange[self.gripper] if self.gripper >= 0 else np.zeros(2)
+        self.gripper_open, self.gripper_closed = float(grip_range[1]), float(grip_range[0])
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -350,11 +355,24 @@ class ArmMotion:
     def _grip(self, state: str | None) -> float | None:
         if state is None or self.gripper < 0:
             return None
-        return self.gripper_open if state == "open" else 0.0
+        return self.gripper_open if state == "open" else self.gripper_closed
 
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
+
+
+def _around_home(model: mujoco.MjModel, chain: Chain, joints: list[int], home_qpos: np.ndarray) -> Chain:
+    """The chain with each joint that turns without end allowed half a turn either way from its home angle. The IK
+    otherwise keeps such joints in -180..180 degrees: a Kinova Gen3 starts with joint 3 at 180, pinned at that edge, and
+    its gripper ended 34 cm from where move_arm sent it, the arm jammed against its own base."""
+    endless = np.array([not model.jnt_limited[j] for j in joints])
+    if not endless.any():
+        return chain
+    home = home_qpos[chain.qpos_adr]
+    lower = np.where(endless, home - np.pi, chain.lower)
+    upper = np.where(endless, home + np.pi, chain.upper)
+    return dataclasses.replace(chain, lower=lower, upper=upper)
 
 
 def _path_hinges(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> list[int]:
