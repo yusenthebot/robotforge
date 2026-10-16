@@ -8,8 +8,10 @@ starts higher hangs over the cell (a table top, a shelf board, a tree crown).
 
 A cell is no place for the robot's center (lethal) when
 - the ground steps up from a neighbor by more than the robot climbs: a wall, a counter, a curb too high
-  for it (a step lower than the robot is a "step", anything taller an "obstacle");
-- a smooth surface (a ramp, a hill) is steeper there than it climbs;
+  for it (a step lower than the robot is a "step", anything taller an "obstacle"); or inside the cell, from
+  one of its quarter points to another (a gap between stepping stones, narrower than a cell);
+- a smooth surface (a ramp, a hill) is steeper there than it climbs (legged robots less steep on hills, whose
+  slopes a path crosses at any angle), or a bump on a hill stands out by more than half its step;
 - something hangs lower over it than the robot is tall, plus a margin, and never lower than MIN_HEADROOM.
 The floor is ignored, and so are loose objects light enough to push aside. Other robots and heavy loose
 objects block like furniture. The robot's own shape gives the room it needs around its center: half its
@@ -79,6 +81,12 @@ SLOPE_DEG = {
     Kind.SNAKE: 5.0,  # not measured
 }
 OTHER_SLOPE_DEG = 5.0  # learned rhythm walks and anything else: not measured
+# Up a ramp a path goes straight up its slope; on hills it crosses slopes at any angle, and a gait slides down a
+# slope to its side. Sent by the follower across a ramp's face (2026-10-17): at 10 degrees the template dog fell
+# and the Go2 fell; at 7.5 the Go2 fell when it turned on the spot first and the dog slid off its path and planned
+# again four times; at 5 both walked across. On the obstacle course's bumps (slopes up to 10 degrees) both slid
+# off their paths near the top and gave up (scripts/nav_bench.py).
+HILL_SLOPE_DEG = {Kind.QUADRUPED: 5.0, Kind.HEXAPOD: 5.0}
 CASTER_SLOPE_DEG = 3.0  # wheeled robots with a caster ahead of the drive wheels (see above)
 
 
@@ -94,6 +102,16 @@ class Body:
     step: float  # m, the highest step it climbs
     slope: float  # rad, the steepest slope it climbs
     pushes: bool = False  # it rolls, and pushes light loose objects aside (see PUSHABLE)
+    hill_slope: float | None = None  # rad, the steepest hill (a heightfield) it crosses at any angle; None: slope
+
+    @property
+    def hills(self) -> float:
+        return self.slope if self.hill_slope is None else min(self.hill_slope, self.slope)
+
+    def slope_words(self) -> str:
+        """The steepest slope it climbs, in words (degrees)."""
+        up = f"{math.degrees(self.slope):.0f} degrees"
+        return up if self.hills == self.slope else f"{up} up a ramp, {math.degrees(self.hills):.0f} on hills"
 
     @property
     def need(self) -> float:
@@ -134,7 +152,8 @@ def measure_body(model: mujoco.MjModel, data: mujoco.MjData, robot: str, kind: K
     slope = math.radians(slope_deg)
     mass = float(model.body_subtreemass[root])
     pushes = kind in (Kind.ROVER, Kind.BALANCER)
-    return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope, pushes)
+    hill = math.radians(HILL_SLOPE_DEG[kind]) if kind in HILL_SLOPE_DEG else None
+    return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope, pushes, hill)
 
 
 def footprint_radius(model: mujoco.MjModel, data: mujoco.MjData, robot: str) -> float:
@@ -499,7 +518,8 @@ def build(
     ground2 = ground.reshape(grid.shape)
     _mark_uneven(layer, body, smooth.reshape(grid.shape), lethal.reshape(grid.shape))
     _mark_steps(ground2, smooth.reshape(grid.shape), body, grid.res, lethal.reshape(grid.shape))
-    _mark_slopes(ground2, smooth.reshape(grid.shape), body, grid.res, lethal.reshape(grid.shape))
+    hills = (layer.smooth_floor & on_floor).reshape(grid.shape)
+    _mark_slopes(ground2, smooth.reshape(grid.shape), body, grid.res, lethal.reshape(grid.shape), hills)
     lethal2 = lethal.reshape(grid.shape)
     if blocked is not None:
         lethal2[blocked] = OBSTACLE
@@ -552,16 +572,25 @@ def _mark_uneven(layer: StaticLayer, body: Body, smooth: np.ndarray, lethal: np.
     np.copyto(lethal, np.maximum(lethal, np.where(tall, OBSTACLE, STEP).astype(np.int8)), where=uneven)
 
 
-def _mark_slopes(ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, lethal: np.ndarray) -> None:
+def _mark_slopes(
+    ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, lethal: np.ndarray, hills: np.ndarray | None = None
+) -> None:
     """Mark smooth cells steeper than the robot climbs, measured over about 20 cm (a robot's stride, so one bump
-    of rough ground is not a slope) on the smooth cells only: flat steps and walls have no slope, only edges."""
+    of rough ground is not a slope) on the smooth cells only: flat steps and walls have no slope, only edges. On
+    hills (heightfields, `hills`) the limit is the robot's hill slope, and a bump standing out from the ground
+    around it by more than half the robot's step is a step: the template humanoid (0.5 cm) fell twice on the
+    rim of the obstacle course's rough patch, 8 mm bumps on a slope of 3 degrees measured over 20 cm."""
     k = max(1, round(0.1 / res))
     ok = smooth & (lethal == FREE)
     weight = _box_sum(ok.astype(float), k)
     level = np.where(weight > 0, _box_sum(np.where(ok, ground, 0.0), k) / np.maximum(weight, 1e-9), ground)
     gy, gx = np.gradient(level, res)
-    steep = smooth & (np.hypot(gx, gy) > math.tan(body.slope)) & (lethal == FREE)
+    hills = np.zeros(ground.shape, bool) if hills is None else hills
+    limit = np.where(hills, math.tan(body.hills), math.tan(body.slope))
+    steep = smooth & (np.hypot(gx, gy) > limit) & (lethal == FREE)
+    bumpy = hills & (np.abs(ground - level) > body.step / 2) & (lethal == FREE) & ~steep
     lethal[steep] = SLOPE
+    lethal[bumpy] = STEP
 
 
 def _box_sum(values: np.ndarray, k: int) -> np.ndarray:

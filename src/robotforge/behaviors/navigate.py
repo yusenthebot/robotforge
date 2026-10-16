@@ -272,8 +272,7 @@ class Planner:
             return "where the robot does not fit"
         what = nav.blocker(here) or next(iter(_owners_near(nav, here, 3 * nav.grid.res)), None)
         if nav.lethal[here] == SLOPE:
-            degrees = math.degrees(self.body.slope)
-            return f"on a slope{f' of {what}' if what else ''} steeper than it climbs ({degrees:.0f} degrees)"
+            return f"on a slope{f' of {what}' if what else ''} steeper than it climbs ({self.body.slope_words()})"
         if nav.ground[here] - nav.floor[here] > self.body.step and what:
             return f"on top of or inside {what}"
         return _inside_text(what)
@@ -428,22 +427,29 @@ class Planner:
 
     def _climb(self, nav: NavMap, cells: list[tuple[int, int]]) -> str:
         """What the way found without steps and slopes climbs that the robot cannot, in words."""
-        body, grid = self.body, nav.grid
+        body = self.body
         terrain = (nav.lethal == STEP) | (nav.lethal == SLOPE)
-        near = clearance(terrain, grid.res, body.need) < body.need
-        hit = next((c for c in cells if near[c]), None)
+        near = _near_terrain(nav)
+        # The last one before the end: that way may cross others it could have gone round (the way to the top of
+        # the obstacle course's bumps crossed a curb first, and the curb was named), but not what the end is on.
+        hit = next((c for c in reversed(cells) if near[c]), None)
         if hit is None:
             return "the way there climbs more than it can"
         cell = _nearest_lethal(nav, hit, terrain)
         what = nav.blocker(cell)
         at = f" ({what})" if what else ""
         if nav.lethal[cell] == SLOPE:
-            degrees = math.degrees(body.slope)
-            return f"the only way there is up a slope steeper than it climbs ({degrees:.0f} degrees){at}"
+            return f"the only way there is up a slope steeper than it climbs ({body.slope_words()}){at}"
         r, c = cell
         window = nav.ground[max(r - 1, 0) : r + 2, max(c - 1, 0) : c + 2]
         height = float(window.max() - window.min())
         return f"the only way there climbs a {height * 100:.0f} cm step{at}, and it climbs {body.step * 100:.1f} cm"
+
+
+def _near_terrain(nav: NavMap) -> np.ndarray:
+    """Cells where the robot's center would touch a step or slope it cannot climb."""
+    terrain = (nav.lethal == STEP) | (nav.lethal == SLOPE)
+    return clearance(terrain, nav.grid.res, nav.body.need) < nav.body.need
 
 
 def _heuristic(grid: Grid, goal: np.ndarray) -> np.ndarray:

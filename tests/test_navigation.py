@@ -200,6 +200,20 @@ def test_gaps_narrower_than_a_cell_are_seen_between_stepping_stones(pg):
     assert caught.value.cause == "climb" and "(stones)" in str(caught.value), str(caught.value)
 
 
+def test_on_hills_legged_robots_keep_to_gentle_slopes_and_a_humanoid_off_bumps(pg):
+    """Regressions on the obstacle course (scripts/nav_bench.py). A path crosses a hill's slopes at any angle, and a
+    gait slides down a slope to its side: the dog and the Go2 slid off their paths near the top of the bumps (up to
+    10 degrees, their limit up a ramp) and gave up; on hills they now keep to 5. The humanoid fell twice on the rim
+    of the rough patch, on 8 mm bumps where the slope over 20 cm was within its 3 degrees."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_robot("bot", template="humanoid")
+    pg.load_scene("obstacle_course")
+    with pytest.raises(NoWay) as caught:
+        pg.behaviors.navigate("dog", [15.8, 0.1])  # near the top of the bumps
+    assert caught.value.cause == "climb" and "5 on hills) (bumps)" in str(caught.value), str(caught.value)
+    assert not _fits(_map(pg, "bot"), 9.15, -0.55)  # a bump on the rough patch's rim
+
+
 def test_wheels_push_light_loose_objects_aside_and_legs_go_round_them(pg):
     pg.add_robot("rover", template="rover")
     pg.add_robot("dog", template="quadruped", pos=[0.0, -1.5])
