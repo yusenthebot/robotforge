@@ -66,6 +66,12 @@ def test_the_checks_give_the_verdicts_read_from_the_sessions(ev, task):
         assert next(c["ok"] for c in outcome.criteria if c["name"] == name) is ok, outcome.criteria
 
 
+def test_a_live_balance_run_says_whether_it_held(ev):
+    outcome = ev.score(ev.TASKS["learn_control"], FIXTURES / "learn_control_live")
+    ran = next(c for c in outcome.criteria if c["name"] == "ran a balance controller live")
+    assert ran["observed"] == "1 run_controller (success [True]), 1 compare_controllers (off-screen)"
+
+
 def test_a_robot_driven_by_a_controller_is_followed_through_its_results(ev):
     """A later session (commit 3724596) drove its rover with run_controller(drive_to), stopped it and zeroed the
     wheels with set_controls and simulate: no move or robots result. The check first said no robot was reported;

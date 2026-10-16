@@ -709,7 +709,7 @@ def check_learn_control(ev: Evidence) -> list[Criterion]:
         return [c for c in ev.session.ours if c.tool == tool and c.ok and "balance" in str(c.args.get("task", ""))]
 
     live, table = balance("run_controller"), balance("compare_controllers")
-    held = [((c.data or {}).get("result") or {}).get("success") for c in live if isinstance(c.data, dict)]
+    held = [c.data.get("success") for c in live if isinstance(c.data, dict)]
     return [
         Criterion("opened the control lesson (lessons 6)", 6 in got, f"lessons opened: {got or 'none'}"),
         Criterion(
