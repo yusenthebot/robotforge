@@ -1,6 +1,6 @@
 """Measure the seeing lesson's color finder: how far its estimate of the red cube is from the truth.
 
-    uv run python scripts/vision_bench.py [--spots 60] [--seed 0] [--picks 12]
+    uv run python scripts/vision_bench.py [--spots 60] [--seed 0] [--picks 12] [--scenes]
 
 Puts the red cube at random spots on the lesson's mat (the other cubes where the lesson starts them), takes a
 picture from the overhead camera under each light with the lesson's camera noise, runs the finder with the
@@ -8,6 +8,8 @@ settings a learner ends up with, and prints, per light, finder setting and way o
 the biggest blob was the red cube and how far the estimate was from the cube's true middle. `--picks` also has
 the lesson's arm pick the red cube from that many spots it can reach, aiming a set distance off the cube's
 middle, to see how far off an estimate may be before the grasp fails. The lesson's text quotes these numbers.
+`--scenes` instead runs observe(find="all") in every ready-made scene from every preset view and robot camera,
+and prints how far each loose object's estimate is from its true middle, with the flags it came with.
 Needs offscreen OpenGL (not the pick test).
 """
 
@@ -15,13 +17,18 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
+import tempfile
 
 import mujoco
 import numpy as np
 
 from robotforge.behaviors.arm import ArmMotion
+from robotforge.design import scenes
 from robotforge.learn import seeing
-from robotforge.sim.render import SnapshotRenderer, render_unavailable_reason
+from robotforge.playground import Playground
+from robotforge.sim import vision
+from robotforge.sim.render import VIEWS, SnapshotRenderer, render_unavailable_reason
 
 TUNED = {"hue": 0.0, "width": 15.0, "sat": 0.3, "val": 0.2}  # where the mask step leaves the knobs
 FINDERS = {
@@ -81,17 +88,112 @@ def picks(n: int, seed: int) -> None:
         print(f"  {off * 100:.1f} cm: {done}/{len(places)} in the tray")
 
 
+def middle(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> np.ndarray:
+    """The middle of the box around a body's drawn geoms in the world: what a finder should report."""
+    corners = []
+    for g in range(model.ngeom):
+        if model.geom_bodyid[g] != body or model.geom_group[g] >= 3:  # group 3: collision shapes, not drawn
+            continue
+        center, half = model.geom_aabb[g, :3], model.geom_aabb[g, 3:]
+        signs = np.array([[i, j, k] for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)])
+        local = center + signs * half
+        corners.append(data.geom_xpos[g] + local @ data.geom_xmat[g].reshape(3, 3).T)
+    points = np.concatenate(corners)
+    return (points.min(axis=0) + points.max(axis=0)) / 2
+
+
+FLAGS = ("cut_off", "hidden", "side_on")
+FINDABLE = 30  # px of a loose object in a named color's window (cleaned) for the sweep to expect it found
+
+
+def findable(pg: Playground, view: str, bodies: list[int]) -> set[str]:
+    """The loose objects that show at least FINDABLE pixels in some named color's window from `view`."""
+    model = pg.session.model
+    layers = pg.renderer.layers(pg.session, view, 640, 480, geoms=True, exposure=vision.EXPOSURE)
+    hsv = vision.to_hsv(layers.rgb)
+    masks = [vision.clean(vision.threshold(hsv, r)) for r in vision.NAMED.values()]
+    owner = np.where(layers.geoms >= 0, model.geom_bodyid[np.maximum(layers.geoms, 0)], -1)
+    out = set()
+    for body in bodies:
+        mine = owner == body
+        if any((mine & mask).sum() >= FINDABLE for mask in masks):
+            out.add(model.body(body).name)
+    return out
+
+
+def scene_sweep() -> None:
+    """observe(find="all") in every scene from every view: each loose object's error, by the flags it has, and
+    the loose objects in view that it did not list."""
+    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp()  # the scenes' worlds are saved here, not in the user's
+    rows: list[tuple[str, str, str, float, int, tuple[str, ...], float]] = []
+    listed = dropped = seen_loose = 0
+    missed: list[tuple[str, str, str]] = []
+    for scene in scenes.SCENES:
+        pg = Playground.with_demo()
+        pg.load_scene(scene)
+        pg.simulate(0.5)
+        model, data = pg.session.model, pg.session.data
+        cameras = [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
+        free = int(mujoco.mjtJoint.mjJNT_FREE)
+        loose = [  # top bodies on a free joint, not a robot's ("dog/trunk")
+            b
+            for b in range(1, model.nbody)
+            if model.body_jntnum[b] and model.jnt_type[model.body_jntadr[b]] == free and "/" not in model.body(b).name
+        ]
+        for view in [*VIEWS, *cameras]:
+            found, _ = pg.find(view, "all")
+            objects = found["objects"]
+            listed += len(objects)
+            dropped += found.get("more", 0)
+            names = {o["object"] for o in objects if "object" in o}
+            names |= {name for o in objects for name in o.get("merged", [])}  # listed, as part of a bigger find
+            for name in findable(pg, view, loose) - names:
+                missed.append((scene, view, name))
+            for o in objects:
+                if "object" not in o:
+                    continue
+                seen_loose += 1
+                truth = middle(model, data, model.body(o["object"]).id)
+                error = float(np.linalg.norm(np.array(o["position"]) - truth)) * 100
+                flags = tuple(f for f in FLAGS if o.get(f))
+                rows.append((scene, view, o["object"], error, o["pixels"], flags, o["about_cm"]))
+    print(f"{listed} finds listed, {dropped} left out past the list's end, {seen_loose} of them loose objects")
+    print(f"{len(missed)} loose objects in view in a findable color were not listed:")
+    for scene, view, name in missed:
+        print(f"  {scene:16s} {view:22s} {name}")
+    print(f"{'scene':16s} {'view':22s} {'object':12s} {'cm':>6s} {'px':>6s} {'about':>6s}  flags")
+    for scene, view, name, error, pixels, flags, about in sorted(rows, key=lambda r: -r[3]):
+        print(f"{scene:16s} {view:22s} {name:12s} {error:6.2f} {pixels:6d} {about:6.1f}  {' '.join(flags)}")
+    clean = np.array([r[3] for r in rows if not r[5]])
+    if clean.size:
+        ratio = np.array([r[3] / r[6] for r in rows if not r[5]])
+        print(
+            f"no flag: {clean.size} finds, mean {clean.mean():.2f} cm, median {np.median(clean):.2f}, "
+            f"p90 {np.percentile(clean, 90):.2f}, max {clean.max():.2f}; error / about_cm: median "
+            f"{np.median(ratio):.2f}, within 1x {np.mean(ratio <= 1):.0%}, within 2x {np.mean(ratio <= 2):.0%}, "
+            f"max {ratio.max():.2f}"
+        )
+    for flag in FLAGS:
+        errs = np.array([r[3] for r in rows if flag in r[5]])
+        if errs.size:
+            print(f"{flag}: {errs.size} finds, median {np.median(errs):.2f} cm, max {errs.max():.2f}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--spots", type=int, default=60)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--picks", type=int, default=0, help="also run the pick test from this many spots")
+    parser.add_argument("--scenes", action="store_true", help="measure observe(find='all') in the scenes instead")
     args = parser.parse_args()
     if args.picks:
         picks(args.picks, args.seed)
     reason = render_unavailable_reason()
     if reason is not None:
         raise SystemExit(f"no offscreen OpenGL here: {reason}")
+    if args.scenes:
+        scene_sweep()
+        return
     lesson = seeing.SeeingLesson()
     model = lesson.build()
     data = mujoco.MjData(model)
