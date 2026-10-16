@@ -281,6 +281,34 @@ def test_an_arm_built_from_parts_answers_to_the_parts_it_hangs_from(pg):
     assert np.linalg.norm(pg.session.data.site_xpos[motion.site] - target) < 0.015
 
 
+def test_a_robots_body_is_not_its_arm_and_other_tools_still_call_a_part_a_part(pg):
+    """Looking an arm up by any part it hangs from also matched the robot's own base, for every tool: pose("rover/base")
+    answered with the arm's pose (on the Mars rover: heading 180, not upright, as if it had fallen over)."""
+    carrier = {
+        "motor": "jga25",
+        "base": {"shape": "box", "size": [0.34, 0.22, 0.06], "mass": 3.0},
+        "parts": [
+            {"name": "left_wheel", "at": [0, 0.13, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+            {"name": "front_caster", "at": [0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {"name": "rear_caster", "at": [-0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {"name": "arm", "at": "top", "shift": [0.06, 0, 0], "robot": {"template": "arm"}},
+        ],
+    }
+    pg.add_robot("cart", build=carrier)
+    pg.add_robot("rover", design="mars_rover", pos=[1.5, 0])
+    for robot, arm in (("cart", "cart/arm"), ("rover", "rover/hand")):
+        with pytest.raises(ValueError, match=f"'{robot}/base' is a part of {robot}, not a robot; use {robot}$"):
+            pg.behaviors.pose(f"{robot}/base")
+        with pytest.raises(ValueError, match=f"'{robot}/base' is a part of {robot}, not a robot"):
+            pg.behaviors.move(f"{robot}/base", 0.2, 0.0)
+        with pytest.raises(ValueError, match=f"'{robot}/base' is not an arm of {robot}; use {arm}$"):
+            pg.behaviors.resolve(f"{robot}/base", arm=True)
+    # The arm's own parts still find it, but only for the arm tools.
+    assert pg.behaviors.resolve("rover/arm_upper", arm=True) == "rover/hand"
+    with pytest.raises(ValueError, match="'rover/arm_upper' is a part of rover"):
+        pg.behaviors.pose("rover/arm_upper")
+
+
 def test_the_scorpion_walks_on_six_legs_and_picks_with_its_tail(pg):
     pg.add_robot("scorpion", design="scorpion")
     info = pg.behaviors.robots()[0]

@@ -56,13 +56,8 @@ class ArmMotion:
             raise ValueError(f"robot {robot!r} has no tool point; is it an arm?")
         self.site = site
         tool_body = int(model.site_bodyid[site])
-        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
-        # The arm is the powered joints between the robot's root and the tool: that leaves out wheels, legs
-        # and a second arm of the same robot, and works for arms built from parts too. A lift it rides on
-        # counts, so it reaches a table by raising itself; a waist or a turntable that two arms share
-        # belongs to neither, or each arm would turn the other one away from its target.
-        shared = _shared_joints(model, site, joint_to_act)
-        joints = [j for j in _path_joints(model, tool_body, joint_to_act) if j not in shared]
+        joint_to_act = _powered(model)
+        joints = arm_joints(model, site)
         if not joints:
             raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
         self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
@@ -373,6 +368,39 @@ class ArmMotion:
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
+
+
+def _powered(model: mujoco.MjModel) -> dict[int, int]:
+    """Joint id -> the actuator that drives it."""
+    return {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
+
+
+def arm_joints(model: mujoco.MjModel, site: int) -> list[int]:
+    """The joints that move the arm whose tool point is `site`, from its first joint to the tool.
+
+    The arm is the powered joints between the robot's root and the tool: that leaves out wheels, legs and a second
+    arm of the same robot, and works for arms built from parts too. A lift it rides on counts, so it reaches a table
+    by raising itself; a waist or a turntable that two arms share belongs to neither, or each arm would turn the other
+    one away from its target."""
+    powered = _powered(model)
+    shared = _shared_joints(model, site, powered)
+    return [j for j in _path_joints(model, int(model.site_bodyid[site]), powered) if j not in shared]
+
+
+def arm_bodies(model: mujoco.MjModel, site: int) -> set[int]:
+    """The bodies of the arm whose tool point is `site`: from the body of its first joint down to the tool's, so not
+    the robot that carries it, nor a waist it shares with another arm."""
+    joints = arm_joints(model, site)
+    if not joints:
+        return set()
+    first = int(model.jnt_bodyid[joints[0]])
+    body, bodies = int(model.site_bodyid[site]), set()
+    while body > 0:
+        bodies.add(body)
+        if body == first:
+            break
+        body = int(model.body_parentid[body])
+    return bodies
 
 
 def _path_joints(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> list[int]:

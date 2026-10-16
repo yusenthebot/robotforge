@@ -15,7 +15,7 @@ import numpy as np
 
 from robotforge import wording
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
-from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach
+from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
@@ -207,7 +207,9 @@ class BehaviorManager:
             return found
         named = f"{found}/{part.strip()}"
         arms = self.arms(found)
-        mounted = wording.match(named, arms) or self._arm_hanging_from(found, part.strip(), arms)
+        mounted = wording.match(named, arms)
+        if mounted is None and arm:
+            mounted = self._arm_hanging_from(found, part.strip(), arms)
         if mounted is not None:
             return mounted
         if not arm:
@@ -219,20 +221,16 @@ class BehaviorManager:
         )
 
     def _arm_hanging_from(self, robot: str, part: str, arms: list[str]) -> str | None:
-        """The one arm that hangs from a part of `robot`: an arm built from parts answers to the part its gripper is
-        mounted on ("centaur/left_hand"), and its shoulder ("centaur/left_arm") or forearm should find it too."""
+        """The arm a part of `robot` belongs to, for the tools that work an arm: an arm built from parts answers to
+        the part its gripper is mounted on ("centaur/left_hand"), and its shoulder ("centaur/left_arm") or forearm
+        should find it too. Only the arm's own moving parts count: the robot's body, its wheels or a waist two arms
+        share are not an arm."""
         m = self.session.model
         body = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"{robot}/{wording.squash(part)}")
         if body < 0:
             return None
-        hanging = []
-        for name in arms:
-            b = int(m.site_bodyid[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{name}/tcp")])
-            while b > 0 and b != body:
-                b = int(m.body_parentid[b])
-            if b == body:
-                hanging.append(name)
-        return hanging[0] if len(hanging) == 1 else None
+        sites = {name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{name}/tcp") for name in arms}
+        return next((name for name, site in sites.items() if body in arm_bodies(m, site)), None)
 
     def kind(self, robot: str) -> Kind:
         world = self._world()  # read once: it comes from the file
