@@ -301,6 +301,25 @@ def test_a_robot_built_from_parts_stops_where_its_arm_reaches_the_object(pg):
     assert np.linalg.norm(cube - arm) < 0.75 * reach + 0.02
 
 
+def test_the_end_of_a_path_is_aimed_along_not_at(pg):
+    """Regression: the path ended in a stub from the search's last cell center to the point (a few cm, pointing
+    anywhere), and near the end the follower aimed at the end itself, whose bearing swings across as the robot
+    draws near a little to one side. The real Go2 swung round on the warehouse ramp, slid off and fell
+    (scripts/nav_bench.py)."""
+    pg.add_robot("rover", template="rover", pos=[0.0, 0.0], yaw=0)
+    trip = pg.behaviors.navigate("rover", [2.03, 0.31])  # not a cell center
+    points = trip.plan.points
+    assert np.allclose(points[-1], [2.03, 0.31])
+    assert (np.linalg.norm(np.diff(points, axis=0), axis=1) > 0.1).all()
+    end = points[-1]
+    along = (end - points[-2]) / np.linalg.norm(end - points[-2])
+    xy = end - 0.2 * along + 0.1 * np.array([-along[1], along[0]])  # 20 cm before the end, 10 cm to its left
+    trip._last_xy = xy
+    s, _ = trip._project(xy)
+    target, _ = trip._target(xy, s)
+    assert (target - end) @ along > 0.1  # on the line, past the end
+
+
 def test_pushed_off_its_path_it_plans_again_and_still_arrives(pg):
     pg.add_robot("rover", template="rover", pos=[-2.0, 0.0], yaw=0)
     pg.add_object("wall", shape="wall", pos=[0.0, 0.0], size=[2.0, 0.1, 0.5], yaw=90)

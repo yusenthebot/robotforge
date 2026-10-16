@@ -218,7 +218,13 @@ class Planner:
         on_point = not d.name or d.onto
         exact = level == 0 and (not on_point or self._point_is_free(nav))
         if on_point and exact:
-            points.append(d.point)
+            # The point itself, in place of the search's last cell center next to it: a stub of a few cm from one
+            # to the other made the last stretch point anywhere, and a Go2 steering for it on a ramp swung round
+            # and slid off (scripts/nav_bench.py, warehouse).
+            if len(points) > 1 + escape and math.dist(points[-1], d.point) < 2 * grid.res:
+                points[-1] = d.point
+            else:
+                points.append(d.point)
         pts = _dedupe(np.array(points, float))
         heights = np.array([nav.ground_at(x, y) for x, y in pts])
         plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact)
@@ -715,16 +721,20 @@ class Navigator:
             if _turn_at(p, k) > SHARP:
                 corner_left = left_here - self._after[k]
                 return (p[k] if corner_left <= look else self._point_at(s, look)), corner_left
-        return self._point_at(s, min(look, left_here)), math.inf
+        a, b = p[-2], p[-1]
+        if self._seg == len(p) - 2 and float((self._last_xy - a) @ (b - a)) > self._seg_len[-1] ** 2:
+            return b.copy(), math.inf  # walked past the end, further than OVERSHOOT: back to it
+        # Up to the end the aim stays a lookahead ahead, on the line through the end: aiming at the end itself, the
+        # bearing swings across as the robot draws near with a few cm to one side, and a gait's turn lags behind.
+        return self._point_at(s, look), math.inf
 
     def _point_at(self, s: float, ahead: float) -> np.ndarray:
-        """The path point `ahead` meters on from `s` along the current segment."""
+        """The path point `ahead` meters on from `s` along the current segment, on past the end in its direction."""
         p = self.plan.points
         seg, along = self._seg, s + ahead
         while seg < len(p) - 2 and along > self._seg_len[seg]:
             along -= self._seg_len[seg]
             seg += 1
-        along = min(along, self._seg_len[seg])
         return p[seg] + (p[seg + 1] - p[seg]) / max(self._seg_len[seg], 1e-9) * along
 
     def _turn(self, alpha: float) -> float:
