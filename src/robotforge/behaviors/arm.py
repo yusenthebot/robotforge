@@ -32,11 +32,12 @@ GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 # away from the base or toward it. Grasping and placing still point down.
 TILTS = (0.35, 0.6, 0.9)
 # An arm riding on a robot carries things over that robot's body: a PiPER on a Go2 swept a cube into the dog's head.
-# So the carry clears the robot's shapes under its way: the ring sector the tool sweeps about the arm's base from above
-# the grasp to above the place, widened by the object, the jaws around it (CARRY_MARGIN, m) and ARC_MARGIN (rad) at
-# either end, looked at with rays every CARRY_STEP (m). A carry that turns about half a turn may go round either way
-# (AMBIGUOUS_TURN, rad from half a turn), so then it is the whole ring. Only what lies under it counts: the highest
-# shape anywhere on the carrier made a rover with a 25 cm mast behind its arm refuse picks in front of it.
+# So the carry clears the robot's shapes under its way: the sector the arm sweeps about its base (its links too, from
+# the base out to the tool) from above the grasp to above the place, widened by the object, the jaws around it
+# (CARRY_MARGIN, m) and ARC_MARGIN (rad) at either end, looked at with rays every CARRY_STEP (m). A carry that turns
+# about half a turn may go round either way (AMBIGUOUS_TURN, rad from half a turn), so then it is the whole disk. Only
+# what lies under it counts: the highest shape anywhere on the carrier made a rover with a 25 cm mast behind its arm
+# refuse picks in front of it; the tool's ring alone let a UR5e on ANYmal sweep its forearm through the dog's legs.
 CARRY_MARGIN = 0.04
 ARC_MARGIN = 0.25
 CARRY_STEP = 0.01
@@ -181,6 +182,7 @@ class ArmMotion:
         # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
         for start in (self.q, seed):
             q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
+            q2 = self._unwound(q2)
             if err2 <= REACH_TOL and not self._collides(q2):
                 return q2, err2, False
             if err2 < err:
@@ -191,6 +193,7 @@ class ArmMotion:
             start = rng.uniform(self.chain.lower, self.chain.upper)
             start[0] = seed[0]
             q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
+            q2 = self._unwound(q2)
             if err2 <= REACH_TOL and not self._collides(q2):
                 travel = float(np.max(np.abs(q2 - self.q)))
                 if best is None or travel < best[2]:  # of the answers that work, the one nearest to now
@@ -200,6 +203,19 @@ class ArmMotion:
         if best is not None:
             return best[0], best[1], True
         return q, max(err, REACH_TOL * 1.01), True  # nothing collision-free: as good as out of reach
+
+    def _unwound(self, q: np.ndarray) -> np.ndarray:
+        """The same pose with each joint that turns a whole turn or more within its limits (a UR5e's, +-360 degrees)
+        set the way round nearest to where it is now. On a dog's back, an IK answer one turn away swung a UR5e's base
+        through 376 degrees, and the carry about it one and a half turns, until the joint hit its limit and flung the
+        cube."""
+        out = q.copy()
+        for i in np.flatnonzero(self.chain.upper - self.chain.lower >= 2 * np.pi):
+            turns = out[i] + 2 * np.pi * np.arange(-2, 3)
+            inside = turns[(turns >= self.chain.lower[i] - 1e-9) & (turns <= self.chain.upper[i] + 1e-9)]
+            if inside.size:
+                out[i] = inside[np.argmin(np.abs(inside - self.q[i]))]
+        return out
 
     def _collides(self, q: np.ndarray) -> bool:
         """True when the arm at `q` runs into itself, its carrier or the floor (in the IK's own copy)."""
@@ -308,7 +324,7 @@ class ArmMotion:
         da, db = np.asarray(a, float)[:2] - self.base_xy, np.asarray(b, float)[:2] - self.base_xy
         ra, rb = float(np.linalg.norm(da)), float(np.linalg.norm(db))
         margin = half + CARRY_MARGIN
-        r_lo, r_hi = max(0.0, min(ra, rb) - margin), max(ra, rb) + margin
+        r_lo, r_hi = 0.0, max(ra, rb) + margin
         ta = float(np.arctan2(da[1], da[0]))
         turn = self._sweep(ta, float(np.arctan2(db[1], db[0]))) if min(ra, rb) > 1e-3 else 2 * np.pi
         whole = abs(abs(turn) - np.pi) < AMBIGUOUS_TURN or abs(turn) >= 2 * np.pi - 2 * ARC_MARGIN
@@ -316,6 +332,8 @@ class ArmMotion:
         for g in range(m.ngeom):
             body = int(m.geom_bodyid[g])
             if int(m.body_rootid[body]) != self._robot_root or (m.body(body).name or "").startswith(mine):
+                continue
+            if body in self._moving:  # the arm's own, also a gripper mounted on its flange ("dog/gripper/...")
                 continue
             if not (m.geom_contype[g] or m.geom_conaffinity[g]):
                 continue

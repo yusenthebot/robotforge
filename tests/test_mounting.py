@@ -279,6 +279,18 @@ async def test_an_arm_on_a_humanoid_waits_longer_for_it_to_stand(pg):
     assert pg.behaviors.pose("h")["upright"]
 
 
+def test_a_carried_arm_takes_a_whole_turn_joint_the_near_way_round(pg):
+    """Regression: on ANYmal's back an IK answer with the UR5e's base one turn (+-360 degrees allows it) from where it
+    was swung the base through 376 degrees and the carry about it one and a half turns, until the joint hit its limit
+    and flung the cube 3 m. The same pose is taken with the joint turned the near way."""
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}])
+    arm = pg.behaviors._arm("anymal/arm")
+    far = arm.q.copy()
+    far[0] += 2 * np.pi + 0.29
+    assert arm._unwound(far)[0] == pytest.approx(arm.q[0] + 0.29)
+    assert arm._unwound(far)[1:] == pytest.approx(far[1:])
+
+
 @pytest.mark.anyio
 async def test_mcp_pick_and_place_stops_a_walking_carrier_first(pg):
     server = build_server(pg, find_free_port(8797))
