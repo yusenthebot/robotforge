@@ -529,6 +529,7 @@ class BehaviorManager:
             trip.start_time = float(self.session.data.time)
             if seconds is not None:
                 trip.deadline = trip.start_time + seconds
+            trip.note_others(self.session.data)
             self.session.set_controller(key, trip)
         return trip
 

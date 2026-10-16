@@ -368,6 +368,33 @@ def test_no_way_says_why(pg, build, cause):
     assert TRIP + "rover" not in pg.session.controllers
 
 
+def test_a_robot_standing_beside_the_path_is_passed_not_waited_for(pg):
+    """Regression: a robot standing next to the path counted as one that moved into the way (its reach, not its
+    shape, was measured against the path), so the rover stopped, planned the same path again and gave up."""
+    pg.add_robot("rover", template="rover", pos=[0.0, 0.0], yaw=0)
+    for side in (1, -1):  # a corridor 0.9 m wide
+        pg.add_object(f"wall_{side + 1}", shape="wall", pos=[1.5, 0.5 * side], size=[4.0, 0.1, 0.5])
+    pg.add_robot("dog", template="quadruped", pos=[1.5, 0.26], yaw=0)  # standing along the north wall
+    trip = _trip(pg, "rover", [3.0, 0.0])
+    result = trip.result()
+    assert result["arrived"] and "made_way" not in result, result
+
+
+def test_two_robots_crossing_make_way_for_each_other(pg):
+    """Head on along one line: the robot whose name comes first (dog) plans round the other after a moment; the
+    rover waits, then goes on once the dog is off its path. Each goal is just past where the other one starts, so
+    the rover's goal is taken when it sets off and free by the time it gets there."""
+    pg.add_robot("dog", template="quadruped", pos=[-1.5, 0.0], yaw=0)
+    pg.add_robot("rover", template="rover", pos=[1.5, 0.05], yaw=180)
+    dog = pg.behaviors.navigate("dog", [1.6, 0.0], seconds=60)
+    rover = pg.behaviors.navigate("rover", [-1.6, 0.0], seconds=60)
+    pg.run_fast(lambda: dog.done and rover.done, 61)
+    assert dog.result()["arrived"] and rover.result()["arrived"], (dog.result(), rover.result())
+    assert dog.result()["made_way"] >= 1
+    assert math.dist(pg.behaviors.pose("rover")["position"][:2], [-1.6, 0.0]) < 0.15
+    assert pg.behaviors.pose("dog")["upright"] and pg.behaviors.pose("rover")["upright"]
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])

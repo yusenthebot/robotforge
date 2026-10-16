@@ -44,11 +44,13 @@ MIN_SPEED_SHARE = 0.3  # of the top speed, at the least, until it is there
 PROGRESS = 0.05  # m of headway that counts as getting on
 STUCK_TIME = 3.0  # s without headway (plus a half turn's time) that counts as stuck
 MAX_REPLANS = 4  # plans after the first before it gives up
-# Another robot that moves onto the path: one this close to the path (beyond both robots' half widths) within
-# AHEAD m in front is in the way. The robot whose name comes first plans around it after YIELD_FIRST s, the
-# other after YIELD_SECOND s, so two that meet do not swerve the same way at once; MAX_YIELDS times at most.
+# Another robot that moved onto the path since it was planned (by more than MOVED m): one this close to the path
+# (beyond both robots' half widths) within AHEAD m in front is in the way. The robot whose name comes first plans
+# around it after YIELD_FIRST s, the other after YIELD_SECOND s, so two that meet do not swerve the same way at
+# once; MAX_YIELDS times at most. One standing still is in the plan already.
 AHEAD = 1.0  # m
 MARGIN_AROUND = 0.05  # m
+MOVED = 0.1  # m
 YIELD_FIRST, YIELD_SECOND = 0.3, 2.5  # s
 MAX_YIELDS = 6
 FALLEN = math.cos(math.radians(60.0))  # its up axis this far from up: it has fallen over
@@ -251,10 +253,10 @@ class Planner:
     def _short_note(self, nav: NavMap, end: tuple[int, int], on_point: bool, away: np.ndarray | None) -> str:
         """Why the path ends short of where the robot was sent."""
         d, grid = self.destination, nav.grid
-        label = d.name or f"[{d.point[0]:.2f}, {d.point[1]:.2f}]"
         if on_point:
             gap = math.dist(grid.center(*end), d.point)
-            return f"{label} is {self._inside(nav)}, so it stops at the nearest spot with room for it, {gap:.2f} m off"
+            where = f"{self._label()} is {self._inside(nav)}"
+            return f"{where}, so it stops at the nearest spot with room for it, {gap:.2f} m off"
         gap = float(away[end]) if away is not None else math.dist(grid.center(*end), d.point)
         between = [n for n in _owners_between(nav, end, grid.cell(*d.point)) if n != d.name][:2]
         lead = ": in the way is " if len(between) == 1 else ": in the way are "
@@ -342,7 +344,7 @@ class Planner:
     def _why_not(self, nav: NavMap, start: tuple[int, int], goal: np.ndarray) -> NoWay:
         grid, body = nav.grid, self.body
         heuristic = _heuristic(grid, goal)
-        label = self.destination.name or f"[{self.destination.point[0]:.2f}, {self.destination.point[1]:.2f}]"
+        label = self._label()
         flat = np.zeros(grid.shape)
         # Without the steps and slopes it cannot climb, is there a way? Then they are what is in the way.
         obstacles = nav.lethal == OBSTACLE
@@ -509,6 +511,8 @@ class Navigator:
     _blockers: list = field(default_factory=list, init=False)
     _waiting: tuple[str, float] | None = field(default=None, init=False)  # (robot in the way, since when)
     _yields: int = field(default=0, init=False)
+    _others_at: dict[str, np.ndarray] = field(default_factory=dict, init=False)  # where they were for the plan
+    _retried: bool = field(default=False, init=False)  # planned again at the end of a path to a taken point
 
     def __post_init__(self) -> None:
         self.first_length = self.plan.length
@@ -589,6 +593,8 @@ class Navigator:
                 self._spinning = True
             elif self.plan.exact or math.dist(xy, d.point) <= NEAR_ENOUGH:
                 self._finish(t, "arrived")
+            elif not self._retried and self._try_again(t, data):
+                pass  # what stood on the point (another robot) has moved off it: on to the point itself
             else:  # a point inside something: it got as near as it could, which is not there
                 self._finish(t, "stopped", "inside", self.plan.note)
             return
@@ -642,8 +648,7 @@ class Navigator:
         if self._yields > MAX_YIELDS:
             self._finish(t, "stopped", "stuck", f"{other.name} kept getting in the way")
             return True
-        self.replans -= 1  # making way is not a failure to plan: it does not count toward giving up
-        self._replan(t, data, f"{other.name} was in the way")
+        self._replan(t, data, f"{other.name} was in the way", count=False)  # making way is not failing to plan
         return True
 
     def _robot_ahead(self, xy: np.ndarray, s: float, data: mujoco.MjData) -> Other | None:
@@ -655,6 +660,9 @@ class Navigator:
         best, best_d = None, math.inf
         for other in self.others:
             at = data.xpos[other.root][:2]
+            then = self._others_at.get(other.name)
+            if then is not None and np.linalg.norm(at - then) <= MOVED:
+                continue  # where it was when the path was planned: the path goes round it
             d = float(np.linalg.norm(at - xy))
             if d > AHEAD + body.reach + other.radius or d >= best_d:
                 continue
@@ -733,12 +741,13 @@ class Navigator:
             return
         self.walker.command(0.0, self._turn(alpha))
 
-    def _replan(self, t: float, data: mujoco.MjData, why: str) -> None:
-        if self.replans >= MAX_REPLANS:
+    def _replan(self, t: float, data: mujoco.MjData, why: str, count: bool = True) -> None:
+        """Plan again from where the robot is; `count` says whether this one counts toward giving up."""
+        if count and self.replans >= MAX_REPLANS:
             x, y = data.xpos[self.planner.root][:2]
             self._finish(t, "stopped", "stuck", f"it got stuck near [{x:.2f}, {y:.2f}]: {why}")
             return
-        self.replans += 1
+        self.replans += 1 if count else 0
         self.walker.command(0.0, 0.0)
         try:
             self.plan = self.planner.plan(data, self._blockers)
@@ -747,6 +756,27 @@ class Navigator:
             return
         self._reset_path()
         self._since = t
+        self.note_others(data)
+
+    def _try_again(self, t: float, data: mujoco.MjData) -> bool:
+        """Once per trip, at the nearest free spot to a point that was taken: plan again, and go on if the point
+        itself is free now (a robot standing there when the trip began has walked off)."""
+        self._retried = True
+        try:
+            plan = self.planner.plan(data, self._blockers)
+        except NoWay:
+            return False
+        if not plan.exact:
+            return False
+        self.plan = plan
+        self._reset_path()
+        self._since = t
+        self.note_others(data)
+        return True
+
+    def note_others(self, data: mujoco.MjData) -> None:
+        """Remember where the other robots are as the path is planned (see _robot_ahead)."""
+        self._others_at = {o.name: data.xpos[o.root][:2].copy() for o in self.others}
 
     def _finish(self, t: float, state: str, cause: str | None = None, note: str | None = None) -> None:
         self.walker.command(0.0, 0.0)
