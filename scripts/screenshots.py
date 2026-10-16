@@ -355,6 +355,13 @@ SHOTS = [
         page="window.__robotforge.lookAt([0.6, -4.2, 3.4], [0.0, 0.3, 0.2]);",
         settle=0.2,
     ),
+    Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them
+        "nav_obstacle_course",
+        _in_scene("obstacle_course", {"dog": {"template": "quadruped"}}),
+        viewer=[_go("dog", "finish"), {"wait": 2.0}],
+        page="window.__robotforge.lookAt([8.6, -11.0, 9.0], [8.6, 0.6, 0]);",
+        settle=0.5,
+    ),
     Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
     Shot(
         "lesson_your_robot",
