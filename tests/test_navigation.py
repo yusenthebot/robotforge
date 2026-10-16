@@ -9,6 +9,7 @@ import mujoco
 import numpy as np
 import pytest
 from mcp import Client
+from starlette.testclient import TestClient
 
 from robotforge.behaviors import nav_grid, nav_map
 from robotforge.behaviors.manager import TRIP, BehaviorError
@@ -19,6 +20,7 @@ from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
+from robotforge.viewer.server import ViewerHub, create_app
 
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
 
@@ -528,6 +530,33 @@ def test_a_trip_needs_a_speed_that_gets_somewhere(pg):
     with pytest.raises(BehaviorError, match="leave speed out"):
         pg.behaviors.navigate("rover", [1.5, 0.0], speed=0.0)
     assert pg.behaviors.trip("rover") is None
+
+
+def test_the_viewer_sends_a_robot_and_says_when_there_is_no_way(pg):
+    """The viewer's double-click sends {"type": "teleop", "to": [x, y]}; no way comes back as an error message."""
+    pg.add_robot("rover", template="rover")
+    _pen(pg, None)
+    hub = ViewerHub(pg.session)
+    pg.attach_viewer(hub)
+    client = TestClient(create_app(hub), base_url="http://127.0.0.1:8737")
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
+        ws.send_text(json.dumps({"type": "teleop", "robot": "rover", "to": [3.0, 0.0]}))  # inside the pen
+        error = _next_message(ws, "error")
+        assert "no way to [3.00, 0.00]" in error["message"] and "close it off" in error["message"]
+        ws.send_text(json.dumps({"type": "teleop", "robot": "rover", "to": [1.0, 1.5]}))
+        ws.send_text(json.dumps({"type": "nope"}))  # answered once the message before it has been handled
+        _next_message(ws, "error")
+        assert pg.behaviors.trip("rover") is not None
+
+
+def _next_message(ws, kind: str) -> dict:
+    for _ in range(400):
+        msg = ws.receive()
+        if msg.get("text"):
+            data = json.loads(msg["text"])
+            if data["type"] == kind:
+                return data
+    raise AssertionError(f"no {kind} message")
 
 
 def test_driving_by_hand_ends_a_trip(pg):
