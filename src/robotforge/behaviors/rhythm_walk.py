@@ -89,9 +89,11 @@ class SavedWalk(BaseModel):
     # it is calm, or "hold" home at once until it stands still; None: as `switching` says.
     turn_left_exit: Literal["fade", "hold"] | None = None
     turn_right_exit: Literal["fade", "hold"] | None = None
-    # rad/s: what a turn asked for right after walking turns in its first second, as move plays it (the slower side),
-    # measured once the switching was checked. turn_rate is the rate from standing still.
-    turn_rate_from_walk: float | None = Field(None, ge=0)
+    # rad/s: what a turn asked for right after walking turns in its first second, each way, as move and the keys play
+    # it (on average over the points of the stride it is asked at), measured once the switching was checked. turn_rate
+    # is the rate from standing still.
+    turn_left_rate_from_walk: float | None = Field(None, ge=0)
+    turn_right_rate_from_walk: float | None = Field(None, ge=0)
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -124,6 +126,12 @@ class SavedWalk(BaseModel):
     def turns_from_walking(self) -> bool:
         return self.turn_left_walking is not None and self.turn_right_walking is not None
 
+    @property
+    def turn_rates_from_walk(self) -> dict[str, float] | None:
+        """rad/s each way in a turn's first second right after walking, if measured."""
+        left, right = self.turn_left_rate_from_walk, self.turn_right_rate_from_walk
+        return None if left is None or right is None else {"left": left, "right": right}
+
     def describe(self) -> dict[str, Any]:
         """What `robots` reports for a robot that has one."""
         out: dict[str, Any] = {"speed": round(self.speed, 3), "turns": self.turns, "walker": "rhythm"}
@@ -131,8 +139,9 @@ class SavedWalk(BaseModel):
             out["holds_heading"] = True
         if self.turns and self.turn_rate is not None:
             out["turn_deg_s"] = round(math.degrees(self.turn_rate))
-        if self.turns and self.turn_rate_from_walk is not None:
-            out["turn_deg_s_from_walk"] = round(math.degrees(self.turn_rate_from_walk))
+        from_walk = self.turn_rates_from_walk
+        if self.turns and from_walk is not None:
+            out["turn_deg_s_from_walk"] = {side: round(math.degrees(rate)) for side, rate in from_walk.items()}
         if self.survived is not None:
             out["stayed_up"] = f"{self.survived} of {self.shoves} shoves"
         return out
@@ -377,7 +386,9 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
     style's own way of leaving first, on its switch_checks; the first that tips the robot over least is kept. Of the
     two styles, fading is kept only if it tips the robot over less than holding: a check that finds no fall does not
     show a rare one cannot happen, and holding was the safer one wherever a robot steadies when held. Also returns how
-    fast a turn asked for right after walking turns in its first second (the slower side), as move then plays it.
+    fast a turn asked for right after walking turns in its first second each way, as move then plays it. Reporting the
+    slower side alone said 26 deg/s for a template dog walk whose 1 s turns right after walking went 70 degrees left
+    and 159 right.
 
     Leaving each turn was first checked only for stops, from standing and after 1.5 s of walking: a template dog walk
     whose right turn was kept to fade then fell in 2 of 25 walk, 1 s turn, walk sequences (asked at every point of the
@@ -386,12 +397,11 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
     walks fell 520 times (fading, 71)."""
     if not walk.turns:
         return walk
-    best: tuple[int, dict[str, Any], list[float]] | None = None
+    best: tuple[int, dict[str, Any]] | None = None
     for style in STYLES:
         styled = walk.model_copy(update={"switching": style})
         falls = _falls(model, robot, styled, walk_checks(walk.freq), None if best is None else best[0])
         kept: dict[str, Any] = {"switching": style}
-        rates = []
         for side, sign in (("left", 1.0), ("right", -1.0)):
             if best is not None and falls >= best[0]:
                 break
@@ -399,13 +409,12 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
             side_falls, update, first = _turn_switching(model, robot, styled, side, sign, left_over)
             falls += side_falls
             kept.update(update)
-            if first:  # none if the walk falls before every turn: nothing to say
-                rates.append(max(0.0, float(np.mean(first))) / FIRST_SECOND)
+            # None if the walk falls before every turn: nothing to say
+            kept[f"turn_{side}_rate_from_walk"] = max(0.0, float(np.mean(first))) / FIRST_SECOND if first else None
         if best is None or falls < best[0]:
-            best = (falls, kept, rates)
+            best = (falls, kept)
     assert best is not None
-    rates = best[2]
-    return walk.model_copy(update={**best[1], "turn_rate_from_walk": min(rates) if len(rates) == 2 else None})
+    return walk.model_copy(update=best[1])
 
 
 def _turn_switching(

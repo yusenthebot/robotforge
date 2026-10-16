@@ -341,8 +341,10 @@ def test_switches_keep_the_first_way_that_tips_the_robot_over_least(monkeypatch,
     assert tried.count((style, "left", True, style)) == checks  # the first way on each side, checked in full
     assert tried.count((style, "right", False, style)) == checks
     assert all(t[0] == "hold" for t in tried) != held_walk_falls  # fading is only tried if holding fell
-    assert kept.turn_rate_from_walk == pytest.approx(0.3)  # rad/s: the slower side's first second out of the walk
-    assert kept.describe()["turn_deg_s_from_walk"] == round(math.degrees(0.3))
+    # rad/s, each side's first second out of the walk: reporting the slower alone said 26 deg/s for a template dog walk
+    # whose 1 s turns right after walking went 70 degrees left and 159 right
+    assert kept.turn_rates_from_walk == pytest.approx({"left": 0.6, "right": 0.3})
+    assert kept.describe()["turn_deg_s_from_walk"] == {"left": 34, "right": 17}  # degrees
     assert rhythm_walk.learn_switches(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
 
 

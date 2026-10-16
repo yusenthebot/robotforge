@@ -793,12 +793,14 @@ class LearnToWalkLesson(Lesson):
         rate = math.degrees(turned.turn_rate or 0.0)
         kept = {**ctx.results.get("kept", {}), "turns": True, "turn_deg_s": round(rate)}
         walking = _text("", "")
-        if turned.turn_rate_from_walk is not None:  # what a turn right after walking gives differs: say it too
-            from_walk = math.degrees(turned.turn_rate_from_walk)
-            kept["turn_deg_s_from_walk"] = round(from_walk)
+        from_walk = turned.turn_rates_from_walk
+        if from_walk is not None:  # what a turn right after walking gives differs, and each way: say it too
+            left, right = (round(math.degrees(from_walk[side])) for side in ("left", "right"))
+            kept["turn_deg_s_from_walk"] = {"left": left, "right": right}
             walking = _text(
-                f"走着走着直接转弯，第一秒约 {from_walk:.0f} 度。",
-                f"Asked right after walking, a turn gives about {from_walk:.0f} degrees in its first second. ",
+                f"走着走着直接转弯，第一秒平均向左约 {left} 度、向右约 {right} 度。",
+                f"Asked right after walking, a turn gives on average about {left} degrees left or {right} right in its "
+                "first second. ",
             )
         ctx.results["kept"] = kept
         ctx.results["summary"] = _text(
