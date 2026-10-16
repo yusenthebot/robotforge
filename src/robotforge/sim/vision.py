@@ -36,8 +36,10 @@ class ColorRange:
 # palette's cubes from seven views (tests/test_vision.py) and of every scene's props. They hold for a picture that
 # is not overexposed: where the brightest channel clips, hues slide toward the next secondary color (in the world's
 # full sun a top-down view put orange at 58 degrees, beside yellow, and blue at 186, beside teal), so the finder
-# looks with the exposure a camera would pick (EXPOSURE). There, the palette cubes' middle 90 % of pixels measured:
-# purple 259 to 265 degrees and teal 167 to 183, so both windows leave a few degrees past that.
+# looks with the exposure a camera would pick (EXPOSURE). There, from all seven preset views, 96 % of the palette
+# cubes' pixels (bright enough for the mask) measured: green 137 to 147 degrees, teal 180 to 183 (its color is
+# exactly 180; a teal block's pixels in the desk scene went down to 164), purple 245 to 266. Teal is centred on
+# 180 and green ends half way between, so neither margin is only a few degrees wide on one side.
 # Orange and brown share their hues and differ in saturation. Orange things measured 0.66 to 0.80 (median over a
 # cube, the top seen from above the lowest: the light's shine on it greys it), the palette's brown 0.41 to 0.55,
 # and the wood and cardboard of every scene (floors, tables, shelves, crates) at most 0.49 in 99 % of their pixels:
@@ -48,8 +50,8 @@ NAMED: dict[str, ColorRange] = {
     "orange": ColorRange(29.0, 9.0, sat=SPLIT),
     "brown": ColorRange(28.0, 10.0, sat=0.25, sat_max=SPLIT),
     "yellow": ColorRange(47.0, 8.0),
-    "green": ColorRange(140.0, 25.0),
-    "teal": ColorRange(183.0, 16.0),
+    "green": ColorRange(140.0, 23.0),
+    "teal": ColorRange(180.0, 16.0),
     "blue": ColorRange(218.0, 16.0),
     "purple": ColorRange(264.0, 26.0),
     "pink": ColorRange(330.0, 16.0, sat=0.25),  # a pale color: about 0.45 saturated
