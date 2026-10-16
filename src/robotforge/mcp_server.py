@@ -319,9 +319,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
     ) -> str:
-        """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
-        "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part)."""
+        """Change a robot's template params (merged), position or heading. For a robot built from parts, build replaces
+        its whole description (add_part / update_part change one part)."""
         with _tool_errors():
             return _json(playground.update_robot(name, params, pos, yaw, build))
 

@@ -290,25 +290,19 @@ def test_built_hexapod_walks_with_a_tripod_gait(pg):
     assert end["upright"]
 
 
-def test_a_build_without_parts_changes_its_fields_and_keeps_the_legs(pg):
+def test_a_build_without_parts_says_the_parts_are_gone(pg):
     """An agent in the eval sent update_robot(build={"servo": ..., "base": {...}}) to give a hexapod stronger servos
-    and got a bare box of 1 part: a build without parts was taken as the whole robot."""
+    and got a bare box, told only "built from 1 parts (0 joints, 0 actuators)": a build is the whole robot. The
+    result now says the parts are gone, and how to keep them."""
     pg.add_robot("spider", build=HEXAPOD)
-    joints = pg.session.model.nu
-    out = pg.update_robot("spider", build={"servo": "bldc_joint", "base": {"mass": 0.8}})
-    built = pg.current_world().robots[0].build
-    assert len(built["parts"]) == len(HEXAPOD["parts"]) and pg.session.model.nu == joints
-    assert built["servo"] == "bldc_joint"
-    assert built["base"] == {**HEXAPOD["base"], "mass": 0.8}  # the size and shape it had are kept
-    assert any("kept its" in note and "servo, base" in note for note in out["notes"])
-    # The same merge as update_part(robot, "robot" | "base"): null puts a field back to its default, and a field
-    # that is neither robot-wide nor the base is refused with the list of robot-wide settings.
-    pg.update_robot("spider", build={"servo": None})
-    assert "servo" not in pg.current_world().robots[0].build
-    with pytest.raises(ValueError, match="robot-wide settings are"):
-        pg.update_robot("spider", build={"legs": 6})
-    pg.update_robot("spider", build={**HEXAPOD, "parts": HEXAPOD["parts"][:3]})  # with parts: the whole robot
-    assert len(pg.current_world().robots[0].build["parts"]) == 3
+    out = pg.update_robot("spider", build={"servo": "bldc_joint", "base": HEXAPOD["base"]})
+    assert "parts" not in pg.current_world().robots[0].build
+    (note,) = [n for n in out["notes"] if "parts are gone" in n]
+    assert "undo brings them back" in note and 'update_part(\'spider\', "robot" or "base"' in note
+    pg.undo()
+    assert len(pg.current_world().robots[0].build["parts"]) == len(HEXAPOD["parts"])
+    out = pg.update_robot("spider", build={**HEXAPOD, "parts": HEXAPOD["parts"][:2]})  # with parts: no note
+    assert not [n for n in out.get("notes", []) if "parts are gone" in n]
 
 
 def test_bad_build_leaves_the_world_unchanged(pg):

@@ -304,7 +304,7 @@ class Playground:
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
-        kept: list[str] = []
+        dropped: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -318,17 +318,17 @@ class Playground:
                 robot.yaw = yaw
             if build is not None:
                 entry = _built(robot)
-                parts = (entry.build or {}).get("parts") or []
-                if "parts" in build or not parts:
-                    entry.build = build
-                else:
-                    entry.build = _merged_build(entry.build, build)
-                    kept.append(
-                        f"{robot.name}: kept its {len(parts)} parts and changed only {', '.join(build)}; a build "
-                        'without "parts" changes the fields it gives (send "parts" to replace them)'
+                if (entry.build or {}).get("parts") and "parts" not in build:
+                    # An agent in the eval sent build={"servo": ..., "base": {...}} to give its hexapod stronger
+                    # servos, was told only "built from 1 parts (0 joints, 0 actuators)" and sent all 19 again.
+                    dropped.append(
+                        f'{robot.name}: this build has no "parts", and a build is the whole robot, so its parts are '
+                        f"gone (undo brings them back); to change one setting keep them, use update_part"
+                        f'({robot.name!r}, "robot" or "base", ...)'
                     )
+                entry.build = build
 
-        return _noted(self._edit(change), _yaw_note(yaw), *kept)
+        return _noted(self._edit(change), _yaw_note(yaw), *dropped)
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -823,20 +823,6 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
     if max(abs(v) for v in values) / 100 <= limit:
         text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
     raise PlaygroundError(text)
-
-
-def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """A robot's build with the fields of `new` changed and its parts kept, as update_part(robot, "robot" or "base")
-    changes them. An agent that sent build={"servo": ..., "base": {...}} to change the servos of a hexapod got a bare
-    box: a build without parts was taken as the whole robot."""
-    robot_wide = {key: value for key, value in new.items() if key != "base"}
-    out = build_edit.update_part(old, "robot", robot_wide) if robot_wide else old
-    base = new.get("base")
-    if isinstance(base, dict) and base:
-        out = build_edit.update_part(out, "base", base)  # {"base": {"mass": 0.8}} keeps its shape and size
-    elif "base" in new:
-        out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
-    return out
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
