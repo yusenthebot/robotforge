@@ -214,8 +214,11 @@ SETTLE_MAX = 1.0  # s
 # if no stop came between, and the walk asked again plays on. By hand, W let go and A pressed a moment later send a stop
 # between the two; taken at once, the robot steadied first, and a 1 s turn one update after letting go of W turned the
 # template dog 27 to 70% of its rate (median per walk and side, 6 walks, scripts/rhythm_bench.py leads, path quick);
-# with the stop let go of, 25 to 127% (the lowest on a side whose walking turn was dropped), as with no gap at all.
-STOP_GRACE = 0.1  # s: a fifth of a 2 Hz stride
+# with the stop let go of, 25 to 127% (the lowest on a side whose walking turn was dropped), as with no gap at all. The
+# longer it waits, the later a robot really let go of settles: waiting 0.1 s, a 1 s turn asked 0.16 to 0.3 s after
+# letting go of W got 54 to 77% of the rate (median by gap; 70 to 86% stopping at once), waiting 0.06 s as stopping at
+# once (path gap: 198 of 300 tries at 60% or more against 199).
+STOP_GRACE = 0.06  # s: three updates
 # How the walk switches is checked after the turns are learned (learn_switches): a walk of SWITCH_WALK seconds and
 # then some, ending at each of SWITCH_TRIES points of the stride (every update at 2 Hz) in a stride early in the walk or
 # later on; then the turn for FIRST_SECOND and up to a stride more (ending at SWITCH_ENDS points of its own stride),
@@ -226,7 +229,7 @@ STOP_GRACE = 0.1  # s: a fifth of a 2 Hz stride
 SWITCH_TRIES = 25
 SWITCH_WALK = (1.0, 4.5)  # s
 SWITCH_ENDS = 5
-SWITCH_GAPS = (0.16, 0.22, 0.32)  # s, from asking to stop: 0.06 to 0.22 s after the walk stopped
+SWITCH_GAPS = (0.12, 0.18, 0.28)  # s, from asking to stop: 0.06 to 0.22 s after the walk stopped
 # A turn begins straight out of the walk only once the walk has played as long as the earliest moment its walking
 # version was checked from; asked sooner, the robot steadies first. In random runs of commands (each 0.3 to 1.5 s, the
 # next at once), where a walk is often short and follows steadying out of a turn, 6 template dog walks fell 16 times in
