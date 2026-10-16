@@ -83,7 +83,6 @@ class LibraryRobot:
     # (N*m*s/rad), keeping their force limits.
     stiffer_servos: tuple[float, float] | None = None
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
-    walks: bool = True  # False: the robot stands and balances, but move cannot walk it yet
     tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
     mass: float = 0.0  # kg, of the model at the pinned commit
     payload: Payload | None = None  # walkers: what they carry (see Payload)

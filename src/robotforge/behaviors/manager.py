@@ -186,8 +186,6 @@ class BehaviorManager:
                 learned = self._learned_walkers(world).get(name)
                 if learned is not None:
                     info["max_speed"] = round(learned["max_speed"], 3)
-            elif kind in MOBILE and not _walks(entry):
-                info["walks"] = False  # it stands and keeps its balance, but move cannot walk it yet
             elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)
@@ -288,13 +286,6 @@ class BehaviorManager:
                 raise BehaviorError(self._cannot_move(robot, kind))
         elif kind not in MOBILE:
             raise BehaviorError(self._cannot_move(robot, kind))
-        entry = _entry(robot, world)
-        if walker in (None, "gait") and not _walks(entry):
-            title = library.get(entry.library).title
-            raise BehaviorError(
-                f"{robot} ({title}) has no walk yet: it stands and keeps its balance on the built-in gait, which "
-                "cannot step with it without falling. Robots that walk: list_library"
-            )
         if walker == "gait" and kind == Kind.HEXAPOD:
             walker = None  # its built-in gait is the only one it has
         if walker not in (None, RHYTHM) and kind not in LEGGED:
@@ -866,11 +857,6 @@ def _learned_humanoid(entry: RobotEntry | None) -> bool:
     if entry is None or entry.library is None or library.get(entry.library).kind != "humanoid":
         return False
     return policies.for_robot(entry.library) is not None
-
-
-def _walks(entry: RobotEntry | None) -> bool:
-    """False for a library robot that stands and balances but has no walk yet (none at present)."""
-    return entry is None or entry.library is None or library.get(entry.library).walks
 
 
 def _carrier(arm: str) -> str | None:

@@ -451,16 +451,6 @@ def test_driving_and_listing_robots_read_world_yaml_once(pg, monkeypatch):
         assert len(reads) == 1
 
 
-def test_a_humanoid_that_cannot_walk_yet_stands_and_says_so(pg, monkeypatch):
-    monkeypatch.setitem(library.CATALOG, "op3", dataclasses.replace(library.CATALOG["op3"], walks=False))
-    pg.add_robot("bot", library="op3")
-    assert pg.behaviors.robots()[0]["walks"] is False
-    with pytest.raises(ValueError, match="has no walk yet: it stands and keeps its balance"):
-        pg.behaviors.move("bot", 0.1, 0.0)
-    _run(pg, 4.0)
-    assert pg.behaviors.pose("bot")["upright"]
-
-
 def test_arm_poses_are_refused_on_a_real_humanoid_whose_arms_hold_still(pg):
     pg.add_robot("op3", library="op3")
     with pytest.raises(ValueError, match="wave moves only the arms and head, which on op3 hold still; it can: squat"):
