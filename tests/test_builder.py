@@ -12,6 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge.cli import find_free_port
 from robotforge.design import builder
+from robotforge.design.visuals import HIDDEN_GROUP
 from robotforge.design.world import World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
@@ -481,6 +482,39 @@ def test_a_wheel_legged_robot_balances_in_place_and_stays_there_when_it_crouches
         end = pg.behaviors.pose("ascent")
         assert end["upright"] and abs(end["position"][0] - start[0]) < 0.05, (thigh, end)
     assert end["position"][2] < start[2] - 0.08  # it did crouch
+
+
+def _wheel_motor(model: mujoco.MjModel, carrier: str) -> int:
+    """The drawn gear motor of the wheel on `carrier`: the shown cylinder on that body nothing collides with (the
+    knee's servo is one too, drawn as a mesh over a hidden one)."""
+    body = model.body(carrier).id
+    cylinder = int(mujoco.mjtGeom.mjGEOM_CYLINDER)
+    found = [
+        g
+        for g in range(model.ngeom)
+        if model.geom_bodyid[g] == body
+        and model.geom_type[g] == cylinder
+        and not model.geom_contype[g]
+        and model.geom_group[g] < HIDDEN_GROUP
+    ]
+    assert len(found) == 1, found
+    return found[0]
+
+
+def test_a_wheel_hung_on_a_leg_gets_a_hub_motor_that_stays_outside_the_leg():
+    """The motor was drawn as a 6 cm can inboard of the wheel, which on a leg stuck out through the leg."""
+    from robotforge.design.builder.assemble import MOTOR_YELLOW
+    from robotforge.design.visuals import parts as P
+
+    model = _model(WHEEL_LEGS)
+    motor = _wheel_motor(model, "r/left_shin")
+    center, half = model.geom_pos[motor], model.geom_size[motor][1]
+    assert center[1] - half >= 0.0 and center[1] + half <= 0.032 - 0.015  # between the leg's middle and the wheel
+    assert list(model.geom_rgba[motor]) == pytest.approx(P.METAL)  # a JGA25 is a metal can
+    tt = copy.deepcopy(WHEEL_LEGS)
+    tt["motor"] = "tt_motor"
+    toy = _model(tt)
+    assert list(toy.geom_rgba[_wheel_motor(toy, "r/left_shin")]) == pytest.approx(MOTOR_YELLOW)  # a TT's yellow case
 
 
 def test_two_wheels_and_a_caster_that_sits_a_little_high_is_a_rover(pg):

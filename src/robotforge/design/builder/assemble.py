@@ -36,7 +36,8 @@ LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator push
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
 WHEEL_DAMPING = 0.002
 INVISIBLE = [0.0, 0.0, 0.0, 0.0]
-MOTOR_YELLOW = [0.95, 0.8, 0.2, 1.0]
+MOTOR_YELLOW = [0.95, 0.8, 0.2, 1.0]  # the TT gear motor's plastic case; metal gear motors are drawn in metal
+MIN_HUB = 0.01  # m: the shortest a wheel's motor is drawn
 FOOT_FRICTION = [1.2, 0.02, 0.002]
 CASTER_FRICTION = [0.02, 0.001, 0.0001]
 MIN_MASS = 0.005  # kg for a bare joint with no shape: MuJoCo needs mass on every moving body
@@ -207,14 +208,17 @@ def _actuator_housing(
         axis_parent = part.rot @ axis
         inboard = -axis_parent if float(axis_parent @ part.pos) > 0 else axis_parent
         half_w = part.spec.size[1] / 2
-        length = min(sx, 0.06)
+        # It fits between the wheel and the middle of what carries it: a wheel hung just outboard of a leg gets a
+        # short hub motor there, where a full-length can stuck out through the leg on the inside.
+        room = abs(float(axis_parent @ part.pos)) - half_w - 0.003
+        length = min(sx, 0.06, max(room, MIN_HUB))
         center = part.pos + inboard * (half_w + length / 2 + 0.003)
         parent.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[max(sy, sz) / 2, length / 2, 0],
             pos=center.tolist(),
             quat=_z_to(axis_parent),
-            rgba=MOTOR_YELLOW if visible else INVISIBLE,
+            rgba=(MOTOR_YELLOW if actuator.name == "tt_motor" else P.METAL) if visible else INVISIBLE,
             mass=actuator.mass,
             contype=0,
             conaffinity=0,
