@@ -56,7 +56,7 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     spec = new_spec()
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
-    vis = Visuals(spec)
+    vis = Visuals(spec, rays=False)  # the dressing never changes what a rangefinder or lidar measures
     # Mounted robots are built first: the dressing keeps screws and vents off the spot each one stands on.
     mounted = {p.name: _mounted_robot(p) for p in placed if p.spec.robot is not None}
     reach = {name: looks.footprint(child.spec) for name, (child, _) in mounted.items()}
