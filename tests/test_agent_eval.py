@@ -109,9 +109,12 @@ def test_the_summary_keeps_no_paths_of_this_machine(ev, tmp_path):
     session = ev.parse_events([json.dumps(failed)])
     task_dir = run / "tasks" / "urdf_rover"
     outcome = ev.judge(ev.TASKS["urdf_rover"], session, task_dir / "rf_home", task_dir / "work", {})
-    text = json.dumps(outcome.failures)
-    assert str(tmp_path) not in text and str(Path.home()) not in text
-    assert "RUN/tasks/urdf_rover/work/my_rover.urdf" in text and "~/x.urdf" in text
+    (failure,) = outcome.failures
+    for text in failure.values():
+        for path in (tmp_path, Path.home()):
+            assert str(path) not in text and json.dumps(str(path))[1:-1] not in text, text
+    assert failure["error"].startswith("no file at RUN") and "my_rover.urdf" in failure["args"]
+    assert "~" in failure["error"] and "RUN" in failure["args"]
 
 
 def test_a_robot_that_fell_at_the_end_does_not_pass(ev, tmp_path):
@@ -133,7 +136,7 @@ def test_a_session_that_ran_out_of_time_does_not_pass(ev, tmp_path):
     import shutil
 
     shutil.copytree(FIXTURES / "go2_turn", tmp_path / "go2_turn")
-    (tmp_path / "go2_turn" / "meta.json").write_text(json.dumps({"wall_seconds": 600, "timed_out": True}))
+    (tmp_path / "go2_turn" / "meta.json").write_text(json.dumps({"timed_out": True}), encoding="utf-8")
     outcome = ev.score(ev.TASKS["go2_turn"], tmp_path / "go2_turn")
     assert all(c["ok"] for c in outcome.criteria) and not outcome.passed
 

@@ -693,7 +693,10 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
     run_dir = work.parent.parent.parent  # <run>/tasks/<task>/work
 
     def tidy(text: str) -> str:  # the summary is committed: no paths of this machine
-        return _short(text.replace(str(run_dir), "RUN").replace(str(Path.home()), "~"))
+        for path, short in ((run_dir, "RUN"), (Path.home(), "~")):
+            # as written, and as JSON writes it inside arguments (Windows backslashes doubled)
+            text = text.replace(str(path), short).replace(json.dumps(str(path))[1:-1], short)
+        return _short(text)
 
     return Outcome(
         task=task.name,
@@ -759,7 +762,8 @@ def codex_home(run_dir: Path, source: str, model: str, effort: str, work_dirs: l
         raise SystemExit(f"no Codex login at {auth}: run `codex login` first")
     (home / "auth.json").symlink_to(auth)
     features = "\n".join(f"{name} = false" for name in OFF_FEATURES)
-    trusted = "\n".join(f'[projects."{w}"]\ntrust_level = "trusted"\n' for w in work_dirs)
+    # A literal TOML key: a Windows path's backslashes would be escapes in a quoted one.
+    trusted = "\n".join(f"[projects.'{w}']\ntrust_level = \"trusted\"\n" for w in work_dirs)
     (home / "config.toml").write_text(
         f'model = "{model}"\nmodel_reasoning_effort = "{effort}"\napproval_policy = "never"\n'
         f'sandbox_mode = "danger-full-access"\nsuppress_unstable_features_warning = true\n\n'
@@ -795,7 +799,7 @@ def run_session(task: Task, task_dir: Path, home: Path, timeout: float) -> dict[
     cmd = ["codex", "exec", "--json", "--skip-git-repo-check", "-C", str(work), task.text(work)]
     start = time.monotonic()
     timed_out = False
-    with (task_dir / "events.jsonl").open("w", encoding="utf-8") as out, (task_dir / "stderr.txt").open("w") as err:
+    with (task_dir / "events.jsonl").open("wb") as out, (task_dir / "stderr.txt").open("wb") as err:  # raw bytes
         # stdin from /dev/null: with a terminal or pipe attached, `codex exec` waits for more prompt forever.
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env, start_new_session=True)
         try:
