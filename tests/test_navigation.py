@@ -288,6 +288,18 @@ def test_a_rover_with_a_caster_in_front_is_told_it_cannot_climb_a_ramp(pg):
     assert caught.value.cause == "climb" and "slope" in str(caught.value), str(caught.value)
 
 
+@pytest.mark.parametrize("build", ["SNAKE", "BALANCER"])
+def test_a_snake_and_a_balancer_built_from_parts_go_round_a_wall(pg, build):
+    """A snake cannot turn on the spot: it steers while it slithers on. A balancer drives while it balances."""
+    import test_builder
+
+    pg.add_robot("r", build=getattr(test_builder, build), pos=[0.0, 0.0], yaw=0)
+    pg.add_object("wall", shape="wall", pos=[1.2, 0.0], size=[1.0, 0.1, 0.4], yaw=90)
+    trip = _trip(pg, "r", [2.5, 0.0], limit=60)
+    assert trip.result()["arrived"], trip.result()
+    assert trip.turns_in_place == (build == "BALANCER")
+
+
 def test_a_robot_built_from_parts_stops_where_its_arm_reaches_the_object(pg):
     from test_builder import MOBILE_ARM
 
