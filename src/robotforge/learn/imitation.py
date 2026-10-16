@@ -101,14 +101,16 @@ STEPS = (
         title=_text("示范一次", "Show it once"),
         body=_text(
             "这节课你来当老师：亲手带机械臂抓一次方块，它看着学。\n"
-            "拖动琥珀色小球（或用下面的滑条，或按 W A S D）把手爪移到红方块正上方，再往下放，让两根手指夹在方块两边；"
+            "拖动琥珀色小球（它贴着桌面平移，按住 Shift 拖动是升降；也可以用下面的滑条，"
+            "或按 W A S D，按屏幕上的方向走）把手爪移到红方块正上方，再往下放，让两根手指夹在方块两边；"
             "打开「手爪合上」；把方块提起来，移到蓝盒子上方，再关掉「手爪合上」，让它掉进盒子。\n"
             "你做的每一步都会被记下来：每 0.1 秒记一次方块在哪、手爪在哪、手指张多大（它“看到”的），"
             "和你接着让手爪去哪、合不合上（它该“做”的）。",
             "In this lesson you are the teacher: guide the arm through one pick and it learns by watching.\n"
-            "Drag the amber ball (or use the sliders, or W A S D) to bring the gripper right over the red cube, then "
-            "down so its two fingers are either side of it; turn on Gripper closed; lift the cube, move it over the "
-            "blue bin and turn Gripper closed off so it drops in.\n"
+            "Drag the amber ball (it slides level over the desk; hold Shift to drag it up and down; or use the "
+            "sliders, or W A S D, which go the way they point on screen) to bring the gripper right over the red cube, "
+            "then down so its two fingers are either side of it; turn on Gripper closed; lift the cube, move it over "
+            "the blue bin and turn Gripper closed off so it drops in.\n"
             "Everything you do is recorded: every 0.1 s, where the cube is, where the gripper is and how far its "
             "fingers are open (what the robot sees), and where you sent the gripper next and whether you closed it "
             "(what it should do).",

@@ -2057,6 +2057,7 @@ function imitateRig(rig) {
     parts,
     dragTarget: {
       mesh: ball,
+      level: true, // over the desk at its height (Shift: up and down), so it lands right over what the pointer is on
       // Back to the sliders: forward and sideways from the arm's base, height over the desk.
       toControls(hit) {
         const round = (v) => Number(v.toFixed(3));
@@ -2130,12 +2131,24 @@ function startTargetDrag(e) {
   if (!ray.intersectObject(t.mesh, false).length) return;
   e.stopPropagation(); // not a camera orbit, and not a body drag
   e.preventDefault();
+  let lift = null; // where a Shift-drag started: only the height changes
   if (t.toControls) {
-    // A target in 3D slides on the plane facing the camera through it, where the pointer can follow it.
+    // A target in 3D slides on the plane facing the camera through it, where the pointer can follow it. A level
+    // target slides on the level plane through it instead: on the facing plane a drag that looked right on screen
+    // left it 2 to 3 cm off the cube along the line of sight. With Shift it slides up and down a wall facing the
+    // camera.
     const at = t.mesh.getWorldPosition(new THREE.Vector3());
-    t.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(ray.ray.direction.clone().negate(), at);
+    let normal = ray.ray.direction.clone().negate();
+    if (t.level) {
+      const wall = normal.clone().setZ(0);
+      if (e.shiftKey && wall.lengthSq() > 1e-6) {
+        normal = wall.normalize();
+        lift = at;
+      } else if (!e.shiftKey) normal = new THREE.Vector3(0, 0, 1);
+    }
+    t.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, at);
   }
-  targetDrag = { sent: 0 };
+  targetDrag = { sent: 0, lift };
   api.canvas.classList.add("dragging");
 }
 
@@ -2144,6 +2157,7 @@ function moveTargetDrag(e) {
   const t = overlays.target();
   const hit = new THREE.Vector3();
   if (!api.rayAt(e.clientX, e.clientY).ray.intersectPlane(t.plane, hit)) return;
+  if (targetDrag.lift) hit.setX(targetDrag.lift.x).setY(targetDrag.lift.y);
   if (t.toControls) targetDrag.at = t.toControls(hit);
   else {
     const rel = hit.sub(t.origin);
