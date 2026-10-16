@@ -45,6 +45,9 @@ BASELINE = {
     # It opened lesson 6 and built the cart-pole, but never ran a controller.
     "learn_control": (False, {"opened the control lesson (lessons 6)": True, "ran a balance controller": False}),
     "fix_workshop": (True, {"green_cube starts where it was": True, "an arm call handled it": True}),
+    # Run on the same commit after the task was added: open_world failed on the misspelled template, the agent
+    # searched for the file (the error did not say where it is), fixed it and walked the dog 1.04 m.
+    "fix_garden": (True, {"a robotforge call failed first": True, "then the dog walked >= 0.5 m": True}),
 }
 
 
@@ -283,6 +286,30 @@ def test_a_rover_on_its_back_at_the_rock_does_not_pass(ev, tmp_path, then):
     assert not outcome.passed
     verdict = _verdict(outcome)
     assert verdict["a rover and a rock"] and verdict["ended within 0.5 m of it"] and not verdict["upright at the end"]
+
+
+def _garden_walk(robot: str = "dog") -> list[str]:
+    return [
+        _event("open_world", {"name_or_path": "garden"}, "robot 'dog': unknown template 'quadrupd'", ok=False),
+        _drove(robot, [0.9, 0, 0.3], True),
+    ]
+
+
+def test_the_garden_passes_only_once_the_dog_walks_in_the_repaired_world(ev, tmp_path):
+    fixed = ev.GARDEN.replace("quadrupd", "quadruped")
+    outcome = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "a", {"garden": fixed}, *_garden_walk()))
+    assert outcome.passed, outcome.criteria
+    assert outcome.failed_calls == 1 and outcome.failures[0]["tool"] == "open_world"
+    # Left broken: it does not compile, whatever the session says it walked.
+    broken = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "b", {"garden": ev.GARDEN}, *_garden_walk()))
+    assert _verdict(broken)["garden opens with its dog a quadruped"] is False and not broken.passed
+    # Walked first, then a failure: nothing happened after the mistake.
+    later = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "c", {"garden": fixed}, *reversed(_garden_walk())))
+    assert _verdict(later)["then the dog walked >= 0.5 m"] is False
+    # A new world instead of the user's garden, with its ball lost.
+    lost = fixed.replace("objects:", "objects: []\nold:")
+    gone = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "d", {"garden": lost}, *_garden_walk()))
+    assert _verdict(gone)["the ball is still there"] is False
 
 
 # ---- scoring itself ---------------------------------------------------------------------------------------

@@ -363,6 +363,14 @@ def upright_at_end(session: Session, robot: str) -> bool | None:
     return seen[-1] if seen else None
 
 
+def after_first_failure(session: Session) -> Session | None:
+    """The session from just after its first failed robotforge call, or None when no call failed."""
+    first = next((i for i, c in enumerate(session.calls) if c.server == SERVER and not c.ok), None)
+    if first is None:
+        return None
+    return Session(session.calls[first + 1 :], session.commands, session.messages, session.usage, session.problems)
+
+
 def object_positions(session: Session, name: str) -> list[list[float]]:
     """Where robotforge reported object `name`, in order: pick_and_place, observe and simulate results."""
     out = []
@@ -722,6 +730,61 @@ def check_fix_workshop(ev: Evidence) -> list[Criterion]:
     ]
 
 
+# A world the user saved earlier and then edited by hand, with the dog's template misspelled: opening it fails the
+# same way every time, so the session has to meet the mistake and recover from it.
+GARDEN = """\
+name: garden
+floor:
+  style: grass
+robots:
+- name: dog
+  template: quadrupd
+  pos: [0.0, 0.0]
+objects:
+- name: ball
+  shape: sphere
+  size: [0.12]
+  pos: [1.5, 0.8]
+  color: orange
+"""
+GARDEN_WALK = 0.5  # m: "about a meter", at least half of it
+
+
+def setup_garden(_work: Path, home: Path) -> None:
+    (home / "worlds" / "garden").mkdir(parents=True, exist_ok=True)
+    (home / "worlds" / "garden" / "world.yaml").write_text(GARDEN, encoding="utf-8")
+
+
+def check_fix_garden(ev: Evidence) -> list[Criterion]:
+    world = next((w for w in ev.worlds if w.name == "garden"), None)
+    if world is None:
+        return [Criterion("the garden world is still there", False, "gone")]
+    failed = next((c for c in ev.session.ours if not c.ok), None)
+    later = after_first_failure(ev.session)
+    walked = travelled(later, "dog") if later else 0.0
+    upright = upright_at_end(later, "dog") if later else None
+    kinds = world.kinds
+    return [
+        Criterion(
+            "a robotforge call failed first",
+            failed is not None,
+            f"{failed.tool}: {failed.text}" if failed else "none failed",
+        ),
+        Criterion(
+            "garden opens with its dog a quadruped",
+            kinds.get("dog") == "quadruped",
+            ", ".join(f"{k or 'world'}: {v}" for k, v in kinds.items()) or "no robots",
+        ),
+        Criterion(
+            "the ball is still there",
+            world.object("ball") is not None,
+            ", ".join(o.get("name", "") for o in world.objects),
+        ),
+        Criterion(f"then the dog walked >= {GARDEN_WALK} m", walked >= GARDEN_WALK, f"{walked:.2f} m"),
+        Criterion("upright at the end", upright is True, str(upright)),
+    ]
+
+
 TASKS: dict[str, Task] = {
     t.name: t
     for t in (
@@ -784,6 +847,14 @@ TASKS: dict[str, Task] = {
             "Open my workshop world. Paint the ball blue, and have the arm drop the green cube into the bin.",
             check_fix_workshop,
             setup_workshop,
+        ),
+        Task(
+            "fix_garden",
+            "en",
+            ("open a world", "recover from a mistake", "walk"),
+            "Open my garden world and have the dog walk forward about a meter.",
+            check_fix_garden,
+            setup_garden,
         ),
     )
 }

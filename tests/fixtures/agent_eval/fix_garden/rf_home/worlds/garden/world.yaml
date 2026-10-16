@@ -1,0 +1,13 @@
+name: garden
+floor:
+  style: grass
+robots:
+- name: dog
+  template: quadruped
+  pos: [0.0, 0.0]
+objects:
+- name: ball
+  shape: sphere
+  size: [0.12]
+  pos: [1.5, 0.8]
+  color: orange
