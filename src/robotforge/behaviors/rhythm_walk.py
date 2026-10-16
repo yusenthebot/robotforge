@@ -11,9 +11,9 @@ its own, each saved in the same file once learned: to hold its heading (`learn_s
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
 Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts faded in from the stride
 as its walking version learned to, at once or at the next point of the stride it was checked to start from safely;
-any other switch while moving first steadies the robot on its home pose until it is calm, then fades the new rhythm
-in (out of a turn checked to need it, it holds home at once until it stands still). It cannot back up or change
-speed, and the status says so.
+any other switch while moving first steadies the robot on its home pose, the way checked to tip it over least
+(`learn_switches`): holding home until it stands still and starting the new rhythm as learned, or fading to home until
+it is calm and fading the new rhythm in. It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import json
 import math
 import os
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -80,13 +81,17 @@ class SavedWalk(BaseModel):
     # Where in its stride (0 to 1, from where the walk's rhythm starts) each walking turn may begin; None: anywhere.
     turn_left_walking_at: list[float] | None = None
     turn_right_walking_at: list[float] | None = None
-    # How it switches rhythms while moving: "fade" (kept since steering and walking turns); None, as files kept
-    # before: stop holds home at once, and another rhythm waits on home until the robot stands still.
-    switching: Literal["fade"] | None = None
+    # How it steadies leaving the walk (and any rhythm whose way out is not given), checked when its turns are learned:
+    # "fade" to home and wait until it is calm, then fade the next rhythm in; "hold" home at once and wait until it
+    # stands still, then start the next rhythm as learned. None, as files kept before: as "hold".
+    switching: Literal["fade", "hold"] | None = None
     # How the robot steadies leaving each turn, checked after it is learned: "fade" its joints to home and wait until
     # it is calm, or "hold" home at once until it stands still; None: as `switching` says.
     turn_left_exit: Literal["fade", "hold"] | None = None
     turn_right_exit: Literal["fade", "hold"] | None = None
+    # rad/s: what a turn asked for right after walking turns in its first second, as move plays it (the slower side),
+    # measured once the switching was checked. turn_rate is the rate from standing still.
+    turn_rate_from_walk: float | None = Field(None, ge=0)
 
     @model_validator(mode="after")
     def _shape(self) -> SavedWalk:
@@ -126,6 +131,8 @@ class SavedWalk(BaseModel):
             out["holds_heading"] = True
         if self.turns and self.turn_rate is not None:
             out["turn_deg_s"] = round(math.degrees(self.turn_rate))
+        if self.turns and self.turn_rate_from_walk is not None:
+            out["turn_deg_s_from_walk"] = round(math.degrees(self.turn_rate_from_walk))
         if self.survived is not None:
             out["stayed_up"] = f"{self.survived} of {self.shoves} shoves"
         return out
@@ -182,24 +189,32 @@ STEER_RELAX = 0.1  # rad/s
 STILL_SPEED = 0.02  # m/s
 STILL_SPIN = 0.1  # rad/s
 STILL_JOINT = 0.1  # rad/s
-# Before a switch it never learned (out of a turn, or into a turn without a walking version) the robot steadies:
-# its joints fade to the home pose and hold it until its trunk turns slower than CALM_SPIN and leans less than
-# CALM_TILT, at most CALM_MAX, and stop fades to home the same way. Holding home at once and until the robot stood
-# still (SETTLE_MAX at most), as walks kept before still do, took the whole of a 1 s command, and in 810 tries of
-# each switch on its own 6 A1 walks fell 119 times; steadying until calm and fading, 4 (6 template dog walks: none
-# and 8). Steadying until the trunk turned slower than 2 rad/s, 3 template dog walks fell 4 times in 405 tries of each
-# switch and 3 A1 walks 3; slower than 1 rad/s, 1 and 0.
+# Before a switch it never learned (out of a turn, or into a turn without a walking version) the robot steadies, one
+# of two ways (learn_switches checks which tips it over less): its joints fade to the home pose and hold it until its
+# trunk turns slower than CALM_SPIN and leans less than CALM_TILT, at most CALM_MAX; or they hold home at once until
+# the robot stands still, SETTLE_MAX at most, as walks kept before do. Stop goes home the same way. Holding took the
+# whole of a 1 s command, and in 810 tries of each switch on its own 6 A1 walks fell 119 times; steadying until calm
+# and fading, 4 (6 template dog walks: none and 8). Steadying until the trunk turned slower than 2 rad/s, 3 template
+# dog walks fell 4 times in 405 tries of each switch and 3 A1 walks 3; slower than 1 rad/s, 1 and 0.
 CALM_SPIN = 1.0  # rad/s, the trunk's angular speed
 CALM_TILT = math.radians(25.0)  # a walking A1 rocks up to 20 degrees
 CALM_MAX = 0.6  # s
 SETTLE_MAX = 1.0  # s
-# Which of the two steadies a robot out of each turn is checked after the turns are learned: stopping after EXIT_LEADS
-# seconds of turning, from standing and out of EXIT_WALK seconds of walking, each watched for EXIT_WAIT seconds; the
-# one that tips it over less is kept, fading if they tie. Fading every time, 6 template dog walks fell 8 times in 810
-# tries of each switch, 7 of them out of one walk's right turn; checked this way (that turn holds), 1.
-EXIT_LEADS = tuple(round(1.0 + 0.2 * k, 1) for k in range(11))  # s
-EXIT_WALK = 1.5  # s
+# How the walk switches is checked after the turns are learned (learn_switches): a walk of SWITCH_WALK seconds and
+# then some, ending at each of SWITCH_TRIES points of the stride (every update at 2 Hz) in a stride early in the walk or
+# later on; then the turn for FIRST_SECOND and up to a stride more (ending at SWITCH_ENDS points of its own stride),
+# asked at once or SWITCH_GAPS after letting go of the walk; then walking on for SWITCH_ON or standing for EXIT_WAIT.
+# And turns from standing. The bench (scripts/rhythm_bench.py leads) walks 2 to 4.5 s, other gaps, 1 s turns.
+SWITCH_TRIES = 25
+SWITCH_WALK = (1.0, 4.5)  # s
+SWITCH_ENDS = 5
+SWITCH_GAPS = (0.06, 0.14, 0.24)  # s
+SWITCH_ON = 2.0  # s
 EXIT_WAIT = 2.0  # s
+# Leaving the walk (SavedWalk.switching), holding first: "hold" home at once and wait until the robot stands still,
+# then start the next rhythm as learned; "fade" to home and wait until it is calm, then fade the next rhythm in.
+STYLES = ("hold", "fade")
+EXITS = ("fade", "hold")  # leaving a turn, the same two ways
 
 
 class _Joints:
@@ -352,47 +367,161 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
         learned[side] = joints.to_saved(rhythm.theta)
         rates.append(max(0.0, sign * result["turned"]) / walk.seconds)
     turned = learn_walking_turns(model, robot, walk.model_copy(update={**learned, "turn_rate": min(rates)}), seed)
-    return learn_turn_exits(model, robot, turned)
+    return learn_switches(model, robot, turned)
 
 
-def learn_turn_exits(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedWalk:
-    """For each of the walk's turns, which way of steadying out of it (fading or holding home) tips the robot over
-    less when it stops (the robot alone in `model`), fading if they tie. Fading out of a turn tipped one template dog
-    walk's right turn over in 3 of 40 stops, holding in none; for an imported A1 holding was worse."""
+def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedWalk:
+    """How the walk switches, checked by driving the robot (alone in `model`) the way move and the keyboard do: how it
+    steadies leaving the walk (`switching`, STYLES), and for each turn whether it begins straight out of the walk with
+    its walking version or steadies first, and how it is left (EXITS). Each turn's ways are tried in that order, its
+    style's own way of leaving first, on its switch_checks; the first that tips the robot over least is kept. Of the
+    two styles, fading is kept only if it tips the robot over less than holding: a check that finds no fall does not
+    show a rare one cannot happen, and holding was the safer one wherever a robot steadies when held. Also returns how
+    fast a turn asked for right after walking turns in its first second (the slower side), as move then plays it.
+
+    Leaving each turn was first checked only for stops, from standing and after 1.5 s of walking: a template dog walk
+    whose right turn was kept to fade then fell in 2 of 25 walk, 1 s turn, walk sequences (asked at every point of the
+    stride), one kept to hold in 10 of 25. Fading everywhere, 6 dog walks still fell 12 times in 2100 sequences of
+    move, gap and idle; holding (and beginning the turns that do not fall out of the walk), in none, but 6 imported A1
+    walks fell 520 times (fading, 71: an A1 rocks on after it is held still)."""
     if not walk.turns:
         return walk
-    exits: dict[str, str] = {}
-    for side, turn in (("left", 1.0), ("right", -1.0)):
-        falls = {}
-        for style in ("fade", "hold"):
-            trial = walk.model_copy(update={f"turn_{side}_exit": style})
-            falls[style] = sum(
-                _falls_stopping(model, robot, trial, turn, lead, walked)
-                for lead in EXIT_LEADS
-                for walked in (0.0, EXIT_WALK)
-            )
-        exits[f"turn_{side}_exit"] = "hold" if falls["hold"] < falls["fade"] else "fade"
-    return walk.model_copy(update=exits)
+    best: tuple[int, dict[str, Any], list[float]] | None = None
+    for style in STYLES:
+        styled = walk.model_copy(update={"switching": style})
+        falls = _falls(model, robot, styled, walk_checks(walk.freq), None if best is None else best[0])
+        kept: dict[str, Any] = {"switching": style}
+        rates = []
+        for side, sign in (("left", 1.0), ("right", -1.0)):
+            if best is not None and falls >= best[0]:
+                break
+            left_over = None if best is None else best[0] - falls
+            side_falls, update, first = _turn_switching(model, robot, styled, side, sign, left_over)
+            falls += side_falls
+            kept.update(update)
+            if first:  # none if the walk falls before every turn: nothing to say
+                rates.append(max(0.0, float(np.mean(first))) / FIRST_SECOND)
+        if best is None or falls < best[0]:
+            best = (falls, kept, rates)
+    assert best is not None
+    rates = best[2]
+    return walk.model_copy(update={**best[1], "turn_rate_from_walk": min(rates) if len(rates) == 2 else None})
 
 
-def _falls_stopping(
-    model: mujoco.MjModel, robot: str, walk: SavedWalk, turn: float, lead: float, walked: float
-) -> bool:
-    """Whether the robot (alone in `model`) falls in EXIT_WAIT seconds after stopping a turn played for `lead`
-    seconds, after `walked` seconds of walking from standing (0: from standing). A fall before the stop is not the
-    stop's."""
+def _turn_switching(
+    model: mujoco.MjModel, robot: str, walk: SavedWalk, side: str, sign: float, enough: int | None
+) -> tuple[int, dict[str, Any], list[float]]:
+    """The way into and out of one turn that tips the robot over least in its switch_checks (stopping once a way
+    reaches `enough` falls), the first tried winning a tie: its falls, its fields, and its first-second angles."""
+    walking = getattr(walk, f"turn_{side}_walking")
+    at = getattr(walk, f"turn_{side}_walking_at")
+    exits = sorted(EXITS, key=lambda e: e != walk.switching)  # the style's own way of leaving first
+    begins = ((walking, at), (None, None)) if walking is not None else ((None, None),)
+    best: tuple[int, dict[str, Any], list[float]] | None = None
+    for theta, theta_at in begins:
+        for exit_ in exits:
+            update = {f"turn_{side}_walking": theta, f"turn_{side}_walking_at": theta_at, f"turn_{side}_exit": exit_}
+            limit = enough if best is None else best[0] if enough is None else min(enough, best[0])
+            first: list[float] = []
+            falls = _falls(model, robot, walk.model_copy(update=update), switch_checks(walk.freq, sign), limit, first)
+            if best is None or falls < best[0]:
+                best = (falls, update, first)
+            if falls == 0:
+                return best
+    assert best is not None
+    return best
+
+
+def walk_checks(freq: float) -> list[list[tuple[float, float, float]]]:
+    """The sequences leaving the walk is checked on (speed, turn, seconds): stopping out of SWITCH_TRIES moments of
+    the walk, one at each point of a stride of `freq` Hz, and stopping for a moment and walking on."""
+    out = []
+    for k, lead in enumerate(_leads(freq)):
+        out.append([(1.0, 0.0, lead), (0.0, 0.0, EXIT_WAIT)])
+        out.append([(1.0, 0.0, lead), (0.0, 0.0, SWITCH_GAPS[k % len(SWITCH_GAPS)]), (1.0, 0.0, SWITCH_ON)])
+    return out
+
+
+def switch_checks(freq: float, sign: float) -> list[list[tuple[float, float, float]]]:
+    """The sequences a turn's switching is checked on (speed, turn, seconds; `sign` the turn's side): out of
+    SWITCH_TRIES moments of the walk, one at each point of a stride of `freq` Hz, into a turn of FIRST_SECOND to about
+    one and a half (ending at different points of its own stride), then walking on or stopping; the same turns asked a
+    moment after letting go of the walk, then walking on a moment after letting go of the turn; and from standing into
+    turns as long, then stopping or walking. Each turn command is given as its first second and the rest, the same mode
+    (no switch), so its first second can be told apart."""
+    out = []
+    for k, lead in enumerate(_leads(freq)):
+        turn = [(0.0, sign, FIRST_SECOND), (0.0, sign, (k % SWITCH_ENDS) / (SWITCH_ENDS * freq))]
+        gap = (0.0, 0.0, SWITCH_GAPS[k % len(SWITCH_GAPS)])
+        out.append([(1.0, 0.0, lead), *turn, (1.0, 0.0, SWITCH_ON), (0.0, 0.0, EXIT_WAIT)])
+        out.append([(1.0, 0.0, lead), *turn, (0.0, 0.0, EXIT_WAIT)])
+        out.append([(1.0, 0.0, lead), gap, *turn, gap, (1.0, 0.0, SWITCH_ON), (0.0, 0.0, EXIT_WAIT)])
+    for j in range(SWITCH_ENDS):
+        turn = [(0.0, sign, FIRST_SECOND), (0.0, sign, j / (SWITCH_ENDS * freq))]
+        out.append([*turn, (0.0, 0.0, EXIT_WAIT)])
+        out.append([*turn, (1.0, 0.0, SWITCH_ON)])
+    return out
+
+
+def _leads(freq: float) -> list[float]:
+    """Seconds of walking before a switch is checked: SWITCH_TRIES of them, each at another point of the stride."""
+    return [SWITCH_WALK[k % len(SWITCH_WALK)] + k / (SWITCH_TRIES * freq) for k in range(SWITCH_TRIES)]
+
+
+def _falls(
+    model: mujoco.MjModel,
+    robot: str,
+    walk: SavedWalk,
+    checks: Sequence[Sequence[tuple[float, float, float]]],
+    enough: int | None,
+    first: list[float] | None = None,
+) -> int:
+    """How often the robot falls in `checks` after their first command (a fall while walking up to a switch, or
+    turning from standing, is no switch's), counting up to `enough`. Into `first`, the angle (rad, the turn's way) of
+    the first second of each turn straight out of the walk that it stayed up through."""
+    falls = 0
+    for commands in checks:
+        if enough is not None and falls >= enough:
+            break
+        played = play_alone(model, robot, walk, commands)
+        falls += played[-1].fell and len(played) > 1
+        out_of_walk = commands[0][0] > 0 and len(commands) > 1 and commands[1][1] != 0.0
+        if first is not None and out_of_walk and len(played) > 1 and not (len(played) == 2 and played[-1].fell):
+            first.append(math.copysign(1.0, commands[1][1]) * played[1].turned)
+    return falls
+
+
+@dataclass(frozen=True)
+class Played:
+    """One command of a sequence played alone: the angle the heading turned while it lasted (rad, to the left), and
+    whether the robot fell then (the sequence ends there)."""
+
+    turned: float
+    fell: bool
+
+
+def play_alone(
+    model: mujoco.MjModel, robot: str, walk: SavedWalk, commands: Sequence[tuple[float, float, float]]
+) -> list[Played]:
+    """Drive the robot (alone in `model`, never the live world) with `walk` as move and the keyboard do, from standing
+    at home: each command (speed, turn, seconds) in turn, the next given at once (a stop between two is skipped, as
+    the move tool's is). One entry per command played, up to a fall."""
     data, walker, substeps = _walker_alone(model, robot, walk)
-    steps = (round(walked * CONTROL_HZ), round(lead * CONTROL_HZ), round(EXIT_WAIT * CONTROL_HZ))
-    for leg, (count, (speed, angle)) in enumerate(zip(steps, ((1.0, 0.0), (0.0, turn), (0.0, 0.0)), strict=True)):
+    out: list[Played] = []
+    for speed, angle, seconds in commands:
         walker.command(speed, angle)
-        for _ in range(count):
+        heading, turned = trunk_yaw(data, walker.body), 0.0
+        for _ in range(round(seconds * CONTROL_HZ)):
             walker.update(model, data)
             for _ in range(substeps):
                 mujoco.mj_step(model, data)
+            now = trunk_yaw(data, walker.body)
+            turned, heading = turned + _wrapped(now - heading), now
             walker.tilt_cos = float(data.xmat[walker.body.trunk][8])
             if walker.fallen:
-                return leg == 2
-    return False
+                return [*out, Played(turned, True)]
+        out.append(Played(turned, False))
+    return out
 
 
 def _standing_turn(
@@ -575,11 +704,11 @@ class RhythmWalker:
         # A walk kept before files said how it switches does as it always did: stop holds home at once, and a rhythm
         # asked for while moving waits on home until the robot stands still. Switched the new way, the walk the
         # imported A1 kept first ended on its back in 7 of 8 move sequences with 0 to 5 s between the calls (in 1 as
-        # before): a faded stop leaves its feet elsewhere, and its fast turn from there tips it over.
-        self.kept_before = walk.switching is None
-        # How steadying goes: holding home at once until still (walks kept before, turns checked to need it) or
-        # fading to it until calm. What it leaves decides.
-        self.holding = self.kept_before
+        # before): a faded stop leaves its feet elsewhere, and its fast turn from there tips it over. A walk kept now
+        # was checked for which of the two tips it over less ("hold" or "fade").
+        self.holds = walk.switching != "fade"
+        # How steadying goes: holding home at once until still or fading to it until calm. What it leaves decides.
+        self.holding = self.holds
         self.exits = {"left": walk.turn_left_exit, "right": walk.turn_right_exit}
         forward = Rhythm(np.array(walk.theta), walk.freq, walk.reflexes)
         self.rhythms: dict[str, Rhythm | Steering] = {
@@ -681,7 +810,8 @@ class RhythmWalker:
         (in files that have them) right out of the walk; those start at once, or at the next point of the stride they
         were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
         When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
-        16 degrees of the 88 it promised."""
+        16 degrees of the 88 it promised; a walk that holds still before other switches still begins its turns that
+        way."""
         # Only out of the walk as it plays (or walks on to a turn): a robot stopped a moment ago is fading to home, a
         # pose and a point of the stride its walking turns were never checked from. Any switch within a quarter second
         # of the walk's last update used to count, so a turn soon after a stop began at once wherever the stride was.
@@ -689,7 +819,7 @@ class RhythmWalker:
         self.playing, self.steady_from, self.turn_at = self.mode, None, None
         if self.rhythm is not None:  # what it leaves decides how it steadies (already steadying: as it is)
             exit_ = self.exits.get(self.rhythm.split()[0])
-            self.holding = self.kept_before if exit_ is None else exit_ == "hold"
+            self.holding = self.holds if exit_ is None else exit_ == "hold"
         if self.mode == "forward" and self.rhythm != "forward":
             # Where it faces now, not once steadied: an imported A1 coming out of a fast turn spun on by 47 degrees
             # while it steadied, and then walked that way.

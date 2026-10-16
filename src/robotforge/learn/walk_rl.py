@@ -52,6 +52,11 @@ SHOVE_AT = 2.0  # s into each replay
 PUSH_TRIALS = 12
 SAMPLE_DT = 0.02
 KEEP_MIN = 0.1  # m in an attempt: a walk that gets less than this is not worth keeping
+ROUND_TRIES = 17  # tries in a training round: both sides of Trainer.train's 8 directions, and the replay
+# The switch checks after Keep play one way out of the walk and one per turn for a template dog, about four times as
+# much for an imported A1 (it tries both ways of steadying): 6.8 s and 28 s of the 155 and 168 s after Keep, measured
+# on a laptop with no viewer running (the estimate says 170 for both).
+SWITCH_PASSES = 2.0
 STAR = {
     "color": "purple",
     "base": {"shape": "cylinder", "size": [0.2, 0.05], "sensors": ["imu"]},
@@ -107,18 +112,25 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
     return out
 
 
-def _turn_seconds(trained: dict[str, Any]) -> int:
+def _turn_seconds(trained: dict[str, Any], freq: float) -> int:
     """About how long learning what follows a kept walk takes, from the robot's own training pace (a round of
     ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns
-    as many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk. With the
-    sim running at real time, as in the viewer, an MJCF critter that trained 15 rounds in 4.4 s learned all that in
-    109 s (this says 120), and an imported A1 that trained 30 rounds in 11.2 s in 139 s (this says 150). When the sim
-    runs as fast as it can while the robot trains, as the tests drive it, a round takes longer and this says too
-    much."""
+    as many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk, and the
+    switches are checked (rhythm_walk.learn_switches) on the sequences of one way out of the walk and one per turn,
+    SWITCH_PASSES times over for the robots that try more. With the sim running at real time, as in the viewer, an
+    MJCF critter that trained 15 rounds in 4.4 s learned all but the switch checks in 109 s (this said 120), and an
+    imported A1 that trained 30 rounds in 11.2 s in 139 s (this said 150). When the sim runs as fast as it can while
+    the robot trains, as the tests drive it, a round takes longer and this says too much."""
     steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
     turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * 2 * rhythm_walk.WALKING_ROUNDS
+    played = [
+        *rhythm_walk.walk_checks(freq),
+        *rhythm_walk.switch_checks(freq, 1.0),
+        *rhythm_walk.switch_checks(freq, -1.0),
+    ]
+    checks = SWITCH_PASSES * sum(seconds for commands in played for _, _, seconds in commands) / (ROUND_TRIES * ATTEMPT)
     per_round = trained["seconds"] / max(1, trained["rounds"])
-    return max(10, int(round(per_round * (steer + turns) / 10.0)) * 10)
+    return max(10, int(round(per_round * (steer + turns + checks) / 10.0)) * 10)
 
 
 def lesson_reward(energy: float, shove: bool) -> Reward:
@@ -743,7 +755,7 @@ class LearnToWalkLesson(Lesson):
         drift = heading_drift(self._solo("yours"), "yours", walk)
         self.turning = threading.Thread(target=self._learn_turns, args=(walk, folder, ctx), daemon=True)
         self.turning.start()
-        wait = _turn_seconds(result)
+        wait = _turn_seconds(result, walk.freq)
         curve, check = abs(math.degrees(drift or 0.0)), rhythm_walk.STEER_CHECK
         then = _text(
             f"它先学怎么保持方向（不管的话，它的走法 {check:.0f} 秒会拐 {curve:.0f} 度），再学原地转弯，",
@@ -777,11 +789,21 @@ class LearnToWalkLesson(Lesson):
             ctx.results["summary"] = _text(f"转弯没学成：{exc}", f"Turning was not learned: {exc}")
             return
         rate = math.degrees(turned.turn_rate or 0.0)
-        ctx.results["kept"] = {**ctx.results.get("kept", {}), "turns": True, "turn_deg_s": round(rate)}
+        kept = {**ctx.results.get("kept", {}), "turns": True, "turn_deg_s": round(rate)}
+        walking = _text("", "")
+        if turned.turn_rate_from_walk is not None:  # what a turn right after walking gives differs: say it too
+            from_walk = math.degrees(turned.turn_rate_from_walk)
+            kept["turn_deg_s_from_walk"] = round(from_walk)
+            walking = _text(
+                f"走着走着直接转弯，第一秒约 {from_walk:.0f} 度。",
+                f"Asked right after walking, a turn gives about {from_walk:.0f} degrees in its first second. ",
+            )
+        ctx.results["kept"] = kept
         ctx.results["summary"] = _text(
-            f"{walk.robot} 也学会了原地转弯：慢的那边每秒约 {rate:.0f} 度。回到你的世界，选中它按 A、D 就能转。",
-            f"{walk.robot} also learned to turn on the spot: about {rate:.0f} degrees a second on its slower side. "
-            "Back in your world, select it and press A or D to turn.",
+            f"{walk.robot} 也学会了原地转弯：站着起转，慢的那边每秒约 {rate:.0f} 度；{walking['zh']}"
+            "回到你的世界，选中它按 A、D 就能转。",
+            f"{walk.robot} also learned to turn on the spot: from standing, about {rate:.0f} degrees a second on its "
+            f"slower side. {walking['en']}Back in your world, select it and press A or D to turn.",
         )
 
     def close(self) -> None:

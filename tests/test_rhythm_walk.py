@@ -292,24 +292,57 @@ def test_a_turn_checked_to_need_it_is_left_by_holding_home_at_once(pg):
     assert not walker.holding and walker.fade_from is not None
 
 
-def test_turn_exits_keep_the_way_that_tips_the_robot_over_less(monkeypatch):
+def _fake_play(tried: list, held_walk_falls: bool):
+    """A stand-in for play_alone: out of the walk the right turn falls when it begins straight out of it, whichever
+    way it is left; a held stop falls if `held_walk_falls`. Turns give 0.6 rad in a first second straight out of the
+    walk, 0.3 steadying first."""
+    from robotforge.behaviors.rhythm_walk import Played
+
+    def play(model, robot, walk, commands):
+        turns = [c for c in commands if c[1]]
+        walked = commands[0][0] > 0
+        if not turns:
+            tried.append((walk.switching, "walk"))
+            fell = held_walk_falls and walk.switching == "hold"
+            return [Played(0.0, False), Played(0.0, fell)]
+        side = "right" if turns[0][1] < 0 else "left"
+        walking, exit_ = getattr(walk, f"turn_{side}_walking") is not None, getattr(walk, f"turn_{side}_exit")
+        tried.append((walk.switching, side, walking, exit_))
+        fell = walked and side == "right" and walking
+        out = [Played(0.0, False), Played((0.6 if walking else 0.3) * (-1 if side == "right" else 1), False)]
+        return out + [Played(0.0, fell)]
+
+    return play
+
+
+@pytest.mark.parametrize("held_walk_falls", [False, True])
+def test_switches_keep_the_first_way_that_tips_the_robot_over_least(monkeypatch, held_walk_falls):
+    """Regression: leaving each turn was checked only for stops, so a template dog walk's right turn kept to fade fell
+    in 2 of 25 walk, turn, walk sequences and another kept to hold in 10; and fading everywhere, 6 dog walks still fell
+    12 times in 2100 bench sequences, holding (as before) in none. How the walk steadies (holding first, fading only if
+    that tips it over less), whether each turn begins straight out of the walk and how it is left are now chosen
+    together, on the sequences move and the keyboard give."""
     from robotforge.behaviors import rhythm_walk
 
-    tried = []
-
-    def falls(model, robot, walk, turn, lead, walked):
-        style = walk.turn_left_exit if turn > 0 else walk.turn_right_exit
-        tried.append((turn, style, walked))
-        return turn < 0 and style == "fade" and lead > 2.0  # fading out of the right turn tips it, late in it
-
-    monkeypatch.setattr(rhythm_walk, "_falls_stopping", falls)
+    tried: list = []
+    monkeypatch.setattr(rhythm_walk, "play_alone", _fake_play(tried, held_walk_falls))
     solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
     names = joint_names(solo, Body.find(solo, "crab"))
-    turns = {"turn_left": [0.0] * 3 * len(names), "turn_right": [0.0] * 3 * len(names), "turn_rate": 1.0}
-    kept = rhythm_walk.learn_turn_exits(solo, "crab", _walk("crab", names, **turns))
-    assert kept.turn_left_exit == "fade" and kept.turn_right_exit == "hold"  # a tie fades
-    assert len(tried) == 2 * 2 * 2 * len(rhythm_walk.EXIT_LEADS)  # each side, each way, from standing and walking
-    assert rhythm_walk.learn_turn_exits(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
+    still = [0.0] * 3 * len(names)
+    turns = {"turn_left": still, "turn_right": still, "turn_rate": 1.0}
+    walking = {"turn_left_walking": still, "turn_right_walking": still, "turn_right_walking_at": [0.2]}
+    kept = rhythm_walk.learn_switches(solo, "crab", _walk("crab", names, **turns, **walking))
+    style = "fade" if held_walk_falls else "hold"
+    assert kept.switching == style
+    assert kept.turn_left_walking is not None and kept.turn_left_exit == style  # no falls: the style's own way out
+    assert kept.turn_right_walking is None and kept.turn_right_walking_at is None and kept.turn_right_exit == style
+    checks = len(rhythm_walk.switch_checks(2.0, 1.0))
+    assert tried.count((style, "left", True, style)) == checks  # the first way on each side, checked in full
+    assert tried.count((style, "right", False, style)) == checks
+    assert all(t[0] == "hold" for t in tried) != held_walk_falls  # fading is only tried if holding fell
+    assert kept.turn_rate_from_walk == pytest.approx(0.3)  # rad/s: the slower side's first second out of the walk
+    assert kept.describe()["turn_deg_s_from_walk"] == round(math.degrees(0.3))
+    assert rhythm_walk.learn_switches(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
 
 
 def test_a_walk_kept_before_switches_as_it_always_did(pg):
@@ -318,7 +351,7 @@ def test_a_walk_kept_before_switches_as_it_always_did(pg):
     open: in 7 of 8 waits from 0 to 5 s; switched as before, in 1. A file without a home pose, kept before, stops at
     once on home and waits on it until the robot stands still."""
     walker = _swinging(pg, kept_before=True)
-    assert walker.kept_before
+    assert walker.holds
     pg.session.data.qvel[walker.body.qvel[5]] = 1.0  # rad/s of yaw: calm, but not still
     pg.behaviors.move("crab", 0.0, 0.8)
     pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
