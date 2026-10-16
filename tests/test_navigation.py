@@ -176,6 +176,28 @@ def test_what_a_robot_climbs_decides_steps_and_slopes(pg):
     assert nav_map.SLOPE in _codes(rover, (-3.0, -2.8), (2.9, 3.1))  # 20 degrees
 
 
+def test_gaps_narrower_than_a_cell_are_seen_between_stepping_stones(pg):
+    """Regression: a cell's ground is the top of everything over any part of it, so the 4 cm gaps between the
+    obstacle course's stepping stones vanished from the map: stones from 3.8 to 6.2 cm high, none more than a step
+    above its neighbor, read as one platform the dog climbed onto from the lowest, and it put a foot in a gap and
+    fell (scripts/nav_bench.py). The same here at the dog's present limit (2.5 cm): stones 2.3 to 4.7 cm high, half of
+    the patch free without the gaps. The ground at the four quarter points of each cell shows them; a platform
+    without gaps stays open to it."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0], yaw=0)
+    params = {"size": [1.6, 1.4], "stone": 0.3, "gap": 0.04, "height": 0.035, "jitter": 0.012, "seed": 1}
+    pg.add_terrain("stones", name="stones", pos=[2.0, 0.0], params=params)
+    pg.add_terrain("platform", name="stage", pos=[2.0, 3.0], params={"size": [1.6, 1.4], "height": 0.02})
+    dog = _map(pg, "dog")
+    assert 0.02 < dog.body.step < 0.03
+    assert nav_map.STEP in _codes(dog, (1.5, 2.5), (-0.5, 0.5))
+    (r0, c0), (r1, c1) = dog.grid.cell(1.3, -0.6), dog.grid.cell(2.7, 0.6)
+    assert dog.free[r0 : r1 + 1, c0 : c1 + 1].mean() < 0.1  # a few low stones in the middle, out of reach
+    assert _codes(dog, (1.5, 2.5), (2.7, 3.3)) == {nav_map.FREE} and _fits(dog, 2.0, 3.0)
+    with pytest.raises(NoWay) as caught:  # it is not sent onto them
+        pg.behaviors.navigate("dog", [2.0, 0.0])
+    assert caught.value.cause == "climb" and "(stones)" in str(caught.value), str(caught.value)
+
+
 def test_wheels_push_light_loose_objects_aside_and_legs_go_round_them(pg):
     pg.add_robot("rover", template="rover")
     pg.add_robot("dog", template="quadruped", pos=[0.0, -1.5])

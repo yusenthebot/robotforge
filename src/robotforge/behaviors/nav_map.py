@@ -233,10 +233,13 @@ class Columns:
     tilted: bool  # its top leans (a ramp slab): its edges are a slope, not a step
 
 
-def geom_columns(model: mujoco.MjModel, data: mujoco.MjData, g: int, grid: Grid, owner: int) -> Columns | None:
+def geom_columns(
+    model: mujoco.MjModel, data: mujoco.MjData, g: int, grid: Grid, owner: int, pad: float | None = None
+) -> Columns | None:
     """Columns of geom `g` over every cell whose square it overlaps (cells are tested at their center against the
-    geom grown by half a cell sideways, which is exact for an upright box)."""
-    pad = grid.res / 2
+    geom grown by half a cell sideways, which is exact for an upright box); with `pad` given, grown by that much
+    instead (0: the cells whose center it covers)."""
+    pad = grid.res / 2 if pad is None else pad
     low3, high3 = world_extent(model, data, g)
     lo_xy, hi_xy = low3[:2] - pad, high3[:2] + pad
     r0, c0 = grid.cell(lo_xy[0], lo_xy[1])
@@ -348,13 +351,27 @@ class NavMap:
 
 class StaticLayer:
     """The columns of everything that never moves (walls, furniture, terrain) for one robot in one compiled
-    world, kept between plans: only loose objects and other robots are measured afresh."""
+    world, kept between plans: only loose objects and other robots are measured afresh. `quarters` holds the same
+    columns at the four quarter points of every cell (on quarter_grid), for what changes inside a cell."""
 
     def __init__(
-        self, grid: Grid, floor: np.ndarray, smooth_floor: np.ndarray, floor_owner: np.ndarray, columns, names
+        self,
+        grid: Grid,
+        floor: np.ndarray,
+        smooth_floor: np.ndarray,
+        floor_owner: np.ndarray,
+        columns: list[Columns],
+        names: list[str],
+        quarters: list[Columns] = (),
     ):
         self.grid, self.floor, self.smooth_floor, self.floor_owner = grid, floor, smooth_floor, floor_owner
-        self.columns, self.names = columns, names
+        self.columns, self.names, self.quarters = columns, names, list(quarters)
+
+
+def quarter_grid(grid: Grid) -> Grid:
+    """Cells half as wide, centered on the four quarter points of every cell of `grid`: cell (r, c) holds those
+    of (2r .. 2r + 1, 2c .. 2c + 1)."""
+    return Grid(grid.x0 - grid.res / 4, grid.y0 - grid.res / 4, grid.res / 2, 2 * grid.rows, 2 * grid.cols)
 
 
 def bounds(model: mujoco.MjModel, data: mujoco.MjData, robot: str, points: list[tuple[float, float]]):
@@ -382,7 +399,8 @@ def static_layer(model: mujoco.MjModel, data: mujoco.MjData, robot: str, grid: G
     floor_owner = np.full(grid.rows * grid.cols, -1, np.int32)  # the heightfield a cell's floor is, by name
     xs, ys = grid.centers()
     own = set(robot_geoms(model, robot))
-    columns = []
+    columns, quarters = [], []
+    fine = quarter_grid(grid)
     for g in range(model.ngeom):
         if g in own or not collides(model, g):
             continue
@@ -401,11 +419,15 @@ def static_layer(model: mujoco.MjModel, data: mujoco.MjData, robot: str, grid: G
             smooth |= covered
             floor_owner[covered] = _name_index(names, _owner(model, g))
             continue
-        found = geom_columns(model, data, g, grid, _name_index(names, _owner(model, g)))
+        owner = _name_index(names, _owner(model, g))
+        found = geom_columns(model, data, g, grid, owner)
         if found is not None:
             columns.append(found)
+            quartered = geom_columns(model, data, g, fine, owner, pad=0.0)
+            if quartered is not None:
+                quarters.append(quartered)
     floor = np.where(np.isfinite(floor), floor, 0.0)
-    return StaticLayer(grid, floor, smooth, floor_owner, columns, names)
+    return StaticLayer(grid, floor, smooth, floor_owner, columns, names, quarters)
 
 
 def dynamic_columns(
@@ -475,6 +497,7 @@ def build(
         lethal[cells[over]] = OBSTACLE
         owner[cells[over]] = col.owner
     ground2 = ground.reshape(grid.shape)
+    _mark_uneven(layer, body, smooth.reshape(grid.shape), lethal.reshape(grid.shape))
     _mark_steps(ground2, smooth.reshape(grid.shape), body, grid.res, lethal.reshape(grid.shape))
     _mark_slopes(ground2, smooth.reshape(grid.shape), body, grid.res, lethal.reshape(grid.shape))
     lethal2 = lethal.reshape(grid.shape)
@@ -507,6 +530,26 @@ def _mark_steps(ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, 
         view_b = lethal[1:, :] if axis == 0 else lethal[:, 1:]
         np.copyto(view_a, np.maximum(view_a, cause), where=first)
         np.copyto(view_b, np.maximum(view_b, cause), where=second)
+
+
+def _mark_uneven(layer: StaticLayer, body: Body, smooth: np.ndarray, lethal: np.ndarray) -> None:
+    """Mark cells whose ground differs inside them by more than the robot climbs, from the ground at their four
+    quarter points (2.5 cm apart on 5 cm cells). A cell's ground is the top of everything over any part of it, so
+    gaps narrower than a cell vanish from it: the obstacle course's stepping stones, 4 cm apart, read as one
+    platform, and the template dog walked onto them, put a foot in a gap and fell (scripts/nav_bench.py)."""
+    grid = layer.grid
+    floor = layer.floor.reshape(grid.shape)
+    quarter = np.repeat(np.repeat(floor, 2, axis=0), 2, axis=1).ravel()  # the floor under each quarter point
+    under = quarter.copy()
+    for col in layer.quarters:
+        stands = col.low < under[col.cells] + body.headroom  # as in build: what it cannot pass under is ground
+        np.maximum.at(quarter, col.cells[stands], col.high[stands])
+    four = quarter.reshape(grid.rows, 2, grid.cols, 2)
+    spread = four.max(axis=(1, 3)) - four.min(axis=(1, 3))
+    limit = body.step + np.where(smooth, grid.res * math.tan(body.slope), 0.0)  # a ramp rises inside a cell too
+    uneven = spread > limit
+    tall = spread > min(STEP_SHARE * body.height, STEP_LIKE)
+    np.copyto(lethal, np.maximum(lethal, np.where(tall, OBSTACLE, STEP).astype(np.int8)), where=uneven)
 
 
 def _mark_slopes(ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, lethal: np.ndarray) -> None:
