@@ -40,6 +40,8 @@ PRESETS: dict[str, Preset] = {
     "shell": Preset(0.5, 0.75, 0.0, roughness=0.35),  # glossy painted plastic (accent / shell color)
     "dark": Preset(0.22, 0.35, roughness=0.6),  # matte dark plastic, anodized structure
     "metal": Preset(0.85, 0.8, 0.04, metallic=1.0, roughness=0.35),  # brushed aluminium, bolts, axles
+    "aluminum": Preset(0.75, 0.7, 0.05, metallic=0.8, roughness=0.4),  # anodised aluminium parts in their color
+    "carbon": Preset(0.95, 0.95, 0.06, roughness=0.15),  # clear-coated carbon fibre (the viewer adds the weave)
     "rubber": Preset(0.04, 0.05, roughness=0.95),  # tyres, foot pads
     "glass": Preset(1.0, 0.95, 0.08, roughness=0.05),  # lenses, visors
     "led": Preset(0.3, 0.6, emission=0.85, roughness=0.3),  # small glowing indicator
