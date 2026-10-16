@@ -45,7 +45,8 @@ GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy'
 # A timed move that ends less than this fraction of its ideal reach from its start says why (shortfall). On flat
 # ground the robots of the agent eval's sessions covered 72 to 108 percent of speed x seconds on straight moves:
 # dog 94-102, Go2 86, hexapod 100, rovers 80-98, template humanoid 73-108 (0.1 m/s for 1.5 to 3 s), a two-wheeled
-# balancer 72. A move that turns is judged by its arc's chord (ideal_reach), or a full circle reads as stuck.
+# balancer 72. A move is judged by how far it got along the way it was sent: for a move that turns, along its arc's
+# chord (ideal_shift), or a full circle reads as stuck; a robot that went backwards gets the note too.
 SHORTFALL_FRACTION = 0.25
 SHORTFALL_MIN_ASKED = (
     0.1  # m: a move whose ideal reach is shorter (a nudge, a turn on the spot, a circle) is not judged
@@ -193,6 +194,16 @@ def ideal_reach(speed: float, turn: float, seconds: float) -> float:
     if angle < 1e-6:
         return abs(speed) * seconds
     return 2 * abs(speed) / abs(turn) * abs(math.sin(angle / 2))
+
+
+def ideal_shift(speed: float, turn: float, seconds: float) -> np.ndarray:
+    """Where a robot that moves at `speed` m/s turning `turn` rad/s (positive = left) for `seconds` ends if it does
+    exactly that, in the frame it started in (front +x, left +y); its length is ideal_reach."""
+    angle = turn * seconds
+    if abs(angle) < 1e-6:
+        return np.array([speed * seconds, 0.0])
+    radius = speed / turn
+    return np.array([radius * math.sin(angle), radius * (1.0 - math.cos(angle))])
 
 
 def _clamp_notes(ctrl: Any, speed: float, turn: float) -> list[str]:
@@ -589,23 +600,42 @@ class BehaviorManager:
             if plain or speed:  # a speed servo pulls toward ctrl as a joint speed, with no position term
                 d.ctrl[a] = 0.0
 
-    def shortfall(self, robot: str, seconds: float, start: list[float]) -> str | None:
-        """Why a timed move that is still running ended far closer to its start than it should, or None. A rover
-        too heavy for its motors stood still for 6 s and the agent was told only "distance_m 0.002"."""
+    def shortfall(self, robot: str, seconds: float, start: list[float], heading_deg: float = 0.0) -> str | None:
+        """Why a timed move that is still running got far less far along its way than it should, or went the
+        wrong way, or None. A rover too heavy for its motors stood still for 6 s and the agent was told only
+        "distance_m 0.002"; a hexapod on weak servos went 0.21 m backwards when asked forwards and was told
+        nothing, since it had moved. `start` and `heading_deg` are where it was and faced when the move began."""
         ctrl = self.session.controllers.get(robot)
-        speed = abs(float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0))
-        turn = abs(float(getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0)) or 0.0))
+        speed = float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0)
+        turn = float(getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0)) or 0.0)
         going = max(0.0, seconds - SHORTFALL_STARTUP)
-        asked = ideal_reach(speed, turn, going)
+        # The start-up second shortens the way, not the arc: a dog's full circle in 6.3 s, judged as 5.3 s of
+        # turning, was a 0.28 m chord it had not made.
+        shift = ideal_shift(speed, turn, seconds) * (going / seconds)
+        asked = float(np.linalg.norm(shift))
         now = self.pose(robot)
-        moved = math.dist(now["position"][:2], start[:2])
-        if asked < SHORTFALL_MIN_ASKED or moved >= SHORTFALL_FRACTION * asked or not now["upright"]:
+        if asked < SHORTFALL_MIN_ASKED or not now["upright"]:
+            return None
+        h = math.radians(heading_deg)
+        way = np.array([[math.cos(h), -math.sin(h)], [math.sin(h), math.cos(h)]]) @ (shift / asked)
+        along = float(np.dot(np.subtract(now["position"][:2], start[:2]), way))  # m along the way it was sent
+        if along >= SHORTFALL_FRACTION * asked:
             return None
         motion = f"{speed:g} m/s for {seconds:g} s, less {SHORTFALL_STARTUP:g} s to get going"
-        if turn * going >= 1e-6:
+        if abs(turn) * seconds >= 1e-6:
             motion = f"{speed:g} m/s turning {turn:g} rad/s for {seconds:g} s, less {SHORTFALL_STARTUP:g} s to get "
             motion += "going: the chord of that arc"
-        text = f"{robot} ended {moved:.2f} m from its start, of the {asked:.2f} m asked ({motion})"
+        if along < 0:
+            way_back = "backwards" if abs(turn) * seconds < 1e-6 and speed > 0 else "the wrong way"
+            text = f"{robot} went {-along:.2f} m {way_back} instead of the {asked:.2f} m asked ({motion})"
+        else:
+            text = f"{robot} got {along:.2f} m along its way, of the {asked:.2f} m asked ({motion})"
+        if isinstance(ctrl, quadruped.QuadrupedGait):
+            return (
+                f"{text}: its legs may be too weak for its weight (they give way and the feet slide back; "
+                "add_robot's notes say how hard its servos work standing, and stronger servos help), or something "
+                "held it back (a wall or an object in the way, a slope); look with observe"
+            )
         if not isinstance(ctrl, DiffDrive):
             return f"{text}: something held it back (a wall or an object in the way, a slope); look with observe"
         m, d = self.session.model, self.session.data

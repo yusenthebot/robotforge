@@ -448,7 +448,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 return False
 
             run = await run_until(track, seconds)
-            why = playground.behaviors.shortfall(robot, seconds, before["position"])
+            why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
             moving = playground.session.controllers.get(robot)
             # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
             # the clamp notes from the start kept.

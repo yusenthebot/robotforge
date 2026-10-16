@@ -277,6 +277,7 @@ async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
     pg.add_robot("rover", template="rover")
     params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("heavy", template="rover", params=params, pos=[0, 2])
+    pg.add_robot("dog", template="quadruped", pos=[0, -2])
     server = build_server(pg, find_free_port(8790))
     async with Client(server) as client:
         circle = {"robot": "rover", "speed": 0.3, "turn": 1.0, "seconds": 6.3}
@@ -284,7 +285,10 @@ async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
         stalled = json.loads(
             (await client.call_tool("move", {**circle, "robot": "heavy", "seconds": 4})).content[0].text
         )
+        # Judged as 5.3 s of turning after a 1 s start, the dog's circle was a 0.28 m chord it had not made.
+        walked = json.loads((await client.call_tool("move", {**circle, "robot": "dog"})).content[0].text)
     assert looped["turned_deg"] > 270 and looped["distance_m"] < 0.5 and "note" not in looped
+    assert walked["distance_m"] < 0.2 and "note" not in walked, walked
     assert stalled["distance_m"] < 0.05 and "wheels barely turned" in stalled["note"]
 
 
@@ -301,6 +305,22 @@ async def test_a_short_move_on_flat_ground_is_not_told_it_was_held_back(pg):
             (await client.call_tool("move", {"robot": "snake", "speed": 0.2, "seconds": 1})).content[0].text
         )
     assert nudged["distance_m"] < 0.1 and "note" not in nudged, nudged
+
+
+@pytest.mark.anyio
+async def test_a_robot_that_went_backwards_is_told_so(pg):
+    """The eval's hexapod on weak servos was sent forwards at 0.12 m/s for 5 s and went 0.21 m backwards; it had
+    moved, so the shortfall note (judged by distance) said nothing, and the agent reported a walk."""
+    import test_builder
+
+    pg.add_robot("spider", build=test_builder.SPIDER)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        moved = json.loads(
+            (await client.call_tool("move", {"robot": "spider", "speed": 0.12, "seconds": 5})).content[0].text
+        )
+    assert moved["to"]["position"][0] < moved["from"]["position"][0] - 0.1, moved
+    assert "m backwards instead of the 0.48 m asked" in moved["note"] and "stronger servos" in moved["note"]
 
 
 def test_the_ideal_reach_of_a_move_is_the_chord_of_its_arc():
