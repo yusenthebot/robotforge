@@ -684,3 +684,51 @@ def test_range_sensors_compile_and_measure_distance():
     assert 0.6 < ahead < 1.0  # the wall's face is about 0.85 m ahead of the body's front
     ring = [data.sensor(f"r/base_lidar_{i}").data[0] for i in range(8)]
     assert 0.6 < ring[0] < 1.0 and all(r == -1 or r > 0 for r in ring)
+
+
+# The agent eval's hexapod (ae450e3): legs that roll out at the hip and pitch at thigh and knee, like a dog's, on
+# xl430 servos. Sent forwards at 0.12 m/s for 5 s it went 0.21 m backwards, told only that it was built.
+SPIDER = {
+    "material": "carbon",
+    "servo": "xl430",
+    "base": {"shape": "box", "size": [0.46, 0.18, 0.075], "mass": 0.7, "sensors": ["imu"]},
+    "parts": [
+        {
+            "name": "left_hip",
+            "at": [0.18, 0.09, 0],
+            "joint": {"axis": "x", "range": [-45, 65], "home": 30},
+            "shape": "none",
+            "mirror": True,
+            "repeat": {"count": 3, "along": "back", "spacing": 0.18},
+        },
+        {
+            "name": "left_thigh",
+            "parent": "left_hip",
+            "at": [0, 0.045, 0],
+            "joint": {"axis": "y", "range": [-70, 140], "home": 46},
+            "shape": "capsule",
+            "size": [0.025, 0.15],
+            "direction": "down",
+        },
+        {
+            "name": "left_shin",
+            "parent": "left_thigh",
+            "at": "end",
+            "joint": {"axis": "y", "range": [-150, -15], "home": -92},
+            "shape": "capsule",
+            "size": [0.021, 0.16],
+            "direction": "down",
+            "foot": True,
+        },
+    ],
+}
+
+
+def test_a_walker_whose_servos_work_hard_standing_is_told_it_may_not_walk(pg):
+    """Standing on six feet the agent's spider used 46 to 54 % of its xl430s' force, under the 60 % that got a note;
+    walking holds it on three, and it slid backwards. On sts3215 servos (39 %) it walks."""
+    out = pg.add_robot("spider", build=SPIDER)
+    (note,) = [n for n in out["notes"] if "little headroom to walk" in n]
+    assert "standing on all 6 feet" in note and "slide backwards" in note and "sts3215" in note
+    stronger = pg.add_robot("strong", build={**SPIDER, "servo": "sts3215"}, pos=[0, 1.5])
+    assert not [n for n in stronger["notes"] if n.startswith("strong:") and "headroom" in n], stronger["notes"]
