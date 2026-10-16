@@ -97,6 +97,32 @@ def test_a_light_switched_on_is_not_judged_on_a_frame_taken_before(pg):
     assert not seeing._close_on_the_plane(ctx)
 
 
+def test_the_evening_lamp_breaks_the_mask_and_balance_with_clean_fixes_it(needs_gl, pg):
+    """The light step's lesson: under the warm lamp the pink cube turns red and the noise speckles the mask, so a
+    finder tuned in daylight never sees the red cube alone; white balance and cleaning together always do."""
+    pg.lessons.start("seeing")
+    player = Player(pg)
+    pg.lessons.passed.update({"look", "mask", "where", "pick", "depth"})
+    pg.lessons.step = [s.id for s in seeing.STEPS].index("light")
+    alone = {}
+    for balance, clean in ((0, 0), (1, 0), (0, 1), (1, 1)):
+        Set(width=15, light=1, balance=balance, clean=clean).apply(player)
+        frames = []
+        for _ in range(10):
+            player.play(seeing.FRAME_DT)
+            seen = pg.lessons.ctx.results["seen"]
+            assert seen["light"] == 1
+            frames.append(seen["on"] == [seeing.TARGET])
+        alone[balance, clean] = sum(frames)
+    pg.lessons.exit()
+    assert alone == {(0, 0): 0, (1, 0): 0, (0, 1): 0, (1, 1): 10}
+
+
+def test_two_runs_that_differ_only_in_cleaning_are_told_apart_in_the_record(pg):
+    assert "clean" in seeing.SeeingLesson.bench.params
+    assert len(seeing.SeeingLesson.bench.short) == len(seeing.SeeingLesson.bench.params)
+
+
 def test_test_spots_and_shuffles_keep_cubes_apart_on_the_mat(pg):
     pg.lessons.start("seeing")
     lesson = pg.lessons.lesson

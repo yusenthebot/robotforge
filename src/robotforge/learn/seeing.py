@@ -333,12 +333,13 @@ STEPS = (
         id="where",
         title=_text("从像素回到桌面", "From a pixel back to the table"),
         body=_text(
-            "十字是这一块白像素的质心，也就是它们的平均位置。相机知道自己在哪、镜头多宽，"
+            "十字是红方块那一块像素（掩码里的白块）的质心，也就是它们的平均位置。相机知道自己在哪、镜头多宽，"
             "所以每个像素对应空间里的一条射线（3D 视图里的黄线）。射线和一个水平面的交点，就是方块位置的估计。\n"
             "平面该放多高？先猜，再拖“假设高度”，让估计误差小于 0.5 厘米。",
-            "The cross is the centroid of the white blob: the average position of its pixels. The camera knows "
-            "where it is and how wide its lens sees, so each pixel is a ray in space (the yellow line in the 3D "
-            "view). Where the ray meets a level plane is the estimate of the cube's position.\n"
+            "The cross is the centroid of the red cube's pixels (the white blob in the mask): their average "
+            "position. The camera knows where it is and how wide its lens sees, so each pixel is a ray in space "
+            "(the yellow line in the 3D view). Where the ray meets a level plane is the estimate of the cube's "
+            "position.\n"
             "How high should the plane be? Guess first, then move 'assumed height' until the error is under 0.5 cm.",
         ),
         done=_text(
@@ -479,6 +480,7 @@ STEPS = (
     ),
 )
 VIEWS = {"look": "picture", "mask": "mask", "light": "mask"}  # which picture each step opens on; else the camera's
+PARAMS = ("light", "height", "depth", "balance", "clean")  # the knobs a 12-spot run is recorded with
 
 
 CONTROLS = (
@@ -525,8 +527,14 @@ class SeeingLesson(Lesson):
         x_unit="",
         y=_text("误差", "error"),
         y_unit="cm",
-        params=("light", "height", "depth", "balance"),
-        short=(_text("灯光", "light"), _text("高度", "height"), _text("深度", "depth"), _text("白平衡", "balance")),
+        params=PARAMS,
+        short=(
+            _text("灯光", "light"),
+            _text("高度", "height"),
+            _text("深度", "depth"),
+            _text("白平衡", "balance"),
+            _text("清理", "clean"),
+        ),
         metrics=(
             Metric("mean", _text("平均误差", "mean error"), "cm"),
             Metric("worst", _text("最大误差", "worst"), "cm"),
@@ -766,7 +774,7 @@ class SeeingLesson(Lesson):
             "worst": round(float(np.max(errors)), 2) if errors else None,
             "found": len(errors),
         }
-        params = {p: ctx.values[p] for p in ("light", "height", "depth", "balance")}
+        params = {p: ctx.values[p] for p in PARAMS}
         ctx.record_run(params, metrics, xs, errors)
         if errors:
             ctx.results["summary"] = _text(
