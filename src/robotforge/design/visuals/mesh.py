@@ -344,6 +344,64 @@ def rounded_box(hx: float, hy: float, hz: float, radius: float, segments: int = 
 
 
 @cached
+def slab(
+    hx: float,
+    hy: float,
+    z0: float,
+    z1: float,
+    bottom: float,
+    top: float,
+    corner: float,
+    segments: int = 3,
+    per_corner: int = 3,
+    fence: bool = True,
+) -> Mesh:
+    """A rounded-rectangle block from z0 to z1 with its own edge radius at the bottom and at the top.
+
+    Two slabs stacked with a small gap make a shell with a parting line: a soft outer edge and a
+    crisp seam, which one rounded box cannot do. `corner` is the radius of the vertical edges.
+    With `fence` every flat face is bordered by a thin strip (see _fenced), so a big face shades
+    flat instead of fading into the curve beside it; small parts can do without.
+    """
+    h = (z1 - z0) / 2
+    rb = max(min(bottom, hx, hy, h), 1e-5)
+    rt = max(min(top, hx, hy, h), 1e-5)
+
+    def ring(inset: float, z: float) -> np.ndarray:
+        rect = rounded_rect(hx - inset, hy - inset, max(corner - inset, 1e-5), per_corner)
+        return at_z(_fenced(rect) if fence else rect, z)
+
+    angles = np.linspace(0.0, math.pi / 2, segments + 1)
+    rings = [ring(rb * (1 - math.sin(a)), z0 + rb * (1 - math.cos(a))) for a in angles]
+    straight = (z1 - rt) - (z0 + rb)
+    if fence and straight > 1e-5:  # fence the flat sides top and bottom as well
+        rings += [ring(0.0, z0 + rb + straight * _FENCE), ring(0.0, z1 - rt - straight * _FENCE)]
+    rings += [ring(rt * (1 - math.sin(a)), z1 - rt * (1 - math.cos(a))) for a in angles[::-1]]
+    return loft(rings)
+
+
+_FENCE = 0.004  # share of a flat face given to the strip that fences it off from the curve next to it
+
+
+def _fenced(ring2: np.ndarray) -> np.ndarray:
+    """A rounded rectangle with two extra points on each straight side, just inside its ends.
+
+    Smooth normals average the faces around a vertex; without the extra points the vertex where a
+    corner meets a flat side leans toward the corner, and that lean is interpolated across the
+    whole side: a long flat face shades like a shallow curve. The thin strip takes the blend.
+    """
+    corners = 4
+    per = len(ring2) // corners
+    out = []
+    for k in range(corners):
+        arc = ring2[k * per : (k + 1) * per]
+        out.extend(arc)
+        a, b = arc[-1], ring2[((k + 1) * per) % len(ring2)]
+        out += [a + (b - a) * _FENCE, b + (a - b) * _FENCE]
+    return np.array(out)
+
+
+@cached
 def box(hx: float, hy: float, hz: float, chamfer: float = 0.0) -> Mesh:
     """A box with crisp (or slightly chamfered) edges, for planks, slats and seams."""
     if chamfer > 0:
