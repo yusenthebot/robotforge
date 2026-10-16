@@ -665,8 +665,9 @@ function updateRing() {
   const robot = robotByName(selected);
   // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
   const box = selected ? robotBox(selected, { baseOnly: !robot?.max_speed }) : null;
-  // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise.
-  if (!box || (lessonActive() && !lessonDriveSpec())) {
+  // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise, and so it is
+  // when the keys steer something else (a gripper's target: the drive spec says robot: false).
+  if (!box || (lessonActive() && (!lessonDriveSpec() || lessonDriveSpec().robot === false))) {
     ring.visible = false;
     return;
   }

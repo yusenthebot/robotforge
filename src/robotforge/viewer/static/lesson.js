@@ -169,6 +169,8 @@ function openLesson(desc) {
   $("lesson-chapter").textContent = pick(desc.chapter);
   $("lesson-title").textContent = pick(desc.title);
   $("lesson-drive").hidden = !desc.drive;
+  // A lesson may say what its keys move ("Move the gripper"); otherwise they drive its robot.
+  $("lesson-drive").querySelector("[data-i18n]").textContent = desc.drive?.label ? pick(desc.drive.label) : t("lesson_drive");
   pip.setup(desc.rig);
   renderControls();
   renderStep();
@@ -1966,7 +1968,125 @@ function planRig(rig) {
   };
 }
 
+// Teaching by showing: the amber target the gripper follows (drag it), where cubes can appear, every
+// demonstration (a ring where the cube was, the gripper's path), the last test's spots (green: picked, red:
+// missed) and the arm's own try (violet). Demonstrations and tests arrive only when they change.
+function imitateRig(rig) {
+  const amber = api.color("--amber");
+  const blue = api.color("--plot-blue");
+  const green = api.color("--plot-green");
+  const red = api.color("--bad");
+  const violet = api.color("--plot-violet");
+  const ink = api.color("--ink");
+  const z0 = rig.desk + 0.002; // just above the desk
+  const onDesk = (x, y) => new THREE.Vector3(x, y, z0);
+  const onTop = (m) => Object.assign(m, { depthTest: false });
+
+  // Seen through the fingers it sits between: it is the handle the learner drags.
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.014, 24, 12), onTop(basic(amber, 0.95)));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.026, 24, 12), onTop(basic(amber, 0.22)));
+  const marker = new THREE.Group();
+  marker.add(ball, halo);
+  const error = dashedLine(amber, 0.9);
+  const target = new THREE.Group();
+  target.add(marker, error);
+
+  // The ring sector cubes appear in: its outline and a faint fill on the desk.
+  const [r0, r1] = rig.region.r;
+  const [d0, d1] = rig.region.deg.map((d) => THREE.MathUtils.degToRad(d));
+  const arc = (r, a, b) => {
+    const out = [];
+    for (let k = 0; k <= 48; k++) {
+      const t = a + ((b - a) * k) / 48;
+      out.push(onDesk(rig.base[0] + r * Math.cos(t), rig.base[1] + r * Math.sin(t)));
+    }
+    return out;
+  };
+  const outline = [...arc(r1, d0, d1), ...arc(r0, d1, d0)];
+  const region = new THREE.Group();
+  const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y)));
+  const fill = new THREE.Mesh(new THREE.ShapeGeometry(shape), basic(ink, 0.05, true));
+  fill.position.z = z0 - 0.001;
+  const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(outline), lineMat(ink, 0.3));
+  region.add(fill, edge);
+
+  const demos = new THREE.Group();
+  const tests = new THREE.Group();
+  const trialPath = new THREE.Line(new THREE.BufferGeometry(), onTop(lineMat(violet, 0.95)));
+  const trialRing = new THREE.Mesh(new THREE.RingGeometry(0.026, 0.034, 40), onTop(basic(violet, 0.95, true)));
+  const trial = new THREE.Group();
+  trial.add(trialPath, trialRing);
+  const parts = { target, region, demos, tests, trial };
+  const group = new THREE.Group();
+  group.add(...Object.values(parts));
+  group.traverse((o) => {
+    o.renderOrder = 5; // after the desk and the arm: drawn over them
+  });
+
+  const clear = (g) => {
+    for (const child of [...g.children]) {
+      child.geometry?.dispose();
+      child.material?.dispose();
+      g.remove(child);
+    }
+  };
+  let shown = null; // the drawing on screen
+  const draw = (d) => {
+    shown = d;
+    clear(demos);
+    for (const demo of d.demos ?? []) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.03, 40), onTop(basic(blue, 0.9, true)));
+      ring.position.copy(onDesk(...demo.spot));
+      const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(demo.path.map((p) => new THREE.Vector3(...p))), lineMat(blue, 0.7));
+      ring.renderOrder = path.renderOrder = 5;
+      demos.add(ring, path);
+    }
+    clear(tests);
+    for (const t of d.tests ?? []) {
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.011, 24), onTop(basic(t.ok ? green : red, 0.95, true)));
+      dot.position.copy(onDesk(...t.spot));
+      dot.renderOrder = 6;
+      tests.add(dot);
+    }
+  };
+  let trialShown = "";
+  return {
+    group,
+    parts,
+    dragTarget: {
+      mesh: ball,
+      // Back to the sliders: forward and sideways from the arm's base, height over the desk.
+      toControls(hit) {
+        const round = (v) => Number(v.toFixed(3));
+        return { tx: round(hit.x - rig.base[0]), ty: round(hit.y - rig.base[1]), tz: round(hit.z - rig.desk) };
+      },
+    },
+    frame() {
+      const live = state.live;
+      if (!live?.target) return;
+      const goal = new THREE.Vector3().fromArray(live.target);
+      marker.position.copy(goal);
+      marker.visible = !live.trying; // during a try the arm steers itself: nothing to drag
+      setPoints(error, [new THREE.Vector3().fromArray(live.hand), goal]);
+      const d = state.drawing;
+      if (d && d !== shown) draw(d);
+      const tr = live.trial;
+      trial.visible = trial.visible && !!tr;
+      if (tr) {
+        const key = `${tr.spot}:${tr.path.length}:${tr.ok}`;
+        if (key !== trialShown) {
+          trialShown = key;
+          trialRing.position.copy(onDesk(...tr.spot));
+          if (tr.path.length > 1) setPoints(trialPath, tr.path.map((p) => new THREE.Vector3(...p)));
+          trialPath.visible = tr.path.length > 1;
+        }
+      }
+    },
+  };
+}
+
 const RIGS = {
+  imitate: imitateRig,
   gait: gaitRig,
   plan: planRig,
   joint: jointRig,

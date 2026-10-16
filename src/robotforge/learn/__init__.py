@@ -11,6 +11,7 @@ from robotforge.learn.engine import Lesson, LessonError, LessonRunner
 from robotforge.learn.gait import GaitLesson
 from robotforge.learn.ik import IKLesson
 from robotforge.learn.ik_arm import IKArmLesson
+from robotforge.learn.imitation import ImitationLesson
 from robotforge.learn.pd import PDLesson
 from robotforge.learn.pd_piper import PiperPIDLesson
 from robotforge.learn.rl import RLLesson
@@ -32,6 +33,7 @@ LESSONS: dict[str, type[Lesson]] = {
         BalanceLesson,
         RLLesson,
         LearnToWalkLesson,
+        ImitationLesson,
         MazeChallenge,
         ShoveChallenge,
         CourseChallenge,
