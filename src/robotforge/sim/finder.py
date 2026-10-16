@@ -29,15 +29,23 @@ KINDS = ("object", "robot", "fixed")  # the order finds are listed in: what can 
 # 115 finds of loose objects). The 56 with no flag were 0.1 to 3.9 cm off, 91 % of them within about_cm and 96 %
 # within twice it; flagged ones were up to 66 cm off (a pallet seen through the gaps between the crates on it).
 # A red cube on a blue one at 12 spots (--stacks): 62 of its 64 finds with no flag were within about_cm, at most
-# 1.1 cm off; from straight above it is flagged.
-ACCURACY = (
-    "about_cm is how far off it may be (what one pixel spans at the object, along the view): 9 in 10 finds with no "
-    "flag were within it. A flag means it can be much further off: cut_off (by the picture's edge), hidden (partly "
-    "behind something nearer), side_on (only a face is seen; the real middle is behind it by half the object's "
-    "depth), raised (it may stand on something under it that this view cannot show; then it is higher). From "
-    "low down a round thing's middle comes out a little short. merged: loose objects of the same color touching "
-    "it, found as one with it; the position is the middle of them all"
+# 1.1 cm off; from straight above it is flagged. Carried in the arm's gripper at 12 spots, each of its 72 finds
+# said held_by (1.4 to 4.5 cm off: the gripper covers part of it).
+HOW = (
+    "position: the estimated middle (m, world frame) from the picture's color and depth. about_cm: how far off it "
+    "may be; 9 in 10 finds with no flag were within it (from low down a ball comes out a little short). object "
+    "(pick_and_place takes it), robot or fixed: what those pixels show"
 )
+# What each flag on a find means; observe's "how" explains only the ones its finds carry, to keep it short. Any of
+# them: it may be much further off than about_cm.
+DOUBTS = {
+    "cut_off": "the picture's edge cuts it",
+    "hidden": "something nearer covers part of it",
+    "side_on": "only a face is seen; its middle is about half its depth further away",
+    "raised": "it may stand on something under it that this view cannot show; then it is higher",
+    "held_by": "that robot holds it, and its hand may cover part of it",
+    "merged": "loose objects of its color touching it, found as one; the position is the middle of them all",
+}
 MARK = (255, 190, 0)  # the boxes drawn round the finds
 FLAGS = ("cut_off", "hidden", "side_on", "raised")  # vision.Found's doubts, passed on when they hold
 MERGED_SHARE = 0.03  # of a blob's pixels (and MIN_AREA at least): another loose object this big in it is part of it
@@ -64,6 +72,7 @@ def find(layers: Layers, color: str) -> list[Seen]:
     then each robot once, then each fixed thing once, then blobs no one thing covers; biggest first in each."""
     found = [f for c in colors(color) for f in vision.find(layers.rgb, layers.depth, layers.camera, c)]
     driven = _driven(layers.model)
+    held = _held(layers.model, layers.touching, driven)
     named = [(f, *_what(f.blob, layers.geoms, layers.model, driven)) for f in found]
     named.sort(key=lambda fwm: (_rank(fwm[1], fwm[2]), -fwm[0].blob.area))
     out: list[Seen] = []
@@ -87,6 +96,8 @@ def find(layers: Layers, color: str) -> list[Seen]:
         if merged:
             entry["merged"] = merged
         entry.update({flag: True for flag in FLAGS if getattr(f, flag)})
+        if what.get("object") in held:
+            entry["held_by"] = held[what["object"]]
         out.append(Seen(entry, f.blob.box))
     return out
 
@@ -96,10 +107,8 @@ def summary(view: str, color: str, found: list[Seen]) -> dict[str, Any]:
     out: dict[str, Any] = {"view": view, "color": color, "objects": [s.entry for s in found[:MAX_FOUND]]}
     if len(found) > MAX_FOUND:
         out["more"] = len(found) - MAX_FOUND
-    out["how"] = (
-        f"position: the estimated middle (m, world frame) from the picture's color and depth; {ACCURACY}. "
-        "object (pick_and_place takes it), robot or fixed: the name of what those pixels show in the simulator"
-    )
+    marks = [mark for mark in DOUBTS if any(mark in o for o in out["objects"])]
+    out["how"] = HOW + (". May be much further off: " + "; ".join(f"{m}: {DOUBTS[m]}" for m in marks) if marks else "")
     if not found:
         out["hint"] = (
             "nothing of that color in view: try another view (overview, or a robot's camera from describe_model) "
@@ -147,6 +156,29 @@ def _driven(model: mujoco.MjModel) -> set[int]:
         elif kind == int(mujoco.mjtTrn.mjTRN_SITE):
             roots.add(int(model.body_rootid[model.site_bodyid[target]]))
     return roots
+
+
+def _held(model: mujoco.MjModel, touching: np.ndarray | None, driven: set[int]) -> dict[str, str]:
+    """The loose objects a robot holds, and which robot: everything such an object touches is part of that robot
+    (a gripper's fingers), and nothing else carries it (not the floor, a table or another object). From the
+    simulator's contacts at the moment of the picture, as the names are."""
+    if touching is None or not len(touching):
+        return {}
+    roots = model.body_rootid[model.geom_bodyid[touching]]
+    others: dict[int, set[int]] = {}
+    for a, b in roots.tolist():
+        if a != b:
+            others.setdefault(a, set()).add(b)
+            others.setdefault(b, set()).add(a)
+    held = {}
+    for body, by in others.items():
+        thing = _name(model, "body", body, driven) if body else {}
+        if "object" not in thing or 0 in by:  # body 0 is the world's: the floor and everything fixed
+            continue
+        holders = [_name(model, "body", other, driven) for other in sorted(by)]
+        if all("robot" in h for h in holders):
+            held[thing["object"]] = holders[0]["robot"]
+    return held
 
 
 def _what(

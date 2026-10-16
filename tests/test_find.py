@@ -62,6 +62,11 @@ async def test_the_red_one_is_found_located_and_named(needs_gl, pg):
 
         plain = await client.call_tool("observe", {"view": "top", "find": "red", "include_image": False})
         assert len(plain.content) == 1 and _state(plain)["found"]["objects"][0]["object"] == "cube_a"
+        # Sent with every find, so it explains only the flags the finds carry (it was 697 characters every time).
+        found = _state(plain)["found"]
+        carried = {mark for o in found["objects"] for mark in finder.DOUBTS if mark in o}
+        assert len(finder.HOW) < 300 and found["how"].startswith(finder.HOW)
+        assert all((text in found["how"]) == (mark in carried) for mark, text in finder.DOUBTS.items())
 
 
 async def test_an_agent_picks_the_red_one_without_knowing_its_name(needs_gl, pg):
@@ -237,6 +242,25 @@ def test_a_cube_on_a_cube_is_located_on_it_or_flagged(needs_gl, tmp_path, monkey
     ball = pg.find("top", "orange")[0]["objects"][0]
     assert ball["object"] == "ball" and "raised" not in ball
     assert np.linalg.norm(np.array(ball["position"]) - pg.session.data.body("ball").xpos) < 0.01
+
+
+def test_a_cube_in_the_gripper_is_located_at_its_height_and_said_to_be_held(needs_gl, pg):
+    """Mid-carry the cube came out 4 cm low (the desk taken as what it stands on) with no flag, and the gripper
+    hides part of it, which moves its middle a cm or two across."""
+    pg.behaviors.pick_and_place("arm", "cube_a", "bin")
+    for _ in range(200):
+        pg.simulate(0.05)
+        if pg.session.data.body("cube_a").xpos[2] > 0.08:
+            break
+    pg.session.paused = True
+    truth = pg.session.data.body("cube_a").xpos
+    assert truth[2] > 0.08
+    for view in ("default", "front", "right"):
+        found, _ = pg.find(view, "red")
+        cube = next(o for o in found["objects"] if o.get("object") == "cube_a")
+        assert cube["held_by"] == "arm", (view, cube)
+        assert abs(cube["position"][2] - truth[2]) < 0.01, (view, cube)
+        assert "held_by: that robot holds it" in found["how"]
 
 
 def test_a_ball_in_front_of_a_bench_is_not_pulled_back_to_it(needs_gl, tmp_path, monkeypatch):

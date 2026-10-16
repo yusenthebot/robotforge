@@ -39,6 +39,7 @@ VIEWS: dict[str, tuple[float, float, float]] = {
 MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown with some ground around it
 
 MAX_PIXELS = 1280 * 960
+TOUCHING = 0.001  # m: geoms a contact holds closer than this touch (a contact with a margin can be further apart)
 log = logging.getLogger(__name__)
 
 
@@ -197,6 +198,7 @@ class SnapshotRenderer:
         finally:
             r.disable_depth_rendering()
         seen = None
+        touching = None
         if geoms:
             r.enable_segmentation_rendering()
             try:
@@ -204,7 +206,9 @@ class SnapshotRenderer:
             finally:
                 r.disable_segmentation_rendering()
             seen = np.where(seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM), seg[..., 0], -1).astype(np.int32)
-        return Layers(rgb, depth, seen, pinhole, model)
+            contacts = data.contact
+            touching = contacts.geom[contacts.dist <= TOUCHING].astype(np.int32)
+        return Layers(rgb, depth, seen, pinhole, model, touching)
 
 
 def _camera_only() -> mujoco.MjvOption:
@@ -230,6 +234,7 @@ class Layers:
     geoms: np.ndarray | None
     camera: vision.Pinhole
     model: mujoco.MjModel
+    touching: np.ndarray | None = None  # with the geoms: the pairs of geoms in contact at that moment (Nx2)
 
 
 CLIP_CONTROL = "ARB_clip_control unavailable"  # macOS OpenGL 4.1 has no reverse-Z depth; MuJoCo says so
