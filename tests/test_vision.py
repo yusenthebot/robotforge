@@ -202,3 +202,21 @@ def test_exposure_is_for_one_picture_only(needs_gl):
     assert dim < full * 0.8
     assert np.array_equal(session.model.light_diffuse, before[0])
     assert np.array_equal(session.model.vis.headlight.diffuse, before[1])
+
+
+@pytest.mark.parametrize("template", ["arm", "gripper", "rover", "quadruped", "humanoid"])
+def test_a_template_robots_camera_sees_out_past_its_own_lens(needs_gl, template):
+    """The arm's wrist camera sat behind its lens and saw the bezel as a black ring round every picture (15 % of
+    it); what a robot's camera may see of itself is the tips of its fingers (5 %)."""
+    world = World.model_validate({"name": "w", "robots": [{"name": "bot", "template": template}]})
+    model = compile_world(world).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    mujoco.mj_forward(model, data)
+    renderer = SnapshotRenderer()
+    for cam in range(model.ncam):
+        layers = renderer.layers_of(model, data, model.camera(cam).name, 320, 240, 0, geoms=True)
+        shown = layers.geoms[layers.geoms >= 0]
+        own = sum((model.body(int(model.geom_bodyid[g])).name or "").startswith("bot/") for g in shown.tolist())
+        assert own / layers.geoms.size < 0.08, model.camera(cam).name
+    renderer.close()
