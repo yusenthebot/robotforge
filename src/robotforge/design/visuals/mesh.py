@@ -466,13 +466,14 @@ def link(
     rounding: tuple[float, float] = (1.0, 1.0),
     stations: int = 5,
     per_corner: int = 3,
+    domes: int = 4,
 ) -> Mesh:
     """A tapered limb along z from 0 to `length`: rounded-rectangle sections from half extents
-    `start` (x, y) to `end`, ends domed by `rounding` times the end section's smaller half extent."""
+    `start` (x, y) to `end`, ends domed by `rounding` times the end section's smaller half extent.
+    A thick limb needs more `per_corner` points round its section and more `domes` rings per end."""
     rings = []
     d0 = rounding[0] * min(start)
     d1 = rounding[1] * min(end)
-    domes = 4
     count = 4 * (per_corner + 1)
     for a in np.linspace(0.0, math.pi / 2, domes + 1):  # bottom dome
         k = math.sin(a)

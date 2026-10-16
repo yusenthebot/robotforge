@@ -384,7 +384,7 @@ def _shape(
         if shape == "cylinder":
             looks.cylinder(vis, body, owner, a, b, size[0] / 2, rgba, surface, layout, is_base)
         else:
-            looks.link(vis, body, a, b, size[0] / 2, rgba, surface, _hinge_axis(part))
+            looks.link(vis, body, a, b, size[0] / 2, rgba, surface, looks.hinge_axis(part))
 
 
 def link_radius(spec: BaseSpec | PartSpec) -> float:
@@ -403,13 +403,6 @@ def _toward_parent(part: Placed | None, layout: looks.Layout) -> np.ndarray:
             return part.rot.T @ ((center - part.pos) / np.linalg.norm(center - part.pos))
         return part.rot.T @ np.array([0.0, 0.0, 1.0])
     return np.array([0.0, 0.0, 1.0])
-
-
-def _hinge_axis(part: Placed | None) -> np.ndarray | None:
-    """The hinge a part swings on, in its body frame (its link is drawn flattened along it)."""
-    if part is None or part.spec.joint.type != "hinge" or part.spec.joint.continuous:
-        return None
-    return part.axis(axis_vector(part.spec.joint.axis))
 
 
 def _foot(body: mujoco.MjsBody, part: Placed, vis: Visuals) -> None:

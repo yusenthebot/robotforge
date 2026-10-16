@@ -45,6 +45,7 @@ SEAM_EDGE = 0.0005  # m, edge radius on either side of a parting line: crisp, bu
 SEAM_INSET = 0.0007  # m the dark core under a parting line sits inside the shell, so the groove reads dark
 PAN_INSET = 0.0012  # m a base's dark lower pan steps in from its colored upper shell
 BASE_SEAM = 0.36  # share of a base's height taken by its dark pan (the templates' trunk uses about a third)
+LINK_ROUNDNESS = 0.85  # corner radius of a hinged link's section, as a share of its smaller half extent
 LID_SEAM = 0.74  # a box part's lid line, as a share of its height from the bottom
 KEEPOUT_MARGIN = 0.003  # m kept clear around whatever is attached to a face before a screw goes there
 SENSOR_KEEPOUT = 0.016  # m around a sensor's mounting point
@@ -285,6 +286,47 @@ class Layout:
             if n > 1e-6 and n > 0.3 * float(np.linalg.norm(v)):
                 return flat / n
         return _unit(_perp(np.array([1.0, 0.0, 0.0]), axis_parent))
+
+
+@dataclass(frozen=True)
+class LinkShape:
+    """A hinged capsule drawn as a moulded limb, in its body frame: from `a` to `b` (the capsule's end points),
+    wider at its joint and flattened along the hinge it swings on. Its section is a rounded rectangle of half
+    extents `first` at `a` going linearly to `last` at `b`, in the x and y columns of `rot` (z runs a -> b);
+    the ends are domes reaching 0.9 times the end section's smaller half extent beyond a and b."""
+
+    a: np.ndarray
+    b: np.ndarray
+    rot: np.ndarray
+    first: tuple[float, float]
+    last: tuple[float, float]
+
+    @classmethod
+    def of(cls, a: np.ndarray, b: np.ndarray, r: float, hinge: np.ndarray | None) -> LinkShape | None:
+        """How a capsule of radius r from a to b is drawn, or None when it is drawn as it is (round, untapered):
+        it has no hinge across it (a base, a fixed part, a wheel-like spinner)."""
+        a, b = np.asarray(a, float), np.asarray(b, float)
+        length = float(np.linalg.norm(b - a))
+        if hinge is None or length < 1e-6:
+            return None
+        d = (b - a) / length
+        across = _perp(np.asarray(hinge, float), d)
+        if np.linalg.norm(across) <= 0.3:  # the hinge runs along the link: it spins, it does not swing
+            return None
+        y = _unit(across)
+        return cls(a, b, np.column_stack([_cross(y, d), y, d]), (r * 1.12, r * 0.9), (r * 0.92, r * 0.86))
+
+    @property
+    def ends(self) -> tuple[float, float]:
+        """How far the domes reach beyond a and b."""
+        return 0.9 * min(self.first), 0.9 * min(self.last)
+
+
+def hinge_axis(part: Placed | None) -> np.ndarray | None:
+    """The hinge a part swings on, in its body frame (its link is drawn flattened along it)."""
+    if part is None or part.spec.joint.type != "hinge" or part.spec.joint.continuous:
+        return None
+    return part.axis(axis_vector(part.spec.joint.axis))
 
 
 def _center(spec: BaseSpec | PartSpec, local: np.ndarray) -> np.ndarray | None:
@@ -529,24 +571,31 @@ def link(
     hinge: np.ndarray | None,
 ) -> None:
     """A capsule as a moulded limb: domed ends where the capsule's round ends are, wider at its joint and
-    flattened along the hinge it swings on (a round tube when it has no hinge across it)."""
+    flattened along the hinge it swings on (see LinkShape). With no hinge across it (a base, a fixed part)
+    it is drawn as the capsule it is. Either way a thick one gets as many points round as a cylinder."""
     a, b = np.asarray(start, float), np.asarray(end, float)
     length = float(np.linalg.norm(b - a))
+    n = _segments(r, low=16, high=64)
     if length < 1e-6:
-        vis.add(body, preset, rgba, M.sphere(r, rings=10, segments=_segments(r, low=16, high=32)), a)
+        vis.add(body, preset, rgba, M.sphere(r, rings=max(10, n // 4), segments=n), a)
         return
-    d = (b - a) / length
-    across = None if hinge is None else _perp(np.asarray(hinge, float), d)
-    if across is not None and np.linalg.norm(across) > 0.3:
-        y = _unit(across)
-        rot = np.column_stack([_cross(y, d), y, d])
-        first, last = (r * 1.12, r * 0.9), (r * 0.92, r * 0.86)
-    else:
-        rot = M.z_to(d)
-        first, last = (r, r), (r * 0.94, r * 0.94)
-    e0, e1 = 0.9 * min(first), 0.9 * min(last)
-    mesh = M.link(length + e0 + e1, first, last, roundness=0.85, rounding=(0.9, 0.9), stations=5, per_corner=3)
-    vis.add(body, preset, rgba, mesh, a - d * e0, rot)
+    shape = LinkShape.of(a, b, r, hinge)
+    if shape is None:
+        vis.add(body, preset, rgba, M.capsule(r, length, rings=max(6, n // 8), segments=n), a, M.z_to(b - a))
+        return
+    per = n // 4 - 1  # points per rounded corner, so the section has n points like a cylinder of radius r
+    e0, e1 = shape.ends
+    mesh = M.link(
+        length + e0 + e1,
+        shape.first,
+        shape.last,
+        roundness=LINK_ROUNDNESS,
+        rounding=(0.9, 0.9),
+        stations=5,
+        per_corner=per,
+        domes=int(np.clip(per + 1, 4, 10)),
+    )
+    vis.add(body, preset, rgba, mesh, a - shape.rot[:, 2] * e0, shape.rot)
 
 
 def caster(vis: Visuals, body: mujoco.MjsBody, center: np.ndarray, r: float, up: np.ndarray, ball, preset: str) -> None:
