@@ -14,6 +14,7 @@ from robotforge.behaviors import nav_grid, nav_map
 from robotforge.behaviors.manager import TRIP
 from robotforge.behaviors.nav_grid import Grid
 from robotforge.behaviors.navigate import NoWay
+from robotforge.bridge.onnx_policy import PolicyWalker, onnxruntime_available
 from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
@@ -298,6 +299,17 @@ def test_a_snake_and_a_balancer_built_from_parts_go_round_a_wall(pg, build):
     trip = _trip(pg, "r", [2.5, 0.0], limit=60)
     assert trip.result()["arrived"], trip.result()
     assert trip.turns_in_place == (build == "BALANCER")
+
+
+@pytest.mark.skipif(not onnxruntime_available(), reason="needs the optional extra: policy")
+def test_a_go2_finds_its_way_on_its_learned_walk(pg):
+    """The follower steers whatever walks the robot: here the Go2's learned policy (walker='rl')."""
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.0], yaw=0)
+    pg.add_object("wall", shape="wall", pos=[1.2, 0.0], size=[1.2, 0.1, 0.5], yaw=90)
+    trip = _trip(pg, "go2", [2.6, 0.0], walker="rl")
+    assert isinstance(trip.walker, PolicyWalker)
+    assert trip.result()["arrived"], trip.result()
+    assert pg.behaviors.pose("go2")["upright"]
 
 
 def test_a_robot_built_from_parts_stops_where_its_arm_reaches_the_object(pg):
