@@ -413,6 +413,64 @@ def test_real_go2_with_a_real_piper_moves_a_cube_between_tables(tmp_path, monkey
     assert placed["success"]
 
 
+CUBE = [0.04, 0.04, 0.04]
+# A second job for every arm, away from the layout its own test was tuned on: (arm, props, object, target).
+SECOND_JOBS = {
+    "lift_picker": (  # from a coffee table on its left to a counter on its right
+        "r",
+        {
+            "coffee": {"shape": "table", "size": [0.26, 0.26, 0.2], "pos": [0.1, 0.4], "fixed": True},
+            "counter": {"shape": "table", "size": [0.3, 0.3, 0.7], "pos": [0.15, -0.42], "fixed": True},
+            "cube": {"shape": "box", "size": CUBE, "pos": [0.1, 0.36, 0.22]},
+        },
+        "counter",
+    ),
+    "mobile_panda": (  # off the floor behind its left wheel, into a bin ahead on its right
+        "r/arm",
+        {
+            "cube": {"shape": "box", "size": CUBE, "pos": [-0.2, 0.55]},
+            "bin": {"shape": "bin", "size": [0.2, 0.2, 0.08], "pos": [0.65, -0.3], "fixed": True},
+        },
+        "bin",
+    ),
+    "mars_rover": ("r/hand", {"cube": {"shape": "box", "size": CUBE, "pos": [0.42, -0.12]}}, [0.36, 0.08]),
+    "centaur": ("r/right_hand", {"cube": {"shape": "box", "size": CUBE, "pos": [0.4, -0.15]}}, [0.25, -0.4]),
+    # From beside its front left leg to behind its right side: sweeping down on a slant from its raised pose, the claw
+    # caught on that leg's femur and closed 3 cm above the cube.
+    "scorpion": ("r/claw", {"cube": {"shape": "box", "size": CUBE, "pos": [0.2, 0.2]}}, [-0.4, -0.2]),
+    "go2_arm": ("r/arm", {"cube": {"shape": "box", "size": CUBE, "pos": [0.0, 0.3]}}, [0.0, -0.3]),
+    "twin_arm": (  # from the table in front onto a higher stand at its left
+        "r/left_hand",
+        {
+            "table": {"shape": "table", "size": [0.3, 0.7, 0.35], "pos": [0.42, 0.0], "fixed": True},
+            "stand": {"shape": "table", "size": [0.25, 0.25, 0.5], "pos": [0.0, 0.5], "fixed": True},
+            "cube": {"shape": "box", "size": CUBE, "pos": [0.4, 0.2, 0.37]},
+        },
+        "stand",
+    ),
+    "tentacle": (  # from behind it on one side onto a step in front on the other
+        "r",
+        {
+            "cube": {"shape": "box", "size": CUBE, "pos": [-0.25, 0.15]},
+            "step": {"shape": "box", "size": [0.16, 0.16, 0.1], "pos": [0.25, -0.15], "fixed": True},
+        },
+        "step",
+    ),
+}
+
+
+@pytest.mark.parametrize("design", list(SECOND_JOBS))
+def test_every_arm_does_a_second_job_somewhere_else(pg, design):
+    arm, props, target = SECOND_JOBS[design]
+    pg.add_robot("r", design=design)
+    for name, fields in props.items():
+        pg.add_object(name, **fields)
+    _run(pg, 0.5)
+    placed = _pick(pg, arm, "cube", target)
+    assert placed["success"], (design, placed)
+    assert pg.behaviors.pose("r")["upright"]
+
+
 def test_the_twin_arm_works_one_cube_with_each_hand_and_leaves_its_waist_alone(pg):
     pg.add_robot("twin", design="twin_arm")
     pg.add_object("table", shape="table", size=[0.3, 0.7, 0.35], pos=[0.42, 0.0], fixed=True)

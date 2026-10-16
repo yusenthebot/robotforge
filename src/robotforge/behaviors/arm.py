@@ -277,6 +277,15 @@ class ArmMotion:
         if start[2] < travel_z - RISE_MIN and self.reach_error(risen) <= REACH_TOL:
             self.queue.append(Waypoint(risen, self._grip("open"), self._time(start, risen), "rise"))
             start = risen
+        elif start[2] > travel_z + RISE_MIN:
+            # Starting high (an arm held up at home), go across high and come straight down over the object: sweeping
+            # down on a slant, a scorpion's claw caught on its own front leg on the way and closed 3 cm above the cube.
+            for z in np.arange(start[2], travel_z + RISE_MIN, -CARRY_RAISE):
+                over = np.array([above[0], above[1], z])
+                if self._reaches_around(start, over):
+                    self.queue.append(Waypoint(over, self._grip("open"), self._time(start, over), "approach"))
+                    start = over
+                    break
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
@@ -300,19 +309,30 @@ class ArmMotion:
         for k in range(CARRY_RAISES + 1):
             z = low + k * CARRY_RAISE
             a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
-            da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
-            turn = self._sweep(float(np.arctan2(da[1], da[0])), float(np.arctan2(db[1], db[0])))
-            way = [self._arc_point(a, b, s, turn) for s in np.linspace(0, 1, CARRY_CHECKS + 2)[1:-1]]
             clear = all(
                 p[2] - load_half_height > top + LOAD_CLEARANCE
-                for p in way
+                for p in self._way_around(a, b)
                 for center, half, top in under
                 if np.all(np.abs(p[:2] - center) < half + load_half_height + LOAD_CLEARANCE)
             )
-            ends = [a, b] if k else []  # the first height's ends are checked with the other key points
-            if clear and all(self.reach_error(p) <= REACH_TOL for p in [*ends, *way]):
+            # The first height's ends are checked with the other key points.
+            if clear and self._reaches_around(a, b, ends=k > 0):
                 return z
         return None
+
+    def _way_around(self, a: np.ndarray, b: np.ndarray) -> list[np.ndarray]:
+        """Points along the path a move from `a` to `b` takes around the base (ends left out)."""
+        steps = np.linspace(0, 1, CARRY_CHECKS + 2)[1:-1]
+        if self.yaw is None:
+            return [a + (b - a) * s for s in steps]
+        da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
+        turn = self._sweep(float(np.arctan2(da[1], da[0])), float(np.arctan2(db[1], db[0])))
+        return [self._arc_point(a, b, s, turn) for s in steps]
+
+    def _reaches_around(self, a: np.ndarray, b: np.ndarray, ends: bool = True) -> bool:
+        """Whether the tool reaches every point of the way from `a` to `b` around the base, pointing down."""
+        points = [*([a, b] if ends else []), *self._way_around(a, b)]
+        return all(self.reach_error(p) <= REACH_TOL for p in points)
 
     def _carrier_boxes(self) -> list[tuple[np.ndarray, np.ndarray, float]]:
         """The robot under the arm as boxes seen from above: (center xy, half size xy, top z) of each solid shape
