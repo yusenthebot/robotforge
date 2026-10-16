@@ -4,6 +4,8 @@
         [--rounds 30] [--energy 0.1] [--reflexes] [--shove] [--heading W]
     uv run python scripts/rhythm_bench.py switch [--robots dog,star] [--seeds 1,2,3] [--jobs 4] [--stress 4]
         [--idle 3] [--long 20] [--min-share 0.6] [--keep DIR | --walks DIR]
+    uv run python scripts/rhythm_bench.py leads --walks DIR [--robots dog,star] [--seeds 1,2,3] [--paths move,gap]
+        [--jobs 4] [--json]
     add --import a1=path/to/a1.urdf (or any URDF or MJCF file) to bench a robot from a file too
 
 forward: each run teaches one robot to walk forward the way the RL II lesson's Learn button does
@@ -35,6 +37,16 @@ instead tries every switch out of walking or turning (F>L, L>F, R>S, ...) N time
 the first command for 2 to 2.5 s, the second for 1.5 s, and counts the falls after the switch (and any before),
 and the degrees turned after it: in the first second (a turn's share of its rate) and in all 1.5 s.
 --keep DIR saves each trained walk as DIR/<robot>_<seed>.json; --walks DIR plays those instead of training.
+switch's move, idle and keys paths turn left once, after one lead: one sequence says little about falls, which come
+at some points of the stride and not others.
+
+leads: plays walks kept with switch --keep through each path, both turn directions, after each of 25 leads of
+walking (2.0 to 4.48 s, every update of a 2 Hz stride once): move, idle and keys as above (a 1 s turn, then 2 s of
+walking, then a stop and 2 s of standing), and gap: W let go, A or D pressed 0.04 to 0.3 s later for a second, let
+go, W pressed again as long after. Each sequence starts from standing in a reset world. It reports the falls (trunk
+past 60 degrees at any update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the
+walk before the turn), and the 1 s turn's share of the learned rate: per walk the median over its leads, and over
+all tries how many reached --min-share.
 """
 
 from __future__ import annotations
@@ -320,6 +332,153 @@ def _long(pg, robot: str, seconds: float) -> list[Leg]:
     return legs
 
 
+# leads: when in the stride a turn is asked for decides whether it tips the robot over, so each sequence is tried
+# after 25 leads of walking, 2.0 to 4.48 s: every update of a 2 Hz stride (0.02 s apart) once, over five strides.
+LEADS = tuple(round(2.0 + 0.1 * k + 0.02 * (k // 5), 2) for k in range(25))
+GAPS = (0.04, 0.1, 0.16, 0.22, 0.3)  # s between letting go of W and pressing A or D (path gap), cycled over leads
+PATHS = ("move", "idle", "keys", "gap")
+
+
+def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> list[tuple[str, float, float, float]]:
+    """The calls of one sequence: (what, speed, turn, then seconds of sim time). "move" is a move call (a key change),
+    "stop" a stop; the turn command's seconds are the 1 s turn measured."""
+    if path == "move":  # the MCP move tool with seconds, the next call at once
+        return [
+            ("move", 0.2, 0.0, lead),
+            ("stop", 0, 0, 0.0),
+            ("move", 0.0, turn, TURN_SECONDS),
+            ("stop", 0, 0, 0.0),
+            ("move", 0.2, 0.0, 2.0),
+            ("stop", 0, 0, STAND_SECONDS),
+        ]
+    if path == "idle":  # the same with the viewer open: the sim runs on while the agent thinks
+        return [
+            ("move", 0.2, 0.0, lead),
+            ("stop", 0, 0, idle),
+            ("move", 0.0, turn, TURN_SECONDS),
+            ("stop", 0, 0, idle),
+            ("move", 0.2, 0.0, 2.0),
+            ("stop", 0, 0, STAND_SECONDS),
+        ]
+    if path == "keys":  # W held, A or D pressed for a second while W is still held, then let go
+        return [
+            ("move", 0.2, 0.0, lead),
+            ("move", 0.2, turn, TURN_SECONDS),
+            ("move", 0.2, 0.0, 2.0),
+            ("move", 0.0, 0.0, STAND_SECONDS),
+        ]
+    # gap: W let go, A or D pressed a moment later for a second, then W again
+    return [
+        ("move", 0.2, 0.0, lead),
+        ("move", 0.0, 0.0, gap),
+        ("move", 0.0, turn, TURN_SECONDS),
+        ("move", 0.0, 0.0, gap),
+        ("move", 0.2, 0.0, 2.0),
+        ("move", 0.0, 0.0, STAND_SECONDS),
+    ]
+
+
+def run_leads(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
+    """Every path, both turn directions, every lead, on a saved walk: whether it fell (trunk past 60 degrees at any
+    update) and in which call, and the degrees of the 1 s turn."""
+    from robotforge.behaviors.rhythm_walk import SavedWalk, save_walk
+    from robotforge.playground import Playground
+
+    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_rhythm_")
+    walk = SavedWalk.model_validate_json(Path(opts["walks"], f"{robot}_{seed}.json").read_text(encoding="utf-8"))
+    pg = Playground.with_demo()
+    pg.new_world(f"leads_{robot}")
+    pg.add_robot(robot, **_entry(robot, opts))
+    save_walk(pg.store.dir, walk)
+    rate = math.degrees(walk.turn_rate or 0.0)
+    out = []
+    for path in opts["paths"]:
+        for side, turn in (("L", 1.0), ("R", -1.0)):
+            for k, lead in enumerate(LEADS):
+                pg.session.reset()
+                calls = _sequence(path, turn, lead, opts["idle"], GAPS[k % len(GAPS)])
+                fell, turned = _play(pg, robot, calls)
+                share = round(turn * turned / rate, 2) if turned is not None and rate > 0 else None
+                out.append(
+                    {
+                        "robot": robot,
+                        "seed": seed,
+                        "path": path,
+                        "side": side,
+                        "lead": lead,
+                        "fell": fell,
+                        "turned": turned,
+                        "share": share,
+                    }
+                )
+    return out
+
+
+def _play(pg, robot: str, calls: list[tuple[str, float, float, float]]) -> tuple[int | None, float | None]:
+    """Make the calls one after the other: the call during or after which the robot fell (None: it stayed up), and
+    the degrees it turned during the 1 s turn command (None if it fell before)."""
+    root = pg.behaviors._root_body(robot)
+    state = {"fell": False, "turned": 0.0, "last": 0.0}
+
+    def heading() -> float:
+        rot = pg.session.data.xmat[root]
+        return math.degrees(math.atan2(float(rot[3]), float(rot[0])))
+
+    def watch() -> bool:
+        now = heading()
+        state["turned"] += (now - state["last"] + 180) % 360 - 180
+        state["last"] = now
+        state["fell"] = state["fell"] or float(pg.session.data.xmat[root][8]) < FELL_COS
+        return state["fell"]
+
+    turned = None
+    for i, (what, speed, angle, seconds) in enumerate(calls):
+        if what == "stop":
+            pg.behaviors.stop(robot)
+        else:
+            pg.behaviors.move(robot, speed, angle, "rhythm")
+        state["last"], state["turned"] = heading(), 0.0
+        if seconds:
+            pg.run_fast(watch, seconds)
+        watch()
+        if angle and seconds == TURN_SECONDS and turned is None:
+            turned = round(state["turned"], 1)
+        if state["fell"]:
+            return i, turned
+    return None, turned
+
+
+def _leads_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
+    return run_leads(*args)
+
+
+def _print_leads(results: list[dict], min_share: float) -> None:
+    """Falls per robot, path and side (and in which call), and the 1 s turn's share of the rate: per walk the median
+    over leads, and over all tries how many reached `min_share`."""
+    for robot in dict.fromkeys(r["robot"] for r in results):
+        mine = [r for r in results if r["robot"] == robot]
+        seeds = sorted({r["seed"] for r in mine})
+        for path in dict.fromkeys(r["path"] for r in mine):
+            for side in "LR":
+                runs = [r for r in mine if r["path"] == path and r["side"] == side]
+                falls = [r for r in runs if r["fell"] is not None]
+                where = {}
+                for r in falls:
+                    where[f"s{r['seed']}c{r['fell']}"] = where.get(f"s{r['seed']}c{r['fell']}", 0) + 1
+                shares = [r["share"] for r in runs if r["share"] is not None and r["fell"] is None]
+                medians = []
+                for seed in seeds:
+                    own = sorted(r["share"] for r in runs if r["seed"] == seed and r["share"] is not None)
+                    medians.append(f"{own[len(own) // 2]:.0%}" if own else "-")
+                reached = sum(s >= min_share for s in shares)
+                print(
+                    f"{robot:9} {path:5} {side}: {len(falls):3} falls in {len(runs)}"
+                    + (f" ({', '.join(f'{k} {n}' for k, n in sorted(where.items()))})" if where else "")
+                    + f"; 1 s turn: median per walk {' '.join(medians)}; >= {min_share:.0%} in {reached} of "
+                    f"{len(shares)}"
+                )
+
+
 def _forward_job(args: tuple[str, int, dict[str, Any]]) -> dict:
     return asdict(run_forward(*args))
 
@@ -330,7 +489,7 @@ def _switch_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("what", choices=("forward", "switch"))
+    parser.add_argument("what", choices=("forward", "switch", "leads"))
     parser.add_argument("--robots", default="dog,star,humanoid")
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--import", dest="imports", action="append", default=[], metavar="NAME=FILE")
@@ -346,6 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--trials", type=int, default=0, help="switch: tries of each switch on its own")
     parser.add_argument("--keep", help="switch: save the trained walks here")
     parser.add_argument("--walks", help="switch: play the walks saved here instead of training")
+    parser.add_argument("--paths", default=",".join(PATHS), help="leads: which of " + ", ".join(PATHS))
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--json", action="store_true", help="print one JSON line per run")
     args = parser.parse_args(argv)
@@ -368,13 +528,23 @@ def main(argv: list[str] | None = None) -> int:
         "trials": args.trials,
         "keep": args.keep,
         "walks": args.walks,
+        "paths": [p for p in args.paths.split(",") if p],
     }
     names = [r for r in args.robots.split(",") if r]
     robots = names + [n for n in imports if n not in names]
     jobs = [(r, int(s), opts) for r in robots for s in args.seeds.split(",")]
-    worker = _forward_job if args.what == "forward" else _switch_job
+    if args.what == "leads" and not args.walks:
+        parser.error("leads plays saved walks: give --walks DIR (from switch --keep DIR)")
+    worker = {"forward": _forward_job, "switch": _switch_job, "leads": _leads_job}[args.what]
     with ProcessPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         results = list(pool.map(worker, jobs))
+    if args.what == "leads":
+        flat = [r for batch in results for r in batch]
+        if args.json:
+            for r in flat:
+                print(json.dumps(r))
+        _print_leads(flat, args.min_share)
+        return 0
     if args.what == "forward":
         _print_forward(results, args.json)
         return 0
