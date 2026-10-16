@@ -484,6 +484,22 @@ def test_a_far_destination_does_not_make_later_maps_coarser(pg):
     assert near.planner.last_map.grid.res == nav_map.RES
 
 
+@pytest.mark.parametrize(("width", "arrived"), [(0.6, True), (2.4, False)])
+def test_an_object_it_cannot_get_next_to_is_not_arrived_at(pg, width, arrived):
+    """Regression: an object out of reach behind something (here in the middle of a block) let the goal ring widen
+    up to 2.5 m, and the trip still said arrived. The dog stops where it can; next to a narrow block that is beside
+    the cube (arrived, with a note); on a wide one it is a metre off: not arrived, and why."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0], yaw=0)
+    pg.add_object("block", shape="box", pos=[2.5, 0.0, 0.25], size=[width, width, 0.5], fixed=True)
+    pg.add_object("cube", shape="box", pos=[2.5, 0.0, 0.55], size=[0.1, 0.1, 0.1])
+    trip = _trip(pg, "dog", "cube")
+    result = trip.result()
+    assert result["arrived"] is arrived and "block" in result["note"], result
+    assert (result.get("why") == "closed_off") is not arrived, result
+    x = pg.behaviors.pose("dog")["position"][0]
+    assert 2.5 - width / 2 - 0.5 < x < 2.5 - width / 2  # it went up to the block either way
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])

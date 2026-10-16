@@ -33,6 +33,11 @@ OVERSHOOT = 0.2  # m: a walker that slows late steps past the end; that far past
 NEAR_ENOUGH = 0.15  # m: a point a little inside the room a robot keeps from walls, reached this nearly, is reached
 FACE_TOL = math.radians(12.0)  # facing an object this closely is facing it
 GAP = 0.15  # m left between the robot's front and an object it was sent to
+# Where it cannot stop that close to an object it was sent to, up to NEXT_TO m further is still next to it: at the
+# edge of the counter or the shelf the object is on (kitchen: 0.5 to 0.8 m from the cups on the island). Further
+# out it goes as near as it can get, up to FAR m from the object, and says it did not get there.
+NEXT_TO = 0.3
+FAR = 3.0
 ARM_SHARE = 0.75  # of an arm's stretched-out length: what it reaches with its gripper pointing down
 SNAP = 0.5  # m: a point inside an obstacle is replaced by the nearest free spot up to this far beyond the robot
 CRUISE_SHARE, CRUISE_MAX = 0.8, 0.5  # default top speed: this share of max_speed, at most this many m/s
@@ -159,6 +164,7 @@ class Plan:
     exact: bool  # it ends where it was sent (not at the nearest free spot, nor further from an object)
     note: str | None = None
     within_reach: bool | None = None  # for a robot with an arm sent to an object
+    short: str | None = None  # it ends only near an object (beyond NEXT_TO), why: a NoWay cause
 
 
 class Planner:
@@ -215,8 +221,14 @@ class Planner:
             ((k, found) for k, goal in enumerate(goals) if (found := self._search(nav, penalty, first, goal))),
             (-1, None),
         )
+        short = None
+        if cells is None and away is not None:  # an object it cannot get next to: as near to it as it gets
+            near = self._nearest(nav, first, away)
+            cells = self._search(nav, penalty, first, near) if near is not None else None
+            if cells is not None:
+                level, short = len(goals), self._why_not(nav, first, np.logical_or.reduce(goals)).cause
         if cells is None:
-            raise self._why_not(nav, first, goals[-1])
+            raise self._why_not(nav, first, np.logical_or.reduce(goals))
         corners = pull_string(grid, cells, nav.room, self.body.reach + 0.1)
         points = [start_xy]
         if escape:
@@ -238,6 +250,7 @@ class Planner:
         plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact)
         if not exact:
             plan.note = self._short_note(nav, cells[-1], on_point, away)
+        plan.short = short
         if self.arm is not None and d.loose and not on_point:
             plan.within_reach = self._reaches(pts[-1])
         return plan
@@ -311,7 +324,7 @@ class Planner:
                 raise self._why_not(nav, start, to_point <= grid.res)
             nearest = float(to_point[candidates].min())
             return [candidates & (to_point <= nearest + 0.1)], None
-        away = clearance(self._object_mask(nav, data), grid.res, 3.0)
+        away = clearance(self._object_mask(nav, data), grid.res, FAR)
         # Its front a hand's width from the object; at least a row of cells beyond the room it needs, or on coarse
         # cells (a map stretched to a far point) no cell falls between the two for a robot with a short front.
         want = max(self.body.front + GAP, self.body.need + grid.res)
@@ -320,8 +333,15 @@ class Planner:
             reach = self._reach_mask(xs, ys)
             if reach is not None:
                 goals.append(reach)
-        goals += [away <= want + extra for extra in (0.0, 0.3, 1.0, 2.5)]
+        goals += [away <= want, away <= want + NEXT_TO]
         return goals, away
+
+    def _nearest(self, nav: NavMap, start: tuple[int, int], away: np.ndarray) -> np.ndarray | None:
+        """The cells it can get to that are nearest an object (within FAR of it), or None."""
+        candidates = nav_grid.reachable(nav.grid, nav.free, start) & (away < FAR)
+        if not candidates.any():
+            return None
+        return candidates & (away <= float(away[candidates].min()) + nav.grid.res)
 
     def _object_mask(self, nav: NavMap, data: mujoco.MjData) -> np.ndarray:
         grid = nav.grid
@@ -757,7 +777,10 @@ class Navigator:
         alpha = _wrap(math.atan2(fy - xy[1], fx - xy[0]) - yaw)
         if abs(alpha) <= FACE_TOL or not self.turns_in_place or math.hypot(fx - xy[0], fy - xy[1]) < 0.05:
             self.walker.command(0.0, 0.0)
-            self._finish(t, "arrived")
+            if self.plan.short:  # as near as it gets, which is not next to it
+                self._finish(t, "stopped", self.plan.short, self.plan.note)
+            else:
+                self._finish(t, "arrived")
             return
         self.walker.command(0.0, self._turn(alpha))
 
