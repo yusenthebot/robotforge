@@ -6,6 +6,7 @@ touched, so a bad edit never leaves a broken world behind.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -40,6 +41,29 @@ def slug(name: str) -> str:
     return s[:32]
 
 
+def _legacy_slug(name: str) -> str:
+    """The folder robotforge used before names in other scripts got their code ("Café" was saved as caf), so worlds
+    saved then still open by the name they were given."""
+    s = _SAFE.sub("_", name.strip().lower()).strip("_")
+    if not s or not s[0].isalpha():
+        s = f"world_{s}" if s else "world"
+    return s[:32]
+
+
+def _folder(name: str, parent: Path | None = None) -> Path:
+    """Where the world called `name` lives: its own folder, or the one an older robotforge saved it in."""
+    home = parent or worlds_home()
+    own, legacy = home / slug(name), home / _legacy_slug(name)
+    # Every name without Latin letters used to share "world": that one opens by its own name only.
+    shared = legacy.name == "world"
+    if not (own / "world.yaml").exists() and legacy != own and not shared and (legacy / "world.yaml").exists():
+        world = legacy / "world.yaml"
+        with contextlib.suppress(OSError, ValueError):  # a world whose file cannot be read is not this one
+            if World.from_yaml(world.read_text(encoding="utf-8")).name in (name.strip(), _legacy_slug(name)):
+                return legacy
+    return own
+
+
 class WorldStore:
     def __init__(self, directory: Path):
         self.dir = directory
@@ -50,7 +74,7 @@ class WorldStore:
 
     @classmethod
     def create(cls, name: str, floor_style: str = "checker", parent: Path | None = None) -> WorldStore:
-        directory = (parent or worlds_home()) / slug(name)
+        directory = _folder(name, parent)
         store = cls(directory)
         if store.file.exists():
             store.reopened = True  # reopening an existing world is friendlier than failing
@@ -65,7 +89,7 @@ class WorldStore:
     def open(cls, name_or_path: str) -> WorldStore:
         p = Path(name_or_path).expanduser()
         candidates = [p, p / "world.yaml"] if p.is_absolute() or p.exists() else []
-        candidates.append(worlds_home() / slug(name_or_path))
+        candidates.append(_folder(name_or_path))
         for c in candidates:
             directory = c.parent if c.name == "world.yaml" else c
             if (directory / "world.yaml").exists():
