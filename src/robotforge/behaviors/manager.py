@@ -101,7 +101,7 @@ class BehaviorManager:
         In an open world, legged walkers stand on their gait from the start too (see STEPPING). Not in lessons,
         which drive their robots themselves, nor in a plain model file."""
         world = self._world()
-        names = self._names()
+        names = self._names(world)
         told = {r.name: _told_kind(r) for r in world.robots} if world else {}
         in_world = self._world_dir() is not None
         with self.session.lock:
@@ -130,7 +130,7 @@ class BehaviorManager:
     def hands_off(self) -> set[str]:
         """The robots no controller runs right now: legs set by hand, or the "Joints by hand" mode. A world edit
         or a lesson that brings them back stands them on a fresh gait; let_go takes it away again."""
-        return set(self._names()) - set(self.session.controllers)
+        return set(self.robot_names()) - set(self.session.controllers)
 
     def let_go(self, robots: Iterable[str]) -> None:
         """Take away the gait start_balancing stood these robots on, so their joints stay where they were set:
@@ -143,14 +143,10 @@ class BehaviorManager:
 
     # ---- robots in the session -------------------------------------------------------
 
-    def _names(self) -> list[str]:
-        world = self._world()
-        return [r.name for r in world.robots] if world else sorted(self._prefixes())
-
     def robots(self) -> list[dict[str, Any]]:
         m = self.session.model
         world = self._world()
-        names = self._names()
+        names = self._names(world)
         told = {r.name: _told_kind(r) for r in world.robots} if world else {}
         models = {r.name: library.get(r.library).title for r in world.robots if r.library} if world else {}
         out = []
