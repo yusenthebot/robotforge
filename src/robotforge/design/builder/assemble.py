@@ -33,6 +33,7 @@ from robotforge.design.visuals import parts as P
 # MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
 RANGE_DIST = 1 << int(mujoco.mjtRayDataField.mjRAYDATA_DIST)
 LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator pushes with full force
+LOOKS_OUT = 0.7  # |cos| of the angle between a sensor's view and its face's normal above which it looks out of it
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
 WHEEL_DAMPING = 0.002
 INVISIBLE = [0.0, 0.0, 0.0, 0.0]
@@ -441,7 +442,35 @@ def _sensors(
         where = local @ anchor(part, sensor.at, "the base" if owner == "base" else f"part {owner!r}")
         look = local @ np.asarray(axis_vector(sensor.direction), float)
         name = sensor.name or _sensor_name(owner, sensor, used)
-        _add_sensor(spec, body, name, sensor, where, look, part, vis, up)
+        normal = looks.face_normal(part, sensor.at, local)
+        seat = where if normal is None else where + normal * layout.shell_offset(owner, where, normal)
+        along = looks.direction_of(part, local) if isinstance(part, PartSpec) else None
+        if along is None and normal is not None and np.linalg.norm(np.cross(up, normal)) > 1e-6:
+            along = np.cross(up, normal)  # a board on a side face lies level
+        mount = _Mount(where, look, up, normal, seat, along)
+        _add_sensor(spec, body, name, sensor, mount, part, vis)
+
+
+@dataclass(frozen=True)
+class _Mount:
+    """Where a sensor is, in its body's frame, and where its module is drawn."""
+
+    where: np.ndarray  # the sensor itself: its site or camera
+    look: np.ndarray  # where a camera or rangefinder looks
+    up: np.ndarray  # the robot's up
+    normal: np.ndarray | None  # outward normal of the face it is on (None: the center, an end or numbers)
+    seat: np.ndarray  # the same spot on the drawn shell (a hinged link is drawn tapered, not as its capsule)
+    along: np.ndarray | None  # which way a board's long side runs
+
+    def lift(self, half_width: float, half_height: float, frame: np.ndarray) -> np.ndarray | None:
+        """Where a module that looks along its face (a camera on top looking forward) stands so it sits on the
+        face instead of halfway into it: its middle raised by its half size across the face. None when it
+        looks out of its face or is not on one."""
+        if self.normal is None or abs(float(self.look @ self.normal)) > LOOKS_OUT:
+            return None
+        x, y = abs(float(frame[:, 0] @ self.normal)), abs(float(frame[:, 1] @ self.normal))
+        across = x * half_width + y * half_height
+        return self.seat + self.normal * (across - looks.CAMERA_SEAT)
 
 
 def _sensor_name(owner: str, sensor: SensorSpec, used: dict[str, int]) -> str:
@@ -456,13 +485,12 @@ def _add_sensor(
     body: mujoco.MjsBody,
     name: str,
     sensor: SensorSpec,
-    where: np.ndarray,
-    look: np.ndarray,
+    mount: _Mount,
     part: BaseSpec | PartSpec,
     vis: Visuals,
-    up: np.ndarray,
 ) -> None:
     S, OBJ = mujoco.mjtSensor, mujoco.mjtObj
+    where, look, up = mount.where, mount.look, mount.up
     if sensor.type == "imu":
         # Same names as the templates' IMU: <prefix>imu (site), accel, gyro, orientation.
         prefix = name[: -len("imu")] if name.endswith("imu") else f"{name}_"
@@ -474,7 +502,10 @@ def _add_sensor(
             ("orientation", S.mjSENS_FRAMEQUAT),
         ):
             spec.add_sensor(name=f"{prefix}{kind}", type=stype, objtype=OBJ.mjOBJ_SITE, objname=site)
-        looks.imu(vis, body, where, np.array([0.0, 0.0, 1.0]))
+        if mount.normal is None:  # inside the body (it is usually hidden there) or at given numbers: level
+            looks.imu(vis, body, where, np.array([0.0, 0.0, 1.0]), None)
+        else:  # flat on its face
+            looks.imu(vis, body, mount.seat, mount.normal, mount.along)
         return
     if sensor.type == "touch":
         radius = max(0.012, 1.4 * link_radius(part)) if isinstance(part, PartSpec) and part.foot else None
@@ -483,8 +514,12 @@ def _add_sensor(
         spec.add_sensor(name=name, type=S.mjSENS_TOUCH, objtype=OBJ.mjOBJ_SITE, objname=name)
         return
     if sensor.type == "camera":
-        body.add_camera(name=name, pos=where.tolist(), xyaxes=_camera_axes(look), fovy=sensor.fov)
-        # A small lens so you can see where the camera sits and which way it looks (drawn as a board camera).
+        # A camera on a face it does not look out of (on top, looking forward) stands on that face: from
+        # halfway into the shell it saw the inside of the robot.
+        lifted = mount.lift(looks.CAMERA_HALF, looks.CAMERA_HALF, looks.camera_frame(look, up))
+        eye = where if lifted is None else lifted
+        body.add_camera(name=name, pos=eye.tolist(), xyaxes=_camera_axes(look), fovy=sensor.fov)
+        # The camera's mass, where it has always been (drawn as the board camera round the camera point).
         lens = body.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[0.009, 0.006, 0],
@@ -496,7 +531,7 @@ def _add_sensor(
             conaffinity=0,
         )
         vis.hide(lens)
-        looks.camera(vis, body, where, look, up)
+        looks.camera(vis, body, eye, look, up)
         return
     if sensor.type == "rangefinder":
         body.add_site(name=name, pos=where.tolist(), quat=_z_to(look), size=[0.004, 0, 0], rgba=[1, 0.3, 0.2, 0.8])
@@ -504,7 +539,10 @@ def _add_sensor(
             name=name, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=name, cutoff=sensor.range
         )
         ray.intprm[0] = RANGE_DIST
-        looks.rangefinder(vis, body, where, look, up)
+        # The board stands on its face; the ray still starts where the sensor is.
+        frame = looks.rangefinder_frame(look, up)
+        lifted = mount.lift(looks.RANGE_HALF, looks.RANGE_HALF * looks.RANGE_ASPECT, frame)
+        looks.rangefinder(vis, body, mount.seat if lifted is None else lifted, frame)
         return
     # lidar: a spinning puck, modelled as a ring of rangefinders in the owner's horizontal plane
     up = np.array([0.0, 0.0, 1.0])

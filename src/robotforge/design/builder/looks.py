@@ -58,9 +58,12 @@ CAMERA_HALF = 0.011  # m, half the width of a board camera's housing
 CAMERA_DEPTH = 0.009  # m the housing reaches back from its front face
 CAMERA_PROUD = 0.002  # m the housing stands in front of the camera point, which stays inside it (see camera_module)
 CAMERA_BARREL = 0.003  # m the lens barrel stands in front of the housing
+CAMERA_SEAT = 0.0005  # m a camera raised onto a face sinks into it, so no gap shows under the housing
 LIDAR_RADIUS, LIDAR_HEIGHT = 0.022, 0.024  # m, as the lidar puck assemble.py gives its mass to
 IMU_HALF = 0.009  # m, half the width of an IMU breakout board
 RANGE_HALF = 0.012  # m, half the width of an ultrasonic range finder board
+RANGE_ASPECT = 0.42  # its height as a share of its width (P.range_finder)
+FACE_NORMALS = {"top": "up", "bottom": "down", "front": "forward", "back": "back", "left": "left", "right": "right"}
 
 
 def look_of(material: str) -> str:
@@ -125,6 +128,7 @@ class Layout:
     centers: dict[str, np.ndarray | None] = field(default_factory=dict)  # body -> shape middle, own frame
     boxes: dict[str, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict)  # body -> shape bounds, own frame
     solids: dict[str, tuple] = field(default_factory=dict)  # body -> its shape, own frame (see `inside`)
+    links: dict[str, LinkShape] = field(default_factory=dict)  # body -> how its capsule is drawn, when not round
     keepouts: dict[str, list[tuple[np.ndarray, np.ndarray]]] = field(default_factory=dict)
     middle: np.ndarray = field(default_factory=lambda: np.zeros(3))  # the robot's middle (the base shape's)
     poses: dict[str, tuple[np.ndarray, np.ndarray, int]] = field(default_factory=dict)  # part -> its servo case
@@ -134,20 +138,20 @@ class Layout:
         out = cls()
         out.frames["base"] = (np.eye(3), np.zeros(3))
         out.centers["base"] = _center(build.base, np.eye(3))
-        out._bounds("base", build.base, np.eye(3))
+        out._bounds("base", build.base, np.eye(3), None)
         out.middle = out.centers["base"] if out.centers["base"] is not None else np.zeros(3)
         out._sensor_keepouts("base", build.base, np.eye(3))
         for part in placed:
             rot_p, pos_p = out.frames[part.parent]
             out.frames[part.name] = (rot_p @ part.rot, rot_p @ part.pos + pos_p)
             out.centers[part.name] = _center(part.spec, part.local)
-            out._bounds(part.name, part.spec, part.local)
+            out._bounds(part.name, part.spec, part.local, hinge_axis(part))
             out._sensor_keepouts(part.name, part.spec, part.local)
         for part in placed:
             out._child_keepout(build, part, footprints.get(part.name))
         return out
 
-    def _bounds(self, body: str, spec: BaseSpec | PartSpec, local: np.ndarray) -> None:
+    def _bounds(self, body: str, spec: BaseSpec | PartSpec, local: np.ndarray, hinge: np.ndarray | None) -> None:
         if spec.shape == "none":
             return
         low, high = shape_box(spec)
@@ -163,6 +167,15 @@ class Layout:
         else:
             start, end = segment(spec)
             self.solids[body] = (spec.shape, local @ start, local @ end, spec.size[0] / 2)
+            shape = LinkShape.of(local @ start, local @ end, spec.size[0] / 2, hinge)
+            if spec.shape == "capsule" and shape is not None:
+                self.links[body] = shape
+
+    def shell_offset(self, body: str, point: np.ndarray, normal: np.ndarray) -> float:
+        """How far beyond `point`, a point on the body's collision shape, its drawn shell's surface lies along
+        `normal` (negative: inside). Only a hinged link is drawn other than its shape: tapered and flattened."""
+        link = self.links.get(body)
+        return 0.0 if link is None else link.offset(np.asarray(point, float), _unit(normal))
 
     def inside(self, body: str, points: np.ndarray, margin: float = 0.0005) -> bool:
         """True when every point lies inside the body's own shape, `margin` deep: what is there cannot be seen."""
@@ -321,12 +334,47 @@ class LinkShape:
         """How far the domes reach beyond a and b."""
         return 0.9 * min(self.first), 0.9 * min(self.last)
 
+    def offset(self, point: np.ndarray, normal: np.ndarray) -> float:
+        d = self.rot[:, 2]
+        length = float(np.linalg.norm(self.b - self.a))
+        along = float(normal @ d)
+        if abs(along) > 0.7:  # on an end: the dome's tip
+            tip = self.b + d * self.ends[1] if along > 0 else self.a - d * self.ends[0]
+            return float((tip - point) @ normal)
+        s = float(np.clip((point - self.a) @ d, 0.0, length))
+        u = _unit(_perp(normal, d))
+        t = s / length
+        hx = self.first[0] + (self.last[0] - self.first[0]) * t
+        hy = self.first[1] + (self.last[1] - self.first[1]) * t
+        ux, uy = abs(float(u @ self.rot[:, 0])), abs(float(u @ self.rot[:, 1]))
+        reach = _reach(hx, hy, LINK_ROUNDNESS * min(hx, hy), ux, uy)
+        return reach - float((point - self.a - s * d) @ u)
+
+
+def _reach(hx: float, hy: float, rr: float, ux: float, uy: float) -> float:
+    """How far from its middle a rounded rectangle (half extents hx, hy, corner radius rr) ends along (ux, uy)."""
+    cx, cy = hx - rr, hy - rr
+    if ux > 1e-9 and hx / ux * uy <= cy:
+        return hx / ux
+    if uy > 1e-9 and hy / uy * ux <= cx:
+        return hy / uy
+    uc = ux * cx + uy * cy
+    return uc + math.sqrt(max(uc * uc - cx * cx - cy * cy + rr * rr, 0.0))
+
 
 def hinge_axis(part: Placed | None) -> np.ndarray | None:
     """The hinge a part swings on, in its body frame (its link is drawn flattened along it)."""
     if part is None or part.spec.joint.type != "hinge" or part.spec.joint.continuous:
         return None
     return part.axis(axis_vector(part.spec.joint.axis))
+
+
+def face_normal(spec: BaseSpec | PartSpec, at: str | Sequence[float], local: np.ndarray) -> np.ndarray | None:
+    """The outward normal, in the body frame, of the face a named anchor such as "front" sits on (None for
+    the center, the ends, a mount or numbers)."""
+    if not isinstance(at, str) or at in spec.mounts or at not in FACE_NORMALS:
+        return None
+    return local @ np.asarray(axis_vector(FACE_NORMALS[at]), float)
 
 
 def _center(spec: BaseSpec | PartSpec, local: np.ndarray) -> np.ndarray | None:
@@ -759,30 +807,42 @@ def mount_plate(vis: Visuals, body: mujoco.MjsBody, reach: float) -> None:
 # ---- sensors ------------------------------------------------------------------------------------------
 
 
-def camera(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarray, up: np.ndarray) -> None:
-    """A board camera around the camera point, its lens looking where the camera looks."""
+def camera_frame(look: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """A board camera's housing frame: z where it looks, y up (so its LED sits top right)."""
     z = _unit(look)
     y = _perp(np.asarray(up, float), z)
     y = _unit(y) if np.linalg.norm(y) > 1e-6 else M.z_to(z)[:, 1]
-    rot = np.column_stack([_cross(y, z), y, z])  # the housing's y up, so its LED sits top right
+    return np.column_stack([_cross(y, z), y, z])
+
+
+def camera(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarray, up: np.ndarray) -> None:
+    """A board camera around the camera point, its lens looking where the camera looks."""
     front = np.asarray(where, float) + _unit(look) * CAMERA_PROUD
     parts = P.camera_module(CAMERA_HALF, CAMERA_DEPTH, CAMERA_BARREL)
-    _add(vis, body, parts, {**NEUTRAL, "led": P.LED_RED}, front, rot)
+    _add(vis, body, parts, {**NEUTRAL, "led": P.LED_RED}, front, camera_frame(look, up))
 
 
 def lidar(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, up: np.ndarray) -> None:
     _add(vis, body, P.lidar_head(LIDAR_RADIUS, LIDAR_HEIGHT), NEUTRAL, where, M.z_to(up))
 
 
-def imu(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, up: np.ndarray) -> None:
+def imu(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, normal: np.ndarray, along: np.ndarray | None) -> None:
+    """An IMU board lying flat on the face whose outward normal is `normal`, its long side `along` that way."""
     colors = {**NEUTRAL, "shell": P.PCB, "led": P.LED_RED}
-    _add(vis, body, P.imu_board(IMU_HALF), colors, np.asarray(where, float) - _unit(up) * 0.0003, M.z_to(up))
+    rot = _frame(normal, along)
+    _add(vis, body, P.imu_board(IMU_HALF), colors, np.asarray(where, float) - _unit(normal) * 0.0003, rot)
 
 
-def rangefinder(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarray, up: np.ndarray) -> None:
-    rot = _frame(look, _cross(up, look) if np.linalg.norm(_cross(up, look)) > 1e-6 else None)
+def rangefinder_frame(look: np.ndarray, up: np.ndarray) -> np.ndarray:
+    """A range finder board's frame: z where it looks, x (its long side, the two cans) level."""
+    side = _cross(np.asarray(up, float), _unit(look))
+    return _frame(look, side if np.linalg.norm(side) > 1e-6 else None)
+
+
+def rangefinder(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, rot: np.ndarray) -> None:
+    """An ultrasonic range finder board on `where`, facing the z column of `rot`."""
     colors = {**NEUTRAL, "shell": P.PCB}
-    _add(vis, body, P.range_finder(RANGE_HALF), colors, np.asarray(where, float) - _unit(look) * 0.0006, rot)
+    _add(vis, body, P.range_finder(RANGE_HALF), colors, np.asarray(where, float) - rot[:, 2] * 0.0006, rot)
 
 
 def link_end_point(spec: PartSpec, local: np.ndarray) -> np.ndarray:
