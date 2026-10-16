@@ -318,7 +318,7 @@ def _rocks(pg: Any) -> None:
 def _gallery_line_up(pg: Any) -> None:
     """Several designs side by side, for an overview picture."""
     for name, pos in (
-        ("mars_rover", [0.0, 1.2]),
+        ("mars_rover", [0.15, 1.4]),
         ("centaur", [0.0, 0.4]),
         ("wheel_biped", [0.0, -0.3]),
         ("scorpion", [0.0, -0.95]),
