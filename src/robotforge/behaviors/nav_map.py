@@ -194,14 +194,21 @@ def _rolling_radius(
     bottom = min(b[0][2] for b in boxes.values())
     axle = float(data.xpos[root_body(model, robot)][0])  # fallback when the walker does not say
     wheels = [*getattr(walker, "left", ()), *getattr(walker, "right", ())]
-    if wheels:
-        joints = [int(model.actuator_trnid[a, 0]) for a in wheels]
+    joints = [int(model.actuator_trnid[a, 0]) for a in wheels]
+    if joints:
         axle = float(np.mean([(heading @ (data.xanchor[j] - center))[0] for j in joints]))
+    # The drive wheels are not casters, however the robot leans: tilted on the obstacle course's bumps, the template
+    # rover's lower wheel stood 1.5 mm ahead of the axle in its heading frame, read as a caster in front, and the
+    # rover was given a caster's 3 degree slope limit and found itself boxed in on the slope it stood on.
+    driven = {int(model.jnt_bodyid[j]) for j in joints}
     round_types = (G.mjGEOM_SPHERE, G.mjGEOM_CYLINDER, G.mjGEOM_CAPSULE, G.mjGEOM_ELLIPSOID)
     ahead = [
         float(model.geom_size[g][0])
         for g, (low, high) in boxes.items()
-        if low[2] - bottom < 0.005 and int(model.geom_type[g]) in round_types and (low[0] + high[0]) / 2 > axle + 1e-3
+        if low[2] - bottom < 0.005
+        and int(model.geom_type[g]) in round_types
+        and int(model.geom_bodyid[g]) not in driven
+        and (low[0] + high[0]) / 2 > axle + 1e-3
     ]
     radii = [r for r in (wheel, *ahead) if r > 0]
     return (min(radii) if radii else 0.0), bool(ahead)

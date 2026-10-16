@@ -328,6 +328,18 @@ def test_a_rover_with_small_wheels_drives_up_a_ramp(pg):
     assert pg.behaviors.pose("rover")["position"][2] > 0.26  # up on the landing, 0.26 m above the floor
 
 
+def test_a_rover_standing_aslant_on_a_ramp_does_not_take_a_wheel_for_a_caster(pg):
+    """Regression: leaning on a slope, the template rover's lower wheel stood a little ahead of the axle in its
+    heading frame and was taken for a caster in front, whose slope limit is 3 degrees: standing aslant on a 10
+    degree ramp (or on the obstacle course's bumps, in scripts/nav_bench.py) it had no room to move."""
+    pg.add_robot("rover", template="rover", pos=[0.5, 0.0], yaw=45)
+    _ramp(pg, 10)
+    pg.run_fast(lambda: False, 1.0)
+    trip = pg.behaviors.navigate("rover", [2.5, 0.0])
+    pg.behaviors.stop("rover")
+    assert math.degrees(trip.planner.body.slope) == pytest.approx(15.0)
+
+
 def test_a_rover_with_a_caster_in_front_is_told_it_cannot_climb_a_ramp(pg):
     """Regression: a rover built from parts was sent up ramps a rover climbs and stuck at the foot of 5, 9 and 12
     degree ones, its front caster caught on the toe (scripts/nav_bench.py: twice in the park's hills)."""
