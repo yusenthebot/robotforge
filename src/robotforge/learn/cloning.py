@@ -69,10 +69,12 @@ SURE = 0.7
 # gripper-to-cube gap held at 5 mm for 20 s (an elliptic cone with impratio 10 still crept 0.15 mm a second).
 # It costs about a third more time per roll-out (an IK pick 0.16 -> 0.21 s). Measured 2026-10-17.
 NOSLIP = 5
-# A demonstration's stretch in which nothing moves (see Recording) keeps this many samples, 1 s: longer than the
-# pauses of a pick (the fingers close in 0.3 s; the scripted learner waits 0.5 s to find the toggle), so those
-# are recorded whole.
+# Samples kept of a stretch in which nothing moves (see Recording): before the learner's first move, 1 s; after
+# it, 5 s. The pauses of a pick are recorded whole: at the cube before closing they are the samples labelled
+# "close", and cutting them to 1 s took the network from 79% to 38% on five slow demonstrations (0.05 m/s, 2 s
+# pauses, 2026-10-17), whose many moving samples then outweighed the close.
 PAUSE_KEEP = 10
+PAUSE_CAP = 50
 STILL = 0.001  # m: less than this between two samples is not a move (the held arm sags 0.05 mm a second)
 MAX_ROWS = 1500  # samples, 150 s of moving: a demonstration takes 5 to 40 s; past this the recording stops
 
@@ -333,10 +335,10 @@ class Recording:
     A recording opens with the lesson, with New cube and with Reset, so the time a learner spends reading before
     their first move would be recorded too: two minutes of it made 1250 samples of the arm standing at home,
     four times the real samples of all five demonstrations, and took the network from 83% to 71% at the test
-    spots (the scripted learner, 2026-10-17). A stretch where nothing moves keeps only its first PAUSE_KEEP
-    samples: they all see the same and are labelled with the same move (label), so the rest added weight and
-    nothing else (trimmed, the same two minutes gave 62 samples and 79%). The time before the first move is
-    not counted in the demonstration's seconds."""
+    spots (the scripted learner, 2026-10-17). Before the first move a still stretch keeps PAUSE_KEEP samples:
+    they all see the same and are labelled with the same move (label), so the rest added weight and nothing else
+    (trimmed, the same two minutes gave 62 samples and 79%), and that time is not counted in the demonstration's
+    seconds. Later pauses keep up to PAUSE_CAP, so a break in the middle cannot flood it either."""
 
     spot: np.ndarray
     started: float
@@ -352,7 +354,7 @@ class Recording:
         self.moved = self.moved or bool(self.rows and not np.array_equal(self.rows[-1][1], row[1]))
         if self.rows and _still(self.rows[-1], row):
             self.still += 1
-            if self.still > PAUSE_KEEP:
+            if self.still > (PAUSE_CAP if self.moved else PAUSE_KEEP):
                 if not self.moved and now is not None:
                     self.started = now - PAUSE_KEEP * DT  # the demonstration has not begun yet
                 return
@@ -546,7 +548,9 @@ class Pilot:
         self.next = now
         self.spot = np.asarray(spot, float)
         self.path: list[list[float]] = []
-        self.closed_at: list[float] | None = None  # where the fingers first closed (the cube's distance then)
+        # where the fingers first closed: the gripper's distance from the cube across the desk, and its height over
+        # the cube's middle (m)
+        self.closed_at: list[float] | None = None
         self.done_at: float | None = None
         self.outcome: Outcome | None = None
         self.anchor: tuple[np.ndarray, float, float] | None = None  # (gripper, grip, time) of the last progress
@@ -559,11 +563,13 @@ class Pilot:
             self.path.append([round(float(v), 3) for v in obs[3:6]])
             if not self.follow.busy(now):
                 action = self.policy(obs)
-                if action[3] >= 0.5 and self.follow.grip < 0.5 and self.closed_at is None:
-                    self.closed_at = [float(np.linalg.norm(obs[:2] - obs[3:5])), float(obs[2])]
                 grip = self.follow.grip
                 if abs(float(action[3]) - grip) > SURE:
                     grip = 1.0 - grip
+                # Only a close that happens counts: a network hovering at 0.6 over the cube never closed, and was
+                # reported as having closed there and missed.
+                if grip >= 0.5 and self.follow.grip < 0.5 and self.closed_at is None:
+                    self.closed_at = [float(np.linalg.norm(obs[:2] - obs[3:5])), float(obs[5] - obs[2])]
                 self.follow.set(action[:3], grip, now)
             self._judge(data, now, obs[3:6])
         self.follow.update(model, data)

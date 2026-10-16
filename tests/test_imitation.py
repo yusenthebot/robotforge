@@ -201,10 +201,11 @@ def test_copying_works_beside_a_demonstration_and_fails_far_from_it(pg):
 def test_tests_and_the_sweep_give_the_measured_success(pg):
     """Five demonstrations by the scripted learner, then the three methods at the 24 spots and the sweep.
 
-    Measured on macOS arm64, 2026-10-17: copying 4% of the 24 spots, 100% beside a demonstration, 0% 6 cm or more
-    away; the network 92%, 100%, 75% (sweep: 0, 29, 67, 71, 92% with 1 to 5 demonstrations); the hand-written pick
-    100% everywhere. On 12 sets of five demonstrations (4 through the viewer) the network ranged 62 to 95%, always
-    100% beside a demonstration: the tolerances leave that much room for other machines' floating point."""
+    Measured on macOS arm64, 2026-10-17, with the no-slip pass: copying 4% of the 24 spots, 100% beside a
+    demonstration, 0% 6 cm or more away; the network 92%, 100%, 75% (sweep: 0, 21, 62, 67, 92% with 1 to 5
+    demonstrations); the hand-written pick 100% everywhere. On 12 sets of five demonstrations (4 recorded through
+    the viewer, 3 by a deliberately rough teacher) the network ranged 58 to 96%, and 80 to 100% beside a
+    demonstration: the tolerances leave that much room for other machines' floating point."""
     p = _player(pg)
     _show_a_pick(p)
     _show_more(p)
@@ -325,3 +326,32 @@ def test_a_sweep_ends_on_every_demonstration_and_copying_points_to_the_network(p
 
 def test_the_panel_never_shows_minus_zero():
     assert imitation._xyz([-0.001, 0.0, 0.254]) == "0, 0, 25"
+
+
+def test_a_try_that_hovers_over_the_cube_never_closed():
+    """A network unsure at the cube (grip 0.6, under SURE) holds still there and fails: it never closed the gripper,
+    and the reason must say so (it said 'closed the gripper 0 cm from the cube and missed it')."""
+    model = bc.build_model()
+    spot = np.array(bc.HOME_SPOT)
+
+    def unsure(obs: np.ndarray) -> np.ndarray:
+        return np.array([obs[0], obs[1], bc.DESK + 0.025, 0.6])
+
+    out = bc.rollout(model, unsure, spot)
+    assert not out.success and out.why["en"] == "never closed the gripper"
+
+
+def test_a_pause_after_the_first_move_is_kept_whole():
+    """Standing at home before the first move keeps 1 s; a 3 s pause at the cube before closing keeps all of it:
+    those are the samples labelled 'close', and cutting them to 1 s took the network from 79% to 38% on slow
+    demonstrations."""
+    cube = np.array([0.25, 0.0, bc.DESK + 0.02])
+    home, bottom = np.array([0.22, 0.0, bc.DESK + 0.11]), np.array([0.25, 0.0, bc.DESK + 0.025])
+    rec = bc.Recording(cube[:2], 0.0)
+    for k in range(30):  # reading the step
+        rec.add(np.array([*cube, *home, 0.07]), home, 0.0, False, k * bc.DT)
+    assert len(rec.rows) == 1 + bc.PAUSE_KEEP and rec.started == pytest.approx(29 * bc.DT - bc.PAUSE_KEEP * bc.DT)
+    rec.add(np.array([*cube, *home, 0.07]), bottom, 0.0, False, 3.0)  # the first move
+    for k in range(30):  # at the cube, finding the toggle
+        rec.add(np.array([*cube, *bottom, 0.07]), bottom, 0.0, False, 3.1 + k * bc.DT)
+    assert len(rec.rows) == 1 + bc.PAUSE_KEEP + 1 + 30
