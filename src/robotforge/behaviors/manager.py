@@ -96,6 +96,8 @@ class BehaviorManager:
         self._world = world
         self._world_dir = world_dir  # where the open world keeps its files (walks/ among them); None in lessons
         self._standing: dict[str, Any] = {}  # robot -> the gait start_balancing stood it on, until it is moved
+        self._last_trips: dict[str, dict[str, Any]] = {}  # robot -> how its last trip ended, until it is moved again
+        session.reset_hooks.append(self._last_trips.clear)
         session.reset_hooks.append(self.start_balancing)
         session.ctrl_hooks.append(self._set_by_hand)
         self.start_balancing()
@@ -270,6 +272,7 @@ class BehaviorManager:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             self._end_trip(robot)  # driven by hand (a key, a move) it stops following a path
+            self._last_trips.pop(robot, None)
             ctrl.command(speed, turn)
             standing = self._standing.pop(robot, None)
             if standing is not None:  # moved: its gait is its own now, and stands as any gait it was moved with
@@ -505,6 +508,7 @@ class BehaviorManager:
         def finished(trip: navigation.Navigator) -> None:  # runs inside a sim step, with the session lock held
             if self.session.controllers.get(key) is trip:
                 self.session.set_controller(key, None)
+                self._last_trips[robot] = trip.result()  # for `robots`, after a trip sent off with seconds=null
 
         trip = navigation.Navigator(
             robot,
@@ -547,6 +551,7 @@ class BehaviorManager:
             if not trip.done:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
                 trip.end_time = float(self.session.data.time)
+                self._last_trips[robot] = trip.result()
 
     def _layers(self, version: int) -> dict:
         """The static map layers of this compiled world, shared by all trips in it (see navigation.Planner)."""
@@ -837,7 +842,11 @@ class BehaviorManager:
     # ---- status --------------------------------------------------------------------------
 
     def status(self) -> list[dict[str, Any]]:
-        return [c.status() for c in self.session.controllers.values()]
+        done = [
+            {"behavior": "navigate", "navigating": robot, "state": "done", "last_trip": result}
+            for robot, result in self._last_trips.items()
+        ]
+        return [c.status() for c in self.session.controllers.values()] + done
 
 
 def _told_kind(entry: Any) -> str | None:

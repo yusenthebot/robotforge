@@ -512,6 +512,17 @@ def test_a_robot_goes_onto_terrain_it_climbs_and_next_to_terrain_it_does_not(pg)
     assert 1.3 < pg.behaviors.pose("dog")["position"][1] < 1.9  # on the floor in front of its edge at y = 1.9
 
 
+def test_a_trip_sent_off_without_waiting_says_how_it_ended(pg):
+    """move(to=..., seconds=null) and the viewer's double-click return at once; `robots` tells how it went after."""
+    pg.add_robot("rover", template="rover")
+    trip = pg.behaviors.navigate("rover", [1.5, 0.5])
+    pg.run_fast(lambda: trip.done, 30)
+    done = [s for s in pg.behaviors.status() if s.get("navigating") == "rover"]
+    assert done and done[0]["last_trip"]["arrived"], pg.behaviors.status()
+    pg.behaviors.move("rover", 0.0, 0.5)  # moved again: that trip is old news
+    assert not [s for s in pg.behaviors.status() if s.get("navigating") == "rover"]
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])
