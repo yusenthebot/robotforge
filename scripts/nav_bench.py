@@ -5,15 +5,16 @@
     uv run python scripts/nav_bench.py --report a.jsonl b.jsonl ...
 
 Each trial puts the robot at a start with update_robot (the world is compiled afresh, so every controller starts
-clean), sends it to a goal as move(to=...) does (BehaviorManager.navigate) and runs the physics headless until it
-arrives or stops. Starts and goals are drawn from the floor the robot's own map calls free, inside the scene (not
-the margin round it), at least MIN_APART apart; about one goal in four is a named object of the scene. With
---anywhere SHARE, that share of the goals is any point of the scene instead (in a counter, on a rack, behind a
-wall): those are reported apart, by what the robot made of them (arrived, stopped at the nearest free spot, no
-way and why). A goal the planner finds no way to is counted under "no way" with its cause: that is the
-planner's answer, not a failed trip.
-The time limit is generous (TIME_SLACK plus three times the path at the robot's pace), so a trip that runs out
-of it really got stuck. Uses the real Menagerie Go2 (downloaded once into the cache). Maintainer tool.
+clean), sends it to a goal as move(to=...) does (BehaviorManager.navigate, with the tool's 60 s limit) and runs
+the physics headless until it arrives or stops. A trip that runs out of time is sent on again, as the tool's note
+tells an agent to, up to MAX_CALLS calls; the report says how many arrived within one call. Starts and goals are
+drawn from the floor the robot's own map calls free, inside the scene (not the margin round it), at least
+MIN_APART apart; about one goal in four is a named object of the scene. With --anywhere SHARE, that share of the
+goals is any point of the scene instead (in a counter, on a rack, behind a wall): those are reported apart, by
+what the robot made of them (arrived, stopped at the nearest free spot, no way and why).
+Two answers are the planner's, not failed trips: "no way" (it did not set off) and "short" (it went as near as it
+could to an object it cannot get next to, and said why). Uses the real Menagerie Go2 (downloaded once into the
+cache). Maintainer tool.
 """
 
 from __future__ import annotations
@@ -35,12 +36,12 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-SCENES = ("kitchen", "warehouse", "maze", "park")
+SCENES = ("kitchen", "warehouse", "maze", "park", "obstacle_course", "desk_lab")
 MIN_APART = 1.5  # m between start and goal
-MAX_APART = {"humanoid": 4.0}  # m: the template humanoid walks at 0.09 m/s
 OBJECT_SHARE = 0.25  # of the goals, a named object rather than a point
-TIME_SLACK = 20.0  # s on top of three times the path at the robot's pace
+MAX_CALLS = 5  # move(to=...) calls of 60 s at most per trip: 5 min, 27 m for a humanoid at 0.09 m/s
 SETTLE = 0.5  # s a robot stands at its start before it is sent off
+SHORT = ("inside", "closed_off", "climb", "too_narrow")  # a trip that ends short for one of these was told so
 
 
 def robots() -> dict[str, dict[str, Any]]:
@@ -72,13 +73,12 @@ def free_spots(pg: Any, robot: str) -> tuple[Any, np.ndarray]:
     return nav, roomy & inside & reach
 
 
-def pick(rng: np.random.Generator, nav: Any, spots: np.ndarray, near: tuple[float, float] | None, far: float):
-    """A random spot (x, y), at least MIN_APART and at most `far` from `near`."""
+def pick(rng: np.random.Generator, nav: Any, spots: np.ndarray, near: tuple[float, float] | None):
+    """A random spot (x, y), at least MIN_APART from `near`."""
     xs, ys = nav.grid.centers()
     ok = spots.copy()
     if near is not None:
-        d = np.hypot(xs - near[0], ys - near[1])
-        ok &= (d >= MIN_APART) & (d <= far)
+        ok &= np.hypot(xs - near[0], ys - near[1]) >= MIN_APART
     cells = np.argwhere(ok)
     if not len(cells):
         return None
@@ -88,33 +88,46 @@ def pick(rng: np.random.Generator, nav: Any, spots: np.ndarray, near: tuple[floa
 
 def trial(pg: Any, robot: str, start: tuple[float, float], yaw: float, goal: Any) -> dict[str, Any]:
     from robotforge.behaviors.navigate import NoWay
+    from robotforge.playground import MAX_SIM_SECONDS
 
     pg.update_robot(robot, pos=[round(start[0], 3), round(start[1], 3)], yaw=round(yaw, 1))
     pg.run_fast(lambda: False, SETTLE)
     record: dict[str, Any] = {"start": [round(start[0], 2), round(start[1], 2)], "yaw": round(yaw, 1), "goal": goal}
-    t0 = time.perf_counter()
-    try:
-        trip = pg.behaviors.navigate(robot, goal)
-    except NoWay as exc:
-        return {**record, "outcome": "no_way", "why": exc.cause, "note": str(exc)}
-    record["plan_ms"] = round(1000 * (time.perf_counter() - t0), 1)
-    limit = TIME_SLACK + 3 * trip.plan.length / trip.cruise
-    trip.deadline = trip.start_time + limit
-    t1 = time.perf_counter()
-    pg.run_fast(lambda: trip.done, limit + 1.0)
-    result = trip.result()
+    calls, spent, walked, replans = 0, 0.0, 0.0, 0
+    wall = time.perf_counter()
+    while True:
+        calls += 1
+        t0 = time.perf_counter()
+        try:
+            trip = pg.behaviors.navigate(robot, goal, seconds=MAX_SIM_SECONDS)
+        except NoWay as exc:
+            if calls == 1:
+                return {**record, "outcome": "no_way", "why": exc.cause, "note": str(exc)}
+            result = {"arrived": False, "why": exc.cause, "note": str(exc), "time_s": 0.0, "distance_m": 0.0}
+            break
+        if calls == 1:
+            record.update(plan_ms=round(1000 * (time.perf_counter() - t0), 1), path_m=round(trip.plan.length, 2))
+        pg.run_fast(lambda trip=trip: trip.done, MAX_SIM_SECONDS + 1.0)
+        result = trip.result()
+        spent += result["time_s"]
+        walked += result["distance_m"]
+        replans += result.get("replans", 0)
+        if result.get("why") != "out_of_time" or calls == MAX_CALLS:
+            break
     pose = pg.behaviors.pose(robot)
+    why = result.get("why")
+    outcome = "arrived" if result["arrived"] else "short" if why in SHORT else "failed"
     record.update(
-        outcome="arrived" if result["arrived"] else "failed",
-        why=result.get("why"),
+        outcome=outcome,
+        why=why,
         note=result.get("note"),
-        time_s=result["time_s"],
-        path_m=result["path_m"],
-        distance_m=result["distance_m"],
-        replans=result.get("replans", 0),
+        calls=calls,
+        time_s=round(spent, 2),
+        distance_m=round(walked, 2),
+        replans=replans,
         upright=pose["upright"],
         end=[round(v, 2) for v in pose["position"][:2]],
-        wall_s=round(time.perf_counter() - t1, 2),
+        wall_s=round(time.perf_counter() - wall, 2),
         within_reach=result.get("within_reach"),
     )
     return record
@@ -134,7 +147,6 @@ def run(
     nav, spots = free_spots(pg, robot)
     objects = [o.name for o in pg.current_world().objects]
     rng = np.random.default_rng(seed)
-    far = MAX_APART.get(robot, math.inf)
     records = []
     edge = nav_map_edge()
     low = (nav.grid.x0 + edge, nav.grid.y0 + edge)
@@ -143,14 +155,14 @@ def run(
         nav.grid.y0 + (nav.grid.rows - 1) * nav.grid.res - edge,
     )
     for k in range(trials):
-        start = pick(rng, nav, spots, None, far)
+        start = pick(rng, nav, spots, None)
         kind = "anywhere" if rng.random() < anywhere else "object" if rng.random() < OBJECT_SHARE else "spot"
         if kind == "anywhere":
             goal: Any = [round(float(rng.uniform(low[0], high[0])), 2), round(float(rng.uniform(low[1], high[1])), 2)]
         elif kind == "object":
             goal = str(rng.choice(objects))
         else:
-            point = pick(rng, nav, spots, start, far)
+            point = pick(rng, nav, spots, start)
             goal = [round(point[0], 2), round(point[1], 2)] if point else None
         if start is None or goal is None:
             continue
@@ -159,7 +171,8 @@ def run(
         records.append(record)
         out.write(json.dumps(record) + "\n")
         out.flush()
-        brief = {key: record.get(key) for key in ("goal", "outcome", "why", "time_s", "path_m", "replans", "wall_s")}
+        keys = ("goal", "outcome", "why", "calls", "time_s", "path_m", "replans", "wall_s")
+        brief = {key: record.get(key) for key in keys}
         print(f"{scene} {robot} {k}: {brief}", flush=True)
     return records
 
@@ -174,48 +187,65 @@ def nav_map_edge() -> float:
 
 
 def report(all_records: list[dict[str, Any]]) -> str:
-    """Markdown tables: per scene and robot, then failures and no-way answers by cause; goals anywhere apart."""
+    """Markdown tables: per scene and robot, then failures and the planner's answers by cause; goals anywhere
+    apart."""
     records = [r for r in all_records if r.get("goal_kind") != "anywhere"]
     anywhere = [r for r in all_records if r.get("goal_kind") == "anywhere"]
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in records:
         groups[(r["scene"], r["robot"])].append(r)
     lines = [
-        "| scene | robot | trips | arrived | median time (s) | median path (m) | speed (m/s) | replans | no way |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| scene | robot | trips | arrived | in one call | median time (s) | median path (m) | speed (m/s) | replans "
+        "| short | no way |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for (scene, robot), rs in sorted(groups.items()):
-        trips = [r for r in rs if r["outcome"] != "no_way"]
+        trips = [r for r in rs if r["outcome"] in ("arrived", "failed")]
         ok = [r for r in trips if r["outcome"] == "arrived"]
+        once = sum(r.get("calls", 1) == 1 for r in ok)
         times = [r["time_s"] for r in ok]
         paths = [r["path_m"] for r in ok]
         speed = sum(paths) / sum(times) if times else float("nan")
-        no_way = len(rs) - len(trips)
+        short = sum(r["outcome"] == "short" for r in rs)
+        no_way = sum(r["outcome"] == "no_way" for r in rs)
         rate = f"{len(ok)}/{len(trips)} ({100 * len(ok) / len(trips):.0f}%)" if trips else "-"
         lines.append(
-            f"| {scene} | {robot} | {len(trips)} | {rate} | {_median(times)} | {_median(paths)} | {speed:.2f} | "
-            f"{sum(r.get('replans', 0) for r in trips)} | {no_way} |"
+            f"| {scene} | {robot} | {len(trips)} | {rate} | {once} | {_median(times)} | {_median(paths)} | "
+            f"{speed:.2f} | {sum(r.get('replans', 0) for r in trips)} | {short} | {no_way} |"
         )
     failed = Counter((r["robot"], r["why"]) for r in records if r["outcome"] == "failed")
+    short = Counter((r["robot"], r["why"]) for r in records if r["outcome"] == "short")
     refused = Counter((r["robot"], r["why"]) for r in records if r["outcome"] == "no_way")
     lines += ["", "Failed trips by cause: " + (_counts(failed) or "none") + "."]
+    lines += ["Ended short of an object, as planned, by cause: " + (_counts(short) or "none") + "."]
     lines += ["No way (the planner's answer) by cause: " + (_counts(refused) or "none") + "."]
-    total = [r for r in records if r["outcome"] != "no_way"]
-    arrived = sum(r["outcome"] == "arrived" for r in total)
+    total = [r for r in records if r["outcome"] in ("arrived", "failed")]
+    arrived = [r for r in total if r["outcome"] == "arrived"]
     if total:
-        lines.append(f"Overall: {arrived} of {len(total)} trips arrived ({100 * arrived / len(total):.1f}%).")
+        once = sum(r.get("calls", 1) == 1 for r in arrived)
+        lines.append(
+            f"Overall: {len(arrived)} of {len(total)} trips arrived ({100 * len(arrived) / len(total):.1f}%), "
+            f"{once} within one move call of 60 s ({100 * once / len(total):.1f}%)."
+        )
+    noted = sum(bool(r.get("note")) for r in arrived)
+    unreachable = sum(r.get("within_reach") is False for r in arrived)
+    lines.append(
+        f"Of those that arrived, {noted} said something (next to the counter or shelf an object is on, not at its "
+        f"usual distance), and {unreachable} stood next to an object their arm cannot reach."
+    )
     plans = [r["plan_ms"] for r in all_records if "plan_ms" in r]
     if plans:
         lines.append(f"Planning took {statistics.median(plans):.0f} ms at the median, {max(plans):.0f} ms at most.")
     if anywhere:
         answers = Counter(
-            "arrived"
-            if r["outcome"] == "arrived"
-            else f"{'no way' if r['outcome'] == 'no_way' else 'stopped'}: {r['why']}"
-            for r in anywhere
+            "arrived" if r["outcome"] == "arrived" else f"{_word(r['outcome'])}: {r['why']}" for r in anywhere
         )
         lines += ["", f"Goals anywhere in the scene: {len(anywhere)}; " + _plain(answers) + "."]
     return "\n".join(lines)
+
+
+def _word(outcome: str) -> str:
+    return {"no_way": "no way", "short": "stopped short", "failed": "failed"}[outcome]
 
 
 def _plain(counter: Counter) -> str:
