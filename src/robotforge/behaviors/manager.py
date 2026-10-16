@@ -687,6 +687,11 @@ class BehaviorManager:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
                 raise BehaviorError(f"{name} has no gripper to pick with; {self._gripper_hint(name)}")
+            model, tool = self._library_tool(name)
+            if tool is not None and tool.cannot_pick:
+                raise BehaviorError(
+                    f"{name} ({model.title}) cannot pick and place yet: {tool.cannot_pick}; move_arm and gripper work"
+                )
             self._check_carrier(name)  # before its motion takes hold of the arm
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
@@ -699,6 +704,20 @@ class BehaviorManager:
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}
+
+    def _library_tool(self, arm: str) -> tuple[library.LibraryRobot | None, library.Tool | None]:
+        """The library robot an arm is ("z1", "go2/arm" carrying a PiPER, "aloha/left") and its Tool, if it is one."""
+        owner, _, rest = arm.partition("/")
+        entry = _entry(owner, self._world())
+        if entry is None:
+            return None, None
+        first = rest.split("/", 1)[0]
+        mount = next((m for m in entry.mounts if mounting.default_name(m) == first), None) if rest else None
+        source, rest = (mount.library, rest[len(first) + 1 :]) if mount is not None else (entry.library, rest)
+        if source is None:
+            return None, None
+        robot = library.get(source)
+        return robot, next((t for t in robot.tools if t.arm.rstrip("/") == rest), None)
 
     def _gripper_hint(self, arm: str) -> str:
         """How to give an arm without a gripper one: on its flange, as the next of the robot's mounts."""

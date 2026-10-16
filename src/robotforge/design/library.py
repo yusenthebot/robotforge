@@ -45,6 +45,7 @@ class Tool:
     closes_high: bool = False
     grip_force: float | None = None  # N or N*m: a gentler limit on the gripper's force than the model's
     arm: str = ""  # on a robot with two arms, each arm's name prefix ("left/"); "" on a one-armed robot
+    cannot_pick: str = ""  # why pick_and_place does not work with it yet, which refuses it; "" when it does
 
 
 @dataclass(frozen=True)
@@ -321,6 +322,8 @@ CATALOG: dict[str, LibraryRobot] = {
                     gripper="motorGripper",
                     closes_high=True,
                     grip_force=6.0,  # its 30 N*m flung a 40 g cube out of the jaws at 20 m/s
+                    # 1 of 3 floor picks (2026-10-17): it lifts the cube, then lets go of it as the arm swings
+                    cannot_pick="its one-jaw claw lets go of a cube as the arm swings",
                 ),
             ),
         ),

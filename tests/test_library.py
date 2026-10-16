@@ -639,6 +639,22 @@ def test_an_arm_grasps_a_turned_box_square_to_its_faces(pg, name):
     assert pg.behaviors.placed("cube", info["region"])["success"]
 
 
+def test_an_arm_that_cannot_pick_yet_is_refused_and_says_what_works(pg, monkeypatch):
+    """A Unitree Z1's one-jaw claw lets go of a cube as the arm swings; pick_and_place ran anyway and pushed the cube
+    5 to 15 cm, taking the whole motion's time."""
+    piper = library.CATALOG["piper"]
+    tool = dataclasses.replace(piper.tools[0], cannot_pick="its claw lets go")
+    monkeypatch.setitem(library.CATALOG, "piper", dataclasses.replace(piper, tools=(tool,)))
+    pg.add_robot("bot", library="piper")
+    pg.add_robot("dog", library="go2", pos=[2.0, 0.0], mounts=[{"library": "piper"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.15])
+    for arm in ("bot", "dog/arm"):
+        with pytest.raises(
+            ValueError, match=rf"{arm} \(AgileX PiPER\) cannot pick and place yet: its claw lets go; mo"
+        ):
+            pg.behaviors.pick_and_place(arm, "cube", [0.3, -0.2])
+
+
 # Cube and bin (x, y) around an arm's base, for an arm facing +x: in front, from the front to either side, and long
 # carries across it. An xArm 7 gripping at its fingertips dropped the cube on four of these.
 PICK_LAYOUTS = {
@@ -709,3 +725,15 @@ def test_real_so100_picks_a_cube_from_the_floor_into_a_tray(pg, layout):
             break
     _run(pg, 1.0)
     assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_z1_refuses_pick_and_place_but_moves_its_arm(pg):
+    pg.add_robot("z1", library="z1")
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.45, 0.0])
+    _run(pg, 1.0)
+    with pytest.raises(ValueError, match="z1 \\(Unitree Z1\\) cannot pick and place yet: its one-jaw claw lets go"):
+        pg.behaviors.pick_and_place("z1", "cube", [0.0, 0.4])
+    motion = pg.behaviors.move_arm("z1", [0.4, 0.1, 0.1])
+    pg.run_fast(lambda: motion.done, 10)
+    assert np.linalg.norm(pg.session.data.site_xpos[motion.site] - [0.4, 0.1, 0.1]) < 0.02
