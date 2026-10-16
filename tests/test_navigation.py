@@ -213,6 +213,19 @@ def test_wheels_push_light_loose_objects_aside_and_legs_go_round_them(pg):
         assert not nav.free[nav.ground > 0.2].any()  # the crate's top has room, but no way up
 
 
+def test_a_point_on_a_slope_too_steep_is_named_as_such(pg):
+    """A point on the face of a 20 degree ramp is out of the rover's way because of the slope, not inside
+    something: the trip says climb and names the slope."""
+    pg.add_robot("rover", template="rover", pos=[0.0, 0.0], yaw=0)
+    pg.add_terrain("ramp", name="steep", pos=[2.5, 0.0], params={"angle": 20, "length": 1.0, "direction": "up"})
+    nav = _map(pg, "rover")
+    rows, cols = np.nonzero(nav.lethal == nav_map.SLOPE)
+    x, y = nav.grid.center(int(np.median(rows)), int(np.median(cols)))
+    trip = pg.behaviors.navigate("rover", [round(x, 2), round(y, 2)])
+    pg.behaviors.stop("rover")
+    assert trip.plan.short == "climb" and "on a slope of steep steeper than it climbs" in trip.plan.note, trip.plan
+
+
 def test_a_dog_walks_round_a_ball_in_its_way_instead_of_onto_it(pg):
     """Regression: loose objects up to half its weight were left off a dog's map as things it pushes aside. In the
     park the template dog walked straight into the 0.3 kg red ball (20 cm, nearly its own height) and fell over."""

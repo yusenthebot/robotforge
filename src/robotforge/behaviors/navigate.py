@@ -165,7 +165,7 @@ class Plan:
     exact: bool  # it ends where it was sent (not at the nearest free spot, nor further from an object)
     note: str | None = None
     within_reach: bool | None = None  # for a robot with an arm sent to an object
-    short: str | None = None  # it ends only near an object (beyond NEXT_TO), why: a NoWay cause
+    short: str | None = None  # why it ends short (a NoWay cause): only near an object, or by a point it cannot reach
 
 
 class Planner:
@@ -251,7 +251,7 @@ class Planner:
         plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact)
         if not exact:
             plan.note = self._short_note(nav, cells[-1], on_point, away)
-        plan.short = short
+        plan.short = self._point_cause(nav) if on_point and not exact else short
         if self.arm is not None and d.loose and not on_point:
             plan.within_reach = self._reaches(pts[-1])
         return plan
@@ -270,9 +270,17 @@ class Planner:
         if not nav.grid.inside(*here):
             return "where the robot does not fit"
         what = nav.blocker(here) or next(iter(_owners_near(nav, here, 3 * nav.grid.res)), None)
+        if nav.lethal[here] == SLOPE:
+            degrees = math.degrees(self.body.slope)
+            return f"on a slope{f' of {what}' if what else ''} steeper than it climbs ({degrees:.0f} degrees)"
         if nav.ground[here] - nav.floor[here] > self.body.step and what:
             return f"on top of or inside {what}"
         return _inside_text(what)
+
+    def _point_cause(self, nav: NavMap) -> str:
+        """Why a point it cannot stand on is out of its way, in one word: on a slope too steep, or in something."""
+        here = nav.grid.cell(*self.destination.point)
+        return "climb" if nav.grid.inside(*here) and nav.lethal[here] == SLOPE else "inside"
 
     def _point_is_free(self, nav: NavMap) -> bool:
         here = nav.grid.cell(*self.destination.point)
@@ -411,7 +419,7 @@ class Planner:
         d = self.destination
         here = grid.cell(*d.point)
         if (not d.name or d.onto) and grid.inside(*here) and nav.ground[here] - nav.floor[here] > body.step:
-            return NoWay("inside", f"no way to {label} for {self.robot}: it is {self._inside(nav)}")
+            return NoWay(self._point_cause(nav), f"no way to {label} for {self.robot}: it is {self._inside(nav)}")
         around = _owners_near(nav, nav.grid.cell(*d.point), 1.5, many=4)
         what = f" ({', '.join(around[:-1])} and {around[-1]})" if len(around) > 1 else ""
         what = what or (f" ({around[0]})" if around else "")
@@ -640,7 +648,7 @@ class Navigator:
             elif not self._retried and self._try_again(t, data):
                 pass  # what stood on the point (another robot) has moved off it: on to the point itself
             else:  # a point inside something: it got as near as it could, which is not there
-                self._finish(t, "stopped", "inside", self.plan.note)
+                self._finish(t, "stopped", self.plan.short or "inside", self.plan.note)
             return
         s, off = self._project(xy)
         if off > max(0.3, 2.0 * self.planner.body.radius):
