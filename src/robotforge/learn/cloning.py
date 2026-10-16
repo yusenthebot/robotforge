@@ -58,11 +58,12 @@ TRY_SECONDS = 12.0  # a roll-out that has not finished by then has failed (demon
 STUCK_SECONDS = 2.5  # a roll-out whose gripper has not moved 1 cm nor changed its grip for this long has failed
 STUCK_MOVE = 0.01  # m
 SETTLE = 0.5  # s after the cube lands in the bin with the gripper open, before it counts
-# The network's grip is a number, 0 open to 1 closed; the arm switches only once it is this far from the grip it
-# has (closes above 0.7, opens below 0.3). Before the ARRIVED rule it closed a centimetre or two over the cube
-# at 0.5 (71% at 8 demonstrations, 83% at 0.7); with it the threshold matters little (12 sets of 5
-# demonstrations: 83.0% at 0.5, worst set 54%; 83.3% at 0.7, worst set 62%).
-SURE = 0.7
+# The network's grip is a number, 0 open to 1 closed; the arm switches once it is this far from the grip it has.
+# Before the ARRIVED rule it closed a centimetre or two over the cube at 0.5 (71% at 8 demonstrations, 83% at
+# 0.7). With ARRIVED, JITTER and the no-slip pass, 0.7 left an unsure network hovering at 0.6 over the cube or
+# the bin: on 12 sets of 5 demonstrations 0.5 took the mean from 83% to 88%, the worst set from 58% to 71%, and
+# beside a demonstration from 80-100% to 100% in every set (2026-10-17).
+SURE = 0.5
 # MuJoCo's soft contacts let a held cube creep down between the fingers: lifted 10 cm through the sliders and held
 # still, it slid 3.6 mm a second and was back on the desk 7.5 s after the lift, so a learner carrying at their own
 # pace (one slider at a time, a pause between moves: 10 to 15 s) lost it. The no-slip pass stops the creep: the

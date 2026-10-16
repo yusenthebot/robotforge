@@ -201,11 +201,11 @@ def test_copying_works_beside_a_demonstration_and_fails_far_from_it(pg):
 def test_tests_and_the_sweep_give_the_measured_success(pg):
     """Five demonstrations by the scripted learner, then the three methods at the 24 spots and the sweep.
 
-    Measured on macOS arm64, 2026-10-17, with the no-slip pass: copying 4% of the 24 spots, 100% beside a
-    demonstration, 0% 6 cm or more away; the network 92%, 100%, 75% (sweep: 0, 21, 62, 67, 92% with 1 to 5
-    demonstrations); the hand-written pick 100% everywhere. On 12 sets of five demonstrations (4 recorded through
-    the viewer, 3 by a deliberately rough teacher) the network ranged 58 to 96%, and 80 to 100% beside a
-    demonstration: the tolerances leave that much room for other machines' floating point."""
+    Measured on macOS arm64, 2026-10-17, with the no-slip pass and SURE 0.5: copying 4% of the 24 spots, 100%
+    beside a demonstration, 0% 6 cm or more away; the network 88%, 100%, 62% (sweep: 4, 21, 67, 71, 88% with 1 to
+    5 demonstrations); the hand-written pick 100% everywhere. On 12 sets of five demonstrations (4 recorded through
+    the viewer, 3 by a deliberately rough teacher) the network ranged 71 to 92%, 100% beside a demonstration in
+    every set: the tolerances leave that much room for other machines' floating point."""
     p = _player(pg)
     _show_a_pick(p)
     _show_more(p)
@@ -328,9 +328,11 @@ def test_the_panel_never_shows_minus_zero():
     assert imitation._xyz([-0.001, 0.0, 0.254]) == "0, 0, 25"
 
 
-def test_a_try_that_hovers_over_the_cube_never_closed():
-    """A network unsure at the cube (grip 0.6, under SURE) holds still there and fails: it never closed the gripper,
-    and the reason must say so (it said 'closed the gripper 0 cm from the cube and missed it')."""
+def test_a_try_that_hovers_over_the_cube_never_closed(monkeypatch):
+    """A network unsure at the cube (grip 0.6 against a threshold of 0.7, as SURE was) holds still there and fails:
+    it never closed the gripper, and the reason must say so (it said 'closed the gripper 0 cm from the cube and
+    missed it')."""
+    monkeypatch.setattr(bc, "SURE", 0.7)
     model = bc.build_model()
     spot = np.array(bc.HOME_SPOT)
 
