@@ -446,7 +446,22 @@ class BehaviorManager:
                 return {"robot": robot, "stopped": True}
             if ctrl is not None:
                 self.session.set_controller(robot, None)
+                self._rest_speed_and_force_actuators(robot)
             return {"robot": robot, "stopped": ctrl is not None}
+
+    def _rest_speed_and_force_actuators(self, robot: str) -> None:
+        """Zero the speed and force commands a removed controller left behind; position servos keep holding.
+        A rover stopped after run_controller(drive_to) kept its wheels at -2.1 and 5.0 rad/s and went on
+        spinning: 0.11 m and a quarter turn in the next 2 s, until the agent zeroed them by hand."""
+        m, d = self.session.model, self.session.data
+        prefix = f"{robot}/"
+        for a in range(m.nu):
+            if not (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or "").startswith(prefix):
+                continue
+            plain = m.actuator_biastype[a] == mujoco.mjtBias.mjBIAS_NONE  # a motor: ctrl is force or torque
+            speed = m.actuator_biastype[a] == mujoco.mjtBias.mjBIAS_AFFINE and m.actuator_biasprm[a][1] == 0
+            if plain or speed:  # a speed servo pulls toward ctrl as a joint speed, with no position term
+                d.ctrl[a] = 0.0
 
     def shortfall(self, robot: str, seconds: float, start: list[float]) -> str | None:
         """Why a timed move that is still running has covered far less ground than it asked for, or None. A rover

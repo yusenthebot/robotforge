@@ -185,6 +185,28 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
 
 
 @pytest.mark.anyio
+async def test_stop_after_run_controller_stops_a_rovers_wheels(pg):
+    """run_controller leaves its controller attached; stop removed it but left the wheel speeds it last set, and
+    the rover in the eval went on spinning (0.11 m and a quarter turn in 2 s) until the agent zeroed them."""
+    pg.add_robot("rover", template="rover")
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        ran = await client.call_tool(
+            "run_controller",
+            {"robot": "rover", "task": "drive_to", "method": "pd", "task_params": {"goal": [0.8, 0.4]}, "seconds": 2},
+        )
+        assert json.loads(ran.content[0].text)["keeps_running"] is True
+        await client.call_tool("stop", {"robot": "rover"})
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        before = pg.behaviors.pose("rover")
+        await client.call_tool("simulate", {"seconds": 2})
+        after = pg.behaviors.pose("rover")
+    assert math.dist(before["position"][:2], after["position"][:2]) < 0.02
+    assert abs(after["heading_deg"] - before["heading_deg"]) < 3
+
+
+@pytest.mark.anyio
 async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
     """A session built a 0.6 m solid aluminum rover on hobby gearmotors; it moved 2 mm in 6 s and the agent was
     told only distance_m 0.002, so it had to guess. (That one rolls now that its caster no longer brakes; this one,
