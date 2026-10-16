@@ -438,6 +438,16 @@ def test_two_robots_crossing_make_way_for_each_other(pg):
     assert pg.behaviors.pose("dog")["upright"] and pg.behaviors.pose("rover")["upright"]
 
 
+def test_trips_share_one_map_of_the_furniture_per_robot(pg):
+    """Regression: the map of what never moves was kept per robot and per measured shape, and a dog's shape
+    differs a little every time its legs move, so each trip added another map to a store that only grew."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.0, 0.1, 0.5], yaw=90)
+    for x in (2.0, 0.0, 2.0):
+        _trip(pg, "dog", [x, 0.6])
+    assert len(pg.behaviors._layers(pg.session.version)) == 1
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])

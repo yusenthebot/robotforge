@@ -174,12 +174,12 @@ class Planner:
         layers: dict | None = None,
     ) -> None:
         self.model, self.robot, self.body, self.destination, self.arm = model, robot, body, destination, arm
-        self.layers = layers if layers is not None else {}  # (robot, body) -> StaticLayer, shared per world
+        self.layers = layers if layers is not None else {}  # robot -> StaticLayer, shared per compiled world
         self.root = nav_map.root_body(model, robot)
         self.last_map: NavMap | None = None
 
     def _layer(self, data: mujoco.MjData, start: tuple[float, float]) -> StaticLayer:
-        key = (self.robot, self.body)
+        key = self.robot  # what never moves is the same whatever shape the robot is in: only its geoms are left out
         layer = self.layers.get(key)
         points = [start, self.destination.point]
         if layer is not None and all(_inside_margin(layer.grid, p) for p in points):
