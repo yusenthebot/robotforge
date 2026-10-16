@@ -479,15 +479,19 @@ async def test_a_world_file_edited_by_hand_is_explained_by_every_tool_that_reads
 
 async def test_a_world_that_does_not_open_says_where_its_file_is(lab):
     """An agent in the eval told only "unknown template 'quadrupd'" looked for the file in ~/.robotforge, read the
-    troubleshooting page and searched the disk before it found and fixed it."""
+    troubleshooting page and searched the disk before it found and fixed it. The world open before stays open:
+    the broken one used to become the one edits went to, while the simulation still ran the last one."""
     garden = lab.playground.store.dir.parent / "garden" / "world.yaml"
     garden.parent.mkdir()
-    garden.write_text("name: garden\nrobots:\n- name: dog\n  template: quadrupd\n", encoding="utf-8")
+    garden.write_text("name: garden\nrobots:\n- name: pup\n  template: quadrupd\n", encoding="utf-8")
     text = await lab.refused("open_world", name_or_path="garden")
     assert "unknown template 'quadrupd'. Did you mean quadruped?" in text
     assert f"the world is {garden}: fix it there, then open_world again" in text
+    assert lab.playground.store.dir.name == "lab"
+    listed = json.loads(await lab.accepted("robots"))
+    assert "pup" not in {r["name"] for r in listed["robots"]}  # the broken file's robot is not in the session
     garden.write_text(garden.read_text(encoding="utf-8").replace("quadrupd", "quadruped"), encoding="utf-8")
-    assert json.loads(await lab.accepted("open_world", name_or_path="garden"))["robots"] == ["dog"]
+    assert json.loads(await lab.accepted("open_world", name_or_path="garden"))["robots"] == ["pup"]
     lab.playground.store = type(lab.playground.store)(lab.playground.store.dir.parent / "lab")
     await lab.restore()
 

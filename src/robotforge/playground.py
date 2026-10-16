@@ -241,15 +241,16 @@ class Playground:
 
     @_one_edit_at_a_time
     def open_world(self, name_or_path: str) -> dict[str, Any]:
-        self.store = WorldStore.open(name_or_path)
+        store = WorldStore.open(name_or_path)
         try:
-            compiled = self.store.compile()
+            compiled = store.compile()
         except ValueError as exc:
             # Where the file is: an agent told only "unknown template 'quadrupd'" looked for it in ~/.robotforge,
             # read the troubleshooting page and searched the disk before it found and fixed it (agent eval).
-            raise PlaygroundError(
-                f"{exc} (the world is {self.store.file}: fix it there, then open_world again)"
-            ) from exc
+            raise PlaygroundError(f"{exc} (the world is {store.file}: fix it there, then open_world again)") from exc
+        # Only now: a world that did not open used to become the one edits went to while the simulation still
+        # ran the last one, so robots listed the broken file's dog and add_object failed on its template.
+        self.store = store
         return self._load_world(compiled)
 
     @_one_edit_at_a_time
