@@ -1,0 +1,92 @@
+<!--
+  Offline stand-in for MuJoCo Menagerie's universal_robots_ur5e/ur5e.xml (BSD-3-Clause, see that folder's
+  LICENSE), for tests only: the same bodies, joints, inertias, actuators, sites and keyframe, without the visual
+  meshes.
+-->
+<mujoco model="ur5e">
+  <compiler angle="radian"/>
+
+  <option integrator="implicitfast"/>
+
+
+  <default>
+    <default class="ur5e">
+      <material shininess="0.25"/>
+      <joint range="-6.28319 6.28319" armature="0.1" axis="0 1 0"/>
+      <site size="0.001 0.005 0.005" group="4" rgba="0.5 0.5 0.5 0.3"/>
+      <general ctrlrange="-6.2831 6.2831" forcerange="-150 150" biastype="affine" gainprm="2000" biasprm="0 -2000 -400"/>
+      <default class="size3">
+        <default class="size3_limited">
+          <joint range="-3.1415 3.1415"/>
+          <general ctrlrange="-3.1415 3.1415"/>
+        </default>
+      </default>
+      <default class="size1">
+        <general forcerange="-28 28" gainprm="500" biasprm="0 -500 -100"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="capsule" group="3"/>
+        <default class="eef_collision">
+          <geom type="cylinder"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="spotlight" target="wrist_2_link" pos="0 -1 2" mode="targetbodycom"/>
+    <body name="base" childclass="ur5e" quat="0 0 0 -1">
+      <inertial pos="0 0 0" mass="4" diaginertia="0.00443333 0.00443333 0.0072"/>
+      <body name="shoulder_link" pos="0 0 0.163">
+        <inertial pos="0 0 0" mass="3.7" diaginertia="0.0102675 0.0102675 0.00666"/>
+        <joint name="shoulder_pan_joint" class="size3" axis="0 0 1"/>
+        <geom class="collision" size="0.06 0.06" pos="0 0 -0.04"/>
+        <body name="upper_arm_link" pos="0 0.138 0" quat="0.707107 0 0.707107 0">
+          <inertial pos="0 0 0.2125" mass="8.393" diaginertia="0.133886 0.133886 0.0151074"/>
+          <joint name="shoulder_lift_joint" class="size3"/>
+          <geom class="collision" size="0.06 0.06" pos="0 -0.04 0" quat="0.707107 0.707107 0 0"/>
+          <geom class="collision" size="0.05 0.2" pos="0 0 0.2"/>
+          <body name="forearm_link" pos="0 -0.131 0.425">
+            <inertial pos="0 0 0.196" mass="2.275" diaginertia="0.0311796 0.0311796 0.004095"/>
+            <joint name="elbow_joint" class="size3_limited"/>
+            <geom class="collision" size="0.055 0.06" pos="0 0.08 0" quat="0.707107 0.707107 0 0"/>
+            <geom class="collision" size="0.038 0.19" pos="0 0 0.2"/>
+            <body name="wrist_1_link" pos="0 0 0.392" quat="0.707107 0 0.707107 0">
+              <inertial pos="0 0.127 0" mass="1.219" diaginertia="0.0025599 0.0025599 0.0021942"/>
+              <joint name="wrist_1_joint" class="size1"/>
+              <geom class="collision" size="0.04 0.07" pos="0 0.05 0" quat="0.707107 0.707107 0 0"/>
+              <body name="wrist_2_link" pos="0 0.127 0">
+                <inertial pos="0 0 0.1" mass="1.219" diaginertia="0.0025599 0.0025599 0.0021942"/>
+                <joint name="wrist_2_joint" class="size1" axis="0 0 1"/>
+                <geom class="collision" size="0.04 0.06" pos="0 0 0.04"/>
+                <geom class="collision" size="0.04 0.04" pos="0 0.02 0.1" quat="0.707107 0.707107 0 0"/>
+                <body name="wrist_3_link" pos="0 0 0.1">
+                  <inertial pos="0 0.0771683 0" quat="0.707107 0 0 0.707107" mass="0.1889" diaginertia="0.000132134 9.90863e-05 9.90863e-05"/>
+                  <joint name="wrist_3_joint" class="size1"/>
+                  <geom class="eef_collision" size="0.04 0.02" pos="0 0.08 0" quat="0.707107 0.707107 0 0"/>
+                  <site name="attachment_site" pos="0 0.1 0" quat="-0.707107 0.707107 0 0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <general name="shoulder_pan" class="size3" joint="shoulder_pan_joint"/>
+    <general name="shoulder_lift" class="size3" joint="shoulder_lift_joint"/>
+    <general name="elbow" class="size3_limited" joint="elbow_joint"/>
+    <general name="wrist_1" class="size1" joint="wrist_1_joint"/>
+    <general name="wrist_2" class="size1" joint="wrist_2_joint"/>
+    <general name="wrist_3" class="size1" joint="wrist_3_joint"/>
+  </actuator>
+
+  <keyframe>
+    <key name="home" qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0" ctrl="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0"/>
+  </keyframe>
+</mujoco>

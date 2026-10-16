@@ -22,6 +22,7 @@ from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.geometry import collides, lowest_point
 
 SPAWN_CLEARANCE = 0.002  # m between the lowest point and the floor, so nothing starts inside it
+TCP_RGBA = [1.0, 0.6, 0.1, 0.6]  # the tool point, as on our own arms
 
 
 class LibraryError(ValueError):
@@ -29,24 +30,42 @@ class LibraryError(ValueError):
 
 
 @dataclass(frozen=True)
+class Tool:
+    """Where an arm holds things. The grasp point becomes the "tcp" site that move_arm, pick_and_place and reach
+    steer, as on our own arms, pointing the way the gripper points. An arm without a gripper also gets a "flange"
+    site there: a gripper from the library mounts on it (see mounting.py)."""
+
+    frame: str  # a body or a site of the model: the flange, or the grasp point itself
+    reach: float = 0.0  # m from the frame's origin to the grasp point, along `axis`
+    axis: tuple[float, float, float] = (0.0, 0.0, 1.0)  # the way the gripper points, in the frame's axes
+    shift: tuple[float, float, float] = (0.0, 0.0, 0.0)  # m, the grasp point moved off the axis (one-jaw grippers)
+    gripper: str | None = None  # actuator that opens and closes it, renamed "gripper" like ours
+    # True when the gripper closes at the top of its control range (Robotiq's 0 open, 255 closed). It is turned
+    # around, so that for every arm the top of the range opens and the bottom closes, as move_arm expects.
+    closes_high: bool = False
+    grip_force: float | None = None  # N or N*m: a gentler limit on the gripper's force than the model's
+    arm: str = ""  # on a robot with two arms, each arm's name prefix ("left/"); "" on a one-armed robot
+
+
+@dataclass(frozen=True)
 class LibraryRobot:
     name: str
     title: str
-    kind: Literal["quadruped", "arm", "humanoid"]
+    kind: Literal["quadruped", "arm", "humanoid", "gripper"]  # gripper: a hand to mount on an arm (mounting.py)
     summary: str
     maker: str
     license: str  # of the Menagerie model folder (see its LICENSE file)
     folder: str  # Menagerie directory
     mjcf: str  # model file inside it
     home_key: str | None = "home"  # keyframe that becomes our home pose
+    # For a robot with no keyframe anywhere: joint angles (rad) of its home pose; the others stay at zero.
+    home: tuple[tuple[str, float], ...] = ()
     # Torque-motor models get position servos with this stiffness (N*m/rad), keeping their torque
     # limits: that is how the real robots are commanded (joint targets + PD in the motor driver).
     servo_kp: float | None = None
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
-    # Arms: the body the tool hangs from and how far along its +z the grasp point is (m). It becomes
-    # the "tcp" site that move_arm, pick_and_place and reach steer, as on our own arms.
-    tool: tuple[str, float] | None = None
-    gripper: str | None = None  # actuator that opens the gripper, renamed "gripper" like ours
+    walks: bool = True  # False: the robot stands and balances, but move cannot walk it yet
+    tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -103,8 +122,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "franka_emika_panda",
             "panda.xml",
-            tool=("hand", 0.1034),  # Franka's own flange-to-TCP distance
-            gripper="actuator8",
+            tools=(Tool("hand", 0.1034, gripper="actuator8"),),  # Franka's own flange-to-TCP distance
         ),
         LibraryRobot(
             "so_arm100",
@@ -115,6 +133,9 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "trs_so_arm100",
             "so_arm100.xml",
+            # The jaws reach along the fixed jaw's -y; the pads span 0.047-0.106 m. The grasp point sits 12 mm off the
+            # fixed jaw's pad (x 0.008), where a 4 cm cube touches it, and the moving jaw closes onto it.
+            tools=(Tool("Fixed_Jaw", 0.077, axis=(0.0, -1.0, 0.0), shift=(-0.012, 0.0, 0.0), gripper="Jaw"),),
         ),
         LibraryRobot(
             "piper",
@@ -125,8 +146,8 @@ CATALOG: dict[str, LibraryRobot] = {
             "MIT",
             "agilex_piper",
             "piper.xml",
-            tool=("link6", 0.12),  # centre of the fingertip pads (the pads span 0.075-0.135 m past the flange)
-            gripper="gripper",
+            # centre of the fingertip pads (the pads span 0.075-0.135 m past the flange)
+            tools=(Tool("link6", 0.12, gripper="gripper"),),
         ),
         LibraryRobot(
             "g1",
@@ -138,6 +159,146 @@ CATALOG: dict[str, LibraryRobot] = {
             "unitree_g1",
             "g1.xml",
             home_key="stand",
+        ),
+        LibraryRobot(
+            "anymal_c",
+            "ANYbotics ANYmal C",
+            "quadruped",
+            "45 kg industrial inspection robot dog with a lidar on its back; walks with move and the keyboard.",
+            "ANYbotics",
+            "BSD-3-Clause",
+            "anybotics_anymal_c",
+            "anymal_c.xml",
+            # Lower than the stance of Menagerie's MJX keyframe (0.52, 0.785 rad), where the legs are nearly straight:
+            # on those our trot swung a knee through straight and it fell within 6 s; on these it walks 0.3 m/s.
+            home=tuple(
+                (f"{leg}_{joint}", sign * angle)
+                for leg, sign in (("LF", 1), ("RF", 1), ("LH", -1), ("RH", -1))
+                for joint, angle in (("HFE", 0.8), ("KFE", -1.4))
+            ),
+            max_speed=0.45,  # measured: 0.45 m/s straight; at 0.6 it veered 13 degrees in 10 s
+        ),
+        LibraryRobot(
+            "barkour",
+            "Google Barkour vB",
+            "quadruped",
+            "Google DeepMind's 14 kg agility robot dog with a head camera; walks with move and the keyboard.",
+            "Google DeepMind",
+            "Apache-2.0",
+            "google_barkour_vb",
+            "barkour_vb.xml",
+            # On the stance of Menagerie's scene keyframe (hip 0.5, knee 1.0 rad) our trot walked it backwards
+            # (-1.4 m in 10 s at 0.3 m/s); on these bent knees it walks 3.0 m, straight.
+            home=tuple(
+                (f"{joint}_{leg}", angle)
+                for leg in ("front_left", "hind_left", "front_right", "hind_right")
+                for joint, angle in (("hip", 0.7), ("knee", 1.4))
+            ),
+        ),
+        LibraryRobot(
+            "op3",
+            "Robotis OP3",
+            "humanoid",
+            "51 cm, 3 kg open-source humanoid with 20 servos, a RoboCup favourite; walks with move and the keyboard.",
+            "Robotis",
+            "Apache-2.0",
+            "robotis_op3",
+            "op3.xml",
+            # No keyframe in Menagerie: knees soft like our template's (hip and ankle 0.35 rad, knee 0.7). Each joint
+            # turns the way its axis says; the right leg's pitch axes point the other way.
+            home=(
+                ("l_hip_pitch", -0.35),
+                ("l_knee", 0.7),
+                ("l_ank_pitch", 0.35),
+                ("r_hip_pitch", 0.35),
+                ("r_knee", -0.7),
+                ("r_ank_pitch", -0.35),
+            ),
+        ),
+        LibraryRobot(
+            "t1",
+            "Booster T1",
+            "humanoid",
+            "1.2 m, 32 kg humanoid with 23 joints, built for robot soccer; stands and keeps its balance (no walk yet).",
+            "Booster Robotics",
+            "Apache-2.0",
+            "booster_t1",
+            "t1.xml",
+            walks=False,  # measured: the balance gait keeps it standing within 2 degrees, but it falls at 0.05 m/s
+        ),
+        LibraryRobot(
+            "z1",
+            "Unitree Z1",
+            "arm",
+            "Unitree's 4.7 kg 6-joint arm (0.74 m reach) for robot dogs; move_arm works, but its one-jaw claw "
+            "cannot hold a cube in pick_and_place yet.",
+            "Unitree Robotics",
+            "BSD-3-Clause",
+            "unitree_z1",
+            "z1_gripper.xml",
+            # The grasp point is the middle of the fingertip pads (0.172-0.2 m along link06's x), 1 cm above the fixed
+            # jaw's pad: a cube rests on that jaw and the moving one closes onto it (at 0 rad; -1.52 is wide open).
+            tools=(
+                Tool(
+                    "link06",
+                    0.186,
+                    axis=(1.0, 0.0, 0.0),
+                    shift=(0.0, 0.0, 0.01),
+                    gripper="motorGripper",
+                    closes_high=True,
+                    grip_force=6.0,  # its 30 N*m flung a 40 g cube out of the jaws at 20 m/s
+                ),
+            ),
+        ),
+        LibraryRobot(
+            "ur5e",
+            "Universal Robots UR5e",
+            "arm",
+            "The classic 6-joint industrial cobot (0.85 m reach) with a bare flange: mount a gripper (robotiq_2f85).",
+            "Universal Robots",
+            "BSD-3-Clause",
+            "universal_robots_ur5e",
+            "ur5e.xml",
+            tools=(Tool("attachment_site"),),
+        ),
+        LibraryRobot(
+            "xarm7",
+            "UFACTORY xArm 7",
+            "arm",
+            "7-joint arm (0.7 m reach) with UFACTORY's parallel gripper.",
+            "UFACTORY",
+            "BSD-3-Clause",
+            "ufactory_xarm7",
+            "xarm7.xml",
+            tools=(Tool("link_tcp", gripper="gripper", closes_high=True),),
+        ),
+        LibraryRobot(
+            "aloha",
+            "ALOHA 2",
+            "arm",
+            "Two-armed teleoperation station (two 6-joint arms with grippers facing each other); arms aloha/left and "
+            "aloha/right.",
+            "Trossen Robotics and Google DeepMind",
+            "BSD-3-Clause",
+            "aloha",
+            "aloha.xml",
+            home_key="neutral_pose",
+            tools=(
+                Tool("left/gripper", axis=(1.0, 0.0, 0.0), gripper="left/gripper", arm="left/"),
+                Tool("right/gripper", axis=(1.0, 0.0, 0.0), gripper="right/gripper", arm="right/"),
+            ),
+        ),
+        LibraryRobot(
+            "robotiq_2f85",
+            "Robotiq 2F-85",
+            "gripper",
+            "The most common industrial two-finger gripper (85 mm stroke); mount it on the flange of an arm (ur5e).",
+            "Robotiq (model from ROS-Industrial)",
+            "BSD-2-Clause",
+            "robotiq_2f85",
+            "2f85.xml",
+            home_key=None,
+            tools=(Tool("pinch", gripper="fingers_actuator", closes_high=True),),
         ),
     ]
 }
@@ -199,12 +360,10 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     robot = get(name)
     if params:
         raise LibraryError(f"library robots are used as built and take no params (got {', '.join(params)})")
-    path = model_dir(robot) / robot.mjcf
-    try:
-        spec = mujoco.MjSpec.from_file(str(path))
-    except ValueError as exc:
-        raise LibraryError(f"MuJoCo could not read {path}: {exc}") from exc
+    spec = _read(model_dir(robot) / robot.mjcf)
     key_qpos, key_ctrl = _read_key(spec, robot.home_key)
+    if key_qpos is None and robot.home:
+        key_qpos = _home_from_joints(spec, robot)
     notes = [f"{robot.title} from MuJoCo Menagerie ({robot.license}, {robot.maker})"]
     if robot.servo_kp is not None:
         converted = _motors_to_servos(spec, robot.servo_kp)
@@ -212,8 +371,8 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
             notes.append(
                 f"{converted} torque motors driven as position servos (kp {robot.servo_kp:g}, torque limits kept)"
             )
-    if robot.tool is not None:
-        _add_tool(spec, robot)
+    if robot.tools:
+        key_ctrl = _add_tools(spec, robot, key_ctrl)
     for geom in list(spec.worldbody.geoms):  # the world brings its own floor and lights
         spec.delete(geom)
     for light in list(spec.worldbody.lights):
@@ -225,27 +384,97 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         raise LibraryError(f"{robot.title}: the model has no bodies")
     floating = any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints)
     if floating:
-        # Place the base by its keyframe orientation; height comes from the lowest point below.
+        # Place the base by its keyframe orientation; height comes from the lowest point below. Without a keyframe
+        # it faces +x like every robot here: a file's own placement is its scene's (ANYmal C's faces -x).
         root.pos = [0.0, 0.0, 0.0]
-        if key_qpos is not None:
-            root.quat = key_qpos[3:7].tolist()
+        root.quat = key_qpos[3:7].tolist() if key_qpos is not None else [1.0, 0.0, 0.0, 0.0]
     home_qpos, home_ctrl, spawn = _home_pose(spec, key_qpos, key_ctrl, floating)
     return BuiltRobot(
         spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
     )
 
 
-def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
-    body_name, reach = robot.tool
-    body = spec.body(body_name)
+def _home_from_joints(spec: mujoco.MjSpec, robot: LibraryRobot) -> np.ndarray:
+    model = spec.compile()
+    qpos = model.qpos0.copy()
+    if model.njnt and model.jnt_type[0] == mujoco.mjtJoint.mjJNT_FREE:
+        qpos[3:7] = [1.0, 0.0, 0.0, 0.0]  # level and facing +x
+    for joint, angle in robot.home:
+        j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint)
+        if j < 0:
+            raise LibraryError(f"{robot.title}: the model has no joint {joint!r} for its home pose")
+        qpos[model.jnt_qposadr[j]] = angle
+    return qpos
+
+
+def _read(path: Path) -> mujoco.MjSpec:
+    try:
+        return mujoco.MjSpec.from_file(str(path))
+    except ValueError as exc:
+        raise LibraryError(f"MuJoCo could not read {path}: {exc}") from exc
+
+
+def _add_tools(spec: mujoco.MjSpec, robot: LibraryRobot, key_ctrl: np.ndarray | None) -> np.ndarray | None:
+    """Put each arm's "tcp" site (and "flange", without a gripper) on the model and name its gripper "gripper".
+    Returns the keyframe's controls, with those of a gripper that was turned around turned with it."""
+    model = spec.compile()  # resolves where sites really are (frames, other ways of writing an orientation)
+    actuators = list(spec.actuators)
+    for tool in robot.tools:
+        body, pos, quat = _tool_frame(spec, model, robot, tool)
+        axis = np.asarray(tool.axis, float) / np.linalg.norm(tool.axis)
+        turn, tip = np.zeros(4), np.zeros(4)
+        mujoco.mju_quatZ2Vec(turn, axis)
+        mujoco.mju_mulQuat(tip, quat, turn)
+        rot = np.zeros(9)
+        mujoco.mju_quat2Mat(rot, quat)
+        grasp = pos + rot.reshape(3, 3) @ (tool.reach * axis + np.asarray(tool.shift, float))
+        body.add_site(name=f"{tool.arm}tcp", pos=grasp.tolist(), quat=tip.tolist(), size=[0.006, 0, 0], rgba=TCP_RGBA)
+        if tool.gripper is None:  # a bare flange: a gripper can be mounted here
+            body.add_site(name=f"{tool.arm}flange", pos=pos.tolist(), quat=tip.tolist(), size=[0.004, 0, 0], group=5)
+            continue
+        index = next((i for i, a in enumerate(actuators) if a.name == tool.gripper), None)
+        if index is None:
+            raise LibraryError(f"{robot.title}: the model has no gripper actuator {tool.gripper!r}")
+        actuators[index].name = f"{tool.arm}gripper"
+        if tool.grip_force is not None:
+            actuators[index].forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
+            actuators[index].forcerange = [-tool.grip_force, tool.grip_force]
+        if tool.closes_high:
+            low, high = _turn_around(actuators[index], robot)
+            if key_ctrl is not None and key_ctrl.size == len(actuators):
+                key_ctrl = key_ctrl.copy()
+                key_ctrl[index] = low + high - key_ctrl[index]
+    return key_ctrl
+
+
+def _tool_frame(
+    spec: mujoco.MjSpec, model: mujoco.MjModel, robot: LibraryRobot, tool: Tool
+) -> tuple[mujoco.MjsBody, np.ndarray, np.ndarray]:
+    """The body a tool's frame is on, and the frame's position and orientation in that body."""
+    site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, tool.frame)
+    if site >= 0:
+        body = spec.body(mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.site_bodyid[site])))
+        return body, model.site_pos[site].copy(), model.site_quat[site].copy()
+    body = spec.body(tool.frame)
     if body is None:
-        raise LibraryError(f"{robot.title}: the model has no body {body_name!r} to put the tool point on")
-    body.add_site(name="tcp", pos=[0, 0, reach], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
-    if robot.gripper and robot.gripper != "gripper":
-        actuator = next((a for a in spec.actuators if a.name == robot.gripper), None)
-        if actuator is None:
-            raise LibraryError(f"{robot.title}: the model has no gripper actuator {robot.gripper!r}")
-        actuator.name = "gripper"
+        raise LibraryError(f"{robot.title}: the model has no body or site {tool.frame!r} to put the tool point on")
+    return body, np.zeros(3), np.array([1.0, 0.0, 0.0, 0.0])
+
+
+def _turn_around(actuator: mujoco.MjsActuator, robot: LibraryRobot) -> tuple[float, float]:
+    """Make an actuator read its control the other way round within its range (c becomes low + high - c), exactly:
+    force = gain * c + bias is affine in c. Returns the range."""
+    if actuator.gaintype != mujoco.mjtGain.mjGAIN_FIXED or actuator.dyntype != mujoco.mjtDyn.mjDYN_NONE:
+        raise LibraryError(f"{robot.title}: cannot turn the gripper actuator {actuator.name!r} around")
+    low, high = (float(v) for v in actuator.ctrlrange)
+    gain = np.array(actuator.gainprm, float)
+    bias = np.array(actuator.biasprm, float)
+    bias[0] += gain[0] * (low + high)
+    gain[0] = -gain[0]
+    actuator.gainprm = gain.tolist()
+    actuator.biasprm = bias.tolist()
+    actuator.biastype = mujoco.mjtBias.mjBIAS_AFFINE
+    return low, high
 
 
 def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:

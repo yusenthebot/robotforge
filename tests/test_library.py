@@ -20,7 +20,7 @@ import pytest
 from mcp import Client
 
 from robotforge import mcp_server
-from robotforge.behaviors import Kind, quadruped, robot_kind
+from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
 from robotforge.cli import find_free_port
 from robotforge.design import library, menagerie
 from robotforge.design.world import RobotEntry, World, compile_world
@@ -60,7 +60,7 @@ def test_catalog_describes_each_robot_with_its_license():
     assert entries["go2"]["kind"] == "quadruped"
     assert entries["go2"]["license"] == "BSD-3-Clause"
     assert entries["panda"]["license"] == "Apache-2.0"
-    assert {e["kind"] for e in entries.values()} == {"quadruped", "arm", "humanoid"}
+    assert {e["kind"] for e in entries.values()} == {"quadruped", "arm", "humanoid", "gripper"}
     assert entries["go2"]["downloaded"] is True  # the offline fixture counts as downloaded
 
 
@@ -187,7 +187,7 @@ def test_legs_are_found_from_the_kinematic_tree(pg):
 
 def test_arms_are_not_mistaken_for_quadrupeds(pg):
     pg.add_robot("arm", library="so_arm100")
-    assert robot_kind(pg.session.model, "arm") == Kind.OTHER
+    assert robot_kind(pg.session.model, "arm") == Kind.ARM  # by its tool point, not its legs
     with pytest.raises(ValueError, match="only legged robots"):
         pg.behaviors.move("arm", 0.2, 0.0)
 
@@ -317,11 +317,139 @@ def test_motors_become_servos_in_radians_even_in_degree_models():
     assert not is_position_servo(model, speed)  # velocity actuators are not position servos
 
 
+# ---- the robots added for variety: dogs, humanoids, arms, a gripper ---------------------------------
+
+
+def test_new_robots_are_listed_with_their_kind_and_licence():
+    entries = {e["name"]: e for e in library.catalog()}
+    expected = {
+        "anymal_c": ("quadruped", "BSD-3-Clause"),
+        "barkour": ("quadruped", "Apache-2.0"),
+        "op3": ("humanoid", "Apache-2.0"),
+        "t1": ("humanoid", "Apache-2.0"),
+        "z1": ("arm", "BSD-3-Clause"),
+        "ur5e": ("arm", "BSD-3-Clause"),
+        "xarm7": ("arm", "BSD-3-Clause"),
+        "aloha": ("arm", "BSD-3-Clause"),
+        "robotiq_2f85": ("gripper", "BSD-2-Clause"),
+    }
+    for name, (kind, licence) in expected.items():
+        assert (entries[name]["kind"], entries[name]["license"]) == (kind, licence)
+        assert 1 < entries[name]["download_mb"] < 60
+
+
+def test_a_robot_without_a_keyframe_stands_on_the_home_pose_it_is_given_facing_forward():
+    built = library.build("anymal_c")
+    # Its file turns it 180 degrees (a scene's choice); every robot here faces +x.
+    assert built.spec.worldbody.first_body().quat == pytest.approx([1, 0, 0, 0])
+    assert built.home_qpos["LF_HFE"] == pytest.approx(0.8) and built.home_qpos["LH_KFE"] == pytest.approx(1.4)
+    model = compile_world(World.model_validate({"robots": [{"name": "dog", "library": "anymal_c"}]})).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    mujoco.mj_forward(model, data)
+    feet = [model.geom(g) for g in range(model.ngeom) if model.geom(g).name == "" and model.geom_priority[g] == 1]
+    assert feet and min(data.geom_xpos[f.id][2] - model.geom_size[f.id][0] for f in feet) == pytest.approx(0, abs=3e-3)
+
+
+def test_anymal_walks_on_the_gait(pg):
+    pg.add_robot("dog", library="anymal_c")
+    _run(pg, 1.0)
+    start = pg.behaviors.pose("dog")["position"]
+    pg.behaviors.move("dog", 0.3, 0.0)
+    _run(pg, 8.0)
+    end = pg.behaviors.pose("dog")
+    assert end["position"][0] - start[0] > 1.8 and abs(end["position"][1] - start[1]) < 0.3 and end["upright"]
+
+
+def test_op3_stands_and_walks_on_the_balance_gait_found_from_its_legs(pg):
+    pg.add_robot("op3", library="op3")
+    gait = pg.session.controllers["op3"]  # it balances from the start
+    assert isinstance(gait, humanoid.HumanoidController)
+    for roles in gait.roles:  # hip roll, ankle pitch and ankle roll of each leg, from the way their axes point
+        assert roles.ankle_roll is not None and roles.hip_roll[0] == 1 and roles.ankle_pitch[0] == 4
+    _run(pg, 2.0)
+    start = pg.behaviors.pose("op3")["position"]
+    pg.behaviors.move("op3", 0.1, 0.0)
+    _run(pg, 6.0)
+    end = pg.behaviors.pose("op3")
+    assert end["position"][0] - start[0] > 0.45 and end["upright"]
+
+
+def test_a_humanoid_that_cannot_walk_yet_stands_and_says_so(pg, monkeypatch):
+    monkeypatch.setitem(library.CATALOG, "op3", dataclasses.replace(library.CATALOG["op3"], walks=False))
+    pg.add_robot("bot", library="op3")
+    assert pg.behaviors.robots()[0]["walks"] is False
+    with pytest.raises(ValueError, match="has no walk yet: it stands and keeps its balance"):
+        pg.behaviors.move("bot", 0.1, 0.0)
+    _run(pg, 4.0)
+    assert pg.behaviors.pose("bot")["upright"]
+
+
+def test_arm_poses_are_refused_on_a_real_humanoid_whose_arms_hold_still(pg):
+    pg.add_robot("op3", library="op3")
+    with pytest.raises(ValueError, match="wave moves only the arms and head, which on op3 hold still; it can: squat"):
+        pg.behaviors.strike_pose("op3", "wave")
+    pg.behaviors.strike_pose("op3", "squat")  # drops the hips: that works on any legs
+
+
+def test_an_arm_with_a_bare_flange_reaches(pg):
+    pg.add_robot("ur", library="ur5e")
+    m = pg.session.model
+    tcp, flange, attachment = (m.site(f"ur/{s}").id for s in ("tcp", "flange", "attachment_site"))
+    # Both sit where Menagerie's attachment site is, pointing the way it does.
+    _run(pg, 0.1)
+    d = pg.session.data
+    np.testing.assert_allclose(d.site_xpos[tcp], d.site_xpos[attachment], atol=1e-9)
+    np.testing.assert_allclose(d.site_xmat[flange], d.site_xmat[attachment], atol=1e-9)
+    pg.behaviors.move_arm("ur", [0.4, 0.1, 0.2])
+    _run(pg, 4.0)
+    assert np.linalg.norm(d.site_xpos[tcp] - [0.4, 0.1, 0.2]) < 0.012
+
+
+def test_a_gripper_that_closes_high_is_turned_around_exactly():
+    spec = mujoco.MjSpec.from_string(
+        """<mujoco><worldbody><body><joint name="slide" type="slide" axis="1 0 0" range="0 0.05"/>
+        <geom size="0.01" mass="0.1"/></body></worldbody><actuator><general name="fingers" joint="slide"
+        ctrlrange="0 255" gainprm="0.3" biasprm="0 -100 -10" biastype="affine"/></actuator></mujoco>"""
+    )
+    before = spec.compile()
+    low, high = library._turn_around(spec.actuators[0], library.CATALOG["robotiq_2f85"])
+    after = spec.compile()
+    assert (low, high) == (0, 255)
+    for ctrl in (0.0, 80.0, 255.0):
+        d1, d2 = mujoco.MjData(before), mujoco.MjData(after)
+        d1.qpos[0] = d2.qpos[0] = 0.02
+        d1.ctrl[0], d2.ctrl[0] = ctrl, low + high - ctrl
+        mujoco.mj_forward(before, d1)
+        mujoco.mj_forward(after, d2)
+        assert d2.actuator_force[0] == pytest.approx(d1.actuator_force[0])
+
+
+def test_two_armed_aloha_has_an_arm_on_each_side(pg):
+    pg.add_robot("aloha", library="aloha")
+    assert pg.behaviors.robots()[0]["arms"] == ["aloha/left", "aloha/right"]
+    with pytest.raises(ValueError, match="aloha has 2 arms; name the one you mean: aloha/left, aloha/right"):
+        pg.behaviors.move_arm("aloha", [0.0, 0.0, 0.2])
+    arm = pg.behaviors.move_arm("aloha/right", [0.15, 0.0, 0.2])
+    _run(pg, 2.5)
+    assert np.linalg.norm(pg.session.data.site_xpos[arm.site] - [0.15, 0.0, 0.2]) < 0.02
+    assert pg.session.model.actuator(arm.gripper).name == "aloha/right/gripper"
+
+
+def test_suggestions_for_a_misspelt_robot_start_like_it():
+    with pytest.raises(library.LibraryError, match="Did you mean go2, go1, op3"):
+        library.get("go3")
+
+
 # ---- real downloads (opt-in) ----------------------------------------------------------------------
 
 
+# Humanoids without a learned walk stand on the balance gait, not on their servos alone: see the test below them.
+ON_SERVOS = [name for name, robot in library.CATALOG.items() if robot.kind != "humanoid" or name == "g1"]
+
+
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
-@pytest.mark.parametrize("name", list(library.CATALOG))
+@pytest.mark.parametrize("name", ON_SERVOS)
 def test_real_library_robot_loads_and_holds_still(name):
     model = compile_world(World.model_validate({"robots": [{"name": "r", "library": name}]})).model
     data = mujoco.MjData(model)
@@ -347,3 +475,49 @@ def test_real_go2_walks(pg):
     _run(pg, 10.0)
     end = pg.behaviors.pose("go2")
     assert end["position"][0] - start[0] > 2.4 and end["upright"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("name", ["op3", "t1"])
+def test_real_humanoid_stands_ten_seconds_on_the_balance_gait(pg, name):
+    pg.add_robot("bot", library=name)
+    _run(pg, 0.5)
+    start = pg.behaviors.pose("bot")["position"]
+    _run(pg, 10.0)
+    end = pg.behaviors.pose("bot")
+    assert end["upright"] and math.dist(start[:2], end["position"][:2]) < 0.1
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("name, speed, distance", [("anymal_c", 0.3, 2.4), ("barkour", 0.3, 2.4), ("op3", 0.1, 0.8)])
+def test_real_new_walkers_walk_ten_seconds(pg, name, speed, distance):
+    pg.add_robot("bot", library=name)
+    _run(pg, 2.0)
+    start = pg.behaviors.pose("bot")["position"]
+    pg.behaviors.move("bot", speed, 0.0)
+    _run(pg, 10.0)
+    end = pg.behaviors.pose("bot")
+    assert end["position"][0] - start[0] > distance and abs(end["position"][1] - start[1]) < 0.5 and end["upright"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize(
+    "name, arm, cube, bin_at",
+    [
+        ("xarm7", "bot", [0.4, 0.15], [0.35, -0.25]),
+        ("aloha", "bot/left", [-0.15, 0.1], [-0.1, -0.15]),
+        ("aloha", "bot/right", [0.15, -0.1], [0.1, 0.15]),
+    ],
+)
+def test_real_new_arms_pick_a_cube_into_a_bin(pg, name, arm, cube, bin_at):
+    pg.add_robot("bot", library=name)
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=cube)
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=bin_at, color="blue")
+    _run(pg, 1.0)
+    motion, info = pg.behaviors.pick_and_place(arm, "cube", "bin")
+    for _ in range(80):
+        _run(pg, 0.25)
+        if motion.done:
+            break
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
