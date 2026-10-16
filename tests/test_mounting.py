@@ -4,6 +4,7 @@ Offline against the Menagerie stand-ins in tests/fixtures/menagerie, like test_l
 """
 
 import json
+import os
 from pathlib import Path
 
 import mujoco
@@ -22,9 +23,13 @@ from robotforge.sim.session import SimSession
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
 
 
+NETWORK = os.environ.get("ROBOTFORGE_NETWORK_TESTS") == "1"
+
+
 @pytest.fixture(autouse=True)
-def offline_menagerie(monkeypatch):
-    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(FIXTURES))
+def offline_menagerie(monkeypatch, request):
+    if not request.node.name.startswith("test_real_"):
+        monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(FIXTURES))
 
 
 @pytest.fixture
@@ -270,3 +275,23 @@ async def test_mcp_add_robot_mounts_an_arm_and_works_it(pg):
         assert (await call("robots", {}))["robots"][0]["arms"] == ["go2/arm"]
         moved = await call("move_arm", {"robot": "go2/arm", "position": [0.4, 0.0, 0.4]})
         assert np.linalg.norm(np.subtract(moved["tool_position"], [0.4, 0.0, 0.4])) < 0.02
+
+
+# ---- real downloads (opt-in, see test_library.py) ----------------------------------------------------------------
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_a_go2_with_a_piper_walks_to_a_cube_and_bins_it(pg):
+    test_a_dog_walks_to_a_cube_and_its_arm_puts_it_in_a_bin(pg)
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_a_ur5e_with_a_robotiq_gripper_picks_a_cube(pg):
+    pg.add_robot("ur", library="ur5e", mounts=[{"library": "robotiq_2f85"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.15])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=[0.35, -0.25], color="blue")
+    _run(pg, 1.0)
+    _, info = pg.behaviors.pick_and_place("ur", "cube", "bin")
+    _arm_done(pg, "ur")
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
