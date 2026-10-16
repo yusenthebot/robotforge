@@ -14,12 +14,12 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 
 | 设计 | 是什么 | 怎么用 | 实测（真实仿真） |
 |---|---|---|---|
-| `wheel_biped` | 两条腿末端是驱动轮，像赛格威一样自己平衡，腿撑着半蹲 | `move` 开；`set_controls` 改 `left_thigh`、`left_shin` 等关节就能蹲下或站高 | 0.4 m/s 开 3 秒前进 1.27 m；深蹲时只滚了 1.5 cm |
+| `wheel_biped` | 两条腿末端是驱动轮，像赛格威一样自己平衡，腿撑着半蹲 | `move` 开；`set_controls` 改 `left_thigh`、`left_shin` 等关节就能蹲下或站高 | 0.4 m/s 开 3 秒前进 1.28 m；深蹲时只滚了 1.6 cm |
 | `wheel_dog` | 四条腿末端是驱动轮的机器狗 | `move` 像小车一样开；改腿的角度换姿势 | 0.4 m/s 开 3 秒前进 1.24 m |
 | `mars_rover` | 六轮摇臂转向架火星车，带摄像头桅杆和采样机械臂 | `move` 开；采样臂叫 `mars_rover/hand` | 翻过 6 cm 路沿，6 秒前进 1.76 m；把石块放进样品盒 |
 | `lift_picker` | 拣货机器人：小车、能升降的立柱和机械臂 | `move` 开；`pick_and_place` 会自己升降立柱 | 把方块从 0.45 m 的桌子放到 0.62 m 的桌子上，立柱升到 0.25 m，底盘纹丝不动 |
-| `mobile_panda` | 真实的 Franka Emika Panda 机械臂装在一台很重的四轮底盘上，像实验室里常见的移动操作平台 | `move` 开；机械臂叫 `mobile_panda/arm` | 0.4 m/s 开 4 秒前进 1.65 m；从地上捡起方块放到 0.45 m 的桌子上 |
-| `centaur` | 半人马：四条腿走四足步态，上身有头和两只带夹爪的手 | `move` 走；两只手叫 `centaur/left_hand`、`centaur/right_hand` | 0.3 m/s 走 4 秒前进 0.73 m；左手把方块放进盒子 |
+| `mobile_panda` | 真实的 Franka Emika Panda 机械臂装在一台很重的四轮底盘上，像实验室里常见的移动操作平台 | `move` 开；机械臂叫 `mobile_panda/arm` | 0.4 m/s 开 4 秒前进 1.66 m；从地上捡起方块放到 0.45 m 的桌子上 |
+| `centaur` | 半人马：四条腿走四足步态，上身有头和两只带夹爪的手 | `move` 走；两只手叫 `centaur/left_hand`、`centaur/right_hand` | 0.3 m/s 走 4 秒前进 0.70 m；左手把方块放进盒子 |
 | `scorpion` | 蝎子：六足三角步态，尾巴是一条机械臂，末端是夹钳 | `move` 走；尾巴叫 `scorpion/claw` | 0.25 m/s 走 4 秒前进 1.10 m；尾巴绕过背把方块挪到一边 |
 | `go2_arm` | 真实的宇树 Go2 背着真实的 AgileX PiPER 机械臂（都来自 MuJoCo Menagerie，第一次用时下载） | `move` 走；机械臂叫 `go2_arm/arm` | 0.4 m/s 走 3 秒前进 1.26 m；把方块从一张桌子搬到另一张 |
 | `twin_arm` | 双臂工作台：带头的上身装在可转动的腰上，两只手各带夹爪 | 两只手叫 `twin_arm/left_hand`、`twin_arm/right_hand`；腰用 `set_controls` 手动转 | 两只手各把一个方块放进自己那边的托盘，腰一动不动 |
