@@ -233,6 +233,30 @@ def test_copying_works_beside_a_demonstration_and_fails_far_from_it(pg):
         Press("try").apply(p)
 
 
+def test_let_it_try_learns_from_the_demonstrations_used(pg):
+    """Demonstrations used at 1 of 2: a try learned from every demonstration whatever the slider said. It learns
+    from the first one, its "where you showed it" is beside that one, and the readout says so; a demonstration
+    the slider leaves out says so when it is kept."""
+    p = _player(pg)
+    _show_a_pick(p)
+    Press("new_cube", 0.3).apply(p)
+    _show_a_pick(p)
+    _unlock_all(p)
+    lesson = p.lesson
+    first, second = (d.spot for d in lesson.demos)
+    Set(method=0, where=0, use=1).apply(p)
+    Press("try").apply(p)
+    p.play(0.2)
+    assert lesson.trial["use"] == 1 and lesson.policy[0] == ("knn", 1)
+    assert np.linalg.norm(np.subtract(lesson.trial["spot"], first)) == pytest.approx(imitation.NEAR_OFFSET, abs=1e-3)
+    assert np.linalg.norm(np.subtract(lesson.trial["spot"], second)) > 0.03
+    assert "the first 1 demonstration of 2" in p.update["live"]["readout"]["en"]
+    _finish_try(p)
+    Press("new_cube", 0.3).apply(p)
+    _show_a_pick(p)
+    assert "Demonstrations used is at 1" in p.ctx.results["summary"]["en"]
+
+
 @pytest.mark.slow  # 25 s: trains the network six times (CI runs the slow tests on Ubuntu)
 def test_tests_and_the_sweep_give_the_measured_success(pg):
     """Five demonstrations by the scripted learner, then the three methods at the 24 spots and the sweep.

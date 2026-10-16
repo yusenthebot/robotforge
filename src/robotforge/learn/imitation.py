@@ -59,6 +59,11 @@ def _cm(v: float) -> str:
     return f"{100 * v:.0f}"
 
 
+def _demos(n: int) -> str:
+    """'1 demonstration', '5 demonstrations' (the readout said "1 demonstrations")."""
+    return f"{n} demonstration{'' if n == 1 else 's'}"
+
+
 # ---- the step checks ----------------------------------------------------------------------------------------
 
 
@@ -722,18 +727,26 @@ class ImitationLesson(Lesson):
         self.demos.append(demo)
         ctx.results["demos"] = len(self.demos)
         ctx.events.add("demo_saved")
+        n = len(self.demos)
         if demo.correction:
             ctx.events.add("corrected")
-            ctx.results["summary"] = _text(
-                f"纠正 #{len(self.demos)} 录好了：{len(demo.X)} 对“看到 → 做”，都是它自己走到的情形。",
-                f"Correction #{len(self.demos)} recorded: {len(demo.X)} 'see -> do' pairs, all in situations it "
-                "got itself into.",
+            summary = _text(
+                f"纠正 #{n} 录好了：{len(demo.X)} 对“看到 → 做”，都是它自己走到的情形。",
+                f"Correction #{n} recorded: {len(demo.X)} 'see -> do' pairs, all in situations it got itself into.",
             )
         else:
-            ctx.results["summary"] = _text(
-                f"示范 #{len(self.demos)} 录好了：{len(demo.X)} 对“看到 → 做”，{demo.seconds:.1f} 秒。",
-                f"Demonstration #{len(self.demos)} recorded: {len(demo.X)} 'see -> do' pairs in {demo.seconds:.1f} s.",
+            summary = _text(
+                f"示范 #{n} 录好了：{len(demo.X)} 对“看到 → 做”，{demo.seconds:.1f} 秒。",
+                f"Demonstration #{n} recorded: {len(demo.X)} 'see -> do' pairs in {demo.seconds:.1f} s.",
             )
+        use = int(ctx.values["use"])
+        if use < n:  # tries and tests learn from the first `use`: without a word, a retry seems to ignore this one
+            summary = _text(
+                f"{summary['zh']}「用几次示范」是 {use}，让它做和考试都用不到它；想用就往右拉。",
+                f"{summary['en']} Demonstrations used is at {use}, so Let it try and Test leave it out; slide it up "
+                "to use it.",
+            )
+        ctx.results["summary"] = summary
         self._redraw()
 
     # ---- buttons -------------------------------------------------------------------------------------------------
@@ -774,10 +787,13 @@ class ImitationLesson(Lesson):
         if method != "ik" and not spots:
             raise LessonError("show it once first: there is nothing to copy yet")
         self.tries += 1
+        # It learns from the first `use`, as a test does (a try took every demonstration whatever the slider said),
+        # and "where you showed it" and "far" are measured from those.
+        use = min(int(ctx.values["use"]), len(self.demos)) if method != "ik" else len(self.demos)
         # Distances are to the demonstrations, which start from the cube: a correction made at a spot does not
         # make it "where you showed it", so the arm can be tried there again (only it now has a correction).
-        shown = [d.spot for d in self.demos if not d.correction]
-        fixes = [d.spot for d in self.demos if d.correction]
+        shown = [d.spot for d in self.demos[:use] if not d.correction]
+        fixes = [d.spot for d in self.demos[:use] if d.correction]
         if where == "near" and shown:
             angle = 2 * math.pi * (self.tries * 0.618 % 1.0)  # round the spot, a new side every try
             spot = shown[-1] + NEAR_OFFSET * np.array([math.cos(angle), math.sin(angle)])
@@ -794,15 +810,15 @@ class ImitationLesson(Lesson):
             "corrected": bc.nearest(spot, fixes) < CORRECTED_HERE,
             "path": [],
             "ok": None,
+            "use": use,
         }
-        use = len(self.demos)
         cached = self._cached(method, use)
         if method == "ik" or cached is not None:
             hands.start(data, spot, cached)
             ctx.results["summary"] = _text("它在自己做……", "It is trying on its own...")
             return
         # A network trains for a second or two: on the lesson's thread, so the viewer does not stop meanwhile.
-        demos = list(self.demos)
+        demos = self.demos[:use]
         generation = self.generation
 
         def train() -> None:
@@ -1000,7 +1016,7 @@ class ImitationLesson(Lesson):
         for n in counts:
             if self.stopping.is_set():
                 return
-            self.progress = _text(f"用 {n} 次示范训练……", f"Training on {n} demonstrations...")
+            self.progress = _text(f"用 {n} 次示范训练……", f"Training on {_demos(n)}...")
             learner = bc.learn(method, demos[:n])
             oks = []
             for k, spot in enumerate(fixed):
@@ -1008,7 +1024,7 @@ class ImitationLesson(Lesson):
                     return
                 self.progress = _text(
                     f"用 {n} 次示范：考第 {k + 1} 处，共 {len(fixed)} 处……",
-                    f"{n} demonstrations: testing spot {k + 1} of {len(fixed)}...",
+                    f"{_demos(n)}: testing spot {k + 1} of {len(fixed)}...",
                 )
                 oks.append(bc.rollout(model, learner, spot).success)
             points.append({"x": float(n), "success": bc.rate(oks)})
@@ -1097,12 +1113,18 @@ class ImitationLesson(Lesson):
         if self.progress is not None:
             return self.progress
         if trying:
-            return _text(f"它在自己做（学了 {n} 次示范）……", f"Trying on its own (learned from {n} demonstrations)...")
+            use = self.trial.get("use", n) if self.trial is not None else n
+            if use < n:
+                return _text(
+                    f"它在自己做（学了前 {use} 次示范，共 {n} 次）……",
+                    f"Trying on its own (learned from the first {_demos(use)} of {n})...",
+                )
+            return _text(f"它在自己做（学了 {n} 次示范）……", f"Trying on its own (learned from {_demos(n)})...")
         if self.recording is not None and self.recording.correction:
             return _text(f"● 正在记录纠正（第 {n + 1} 次）", f"● Recording a correction ({n + 1})")
         if self.recording is not None:
             return _text(f"● 正在记录第 {n + 1} 次示范", f"● Recording demonstration {n + 1}")
-        return _text(f"已有 {n} 次示范。点「新方块」再示范一次", f"{n} demonstrations. Press New cube to show it again")
+        return _text(f"已有 {n} 次示范。点「新方块」再示范一次", f"{_demos(n)}. Press New cube to show it again")
 
     def _table(self) -> dict[str, Any] | None:
         if not self.demos:
