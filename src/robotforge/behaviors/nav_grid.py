@@ -151,6 +151,41 @@ def astar(
     return path[::-1]
 
 
+def enclosed(grid: Grid, free: np.ndarray, region: np.ndarray, start: tuple[int, int], budget: int = 20_000) -> bool:
+    """Whether the free cells a walk reaches from `region` (8-connected, the same corner rule as astar) are fewer
+    than `budget` and leave out `start`. Then no path joins the two, found at the cost of the small side alone:
+    a point closed off in a pen took three searches through the whole park (1.3 s) to say there was no way."""
+    width = grid.cols + 2
+    ok = np.pad(free, 1, constant_values=False).ravel()
+    seeds = np.flatnonzero(np.pad(region & free, 1, constant_values=False).ravel())
+    if len(seeds) > budget:
+        return False
+    target = (start[0] + 1) * width + start[1] + 1
+    seen = set(seeds.tolist())
+    if target in seen:
+        return False
+    ok_list = ok.tolist()
+    straight = (1, -1, width, -width)
+    diagonal = ((width + 1, 1, width), (width - 1, -1, width), (-width + 1, 1, -width), (-width - 1, -1, -width))
+    frontier = list(seen)
+    while frontier:
+        grown = []
+        for here in frontier:
+            steps = [here + d for d in straight]
+            steps += [here + d for d, a, b in diagonal if ok_list[here + a] and ok_list[here + b]]
+            for cell in steps:
+                if not ok_list[cell] or cell in seen:
+                    continue
+                if cell == target:
+                    return False
+                seen.add(cell)
+                grown.append(cell)
+            if len(seen) > budget:
+                return False
+        frontier = grown
+    return True
+
+
 def reachable(grid: Grid, free: np.ndarray, start: tuple[int, int] | np.ndarray) -> np.ndarray:
     """The free cells an 8-connected walk reaches (same corner rule as astar) from `start`: a cell, or a mask
     of cells to start from all at once."""

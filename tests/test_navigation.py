@@ -97,6 +97,13 @@ def test_the_search_says_none_when_the_goal_is_closed_off():
     goal, h = _goal_at(grid, (10, 10))
     assert nav_grid.astar(grid, free, np.zeros(grid.shape), (2, 2), goal, h) is None
     assert not nav_grid.reachable(grid, free, (2, 2))[10, 10]
+    # Found from the small side alone: the box holds 9 cells. Not beyond the budget, nor when the box has a gap.
+    assert nav_grid.enclosed(grid, free, goal, (2, 2))
+    assert not nav_grid.enclosed(grid, free, goal, (2, 2), budget=5)
+    free[8, 8] = True  # its corner open: only a diagonal step past two wall cells would get in, as in astar
+    assert nav_grid.enclosed(grid, free, goal, (2, 2))
+    free[10, 8] = True
+    assert not nav_grid.enclosed(grid, free, goal, (2, 2))
 
 
 def test_room_is_the_exact_distance_to_the_nearest_blocked_cell():

@@ -222,10 +222,12 @@ class Planner:
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
         goals, away = self._goals(nav, data, first)
         penalty = nav.penalty()
-        level, cells = next(
-            ((k, found) for k, goal in enumerate(goals) if (found := self._search(nav, penalty, first, goal))),
-            (-1, None),
-        )
+        level, cells = -1, None
+        if not nav_grid.enclosed(grid, nav.free, np.logical_or.reduce(goals), first):
+            level, cells = next(
+                ((k, found) for k, goal in enumerate(goals) if (found := self._search(nav, penalty, first, goal))),
+                (-1, None),
+            )
         short = None
         if cells is None and away is not None:  # an object it cannot get next to: as near to it as it gets
             near = self._nearest(nav, first, away)
@@ -404,16 +406,15 @@ class Planner:
         grid, body = nav.grid, self.body
         heuristic = _heuristic(grid, goal)
         label = self._label()
-        flat = np.zeros(grid.shape)
         # Without the steps and slopes it cannot climb, is there a way? Then they are what is in the way.
         obstacles = nav.lethal == OBSTACLE
         room = clearance(obstacles, grid.res, body.reach + 0.3)
-        cells = astar(grid, room >= body.need, flat, start, goal, heuristic)
+        cells = _search_open(grid, room >= body.need, start, goal, heuristic)
         if cells is not None:
             return NoWay("climb", f"no way to {label} for {self.robot}: {self._climb(nav, cells)}")
         # As a point (no room needed), is there a way? Then a gap on it is too narrow.
         point = nav.lethal == 0
-        cells = astar(grid, point, flat, start, goal, heuristic)
+        cells = _search_open(grid, point, start, goal, heuristic)
         if cells is not None:
             tight = min(cells, key=lambda c: nav.room[c])
             width = 2 * float(nav.room[tight]) + grid.res
@@ -454,6 +455,13 @@ class Planner:
         window = nav.ground[max(r - 1, 0) : r + 2, max(c - 1, 0) : c + 2]
         height = float(window.max() - window.min())
         return f"the only way there climbs a {height * 100:.0f} cm step{at}, and it climbs {body.step * 100:.1f} cm"
+
+
+def _search_open(grid: Grid, free: np.ndarray, start: tuple[int, int], goal: np.ndarray, heuristic: np.ndarray):
+    """A path on `free` at no extra cost near walls, or None; at once where the goal is closed off."""
+    if nav_grid.enclosed(grid, free, goal, start):
+        return None
+    return astar(grid, free, np.zeros(grid.shape), start, goal, heuristic)
 
 
 def _near_terrain(nav: NavMap) -> np.ndarray:
