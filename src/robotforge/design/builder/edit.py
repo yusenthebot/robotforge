@@ -127,6 +127,10 @@ def _merge(target: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
     for key, value in changes.items():
         if value is None:
             target.pop(key, None)
+        elif key == "robot" and _swaps_robot(target.get(key), value):
+            # Another robot on the mount: the old one's params and home pose do not fit it (the PiPER's folded
+            # joint2 on an SO-100 failed the edit, and a template kept beside a new library robot was refused).
+            target[key] = {k: copy.deepcopy(v) for k, v in value.items() if v is not None}
         elif isinstance(value, dict) and isinstance(target.get(key), dict):
             merged = dict(target[key])
             for k, v in value.items():
@@ -138,3 +142,11 @@ def _merge(target: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
         else:
             target[key] = copy.deepcopy(value)
     return target
+
+
+def _swaps_robot(old: Any, new: Any) -> bool:
+    """True when a change to a part's `robot` names a different template or library robot than the one mounted."""
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return False
+    named = {k: new[k] for k in ("template", "library") if new.get(k) is not None}
+    return bool(named) and any(old.get(k) != v for k, v in named.items())

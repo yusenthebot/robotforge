@@ -88,6 +88,18 @@ def test_a_design_is_added_by_name_and_kept_as_its_parts(pg):
     assert "right_shin" in [pg.session.model.body(b).name.split("/")[-1] for b in range(pg.session.model.nbody)]
 
 
+def test_swapping_a_designs_mounted_robot_drops_the_old_ones_pose(pg):
+    """The folded PiPER's home pose stayed on the mount when another robot replaced it: an SO-100 has no joint2 and
+    the edit failed, and a template named beside the old library robot was refused as two robots."""
+    pg.add_robot("dog", design="go2_arm")
+    pg.update_part("dog", "arm", {"robot": {"library": "so_arm100"}})
+    assert pg.current_world().robots[0].build["parts"][-1]["robot"] == {"library": "so_arm100"}
+    pg.update_part("dog", "arm", {"robot": {"template": "arm"}})
+    assert pg.current_world().robots[0].build["parts"][-1]["robot"] == {"template": "arm"}
+    pg.update_part("dog", "arm", {"robot": {"params": {"reach": 0.4}}})  # the same robot: changes merge
+    assert pg.current_world().robots[0].build["parts"][-1]["robot"] == {"template": "arm", "params": {"reach": 0.4}}
+
+
 def test_recoloring_a_design_recolors_its_accent_parts(pg):
     from robotforge.design import components
 
