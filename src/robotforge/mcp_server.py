@@ -26,7 +26,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
-from robotforge.behaviors.manager import BehaviorError
+from robotforge.behaviors.manager import CARRIER_WAIT, BehaviorError
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
@@ -490,6 +490,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     lessons.register(server)
     policy_tools.register(server)
 
+    async def carrier_stands(robot: str) -> dict[str, Any]:
+        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
+        still = playground.behaviors.stop_carrier(robot)
+        if still is None:
+            return {}
+        waited = await run_until(still, CARRIER_WAIT)
+        owner = robot.split("/", 1)[0]
+        return {"carrier_stopped": f"{owner} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
+
     @server.tool()
     def stop(robot: str) -> str:
         """Stop a robot's current behavior (a walking robot settles into a stand; a quadruped or hexapod keeps its
@@ -513,12 +522,14 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
         """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or closing the
         gripper on the way. Fails with the distance and reach if the point cannot be reached. robot is an arm, or a
-        robot carrying one ("rover", or "rover/arm" for the mounted arm)."""
+        robot carrying one ("rover", or "rover/arm" for the mounted arm); a robot carrying it stops first."""
         with _tool_errors():
-            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot, arm=True), position, gripper)
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            arm = playground.behaviors.move_arm(robot, position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
-            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
+            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
 
     @server.tool()
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
@@ -532,11 +543,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     async def pick_and_place(robot: str, object: str, target: str | list[float]) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box) or a
         floor position [x, y]. Plans the motion, checks reach first, runs it and reports whether the object ended up
-        there."""
+        there. A robot carrying the arm (a dog walking to the object) stops first."""
         with _tool_errors():
-            arm, info = playground.behaviors.pick_and_place(
-                playground.behaviors.resolve(robot, arm=True), object, target
-            )
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            arm, info = playground.behaviors.pick_and_place(robot, object, target)
             object = info["object"]  # as the world spells it
             run = await run_until(lambda: arm.done, 40.0)
             settle = await run_until(lambda: False, 0.5)
@@ -548,6 +559,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                     "target": target,
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
                     "shown_live": run["shown_live"],
+                    **stopped,
                 }
             )
 

@@ -137,6 +137,73 @@ def test_a_dog_walks_to_a_cube_and_its_arm_puts_it_in_a_bin(pg):
     assert after["upright"] and np.linalg.norm(np.subtract(after["position"][:2], stood[:2])) < 0.05
 
 
+def test_an_arm_on_a_walking_dog_waits_until_the_dog_stands(pg):
+    """Regression: the arm planned where the cube was while the dog walked on, so it reached at nothing (or the
+    dog fell over as it reached out). Planning is refused while the carrier moves; stop_carrier stops it and says
+    when it stands still."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[1.05, 0.3])
+    _run(pg, 1.0)
+    pg.behaviors.move("go2", 0.3, 0.0)
+    _run(pg, 2.0)
+    with pytest.raises(ValueError, match="go2 is moving, and go2/arm plans its motion where things are now; stop go2"):
+        pg.behaviors.pick_and_place("go2/arm", "cube", [1.05, -0.3])
+    with pytest.raises(ValueError, match="go2 is moving"):
+        pg.behaviors.move_arm("go2", [1.0, 0.0, 0.4])
+    still = pg.behaviors.stop_carrier("go2/arm")
+    assert still is not None and not still()
+    with pytest.raises(ValueError, match=r"go2 is still coming to a stand \(0\.\d\d m/s\); give it a second"):
+        pg.behaviors.pick_and_place("go2/arm", "cube", [1.05, -0.3])
+    pg.run_fast(still, 3.0)
+    assert still() and pg.behaviors.stop_carrier("go2/arm") is None  # standing: nothing to wait for
+    x, y, _ = pg.behaviors.pose("go2")["position"]
+    pg.behaviors.move_arm("go2/arm", [x + 0.3, y, 0.45])
+
+
+@pytest.mark.anyio
+async def test_mcp_pick_and_place_stops_a_walking_carrier_first(pg):
+    server = build_server(pg, find_free_port(8797))
+    async with Client(server) as client:
+
+        async def call(tool: str, args: dict) -> dict:
+            result = await client.call_tool(tool, args)
+            assert not result.is_error, result.content[0].text
+            return json.loads(result.content[0].text)
+
+        await call("add_robot", {"name": "go2", "library": "go2", "mounts": [{"library": "piper"}]})
+        await call("add_object", {"name": "cube", "shape": "box", "size": [0.04] * 3, "pos": [1.05, 0.3]})
+        await call("add_object", {"name": "bin", "shape": "bin", "size": [0.18, 0.18, 0.08], "pos": [1.05, -0.35]})
+        _run(pg, 1.0)
+        await call("move", {"robot": "go2", "speed": 0.3, "seconds": None})  # walks on until told to stop
+        _run(pg, 3.1)
+        picked = await call("pick_and_place", {"robot": "go2/arm", "object": "cube", "target": "bin"})
+        assert picked["success"] and picked["carrier_stopped"].startswith("go2 stopped first and stood still after")
+        assert pg.behaviors.pose("go2")["upright"]
+
+
+WALK_AND_PICK = """
+from robotforge.script import connect
+
+sim = connect()
+sim.move("go2", speed=0.3)
+sim.step(3.1)
+print("in the bin:", sim.pick_and_place("go2/arm", "cube", "bin"))
+"""
+
+
+@pytest.mark.anyio
+async def test_a_script_picks_from_a_walking_dog_after_it_stops(pg):
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[1.05, 0.3])
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[1.05, -0.35])
+    _run(pg, 1.0)
+    server = build_server(pg, find_free_port(8799))
+    async with Client(server) as client:
+        await client.call_tool("write_script", {"name": "walk_and_pick", "code": WALK_AND_PICK})
+        ran = json.loads((await client.call_tool("run_script", {"name": "walk_and_pick"})).content[0].text)
+    assert ran["ok"] and "in the bin: True" in ran["output"], ran["output"]
+
+
 def test_a_robot_imported_from_a_file_carries_a_library_arm(pg):
     pg.add_robot(
         "dog", file=str(FIXTURES / "unitree_go2" / "go2.xml"), pos=[0, 0, 0.5], mounts=[{"library": "so_arm100"}]

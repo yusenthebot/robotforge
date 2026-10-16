@@ -26,7 +26,7 @@ import mujoco
 import numpy as np
 
 import robotforge
-from robotforge.behaviors.manager import BehaviorError
+from robotforge.behaviors.manager import CARRIER_WAIT, BehaviorError
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script import ENV_PORT, ENV_TOKEN
 
@@ -203,7 +203,14 @@ class ScriptRunner:
         await self._advance(lambda: ctrl.done, 20.0)
         return bool(self.pg.behaviors.pose(req["robot"])["upright"])
 
+    async def _carrier_stands(self, robot: str) -> None:
+        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
+        still = self.pg.behaviors.stop_carrier(robot)
+        if still is not None:
+            await self._advance(still, CARRIER_WAIT)
+
     async def _op_move_arm(self, req) -> list[float]:
+        await self._carrier_stands(req["robot"])
         arm = self.pg.behaviors.move_arm(req["robot"], req["position"], req.get("gripper"))
         await self._advance(lambda: arm.done, 20.0)
         return [round(float(v), 4) for v in self.pg.session.data.site_xpos[arm.site]]
@@ -214,6 +221,7 @@ class ScriptRunner:
 
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
+        await self._carrier_stands(req["robot"])
         arm, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
         await self._advance(lambda: arm.done, 40.0)
         await self._advance(lambda: False, 0.5)

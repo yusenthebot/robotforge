@@ -40,6 +40,14 @@ LEARN_A_WALK = (
 )
 
 
+# An arm riding on a robot plans its motion where things are when it starts, so its carrier must stand still: a Go2
+# walking on at 0.3 m/s carried its PiPER past the cube and fell over as the arm reached out. Still is this slow
+# (m/s, rad/s) for CARRIER_CALM s. Told to stop after walking 0.3 or 0.5 m/s, a Go2 with a PiPER is that still within
+# 0.9 s; the tools wait up to CARRIER_WAIT s for it.
+CARRIER_STILL, CARRIER_STILL_TURN = 0.03, 0.05
+CARRIER_CALM = 0.2
+CARRIER_WAIT = 3.0
+
 GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
 
@@ -556,12 +564,61 @@ class BehaviorManager:
         self.session.set_controller(name, arm)
         return arm
 
+    def stop_carrier(self, robot: str) -> Callable[[], bool] | None:
+        """For an arm riding on a robot that moves (see CARRIER_STILL): stop the robot, and return a check that turns
+        true once it has stood still long enough for the arm to start. None when there is nothing to wait for."""
+        with self.session.lock:
+            owner = _carrier(self._arm_name(robot))
+            if owner is None or not self._carrier_moving(owner):
+                return None
+            self.stop(owner)
+        calm_since: list[float] = []
+
+        def still() -> bool:
+            now = float(self.session.data.time)
+            if self._carrier_moving(owner):
+                calm_since.clear()
+            elif not calm_since:
+                calm_since.append(now)
+            return bool(calm_since) and now - calm_since[0] >= CARRIER_CALM
+
+        return still
+
+    def _carrier_motion(self, owner: str) -> tuple[float, float]:
+        """How fast a robot's main body moves over the floor (m/s) and turns (rad/s)."""
+        velocity = np.zeros(6)
+        body = self._root_body(owner)
+        mujoco.mj_objectVelocity(self.session.model, self.session.data, mujoco.mjtObj.mjOBJ_BODY, body, velocity, 0)
+        return float(np.linalg.norm(velocity[3:5])), float(abs(velocity[2]))
+
+    def _carrier_moving(self, owner: str) -> bool:
+        speed, turn = self._carrier_motion(owner)
+        told = _told_to_move(self.session.controllers.get(owner))
+        return told or speed > CARRIER_STILL or turn > CARRIER_STILL_TURN
+
+    def _check_carrier(self, arm: str) -> None:
+        """Refuse to plan an arm's motion while the robot carrying it moves (see CARRIER_STILL)."""
+        owner = _carrier(arm)
+        if owner is None:
+            return
+        if _told_to_move(self.session.controllers.get(owner)):
+            raise BehaviorError(
+                f"{owner} is moving, and {arm} plans its motion where things are now; stop {owner} first, then "
+                "use its arm"
+            )
+        speed, turn = self._carrier_motion(owner)
+        if speed > CARRIER_STILL or turn > CARRIER_STILL_TURN:
+            raise BehaviorError(
+                f"{owner} is still coming to a stand ({speed:.2f} m/s); give it a second, then use {arm}"
+            )
+
     def move_arm(self, robot: str, position: list[float], gripper: str | None = None) -> ArmMotion:
         target = np.asarray(position, float)
         if target.shape != (3,):
             raise BehaviorError(f"position must be [x, y, z] in meters (world frame), got {list(position)}")
         with self.session.lock:
             arm = self._arm(robot)
+            self._check_carrier(arm.robot)
             if arm.reach_error(target) > REACH_TOL:
                 raise BehaviorError(self._out_of_reach(arm, target))
             arm.move_to(target, gripper)
@@ -596,6 +653,7 @@ class BehaviorManager:
                     f"{arm.robot} has no gripper to pick with; mount one from the library, e.g. add_robot with "
                     'mounts=[{"library": "robotiq_2f85"}]'
                 )
+            self._check_carrier(arm.robot)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
             place, place_top, region = self._place_target(target)
@@ -734,6 +792,24 @@ def _told_kind(entry: Any) -> str | None:
     """The kind a world entry declares: its template, or for a library robot what the catalog says
     (G1's joints are not named like our template's, so its shape alone does not say humanoid)."""
     return entry.template or (library.get(entry.library).kind if entry.library else None)
+
+
+def _carrier(arm: str) -> str | None:
+    """The robot an arm rides on ("go2" for "go2/arm"), or None for an arm standing on its own."""
+    return arm.split("/", 1)[0] if "/" in arm else None
+
+
+def _told_to_move(ctrl: Any) -> bool:
+    """Whether a robot's walking or driving controller has been told to move (gaits keep the command they were given,
+    wheels their speed)."""
+    if isinstance(ctrl, RhythmWalker):
+        return ctrl.walking
+    if not _is_mover(ctrl):
+        return False
+    return bool(
+        getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0))
+        or getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0))
+    )
 
 
 def _is_mover(ctrl: Any) -> bool:
