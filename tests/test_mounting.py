@@ -171,10 +171,17 @@ def test_a_mount_that_lifting_cannot_free_is_told_to_go_elsewhere():
         mounting.attach(library.build("op3"), [entry], "op3")
 
 
-def test_on_a_humanoid_top_is_its_head(pg):
-    """Regression: on top of a humanoid's main body (its pelvis) is inside its torso, and a mount there was refused."""
-    result = pg.add_robot("op3", library="op3", mounts=[{"library": "so_arm100"}])
-    assert "op3: arm: SO-ARM100 mounted on top of head_pan_link" in result["notes"]
+@pytest.mark.parametrize("humanoid, mount", [("op3", "so_arm100"), ("g1", "piper")])
+def test_on_a_humanoid_top_is_its_upper_body_not_inside_its_torso(pg, humanoid, mount):
+    """Regression: on top of a humanoid's main body (its pelvis) is inside its torso, and a mount there was refused
+    (G1 with a PiPER, T1 with an SO-100). It goes on what is on top: the head, or the shoulders of a head narrower
+    than its base."""
+    pg.add_robot("bot", library=humanoid, mounts=[{"library": mount}])
+    m, d = pg.session.model, pg.session.data
+    mujoco.mj_forward(m, d)
+    base = next(b for b in range(m.nbody) if m.body(b).name.startswith("bot/arm/"))
+    pelvis = next(b for b in range(m.nbody) if m.body_parentid[b] == 0 and m.body(b).name.startswith("bot/"))
+    assert m.body_parentid[base] != pelvis and d.xpos[base][2] > d.xpos[pelvis][2] + 0.1
 
 
 def test_the_dog_still_walks_with_the_arm_on_its_back(pg):
