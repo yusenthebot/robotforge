@@ -294,26 +294,30 @@ def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
 
+def _built_robots() -> Any:
+    """The robots built from parts that the look tests use (tests/built_robots.py, plain data)."""
+    sys.path.insert(0, str(ROOT / "tests"))
+    import built_robots
+
+    return built_robots
+
+
 def _built(names: tuple[str, ...], spacing: float = 0.62) -> Callable[[Any], None]:
     """A world with some of the look tests' robots built from parts, in a row along y."""
 
     def world(pg: Any) -> None:
-        sys.path.insert(0, str(ROOT / "tests"))
-        from built_robots import GALLERY
-
+        gallery = _built_robots().GALLERY
         for i, name in enumerate(names):
-            pg.add_robot(name, build=GALLERY[name], pos=[0.0, spacing * (i - (len(names) - 1) / 2)])
+            pg.add_robot(name, build=gallery[name], pos=[0.0, spacing * (i - (len(names) - 1) / 2)])
 
     return world
 
 
 def _materials(pg: Any) -> None:
     """One small robot four times: printed PLA, anodised aluminium, carbon fibre and rubber."""
-    sys.path.insert(0, str(ROOT / "tests"))
-    from test_builder_looks import MATERIAL_PROBE
-
+    probe = _built_robots().MATERIAL_PROBE
     for i, material in enumerate(("pla", "aluminum", "carbon", "rubber")):
-        pg.add_robot(material, build={**MATERIAL_PROBE, "material": material}, pos=[0.0, 0.3 * i - 0.45])
+        pg.add_robot(material, build={**probe, "material": material}, pos=[0.0, 0.3 * i - 0.45])
 
 
 SHOTS = [

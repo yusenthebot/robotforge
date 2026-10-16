@@ -1,5 +1,6 @@
 """Robots built from parts that the look tests and the screenshot script share: the builder tests' robots
-plus a few heterogeneous ones (sensor rover, fork lift, carbon spider, a dog carrying an arm and a lidar)."""
+plus a few heterogeneous ones (sensor rover, fork lift, carbon spider, a dog carrying an arm and a lidar),
+a 48-servo centipede for the triangle budget and a small robot that shows a material."""
 
 from __future__ import annotations
 
@@ -163,6 +164,67 @@ CENTAUR = {  # spliced: a dog's legs, an arm template on its back and a lidar ma
             "size": [0.02, 0.08],
             "direction": "up",
             "sensors": [{"type": "lidar", "at": "end", "rays": 8}],
+        },
+    ],
+}
+
+CENTIPEDE = {  # the biggest built robot the look tests draw: 12 legs of 4 servos each (48 servos)
+    "color": "green",
+    "base": {"shape": "box", "size": [0.62, 0.16, 0.05]},
+    "parts": [
+        {
+            "name": "left_hip",
+            "at": [0.25, 0.08, 0],
+            "joint": {"axis": "z", "range": [-30, 30]},
+            "shape": "box",
+            "size": [0.03, 0.04, 0.025],
+            "direction": "left",
+            "mirror": True,
+            "repeat": {"count": 6, "along": "back", "spacing": 0.1},
+        },
+        {
+            "name": "left_femur",
+            "parent": "left_hip",
+            "at": "end",
+            "joint": {"axis": "x", "range": [-60, 60], "home": -20},
+            "size": [0.02, 0.06],
+            "direction": "left",
+        },
+        {
+            "name": "left_tibia",
+            "parent": "left_femur",
+            "at": "end",
+            "joint": {"axis": "x", "range": [-150, 150], "home": -90},
+            "size": [0.016, 0.08],
+            "direction": "left",
+        },
+        {
+            "name": "left_tarsus",
+            "parent": "left_tibia",
+            "at": "end",
+            "joint": {"axis": "x", "range": [-60, 60]},
+            "size": [0.012, 0.03],
+            "direction": "left",
+            "foot": True,
+        },
+    ],
+}
+
+# One small robot that shows a material: a box, a fixed post with no color and a hinged arm in its own color.
+MATERIAL_PROBE = {
+    "color": "teal",
+    "base": {"shape": "box", "size": [0.16, 0.12, 0.05], "fixed": True},
+    "parts": [
+        {"name": "post", "at": "top", "joint": "fixed", "shape": "cylinder", "size": [0.05, 0.06], "direction": "up"},
+        {
+            "name": "arm",
+            "parent": "post",
+            "at": "end",
+            "shift": [0, 0, 0.02],
+            "joint": {"axis": "y", "range": [-90, 90], "home": 30},
+            "size": [0.03, 0.12],
+            "direction": "up",
+            "color": "#ff8800",
         },
     ],
 }

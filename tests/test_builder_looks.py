@@ -12,17 +12,22 @@ import copy
 import mujoco
 import numpy as np
 import pytest
-from built_robots import GALLERY, SCOUT
+from built_robots import CENTIPEDE, GALLERY, MATERIAL_PROBE, SCOUT
 from test_visuals import assert_same_physics
 
-from robotforge.design import visuals
+from robotforge.design import components, visuals
+from robotforge.design.builder import looks
+from robotforge.design.templates.base import SHELL
+from robotforge.design.visuals import parts as P
 from robotforge.design.world import World, compile_world
 from robotforge.sim.geometry import collides
 
-# Mesh triangles a built robot may add (the templates' budget is 30k; the hexapod alone has 18 servos,
-# each a case and a horn). Measured 2026-10-17: snake 35k (16 wheels), centaur 33k, spider 32k.
-TRIANGLE_BUDGET_BUILT = 40_000
-MESH = mujoco.mjtGeom.mjGEOM_MESH
+# Mesh triangles a built robot may draw: its base with the base's sensors, plus so many per part. A part
+# with its servo case and horn measured 1.4k to 1.7k (2026-10-17), a wheel with its gear motor about 3k.
+TRIANGLES_BASE, TRIANGLES_PER_PART = 14_000, 1_600
+# The gallery's robots stay under 40k each (the templates' budget is 30k): snake 35k, centaur 33k, spider 32k.
+TRIANGLE_BUDGET_GALLERY = 40_000
+MESH, BOX, CAPSULE = mujoco.mjtGeom.mjGEOM_MESH, mujoco.mjtGeom.mjGEOM_BOX, mujoco.mjtGeom.mjGEOM_CAPSULE
 
 
 def _compile(build: dict) -> mujoco.MjModel:
@@ -41,8 +46,18 @@ def _rounded(rgba) -> tuple[float, ...]:
     return tuple(round(float(c), 3) for c in rgba)
 
 
-def _triangles(model: mujoco.MjModel) -> int:
-    return sum(int(model.mesh_facenum[model.geom_dataid[g]]) for g in range(model.ngeom) if model.geom_type[g] == MESH)
+def _own(model: mujoco.MjModel, body: int) -> bool:
+    """A body of the built robot itself (not the floor, not a mounted template, which has its own budget)."""
+    name = model.body(body).name
+    return name.startswith("r/") and "/" not in name[2:]
+
+
+def _triangles(model: mujoco.MjModel, own: bool = False) -> int:
+    return sum(
+        int(model.mesh_facenum[model.geom_dataid[g]])
+        for g in range(model.ngeom)
+        if model.geom_type[g] == MESH and (not own or _own(model, int(model.geom_bodyid[g])))
+    )
 
 
 @pytest.mark.parametrize("name", list(GALLERY))
@@ -86,9 +101,14 @@ def test_dressing_is_visual_only_and_covers_every_primitive(name):
     np.testing.assert_array_equal(bare.body_mass, model.body_mass)
 
 
-@pytest.mark.parametrize("name", list(GALLERY))
+@pytest.mark.parametrize("name", [*GALLERY, "centipede"])
 def test_built_robots_fit_the_triangle_budget(name):
-    assert _triangles(_compile(GALLERY[name])) <= TRIANGLE_BUDGET_BUILT
+    build = CENTIPEDE if name == "centipede" else GALLERY[name]
+    model = _compile(build)
+    parts = sum(1 for b in range(model.nbody) if _own(model, b)) - 1  # all but the base
+    assert _triangles(model, own=True) <= TRIANGLES_BASE + TRIANGLES_PER_PART * parts
+    if name in GALLERY:
+        assert _triangles(model) <= TRIANGLE_BUDGET_GALLERY
 
 
 def test_rays_pass_through_the_dressing():
@@ -117,25 +137,6 @@ def test_powered_hinges_get_a_servo_case_on_the_parent_and_a_horn_on_the_part():
             assert f"r/rf_{side}_shin_{i}_rubber" in meshes  # the foot
 
 
-MATERIAL_PROBE = {
-    "color": "teal",
-    "base": {"shape": "box", "size": [0.16, 0.12, 0.05], "fixed": True},
-    "parts": [
-        {"name": "post", "at": "top", "joint": "fixed", "shape": "cylinder", "size": [0.05, 0.06], "direction": "up"},
-        {
-            "name": "arm",
-            "parent": "post",
-            "at": "end",
-            "shift": [0, 0, 0.02],
-            "joint": {"axis": "y", "range": [-90, 90], "home": 30},
-            "size": [0.03, 0.12],
-            "direction": "up",
-            "color": "#ff8800",
-        },
-    ],
-}
-
-
 @pytest.mark.parametrize(
     ("material", "surface", "bare_post"),
     [
@@ -150,7 +151,7 @@ def test_material_picks_the_surface_and_a_color_stays_a_color(material, surface,
     build["material"] = material
     model = _compile(build)
 
-    def looks(body: str) -> set[tuple[str, tuple[float, ...]]]:
+    def surfaces(body: str) -> set[tuple[str, tuple[float, ...]]]:
         b = model.body(f"r/{body}").id
         return {
             (
@@ -163,10 +164,10 @@ def test_material_picks_the_surface_and_a_color_stays_a_color(material, surface,
 
     teal = _rounded([0.2, 0.7, 0.7, 1.0])
     orange = _rounded([1.0, 0x88 / 255, 0.0, 1.0])
-    assert (f"r/{surface}", teal) in looks("base")  # the robot's color, in the material's surface
-    assert (f"r/{surface}", orange) in looks("arm")  # a part's own color is kept exactly
+    assert (f"r/{surface}", teal) in surfaces("base")  # the robot's color, in the material's surface
+    assert (f"r/{surface}", orange) in surfaces("arm")  # a part's own color is kept exactly
     # A part with no color shows white plastic or rubber, bare aluminium or black carbon fibre.
-    assert (f"r/{surface}", _rounded(bare_post)) in looks("post")
+    assert (f"r/{surface}", _rounded(bare_post)) in surfaces("post")
 
 
 def test_a_robot_camera_never_sees_its_own_housing(needs_gl):
@@ -188,3 +189,206 @@ def test_a_robot_camera_never_sees_its_own_housing(needs_gl):
     geoms = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
     own = [g for g in np.unique(seg[..., 0][geoms]) if g >= 0 and model.geom_bodyid[g] == model.cam_bodyid[cam]]
     assert own == []
+
+
+# ---- where details sit -------------------------------------------------------------------------------------
+
+FACES = {"top": (0, 0, 1), "bottom": (0, 0, -1), "front": (1, 0, 0), "back": (-1, 0, 0), "left": (0, 1, 0)}
+FACES["right"] = (0, -1, 0)
+
+
+def _mesh_points(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:
+    """A mesh geom's vertices in its body's frame."""
+    m = int(model.geom_dataid[g])
+    start = int(model.mesh_vertadr[m])
+    local = model.mesh_vert[start : start + int(model.mesh_vertnum[m])]
+    world = data.geom_xpos[g] + local @ data.geom_xmat[g].reshape(3, 3).T
+    b = int(model.geom_bodyid[g])
+    return (world - data.xpos[b]) @ data.xmat[b].reshape(3, 3)
+
+
+def _mesh_triangles(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:
+    m = int(model.geom_dataid[g])
+    faces = model.mesh_face[int(model.mesh_faceadr[m]) : int(model.mesh_faceadr[m]) + int(model.mesh_facenum[m])]
+    return _mesh_points(model, data, g)[faces]
+
+
+def _colored(model: mujoco.MjModel, body: str, rgba) -> list[int]:
+    b = model.body(f"r/{body}").id
+    want = _rounded(rgba)
+    return [
+        g
+        for g in range(model.ngeom)
+        if model.geom_bodyid[g] == b and model.geom_type[g] == MESH and _rounded(model.geom_rgba[g]) == want
+    ]
+
+
+def _ray(origin: np.ndarray, direction: np.ndarray, tris: np.ndarray) -> float:
+    """How far along `direction` from `origin` the first of the triangles is (Moller-Trumbore)."""
+    e1, e2 = tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]
+    p = np.cross(direction, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-15
+    inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+    s = origin - tris[:, 0]
+    u = np.einsum("ij,ij->i", s, p) * inv
+    q = np.cross(s, e1)
+    v = (q @ direction) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1) & (t > 0)
+    return float(t[hit].min())
+
+
+@pytest.mark.parametrize("face", list(FACES))
+def test_an_imu_on_a_face_lies_flat_on_it(face):
+    """An IMU board on a side face stood out of it like a shelf, half buried: its normal was always up."""
+    half = np.array([0.1, 0.07, 0.03])
+    base = {"shape": "box", "size": (2 * half).tolist(), "fixed": True, "sensors": [{"type": "imu", "at": face}]}
+    model = _compile({"base": base})
+    data = _home(model)
+    n = np.array(FACES[face], float)
+    (board,) = _colored(model, "base", P.PCB)
+    height = (_mesh_points(model, data, board) - n * float(np.abs(n) @ half)) @ n  # above the face
+    assert -0.001 <= height.min() <= 0.0005 and height.max() <= 0.003  # flat on the face, not into it
+
+
+@pytest.mark.parametrize("face", ["front", "back", "left", "right", "top"])
+def test_an_imu_on_a_link_lies_on_the_link_as_drawn(face):
+    """A hinged capsule is drawn tapered and flattened, not as its capsule: a board on its side sits on the
+    surface you see, neither floating off it nor sunk into it."""
+    r, length = 0.02, 0.14
+    build = {
+        "color": "orange",
+        "base": {"shape": "box", "size": [0.2, 0.14, 0.06], "fixed": True},
+        "parts": [
+            {
+                "name": "arm",
+                "at": "top",
+                "shift": [0, 0, 0.025],
+                "joint": {"axis": "y", "range": [-60, 60]},
+                "size": [2 * r, length],
+                "direction": "up",
+                "sensors": [{"type": "imu", "at": face}],
+            }
+        ],
+    }
+    model = _compile(build)
+    data = _home(model)
+    n = np.array(FACES[face], float)
+    at = np.array([0.0, 0.0, length + r]) if face == "top" else np.array([0.0, 0.0, length / 2]) + n * r
+    (link,) = _colored(model, "arm", SHELL)
+    surface = 0.05 - _ray(at + n * 0.05, -n, _mesh_triangles(model, data, link))  # the drawn surface, above `at`
+    (board,) = _colored(model, "arm", P.PCB)
+    height = (_mesh_points(model, data, board) - at) @ n - surface
+    assert -0.001 <= height.min() <= 0.0005 and height.max() <= 0.003
+
+
+def _presets(model: mujoco.MjModel, body: str) -> set[str]:
+    b = model.body(f"r/{body}").id
+    return {
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, int(model.geom_matid[g]))
+        for g in range(model.ngeom)
+        if model.geom_bodyid[g] == b and model.geom_type[g] == MESH
+    }
+
+
+def test_without_servo_caps_a_powered_hinge_shows_no_hardware():
+    """servo_caps: false asks for no joint hardware; it drew a dark knuckle drum at every powered hinge."""
+    build = {
+        "color": "teal",
+        "base": {"shape": "capsule", "size": [0.1, 0.2], "axis": "x", "fixed": True},
+        "parts": [
+            {
+                "name": "arm",
+                "at": "top",
+                "shift": [0, 0, 0.025],
+                "joint": {"axis": "y", "range": [-60, 60]},
+                "size": [0.03, 0.14],
+                "direction": "up",
+            }
+        ],
+    }
+    with_caps = _compile(build)
+    assert "r/rf_dark" in _presets(with_caps, "base") and "r/rf_metal" in _presets(with_caps, "arm")
+    without = _compile({**build, "servo_caps": False})
+    assert _presets(without, "base") == _presets(without, "arm") == {"r/rf_shell"}  # just the two shells
+
+
+def test_a_tall_base_keeps_its_color_down_to_a_thin_dark_pan():
+    """A base's dark lower pan took 36 % of its height: the balancer's red body had an 8 cm black band."""
+    model = _compile(GALLERY["balancer"])
+    data = _home(model)
+    base = model.body("r/base").id
+    (box,) = [g for g in range(model.ngeom) if model.geom_bodyid[g] == base and model.geom_type[g] == BOX]
+    bottom = float(model.geom_pos[box][2] - model.geom_size[box][2])
+    (shell,) = _colored(model, "base", components.color(GALLERY["balancer"]["color"]))
+    assert _mesh_points(model, data, shell)[:, 2].min() <= bottom + 0.016  # 15 mm of pan and a parting line
+
+
+def _ring_points(points: np.ndarray, a: np.ndarray, b: np.ndarray) -> int:
+    """Points round the ring of a mesh lofted along a -> b that is nearest the middle."""
+    d = (b - a) / np.linalg.norm(b - a)
+    s = np.round((points - a) @ d, 5)
+    stations, counts = np.unique(s, return_counts=True)
+    ring = stations[counts >= 8][np.argmin(np.abs(stations[counts >= 8] - float(np.linalg.norm(b - a)) / 2))]
+    return len(np.unique(np.round(points[s == ring], 5), axis=0))
+
+
+def test_a_thick_capsule_is_smooth_and_round_where_it_does_not_swing():
+    """Every capsule was a 16-sided rounded square with 4 rings per end, however big: a 30 cm capsule body
+    looked lumpy and polygonal. A thick one now gets as many points round as a cylinder, and one with no hinge
+    across it (a base) is drawn as the capsule it is."""
+    build = {
+        "color": "yellow",
+        "base": {"shape": "capsule", "size": [0.3, 0.4], "axis": "x", "fixed": True},
+        "parts": [
+            {
+                "name": "boom",
+                "at": "top",
+                "shift": [-0.1, 0, 0.065],
+                "joint": {"axis": "y", "range": [-60, 60], "home": 30},
+                "size": [0.12, 0.3],
+                "direction": "up",
+                "color": "teal",
+            }
+        ],
+    }
+    model = _compile(build)
+    data = _home(model)
+    for body, color, r in (("base", "yellow", 0.15), ("boom", "teal", 0.06)):
+        b = model.body(f"r/{body}").id
+        (cap,) = [g for g in range(model.ngeom) if model.geom_bodyid[g] == b and model.geom_type[g] == CAPSULE]
+        axis, half = model.geom_quat[cap], float(model.geom_size[cap][1])
+        z = np.zeros(9)
+        mujoco.mju_quat2Mat(z, axis)
+        a = model.geom_pos[cap] - z.reshape(3, 3)[:, 2] * half
+        end = model.geom_pos[cap] + z.reshape(3, 3)[:, 2] * half
+        (mesh,) = _colored(model, body, components.color(color))
+        points = _mesh_points(model, data, mesh)
+        assert _ring_points(points, a, end) >= min(60, 2 * np.pi * r / looks.CURVE_STEP)
+        if body == "base":  # round and untapered: every point on the collision capsule's surface
+            t = np.clip((points - a) @ (end - a) / float((end - a) @ (end - a)), 0.0, 1.0)
+            off = np.linalg.norm(points - (a + np.outer(t, end - a)), axis=1) - r
+            assert np.abs(off).max() < 0.0003
+
+
+def test_a_camera_on_top_stands_on_it_and_never_sees_inside_its_robot(needs_gl):
+    """A camera on a face it does not look out of (on top, looking forward) was halfway into the shell: its
+    picture showed the dark insides of its own robot. It now stands on the face and sees the robot's top."""
+    build = {"color": "blue", "base": {"shape": "box", "size": [0.24, 0.16, 0.06], "fixed": True}}
+    build["base"]["sensors"] = [{"type": "camera", "at": "top"}]
+    model = _compile(build)
+    data = _home(model)
+    cam = model.camera("r/base_cam").id
+    assert model.cam_pos[cam][2] == pytest.approx(0.03 + looks.CAMERA_HALF - looks.CAMERA_SEAT)
+    renderer = mujoco.Renderer(model, 120, 160)
+    try:
+        renderer.enable_segmentation_rendering()
+        renderer.update_scene(data, camera=cam)
+        seg = renderer.render()
+    finally:
+        renderer.close()
+    geoms = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
+    seen = {int(g) for g in np.unique(seg[..., 0][geoms]) if g >= 0 and model.geom_bodyid[g] == model.cam_bodyid[cam]}
+    names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, int(model.geom_matid[g])) for g in seen}
+    assert "r/rf_dark" not in names  # the pan, the parting line's core and the camera's own housing
