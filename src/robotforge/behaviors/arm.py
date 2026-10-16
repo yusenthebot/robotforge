@@ -277,9 +277,12 @@ class ArmMotion:
         if start[2] < travel_z - RISE_MIN and self.reach_error(risen) <= REACH_TOL:
             self.queue.append(Waypoint(risen, self._grip("open"), self._time(start, risen), "rise"))
             start = risen
-        elif start[2] > travel_z + RISE_MIN:
-            # Starting high (an arm held up at home), go across high and come straight down over the object: sweeping
-            # down on a slant, a scorpion's claw caught on its own front leg on the way and closed 3 cm above the cube.
+        elif start[2] > travel_z + RISE_MIN and not self._reaches_around(start, above):
+            # Starting high (an arm held up at home) where the tool cannot reach all the way down on a slant, go across
+            # high and come straight down over the object: sweeping down on a slant, a scorpion's claw caught on its
+            # own front leg on the way and closed 3 cm above the cube. Only then: crossing high, a Panda's upright
+            # shoulder lines up its first and third joints, the turn twists into both, and from that twisted grasp
+            # the carry went the long way round and flung the cube 1.4 m.
             for z in np.arange(start[2], travel_z + RISE_MIN, -CARRY_RAISE):
                 over = np.array([above[0], above[1], z])
                 if self._reaches_around(start, over):
