@@ -56,6 +56,16 @@ def centaur() -> dict[str, Any]:
                 "direction": "up",
                 "color": IVORY,
             },
+            {  # a chest plate in the robot's color
+                "name": "chest",
+                "parent": "torso",
+                "at": [0.045, 0, 0.085],
+                "joint": "fixed",
+                "shape": "box",
+                "size": [0.008, 0.09, 0.07],
+                "direction": "forward",
+                "color": "main",
+            },
             {
                 "name": "head",
                 "parent": "torso",
