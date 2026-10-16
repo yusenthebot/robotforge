@@ -751,6 +751,77 @@ LIFT_ARM = {  # an arm on a lifting column: it reaches a high shelf only by rais
 }
 
 
+def test_an_arm_on_a_lift_raises_it_to_reach_a_high_table(pg):
+    """The arm's joints were its hinges only, so a cube on a table above the arm's reach from where the lift stood was
+    refused as out of reach; the lift is a joint the arm rides on and is now steered with the others."""
+    pg.add_robot("tower", build=LIFT_ARM)
+    pg.add_object("high", shape="table", size=[0.2, 0.2, 0.55], pos=[0.0, -0.28], fixed=True)
+    pg.add_object("low", shape="table", size=[0.2, 0.2, 0.3], pos=[0.0, 0.28], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, -0.28, 0.57])
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("tower", "cube", "low")
+    assert "tower/lift" in [mujoco.mj_id2name(pg.session.model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in arm.joints]
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+TWIN = {  # two arms on one turntable
+    "base": {"shape": "cylinder", "size": [0.16, 0.06], "fixed": True},
+    "parts": [
+        {
+            "name": "turntable",
+            "at": "top",
+            "joint": {"axis": "z", "range": [-180, 180]},
+            "shape": "box",
+            "size": [0.08, 0.38, 0.03],
+            "direction": "up",
+        },
+        {
+            "name": "left_arm",
+            "parent": "turntable",
+            "at": "end",
+            "shift": [0, 0.14, 0],
+            "robot": {"template": "arm", "params": {"reach": 0.35, "base_height": 0.03}},
+        },
+        {
+            "name": "right_arm",
+            "parent": "turntable",
+            "at": "end",
+            "shift": [0, -0.14, 0],
+            "robot": {"template": "arm", "params": {"reach": 0.35, "base_height": 0.03}},
+        },
+    ],
+}
+
+
+def _tool_error(pg: Playground, arm, target: list[float]) -> float:
+    return float(np.linalg.norm(pg.session.data.site_xpos[arm.site] - np.asarray(target)))
+
+
+def test_two_arms_on_one_turntable_reach_without_turning_it_and_follow_it_when_it_turns(pg):
+    """Both arms counted the turntable as their own first joint, so each turned it toward its target (and the other
+    arm away from its own); and an arm's IK assumed the turntable stood where it started, so after it was turned by
+    hand the arm missed its target by the turn."""
+    pg.add_robot("twin", build=TWIN)
+    assert pg.behaviors.robots()[0]["arms"] == ["twin/left_arm", "twin/right_arm"]
+    turntable = pg.session.model.joint("twin/turntable").qposadr[0]
+    target = [0.12, 0.3, 0.15]
+    left = pg.behaviors.move_arm("twin/left_arm", target)
+    pg.run_fast(lambda: left.done, 10)
+    _run(pg, 0.5)
+    assert _tool_error(pg, left, target) < 0.015  # small hobby servos sag about a centimetre
+    assert abs(pg.session.data.qpos[turntable]) < 0.01  # it did not turn the turntable
+    pg.set_controls({"twin/turntable": np.radians(40)})
+    _run(pg, 1.5)
+    target = [0.3, 0.0, 0.12]
+    right = pg.behaviors.move_arm("twin/right_arm", target)
+    pg.run_fast(lambda: right.done, 10)
+    _run(pg, 0.5)
+    assert _tool_error(pg, right, target) < 0.015
+    assert pg.session.data.qpos[turntable] == pytest.approx(np.radians(40), abs=0.02)
+
+
 def test_a_mounted_robot_starts_in_the_home_pose_its_mount_gives():
     folded = copy.deepcopy(LIFT_ARM)
     folded["parts"][1]["robot"]["home"] = {"yaw": 180, "shoulder": -30}

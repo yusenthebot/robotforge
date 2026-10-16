@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
-from robotforge.sim.actuators import drives_joint
+from robotforge.sim.actuators import drives_joint, is_position_servo
 
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
@@ -23,6 +23,7 @@ RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nea
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
+UPRIGHT = 0.9  # an arm's first hinge turns it toward a target when its axis is this close to vertical (cosine)
 
 
 class OutOfReach(ValueError):
@@ -54,9 +55,12 @@ class ArmMotion:
         self.site = site
         tool_body = int(model.site_bodyid[site])
         joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
-        # The arm is the powered hinges between the robot's root and the tool: that leaves out wheels,
-        # legs or a second arm of the same robot, and works for arms built from parts too.
-        joints = _path_hinges(model, tool_body, joint_to_act)
+        # The arm is the powered joints between the robot's root and the tool: that leaves out wheels, legs
+        # and a second arm of the same robot, and works for arms built from parts too. A lift it rides on
+        # counts, so it reaches a table by raising itself; a waist or a turntable that two arms share
+        # belongs to neither, or each arm would turn the other one away from its target.
+        shared = _shared_joints(model, site, joint_to_act)
+        joints = [j for j in _path_joints(model, tool_body, joint_to_act) if j not in shared]
         if not joints:
             raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
         self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
@@ -76,12 +80,16 @@ class ArmMotion:
         free = [j for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])]
         free = [j for j in free if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE]
         self.free_adr = int(model.jnt_qposadr[free[0]]) if free else None
-        # Paths sweep around the base axis so the tool never cuts through the arm itself.
-        self.base_body = int(model.jnt_bodyid[joints[0]])
+        # Paths sweep around the base axis so the tool never cuts through the arm itself: the arm's first hinge,
+        # when it turns about an upright axis (an arm with none, like one hanging from a shoulder, moves in
+        # straight lines).
+        self.yaw = _yaw_index(model, joints, home_qpos)
+        self.base_body = int(model.jnt_bodyid[joints[self.yaw if self.yaw is not None else 0]])
         # Bodies the arm's joints move, and the robot they belong to: IK answers must not run them into
         # each other, into whatever carries the arm, or into the floor.
-        self._moving = {b for b in range(model.nbody) if _descends_from(model, b, self.base_body)}
-        self._robot_root = int(model.body_rootid[self.base_body])
+        first = int(model.jnt_bodyid[joints[0]])
+        self._moving = {b for b in range(model.nbody) if _descends_from(model, b, first)}
+        self._robot_root = int(model.body_rootid[first])
         # Shapes that already overlap in the home pose (coarse collision shapes around a joint, common in
         # imported models) are part of the model, not a collision to steer around. Worked out once the
         # moving bodies are known: before that it crashed on any overlap and was then thrown away.
@@ -105,9 +113,10 @@ class ArmMotion:
         self.base_yaw = float(np.arctan2(parent_rot[1, 0], parent_rot[0, 0]))
 
     def sync(self, data: mujoco.MjData) -> None:
-        """Follow the robot carrying the arm: IK and path planning start from where it is now."""
-        if self.free_adr is not None:
-            self.ik.base_qpos[self.free_adr : self.free_adr + 7] = data.qpos[self.free_adr : self.free_adr + 7]
+        """Follow whatever carries the arm as it is now: the robot that drives or walks with it, and joints the arm
+        rides on but does not move itself (a turntable two arms share, a lift set by hand). IK and path planning
+        start from there."""
+        self.ik.base_qpos[:] = data.qpos
         self._read_base(data)
 
     def base_and_reach(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
@@ -143,7 +152,8 @@ class ArmMotion:
         rng = np.random.default_rng(0)
         for _ in range(RESTARTS):
             start = rng.uniform(self.chain.lower, self.chain.upper)
-            start[0] = seed[0]
+            if self.yaw is not None:
+                start[self.yaw] = seed[self.yaw]
             q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
             if err2 <= REACH_TOL and not self._collides(q2):
                 travel = float(np.max(np.abs(q2 - self.q)))
@@ -183,12 +193,13 @@ class ArmMotion:
         """Start IK with the base already turned toward the target; DLS alone can stall on big turns."""
         q = self.q.copy()
         d = np.asarray(target)[:2] - self.base_xy
-        if np.linalg.norm(d) > 1e-3:
-            lo, hi = self.chain.lower[0], self.chain.upper[0]
+        i = self.yaw
+        if i is not None and np.linalg.norm(d) > 1e-3:
+            lo, hi = self.chain.lower[i], self.chain.upper[i]
             want = float((np.arctan2(d[1], d[0]) - self.base_yaw + np.pi) % (2 * np.pi) - np.pi)
             # The same heading, one turn either way: take the one inside the limits closest to now.
             inside = [a for a in (want, want - 2 * np.pi, want + 2 * np.pi) if lo - 1e-9 <= a <= hi + 1e-9]
-            q[0] = min(inside, key=lambda a: abs(a - q[0])) if inside else np.clip(want, lo, hi)
+            q[i] = min(inside, key=lambda a: abs(a - q[i])) if inside else np.clip(want, lo, hi)
         return q
 
     def move_to(self, target, gripper: str | None = None, from_point: np.ndarray | None = None) -> None:
@@ -265,8 +276,7 @@ class ArmMotion:
     # ---- control -------------------------------------------------------------------
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        if self.free_adr is not None:
-            self.sync(data)
+        self.sync(data)
         t = data.time
         if self._segment is None and self.queue:
             wp = self.queue.popleft()
@@ -277,8 +287,8 @@ class ArmMotion:
                 self._branch = (self.q.copy(), wp.joints)
             elif wp.position is not None:
                 goal, err, restarted = self._solve(wp.position)
-                if err <= REACH_TOL:
-                    self._turn = self._path_turn(start, wp.position, float(goal[0] - self.q[0]))
+                if err <= REACH_TOL and self.yaw is not None:
+                    self._turn = self._path_turn(start, wp.position, float(goal[self.yaw] - self.q[self.yaw]))
                 if restarted and err <= REACH_TOL:
                     # The goal lies in another elbow or wrist branch, which no straight tool path reaches:
                     # move joint by joint instead, as industrial arms do, slowly enough not to fling a load.
@@ -314,7 +324,7 @@ class ArmMotion:
         """Interpolate in cylindrical coordinates (radius, angle, height) about the base axis."""
         da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
         ra, rb = np.linalg.norm(da), np.linalg.norm(db)
-        if min(ra, rb) < 1e-3:
+        if self.yaw is None or min(ra, rb) < 1e-3:
             return a + (b - a) * s
         ta = np.arctan2(da[1], da[0])
         turn = self._turn if self._turn is not None else self._sweep(ta, np.arctan2(db[1], db[0]))
@@ -331,7 +341,7 @@ class ArmMotion:
 
     def _sweep(self, from_angle: float, to_angle: float) -> float:
         """Signed turn from one world heading to another that keeps the base joint inside its limits."""
-        lo, hi = self.chain.lower[0], self.chain.upper[0]
+        lo, hi = self.chain.lower[self.yaw], self.chain.upper[self.yaw]
         start = np.clip(from_angle - self.base_yaw, lo, hi)
         goal = to_angle - self.base_yaw
         options = [
@@ -357,17 +367,49 @@ class ArmMotion:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
 
 
-def _path_hinges(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> list[int]:
-    """Powered hinge joints from the root of `body`'s robot down to `body`, in that order."""
+def _path_joints(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> list[int]:
+    """Powered joints from the root of `body`'s robot down to `body`, in that order: hinges, and slides a
+    position actuator drives (a lift; a slide on a speed or force command would not hold where IK puts it)."""
     joints: list[int] = []
     while body > 0:
         start, count = model.body_jntadr[body], model.body_jntnum[body]
-        own = [
-            j for j in range(start, start + count) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE and j in powered
-        ]
+        own = [j for j in range(start, start + count) if j in powered and _steerable(model, j, powered[j])]
         joints = own + joints
         body = int(model.body_parentid[body])
     return joints
+
+
+def _steerable(model: mujoco.MjModel, joint: int, actuator: int) -> bool:
+    kind = int(model.jnt_type[joint])
+    if kind == mujoco.mjtJoint.mjJNT_HINGE:
+        return True
+    return kind == mujoco.mjtJoint.mjJNT_SLIDE and is_position_servo(model, actuator)
+
+
+def _shared_joints(model: mujoco.MjModel, site: int, powered: dict[int, int]) -> set[int]:
+    """Joints that this tool point's arm and another arm of the same robot both ride on."""
+    root = int(model.body_rootid[model.site_bodyid[site]])
+    mine = set(_path_joints(model, int(model.site_bodyid[site]), powered))
+    shared: set[int] = set()
+    for other in range(model.nsite):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, other) or ""
+        if other == site or not (name == "tcp" or name.endswith("/tcp")):
+            continue
+        if int(model.body_rootid[model.site_bodyid[other]]) == root:
+            shared |= mine & set(_path_joints(model, int(model.site_bodyid[other]), powered))
+    return shared
+
+
+def _yaw_index(model: mujoco.MjModel, joints: list[int], home_qpos: np.ndarray) -> int | None:
+    """Where in the chain the arm's first hinge is, if it turns about an upright axis at the home pose."""
+    hinges = [i for i, j in enumerate(joints) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE]
+    if not hinges:
+        return None
+    data = mujoco.MjData(model)
+    data.qpos[:] = home_qpos
+    mujoco.mj_kinematics(model, data)
+    first = hinges[0]
+    return first if abs(float(data.xaxis[joints[first]][2])) > UPRIGHT else None
 
 
 def _turn_toward(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
