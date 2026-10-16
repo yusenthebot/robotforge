@@ -41,12 +41,14 @@ switch's move, idle and keys paths turn left once, after one lead: one sequence 
 at some points of the stride and not others.
 
 leads: plays walks kept with switch --keep through each path, both turn directions, after each of 25 leads of
-walking (2.0 to 4.48 s, every update of a 2 Hz stride once): move, idle and keys as above (a 1 s turn, then 2 s of
-walking, then a stop and 2 s of standing), and gap: W let go, A or D pressed 0.04 to 0.3 s later for a second, let
-go, W pressed again as long after. Each sequence starts from standing in a reset world. It reports the falls (trunk
-past 60 degrees at any update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the
-walk before the turn), and the 1 s turn's share of the learned rate: per walk the median over its leads, and over
-all tries how many reached --min-share.
+walking (2.0 to 4.48 s, every update of a 2 Hz stride once): move and idle as above (a 1 s turn, then 2 s of
+walking, then a stop and 2 s of standing); quick, a key change by hand: W let go, A or D pressed one update later
+for a second, let go, W pressed one update later; and gap: the same with 0.04 to 0.3 s between the keys. (Holding W
+while A is down plays exactly as move: a turn wins over W, and move's stop is skipped as the next call comes at
+once.) Each sequence starts from standing in a reset world. It reports the falls (trunk past 60 degrees at any
+update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the walk before the turn),
+the 1 s turn's share of the learned rate (per walk the median over its leads, and over all tries how many reached
+--min-share), and per robot how many distinct sequences fell after the walk before the turn.
 """
 
 from __future__ import annotations
@@ -336,7 +338,10 @@ def _long(pg, robot: str, seconds: float) -> list[Leg]:
 # after 25 leads of walking, 2.0 to 4.48 s: every update of a 2 Hz stride (0.02 s apart) once, over five strides.
 LEADS = tuple(round(2.0 + 0.1 * k + 0.02 * (k // 5), 2) for k in range(25))
 GAPS = (0.04, 0.1, 0.16, 0.22, 0.3)  # s between letting go of W and pressing A or D (path gap), cycled over leads
-PATHS = ("move", "idle", "keys", "gap")
+# The quickest key change by hand that is not two keys down at once: one update. run_fast steps whole updates of
+# 0.02 s until this much has passed (0.02 itself sometimes came to two, the sum a hair short).
+QUICK = 0.01  # s
+PATHS = ("move", "idle", "quick", "gap")
 
 
 def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> list[tuple[str, float, float, float]]:
@@ -360,13 +365,8 @@ def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> l
             ("move", 0.2, 0.0, 2.0),
             ("stop", 0, 0, STAND_SECONDS),
         ]
-    if path == "keys":  # W held, A or D pressed for a second while W is still held, then let go
-        return [
-            ("move", 0.2, 0.0, lead),
-            ("move", 0.2, turn, TURN_SECONDS),
-            ("move", 0.2, 0.0, 2.0),
-            ("move", 0.0, 0.0, STAND_SECONDS),
-        ]
+    if path == "quick":  # W let go and A or D pressed one update later for a second, then W again as quickly
+        gap = QUICK
     # gap: W let go, A or D pressed a moment later for a second, then W again
     return [
         ("move", 0.2, 0.0, lead),
@@ -477,6 +477,9 @@ def _print_leads(results: list[dict], min_share: float) -> None:
                     + f"; 1 s turn: median per walk {' '.join(medians)}; >= {min_share:.0%} in {reached} of "
                     f"{len(shares)}"
                 )
+        switch = sum(r["fell"] not in (None, 0) for r in mine)
+        before = sum(r["fell"] == 0 for r in mine)
+        print(f"{robot:9} all: {switch} distinct sequences fell after the walk ({before} during it) of {len(mine)}")
 
 
 def _forward_job(args: tuple[str, int, dict[str, Any]]) -> dict:
