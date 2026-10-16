@@ -610,7 +610,6 @@ class RhythmWalker:
         self.turn_at: float | None = None  # sim time the asked turn begins out of the walk, which plays on until then
         self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
         self.fade_t0 = 0.0
-        self.walked_until = -math.inf  # sim time the walk last played
         self.clock = -math.inf  # sim time of the last update
         self.tilt_cos = 1.0
 
@@ -639,7 +638,6 @@ class RhythmWalker:
         if now < self.clock:  # the clock was turned back (a reset): times kept from before lie in the future
             self.playing, self.rhythm, self.t0, self.steady_from, self.fade_from = None, None, None, None, None
             self.turn_at = None
-            self.walked_until = -math.inf
         self.clock = now
         if self.mode != self.playing:
             self._switch(data, now)
@@ -658,7 +656,6 @@ class RhythmWalker:
             error = 0.0
             if self.rhythm == "forward":
                 error = self._heading_error(data, now - self.t0, dt)
-                self.walked_until = now
             target = rhythm.targets(self.home, now - self.t0, senses=senses, error=error)
         if self.fade_from is not None:
             target = fade_in(self.fade_from, target, now - self.fade_t0)
@@ -685,7 +682,10 @@ class RhythmWalker:
         were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
         When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
         16 degrees of the 88 it promised."""
-        out_of_walk = now - self.walked_until <= FADE + 1.0 / CONTROL_HZ
+        # Only out of the walk as it plays (or walks on to a turn): a robot stopped a moment ago is fading to home, a
+        # pose and a point of the stride its walking turns were never checked from. Any switch within a quarter second
+        # of the walk's last update used to count, so a turn soon after a stop began at once wherever the stride was.
+        out_of_walk = self.rhythm == "forward"
         self.playing, self.steady_from, self.turn_at = self.mode, None, None
         if self.rhythm is not None:  # what it leaves decides how it steadies (already steadying: as it is)
             exit_ = self.exits.get(self.rhythm.split()[0])

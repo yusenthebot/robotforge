@@ -226,6 +226,19 @@ def test_a_turn_that_fell_from_some_points_of_the_stride_waits_for_one_it_did_no
     assert walker.fade_from is not None  # faded in from the stride
 
 
+def test_a_turn_soon_after_a_stop_steadies_first_instead_of_skipping_the_stride_check(pg):
+    """Regression: a turn asked for within a quarter second of a stop counted as out of the walk, but the walk no
+    longer played, so its walking version began at once wherever the stride was (here at 0.48 to 0.88 of it where
+    only 0.3 was checked safe), from joints half way home. It turns as from standing, once steady, as after any other
+    stop."""
+    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 0.1)  # letting go of W, then pressing A a moment later
+    pg.behaviors.move("crab", 0.0, 0.8)
+    began = pg.run_fast(lambda: walker.rhythm is not None, 2 * CALM_MAX)
+    assert walker.playing == "left" and walker.rhythm == "left", f"{walker.rhythm} after {began:.2f} s"
+
+
 def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
     walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
     pg.behaviors.move("crab", 0.0, -0.8)  # the right turn may begin anywhere
