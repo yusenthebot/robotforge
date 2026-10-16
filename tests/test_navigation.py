@@ -1,6 +1,7 @@
 """Navigation: the grid search on hand-built maps, maps of compiled scenes, trips in scenes for several kinds of
 robot (move with to=...), and move without a destination behaving as it always did."""
 
+import asyncio
 import json
 import math
 from pathlib import Path
@@ -708,6 +709,37 @@ async def test_a_trip_out_of_time_goes_on_when_sent_again(pg):
         call.pop("seconds")
         second = json.loads((await client.call_tool("move", call)).content[0].text)
         assert second["arrived"] is True and second["path_m"] < first["path_m"], (first, second)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("how", ["reset", "edit"])
+async def test_a_reset_or_an_edit_on_the_way_ends_the_trip_and_says_so(pg, how):
+    """Regression: a reset or a world edit cleared the trip without ending it; move waited out its whole time limit
+    for nothing and returned time_s NaN (not JSON), and `robots` never told how a trip sent off with seconds=null
+    ended."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
+    server = build_server(pg, find_free_port(8790))
+
+    async def disrupt():
+        for _ in range(200_000):
+            if pg.behaviors.trip("dog") is not None and pg.session.data.time > 2.0:
+                break
+            await asyncio.sleep(0)
+        if how == "reset":
+            pg.session.reset()
+        else:
+            pg.add_object("box", shape="box", pos=[-2.0, 2.0], size=[0.2, 0.2, 0.2])
+
+    async with Client(server) as client:
+        task = asyncio.create_task(disrupt())
+        result = json.loads((await client.call_tool("move", {"robot": "dog", "to": [2.0, 0.0]})).content[0].text)
+        await task
+        assert result["arrived"] is False and result["why"] == "interrupted" and "reset" in result["note"], result
+        assert 1.5 < result["time_s"] < 10.0  # when it was cut off, not the whole limit
+        robots = json.loads((await client.call_tool("robots", {})).content[0].text)
+    last = [b["last_trip"] for b in robots["behaviors"] if b.get("navigating") == "dog"]
+    assert last and last[0]["why"] == "interrupted", robots["behaviors"]
 
 
 @pytest.mark.anyio

@@ -98,7 +98,8 @@ class BehaviorManager:
         self._world_dir = world_dir  # where the open world keeps its files (walks/ among them); None in lessons
         self._standing: dict[str, Any] = {}  # robot -> the gait start_balancing stood it on, until it is moved
         self._last_trips: dict[str, dict[str, Any]] = {}  # robot -> how its last trip ended, until it is moved again
-        session.reset_hooks.append(self._last_trips.clear)
+        self._live_trips: dict[str, navigation.Navigator] = {}  # robot -> the trip it is on
+        session.reset_hooks.append(self._trips_after_reset)
         session.reset_hooks.append(self.start_balancing)
         session.ctrl_hooks.append(self._set_by_hand)
         self.start_balancing()
@@ -517,6 +518,8 @@ class BehaviorManager:
             if self.session.controllers.get(key) is trip:
                 self.session.set_controller(key, None)
                 self._last_trips[robot] = trip.result()  # for `robots`, after a trip sent off with seconds=null
+            if self._live_trips.get(robot) is trip:
+                del self._live_trips[robot]
 
         trip = navigation.Navigator(
             robot,
@@ -544,6 +547,7 @@ class BehaviorManager:
                 trip.deadline = trip.start_time + seconds
             trip.note_others(self.session.data)
             self.session.set_controller(key, trip)
+            self._live_trips[robot] = trip
         return trip
 
     def trip(self, robot: str) -> navigation.Navigator | None:
@@ -553,12 +557,25 @@ class BehaviorManager:
 
     def _end_trip(self, robot: str) -> None:
         """Called with the session lock held: the robot is driven some other way now."""
+        self._live_trips.pop(robot, None)
         trip = self.session.controllers.get(TRIP + robot)
         if isinstance(trip, navigation.Navigator):
             self.session.set_controller(TRIP + robot, None)
             if not trip.done:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
                 trip.end_time = float(self.session.data.time)
+                self._last_trips[robot] = trip.result()
+
+    def _trips_after_reset(self) -> None:
+        """A reset or a change to the world clears every controller, trips among them, before this runs. A trip under
+        way ends there, and says so (to move(to=...) waiting for it, and in `robots` after seconds=null): it used to
+        vanish, and move waited out its whole time limit and returned time_s NaN. Trips that ended before are
+        forgotten, as the robots were put back."""
+        live, self._live_trips = self._live_trips, {}
+        self._last_trips.clear()
+        for robot, trip in live.items():
+            if not trip.done:
+                trip.interrupt("the world was reset or changed while it was on the way; send it again")
                 self._last_trips[robot] = trip.result()
 
     def _layers(self, version: int) -> dict:

@@ -879,6 +879,11 @@ class Navigator:
         """Remember where the other robots are as the path is planned (see _robot_ahead)."""
         self._others_at = {o.name: data.xpos[o.root][:2].copy() for o in self.others}
 
+    def interrupt(self, note: str) -> None:
+        """End the trip from outside (its controller is gone): when it was last updated, interrupted."""
+        if not self.done:
+            self._finish(self._ended_at(), "stopped", "interrupted", note)
+
     def _finish(self, t: float, state: str, cause: str | None = None, note: str | None = None) -> None:
         self.walker.command(0.0, 0.0)
         self.state = state

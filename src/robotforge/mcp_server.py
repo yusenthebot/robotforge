@@ -441,7 +441,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         if seconds is None:
             started = {k: v for k, v in trip.status().items() if k != "path"}
             return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
-        run = await run_until(lambda: trip.done, seconds + 1.0)
+        # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
+        run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
         if not trip.done:  # the viewer's clock lagged behind the wall clock: end the trip here
             playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
