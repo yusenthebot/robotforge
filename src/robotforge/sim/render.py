@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import io
 import sys
 import threading
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import Any
 
 import mujoco
@@ -16,6 +18,7 @@ import numpy as np
 from PIL import Image
 
 from robotforge import wording
+from robotforge.sim import vision
 from robotforge.sim.session import SimSession
 
 # Free-camera presets as (azimuth deg, elevation deg, share of the image the content spans).
@@ -110,11 +113,7 @@ class SnapshotRenderer:
         return buf.getvalue()
 
     def rgb(self, session: SimSession, view: str = "default", width: int = 640, height: int = 480) -> np.ndarray:
-        if width * height > MAX_PIXELS or width < 16 or height < 16:
-            raise ValueError(
-                f"image size {width}x{height} is out of range: width and height are pixels, each at least 16, "
-                f"and width*height is at most {MAX_PIXELS}"
-            )
+        _check_size(width, height)
         with self._lock, session.lock:
             model, data = session.model, session.data
             width = min(width, model.vis.global_.offwidth)
@@ -124,17 +123,130 @@ class SnapshotRenderer:
 
     def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
+        self._ready(model, key)
+        self._renderer.update_scene(data, camera=camera)
+        return self._renderer.render().copy()
+
+    def _ready(self, model: mujoco.MjModel, key: tuple[int, int, int]) -> None:
+        """A renderer for this model version and size, on the GL thread."""
         reason = _probe_gl()
         if reason is not None:
             hint = _GL_HINTS.get(sys.platform, _GL_HINTS["linux"])
             raise RenderUnavailable(f"Offscreen OpenGL rendering is unavailable here ({reason}). {hint}")
-        if self._key != key:
+        # The model itself is checked too: layers_of renders models that are not a session's (a lesson's copy, a
+        # measurement script's), whose version numbers say nothing about which model they are.
+        if self._key != key or self._renderer is None or self._renderer.model is not model:
             if self._renderer is not None:
                 self._renderer.close()
             self._renderer = mujoco.Renderer(model, height=key[2], width=key[1])
             self._key = key
-        self._renderer.update_scene(data, camera=camera)
-        return self._renderer.render().copy()
+
+    def layers(
+        self,
+        session: SimSession,
+        view: str = "default",
+        width: int = 640,
+        height: int = 480,
+        geoms: bool = False,
+        exposure: float = 1.0,
+    ) -> Layers:
+        """The picture, the depth and (with `geoms`) which geom each pixel shows, from one camera at one moment.
+        `exposure` scales every light for this picture only, as a camera's exposure setting would."""
+        _check_size(width, height)
+        with self._lock, session.lock, _exposed(session.model, exposure):
+            return self._take_layers(session.model, session.data, view, width, height, session.version, geoms)
+
+    def layers_of(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        view: str,
+        width: int,
+        height: int,
+        version: int,
+        geoms: bool = False,
+    ) -> Layers:
+        """`layers` for a model and data the caller already holds the lock on (a lesson, or a scratch copy).
+
+        The renderer's lock is taken after the caller's, the opposite order to `layers`: a renderer used this
+        way (a lesson's own) must not also be used through `layers`."""
+        _check_size(width, height)
+        with self._lock:
+            return self._take_layers(model, data, view, width, height, version, geoms)
+
+    def _take_layers(
+        self, model: mujoco.MjModel, data: mujoco.MjData, view: str, width: int, height: int, version: int, geoms: bool
+    ) -> Layers:
+        width = min(width, model.vis.global_.offwidth)
+        height = min(height, model.vis.global_.offheight)
+        camera = _camera_for(model, view, data, width / height)
+        return _on_gl_thread(self._layers, model, data, camera, (version, width, height), geoms)
+
+    def _layers(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int], geoms: bool):
+        self._ready(model, key)
+        r = self._renderer
+        r.update_scene(data, camera=camera)
+        rgb = r.render().copy()
+        pinhole = vision.Pinhole.from_scene(r.scene, key[1], key[2])
+        r.enable_depth_rendering()
+        try:
+            depth = r.render().copy()
+        finally:
+            r.disable_depth_rendering()
+        seen = None
+        if geoms:
+            r.enable_segmentation_rendering()
+            try:
+                seg = r.render()
+            finally:
+                r.disable_segmentation_rendering()
+            seen = np.where(seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM), seg[..., 0], -1).astype(np.int32)
+        return Layers(rgb, depth, seen, pinhole)
+
+
+@dataclass(frozen=True)
+class Layers:
+    """One look through a camera: the picture, the depth camera's reading (m along the view direction) and,
+    when asked, the geom each pixel shows (-1 for the sky), with the camera they were taken with."""
+
+    rgb: np.ndarray
+    depth: np.ndarray
+    geoms: np.ndarray | None
+    camera: vision.Pinhole
+
+
+@contextlib.contextmanager
+def _exposed(model: mujoco.MjModel, exposure: float) -> Iterator[None]:
+    """Every light of the model (and the headlight) scaled by `exposure` until the block ends."""
+    if exposure == 1.0:
+        yield
+        return
+    saved = [
+        (array, array.copy())
+        for array in (
+            model.light_diffuse,
+            model.light_ambient,
+            model.light_specular,
+            model.vis.headlight.ambient,
+            model.vis.headlight.diffuse,
+            model.vis.headlight.specular,
+        )
+    ]
+    try:
+        for array, original in saved:
+            array[:] = original * exposure
+        yield
+    finally:
+        for array, original in saved:
+            array[:] = original
+
+
+def _check_size(width: int, height: int) -> None:
+    if width * height > MAX_PIXELS or width < 16 or height < 16:
+        raise ValueError(
+            f"image size {width}x{height} is out of range: width and height are pixels, each at least 16, "
+            f"and width*height is at most {MAX_PIXELS}"
+        )
 
 
 def _camera_for(
