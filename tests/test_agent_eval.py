@@ -2,7 +2,8 @@
 
 tests/fixtures/agent_eval/<task>/ holds one session of the 2026-10-17 baseline run (commit 2f614f8, gpt-6.1-sol
 at medium effort) and the worlds it left, trimmed by `agent_eval.py --fixture`: no images, shell output or texts
-that no check reads, and the run folder's path written as RUN. The expected verdicts are the ones read by hand
+that no check reads, and the run folder's path written as RUN. The other folders are sessions on later commits,
+named where they are used. The expected verdicts are the ones read by hand
 from the full transcripts. Sessions made up here (_made_up) are what a check must not pass: each is a shortcut a
 real session could take. The script itself needs Codex, a login and the network; these tests need none of them.
 """
@@ -43,17 +44,22 @@ BASELINE = {
     "hexapod_build": (True, {"it is a hexapod": True}),
     "rover_rock": (True, {"a rover and a rock": True, "upright at the end": True}),
     # It opened lesson 6 and built the cart-pole, but never ran a controller.
-    "learn_control": (False, {"opened the control lesson (lessons 6)": True, "ran a balance controller": False}),
+    "learn_control": (False, {"opened the control lesson (lessons 6)": True, "ran a balance controller live": False}),
     "fix_workshop": (True, {"green_cube starts where it was": True, "an arm call handled it": True}),
     # Run on the same commit after the task was added: open_world failed on the misspelled template, the agent
     # searched for the file (the error did not say where it is), fixed it and walked the dog 1.04 m.
-    "fix_garden": (True, {"a robotforge call failed first": True, "then the dog walked >= 0.5 m": True}),
+    "fix_garden": (True, {"the dog walked >= 0.5 m in the garden": True}),
+    # On 15fddbb: lesson 6, then only compare_controllers, which runs off-screen; the observe after it shows time 0.
+    "learn_control_table_only": (False, {"ran a balance controller live": False}),
+    # On f281b69: compare_controllers, then run_controller(pd) live with a push at 3 s.
+    "learn_control_live": (True, {"ran a balance controller live": True}),
 }
+TASK_OF = {"learn_control_table_only": "learn_control", "learn_control_live": "learn_control"}
 
 
 @pytest.mark.parametrize("task", list(BASELINE))
 def test_the_checks_give_the_verdicts_read_from_the_sessions(ev, task):
-    outcome = ev.score(ev.TASKS[task], FIXTURES / task)
+    outcome = ev.score(ev.TASKS[TASK_OF.get(task, task)], FIXTURES / task)
     passed, criteria = BASELINE[task]
     assert outcome.passed is passed, outcome.criteria
     for name, ok in (criteria or {}).items():
@@ -168,6 +174,12 @@ def _event(tool: str, args: dict, result: object, ok: bool = True) -> str:
     return json.dumps({"type": "item.completed", "item": item})
 
 
+def _opened(world: str) -> str:
+    """What open_world (or new_world, or any edit) answers: the world now open. Where things went is read from the
+    calls made while their world was open."""
+    return _event("open_world", {"name_or_path": world}, {"world": world, "world_dir": f"RUN/rf_home/worlds/{world}"})
+
+
 def _made_up(tmp_path: Path, worlds: dict[str, str], *events: str) -> Path:
     """A task folder as a run leaves it: the event stream, meta.json and the worlds on disk."""
     task_dir = tmp_path / "run" / "tasks" / "made_up"
@@ -205,7 +217,7 @@ def _verdict(outcome) -> dict[str, bool]:
 def test_a_cube_made_inside_the_bin_was_not_put_there(ev, tmp_path):
     world = ARM_WORLD.format(cube="[0.05, 0.28]", shape="bin", size="[0.14, 0.14, 0.05]")
     observed = _event("observe", {}, {"time": 0, "free_bodies": {"red_cube": [0.05, 0.28, 0.02]}})
-    outcome = ev.score(ev.TASKS["arm_cube"], _made_up(tmp_path, {"cube": world}, observed))
+    outcome = ev.score(ev.TASKS["arm_cube"], _made_up(tmp_path, {"cube": world}, _opened("cube"), observed))
     assert not outcome.passed
     verdict = _verdict(outcome)
     assert verdict["red_cube ended in a bin"] is True  # it is in the bin: but nothing put it there
@@ -216,7 +228,7 @@ def test_a_cube_left_on_top_of_a_solid_box_is_not_in_it(ev, tmp_path):
     world = ARM_WORLD.format(cube="[0.25, -0.12]", shape="box", size="[0.15, 0.15, 0.1]")
     placed = {"success": True, "object_position": [0.05, 0.28, 0.12], "object": "red_cube", "target": "box"}
     events = _event("pick_and_place", {"robot": "arm", "object": "red_cube", "target": "box"}, placed)
-    outcome = ev.score(ev.TASKS["arm_cube"], _made_up(tmp_path, {"cube": world}, events))
+    outcome = ev.score(ev.TASKS["arm_cube"], _made_up(tmp_path, {"cube": world}, _opened("cube"), events))
     assert not outcome.passed and _verdict(outcome)["red_cube ended in a bin"] is False
 
 
@@ -258,7 +270,8 @@ def _drove(robot: str, to: list[float], upright: bool) -> str:
 
 def test_a_dog_that_walked_to_the_rock_is_not_a_rover(ev, tmp_path):
     world = ROCK_WORLD.format(name="dog", template="quadruped")
-    outcome = ev.score(ev.TASKS["rover_rock"], _made_up(tmp_path, {"rock": world}, _drove("dog", [1.5, 0, 0.3], True)))
+    events = [_opened("rock"), _drove("dog", [1.5, 0, 0.3], True)]
+    outcome = ev.score(ev.TASKS["rover_rock"], _made_up(tmp_path, {"rock": world}, *events))
     assert not outcome.passed
     verdict = _verdict(outcome)
     assert verdict["a rover and a rock"] is False and verdict["ended within 0.5 m of it"] is True
@@ -281,7 +294,7 @@ def test_a_dog_that_walked_to_the_rock_is_not_a_rover(ev, tmp_path):
 )
 def test_a_rover_on_its_back_at_the_rock_does_not_pass(ev, tmp_path, then):
     world = ROCK_WORLD.format(name="rover", template="rover")
-    events = [_drove("rover", [1.5, 0, 0.1], False), *then]
+    events = [_opened("rock"), _drove("rover", [1.5, 0, 0.1], False), *then]
     outcome = ev.score(ev.TASKS["rover_rock"], _made_up(tmp_path, {"rock": world}, *events))
     assert not outcome.passed
     verdict = _verdict(outcome)
@@ -289,13 +302,15 @@ def test_a_rover_on_its_back_at_the_rock_does_not_pass(ev, tmp_path, then):
 
 
 def _garden_walk(robot: str = "dog") -> list[str]:
+    """open_world fails on the misspelled template, the file is fixed in the shell, the garden opens, the dog walks."""
     return [
         _event("open_world", {"name_or_path": "garden"}, "robot 'dog': unknown template 'quadrupd'", ok=False),
+        _opened("garden"),
         _drove(robot, [0.9, 0, 0.3], True),
     ]
 
 
-def test_the_garden_passes_only_once_the_dog_walks_in_the_repaired_world(ev, tmp_path):
+def test_the_garden_passes_once_its_dog_walks_in_the_repaired_world(ev, tmp_path):
     fixed = ev.GARDEN.replace("quadrupd", "quadruped")
     outcome = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "a", {"garden": fixed}, *_garden_walk()))
     assert outcome.passed, outcome.criteria
@@ -303,13 +318,62 @@ def test_the_garden_passes_only_once_the_dog_walks_in_the_repaired_world(ev, tmp
     # Left broken: it does not compile, whatever the session says it walked.
     broken = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "b", {"garden": ev.GARDEN}, *_garden_walk()))
     assert _verdict(broken)["garden opens with its dog a quadruped"] is False and not broken.passed
-    # Walked first, then a failure: nothing happened after the mistake.
-    later = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "c", {"garden": fixed}, *reversed(_garden_walk())))
-    assert _verdict(later)["then the dog walked >= 0.5 m"] is False
+    # Walked before the garden opened: in whatever world was open then, not the garden.
+    walk = _garden_walk()
+    early = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "c", {"garden": fixed}, walk[0], walk[2], walk[1]))
+    assert _verdict(early)["the dog walked >= 0.5 m in the garden"] is False
     # A new world instead of the user's garden, with its ball lost.
     lost = fixed.replace("objects:", "objects: []\nold:")
     gone = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "d", {"garden": lost}, *_garden_walk()))
     assert _verdict(gone)["the ball is still there"] is False
+
+
+def test_the_garden_fixed_before_it_ever_failed_passes(ev, tmp_path):
+    """The best session reads the file, fixes the template and then opens the garden: no call fails. A failed
+    call was a pass condition, so this one failed on three criteria (review)."""
+    fixed = ev.GARDEN.replace("quadrupd", "quadruped")
+    shell = json.dumps({"type": "item.completed", "item": {"type": "command_execution", "command": "cat world.yaml"}})
+    events = [shell, _opened("garden"), _drove("dog", [1.0, 0, 0.3], True)]
+    outcome = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path, {"garden": fixed}, *events))
+    assert outcome.passed and outcome.failed_calls == 0, outcome.criteria
+
+
+def test_a_dog_walked_in_another_world_is_not_the_gardens_dog(ev, tmp_path):
+    """open_world fails, a dog of the same name walks 1 m in a new world, and the garden file is fixed in the shell
+    but never opened: it passed every criterion, matched by the robot's name alone (review)."""
+    fixed = ev.GARDEN.replace("quadrupd", "quadruped")
+    park = "name: park\nfloor:\n  style: checker\nrobots:\n- name: dog\n  template: quadruped\n"
+    events = [_garden_walk()[0], _opened("park"), _drove("dog", [1.0, 0, 0.3], True)]
+    outcome = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path, {"garden": fixed, "park": park}, *events))
+    assert not outcome.passed and _verdict(outcome)["the dog walked >= 0.5 m in the garden"] is False
+
+
+def test_a_dog_on_grass_must_walk_on_the_grass(ev, tmp_path):
+    """A dog on a grass world that never moved, and a dog of the same name that walked 3 m in a checker world:
+    dog_grass passed on the name alone (review)."""
+    lawn = "name: lawn\nfloor:\n  style: grass\nrobots:\n- name: dog\n  template: quadruped\n"
+    lab = "name: lab\nfloor:\n  style: checker\nrobots:\n- name: dog\n  template: quadruped\n"
+    events = [_opened("lab"), _drove("dog", [3.0, 0, 0.3], True), _opened("lawn")]
+    outcome = ev.score(ev.TASKS["dog_grass"], _made_up(tmp_path, {"lawn": lawn, "lab": lab}, *events))
+    assert not outcome.passed, outcome.criteria
+
+
+def test_each_call_is_in_the_world_open_when_it_ran(ev):
+    started = _event("new_world", {"name": "My Park"}, {"world": "my_park", "world_dir": "C:\\rf\\worlds\\my_park"})
+    session = ev.parse_events(
+        [
+            _event("robots", {}, {"robots": []}),  # the demo, before any world
+            started,
+            _event("move", {"robot": "dog"}, {"distance_m": 1.0}),
+            _event("open_world", {"name_or_path": "garden"}, "unknown template", ok=False),  # still my_park
+            _event("observe", {}, {"time": 1.0}),
+            _event("open_model", {"path": "x.urdf"}, {"model": "x.urdf"}),  # a model, not a saved world
+            _event("simulate", {"seconds": 1}, {"moved": {}}),
+            _event("add_object", {"name": "box"}, {"world": "lab"}),  # an edit names its world too
+        ]
+    )
+    assert session.worlds == (None, "my_park", "my_park", "my_park", "my_park", None, None, "lab")
+    assert [c.tool for c in session.in_world("my_park").calls] == ["new_world", "move", "open_world", "observe"]
 
 
 # ---- scoring itself ---------------------------------------------------------------------------------------
@@ -407,3 +471,15 @@ def test_reports_compare_and_merge_runs(ev):
 def test_a_transcript_shows_calls_and_what_the_agent_said(ev):
     text = ev.transcript(FIXTURES / "learn_control")
     assert "TOOL robotforge.lessons" in text and "SAY " in text and "USAGE" in text
+
+
+def test_a_fixture_keeps_which_world_each_result_is_in(ev):
+    long = json.dumps({"world": "garden", "world_dir": "RUN/w/garden", "robots": ["dog"], "actuators": ["x"] * 99})
+    assert json.loads(ev._trim_result("open_world", long)) == {
+        "world": "garden",
+        "world_dir": "RUN/w/garden",
+        "robots": ["dog"],
+    }
+    assert json.loads(ev._trim_result("open_model", json.dumps({"model": "a.urdf", "joints": [1] * 99}))) == {
+        "model": "a.urdf"
+    }

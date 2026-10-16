@@ -17,9 +17,10 @@ does the tasks, not the cold install (docs/PLUGINS.md measures that). Codex gets
 ChatGPT apps, which would add tokens and variance that have nothing to do with robotforge.
 
 A task's check reads only what happened: the MCP tool calls and their results in the event stream, and the
-worlds saved on disk (world.yaml). It never reads what the agent says it did. Each check is a short list of
-criteria; a task passes when all of them do. Alongside, every session records its robotforge tool calls, the
-calls that failed, shell commands, input, cached and output tokens and wall time.
+worlds saved on disk (world.yaml). It never reads what the agent says it did. Where a robot or an object went is
+read from the calls made while its world was open (a dog walked in another world is not the garden's dog). Each
+check is a short list of criteria; a task passes when all of them do. Alongside, every session records its
+robotforge tool calls, the calls that failed, shell commands, input, cached and output tokens and wall time.
 
 A run writes a JSON summary (no absolute paths) to --results, by default docs/evals/agent/<date>-<label>.json,
 for later rounds to compare against; the raw event streams and worlds stay in the run folder under --work.
@@ -37,6 +38,7 @@ import itertools
 import json
 import math
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -105,6 +107,30 @@ class Session:
     def results(self, *tools: str) -> list[dict[str, Any]]:
         """The JSON results of robotforge's successful calls to these tools, in order."""
         return [c.data for c in self.ours if c.ok and c.tool in tools and isinstance(c.data, dict)]
+
+    @functools.cached_property
+    def worlds(self) -> tuple[str | None, ...]:
+        """For each call, the folder of the world open when it ran, or None (before the first world, or a model
+        opened from a file). robotforge's world results name it: new_world, open_world, undo and every edit
+        return "world" and "world_dir"; a call that fails leaves the open world as it was."""
+        current, out = None, []
+        for call in self.calls:
+            data = call.data if call.server == SERVER else None
+            if isinstance(data, dict):
+                if call.tool == "open_model":
+                    current = None
+                elif isinstance(data.get("world_dir"), str):
+                    current = re.split(r"[\\/]", data["world_dir"].rstrip("\\/"))[-1]
+                elif isinstance(data.get("world"), str):
+                    current = data["world"]
+            out.append(current)
+        return tuple(out)
+
+    def in_world(self, name: str) -> Session:
+        """The session with only the calls made while world `name` (its folder) was open: a dog walked in another
+        world is not the garden's dog, though it has the same name."""
+        calls = tuple(c for c, w in zip(self.calls, self.worlds, strict=True) if w == name)
+        return replace(self, calls=calls)
 
 
 ERROR_PREFIX = "Error executing tool "
@@ -278,6 +304,11 @@ class Evidence:
     def robots(self, *kinds: str) -> list[tuple[World, dict[str, Any]]]:
         return [(w, r) for w in self.worlds for r in w.robots if not kinds or self.kind(w, r) in kinds]
 
+    def seen(self, world: World) -> Session:
+        """What the session did while `world` was open: where its robots and objects went is read from these calls
+        only."""
+        return self.session.in_world(world.name)
+
 
 # ---- where things went --------------------------------------------------------------------------------------
 
@@ -361,14 +392,6 @@ def upright_at_end(session: Session, robot: str) -> bool | None:
     """The last upright value robotforge reported for `robot` (simulate and run_controller give none)."""
     seen = [p.upright for p in poses(session, robot) if p.upright is not None]
     return seen[-1] if seen else None
-
-
-def after_first_failure(session: Session) -> Session | None:
-    """The session from just after its first failed robotforge call, or None when no call failed."""
-    first = next((i for i, c in enumerate(session.calls) if c.server == SERVER and not c.ok), None)
-    if first is None:
-        return None
-    return Session(session.calls[first + 1 :], session.commands, session.messages, session.usage, session.problems)
 
 
 def object_positions(session: Session, name: str) -> list[list[float]]:
@@ -484,9 +507,9 @@ def _named(world: World, robot: dict[str, Any]) -> str:
 
 
 def _walk_criteria(ev: Evidence, world: World, robot: dict[str, Any], kind: str, at_least: float) -> list[Criterion]:
-    name = robot["name"]
-    distance = travelled(ev.session, name)
-    upright = upright_at_end(ev.session, name)
+    name, there = robot["name"], ev.seen(world)
+    distance = travelled(there, name)
+    upright = upright_at_end(there, name)
     return [
         Criterion(f"a {kind}", True, _named(world, robot)),
         Criterion(f"moved >= {at_least} m", distance >= at_least, f"{distance:.2f} m"),
@@ -514,8 +537,8 @@ def _carried(ev: Evidence, world: World, thing: dict[str, Any], start: list[floa
         outside = Criterion(f"{name} starts where it was", pos[:2] == start, f"saved at {pos}")
     else:
         outside = Criterion(f"{name} starts outside the bin", bool(pos) and not starts, f"saved at {pos}")
-    handled = arm_moved(ev.session, name)
-    seen = object_positions(ev.session, name)
+    handled = arm_moved(ev.seen(world), name)
+    seen = object_positions(ev.seen(world), name)
     last = seen[-1] if seen else None
     holding = [o["name"] for o in containers if last and inside(last, o)]
     where = f"last at {last}, bins {[o['name'] for o in containers]}" if last else f"{name} never reported moved"
@@ -550,7 +573,7 @@ def check_go2_turn(ev: Evidence) -> list[Criterion]:
         if str(robot.get("library") or "").lower() != "go2":
             continue
         crit = _walk_criteria(ev, world, robot, "Go2 from the library", 0.3)
-        left = turned_left(ev.session, robot["name"])
+        left = turned_left(ev.seen(world), robot["name"])
         crit.insert(2, Criterion("turned left >= 30 deg", left >= 30, f"{left:.0f} deg"))
         rows.append((robot, crit))
     return _best(rows, [Criterion("a Go2 from the library", False, "none in any world")])
@@ -632,9 +655,10 @@ def check_rover_rock(ev: Evidence) -> list[Criterion]:
     rows = []
     for world in ev.worlds:
         rocks = [o for o in world.objects if o.get("shape") == "rock" and len(o.get("pos") or []) >= 2]
+        there = ev.seen(world)
         for robot in world.robots if rocks else []:
             name = robot.get("name", "")
-            seen = poses(ev.session, name)
+            seen = poses(there, name)
             if not seen:
                 continue
             kind = ev.kind(world, robot)
@@ -644,7 +668,7 @@ def check_rover_rock(ev: Evidence) -> list[Criterion]:
             rock = min(rocks, key=lambda r: _gap(end.x, end.y, heading, outline, r))
             at_end = _gap(end.x, end.y, heading, outline, rock)
             at_start = _gap(start[0], start[1], yaw, outline, rock)
-            upright = upright_at_end(ev.session, name)
+            upright = upright_at_end(there, name)
             center = math.dist((end.x, end.y), rock["pos"][:2]) - float((rock.get("size") or [0.5])[0]) / 2
             rows.append(
                 (
@@ -665,20 +689,28 @@ def check_rover_rock(ev: Evidence) -> list[Criterion]:
                     ],
                 )
             )
-    return _best(rows, [Criterion("a rover and a rock", False, "no robot reported in a world with a rock")])
+    return _best(rows, [Criterion("a rover and a rock", False, "no robot reported moving in a world with a rock")])
 
 
 def check_learn_control(ev: Evidence) -> list[Criterion]:
+    """Lesson 6 opened, and a balance controller ran live, in the world the learner watches. compare_controllers
+    runs off-screen and leaves the live world as it was (an observe after it showed time 0 and the pole untouched),
+    so it is counted beside, not as, the run."""
     plans = [r.get("lesson") for r in ev.session.results("lessons")]
     got = sorted({p.get("number") for p in plans if isinstance(p, dict) and p.get("number") is not None})
-    ran = [
-        c
-        for c in ev.session.ours
-        if c.tool in ("run_controller", "compare_controllers") and c.ok and "balance" in str(c.args.get("task", ""))
-    ]
+
+    def balance(tool: str) -> list[Call]:
+        return [c for c in ev.session.ours if c.tool == tool and c.ok and "balance" in str(c.args.get("task", ""))]
+
+    live, table = balance("run_controller"), balance("compare_controllers")
+    held = [((c.data or {}).get("result") or {}).get("success") for c in live if isinstance(c.data, dict)]
     return [
         Criterion("opened the control lesson (lessons 6)", 6 in got, f"lessons opened: {got or 'none'}"),
-        Criterion("ran a balance controller", bool(ran), f"{len(ran)} successful run_controller/compare_controllers"),
+        Criterion(
+            "ran a balance controller live",
+            bool(live),
+            f"{len(live)} run_controller (success {held}), {len(table)} compare_controllers (off-screen)",
+        ),
     ]
 
 
@@ -756,20 +788,16 @@ def setup_garden(_work: Path, home: Path) -> None:
 
 
 def check_fix_garden(ev: Evidence) -> list[Criterion]:
+    """The garden opens (its dog's template fixed, nothing else lost) and its dog walked while it was open. Meeting
+    the mistake is not required: a session that reads the file and fixes it first is the best one, and the failed
+    calls are counted beside the verdict anyway."""
     world = next((w for w in ev.worlds if w.name == "garden"), None)
     if world is None:
         return [Criterion("the garden world is still there", False, "gone")]
-    failed = next((c for c in ev.session.ours if not c.ok), None)
-    later = after_first_failure(ev.session)
-    walked = travelled(later, "dog") if later else 0.0
-    upright = upright_at_end(later, "dog") if later else None
+    there = ev.seen(world)
+    walked, upright = travelled(there, "dog"), upright_at_end(there, "dog")
     kinds = world.kinds
     return [
-        Criterion(
-            "a robotforge call failed first",
-            failed is not None,
-            f"{failed.tool}: {failed.text}" if failed else "none failed",
-        ),
         Criterion(
             "garden opens with its dog a quadruped",
             kinds.get("dog") == "quadruped",
@@ -780,7 +808,7 @@ def check_fix_garden(ev: Evidence) -> list[Criterion]:
             world.object("ball") is not None,
             ", ".join(o.get("name", "") for o in world.objects),
         ),
-        Criterion(f"then the dog walked >= {GARDEN_WALK} m", walked >= GARDEN_WALK, f"{walked:.2f} m"),
+        Criterion(f"the dog walked >= {GARDEN_WALK} m in the garden", walked >= GARDEN_WALK, f"{walked:.2f} m"),
         Criterion("upright at the end", upright is True, str(upright)),
     ]
 
@@ -1146,6 +1174,9 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> str:
 CHECKED_RESULTS = ("move", "robots", "pick_and_place", "simulate", "run_controller", "compare_controllers")
 
 
+WORLD_KEYS = ("world", "world_dir", "robots", "objects", "model")  # which world is open (Session.worlds)
+
+
 def _trim_result(tool: str, text: str) -> str:
     if tool == "lessons" and text.startswith("{"):
         data = json.loads(text)
@@ -1157,6 +1188,13 @@ def _trim_result(tool: str, text: str) -> str:
         kept = {k: data[k] for k in ("time", "free_bodies") if k in data}
         orientation = {k: v for k, v in (data.get("sensors") or {}).items() if k.endswith("/orientation")}
         return json.dumps({**kept, **({"sensors": orientation} if orientation else {})}, ensure_ascii=False)
+    if tool not in CHECKED_RESULTS and text.startswith("{"):
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and ("world" in data or "world_dir" in data or tool == "open_model"):
+            return json.dumps({k: data[k] for k in WORLD_KEYS if k in data}, ensure_ascii=False)
     if tool not in CHECKED_RESULTS and len(text) > SHORT:
         return text[:SHORT] + "..."
     return text

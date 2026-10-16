@@ -1,0 +1,17 @@
+name: pid_balance_beginner
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: pole
+  template: cartpole
+  file: null
+  library: null
+  build: null
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects: []

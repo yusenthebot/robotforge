@@ -1,1 +1,1 @@
-{"wall_seconds": 60.5, "exit_code": 0, "timed_out": false}
+{"wall_seconds": 60.5, "exit_code": 0, "timed_out": false, "prompt": "I downloaded a robot description to {work}/my_rover/urdf/my_rover.urdf. Can you load it and drive it forward a little?"}
