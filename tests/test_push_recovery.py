@@ -415,3 +415,31 @@ def test_a_long_drag_keeps_a_trotting_dog_recovering(pg):
     assert out["tilt"] < 5
     assert out["last_second"] > 0.5 * TROT
     assert out["sideways"] > 0.5
+
+
+@pytest.mark.parametrize("robot", list(ROBOTS))
+@pytest.mark.parametrize(("distance", "seconds"), [(0.4, 2.0), (0.6, 3.0)])
+def test_a_never_moved_quadruped_pulled_forward_by_its_back_walks_along(pg, robot, distance, seconds):
+    """Review of round 32: every drag in the bench pulled to the left. Pulled forwards by its back, a never-moved
+    dog's strides braked against the hand, it pitched up to 61 degrees and went onto its back (0.6 m over 3 s)."""
+    trunk, _ = _on_its_gait(pg, robot, None)
+    session, data = pg.session, pg.session.data
+    rot = data.xmat[trunk].reshape(3, 3).copy()
+    ahead = np.array([rot[0, 0], rot[1, 0], 0.0]) / np.hypot(rot[0, 0], rot[1, 0])
+    grab = data.xpos[trunk] + rot @ [0.0, 0.0, 0.04]
+    start = data.xpos[trunk].copy()
+    worst = 0.0
+    session.start_drag(trunk, grab)
+    steps = round(20 * seconds)
+    for k in range(1, steps + 1):
+        session.move_drag(grab + ahead * distance * k / steps)
+        for _ in range(round(0.05 / session.model.opt.timestep)):
+            session.step()
+            worst = max(worst, _tilt(pg, trunk))
+    session.end_drag()
+    for _ in range(round(4.0 / session.model.opt.timestep)):
+        session.step()
+        worst = max(worst, _tilt(pg, trunk))
+    assert worst < 30, f"tilted {worst:.0f} degrees"
+    # it goes along (the heavier Go2 less far: the viewer's drag spring pulled it 0.18 m of 0.4)
+    assert _tilt(pg, trunk) < 5 and float((data.xpos[trunk] - start) @ ahead) > 0.25 * distance

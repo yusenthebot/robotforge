@@ -340,9 +340,15 @@ class QuadrupedGait:
             return  # it has not stepped since it started: every foot target is still its home (see IK_TOL)
         level = None
         if w > 1e-3:
-            # Sideways strides follow the trunk, and the velocity correction lets go of that axis.
-            v_body = np.array([v_body[0], (1.0 - w) * v_body[1] + w * LATERAL_FOLLOW * self._v_fast[1]])
-            self._v_int = np.array([self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
+            if moving or not held:
+                # Sideways strides follow the trunk, and the velocity correction lets go of that axis.
+                v_body = np.array([v_body[0], (1.0 - w) * v_body[1] + w * LATERAL_FOLLOW * self._v_fast[1]])
+                self._v_int = np.array([self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
+            else:
+                # A hand pulling a standing robot: its strides follow forwards too. Braking against a forward
+                # pull by the back pitched a never-moved dog to 61 degrees and onto its back.
+                v_body = (1.0 - w) * v_body + w * LATERAL_FOLLOW * self._v_fast[:2]
+                self._v_int = np.array([(1.0 - w) * self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
             level = _tilt(quat)
         half_cycle = self.period * self.duty
         saturated = False
