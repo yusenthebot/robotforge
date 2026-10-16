@@ -96,6 +96,11 @@ async def test_colors_it_cannot_find_are_refused_before_rendering(pg, monkeypatc
         assert bad.is_error and "unknown color 'chartreuse'" in bad.content[0].text
         grey = await client.call_tool("observe", {"find": "grey"})
         assert grey.is_error and "too grey" in grey.content[0].text
+        # It offered white, black and gray (which it then refused as too grey) and never "all".
+        for refused in (bad, grey):
+            text = refused.content[0].text
+            assert all(name in text for name in vision.NAMED) and '"all"' in text
+            assert not any(f" {name}," in text for name in ("white", "black", "gray"))
 
 
 async def test_without_opengl_find_returns_the_state_and_says_why(pg, monkeypatch):

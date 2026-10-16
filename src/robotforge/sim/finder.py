@@ -63,7 +63,10 @@ def colors(color: str) -> list[str]:
     """The colors `find=` asks for; an unknown or grey one fails here, before anything is rendered."""
     if color.strip().lower() in EVERY:
         return list(vision.NAMED)
-    vision.color_range(color)  # raises ValueError naming the colors it knows
+    try:
+        vision.color_range(color)
+    except ValueError as exc:
+        raise ValueError(f'{exc}; "all" looks for every named one') from None
     return [color]
 
 

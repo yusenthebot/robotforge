@@ -64,6 +64,8 @@ Never say something worked because the call returned. Read the numbers, and look
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
 `observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.
+`observe(view, find="red")` (a color name, a hex code, or "all") lists what that view sees of the color: each find's world `position`, the `object` name `pick_and_place` takes, and `about_cm`, how far off the position may be.
+A flag on a find (cut_off, hidden, side_on, raised, held_by) means it may be much further off; the result's `how` says what each one it carries means.
 Without OpenGL it returns the state with a note instead of an image: rely on the numbers and ask the user to look at the viewer.
 When something fails, say so plainly, read the error (it says what to do), fix it and check again.
 Report real numbers, including disappointing ones.
@@ -81,7 +83,7 @@ Report real numbers, including disappointing ones.
 `lessons()` lists nine beginner lessons; `lessons(number)` returns one lesson's plan: ideas to teach, tool steps, checks and a closing challenge.
 Follow the plan and adapt it to the learner. MCP clients with prompt support also list them as prompts `lesson_1` to `lesson_9`, plus `start`.
 
-The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, motion planning, sensors, gaits, balance and reinforcement learning (a cart-pole, then any body learning to walk, the user's own robot included), real-robot face-offs (our arm next to the AgileX PiPER and Franka Panda, our humanoid next to the Unitree G1), plus challenges with stars (maze escape, shove survival, obstacle course).
+The viewer has its own hands-on lessons behind the Learn button (学习): PID control, inverse kinematics, motion planning, sensors, finding an object with a camera, gaits, balance and reinforcement learning (a cart-pole, then any body learning to walk, the user's own robot included), real-robot face-offs (our arm next to the AgileX PiPER and Franka Panda, our humanoid next to the Unitree G1), plus challenges with stars (maze escape, shove survival, obstacle course).
 Each is a guided experiment with live plots, quizzes and checks that run on the physics, and it works without you.
 When a beginner wants to understand how robots work, open the viewer and suggest one; afterwards, offer to build on it in their own world.
 

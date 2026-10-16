@@ -54,6 +54,7 @@ NAMED: dict[str, ColorRange] = {
     "purple": ColorRange(264.0, 26.0),
     "pink": ColorRange(330.0, 16.0, sat=0.25),  # a pale color: about 0.45 saturated
 }
+FINDABLE = f'find looks for {", ".join(NAMED)}, or a hex code like "#9c6b3f"'
 # Share of the world's light the finder's camera lets in, as its exposure: at 0.6 no channel of a sunlit cube
 # top clips, and every palette color stayed in its window (at 1.0, the 3D view's brightness, several left it).
 EXPOSURE = 0.6
@@ -83,15 +84,22 @@ RAISED_SHARE = 0.1  # of the measured points round a blob: a flat surface this b
 
 
 def color_range(color: str | list[float]) -> ColorRange:
-    """A named color's window, or one around any color components.color accepts ("#9c6b3f", [r, g, b])."""
+    """A named color's window, or one around any color components.color accepts ("#9c6b3f", [r, g, b]).
+    Fails with FINDABLE in the message for a color it does not know or one too grey to find."""
     if isinstance(color, str):
         name = components.COLOR_SPELLINGS.get(color.strip().lower(), color.strip().lower())
         if name in NAMED:
             return NAMED[name]
-    rgb = np.array(components.color(color)[:3], dtype=np.float32).reshape(1, 1, 3) * 255
+    try:
+        rgb = np.array(components.color(color)[:3], dtype=np.float32).reshape(1, 1, 3) * 255
+    except ValueError as exc:
+        if not isinstance(color, str):
+            raise
+        # components offers its own colors, white, black and gray among them, which cannot be found by color
+        raise ValueError(f"unknown color {color!r}; {FINDABLE}") from exc
     h, s, v = to_hsv(rgb.astype(np.uint8))[0, 0]
     if s < 0.2:
-        raise ValueError(f"{color!r} is too grey to find by its color; find works for colors like red or blue")
+        raise ValueError(f"{color!r} is too grey to find by its color; {FINDABLE}")
     return ColorRange(float(h), 12.0, sat=float(s) * 0.5, val=float(v) * 0.4)
 
 
