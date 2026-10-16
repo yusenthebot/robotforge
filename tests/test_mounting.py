@@ -598,6 +598,33 @@ def test_two_mounts_need_two_names(pg):
         pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"library": "so_arm100"}])
 
 
+def test_two_arms_on_top_of_a_dog_stand_apart(pg):
+    """Regression: two mounts on top landed on the same spot, 75 mm inside each other, and the refusal said to use
+    'top', which they had."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}])
+    assert pg.behaviors.robots()[0]["arms"] == ["go2/arm", "go2/arm2"]
+    m, d = pg.session.model, pg.session.data
+    mujoco.mj_forward(m, d)
+    apart = np.linalg.norm(d.xpos[m.body("go2/arm/base_link").id][:2] - d.xpos[m.body("go2/arm2/Base").id][:2])
+    assert apart > 0.08
+
+
+def test_a_second_arm_with_no_room_beside_the_first_is_told_where_it_fits(pg):
+    """Two PiPERs reach forward from their bases, so on a Go2 the second's arm runs into the first's whatever spot its
+    base takes; the refusal gives a shift that was tried and clears."""
+    with pytest.raises(
+        ValueError, match=r"mounts 'arm' and 'arm2' overlap by \d+ mm at the home pose; shift \["
+    ) as told:
+        pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "piper"}])
+    shift = [
+        float(v) for v in re.search(r"shift \[([-\d., ]+)\] moves 'arm2' clear", str(told.value)).group(1).split(",")
+    ]
+    pg.add_robot(
+        "go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "piper", "shift": shift}]
+    )
+    assert pg.behaviors.robots()[0]["arms"] == ["go2/arm", "go2/arm2"]
+
+
 def test_shift_and_rotate_place_a_named_mount(pg):
     pg.add_robot(
         "go2",

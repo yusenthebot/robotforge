@@ -41,6 +41,18 @@ OPTIONS = ("timestep", "integrator", "cone", "impratio")  # physics options a mo
 SPOTS = sorted(
     ((dx, dy) for dx in np.arange(-0.08, 0.081, 0.02) for dy in (-0.02, 0.0, 0.02)), key=lambda o: math.hypot(*o)
 )
+# A second mount on top keeps MOUNT_GAP (m) between its base and those already there, looking further out when no spot
+# above is clear: two default mounts on a Go2 landed on the same spot, 75 mm inside each other.
+FAR_SPOTS = sorted(
+    ((dx, dy) for dx in np.arange(-0.24, 0.241, 0.02) for dy in np.arange(-0.06, 0.061, 0.02)),
+    key=lambda o: math.hypot(*o),
+)
+MOUNT_GAP = 0.01
+# Where a second mount overlapping the first is tried instead, for the refusal's hint (m along its shift axes): back
+# along the carrier, then forward, then to either side. A Go2 has room for a PiPER and an SO-100 15 cm behind it.
+SLIDES = [np.array([sign * d, 0.0, 0.0]) for sign in (-1.0, 1.0) for d in np.arange(0.03, 0.31, 0.03)] + [
+    np.array([0.0, sign * d, 0.0]) for sign in (1.0, -1.0) for d in np.arange(0.03, 0.16, 0.03)
+]
 TOP_DROP = 0.03
 # Where rays look under a base of radius 1: its middle and two rings, close enough to catch a 2 cm handle.
 UNDER_BASE = [(0.0, 0.0)] + [
@@ -127,6 +139,7 @@ class _Placed:
     up: np.ndarray
     shift: list[float]
     radius: float  # of its base (see _footprint)
+    axes: np.ndarray  # of its shift, in the frame's body (see attach)
 
 
 def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str | None = None) -> BuiltRobot:
@@ -153,7 +166,7 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str 
         carried.append((what(mount), mass))
         ride_on(child.spec, spec)
         at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
-        body, pos, quat, where = _place(spec, home_qpos, at, robot, name, [p.name for p in placed], radius)
+        body, pos, quat, where = _place(spec, home_qpos, at, robot, name, placed, radius)
         rot = np.zeros(4)
         mujoco.mju_mat2Quat(rot, _euler(mount.rotate).ravel())
         turned = np.zeros(4)
@@ -164,7 +177,9 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str 
         frame = body.add_frame(pos=(pos + offset).tolist(), quat=turned.tolist())
         spec.attach(child.spec, prefix=f"{name}/", frame=frame)
         up = _rotate(quat, np.array([0.0, 0.0, 1.0]))
-        placed.append(_Placed(name, body.name, frame, up, list(mount.shift), radius))
+        axes = np.zeros(9)
+        mujoco.mju_quat2Mat(axes, quat)
+        placed.append(_Placed(name, body.name, frame, up, list(mount.shift), radius, axes.reshape(3, 3)))
         home_qpos.update({f"{name}/{k}": v for k, v in child.home_qpos.items()})
         home_ctrl.update({f"{name}/{k}": v for k, v in child.home_ctrl.items()})
         arm = _flange_owner(at, spec, [p.name for p in placed])
@@ -238,12 +253,13 @@ def _place(
     at: str,
     robot: str,
     name: str,
-    mounted: list[str],
+    placed: list[_Placed],
     radius: float,
 ) -> tuple[mujoco.MjsBody, np.ndarray, np.ndarray, str]:
-    """(body, position, orientation in it, words for the notes) of a mount point. `mounted` names the mounts already
-    on the robot: a second one does not stand on the first. `radius` is the mount's base's (see _footprint)."""
+    """(body, position, orientation in it, words for the notes) of a mount point. `placed` are the mounts already on
+    the robot: a second one does not stand on the first. `radius` is the mount's base's (see _footprint)."""
     identity = np.array([1.0, 0.0, 0.0, 0.0])
+    mounted = [p.name for p in placed]
     if at == "tool" or at.endswith("/tool"):
         flanges = _flanges(spec, mounted)
         arm = _flange_owner(at, spec, mounted)
@@ -263,7 +279,7 @@ def _place(
         whose = f"{robot}/{arm.rstrip('/')}'s" if arm else "the arm's"
         return flange.parent, np.array(flange.pos, float), np.array(flange.quat, float), f"on {whose} flange"
     if at == "top":
-        return _on_top(spec, home_qpos, mounted, radius)
+        return _on_top(spec, home_qpos, placed, radius)
     body = spec.body(at)
     if body is None or body == spec.worldbody:
         bodies = [b.name for b in spec.bodies if b.name and b != spec.worldbody and "/" not in b.name]
@@ -277,16 +293,22 @@ def _place(
 
 
 def _on_top(
-    spec: mujoco.MjSpec, home_qpos: dict[str, float], mounted: list[str], radius: float
+    spec: mujoco.MjSpec, home_qpos: dict[str, float], placed: list[_Placed], radius: float
 ) -> tuple[mujoco.MjsBody, np.ndarray, np.ndarray, str]:
     """Where a mount with a base of this radius stands on top of the carrier (see SPOTS), found with rays dropped onto
-    what it looks like (see _surface). That is on the main body for a dog, and on the head of a humanoid, whose main
-    body (the pelvis) lies inside its torso. The mount stands upright as the main body does."""
+    what it looks like (see _surface), clear of the mounts already there (see MOUNT_GAP). That is on the main body for
+    a dog, and on the head of a humanoid, whose main body (the pelvis) lies inside its torso. The mount stands upright
+    as the main body does."""
     model = spec.compile()
     data = _posed(model, home_qpos)
     root = 1  # the first body of the world, the robot's root
     rot, origin = data.xmat[root].reshape(3, 3), data.xpos[root]
-    own = [b for b in range(1, model.nbody) if not _mounted_body(model, b, mounted)]
+    own = [b for b in range(1, model.nbody) if not _mounted_body(model, b, [p.name for p in placed])]
+    taken = []  # (where its base stands, in the root's frame; its radius) for each mount already placed
+    for p in placed:
+        body = model.body(p.body).id
+        base = data.xpos[body] + data.xmat[body].reshape(3, 3) @ np.array(p.frame.pos, float)
+        taken.append(((rot.T @ (base - origin))[:2], p.radius))
     shapes = _surface(model, own)
     mass = model.body_mass[own]
     com = (mass @ data.xipos[own]) / mass.sum() if shapes and mass.sum() > 0 else origin
@@ -299,14 +321,22 @@ def _on_top(
         hits = [(h, g) for g in shapes if (h := ray(model, data, g, start, down)) >= 0]
         return (above - min(hits)[0], min(hits)[1]) if hits else None
 
+    def clear(x: float, y: float) -> bool:
+        return all(math.dist((x, y), xy) >= radius + r + MOUNT_GAP for xy, r in taken)
+
     spots = []  # (the base's height there, the median height under it, offset, the geom at the top)
-    for dx, dy in SPOTS:
-        x, y = middle[0] + dx, middle[1] + dy
-        under = [h for cx, cy in UNDER_BASE if (h := height(x + radius * cx, y + radius * cy)) is not None]
-        # On the carrier: its middle and at least half of it. A base wider than its carrier hangs over the sides.
-        if height(x, y) is not None and 2 * len(under) >= len(UNDER_BASE):
-            rest = max(under)
-            spots.append((rest[0], float(np.median([h for h, _ in under])), (x, y), rest[1]))
+    for offsets in (SPOTS, FAR_SPOTS) if taken else (SPOTS,):
+        for dx, dy in offsets:
+            x, y = middle[0] + dx, middle[1] + dy
+            if not clear(x, y):
+                continue
+            under = [h for cx, cy in UNDER_BASE if (h := height(x + radius * cx, y + radius * cy)) is not None]
+            # On the carrier: its middle and at least half of it. A base wider than its carrier hangs over the sides.
+            if height(x, y) is not None and 2 * len(under) >= len(UNDER_BASE):
+                rest = max(under)
+                spots.append((rest[0], float(np.median([h for h, _ in under])), (x, y), rest[1]))
+        if spots:
+            break
     if not spots:  # nothing under its middle near the centre of mass (a ring, say): on the main body's origin
         return spec.body(model.body(root).name), np.zeros(3), np.array([1.0, 0.0, 0.0, 0.0]), "on its main body"
     level = spots[0][1]
@@ -465,6 +495,18 @@ def _check_overlaps(spec: mujoco.MjSpec, home_qpos: dict[str, float], robot: str
     else:  # two mounts: the later one was put where the first already is
         mount = max(a, b, key=names.index)
         what = f"mounts {a!r} and {b!r} overlap by {depth * 1000:.0f} mm"
+        moved = next(p for p in placed if p.name == mount)
+        slide = _slide(spec, home_qpos, robot, placed, moved)
+        if slide is None:
+            raise ValueError(
+                f"robot {robot!r}: {what} at the home pose, and there is no room for both side by side on top of "
+                f"{robot}; mount {mount!r} somewhere else with at (a body name), or turn it with rotate"
+            )
+        shift = [round(float(v), 3) for v in np.asarray(moved.shift) + slide]
+        raise ValueError(
+            f"robot {robot!r}: {what} at the home pose; shift {shift} moves {mount!r} clear, or mount it somewhere "
+            "else with at"
+        )
     moved = next(p for p in placed if p.name == mount)
     lift = _lift(spec, home_qpos, robot, placed, moved, depth)
     if lift is None:
@@ -591,6 +633,23 @@ def _lift(
             if left >= depth - 1e-4:  # no better for it
                 return None
             depth = left
+        return None
+    finally:
+        mount.frame.pos = start.tolist()
+
+
+def _slide(
+    spec: mujoco.MjSpec, home_qpos: dict[str, float], robot: str, placed: list[_Placed], mount: _Placed
+) -> np.ndarray | None:
+    """A shift (m, along its shift axes) that moves a mount clear of everything, found by trying (see SLIDES): back,
+    then forward, then to either side. None when none does."""
+    start = np.array(mount.frame.pos, float)
+    try:
+        for offset in SLIDES:
+            mount.frame.pos = (start + mount.axes @ offset).tolist()
+            overlaps = _overlaps(spec, home_qpos, robot, placed)
+            if not any(mount.name in pair for pair in overlaps):
+                return offset
         return None
     finally:
         mount.frame.pos = start.tolist()
