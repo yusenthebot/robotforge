@@ -160,7 +160,8 @@ class BehaviorManager:
         out = []
         for name in names:
             kind = robot_kind(m, name, told.get(name))
-            info: dict[str, Any] = {"name": name, "kind": kind.value}
+            # A gripper on its own has a tool point like an arm, but nothing to move it (see _arm_name).
+            info: dict[str, Any] = {"name": name, "kind": "gripper" if told.get(name) == "gripper" else kind.value}
             if name in models:
                 info["model"] = models[name]
             arms = self.arms(name)
@@ -540,6 +541,13 @@ class BehaviorManager:
         robot = self.resolve(robot, arm=True)  # unknown robots get the usual message
         if "/" in robot:
             return robot
+        entry = self._entry(robot)
+        if entry is not None and (entry.template == "gripper" or library.kind_of(entry.library) == "gripper"):
+            what = library.get(entry.library).title if entry.library else "a gripper template"
+            raise BehaviorError(
+                f"{robot} is a gripper on its own ({what}), with no arm to move it; mount it on an arm's bare flange, "
+                f'e.g. add_robot with library ur5e and mounts=[{{"library": "{entry.library or "robotiq_2f85"}"}}]'
+            )
         kind = self.kind(robot)
         arms = self.arms(robot)
         if not arms:

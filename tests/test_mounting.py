@@ -315,6 +315,30 @@ def test_a_gripper_on_an_arms_flange_becomes_the_arms_own(pg):
     assert arm.gripper_open == 255.0 and arm.gripper_closed == 0.0
 
 
+def test_a_mounted_robotiq_starts_open(pg):
+    """Regression: the 2F-85 has no keyframe, so its control started at 0, which after the turn-around closes it: a
+    UR5e came up with its fingers shut."""
+    pg.add_robot("ur", library="ur5e", mounts=[{"library": "robotiq_2f85"}])
+    _run(pg, 1.0)
+    m = pg.session.model
+    gripper = m.actuator("ur/gripper").id
+    assert pg.session.data.ctrl[gripper] == m.actuator_ctrlrange[gripper][1]  # the top of the range: open
+    driver = m.joint("ur/gripper/right_driver_joint")
+    assert pg.session.data.qpos[driver.qposadr[0]] < 0.25 * driver.range[1]  # shut, it is at 0.78 of 0.8
+
+
+@pytest.mark.parametrize("source", [{"library": "robotiq_2f85"}, {"template": "gripper"}])
+def test_a_gripper_on_its_own_says_to_mount_it_on_an_arm(pg, source):
+    pg.add_robot("hand", **source)
+    assert pg.behaviors.robots()[0]["kind"] == "gripper"
+    for call in (
+        lambda: pg.behaviors.move_arm("hand", [0.3, 0.0, 0.3]),
+        lambda: pg.behaviors.set_gripper("hand", "close"),
+    ):
+        with pytest.raises(ValueError, match="hand is a gripper on its own .*mount it on an arm's bare flange"):
+            call()
+
+
 def test_an_arm_without_a_gripper_will_not_pick_and_says_how_to_mount_one(pg):
     pg.add_robot("ur", library="ur5e")
     pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.15])

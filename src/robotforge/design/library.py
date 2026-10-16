@@ -339,6 +339,11 @@ def get(name: str) -> LibraryRobot:
     return CATALOG[found]
 
 
+def kind_of(name: str | None) -> str | None:
+    """What a library robot is ("arm", "gripper"), or None for no library robot."""
+    return get(name).kind if name is not None else None
+
+
 def catalog() -> list[dict[str, Any]]:
     """Library robots for agents: what they are, their license, download size and whether they are here yet."""
     return [
@@ -411,6 +416,11 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         root.pos = [0.0, 0.0, 0.0]
         root.quat = key_qpos[3:7].tolist() if key_qpos is not None else [1.0, 0.0, 0.0, 0.0]
     home_qpos, home_ctrl, spawn = _home_pose(spec, key_qpos, key_ctrl, floating)
+    for tool in robot.tools:  # a gripper with no keyframe to say otherwise starts open, as the arms' keyframes have it
+        gripper = f"{tool.arm}gripper"
+        actuator = next((a for a in spec.actuators if a.name == gripper), None)
+        if tool.gripper is not None and gripper not in home_ctrl and actuator is not None:
+            home_ctrl[gripper] = float(actuator.ctrlrange[1])
     return BuiltRobot(
         spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
     )
