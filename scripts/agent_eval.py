@@ -5,6 +5,7 @@ plugin, and a deterministic check reads what really happened.
     uv run python scripts/agent_eval.py --rescore RUN_DIR          # check a finished run again, no agent
     uv run python scripts/agent_eval.py --transcript RUN_DIR/tasks/NAME   # read one session
     uv run python scripts/agent_eval.py --compare BEFORE.json [MORE.json] [--after AFTER.json ...]
+    uv run python scripts/agent_eval.py --fixture RUN_DIR/tasks/NAME tests/fixtures/agent_eval/NAME
     uv run python scripts/agent_eval.py --list
 
 Every task is one `codex exec --json` session with a fresh ROBOTFORGE_HOME, so the worlds it leaves on disk are
@@ -824,6 +825,11 @@ def prepare(task: Task, task_dir: Path) -> None:
         task.setup(task_dir / "work", task_dir / "rf_home")
 
 
+def _events(task_dir: Path) -> list[str]:
+    # Written as raw bytes; a stray invalid byte in a tool's output must not lose the session.
+    return (task_dir / "events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
+
+
 def score(task: Task, task_dir: Path) -> Outcome:
     lines = (task_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
     meta = json.loads((task_dir / "meta.json").read_text(encoding="utf-8"))
@@ -918,10 +924,85 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> str:
     return "\n".join(rows)
 
 
+# Tools whose whole result a check may read; any other result is cut to SHORT characters in a fixture.
+CHECKED_RESULTS = ("move", "robots", "pick_and_place", "simulate", "run_controller", "compare_controllers")
+
+
+def _trim_result(tool: str, text: str) -> str:
+    if tool == "lessons" and text.startswith("{"):
+        data = json.loads(text)
+        if isinstance(data.get("lesson"), dict):  # the plan is long; the check reads only which lesson it is
+            data = {"lesson": {k: data["lesson"].get(k) for k in ("number", "title")}}
+        return json.dumps(data, ensure_ascii=False)
+    if tool == "observe" and text.startswith("{"):
+        data = json.loads(text)  # the image and joint lists go; where things are and which way robots face stay
+        kept = {k: data[k] for k in ("time", "free_bodies") if k in data}
+        orientation = {k: v for k, v in (data.get("sensors") or {}).items() if k.endswith("/orientation")}
+        return json.dumps({**kept, **({"sensors": orientation} if orientation else {})}, ensure_ascii=False)
+    if tool not in CHECKED_RESULTS and len(text) > SHORT:
+        return text[:SHORT] + "..."
+    return text
+
+
+def _trim_args(args: Any) -> Any:
+    """A build's parts lists, which no check reads, become a count; every other argument stays as it was sent."""
+    if isinstance(args, dict):
+        return {
+            k: f"({len(v)} parts trimmed)" if k == "parts" and isinstance(v, list) else _trim_args(v)
+            for k, v in args.items()
+        }
+    return args
+
+
+def trim(task_dir: Path, dest: Path) -> int:
+    """One session as a test fixture (tests/fixtures/agent_eval): its events without images, shell output, long
+    messages or results no check reads, the worlds it left, and the run folder's path written as RUN, the home
+    folder's as ~. Returns the number of events kept."""
+    run_dir = task_dir.parent.parent
+
+    def clean(text: str) -> str:
+        for path, short in ((run_dir, "RUN"), (Path.home(), "~")):
+            text = text.replace(str(path), short).replace(json.dumps(str(path))[1:-1], short)
+        return text
+
+    lines = []
+    for line in _events(task_dir):
+        if not line.startswith("{"):
+            continue
+        event = json.loads(line)
+        if event.get("type") in ("item.started", "item.updated"):
+            continue
+        item = event.get("item") or {}
+        if event.get("type") == "item.completed":
+            match item.get("type"):
+                case "command_execution":
+                    item["aggregated_output"] = ""
+                case "agent_message":
+                    item["text"] = str(item.get("text", ""))[:SHORT]
+                case "mcp_tool_call":
+                    result = item.get("result") if isinstance(item.get("result"), dict) else {}
+                    texts = [c for c in result.get("content") or [] if isinstance(c, dict) and c.get("type") == "text"]
+                    for c in texts:
+                        c["text"] = _trim_result(str(item.get("tool")), str(c.get("text", "")))
+                    if result:
+                        result["content"] = texts
+                    item["arguments"] = _trim_args(item.get("arguments"))
+        lines.append(clean(json.dumps(event, ensure_ascii=False)))
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "events.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    meta = json.loads((task_dir / "meta.json").read_text(encoding="utf-8"))
+    (dest / "meta.json").write_text(json.dumps(meta) + "\n", encoding="utf-8")
+    for world in (task_dir / "rf_home" / "worlds").glob("*/world.yaml"):
+        target = dest / "rf_home" / "worlds" / world.parent.name / "world.yaml"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(clean(world.read_text(encoding="utf-8")), encoding="utf-8")
+    return len(lines)
+
+
 def transcript(task_dir: Path) -> str:
     """One session as a reader wants it: what the agent said, every tool call and shell command, in order."""
     out = []
-    for line in (task_dir / "events.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in _events(task_dir):
         if not line.startswith("{"):
             continue
         event = json.loads(line)
@@ -1040,6 +1121,9 @@ def main(argv: list[str] | None = None) -> int:
         "files are merged, a later file's task replacing an earlier one's (a few tasks run again)",
     )
     parser.add_argument("--after", nargs="+", type=Path, metavar="RESULTS", help="with --compare: the after files")
+    parser.add_argument(
+        "--fixture", nargs=2, type=Path, metavar=("TASK_DIR", "DEST"), help="trim one session into a test fixture"
+    )
     parser.add_argument("--list", action="store_true", help="print the tasks")
     options = parser.parse_args(argv)
     if options.list:
@@ -1048,6 +1132,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if options.transcript:
         print(transcript(options.transcript))
+        return 0
+    if options.fixture:
+        print(f"{trim(*options.fixture)} events kept in {options.fixture[1]}")
         return 0
     if options.compare:
         before = [json.loads(p.read_text(encoding="utf-8")) for p in options.compare]

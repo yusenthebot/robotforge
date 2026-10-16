@@ -1,9 +1,10 @@
 """The agent eval's checks (scripts/agent_eval.py) on sessions recorded with Codex.
 
 tests/fixtures/agent_eval/<task>/ holds one session of the 2026-10-17 baseline run (commit 2f614f8, gpt-6.1-sol
-at medium effort) and the worlds it left, trimmed: no images, shell output or texts that no check reads, and the
-run folder's path written as RUN. The expected verdicts are the ones read by hand from the full transcripts.
-The script itself needs Codex, a login and the network; these tests need none of them.
+at medium effort) and the worlds it left, trimmed by `agent_eval.py --fixture`: no images, shell output or texts
+that no check reads, and the run folder's path written as RUN. The expected verdicts are the ones read by hand
+from the full transcripts. Sessions made up here (_made_up) are what a check must not pass: each is a shortcut a
+real session could take. The script itself needs Codex, a login and the network; these tests need none of them.
 """
 
 from __future__ import annotations
@@ -130,6 +131,19 @@ def test_a_robot_that_fell_at_the_end_does_not_pass(ev, tmp_path):
     outcome = ev.score(ev.TASKS["hexapod_build"], tmp_path / "hexapod_build")
     assert not outcome.passed
     assert next(c for c in outcome.criteria if c["name"] == "upright at the end")["ok"] is False
+
+
+def test_a_fixture_keeps_every_argument_but_the_parts_lists(ev):
+    """The trimmer once wrote every build as {"parts": "(trimmed)"}, which misrecorded the update_robot call that
+    wiped the hexapod's legs: it sent no parts at all."""
+    session = ev.parse_events((FIXTURES / "hexapod_build" / "events.jsonl").read_text(encoding="utf-8").splitlines())
+    wiped = next(c for c in session.ours if c.tool == "update_robot")
+    assert set(wiped.args["build"]) == {"servo", "base"}
+    added = next(c for c in session.ours if c.tool == "add_robot")
+    assert added.args["build"]["parts"] == "(3 parts trimmed)" and added.args["build"]["base"]["shape"] == "box"
+    assert ev._trim_args({"build": {"parts": [1, 2], "servo": "x"}}) == {
+        "build": {"parts": "(2 parts trimmed)", "servo": "x"}
+    }
 
 
 def test_a_session_that_ran_out_of_time_does_not_pass(ev, tmp_path):
