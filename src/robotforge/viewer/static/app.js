@@ -606,7 +606,9 @@ function readTheme() {
 
 function accentMaterial(opts) {
   // Pulled toward the camera in depth so a ring lying on the floor never sinks into it at a distance.
+  // Amber from the start: readTheme recolors the ones made so far, and a marker made after it stayed white.
   const m = new THREE.MeshBasicMaterial({
+    color: theme.amber,
     transparent: true,
     depthWrite: false,
     polygonOffset: true,
@@ -1058,6 +1060,7 @@ function applyState(s) {
   paused = s.paused;
   rtf = s.rtf;
   behaviors = s.behaviors || [];
+  updatePaths(behaviors);
   const play = $("btn-play");
   play.classList.toggle("is-paused", paused);
   const tip = t(paused ? "play_tip" : "pause_tip");
@@ -1670,6 +1673,93 @@ function showMarker(robot, mode, point) {
 function hideMarker() {
   markerFor = null;
   markerDot.visible = markerPad.visible = markerPin.visible = false;
+}
+
+// ---------------------------------------------------------------- planned paths
+
+// A robot sent somewhere (move with a destination) shows the way still ahead of it: a thin amber line on the
+// ground and a ring where it ends. The server sends the path (x, y and the ground height at each corner) with
+// every state message while the robot follows it, and stops once it is there, so the line goes with it.
+const PATH_WIDTH = 0.035; // m
+const PATH_LIFT = 0.012; // m above the ground: it lies on the floor without flickering into it
+const PATH_STEP = 0.15; // m between the points that follow a hill or a ramp along a straight stretch
+const pathMaterial = accentMaterial({ opacity: 0.9, side: THREE.DoubleSide });
+const pathEndGeometry = new THREE.RingGeometry(0.055, 0.085, 40);
+const paths = new Map(); // robot -> { line, end, key }
+
+function updatePaths(list) {
+  const live = new Set();
+  for (const b of list) {
+    if (!b.navigating || !Array.isArray(b.path) || b.path.length < 2) continue;
+    live.add(b.navigating);
+    let shape = paths.get(b.navigating);
+    if (!shape) {
+      shape = { line: new THREE.Mesh(new THREE.BufferGeometry(), pathMaterial), end: new THREE.Mesh(pathEndGeometry, pathMaterial), key: "" };
+      shape.line.renderOrder = shape.end.renderOrder = 3;
+      scene3.add(shape.line, shape.end);
+      paths.set(b.navigating, shape);
+    }
+    const key = JSON.stringify(b.path);
+    if (key === shape.key) continue;
+    shape.key = key;
+    const points = groundPoints(b.path);
+    ribbon(shape.line.geometry, points);
+    shape.end.position.copy(points[points.length - 1]);
+  }
+  for (const [robot, shape] of paths) {
+    if (live.has(robot)) continue;
+    scene3.remove(shape.line, shape.end);
+    shape.line.geometry.dispose();
+    paths.delete(robot);
+  }
+}
+
+// The path's corners, with points in between that sit on the scenery under them (a hill, a ramp). The ray starts
+// a little above the height the server gives, so a table the path runs under is not taken for the ground.
+function groundPoints(path) {
+  const out = [];
+  for (let i = 0; i < path.length; i++) {
+    const [x, y, z] = path[i];
+    out.push(new THREE.Vector3(x, y, groundHeight(x, y, z + 0.3, z) + PATH_LIFT));
+    if (i === path.length - 1) break;
+    const [x2, y2, z2] = path[i + 1];
+    const n = Math.floor(Math.hypot(x2 - x, y2 - y) / PATH_STEP);
+    for (let k = 1; k < n; k++) {
+      const f = k / n;
+      const px = x + (x2 - x) * f;
+      const py = y + (y2 - y) * f;
+      const pz = z + (z2 - z) * f;
+      out.push(new THREE.Vector3(px, py, groundHeight(px, py, pz + 0.3, pz) + PATH_LIFT));
+    }
+  }
+  return out;
+}
+
+// A flat strip PATH_WIDTH wide along the points, mitred at the corners.
+function ribbon(geometry, points) {
+  const pos = [];
+  const index = [];
+  for (let i = 0; i < points.length; i++) {
+    const before = points[Math.max(i - 1, 0)];
+    const after = points[Math.min(i + 1, points.length - 1)];
+    const dir = new THREE.Vector2(after.x - before.x, after.y - before.y).normalize();
+    let side = new THREE.Vector2(-dir.y, dir.x);
+    if (i > 0 && i < points.length - 1) {
+      const into = new THREE.Vector2(points[i].x - before.x, points[i].y - before.y).normalize();
+      const miter = Math.max(0.35, Math.abs(side.dot(new THREE.Vector2(-into.y, into.x))));
+      side = side.multiplyScalar(1 / miter);
+    }
+    const w = PATH_WIDTH / 2;
+    const p = points[i];
+    pos.push(p.x + side.x * w, p.y + side.y * w, p.z, p.x - side.x * w, p.y - side.y * w, p.z);
+    if (i > 0) {
+      const a = 2 * (i - 1);
+      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geometry.setIndex(index);
+  geometry.computeBoundingSphere();
 }
 
 // ---------------------------------------------------------------- render loop
