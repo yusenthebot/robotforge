@@ -82,6 +82,28 @@ def test_a_failed_call_counts_and_keeps_its_error_without_the_sdk_frame(ev):
     assert not call.ok and call.text == "arm cannot reach" and call.data is None
 
 
+def test_the_summary_keeps_no_paths_of_this_machine(ev, tmp_path):
+    run = tmp_path / "run"
+    where = str(run / "tasks" / "urdf_rover" / "work" / "my_rover.urdf")
+    failed = {
+        "type": "item.completed",
+        "item": {
+            "type": "mcp_tool_call",
+            "server": "robotforge",
+            "tool": "add_robot",
+            "arguments": {"name": "r", "file": where},
+            "result": {"content": [{"type": "text", "text": f"no file at {where} or {Path.home() / 'x.urdf'}"}]},
+            "status": "failed",
+        },
+    }
+    session = ev.parse_events([json.dumps(failed)])
+    task_dir = run / "tasks" / "urdf_rover"
+    outcome = ev.judge(ev.TASKS["urdf_rover"], session, task_dir / "rf_home", task_dir / "work", {})
+    text = json.dumps(outcome.failures)
+    assert str(tmp_path) not in text and str(Path.home()) not in text
+    assert "RUN/tasks/urdf_rover/work/my_rover.urdf" in text and "~/x.urdf" in text
+
+
 def test_a_robot_that_fell_at_the_end_does_not_pass(ev, tmp_path):
     """The same hexapod session, but its last move ends on its back."""
     import shutil

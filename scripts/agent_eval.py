@@ -4,7 +4,7 @@ plugin, and a deterministic check reads what really happened.
     uv run python scripts/agent_eval.py [--only NAME,...] [--ref REF | --source SOURCE] [--label TEXT]
     uv run python scripts/agent_eval.py --rescore RUN_DIR          # check a finished run again, no agent
     uv run python scripts/agent_eval.py --transcript RUN_DIR/tasks/NAME   # read one session
-    uv run python scripts/agent_eval.py --compare BEFORE.json AFTER.json
+    uv run python scripts/agent_eval.py --compare BEFORE.json [MORE.json] [--after AFTER.json ...]
     uv run python scripts/agent_eval.py --list
 
 Every task is one `codex exec --json` session with a fresh ROBOTFORGE_HOME, so the worlds it leaves on disk are
@@ -680,6 +680,11 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
     ours = session.ours
     failed = [c for c in ours if not c.ok]
     usage = session.usage
+    run_dir = work.parent.parent.parent  # <run>/tasks/<task>/work
+
+    def tidy(text: str) -> str:  # the summary is committed: no paths of this machine
+        return _short(text.replace(str(run_dir), "RUN").replace(str(Path.home()), "~"))
+
     return Outcome(
         task=task.name,
         lang=task.lang,
@@ -699,11 +704,11 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
         timed_out=bool(meta.get("timed_out")),
         tools=[c.tool + ("" if c.ok else "!") for c in ours],
         failures=[
-            {"tool": c.tool, "args": _short(json.dumps(c.args, ensure_ascii=False)), "error": _short(c.text)}
+            {"tool": c.tool, "args": tidy(json.dumps(c.args, ensure_ascii=False)), "error": tidy(c.text)}
             for c in failed
         ],
-        problems=[_short(p) for p in session.problems],
-        final_message=_short(session.messages[-1] if session.messages else ""),
+        problems=[tidy(p) for p in session.problems],
+        final_message=tidy(session.messages[-1] if session.messages else ""),
     )
 
 
@@ -1017,9 +1022,10 @@ def main(argv: list[str] | None = None) -> int:
         nargs="+",
         type=Path,
         metavar="RESULTS",
-        help="results files: the last is after; the ones before it are merged into before, a later file's task "
-        "replacing an earlier one's (a few tasks run again)",
+        help="results files to compare: before, then after (the last one) unless --after names them; several "
+        "files are merged, a later file's task replacing an earlier one's (a few tasks run again)",
     )
+    parser.add_argument("--after", nargs="+", type=Path, metavar="RESULTS", help="with --compare: the after files")
     parser.add_argument("--list", action="store_true", help="print the tasks")
     options = parser.parse_args(argv)
     if options.list:
@@ -1030,10 +1036,13 @@ def main(argv: list[str] | None = None) -> int:
         print(transcript(options.transcript))
         return 0
     if options.compare:
-        if len(options.compare) < 2:
-            raise SystemExit("--compare needs at least two results files: before and after")
-        runs = [json.loads(p.read_text(encoding="utf-8")) for p in options.compare]
-        print(compare(merge(runs[:-1]), runs[-1]))
+        before = [json.loads(p.read_text(encoding="utf-8")) for p in options.compare]
+        after = [json.loads(p.read_text(encoding="utf-8")) for p in options.after or []]
+        if not after and len(before) > 1:
+            after = [before.pop()]  # --compare BEFORE AFTER
+        if not after:
+            raise SystemExit("--compare needs a results file to compare with: --compare BEFORE AFTER")
+        print(compare(merge(before), merge(after)))
         return 0
     if shutil.which("codex") is None and not options.rescore:
         raise SystemExit("the codex CLI is not on PATH")
