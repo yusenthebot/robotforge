@@ -170,12 +170,13 @@ def _swinging(pg, walking: bool = False, kept_before: bool = False, **more) -> R
     names = joint_names(model, body)
     swing = [0.0] * len(names) + [0.5] * len(names) + [0.0] * len(names)
     turn = [0.0] * len(names) + [0.3] * len(names) + [1.0] * len(names)
-    extra: dict = more
+    extra: dict = {}
     if not kept_before:
         extra |= {"home": dict(zip(names, pg.behaviors.home_qpos()[body.qadr], strict=True)), "switching": "fade"}
     if walking:
         out_of_walk = [0.0] * len(names) + [0.3] * len(names) + [-1.0] * len(names)
         extra |= {"turn_left_walking": out_of_walk, "turn_right_walking": out_of_walk}
+    extra |= more
     save_walk(pg.store.dir, _walk("crab", names, swing, turn_left=turn, turn_right=turn, **extra))
     pg.behaviors.move("crab", 0.2, 0.0)
     walker = pg.session.controllers["crab"]
@@ -345,12 +346,13 @@ def test_switches_keep_the_first_way_that_tips_the_robot_over_least(monkeypatch,
     assert rhythm_walk.learn_switches(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
 
 
-def test_a_walk_kept_before_switches_as_it_always_did(pg):
+@pytest.mark.parametrize("kept", ["before", "to hold"])
+def test_a_walk_kept_before_or_to_hold_switches_as_walks_always_did(pg, kept):
     """Regression: with faster switching (stop fading to home, rhythms starting once the robot is calm), the walk the
     imported A1 kept first ended on its back when the sim ran on between move calls, as it does with the viewer
     open: in 7 of 8 waits from 0 to 5 s; switched as before, in 1. A file without a home pose, kept before, stops at
-    once on home and waits on it until the robot stands still."""
-    walker = _swinging(pg, kept_before=True)
+    once on home and waits on it until the robot stands still; so does one checked to hold (switching: hold)."""
+    walker = _swinging(pg, kept_before=kept == "before", **({"switching": "hold"} if kept == "to hold" else {}))
     assert walker.holds
     pg.session.data.qvel[walker.body.qvel[5]] = 1.0  # rad/s of yaw: calm, but not still
     pg.behaviors.move("crab", 0.0, 0.8)
@@ -363,6 +365,22 @@ def test_a_walk_kept_before_switches_as_it_always_did(pg):
     pg.behaviors.stop("crab")
     pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
     assert pg.session.data.ctrl[walker.actuators] == pytest.approx(home)  # stop: home at once
+
+
+def test_a_walk_kept_to_hold_still_begins_its_walking_turns_straight_out_of_the_walk(pg):
+    """A template dog walk never fell when it held home before other switches, and kept the turns that begin straight
+    out of the walk safely: a 1 s turn after walking turned 80% of its rate on the median instead of 47%."""
+    walker = _swinging(pg, walking=True, switching="hold")
+    assert walker.holds
+    pg.behaviors.stop("crab")  # what the move tool does between commands: the next comes at once
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.rhythm == "left walking" and walker.steady_from is None and walker.fade_from is not None
+    pg.run_fast(lambda: False, 0.5)
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    home = np.clip(walker.home, walker.lower, walker.upper)
+    assert walker.holding and pg.session.data.ctrl[walker.actuators] == pytest.approx(home)  # stop: home at once
 
 
 def test_stop_fades_a_walk_kept_now_to_home(pg):
