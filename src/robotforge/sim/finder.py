@@ -31,7 +31,7 @@ KINDS = ("object", "robot", "fixed")  # the order finds are listed in: what can 
 # within twice it; flagged ones were up to 66 cm off (a pallet seen through the gaps between the crates on it).
 # A red cube on a blue one at 12 spots (--stacks): 62 of its 64 finds with no flag were within about_cm, at most
 # 1.1 cm off; from straight above it is flagged. Carried in the arm's gripper at 12 spots, each of its 72 finds
-# said held_by (1.4 to 4.5 cm off: the gripper covers part of it).
+# said held_by (by view, 1.4 to 4.3 cm off in the median and 4.5 at most: the gripper covers part of it).
 HOW = (
     "position: the estimated middle (m, world frame) from the picture's color and depth. about_cm: how far off it "
     "may be; 9 in 10 finds with no flag were within it (from low down a ball comes out a little short). object "
