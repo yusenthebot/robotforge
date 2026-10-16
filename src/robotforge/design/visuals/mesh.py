@@ -238,16 +238,12 @@ def _band(rings: list[np.ndarray], n: int, closed: bool) -> Mesh:
     m = len(rings)
     i = np.arange(n if closed else n - 1)
     j = (i + 1) % n
-    point = [bool(np.ptp(r, axis=0).max() < 1e-12) for r in rings]
-    faces = []
-    for k in range(m - 1):
-        a, b = k * n + i, k * n + j
-        c, d = (k + 1) * n + j, (k + 1) * n + i
-        if not point[k]:  # next to a pole one triangle per quad is enough, the other has no area
-            faces.append(np.stack([a, b, c], axis=1))
-        if not point[k + 1]:
-            faces.append(np.stack([a, c, d], axis=1))
-    faces = np.vstack(faces).astype(np.int32)
+    point = np.array([np.ptp(r, axis=0).max() < 1e-12 for r in rings])
+    k = np.arange(m - 1)[:, None] * n  # every band between two rings at once (a loop of np.stack was slow)
+    a, b, c, d = k + i, k + j, k + n + j, k + n + i
+    quads = np.stack([np.stack([a, b, c], axis=-1), np.stack([a, c, d], axis=-1)], axis=1)  # (bands, 2, n, 3)
+    keep = np.stack([~point[:-1], ~point[1:]], axis=1)  # next to a pole one triangle per quad has no area
+    faces = quads[keep].reshape(-1, 3).astype(np.int32)
     return Mesh(verts, np.zeros_like(verts), faces, _position_keys(verts))
 
 
@@ -278,10 +274,19 @@ def _signed_volume(rings: list[np.ndarray], n: int) -> float:
 
 
 def _position_keys(verts: np.ndarray) -> np.ndarray:
-    """Same key for vertices at the same spot (poles, wrap seams), so they share a normal."""
+    """Same key for vertices at the same spot (poles, wrap seams), so they share a normal.
+
+    The keys are np.unique(q, axis=0)'s inverse, found with a lexsort, which is several times faster."""
     q = np.round(verts * 1e7).astype(np.int64)
-    _, inverse = np.unique(q, axis=0, return_inverse=True)
-    return inverse.reshape(-1).astype(np.int64)
+    if len(q) == 0:
+        return np.zeros(0, dtype=np.int64)
+    order = np.lexsort((q[:, 2], q[:, 1], q[:, 0]))
+    ranked = q[order]
+    new = np.ones(len(q), dtype=bool)
+    new[1:] = np.any(ranked[1:] != ranked[:-1], axis=1)
+    keys = np.empty(len(q), dtype=np.int64)
+    keys[order] = np.cumsum(new) - 1
+    return keys
 
 
 def _finish(mesh: Mesh) -> Mesh:
