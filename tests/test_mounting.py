@@ -296,6 +296,27 @@ def test_an_arm_on_a_dog_carries_things_over_the_dogs_back(pg):
     assert carry.position[2] >= back + 0.04 + 0.03 - 1e-3  # the cube's bottom clears the dog by 3 cm
 
 
+def test_an_arm_on_a_dog_turns_its_gripper_down_gently(pg):
+    """Regression: on a carrier the gripper snapped from its home pose to pointing down on the first ticks of a move
+    (the gradual turn was for arms on the floor only); the jolt pushed a Go2 carrying a Z1 25 mm back, it took that
+    for a shove and stepped off half a metre."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    _run(pg, 2.0)
+    d = pg.session.data
+    x, y, _ = pg.behaviors.pose("go2")["position"]
+    arm = pg.behaviors.move_arm("go2/arm", [x + 0.1, y + 0.3, 0.25])
+
+    def from_down() -> float:
+        axis = d.xmat[arm.chain.body].reshape(3, 3) @ arm.tool_axis
+        return float(np.degrees(np.arccos(np.clip(-axis[2], -1.0, 1.0))))
+
+    start = from_down()
+    _run(pg, 0.1)  # of a move of about 3.6 s
+    assert start > 45 and abs(from_down() - start) < 1.5  # snapping, it had turned 4 degrees already
+    _arm_done(pg, "go2/arm")
+    assert from_down() < 3
+
+
 def test_a_robot_imported_from_a_file_carries_a_library_arm(pg):
     pg.add_robot(
         "dog", file=str(FIXTURES / "unitree_go2" / "go2.xml"), pos=[0, 0, 0.5], mounts=[{"library": "so_arm100"}]

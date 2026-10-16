@@ -344,8 +344,10 @@ class ArmMotion:
                     travel = float(np.max(np.abs(goal - self.q)))
                     wp = Waypoint(wp.position, wp.gripper, max(wp.duration, travel / JOINT_SPEED), wp.label)
             self._segment = (start, wp, t)
-            rot = data.xmat[self.chain.body].reshape(3, 3) if self.free_adr is None else None
-            self._axis0 = rot @ self.tool_axis if rot is not None else DOWN
+            # Where the tool points now, in the world, also on a carrier (whose pose the IK follows, see sync): a Z1 on
+            # a Go2, snapped from its home pose to pointing down on the first ticks, jolted the dog 25 mm back and it
+            # stepped off half a metre.
+            self._axis0 = data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
             self.current_label = wp.label
             if wp.gripper is not None and self.gripper >= 0:
                 data.ctrl[self.gripper] = wp.gripper
