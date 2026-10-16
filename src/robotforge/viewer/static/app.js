@@ -1697,7 +1697,10 @@ function hideMarker() {
 // A robot sent somewhere (move with a destination) shows the way still ahead of it: a thin amber line on the
 // ground and a ring where it ends. The server sends the path (x, y and the ground height at each corner) with
 // every state message while the robot follows it, and stops once it is there, so the line goes with it.
-const PATH_WIDTH = 0.035; // m
+const PATH_WIDTH = 0.035; // m, seen from nearby
+// CSS px it keeps on screen from further away, across the line of sight: with the whole obstacle course in view
+// (15 to 20 m off, looking down at 38 degrees) a 3.5 cm line was 1 to 2 px wide and hard to make out.
+const PATH_MIN_PX = 3;
 const PATH_LIFT = 0.012; // m above the ground: it lies on the floor without flickering into it
 const PATH_STEP = 0.15; // m between the points that follow a hill or a ramp along a straight stretch
 const pathMaterial = accentMaterial({ opacity: 0.9, side: THREE.DoubleSide });
@@ -1711,7 +1714,11 @@ function updatePaths(list) {
     live.add(b.navigating);
     let shape = paths.get(b.navigating);
     if (!shape) {
-      shape = { line: new THREE.Mesh(new THREE.BufferGeometry(), pathMaterial), end: new THREE.Mesh(pathEndGeometry, pathMaterial), key: "" };
+      shape = {
+        line: new THREE.Mesh(new THREE.BufferGeometry(), pathMaterial),
+        end: new THREE.Mesh(pathEndGeometry, pathMaterial),
+        key: "",
+      };
       shape.line.renderOrder = shape.end.renderOrder = 3;
       scene3.add(shape.line, shape.end);
       paths.set(b.navigating, shape);
@@ -1719,9 +1726,10 @@ function updatePaths(list) {
     const key = JSON.stringify(b.path);
     if (key === shape.key) continue;
     shape.key = key;
-    const points = groundPoints(b.path);
-    ribbon(shape.line.geometry, points);
-    shape.end.position.copy(points[points.length - 1]);
+    shape.points = groundPoints(b.path);
+    ribbon(shape.line.geometry, shape.points);
+    shape.end.position.copy(shape.points[shape.points.length - 1]);
+    shape.end.scale.setScalar(pathWidth(shape.end.position) / PATH_WIDTH);
   }
   for (const [robot, shape] of paths) {
     if (live.has(robot)) continue;
@@ -1752,7 +1760,32 @@ function groundPoints(path) {
   return out;
 }
 
-// A flat strip PATH_WIDTH wide along the points, mitred at the corners.
+// Each frame: the further a stretch of path is from the camera, the wider it is drawn, at least PATH_MIN_PX across
+// on screen. Rebuilt only once the camera has moved by a few percent of its distance to the path.
+function updatePathWidths() {
+  if (!paths.size || !hasSize()) return;
+  for (const shape of paths.values()) {
+    const middle = shape.line.geometry.boundingSphere?.center;
+    if (!middle || !shape.points) continue;
+    const away = camera.position.distanceTo(middle);
+    if (shape.seenFrom && shape.seenFrom.distanceTo(camera.position) < 0.03 * away) continue;
+    shape.seenFrom = camera.position.clone();
+    ribbon(shape.line.geometry, shape.points);
+    const end = shape.points[shape.points.length - 1];
+    shape.end.scale.setScalar(pathWidth(end) / PATH_WIDTH);
+  }
+}
+
+// Width (m) of the path at a point: PATH_WIDTH, or wider from far away (a flat line seen at a slant foreshortens).
+function pathWidth(p) {
+  if (!hasSize()) return PATH_WIDTH;
+  const away = Math.max(camera.position.distanceTo(p), 1e-6);
+  const perPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / window.innerHeight; // m per px, 1 m off
+  const across = Math.max((camera.position.z - p.z) / away, 0.3);
+  return Math.max(PATH_WIDTH, (away * perPx * PATH_MIN_PX) / across);
+}
+
+// A flat strip along the points (pathWidth wide at each), mitred at the corners.
 function ribbon(geometry, points) {
   const pos = [];
   const index = [];
@@ -1766,7 +1799,7 @@ function ribbon(geometry, points) {
       const miter = Math.max(0.35, Math.abs(side.dot(new THREE.Vector2(-into.y, into.x))));
       side = side.multiplyScalar(1 / miter);
     }
-    const w = PATH_WIDTH / 2;
+    const w = pathWidth(points[i]) / 2;
     const p = points[i];
     pos.push(p.x + side.x * w, p.y + side.y * w, p.z, p.x - side.x * w, p.y - side.y * w, p.z);
     if (i > 0) {
@@ -1813,6 +1846,7 @@ function loop() {
   updateFollow();
   controls.update();
   updateRing();
+  updatePathWidths();
   refreshDragVisual();
   lessonFrame();
   renderer.render(scene3, camera);
