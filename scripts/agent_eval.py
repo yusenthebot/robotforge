@@ -1087,6 +1087,11 @@ def _events(task_dir: Path) -> list[str]:
     return (task_dir / "events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
 
 
+# Errors Codex logs that leave the session as it would be: its model list not refreshed (it keeps the configured
+# model; 4 of the 8 baseline sessions logged it and ran normally). The summary counts the sessions with any other.
+HARMLESS_CODEX_ERRORS = ("failed to refresh available models",)
+
+
 def codex_errors(task_dir: Path) -> list[str]:
     """The errors Codex logged on stderr ("... ERROR codex_...: failed to install system skills ..."): a session
     that started broken shows in the summary instead of passing as one more agent's mistake."""
@@ -1130,7 +1135,9 @@ def summarize(outcomes: list[Outcome]) -> dict[str, Any]:
         "tool_calls": sum(o.tool_calls for o in outcomes),
         "failed_calls": sum(o.failed_calls for o in outcomes),
         "shell_commands": sum(o.shell_commands for o in outcomes),
-        "sessions_with_problems": sum(bool(o.problems) for o in outcomes),
+        "sessions_with_problems": sum(
+            any(not any(h in p for h in HARMLESS_CODEX_ERRORS) for p in o.problems) for o in outcomes
+        ),
         "input_tokens": sum(o.input_tokens for o in outcomes),
         "uncached_input_tokens": sum(o.input_tokens - o.cached_input_tokens for o in outcomes),
         "output_tokens": sum(o.output_tokens for o in outcomes),

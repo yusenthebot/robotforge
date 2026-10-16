@@ -512,6 +512,14 @@ def test_codex_errors_on_stderr_count_as_problems(ev, tmp_path):
     outcome = ev.score(ev.TASKS["dog_grass"], task_dir)
     assert outcome.problems == ["codex_skills_extension::host_service: failed to install system skills: io error"]
     assert ev.summarize([outcome])["sessions_with_problems"] == 1
+    # Listed, but not counted: Codex keeps the configured model when its model list does not refresh.
+    (task_dir / "stderr.txt").write_text(
+        "2026-10-16T17:48:39Z ERROR codex_models_manager::manager: failed to refresh available models: request "
+        "timed out\n",
+        encoding="utf-8",
+    )
+    outcome = ev.score(ev.TASKS["dog_grass"], task_dir)
+    assert len(outcome.problems) == 1 and ev.summarize([outcome])["sessions_with_problems"] == 0
 
 
 def test_a_fixture_keeps_which_world_each_result_is_in(ev):
