@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import find_free_port
 from robotforge.design import builder
 from robotforge.design.visuals import HIDDEN_GROUP
@@ -523,6 +524,49 @@ def test_a_wheel_legged_robot_whose_body_tips_back_as_it_crouches_keeps_balancin
     assert not pg.session.controllers["ascent"].fallen
     assert end["upright"]  # balancing, though its body leans far back
     assert np.linalg.norm(np.subtract(end["position"][:2], start[:2])) < 0.05
+
+
+def _cart_with_a_head(head_height: float) -> dict:
+    """A cart with an arm at the back and a block (a head, a sensor box) at the front, in the way of the arm's swing
+    from one side to the other."""
+    return {
+        "motor": "jga25",
+        "base": {"shape": "box", "size": [0.4, 0.24, 0.06], "mass": 4.0},
+        "parts": [
+            {"name": "left_wheel", "at": [0, 0.14, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+            {"name": "front_caster", "at": [0.16, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {"name": "rear_caster", "at": [-0.16, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {
+                "name": "head",
+                "at": "top",
+                "shift": [0.15, 0, 0],
+                "joint": "fixed",
+                "shape": "box",
+                "size": [0.08, 0.16, head_height],
+                "direction": "up",
+            },
+            {"name": "arm", "at": "top", "shift": [-0.12, 0, 0], "robot": {"template": "arm", "home": {"yaw": 90}}},
+        ],
+    }
+
+
+def test_an_arm_carries_a_load_over_the_robot_it_rides_on_or_says_it_cannot(pg):
+    """Moving a floor cube from the cart's left to its right swings it round in front, at 10 cm: the cube struck the
+    block in the way, was dropped short and the pick still ran to the end. The load now goes over the block, and
+    where nothing gets over it the pick is refused with the reason."""
+    pg.add_robot("cart", build=_cart_with_a_head(0.08))
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("cart/arm", "cube", [-0.12, -0.28])
+    assert [round(float(w.position[2]), 2) for w in motion.queue if w.label == "carry"] == [0.25]
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed(info["object"], info["region"])["success"]
+    pg.update_part("cart", "head", {"size": [0.08, 0.16, 0.16]})  # too tall for the arm to get a cube over it
+    pg.add_object("another", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
+    _run(pg, 0.5)
+    with pytest.raises(BehaviorError, match="cannot carry it across: .*put both on the same side of the robot"):
+        pg.behaviors.pick_and_place("cart/arm", "another", [-0.12, -0.28])
 
 
 def _wheel_motor(model: mujoco.MjModel, carrier: str) -> int:

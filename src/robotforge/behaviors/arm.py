@@ -15,6 +15,7 @@ import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.sim.actuators import drives_joint, is_position_servo
+from robotforge.sim.geometry import collides
 
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
@@ -27,6 +28,10 @@ PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor ru
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 UPRIGHT = 0.9  # an arm's first hinge turns it toward a target when its axis is this close to vertical (cosine)
 FAR_FROM_DOWN = 0.7  # cosine: a tool pointing more than 45 degrees off down moves joint by joint to a goal
+CARRY_CHECKS = 7  # points checked along the way across with a load, between the two points above pick and place
+CARRY_RAISE = 0.05  # m: each try carries the load this much higher
+CARRY_RAISES = 8  # tries before giving up and carrying at the first height (up to 0.4 m higher)
+LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying the arm
 
 
 class OutOfReach(ValueError):
@@ -257,6 +262,14 @@ class ArmMotion:
         bad = self.unreachable({"object": grasp, "above object": above, "place": drop, "above place": above_drop})
         if bad:
             raise OutOfReach(self.robot, bad)
+        carry_z = self._carry_height(grasp, drop, travel_z, obj_half_height)
+        if carry_z is None:
+            raise ValueError(
+                f"{self.robot} cannot carry it across: on the way around its base from the object to the place, the "
+                "load would hit the robot carrying the arm, or the gripper cannot point down there, even carried "
+                f"{CARRY_RAISES * CARRY_RAISE:.1f} m higher; put both on the same side of the robot, or turn it"
+            )
+        above[2] = above_drop[2] = travel_z = carry_z
         start = self.tool_target_end()
         # Starting low (an arm folded over the robot that carries it), go up first and across at the carrying height:
         # swinging around at the folded height ran a picker's hand into the table beside it.
@@ -272,6 +285,49 @@ class ArmMotion:
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower"))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat"))
+
+    def _carry_height(self, grasp: np.ndarray, drop: np.ndarray, low: float, load_half_height: float) -> float | None:
+        """The lowest height from `low` up at which the tool reaches every point of the way across, around the base
+        from above the object to above the place, and the load it carries clears the robot the arm rides on. A
+        Go2's PiPER moving a floor cube from its left to its right swung it round in front at 10 cm, where its
+        gripper cannot point down without hitting the dog's head: the arm stalled, then jumped and flung the cube.
+        At 30 cm the gripper got past, but the cube under it struck the head and was knocked out of its fingers.
+        None when no height up to CARRY_RAISES tries works."""
+        if self.yaw is None:
+            return low
+        self.ik.point(self.chain, self.q)
+        under = self._carrier_boxes()
+        for k in range(CARRY_RAISES + 1):
+            z = low + k * CARRY_RAISE
+            a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
+            da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
+            turn = self._sweep(float(np.arctan2(da[1], da[0])), float(np.arctan2(db[1], db[0])))
+            way = [self._arc_point(a, b, s, turn) for s in np.linspace(0, 1, CARRY_CHECKS + 2)[1:-1]]
+            clear = all(
+                p[2] - load_half_height > top + LOAD_CLEARANCE
+                for p in way
+                for center, half, top in under
+                if np.all(np.abs(p[:2] - center) < half + load_half_height + LOAD_CLEARANCE)
+            )
+            ends = [a, b] if k else []  # the first height's ends are checked with the other key points
+            if clear and all(self.reach_error(p) <= REACH_TOL for p in [*ends, *way]):
+                return z
+        return None
+
+    def _carrier_boxes(self) -> list[tuple[np.ndarray, np.ndarray, float]]:
+        """The robot under the arm as boxes seen from above: (center xy, half size xy, top z) of each solid shape
+        of the robot the arm does not move, as posed in the IK's copy."""
+        m, d = self.ik.model, self.ik.data
+        boxes = []
+        for g in range(m.ngeom):
+            body = int(m.geom_bodyid[g])
+            if body in self._moving or int(m.body_rootid[body]) != self._robot_root or not collides(m, g):
+                continue
+            rot = d.geom_xmat[g].reshape(3, 3)
+            center = d.geom_xpos[g] + rot @ m.geom_aabb[g, :3]
+            half = np.abs(rot) @ m.geom_aabb[g, 3:]
+            boxes.append((center[:2], half[:2], float(center[2] + half[2])))
+        return boxes
 
     def tool_target_end(self) -> np.ndarray:
         """Where the tool will be once the queued moves are done."""
@@ -348,14 +404,16 @@ class ArmMotion:
         if u >= 1.0:
             self._segment = None
 
-    def _arc_point(self, a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
-        """Interpolate in cylindrical coordinates (radius, angle, height) about the base axis."""
+    def _arc_point(self, a: np.ndarray, b: np.ndarray, s: float, turn: float | None = None) -> np.ndarray:
+        """Interpolate in cylindrical coordinates (radius, angle, height) about the base axis, turning `turn`
+        (by default the current move's turn, or the way the base joint can go)."""
         da, db = a[:2] - self.base_xy, b[:2] - self.base_xy
         ra, rb = np.linalg.norm(da), np.linalg.norm(db)
         if self.yaw is None or min(ra, rb) < 1e-3:
             return a + (b - a) * s
         ta = np.arctan2(da[1], da[0])
-        turn = self._turn if self._turn is not None else self._sweep(ta, np.arctan2(db[1], db[0]))
+        if turn is None:
+            turn = self._turn if self._turn is not None else self._sweep(ta, np.arctan2(db[1], db[0]))
         r, t = ra + (rb - ra) * s, ta + turn * s
         return np.array([*(self.base_xy + r * np.array([np.cos(t), np.sin(t)])), a[2] + (b[2] - a[2]) * s])
 

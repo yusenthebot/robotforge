@@ -376,6 +376,22 @@ def test_the_go2_with_an_arm_walks_and_moves_a_cube_between_tables(pg):
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_go2_arm_carries_a_floor_cube_from_one_side_to_the_other_over_the_dogs_head(tmp_path, monkeypatch):
+    """Swung round in front at 10 cm the gripper could not point down without hitting the head and flung the cube; at
+    30 cm the cube under the gripper struck the head and was knocked out of its fingers. (The offline stand-in's
+    simpler shapes clear the head either way: tests/test_builder.py covers the same with a built robot.)"""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.delenv("ROBOTFORGE_MENAGERIE", raising=False)
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("real")
+    playground.add_robot("dog", design="go2_arm")
+    playground.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, 0.3])
+    _run(playground, 0.5)
+    placed = _pick(playground, "dog/arm", "cube", [0.0, -0.3])
+    assert placed["success"], placed
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
 def test_real_go2_with_a_real_piper_moves_a_cube_between_tables(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     monkeypatch.delenv("ROBOTFORGE_MENAGERIE", raising=False)
