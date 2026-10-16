@@ -213,6 +213,8 @@ CATALOG: dict[str, LibraryRobot] = {
                 ("r_hip_pitch", 0.35),
                 ("r_knee", -0.7),
                 ("r_ank_pitch", -0.35),
+                ("l_sho_roll", 1.25),  # arms down at its sides (at zero they stick out sideways)
+                ("r_sho_roll", -1.25),
             ),
         ),
         LibraryRobot(
