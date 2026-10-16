@@ -672,10 +672,13 @@ def test_a_walk_asked_for_out_of_a_turn_holds_the_heading_it_was_asked_at(pg):
     assert abs(started - asked) > 0.15  # it spun on while it steadied
 
 
-def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg):
+def test_a_kept_walk_learns_to_turn_and_move_turns_the_robot(pg, monkeypatch):
     """Turning on the spot is learned after the walk (one rhythm each way); a turn command then plays it."""
+    from robotforge.behaviors import rhythm_walk
     from robotforge.behaviors.rhythm_walk import learn_turns
 
+    # Checked from every update of the walk the walking turns take minutes here; a tenth of a second apart, as before
+    monkeypatch.setattr(rhythm_walk, "WALK_CHECKS", rhythm_walk.WALK_CHECKS[::5])
     pg.add_robot("crab", build=STAR)
     solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
     body = Body.find(solo, "crab")
@@ -717,6 +720,7 @@ async def test_move_reports_a_half_turn_as_turned_not_wrapped(pg, monkeypatch):
     from robotforge.behaviors.rhythm_walk import learn_turns
 
     monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 2)  # it turns from standing here
+    monkeypatch.setattr(rhythm_walk, "WALK_CHECKS", rhythm_walk.WALK_CHECKS[::5])
     from robotforge.cli import find_free_port
     from robotforge.mcp_server import build_server
 
