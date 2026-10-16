@@ -1,0 +1,17 @@
+name: go2_turn
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: go2
+  template: null
+  file: null
+  library: go2
+  build: null
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects: []

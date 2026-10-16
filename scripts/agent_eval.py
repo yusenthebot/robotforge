@@ -859,6 +859,18 @@ def details(outcomes: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
+def merge(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Several results files as one run: a task in a later file replaces the same task in an earlier one."""
+    tasks: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        tasks.update({o["task"]: o for o in run["tasks"]})
+
+    def joined(key: str) -> str:
+        return "+".join(dict.fromkeys(str(r[key]) for r in runs))
+
+    return {**runs[0], "label": joined("label"), "commit": joined("commit"), "tasks": list(tasks.values())}
+
+
 def compare(before: dict[str, Any], after: dict[str, Any]) -> str:
     """Before and after, task by task: result, calls, failed calls, input tokens, wall time."""
     old = {o["task"]: o for o in before["tasks"]}
@@ -1000,7 +1012,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results", type=Path, default=RESULTS, help="where the JSON summary goes")
     parser.add_argument("--rescore", type=Path, metavar="RUN_DIR", help="check a finished run again")
     parser.add_argument("--transcript", type=Path, metavar="TASK_DIR", help="print one session")
-    parser.add_argument("--compare", nargs=2, type=Path, metavar=("BEFORE", "AFTER"), help="two results files")
+    parser.add_argument(
+        "--compare",
+        nargs="+",
+        type=Path,
+        metavar="RESULTS",
+        help="results files: the last is after; the ones before it are merged into before, a later file's task "
+        "replacing an earlier one's (a few tasks run again)",
+    )
     parser.add_argument("--list", action="store_true", help="print the tasks")
     options = parser.parse_args(argv)
     if options.list:
@@ -1011,8 +1030,10 @@ def main(argv: list[str] | None = None) -> int:
         print(transcript(options.transcript))
         return 0
     if options.compare:
-        before, after = (json.loads(p.read_text(encoding="utf-8")) for p in options.compare)
-        print(compare(before, after))
+        if len(options.compare) < 2:
+            raise SystemExit("--compare needs at least two results files: before and after")
+        runs = [json.loads(p.read_text(encoding="utf-8")) for p in options.compare]
+        print(compare(merge(runs[:-1]), runs[-1]))
         return 0
     if shutil.which("codex") is None and not options.rescore:
         raise SystemExit("the codex CLI is not on PATH")
