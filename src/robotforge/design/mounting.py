@@ -53,6 +53,7 @@ MOUNT_GAP = 0.01
 SLIDES = [np.array([sign * d, 0.0, 0.0]) for sign in (-1.0, 1.0) for d in np.arange(0.03, 0.31, 0.03)] + [
     np.array([0.0, sign * d, 0.0]) for sign in (1.0, -1.0) for d in np.arange(0.03, 0.16, 0.03)
 ]
+SEATED = 0.01  # m: a shifted base stands on the carrier this close to the height it stood at, or it is not tried
 TOP_DROP = 0.03
 # Where rays look under a base of radius 1: its middle and two rings, close enough to catch a 2 cm handle.
 UNDER_BASE = [(0.0, 0.0)] + [
@@ -222,6 +223,7 @@ def attach(
         notes += [f"{name}: {n}" for n in child.notes]
     notes += _check_payload(robot, model, carried)
     if known is None:
+        notes += _make_room(spec, home_qpos, robot, placed, mounts, spots)
         _check_overlaps(spec, home_qpos, robot, placed)
         rise = max(0.0, before - _lowest(spec, home_qpos)) if carrier.floating else 0.0  # one hangs below the feet
         if key is not None:
@@ -672,15 +674,69 @@ def _lift(
         mount.frame.pos = start.tolist()
 
 
+def _make_room(
+    spec: mujoco.MjSpec,
+    home_qpos: dict[str, float],
+    robot: str,
+    placed: list[_Placed],
+    mounts: Sequence[Mount],
+    spots: list,
+) -> list[str]:
+    """Move a mount put on top where it was not told exactly (no at, no shift) clear of the mounts before it, along
+    or across the carrier (see _slide): two arms reach out from their bases, and a PiPER and an SO-100 on a Go2 met
+    above wherever the second's base stood. Its spot in `spots` moves with it. Notes say where each went."""
+    notes = []
+    for i, (p, mount) in enumerate(zip(placed, mounts, strict=True)):
+        if i == 0 or mount.at is not None or any(mount.shift):
+            continue
+        overlaps = _overlaps(spec, home_qpos, robot, placed[: i + 1])
+        if not any(p.name in pair and robot not in pair for pair in overlaps):
+            continue
+        offset = _slide(spec, home_qpos, robot, placed[: i + 1], p)
+        if offset is None:
+            continue  # the check after says so, and why
+        moved = p.axes @ offset
+        p.frame.pos = (np.array(p.frame.pos, float) + moved).tolist()
+        radius, kg, body, pos, quat, where = spots[i]
+        spots[i] = (radius, kg, body, tuple(float(v) for v in np.array(pos) + moved), quat, where)
+        x, y = offset[:2]
+        way = ("back" if x < 0 else "forward") if x else ("to the left" if y > 0 else "to the right")
+        notes.append(f"{p.name}: moved {np.linalg.norm(offset) * 100:.0f} cm {way} to clear {placed[0].name}")
+    return notes
+
+
 def _slide(
     spec: mujoco.MjSpec, home_qpos: dict[str, float], robot: str, placed: list[_Placed], mount: _Placed
 ) -> np.ndarray | None:
     """A shift (m, along its shift axes) that moves a mount clear of everything, found by trying (see SLIDES): back,
-    then forward, then to either side. None when none does."""
+    then forward, then to either side, where its base still stands on the carrier as before (within SEATED). None when
+    none does."""
+    model = spec.compile()
+    data = _posed(model, home_qpos)
+    own = _surface(model, [b for b in range(1, model.nbody) if not _mounted_body(model, b, [p.name for p in placed])])
+    body = model.body(mount.body).id
+    rot = data.xmat[body].reshape(3, 3)
     start = np.array(mount.frame.pos, float)
+    up = rot @ mount.up
+    across = np.cross(up, [1.0, 0.0, 0.0] if abs(up[0]) < 0.9 else [0.0, 1.0, 0.0])
+    across /= np.linalg.norm(across)
+    sideways = np.cross(up, across)
+
+    def ground(at: np.ndarray) -> list[float]:  # the carrier's surface under a base standing at `at`, along up
+        points = [at + mount.radius * (cx * across + cy * sideways) for cx, cy in UNDER_BASE]
+        hits = [min((d for g in own if (d := ray(model, data, g, x + up, -up)) >= 0), default=None) for x in points]
+        return [1.0 - d for d in hits if d is not None]
+
+    center = data.xpos[body] + rot @ start
+    under = ground(center)
+    seat = max(under) if under else 0.0
     try:
         for offset in SLIDES:
-            mount.frame.pos = (start + mount.axes @ offset).tolist()
+            moved = start + mount.axes @ offset
+            there = ground(data.xpos[body] + rot @ moved)
+            if 2 * len(there) < len(UNDER_BASE) or abs(max(there) - seat) > SEATED:
+                continue  # off the carrier's edge, or on a step up or down
+            mount.frame.pos = moved.tolist()
             overlaps = _overlaps(spec, home_qpos, robot, placed)
             if not any(mount.name in pair for pair in overlaps):
                 return offset

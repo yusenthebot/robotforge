@@ -648,20 +648,29 @@ def test_two_arms_on_top_of_a_dog_stand_apart(pg):
     assert apart > 0.08
 
 
-def test_a_second_arm_with_no_room_beside_the_first_is_told_where_it_fits(pg):
-    """Two PiPERs reach forward from their bases, so on a Go2 the second's arm runs into the first's whatever spot its
-    base takes; the refusal gives a shift that was tried and clears."""
+def test_a_second_arm_is_moved_clear_of_the_first_or_told_where_it_fits(pg):
+    """Two arms reach out from their bases, so on a Go2 the second's arm ran into the first's whatever spot its base
+    took. Put on top without being told exactly, it is moved clear along or across the dog; told to stand on top as it
+    is, the refusal gives a shift that was tried, clears, and keeps its base on the dog."""
+    arm = {"template": "arm", "params": {"reach": 0.3}}
+    result = pg.add_robot("go2", library="go2", mounts=[arm, {**arm, "name": "arm2"}])
+    assert "go2: arm2: moved 18 cm back to clear arm" in result["notes"]
+    assert pg.behaviors.robots()[0]["arms"] == ["go2/arm", "go2/arm2"]
+    told = [arm, {**arm, "name": "arm2", "at": "top"}]
     with pytest.raises(
         ValueError, match=r"mounts 'arm' and 'arm2' overlap by \d+ mm at the home pose; shift \["
-    ) as told:
-        pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "piper"}])
+    ) as hint:
+        pg.update_robot("go2", mounts=told)
     shift = [
-        float(v) for v in re.search(r"shift \[([-\d., ]+)\] moves 'arm2' clear", str(told.value)).group(1).split(",")
+        float(v) for v in re.search(r"shift \[([-\d., ]+)\] moves 'arm2' clear", str(hint.value)).group(1).split(",")
     ]
-    pg.add_robot(
-        "go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "piper", "shift": shift}]
-    )
+    pg.update_robot("go2", mounts=[told[0], {**told[1], "shift": shift}])
     assert pg.behaviors.robots()[0]["arms"] == ["go2/arm", "go2/arm2"]
+
+
+def test_two_arms_with_no_room_for_both_are_told_so(pg):
+    with pytest.raises(ValueError, match="and there is no room for both side by side on top of anymal; mount 'arm2'"):
+        pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "piper"}, {"name": "arm2", "library": "piper"}])
 
 
 def test_shift_and_rotate_place_a_named_mount(pg):
@@ -799,3 +808,13 @@ def test_real_a_t1_carrying_a_piper_walks_at_its_lower_top_speed_without_falling
     _run(pg, 10.0)
     end = pg.behaviors.pose("t1")
     assert end["upright"] and end["position"][0] - start[0] > 0.4
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_a_go2_carries_two_arms_side_by_side_and_walks(pg):
+    result = pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}])
+    assert any(n.startswith("go2: arm2: moved") for n in result["notes"])
+    _run(pg, 1.0)
+    pg.behaviors.move("go2", 0.3, 0.0)
+    _run(pg, 6.0)
+    assert pg.behaviors.pose("go2")["upright"] and pg.behaviors.pose("go2")["position"][0] > 1.5
