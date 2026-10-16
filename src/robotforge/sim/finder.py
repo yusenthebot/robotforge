@@ -28,15 +28,18 @@ KINDS = ("object", "robot", "fixed")  # the order finds are listed in: what can 
 # Measured with scripts/vision_bench.py --scenes (every ready-made scene, from every preset view and robot camera:
 # 115 finds of loose objects). The 56 with no flag were 0.1 to 3.9 cm off, 91 % of them within about_cm and 96 %
 # within twice it; flagged ones were up to 66 cm off (a pallet seen through the gaps between the crates on it).
+# A red cube on a blue one at 12 spots (--stacks): 62 of its 64 finds with no flag were within about_cm, at most
+# 1.1 cm off; from straight above it is flagged.
 ACCURACY = (
     "about_cm is how far off it may be (what one pixel spans at the object, along the view): 9 in 10 finds with no "
     "flag were within it. A flag means it can be much further off: cut_off (by the picture's edge), hidden (partly "
     "behind something nearer), side_on (only a face is seen; the real middle is behind it by half the object's "
-    "depth). From low down a round thing's middle comes out a little short. merged: loose objects of the same "
-    "color touching it, found as one with it; the position is the middle of them all"
+    "depth), raised (it may stand on something under it that this view cannot show; then it is higher). From "
+    "low down a round thing's middle comes out a little short. merged: loose objects of the same color touching "
+    "it, found as one with it; the position is the middle of them all"
 )
 MARK = (255, 190, 0)  # the boxes drawn round the finds
-FLAGS = ("cut_off", "hidden", "side_on")  # vision.Found's doubts, passed on when they hold
+FLAGS = ("cut_off", "hidden", "side_on", "raised")  # vision.Found's doubts, passed on when they hold
 MERGED_SHARE = 0.03  # of a blob's pixels (and MIN_AREA at least): another loose object this big in it is part of it
 
 

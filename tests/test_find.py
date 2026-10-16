@@ -149,11 +149,13 @@ def test_a_box_partly_behind_the_arm_is_located_and_said_to_be_hidden(needs_gl, 
 def test_the_wrist_camera_says_when_the_cube_is_cut_off(needs_gl, pg):
     """Close over the cube, the wrist camera's picture cuts it, and the estimate is off by a cm or two."""
     truth = pg.session.data.body("cube_a").xpos.copy()
-    for aim, cut in (([0.22, -0.02, 0.09], True), ([0.22, -0.08, 0.13], False)):
+    for aim, cut in (([0.22, -0.02, 0.09], True), ([0.22, -0.08, 0.13], False), ([0.22, -0.02, 0.13], False)):
         pg.behaviors.move_arm("arm", aim)
         pg.simulate(2.0)
         cube = pg.find("arm/wrist_cam", "red")[0]["objects"][0]
         assert cube["object"] == "cube_a" and bool(cube.get("cut_off")) == cut, (aim, cube)
+        # Close up, the cube's own shaded side fills the ring round it; it is no surface the cube may stand on.
+        assert "raised" not in cube, (aim, cube)
         if not cut:
             assert np.linalg.norm(np.array(cube["position"]) - truth) < cube["about_cm"] / 100 + 0.002
 
@@ -203,6 +205,38 @@ def test_touching_things_of_one_color_are_one_find_that_names_them_all(needs_gl,
     both = found["objects"][0]
     assert {both.get("object"), *both["merged"]} >= {"left_cube", "right_cube"}
     assert np.linalg.norm(np.array(both["position"][:2]) - [0.3, 0.0]) < 0.01  # the middle of the two
+
+
+def _cube_from(pg: Playground, view: str) -> dict:
+    found, _ = pg.find(view, "red")
+    return next(o for o in found["objects"] if o.get("object") == "cube")
+
+
+FLAGGED = (*finder.FLAGS, "held_by")
+
+
+def test_a_cube_on_a_cube_is_located_on_it_or_flagged(needs_gl, tmp_path, monkeypatch):
+    """Every find took the desk as the surface under it: a red cube on a blue one came out 2.5 cm low from every
+    view, 9 cm tall and with no flag. A ball seen from above ends at its widest and must stay on the desk."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("desk")
+    pg.add_robot("arm", template="arm")
+    pg.add_object("under", shape="box", size=[0.05, 0.05, 0.05], pos=[0.25, 0.1], color="blue")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1, 0.075], color="red")
+    pg.add_object("ball", shape="sphere", size=[0.06], pos=[0.3, -0.18], color="orange")
+    pg.simulate(1.0)
+    truth = pg.session.data.body("cube").xpos
+    for view in ("default", "front", "right", "top"):
+        cube = _cube_from(pg, view)
+        error = np.linalg.norm(np.array(cube["position"]) - truth)
+        assert error < 0.01 or any(flag in cube for flag in FLAGGED), (view, error, cube)
+    default = _cube_from(pg, "default")
+    assert not any(flag in default for flag in FLAGGED) and abs(default["size"][2] - 0.04) < 0.005
+    assert _cube_from(pg, "top").get("raised")  # from straight above its sides cannot be seen
+    ball = pg.find("top", "orange")[0]["objects"][0]
+    assert ball["object"] == "ball" and "raised" not in ball
+    assert np.linalg.norm(np.array(ball["position"]) - pg.session.data.body("ball").xpos) < 0.01
 
 
 def test_a_ball_in_front_of_a_bench_is_not_pulled_back_to_it(needs_gl, tmp_path, monkeypatch):

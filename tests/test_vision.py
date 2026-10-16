@@ -191,6 +191,21 @@ def test_an_object_stands_on_the_flat_surface_seen_most_around_it():
     assert position[2] == pytest.approx(0.075, abs=0.002) and size[2] == pytest.approx(0.05, abs=0.003)
 
 
+def test_from_straight_above_a_box_with_a_shelf_around_it_may_be_raised():
+    """Looking straight down, the camera sees no side, so it cannot tell a box on the floor from one on a block
+    under it: it takes the floor, and says the box may be higher when a flat surface between is seen around it."""
+    cam = _looking_down()
+    rgb = np.zeros((100, 100, 3), np.uint8)
+    rgb[45:55, 60:70] = RED
+    for shelf, raised in ((False, False), (True, True)):
+        depth, _ = _box_seen_from_above(top=0.1)
+        if shelf:
+            depth[42:45, 57:73] = 1.0 - 0.05  # the block under it shows a strip 5 cm high beyond its far edge
+        found = vision.find(rgb, depth, cam, "red")[0]
+        assert found.raised is raised
+        assert found.position[2] == pytest.approx(0.05, abs=0.002)  # half way up from the floor either way
+
+
 def test_a_find_says_when_it_is_cut_off_or_hidden():
     depth, blob = _box_seen_from_above()
     assert not vision.cut_off(blob, depth.shape) and not vision.hidden(depth, blob)

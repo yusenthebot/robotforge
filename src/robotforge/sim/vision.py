@@ -70,6 +70,16 @@ SUPPORT_BIN = 0.01  # m: heights around a blob are counted in bins this tall; a 
 HIDDEN_SHARE = 0.05  # of the pixels round a blob: this many nearer than all of it means something covers part of it
 SIDE_ON = 0.01  # m: a top seen this shallow along the view is only the top edge of the face the camera sees
 MIN_SLANT = 0.1  # sine of the lowest angle (6 degrees) a camera is taken to look down at a surface from
+# Share of an object's width, both ways, its top must span for the object to count as box-like (a box, a standing
+# can). A ball's top band (TOP_BAND deep) spans 2 * sqrt(2 * TOP_BAND * r) of its 2r: 0.7 or more only for a ball
+# under 2 cm in radius, which seen from above ends less than SLACK over the floor, so no ball is taken as raised.
+# Coarse pixels make a far ball look boxier (the kitchen's apple from above: 0.79); SIDE_ROWS keeps those out.
+BOXY = 0.7
+# Pixel rows of an object's side the camera must see to tell where the side ends. A cube on a cube, or in the arm's
+# gripper, showed 10 to 17 from every slanting preset view. From straight above, the sides of the scenes' boxes and
+# cans showed at most 0.1 and the apple's 0.3 (a big ball shows more of itself, 8 for the park's, but is not boxy).
+SIDE_ROWS = 4
+RAISED_SHARE = 0.1  # of the measured points round a blob: a flat surface this big under its top may be its support
 
 
 def color_range(color: str | list[float]) -> ColorRange:
@@ -322,16 +332,27 @@ def locate(cam: Pinhole, depth: np.ndarray, blob: Blob) -> tuple[np.ndarray, np.
     A camera above an object sees all of its top but only part of its sides, and none of its bottom, so the
     middle is not the middle of the points it measured (that sat 0.6 cm high and toward the camera on the
     lesson's cubes). Across, it is the middle of the top (the points within TOP_BAND of the highest); up, half
-    way between the top and the surface the object stands on, which the depth camera measures around it.
-    The outermost 2 percent of points are ignored everywhere.
+    way between the top and its bottom (_bottom): the surface it stands on, which the depth camera measures
+    around it, or where its sides are seen to end when that is well above the surface. The outermost 2 percent
+    of points are ignored everywhere.
     """
+    center, size, _ = _locate(cam, depth, blob)
+    return center, size
+
+
+def _locate(
+    cam: Pinhole, depth: np.ndarray, blob: Blob, tinted: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray, bool]:
+    """locate, and whether the object may stand on something higher than its bottom was taken to be. `tinted`
+    marks the pixels of the blob's hue however dark (tinted): its own shaded faces, which are not around it."""
     points = depth_points(cam, depth, blob)
     top, upper, whole = _top(cam, depth, blob, points)
     across = (np.percentile(upper[:, :2], 2, axis=0) + np.percentile(upper[:, :2], 98, axis=0)) / 2
     low, high = np.percentile(points, 2, axis=0), np.percentile(points, 98, axis=0)
-    support = _support(cam, depth, blob, top, lowest=min(float(low[2]), float(np.percentile(whole[:, 2], 2))))
-    size = np.array([high[0] - low[0], high[1] - low[1], top - support])
-    return np.array([across[0], across[1], (top + support) / 2]), size
+    lowest = min(float(low[2]), float(np.percentile(whole[:, 2], 2)))
+    bottom, maybe_higher = _bottom(cam, depth, blob, top, upper, whole, lowest, tinted)
+    size = np.array([high[0] - low[0], high[1] - low[1], top - bottom])
+    return np.array([across[0], across[1], (top + bottom) / 2]), size, maybe_higher
 
 
 def _top(cam: Pinhole, depth: np.ndarray, blob: Blob, inside: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
@@ -363,14 +384,72 @@ def own_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
     return cam.pos + d[:, None] * cam.ray(xs + 0.5, ys + 0.5)
 
 
-def _support(cam: Pinhole, depth: np.ndarray, blob: Blob, top: float, lowest: float) -> float:
+def _bottom(
+    cam: Pinhole,
+    depth: np.ndarray,
+    blob: Blob,
+    top: float,
+    upper: np.ndarray,
+    whole: np.ndarray,
+    lowest: float,
+    tinted: np.ndarray | None = None,
+) -> tuple[float, bool]:
+    """The height of an object's bottom, and whether it may in fact be higher (find's flag `raised`).
+
+    Usually the bottom is the surface the object stands on (_support). But a box-like thing whose sides are seen
+    to end well above that surface stands on something smaller or is held up, and the camera sees past its
+    bottom: a red cube on a blue one came out 2.5 cm low, one in the arm's gripper 4 cm low. Its bottom is then
+    the lowest point seen on it. Where that cannot be told (no side is seen, from straight above, or it is round
+    and its widest is what is seen) it is taken to stand on the surface, and may be higher if a flat surface
+    above that one is seen around it.
+    """
+    around = _ring_points(cam, depth, blob)
+    support = _support(around, top, lowest)
+    # The lowest point seen, not a percentile: on a small blob the 2nd percentile is a pixel or two up its side.
+    # An edge pixel that blends in what is under it sits lower still, which only says "it stands there".
+    end = float(whole[:, 2].min())
+    if end - support <= SLACK:  # its sides run down to the surface: it stands there
+        return support, False
+    # A side is what is seen below the top band: a wrist camera close over a cube sees only its top, whose depth
+    # varied by 3 mm, and from that steep a pixel row is half a millimetre, so the rows alone took it for a side.
+    side = int((whole[:, 2] < top - 2 * TOP_BAND).sum())
+    if side >= MIN_INTERIOR and top - end >= SIDE_ROWS * _row_height(cam, depth, blob) and _boxy(upper, whole):
+        return end, False
+    # Close up, the ring round a cube is half its own shaded side, whose top few cm piled up like a surface
+    # just under its top; that side has the cube's hue, so what has it is left out.
+    return support, _higher_surface(_ring_points(cam, depth, blob, tinted), top, support)
+
+
+def _row_height(cam: Pinhole, depth: np.ndarray, blob: Blob) -> float:
+    """How much of an upright side one pixel row covers at the object (m): a pixel's width at its distance,
+    stretched by how steeply the camera looks down at it (from straight above a side is not seen at all)."""
+    iy, ix = blob.interior()
+    distance = float(np.median(depth[iy, ix]))
+    ray = cam.ray(blob.u, blob.v)
+    level = float(np.linalg.norm(ray[:2]) / np.linalg.norm(ray))
+    return distance / min(cam.fx, cam.fy) / max(level, MIN_SLANT)
+
+
+def _boxy(upper: np.ndarray, whole: np.ndarray) -> bool:
+    """Its top spans at least BOXY of its width both ways, as a box's or a standing can's does; a ball's top
+    is a small cap. Measured along the main directions of what was seen, so a box turned 45 degrees counts."""
+    xy = whole[:, :2] - whole[:, :2].mean(axis=0)
+    axes = np.linalg.svd(xy, full_matrices=False)[2]
+
+    def span(points: np.ndarray) -> np.ndarray:
+        along = points[:, :2] @ axes.T
+        return np.percentile(along, 98, axis=0) - np.percentile(along, 2, axis=0)
+
+    return bool(np.all(span(upper) >= BOXY * span(whole)))
+
+
+def _support(around: np.ndarray, top: float, lowest: float) -> float:
     """The height of the surface the object stands on: the flat surface seen most around it, below its top.
 
     A flat surface puts many points in one SUPPORT_BIN; a wall or a table's side spreads its points over many,
     so the median of everything around (the old way) sank to 0.6 m for a cereal box on a 0.9 m kitchen island
     with the island's side below it. It cannot be above the lowest point seen on the object itself.
     """
-    around = _ring_points(cam, depth, blob)
     below = around[around[:, 2] < top - TOP_BAND, 2]
     if below.size < MIN_INTERIOR:
         return lowest
@@ -379,9 +458,20 @@ def _support(cam: Pinhole, depth: np.ndarray, blob: Blob, top: float, lowest: fl
     return min(float(np.median(below[bins == fullest])), lowest)
 
 
-def _ring_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
+def _higher_surface(around: np.ndarray, top: float, support: float) -> bool:
+    """A flat surface around the object, more than SLACK above the one it is taken to stand on and below its
+    top, covering at least RAISED_SHARE of what is seen around it (in one SUPPORT_BIN): it may stand on that."""
+    below = around[around[:, 2] < top - TOP_BAND, 2]
+    higher = below[below > support + SLACK]
+    if higher.size < max(MIN_INTERIOR, RAISED_SHARE * below.size):
+        return False
+    bins = np.floor((higher - higher.min()) / SUPPORT_BIN).astype(np.int64)
+    return int(np.bincount(bins).max()) >= RAISED_SHARE * below.size
+
+
+def _ring_points(cam: Pinhole, depth: np.ndarray, blob: Blob, leave_out: np.ndarray | None = None) -> np.ndarray:
     """The measured points just outside a blob's box (RING pixels wide): what the object stands on, mostly.
-    Where nothing was measured (the sky) is left out."""
+    Where nothing was measured (the sky) is left out, and so are the pixels `leave_out` marks."""
     h, w = depth.shape
     x0, y0, x1, y1 = blob.box
     xa, ya, xb, yb = max(x0 - RING, 0), max(y0 - RING, 0), min(x1 + RING, w - 1), min(y1 + RING, h - 1)
@@ -390,6 +480,8 @@ def _ring_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
     ys, xs = ys[outside], xs[outside]
     d = depth[ys, xs]
     seen = d < cam.far * SKY
+    if leave_out is not None:
+        seen &= ~leave_out[ys, xs]
     return cam.pos + d[seen][:, None] * cam.ray(xs[seen] + 0.5, ys[seen] + 0.5)
 
 
@@ -451,17 +543,20 @@ class Found:
     cut_off: bool = False  # the blob touches the picture's edge
     hidden: bool = False  # something nearer covers part of it
     side_on: bool = False  # only a face of it is seen, not its top: the middle found is the face's
+    raised: bool = False  # it may stand on something higher than its bottom was taken to be (_bottom)
     reach: float = 0.0  # m of a level surface one pixel covers at the object, along the view (pixel_reach)
 
 
 def find(rgb: np.ndarray, depth: np.ndarray, cam: Pinhole, color: str, min_area: int = MIN_AREA) -> list[Found]:
     """Every blob of `color` (a name, a hex code or [r, g, b]) in the picture, biggest first, located in 3D."""
     rng = color_range(color)
+    hsv = to_hsv(rgb)
     # Only where the depth camera measured something: a bluish grey sky otherwise came back as a blue thing.
-    mask = clean(threshold(to_hsv(rgb), rng) & (depth < cam.far * SKY))
+    mask = clean(threshold(hsv, rng) & (depth < cam.far * SKY))
+    tinted = threshold(hsv, ColorRange(rng.hue, rng.width, sat=rng.sat, val=0.0))  # its hue in any light or shade
     out = []
     for blob in blobs(mask, min_area):
-        center, size = locate(cam, depth, blob)
+        center, size, raised = _locate(cam, depth, blob, tinted)
         out.append(
             Found(
                 color if isinstance(color, str) else "color",
@@ -471,6 +566,7 @@ def find(rgb: np.ndarray, depth: np.ndarray, cam: Pinhole, color: str, min_area:
                 cut_off=cut_off(blob, rgb.shape),
                 hidden=hidden(depth, blob),
                 side_on=side_on(cam, depth, blob),
+                raised=raised,
                 reach=pixel_reach(cam, depth, blob),
             )
         )
