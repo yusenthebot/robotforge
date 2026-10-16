@@ -321,6 +321,15 @@ def _dogs_with_arms(pg: Any) -> None:
     pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[1.6, 0.15], color="blue")
 
 
+def _more_carriers(pg: Any) -> None:
+    """Robots carrying robots beyond the Go2: an ANYmal C and a Barkour with PiPERs, a Booster T1 with an SO-100 on its
+    head, and a UR5e wearing a Robotiq gripper."""
+    pg.add_robot("anymal", library="anymal_c", pos=[0.0, 1.5], mounts=[{"library": "piper"}])
+    pg.add_robot("barkour", library="barkour", pos=[0.0, 0.35], mounts=[{"library": "piper"}])
+    pg.add_robot("t1", library="t1", pos=[0.0, -0.6], mounts=[{"library": "so_arm100"}])
+    pg.add_robot("ur5e", library="ur5e", pos=[0.0, -1.6], mounts=[{"library": "robotiq_2f85"}])
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -359,6 +368,7 @@ SHOTS = [
         page=_look((2.6, -2.3, 1.3), (1.0, 0.0, 0.35)),
         settle=2.0,
     ),
+    Shot("splice_more_carriers", _more_carriers, page=_look((3.6, -1.2, 1.5), (0.0, 0.0, 0.45)), settle=3.0),
 ]
 
 
