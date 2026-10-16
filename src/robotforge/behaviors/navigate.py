@@ -440,6 +440,8 @@ class Planner:
         at = f" ({what})" if what else ""
         if nav.lethal[cell] == SLOPE:
             return f"the only way there is up a slope steeper than it climbs ({body.slope_words()}){at}"
+        if what and nav.ground[cell] == nav.floor[cell]:  # a step in a hill's own ground: bumps, not a block's edge
+            return f"the only way there crosses {what}, more uneven than it steps ({body.step * 100:.1f} cm)"
         r, c = cell
         window = nav.ground[max(r - 1, 0) : r + 2, max(c - 1, 0) : c + 2]
         height = float(window.max() - window.min())

@@ -212,6 +212,9 @@ def test_on_hills_legged_robots_keep_to_gentle_slopes_and_a_humanoid_off_bumps(p
         pg.behaviors.navigate("dog", [15.8, 0.1])  # near the top of the bumps
     assert caught.value.cause == "climb" and "5 on hills) (bumps)" in str(caught.value), str(caught.value)
     assert not _fits(_map(pg, "bot"), 9.15, -0.55)  # a bump on the rough patch's rim
+    with pytest.raises(NoWay) as caught:
+        pg.behaviors.navigate("bot", [8.3, 0.0])  # the middle of the rough patch
+    assert "crosses rough, more uneven than it steps (0.5 cm)" in str(caught.value), str(caught.value)
 
 
 def test_wheels_push_light_loose_objects_aside_and_legs_go_round_them(pg):
