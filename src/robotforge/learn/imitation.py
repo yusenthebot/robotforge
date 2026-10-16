@@ -1098,7 +1098,7 @@ class ImitationLesson(Lesson):
             "recording": self.recording is not None,
             "readout": self._readout(ctx, trying),
             "table": self._table(),
-            "formula": self._formula(),
+            **self._formula(),
         }
         if self.trial is not None:
             path = hands.pilot.path if hands.pilot is not None else self.trial["path"]
@@ -1152,9 +1152,17 @@ class ImitationLesson(Lesson):
             )
         return {"columns": columns, "rows": rows, "tab": _text("示范", "Demos")}
 
-    def _formula(self) -> list[dict[str, Any]]:
-        """One recorded pair, as the learner made it a second ago: what the arm saw, and what it should do."""
-        pair = self.last_pair
+    def _formula(self) -> dict[str, Any]:
+        """See -> do, and whose: the pair being recorded as the learner steers (the panel's header said "the controller
+        right now" over it, while no controller was at work), or what the learned method sees and does in a try."""
+        pilot = self.hands.pilot if self.hands is not None else None
+        title = _text("最后记下的一对", "The last pair recorded")
+        does, pair = _text("该做", "Should do"), self.last_pair
+        if isinstance(pilot, bc.Pilot):
+            title = _text("它此刻看到什么、做什么", "What it sees and does now")
+            does, pair = _text("它做", "Does"), pilot.last
+        elif self.recording is not None:
+            title = _text("正在记录（1 秒前）", "Being recorded (1 s ago)")
         cube = hand = done = "-"
         if pair is not None:
             obs, action = pair
@@ -1163,11 +1171,11 @@ class ImitationLesson(Lesson):
             hand = f"{_xyz(obs[3:6] - up)} · {100 * obs[6]:.1f}"
             grip = _text("合上", "close") if action[3] >= 0.5 else _text("张开", "open")
             done = {lang: f"{_xyz(action[:3] - up)} · {grip[lang]}" for lang in ("zh", "en")}
-        return [
+        rows = [
             {
                 "show": "f_sample",
                 "label": _text("看到方块", "Sees cube"),
-                "expr": _text("1 秒前，厘米", "1 s ago, cm"),
+                "expr": _text("厘米", "cm"),
                 "value": cube,
                 "color": "blue",
             },
@@ -1180,12 +1188,13 @@ class ImitationLesson(Lesson):
             },
             {
                 "show": "f_sample",
-                "label": _text("该做", "Should do"),
+                "label": does,
                 "expr": _text("手爪接着去哪 · 抓握", "gripper goes to · grip"),
                 "value": done,
                 "color": "amber",
             },
         ]
+        return {"formula": rows, "formula_title": title}
 
     def rig(self, model: mujoco.MjModel) -> dict[str, Any]:
         return {

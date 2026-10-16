@@ -378,6 +378,21 @@ _CARRYING = """
 """
 
 
+# A try caught mid-way, the panel on what it sees and does right now (its header said "the controller right now"
+# over the learner's recorded pairs): fail the shot if the header does not say whose numbers they are.
+_TRYING = """
+    await demo();
+    await until(() => passed('show'), 3);
+    await next();
+    answer(0);
+    press('try');
+    await sleep(700);  // on its way down to the cube (copying beside a demonstration has it in the bin by 2 s)
+    document.getElementById("lesson-formula").scrollIntoView({ block: "center" });
+    const head = document.querySelector("#lesson-formula .section-title").textContent;
+    if (!/sees and does now|此刻看到/.test(head)) throw new Error(`the formula's header reads ${head}`);
+"""
+
+
 # W A S D in the imitation lesson go the way they point on screen (in the world's axes A moved the ball right from
 # this camera): hold A, then W, and fail the shot if the ball went another way.
 _KEYS = """
@@ -454,6 +469,7 @@ SHOTS = [
     ),
     Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
     Shot("lesson_imitation_show", _nothing, page=_lesson("imitation", _TEACH, _CARRYING), settle=0.3),
+    Shot("lesson_imitation_trying", _nothing, page=_lesson("imitation", _TEACH, _TRYING), settle=0.2),
     Shot("lesson_imitation_network", _nothing, page=_imitation("network"), settle=1.0),
     Shot(
         "lesson_imitation_sweep",

@@ -558,6 +558,7 @@ class Pilot:
         self.done_at: float | None = None
         self.outcome: Outcome | None = None
         self.anchor: tuple[np.ndarray, float, float] | None = None  # (gripper, grip, time) of the last progress
+        self.last: tuple[np.ndarray, np.ndarray] | None = None  # what it last saw, and what it did: target, grip
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         now = float(data.time)
@@ -575,6 +576,7 @@ class Pilot:
                 if grip >= 0.5 and self.follow.grip < 0.5 and self.closed_at is None:
                     self.closed_at = [float(np.linalg.norm(obs[:2] - obs[3:5])), float(obs[5] - obs[2])]
                 self.follow.set(action[:3], grip, now)
+                self.last = (obs, np.array([*action[:3], grip]))
             self._judge(data, now, obs[3:6])
         self.follow.update(model, data)
 

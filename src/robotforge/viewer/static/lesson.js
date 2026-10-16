@@ -245,18 +245,22 @@ export function lessonUpdate(msg) {
   const follow = msg.live?.follow ?? null;
   // Only when the lesson asks for a different body, so orbiting the camera away stays yours.
   if (follow !== followWanted && api.followBody(follow)) followWanted = follow;
-  renderFormula(msg.live?.formula ?? null);
+  renderFormula(msg.live?.formula ?? null, msg.live?.formula_title ?? null);
   renderTable(msg.live?.table ?? null);
 }
 
-// The controller's sum with live numbers, one row per term; a row appears once its step shows it.
-function renderFormula(rows) {
+// The controller's sum with live numbers, one row per term; a row appears once its step shows it. A lesson whose
+// rows are not a controller's says what they are instead (the imitation lesson: a pair being recorded).
+function renderFormula(rows, title) {
   const box = $("lesson-formula");
   const shown = new Set(state?.shown ?? []);
   const visible = (rows ?? []).filter((r) => shown.has(r.show));
   box.hidden = visible.length === 0;
   if (box.hidden) return;
   const text = (x) => (typeof x === "string" ? x : pick(x));
+  const heading = title ? text(title) : t("formula_title");
+  const head = box.querySelector("[data-i18n]");
+  if (head.textContent !== heading) head.textContent = heading;
   const list = $("lesson-formula-rows");
   if (list.childElementCount !== visible.length) {
     list.replaceChildren(

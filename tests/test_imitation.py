@@ -104,6 +104,26 @@ def test_a_demonstration_is_recorded_as_see_do_pairs(pg):
     assert {"demos", "tests"} <= set(update["live"].get("drawing") or lesson.drawing())
 
 
+def test_the_panel_says_whose_see_do_pair_it_shows(pg):
+    """The pair panel's header said "the controller right now" while the learner steered and no controller was at
+    work. It says a pair is being recorded, which pair it kept last, or what the copy sees and does in a try."""
+    p = _player(pg)
+    title = lambda: p.update["live"]["formula_title"]["en"]  # noqa: E731
+    p.play(0.2)
+    assert title() == "Being recorded (1 s ago)"
+    _show_a_pick(p)
+    p.play(0.1)
+    assert title() == "The last pair recorded"
+    _unlock_all(p)
+    Set(method=0, where=0).apply(p)
+    Press("try", 0.5).apply(p)
+    assert title() == "What it sees and does now"
+    sees, does = (r["value"] for r in p.update["live"]["formula"][::2])
+    seen = np.array([float(v) for v in sees.split(", ")[:2]]) / 100  # cm, as the panel shows it
+    assert np.linalg.norm(seen - p.lesson.trial["spot"]) < 0.015  # the try's cube, not the demonstration's
+    assert does["en"].endswith(("open", "close"))
+
+
 def test_a_held_cube_stays_in_the_gripper_at_a_learners_pace(pg):
     """Grasped, lifted 10 cm and held still for 15 s: still in the gripper. Without the no-slip pass (cloning.NOSLIP)
     it crept down 3.6 mm a second and was back on the desk 7.5 s after the lift (measured 2026-10-17)."""
