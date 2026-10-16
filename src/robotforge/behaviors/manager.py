@@ -41,11 +41,14 @@ LEARN_A_WALK = (
 
 
 GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
-# A timed move that covers less than this fraction of speed x seconds says why (shortfall). On flat ground the
-# robots of the agent eval's sessions covered 72 to 108 percent: dog 94-102, Go2 86, hexapod 100, rovers 80-98,
-# template humanoid 73-108 (0.1 m/s for 1.5 to 3 s), a two-wheeled balancer 72.
+# A timed move that ends less than this fraction of its ideal reach from its start says why (shortfall). On flat
+# ground the robots of the agent eval's sessions covered 72 to 108 percent of speed x seconds on straight moves:
+# dog 94-102, Go2 86, hexapod 100, rovers 80-98, template humanoid 73-108 (0.1 m/s for 1.5 to 3 s), a two-wheeled
+# balancer 72. A move that turns is judged by its arc's chord (ideal_reach), or a full circle reads as stuck.
 SHORTFALL_FRACTION = 0.25
-SHORTFALL_MIN_ASKED = 0.1  # m: a shorter move (a nudge, a turn on the spot) is not judged
+SHORTFALL_MIN_ASKED = (
+    0.1  # m: a move whose ideal reach is shorter (a nudge, a turn on the spot, a circle) is not judged
+)
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
 
 
@@ -67,6 +70,16 @@ def _how_to_move(kind: Kind) -> str:
     if kind in MOBILE:
         return "it moves with move" + (" and strikes poses with pose" if kind == Kind.HUMANOID else "")
     return "robots lists what each robot can do"
+
+
+def ideal_reach(speed: float, turn: float, seconds: float) -> float:
+    """How far from its start a robot ends that moves at `speed` m/s turning `turn` rad/s for `seconds`, if it does
+    exactly that: speed x seconds in a straight line, the chord of the arc when it turns (0 after a full circle).
+    Lesson 2's challenge, a rover driving a full circle back to its start, was told it was stuck."""
+    angle = abs(turn) * seconds
+    if angle < 1e-6:
+        return abs(speed) * seconds
+    return 2 * abs(speed) / abs(turn) * abs(math.sin(angle / 2))
 
 
 def _clamp_notes(ctrl: Any, speed: float, turn: float) -> list[str]:
@@ -464,16 +477,20 @@ class BehaviorManager:
                 d.ctrl[a] = 0.0
 
     def shortfall(self, robot: str, seconds: float, start: list[float]) -> str | None:
-        """Why a timed move that is still running has covered far less ground than it asked for, or None. A rover
+        """Why a timed move that is still running ended far closer to its start than it should, or None. A rover
         too heavy for its motors stood still for 6 s and the agent was told only "distance_m 0.002"."""
         ctrl = self.session.controllers.get(robot)
         speed = abs(float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0))
-        asked = speed * seconds
+        turn = abs(float(getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0)) or 0.0))
+        asked = ideal_reach(speed, turn, seconds)
         now = self.pose(robot)
         moved = math.dist(now["position"][:2], start[:2])
         if asked < SHORTFALL_MIN_ASKED or moved >= SHORTFALL_FRACTION * asked or not now["upright"]:
             return None
-        text = f"{robot} moved {moved:.2f} m of the {asked:.2f} m asked ({speed:g} m/s for {seconds:g} s)"
+        motion = f"{speed:g} m/s for {seconds:g} s"
+        if turn * seconds >= 1e-6:
+            motion = f"{speed:g} m/s turning {turn:g} rad/s for {seconds:g} s: the chord of that arc"
+        text = f"{robot} ended {moved:.2f} m from its start, of the {asked:.2f} m asked ({motion})"
         if not isinstance(ctrl, DiffDrive):
             return f"{text}: something held it back (a wall or an object in the way, a slope); look with observe"
         m, d = self.session.model, self.session.data

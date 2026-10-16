@@ -4,7 +4,7 @@ import math
 import pytest
 from mcp import Client
 
-from robotforge.behaviors.manager import BehaviorError
+from robotforge.behaviors.manager import BehaviorError, ideal_reach
 from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
@@ -219,6 +219,32 @@ async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
         moved = json.loads(result.content[0].text)
     assert moved["distance_m"] < 0.05
     assert "wheels barely turned" in moved["note"] and "kg" in moved["note"] and "stronger motors" in moved["note"]
+
+
+@pytest.mark.anyio
+async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
+    """Lesson 2's challenge drives a full circle back to the start; the move ended 0.23 m from its start and was
+    told "its wheels turned but it did not get anywhere", judged against speed x seconds (1.89 m). A turning move
+    is judged by its arc's chord, so only a robot that really stalls on the arc gets the note."""
+    pg.add_robot("rover", template="rover")
+    params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
+    pg.add_robot("heavy", template="rover", params=params, pos=[0, 2])
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        circle = {"robot": "rover", "speed": 0.3, "turn": 1.0, "seconds": 6.3}
+        looped = json.loads((await client.call_tool("move", circle)).content[0].text)
+        stalled = json.loads(
+            (await client.call_tool("move", {**circle, "robot": "heavy", "seconds": 4})).content[0].text
+        )
+    assert looped["turned_deg"] > 270 and looped["distance_m"] < 0.5 and "note" not in looped
+    assert stalled["distance_m"] < 0.05 and "wheels barely turned" in stalled["note"]
+
+
+def test_the_ideal_reach_of_a_move_is_the_chord_of_its_arc():
+    assert ideal_reach(0.3, 0.0, 3.0) == pytest.approx(0.9)
+    assert ideal_reach(0.3, 1.0, 2 * math.pi) == pytest.approx(0.0, abs=1e-9)  # a full circle
+    assert ideal_reach(0.3, -1.0, math.pi) == pytest.approx(0.6)  # a half circle to the right: its diameter
+    assert ideal_reach(-0.2, 0.5, 1e-3) == pytest.approx(2e-4)
 
 
 @pytest.fixture
