@@ -40,6 +40,7 @@ METHODS = ("knn", "mlp", "ik")
 WHERE = ("near", "far", "anywhere")
 NEAR_OFFSET = 0.01  # m: "near a demonstration" puts the cube this far from a demonstrated spot
 NEAR_TESTS = 8  # a test adds one near spot for each of the latest demonstrations, up to this many
+CORRECTED_HERE = 0.005  # m: a try this close to where a correction was made is "at the spot you corrected"
 MAX_DEMOS = 30
 USE_VALUES = (1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30)  # the sweep's demonstration counts
 DEMOS_WANTED = 5  # the "show it more" step
@@ -87,7 +88,8 @@ def _tested(method: str):
 
 
 def _swept(ctx: LessonContext) -> bool:
-    return "swept:done" in ctx.events
+    """a sweep with the small network has finished (copying's line stays near zero at every count)"""
+    return "swept:mlp" in ctx.events
 
 
 def _corrected_and_retried(ctx: LessonContext) -> bool:
@@ -271,28 +273,31 @@ STEPS = (
         done=_text(
             "两次示范之间的位置它也常能抓到：它学到的是一个平滑的函数，不是一张表，所以能在示范之间“插值”。"
             "训练时还把手爪的位置随机挪开一两厘米、目标不动，它就学会了从偏一点的地方回到路上，这是对付协变量偏移的老办法。"
-            "离所有示范都远的地方（桌子边、角落）它还是会失败，那是“外推”，它只能瞎猜。示范越少，它越容易学歪。",
+            "离所有示范都远的地方（桌子边、角落）就时灵时不灵了：有的抓到，有的没抓到，事先说不准是哪个，看看红点落在哪。"
+            "那是“外推”：没见过的地方它只能猜，猜对猜错都有可能。示范越少，它越容易学歪。",
             "Between two demonstrations it now often succeeds: it learned a smooth function, not a table, so it can "
             "interpolate between demonstrations. In training the gripper's position was also nudged a centimetre or "
             "two at random with the target left where it was, so it learned to get back to the path from a little "
-            "off it: an old remedy for covariate shift. Far from all demonstrations (the edges, the corners) it "
-            "still fails: that is extrapolation, and there it can only guess. The fewer the demonstrations, the "
-            "more it learns the wrong thing.",
+            "off it: an old remedy for covariate shift. Far from every demonstration (the edges, the corners) it is "
+            "hit or miss: some spots work, some do not, and you cannot tell in advance which; see where the red dots "
+            "are. That is extrapolation: where it has seen nothing it can only guess, and a guess can go either way. "
+            "The fewer the demonstrations, the more it learns the wrong thing.",
         ),
         quiz=Quiz(
             question=_text("和照抄比，神经网络会？", "Compared with copying, the network will be?"),
             options=(
                 _text("更差", "Worse"),
                 _text(
-                    "在示范之间也常做对，离示范太远还是不行",
-                    "Often right between demonstrations, still wrong far from them",
+                    "在示范之间也常做对，离示范远了就时灵时不灵",
+                    "Often right between demonstrations, less reliable far from them",
                 ),
                 _text("哪里都能做对", "Right everywhere"),
             ),
             answer=1,
             explain=_text(
-                "它能在示范之间插值，但没见过的地方它也只是在猜。",
-                "It interpolates between demonstrations, but where it has seen nothing it is guessing too.",
+                "它能在示范之间插值；没见过的地方它只是在猜，有时猜对，有时猜错。",
+                "It interpolates between demonstrations; where it has seen nothing it guesses, sometimes right, "
+                "sometimes wrong.",
             ),
             predict=True,
         ),
@@ -304,11 +309,12 @@ STEPS = (
         id="how_many",
         title=_text("要示范多少次", "How many demonstrations?"),
         body=_text(
-            "示范越多越好吗？在实验记录里点「扫一遍 示范」：只用前 1 次、前 2 次……的示范训练，每次都考那 24 处，"
-            "画出成功率随示范次数怎么变（用的是现在选的方法）。先猜。想看得更清楚，可以先多示范几次。",
-            "Do more demonstrations help? In the experiment record press Sweep demos: it trains on your first "
-            "demonstration only, then the first two, and so on, tests each at the 24 spots, and plots success "
-            "against the number of demonstrations (with the method chosen now). Guess first. To see it more "
+            "示范越多越好吗？「方法」保持“小神经网络”，在实验记录里点「扫一遍 示范」："
+            "只用前 1 次、前 2 次……的示范训练，每次都考那 24 处，画出成功率随示范次数怎么变。"
+            "先猜。想看得更清楚，可以先多示范几次。",
+            "Do more demonstrations help? Keep Method on 'small neural network' and in the experiment record press "
+            "Sweep demos: it trains on your first demonstration only, then the first two, and so on, tests each at "
+            "the 24 spots, and plots success against the number of demonstrations. Guess first. To see it more "
             "clearly, show it a few more times before you sweep.",
         ),
         done=_text(
@@ -349,13 +355,14 @@ STEPS = (
         done=_text(
             "它可能还会先犯同样的错，但现在知道从那里怎么接着做。这就是 DAgger（数据集聚合）的思路："
             "不只示范你自己会走的路线，也示范它自己会走进去的情形。真实机器人上也常这样教：人拿着遥控器在旁边，"
-            "它一出错就接手。换成小神经网络再试：一次纠正它常常还学不会，几十对纠正混在几百对示范里，被“平均”掉了，"
-            "所以 DAgger 要一轮一轮反复纠正。",
+            "它一出错就接手。小神经网络也许自己就能抓到这个远处的方块；抓不到时，一次纠正不一定够："
+            "几十对纠正混在几百对示范里，会被“平均”掉，所以 DAgger 要一轮一轮反复纠正。",
             "It may still make the same first mistake, but now it knows what to do from there. That is the idea "
             "of DAgger (dataset aggregation): show it not only your own way, but also the situations it gets "
             "itself into. Real robots are often taught like this: a person stands by with the controls and takes "
-            "over whenever it slips. Try the small network too: one correction is often not enough for it, a few "
-            "dozen pairs averaged in with a few hundred, which is why DAgger corrects round after round.",
+            "over whenever it slips. The small network may get this far cube by itself; when it does not, one "
+            "correction may not be enough, a few dozen pairs averaged in with a few hundred, which is why DAgger "
+            "corrects round after round.",
         ),
         quiz=Quiz(
             question=_text(
@@ -765,13 +772,15 @@ class ImitationLesson(Lesson):
         if method != "ik" and not spots:
             raise LessonError("show it once first: there is nothing to copy yet")
         self.tries += 1
-        if where == "near" and spots:
+        # Distances are to the demonstrations, which start from the cube: a correction made at a spot does not
+        # make it "where you showed it", so the arm can be tried there again (only it now has a correction).
+        shown = [d.spot for d in self.demos if not d.correction]
+        fixes = [d.spot for d in self.demos if d.correction]
+        if where == "near" and shown:
             angle = 2 * math.pi * (self.tries * 0.618 % 1.0)  # round the spot, a new side every try
-            spot = spots[-1] + NEAR_OFFSET * np.array([math.cos(angle), math.sin(angle)])
+            spot = shown[-1] + NEAR_OFFSET * np.array([math.cos(angle), math.sin(angle)])
         elif where == "far":
-            # From the demonstrations only: a correction made there does not move "far" away, so the arm can be
-            # tried at the same spot again (only it now has a correction from there).
-            spot = bc.far_spot([d.spot for d in self.demos if not d.correction])
+            spot = bc.far_spot(shown)
         else:
             spot = bc.random_spot(np.random.default_rng(1000 + self.tries))
         self.recording = None
@@ -779,7 +788,8 @@ class ImitationLesson(Lesson):
             "where": where,
             "method": method,
             "spot": [round(float(v), 3) for v in spot],
-            "distance": round(bc.nearest(spot, spots), 3) if spots else None,
+            "distance": round(bc.nearest(spot, shown), 3) if shown else None,
+            "corrected": bc.nearest(spot, fixes) < CORRECTED_HERE,
             "path": [],
             "ok": None,
         }
@@ -869,6 +879,11 @@ class ImitationLesson(Lesson):
             if far is not None
             else _text("", "")
         )
+        if trial.get("corrected"):  # the success there is what the correction taught, not a demonstration
+            away = _text(
+                f"（离最近的示范 {_cm(far)} 厘米，就在你纠正过的地方）",
+                f" ({_cm(far)} cm from the nearest demonstration, at the spot you corrected)",
+            )
         verdict = _text("成功", "Success") if outcome.success else _text("失败", "Failed")
         ctx.results["summary"] = _text(
             f"{verdict['zh']}{away['zh']}：{outcome.why['zh']}，用了 {outcome.seconds:.1f} 秒。",
@@ -936,7 +951,9 @@ class ImitationLesson(Lesson):
             "far": bc.rate([ok for d, ok in pairs if d >= bc.FAR_CM]),
             "train": round(learner.seconds, 1) if learner is not None else None,
         }
-        settings = {"method": float(METHODS.index(method)), "use": float(use)}
+        settings = {"method": float(METHODS.index(method))}
+        if learner is not None:  # the hand-written pick uses no demonstrations: no count in its row
+            settings["use"] = float(use)
         # The record's curve leaves out the bands no spot fell in (the engine keeps numbers, not gaps).
         kept = [(x, y) for x, y in zip(xs, ys, strict=True) if y is not None]
         ctx.record_run(settings, metrics, [x for x, _ in kept], [y for _, y in kept])
@@ -957,13 +974,14 @@ class ImitationLesson(Lesson):
         method = METHODS[int(ctx.values["method"])]
         if method == "ik":
             raise LessonError("the hand-written pick learns from no demonstrations: pick a learned method to sweep")
-        counts = [n for n in sweep.values if n <= len(self.demos)]
-        if len(counts) < 2:
+        if len(self.demos) < 2:
             raise LessonError("show it at least twice before sweeping")
+        # the counts up to the demonstrations there are, and always all of them (with 7, the values stop at 6)
+        counts = [n for n in sweep.values if n < len(self.demos)] + [len(self.demos)]
         assert self.model is not None
         model = bc.private(self.model)
         demos = list(self.demos)
-        ctx.events.discard("swept:done")
+        ctx.events.discard(f"swept:{method}")
         self.thread = threading.Thread(target=self._sweep, args=(model, method, demos, counts, ctx), daemon=True)
         self.thread.start()
         return None
@@ -989,13 +1007,22 @@ class ImitationLesson(Lesson):
             ctx.sweep = {"control": "use", "points": list(points)}
             ctx.bench_version += 1
         self.progress = None
-        ctx.events.add("swept:done")
+        ctx.events.add(f"swept:{method}")
         lo, hi = points[0], points[-1]
+        hint = (
+            _text(
+                "照抄只在示范旁边管用，所以这条线一直很低；把「方法」换成“小神经网络”再扫一遍，看示范多了有什么不同。",
+                " Copying works only beside a demonstration, so its line stays low: set Method to 'small neural "
+                "network' and sweep again to see what more demonstrations change.",
+            )
+            if method == "knn"
+            else _text("", "")
+        )
         ctx.results["summary"] = _text(
             f"{_METHOD_ZH[method]}：{lo['x']:g} 次示范成功 {lo['success']:g}%，"
-            f"{hi['x']:g} 次示范成功 {hi['success']:g}%。",
+            f"{hi['x']:g} 次示范成功 {hi['success']:g}%。{hint['zh']}",
             f"{_METHOD_EN[method]}: {lo['success']:g}% with {lo['x']:g} demonstration{'s' if lo['x'] != 1 else ''}, "
-            f"{hi['success']:g}% with {hi['x']:g}.",
+            f"{hi['success']:g}% with {hi['x']:g}.{hint['en']}",
         )
 
     # ---- what the viewer shows ------------------------------------------------------------------------------------
@@ -1152,4 +1179,4 @@ def _pct(v: float | None) -> str:
 
 
 def _xyz(v: Sequence[float]) -> str:
-    return ", ".join(f"{100 * float(x):.0f}" for x in v)
+    return ", ".join(str(round(100 * float(x))) for x in v)  # an integer: never "-0" for a hair below zero

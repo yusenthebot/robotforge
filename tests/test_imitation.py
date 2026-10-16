@@ -221,6 +221,7 @@ def test_tests_and_the_sweep_give_the_measured_success(pg):
     assert ik["success"] == 100 and ik["near"] == 100 and ik["far"] == 100
     runs = p.ctx.runs
     assert [r["params"]["method"] for r in runs] == [0.0, 1.0, 2.0]
+    assert "use" not in runs[2]["params"]  # the hand-written pick learned from no demonstrations
     assert runs[0]["x"][0] == 1.0 and runs[0]["y"][0] == 100.0  # copying: within 2 cm it works...
     assert max(runs[0]["y"][1:]) <= 34  # ...and further off it hardly ever does
     # the sweep runs on the lesson's thread and fills in its points one by one
@@ -228,7 +229,7 @@ def test_tests_and_the_sweep_give_the_measured_success(pg):
     p.handle("sweep", control="use")
     _finish_job(p)
     points = p.ctx.sweep["points"]
-    assert [pt["x"] for pt in points] == [1.0, 2.0, 3.0, 4.0, 5.0] and "swept:done" in p.ctx.events
+    assert [pt["x"] for pt in points] == [1.0, 2.0, 3.0, 4.0, 5.0] and "swept:mlp" in p.ctx.events
     assert points[0]["success"] < points[-1]["success"]
     assert points[-1]["success"] == pytest.approx(mlp["success"], abs=1e-6)  # the same five, the same 24 spots
 
@@ -295,5 +296,31 @@ def test_a_correction_taken_over_from_a_far_try_teaches_it_that_spot(pg):
     Press("try").apply(p)
     again = _finish_try(p)
     assert again["spot"] == spot and again["ok"] is True and "after_fix:far:ok" in p.ctx.events
+    # still far from every demonstration: what got it there is the correction made at this very spot
+    assert again["distance"] > 0.2 and "at the spot you corrected" in p.ctx.results["summary"]["en"]
     with pytest.raises(LessonError, match="nothing to correct"):
         Press("take_over").apply(p)
+
+
+def test_a_sweep_ends_on_every_demonstration_and_copying_points_to_the_network(pg, monkeypatch):
+    """Seven demonstrations: the sweep's counts stop at 6 in its values, and it trains on all seven too. A sweep
+    with copying stays low, so it does not pass the step and says to sweep with the network."""
+    spots = bc.test_spots()[:3]  # three of the 24: the counts are what this is about
+    monkeypatch.setattr(bc, "test_spots", lambda: spots)
+    p = _player(pg)
+    while p.ctx.results.get("demos", 0) < 7:
+        if p.ctx.results.get("demos", 0):
+            Press("new_cube", 0.3).apply(p)
+        _show_a_pick(p)
+    _unlock_all(p)
+    pg.lessons.passed.discard("how_many")
+    Set(method=0).apply(p)
+    p.handle("sweep", control="use")
+    _finish_job(p)
+    assert [pt["x"] for pt in p.ctx.sweep["points"]] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+    assert "swept:knn" in p.ctx.events and not imitation._swept(p.ctx)
+    assert "small neural network" in p.ctx.results["summary"]["en"]
+
+
+def test_the_panel_never_shows_minus_zero():
+    assert imitation._xyz([-0.001, 0.0, 0.254]) == "0, 0, 25"

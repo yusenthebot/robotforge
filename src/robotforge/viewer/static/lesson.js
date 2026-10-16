@@ -605,8 +605,10 @@ const bench = {
       chip.textContent = `#${run.id}`;
       const settings = document.createElement("span");
       settings.className = "run-settings";
-      // Each setting stays on one line with its value; lines break after a dot, never before one.
-      settings.textContent = spec.params.map((p) => `${this.label(p)}\u00a0${this.value(p, run.params[p])}`).join("\u00a0· ");
+      // Each setting stays on one line with its value; lines break after a dot, never before one. A setting the run
+      // did not use is left out (the hand-written pick learns from no demonstrations).
+      const used = spec.params.filter((p) => run.params[p] !== undefined);
+      settings.textContent = used.map((p) => `${this.label(p)}\u00a0${this.value(p, run.params[p])}`).join("\u00a0· ");
       th.append(chip, settings);
       tr.append(th);
       spec.metrics.forEach((m, k) => {
