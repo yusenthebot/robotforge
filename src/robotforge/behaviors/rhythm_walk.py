@@ -171,14 +171,16 @@ WALKING_ROUNDS = 40
 # tips it over either way, 21 against 10, 8 of the 11 more in or after a turn begun out of a walk 1.0 to 1.47 s old.
 # Gated at 1.5 s, 75 (13 leaving that walk out), none of them in or after a turn begun out of the walk.
 WALKED_MIN = 1.5  # s
-# A turn's walking version is checked from more moments of the walk as move plays it, a tenth of a second apart (at
-# 2 Hz, each of 5 points of the stride 8 or 9 times), each for TURN_CHECK seconds. Of the tuned turn and the one from
-# standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the walk,
-# at any point of the stride if it fell from none of the moments, else only at the points it never fell from (at
+# A turn's walking version is checked from more moments of the walk as move plays it, from WALKED_MIN to 5 s at every
+# update (at 2 Hz, each of 25 points of the stride 7 times), each for TURN_CHECK seconds. Of the tuned turn and the one
+# from standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the
+# walk, at any point of the stride if it fell from none of the moments, else only at the points it never fell from (at
 # least MIN_SAFE of them), the robot walking on until the next one. If neither, the robot steadies first. Checked on
 # 21 moments of the walk as the trainer played it, an A1 left turn kept for 1 of the 5 points fell in 4 of 15 tries
-# straight out of the walk; checked like this, the left turns of 6 A1 walks fell in 1 of 90.
-WALK_CHECKS = tuple(round(1.0 + 0.1 * k, 1) for k in range(41))  # s after the walk starts
+# straight out of the walk; checked like this, the left turns of 6 A1 walks fell in 1 of 90. Checked a tenth of a
+# second apart (5 points of the stride), a template dog walk's left turn was kept for any point and fell in 3 of its
+# 100 bench sequences, begun at 0.28 of its stride; every update, it fell from 4 of 176 moments, at 0.28 to 0.36.
+WALK_CHECKS = tuple(round(WALKED_MIN + k / CONTROL_HZ, 2) for k in range(round((5.0 - WALKED_MIN) * CONTROL_HZ) + 1))
 MIN_SAFE = 0.5  # share of the points of the stride checked
 TURN_CHECK = 2.0  # s
 FIRST_SECOND = 1.0  # s: what a short turn command gets
