@@ -45,6 +45,11 @@ MIN_HUB = 0.01  # m: the shortest a wheel's motor is drawn
 FOOT_FRICTION = [1.2, 0.02, 0.002]
 CASTER_FRICTION = [0.02, 0.001, 0.0001]
 MIN_MASS = 0.005  # kg for a bare joint with no shape: MuJoCo needs mass on every moving body
+# The physics every world runs a robot with (world.compile_world), so the checks judge a build the way it will move.
+# Explicit Euler, a fresh spec's default, made the stiff position servos of a mounted Franka Panda chatter at their
+# force limits, and the build was told they were too weak to hold the arm up.
+WORLD_TIMESTEP = 0.002  # s
+WORLD_INTEGRATOR = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
 
 
 @dataclass
@@ -59,6 +64,7 @@ class Assembly:
 
 def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     spec = new_spec()
+    spec.option.timestep, spec.option.integrator = WORLD_TIMESTEP, WORLD_INTEGRATOR
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
     vis = Visuals(spec)

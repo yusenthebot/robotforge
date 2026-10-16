@@ -859,6 +859,25 @@ def test_an_arm_folded_low_rises_before_it_swings_around_to_its_target(pg):
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
+def test_a_mounted_panda_is_not_called_too_weak(monkeypatch):
+    """The build check ran explicit Euler, a fresh spec's default, where the Panda's stiff servos (kp 4500) chatter at
+    their 87 N*m limits holding the arm still, so every build carrying one was told its arm was too weak; worlds run
+    the implicit integrator the check now uses too."""
+    from pathlib import Path
+
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(Path(__file__).parent / "fixtures" / "menagerie"))
+    build = {
+        "base": {"shape": "box", "size": [0.6, 0.45, 0.15], "mass": 40.0},
+        "parts": [
+            {"name": "left_wheel", "at": [0.2, 0.26, -0.05], "shape": "wheel", "size": [0.16, 0.06], "mirror": True},
+            {"name": "left_rear", "at": [-0.2, 0.26, -0.05], "shape": "wheel", "size": [0.16, 0.06], "mirror": True},
+            {"name": "arm", "at": "top", "robot": {"library": "panda"}},
+        ],
+    }
+    notes = " ".join(builder.build_robot(build).notes)
+    assert "Franka Emika Panda" in notes and "too weak" not in notes
+
+
 def test_a_mounted_robot_starts_in_the_home_pose_its_mount_gives():
     folded = copy.deepcopy(LIFT_ARM)
     folded["parts"][1]["robot"]["home"] = {"yaw": 180, "shoulder": -30}
