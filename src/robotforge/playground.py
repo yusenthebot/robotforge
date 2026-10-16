@@ -242,7 +242,15 @@ class Playground:
     @_one_edit_at_a_time
     def open_world(self, name_or_path: str) -> dict[str, Any]:
         self.store = WorldStore.open(name_or_path)
-        return self._load_world(self.store.compile())
+        try:
+            compiled = self.store.compile()
+        except ValueError as exc:
+            # Where the file is: an agent told only "unknown template 'quadrupd'" looked for it in ~/.robotforge,
+            # read the troubleshooting page and searched the disk before it found and fixed it (agent eval).
+            raise PlaygroundError(
+                f"{exc} (the world is {self.store.file}: fix it there, then open_world again)"
+            ) from exc
+        return self._load_world(compiled)
 
     @_one_edit_at_a_time
     def add_robot(

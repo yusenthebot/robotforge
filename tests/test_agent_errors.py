@@ -477,6 +477,21 @@ async def test_a_world_file_edited_by_hand_is_explained_by_every_tool_that_reads
     await lab.restore()
 
 
+async def test_a_world_that_does_not_open_says_where_its_file_is(lab):
+    """An agent in the eval told only "unknown template 'quadrupd'" looked for the file in ~/.robotforge, read the
+    troubleshooting page and searched the disk before it found and fixed it."""
+    garden = lab.playground.store.dir.parent / "garden" / "world.yaml"
+    garden.parent.mkdir()
+    garden.write_text("name: garden\nrobots:\n- name: dog\n  template: quadrupd\n", encoding="utf-8")
+    text = await lab.refused("open_world", name_or_path="garden")
+    assert "unknown template 'quadrupd'. Did you mean quadruped?" in text
+    assert f"the world is {garden}: fix it there, then open_world again" in text
+    garden.write_text(garden.read_text(encoding="utf-8").replace("quadrupd", "quadruped"), encoding="utf-8")
+    assert json.loads(await lab.accepted("open_world", name_or_path="garden"))["robots"] == ["dog"]
+    lab.playground.store = type(lab.playground.store)(lab.playground.store.dir.parent / "lab")
+    await lab.restore()
+
+
 async def test_a_name_that_exists_reopens_the_world_and_a_new_name_in_chinese_is_a_new_world(lab):
     again = json.loads(await lab.accepted("new_world", name="Lab"))
     assert again["created"] is False and "already existed" in again["notes"][0]
