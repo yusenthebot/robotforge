@@ -243,7 +243,7 @@ def _case_trips(case: str, nav: Any, roomy: np.ndarray, anywhere: np.ndarray, rn
     elif case == "narrow":
         for _ in range(trials):
             start = pick(rng, nav, anywhere, None)
-            yield start, float(rng.uniform(-180, 180)), _round(pick(rng, nav, anywhere, start))
+            yield start, fitting_yaw(nav, start, rng), _round(pick(rng, nav, anywhere, start))
     else:  # dead_ends: into one from a roomy start, then out of one, facing its end
         ends = dead_ends(nav, anywhere)
         for k in range(trials if ends else 0):
@@ -252,6 +252,31 @@ def _case_trips(case: str, nav: Any, roomy: np.ndarray, anywhere: np.ndarray, rn
                 yield pick(rng, nav, roomy, (x, y)), float(rng.uniform(-180, 180)), [round(x, 2), round(y, 2)]
             else:
                 yield (x, y), math.degrees(way_in), _round(pick(rng, nav, roomy, (x, y)))
+
+
+def fitting_yaw(nav: Any, start: tuple[float, float] | None, rng) -> float:
+    """A heading (degrees) the robot fits in where it stands: any, with room to turn on the spot; else along the way
+    with the longest free run ahead and behind (along a corridor), forward or back. A heading across a 0.6 m
+    corridor put the Go2 into both its walls."""
+    if start is None:
+        return 0.0
+    if nav.room[nav.grid.cell(*start)] >= nav.body.reach + 0.05:
+        return float(rng.uniform(-180, 180))
+    ways = np.linspace(0.0, math.pi, 16, endpoint=False)
+    runs = [_free_run(nav, start, way) + _free_run(nav, start, way + math.pi) for way in ways]
+    way = float(ways[int(np.argmax(runs))]) + (math.pi if rng.random() < 0.5 else 0.0)
+    return math.degrees(way + rng.uniform(-0.1, 0.1))
+
+
+def _free_run(nav: Any, start: tuple[float, float], way: float, most: float = 1.0) -> float:
+    """How far (m, up to `most`) the robot's middle stays on free cells going from `start` along `way` (rad)."""
+    run = 0.0
+    while run < most:
+        cell = nav.grid.cell(start[0] + (run + 0.05) * math.cos(way), start[1] + (run + 0.05) * math.sin(way))
+        if not (nav.grid.inside(*cell) and nav.free[cell]):
+            break
+        run += 0.05
+    return run
 
 
 def dead_ends(nav: Any, free: np.ndarray, ring: float = 0.6) -> list[tuple[float, float, float]]:
