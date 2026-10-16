@@ -41,6 +41,11 @@ LEARN_A_WALK = (
 
 
 GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
+# A timed move that covers less than this fraction of speed x seconds says why (shortfall). On flat ground the
+# robots of the agent eval's sessions covered 72 to 108 percent: dog 94-102, Go2 86, hexapod 100, rovers 80-98,
+# template humanoid 73-108 (0.1 m/s for 1.5 to 3 s), a two-wheeled balancer 72.
+SHORTFALL_FRACTION = 0.25
+SHORTFALL_MIN_ASKED = 0.1  # m: a shorter move (a nudge, a turn on the spot) is not judged
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
 
 
@@ -434,10 +439,38 @@ class BehaviorManager:
             ctrl = self.session.controllers.get(robot)
             if _is_mover(ctrl):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
+                if isinstance(ctrl, DiffDrive):
+                    # Wheel speeds at rest now, not at the controller's next tick: an observe right after a stop
+                    # showed the wheels still commanded, and agents zeroed them by hand (set_controls, simulate).
+                    ctrl.update(self.session.model, self.session.data)
                 return {"robot": robot, "stopped": True}
             if ctrl is not None:
                 self.session.set_controller(robot, None)
             return {"robot": robot, "stopped": ctrl is not None}
+
+    def shortfall(self, robot: str, seconds: float, start: list[float]) -> str | None:
+        """Why a timed move that is still running has covered far less ground than it asked for, or None. A rover
+        too heavy for its motors stood still for 6 s and the agent was told only "distance_m 0.002"."""
+        ctrl = self.session.controllers.get(robot)
+        speed = abs(float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0))
+        asked = speed * seconds
+        now = self.pose(robot)
+        moved = math.dist(now["position"][:2], start[:2])
+        if asked < SHORTFALL_MIN_ASKED or moved >= SHORTFALL_FRACTION * asked or not now["upright"]:
+            return None
+        text = f"{robot} moved {moved:.2f} m of the {asked:.2f} m asked ({speed:g} m/s for {seconds:g} s)"
+        if not isinstance(ctrl, DiffDrive):
+            return f"{text}: something held it back (a wall or an object in the way, a slope); look with observe"
+        m, d = self.session.model, self.session.data
+        if ctrl.spin(m, d) > SHORTFALL_FRACTION:
+            return f"{text}: its wheels turned but it did not get anywhere (slipping or stuck); look with observe"
+        push = ctrl.push_limit(m)
+        weight = f"it weighs {float(m.body_subtreemass[self._root_body(robot)]):.1f} kg"
+        strength = f" and its wheel motors push with at most {push:.1f} N in all" if push is not None else ""
+        return (
+            f"{text}: its wheels barely turned, {weight}{strength}. Give it stronger motors (list_templates lists "
+            "them), smaller wheels or a lighter body (material pla)"
+        )
 
     def settled(self, robot: str) -> Callable[[], bool] | None:
         """For robots that keep stepping for a moment after `stop`: a check for when they stand still."""

@@ -55,6 +55,23 @@ class DiffDrive:
             "max_speed": round(self.max_speed, 3),
         }
 
+    def push_limit(self, model: mujoco.MjModel) -> float | None:
+        """The most the wheels can push the robot with, in newtons (each motor's stall torque over the wheel
+        radius), or None when a motor has no torque limit."""
+        wheels = [*self.left, *self.right]
+        if not all(model.actuator_forcelimited[a] for a in wheels):
+            return None
+        return float(sum(model.actuator_forcerange[a][1] for a in wheels) / self.radius)
+
+    def spin(self, model: mujoco.MjModel, data: mujoco.MjData) -> float:
+        """How fast the wheels turn as a fraction of the speed they are commanded (0 = stalled), 1 when idle."""
+        wanted = abs(self.speed) / self.radius
+        if wanted < 1e-6:
+            return 1.0
+        wheels = [*self.left, *self.right]
+        turning = [abs(data.qvel[model.jnt_dofadr[model.actuator_trnid[a][0]]]) for a in wheels]
+        return float(np.mean(turning) / wanted)
+
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         left = (self.speed - self.turn * self.track / 2) / self.radius
         right = (self.speed + self.turn * self.track / 2) / self.radius

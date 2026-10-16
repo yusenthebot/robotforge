@@ -418,8 +418,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
         a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
         (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
-        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops and
-        reports the distance; seconds=null keeps moving until `stop`. The user watches in real time if the viewer is
+        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops (no
+        need to call stop) and reports the distance, with a note saying why when it fell far short; seconds=null
+        keeps moving until `stop`. The user watches in real time if the viewer is
         open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned policy
         (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
         `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
@@ -446,6 +447,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 return False
 
             run = await run_until(track, seconds)
+            why = playground.behaviors.shortfall(robot, seconds, before["position"])
+            moving = playground.session.controllers.get(robot)
+            # Its status as it moved at the end, marked stopped: the one from the start read as still driving at
+            # full speed (a gait's as standing at speed 0), and agents called stop after every timed move.
+            status = {**status, **(moving.status() if moving is not None else {}), "stopped": True}
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)
             if settled is not None:  # a humanoid finishes its step first; measure where it really stops
@@ -464,6 +470,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     "turned_deg": round(turned, 1),
                     **run,
                     "behavior": status,
+                    **({"note": why} if why else {}),
                 }
             )
 
