@@ -19,7 +19,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - Ground and terrain: `set_floor(style)` (checker, grass, wood, concrete, dirt, sand, rock, snow, tile); `set_terrain(type)` for the whole ground or `add_terrain(type, pos)` for one feature (hills, rough, stairs, ramp, stones, curb, platform).
 3. **Robot.** Pick the source that fits:
    - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, tuned with `params` (sizes, servo, color);
-   - library (`list_library`): real robots such as `go2` or `panda`, downloaded on first use (4-55 MB); `mounts` puts one on another, an arm on a dog's back (`add_robot(name="go2", library="go2", mounts=[{"library": "piper"}])`, then the arm is `go2/arm`, and a walking dog stops before it works) or a gripper on an arm's flange (`ur5e` with `robotiq_2f85`);
+   - library (`list_library`): real robots such as `go2` or `panda`, downloaded on first use (4-55 MB); `mounts` puts one on another, an arm on a dog's back (`add_robot(name="go2", library="go2", mounts=[{"library": "piper"}])`, then the arm is `go2/arm`, and a walking dog stops before it works) or a gripper on an arm's flange (`ur5e` with `robotiq_2f85`, also on a dog: `anymal_c` with both); each walker carries only what `list_library` says (`carries`);
    - file: `add_robot(file=...)` imports URDF, xacro, MJCF or a mesh and returns the import doctor's report;
    - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover);
    - nothing fits: write a small URDF and import it (see recipes).

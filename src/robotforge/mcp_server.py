@@ -284,9 +284,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         or built from parts (build, see builder_guide).
 
         mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
-        pick_and_place "go2/arm"); on an arm such as ur5e, {"library": "robotiq_2f85"} becomes its gripper. Each
-        mount: library or template, optional name, at ("top" by default, "tool" for an arm's flange, or a body name),
-        shift [x, y, z] in meters and rotate [roll, pitch, yaw] in degrees.
+        pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
+        gripper. A walker carries what list_library's "carries" says. Each mount: library or template, optional name,
+        at ("top" by default, "tool" for an arm's flange, or a body name), shift [x, y, z] in meters and rotate [roll,
+        pitch, yaw] in degrees.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
