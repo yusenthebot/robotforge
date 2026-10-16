@@ -818,16 +818,23 @@ def linear(
     layout: Layout,
 ) -> None:
     """A linear actuator drawn as a lead screw along the whole stroke: the motor below the start of the
-    travel, a bearing block past its end and a nut that rides with the part."""
+    travel, a bearing block past its end and a nut that rides with the part. With nothing of the parent near
+    the far end to hold a bearing (a lifter rising off a base's top) the screw ends free where the nut stops."""
     sx, sy, sz = actuator.size
     a = _unit(part.rot @ axis)
     lo, hi = joint_range
     rod_r = float(np.clip(0.2 * min(sy, sz), 0.002, 0.008))
-    nut_h = max(0.004, rod_r * 1.4)
+    nut_h = max(0.004, rod_r * 1.4)  # m, half the nut's height
     center = layout.centers.get(part.parent)
     rot = _frame(a, None if center is None else center - part.pos)
     back = rot[:, 0]  # toward the parent's middle, across the screw
     bottom, top = lo - nut_h - 0.004, hi + nut_h + 0.004
+    ends = [(bottom - sx / 2, sy / 2)]  # where a bracket holds the screw, and its half width
+    gap = layout.surface(part.parent, part.pos + a * (top + rod_r * 1.3), back)
+    if gap is not None and gap <= BRACKET_REACH:
+        ends.insert(0, (top + rod_r * 1.3, rod_r * 2.2))
+    else:
+        top = hi + nut_h
     motor = M.rounded_box(sy / 2, sz / 2, sx / 2, min(sy, sz) * 0.12, segments=2)
     vis.add(parent, "dark", DARK, motor, part.pos + a * (bottom - sx / 2), rot)
     for end in (1, -1):
@@ -835,7 +842,7 @@ def linear(
         vis.add(parent, "metal", P.METAL, cap, part.pos + a * (bottom - sx / 2 + end * sx * 0.42), rot)
     vis.add(parent, "metal", P.METAL, P.lead_screw(rod_r, top - bottom), part.pos + a * bottom, rot)
     # The screw's ends are held by brackets that reach back to the parent's surface, so nothing floats.
-    for at, half_w in ((top + rod_r * 1.3, rod_r * 2.2), (bottom - sx / 2, sy / 2)):
+    for at, half_w in ends:
         start = part.pos + a * at
         gap = layout.surface(part.parent, start, back)
         reach = rod_r * 2.2 if gap is None or gap > BRACKET_REACH else max(gap + 0.002, rod_r * 2.2)

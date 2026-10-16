@@ -483,3 +483,27 @@ def test_a_part_on_an_unpowered_hinge_keeps_its_color(needs_gl, name):
     finally:
         renderer.close()
     assert own > 0 and colored >= 0.85 * own
+
+
+def test_a_lead_screw_with_nothing_near_its_far_end_ends_free():
+    """A lifter rising off a base's top had the bearing at the far end of its lead screw drawn as a stub in
+    mid-air, 9 cm above the base, holding nothing. With nothing of the parent near to hold a bearing, the
+    screw ends where the nut stops and no bracket is drawn there."""
+    build = {"color": "teal", "linear": "l16", "base": {"shape": "box", "size": [0.25, 0.18, 0.06], "fixed": True}}
+    lifter = {"name": "lifter", "at": "top", "shift": [0.05, 0, 0], "shape": "box", "size": [0.06, 0.06, 0.02]}
+    lifter["direction"] = "up"
+    lifter["joint"] = {"type": "slide", "axis": "z", "range": [0, 0.08]}
+    build["parts"] = [lifter]
+    model = _compile(build)
+    data = _home(model)
+    top = 0.03  # the base's top face, in its frame
+    base = model.body("r/base").id
+    meshes = [g for g in range(model.ngeom) if model.geom_bodyid[g] == base and model.geom_type[g] == MESH]
+    highest = {
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, int(model.geom_matid[g])): float(
+            _mesh_points(model, data, g)[:, 2].max()
+        )
+        for g in meshes
+    }
+    assert highest["r/rf_dark"] < top + 0.005  # the pan, the vent, the motor: no bracket up in the air
+    assert highest["r/rf_metal"] < top + 0.08 + 0.0056 + 0.001  # the screw ends level with the nut at full stroke
