@@ -236,11 +236,14 @@ LESSONS: tuple[Lesson, ...] = (
             '`add_object(name="box", shape="box", size=[0.1, 0.1, 0.1], pos=[0.6, 0.4], color="blue")`.',
             '`describe_model()` lists sensors and cameras; `observe(view="rover/front_cam")` shows what the rover '
             'sees; compare with `observe(view="top")`.',
+            '`observe(view="rover/front_cam", find="red")`: the camera finds the red pixels and, with its depth, '
+            "estimates where the ball is; compare that position with the ball's in free_bodies.",
             '`move(robot="rover", speed=0, turn=1.0, seconds=null)`, `simulate(seconds=1)`, '
             '`observe(include_image=false)`: read rover/gyro while it turns, then `stop(robot="rover")`.',
         ),
         check=(
-            "The front_cam image shows the red ball ahead.",
+            'The front_cam image shows the red ball ahead, and find names it (object "ball") at about x 0.78: '
+            "2 cm short of its middle, because the camera sees only the ball's near half.",
             "While turning, the third rover/gyro value (rotation about the vertical axis) is clearly positive, "
             "about 0.6 rad/s for the 1.0 commanded: measuring beats assuming. After stop it is near 0.",
         ),

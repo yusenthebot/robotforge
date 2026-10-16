@@ -22,8 +22,12 @@ from robotforge.sim.render import Layers
 
 EVERY = ("all", "any", "every", "colors")  # find= words that mean every named color
 MAX_FOUND = 12  # the biggest finds reported; the rest are counted
-# scripts/vision_bench.py and tests/test_vision.py: a 4 cm cube half a metre away, located by depth
-ACCURACY = "about 0.3 cm off for a 4 cm cube half a metre away, less accurate further away"
+# Measured (scripts/vision_bench.py, tests/test_find.py): a 4 cm cube half a metre away and seen from above
+# came out 0.1 to 0.4 cm off; a 10 cm ball seen from a rover's low camera 2 cm short, its far half unseen.
+ACCURACY = (
+    "within about 0.5 cm for a small object seen from above; a camera looking from the side sees only the near "
+    "half, so the middle can come out a few cm short"
+)
 MARK = (255, 190, 0)  # the boxes drawn round the finds
 
 
