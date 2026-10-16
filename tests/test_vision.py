@@ -142,6 +142,90 @@ def test_the_wrong_plane_height_lands_behind_the_object():
     assert cam.on_plane(u, v, 0.6) is None  # a plane above the camera is never met looking down
 
 
+# ---- locating from depth, and the doubts about a find --------------------------------------------------------
+
+
+def _looking_down() -> vision.Pinhole:
+    """A camera 1 m above the floor looking straight down, 100 px across, a pixel 1 cm wide on the floor (and
+    0.9 cm on a 10 cm box's top)."""
+    down, right, up = np.array([0.0, 0.0, -1.0]), np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])
+    return vision.Pinhole(np.zeros(3) + [0, 0, 1.0], right, up, down, 100.0, 100.0, 50.0, 50.0, 100, 100)
+
+
+def _box_seen_from_above(top: float = 0.1) -> tuple[np.ndarray, vision.Blob]:
+    """Depth of a 10 cm box (its top `top` m high) standing on the floor, pixels 60..69 across, 45..54 down."""
+    depth = np.ones((100, 100))
+    depth[45:55, 60:70] = 1.0 - top
+    mask = np.zeros((100, 100), bool)
+    mask[45:55, 60:70] = True
+    return depth, vision.blobs(mask)[0]
+
+
+def test_edge_pixels_of_something_in_front_or_behind_do_not_move_a_find():
+    """A hand over a box's edge lent the box's blob a few pixels 10 cm above its top (observe(find=) put the box
+    7.6 cm off); a bench far behind a ball lent it pixels at the ball's height (77 cm off)."""
+    cam = _looking_down()
+    depth, blob = _box_seen_from_above()
+    clean, _ = vision.locate(cam, depth, blob)
+    depth[45:55, 60] = 0.5  # the left column blends in a hand half a metre above the floor
+    depth[45, 61:70] = 2.0  # the top row blends in something a metre further away
+    assert len(vision.own_points(cam, depth, blob)) == 100 - 10 - 9
+    position, _ = vision.locate(cam, depth, blob)
+    assert position == pytest.approx(clean, abs=0.005)  # half a pixel: the box's left column is gone (2 cm before)
+    assert clean == pytest.approx([0.135, 0.0, 0.05], abs=1e-6)  # pixel 65's ray 0.9 m down; half way up
+
+
+def test_an_object_stands_on_the_flat_surface_seen_most_around_it():
+    """A cereal box on a kitchen island sat 15 cm low: around it the island's side ran down to the floor, and the
+    median height of everything round it was 0.6 m though the island is 0.9 m high."""
+    cam = _looking_down()
+    depth, blob = _box_seen_from_above(top=0.1)
+    ring = np.zeros((100, 100), bool)
+    ring[41:59, 56:74] = True
+    ring[45:55, 60:70] = False
+    ys, xs = np.nonzero(ring)
+    slope = np.linspace(0.0, 0.04, len(ys))  # most of the ring: a slope from the floor up to 4 cm
+    depth[ys, xs] = 1.0 - slope
+    depth[ys[::3], xs[::3]] = 1.0 - 0.05  # a third of it: a flat shelf 5 cm high the box stands on
+    position, size = vision.locate(cam, depth, blob)
+    assert position[2] == pytest.approx(0.075, abs=0.002) and size[2] == pytest.approx(0.05, abs=0.003)
+
+
+def test_a_find_says_when_it_is_cut_off_or_hidden():
+    depth, blob = _box_seen_from_above()
+    assert not vision.cut_off(blob, depth.shape) and not vision.hidden(depth, blob)
+    behind = depth.copy()
+    behind[40:60, 55:60] = 3.0  # something further away next to it hides nothing
+    assert not vision.hidden(behind, blob)
+    covered = depth.copy()
+    covered[44:56, 55:61] = 0.5  # an arm in front covers its left edge
+    assert vision.hidden(covered, blob)
+    mask = np.zeros((100, 100), bool)
+    mask[0:10, 60:70] = True  # runs into the picture's top edge
+    assert vision.cut_off(vision.blobs(mask)[0], depth.shape)
+
+
+def test_a_box_under_a_shelf_seen_from_the_side_is_side_on(needs_gl):
+    """With its top hidden the camera sees one face, whose middle is half the box's depth in front of the box's."""
+    seen = {}
+    for shelf in (False, True):
+        objects = [{"name": "cube", "shape": "box", "size": [0.06] * 3, "pos": [0.3, 0.0], "color": "red"}]
+        if shelf:  # a grey board 1.5 cm over the cube's top, wider than it
+            board = {"size": [0.3, 0.3, 0.01], "pos": [0.3, 0.0, 0.075], "color": "gray", "fixed": True}
+            objects.append({"name": "shelf", "shape": "box", **board})
+        model = compile_world(World.model_validate({"name": "w", "objects": objects})).model
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        renderer = SnapshotRenderer()
+        layers = renderer.layers_of(model, data, "front", 640, 480, 0)
+        renderer.close()
+        seen[shelf] = vision.find(layers.rgb, layers.depth, layers.camera, "red")[0]
+    assert not seen[False].side_on and seen[True].side_on
+    truth = np.array([0.3, 0.0, 0.03])
+    assert np.linalg.norm(seen[False].position - truth) < 0.01
+    assert seen[True].position[0] == pytest.approx(0.3 + 0.03, abs=0.01)  # the face toward the camera (+x)
+
+
 # ---- real renders -----------------------------------------------------------------------------------------
 
 PALETTE = ("red", "orange", "yellow", "green", "teal", "blue", "purple", "pink")

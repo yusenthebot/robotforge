@@ -49,9 +49,17 @@ NAMED: dict[str, ColorRange] = {
 EXPOSURE = 0.6
 MIN_AREA = 12  # px: smaller blobs are noise (a 4 cm cube 0.7 m from a 640 px camera covers about 800)
 MIN_INTERIOR = 9  # px: a blob with fewer pixels off its edge is measured over all of them
-TOP_BAND = 0.005  # m: measured points this close below an object's highest count as its top
+TOP_BAND = 0.005  # m: measured points this close to an object's highest count as its top
 RING = 4  # px around a blob's box where the depth camera measures what the object stands on
 SKY = 0.999  # share of the far clipping distance from which a depth reading means nothing was there
+# m: a pixel on a blob's edge more than this nearer or farther than every pixel inside it blends in something in
+# front of the object or behind it (measured: an arm's hand 18 cm nearer than a box it hid part of, a park bench
+# 1.6 m behind a ball). A cube's own edge pixels were at most 1.1 cm past its inside.
+SLACK = 0.03
+SUPPORT_BIN = 0.01  # m: heights around a blob are counted in bins this tall; a flat surface fills one of them
+HIDDEN_SHARE = 0.05  # of the pixels round a blob: this many nearer than all of it means something covers part of it
+SIDE_ON = 0.01  # m: a top seen this shallow along the view is only the top edge of the face the camera sees
+MIN_SLANT = 0.1  # sine of the lowest angle (6 degrees) a camera is taken to look down at a surface from
 
 
 def color_range(color: str | list[float]) -> ColorRange:
@@ -307,43 +315,132 @@ def locate(cam: Pinhole, depth: np.ndarray, blob: Blob) -> tuple[np.ndarray, np.
     The outermost 2 percent of points are ignored everywhere.
     """
     points = depth_points(cam, depth, blob)
-    top = float(np.percentile(points[:, 2], 98))
-    # The top's edge pixels count: one that blends in the floor behind has the floor's height and drops out
-    # anyway, and leaving them all out shaved the far edge only (the near one runs on into the side), which
-    # pulled the middle 3 mm toward the camera.
-    whole = depth_points(cam, depth, blob, interior=False)
-    upper = whole[whole[:, 2] >= top - TOP_BAND][:, :2]
-    across = (np.percentile(upper, 2, axis=0) + np.percentile(upper, 98, axis=0)) / 2
+    top, upper, whole = _top(cam, depth, blob, points)
+    across = (np.percentile(upper[:, :2], 2, axis=0) + np.percentile(upper[:, :2], 98, axis=0)) / 2
     low, high = np.percentile(points, 2, axis=0), np.percentile(points, 98, axis=0)
-    around = _ring_points(cam, depth, blob)
-    below = around[around[:, 2] < top - TOP_BAND, 2]
-    support = float(np.median(below)) if below.size >= MIN_INTERIOR else float(low[2])
+    support = _support(cam, depth, blob, top, lowest=min(float(low[2]), float(np.percentile(whole[:, 2], 2))))
     size = np.array([high[0] - low[0], high[1] - low[1], top - support])
     return np.array([across[0], across[1], (top + support) / 2]), size
 
 
+def _top(cam: Pinhole, depth: np.ndarray, blob: Blob, inside: np.ndarray) -> tuple[float, np.ndarray, np.ndarray]:
+    """An object's top height (from the points inside its blob), the points of its top, and all its points.
+    The top is one of the inside's points, so the top's points are never none."""
+    top = float(np.percentile(inside[:, 2], 98, method="lower"))
+    whole = own_points(cam, depth, blob)
+    # The top's edge pixels count: one that blends in the floor behind has the floor's height and drops out
+    # anyway, and leaving them all out shaved the far edge only (the near one runs on into the side), which
+    # pulled the middle 3 mm toward the camera. The band is closed above too, for what own_points lets through.
+    z = whole[:, 2]
+    return top, whole[(z >= top - TOP_BAND) & (z <= top + TOP_BAND)], whole
+
+
+def own_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
+    """The world points measured over a whole blob, less its edge pixels that show something else.
+
+    An edge pixel blends the object's color with what is next to it, and the depth camera gives it one of the
+    two depths: a hand in front of a box lent the box's blob four pixels 10 cm above the box's top, enough to
+    move its middle 7.6 cm. Pixels more than SLACK nearer or farther than every pixel inside the blob go (the
+    inside's own pixels all stay).
+    """
+    ys, xs = blob.pixels()
+    d = depth[ys, xs]
+    iy, ix = blob.interior()
+    near, far = float(depth[iy, ix].min()), float(depth[iy, ix].max())
+    keep = (d >= near - SLACK) & (d <= far + SLACK)
+    ys, xs, d = ys[keep], xs[keep], d[keep]
+    return cam.pos + d[:, None] * cam.ray(xs + 0.5, ys + 0.5)
+
+
+def _support(cam: Pinhole, depth: np.ndarray, blob: Blob, top: float, lowest: float) -> float:
+    """The height of the surface the object stands on: the flat surface seen most around it, below its top.
+
+    A flat surface puts many points in one SUPPORT_BIN; a wall or a table's side spreads its points over many,
+    so the median of everything around (the old way) sank to 0.6 m for a cereal box on a 0.9 m kitchen island
+    with the island's side below it. It cannot be above the lowest point seen on the object itself.
+    """
+    around = _ring_points(cam, depth, blob)
+    below = around[around[:, 2] < top - TOP_BAND, 2]
+    if below.size < MIN_INTERIOR:
+        return lowest
+    bins = np.floor((below - below.min()) / SUPPORT_BIN).astype(np.int64)
+    fullest = int(np.argmax(np.bincount(bins)))
+    return min(float(np.median(below[bins == fullest])), lowest)
+
+
 def _ring_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
-    """The measured points just outside a blob's box (RING pixels wide): what the object stands on, mostly."""
+    """The measured points just outside a blob's box (RING pixels wide): what the object stands on, mostly.
+    Where nothing was measured (the sky) is left out."""
     h, w = depth.shape
     x0, y0, x1, y1 = blob.box
     xa, ya, xb, yb = max(x0 - RING, 0), max(y0 - RING, 0), min(x1 + RING, w - 1), min(y1 + RING, h - 1)
     ys, xs = np.mgrid[ya : yb + 1, xa : xb + 1]
     outside = (xs < x0) | (xs > x1) | (ys < y0) | (ys > y1)
     ys, xs = ys[outside], xs[outside]
-    return cam.pos + depth[ys, xs][:, None] * cam.ray(xs + 0.5, ys + 0.5)
+    d = depth[ys, xs]
+    seen = d < cam.far * SKY
+    return cam.pos + d[seen][:, None] * cam.ray(xs[seen] + 0.5, ys[seen] + 0.5)
 
 
 # ---- finding colored objects (observe(find=...)) ----------------------------------------------------------
 
 
+def cut_off(blob: Blob, shape: tuple[int, ...]) -> bool:
+    """The blob touches the picture's edge, so part of its object may be out of view and its middle off."""
+    x0, y0, x1, y1 = blob.box
+    return x0 == 0 or y0 == 0 or x1 == shape[1] - 1 or y1 == shape[0] - 1
+
+
+def hidden(depth: np.ndarray, blob: Blob) -> bool:
+    """Something in front covers part of the object: of the pixels just round the blob and its own edge pixels,
+    at least HIDDEN_SHARE (counted against the pixels round it) are more than SLACK nearer than all of its inside.
+    What it stands on and what is behind it are never nearer, so they do not count."""
+    h, w = depth.shape
+    x0, y0, x1, y1 = blob.box
+    xa, ya = max(x0 - 1, 0), max(y0 - 1, 0)
+    local = np.zeros((min(y1 + 1, h - 1) - ya + 1, min(x1 + 1, w - 1) - xa + 1), dtype=bool)
+    ys, xs = blob.pixels()
+    local[ys - ya, xs - xa] = True
+    ny, nx = np.nonzero(dilate(local) & ~local)
+    iy, ix = blob.interior()
+    near = float(depth[iy, ix].min()) - SLACK
+    nearer = int((depth[ny + ya, nx + xa] < near).sum() + (depth[ys, xs] < near).sum())
+    return nearer >= HIDDEN_SHARE * max(ny.size, 1)
+
+
+def side_on(cam: Pinhole, depth: np.ndarray, blob: Blob) -> bool:
+    """The camera sees a face of the object and not its top (from low down, or with a shelf above it): the
+    top it measured is a line less than SIDE_ON deep along the view, and the middle found is that face's."""
+    ahead = cam.forward[:2]
+    if np.linalg.norm(ahead) < 1e-6:  # looking straight down: every top is in view
+        return False
+    _, upper, _ = _top(cam, depth, blob, depth_points(cam, depth, blob))
+    along = upper[:, :2] @ (ahead / np.linalg.norm(ahead))
+    return float(np.percentile(along, 98) - np.percentile(along, 2)) < SIDE_ON
+
+
+def pixel_reach(cam: Pinhole, depth: np.ndarray, blob: Blob) -> float:
+    """How much of a level surface one pixel covers at the object, along the view (m): a pixel's width at the
+    object's distance, stretched by how slanting the camera looks at it (seen from 10 degrees up, six times)."""
+    iy, ix = blob.interior()
+    distance = float(np.median(depth[iy, ix]))
+    ray = cam.ray(blob.u, blob.v)
+    down = max(-float(ray[2]) / float(np.linalg.norm(ray)), MIN_SLANT)
+    return distance / min(cam.fx, cam.fy) / down
+
+
 @dataclass(frozen=True)
 class Found:
-    """A blob of one color, and where its object is by the depth camera."""
+    """A blob of one color, where its object is by the depth camera, and what may make that less sure."""
 
     color: str
     blob: Blob
     position: np.ndarray  # the middle of the box around its measured points, world m
     size: np.ndarray  # that box's extent, m
+    cut_off: bool = False  # the blob touches the picture's edge
+    hidden: bool = False  # something nearer covers part of it
+    side_on: bool = False  # only a face of it is seen, not its top: the middle found is the face's
+    reach: float = 0.0  # m of a level surface one pixel covers at the object, along the view (pixel_reach)
 
 
 def find(rgb: np.ndarray, depth: np.ndarray, cam: Pinhole, color: str, min_area: int = MIN_AREA) -> list[Found]:
@@ -354,5 +451,16 @@ def find(rgb: np.ndarray, depth: np.ndarray, cam: Pinhole, color: str, min_area:
     out = []
     for blob in blobs(mask, min_area):
         center, size = locate(cam, depth, blob)
-        out.append(Found(color if isinstance(color, str) else "color", blob, center, size))
+        out.append(
+            Found(
+                color if isinstance(color, str) else "color",
+                blob,
+                center,
+                size,
+                cut_off=cut_off(blob, rgb.shape),
+                hidden=hidden(depth, blob),
+                side_on=side_on(cam, depth, blob),
+                reach=pixel_reach(cam, depth, blob),
+            )
+        )
     return out
