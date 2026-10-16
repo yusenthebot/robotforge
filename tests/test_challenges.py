@@ -128,4 +128,6 @@ def test_the_obstacle_course_scores_how_far_the_dog_gets(pg):
             break
     run = update["results"]["run"]
     assert run["distance"] > lesson.marks[1][1]  # past the stairs at least
+    # The step's check sees the score at the next tick; on Windows CI the run ended just after this one.
+    update = _play(pg, 0.2)
     assert run["stars"] >= 2 and "course" in update["passed"]
