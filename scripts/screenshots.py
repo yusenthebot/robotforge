@@ -675,7 +675,7 @@ SHOTS = [
             _wait(22.0),
         ),
     ),
-    Shot(  # after Keep the A1 learns its steering and turns, and checks its switches: about 170 s on a laptop
+    Shot(  # after Keep the A1 learns its steering and turns, and checks its switches: a few minutes on a laptop
         "lesson_your_robot_kept",
         _a1,
         page=_lesson(
@@ -683,7 +683,11 @@ SHOTS = [
             "document.querySelector('[data-choice=\"robot\"] button:last-child').click();",
             _wait(1.0),
             _press("train"),
-            _wait(22.0),
+            # until the training's result shows (12 s on an idle laptop, 28 s with other benches running)
+            """for (let k = 0; k < 120 && !/学了 \\d+ 轮|\\d+ rounds \\(/.test(
+                document.getElementById("lesson-result").textContent); k++) {
+                await new Promise((r) => setTimeout(r, 500));
+            }""",
             _press("keep"),
             # until the panel says the turns are learned too (the second sentence of the result), then show it
             """for (let k = 0; k < 600 && !/原地转弯：|turn on the spot:/.test(
