@@ -94,6 +94,11 @@ class Playground:
 
         def teleop(msg: dict[str, Any]) -> None:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
+            if msg.get("to") is not None:  # go there along a planned path, as move(to=...) does, until it arrives
+                to = msg["to"] if isinstance(msg["to"], str) else [float(v) for v in msg["to"]]
+                speed = float(msg["speed"]) if msg.get("speed") is not None else None
+                self.behaviors.navigate(str(msg["robot"]), to, speed, str(walker) if walker else None)
+                return
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
 
