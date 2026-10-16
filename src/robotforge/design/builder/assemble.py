@@ -109,8 +109,7 @@ def _joint(
         direction = looks.direction_of(part.spec, part.local)
         bolted = part.spec.shape in ("capsule", "cylinder", "sphere") and direction is not None
         if bolted and layout.centers.get(part.parent) is not None:  # a flange where it meets its parent
-            neck = 0.42 if part.spec.shape == "sphere" else 1.0  # a sphere stands on a neck narrower than itself
-            looks.fixed(vis, body, direction, neck * link_radius(part.spec))
+            looks.fixed(vis, body, direction, _cover_radius(part.spec))
         return
     hinge = j.type == "hinge"
     # A hinge axis is a rotation (a mirror flips it with the motion); a slide axis is a plain direction.
@@ -140,7 +139,7 @@ def _joint(
             _min_mass(body)
         out.home_qpos[name] = home
         if hinge and part.spec.shape not in ("wheel", "caster"):
-            looks.passive(vis, body, np.asarray(axis), _cover_radius(part.spec))
+            looks.passive(vis, body, part, np.asarray(axis), _cover_radius(part.spec), layout)
         return
 
     actuator = _geared(components.actuator(act_spec.model), act_spec.gear)
@@ -274,8 +273,15 @@ def _actuator_housing(
 
 
 def _cover_radius(spec: PartSpec) -> float:
-    """How big a joint cover has to be to hide where the part's link starts."""
-    return link_radius(spec) if spec.shape != "none" else 0.007
+    """How big a joint cover or flange has to be to hide where the part starts: the radius of its link, of the
+    neck a ball is held by, or of a disc's thickness (a cover as wide as the disc would swallow it)."""
+    if spec.shape == "none":
+        return 0.007
+    if spec.shape == "sphere":
+        return looks.NECK * link_radius(spec)
+    if spec.shape == "cylinder":
+        return min(link_radius(spec), spec.size[1] / 2)
+    return link_radius(spec)
 
 
 def _min_mass(body: mujoco.MjsBody) -> None:

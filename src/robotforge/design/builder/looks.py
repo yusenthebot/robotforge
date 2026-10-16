@@ -51,6 +51,8 @@ PAN_MAX = 0.015  # m: a tall base keeps its color; only its bottom 15 mm is the 
 SEAM_RIM = PAN_INSET - SEAM_INSET
 LINK_ROUNDNESS = 0.85  # corner radius of a hinged link's section, as a share of its smaller half extent
 LINK_SHRINK = 0.25  # a hinged link's drawn shell lies at most this share of its radius inside its capsule (LinkShape)
+ACROSS = 0.3  # a hinge whose share across a link is no more than this runs along it: the link spins, it does not swing
+NECK = 0.42  # a ball is held by a neck this share of its radius (a head on its neck, a bob on its rod)
 LID_SEAM = 0.74  # a box part's lid line, as a share of its height from the bottom
 KEEPOUT_MARGIN = 0.003  # m kept clear around whatever is attached to a face before a screw goes there
 SENSOR_KEEPOUT = 0.016  # m around a sensor's mounting point
@@ -337,8 +339,8 @@ class LinkShape:
         if hinge is None or length < 1e-6:
             return None
         d = (b - a) / length
-        across = _perp(np.asarray(hinge, float), d)
-        if np.linalg.norm(across) <= 0.3:  # the hinge runs along the link: it spins, it does not swing
+        across = _perp(_unit(hinge), d)
+        if np.linalg.norm(across) <= ACROSS:  # the hinge runs along the link: it spins, it does not swing
             return None
         y = _unit(across)
         return cls(a, b, np.column_stack([_cross(y, d), y, d]), (r * 1.12, r * 0.9), (r * 0.92, r * 0.86))
@@ -374,6 +376,17 @@ def _reach(hx: float, hy: float, rr: float, ux: float, uy: float) -> float:
         return hy / uy
     uc = ux * cx + uy * cy
     return uc + math.sqrt(max(uc * uc - cx * cx - cy * cy + rr * rr, 0.0))
+
+
+def spins(spec: BaseSpec | PartSpec, local: np.ndarray, hinge: np.ndarray) -> bool:
+    """True when a cylinder or capsule turns about its own axis (a wheel-like disc, a spinning rod)."""
+    if spec.shape not in ("cylinder", "capsule"):
+        return False
+    start, end = segment(spec)
+    d = local @ (end - start)
+    if np.linalg.norm(d) < 1e-9:
+        return False
+    return float(np.linalg.norm(_perp(_unit(hinge), _unit(d)))) <= ACROSS
 
 
 def hinge_axis(part: Placed | None) -> np.ndarray | None:
@@ -833,10 +846,16 @@ def linear(
     vis.add(child, "dark", DARK, nut, (0.0, 0.0, 0.0), part.rot.T @ rot)
 
 
-def passive(vis: Visuals, body: mujoco.MjsBody, axis: np.ndarray, r_link: float) -> None:
-    """An unpowered hinge: a dark sleeve about the axis with a bearing cap on each side."""
+def passive(vis: Visuals, body: mujoco.MjsBody, part: Placed, axis: np.ndarray, r_link: float, layout: Layout) -> None:
+    """An unpowered hinge: a dark sleeve about the axis with a bearing cap on each side, sized to the link (or
+    neck) that starts there. Not drawn where nothing pokes through the parent: a disc or rod spinning about its
+    own axis, or a hinge deep inside its part (a ball turning about its middle)."""
+    if spins(part.spec, part.local, axis):
+        return
     r = float(np.clip(1.3 * r_link, 0.006, 0.05))
     half = float(np.clip(1.1 * r_link, 0.005, 0.04))
+    if layout.hidden(part.name, np.zeros(3), _frame(axis), (r, r, half)):
+        return
     _add(vis, body, P.knuckle(r, half), NEUTRAL, (0.0, 0.0, 0.0), M.z_to(axis))
 
 

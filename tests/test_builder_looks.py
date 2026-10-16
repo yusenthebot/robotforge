@@ -437,3 +437,49 @@ def test_a_camera_on_top_stands_on_it_and_never_sees_inside_its_robot(needs_gl):
     seen = {int(g) for g in np.unique(seg[..., 0][geoms]) if g >= 0 and model.geom_bodyid[g] == model.cam_bodyid[cam]}
     names = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, int(model.geom_matid[g])) for g in seen}
     assert "r/rf_dark" not in names  # the pan, the parting line's core and the camera's own housing
+
+
+PASSIVE = {  # parts on unpowered hinges: a ball turning about its middle, a disc about its axis, a hanging bob
+    "color": "teal",
+    "base": {"shape": "box", "size": [0.4, 0.2, 0.06], "fixed": True},
+    "parts": [
+        {"name": "ball", "at": "top", "shift": [-0.14, 0, 0.05], "shape": "sphere", "size": [0.06], "color": "red"},
+        {"name": "disc", "at": "top", "shift": [-0.03, 0, 0.07], "shape": "cylinder", "size": [0.12, 0.02]},
+        {"name": "bob", "at": "top", "shift": [0.1, 0, 0], "shape": "sphere", "size": [0.05], "direction": "up"},
+    ],
+}
+PASSIVE["parts"][1].update(direction="left", color="yellow")
+PASSIVE["parts"][2]["color"] = "orange"
+for _part in PASSIVE["parts"]:
+    _part.update(joint={"axis": "y", "range": [-90, 90]}, actuator="none")
+
+
+@pytest.mark.parametrize("name", ["ball", "disc", "bob"])
+def test_a_part_on_an_unpowered_hinge_keeps_its_color(needs_gl, name):
+    """The cover on an unpowered hinge was sized by the part's whole radius: a ball turning about its middle
+    and a disc spinning about its axis vanished into dark drums, and a bob hung under a dark wheel. A ball is
+    held by a neck, a hinge deep inside its part or along a disc's axis needs no cover: seen from anywhere
+    round it, the part is mostly its own color."""
+    model = _compile(PASSIVE)
+    data = _home(model)
+    body = model.body(f"r/{name}").id
+    color = _rounded(components.color(next(p["color"] for p in PASSIVE["parts"] if p["name"] == name)))
+    renderer = mujoco.Renderer(model, 120, 160)
+    own = colored = 0
+    try:
+        renderer.enable_segmentation_rendering()
+        for azimuth in (0, 90, 180, 270):
+            cam = mujoco.MjvCamera()
+            cam.lookat[:] = data.xipos[body]
+            cam.distance, cam.azimuth, cam.elevation = 0.3, azimuth, -20
+            renderer.update_scene(data, camera=cam)
+            seg = renderer.render()
+            geoms = seg[..., 0][seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)]
+            for g in np.unique(geoms):
+                if g >= 0 and model.geom_bodyid[g] == body:
+                    count = int(np.sum(geoms == g))
+                    own += count
+                    colored += count if _rounded(model.geom_rgba[g]) == color else 0
+    finally:
+        renderer.close()
+    assert own > 0 and colored >= 0.85 * own
