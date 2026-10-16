@@ -74,8 +74,11 @@ LEG_STEP_MAX = 0.025  # m, for any legged robot: the Go2's stairs, whatever its 
 FLAT_STEP = 0.005  # m: robots that only walk on flat ground (humanoids, snakes, learned rhythm walks)
 SLOPE_DEG = {
     Kind.ROVER: 15.0,
-    Kind.QUADRUPED: 10.0,  # the Go2 limit; the template dog climbs 15
-    Kind.HEXAPOD: 10.0,
+    # The Go2 climbed 10 degrees straight up 1.5 m ramps at speed (and fell on 12), but on the obstacle course's
+    # 10 degree ramp, 1 m slopes, slowing for a point near the top, it stalled and slid back in 4 of 8 start headings
+    # (2 of 34 trips in scripts/nav_bench.py): 9 keeps a margin. The template dog climbs 15.
+    Kind.QUADRUPED: 9.0,
+    Kind.HEXAPOD: 9.0,
     Kind.HUMANOID: 3.0,
     Kind.BALANCER: 5.0,  # not measured: leaning to balance on a slope is hard, so kept low
     Kind.SNAKE: 5.0,  # not measured

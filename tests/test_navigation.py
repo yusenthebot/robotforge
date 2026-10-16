@@ -2,6 +2,7 @@
 robot (move with to=...), and move without a destination behaving as it always did."""
 
 import asyncio
+import dataclasses
 import json
 import math
 import re
@@ -233,13 +234,15 @@ def test_what_a_robot_climbs_decides_steps_and_slopes(pg):
 
 
 def test_a_ramp_as_steep_as_a_robot_climbs_is_free(pg):
-    """Regression: the obstacle course's 10 degree ramp read 10.00 degrees, and half of it, a hair steeper in floating
-    point, was too steep for the dog and the Go2, which climb 10: they were never sent over it."""
-    pg.add_robot("dog", template="quadruped", pos=[-2.0, 2.0])
+    """Regression: a 10 degree ramp read 10.00 degrees, and half of it, a hair steeper in floating point, was too steep
+    for a robot that climbs 10 (the rover climbs 15; here it is told 10)."""
+    pg.add_robot("rover", template="rover", pos=[-2.0, 2.0])
     pg.add_terrain("ramp", name="ramp", pos=[1.5, 0.0], params={"angle": 10, "length": 1.5, "width": 3.0})
-    dog = _map(pg, "dog")
-    assert math.degrees(dog.body.slope) == pytest.approx(10.0)
-    assert _codes(dog, (0.0, 1.0), (-0.6, 0.6)) == {nav_map.FREE}  # up its slope, away from its sides
+    nav = _map(pg, "rover")
+    body = dataclasses.replace(nav.body, slope=math.radians(10.0))
+    layer = pg.behaviors._layers(pg.session.version)["rover"]
+    rover = nav_map.build(layer, body, [])
+    assert _codes(rover, (0.0, 1.0), (-0.6, 0.6)) == {nav_map.FREE}  # up its slope, away from its sides
 
 
 def test_gaps_narrower_than_a_cell_are_seen_between_stepping_stones(pg):
