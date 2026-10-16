@@ -9,7 +9,10 @@ rest on the ground under them.
 
 from __future__ import annotations
 
+import contextlib
+import json
 import math
+import os
 import re
 from pathlib import Path
 from typing import Any, Literal
@@ -20,7 +23,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from robotforge import wording
-from robotforge.design import builder, components, importer, library, mounting, props, templates, terrain
+from robotforge.design import builder, components, importer, library, menagerie, mounting, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 
@@ -372,7 +375,23 @@ def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
 
 def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
     """The robot as built from its source, with the robots it carries mounted on it."""
-    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name, entry.library)
+    key = _placement_key(entry, base_dir) if entry.mounts else None
+    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
+
+
+def _placement_key(entry: RobotEntry, base_dir: Path | None) -> str:
+    """What a robot and its mounts are built from, for keeping where its mounts go (mounting.PLACEMENTS): its entry
+    but where it stands, the file it is read from as it is now, and where library robots come from."""
+    made_of = entry.model_dump(mode="json", exclude={"name", "pos", "yaw"})
+    stamp = None
+    if entry.file is not None:
+        path = Path(entry.file).expanduser()
+        path = base_dir / path if not path.is_absolute() and base_dir is not None else path
+        with contextlib.suppress(OSError):
+            stat = path.stat()
+            stamp = [str(path.resolve()), stat.st_mtime_ns, stat.st_size]
+    menagerie_from = [os.environ.get(v, "") for v in ("ROBOTFORGE_MENAGERIE", "ROBOTFORGE_CACHE")]
+    return json.dumps([made_of, stamp, menagerie_from, menagerie.COMMIT], sort_keys=True)
 
 
 def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:

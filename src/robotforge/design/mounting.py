@@ -142,10 +142,31 @@ class _Placed:
     axes: np.ndarray  # of its shift, in the frame's body (see attach)
 
 
-def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str | None = None) -> BuiltRobot:
+@dataclass(frozen=True)
+class _Placement:
+    """Where attach put each mount of a robot, and how much a floating carrier rose for them: kept by key (see
+    PLACEMENTS), so the next edit of the world puts them there without looking again."""
+
+    # Per mount: its base's radius, its mass (kg), the body it hangs from, the position and orientation there, and
+    # words for the notes.
+    spots: tuple[tuple[float, float, str, tuple[float, ...], tuple[float, ...], str], ...]
+    rise: float
+
+
+# Placing mounts looks at the carrier with rays and compiles it several times, and every edit of a world compiles each
+# robot again: with a PiPER on its back a Go2 took 0.19 s per add_object instead of 0.06, ANYmal 0.83 s instead of
+# 0.40. Placements are kept for the last PLACEMENTS_KEPT keys (world.py makes them from what the robot is built from).
+PLACEMENTS: dict[str, _Placement] = {}
+PLACEMENTS_KEPT = 64
+
+
+def attach(
+    carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str | None = None, key: str | None = None
+) -> BuiltRobot:
     """`carrier` with every mount attached, its home pose extended, and checked: a mount that overlaps the carrier is
     refused with the overlap in millimetres and the shift that lifts it clear, and a floating carrier rises if a mount
-    hangs below its feet. `model` names the carrier in the library, whose Payload says how much it carries."""
+    hangs below its feet. `model` names the carrier in the library, whose Payload says how much it carries. `key`
+    says what the carrier and its mounts are built from: the same key puts them where they went before (PLACEMENTS)."""
     if not mounts:
         return carrier
     spec = carrier.spec
@@ -153,8 +174,10 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str 
     notes = list(carrier.notes)
     placed: list[_Placed] = []
     carried: list[tuple[str, float]] = []  # (what, kg)
-    before = _lowest(spec, home_qpos) if carrier.floating else 0.0
-    for mount in mounts:
+    known = PLACEMENTS.get(key) if key is not None else None
+    spots = []
+    before = _lowest(spec, home_qpos) if carrier.floating and known is None else 0.0
+    for i, mount in enumerate(mounts):
         name = default_name(mount)
         if name in (p.name for p in placed):
             raise ValueError(f"robot {robot!r}: two mounts are called {name!r}; give each a name")
@@ -162,11 +185,16 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str 
             child = build_child(mount)
         except ValueError as exc:
             raise ValueError(f"robot {robot!r}, mount {name!r}: cannot build {what(mount)}: {exc}") from exc
-        radius, mass = _footprint(child)
-        carried.append((what(mount), mass))
         ride_on(child.spec, spec)
         at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
-        body, pos, quat, where = _place(spec, home_qpos, at, robot, name, placed, radius)
+        if known is not None:
+            radius, mass, body_name, kept_pos, kept_quat, where = known.spots[i]
+            body, pos, quat = spec.body(body_name), np.array(kept_pos), np.array(kept_quat)
+        else:
+            radius, mass = _footprint(child)
+            body, pos, quat, where = _place(spec, home_qpos, at, robot, name, placed, radius)
+        spots.append((radius, mass, body.name, tuple(map(float, pos)), tuple(map(float, quat)), where))
+        carried.append((what(mount), mass))
         rot = np.zeros(4)
         mujoco.mju_mat2Quat(rot, _euler(mount.rotate).ravel())
         turned = np.zeros(4)
@@ -193,10 +221,16 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str 
             notes.append(f"{name}: {what(mount)} mounted {where}")
         notes += [f"{name}: {n}" for n in child.notes]
     notes += _check_payload(robot, model, carried)
-    _check_overlaps(spec, home_qpos, robot, placed)
-    spawn = carrier.spawn_height
-    if carrier.floating:
-        spawn += max(0.0, before - _lowest(spec, home_qpos))  # a mount hanging below the feet lifts the robot
+    if known is None:
+        _check_overlaps(spec, home_qpos, robot, placed)
+        rise = max(0.0, before - _lowest(spec, home_qpos)) if carrier.floating else 0.0  # one hangs below the feet
+        if key is not None:
+            if len(PLACEMENTS) >= PLACEMENTS_KEPT:
+                PLACEMENTS.pop(next(iter(PLACEMENTS)))
+            PLACEMENTS[key] = _Placement(tuple(spots), rise)
+    else:
+        rise = known.rise
+    spawn = carrier.spawn_height + rise
     return BuiltRobot(
         spec=spec,
         home_qpos=home_qpos,

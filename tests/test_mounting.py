@@ -394,6 +394,38 @@ def test_a_robot_imported_from_a_file_carries_a_library_arm(pg):
     assert m.body_parentid[m.body("dog/arm/Base").id] == m.body("dog/base").id
 
 
+def test_where_mounts_go_is_worked_out_once_per_robot_and_again_when_it_changes(pg, tmp_path, monkeypatch):
+    """Regression: placing mounts (rays, several compiles) ran again on every world edit, so with a PiPER on its back a
+    Go2 took 0.19 s per add_object instead of 0.06. It runs again when the mounts or the robot's file change."""
+    looked = []
+    for step in ("_place", "_check_overlaps"):
+        original = getattr(mounting, step)
+        monkeypatch.setattr(mounting, step, lambda *a, _o=original, _s=step, **k: looked.append(_s) or _o(*a, **k))
+    mounting.PLACEMENTS.clear()
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    assert looked == ["_place", "_check_overlaps"]
+    placed = pg.session.model.body("go2/arm/base_link").pos.copy()
+    pg.add_object("box", shape="box", size=[0.05] * 3, pos=[1.0, 1.0])
+    pg.add_object("ball", shape="sphere", size=[0.05], pos=[1.0, -1.0])
+    assert looked == ["_place", "_check_overlaps"]  # the same place, not looked for again
+    np.testing.assert_allclose(pg.session.model.body("go2/arm/base_link").pos, placed)
+    pg.update_robot("go2", mounts=[{"library": "piper", "shift": [-0.05, 0, 0]}])
+    assert len(looked) == 4
+    source = (FIXTURES / "unitree_go2" / "go2.xml").read_text(encoding="utf-8")
+    copy = tmp_path / "go2_copy" / "go2.xml"
+    copy.parent.mkdir()
+    for asset in (FIXTURES / "unitree_go2").iterdir():
+        (copy.parent / asset.name).write_bytes(asset.read_bytes())
+    pg.add_robot("dog", file=str(copy), pos=[2, 0, 0.5], mounts=[{"library": "so_arm100"}])
+    seen = len(looked)
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[2.0, 1.0])
+    assert len(looked) == seen
+    copy.write_text(source.replace("<mujoco", "<mujoco ", 1), encoding="utf-8")  # the file changed
+    os.utime(copy, ns=(copy.stat().st_atime_ns, copy.stat().st_mtime_ns + 10**9))
+    pg.add_object("cube2", shape="box", size=[0.04] * 3, pos=[2.0, -1.0])
+    assert len(looked) == seen + 2
+
+
 def test_a_template_arm_can_ride_on_a_library_dog(pg):
     pg.add_robot("go2", library="go2", mounts=[{"template": "arm", "params": {"reach": 0.4}}])
     assert pg.behaviors.arms("go2") == ["go2/arm"]
