@@ -802,7 +802,8 @@ canvas.addEventListener("dblclick", (e) => {
   if (body > 0 && sceneDesc.bodies[body]?.dynamic) return;
   const up = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
   if (up.z < 0.7) return;
-  send({ type: "teleop", robot: robot.name, to: [+hit.point.x.toFixed(3), +hit.point.y.toFixed(3)] });
+  const to = [+hit.point.x.toFixed(3), +hit.point.y.toFixed(3)];
+  request({ type: "go_to", robot: robot.name, to }).catch((err) => toast(err.message)); // no way: it says why
 });
 
 const dragTarget = new THREE.Vector3();

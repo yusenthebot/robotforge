@@ -115,7 +115,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                 await asyncio.sleep(msg["wait"])
                 continue
             await ws.send(json.dumps({"id": f"shot{k}", **msg}))
-            if msg.get("type") == "lesson_open":  # a slow request: wait for its reply
+            if msg.get("type") in ("lesson_open", "go_to"):  # a slow request: wait for its reply
                 while True:
                     raw = await ws.recv()
                     if isinstance(raw, bytes):  # body poses stream as binary frames
@@ -295,7 +295,7 @@ def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> C
 
 def _go(robot: str, to: list[float] | str) -> dict[str, Any]:
     """Send a robot somewhere along a planned path (move with to=...)."""
-    return {"type": "teleop", "robot": robot, "to": to}
+    return {"type": "go_to", "robot": robot, "to": to}
 
 
 def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:

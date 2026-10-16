@@ -644,19 +644,22 @@ def test_a_trip_needs_a_speed_that_gets_somewhere(pg):
 
 
 def test_the_viewer_sends_a_robot_and_says_when_there_is_no_way(pg):
-    """The viewer's double-click sends {"type": "teleop", "to": [x, y]}; no way comes back as an error message."""
+    """The viewer's double-click asks {"type": "go_to", "to": [x, y]}, planned off the hub's event loop (the stream
+    stood still while it planned); the reply says how long the path is, or that there is no way and why."""
     pg.add_robot("rover", template="rover")
     _pen(pg, None)
     hub = ViewerHub(pg.session)
     pg.attach_viewer(hub)
+    assert "go_to" in hub.slow_handlers
     client = TestClient(create_app(hub), base_url="http://127.0.0.1:8737")
     with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
-        ws.send_text(json.dumps({"type": "teleop", "robot": "rover", "to": [3.0, 0.0]}))  # inside the pen
-        error = _next_message(ws, "error")
-        assert "no way to [3.00, 0.00]" in error["message"] and "close it off" in error["message"]
-        ws.send_text(json.dumps({"type": "teleop", "robot": "rover", "to": [1.0, 1.5]}))
-        ws.send_text(json.dumps({"type": "nope"}))  # answered once the message before it has been handled
-        _next_message(ws, "error")
+        ws.send_text(json.dumps({"type": "go_to", "id": 1, "robot": "rover", "to": [3.0, 0.0]}))  # inside the pen
+        reply = _next_message(ws, "reply")
+        assert reply["id"] == 1 and reply["ok"] is False
+        assert "no way to [3.00, 0.00]" in reply["message"] and "close it off" in reply["message"]
+        ws.send_text(json.dumps({"type": "go_to", "id": 2, "robot": "rover", "to": [1.0, 1.5]}))
+        reply = _next_message(ws, "reply")
+        assert reply["id"] == 2 and reply["ok"] is True and reply["data"]["path_m"] > 1.5, reply
         assert pg.behaviors.trip("rover") is not None
 
 
