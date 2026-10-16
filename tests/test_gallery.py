@@ -100,6 +100,20 @@ def test_swapping_a_designs_mounted_robot_drops_the_old_ones_pose(pg):
     assert pg.current_world().robots[0].build["parts"][-1]["robot"] == {"template": "arm", "params": {"reach": 0.4}}
 
 
+def test_changing_one_setting_of_a_mounted_robot_keeps_the_others(pg):
+    """Recoloring the lift picker's arm replaced all its params with the color: it was rebuilt as a 0.45 m arm on the
+    hobby servos its design says sag 10 cm, and only a build note said so."""
+    pg.add_robot("p", design="lift_picker")
+    pg.update_part("p", "arm", {"robot": {"params": {"color": "red"}}})
+    mount = next(p for p in pg.current_world().robots[0].build["parts"] if p["name"] == "arm")["robot"]
+    assert mount["params"] == {"reach": 0.6, "base_height": 0.04, "servo": "bldc_joint", "color": "red"}
+    assert mount["home"] == {"yaw": 180}
+    pg.update_part("p", "arm", {"robot": {"params": {"base_height": None}, "home": {"shoulder": 20}}})
+    mount = next(p for p in pg.current_world().robots[0].build["parts"] if p["name"] == "arm")["robot"]
+    assert mount["params"] == {"reach": 0.6, "servo": "bldc_joint", "color": "red"}  # null takes one setting away
+    assert mount["home"] == {"yaw": 180, "shoulder": 20}
+
+
 def test_recoloring_a_design_recolors_its_accent_parts(pg):
     from robotforge.design import components
 

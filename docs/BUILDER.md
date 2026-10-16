@@ -73,7 +73,7 @@ robots:
 | `sensors` | `imu`、`touch`、`camera`、`rangefinder`、`lidar`，或带参数的写法 |
 | `mirror` | `true` 在另一侧加一个镜像副本，名字里的 left 和 right 互换 |
 | `repeat` | `{count, around}` 环形排列，`{count, along, spacing}` 一排，`{count, chain: true}` 一节挂一节 |
-| `robot` | 把整个模板或机器人库里的机器人装在这个零件上，例如 `{template: arm}`；`home` 让它换个姿势出场，例如 `{library: piper, home: {joint2: 88}}`（关节名对应角度，滑轨写米）；用 `update_part` 换成另一个机器人时，原来那个的 `home` 和 `params` 会一起去掉 |
+| `robot` | 把整个模板或机器人库里的机器人装在这个零件上，例如 `{template: arm}`；`home` 让它换个姿势出场，例如 `{library: piper, home: {joint2: 88}}`（关节名对应角度，滑轨写米）；用 `update_part` 改同一个机器人的 `params` 或 `home` 时只改写到的那几项，换成另一个机器人时，原来那个的 `home` 和 `params` 会一起去掉 |
 
 `end` 锚点是连杆的末端，所以腿、机械臂、蛇身都可以写成“下一节挂在上一节的 end 上”。
 质量由形状体积和材料密度算出，舵机和电机的质量加在关节处，舵机会画成深色的关节块。

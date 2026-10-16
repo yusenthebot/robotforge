@@ -31,8 +31,8 @@ def add_part(build: dict[str, Any], part: dict[str, Any]) -> dict[str, Any]:
 def update_part(build: dict[str, Any], name: str, changes: dict[str, Any]) -> dict[str, Any]:
     """Merge `changes` into a part ("base" is the base, "robot" the robot-wide settings).
 
-    Nested mappings (joint, actuator, repeat...) merge one level deep; a value of null removes
-    the field, so it goes back to its default.
+    Nested mappings (joint, actuator, repeat...) merge one level deep, and a mounted robot's params and home
+    one level further; a value of null removes the field, so it goes back to its default.
     """
     if not isinstance(changes, dict) or not changes:
         raise ValueError('changes is a mapping of fields to new values, e.g. {"joint": {"home": 30}}')
@@ -131,6 +131,10 @@ def _merge(target: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
             # Another robot on the mount: the old one's params and home pose do not fit it (the PiPER's folded
             # joint2 on an SO-100 failed the edit, and a template kept beside a new library robot was refused).
             target[key] = {k: copy.deepcopy(v) for k, v in value.items() if v is not None}
+        elif key == "robot" and isinstance(value, dict) and isinstance(target.get(key), dict):
+            # The same robot: its params and home pose merge key by key too. Merged one level deep, recoloring the
+            # lift picker's arm replaced all its params with the color and rebuilt it as a 0.45 m arm on hobby servos.
+            target[key] = _merge(dict(target[key]), value)
         elif isinstance(value, dict) and isinstance(target.get(key), dict):
             merged = dict(target[key])
             for k, v in value.items():
