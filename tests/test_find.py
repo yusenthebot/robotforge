@@ -159,8 +159,9 @@ def test_the_wrist_camera_says_when_the_cube_is_cut_off(needs_gl, pg):
 
 
 def test_in_a_kitchen_every_loose_object_seen_is_listed_before_the_scenery(needs_gl, tmp_path, monkeypatch):
-    """The wooden floor, cabinets and shelf are found as orange; they filled the list and hid the cups and the
-    apple. And the cereal box on the island's edge sat 15 cm low: its support was taken from the island's side."""
+    """The wooden floor, cabinets and shelf were found as orange; they filled the list and hid the cups and the
+    apple, and swallowed the orange on the table. And the cereal box on the island's edge sat 15 cm low: its
+    support was taken from the island's side."""
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     pg = Playground.with_demo()
     pg.load_scene("kitchen")
@@ -169,10 +170,15 @@ def test_in_a_kitchen_every_loose_object_seen_is_listed_before_the_scenery(needs
     every = finder.find(layers, "all")
     listed = finder.summary("default", "all", every)["objects"]
     loose = [e.entry["object"] for e in every if "object" in e.entry]
-    assert {"cereal", "red_cup", "apple"} <= set(loose)
+    assert {"cereal", "red_cup", "apple", "fruit"} <= set(loose)  # the orange on the wooden table too
+    assert next(e.entry for e in every if e.entry.get("object") == "fruit")["color"] == "orange"
+    assert any("blue_cup" in e.entry.get("merged", []) for e in every)  # touching the blue arm: one blob
     assert [o["object"] for o in listed if "object" in o] == loose  # all of them, first
-    ranks = [next((i for i, kind in enumerate(finder.KINDS) if kind in o), len(finder.KINDS)) for o in listed]
-    assert ranks == sorted(ranks)  # objects, then robots, then fixed things, then blobs of no one thing
+    ranks = [
+        0 if "merged" in o else next((i for i, kind in enumerate(finder.KINDS) if kind in o), len(finder.KINDS))
+        for o in listed
+    ]
+    assert ranks == sorted(ranks)  # with loose objects in them, then robots, fixed things, blobs of no one thing
     names = [(k, o[k]) for o in listed for k in finder.KINDS if k in o]
     assert len(names) == len(set(names))  # each thing once
     cereal = next(o for o in listed if o.get("object") == "cereal")
@@ -183,6 +189,20 @@ def test_in_a_kitchen_every_loose_object_seen_is_listed_before_the_scenery(needs
         x0, y0, x1, y1 = seen.box
         x, y = max(x0 - 2, 0), (y0 + y1) // 2
         assert tuple(marked[y, x]) == finder.MARK, seen.entry
+
+
+def test_touching_things_of_one_color_are_one_find_that_names_them_all(needs_gl, tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("desk")
+    for name, y in (("left_cube", -0.02), ("right_cube", 0.02)):  # side by side, faces touching
+        pg.add_object(name, shape="box", size=[0.04, 0.04, 0.04], pos=[0.3, y], color="red")
+    pg.simulate(0.3)
+    found, _ = pg.find("top", "red")
+    assert len(found["objects"]) == 1
+    both = found["objects"][0]
+    assert {both.get("object"), *both["merged"]} >= {"left_cube", "right_cube"}
+    assert np.linalg.norm(np.array(both["position"][:2]) - [0.3, 0.0]) < 0.01  # the middle of the two
 
 
 def test_a_ball_in_front_of_a_bench_is_not_pulled_back_to_it(needs_gl, tmp_path, monkeypatch):

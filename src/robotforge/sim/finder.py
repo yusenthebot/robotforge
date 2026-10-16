@@ -26,16 +26,18 @@ EVERY = ("all", "any", "every", "colors")  # find= words that mean every named c
 MAX_FOUND = 12  # finds reported, loose objects first; the rest are counted
 KINDS = ("object", "robot", "fixed")  # the order finds are listed in: what can be picked comes first
 # Measured with scripts/vision_bench.py --scenes (every ready-made scene, from every preset view and robot camera:
-# 101 finds of loose objects). The 46 with no flag were 0.1 to 3.9 cm off, 89 % of them within about_cm and 96 %
-# within twice it; flagged ones were up to 88 cm off (a crate on a pallet behind others).
+# 115 finds of loose objects). The 56 with no flag were 0.1 to 3.9 cm off, 91 % of them within about_cm and 96 %
+# within twice it; flagged ones were up to 66 cm off (a pallet seen through the gaps between the crates on it).
 ACCURACY = (
     "about_cm is how far off it may be (what one pixel spans at the object, along the view): 9 in 10 finds with no "
     "flag were within it. A flag means it can be much further off: cut_off (by the picture's edge), hidden (partly "
     "behind something nearer), side_on (only a face is seen; the real middle is behind it by half the object's "
-    "depth). From low down a round thing's middle comes out a little short"
+    "depth). From low down a round thing's middle comes out a little short. merged: loose objects of the same "
+    "color touching it, found as one with it; the position is the middle of them all"
 )
 MARK = (255, 190, 0)  # the boxes drawn round the finds
 FLAGS = ("cut_off", "hidden", "side_on")  # vision.Found's doubts, passed on when they hold
+MERGED_SHARE = 0.03  # of a blob's pixels (and MIN_AREA at least): another loose object this big in it is part of it
 
 
 @dataclass(frozen=True)
@@ -59,11 +61,11 @@ def find(layers: Layers, color: str) -> list[Seen]:
     then each robot once, then each fixed thing once, then blobs no one thing covers; biggest first in each."""
     found = [f for c in colors(color) for f in vision.find(layers.rgb, layers.depth, layers.camera, c)]
     driven = _driven(layers.model)
-    named = [(f, _what(f.blob, layers.geoms, layers.model, driven)) for f in found]
-    named.sort(key=lambda fw: (_rank(fw[1]), -fw[0].blob.area))
+    named = [(f, *_what(f.blob, layers.geoms, layers.model, driven)) for f in found]
+    named.sort(key=lambda fwm: (_rank(fwm[1], fwm[2]), -fwm[0].blob.area))
     out: list[Seen] = []
     seen: set[tuple[str, str]] = set()
-    for f, what in named:
+    for f, what, merged in named:
         key = next(iter(what.items()), None)
         if key is not None:
             if key in seen:  # a smaller piece of something already reported (a highlight split it, an arm in front)
@@ -79,6 +81,8 @@ def find(layers: Layers, color: str) -> list[Seen]:
             "about_cm": max(round(f.reach * 100, 1), 0.1),
             "at_pixel": [round(f.blob.u), round(f.blob.v)],
         }
+        if merged:
+            entry["merged"] = merged
         entry.update({flag: True for flag in FLAGS if getattr(f, flag)})
         out.append(Seen(entry, f.blob.box))
     return out
@@ -120,9 +124,12 @@ def marked_png(rgb: np.ndarray, found: list[Seen]) -> bytes:
     return buf.getvalue()
 
 
-def _rank(what: dict[str, str]) -> int:
-    """Where a find's kind comes in the list (KINDS), blobs no one thing covers last."""
+def _rank(what: dict[str, str], merged: list[str]) -> int:
+    """Where a find's kind comes in the list (KINDS): with loose objects in it, among the objects; blobs no one
+    thing covers last."""
     kind = next(iter(what), None)
+    if merged:
+        return 0
     return KINDS.index(kind) if kind in KINDS else len(KINDS)
 
 
@@ -139,12 +146,15 @@ def _driven(model: mujoco.MjModel) -> set[int]:
     return roots
 
 
-def _what(blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel, driven: set[int]) -> dict[str, str]:
+def _what(
+    blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel, driven: set[int]
+) -> tuple[dict[str, str], list[str]]:
     """What most of a blob's pixels show: {"object": name} for a loose object, {"robot": name} for a part of a
     robot (anything with a motor in it), {"fixed": name} for something built into the world; nothing when no
-    one thing covers most of it."""
+    one thing covers most of it. And the other loose objects in it: touching things of one color are one blob
+    (crates on a pallet, a blue cup against a blue arm), so its position is the middle of them all."""
     if geoms is None:
-        return {}
+        return {}, []
     ys, xs = blob.pixels()
     ids, counts = np.unique(geoms[ys, xs], return_counts=True)
     things: dict[tuple[str, int], int] = {}  # ("body", root body) or ("geom", geom on the world body): pixels
@@ -154,11 +164,15 @@ def _what(blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel, dr
         root = int(model.body_rootid[model.geom_bodyid[g]])  # a robot's or an object's top body
         key = ("body", root) if root else ("geom", g)
         things[key] = things.get(key, 0) + n
-    if not things:
-        return {}
-    (kind, index), n = max(things.items(), key=lambda kv: kv[1])
-    if n * 2 <= blob.area:
-        return {}
+    ranked = sorted(things.items(), key=lambda kv: -kv[1])
+    what = _name(model, *ranked[0][0], driven) if ranked and ranked[0][1] * 2 > blob.area else {}
+    least = max(vision.MIN_AREA, MERGED_SHARE * blob.area)
+    names = [_name(model, *key, driven) for key, n in ranked if n >= least]
+    return what, [n["object"] for n in names if "object" in n and n != what]
+
+
+def _name(model: mujoco.MjModel, kind: str, index: int, driven: set[int]) -> dict[str, str]:
+    """{"object": name}, {"robot": name} or {"fixed": name} for a top body or a geom on the world body."""
     if kind == "geom":  # built into the world: a fixed prop, a wall, the floor
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, index) or "floor"
         return {"fixed": name.split("/")[0]}
