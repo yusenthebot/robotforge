@@ -186,6 +186,19 @@ def test_the_lift_picker_raises_its_column_to_move_a_cube_to_a_higher_table(pg):
     assert pg.behaviors.pose("picker")["position"][:2] == pytest.approx([0.0, 0.0], abs=0.02)  # the base held still
 
 
+def test_the_mobile_panda_drives_then_lifts_a_cube_off_the_floor_onto_a_table(pg):
+    pg.add_robot("mm", design="mobile_panda")
+    info = pg.behaviors.robots()[0]
+    assert info["kind"] == "rover" and info["arms"] == ["mm/arm"]
+    ahead, end = _moved(pg, "mm", 0.4, 3.0)
+    assert ahead > 1.0 and end["upright"]
+    x, y = end["position"][:2]
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[x + 0.62, y + 0.22])
+    pg.add_object("table", shape="table", size=[0.35, 0.35, 0.45], pos=[x + 0.75, y - 0.25], fixed=True)
+    _run(pg, 0.5)
+    assert _pick(pg, "mm/arm", "cube", "table")["success"]
+
+
 def test_the_centaur_walks_and_picks_with_one_hand(pg):
     pg.add_robot("centaur", design="centaur")
     info = pg.behaviors.robots()[0]

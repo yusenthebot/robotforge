@@ -10,7 +10,7 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 设计会作为零件写进 world.yaml，加进来以后它就是一个普通的零件机器人，可以用 `update_part`、`add_part`、`remove_part` 一块一块地改，例如 `update_part(robot="hopper", part="robot", changes={"color": "purple"})`。
 `list_templates` 会列出所有设计，每个一句话；`show_world` 能看到它的全部零件。
 
-![设计库里的七个机器人站在一起：火星车、半人马、轮腿双足、六足蝎子、升降拣货机器人、双臂工作台和触手](images/gallery.jpg)
+![设计库里的八个机器人站在一起：火星车、半人马、轮腿双足、六足蝎子、升降拣货机器人、背着 Panda 的移动底盘、双臂工作台和触手](images/gallery.jpg)
 
 | 设计 | 是什么 | 怎么用 | 实测（真实仿真） |
 |---|---|---|---|
@@ -18,13 +18,14 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 | `wheel_dog` | 四条腿末端是驱动轮的机器狗 | `move` 像小车一样开；改腿的角度换姿势 | 0.4 m/s 开 3 秒前进 1.24 m |
 | `mars_rover` | 六轮摇臂转向架火星车，带摄像头桅杆和采样机械臂 | `move` 开；采样臂叫 `mars_rover/hand` | 翻过 6 cm 路沿，6 秒前进 1.76 m；把石块放进样品盒 |
 | `lift_picker` | 拣货机器人：小车、能升降的立柱和机械臂 | `move` 开；`pick_and_place` 会自己升降立柱 | 把方块从 0.45 m 的桌子放到 0.62 m 的桌子上，立柱升到 0.25 m，底盘纹丝不动 |
+| `mobile_panda` | 真实的 Franka Emika Panda 机械臂装在一台很重的四轮底盘上，像实验室里常见的移动操作平台 | `move` 开；机械臂叫 `mobile_panda/arm` | 0.4 m/s 开 4 秒前进 1.65 m；从地上捡起方块放到 0.45 m 的桌子上 |
 | `centaur` | 半人马：四条腿走四足步态，上身有头和两只带夹爪的手 | `move` 走；两只手叫 `centaur/left_hand`、`centaur/right_hand` | 0.3 m/s 走 4 秒前进 0.73 m；左手把方块放进盒子 |
 | `scorpion` | 蝎子：六足三角步态，尾巴是一条机械臂，末端是夹钳 | `move` 走；尾巴叫 `scorpion/claw` | 0.25 m/s 走 4 秒前进 1.10 m；尾巴绕过背把方块挪到一边 |
 | `go2_arm` | 真实的宇树 Go2 背着真实的 AgileX PiPER 机械臂（都来自 MuJoCo Menagerie，第一次用时下载） | `move` 走；机械臂叫 `go2_arm/arm` | 0.4 m/s 走 3 秒前进 1.26 m；把方块从一张桌子搬到另一张 |
 | `twin_arm` | 双臂工作台：带头的上身装在可转动的腰上，两只手各带夹爪 | 两只手叫 `twin_arm/left_hand`、`twin_arm/right_hand`；腰用 `set_controls` 手动转 | 两只手各把一个方块放进自己那边的托盘，腰一动不动 |
 | `tentacle` | 八节触手机械臂，上下、左右交替弯曲，末端是夹爪 | `move_arm`、`pick_and_place` | 把方块绕到身后放进盒子；`move_arm` 末端误差约 1 cm |
 
-`go2_arm` 用到的两个真实模型来自 MuJoCo Menagerie：Go2 是 BSD-3-Clause（Unitree Robotics），PiPER 是 MIT（AgileX Robotics），和机器人库里的一样，第一次使用时下载，不随 robotforge 发布。
+`go2_arm` 和 `mobile_panda` 用到的真实模型来自 MuJoCo Menagerie：Go2 是 BSD-3-Clause（Unitree Robotics），PiPER 是 MIT（AgileX Robotics），Panda 是 Apache-2.0（Franka Robotics），和机器人库里的一样，第一次使用时下载，不随 robotforge 发布。
 `lift_picker` 和 `go2_arm` 的机械臂出场时就折叠收好，靠的是 `robot` 字段的 `home`。
 
 ## 基本概念

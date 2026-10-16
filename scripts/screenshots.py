@@ -323,6 +323,7 @@ def _gallery_line_up(pg: Any) -> None:
         ("wheel_biped", [0.0, -0.3]),
         ("scorpion", [0.0, -0.95]),
         ("lift_picker", [-0.9, 0.9]),
+        ("mobile_panda", [-2.0, -1.0]),
         ("twin_arm", [-0.9, -0.2]),
         ("tentacle", [-0.9, -1.0]),
     ):
@@ -338,6 +339,7 @@ GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float,
     ("centaur", None, (0.9, -0.7, 0.45)),
     ("scorpion", None, (0.75, -0.6, 0.45)),
     ("go2_arm", None, (1.1, -0.85, 0.55)),
+    ("mobile_panda", None, (1.9, -1.45, 1.1)),
     ("twin_arm", _twin_table, (1.25, -0.9, 0.55)),
     ("tentacle", None, (0.95, -0.75, 0.45)),
 ]

@@ -137,6 +137,54 @@ def lift_picker() -> dict[str, Any]:
     }
 
 
+def mobile_panda() -> dict[str, Any]:
+    """A research mobile manipulator: a real Franka Emika Panda (Menagerie, Apache-2.0) bolted to a heavy four-wheel
+    base, as labs mount it on a Ridgeback or a Husky.
+
+    The arm weighs about 17 kg and reaches 0.85 m, so the base is low and heavy (40 kg of batteries) and its geared
+    wheels hold it still while the arm swings. The Panda starts in Menagerie's own ready pose, gripper down in front.
+    """
+    wheel = {"shape": "wheel", "size": [0.16, 0.06], "actuator": {"model": "jga25", "gear": 4}}
+    return {
+        "color": "#d4d7dc",
+        "motor": "jga25",
+        "base": {
+            "shape": "box",
+            "size": [0.66, 0.46, 0.16],
+            "mass": 40.0,
+            "sensors": [
+                "imu",
+                {"type": "lidar", "at": [0.3, 0, 0.08], "rays": 24},
+                {"type": "camera", "at": "front"},
+            ],
+        },
+        "parts": [
+            {"name": "left_front_wheel", "at": [0.2, 0.27, -0.06], "mirror": True, **wheel},
+            {"name": "left_rear_wheel", "at": [-0.2, 0.27, -0.06], "mirror": True, **wheel},
+            {
+                "name": "bumper",
+                "at": "front",
+                "joint": "fixed",
+                "shape": "box",
+                "size": [0.03, 0.4, 0.06],
+                "direction": "forward",
+                "offset": [0, 0, -0.03],
+                "color": GRAPHITE,
+            },
+            {
+                "name": "deck",
+                "at": "top",
+                "joint": "fixed",
+                "shape": "box",
+                "size": [0.5, 0.36, 0.012],
+                "direction": "up",
+                "color": GRAPHITE,
+            },
+            {"name": "arm", "parent": "deck", "at": "end", "shift": [0.1, 0, 0], "robot": {"library": "panda"}},
+        ],
+    }
+
+
 def mars_rover() -> dict[str, Any]:
     """Six wheels on a rocker-bogie, like the Mars rovers: each side's rocker and bogie pivot freely, so all six wheels
     keep the ground over rocks and steps. A camera mast with a pan-tilt head and a small arm ride on the deck.
@@ -377,6 +425,12 @@ DESIGNS = [
         "driving base with a lifting column and an arm with a gripper: move drives it; pick_and_place raises the "
         "column as it needs to, so it picks off the floor or a table",
         lift_picker,
+    ),
+    Design(
+        "mobile_panda",
+        "a real Franka Emika Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy four-wheel base: "
+        "move drives it, move_arm and pick_and_place work mobile_panda/arm",
+        mobile_panda,
     ),
     Design(
         "mars_rover",
