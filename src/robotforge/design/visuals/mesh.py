@@ -166,7 +166,7 @@ def z_to(direction: Sequence[float]) -> np.ndarray:
     d = np.asarray(direction, dtype=float)
     d = d / (np.linalg.norm(d) or 1.0)
     z = np.array([0.0, 0.0, 1.0])
-    axis = np.cross(z, d)
+    axis = _cross(z, d)
     s, c = float(np.linalg.norm(axis)), float(z @ d)
     if s < 1e-9:
         return np.eye(3) if c > 0 else rot_x(math.pi)

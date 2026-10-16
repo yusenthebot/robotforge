@@ -79,6 +79,11 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return np.asarray(v, float) / (np.linalg.norm(v) or 1.0)
 
 
+def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The cross product of two 3-vectors (np.cross's per-call overhead dominated compiling a hexapod)."""
+    return np.array([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]])
+
+
 def _perp(v: np.ndarray, axis: np.ndarray) -> np.ndarray:
     return v - (v @ axis) * axis
 
@@ -90,7 +95,7 @@ def _frame(z: np.ndarray, hint: np.ndarray | None = None) -> np.ndarray:
         x = _perp(np.asarray(hint, float), z)
         if np.linalg.norm(x) > 1e-6:
             x = _unit(x)
-            return np.column_stack([x, np.cross(z, x), z])
+            return np.column_stack([x, _cross(z, x), z])
     return M.z_to(z)
 
 
@@ -121,6 +126,7 @@ class Layout:
     solids: dict[str, tuple] = field(default_factory=dict)  # body -> its shape, own frame (see `inside`)
     keepouts: dict[str, list[tuple[np.ndarray, np.ndarray]]] = field(default_factory=dict)
     middle: np.ndarray = field(default_factory=lambda: np.zeros(3))  # the robot's middle (the base shape's)
+    poses: dict[str, tuple[np.ndarray, np.ndarray, int]] = field(default_factory=dict)  # part -> its servo case
 
     @classmethod
     def of(cls, build: BuildSpec, placed: list[Placed], footprints: dict[str, float]) -> Layout:
@@ -243,12 +249,15 @@ class Layout:
     ) -> tuple[np.ndarray, np.ndarray, int]:
         """Where a servo case sits in its parent's frame: its middle, its rotation (x along the case toward
         the parent, z out through the horn) and which way along the hinge axis the horn faces (+1 or -1)."""
+        if part.name in self.poses:
+            return self.poses[part.name]
         axis_parent = _unit(part.rot @ axis)
         side = self.outward(part, axis_parent)
         u = self.case_direction(part, axis_parent, direction_of(part.spec, part.local))
         z = side * axis_parent
-        rot = np.column_stack([u, np.cross(z, u), z])
-        return part.pos + u * SHAFT_OFFSET * actuator.size[0], rot, side
+        rot = np.column_stack([u, _cross(z, u), z])
+        self.poses[part.name] = (part.pos + u * SHAFT_OFFSET * actuator.size[0], rot, side)
+        return self.poses[part.name]
 
     def outward(self, part: Placed, axis_parent: np.ndarray) -> int:
         """+1 when the joint axis points away from the robot's middle (servo horns face out), else -1."""
@@ -530,7 +539,7 @@ def link(
     across = None if hinge is None else _perp(np.asarray(hinge, float), d)
     if across is not None and np.linalg.norm(across) > 0.3:
         y = _unit(across)
-        rot = np.column_stack([np.cross(y, d), y, d])
+        rot = np.column_stack([_cross(y, d), y, d])
         first, last = (r * 1.12, r * 0.9), (r * 0.92, r * 0.86)
     else:
         rot = M.z_to(d)
@@ -706,7 +715,7 @@ def camera(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarr
     z = _unit(look)
     y = _perp(np.asarray(up, float), z)
     y = _unit(y) if np.linalg.norm(y) > 1e-6 else M.z_to(z)[:, 1]
-    rot = np.column_stack([np.cross(y, z), y, z])  # the housing's y up, so its LED sits top right
+    rot = np.column_stack([_cross(y, z), y, z])  # the housing's y up, so its LED sits top right
     front = np.asarray(where, float) + _unit(look) * CAMERA_PROUD
     parts = P.camera_module(CAMERA_HALF, CAMERA_DEPTH, CAMERA_BARREL)
     _add(vis, body, parts, {**NEUTRAL, "led": P.LED_RED}, front, rot)
@@ -722,7 +731,7 @@ def imu(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, up: np.ndarray) -
 
 
 def rangefinder(vis: Visuals, body: mujoco.MjsBody, where: np.ndarray, look: np.ndarray, up: np.ndarray) -> None:
-    rot = _frame(look, np.cross(up, look) if np.linalg.norm(np.cross(up, look)) > 1e-6 else None)
+    rot = _frame(look, _cross(up, look) if np.linalg.norm(_cross(up, look)) > 1e-6 else None)
     colors = {**NEUTRAL, "shell": P.PCB}
     _add(vis, body, P.range_finder(RANGE_HALF), colors, np.asarray(where, float) - _unit(look) * 0.0006, rot)
 
