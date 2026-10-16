@@ -185,7 +185,9 @@ class BehaviorManager:
             if kind in MOBILE and _learned_humanoid(entry):  # its policy's card says, without loading it
                 learned = self._learned_walkers(world).get(name)
                 if learned is not None:
-                    info["max_speed"] = round(learned["max_speed"], 3)
+                    loaded = self._loaded_speed(name, entry)  # slower when it carries much (see library.Payload)
+                    top = learned["max_speed"] if loaded is None else min(learned["max_speed"], loaded)
+                    info["max_speed"] = round(top, 3)
             elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)

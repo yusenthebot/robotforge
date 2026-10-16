@@ -572,6 +572,13 @@ def test_a_dog_carrying_a_heavy_arm_walks_slower_and_says_so(pg):
     assert pg.behaviors.robots()[0]["max_speed"] > 0.5  # a PiPER it carries at full speed
 
 
+def test_a_g1_carrying_more_than_it_walks_with_at_full_speed_says_its_lower_top_speed(pg):
+    """robots read a learned walker's top speed from its policy's card, so it offered 1 m/s whatever the G1 carried."""
+    mounts = [{"library": "piper"}, {"library": "robotiq_2f85", "at": "pelvis", "shift": [0.25, 0, 0]}]
+    pg.add_robot("g1", library="g1", mounts=mounts)  # 3.4 kg: more than the PiPER it walks with at full speed
+    assert pg.behaviors.robots()[0]["max_speed"] == pytest.approx(0.3)
+
+
 def test_the_library_lists_what_robots_weigh_and_carry():
     rows = {r["name"]: r for r in library.catalog()}
     assert rows["piper"]["mass_kg"] == 2.37 and "carries" not in rows["piper"]
