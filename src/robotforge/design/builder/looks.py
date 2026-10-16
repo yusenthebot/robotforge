@@ -45,6 +45,7 @@ SEAM_EDGE = 0.0005  # m, edge radius on either side of a parting line: crisp, bu
 SEAM_INSET = 0.0007  # m the dark core under a parting line sits inside the shell, so the groove reads dark
 PAN_INSET = 0.0012  # m a base's dark lower pan steps in from its colored upper shell
 BASE_SEAM = 0.36  # share of a base's height taken by its dark pan (the templates' trunk uses about a third)
+PAN_MAX = 0.015  # m: a tall base keeps its color; only its bottom 15 mm is the dark pan
 LINK_ROUNDNESS = 0.85  # corner radius of a hinged link's section, as a share of its smaller half extent
 LID_SEAM = 0.74  # a box part's lid line, as a share of its height from the bottom
 KEEPOUT_MARGIN = 0.003  # m kept clear around whatever is attached to a face before a screw goes there
@@ -463,7 +464,7 @@ def box(
     if small < 0.006 or hz < 0.008:  # plates, bars and forks: one rounded block, too thin for a seam
         vis.add(body, preset, rgba, M.rounded_box(hx, hy, hz, rb, segments=2, corner=rc), c)
         return
-    zs = -hz + 2 * hz * (BASE_SEAM if base else LID_SEAM)
+    zs = -hz + (min(2 * hz * BASE_SEAM, PAN_MAX) if base else 2 * hz * LID_SEAM)
     # A base is big on screen: smoother edges and fenced flat faces. A part makes do with less.
     seg, fence = (3, True) if base else (2, False)
     upper = M.slab(hx, hy, zs + SEAM_GAP, hz, SEAM_EDGE, rb, rc, segments=seg, per_corner=per, fence=fence)
@@ -555,7 +556,7 @@ def cylinder(
         vis.add(body, "dark", DARK, collar, b - d * (h - 0.0003), rot)
         return
     if base and length >= 0.016:
-        zs = length * BASE_SEAM
+        zs = min(length * BASE_SEAM, PAN_MAX)
         vis.add(body, preset, rgba, _disc(r, zs + SEAM_GAP, length, SEAM_EDGE, rim, n), a, rot)
         vis.add(body, "dark", DARK, _disc(r - PAN_INSET, 0.0, zs - SEAM_GAP, rim, SEAM_EDGE, n), a, rot)
         depth = SEAM_GAP + 0.0012
