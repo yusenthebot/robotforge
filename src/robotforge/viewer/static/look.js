@@ -43,8 +43,9 @@ const PRESETS = {
   rf_shell: { physical: true, roughness: 0.34, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.28 },
   rf_dark: { roughness: 0.55, metalness: 0.12 },
   rf_metal: { roughness: 0.32, metalness: 1 },
-  // Parts built from aluminium keep their color: anodised, half metal so the color stays bright, a light seal coat.
-  rf_aluminum: { physical: true, roughness: 0.3, metalness: 0.72, clearcoat: 0.2, clearcoatRoughness: 0.3 },
+  // Parts built from aluminium keep their color: anodised metal with a light seal coat, lit a little more by the
+  // studio (a metal takes its brightness from reflections, and at plain strength a blue part turned navy).
+  rf_aluminum: { physical: true, roughness: 0.3, metalness: 0.72, clearcoat: 0.2, clearcoatRoughness: 0.3, env: 1.45 },
   // Carbon fibre: a woven layer under a glossy clear coat (the weave is drawn in the shader, see addWeave).
   rf_carbon: { physical: true, roughness: 0.42, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.06, weave: true },
   rf_rubber: { roughness: 0.92, metalness: 0 },
@@ -89,6 +90,7 @@ export function surfaceMaterial(materialName, color, opacity) {
     transparent,
     opacity,
     depthWrite: !transparent,
+    envMapIntensity: p.env ?? 1,
   };
   const mat = p.physical
     ? new THREE.MeshPhysicalMaterial({
