@@ -294,6 +294,86 @@ def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
 
+# The imitation lesson, played in the page as a learner plays it: the sliders moved a centimetre at a time (as a
+# drag moves them), the grip toggle clicked, the guesses made, the buttons pressed, Next after every step.
+_TEACH = """
+    const rf = window.__robotforge;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const live = () => rf.lesson().live;
+    const passed = (id) => rf.lesson().passed.includes(id);
+    const until = async (ok, seconds) => {
+        for (let k = 0; k < seconds * 20 && !ok(); k++) await sleep(50);
+    };
+    const control = (id) => document.querySelector(`#lesson-controls [data-control="${id}"]`);
+    const press = (id) => document.querySelector(`button[data-control="${id}"]`).click();
+    const choose = (id, k) => document.querySelector(`[data-choice="${id}"]`).children[k].click();
+    const answer = (k) => document.querySelectorAll(".quiz-option")[k].click();
+    const next = async () => { document.getElementById("lesson-next").click(); await sleep(400); };
+    const slide = async (goal) => {
+        const ids = Object.keys(goal);
+        const start = Object.fromEntries(ids.map((id) => [id, Number(control(id).value)]));
+        const n = Math.max(1, Math.ceil(Math.hypot(...ids.map((id) => goal[id] - start[id])) / 0.01));
+        for (let i = 1; i <= n; i++) {
+            for (const id of ids) {
+                control(id).value = start[id] + ((goal[id] - start[id]) * i) / n;
+                control(id).dispatchEvent(new Event("input"));
+            }
+            await sleep(50);
+        }
+        await until(() => Math.hypot(...live().hand.map((v, j) => v - live().target[j])) < 0.012, 3);
+    };
+    const grip = async () => { control("grip").click(); await sleep(600); };
+    const demo = async () => {
+        const before = rf.lesson().results.demos ?? 0;
+        const [x, y] = live().cube;
+        await slide({ tx: x, ty: y, tz: 0.1 });
+        await slide({ tz: 0.025 });
+        await sleep(400);
+        await grip();
+        await slide({ tz: 0.1 });
+        await slide({ tx: 0.05, ty: 0.28 });  // over the bin (learn/cloning.py BIN_XY)
+        await sleep(400);
+        await grip();
+        await until(() => (rf.lesson().results.demos ?? 0) > before, 4);
+    };
+"""
+
+
+def _imitation(until: str, then: str = "") -> str:
+    """Page script: play the imitation lesson up to the step `until`, its experiment done, then `then`."""
+    plays = {
+        "show": "await demo(); await until(() => passed('show'), 3);",
+        "copy": "await next(); answer(0); press('try'); await until(() => passed('copy'), 20);",
+        "far": "await next(); answer(1); choose('where', 1); press('try'); await until(() => passed('far'), 20);",
+        "more": """await next();
+            while ((rf.lesson().results.demos ?? 0) < 5) { press('new_cube'); await sleep(400); await demo(); }
+            await until(() => passed('more'), 3);""",
+        "test": "await next(); answer(2); press('test'); await until(() => passed('test'), 60);",
+        "network": """await next(); answer(1); choose('method', 1); await sleep(300); press('test');
+            await until(() => passed('network'), 90);""",
+        "how_many": """await next(); answer(1); await sleep(300);
+            document.querySelector('.sweep-buttons button').click(); await until(() => passed('how_many'), 180);""",
+        "ik": """await next(); answer(1); choose('method', 2); await sleep(300); press('test');
+            await until(() => passed('ik'), 90);""",
+    }
+    steps = list(plays)
+    return _lesson("imitation", _TEACH, *(plays[s] for s in steps[: steps.index(until) + 1]), then)
+
+
+# The first demonstration caught mid-way: the cube in the gripper on its way to the bin, the panel scrolled to
+# the pair being recorded and the sliders.
+_CARRYING = """
+    const [x, y] = live().cube;
+    await slide({ tx: x, ty: y, tz: 0.1 });
+    await slide({ tz: 0.025 });
+    await sleep(400);
+    await grip();
+    await slide({ tz: 0.1 });
+    await slide({ tx: (x + 0.05) / 2, ty: (y + 0.28) / 2 });
+    document.getElementById("lesson-panel").scrollTop = 1e6;
+"""
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -323,6 +403,15 @@ SHOTS = [
         settle=0.2,
     ),
     Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
+    Shot("lesson_imitation_show", _nothing, page=_lesson("imitation", _TEACH, _CARRYING), settle=0.3),
+    Shot("lesson_imitation_network", _nothing, page=_imitation("network"), settle=1.0),
+    Shot(
+        "lesson_imitation_sweep",
+        _nothing,
+        page=_imitation("how_many", 'document.getElementById("lesson-plots").scrollTop = 1e6;'),
+        settle=1.0,
+    ),
+    Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
 ]
 
 
