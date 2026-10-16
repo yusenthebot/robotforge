@@ -16,6 +16,7 @@ import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.sim.actuators import drives_joint
+from robotforge.sim.geometry import highest_point
 
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
@@ -254,6 +255,10 @@ class ArmMotion:
         grasp = obj_pos.copy()
         drop = place + [0, 0, obj_half_height + 0.01]
         rim = max(place_top if place_top is not None else place[2], grasp[2] - obj_half_height)
+        if self.free_adr is not None:
+            # Riding on a robot, the arm swings round its base over that robot's body: a PiPER on a Go2 carrying a
+            # cube from one side to the other at bin height swept it into the dog's head and lost it.
+            rim = max(rim, self._carrier_top())
         travel_z = max(grasp[2], drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
@@ -275,6 +280,20 @@ class ArmMotion:
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower"))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", tilt=True))
+
+    def _carrier_top(self) -> float:
+        """The height (m) of the highest collision shape of the robot carrying the arm, the arm left out."""
+        m, d = self.ik.model, self.ik.data
+        self.ik.point(self.chain, self.q)  # poses every body, the carrier where it is now (see sync)
+        mine = f"{self.robot}/"
+        tops = [
+            float(highest_point(m, d, g)[2])
+            for g in range(m.ngeom)
+            if int(m.body_rootid[m.geom_bodyid[g]]) == self._robot_root
+            and not (m.body(int(m.geom_bodyid[g])).name or "").startswith(mine)
+            and (m.geom_contype[g] or m.geom_conaffinity[g])
+        ]
+        return max(tops, default=0.0)
 
     def tool_target_end(self) -> np.ndarray:
         """Where the tool will be once the queued moves are done."""

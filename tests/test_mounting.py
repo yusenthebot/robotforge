@@ -21,7 +21,7 @@ from robotforge.design.templates.base import BuiltRobot
 from robotforge.design.world import MountEntry, World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
-from robotforge.sim.geometry import lowest_point
+from robotforge.sim.geometry import highest_point, lowest_point
 from robotforge.sim.session import SimSession
 
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
@@ -274,6 +274,26 @@ async def test_a_script_picks_from_a_walking_dog_after_it_stops(pg):
         await client.call_tool("write_script", {"name": "walk_and_pick", "code": WALK_AND_PICK})
         ran = json.loads((await client.call_tool("run_script", {"name": "walk_and_pick"})).content[0].text)
     assert ran["ok"] and "in the bin: True" in ran["output"], ran["output"]
+
+
+def test_an_arm_on_a_dog_carries_things_over_the_dogs_back(pg):
+    """Regression: the carry height came from the bin's rim alone, and swinging round its base from one side of a Go2
+    to the other, a PiPER swept the cube through the dog's head at 15 cm and lost it."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.15, 0.3])
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[0.15, -0.35])
+    _run(pg, 1.0)
+    m, d = pg.session.model, pg.session.data
+    back = max(
+        highest_point(m, d, g)[2]
+        for g in range(m.ngeom)
+        if m.body(m.geom_bodyid[g]).name.startswith("go2/")
+        and not m.body(m.geom_bodyid[g]).name.startswith("go2/arm/")
+        and (m.geom_contype[g] or m.geom_conaffinity[g])
+    )
+    arm, _ = pg.behaviors.pick_and_place("go2/arm", "cube", "bin")
+    carry = next(wp for wp in arm.queue if wp.label == "carry")
+    assert carry.position[2] >= back + 0.04 + 0.03 - 1e-3  # the cube's bottom clears the dog by 3 cm
 
 
 def test_a_robot_imported_from_a_file_carries_a_library_arm(pg):
