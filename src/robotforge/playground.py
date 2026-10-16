@@ -25,7 +25,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
-from robotforge.sim import carry
+from robotforge.sim import carry, finder, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
@@ -724,6 +724,17 @@ class Playground:
             return self.renderer.png(self.session, view, width, height)
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
+
+    def find(self, view: str, color: str, width: int = 640, height: int = 480) -> tuple[dict[str, Any], bytes]:
+        """observe(find=...): the things of `color` that `view` sees, located by color and depth, and the
+        picture with each one boxed and numbered."""
+        try:
+            finder.colors(color)
+            layers = self.renderer.layers(self.session, view, width, height, geoms=True, exposure=vision.EXPOSURE)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+        found = finder.find(layers, color, self.session.model)
+        return finder.summary(view, color, found), finder.marked_png(layers.rgb, found)
 
     # ---- helpers ----------------------------------------------------------------------
 

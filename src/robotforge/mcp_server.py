@@ -74,7 +74,8 @@ Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-whe
 snake slither; pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots with kind, arms and
 positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
-prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer gives the
+prefixed "<robot>/"). observe reports state with an image so you can check your work; observe(find="red") locates
+colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
 user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
 real time.
 
@@ -639,15 +640,29 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json(playground.control(action))
 
     @server.tool()
-    def observe(view: str = "default", width: int = 640, height: int = 480, include_image: bool = True) -> list:
+    def observe(
+        view: str = "default",
+        width: int = 640,
+        height: int = 480,
+        include_image: bool = True,
+        find: str | None = None,
+    ) -> list:
         """Report the state (joint angles, controls, free body positions, sensors, contacts) and, by default, a
         rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
         front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
-        from describe_model."""
+        from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
+        with world positions estimated from the picture and the nearest object's name for pick_and_place."""
         with _tool_errors():
             state = playground.state()
             image = None
-            if include_image:
+            if find:
+                try:
+                    state["found"], image = playground.find(view, find, width, height)
+                except RenderUnavailable as exc:
+                    state["note"] = f"Cannot look for {find}: {exc} Everything else in this state is accurate."
+                if not include_image:
+                    image = None
+            elif include_image:
                 try:
                     image = playground.snapshot(view, width, height)
                 except RenderUnavailable as exc:
