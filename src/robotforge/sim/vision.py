@@ -8,6 +8,7 @@ table at an assumed height, or stops where the depth camera says the surface is.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import mujoco
@@ -18,30 +19,39 @@ from robotforge.design import components
 
 @dataclass(frozen=True)
 class ColorRange:
-    """Pixels whose hue is within `width` degrees of `hue`, at least `sat` saturated and `val` bright."""
+    """Pixels whose hue is within `width` degrees of `hue`, at least `sat` saturated (and less than `sat_max`)
+    and at least `val` bright."""
 
     hue: float  # degrees, 0 red, 120 green, 240 blue
     width: float  # degrees either side of `hue`
     sat: float = 0.3  # 0 grey .. 1 pure color (grey floors and white mats stay under 0.2)
     val: float = 0.2  # 0 black .. 1 full brightness
+    sat_max: float = math.inf  # brown is a greyer orange: it stops where orange starts
 
     def describe(self) -> dict[str, float]:
         return {"hue": self.hue, "width": self.width, "sat": self.sat, "val": self.val}
 
 
-# Hue windows for the palette's colors (design/components.COLORS), none overlapping, measured on MuJoCo renders
-# of the palette's cubes from several views (tests/test_vision.py). They hold for a picture that is not overexposed:
-# where the brightest channel clips, hues slide toward the next secondary color (in the world's full sun a
-# top-down view put orange at 58 degrees, beside yellow, and blue at 186, beside teal), so the finder looks
-# with the exposure a camera would pick (EXPOSURE). Brown is a dark orange: it is found as orange.
+# Windows for the palette's colors (design/components.COLORS), none overlapping, measured on MuJoCo renders of the
+# palette's cubes from seven views (tests/test_vision.py) and of every scene's props. They hold for a picture that
+# is not overexposed: where the brightest channel clips, hues slide toward the next secondary color (in the world's
+# full sun a top-down view put orange at 58 degrees, beside yellow, and blue at 186, beside teal), so the finder
+# looks with the exposure a camera would pick (EXPOSURE). There, the palette cubes' middle 90 % of pixels measured:
+# purple 259 to 265 degrees and teal 167 to 183, so both windows leave a few degrees past that.
+# Orange and brown share their hues and differ in saturation. Orange things measured 0.66 to 0.80 (median over a
+# cube, the top seen from above the lowest: the light's shine on it greys it), the palette's brown 0.41 to 0.55,
+# and the wood and cardboard of every scene (floors, tables, shelves, crates) at most 0.49 in 99 % of their pixels:
+# with orange from 0.3 up, a kitchen's wooden floor swallowed the orange on its table as one orange blob.
+SPLIT = 0.6  # saturation between brown (below) and orange (from here up)
 NAMED: dict[str, ColorRange] = {
     "red": ColorRange(2.0, 12.0),
-    "orange": ColorRange(29.0, 9.0),
+    "orange": ColorRange(29.0, 9.0, sat=SPLIT),
+    "brown": ColorRange(28.0, 10.0, sat=0.25, sat_max=SPLIT),
     "yellow": ColorRange(47.0, 8.0),
     "green": ColorRange(140.0, 25.0),
-    "teal": ColorRange(183.0, 13.0),
+    "teal": ColorRange(183.0, 16.0),
     "blue": ColorRange(218.0, 16.0),
-    "purple": ColorRange(264.0, 24.0),
+    "purple": ColorRange(264.0, 26.0),
     "pink": ColorRange(330.0, 16.0, sat=0.25),  # a pale color: about 0.45 saturated
 }
 # Share of the world's light the finder's camera lets in, as its exposure: at 0.6 no channel of a sunlit cube
@@ -94,7 +104,8 @@ def to_hsv(rgb: np.ndarray) -> np.ndarray:
 def threshold(hsv: np.ndarray, rng: ColorRange) -> np.ndarray:
     """The mask: True where a pixel's color is inside the range. Hue wraps around (350 is near 10)."""
     off = np.abs((hsv[..., 0] - rng.hue + 180.0) % 360.0 - 180.0)
-    return (off <= rng.width) & (hsv[..., 1] >= rng.sat) & (hsv[..., 2] >= rng.val)
+    sat = hsv[..., 1]
+    return (off <= rng.width) & (sat >= rng.sat) & (sat < rng.sat_max) & (hsv[..., 2] >= rng.val)
 
 
 def _shifts(mask: np.ndarray, fill: bool) -> list[np.ndarray]:

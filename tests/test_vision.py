@@ -103,10 +103,10 @@ def test_a_drawn_red_square_is_found_at_its_middle():
 
 
 def test_named_colors_do_not_overlap_and_unknown_or_grey_colors_are_refused():
-    windows = sorted(((r.hue - r.width) % 360, (r.hue + r.width) % 360) for r in vision.NAMED.values())
-    hues = np.arange(0, 360, 0.5)
-    inside = sum((np.abs((hues - r.hue + 180) % 360 - 180) <= r.width).astype(int) for r in vision.NAMED.values())
-    assert inside.max() == 1, windows
+    hue, sat = np.meshgrid(np.arange(0, 360, 0.5), np.arange(0, 1.001, 0.01))
+    hsv = np.stack([hue, sat, np.ones_like(hue)], axis=-1)  # every color at full brightness
+    inside = sum(vision.threshold(hsv, r).astype(int) for r in vision.NAMED.values())
+    assert inside.max() == 1  # orange and brown share hues, not saturations
     assert vision.color_range("#2b7de9").hue == pytest.approx(214, abs=1)  # any color: a window round it
     with pytest.raises(ValueError, match="unknown color"):
         vision.color_range("chartreuse")
@@ -228,7 +228,7 @@ def test_a_box_under_a_shelf_seen_from_the_side_is_side_on(needs_gl):
 
 # ---- real renders -----------------------------------------------------------------------------------------
 
-PALETTE = ("red", "orange", "yellow", "green", "teal", "blue", "purple", "pink")
+PALETTE = ("red", "orange", "brown", "yellow", "green", "teal", "blue", "purple", "pink")
 
 
 def _palette_world() -> tuple[mujoco.MjModel, mujoco.MjData, dict[str, np.ndarray]]:
@@ -243,15 +243,16 @@ def _palette_world() -> tuple[mujoco.MjModel, mujoco.MjData, dict[str, np.ndarra
     return model, data, {c: data.body(f"{c}_cube").xpos.copy() for c in PALETTE}
 
 
-@pytest.mark.parametrize("view", ["top", "default", "front", "overview"])
+@pytest.mark.parametrize("view", ["top", "default", "front", "overview", "left"])
 def test_every_named_color_finds_its_own_cube_and_no_other(needs_gl, view):
+    """Through the finder's own camera (its exposure scales every light, the shine on tops too)."""
+    from robotforge.sim.session import SimSession
+
     model, data, truth = _palette_world()
     renderer = SnapshotRenderer()
-    sun = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_LIGHT, "sun")
-    model.light_diffuse[sun] *= vision.EXPOSURE  # what render.layers(exposure=...) does for observe(find=...)
-    model.vis.headlight.ambient[:] *= vision.EXPOSURE
-    model.vis.headlight.diffuse[:] *= vision.EXPOSURE
-    layers = renderer.layers_of(model, data, view, 640, 480, 0)
+    layers = renderer.layers(
+        SimSession(model=model, data=data, source="palette"), view, 640, 480, exposure=vision.EXPOSURE
+    )
     renderer.close()
     for color in PALETTE:
         found = vision.find(layers.rgb, layers.depth, layers.camera, color)
