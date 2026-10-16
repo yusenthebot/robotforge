@@ -353,9 +353,13 @@ SHOTS = [
     Shot(
         "built_robots",
         _built(("dog", "scout", "spider", "centaur")),
-        page="window.__robotforge.lookAt([1.65, -0.3, 0.72], [0.0, 0.0, 0.1]);",
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.8, -0.28, 0.66], [0.0, 0.0, 0.1]);",
     ),
-    Shot("built_materials", _materials, page="window.__robotforge.lookAt([0.75, -0.25, 0.55], [0.0, 0.0, 0.12]);"),
+    Shot(
+        "built_materials",
+        _materials,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -0.25, 0.55], [0.0, 0.0, 0.12]);",
+    ),
 ]
 
 
