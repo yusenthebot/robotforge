@@ -465,8 +465,10 @@ class Hands:
         self.last = now
         lesson = self.lesson
         if lesson.pending is not None:  # a try whose learner finished training on the lesson's thread
-            self.start(data, *lesson.pending)
+            spot, learner, generation = lesson.pending
             lesson.pending = None
+            if generation == lesson.generation:  # not called off by New cube or Reset meanwhile
+                self.start(data, spot, learner)
         if self.pilot is not None:
             self.pilot.update(model, data)
             if now + 1e-9 >= self.next:
@@ -597,7 +599,9 @@ class ImitationLesson(Lesson):
         self.keys = (0.0, 0.0)  # m/s forward and left from W A S D
         self.trial: dict[str, Any] | None = None  # the live try: where, its path, how it ended
         self.tries = 0
-        self.pending: tuple[np.ndarray, bc.Copier | bc.Network] | None = None  # a try waiting for its learner
+        # a try waiting for its learner: (spot, learner, the generation it was asked for in)
+        self.pending: tuple[np.ndarray, bc.Copier | bc.Network, int] | None = None
+        self.generation = 0  # New cube and Reset count up: a try asked for before them is called off
         self.policy: tuple[tuple[str, int], bc.Copier | bc.Network] | None = None  # ((method, demos), learner)
         self.tests: list[dict[str, Any]] = []  # the last test's spots and results, for the drawing
         self.thread: threading.Thread | None = None
@@ -619,6 +623,7 @@ class ImitationLesson(Lesson):
         """The lesson starts, or the learner pressed Reset: the arm at home, the cube where the keyframe has it."""
         self.ctx = ctx
         self.hands = Hands(self, model, data)
+        self._call_off_try()
         ctx.results.setdefault("demos", len(self.demos))
         self._home_values(ctx)
         self._record(self.hands.scene.cube(data)[:2], float(data.time))
@@ -735,8 +740,8 @@ class ImitationLesson(Lesson):
     def _new_cube(self, data: mujoco.MjData, ctx: LessonContext) -> None:
         hands = self.hands
         assert hands is not None
-        if hands.pilot is not None:
-            hands.pilot = None
+        hands.pilot = None
+        self._call_off_try()
         rng = np.random.default_rng(DEMO_SEED + len(self.demos))
         spot = bc.random_spot(rng)
         hands.scene.start(data, spot)
@@ -784,6 +789,7 @@ class ImitationLesson(Lesson):
             return
         # A network trains for a second or two: on the lesson's thread, so the viewer does not stop meanwhile.
         demos = list(self.demos)
+        generation = self.generation
 
         def train() -> None:
             self.progress = _text("训练中……", "Training...")
@@ -791,11 +797,18 @@ class ImitationLesson(Lesson):
             self.policy = ((method, use), learner)
             self.progress = None
             if not self.stopping.is_set():
-                self.pending = (spot, learner)
+                self.pending = (spot, learner, generation)
 
         ctx.results["summary"] = _text("先训练，再让它自己做……", "Training first, then it tries...")
         self.thread = threading.Thread(target=train, daemon=True)
         self.thread.start()
+
+    def _call_off_try(self) -> None:
+        """New cube or Reset: a try waiting for its learner is called off (pressing New cube during the training
+        let the try start anyway, from the learner's new cube, and the demonstration they had begun went on
+        recording under the old spot)."""
+        self.generation += 1
+        self.pending = None
 
     def _cached(self, method: str, use: int) -> bc.Copier | bc.Network | None:
         """The learner trained on the first `use` demonstrations, if there is one (kNN is made on the spot)."""

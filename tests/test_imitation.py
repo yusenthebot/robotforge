@@ -135,6 +135,26 @@ def test_time_before_the_first_move_is_not_recorded(pg):
     assert len(standing) <= bc.PAUSE_KEEP + 2
 
 
+def test_new_cube_while_it_trains_calls_the_try_off(pg):
+    """Let it try with the network, then New cube before the training ends: no try takes the arm over afterwards,
+    and the demonstration the learner starts is recorded under the new cube's spot."""
+    p = _player(pg)
+    _show_a_pick(p)
+    _unlock_all(p)
+    Set(method=1, where=2).apply(p)
+    Press("try").apply(p)
+    assert p.lesson.busy  # training on the lesson's thread
+    Press("new_cube").apply(p)
+    spot = list(p.lesson.recording.spot)
+    _finish_job(p)
+    p.play(1.0)
+    lesson = p.lesson
+    assert lesson.hands.pilot is None and lesson.pending is None and lesson.trial is None
+    assert lesson.recording is not None and np.allclose(lesson.recording.spot, spot)
+    assert np.allclose(p.update["live"]["cube"][:2], spot, atol=0.002)  # the cube stayed where New cube put it
+    assert not any(e.startswith("try:") for e in p.ctx.events)
+
+
 def test_labels_skip_pauses_and_close_only_where_the_learner_closed():
     """A pause is labelled with the move that ended it; the way down is labelled 'go down', not 'close' (the copies
     closed 2 to 3 cm over the cube when the last 3 cm of the way down were labelled with the grip change)."""
