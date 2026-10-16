@@ -12,6 +12,7 @@
   "tool_calls": 9,
   "failed_calls": 0,
   "shell_commands": 2,
+  "sessions_with_problems": 0,
   "input_tokens": 293358,
   "uncached_input_tokens": 36846,
   "output_tokens": 818,
@@ -25,6 +26,7 @@
     "import",
     "drive"
    ],
+   "prompt": "I downloaded a robot description to {work}/my_rover/urdf/my_rover.urdf. Can you load it and drive it forward about half a meter?",
    "passed": true,
    "criteria": [
     {
@@ -33,9 +35,9 @@
      "observed": "my_rover_drive/my_rover"
     },
     {
-     "name": "moved >= 0.3 m",
+     "name": "went >= 0.3 m the way it was sent",
      "ok": true,
-     "observed": "0.49 m"
+     "observed": "0.49 m (0.49 m in all)"
     },
     {
      "name": "upright at the end",

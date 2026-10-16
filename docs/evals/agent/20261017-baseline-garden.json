@@ -12,6 +12,7 @@
   "tool_calls": 6,
   "failed_calls": 1,
   "shell_commands": 6,
+  "sessions_with_problems": 0,
   "input_tokens": 381775,
   "uncached_input_tokens": 34511,
   "output_tokens": 880,
@@ -26,13 +27,9 @@
     "recover from a mistake",
     "walk"
    ],
+   "prompt": "Open my garden world and have the dog walk forward about a meter.",
    "passed": true,
    "criteria": [
-    {
-     "name": "a robotforge call failed first",
-     "ok": true,
-     "observed": "open_world: robot 'dog': unknown template 'quadrupd'. Did you mean quadruped? Templates: arm, quadruped, humanoid, rover, cartpole, gripper"
-    },
     {
      "name": "garden opens with its dog a quadruped",
      "ok": true,
@@ -44,7 +41,7 @@
      "observed": "ball"
     },
     {
-     "name": "then the dog walked >= 0.5 m",
+     "name": "the dog walked >= 0.5 m forward in the garden",
      "ok": true,
      "observed": "1.04 m"
     },

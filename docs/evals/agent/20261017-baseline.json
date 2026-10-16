@@ -12,6 +12,7 @@
   "tool_calls": 71,
   "failed_calls": 0,
   "shell_commands": 14,
+  "sessions_with_problems": 0,
   "input_tokens": 1995032,
   "uncached_input_tokens": 279064,
   "output_tokens": 7415,
@@ -26,6 +27,7 @@
     "walk",
     "floor"
    ],
+   "prompt": "给我一只四足机器狗，放在草地上，让它往前走 10 秒。",
    "passed": false,
    "criteria": [
     {
@@ -58,6 +60,7 @@
     "objects",
     "pick and place"
    ],
+   "prompt": "Build me a robot arm and have it put a red cube into a box.",
    "passed": true,
    "criteria": [
     {
@@ -121,6 +124,7 @@
     "walk",
     "turn"
    ],
+   "prompt": "我想看看真正的 Unitree Go2 机器狗。帮我放一台，让它往前走几步，再向左转个弯。",
    "passed": true,
    "criteria": [
     {
@@ -129,9 +133,9 @@
      "observed": "go2_turn/go2"
     },
     {
-     "name": "moved >= 0.3 m",
+     "name": "went >= 0.3 m the way it was sent",
      "ok": true,
-     "observed": "1.60 m"
+     "observed": "1.59 m (1.60 m in all)"
     },
     {
      "name": "turned left >= 30 deg",
@@ -171,7 +175,9 @@
     "observe"
    ],
    "failures": [],
-   "problems": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
    "final_message": "已放好 Unitree Go2 的真实机型仿真模型，让它先向前走约 **0.9 米**，再向左转约 **90°**，最后停下，全程保持直立。 打开[三维场景](http://127.0.0.1:8738/)查看，也可以用 **W、A、S、D** 继续控制它。"
   },
   {
@@ -181,6 +187,7 @@
     "import",
     "drive"
    ],
+   "prompt": "I downloaded a robot description to {work}/my_rover/urdf/my_rover.urdf. Can you load it and drive it forward a little?",
    "passed": false,
    "criteria": [
     {
@@ -189,9 +196,9 @@
      "observed": "my_rover_drive/my_rover"
     },
     {
-     "name": "moved >= 0.3 m",
+     "name": "went >= 0.3 m the way it was sent",
      "ok": false,
-     "observed": "0.29 m"
+     "observed": "0.29 m (0.29 m in all)"
     },
     {
      "name": "upright at the end",
@@ -222,7 +229,9 @@
     "simulate"
    ],
    "failures": [],
-   "problems": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
    "final_message": "Loaded your rover and drove it forward **29.3 cm** over two seconds. It stayed upright, kept a straight heading, and is now stopped. The importer added the missing wheel motors. You can explore it in the [3D viewer](http://127.0.0.1:8739/) and drive with W A S D."
   },
   {
@@ -232,6 +241,7 @@
     "parts",
     "walk"
    ],
+   "prompt": "用零件帮我拼一个六条腿的机器人，像蜘蛛那样，然后让它走几步。",
    "passed": true,
    "criteria": [
     {
@@ -245,9 +255,9 @@
      "observed": "hexapod"
     },
     {
-     "name": "moved >= 0.2 m",
+     "name": "went >= 0.2 m the way it was sent",
      "ok": true,
-     "observed": "0.60 m"
+     "observed": "0.60 m (0.60 m in all)"
     },
     {
      "name": "upright at the end",
@@ -289,6 +299,7 @@
     "objects",
     "drive to a place"
    ],
+   "prompt": "造一台火星车，再放一块大石头，把车开到石头旁边停下。",
    "passed": true,
    "criteria": [
     {
@@ -342,7 +353,9 @@
     "observe"
    ],
    "failures": [],
-   "problems": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
    "final_message": "火星车和大石头已搭好，车已前进约 1.93 米，在石头旁停稳，车头留有约 30 厘米空隙。 [打开实时视窗](http://127.0.0.1:8739/)查看，也可以用 W A S D 接着驾驶。"
   },
   {
@@ -352,6 +365,7 @@
     "lessons",
     "controllers"
    ],
+   "prompt": "我是新手，想学控制算法，比如 PID 是怎么让机器人保持平衡的。能一步步教我吗？",
    "passed": false,
    "criteria": [
     {
@@ -360,9 +374,9 @@
      "observed": "lessons opened: [6]"
     },
     {
-     "name": "ran a balance controller",
+     "name": "ran a balance controller live",
      "ok": false,
-     "observed": "0 successful run_controller/compare_controllers"
+     "observed": "0 run_controller (success []), 0 compare_controllers (off-screen)"
     }
    ],
    "tool_calls": 5,
@@ -384,7 +398,9 @@
     "observe"
    ],
    "failures": [],
-   "problems": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
    "final_message": "可以。我们每次学一个概念，再做一个小实验，不需要先懂高等数学。 我已搭好一个 **60 厘米长的倒立摆**，目前杆子竖直、小车没有施力。打开[仿真界面](http://127.0.0.1:8738/)，点击 **Learn／学习**，可以进入 PID 动手课程。 **第一步：机器人为什么要不停调整？** 想象你把扫帚竖在手掌上。扫帚往右倒，手就要往右追，让支撑点赶到它下面。两轮平衡机器人向前倾时，也需要让轮子向前追。 机器人不断重复这件事： **测量倾斜 → 计算该怎么动 → 电机出力 → 再测量。** 这叫反馈控制（feedback control）。平衡看起来是“站着不动”，实际上是..."
   },
   {
@@ -394,6 +410,7 @@
     "edit a world",
     "pick and place"
    ],
+   "prompt": "Open my workshop world. Paint the ball blue, and have the arm drop the green cube into the bin.",
    "passed": true,
    "criteria": [
     {
