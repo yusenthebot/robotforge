@@ -568,6 +568,19 @@ def test_a_trip_that_breaks_ends_and_the_world_goes_on(pg, monkeypatch):
     assert pg.behaviors.trip("rover") is None
 
 
+def test_in_a_corridor_too_narrow_to_turn_round_it_backs_up(pg):
+    """Regression: sent back the way it came along a corridor 0.40 m wide (it needs 0.52 m to turn on the spot), the
+    dog turned on the spot against both walls until its time ran out. It walks backwards now."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0], yaw=0)
+    for side in (1, -1):
+        pg.add_object(f"wall_{side + 1}", shape="wall", pos=[0.0, side * 0.25], size=[4.0, 0.1, 0.5])
+    pg.add_object("end", shape="wall", pos=[2.05, 0.0], size=[0.6, 0.1, 0.5], yaw=90)
+    pg.run_fast(lambda: False, 0.5)
+    trip = _trip(pg, "dog", [-1.5, 0.0], limit=40)
+    assert trip.result()["arrived"] and trip.result()["time_s"] < 20, trip.result()
+    assert abs(pg.behaviors.pose("dog")["heading_deg"]) < 20  # backed all the way, facing as it was
+
+
 def test_something_the_map_did_not_show_is_driven_round(pg):
     pg.add_robot("rover", template="rover", pos=[-1.5, 0.0], yaw=0)
     pg.add_object("crate", shape="box", pos=[0.0, 3.0], size=[0.5, 0.5, 0.3], mass=20.0)

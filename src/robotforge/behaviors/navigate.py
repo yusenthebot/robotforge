@@ -52,6 +52,18 @@ SHARP = math.radians(35.0)  # a corner that turns this much is driven to and tur
 LINE_UP = math.radians(6.0)
 ON_RAMP = math.radians(4.0)
 TURN_GAIN = 2.0  # rad/s of turn per rad of heading error
+# Turning on the spot that has not brought its heading SPIN_GAIN nearer in SPIN_JAM s is jammed (between two walls,
+# against furniture): the Go2 turning round in a 0.6 m corridor spun against the hedges for 30 s, drifting along the
+# corridor (which reset the check on headway), and fell (scripts/nav_bench.py --case narrow).
+SPIN_JAM = 3.0  # s
+SPIN_GAIN = math.radians(10.0)
+# With the way on behind it (more than BEHIND off its heading) where it has no room to turn on the spot, a robot that
+# walks backwards backs up along its path, at BACK_SHARE of its top speed, until there is room to turn, or until the
+# way on is no longer behind it (less than STILL_BEHIND off), at a bend, where it turns on the spot as before: backing
+# round the bends of a maze of 0.6 m corridors, its tail swinging out, the Go2 fell more often than it turned there.
+BEHIND, STILL_BEHIND = math.radians(120.0), math.radians(100.0)
+BACK_SHARE = 0.5
+BACK_TURN = 0.4  # of its turn rate, at most, steering its tail along the path
 MIN_LOOK = 0.1  # m: the lookahead is halved down to this where the straight way to it is short of room
 SLOW_GAIN = 1.2  # m/s of speed per m left to the end or to a sharp corner
 MIN_SPEED_SHARE = 0.3  # of the top speed, at the least, until it is there
@@ -626,6 +638,7 @@ class Navigator:
     still_mine: Callable[[], bool] = lambda: True  # False once something else drives the robot
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
+    backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
     rate_hz: float = RATE_HZ
     state: str = "following"  # following, facing, arrived, stopped
     note: str | None = None
@@ -637,6 +650,10 @@ class Navigator:
     _last_t: float | None = field(default=None, init=False)  # sim time of its last update
     _seg: int = field(default=0, init=False)
     _spinning: bool = field(default=False, init=False)
+    _spin_since: float | None = field(default=None, init=False)  # when the heading last came nearer while spinning
+    _spin_best: float = field(default=math.inf, init=False)  # the nearest it came, rad
+    _backing: bool = field(default=False, init=False)
+    _jammed: bool = field(default=False, init=False)  # backing up since turning on the spot jammed
     _best_left: float = field(default=math.inf, init=False)
     _since: float = field(default=0.0, init=False)
     _last_xy: np.ndarray | None = field(default=None, init=False)
@@ -666,6 +683,8 @@ class Navigator:
         p = self.plan.points
         self._seg = 0
         self._spinning = False
+        self._spin_since = None
+        self._backing = self._jammed = False
         self._lined_up = -1
         self._best_left = math.inf
         seg = np.diff(p, axis=0)
@@ -767,16 +786,22 @@ class Navigator:
         bearing = math.atan2(target[1] - xy[1], target[0] - xy[0])
         alpha = _wrap(bearing - yaw)
         if self.turns_in_place and self._seg in self.plan.pivots and self._lined_up != self._seg:
-            if abs(alpha) > LINE_UP:  # a ramp ahead: lined up here, on level ground, not on the way up
-                self._spinning = True
-                self.walker.command(0.0, self._turn(alpha))
+            # A ramp ahead: lined up here, on level ground, not on the way up (if it can turn here at all).
+            if abs(alpha) > LINE_UP and self._spin(t, alpha):
                 return
             self._lined_up = self._seg
+        if self._back_up(xy, alpha, min(left, corner_left)):
+            return
         if self.turns_in_place and (abs(alpha) > TURN_ON_SPOT or (self._spinning and abs(alpha) > TURN_DONE)):
-            self._spinning = True
-            self.walker.command(0.0, self._turn(alpha))
+            if self._spin(t, alpha):
+                return
+            if self.backs_up and abs(alpha) > BEHIND:  # jammed with the way on behind it: it backs up instead
+                self._backing = self._jammed = True
+                return
+            self._replan(t, data, "it had no room to turn on the spot there")
             return
         self._spinning = False
+        self._spin_since = None
         speed = self.cruise * max(0.0, math.cos(alpha))
         slow = max(MIN_SPEED_SHARE * self.cruise, SLOW_GAIN * min(left, corner_left))
         self.walker.command(min(speed, slow), float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)))
@@ -898,6 +923,43 @@ class Navigator:
             seg += 1
         return p[seg] + (p[seg + 1] - p[seg]) / max(self._seg_len[seg], 1e-9) * along
 
+    def _spin(self, t: float, alpha: float) -> bool:
+        """Turn on the spot toward `alpha` (rad off its heading); False, commanding nothing, once it is jammed."""
+        if self._spin_since is None or abs(alpha) < self._spin_best - SPIN_GAIN:
+            self._spin_since, self._spin_best = t, abs(alpha)
+        elif t - self._spin_since > SPIN_JAM:
+            self._spin_since, self._spinning = None, False
+            self.walker.command(0.0, 0.0)
+            return False
+        self._spinning = True
+        self.walker.command(0.0, self._turn(alpha))
+        return True
+
+    def _back_up(self, xy: np.ndarray, alpha: float, left: float) -> bool:
+        """Back up along the path while the way on is behind it and there is no room to turn on the spot (see
+        BEHIND); True while it does."""
+        if not (self.backs_up and self.turns_in_place):
+            return False
+        cramped = self._jammed or self._cramped(xy)  # jammed turning, though the map shows room
+        if self._backing and (abs(alpha) <= STILL_BEHIND or not cramped):
+            self._backing = self._jammed = False  # at a bend, or with room to turn round
+        elif not self._backing and abs(alpha) > BEHIND and cramped:
+            self._backing = True
+        if not self._backing:
+            return False
+        self._spinning, self._spin_since = False, None
+        tail = _wrap(alpha - math.pi)  # where the way on is, seen from its tail
+        top = BACK_SHARE * self.cruise
+        speed = min(top * math.cos(tail), max(MIN_SPEED_SHARE * top, SLOW_GAIN * left))
+        steer = BACK_TURN * self.turn_rate
+        self.walker.command(-speed, float(np.clip(TURN_GAIN * tail, -steer, steer)))
+        return True
+
+    def _cramped(self, xy: np.ndarray) -> bool:
+        """Whether it has less room where it stands than it needs to turn on the spot."""
+        nav = self.planner.last_map
+        return nav is not None and nav_grid.room_at(nav.grid, nav.room, xy) < self.planner.body.reach
+
     def _turn(self, alpha: float) -> float:
         rate = float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate))
         floor = 0.4 * self.turn_rate  # a gait barely turns at a small command
@@ -913,7 +975,13 @@ class Navigator:
             else:
                 self._finish(t, "arrived")
             return
-        self.walker.command(0.0, self._turn(alpha))
+        if not self._spin(t, alpha):  # jammed: it is there, only not facing it
+            name = self.planner.destination.name
+            jammed = f"it had no room to turn and face {name} there"
+            if self.plan.short:
+                self._finish(t, "stopped", self.plan.short, f"{self.plan.note}; {jammed}")
+            else:
+                self._finish(t, "arrived", None, jammed)
 
     def _replan(self, t: float, data: mujoco.MjData, why: str, count: bool = True) -> None:
         """Plan again from where the robot is; `count` says whether this one counts toward giving up."""

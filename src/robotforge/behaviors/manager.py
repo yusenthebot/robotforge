@@ -529,6 +529,7 @@ class BehaviorManager:
             cruise=cruise,
             turn_rate=navigation.turn_rate_for(kind.value, ctrl),
             turns_in_place=not isinstance(ctrl, SnakeGait),
+            backs_up=not isinstance(ctrl, (SnakeGait, RhythmWalker)) and getattr(ctrl, "max_reverse", 1.0) > 0,
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
