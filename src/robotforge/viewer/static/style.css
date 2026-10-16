@@ -217,6 +217,15 @@ kbd {
   padding: 0 12px 0 14px;
   border-radius: 999px;
   font-weight: 550;
+  white-space: nowrap; /* on a phone the labels wrapped one character per line (学 / 习) */
+  flex-shrink: 0;
+}
+
+.pill .short { display: none; }
+
+@media (max-width: 520px) {
+  .pill .long { display: none; }
+  .pill .short { display: inline; }
 }
 
 .pill:not([aria-expanded="true"]):hover { background-color: var(--panel-solid); }
@@ -238,6 +247,8 @@ kbd {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
+  position: relative;
+  top: 1px; /* the mono face sits a pixel high beside the label, centered as boxes */
 }
 
 .pill[aria-expanded="true"] .count { color: inherit; opacity: 0.7; }
