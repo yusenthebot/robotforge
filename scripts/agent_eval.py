@@ -248,7 +248,9 @@ def _pose(entry: dict[str, Any]) -> Pose | None:
 
 
 def poses(session: Session, robot: str) -> list[Pose]:
-    """Where robotforge reported `robot`, in order: before and after every move, and in every `robots` list."""
+    """Where robotforge reported `robot`, in order: before and after every move, in every `robots` list, at the
+    end of a run_controller, and as its free body ("<robot>/<body>") in observe and simulate. Only move and robots
+    say whether it is upright."""
     out = []
     for call in session.ours:
         data = call.data
@@ -258,6 +260,14 @@ def poses(session: Session, robot: str) -> list[Pose]:
             out += [p for end in ("from", "to") if (e := data.get(end)) and e.get("robot") == robot and (p := _pose(e))]
         elif call.tool == "robots":
             out += [p for e in data.get("robots") or [] if e.get("name") == robot and (p := _pose(e))]
+        elif call.tool == "run_controller" and data.get("robot") == robot:
+            out += [p for e in [{"position": (data.get("result") or {}).get("position")}] if (p := _pose(e))]
+        elif call.tool in ("observe", "simulate"):
+            moved = {name: m.get("to") for name, m in (data.get("moved") or {}).items() if isinstance(m, dict)}
+            bodies = data.get("free_bodies") or moved
+            out += [
+                p for name, pos in bodies.items() if name.startswith(f"{robot}/") and (p := _pose({"position": pos}))
+            ]
     return out
 
 

@@ -53,6 +53,16 @@ def test_the_checks_give_the_verdicts_read_from_the_sessions(ev, task):
         assert next(c["ok"] for c in outcome.criteria if c["name"] == name) is ok, outcome.criteria
 
 
+def test_a_robot_driven_by_a_controller_is_followed_through_its_results(ev):
+    """A later session (commit 3724596) drove its rover with run_controller(drive_to), stopped it and zeroed the
+    wheels with set_controls and simulate: no move or robots result. The check first said no robot was reported;
+    run_controller, observe and simulate say where it is, so it ended 0.42 m from the rock."""
+    outcome = ev.score(ev.TASKS["rover_rock"], FIXTURES / "rover_rock_by_controller")
+    assert outcome.passed, outcome.criteria
+    assert "run_controller" in outcome.tools and "move" not in outcome.tools
+    assert next(c for c in outcome.criteria if c["name"].startswith("ended within"))["observed"] == "0.42 m"
+
+
 def test_a_session_is_read_into_calls_tokens_and_messages(ev):
     lines = (FIXTURES / "rover_rock" / "events.jsonl").read_text(encoding="utf-8").splitlines()
     session = ev.parse_events(["Reading additional input from stdin...", *lines])  # a log line is skipped
