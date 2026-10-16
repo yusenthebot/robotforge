@@ -187,7 +187,7 @@ class SnapshotRenderer:
     def _layers(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int], geoms: bool):
         self._ready(model, key)
         r = self._renderer
-        r.update_scene(data, camera=camera)
+        r.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
         rgb = r.render().copy()
         pinhole = vision.Pinhole.from_scene(r.scene, key[1], key[2])
         r.enable_depth_rendering()
@@ -205,6 +205,18 @@ class SnapshotRenderer:
                 r.disable_segmentation_rendering()
             seen = np.where(seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM), seg[..., 0], -1).astype(np.int32)
         return Layers(rgb, depth, seen, pinhole, model)
+
+
+def _camera_only() -> mujoco.MjvOption:
+    """What a real camera sees: the bodies, not the model's marker sites. The arm template's tool-centre marker,
+    an orange ball between the fingers, filled the top of its own wrist camera's picture and was found as an
+    orange thing that is not there."""
+    option = mujoco.MjvOption()
+    option.sitegroup[:] = 0
+    return option
+
+
+_CAMERA_ONLY = _camera_only()
 
 
 @dataclass(frozen=True)

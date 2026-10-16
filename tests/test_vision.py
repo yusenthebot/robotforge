@@ -317,3 +317,19 @@ def test_a_template_robots_camera_sees_out_past_its_own_lens(needs_gl, template)
         own = sum((model.body(int(model.geom_bodyid[g])).name or "").startswith("bot/") for g in shown.tolist())
         assert own / layers.geoms.size < 0.08, model.camera(cam).name
     renderer.close()
+
+
+def test_a_camera_picture_shows_no_marker_sites(needs_gl):
+    """The arm template's tool-centre marker (an orange site between the fingers) filled the top of the wrist
+    camera's picture, 1808 px of it, and observe(find="orange") reported it as a thing."""
+    world = World.model_validate({"name": "w", "robots": [{"name": "arm", "template": "arm"}]})
+    model = compile_world(world).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    mujoco.mj_forward(model, data)
+    renderer = SnapshotRenderer()
+    layers = renderer.layers_of(model, data, "arm/wrist_cam", 640, 480, 0, geoms=True)
+    renderer.close()
+    drawn = layers.depth < layers.camera.far * vision.SKY
+    assert not (drawn & (layers.geoms < 0)).any()  # every pixel drawn is a geom's
+    assert not vision.find(layers.rgb, layers.depth, layers.camera, "orange")
