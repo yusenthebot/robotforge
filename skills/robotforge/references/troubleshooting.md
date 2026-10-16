@@ -5,7 +5,9 @@ Read them, fix, and check again; tell the user plainly what happened.
 
 ## The robotforge tools are missing
 
-The MCP server did not start.
+Right after the client starts, the server may still be starting: a few seconds, a minute or more on the very first start.
+Wait about 20 seconds (`sleep 20` in a shell) and look for the tools again, up to three times, before telling the user anything.
+If they still do not appear, the MCP server did not start:
 
 - It runs with `uv` (`uv run ... robotforge mcp`). If `uv` is not installed, ask the user to install it (https://docs.astral.sh/uv/getting-started/installation/), then restart the client.
 - The first start downloads Python packages (about 50 MB, plus Python 3.12 if missing) and can take a minute or more on a slow network, which can exceed the client's startup timeout. Ask the user to reconnect: `/mcp` in Claude Code, a new session in Codex, or disable and enable the extension in Claude Desktop. Later starts take about a second.
