@@ -2036,9 +2036,10 @@ function imitateRig(rig) {
     shown = d;
     clear(demos);
     for (const demo of d.demos ?? []) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.03, 40), onTop(basic(blue, 0.9, true)));
+      const color = demo.fix ? violet : blue; // a correction, taken over from the arm's own try
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.03, 40), onTop(basic(color, 0.9, true)));
       ring.position.copy(onDesk(...demo.spot));
-      const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(demo.path.map((p) => new THREE.Vector3(...p))), lineMat(blue, 0.7));
+      const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(demo.path.map((p) => new THREE.Vector3(...p))), lineMat(color, 0.7));
       ring.renderOrder = path.renderOrder = 5;
       demos.add(ring, path);
     }

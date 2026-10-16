@@ -588,6 +588,14 @@ def _show_a_pick(p: Player) -> None:
         p.play(TICK)
 
 
+def _take_it_from_here(p: Player) -> None:
+    """After Take over: open the gripper if the arm had closed it, then carry the cube to the bin from there."""
+    if p.ctx.values["grip"]:
+        Set(grip=0).apply(p)
+        p.play(FIND_THE_TOGGLE)
+    _show_a_pick(p)
+
+
 def _show_more(p: Player) -> None:
     while p.ctx.results.get("demos", 0) < imitation.DEMOS_WANTED:
         Press("new_cube", 0.3).apply(p)
@@ -777,6 +785,14 @@ RECIPES: dict[str, Recipe] = {
             "test": (Answer(2), Press("test", until="training")),
             "network": (Answer(1), Set(method=1), Press("test", until="training")),
             "how_many": (Answer(1), Sweep("use", until="training")),
+            "correct": (
+                Answer(1),
+                Set(method=0, where=1),
+                Press("try", 2.0),  # it heads for where the cube was in the demonstrations: take over on the way
+                Press("take_over"),
+                Do(_take_it_from_here, "open the gripper if it closed, then carry the cube to the bin"),
+                Press("try", until="try"),
+            ),
             "ik": (Answer(1), Set(method=2), Press("test", until="training")),
             "quiz": (Answer(1),),
         },

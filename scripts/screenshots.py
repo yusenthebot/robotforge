@@ -353,6 +353,10 @@ def _imitation(until: str, then: str = "") -> str:
             await until(() => passed('network'), 90);""",
         "how_many": """await next(); answer(1); await sleep(300);
             document.querySelector('.sweep-buttons button').click(); await until(() => passed('how_many'), 180);""",
+        "correct": """await next(); answer(1); choose('method', 0); choose('where', 1); await sleep(300);
+            press('try'); await sleep(2000); press('take_over'); await sleep(300);
+            if (control('grip').checked) await grip();
+            await demo(); press('try'); await until(() => passed('correct'), 30);""",
         "ik": """await next(); answer(1); choose('method', 2); await sleep(300); press('test');
             await until(() => passed('ik'), 90);""",
     }
@@ -411,6 +415,7 @@ SHOTS = [
         page=_imitation("how_many", 'document.getElementById("lesson-plots").scrollTop = 1e6;'),
         settle=1.0,
     ),
+    Shot("lesson_imitation_correct", _nothing, page=_imitation("correct"), settle=1.0),
     Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
 ]
 

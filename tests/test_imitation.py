@@ -16,7 +16,7 @@ import pytest
 from robotforge.learn import cloning as bc
 from robotforge.learn import imitation
 from robotforge.learn.engine import LessonError
-from robotforge.learn.playthrough import Player, Press, Set, _show_a_pick, _show_more
+from robotforge.learn.playthrough import Player, Press, Set, _show_a_pick, _show_more, _take_it_from_here
 from robotforge.playground import Playground
 
 
@@ -211,3 +211,28 @@ def test_reset_starts_the_demonstration_over_and_keeps_the_ones_recorded(pg):
     assert pg.lessons.active and len(lesson.demos) == 1 and lesson.recording is not None
     assert np.allclose(update["live"]["cube"][:2], bc.HOME_SPOT, atol=1e-3)
     assert update["live"]["recording"] is True
+
+
+def test_a_correction_taken_over_from_a_far_try_teaches_it_that_spot(pg):
+    """DAgger in one round: copying misses the far spot; the learner takes over on the way and finishes the pick;
+    the same spot again, and the copy now gets there (measured 2026-10-17 with 1 and with 5 demonstrations, and
+    taking over 1.5, 2.5 or 3.5 s in or after the miss: every retry succeeded)."""
+    p = _player(pg)
+    _show_a_pick(p)
+    _unlock_all(p)
+    with pytest.raises(LessonError, match="press Let it try first"):
+        Press("take_over").apply(p)
+    Set(method=0, where=1).apply(p)
+    Press("try", 2.0).apply(p)
+    spot = list(p.lesson.trial["spot"])
+    Press("take_over").apply(p)
+    assert p.lesson.hands.pilot is None and p.lesson.recording.correction
+    _take_it_from_here(p)
+    assert "corrected" in p.ctx.events and p.lesson.demos[-1].correction
+    rows = [r for r in p.update["live"]["table"]["rows"] if "label" in r]
+    assert rows[-1]["label"]["en"] == "#2 fix"
+    Press("try").apply(p)
+    again = _finish_try(p)
+    assert again["spot"] == spot and again["ok"] is True and "after_fix:far:ok" in p.ctx.events
+    with pytest.raises(LessonError, match="nothing to correct"):
+        Press("take_over").apply(p)

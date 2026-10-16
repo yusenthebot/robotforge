@@ -301,6 +301,7 @@ class Demo:
     seconds: float
     samples: int  # taken, before the ones while the fingers moved were left out
     rows: list[tuple[np.ndarray, np.ndarray, bool]] = field(default_factory=list)  # as recorded, before labelling
+    correction: bool = False  # taken over from a try that went wrong, from where the arm had got to
 
     def describe(self, index: int) -> dict[str, object]:
         return {
@@ -317,6 +318,7 @@ class Recording:
 
     spot: np.ndarray
     started: float
+    correction: bool = False
     rows: list[tuple[np.ndarray, np.ndarray, bool]] = field(default_factory=list)
 
     def add(self, obs: np.ndarray, target: np.ndarray, grip: float, busy: bool) -> None:
@@ -325,7 +327,8 @@ class Recording:
     def finish(self, now: float) -> Demo:
         X, Y = label(self.rows)
         path = [[round(float(v), 3) for v in obs[3:6]] for obs, _, _ in self.rows[::2]]
-        return Demo(self.spot.copy(), X, Y, path, now - self.started, len(self.rows), list(self.rows))
+        rows = list(self.rows)
+        return Demo(self.spot.copy(), X, Y, path, now - self.started, len(rows), rows, self.correction)
 
 
 def label(rows: Sequence[tuple[np.ndarray, np.ndarray, bool]]) -> tuple[np.ndarray, np.ndarray]:

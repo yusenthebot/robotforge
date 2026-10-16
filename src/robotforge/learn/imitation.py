@@ -89,6 +89,11 @@ def _swept(ctx: LessonContext) -> bool:
     return "swept:done" in ctx.events
 
 
+def _corrected_and_retried(ctx: LessonContext) -> bool:
+    """a correction was recorded, and the arm tried a far spot again after it"""
+    return "corrected" in ctx.events and any(e.startswith("after_fix:far:") for e in ctx.events)
+
+
 STEPS = (
     Step(
         id="show",
@@ -325,6 +330,51 @@ STEPS = (
         show=("target", "region", "demos", "tests", "trial", "f_sample"),
     ),
     Step(
+        id="correct",
+        title=_text("纠正它的错", "Correct its mistakes"),
+        body=_text(
+            "示范再多，它总会走进你没示范过的情形。DAgger 的办法是：让它自己做，等它走偏了你接手，"
+            "从它停下的地方把事做完，这一段也记进数据。\n"
+            "「方法」选“照抄”，「方块放在」选“离所有示范都远”，点「让它自己做」；看它走偏了（或做完失败了），"
+            "点「接手纠正」，把方块放进盒子。然后在同一个地方再让它做一次。先猜。",
+            "However many demonstrations you give, it will wander into situations you never showed it. DAgger's "
+            "answer: let it act, take over when it goes wrong, finish the job from where it got to, and add that "
+            "to the data.\nSet Method to 'copy' and Cube at to 'far from every demonstration', and press Let it try; "
+            "when it goes wrong (or once it has failed), press Take over and put the cube in the bin. Then let it "
+            "try the same spot again. Guess first.",
+        ),
+        done=_text(
+            "它可能还会先犯同样的错，但现在知道从那里怎么接着做。这就是 DAgger（数据集聚合）的思路："
+            "不只示范你自己会走的路线，也示范它自己会走进去的情形。真实机器人上也常这样教：人拿着遥控器在旁边，"
+            "它一出错就接手。换成小神经网络再试：一次纠正它常常还学不会，几十对纠正混在几百对示范里，被“平均”掉了，"
+            "所以 DAgger 要一轮一轮反复纠正。",
+            "It may still make the same first mistake, but now it knows what to do from there. That is the idea "
+            "of DAgger (dataset aggregation): show it not only your own way, but also the situations it gets "
+            "itself into. Real robots are often taught like this: a person stands by with the controls and takes "
+            "over whenever it slips. Try the small network too: one correction is often not enough for it, a few "
+            "dozen pairs averaged in with a few hundred, which is why DAgger corrects round after round.",
+        ),
+        quiz=Quiz(
+            question=_text(
+                "纠正一次之后，在同一个地方再试，它会？", "After one correction, at the same spot again, it will?"
+            ),
+            options=(
+                _text("还是失败", "Fail again"),
+                _text(
+                    "多半能做到：它学会了从那种情形里接着做", "Most likely succeed: it learned what to do from there"
+                ),
+            ),
+            answer=1,
+            explain=_text(
+                "纠正示范的正是它自己会走进去的情形，正好补上了它不会的那一块。",
+                "The correction covers exactly the situations it gets itself into: the gap in what it knew.",
+            ),
+            predict=True,
+        ),
+        check=_corrected_and_retried,
+        unlock=("take_over",),
+    ),
+    Step(
         id="ik",
         title=_text("手写的抓取", "The hand-written pick"),
         body=_text(
@@ -489,6 +539,7 @@ class ImitationLesson(Lesson):
             ),
         ),
         Control("try", "button", _text("让它自己做", "Let it try")),
+        Control("take_over", "button", _text("接手纠正", "Take over")),
         Control("test", "button", _text("考 24 处", "Test at 24 spots")),
         Control(
             "method",
@@ -646,10 +697,18 @@ class ImitationLesson(Lesson):
         self.demos.append(demo)
         ctx.results["demos"] = len(self.demos)
         ctx.events.add("demo_saved")
-        ctx.results["summary"] = _text(
-            f"示范 #{len(self.demos)} 录好了：{len(demo.X)} 对“看到 → 做”，{demo.seconds:.1f} 秒。",
-            f"Demonstration #{len(self.demos)} recorded: {len(demo.X)} 'see -> do' pairs in {demo.seconds:.1f} s.",
-        )
+        if demo.correction:
+            ctx.events.add("corrected")
+            ctx.results["summary"] = _text(
+                f"纠正 #{len(self.demos)} 录好了：{len(demo.X)} 对“看到 → 做”，都是它自己走到的情形。",
+                f"Correction #{len(self.demos)} recorded: {len(demo.X)} 'see -> do' pairs, all in situations it "
+                "got itself into.",
+            )
+        else:
+            ctx.results["summary"] = _text(
+                f"示范 #{len(self.demos)} 录好了：{len(demo.X)} 对“看到 → 做”，{demo.seconds:.1f} 秒。",
+                f"Demonstration #{len(self.demos)} recorded: {len(demo.X)} 'see -> do' pairs in {demo.seconds:.1f} s.",
+            )
         self._redraw()
 
     # ---- buttons -------------------------------------------------------------------------------------------------
@@ -661,6 +720,8 @@ class ImitationLesson(Lesson):
             self._try(data, ctx)
         elif control == "test":
             self._start_test(ctx)
+        elif control == "take_over":
+            self._take_over(data, ctx)
 
     def _new_cube(self, data: mujoco.MjData, ctx: LessonContext) -> None:
         hands = self.hands
@@ -692,7 +753,9 @@ class ImitationLesson(Lesson):
             angle = 2 * math.pi * (self.tries * 0.618 % 1.0)  # round the spot, a new side every try
             spot = spots[-1] + NEAR_OFFSET * np.array([math.cos(angle), math.sin(angle)])
         elif where == "far":
-            spot = bc.far_spot(spots)
+            # From the demonstrations only: a correction made there does not move "far" away, so the arm can be
+            # tried at the same spot again (only it now has a correction from there).
+            spot = bc.far_spot([d.spot for d in self.demos if not d.correction])
         else:
             spot = bc.random_spot(np.random.default_rng(1000 + self.tries))
         self.recording = None
@@ -738,6 +801,35 @@ class ImitationLesson(Lesson):
             return learner
         return None
 
+    def _take_over(self, data: mujoco.MjData, ctx: LessonContext) -> None:
+        """The learner takes the controls from a learned try that is going (or went) wrong, and finishes the pick
+        from where the arm got to: a correction, recorded as a demonstration of what to do from there."""
+        hands, trial = self.hands, self.trial
+        assert hands is not None
+        if trial is None or trial["method"] == "ik":
+            raise LessonError("take over from a learned method's try: press Let it try first")
+        if self.pending is not None:
+            raise LessonError("it is still training; take over once it moves")
+        if self.recording is not None:
+            raise LessonError("you are already steering: finish the pick, or press New cube")
+        if isinstance(hands.pilot, bc.Pilot):
+            trial["path"] = hands.pilot.path[-TRY_PATH:]
+            hands.pilot = None
+        elif trial["ok"]:
+            raise LessonError("it got this one by itself: there is nothing to correct")
+        trial["ok"] = False
+        hand = hands.follow.hand(data)
+        ctx.values.update(tx=round(float(hand[0]), 3), ty=round(float(hand[1]), 3))
+        ctx.values["tz"] = round(float(np.clip(hand[2] - bc.DESK, *SLIDERS["tz"])), 3)
+        ctx.values["grip"] = float(hands.follow.grip)
+        self.recording = bc.Recording(np.array(trial["spot"], float), float(data.time), correction=True)
+        self.in_bin_since = None
+        ctx.events.add("took_over")
+        ctx.results["summary"] = _text(
+            "你接手了：从它停下的地方把方块放进盒子，这一段会记成一次纠正。",
+            "You have the controls: put the cube in the bin from where it stopped; this is kept as a correction.",
+        )
+
     def try_ended(self, outcome: bc.Outcome, hand: np.ndarray) -> None:
         ctx, trial = self.ctx, self.trial
         if ctx is None or trial is None:
@@ -745,6 +837,8 @@ class ImitationLesson(Lesson):
         trial["ok"] = outcome.success
         trial["path"] = outcome.path[-TRY_PATH:]
         ctx.events.add(f"try:{trial['where']}:{'ok' if outcome.success else 'missed'}")
+        if any(d.correction for d in self.demos):
+            ctx.events.add(f"after_fix:{trial['where']}:{'ok' if outcome.success else 'missed'}")
         far = trial["distance"]
         away = (
             _text(f"（离最近的示范 {_cm(far)} 厘米）", f" ({_cm(far)} cm from the nearest demonstration)")
@@ -910,7 +1004,7 @@ class ImitationLesson(Lesson):
             tests = list(self.tests)
         return {
             "demos": [
-                {"spot": [round(float(v), 3) for v in d.spot], "path": d.path[::2], "n": k + 1}
+                {"spot": [round(float(v), 3) for v in d.spot], "path": d.path[::2], "n": k + 1, "fix": d.correction}
                 for k, d in enumerate(self.demos)
             ],
             "tests": [{"spot": t["spot"], "ok": t["ok"]} for t in tests],
@@ -945,6 +1039,8 @@ class ImitationLesson(Lesson):
             return self.progress
         if trying:
             return _text(f"它在自己做（学了 {n} 次示范）……", f"Trying on its own (learned from {n} demonstrations)...")
+        if self.recording is not None and self.recording.correction:
+            return _text(f"● 正在记录纠正（第 {n + 1} 次）", f"● Recording a correction ({n + 1})")
         if self.recording is not None:
             return _text(f"● 正在记录第 {n + 1} 次示范", f"● Recording demonstration {n + 1}")
         return _text(f"已有 {n} 次示范。点「新方块」再示范一次", f"{n} demonstrations. Press New cube to show it again")
@@ -962,7 +1058,9 @@ class ImitationLesson(Lesson):
             info = d.describe(len(self.demos) - min(8, len(self.demos)) + k)
             rows.append(
                 {
-                    "label": _text(f"#{info['n']}", f"#{info['n']}"),
+                    "label": _text(f"#{info['n']} 纠正", f"#{info['n']} fix")
+                    if d.correction
+                    else _text(f"#{info['n']}", f"#{info['n']}"),
                     "cells": [f"{info['spot'][0]}, {info['spot'][1]}", str(info["kept"]), f"{info['seconds']}"],
                     "best": None,
                 }
