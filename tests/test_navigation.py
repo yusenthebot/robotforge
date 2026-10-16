@@ -232,6 +232,16 @@ def test_what_a_robot_climbs_decides_steps_and_slopes(pg):
     assert nav_map.SLOPE in _codes(rover, (-3.0, -2.8), (2.9, 3.1))  # 20 degrees
 
 
+def test_a_ramp_as_steep_as_a_robot_climbs_is_free(pg):
+    """Regression: the obstacle course's 10 degree ramp read 10.00 degrees, and half of it, a hair steeper in floating
+    point, was too steep for the dog and the Go2, which climb 10: they were never sent over it."""
+    pg.add_robot("dog", template="quadruped", pos=[-2.0, 2.0])
+    pg.add_terrain("ramp", name="ramp", pos=[1.5, 0.0], params={"angle": 10, "length": 1.5, "width": 3.0})
+    dog = _map(pg, "dog")
+    assert math.degrees(dog.body.slope) == pytest.approx(10.0)
+    assert _codes(dog, (0.0, 1.0), (-0.6, 0.6)) == {nav_map.FREE}  # up its slope, away from its sides
+
+
 def test_gaps_narrower_than_a_cell_are_seen_between_stepping_stones(pg):
     """Regression: a cell's ground is the top of everything over any part of it, so the 4 cm gaps between the
     obstacle course's stepping stones vanished from the map: stones from 3.8 to 6.2 cm high, none more than a step

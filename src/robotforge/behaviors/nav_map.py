@@ -644,7 +644,9 @@ def _mark_slopes(
     level = np.where(weight > 0, _box_sum(np.where(ok, ground, 0.0), k) / np.maximum(weight, 1e-9), ground)
     gy, gx = np.gradient(level, res)
     hills = np.zeros(ground.shape, bool) if hills is None else hills
-    limit = np.where(hills, math.tan(body.hills), math.tan(body.slope))
+    # A slope as steep as the limit is within it: the obstacle course's 10 degree ramp read 10.00 degrees, and half
+    # its cells, a hair over in floating point, were too steep for the dog and the Go2, which climb 10.
+    limit = np.where(hills, math.tan(body.hills), math.tan(body.slope)) * (1 + 1e-6)
     steep = smooth & (np.hypot(gx, gy) > limit) & (lethal == FREE)
     bumpy = hills & (np.abs(ground - level) > body.step / 2) & (lethal == FREE) & ~steep
     lethal[steep] = SLOPE
