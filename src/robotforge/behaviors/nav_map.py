@@ -48,7 +48,6 @@ TILTED = 1e-3  # a geom whose top face leans more than this (1 - cos) is a slope
 
 # Why a cell is lethal; where several reasons hold, the higher number is kept (a wall on a slope is a wall).
 FREE, SLOPE, STEP, OBSTACLE = 0, 1, 2, 3
-CAUSES = {OBSTACLE: "obstacle", STEP: "step", SLOPE: "slope"}
 # A jump in the ground no higher than this share of the robot's height (and at most STEP_LIKE) is a step too
 # high for it (a curb, a stair, a platform's edge); a taller one is an obstacle (a wall, a counter, a pallet).
 STEP_SHARE, STEP_LIKE = 0.5, 0.15

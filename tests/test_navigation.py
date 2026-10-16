@@ -430,8 +430,9 @@ def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])
     pg.run_fast(lambda: False, 0.5)
+    assert pg.behaviors.trip("rover") is trip
     pg.behaviors.move("rover", 0.0, 1.0)  # a key in the viewer, or move without a destination
-    assert TRIP + "rover" not in pg.session.controllers
+    assert pg.behaviors.trip("rover") is None and TRIP + "rover" not in pg.session.controllers
     assert trip.done and trip.cause == "interrupted"
     before = pg.behaviors.pose("rover")["heading_deg"]
     pg.run_fast(lambda: False, 1.0)
