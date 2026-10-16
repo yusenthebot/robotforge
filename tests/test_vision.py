@@ -163,7 +163,7 @@ def _box_seen_from_above(top: float = 0.1) -> tuple[np.ndarray, vision.Blob]:
 
 def test_edge_pixels_of_something_in_front_or_behind_do_not_move_a_find():
     """A hand over a box's edge lent the box's blob a few pixels 10 cm above its top (observe(find=) put the box
-    7.6 cm off); a bench far behind a ball lent it pixels at the ball's height (77 cm off)."""
+    7.7 cm off); a bench far behind a ball lent it pixels at the ball's height (77 cm off)."""
     cam = _looking_down()
     depth, blob = _box_seen_from_above()
     clean, _ = vision.locate(cam, depth, blob)

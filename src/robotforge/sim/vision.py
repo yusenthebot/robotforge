@@ -351,7 +351,7 @@ def own_points(cam: Pinhole, depth: np.ndarray, blob: Blob) -> np.ndarray:
 
     An edge pixel blends the object's color with what is next to it, and the depth camera gives it one of the
     two depths: a hand in front of a box lent the box's blob four pixels 10 cm above the box's top, enough to
-    move its middle 7.6 cm. Pixels more than SLACK nearer or farther than every pixel inside the blob go (the
+    move its middle 7.7 cm. Pixels more than SLACK nearer or farther than every pixel inside the blob go (the
     inside's own pixels all stay).
     """
     ys, xs = blob.pixels()
