@@ -13,6 +13,7 @@ from robotforge.behaviors.quadruped import QuadrupedGait
 from robotforge.behaviors.rhythm_walk import (
     CALM_MAX,
     SETTLE_MAX,
+    STOP_GRACE,
     RhythmWalker,
     SavedWalk,
     joint_names,
@@ -234,10 +235,39 @@ def test_a_turn_soon_after_a_stop_steadies_first_instead_of_skipping_the_stride_
     stop."""
     walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
     pg.behaviors.stop("crab")
-    pg.run_fast(lambda: False, 0.1)  # letting go of W, then pressing A a moment later
+    pg.run_fast(lambda: False, STOP_GRACE + 0.06)  # letting go of W, then pressing A a moment after it stopped
+    assert walker.rhythm is None
     pg.behaviors.move("crab", 0.0, 0.8)
     began = pg.run_fast(lambda: walker.rhythm is not None, 2 * CALM_MAX)
     assert walker.playing == "left" and walker.rhythm == "left", f"{walker.rhythm} after {began:.2f} s"
+
+
+def test_a_quick_key_change_turns_straight_out_of_the_walk(pg):
+    """Regression: letting go of W and pressing A a moment later sends a stop between the two; taken at once, the robot
+    steadied first, and a 1 s turn one update after letting go of W turned the template dog 27 to 70% of its rate. A
+    stop asked while the walk plays comes STOP_GRACE later: a turn asked by then begins straight out of the walk (at a
+    point of the stride it was checked safe from), and the walk asked again plays on."""
+    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    walked_from = walker.t0
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.rhythm == "forward" and walker.stop_at is not None and walker.status()["walking"] is False
+    pg.behaviors.move("crab", 0.2, 0.0)  # W again before the stop came: it walks on as it was
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.rhythm == "forward" and walker.t0 == walked_from and walker.stop_at is None
+    pg.behaviors.stop("crab")
+    pg.run_fast(lambda: False, 0.02)
+    pg.behaviors.move("crab", 0.0, 0.8)  # A one update after letting go of W
+    began = pg.run_fast(lambda: walker.rhythm == "left walking", 1.0)
+    assert ((walker.t0 - walked_from) * walker.walk.freq) % 1.0 == pytest.approx(0.3, abs=0.03), f"after {began:.2f}"
+    pg.behaviors.stop("crab")  # out of a turn the stop comes at once
+    pg.run_fast(lambda: False, 0.02)
+    assert walker.rhythm is None and walker.stop_at is None
+    pg.behaviors.move("crab", 0.2, 0.0)
+    pg.run_fast(lambda: walker.rhythm == "forward", 2 * CALM_MAX)
+    pg.run_fast(lambda: False, 1.0)
+    pg.behaviors.stop("crab")  # nothing asked by then: it steadies on home
+    assert pg.run_fast(lambda: walker.rhythm is None, 1.0) == pytest.approx(STOP_GRACE, abs=0.025)
 
 
 def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
@@ -386,7 +416,7 @@ def test_a_walk_kept_before_or_to_hold_switches_as_walks_always_did(pg, kept):
     open: in 7 of 8 waits from 0 to 5 s; switched as before, in 1. A file without a home pose, kept before, stops at
     once on home and waits on it until the robot stands still; so does one checked to hold (switching: hold)."""
     walker = _swinging(pg, kept_before=kept == "before", **({"switching": "hold"} if kept == "to hold" else {}))
-    assert walker.holds
+    assert walker.holds and walker.grace == 0.0  # no turn to begin out of the walk: a stop comes at once, as before
     pg.session.data.qvel[walker.body.qvel[5]] = 1.0  # rad/s of yaw: calm, but not still
     pg.behaviors.move("crab", 0.0, 0.8)
     pg.run_fast(lambda: False, 1.0 / walker.rate_hz)

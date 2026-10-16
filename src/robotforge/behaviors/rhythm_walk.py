@@ -10,10 +10,11 @@ A rhythm is learned going forward, at its own pace, from standing still. After k
 its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
 Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts faded in from the stride
-as its walking version learned to, at once or at the next point of the stride it was checked to start from safely;
-any other switch while moving first steadies the robot on its home pose, the way checked to tip it over least
-(`learn_switches`): holding home until it stands still and starting the new rhythm as learned, or fading to home until
-it is calm and fading the new rhythm in. It cannot back up or change speed, and the status says so.
+as its walking version learned to, at once or at the next point of the stride it was checked to start from safely (a
+stop asked just before is let go of); any other switch while moving first steadies the robot on its home pose, the way
+checked to tip it over least (`learn_switches`): holding home until it stands still and starting the new rhythm as
+learned, or fading to home until it is calm and fading the new rhythm in. It cannot back up or change speed, and the
+status says so.
 """
 
 from __future__ import annotations
@@ -209,15 +210,23 @@ CALM_SPIN = 1.0  # rad/s, the trunk's angular speed
 CALM_TILT = math.radians(25.0)  # a walking A1 rocks up to 20 degrees
 CALM_MAX = 0.6  # s
 SETTLE_MAX = 1.0  # s
+# A stop asked while the walk plays takes STOP_GRACE to come: a turn asked by then begins straight out of the walk, as
+# if no stop came between, and the walk asked again plays on. By hand, W let go and A pressed a moment later send a stop
+# between the two; taken at once, the robot steadied first, and a 1 s turn one update after letting go of W turned the
+# template dog 27 to 70% of its rate (median per walk and side, 6 walks, scripts/rhythm_bench.py leads, path quick);
+# with the stop let go of, 25 to 127% (the lowest on a side whose walking turn was dropped), as with no gap at all.
+STOP_GRACE = 0.1  # s: a fifth of a 2 Hz stride
 # How the walk switches is checked after the turns are learned (learn_switches): a walk of SWITCH_WALK seconds and
 # then some, ending at each of SWITCH_TRIES points of the stride (every update at 2 Hz) in a stride early in the walk or
 # later on; then the turn for FIRST_SECOND and up to a stride more (ending at SWITCH_ENDS points of its own stride),
 # asked at once or SWITCH_GAPS after letting go of the walk; then walking on for SWITCH_ON or standing for EXIT_WAIT.
-# And turns from standing. The bench (scripts/rhythm_bench.py leads) walks 2 to 4.5 s, other gaps, 1 s turns.
+# And turns from standing. The bench (scripts/rhythm_bench.py leads) walks 2 to 4.5 s, other gaps, 1 s turns. A turn
+# asked within STOP_GRACE of letting go plays as one asked at once from a later point of the stride, so the gaps are
+# longer: the walk has stopped, and the robot steadies first.
 SWITCH_TRIES = 25
 SWITCH_WALK = (1.0, 4.5)  # s
 SWITCH_ENDS = 5
-SWITCH_GAPS = (0.06, 0.14, 0.24)  # s
+SWITCH_GAPS = (0.16, 0.22, 0.32)  # s, from asking to stop: 0.06 to 0.22 s after the walk stopped
 SWITCH_ON = 2.0  # s
 EXIT_WAIT = 2.0  # s
 # Leaving the walk (SavedWalk.switching), holding first: "hold" home at once and wait until the robot stands still,
@@ -762,6 +771,8 @@ class RhythmWalker:
                 if theta is not None:
                     self.rhythms[f"{side} walking"] = Rhythm(np.array(theta), walk.freq)
                     self.walking_at[side] = at
+        # Only a walk with a turn to begin out of it waits STOP_GRACE to stop: one without stops at once, as before.
+        self.grace = STOP_GRACE if self.walking_at else 0.0
         self.max_speed = walk.speed
         self.mode: str | None = None  # forward, left, right, or None: standing
         self.asked: tuple[float, float] = (0.0, 0.0)
@@ -774,6 +785,7 @@ class RhythmWalker:
         self.aim = 0.0  # rad: the heading it steers for now, at most STEER_LEASH from where it faces
         self.steady_from: float | None = None  # steadying on home since then, before the asked rhythm starts
         self.turn_at: float | None = None  # sim time the asked turn begins out of the walk, which plays on until then
+        self.stop_at: float | None = None  # sim time an asked stop comes (STOP_GRACE), the walk playing on until then
         self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
         self.fade_t0 = 0.0
         self.clock = -math.inf  # sim time of the last update
@@ -803,10 +815,13 @@ class RhythmWalker:
         dt = now - self.clock if now >= self.clock > -math.inf else 0.0
         if now < self.clock:  # the clock was turned back (a reset): times kept from before lie in the future
             self.playing, self.rhythm, self.t0, self.steady_from, self.fade_from = None, None, None, None, None
-            self.turn_at = None
+            self.turn_at, self.stop_at = None, None
         self.clock = now
         if self.mode != self.playing:
             self._switch(data, now)
+        if self.stop_at is not None and now >= self.stop_at - 0.5 / CONTROL_HZ:
+            self.stop_at, self.rhythm, self.t0 = None, None, None
+            self._settle(data, now)
         if self.steady_from is not None and self._steadied(data, now - self.steady_from):
             self.steady_from = None
             assert self.mode is not None
@@ -848,12 +863,14 @@ class RhythmWalker:
         were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
         When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
         16 degrees of the 88 it promised. A walk kept to hold home before other switches begins its walking turns
-        straight out of the walk all the same."""
-        # Only out of the walk as it plays (or walks on to a turn): a robot stopped a moment ago is fading to home, a
-        # pose and a point of the stride its walking turns were never checked from. Any switch within a quarter second
-        # of the walk's last update used to count, so a turn soon after a stop began at once wherever the stride was.
+        straight out of the walk all the same. A stop asked while the walk plays comes STOP_GRACE later, so what is
+        asked by then switches straight out of the walk too."""
+        # Only out of the walk as it plays (or walks on to a turn, or to a stop): a robot stopped a moment ago is
+        # fading to home, a pose and a point of the stride its walking turns were never checked from. Any switch within
+        # a quarter second of the walk's last update used to count, so a turn soon after a stop began at once wherever
+        # the stride was.
         out_of_walk = self.rhythm == "forward"
-        self.playing, self.steady_from, self.turn_at = self.mode, None, None
+        self.playing, self.steady_from, self.turn_at, self.stop_at = self.mode, None, None, None
         if self.rhythm is not None:  # what it leaves decides how it steadies (already steadying: as it is)
             exit_ = self.exits.get(self.rhythm.split()[0])
             self.holding = self.holds if exit_ is None else exit_ == "hold"
@@ -861,7 +878,9 @@ class RhythmWalker:
             # Where it faces now, not once steadied: an imported A1 coming out of a fast turn spun on by 47 degrees
             # while it steadied, and then walked that way.
             self.course = self.aim = trunk_yaw(data, self.body)
-        if self.mode is None:  # stop
+        if self.mode is None and out_of_walk and self.grace:  # stop: the walk plays on for STOP_GRACE first
+            self.stop_at = now + self.grace
+        elif self.mode is None:  # stop
             self.rhythm, self.t0 = None, None
             self._settle(data, now)
         elif self.mode == "forward" and self.rhythm == "forward":  # it was walking on to a turn, now not asked for
