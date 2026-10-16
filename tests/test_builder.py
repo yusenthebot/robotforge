@@ -504,6 +504,27 @@ def test_a_wheel_legged_robot_balances_in_place_and_stays_there_when_it_crouches
     assert end["position"][2] < start[2] - 0.08  # it did crouch
 
 
+def test_a_wheel_legged_robot_whose_body_tips_back_as_it_crouches_keeps_balancing(pg):
+    """Folding the thighs back slowly keeps the weight over the axle while the body tips back with them. The fall check
+    read the body's pitch: 46 degrees back it called the robot fallen, cut the wheels, and it fell flat 0.36 m away."""
+    pg.add_robot("ascent", build=WHEEL_LEGS)
+    _run(pg, 1.0)
+    start = pg.behaviors.pose("ascent")["position"]
+    m, d = pg.session.model, pg.session.data
+    goals = (("thigh", 90), ("shin", -60))
+    legs = {f"ascent/{side}_{part}": goal for side in ("left", "right") for part, goal in goals}
+    before = {name: float(d.ctrl[m.actuator(name).id]) for name in legs}
+    for step in range(1, 41):  # over 2 s
+        s = step / 40
+        pg.set_controls({name: (1 - s) * before[name] + s * np.radians(goal) for name, goal in legs.items()})
+        _run(pg, 0.05)
+    _run(pg, 2.0)
+    end = pg.behaviors.pose("ascent")
+    assert not pg.session.controllers["ascent"].fallen
+    assert end["upright"]  # balancing, though its body leans far back
+    assert np.linalg.norm(np.subtract(end["position"][:2], start[:2])) < 0.05
+
+
 def _wheel_motor(model: mujoco.MjModel, carrier: str) -> int:
     """The drawn gear motor of the wheel on `carrier`: the shown cylinder on that body nothing collides with (the
     knee's servo is one too, drawn as a mesh over a hidden one)."""

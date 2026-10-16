@@ -482,11 +482,14 @@ class BehaviorManager:
         d = self.session.data
         root = self._root_body(robot)
         rot = d.xmat[root].reshape(3, 3)
+        ctrl = self.session.controllers.get(robot)
+        # A balancer knows best: a wheel-legged robot that folds its legs back tips its body far over, balanced.
+        upright = not ctrl.fallen if isinstance(ctrl, WheelBalancer) else rot[2, 2] > 0.7
         return {
             "robot": robot,
             "position": [round(float(v), 3) for v in d.xpos[root]],
             "heading_deg": round(math.degrees(math.atan2(rot[1, 0], rot[0, 0])), 1),
-            "upright": bool(rot[2, 2] > 0.7),
+            "upright": bool(upright),
         }
 
     def _root_body(self, robot: str) -> int:

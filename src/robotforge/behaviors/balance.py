@@ -356,7 +356,13 @@ class WheelBalancer:
             self._ref = axle.copy()
         self._ref = self._ref + fwd * self.speed * dt
         x = measure(data, b, fwd, left, self._ref)
-        if abs(x[0] - self.lean) > FALL_ANGLE:
+        # The lean is measured on the center of mass: for a rigid body it is the same number as the body's pitch
+        # from its balanced lean, but a robot that changes its crouch moves its balance point and tips its body
+        # with it. Balancing the old lean rolled it away (0.34 m standing up taller, 1.17 m crouching deep), and
+        # judging a fall on the body's pitch gave up on a wheel biped whose slow crouch tipped its body back 46
+        # degrees with its weight still over the axle.
+        lean = com_lean(data, b, fwd)
+        if abs(lean) > FALL_ANGLE:
             self.fallen = True
         if self.fallen:
             data.ctrl[list(b.wheels)] = 0.0
@@ -365,10 +371,7 @@ class WheelBalancer:
             x[2] = float(np.clip(x[2], -POSITION_SLACK, POSITION_SLACK))
             self._ref = axle - fwd * x[2]
         error = x - np.array([self.lean, 0.0, 0.0, self.speed])
-        # The lean is measured on the center of mass: for a rigid body it is the same number, but a robot that
-        # changes its crouch moves its balance point, and balancing the old lean rolled it away (0.34 m standing
-        # up taller, 1.17 m crouching deep).
-        error[0] = com_lean(data, b, fwd)
+        error[0] = lean
         roll = self.speed / b.radius - float((self.K @ error)[0])
         spin = self.turn * b.track / (2 * b.radius)
         for act, sign, side in zip(b.wheels, b.signs, (-1.0, 1.0), strict=True):
