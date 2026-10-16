@@ -614,6 +614,20 @@ def test_a_trip_sent_off_without_waiting_says_how_it_ended(pg):
     assert not [s for s in pg.behaviors.status() if s.get("navigating") == "rover"]
 
 
+def test_a_mistyped_destination_leaves_a_walking_robot_walking(pg):
+    """Regression: the robot was stood still (and its walker switched) before the destination was looked up, so a
+    typo stopped a dog walking on its own and then came back as an error."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_object("fridge", shape="box", pos=[3.0, 0.0], size=[0.6, 0.6, 1.6], fixed=True)
+    pg.behaviors.move("dog", 0.2, 0.0)
+    pg.run_fast(lambda: False, 1.0)
+    with pytest.raises(BehaviorError, match="fridge"):
+        pg.behaviors.navigate("dog", "frige stove")
+    before = pg.behaviors.pose("dog")["position"][0]
+    pg.run_fast(lambda: False, 2.0)
+    assert pg.behaviors.pose("dog")["position"][0] - before > 0.25  # still walking at about 0.2 m/s
+
+
 def test_a_trip_needs_a_speed_that_gets_somewhere(pg):
     pg.add_robot("rover", template="rover")
     with pytest.raises(BehaviorError, match="leave speed out"):

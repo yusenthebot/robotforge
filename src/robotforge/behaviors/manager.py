@@ -482,6 +482,8 @@ class BehaviorManager:
         named = to if isinstance(to, str) and not NUMBER_LIST.fullmatch(to) else None
         if named is not None and wording.match(named, [robot]) == robot:
             raise BehaviorError(f"{robot} cannot go to itself; give a point [x, y] or another object or robot")
+        with self.session.lock:  # a destination it does not know is a mistake in the call: refused before it stops
+            self._destination(robot, to, self.session.model, self.session.data)
         # The walker it goes with, standing. This also refuses what cannot move (an arm, "rover/arm") the way
         # move does, and ends any trip it was on.
         self.move(robot, 0.0, 0.0, walker)
