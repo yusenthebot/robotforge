@@ -1397,6 +1397,64 @@ const togglePlay = () => send({ type: "cmd", cmd: paused ? "play" : "pause" });
 $("btn-play").addEventListener("click", togglePlay);
 $("btn-reset").addEventListener("click", () => send({ type: "cmd", cmd: "reset" }));
 $("btn-frame").addEventListener("click", () => frameCamera({ animate: true }));
+$("btn-record").addEventListener("click", () => (recording ? stopRecording() : startRecording()));
+
+// ---------------------------------------------------------------- recording
+
+// The 3D view as a video a learner can share, recorded by the browser itself (MediaRecorder): no library.
+const RECORD_MAX_S = 30;
+const RECORD_TYPES = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+let recording = null; // { recorder, chunks, type, t0, timer }
+
+function startRecording() {
+  const type = RECORD_TYPES.find((k) => window.MediaRecorder?.isTypeSupported?.(k));
+  if (!type || !canvas.captureStream) {
+    toast(t("record_unsupported"));
+    return;
+  }
+  const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: type, videoBitsPerSecond: 8_000_000 });
+  const chunks = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size) chunks.push(e.data);
+  };
+  recorder.onstop = () => saveRecording(new Blob(chunks, { type: type.split(";")[0] }));
+  recorder.start(1000);
+  recording = { recorder, type, t0: performance.now(), timer: setInterval(tickRecording, 250) };
+  $("btn-record").setAttribute("aria-pressed", "true");
+  tickRecording();
+}
+
+function tickRecording() {
+  if (!recording) return;
+  const s = (performance.now() - recording.t0) / 1000;
+  if (s >= RECORD_MAX_S) return stopRecording();
+  $("record-label").textContent = `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+function stopRecording() {
+  if (!recording) return;
+  clearInterval(recording.timer);
+  recording.recorder.stop(); // onstop saves what was recorded
+  recording = null;
+  $("btn-record").setAttribute("aria-pressed", "false");
+  $("record-label").textContent = t("record");
+}
+
+function saveRecording(blob) {
+  const d = new Date(); // local time, as the learner's clock shows it
+  const two = (n) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}`;
+  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+  const name = `robotforge-${(lessonTitle() ? "lesson" : worldName || "view").replace(/[^\w-]+/g, "_")}-${stamp}.${ext}`;
+  if (window.__robotforge?.onRecording) return window.__robotforge.onRecording(blob, name); // scripted checks
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  toast(t("record_saved", { name }));
+}
 for (const b of $("speed").children) {
   b.addEventListener("click", () => send({ type: "speed", value: Number(b.dataset.speed) }));
 }

@@ -615,6 +615,13 @@ input[type="range"]::-moz-range-thumb {
 .tool:hover { background: var(--hover); color: var(--ink); }
 .tool:active { background: var(--press); }
 
+.rec .rec-dot { fill: var(--rec, #e5484d); stroke: none; }
+.rec[aria-pressed="true"] { color: var(--rec, #e5484d); }
+.rec[aria-pressed="true"] #record-label { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.rec[aria-pressed="true"] .rec-dot { animation: rec-pulse 1s ease-in-out infinite; }
+@keyframes rec-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .rec[aria-pressed="true"] .rec-dot { animation: none; } }
+
 .tool svg {
   width: 18px;
   height: 18px;
@@ -790,6 +797,7 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 820px) {
   .tool span { display: none; }
   .tool { padding: 0 8px; }
+  .tool.rec[aria-pressed="true"] span { display: inline; } /* the time recorded so far stays in view */
   .drive { bottom: calc(var(--gutter) + 72px); }
   .drawer { max-height: calc(100% - var(--gutter) * 2 - 44px - 140px); } /* stop above the drive hint */
   .coach { bottom: calc(var(--gutter) + 128px); }
