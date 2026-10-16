@@ -268,32 +268,6 @@ def _walk(robot: str, speed: float) -> dict[str, Any]:
     return {"type": "teleop", "robot": robot, "speed": speed, "turn": 0.0}
 
 
-def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
-    """Page script: aim the camera at the middle of these robots, from `offset` metres away."""
-    return f"""
-        const rf = window.__robotforge;
-        const at = {json.dumps(robots)}.map((r) => rf.bodyPosition(
-            rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
-        const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
-        rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
-    """
-
-
-A1_URDF = Path(
-    os.environ.get(
-        "A1_URDF", "~/worktrees/_artifacts/import-doctor/repos/unitree_ros/robots/a1_description/urdf/a1.urdf"
-    )
-).expanduser()  # a checkout of unitree_ros; the shots that import it are skipped without one
-
-
-def _a1(pg: Any) -> None:
-    pg.add_robot("a1", file=str(A1_URDF))
-
-
-def _nothing(pg: Any) -> None:
-    """Lessons build their own world."""
-
-
 # A rover built from parts that carries an arm (tests/test_builder.py builds the same one).
 MOBILE_ARM = {
     "color": "yellow",
@@ -324,6 +298,32 @@ def _go(robot: str, to: list[float] | str) -> dict[str, Any]:
     return {"type": "teleop", "robot": robot, "to": to}
 
 
+def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
+    """Page script: aim the camera at the middle of these robots, from `offset` metres away."""
+    return f"""
+        const rf = window.__robotforge;
+        const at = {json.dumps(robots)}.map((r) => rf.bodyPosition(
+            rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
+        const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
+        rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+    """
+
+
+A1_URDF = Path(
+    os.environ.get(
+        "A1_URDF", "~/worktrees/_artifacts/import-doctor/repos/unitree_ros/robots/a1_description/urdf/a1.urdf"
+    )
+).expanduser()  # a checkout of unitree_ros; the shots that import it are skipped without one
+
+
+def _a1(pg: Any) -> None:
+    pg.add_robot("a1", file=str(A1_URDF))
+
+
+def _nothing(pg: Any) -> None:
+    """Lessons build their own world."""
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -333,26 +333,6 @@ SHOTS = [
         settle=1.0,
     ),
     Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
-    Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
-    Shot(
-        "lesson_your_robot",
-        _a1,
-        page=_lesson(
-            "learn_to_walk",
-            "document.querySelector('[data-choice=\"robot\"] button:last-child').click();",
-            _wait(1.0),
-            _press("train"),
-            _wait(22.0),
-        ),
-    ),
-    Shot("lesson_learn_to_walk", _nothing, page=_lesson("learn_to_walk", _press("train"), _wait(25.0))),
-    Shot(  # the plots show 6 s: capture while the step response is still in them
-        "bench_pid_twins",
-        _nothing,
-        page=_lesson("pid_twins", _wait(0.5), _press("test"), _wait(3.0)),
-        settle=0.2,
-    ),
-    Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
     # Navigation: the path still ahead shows as an amber line on the ground while the robot follows it.
     Shot(
         "nav_warehouse",
@@ -375,6 +355,26 @@ SHOTS = [
         page="window.__robotforge.lookAt([0.6, -4.2, 3.4], [0.0, 0.3, 0.2]);",
         settle=0.2,
     ),
+    Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
+    Shot(
+        "lesson_your_robot",
+        _a1,
+        page=_lesson(
+            "learn_to_walk",
+            "document.querySelector('[data-choice=\"robot\"] button:last-child').click();",
+            _wait(1.0),
+            _press("train"),
+            _wait(22.0),
+        ),
+    ),
+    Shot("lesson_learn_to_walk", _nothing, page=_lesson("learn_to_walk", _press("train"), _wait(25.0))),
+    Shot(  # the plots show 6 s: capture while the step response is still in them
+        "bench_pid_twins",
+        _nothing,
+        page=_lesson("pid_twins", _wait(0.5), _press("test"), _wait(3.0)),
+        settle=0.2,
+    ),
+    Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
 ]
 
 
