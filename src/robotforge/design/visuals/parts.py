@@ -354,12 +354,6 @@ def range_finder(w: float) -> Parts:
 
 @M.cached
 def lead_screw(r: float, length: float) -> M.Mesh:
-    """A threaded rod along z from 0 to `length`: ridges a few millimetres apart catch the light like a thread."""
-    pitch = max(0.002, r * 0.8)
-    turns = max(2, int(length / pitch))
-    prof = [(0.0, 0.0), (r * 0.86, 0.0)]
-    for k in range(turns):
-        z = length * (k + 0.5) / turns
-        prof += [(r, z - length * 0.2 / turns), (r * 0.86, z + length * 0.25 / turns)]
-    prof += [(r * 0.86, length), (0.0, length)]
-    return M.lathe(prof, segments=12)
+    """A lead screw along z from 0 to `length`, drawn as a polished rod: ridges fine enough to be a thread
+    shimmer when the view moves, and coarse ones read as a twisted cable."""
+    return M.cylinder(r, length, segments=16, bevel=r * 0.25, z0=0.0, arc=2)

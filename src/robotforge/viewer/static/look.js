@@ -110,7 +110,7 @@ export function surfaceMaterial(materialName, color, opacity) {
 // A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few
 // shader instructions. Each face takes the plane its normal points out of. Where one tow is
 // smaller than a pixel the weave fades to its average instead of shimmering.
-const WEAVE_PITCH = 0.0025; // m, the width of one tow (a 3K carbon twill is 2 to 3 mm)
+const WEAVE_PITCH = 0.004; // m, the width of one tow (a 12K carbon twill, the coarse weave robot plates show)
 
 function addWeave(mat) {
   mat.onBeforeCompile = (shader) => {
@@ -138,15 +138,15 @@ float weaveFade;`
   bool alongX = mod(cell.x + cell.y, 4.0) < 2.0; // the tow on top steps one cell per row: a twill
   float across = alongX ? f.y : f.x;
   float ridge = sin(3.14159265 * across); // a tow is a flat ridge with a dark gap to the next one
-  weaveFade = clamp(1.5 - 1.5 * max(fwidth(p.x), fwidth(p.y)), 0.0, 1.0);
+  weaveFade = clamp((0.4 - max(fwidth(p.x), fwidth(p.y))) / 0.23, 0.0, 1.0); // full at 6 px a tow, gone at 2.5
   weaveTow = alongX ? 1.0 : 0.0;
-  diffuseColor.rgb *= mix(0.82, mix(0.55, 1.08, ridge), weaveFade);
+  diffuseColor.rgb *= mix(0.86, mix(0.68, 1.04, ridge), weaveFade);
 }`
       )
       .replace(
         "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
-roughnessFactor *= mix(1.0, weaveTow > 0.5 ? 0.7 : 1.3, weaveFade); // tows at right angles catch light differently`
+roughnessFactor *= mix(1.0, weaveTow > 0.5 ? 0.82 : 1.18, weaveFade); // tows at right angles catch light differently`
       );
   };
   mat.customProgramCacheKey = () => "rf-weave";

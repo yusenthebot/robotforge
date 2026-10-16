@@ -417,15 +417,15 @@ def _base_details(vis: Visuals, body, name: str, hx: float, hy: float, hz: float
             return
 
 
+@M.cached
 def _disc(r: float, z0: float, z1: float, bottom: float, top: float, segments: int) -> M.Mesh:
     """A solid cylinder along z with its own edge radius at each end (a slab, but round)."""
     h = (z1 - z0) / 2
     rb, rt = min(bottom, r, h), min(top, r, h)
-    prof = [(0.0, z0)]
-    prof += [(r - rb + rb * math.sin(t), z0 + rb - rb * math.cos(t)) for t in np.linspace(0, math.pi / 2, 3)]
+    prof = [(r - rb + rb * math.sin(t), z0 + rb - rb * math.cos(t)) for t in np.linspace(0, math.pi / 2, 3)]
     prof += [(r - rt + rt * math.sin(t), z1 - rt + rt * math.cos(t)) for t in np.linspace(math.pi / 2, 0, 3)]
-    prof.append((0.0, z1))
-    return M.lathe(tuple(prof), segments)
+    rings = [M.at_z(M.circle(rr, segments), z) for rr, z in prof]
+    return M.loft(rings)
 
 
 def cylinder(
@@ -490,19 +490,23 @@ def sphere(
     vis: Visuals, body: mujoco.MjsBody, center: np.ndarray, r: float, up: np.ndarray, rgba: Sequence[float], preset: str
 ) -> None:
     """A sphere as two hemispheres with a parting line round its middle (a robot head, a ball body)."""
-    gap = min(SEAM_GAP / r, 0.2)
-    edge = min(SEAM_EDGE / r, 0.2)
-    rings = 9
-    # Each half starts with its rim turned in by SEAM_EDGE, so the groove shows the dark core, not a bright lip.
-    lip = (r * math.cos(gap) - SEAM_EDGE, r * math.sin(gap))
-    upper = [lip, *[(r * math.cos(t), r * math.sin(t)) for t in np.linspace(gap + edge, math.pi / 2, rings)]]
-    lower = [(r * math.cos(t), -r * math.sin(t)) for t in np.linspace(math.pi / 2, gap + edge, rings)]
-    lower.append((lip[0], -lip[1]))
     n = _segments(r, low=24, high=48)
     rot = M.z_to(up)
-    vis.add(body, preset, rgba, M.lathe(tuple(upper), n, sharp=(1,)), center, rot)
-    vis.add(body, preset, rgba, M.lathe(tuple(lower), n, sharp=(len(lower) - 2,)), center, rot)
+    for half in (1, -1):
+        vis.add(body, preset, rgba, _hemisphere(r, n, half), center, rot)
     vis.add(body, "dark", DARK, M.sphere(r - SEAM_INSET, rings=12, segments=n), center, rot)
+
+
+@M.cached
+def _hemisphere(r: float, segments: int, half: int) -> M.Mesh:
+    """The upper (half = 1) or lower (-1) half of a sphere, its rim turned in by SEAM_EDGE so the parting line
+    shows the dark core rather than a bright lip."""
+    gap = min(SEAM_GAP / r, 0.2)
+    edge = min(SEAM_EDGE / r, 0.2)
+    prof = [(r * math.cos(gap) - SEAM_EDGE, r * math.sin(gap))]
+    prof += [(r * math.cos(t), r * math.sin(t)) for t in np.linspace(gap + edge, math.pi / 2, 9)]
+    rings = [M.at_z(M.circle(rr, segments), half * z) for rr, z in prof]
+    return M.loft(rings, sharp=(1,))
 
 
 def link(
