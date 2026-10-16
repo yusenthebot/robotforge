@@ -359,7 +359,7 @@ SHOTS = [
         "nav_obstacle_course",
         _in_scene("obstacle_course", {"dog": {"template": "quadruped"}}),
         viewer=[_go("dog", "finish"), {"wait": 2.0}],
-        page="window.__robotforge.lookAt([8.6, -11.0, 9.0], [8.6, 0.6, 0]);",
+        page="window.__robotforge.lookAt([-2.4, -5.0, 3.8], [6.8, 0.5, 0]);",
         settle=0.5,
     ),
     Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
