@@ -35,7 +35,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
-from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError
+from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
@@ -51,18 +51,19 @@ INSTRUCTIONS = wording.unwrap(
     """\
 robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
-Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm,
-quadruped, humanoid, rover, cartpole, gripper; list_templates), takes a real one from the library
-(list_library: Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as
-.stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
-add_robot(build=...) builds any robot from parts (hexapod, snake, self-balancing robot, arm on a rover):
-read builder_guide, then edit with add_part / update_part / remove_part. add_object places boxes, balls,
-cylinders, tables, bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches,
-rocks, flat ground markers). update_robot, update_object, remove, set_floor and undo edit the world; every
-edit is validated and the live viewer updates at once. Robots and objects an edit does not change stay where
-they are (new terrain or a scene starts them fresh). Names are lowercase with underscores; other capitals
-and spaces are accepted ("Red Cube" is saved as red_cube, "the dog" finds dog). Units: meters, kilograms,
-radians for joints, degrees for yaw (the builder takes degrees for joints too).
+Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
+humanoid, rover, cartpole, gripper; list_templates), takes a real one from the library (list_library: Unitree Go2,
+Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the import doctor
+repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any robot from
+parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
+update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
+Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
+bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers).
+update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
+viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
+starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
+saved as red_cube, "the dog" finds dog). Units: meters, kilograms, radians for joints, degrees for yaw (the
+builder takes degrees for joints too).
 
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse, park,
 maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground (hills,
@@ -234,15 +235,22 @@ def build_server(playground: Playground, port: int) -> MCPServer:
     @server.tool()
     def list_templates() -> str:
         """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper) with parameters, defaults and
-        limits, and the parts catalog (servos, motors, linear actuators). For other robots build from parts
-        (builder_guide)."""
-        from robotforge.design import components, templates
+        limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
+        linear actuators). For other robots build from parts (builder_guide)."""
+        from robotforge.design import components, gallery, templates
 
         parts = {
             n: {"kind": a.kind, "stall_torque_nm": a.stall_torque, "speed_rad_s": a.no_load_speed, "note": a.note}
             for n, a in components.ACTUATORS.items()
         }
-        return _json({"templates": templates.catalog(), "parts": parts, "colors": list(components.COLORS)})
+        return _json(
+            {
+                "templates": templates.catalog(),
+                "designs": gallery.catalog(),
+                "parts": parts,
+                "colors": list(components.COLORS),
+            }
+        )
 
     @server.tool()
     def list_library() -> str:
@@ -278,9 +286,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         yaw: float = 0.0,
         library: str | None = None,
         build: dict[str, Any] | None = None,
+        design: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
-        or built from parts (build, see builder_guide).
+        built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
+        list_templates), which is saved as its parts so add_part / update_part change it.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -298,14 +308,16 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}. pos is [x, y] in meters (height is
         automatic); yaw is in degrees."""
         with _tool_errors():
-            for wanted in [library, *build_edit.libraries_in(build)]:
+            parts = build
+            if design is not None:  # the robots it mounts download first, like a build's
+                parts = design_build(design, template=template, file=file, library=library, build=build, params=params)
+            for wanted in [library, *build_edit.libraries_in(parts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
-            added = await asyncio.to_thread(
-                playground.add_robot, name, template, file, params, pos, yaw, library=library, build=build
-            )
+            source = {"library": library, "build": build, "design": design}
+            added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
     @server.tool()

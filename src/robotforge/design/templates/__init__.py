@@ -43,6 +43,13 @@ def canonical(name: str) -> str:
 def get(name: str) -> Template:
     found = wording.match(name, TEMPLATES)
     if found is None:
+        from robotforge.design import gallery  # lazy: the gallery's designs mount templates
+
+        design = gallery.canonical(name)
+        if design is not None:
+            raise ValueError(
+                f"{design} is a ready-made design, not a template: add_robot(name, design={design!r}) adds it"
+            )
         close = wording.near(name, TEMPLATES, NICKNAMES)
         hint = f" Did you mean {', '.join(close)}?" if close else ""
         raise ValueError(f"unknown template {wording.short(name)}.{hint} Templates: {', '.join(TEMPLATES)}")

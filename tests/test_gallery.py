@@ -1,0 +1,279 @@
+"""The gallery: ready-made designs added by name, kept as their parts, and each one doing its job for real."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from pathlib import Path
+
+import mujoco
+import numpy as np
+import pytest
+
+from robotforge.cli import find_free_port
+from robotforge.design import gallery
+from robotforge.mcp_server import build_server
+from robotforge.playground import Playground, PlaygroundError
+from robotforge.sim.session import SimSession
+
+FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"  # offline stand-ins for the Go2 and the PiPER
+NETWORK = os.environ.get("ROBOTFORGE_NETWORK_TESTS") == "1"
+
+
+@pytest.fixture
+def pg(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(FIXTURES))
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("gallery")
+    return playground
+
+
+def _run(pg: Playground, seconds: float) -> None:
+    pg.run_fast(lambda: False, seconds)
+
+
+def _tools(pg: Playground, robot: str) -> np.ndarray:
+    m, d = pg.session.model, pg.session.data
+    return np.array([d.site_xpos[m.site(f"{arm}/tcp").id] for arm in pg.behaviors.arms(robot)])
+
+
+def _moved(pg: Playground, robot: str, speed: float, seconds: float, turn: float = 0.0) -> tuple[float, dict]:
+    start = pg.behaviors.pose(robot)["position"]
+    pg.behaviors.move(robot, speed, turn)
+    _run(pg, seconds)
+    pg.behaviors.stop(robot)
+    _run(pg, 1.0)
+    end = pg.behaviors.pose(robot)
+    return float(end["position"][0] - start[0]), end
+
+
+def _pick(pg: Playground, arm: str, obj: str, target) -> dict:
+    motion, info = pg.behaviors.pick_and_place(arm, obj, target)
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    return pg.behaviors.placed(info["object"], info["region"])
+
+
+# ---- adding a design ------------------------------------------------------------------------------------
+
+
+def test_a_design_is_added_by_name_and_kept_as_its_parts(pg):
+    pg.add_robot("hopper", design="Wheel Biped")
+    entry = pg.current_world().robots[0]
+    assert entry.build == gallery.build("wheel_biped") and entry.template is None
+    # It is a robot built from parts now: change it part by part like any other.
+    pg.update_part("hopper", "robot", {"color": "purple"})
+    pg.update_part("hopper", "left_shin", {"size": [0.025, 0.14]})
+    entry = pg.current_world().robots[0]
+    assert entry.build["color"] == "purple" and entry.build["parts"][2]["size"] == [0.025, 0.14]
+    assert "right_shin" in [pg.session.model.body(b).name.split("/")[-1] for b in range(pg.session.model.nbody)]
+
+
+def test_a_design_comes_alone_and_a_wrong_name_says_what_there_is(pg):
+    with pytest.raises(PlaygroundError, match="leave out template.*update_part"):
+        pg.add_robot("x", template="arm", design="centaur")
+    with pytest.raises(PlaygroundError, match="Did you mean centaur"):
+        pg.add_robot("x", design="centuar")
+    with pytest.raises(PlaygroundError, match="quadruped is a template, not a design"):
+        pg.add_robot("x", design="quadruped")
+    with pytest.raises(ValueError, match=r"centaur is a ready-made design, not a template: .*design=.centaur."):
+        pg.add_robot("x", template="centaur")
+    assert pg.current_world().robots == []
+
+
+def test_every_design_has_a_short_summary_that_names_how_to_drive_it():
+    catalog = gallery.catalog()
+    assert len(catalog) >= 8
+    for entry in catalog:
+        assert set(entry) == {"name", "summary"}
+        assert len(entry["summary"]) < 200, entry
+        assert any(tool in entry["summary"] for tool in ("move", "move_arm", "pick_and_place")), entry
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_agents_list_the_designs_and_add_one_in_one_call(tmp_path, monkeypatch):
+    from mcp import Client
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_NO_BROWSER", "1")
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    server = build_server(playground, find_free_port(18800))
+    async with Client(server) as client:
+        listed = json.loads((await client.call_tool("list_templates", {})).content[0].text)
+        assert {"centaur", "mars_rover", "wheel_biped"} <= {d["name"] for d in listed["designs"]}
+        await client.call_tool("new_world", {"name": "zoo"})
+        added = await client.call_tool("add_robot", {"name": "rover", "design": "mars_rover"})
+        assert not added.is_error, added.content[0].text
+        robots = json.loads((await client.call_tool("robots", {})).content[0].text)["robots"]
+        assert robots[0]["kind"] == "rover" and robots[0]["arms"] == ["rover/hand"]
+        world = json.loads((await client.call_tool("show_world", {})).content[0].text)
+        assert "left_rocker" in json.dumps(world)  # the parts are in world.yaml, ready for update_part
+    await asyncio.sleep(0)
+
+
+# ---- every design stands, and does its job ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("design", list(gallery.DESIGNS))
+def test_every_design_compiles_and_stands_for_five_seconds(pg, design):
+    pg.add_robot("r", design=design)
+    _run(pg, 0.5)
+    start, tools = pg.behaviors.pose("r"), _tools(pg, "r")
+    _run(pg, 5.0)
+    end = pg.behaviors.pose("r")
+    assert end["upright"], design
+    assert np.linalg.norm(np.subtract(end["position"], start["position"])) < 0.05, (design, start, end)
+    if len(tools):  # the arms hold their pose on their servos
+        assert np.abs(_tools(pg, "r") - tools).max() < 0.02, design
+
+
+def test_the_wheel_biped_balances_and_drives(pg):
+    pg.add_robot("hopper", design="wheel_biped")
+    assert pg.behaviors.robots()[0]["kind"] == "balancer"
+    ahead, end = _moved(pg, "hopper", 0.4, 3.0)
+    assert ahead > 0.9 and end["upright"]
+
+
+def test_the_wheel_dog_rolls_on_its_wheel_feet(pg):
+    pg.add_robot("dog", design="wheel_dog")
+    assert pg.behaviors.robots()[0]["kind"] == "rover"
+    ahead, end = _moved(pg, "dog", 0.4, 3.0)
+    assert ahead > 1.0 and end["upright"]
+
+
+def test_the_mars_rover_climbs_a_curb_and_samples_a_rock(pg):
+    pg.add_robot("rover", design="mars_rover")
+    pg.add_terrain("curb", pos=[0.7, 0.0], params={"height": 0.06})
+    ahead, end = _moved(pg, "rover", 0.3, 6.0)
+    assert ahead > 1.4 and end["upright"]  # over the 6 cm curb, a wheel-radius step
+    x, y = end["position"][:2]
+    pg.add_object("rock", shape="box", size=[0.04, 0.04, 0.04], pos=[x + 0.42, y - 0.08])
+    pg.add_object("cache", shape="bin", size=[0.16, 0.16, 0.06], pos=[x + 0.42, y + 0.17], fixed=True)
+    _run(pg, 0.5)
+    assert _pick(pg, "rover/hand", "rock", "cache")["success"]
+
+
+def test_the_lift_picker_raises_its_column_to_move_a_cube_to_a_higher_table(pg):
+    """The arm starts folded backward, low over the base, with a table on either side of it: it rises before it swings
+    around (swinging at the folded height it hit the higher table and spun the base around)."""
+    pg.add_robot("picker", design="lift_picker")
+    pg.add_object("low", shape="table", size=[0.26, 0.26, 0.45], pos=[0.52, -0.14], fixed=True)
+    pg.add_object("high", shape="table", size=[0.26, 0.26, 0.62], pos=[0.45, 0.26], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.52, -0.14, 0.47])
+    _run(pg, 0.5)
+    lift = pg.session.model.joint("picker/lift").qposadr[0]
+    assert _pick(pg, "picker", "cube", "high")["success"]
+    assert pg.session.data.qpos[lift] > 0.15  # it reached the higher table by raising the column
+    assert pg.behaviors.pose("picker")["position"][:2] == pytest.approx([0.0, 0.0], abs=0.02)  # the base held still
+
+
+def test_the_centaur_walks_and_picks_with_one_hand(pg):
+    pg.add_robot("centaur", design="centaur")
+    info = pg.behaviors.robots()[0]
+    assert info["kind"] == "quadruped" and info["arms"] == ["centaur/left_hand", "centaur/right_hand"]
+    ahead, end = _moved(pg, "centaur", 0.3, 4.0)
+    assert ahead > 0.7 and end["upright"]
+    x, y = end["position"][:2]
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[x + 0.39, y + 0.12])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[x + 0.31, y + 0.31], fixed=True)
+    _run(pg, 0.5)
+    assert _pick(pg, "centaur/left_hand", "cube", "bin")["success"]
+
+
+def test_an_arm_built_from_parts_answers_to_the_parts_it_hangs_from(pg):
+    pg.add_robot("centaur", design="centaur")
+    assert pg.behaviors.resolve("centaur/left_arm", arm=True) == "centaur/left_hand"
+    assert pg.behaviors.resolve("Centaur/Right_Fore", arm=True) == "centaur/right_hand"
+    with pytest.raises(ValueError, match="not an arm of centaur; use centaur/left_hand or centaur/right_hand"):
+        pg.behaviors.resolve("centaur/torso", arm=True)  # both arms hang from it: which one is not said
+    target = [0.32, 0.2, 0.15]
+    motion = pg.behaviors.move_arm("centaur/left_arm", target)
+    pg.run_fast(lambda: motion.done, 10)
+    _run(pg, 0.5)
+    assert np.linalg.norm(pg.session.data.site_xpos[motion.site] - target) < 0.015
+
+
+def test_the_scorpion_walks_on_six_legs_and_picks_with_its_tail(pg):
+    pg.add_robot("scorpion", design="scorpion")
+    info = pg.behaviors.robots()[0]
+    assert info["kind"] == "hexapod" and info["arms"] == ["scorpion/claw"]
+    ahead, end = _moved(pg, "scorpion", 0.25, 4.0)
+    assert ahead > 0.7 and end["upright"]
+    x, y = end["position"][:2]
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[x + 0.3, y])
+    _run(pg, 0.5)
+    assert _pick(pg, "scorpion/claw", "cube", [x + 0.3, y - 0.14])["success"]
+
+
+def _go2_moves_a_cube(pg: Playground, walk: bool) -> tuple[dict, list[str]]:
+    """Have the Go2's arm move a cube between two tables (after a walk, or straight away); (placed, the steps of the
+    motion that moved joint by joint)."""
+    pg.add_robot("dog", design="go2_arm")
+    info = pg.behaviors.robots()[0]
+    assert info["kind"] == "quadruped" and info["arms"] == ["dog/arm"]
+    x, y = pg.behaviors.pose("dog")["position"][:2]
+    if walk:
+        ahead, end = _moved(pg, "dog", 0.4, 3.0)
+        assert ahead > 0.8 and end["upright"]
+        x, y = end["position"][:2]
+    pg.add_object("left_table", shape="table", size=[0.22, 0.22, 0.25], pos=[x + 0.42, y - 0.19], fixed=True)
+    pg.add_object("right_table", shape="table", size=[0.22, 0.22, 0.25], pos=[x + 0.38, y + 0.25], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[x + 0.42, y - 0.19, 0.27])
+    _run(pg, 0.5)
+    motion, placed = pg.behaviors.pick_and_place("dog/arm", "cube", "right_table")
+    joint_by_joint = []
+    while not motion.done and pg.session.data.time < 60:
+        _run(pg, 0.05)
+        if motion._branch is not None and motion.current_label not in joint_by_joint:
+            joint_by_joint.append(motion.current_label)
+    _run(pg, 0.5)
+    return pg.behaviors.placed("cube", placed["region"]), joint_by_joint
+
+
+def test_the_go2_with_an_arm_walks_and_moves_a_cube_between_tables(pg):
+    """The PiPER rides folded with its gripper pointing forward. Turning the wrist over along a straight path to its
+    first goal left it sideways on the way down and it swept the real PiPER's cube off the table (the test stand-in's
+    simpler shapes missed the cube); a tool starting that far from pointing down now gets there joint by joint."""
+    placed, joint_by_joint = _go2_moves_a_cube(pg, walk=True)
+    assert placed["success"]
+    assert joint_by_joint[:1] == ["approach"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_go2_with_a_real_piper_moves_a_cube_between_tables(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.delenv("ROBOTFORGE_MENAGERIE", raising=False)
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("real")
+    placed, _ = _go2_moves_a_cube(playground, walk=False)  # standing as it was put down, it swept the cube away
+    assert placed["success"]
+
+
+def test_the_twin_arm_works_one_cube_with_each_hand_and_leaves_its_waist_alone(pg):
+    pg.add_robot("twin", design="twin_arm")
+    pg.add_object("table", shape="table", size=[0.3, 0.7, 0.35], pos=[0.42, 0.0], fixed=True)
+    pg.add_object("red", shape="box", size=[0.04, 0.04, 0.04], pos=[0.35, -0.15, 0.37])
+    pg.add_object("blue", shape="box", size=[0.04, 0.04, 0.04], pos=[0.35, 0.15, 0.37], color="blue")
+    pg.add_object("tray", shape="bin", size=[0.14, 0.14, 0.04], pos=[0.33, -0.27, 0.35], fixed=True)
+    pg.add_object("cup", shape="bin", size=[0.14, 0.14, 0.04], pos=[0.33, 0.27, 0.35], fixed=True)
+    _run(pg, 0.5)
+    assert _pick(pg, "twin/right_hand", "red", "tray")["success"]
+    assert _pick(pg, "twin/left_hand", "blue", "cup")["success"]
+    waist = pg.session.model.joint("twin/waist").qposadr[0]
+    assert abs(pg.session.data.qpos[waist]) < 0.01
+
+
+def test_the_tentacle_curls_around_to_drop_a_cube_in_a_bin_behind_it(pg):
+    pg.add_robot("tentacle", design="tentacle")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.3, 0.12])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[0.0, -0.3], fixed=True)
+    _run(pg, 0.5)
+    assert _pick(pg, "tentacle", "cube", "bin")["success"]
+    assert mujoco.mj_name2id(pg.session.model, mujoco.mjtObj.mjOBJ_JOINT, "tentacle/segment_8") >= 0

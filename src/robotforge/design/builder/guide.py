@@ -84,6 +84,11 @@ def guide() -> dict[str, Any]:
             "wheels on one axle balance by themselves (LQR); a chain of 4+ side-to-side servos slithers; a mounted "
             "arm or gripper works with move_arm / pick_and_place (robot name 'rover' or 'rover/arm')."
         ),
+        "designs": (
+            "To start from something bigger: add_robot(name, design=...) adds a ready-made robot from the gallery "
+            "(list_templates lists them: a wheel-legged biped, a Mars rover, a centaur, a Go2 with an arm...) as "
+            "parts in this schema; show_world shows them, and add_part / update_part change them like any build."
+        ),
         "checks": (
             "Each build is dropped onto a floor before it is saved: overlapping parts or parts in the floor are "
             "refused with a fix, too-weak servos get a warning in notes, the spawn height is automatic."
