@@ -331,6 +331,17 @@ def test_the_foot_of_a_ramp_is_no_step_but_its_sides_are():
     assert not lethal[1, 5:7].any()  # near the foot its side is low enough to drive off
 
 
+def test_a_ramp_or_stairs_by_name_is_its_landing(pg):
+    """Regression: the middle of a ramp patch is the top end of its slope, and a robot sent "to the dock" stopped
+    standing on the slope. Now it goes onto the landing's middle."""
+    pg.add_robot("dog", template="quadruped", pos=[-1.2, 1.2], yaw=90)
+    _ramp(pg, 8)
+    trip = pg.behaviors.navigate("dog", "ramp")
+    pg.behaviors.stop("dog")
+    assert np.allclose(trip.plan.points[-1], [2.25, 0.0], atol=0.03)  # the landing runs from 1.25 to 3.25
+    assert trip.plan.face is None and trip.result()["destination"] == {"object": "ramp", "at": [2.25, 0.0]}
+
+
 def test_a_rover_with_small_wheels_drives_up_a_ramp(pg):
     pg.add_robot("rover", template="rover", params={"wheel_radius": 0.02}, pos=[-1.0, 0.0], yaw=0)
     _ramp(pg, 10)

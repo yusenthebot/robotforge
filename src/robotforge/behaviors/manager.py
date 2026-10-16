@@ -609,7 +609,13 @@ class BehaviorManager:
         destination = navigation.find_destination(model, data, found)
         if destination is None:
             raise BehaviorError(f"{found} is not in the simulation; reload the world (load_world)")
-        return dataclasses.replace(destination, terrain=True) if found in terrain else destination
+        if found not in terrain:
+            return destination
+        destination = dataclasses.replace(destination, terrain=True)
+        if next(t.type for t in world.terrain if t.name == found) in ("ramp", "stairs"):
+            top = navigation.landing(model, data, destination.geoms)
+            destination = dataclasses.replace(destination, point=top) if top else destination
+        return destination
 
     def _carried_arm(self, robot: str, data: mujoco.MjData) -> navigation.Arm | None:
         """The arm a moving robot carries (the first, if it has several), for stopping within its reach."""

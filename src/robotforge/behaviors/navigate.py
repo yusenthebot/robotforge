@@ -149,6 +149,21 @@ def _destination_from(model, data, name: str, geoms: list[int], root: int) -> De
     )
 
 
+def landing(model: mujoco.MjModel, data: mujoco.MjData, geoms: tuple[int, ...]) -> tuple[float, float] | None:
+    """The middle of the highest level box among `geoms`: the landing a ramp or a flight of stairs leads up to, or
+    None. "Go to the dock" means onto it: the middle of the whole patch is the ramp's top end, and a robot sent there
+    stood on the slope."""
+    tops = [
+        (float(data.geom_xpos[g][2] + model.geom_size[g][2]), g)
+        for g in geoms
+        if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_BOX and data.geom_xmat[g][8] > 1 - nav_map.TILTED
+    ]
+    if not tops:
+        return None
+    g = max(tops)[1]
+    return float(data.geom_xpos[g][0]), float(data.geom_xpos[g][1])
+
+
 def _descends(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
     while body > 0:
         if body == ancestor:
