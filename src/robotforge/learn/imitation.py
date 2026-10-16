@@ -328,7 +328,7 @@ STEPS = (
         id="ik",
         title=_text("手写的抓取", "The hand-written pick"),
         body=_text(
-            "最后比一比：「方法」选“手写的 IK 抓取”。它不看示范，只用方块和盒子的位置算出手爪该去哪，"
+            "最后比一比：「方法」选“手写 IK 抓取”。它不看示范，只用方块和盒子的位置算出手爪该去哪，"
             "再用逆运动学求出关节角（就是让机械臂把红方块放进盒子的那段代码）。先猜，再点「考 24 处」。",
             "Last, a comparison: set Method to 'hand-written IK pick'. It ignores the demonstrations: from where "
             "the cube and the bin are it works out where the gripper goes, and inverse kinematics finds the joint "
@@ -495,9 +495,9 @@ class ImitationLesson(Lesson):
             "choice",
             _text("方法", "Method"),
             options=(
-                _text("照抄最像的时刻（k 近邻）", "copy the closest moments (k nearest neighbours)"),
+                _text("照抄（k\u00a0近邻）", "copy (kNN)"),  # unbroken in the record's narrow column
                 _text("小神经网络", "small neural network"),
-                _text("手写的 IK 抓取", "hand-written IK pick"),
+                _text("手写 IK 抓取", "hand-written IK pick"),
             ),
         ),
         Control("use", "slider", _text("用几次示范", "Demonstrations used"), 1, MAX_DEMOS, 1, MAX_DEMOS),
@@ -525,9 +525,10 @@ class ImitationLesson(Lesson):
         params=("method", "use"),
         short=(_text("方法", "method"), _text("示范", "demos")),
         metrics=(
-            Metric("success", _text("24 处成功", "success at 24"), "%", lower_is_better=False),
-            Metric("near", _text("示范旁", "beside a demo"), "%", lower_is_better=False),
-            Metric("far", _text("离示范 6 厘米外", "6 cm or more away"), "%", lower_is_better=False),
+            # short: the record's columns are narrow (the title says it is success, the step texts say where)
+            Metric("success", _text("24 处", "24 spots"), "%", lower_is_better=False),
+            Metric("near", _text("示范旁", "beside"), "%", lower_is_better=False),
+            Metric("far", _text("6 厘米外", "6 cm+"), "%", lower_is_better=False),
             Metric("train", _text("训练", "training"), "s", ranked=False),
         ),
         reference=100.0,
@@ -970,7 +971,7 @@ class ImitationLesson(Lesson):
             rows.insert(
                 1, {"heading": _text(f"（最近 8 次，共 {len(self.demos)} 次）", f"(latest 8 of {len(self.demos)})")}
             )
-        return {"columns": columns, "rows": rows}
+        return {"columns": columns, "rows": rows, "tab": _text("示范", "Demos")}
 
     def _formula(self) -> list[dict[str, Any]]:
         """One recorded pair, as the learner made it a second ago: what the arm saw, and what it should do."""
@@ -1020,7 +1021,7 @@ class ImitationLesson(Lesson):
         return {"eye": [0.78, -0.62, 1.22], "target": [0.15, 0.02, 0.79]}
 
 
-_METHOD_ZH = {"knn": "照抄（k 近邻）", "mlp": "小神经网络", "ik": "手写的 IK 抓取"}
+_METHOD_ZH = {"knn": "照抄（k 近邻）", "mlp": "小神经网络", "ik": "手写 IK 抓取"}
 _METHOD_EN = {"knn": "Copying (k nearest neighbours)", "mlp": "Small neural network", "ik": "Hand-written IK pick"}
 
 

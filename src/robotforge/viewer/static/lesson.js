@@ -474,7 +474,7 @@ const plotTabs = {
 };
 
 function tabLabel(section) {
-  if (section.classList.contains("faceoff-table")) return t("plots_table");
+  if (section.classList.contains("faceoff-table")) return section.dataset.tab || t("plots_table"); // a table may name its tab
   if (section.classList.contains("bench")) return t("plots_record", { n: bench.state?.runs?.length ?? 0 });
   const title = section.querySelector(".plot-title")?.textContent ?? "";
   return title.replace(/\s*\([^)]*\)$/, ""); // the unit stays on the plot itself
@@ -806,6 +806,7 @@ function renderTable(table) {
   if (key === tableKey) return;
   tableKey = key;
   tableBox.hidden = !table;
+  tableBox.dataset.tab = table?.tab ? pick(table.tab) : ""; // e.g. a list of demonstrations, not robots side by side
   plotTabs.sync();
   if (!table) return;
   $("lesson-plots").hidden = false;
