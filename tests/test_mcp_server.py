@@ -112,6 +112,18 @@ async def test_servers_built_together_each_hold_their_own_viewer_port():
             assert "robotforge" in page
 
 
+async def test_a_port_0_server_serves_the_viewer_to_each_session_in_turn():
+    """The first session's viewer closed the held port when it shut down: the next session on the same server
+    object had no viewer (connection refused) on the URL open_viewer still gave it."""
+    playground = Playground.with_demo()
+    server = build_server(playground, 0)
+    for _ in range(2):
+        async with Client(server) as client:
+            opened = _data(await client.call_tool("open_viewer", {"launch_browser": False}))
+            page = await anyio.to_thread.run_sync(lambda url=opened["viewer_url"]: _fetch(url))
+            assert "robotforge" in page
+
+
 async def test_stdio_server_keeps_stdout_clean_and_serves_the_viewer():
     params = StdioServerParameters(
         command=sys.executable,

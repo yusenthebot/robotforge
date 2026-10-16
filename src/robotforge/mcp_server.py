@@ -14,6 +14,7 @@ import os
 import re
 import socket
 import time
+import weakref
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -182,9 +183,9 @@ def _lean_schemas(server: MCPServer) -> None:
 
 
 def build_server(playground: Playground, port: int) -> MCPServer:
-    """The MCP server, with the viewer on `port`. Port 0 takes a free port from the system and holds it from now
-    on: a port only found free (find_free_port) can be taken by another process before the viewer listens, and
-    then the viewer exits (tests run side by side on one machine hit that)."""
+    """The MCP server, with the viewer on `port`. Port 0 takes a free port from the system and holds it as long as
+    the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
+    listens, and then the viewer exits (tests run side by side on one machine hit that)."""
     held: socket.socket | None = None
     if port == 0:
         held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -222,7 +223,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             create_app(hub), host=HOST, port=port, log_level="warning", access_log=False, log_config=None
         )
         viewer = uvicorn.Server(config)
-        task = asyncio.create_task(viewer.serve(sockets=[held] if held is not None else None))
+        # uvicorn closes the sockets it serves on when it stops, so it gets a copy of the held one: the port stays
+        # bound for the next session on this server (the second one found nothing listening when it was given the
+        # held socket itself).
+        task = asyncio.create_task(viewer.serve(sockets=[held.dup()] if held is not None else None))
         log.info("viewer at %s", playground.viewer_url)
         try:
             yield
@@ -230,8 +234,6 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             viewer.should_exit = True
             with contextlib.suppress(Exception):
                 await task
-            if held is not None:
-                held.close()
             playground.renderer.close()
 
     server = _Server(
@@ -241,6 +243,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         extensions=[apps],
         lifespan=lifespan,
     )
+    if held is not None:
+        weakref.finalize(server, held.close)  # the port is let go with the server
     _plain_tools(server)
 
     @server.tool()
