@@ -49,6 +49,22 @@ def _moved(pg: Playground, robot: str, speed: float, seconds: float, turn: float
     return float(end["position"][0] - start[0]), end
 
 
+def _turned(pg: Playground, robot: str, turn: float, seconds: float) -> tuple[float, dict, float]:
+    """Turn in place: (degrees turned, the pose after stopping, how far it wandered in meters)."""
+    start = pg.behaviors.pose(robot)
+    pg.behaviors.move(robot, 0.0, turn)
+    total, last = 0.0, start["heading_deg"]
+    for _ in range(round(seconds / 0.1)):
+        _run(pg, 0.1)
+        heading = pg.behaviors.pose(robot)["heading_deg"]
+        total += (heading - last + 180) % 360 - 180
+        last = heading
+    pg.behaviors.stop(robot)
+    _run(pg, 1.0)
+    end = pg.behaviors.pose(robot)
+    return total, end, float(np.linalg.norm(np.subtract(end["position"][:2], start["position"][:2])))
+
+
 def _pick(pg: Playground, arm: str, obj: str, target) -> dict:
     motion, info = pg.behaviors.pick_and_place(arm, obj, target)
     pg.run_fast(lambda: motion.done, 40)
@@ -144,6 +160,46 @@ def test_every_design_compiles_and_stands_for_five_seconds(pg, design):
     assert np.linalg.norm(np.subtract(end["position"], start["position"])) < 0.05, (design, start, end)
     if len(tools):  # the arms hold their pose on their servos
         assert np.abs(_tools(pg, "r") - tools).max() < 0.02, design
+
+
+# The viewer's A and D keys turn rovers at 2 rad/s, balancers at 1.5 and walkers at 1 (TURN_RATE in app.js).
+TURNS = {
+    "wheel_biped": 1.5,
+    "wheel_dog": 2.0,
+    "mars_rover": 2.0,
+    "lift_picker": 2.0,
+    "mobile_panda": 2.0,
+    "centaur": 1.0,
+    "scorpion": 1.0,
+    "go2_arm": 1.0,
+}
+
+
+@pytest.mark.parametrize("design", list(TURNS))
+def test_every_mobile_design_turns_on_the_spot_at_full_key_and_stays_up(pg, design):
+    """Nothing turned the designs before: the four-wheel Panda base could not skid-steer its 57 kg round (3 degrees in
+    5 s), and the wheel dog rolled onto its side at 2 rad/s."""
+    pg.add_robot("r", design=design)
+    _run(pg, 0.5)
+    turned, end, wandered = _turned(pg, "r", TURNS[design], 3.0)
+    assert turned > 90 and end["upright"], (design, turned, end)
+    assert wandered < 0.3, (design, wandered)
+
+
+def test_the_wheel_dog_turns_in_its_tall_stance_too(pg):
+    """Its summary invites changing the stance: standing tall the plain leg servos gave way and it tipped over."""
+    pg.add_robot("dog", design="wheel_dog")
+    tall = {"thigh": 15, "shin": -30}
+    legs = {
+        f"dog/{side}_{part}_{i}": np.radians(a)
+        for side in ("left", "right")
+        for i in (1, 2)
+        for part, a in tall.items()
+    }
+    pg.set_controls(legs)
+    _run(pg, 2.0)
+    turned, end, _ = _turned(pg, "dog", 0.8, 3.0)
+    assert turned > 60 and end["upright"], (turned, end)
 
 
 def test_the_wheel_biped_balances_and_drives(pg):

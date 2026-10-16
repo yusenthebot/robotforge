@@ -138,13 +138,18 @@ def lift_picker() -> dict[str, Any]:
 
 
 def mobile_panda() -> dict[str, Any]:
-    """A research mobile manipulator: a real Franka Emika Panda (Menagerie, Apache-2.0) bolted to a heavy four-wheel
-    base, as labs mount it on a Ridgeback or a Husky.
+    """A research mobile manipulator: a real Franka Emika Panda (Menagerie, Apache-2.0) bolted to a heavy wheeled base,
+    the way labs put one on wheels.
 
     The arm weighs about 17 kg and reaches 0.85 m, so the base is low and heavy (40 kg of batteries) and its geared
-    wheels hold it still while the arm swings. The Panda starts in Menagerie's own ready pose, gripper down in front.
+    wheels hold it still while the arm swings. Two driven wheels in the middle and a ball caster at each end make it a
+    differential drive that turns on the spot: on four driven wheels it skid-steered, and the tyres could not scrub
+    57 kg round (3 degrees of turn in 5 s for 0.8 rad/s asked). The Panda starts in Menagerie's own ready pose,
+    gripper down in front.
     """
     wheel = {"shape": "wheel", "size": [0.16, 0.06], "actuator": {"model": "jga25", "gear": 4}}
+    # The casters' bottoms are level with the tyres' (0.14 m under the middle of the base).
+    caster = {"shape": "caster", "size": [0.08]}
     return {
         "color": "#d4d7dc",
         "motor": "jga25",
@@ -159,8 +164,9 @@ def mobile_panda() -> dict[str, Any]:
             ],
         },
         "parts": [
-            {"name": "left_front_wheel", "at": [0.2, 0.27, -0.06], "mirror": True, **wheel},
-            {"name": "left_rear_wheel", "at": [-0.2, 0.27, -0.06], "mirror": True, **wheel},
+            {"name": "left_wheel", "at": [0, 0.27, -0.06], "mirror": True, **wheel},
+            {"name": "front_caster", "at": [0.25, 0, -0.1], **caster},
+            {"name": "rear_caster", "at": [-0.25, 0, -0.1], **caster},
             {
                 "name": "bumper",
                 "at": "front",
@@ -364,7 +370,10 @@ def wheel_dog() -> dict[str, Any]:
     rover while its servo legs hold a stance, and set_controls on the legs makes it crouch, stand tall or lean.
 
     One leg is written and mirrored to the other side and repeated to the back; each wheel hangs outboard of its shin.
+    The leg servos are geared 2:1: turning on the spot the wheels scrub round at full torque, and the plain servos gave
+    way under it (a rear thigh bent 60 degrees and the dog rolled onto its side at 2 rad/s, the viewer's A key).
     """
+    leg_servo = {"model": "sts3215", "gear": 2}
     return {
         "color": "#f2b134",
         "motor": "jga25",
@@ -379,6 +388,7 @@ def wheel_dog() -> dict[str, Any]:
                 "name": "left_hip",
                 "at": [0.13, 0.08, 0],
                 "joint": {"axis": "x", "range": [-30, 30]},
+                "actuator": leg_servo,
                 "shape": "none",
                 "mirror": True,
                 "repeat": {"count": 2, "along": "back", "spacing": 0.26},
@@ -388,6 +398,7 @@ def wheel_dog() -> dict[str, Any]:
                 "parent": "left_hip",
                 "at": [0, 0.03, 0],
                 "joint": {"axis": "y", "range": [-60, 100], "home": 35},
+                "actuator": leg_servo,
                 "size": [0.03, 0.13],
                 "direction": "down",
                 "color": GRAPHITE,
@@ -397,6 +408,7 @@ def wheel_dog() -> dict[str, Any]:
                 "parent": "left_thigh",
                 "at": "end",
                 "joint": {"axis": "y", "range": [-140, 0], "home": -70},
+                "actuator": leg_servo,
                 "size": [0.026, 0.13],
                 "direction": "down",
                 "color": GRAPHITE,
@@ -429,8 +441,8 @@ DESIGNS = [
     ),
     Design(
         "mobile_panda",
-        "a real Franka Emika Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy four-wheel base: "
-        "move drives it, move_arm and pick_and_place work mobile_panda/arm",
+        "a real Franka Emika Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy base that turns on the "
+        "spot: move drives it, move_arm and pick_and_place work mobile_panda/arm",
         mobile_panda,
     ),
     Design(
