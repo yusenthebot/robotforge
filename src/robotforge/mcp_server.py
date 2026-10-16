@@ -662,7 +662,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
         front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
         from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
-        with world positions estimated from the picture and the nearest object's name for pick_and_place."""
+        with world positions estimated from the picture and the name of what those pixels show (for
+        pick_and_place)."""
         with _tool_errors():
             state = playground.state()
             image = None
@@ -671,6 +672,14 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                     state["found"], image = playground.find(view, find, width, height)
                 except RenderUnavailable as exc:
                     state["note"] = f"Cannot look for {find}: {exc} Everything else in this state is accurate."
+                except PlaygroundError:
+                    raise  # a wrong view or color: the message says which exist
+                except Exception as exc:  # the state is still worth having when looking fails
+                    log.exception("finding colors failed")
+                    state["note"] = (
+                        f"Cannot look for {find}: finding failed ({type(exc).__name__}: {exc}). Everything else in "
+                        "this state is accurate."
+                    )
                 if not include_image:
                     image = None
             elif include_image:

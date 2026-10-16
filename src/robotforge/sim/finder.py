@@ -4,13 +4,15 @@ one" without knowing names.
 One render gives the picture, its depth and which geom each pixel shows (render.Layers). The color finder
 (vision) makes the blobs and locates each one from the picture and depth alone. What a blob is a picture of
 is then read from the simulator, so an agent gets a name to pass to pick_and_place: a loose object, a robot's
-part, or something fixed in the world. A loose object seen as two blobs (a highlight across it, an arm in
-front) is reported once, by its biggest blob.
+part, or something fixed in the world. Each of them is reported once, by its biggest blob (a highlight across
+an object or an arm in front of it can split it in two), and loose objects come first, so a floor or a shelf
+found as orange never pushes the apple off the list.
 """
 
 from __future__ import annotations
 
 import io
+from dataclasses import dataclass
 from typing import Any
 
 import mujoco
@@ -21,14 +23,27 @@ from robotforge.sim import vision
 from robotforge.sim.render import Layers
 
 EVERY = ("all", "any", "every", "colors")  # find= words that mean every named color
-MAX_FOUND = 12  # the biggest finds reported; the rest are counted
-# Measured (scripts/vision_bench.py, tests/test_find.py): a 4 cm cube half a metre away and seen from above
-# came out 0.1 to 0.4 cm off; a 10 cm ball seen from a rover's low camera 2 cm short, its far half unseen.
+MAX_FOUND = 12  # finds reported, loose objects first; the rest are counted
+KINDS = ("object", "robot", "fixed")  # the order finds are listed in: what can be picked comes first
+# Measured with scripts/vision_bench.py --scenes (every ready-made scene, from every preset view and robot camera:
+# 101 finds of loose objects). The 46 with no flag were 0.1 to 3.9 cm off, 89 % of them within about_cm and 96 %
+# within twice it; flagged ones were up to 88 cm off (a crate on a pallet behind others).
 ACCURACY = (
-    "within about 0.5 cm for a small object seen from above; a camera looking from the side sees only the near "
-    "half, so the middle can come out a few cm short"
+    "about_cm is how far off it may be (what one pixel spans at the object, along the view): 9 in 10 finds with no "
+    "flag were within it. A flag means it can be much further off: cut_off (by the picture's edge), hidden (partly "
+    "behind something nearer), side_on (only a face is seen; the real middle is behind it by half the object's "
+    "depth). From low down a round thing's middle comes out a little short"
 )
 MARK = (255, 190, 0)  # the boxes drawn round the finds
+FLAGS = ("cut_off", "hidden", "side_on")  # vision.Found's doubts, passed on when they hold
+
+
+@dataclass(frozen=True)
+class Seen:
+    """One find as observe reports it, and where its blob is in the picture (for the boxes drawn on it)."""
+
+    entry: dict[str, Any]
+    box: tuple[int, int, int, int]  # x0, y0, x1, y1, px
 
 
 def colors(color: str) -> list[str]:
@@ -39,41 +54,44 @@ def colors(color: str) -> list[str]:
     return [color]
 
 
-def find(layers: Layers, color: str) -> list[dict[str, Any]]:
-    """Every blob of `color` (or of every named color) in the picture, biggest first, located and named."""
+def find(layers: Layers, color: str) -> list[Seen]:
+    """Every blob of `color` (or of every named color) in the picture, located and named: loose objects first,
+    then each robot once, then each fixed thing once, then blobs no one thing covers; biggest first in each."""
     found = [f for c in colors(color) for f in vision.find(layers.rgb, layers.depth, layers.camera, c)]
-    found.sort(key=lambda f: -f.blob.area)
-    out: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for f in found:
-        what = _what(f.blob, layers.geoms, layers.model)
-        loose = what.get("object")
-        if loose is not None:
-            if loose in seen:  # a smaller piece of an object already reported
+    driven = _driven(layers.model)
+    named = [(f, _what(f.blob, layers.geoms, layers.model, driven)) for f in found]
+    named.sort(key=lambda fw: (_rank(fw[1]), -fw[0].blob.area))
+    out: list[Seen] = []
+    seen: set[tuple[str, str]] = set()
+    for f, what in named:
+        key = next(iter(what.items()), None)
+        if key is not None:
+            if key in seen:  # a smaller piece of something already reported (a highlight split it, an arm in front)
                 continue
-            seen.add(loose)
-        out.append(
-            {
-                "n": len(out) + 1,
-                "color": f.color,
-                **what,
-                "position": [round(float(v), 3) for v in f.position],
-                "size": [round(float(v), 3) for v in f.size],
-                "pixels": f.blob.area,
-                "at_pixel": [round(f.blob.u), round(f.blob.v)],
-            }
-        )
+            seen.add(key)
+        entry: dict[str, Any] = {
+            "n": len(out) + 1,
+            "color": f.color,
+            **what,
+            "position": [round(float(v), 3) for v in f.position],
+            "size": [round(float(v), 3) for v in f.size],
+            "pixels": f.blob.area,
+            "about_cm": max(round(f.reach * 100, 1), 0.1),
+            "at_pixel": [round(f.blob.u), round(f.blob.v)],
+        }
+        entry.update({flag: True for flag in FLAGS if getattr(f, flag)})
+        out.append(Seen(entry, f.blob.box))
     return out
 
 
-def summary(view: str, color: str, found: list[dict[str, Any]]) -> dict[str, Any]:
-    """The `found` field of observe's result: the biggest MAX_FOUND finds, and how many more there were."""
-    out: dict[str, Any] = {"view": view, "color": color, "objects": found[:MAX_FOUND]}
+def summary(view: str, color: str, found: list[Seen]) -> dict[str, Any]:
+    """The `found` field of observe's result: the first MAX_FOUND finds, and how many more there were."""
+    out: dict[str, Any] = {"view": view, "color": color, "objects": [s.entry for s in found[:MAX_FOUND]]}
     if len(found) > MAX_FOUND:
         out["more"] = len(found) - MAX_FOUND
     out["how"] = (
-        f"position: the estimated middle (m, world frame) from the picture's color and depth, {ACCURACY}. "
-        "object (pick_and_place takes it), robot or fixed: what those pixels show"
+        f"position: the estimated middle (m, world frame) from the picture's color and depth; {ACCURACY}. "
+        "object (pick_and_place takes it), robot or fixed: the name of what those pixels show in the simulator"
     )
     if not found:
         out["hint"] = (
@@ -83,24 +101,48 @@ def summary(view: str, color: str, found: list[dict[str, Any]]) -> dict[str, Any
     return out
 
 
-def marked_png(rgb: np.ndarray, found: list[dict[str, Any]]) -> bytes:
-    """The picture with a numbered box round each reported find, as observe returns it."""
+def marked_png(rgb: np.ndarray, found: list[Seen]) -> bytes:
+    """The picture with a numbered box round each reported find's blob, as observe returns it."""
     image = Image.fromarray(rgb)
     draw = ImageDraw.Draw(image)
     line = max(2, round(rgb.shape[1] / 320))
-    for item in found[:MAX_FOUND]:
-        u, v = item["at_pixel"]
-        half = max(6.0, (item["pixels"] ** 0.5) * 0.6)
-        draw.rectangle((u - half, v - half, u + half, v + half), outline=MARK, width=line)
-        draw.text((u - half + 2, max(0.0, v - half - 12)), str(item["n"]), fill=MARK)
+    pad = line + 1  # px between a blob and its box, so the box does not cover the blob's edge
+    h, w = rgb.shape[:2]
+    for seen in found[:MAX_FOUND]:
+        x0, y0, x1, y1 = seen.box
+        box = (max(x0 - pad, 0), max(y0 - pad, 0), min(x1 + pad, w - 1), min(y1 + pad, h - 1))
+        draw.rectangle(box, outline=MARK, width=line)
+        label = str(seen.entry["n"])
+        above = box[1] - 12 >= 0  # the number sits on the box's top edge, or inside it at the picture's top
+        draw.text((box[0] + 2, box[1] - 12 if above else box[1] + line + 1), label, fill=MARK)
     buf = io.BytesIO()
     image.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-def _what(blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel) -> dict[str, str]:
+def _rank(what: dict[str, str]) -> int:
+    """Where a find's kind comes in the list (KINDS), blobs no one thing covers last."""
+    kind = next(iter(what), None)
+    return KINDS.index(kind) if kind in KINDS else len(KINDS)
+
+
+def _driven(model: mujoco.MjModel) -> set[int]:
+    """The top bodies with a motor somewhere below them: robots, named with a prefix in a world ("arm/link1")
+    or not in a plain model file (the demo's arm is "base", "turntable", ...)."""
+    roots: set[int] = set()
+    for a in range(model.nu):
+        target, kind = int(model.actuator_trnid[a, 0]), int(model.actuator_trntype[a])
+        if kind in (int(mujoco.mjtTrn.mjTRN_JOINT), int(mujoco.mjtTrn.mjTRN_JOINTINPARENT)):
+            roots.add(int(model.body_rootid[model.jnt_bodyid[target]]))
+        elif kind == int(mujoco.mjtTrn.mjTRN_SITE):
+            roots.add(int(model.body_rootid[model.site_bodyid[target]]))
+    return roots
+
+
+def _what(blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel, driven: set[int]) -> dict[str, str]:
     """What most of a blob's pixels show: {"object": name} for a loose object, {"robot": name} for a part of a
-    robot, {"fixed": name} for something built into the world; nothing when no one thing covers most of it."""
+    robot (anything with a motor in it), {"fixed": name} for something built into the world; nothing when no
+    one thing covers most of it."""
     if geoms is None:
         return {}
     ys, xs = blob.pixels()
@@ -121,7 +163,7 @@ def _what(blob: vision.Blob, geoms: np.ndarray | None, model: mujoco.MjModel) ->
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, index) or "floor"
         return {"fixed": name.split("/")[0]}
     name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, index) or f"body{index}"
-    if "/" in name:
+    if "/" in name or index in driven:
         return {"robot": name.split("/")[0]}
     joint = model.body_jntadr[index]
     free = model.body_jntnum[index] > 0 and int(model.jnt_type[joint]) == int(mujoco.mjtJoint.mjJNT_FREE)
