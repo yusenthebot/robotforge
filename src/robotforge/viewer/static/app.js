@@ -789,6 +789,22 @@ function endDrag(e) {
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
 
+// Double-click the ground: the selected robot finds its way there round whatever is in the way (move with a
+// destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
+// so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
+canvas.addEventListener("dblclick", (e) => {
+  const robot = driveTarget();
+  if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
+  setPointer(e);
+  const hit = raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
+  if (!hit || !hit.face) return;
+  const body = hit.object.userData.body;
+  if (body > 0 && sceneDesc.bodies[body]?.dynamic) return;
+  const up = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (up.z < 0.7) return;
+  send({ type: "teleop", robot: robot.name, to: [+hit.point.x.toFixed(3), +hit.point.y.toFixed(3)] });
+});
+
 const dragTarget = new THREE.Vector3();
 function updateDragVisual(target) {
   dragTarget.copy(target);
