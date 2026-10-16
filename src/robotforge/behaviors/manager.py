@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import math
 import re
 import sys
@@ -14,7 +15,8 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
+from robotforge.behaviors import Kind, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
@@ -42,6 +44,8 @@ LEARN_A_WALK = (
 
 GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
+TRIP = "__navigate__"  # session controller key of a robot's trip to a destination: TRIP + robot (see navigate)
+MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.MAX_POSITION)
 
 
 class BehaviorError(ValueError):
@@ -264,6 +268,7 @@ class BehaviorManager:
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
+            self._end_trip(robot)  # driven by hand (a key, a move) it stops following a path
             ctrl.command(speed, turn)
             standing = self._standing.pop(robot, None)
             if standing is not None:  # moved: its gait is its own now, and stands as any gait it was moved with
@@ -431,6 +436,7 @@ class BehaviorManager:
     def stop(self, robot: str) -> dict[str, Any]:
         robot = self.resolve(robot)
         with self.session.lock:
+            self._end_trip(robot)
             ctrl = self.session.controllers.get(robot)
             if _is_mover(ctrl):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
@@ -445,6 +451,144 @@ class BehaviorManager:
         if isinstance(ctrl, humanoid.HumanoidController):
             return lambda: ctrl.done
         return None
+
+    # ---- going somewhere ------------------------------------------------------------------
+
+    def navigate(
+        self,
+        robot: str,
+        to: str | list[float],
+        speed: float | None = None,
+        walker: str | None = None,
+        seconds: float | None = None,
+    ) -> navigation.Navigator:
+        """Send a robot that moves to `to`: a point [x, y] (m) or the name of an object or another robot. It plans
+        a path around what is in the way and follows it with its own walker (`walker` as for move) at up to
+        `speed` m/s, for at most `seconds` of sim time (None: until it gets there). Raises navigation.NoWay, saying
+        why, when there is no way; the Navigator returned says how the trip goes (`done`, `result()`)."""
+        if speed is not None and not math.isfinite(speed):
+            raise BehaviorError(f"speed must be a finite number, got {speed}")
+        robot = self.resolve(robot)
+        named = to if isinstance(to, str) and not NUMBER_LIST.fullmatch(to) else None
+        if named is not None and wording.match(named, [robot]) == robot:
+            raise BehaviorError(f"{robot} cannot go to itself; give a point [x, y] or another object or robot")
+        # The walker it goes with, standing. This also refuses what cannot move (an arm, "rover/arm") the way
+        # move does, and ends any trip it was on.
+        self.move(robot, 0.0, 0.0, walker)
+        kind = self.kind(robot)
+        with self.session.lock:
+            model, version = self.session.model, self.session.version
+            data = copy.copy(self.session.data)
+            ctrl = self.session.controllers[robot]
+        if isinstance(ctrl, RhythmWalker) and not {"left", "right"} <= set(ctrl.rhythms):
+            raise BehaviorError(
+                f"{robot} walks only straight ahead (its learned walk has no turns yet), so it cannot follow a path; "
+                "teach it turns in the RL II lesson, or drive it with move and turn"
+            )
+        destination = self._destination(robot, to, model, data)
+        try:
+            body = nav_map.measure_body(model, data, robot, kind, ctrl)
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        arm = self._carried_arm(robot, data)
+        planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version))
+        try:
+            plan = planner.plan(data)
+        except navigation.NoWay as exc:
+            exc.destination = destination.describe()
+            raise
+        top = float(ctrl.max_speed)
+        cruise = navigation.default_cruise(top) if speed is None else min(abs(speed), top)
+        key = TRIP + robot
+
+        def finished(trip: navigation.Navigator) -> None:  # runs inside a sim step, with the session lock held
+            if self.session.controllers.get(key) is trip:
+                self.session.set_controller(key, None)
+
+        trip = navigation.Navigator(
+            robot,
+            ctrl,
+            planner,
+            plan,
+            cruise=cruise,
+            turn_rate=navigation.turn_rate_for(kind.value, ctrl),
+            turns_in_place=not isinstance(ctrl, SnakeGait),
+            start_time=float(data.time),
+            deadline=float(data.time) + seconds if seconds is not None else None,
+            still_mine=lambda: self.session.controllers.get(robot) is ctrl,
+            on_finish=finished,
+            others=[
+                navigation.Other(name, nav_map.root_body(model, name), nav_map.footprint_radius(model, data, name))
+                for name in self._names(self._world())
+                if name != robot and "/" not in name
+            ],
+        )
+        with self.session.lock:
+            if self.session.version != version or self.session.controllers.get(robot) is not ctrl:
+                raise BehaviorError(f"{robot} was changed while its path was planned; send it again")
+            trip.start_time = float(self.session.data.time)
+            if seconds is not None:
+                trip.deadline = trip.start_time + seconds
+            self.session.set_controller(key, trip)
+        return trip
+
+    def trip(self, robot: str) -> navigation.Navigator | None:
+        """The robot's trip to a destination, while it is on one."""
+        found = self.session.controllers.get(TRIP + robot)
+        return found if isinstance(found, navigation.Navigator) else None
+
+    def _end_trip(self, robot: str) -> None:
+        """Called with the session lock held: the robot is driven some other way now."""
+        trip = self.session.controllers.get(TRIP + robot)
+        if isinstance(trip, navigation.Navigator):
+            self.session.set_controller(TRIP + robot, None)
+            if not trip.done:
+                trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
+                trip.end_time = float(self.session.data.time)
+
+    def _layers(self, version: int) -> dict:
+        """The static map layers of this compiled world, shared by all trips in it (see navigation.Planner)."""
+        if getattr(self, "_layer_version", None) != version:
+            self._layer_version, self._layer_cache = version, {}
+        return self._layer_cache
+
+    def _destination(self, robot: str, to: str | list[float], model, data) -> navigation.Destination:
+        if isinstance(to, str) and NUMBER_LIST.fullmatch(to):
+            to = [float(w) for w in re.split(r"[^\d.+-]+", to.strip(" []()")) if w]
+        if isinstance(to, (list, tuple)):
+            if len(to) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in to):
+                raise BehaviorError(f"to must be a position [x, y] in meters or the name of an object, got {to}")
+            if max(abs(to[0]), abs(to[1])) > MAX_DESTINATION:
+                raise BehaviorError(f"to {list(to)} is more than {MAX_DESTINATION:g} m away: positions are in meters")
+            return navigation.Destination((float(to[0]), float(to[1])))
+        world = self._world()
+        objects = [o.name for o in world.objects] if world else self._movable()
+        robots = [r for r in self._names(world) if r != robot]
+        found = wording.match(to, [*objects, *robots])
+        if found is None:
+            known = [*objects, *robots]
+            raise BehaviorError(wording.unknown("object or robot", to, known) + " (or give a point [x, y])")
+        if found in robots:
+            return navigation.robot_destination(model, data, found)
+        destination = navigation.find_destination(model, data, found)
+        if destination is None:
+            raise BehaviorError(f"{found} is not in the simulation; reload the world (load_world)")
+        return destination
+
+    def _carried_arm(self, robot: str, data: mujoco.MjData) -> navigation.Arm | None:
+        """The arm a moving robot carries (the first, if it has several), for stopping within its reach."""
+        arms = [a for a in self.arms(robot) if a != robot]
+        if not arms:
+            return None
+        try:
+            base, reach = ArmMotion(self.session.model, arms[0], self.home_qpos()).base_and_reach(data)
+        except ValueError:
+            return None
+        root = nav_map.root_body(self.session.model, robot)
+        rot = data.xmat[root].reshape(3, 3)
+        heading = np.array([rot[0, 0], rot[1, 0]]) / max(math.hypot(rot[0, 0], rot[1, 0]), 1e-9)
+        forward = float((base[:2] - data.xpos[root][:2]) @ heading)
+        return navigation.Arm(forward, float(base[2]), reach)
 
     def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
         """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
