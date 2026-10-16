@@ -5,7 +5,8 @@ the cube over a blue bin and lets go. Every demonstration is recorded as pairs o
 learner did next (learn/cloning.py). Then the arm tries alone, with two learners in turn: k nearest neighbours
 (copy the closest moments) and a small neural network; near a demonstrated spot, far from all of them, and at 24
 spread-out spots on a copy of the world, with success plotted against the distance to the nearest demonstration
-and against how many demonstrations it learned from. The hand-written IK pick runs on the same spots last.
+and against how many demonstrations it learned from. Then the learner takes over a try that goes wrong and
+finishes it (a correction, as DAgger collects them), and the hand-written IK pick runs on the same spots last.
 """
 
 from __future__ import annotations
@@ -511,7 +512,7 @@ class ImitationLesson(Lesson):
         "You demonstrate a pick and the robot copies it with k nearest neighbours and a small neural network. "
         "Move the cube to see what copying can and cannot do, then compare with a hand-written IK pick.",
     )
-    minutes = 15
+    minutes = 18
     # W S: the target forward and back, A D: left and right
     drive = {"max_speed": KEY_SPEED, "turn": KEY_SPEED, "label": _text("移动手爪", "Move the gripper"), "robot": False}
     controls = (
