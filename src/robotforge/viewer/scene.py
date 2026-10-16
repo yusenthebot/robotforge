@@ -15,6 +15,9 @@ from robotforge.design.terrain import STYLES, material_name
 
 # MuJoCo's default geom rgba; when a geom keeps it and has a material, the material color wins.
 _DEFAULT_RGBA = np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32)
+# Every this many pixels of a texture count towards its mean color: ANYmal C has 19 textures of 2048 x 2048, and
+# reading every pixel added 0.6 s to each world load; the mean moves by less than 1/255 this way.
+TEXTURE_SAMPLE = 97
 # Geoms in groups >= this are hidden by default (Menagerie puts collision geoms in group 3).
 VISIBLE_GROUP_LIMIT = 3
 
@@ -44,12 +47,30 @@ def _name(model: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(model, obj, idx) or ""
 
 
-def _geom_rgba(model: mujoco.MjModel, g: int) -> list[float]:
+def _geom_rgba(model: mujoco.MjModel, g: int, textured: dict[int, np.ndarray]) -> list[float]:
     rgba = model.geom_rgba[g]
     mat = model.geom_matid[g]
     if mat >= 0 and np.allclose(rgba, _DEFAULT_RGBA):
         rgba = model.mat_rgba[mat]
+        if mat in textured and model.geom_bodyid[g] != 0:  # the ground draws its own textures
+            rgba = np.concatenate([rgba[:3] * textured[mat], rgba[3:]])
     return [round(float(c), 4) for c in rgba]
+
+
+def _texture_colors(model: mujoco.MjModel) -> dict[int, np.ndarray]:
+    """The mean color of each material's own picture (2D texture), by material. The viewer draws no textures yet, so a
+    textured shell showed plain white: ANYmal C's red covers and black legs, A1's carbon fibre."""
+    rgb = int(mujoco.mjtTextureRole.mjTEXROLE_RGB)
+    colors: dict[int, np.ndarray] = {}
+    for mat in range(model.nmat):
+        tex = int(model.mat_texid[mat, rgb])
+        if tex < 0 or int(model.tex_type[tex]) != int(mujoco.mjtTexture.mjTEXTURE_2D):
+            continue
+        adr, channels = int(model.tex_adr[tex]), int(model.tex_nchannel[tex])
+        size = int(model.tex_width[tex]) * int(model.tex_height[tex]) * channels
+        pixels = model.tex_data[adr : adr + size].reshape(-1, channels)[::TEXTURE_SAMPLE, :3]
+        colors[mat] = pixels.mean(axis=0) / 255.0
+    return colors
 
 
 def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
@@ -90,6 +111,7 @@ def describe(
     model: mujoco.MjModel, version: int, mesh_entries: list[dict], hfield_entries: list[dict] | None = None
 ) -> dict:
     """JSON-ready scene description for the viewer."""
+    textured = _texture_colors(model)
     geoms = []
     for g in range(model.ngeom):
         gtype = _GEOM_TYPE_NAMES.get(int(model.geom_type[g]))
@@ -104,7 +126,7 @@ def describe(
                 "size": [round(float(s), 6) for s in model.geom_size[g]],
                 "pos": [float(p) for p in model.geom_pos[g]],
                 "quat": [float(q) for q in model.geom_quat[g]],
-                "rgba": _geom_rgba(model, g),
+                "rgba": _geom_rgba(model, g, textured),
                 "mesh": int(model.geom_dataid[g]) if gtype == "mesh" else -1,
                 "hfield": int(model.geom_dataid[g]) if gtype == "hfield" else -1,
                 # Ground materials ("ground_grass", ...) tell the viewer which surface texture to draw.
