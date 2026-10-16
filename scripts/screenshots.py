@@ -364,7 +364,7 @@ SHOTS = [
     Shot(
         "nav_maze",
         _in_scene("maze", {"rover": {"template": "rover"}}),
-        viewer=[_go("rover", [0.0, 0.0]), {"wait": 3.0}],  # the middle cell, through the entrance
+        viewer=[_go("rover", [-2.0, 2.0]), {"wait": 0.5}],  # the far corner cell, through the entrance
         page="window.__robotforge.lookAt([0.0, -3.4, 6.6], [0.0, 0.1, 0]);",
         settle=0.5,
     ),
