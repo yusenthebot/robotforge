@@ -1,0 +1,35 @@
+name: mars_rover_rock
+floor:
+  style: sand
+  friction: 1.0
+terrain: []
+robots:
+- name: mars_rover
+  template: rover
+  file: null
+  library: null
+  build: null
+  params:
+    color: orange
+    length: 0.5
+    width: 0.36
+    wheel_radius: 0.09
+    motor: jga25
+    material: aluminum
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects:
+- name: big_rock
+  shape: rock
+  size:
+  - 1.0
+  - 0.8
+  pos:
+  - 2.0
+  - 0.0
+  yaw: 0.0
+  color: '#795548'
+  mass: null
+  fixed: true

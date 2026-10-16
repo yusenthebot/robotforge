@@ -33,6 +33,7 @@ import argparse
 import colorsys
 import datetime as dt
 import functools
+import itertools
 import json
 import math
 import os
@@ -46,7 +47,7 @@ import textwrap
 import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -178,25 +179,73 @@ class World:
         return next((o for o in self.objects if o.get("name") == name), None)
 
     @functools.cached_property
-    def kinds(self) -> dict[str, str]:
-        """Each robot's kind as robotforge's `robots` tool reports it, from the world compiled as saved."""
+    def compiled(self) -> Any:
+        """The world compiled as saved, in a robotforge Playground, or why it does not compile (a string)."""
         from robotforge.playground import Playground
 
         try:
             playground = Playground.with_demo()
             playground.open_world(str(self.dir))
-            return {r["name"]: r["kind"] for r in playground.behaviors.robots()}
-        except Exception as exc:  # a world the agent left broken has no kinds; the check says so
-            return {"": f"does not compile: {type(exc).__name__}: {exc}"[:SHORT]}
+            return playground
+        except Exception as exc:  # a world the agent left broken compiles to nothing; the check says so
+            return f"does not compile: {type(exc).__name__}: {exc}"[:SHORT]
+
+    @property
+    def kinds(self) -> dict[str, str]:
+        """Each robot's kind as robotforge's `robots` tool reports it, from the world compiled as saved."""
+        if isinstance(self.compiled, str):
+            return {"": self.compiled}
+        return {r["name"]: r["kind"] for r in self.compiled.behaviors.robots()}
+
+    def outline(self, robot: str) -> tuple[float, float, float, float] | None:
+        """The robot seen from above at its start, in its own frame (front +x, left +y): (back, front, right, left)
+        in meters from its root body, the box around all its geoms (wheels included). None when it does not
+        compile."""
+        import mujoco
+        import numpy as np
+
+        if isinstance(self.compiled, str):
+            return None
+        m, d = self.compiled.session.model, self.compiled.session.data
+        mujoco.mj_forward(m, d)
+        bodies = [
+            b
+            for b in range(m.nbody)
+            if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith(f"{robot}/")
+        ]
+        if not bodies:
+            return None
+        frame, origin = d.xmat[bodies[0]].reshape(3, 3), d.xpos[bodies[0]]
+        corners = []
+        for g in (g for g in range(m.ngeom) if m.geom_bodyid[g] in bodies):
+            center, half = m.geom_aabb[g][:3], m.geom_aabb[g][3:]
+            for sign in itertools.product((-1, 1), repeat=3):
+                world = d.geom_xpos[g] + d.geom_xmat[g].reshape(3, 3) @ (center + np.multiply(sign, half))
+                corners.append(frame.T @ (world - origin))
+        if not corners:
+            return None
+        x, y = np.array(corners)[:, 0], np.array(corners)[:, 1]
+        return float(x.min()), float(x.max()), float(y.min()), float(y.max())
 
 
 def load_worlds(home: Path) -> list[World]:
+    """The worlds a session left, as robotforge reads them: with the defaults a file leaves out filled in (a bin
+    written without a size is 0.2 x 0.15 x 0.08 m), or as plain YAML when robotforge would refuse the file."""
+    from robotforge.design.world import World as Saved
+
     worlds = []
     for path in sorted((home / "worlds").glob("*/world.yaml")):
         try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError):
-            data = {}
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        try:
+            data = Saved.from_yaml(text).model_dump(mode="json")
+        except ValueError:
+            try:
+                data = yaml.safe_load(text) or {}
+            except yaml.YAMLError:
+                data = {}
         worlds.append(World(path.parent.name, path.parent, data if isinstance(data, dict) else {}))
     return worlds
 
@@ -241,6 +290,9 @@ class Pose:
     upright: bool | None
 
 
+UPRIGHT_COS = 0.7  # robotforge's pose: upright while the body's up axis is within about 45 degrees of vertical
+
+
 def _pose(entry: dict[str, Any]) -> Pose | None:
     pos = entry.get("position")
     if not (isinstance(pos, list) and len(pos) >= 2):
@@ -248,10 +300,21 @@ def _pose(entry: dict[str, Any]) -> Pose | None:
     return Pose(float(pos[0]), float(pos[1]), entry.get("heading_deg"), entry.get("upright"))
 
 
+def _sensed(position: Any, quat: Any) -> Pose | None:
+    """A pose from observe: the free body's position and, when the robot has an IMU, its orientation sensor
+    ([w, x, y, z], the base's frame) for the heading and whether it is upright."""
+    pose = _pose({"position": position})
+    if pose is None or not (isinstance(quat, list) and len(quat) == 4):
+        return pose
+    w, x, y, z = (float(v) for v in quat)
+    heading = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+    return Pose(pose.x, pose.y, round(heading, 1), 1 - 2 * (x * x + y * y) > UPRIGHT_COS)
+
+
 def poses(session: Session, robot: str) -> list[Pose]:
     """Where robotforge reported `robot`, in order: before and after every move, in every `robots` list, at the
-    end of a run_controller, and as its free body ("<robot>/<body>") in observe and simulate. Only move and robots
-    say whether it is upright."""
+    end of a run_controller, and as its free body ("<robot>/<body>") in observe and simulate. Move, robots and an
+    observe of a robot with an IMU (its orientation sensor) say which way it faces and whether it is upright."""
     out = []
     for call in session.ours:
         data = call.data
@@ -263,11 +326,14 @@ def poses(session: Session, robot: str) -> list[Pose]:
             out += [p for e in data.get("robots") or [] if e.get("name") == robot and (p := _pose(e))]
         elif call.tool == "run_controller" and data.get("robot") == robot:
             out += [p for e in [{"position": (data.get("result") or {}).get("position")}] if (p := _pose(e))]
-        elif call.tool in ("observe", "simulate"):
+        elif call.tool == "observe":
+            quat = (data.get("sensors") or {}).get(f"{robot}/orientation")
+            bodies = data.get("free_bodies") or {}
+            out += [p for name, pos in bodies.items() if name.startswith(f"{robot}/") and (p := _sensed(pos, quat))]
+        elif call.tool == "simulate":
             moved = {name: m.get("to") for name, m in (data.get("moved") or {}).items() if isinstance(m, dict)}
-            bodies = data.get("free_bodies") or moved
             out += [
-                p for name, pos in bodies.items() if name.startswith(f"{robot}/") and (p := _pose({"position": pos}))
+                p for name, pos in moved.items() if name.startswith(f"{robot}/") and (p := _pose({"position": pos}))
             ]
     return out
 
@@ -292,6 +358,7 @@ def turned_left(session: Session, robot: str) -> float:
 
 
 def upright_at_end(session: Session, robot: str) -> bool | None:
+    """The last upright value robotforge reported for `robot` (simulate and run_controller give none)."""
     seen = [p.upright for p in poses(session, robot) if p.upright is not None]
     return seen[-1] if seen else None
 
@@ -312,22 +379,48 @@ def object_positions(session: Session, name: str) -> list[list[float]]:
     return [p for p in out if isinstance(p, list) and len(p) >= 3]
 
 
-CONTAINERS = ("bin", "box")
+# Only robotforge's open container: a "box" shape is a solid cuboid, and a cube left on top of one is not in it.
+CONTAINERS = ("bin",)
 RIM_SLACK = 0.03  # m above a container's rim that still counts as in it (the object rests on what is inside)
 
 
-def inside(point: list[float], container: dict[str, Any]) -> bool:
-    """Is `point` within the container's footprint (as saved in world.yaml) and, for one standing on the ground,
-    no higher than just above its rim? (One given a height, on a table say, is checked by its footprint only.)"""
+def over(point: list[float], container: dict[str, Any]) -> bool:
+    """Is `point` (x, y) within the container's footprint, as world.yaml saves it?"""
     pos, size = container.get("pos") or [0, 0], container.get("size") or [0.05, 0.05, 0.05]
-    if len(size) < 3 or len(pos) < 2:
+    if len(size) < 2 or len(pos) < 2 or len(point) < 2:
         return False
     yaw = math.radians(float(container.get("yaw") or 0))
     dx, dy = point[0] - pos[0], point[1] - pos[1]
     along = dx * math.cos(yaw) + dy * math.sin(yaw)
     across = -dx * math.sin(yaw) + dy * math.cos(yaw)
-    low = len(pos) > 2 or point[2] <= size[2] + RIM_SLACK
-    return abs(along) <= size[0] / 2 and abs(across) <= size[1] / 2 and low
+    return abs(along) <= size[0] / 2 and abs(across) <= size[1] / 2
+
+
+def inside(point: list[float], container: dict[str, Any]) -> bool:
+    """Is `point` within the container's footprint and, for one standing on the ground, no higher than just above
+    its rim? (One given a height, on a table say, is checked by its footprint only.)"""
+    size = container.get("size") or [0.05, 0.05, 0.05]
+    if len(size) < 3 or len(point) < 3:
+        return False
+    low = len(container.get("pos") or []) > 2 or point[2] <= size[2] + RIM_SLACK
+    return over(point, container) and low
+
+
+def arm_moved(session: Session, name: str) -> list[str]:
+    """The successful arm calls that could have carried object `name`: pick_and_place naming it (as the agent or
+    the world spells it), or closing a gripper by hand (move_arm or gripper)."""
+    found = []
+    for c in session.ours:
+        if not c.ok:
+            continue
+        named = name in (c.args.get("object"), (c.data or {}).get("object") if isinstance(c.data, dict) else None)
+        if c.tool == "pick_and_place" and named:
+            found.append("pick_and_place")
+        elif (c.tool == "move_arm" and c.args.get("gripper") == "close") or (
+            c.tool == "gripper" and c.args.get("state") == "close"
+        ):
+            found.append(f"{c.tool} close")
+    return found
 
 
 def looks(color: Any, hue: str) -> bool:
@@ -402,30 +495,37 @@ def check_dog_grass(ev: Evidence) -> list[Criterion]:
     return _best(rows, [Criterion("a quadruped", False, "none in any world")])
 
 
+def _carried(ev: Evidence, world: World, thing: dict[str, Any], start: list[float] | None = None) -> list[Criterion]:
+    """Did an arm carry `thing` into a container? It starts outside every container (at `start` when the task set
+    it there), an arm call handled it, and its last reported position is in one."""
+    name = thing["name"]
+    containers = [o for o in world.objects if o.get("shape") in CONTAINERS and o is not thing and _bigger(o, thing)]
+    pos = thing.get("pos") or []
+    starts = [o["name"] for o in containers if over(pos, o)]
+    if start is not None:
+        outside = Criterion(f"{name} starts where it was", pos[:2] == start, f"saved at {pos}")
+    else:
+        outside = Criterion(f"{name} starts outside the bin", bool(pos) and not starts, f"saved at {pos}")
+    handled = arm_moved(ev.session, name)
+    seen = object_positions(ev.session, name)
+    last = seen[-1] if seen else None
+    holding = [o["name"] for o in containers if last and inside(last, o)]
+    where = f"last at {last}, bins {[o['name'] for o in containers]}" if last else f"{name} never reported moved"
+    return [
+        outside,
+        Criterion("an arm call handled it", bool(handled), ", ".join(handled) or "no pick_and_place or gripper"),
+        Criterion(f"{name} ended in a bin", bool(holding), where),
+    ]
+
+
 def check_arm_cube(ev: Evidence) -> list[Criterion]:
     arms = ev.robots("arm")
     rows = []
-    for world, _ in arms:
+    for world, arm in arms:
         reds = [o for o in world.objects if looks(o.get("color"), "red") and o.get("shape") not in ("bin", "table")]
         for red in reds:
-            seen = object_positions(ev.session, red["name"])
-            last = seen[-1] if seen else None
-            holders = [
-                o
-                for o in world.objects
-                if o.get("shape") in CONTAINERS and o is not red and _bigger(o, red) and last and inside(last, o)
-            ]
-            where = f"{red['name']} last at {last}" if last else f"{red['name']} never reported moved"
-            rows.append(
-                (
-                    red,
-                    [
-                        Criterion("an arm", True, _named(world, arms[0][1])),
-                        Criterion("a red object", True, red["name"]),
-                        Criterion("it ended in a box or bin", bool(holders), where),
-                    ],
-                )
-            )
+            found = [Criterion("an arm", True, _named(world, arm)), Criterion("a red object", True, red["name"])]
+            rows.append((red, found + _carried(ev, world, red)))
     empty = [Criterion("an arm", bool(arms), "found" if arms else "none"), Criterion("a red object", False, "none")]
     return _best(rows, empty)
 
@@ -491,13 +591,33 @@ def check_hexapod_build(ev: Evidence) -> list[Criterion]:
     return _best(rows, [Criterion("a robot built from parts", False, "none in any world")])
 
 
-NEAR_ROCK = 0.6  # m from the rock's side: "next to it"
-FAR_START = 1.0  # m: a rock closer than this at the start leaves nothing to drive
+# "Next to it": at most this far from the rock's side to the nearest point of the rover's outline (its box seen
+# from above, wheels included), about one rover length. Measured from the outline, not the center, so a long rover
+# that stops with its nose 0.38 m from the rock is as close as a short one would be.
+NEAR_ROCK = 0.5
+FAR_START = 1.0  # m from the rover's outline at the start: a rock closer than this leaves nothing to drive
 
 
-def _gap(x: float, y: float, rock: dict[str, Any]) -> float:
-    """Meters from (x, y) to the side of a rock (world.yaml saves a rock's size as [diameter, height])."""
-    return math.dist((x, y), rock["pos"][:2]) - float((rock.get("size") or [0.5])[0]) / 2
+def _gap(x: float, y: float, heading_deg: float, outline: tuple[float, ...], rock: dict[str, Any]) -> float:
+    """Meters from a robot's outline, placed at (x, y) facing heading_deg, to the side of a rock (world.yaml saves a
+    rock's size as [diameter, height]); 0 or less when they touch."""
+    back, front, right, left = outline
+    dx, dy = rock["pos"][0] - x, rock["pos"][1] - y
+    h = math.radians(heading_deg)
+    along, across = dx * math.cos(h) + dy * math.sin(h), -dx * math.sin(h) + dy * math.cos(h)
+    nearest = math.hypot(along - min(max(along, back), front), across - min(max(across, right), left))
+    return nearest - float((rock.get("size") or [0.5])[0]) / 2
+
+
+def _heading_at_end(seen: list[Pose], start: list[float], yaw: float) -> float:
+    """Which way the robot faced at its last reported pose: as reported there, else the way it went from its
+    start (it drove to the rock), else its saved yaw."""
+    end = seen[-1]
+    if end.heading_deg is not None:
+        return float(end.heading_deg)
+    if math.dist((end.x, end.y), start[:2]) > 0.1:
+        return math.degrees(math.atan2(end.y - start[1], end.x - start[0]))
+    return yaw
 
 
 def check_rover_rock(ev: Evidence) -> list[Criterion]:
@@ -505,26 +625,39 @@ def check_rover_rock(ev: Evidence) -> list[Criterion]:
     for world in ev.worlds:
         rocks = [o for o in world.objects if o.get("shape") == "rock" and len(o.get("pos") or []) >= 2]
         for robot in world.robots if rocks else []:
-            seen = poses(ev.session, robot.get("name", ""))
+            name = robot.get("name", "")
+            seen = poses(ev.session, name)
             if not seen:
                 continue
-            start, end = robot.get("pos") or [seen[0].x, seen[0].y], seen[-1]
-            rock = min(rocks, key=lambda r: _gap(end.x, end.y, r))
-            at_end, at_start = _gap(end.x, end.y, rock), _gap(start[0], start[1], rock)
+            kind = ev.kind(world, robot)
+            outline = world.outline(name) or (0.0, 0.0, 0.0, 0.0)
+            start, yaw = robot.get("pos") or [seen[0].x, seen[0].y], float(robot.get("yaw") or 0)
+            heading, end = _heading_at_end(seen, start, yaw), seen[-1]
+            rock = min(rocks, key=lambda r: _gap(end.x, end.y, heading, outline, r))
+            at_end = _gap(end.x, end.y, heading, outline, rock)
+            at_start = _gap(start[0], start[1], yaw, outline, rock)
+            upright = upright_at_end(ev.session, name)
+            center = math.dist((end.x, end.y), rock["pos"][:2]) - float((rock.get("size") or [0.5])[0]) / 2
             rows.append(
                 (
                     robot,
                     [
-                        Criterion("a robot and a rock", True, f"{_named(world, robot)}, {rock['name']}"),
+                        Criterion(
+                            "a rover and a rock", kind == "rover", f"{_named(world, robot)} ({kind}), {rock['name']}"
+                        ),
                         Criterion(
                             f"rock >= {FAR_START} m away at the start", at_start >= FAR_START, f"{at_start:.2f} m"
                         ),
-                        Criterion(f"ended within {NEAR_ROCK} m of it", at_end <= NEAR_ROCK, f"{at_end:.2f} m"),
-                        Criterion("upright at the end", end.upright is not False, str(end.upright)),
+                        Criterion(
+                            f"ended within {NEAR_ROCK} m of it",
+                            at_end <= NEAR_ROCK,
+                            f"{at_end:.2f} m from its outline ({center:.2f} m from its center)",
+                        ),
+                        Criterion("upright at the end", upright is True, str(upright)),
                     ],
                 )
             )
-    return _best(rows, [Criterion("a robot and a rock", False, "no robot reported in a world with a rock")])
+    return _best(rows, [Criterion("a rover and a rock", False, "no robot reported in a world with a rock")])
 
 
 def check_learn_control(ev: Evidence) -> list[Criterion]:
@@ -572,19 +705,19 @@ def setup_workshop(_work: Path, home: Path) -> None:
     (home / "worlds" / "workshop" / "world.yaml").write_text(WORKSHOP, encoding="utf-8")
 
 
+WORKSHOP_CUBE = [0.25, 0.1]  # where setup_workshop puts the green cube: the arm has to carry it from there
+
+
 def check_fix_workshop(ev: Evidence) -> list[Criterion]:
     world = next((w for w in ev.worlds if w.name == "workshop"), None)
     if world is None:
         return [Criterion("the workshop world is still there", False, "gone")]
     ball, cube = world.object("ball"), world.object("green_cube")
     kept = [n for n in ("arm", "green_cube", "ball") if n in {e.get("name") for e in world.robots + world.objects}]
-    seen = object_positions(ev.session, "green_cube")
-    last = seen[-1] if seen else None
-    holders = [o["name"] for o in world.objects if o.get("shape") in CONTAINERS and cube and _bigger(o, cube)]
-    holding = [n for n in holders if last and inside(last, world.object(n) or {})]
+    carried = _carried(ev, world, cube, WORKSHOP_CUBE) if cube else [Criterion("the green cube", False, "gone")]
     return [
         Criterion("the ball is blue", bool(ball) and looks(ball.get("color"), "blue"), str(ball and ball.get("color"))),
-        Criterion("the green cube ended in the bin", bool(holding), f"last at {last}, containers {holders}"),
+        *carried,
         Criterion("arm, cube and ball still there", len(kept) == 3, ", ".join(kept)),
     ]
 
@@ -647,7 +780,7 @@ TASKS: dict[str, Task] = {
         Task(
             "fix_workshop",
             "en",
-            ("edit a world", "recover from a mistake", "pick and place"),
+            ("edit a world", "pick and place"),
             "Open my workshop world. Paint the ball blue, and have the arm drop the green cube into the bin.",
             check_fix_workshop,
             setup_workshop,
@@ -704,7 +837,7 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
         lang=task.lang,
         covers=list(task.covers),
         passed=bool(criteria) and all(c.ok for c in criteria) and not meta.get("timed_out"),
-        criteria=[asdict(c) for c in criteria],
+        criteria=[{**asdict(c), "observed": tidy(c.observed)} for c in criteria],
         tool_calls=len(ours),
         failed_calls=len(failed),
         other_mcp_calls=len(session.calls) - len(ours),
@@ -831,9 +964,23 @@ def _events(task_dir: Path) -> list[str]:
 
 
 def score(task: Task, task_dir: Path) -> Outcome:
-    lines = (task_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
     meta = json.loads((task_dir / "meta.json").read_text(encoding="utf-8"))
-    return judge(task, parse_events(lines), task_dir / "rf_home", task_dir / "work", meta)
+    return judge(task, parse_events(_events(task_dir)), task_dir / "rf_home", task_dir / "work", meta)
+
+
+def score_safely(task: Task, task_dir: Path) -> Outcome:
+    """score, or an outcome that failed with the reason when scoring itself broke: one task's broken files must
+    not lose the outcomes of the others (run.json is written once all of them are in)."""
+    try:
+        return score(task, task_dir)
+    except Exception as exc:
+        crashed = Criterion("check ran", False, f"scoring failed: {type(exc).__name__}: {exc}"[:SHORT])
+        try:
+            meta = json.loads((task_dir / "meta.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = {}
+        failed = replace(task, check=lambda _: [crashed])
+        return judge(failed, Session((), (), (), {}), task_dir / "rf_home", task_dir / "work", meta)
 
 
 # ---- reports ----------------------------------------------------------------------------------------------
@@ -1061,9 +1208,12 @@ def evaluate(options: argparse.Namespace) -> dict[str, Any]:
     home = codex_home(run_dir, source, options.model, options.effort, [d / "work" for d in task_dirs.values()])
 
     def one(name: str) -> Outcome:
-        meta = run_session(TASKS[name], task_dirs[name], home, options.timeout)
-        outcome = score(TASKS[name], task_dirs[name])
-        print(f"  {name}: {'pass' if outcome.passed else 'FAIL'} in {meta['wall_seconds']:.0f} s", flush=True)
+        try:
+            run_session(TASKS[name], task_dirs[name], home, options.timeout)
+        except Exception as exc:  # the other sessions go on; this one is scored as far as it got
+            print(f"  {name}: the session broke: {type(exc).__name__}: {exc}", flush=True)
+        outcome = score_safely(TASKS[name], task_dirs[name])
+        print(f"  {name}: {'pass' if outcome.passed else 'FAIL'} in {outcome.wall_seconds:.0f} s", flush=True)
         return outcome
 
     with ThreadPoolExecutor(max_workers=jobs) as pool:
@@ -1085,7 +1235,7 @@ def evaluate(options: argparse.Namespace) -> dict[str, Any]:
 
 def rescore(run_dir: Path) -> dict[str, Any]:
     run = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    outcomes = [score(TASKS[o["task"]], run_dir / "tasks" / o["task"]) for o in run["tasks"]]
+    outcomes = [score_safely(TASKS[o["task"]], run_dir / "tasks" / o["task"]) for o in run["tasks"]]
     run.update(summary=summarize(outcomes), tasks=[asdict(o) for o in outcomes])
     (run_dir / "run.json").write_text(json.dumps(run, indent=1, ensure_ascii=False), encoding="utf-8")
     return run
