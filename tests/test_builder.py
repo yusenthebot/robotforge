@@ -12,7 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import find_free_port
-from robotforge.design import builder
+from robotforge.design import builder, gallery
 from robotforge.design.visuals import HIDDEN_GROUP
 from robotforge.design.world import World, compile_world
 from robotforge.mcp_server import build_server
@@ -524,6 +524,21 @@ def test_a_wheel_legged_robot_whose_body_tips_back_as_it_crouches_keeps_balancin
     assert not pg.session.controllers["ascent"].fallen
     assert end["upright"]  # balancing, though its body leans far back
     assert np.linalg.norm(np.subtract(end["position"][:2], start[:2])) < 0.05
+
+
+def test_only_a_robot_with_nothing_to_hold_it_up_is_told_it_tips_over():
+    """The wheel-legged biped tips over left alone, as every self-balancer does, and was told to get more feet, a wider
+    stance or a caster, though the built-in balancer keeps it up; a robot that tips with nothing to hold it up still
+    hears it."""
+    tips = "does not stay upright by itself"
+    assert not any(tips in n for n in builder.build_robot(gallery.build("wheel_biped")).notes)
+    stilt = {  # a box on one stilt, off its middle
+        "base": {"shape": "box", "size": [0.1, 0.1, 0.1]},
+        "parts": [
+            {"name": "stilt", "at": [0.04, 0, -0.05], "joint": "fixed", "size": [0.01, 0.2], "direction": "down"}
+        ],
+    }
+    assert any(tips in n for n in builder.build_robot(stilt).notes)
 
 
 def _cart_with_a_head(head_height: float) -> dict:
