@@ -473,6 +473,47 @@ def test_a_transcript_shows_calls_and_what_the_agent_said(ev):
     assert "TOOL robotforge.lessons" in text and "SAY " in text and "USAGE" in text
 
 
+def test_a_results_file_is_never_written_over(ev, tmp_path):
+    """A rerun of two tasks on the same commit and day replaced the full run's results file (review)."""
+    full = {"started": "20261017-031624", "label": "head", "tasks": [{"task": t} for t in ev.TASKS]}
+    some = {"started": "20261017-032953", "label": "head", "tasks": [{"task": "arm_cube"}, {"task": "fix_workshop"}]}
+    paths = [ev.save(full, tmp_path), ev.save(some, tmp_path), ev.save(full, tmp_path), ev.save(full, tmp_path)]
+    assert [p.name for p in paths] == [
+        "20261017-head.json",
+        "20261017-head-arm_cube+fix_workshop.json",
+        "20261017-head-031624.json",
+        "20261017-head-031624-2.json",
+    ]
+    assert len(json.loads(paths[0].read_text(encoding="utf-8"))["tasks"]) == len(ev.TASKS)
+    named = ev.save(some, tmp_path / "20261017-head.json")  # a file named on purpose is written over
+    assert named == paths[0] and len(json.loads(named.read_text(encoding="utf-8"))["tasks"]) == 2
+
+
+def test_compare_says_when_a_task_was_asked_differently(ev):
+    def run(label, prompt):
+        task = {"task": "urdf_rover", "passed": True, "tool_calls": 5, "failed_calls": 0, "input_tokens": 1000}
+        task.update(cached_input_tokens=500, wall_seconds=60.0, prompt=prompt)
+        return {"label": label, "commit": label, "tasks": [task]}
+
+    same = ev.compare(run("a", "drive it about half a meter"), run("b", "drive it about half a meter"))
+    assert "prompts differ" not in same
+    text = ev.compare(run("a", "drive it forward a little"), run("b", "drive it about half a meter"))
+    assert "urdf_rover: the prompts differ" in text and "a little" in text and "half a meter" in text
+    assert "(not recorded)" in ev.compare(run("a", None), run("b", "drive it about half a meter"))
+
+
+def test_codex_errors_on_stderr_count_as_problems(ev, tmp_path):
+    task_dir = _made_up(tmp_path, {}, _event("robots", {}, {"robots": []}))
+    (task_dir / "stderr.txt").write_text(
+        "Reading additional input from stdin...\n2026-10-16T19:16:43Z ERROR codex_skills_extension::host_service: "
+        "failed to install system skills: io error\n",
+        encoding="utf-8",
+    )
+    outcome = ev.score(ev.TASKS["dog_grass"], task_dir)
+    assert outcome.problems == ["codex_skills_extension::host_service: failed to install system skills: io error"]
+    assert ev.summarize([outcome])["sessions_with_problems"] == 1
+
+
 def test_a_fixture_keeps_which_world_each_result_is_in(ev):
     long = json.dumps({"world": "garden", "world_dir": "RUN/w/garden", "robots": ["dog"], "actuators": ["x"] * 99})
     assert json.loads(ev._trim_result("open_world", long)) == {

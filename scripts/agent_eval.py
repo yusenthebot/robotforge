@@ -20,9 +20,11 @@ A task's check reads only what happened: the MCP tool calls and their results in
 worlds saved on disk (world.yaml). It never reads what the agent says it did. Where a robot or an object went is
 read from the calls made while its world was open (a dog walked in another world is not the garden's dog). Each
 check is a short list of criteria; a task passes when all of them do. Alongside, every session records its
-robotforge tool calls, the calls that failed, shell commands, input, cached and output tokens and wall time.
+robotforge tool calls, the calls that failed, shell commands, input, cached and output tokens, wall time and the
+errors Codex itself logged.
 
-A run writes a JSON summary (no absolute paths) to --results, by default docs/evals/agent/<date>-<label>.json,
+A run writes a JSON summary (no absolute paths, each task's prompt kept) to --results, by default
+docs/evals/agent/<date>-<label>.json (with the task names when it did not run them all, never over another file),
 for later rounds to compare against; the raw event streams and worlds stay in the run folder under --work.
 This is not a test: it needs Codex, a login and the network. tests/test_agent_eval.py checks the criteria on a
 recorded stream.
@@ -46,6 +48,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import threading
 import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
@@ -63,6 +66,9 @@ MODEL = "gpt-6.1-sol"
 EFFORT = "medium"
 MAX_SESSION_SECONDS = 600  # a beginner would not wait longer for one request
 MAX_JOBS = 2  # sessions run on the user's ChatGPT plan: never more than two at once
+# s between two sessions starting: Codex installs its own skills into CODEX_HOME as a session starts, and two
+# starting together broke that install in 3 of about 30 sessions ("failed to install system skills").
+START_GAP = 10.0
 # Codex features that are not robotforge's: a browser, computer use, image generation and ChatGPT apps would add
 # tokens and variance to every session (round 31's session listed every ChatGPT app before starting).
 OFF_FEATURES = ("apps", "browser_use", "browser_use_external", "in_app_browser", "computer_use", "image_generation")
@@ -895,6 +901,7 @@ class Outcome:
     task: str
     lang: str
     covers: list[str]
+    prompt: str | None  # as the session got it ("{work}" for its folder); None for a run that did not record it
     passed: bool
     criteria: list[dict[str, Any]]
     tool_calls: int  # robotforge's tools
@@ -935,6 +942,7 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
         task=task.name,
         lang=task.lang,
         covers=list(task.covers),
+        prompt=meta.get("prompt"),
         passed=bool(criteria) and all(c.ok for c in criteria) and not meta.get("timed_out"),
         criteria=[{**asdict(c), "observed": tidy(c.observed)} for c in criteria],
         tool_calls=len(ours),
@@ -1024,8 +1032,20 @@ def codex_home(run_dir: Path, source: str, model: str, effort: str, work_dirs: l
     return home
 
 
+_starting = threading.Lock()
+_last_start = [-math.inf]  # time.monotonic() of the last session's start
+
+
+def _wait_to_start() -> None:
+    """At least START_GAP seconds after the last session started (see START_GAP)."""
+    with _starting:
+        time.sleep(max(0.0, _last_start[0] + START_GAP - time.monotonic()))
+        _last_start[0] = time.monotonic()
+
+
 def run_session(task: Task, task_dir: Path, home: Path, timeout: float) -> dict[str, Any]:
     """One `codex exec` session; the event stream goes to events.jsonl, its stderr to stderr.txt."""
+    _wait_to_start()
     work, rf_home = task_dir / "work", task_dir / "rf_home"
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     env.update(CODEX_HOME=str(home), ROBOTFORGE_HOME=str(rf_home), ROBOTFORGE_NO_BROWSER="1")
@@ -1045,7 +1065,12 @@ def run_session(task: Task, task_dir: Path, home: Path, timeout: float) -> dict[
             except subprocess.TimeoutExpired:
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait()
-    meta = {"wall_seconds": round(time.monotonic() - start, 1), "exit_code": proc.returncode, "timed_out": timed_out}
+    meta = {
+        "wall_seconds": round(time.monotonic() - start, 1),
+        "exit_code": proc.returncode,
+        "timed_out": timed_out,
+        "prompt": task.prompt,
+    }
     (task_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return meta
 
@@ -1062,9 +1087,21 @@ def _events(task_dir: Path) -> list[str]:
     return (task_dir / "events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
 
 
+def codex_errors(task_dir: Path) -> list[str]:
+    """The errors Codex logged on stderr ("... ERROR codex_...: failed to install system skills ..."): a session
+    that started broken shows in the summary instead of passing as one more agent's mistake."""
+    try:
+        lines = (task_dir / "stderr.txt").read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    return [line.split(" ERROR ", 1)[1] for line in lines if " ERROR " in line]
+
+
 def score(task: Task, task_dir: Path) -> Outcome:
     meta = json.loads((task_dir / "meta.json").read_text(encoding="utf-8"))
-    return judge(task, parse_events(_events(task_dir)), task_dir / "rf_home", task_dir / "work", meta)
+    session = parse_events(_events(task_dir))
+    session = replace(session, problems=(*session.problems, *codex_errors(task_dir)))
+    return judge(task, session, task_dir / "rf_home", task_dir / "work", meta)
 
 
 def score_safely(task: Task, task_dir: Path) -> Outcome:
@@ -1093,6 +1130,7 @@ def summarize(outcomes: list[Outcome]) -> dict[str, Any]:
         "tool_calls": sum(o.tool_calls for o in outcomes),
         "failed_calls": sum(o.failed_calls for o in outcomes),
         "shell_commands": sum(o.shell_commands for o in outcomes),
+        "sessions_with_problems": sum(bool(o.problems) for o in outcomes),
         "input_tokens": sum(o.input_tokens for o in outcomes),
         "uncached_input_tokens": sum(o.input_tokens - o.cached_input_tokens for o in outcomes),
         "output_tokens": sum(o.output_tokens for o in outcomes),
@@ -1153,10 +1191,14 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> str:
     def pair(a: Any, b: Any) -> str:
         return f"{a} -> {b}"
 
+    notes = []
     for new in after["tasks"]:
         o = old.get(new["task"])
         if o is None:
             continue
+        if o.get("prompt") != new.get("prompt"):  # not the same task any more, or a side did not record it
+            said = [p if p is not None else "(not recorded)" for p in (o.get("prompt"), new.get("prompt"))]
+            notes.append(f"  {new['task']}: the prompts differ:\n    before: {said[0]}\n    after:  {said[1]}")
         verdict = pair("pass" if o["passed"] else "fail", "pass" if new["passed"] else "fail")
         uncached = pair(
             _k(o["input_tokens"] - o["cached_input_tokens"]), _k(new["input_tokens"] - new["cached_input_tokens"])
@@ -1167,7 +1209,7 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> str:
             f"{pair(_k(o['input_tokens']), _k(new['input_tokens'])):>14s}{uncached:>12s}"
             f"{pair(round(o['wall_seconds']), round(new['wall_seconds'])):>11s}"
         )
-    return "\n".join(rows)
+    return "\n".join(rows + (["warning: compared across different prompts", *notes] if notes else []))
 
 
 # Tools whose whole result a check may read; any other result is cut to SHORT characters in a fixture.
@@ -1286,7 +1328,8 @@ def report(run: dict[str, Any]) -> str:
         f"robotforge agent eval {run['label']} ({run['commit']}), {run['model']} {run['effort']}, codex {run['codex']}",
         table(run["tasks"]),
         f"passed {s['passed']}/{s['tasks']}; {s['tool_calls']} robotforge calls, {s['failed_calls']} failed; "
-        f"input {_k(s['input_tokens'])} ({_k(s['uncached_input_tokens'])} uncached), output {_k(s['output_tokens'])}",
+        f"input {_k(s['input_tokens'])} ({_k(s['uncached_input_tokens'])} uncached), output {_k(s['output_tokens'])}; "
+        f"{s.get('sessions_with_problems', 0)} sessions with Codex errors",
         details(run["tasks"]),
     ]
     return "\n".join(lines)
@@ -1351,8 +1394,20 @@ def rescore(run_dir: Path) -> dict[str, Any]:
 
 
 def save(run: dict[str, Any], results: Path) -> Path:
-    results.mkdir(parents=True, exist_ok=True)
-    path = results / f"{run['started'][:8]}-{run['label']}.json"
+    """The results file: --results itself when it names a .json file (written over on purpose, say a rescore),
+    else <date>-<label>[-<tasks>].json in that folder, the tasks named when the run did not do them all. A file
+    already there is never written over: the start time goes into the name. (A rerun of two tasks on the same
+    commit and day once replaced the full run's file.)"""
+    if results.suffix == ".json":
+        path = results
+    else:
+        names = [o["task"] for o in run["tasks"]]
+        some = "" if set(names) >= set(TASKS) else "-" + "+".join(names)
+        path = results / f"{run['started'][:8]}-{run['label']}{some}.json"
+        stem, n = f"{path.stem}-{run['started'][9:]}", 1
+        while path.exists():
+            path, n = path.with_name(f"{stem}{'' if n == 1 else f'-{n}'}.json"), n + 1
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(run, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     return path
 
@@ -1368,7 +1423,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--effort", default=EFFORT, help="Codex reasoning effort")
     parser.add_argument("--timeout", type=float, default=MAX_SESSION_SECONDS, help="seconds per session")
     parser.add_argument("--work", type=Path, help="where run folders go (default: the system temp folder)")
-    parser.add_argument("--results", type=Path, default=RESULTS, help="where the JSON summary goes")
+    parser.add_argument(
+        "--results", type=Path, default=RESULTS, help="folder for the JSON summary, or a .json file to write over"
+    )
     parser.add_argument("--rescore", type=Path, metavar="RUN_DIR", help="check a finished run again")
     parser.add_argument("--transcript", type=Path, metavar="TASK_DIR", help="print one session")
     parser.add_argument(
