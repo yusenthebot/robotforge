@@ -693,7 +693,7 @@ class BehaviorManager:
             pick = self._object_geometry(obj)
             place, place_top, region = self._place_target(target)
             try:
-                arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
+                arm.pick_and_place(pick["center"], pick["half_height"], place, place_top, pick["faces"])
             except OutOfReach as exc:
                 raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target)) from exc
             except ValueError as exc:
@@ -798,7 +798,13 @@ class BehaviorManager:
         else:
             g = next(i for i in range(self.session.model.ngeom) if self.session.model.geom_bodyid[i] == body)
             half = float(self.session.model.geom_rbound[g])
-        return {"center": center, "half_height": half}
+        faces = None  # a box's sides, for jaws closing square to them (see arm.SQUARE_TOL)
+        if entry is not None and entry.shape == "box":
+            sides = self.session.data.xmat[body].reshape(3, 3)[:, :2].T.copy()
+            sides[:, 2] = 0.0
+            if np.all(np.linalg.norm(sides, axis=1) > 0.5):  # standing upright, not on an edge
+                faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
+        return {"center": center, "half_height": half, "faces": faces}
 
     def _place_target(self, target: str | list[float]) -> tuple[np.ndarray, float, dict[str, Any]]:
         """(place point for the object's bottom, highest point around it, success region)."""

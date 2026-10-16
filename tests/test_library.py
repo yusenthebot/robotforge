@@ -620,6 +620,25 @@ def test_real_new_walkers_walk_ten_seconds(pg, name, speed, distance):
     assert end["position"][0] - start[0] > distance and abs(end["position"][1] - start[1]) < 0.5 and end["upright"]
 
 
+@pytest.mark.parametrize("name", ["panda", "piper"])
+def test_an_arm_grasps_a_turned_box_square_to_its_faces(pg, name):
+    """Regression: pointing down left the turn of the jaws about the tool free, so they came down across a cube
+    wherever the IK left them; beside an SO-100 its fixed jaw landed on the cube's edge and pushed it away."""
+    pg.add_robot("bot", library=name)
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.15], yaw=30)
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=[0.35, -0.25])
+    _run(pg, 1.0)
+    motion, info = pg.behaviors.pick_and_place("bot", "cube", "bin")
+    while motion.current_label != "grasp":
+        _run(pg, 0.05)
+    closing = pg.session.data.xmat[motion.chain.body].reshape(3, 3) @ motion.closing
+    off = (math.degrees(math.atan2(closing[1], closing[0])) - 30) % 90
+    assert min(off, 90 - off) < 5  # closing across a face, whichever
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
 # Cube and bin (x, y) around an arm's base, for an arm facing +x: in front, from the front to either side, and long
 # carries across it. An xArm 7 gripping at its fingertips dropped the cube on four of these.
 PICK_LAYOUTS = {
@@ -667,6 +686,9 @@ SO100_LAYOUTS = {
     "across": ([0.2, -0.1], [-0.2, -0.1]),
     "back_across": ([-0.2, -0.15], [0.2, -0.15]),
     "near": ([0.12, -0.18], [-0.12, -0.2]),
+    # Beside it: its jaws came down 35 degrees across the cube and pushed it away, until they turned square to it.
+    "beside": ([0.22, 0.0], [0.05, -0.28]),
+    "beside_far": ([0.25, 0.05], [0.0, -0.3]),
 }
 
 

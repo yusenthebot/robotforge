@@ -42,6 +42,11 @@ CARRY_MARGIN = 0.04
 ARC_MARGIN = 0.25
 CARRY_STEP = 0.01
 AMBIGUOUS_TURN = 0.5
+# Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
+# its jaws came down 35 degrees across a cube, the fixed jaw on the cube's edge, and pushed it away. A box is grasped
+# with the jaws closing square to its faces (on the face nearest to where they close now), where the arm can: within
+# SQUARE_TOL (rad) of that.
+SQUARE_TOL = 0.05
 
 
 class OutOfReach(ValueError):
@@ -63,6 +68,7 @@ class Waypoint:
     label: str
     joints: np.ndarray | None = None  # a joint-space move to these angles instead of a tool position
     tilt: bool = False  # the gripper may lean there (see TILTS)
+    rotation: np.ndarray | None = None  # the tool body's whole orientation there, jaws turned too (see SQUARE_TOL)
 
 
 class ArmMotion:
@@ -117,11 +123,13 @@ class ArmMotion:
         self._base_parent = int(model.body_parentid[self.base_body])
         self.ik.point(self.chain, self.q)
         self._read_base(self.ik.data)
+        self.closing = _closing(model, self.ik.data, self.gripper, self.chain.body, self.tool_axis)
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._axis0 = DOWN  # where the tool pointed when the current move began
         self._axis1 = DOWN  # where it points at the end of the current move
+        self._rot0 = np.eye(3)  # the tool body's orientation when the current move began (see Waypoint.rotation)
         self._turn: float | None = None  # how far the current move turns about the base, rad
         self.current_label = "idle"
         self.log: list[str] = []
@@ -168,9 +176,11 @@ class ArmMotion:
                     return q2, err2, restarted2, axis
         return q, err, restarted, DOWN
 
-    def _solve(self, target: np.ndarray, down: np.ndarray = DOWN) -> tuple[np.ndarray, float, bool]:
-        """Joint values for the tool at `target` pointing down (or along `down`): (q, position error, needed a
-        restart).
+    def _solve(
+        self, target: np.ndarray, down: np.ndarray = DOWN, rotation: np.ndarray | None = None
+    ) -> tuple[np.ndarray, float, bool]:
+        """Joint values for the tool at `target` pointing down (or along `down`, or with the tool body turned to
+        `rotation`): (q, position error, needed a restart; an orientation not reached counts as out of reach).
 
         Damped least squares from the current pose can stall on a joint limit or in the wrong elbow
         branch for points the arm reaches easily some other way, so a stuck solve tries again from
@@ -180,9 +190,17 @@ class ArmMotion:
         q, err = self.q, np.inf
         # From the pose the arm is in, then with its base turned toward the target: the first keeps an arm
         # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
-        for start in (self.q, seed):
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
+        aim = {"rotation": rotation} if rotation is not None else {"axis": (self.tool_axis, down)}
+
+        def solve(start: np.ndarray) -> tuple[np.ndarray, float]:
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, **aim)
             q2 = self._unwound(q2)
+            if rotation is not None and self._turned_from(q2, rotation) > SQUARE_TOL:
+                err2 = max(err2, REACH_TOL * 1.01)
+            return q2, err2
+
+        for start in (self.q, seed):
+            q2, err2 = solve(start)
             if err2 <= REACH_TOL and not self._collides(q2):
                 return q2, err2, False
             if err2 < err:
@@ -192,8 +210,7 @@ class ArmMotion:
         for _ in range(RESTARTS):
             start = rng.uniform(self.chain.lower, self.chain.upper)
             start[0] = seed[0]
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
-            q2 = self._unwound(q2)
+            q2, err2 = solve(start)
             if err2 <= REACH_TOL and not self._collides(q2):
                 travel = float(np.max(np.abs(q2 - self.q)))
                 if best is None or travel < best[2]:  # of the answers that work, the one nearest to now
@@ -203,6 +220,29 @@ class ArmMotion:
         if best is not None:
             return best[0], best[1], True
         return q, max(err, REACH_TOL * 1.01), True  # nothing collision-free: as good as out of reach
+
+    def _turned_from(self, q: np.ndarray, rotation: np.ndarray) -> float:
+        """How far (rad) the tool body at `q` is turned from `rotation`."""
+        self.ik.point(self.chain, q)
+        have = self.ik.data.xmat[self.chain.body].reshape(3, 3)
+        return float(np.arccos(np.clip((np.trace(have.T @ rotation) - 1) / 2, -1.0, 1.0)))
+
+    def _square(self, faces: np.ndarray | None, at: np.ndarray) -> np.ndarray | None:
+        """The tool body's orientation for grasping a box at `at` with its jaws closing square to its faces
+        (`faces`: two horizontal unit normals of its sides; see SQUARE_TOL), on the face nearest to where they close
+        now; None for an arm whose jaws' closing is not known, or that cannot grasp so there."""
+        if faces is None or self.closing is None:
+            return None
+        self.ik.point(self.chain, self.q)
+        now = self.ik.data.xmat[self.chain.body].reshape(3, 3) @ self.closing
+        local = np.column_stack([self.tool_axis, self.closing, np.cross(self.tool_axis, self.closing)])
+        options = [sign * f for f in faces for sign in (1.0, -1.0)]  # the nearest turn first; the wrist may not go so
+        for want in sorted(options, key=lambda f: -float(f[:2] @ now[:2])):
+            side = np.array([want[0], want[1], 0.0]) / np.linalg.norm(want[:2])
+            rotation = np.column_stack([DOWN, side, np.cross(DOWN, side)]) @ local.T
+            if self._solve(at, rotation=rotation)[1] <= REACH_TOL:
+                return rotation
+        return None
 
     def _unwound(self, q: np.ndarray) -> np.ndarray:
         """The same pose with each joint that turns a whole turn or more within its limits (a UR5e's, +-360 degrees)
@@ -274,12 +314,18 @@ class ArmMotion:
         return self.q
 
     def pick_and_place(
-        self, obj_pos: np.ndarray, obj_half_height: float, place: np.ndarray, place_top: float | None = None
+        self,
+        obj_pos: np.ndarray,
+        obj_half_height: float,
+        place: np.ndarray,
+        place_top: float | None = None,
+        faces: np.ndarray | None = None,
     ) -> None:
         """Queue a full pick-and-place. Raises OutOfReach if any key point is out of reach.
 
         `place` is where the object's bottom should end up; `place_top` is the highest point
-        around it (e.g. a bin's rim), which the carried object must clear.
+        around it (e.g. a bin's rim), which the carried object must clear. `faces` are a box's two horizontal
+        side normals, to grasp it square to them (see SQUARE_TOL).
         """
         grasp = obj_pos.copy()
         drop = place + [0, 0, obj_half_height + 0.01]
@@ -304,9 +350,10 @@ class ArmMotion:
         if bad:
             high_only = all(name.startswith("above") for name in bad)
             raise OutOfReach(self.robot, bad, over if high_only else None)
+        square = self._square(faces, grasp)  # the jaws turn square to the box on the way down to it
         start = self.tool_target_end()
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach", tilt=True))
-        self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
+        self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend", rotation=square))
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
         self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", tilt=True))
         self.queue.append(Waypoint(above_drop, None, self._time(above, above_drop), "carry", tilt=True))
@@ -399,7 +446,9 @@ class ArmMotion:
                 self._branch = (self.q.copy(), wp.joints)
             elif wp.position is not None:
                 goal, err, restarted, self._axis1 = (
-                    self._solve_tilting(wp.position) if wp.tilt else (*self._solve(wp.position), DOWN)
+                    self._solve_tilting(wp.position)
+                    if wp.tilt
+                    else (*self._solve(wp.position, rotation=wp.rotation), DOWN)
                 )
                 if err <= REACH_TOL:
                     self._turn = self._path_turn(start, wp.position, float(goal[0] - self.q[0]))
@@ -413,7 +462,8 @@ class ArmMotion:
             # Where the tool points now, in the world, also on a carrier (whose pose the IK follows, see sync): a Z1 on
             # a Go2, snapped from its home pose to pointing down on the first ticks, jolted the dog 25 mm back and it
             # stepped off half a metre.
-            self._axis0 = data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
+            self._rot0 = data.xmat[self.chain.body].reshape(3, 3).copy()
+            self._axis0 = self._rot0 @ self.tool_axis
             self.current_label = wp.label
             if wp.gripper is not None and self.gripper >= 0:
                 data.ctrl[self.gripper] = wp.gripper
@@ -428,6 +478,10 @@ class ArmMotion:
             if self._branch is not None:
                 q0, q1 = self._branch
                 self.q = q0 + (q1 - q0) * s
+            elif wp.rotation is not None:  # the jaws turn square to a box while the tool goes down to it
+                target = self._arc_point(start, wp.position, s)
+                rotation = _blend(self._rot0, wp.rotation, s)
+                self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, rotation=rotation)
             else:
                 target = self._arc_point(start, wp.position, s)
                 # e.g. out of a home pose, or leaning out over a bin, gradually
@@ -508,6 +562,50 @@ def _path_hinges(model: mujoco.MjModel, body: int, powered: dict[int, int]) -> l
         joints = own + joints
         body = int(model.body_parentid[body])
     return joints
+
+
+def _closing(
+    model: mujoco.MjModel, data: mujoco.MjData, gripper: int, body: int, tool_axis: np.ndarray
+) -> np.ndarray | None:
+    """The way an arm's jaws close, in the tool body's frame and across its tool axis: along the fingers' slide, or
+    across a hinged jaw's axis; from the joint the gripper drives, or the first its tendon pulls (a Panda's, a
+    Robotiq's). None when there is no such joint (`data` is posed)."""
+    if gripper < 0:
+        return None
+    target = int(model.actuator_trnid[gripper, 0])
+    kind = int(model.actuator_trntype[gripper])
+    if kind == int(mujoco.mjtTrn.mjTRN_TENDON):
+        start, count = model.tendon_adr[target], model.tendon_num[target]
+        wraps = [int(model.wrap_objid[w]) for w in range(start, start + count) if model.wrap_type[w] == 1]
+        if not wraps:  # mjWRAP_JOINT is 1: a fixed tendon over joints
+            return None
+        joint = wraps[0]
+    elif kind == int(mujoco.mjtTrn.mjTRN_JOINT):
+        joint = target
+    else:
+        return None
+    axis = data.xmat[body].reshape(3, 3).T @ data.xaxis[joint]
+    if model.jnt_type[joint] == mujoco.mjtJoint.mjJNT_HINGE:
+        axis = np.cross(axis, tool_axis)
+    elif model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_SLIDE:
+        return None
+    across = axis - tool_axis * (axis @ tool_axis)
+    norm = float(np.linalg.norm(across))
+    return across / norm if norm > 0.3 else None
+
+
+def _blend(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
+    """The orientation a fraction `s` of the way from rotation matrix `a` to `b`."""
+    qa, qb = np.zeros(4), np.zeros(4)
+    mujoco.mju_mat2Quat(qa, np.ascontiguousarray(a).ravel())
+    mujoco.mju_mat2Quat(qb, np.ascontiguousarray(b).ravel())
+    turn = np.zeros(3)
+    mujoco.mju_subQuat(turn, qb, qa)  # qa * quat(turn) = qb
+    q = qa.copy()
+    mujoco.mju_quatIntegrate(q, turn, s)
+    out = np.zeros(9)
+    mujoco.mju_quat2Mat(out, q)
+    return out.reshape(3, 3)
 
 
 def _turn_toward(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
