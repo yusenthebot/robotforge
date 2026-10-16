@@ -63,6 +63,9 @@ class LibraryRobot:
     # Torque-motor models get position servos with this stiffness (N*m/rad), keeping their torque
     # limits: that is how the real robots are commanded (joint targets + PD in the motor driver).
     servo_kp: float | None = None
+    # Joint position servos that are too soft for the robot's weight get this stiffness (N*m/rad) and damping
+    # (N*m*s/rad), keeping their force limits.
+    stiffer_servos: tuple[float, float] | None = None
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
     walks: bool = True  # False: the robot stands and balances, but move cannot walk it yet
     tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
@@ -176,7 +179,11 @@ CATALOG: dict[str, LibraryRobot] = {
                 for leg, sign in (("LF", 1), ("RF", 1), ("LH", -1), ("RH", -1))
                 for joint, angle in (("HFE", 0.8), ("KFE", -1.4))
             ),
-            max_speed=0.45,  # measured: 0.45 m/s straight; at 0.6 it veered 13 degrees in 10 s
+            # Menagerie's kp 100 and the joints' own damping of 1 let the 45 kg robot sag from 0.44 to 0.27 m and rock:
+            # its knees hit the floor 15 to 36% of the time, it tilted up to 45 degrees turning at keyboard commands,
+            # and at 0.6 m/s it veered off. At kp 300 alone it fell over turning. With damping 10 it walks 0.3 and
+            # 0.6 m/s within 4 degrees, turns as told within 6, and nothing but its feet touches the floor.
+            stiffer_servos=(300.0, 10.0),
         ),
         LibraryRobot(
             "barkour",
@@ -376,6 +383,11 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
             notes.append(
                 f"{converted} torque motors driven as position servos (kp {robot.servo_kp:g}, torque limits kept)"
             )
+    if robot.stiffer_servos is not None:
+        kp, kv = robot.stiffer_servos
+        stiffened = _stiffen_servos(spec, kp, kv)
+        if stiffened:
+            notes.append(f"{stiffened} joint servos stiffened to kp {kp:g}, kv {kv:g} (force limits kept)")
     if robot.tools:
         key_ctrl = _add_tools(spec, robot, key_ctrl)
     for geom in list(spec.worldbody.geoms):  # the world brings its own floor and lights
@@ -526,6 +538,26 @@ def _motors_to_servos(spec: mujoco.MjSpec, kp: float) -> int:
         else:  # a continuous joint: any target is fine
             act.ctrllimited = mujoco.mjtLimited.mjLIMITED_FALSE
         count += 1
+    return count
+
+
+def _stiffen_servos(spec: mujoco.MjSpec, kp: float, kv: float) -> int:
+    """Give the joint position servos this stiffness and damping (force = kp * (target - q) - kv * qdot)."""
+    count = 0
+    for act in spec.actuators:
+        gain, bias = list(act.gainprm), list(act.biasprm)
+        servo = (
+            act.trntype == mujoco.mjtTrn.mjTRN_JOINT
+            and act.gaintype == mujoco.mjtGain.mjGAIN_FIXED
+            and act.biastype == mujoco.mjtBias.mjBIAS_AFFINE
+            and act.dyntype == mujoco.mjtDyn.mjDYN_NONE
+            and gain[0] > 0
+            and bias[1] == -gain[0]
+        )
+        if servo:
+            gain[0], bias[1], bias[2] = kp, -kp, -kv
+            act.gainprm, act.biasprm = gain, bias
+            count += 1
     return count
 
 

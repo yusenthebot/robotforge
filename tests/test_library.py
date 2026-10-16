@@ -361,6 +361,45 @@ def test_anymal_walks_on_the_gait(pg):
     assert end["position"][0] - start[0] > 1.8 and abs(end["position"][1] - start[1]) < 0.3 and end["upright"]
 
 
+def _walk_and_watch(pg: Playground, robot: str, speed: float, turn: float, seconds: float) -> dict:
+    """Walk a robot and watch it: how far it tilted (degrees), turned (degrees), and which of its bodies touched the
+    floor away from its feet (where its gait puts them): a shin's tip beside its foot is fine, a knee is not."""
+    m, d = pg.session.model, pg.session.data
+    pg.behaviors.move(robot, speed, turn)
+    gait = pg.session.controllers[robot]
+    trunk = gait.trunk
+    tilt, turned, last, touched = 0.0, 0.0, None, set()
+    for _ in range(round(seconds / 0.05)):
+        _run(pg, 0.05)
+        rot = d.xmat[trunk].reshape(3, 3)
+        tilt = max(tilt, math.degrees(math.acos(min(1.0, rot[2, 2]))))
+        heading = math.atan2(rot[1, 0], rot[0, 0])
+        turned += 0.0 if last is None else (heading - last + math.pi) % (2 * math.pi) - math.pi
+        last = heading
+        feet = [
+            d.xpos[leg.chain.body] + d.xmat[leg.chain.body].reshape(3, 3) @ leg.chain.local_point for leg in gait.legs
+        ]
+        for c in d.contact[: d.ncon]:
+            g1, g2 = int(c.geom[0]), int(c.geom[1])
+            own = g2 if m.geom_bodyid[g1] == 0 else g1 if m.geom_bodyid[g2] == 0 else None
+            if own is not None and min(np.linalg.norm(c.pos - foot) for foot in feet) > 0.06:
+                touched.add(m.body(m.geom_bodyid[own]).name)
+    return {"tilt": tilt, "turned": math.degrees(turned), "touched": touched}
+
+
+@pytest.mark.parametrize("turn", [1.0, -1.0])
+def test_anymal_turns_at_keyboard_commands_without_rocking_onto_its_knees(pg, turn):
+    """Regression: on Menagerie's soft servos (kp 100, damping 1) the 45 kg robot sagged and rocked. Walking and
+    turning like the keyboard does (0.6 of its top speed, 1 rad/s), it tilted up to 34 degrees and its thighs and
+    shins hit the floor a third of the time."""
+    pg.add_robot("dog", library="anymal_c")
+    _run(pg, 2.0)
+    pg.behaviors.move("dog", 0.0, 0.0)
+    walked = _walk_and_watch(pg, "dog", 0.6 * pg.session.controllers["dog"].max_speed, turn, 6.0)
+    assert walked["tilt"] < 10 and not walked["touched"]
+    assert abs(walked["turned"]) > 250 and walked["turned"] * turn > 0  # about 0.9 of the 344 degrees it was told
+
+
 def test_op3_stands_and_walks_on_the_balance_gait_found_from_its_legs(pg):
     pg.add_robot("op3", library="op3")
     gait = pg.session.controllers["op3"]  # it balances from the start
@@ -486,6 +525,18 @@ def test_real_humanoid_stands_ten_seconds_on_the_balance_gait(pg, name):
     _run(pg, 10.0)
     end = pg.behaviors.pose("bot")
     assert end["upright"] and math.dist(start[:2], end["position"][:2]) < 0.1
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("turn", [1.0, -1.0])
+@pytest.mark.parametrize("name", [n for n, r in library.CATALOG.items() if r.kind == "quadruped"])
+def test_real_dogs_turn_at_keyboard_commands_without_rocking_onto_their_knees(pg, name, turn):
+    pg.add_robot("dog", library=name)
+    _run(pg, 2.0)
+    pg.behaviors.move("dog", 0.0, 0.0)
+    walked = _walk_and_watch(pg, "dog", 0.6 * pg.session.controllers["dog"].max_speed, turn, 6.0)
+    assert walked["tilt"] < 10 and not walked["touched"]
+    assert abs(walked["turned"]) > 250 and walked["turned"] * turn > 0
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
