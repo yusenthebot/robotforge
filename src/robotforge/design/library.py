@@ -86,6 +86,8 @@ class LibraryRobot:
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
     tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
     mass: float = 0.0  # kg, of the model at the pinned commit
+    # Degrees to turn a fixed-base model about the vertical so its front faces +x, as every robot here does.
+    facing: float = 0.0
     payload: Payload | None = None  # walkers: what they carry (see Payload)
 
 
@@ -178,6 +180,9 @@ CATALOG: dict[str, LibraryRobot] = {
             # jaw's pad (x 0.008): that jaw comes down 6 mm beside the cube, not on its edge, and the moving jaw
             # pushes the cube against it. 5 of 6 floor layouts within 0.27 m; at 0.12 m off the pad, 1 of 6.
             tools=(Tool("Fixed_Jaw", 0.09, axis=(0.0, -1.0, 0.0), shift=(-0.018, 0.0, 0.0), gripper="Jaw"),),
+            # The model faces -y. Mounted that way on a dog's back its folded arm stuck out 27 cm over the dog's side:
+            # a Go2 drifted 0.17 m sideways in 10 s and a Barkour walked backwards (-0.4 m) instead of 2.5 m forwards.
+            facing=90.0,
         ),
         LibraryRobot(
             "piper",
@@ -479,6 +484,13 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     if root is None:
         raise LibraryError(f"{robot.title}: the model has no bodies")
     floating = any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints)
+    if robot.facing and not floating:
+        turn, quat = np.zeros(4), np.zeros(4)
+        mujoco.mju_axisAngle2Quat(turn, [0.0, 0.0, 1.0], np.radians(robot.facing))
+        mujoco.mju_mulQuat(quat, turn, np.asarray(root.quat, float))
+        pos = np.zeros(3)
+        mujoco.mju_rotVecQuat(pos, np.asarray(root.pos, float), turn)
+        root.quat, root.pos = quat.tolist(), pos.tolist()
     if floating:
         # Place the base by its keyframe orientation; height comes from the lowest point below. Without a keyframe
         # it faces +x like every robot here: a file's own placement is its scene's (ANYmal C's faces -x).

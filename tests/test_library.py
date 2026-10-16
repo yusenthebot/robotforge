@@ -695,16 +695,16 @@ def test_real_arms_pick_a_cube_into_a_bin(pg, picker, layout):
     assert pg.behaviors.placed("cube", info["region"])["success"]
 
 
-# The SO-100 picks in front of it (its -y), within about 0.27 m: cube and tray (x, y) around its base at (0, -0.045).
+# The SO-100 picks in front of it (+x), within about 0.27 m: cube and tray (x, y) around its base at (0.045, 0).
 SO100_LAYOUTS = {
-    "front": ([0.2, -0.15], [0.05, -0.28]),
-    "side": ([0.0, -0.3], [0.2, -0.2]),
-    "across": ([0.2, -0.1], [-0.2, -0.1]),
-    "back_across": ([-0.2, -0.15], [0.2, -0.15]),
-    "near": ([0.12, -0.18], [-0.12, -0.2]),
+    "front": ([0.15, 0.2], [0.28, 0.05]),
+    "side": ([0.3, 0.0], [0.2, 0.2]),
+    "across": ([0.1, 0.2], [0.1, -0.2]),
+    "back_across": ([0.15, -0.2], [0.15, 0.2]),
+    "near": ([0.18, 0.12], [0.2, -0.12]),
     # Beside it: its jaws came down 35 degrees across the cube and pushed it away, until they turned square to it.
-    "beside": ([0.22, 0.0], [0.05, -0.28]),
-    "beside_far": ([0.25, 0.05], [0.0, -0.3]),
+    "beside": ([0.0, 0.22], [0.28, 0.05]),
+    "beside_far": ([-0.05, 0.25], [0.3, 0.0]),
 }
 
 

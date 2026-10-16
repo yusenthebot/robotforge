@@ -676,8 +676,8 @@ def test_shift_and_rotate_place_a_named_mount(pg):
     trunk = d.xmat[m.body("go2/base").id].reshape(3, 3)
     local = trunk.T @ (d.xpos[base] - d.xpos[m.body("go2/base").id])
     assert local[0] == pytest.approx(0.1, abs=0.03) and local[1] == pytest.approx(0.03, abs=0.03)
-    yaw = (trunk.T @ d.xmat[base].reshape(3, 3))[:, 0]
-    np.testing.assert_allclose(yaw, [0, 1, 0], atol=1e-6)  # turned 90 degrees to the left
+    front = trunk.T @ d.xmat[base].reshape(3, 3) @ [0, -1, 0]  # the SO-100's model faces its -y
+    np.testing.assert_allclose(front, [0, 1, 0], atol=1e-6)  # turned 90 degrees to the left of the dog's front
     assert pg.behaviors.arms("go2") == ["go2/left_arm"]
 
 
