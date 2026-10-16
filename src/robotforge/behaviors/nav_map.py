@@ -41,7 +41,9 @@ CLEARANCE = 0.05  # m above the robot's top that something hanging over it must 
 # park bench (seat 0.45 m) or into a shelf (boards every 0.4 m), gets stuck there, and nobody sent it to the
 # shelf to crawl inside it. Tables (0.72 to 0.75 m) stay open to small robots.
 MIN_HEADROOM = 0.6
-PUSHABLE = 0.5  # a loose object weighing at most this share of the robot is pushed aside, not driven around
+# A loose object weighing at most this share of a wheeled robot is pushed aside, not driven around. Legged robots
+# go round every loose thing on the floor: the template dog walked into a 0.3 kg ball in the park and fell.
+PUSHABLE = 0.5
 TILTED = 1e-3  # a geom whose top face leans more than this (1 - cos) is a slope, not a flat step
 
 # Why a cell is lethal; where several reasons hold, the higher number is kept (a wall on a slope is a wall).
@@ -83,6 +85,7 @@ class Body:
     mass: float  # kg
     step: float  # m, the highest step it climbs
     slope: float  # rad, the steepest slope it climbs
+    pushes: bool = False  # it rolls, and pushes light loose objects aside (see PUSHABLE)
 
     @property
     def need(self) -> float:
@@ -118,7 +121,8 @@ def measure_body(model: mujoco.MjModel, data: mujoco.MjData, robot: str, kind: K
         step = FLAT_STEP
     slope = math.radians(SLOPE_DEG.get(kind, OTHER_SLOPE_DEG))
     mass = float(model.body_subtreemass[root])
-    return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope)
+    pushes = kind in (Kind.ROVER, Kind.BALANCER)
+    return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope, pushes)
 
 
 def footprint_radius(model: mujoco.MjModel, data: mujoco.MjData, robot: str) -> float:
@@ -393,8 +397,8 @@ def static_layer(model: mujoco.MjModel, data: mujoco.MjData, robot: str, grid: G
 def dynamic_columns(
     model: mujoco.MjModel, data: mujoco.MjData, robot: str, body: Body, grid: Grid, names: list[str], skip=()
 ) -> list[Columns]:
-    """Columns of what moves: other robots, and loose objects too heavy to push (see PUSHABLE). Geoms of bodies
-    in `skip` are left out."""
+    """Columns of what moves: other robots, and loose objects the robot does not push aside (see PUSHABLE).
+    Geoms of bodies in `skip` are left out."""
     own = set(robot_geoms(model, robot))
     columns = []
     for g in range(model.ngeom):
@@ -404,7 +408,8 @@ def dynamic_columns(
         if int(model.body_weldid[b]) == 0 or int(model.body_rootid[b]) in skip:
             continue
         root = int(model.body_rootid[b])
-        if "/" not in _body_name(model, root) and float(model.body_subtreemass[root]) <= PUSHABLE * body.mass:
+        light = float(model.body_subtreemass[root]) <= PUSHABLE * body.mass
+        if body.pushes and light and "/" not in _body_name(model, root):
             continue  # a loose object it can push aside
         found = geom_columns(model, data, g, grid, _name_index(names, _owner(model, g)))
         if found is not None:

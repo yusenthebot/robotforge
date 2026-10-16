@@ -175,14 +175,28 @@ def test_what_a_robot_climbs_decides_steps_and_slopes(pg):
     assert nav_map.SLOPE in _codes(rover, (-3.0, -2.8), (2.9, 3.1))  # 20 degrees
 
 
-def test_light_loose_objects_are_pushed_aside_and_heavy_ones_driven_round(pg):
-    pg.add_robot("dog", template="quadruped")
+def test_wheels_push_light_loose_objects_aside_and_legs_go_round_them(pg):
+    pg.add_robot("rover", template="rover")
+    pg.add_robot("dog", template="quadruped", pos=[0.0, -1.5])
     pg.add_object("ball", shape="sphere", pos=[1.0, 0.0], size=[0.15], mass=0.2)
     pg.add_object("crate", shape="box", pos=[0.0, 1.2], size=[0.4, 0.4, 0.3], mass=5.0)
-    nav = _map(pg, "dog")
-    assert _codes(nav, (0.9, 1.1), (-0.1, 0.1)) == {nav_map.FREE} and _fits(nav, 1.0, 0.0)
-    assert nav_map.OBSTACLE in _codes(nav, (-0.25, 0.25), (0.95, 1.45)) and not _fits(nav, 0.0, 1.2)
-    assert not nav.free[nav.ground > 0.2].any()  # its top has room for the dog, but no way up
+    rover, dog = _map(pg, "rover"), _map(pg, "dog")
+    assert _codes(rover, (0.9, 1.1), (-0.1, 0.1)) == {nav_map.FREE} and _fits(rover, 1.0, 0.0)  # 0.2 of 0.69 kg
+    assert not _fits(dog, 1.0, 0.0)  # a dog would step on it
+    for nav in (rover, dog):
+        assert nav_map.OBSTACLE in _codes(nav, (-0.25, 0.25), (0.95, 1.45)) and not _fits(nav, 0.0, 1.2)
+        assert not nav.free[nav.ground > 0.2].any()  # the crate's top has room, but no way up
+
+
+def test_a_dog_walks_round_a_ball_in_its_way_instead_of_onto_it(pg):
+    """Regression: loose objects up to half its weight were left off a dog's map as things it pushes aside. In the
+    park the template dog walked straight into the 0.3 kg red ball (20 cm, nearly its own height) and fell over."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0], yaw=0)
+    pg.add_object("ball", shape="sphere", pos=[1.2, 0.0], size=[0.2], mass=0.3, color="red")
+    trip = _trip(pg, "dog", [2.6, 0.0])
+    assert trip.result()["arrived"], trip.result()
+    assert pg.behaviors.pose("dog")["upright"]
+    assert max(abs(y) for _, y in trip.plan.points) > 0.15  # it planned round the ball
 
 
 # ---- trips --------------------------------------------------------------------------------------------------------
