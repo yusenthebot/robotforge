@@ -28,6 +28,9 @@ from robotforge.sim.geometry import collides, lowest_point
 
 OVERLAP_ERROR = 0.004  # m: deeper than this, the mount and its carrier are inside each other (as the builder's check)
 OPTIONS = ("timestep", "integrator", "cone", "impratio")  # physics options a mounted robot takes from its carrier
+# m: where rays look for the surface a mount stands on, around the middle of the carrier's top: an arm's base is about
+# 7 cm across (PiPER), and resting on the highest point under it, it neither floats over a dip nor sinks into a ridge.
+FOOTPRINT = [(0.0, 0.0), (0.03, 0.0), (-0.03, 0.0), (0.0, 0.03), (0.0, -0.03)]
 
 
 class Mount(Protocol):
@@ -176,26 +179,40 @@ def _place(
 
 
 def _top(spec: mujoco.MjSpec, home_qpos: dict[str, float]) -> np.ndarray:
-    """The middle of the main (root) body's top, in its frame: above the middle of its collision shapes, at the
-    highest point of any of its shapes there (the visible ones too, so nothing mounted sinks into a shell)."""
+    """The middle of the main (root) body's top, in its frame: above the middle of its collision shapes, where rays
+    dropped onto its shapes (the visible ones too, so nothing mounted sinks into a shell) meet the highest surface
+    under a mount's footprint."""
     model = spec.compile()
     data = _posed(model, home_qpos)
     body = 1  # the first body of the world, the robot's root
     rot, origin = data.xmat[body].reshape(3, 3), data.xpos[body]
-    boxes: list[tuple[np.ndarray, bool]] = []
-    for g in range(model.ngeom):
-        if int(model.geom_bodyid[g]) != body:
-            continue
-        corners = _corners(model, data, g)
-        boxes.append(((corners - origin) @ rot, collides(model, g)))
-    if not boxes:
+    shapes = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == body]
+    if not shapes:
         return np.zeros(3)
-    solid = [c for c, hard in boxes if hard] or [c for c, _ in boxes]
+    boxes = {g: (_corners(model, data, g) - origin) @ rot for g in shapes}
+    solid = [boxes[g] for g in shapes if collides(model, g)] or list(boxes.values())
     points = np.vstack(solid)
     middle = (points[:, :2].min(axis=0) + points[:, :2].max(axis=0)) / 2
-    over = [c for c, _ in boxes if np.all(c[:, :2].min(axis=0) <= middle) and np.all(middle <= c[:, :2].max(axis=0))]
-    top = max(float(c[:, 2].max()) for c in (over or solid))
+    above = float(np.vstack(list(boxes.values()))[:, 2].max()) + 0.1
+    down = rot @ np.array([0.0, 0.0, -1.0])
+    heights = []
+    for dx, dy in FOOTPRINT:
+        start = origin + rot @ np.array([middle[0] + dx, middle[1] + dy, above])
+        hits = [_ray(model, data, g, start, down) for g in shapes]
+        hits = [h for h in hits if h >= 0]
+        if hits:
+            heights.append(above - min(hits))
+    top = max(heights) if heights else float(points[:, 2].max())
     return np.array([middle[0], middle[1], top])
+
+
+def _ray(model: mujoco.MjModel, data: mujoco.MjData, g: int, start: np.ndarray, down: np.ndarray) -> float:
+    """How far down from `start` the ray meets geom `g`, or -1."""
+    if int(model.geom_type[g]) == int(mujoco.mjtGeom.mjGEOM_MESH):
+        return float(mujoco.mj_rayMesh(model, data, g, start, down))
+    return float(
+        mujoco.mju_rayGeom(data.geom_xpos[g], data.geom_xmat[g], model.geom_size[g], start, down, model.geom_type[g])
+    )
 
 
 def _corners(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:

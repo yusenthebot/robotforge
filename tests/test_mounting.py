@@ -81,6 +81,25 @@ def test_an_arm_rides_on_top_of_a_dogs_back(pg):
     assert pg.behaviors.pose("go2")["upright"]
 
 
+def test_a_mount_rests_on_the_surface_under_it_not_on_a_shells_bounding_box():
+    """Regression: the top came from the bounding boxes of the shapes over the middle, and the real Go2's shell is
+    curved, so a PiPER floated 3 cm over its back. Rays dropped onto the shapes find the surface itself."""
+    from robotforge.design import mounting
+
+    spec = mujoco.MjSpec.from_string(
+        """<mujoco><worldbody><body name="trunk"><freejoint/>
+        <geom type="box" size="0.2 0.1 0.04"/>
+        <geom type="box" size="0.2 0.05 0.005" pos="0 0 0.045" euler="0 25 0" contype="0" conaffinity="0" group="2"/>
+        </body></worldbody></mujoco>"""
+    )
+    top = mounting._top(spec, {})
+    # The slanted plate's bounding box reaches 0.13 m. Its top face passes 0.005 m above its centre (0.045 m) and drops
+    # by tan(25 deg) per metre along x: at the footprint's back edge (x = -0.03 m) it is 6.5 cm high.
+    a = np.radians(25)
+    surface = 0.045 + 0.005 * np.cos(a) + (0.03 + 0.005 * np.sin(a)) * np.tan(a)
+    assert top[2] == pytest.approx(surface, abs=1e-4) and top[2] < 0.07
+
+
 def test_the_dog_still_walks_with_the_arm_on_its_back(pg):
     pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
     _run(pg, 1.0)
