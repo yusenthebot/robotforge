@@ -62,8 +62,8 @@ SPIN_GAIN = math.radians(10.0)
 # room to turn, or until the way on is no longer behind it (less than STILL_BEHIND off), at a bend, where it turns on
 # the spot as before. Backing round the bends of a maze of 0.6 m corridors, its tail swinging out, the Go2 fell more
 # often than it turned there (round 45 degree bends too); backing from 120 degrees off, half turned, it went sideways
-# off its path into a desk.
-BEHIND, STILL_BEHIND = math.radians(160.0), math.radians(145.0)
+# off its path into a desk. Not backing from 155 degrees off, a rover from parts turned against a hedge and stuck.
+BEHIND, STILL_BEHIND = math.radians(150.0), math.radians(145.0)
 CRAMPED = 0.05
 BACK_SHARE = 0.5
 BACK_TURN = 0.4  # of its turn rate, at most, steering its tail along the path
