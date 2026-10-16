@@ -41,14 +41,14 @@ switch's move, idle and keys paths turn left once, after one lead: one sequence 
 at some points of the stride and not others.
 
 leads: plays walks kept with switch --keep through each path, both turn directions, after each of 25 leads of
-walking (2.0 to 4.48 s, every update of a 2 Hz stride once): move and idle as above (a 1 s turn, then 2 s of
-walking, then a stop and 2 s of standing); quick, a key change by hand: W let go, A or D pressed one update later
-for a second, let go, W pressed one update later; and gap: the same with 0.04 to 0.3 s between the keys. (Holding W
-while A is down plays exactly as move: a turn wins over W, and move's stop is skipped as the next call comes at
-once.) Each sequence starts from standing in a reset world. It reports the falls (trunk past 60 degrees at any
-update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the walk before the turn),
-the 1 s turn's share of the learned rate (per walk the median over its leads, and over all tries how many reached
---min-share), and per robot how many distinct sequences fell after the walk before the turn.
+walking (2.0 to 4.48 s, every update of a 2 Hz stride once): move and idle as above (a 1 s turn, then 2 to 2.48 s of
+walking, every update of a stride once too, then a stop and 2 s of standing); quick, a key change by hand: W let go,
+A or D pressed one update later for a second, let go, W pressed one update later; and gap: the same with 0.04 to 0.3
+s between the keys. (Holding W while A is down plays exactly as move: a turn wins over W, and move's stop is skipped
+as the next call comes at once.) Each sequence starts from standing in a reset world. It reports the falls (trunk
+past 60 degrees at any update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the
+walk before the turn), the 1 s turn's share of the learned rate (per walk the median over its leads, and over all
+tries how many reached --min-share), and per robot how many distinct sequences fell after the walk before the turn.
 """
 
 from __future__ import annotations
@@ -342,9 +342,15 @@ GAPS = (0.04, 0.1, 0.16, 0.22, 0.3)  # s between letting go of W and pressing A 
 # 0.02 s until this much has passed (0.02 itself sometimes came to two, the sum a hair short).
 QUICK = 0.01  # s
 PATHS = ("move", "idle", "quick", "gap")
+# Seconds of walking after the turn, one per lead, over a stride in another order than the leads: a walk started after
+# a turn starts its stride afresh, so a fixed 2 s stopped it at one point of its stride every time. Waiting 0.06 s
+# before stopping instead of 0.1 moved that point, and one A1 walk's stops after the turn went from 3 falls in 50 to 11.
+WALK_ON = tuple(round(2.0 + 0.02 * ((7 * k) % 25), 2) for k in range(25))
 
 
-def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> list[tuple[str, float, float, float]]:
+def _sequence(
+    path: str, turn: float, lead: float, idle: float, gap: float, on: float = 2.0
+) -> list[tuple[str, float, float, float]]:
     """The calls of one sequence: (what, speed, turn, then seconds of sim time). "move" is a move call (a key change),
     "stop" a stop; the turn command's seconds are the 1 s turn measured."""
     if path == "move":  # the MCP move tool with seconds, the next call at once
@@ -353,7 +359,7 @@ def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> l
             ("stop", 0, 0, 0.0),
             ("move", 0.0, turn, TURN_SECONDS),
             ("stop", 0, 0, 0.0),
-            ("move", 0.2, 0.0, 2.0),
+            ("move", 0.2, 0.0, on),
             ("stop", 0, 0, STAND_SECONDS),
         ]
     if path == "idle":  # the same with the viewer open: the sim runs on while the agent thinks
@@ -362,7 +368,7 @@ def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> l
             ("stop", 0, 0, idle),
             ("move", 0.0, turn, TURN_SECONDS),
             ("stop", 0, 0, idle),
-            ("move", 0.2, 0.0, 2.0),
+            ("move", 0.2, 0.0, on),
             ("stop", 0, 0, STAND_SECONDS),
         ]
     if path == "quick":  # W let go and A or D pressed one update later for a second, then W again as quickly
@@ -373,7 +379,7 @@ def _sequence(path: str, turn: float, lead: float, idle: float, gap: float) -> l
         ("move", 0.0, 0.0, gap),
         ("move", 0.0, turn, TURN_SECONDS),
         ("move", 0.0, 0.0, gap),
-        ("move", 0.2, 0.0, 2.0),
+        ("move", 0.2, 0.0, on),
         ("move", 0.0, 0.0, STAND_SECONDS),
     ]
 
@@ -396,7 +402,7 @@ def run_leads(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
         for side, turn in (("L", 1.0), ("R", -1.0)):
             for k, lead in enumerate(LEADS):
                 pg.session.reset()
-                calls = _sequence(path, turn, lead, opts["idle"], GAPS[k % len(GAPS)])
+                calls = _sequence(path, turn, lead, opts["idle"], GAPS[k % len(GAPS)], WALK_ON[k])
                 fell, turned = _play(pg, robot, calls)
                 share = round(turn * turned / rate, 2) if turned is not None and rate > 0 else None
                 out.append(
