@@ -304,7 +304,7 @@ class Playground:
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
-        dropped: list[str] = []
+        kept: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -318,17 +318,24 @@ class Playground:
                 robot.yaw = yaw
             if build is not None:
                 entry = _built(robot)
-                if (entry.build or {}).get("parts") and "parts" not in build:
-                    # An agent in the eval sent build={"servo": ..., "base": {...}} to give its hexapod stronger
-                    # servos, was told only "built from 1 parts (0 joints, 0 actuators)" and sent all 19 again.
-                    dropped.append(
-                        f'{robot.name}: this build has no "parts", and a build is the whole robot, so its parts are '
-                        f"gone (undo brings them back); to change one setting keep them, use update_part"
-                        f'({robot.name!r}, "robot" or "base", ...)'
+                if not (entry.build or {}).get("parts") or "parts" in build:
+                    entry.build = build
+                    return
+                # A build without parts changes the fields it gives and keeps the parts: an agent in the eval sent
+                # build={"servo": ..., "base": {...}} to give its hexapod stronger servos, got a bare box and had
+                # to send all 19 parts again.
+                if not build:
+                    raise PlaygroundError(
+                        f"build {{}} changes nothing on {robot.name}: give the fields to change (servo, base, ...), or "
+                        '"parts" to replace the whole robot'
                     )
-                entry.build = build
+                entry.build = _merged_build(entry.build, build)
+                kept.append(
+                    f'{robot.name}: kept its parts and changed only {", ".join(build)}; a build without "parts" '
+                    'changes the fields it gives (send "parts" to replace them)'
+                )
 
-        return _noted(self._edit(change), _yaw_note(yaw), *dropped)
+        return _noted(self._edit(change), _yaw_note(yaw), *kept)
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -823,6 +830,19 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
     if max(abs(v) for v in values) / 100 <= limit:
         text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
     raise PlaygroundError(text)
+
+
+def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """A robot's build with the fields of `new` changed and its parts kept, as update_part(robot, "robot" or "base")
+    changes them, so null puts a field back to its default and an unknown field is refused the same way."""
+    robot_wide = {key: value for key, value in new.items() if key != "base"}
+    out = build_edit.update_part(old, "robot", robot_wide) if robot_wide else old
+    base = new.get("base")
+    if isinstance(base, dict) and base:
+        out = build_edit.update_part(out, "base", base)  # {"base": {"mass": 0.8}} keeps its shape and size
+    elif "base" in new:
+        out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
+    return out
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
