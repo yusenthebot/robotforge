@@ -69,6 +69,12 @@ SURE = 0.7
 # gripper-to-cube gap held at 5 mm for 20 s (an elliptic cone with impratio 10 still crept 0.15 mm a second).
 # It costs about a third more time per roll-out (an IK pick 0.16 -> 0.21 s). Measured 2026-10-17.
 NOSLIP = 5
+# A demonstration's stretch in which nothing moves (see Recording) keeps this many samples, 1 s: longer than the
+# pauses of a pick (the fingers close in 0.3 s; the scripted learner waits 0.5 s to find the toggle), so those
+# are recorded whole.
+PAUSE_KEEP = 10
+STILL = 0.001  # m: less than this between two samples is not a move (the held arm sags 0.05 mm a second)
+MAX_ROWS = 1500  # samples, 150 s of moving: a demonstration takes 5 to 40 s; past this the recording stops
 
 # The network: three small nets whose answers are averaged. One net's success swung between 20 and 57% with
 # its random start (4 demonstrations); three, with weight decay, held 57 to 75% (and 88 to 95% at 8).
@@ -322,15 +328,40 @@ class Demo:
 
 @dataclass
 class Recording:
-    """Samples of one demonstration as it happens: (observation, the command just given, fingers moving)."""
+    """Samples of one demonstration as it happens: (observation, the command just given, fingers moving).
+
+    A recording opens with the lesson, with New cube and with Reset, so the time a learner spends reading before
+    their first move would be recorded too: two minutes of it made 1250 samples of the arm standing at home,
+    four times the real samples of all five demonstrations, and took the network from 83% to 71% at the test
+    spots (the scripted learner, 2026-10-17). A stretch where nothing moves keeps only its first PAUSE_KEEP
+    samples: they all see the same and are labelled with the same move (label), so the rest added weight and
+    nothing else (trimmed, the same two minutes gave 62 samples and 79%). The time before the first move is
+    not counted in the demonstration's seconds."""
 
     spot: np.ndarray
     started: float
     correction: bool = False
     rows: list[tuple[np.ndarray, np.ndarray, bool]] = field(default_factory=list)
+    still: int = 0  # samples in a row in which nothing moved
+    moved: bool = False  # the learner has made their first move
+    full: bool = False  # MAX_ROWS reached: the recording takes no more
 
-    def add(self, obs: np.ndarray, target: np.ndarray, grip: float, busy: bool) -> None:
-        self.rows.append((obs.copy(), np.array([*target, grip], float), busy))
+    def add(self, obs: np.ndarray, target: np.ndarray, grip: float, busy: bool, now: float | None = None) -> None:
+        row = (obs.copy(), np.array([*target, grip], float), busy)
+        # the learner's first command, not the arm settling into its start pose
+        self.moved = self.moved or bool(self.rows and not np.array_equal(self.rows[-1][1], row[1]))
+        if self.rows and _still(self.rows[-1], row):
+            self.still += 1
+            if self.still > PAUSE_KEEP:
+                if not self.moved and now is not None:
+                    self.started = now - PAUSE_KEEP * DT  # the demonstration has not begun yet
+                return
+        else:
+            self.still = 0
+        if len(self.rows) >= MAX_ROWS:
+            self.full = True
+            return
+        self.rows.append(row)
 
     def finish(self, now: float) -> Demo:
         X, Y = label(self.rows)
@@ -351,23 +382,37 @@ def label(rows: Sequence[tuple[np.ndarray, np.ndarray, bool]]) -> tuple[np.ndarr
     the way down to the cube were labelled "close": the copies closed 2 to 3 cm over the cube's middle and
     pinched its top or missed it (found replaying demonstrations recorded through the viewer, 2026-10-17)."""
     X, Y = [], []
+    if not rows:
+        return np.zeros((0, 7)), np.zeros((0, 4))
+    # Every sample looks ahead along the commands after it: as arrays, so a long demonstration labels in
+    # milliseconds (one row at a time, 3000 samples held the physics up for 3 s).
+    cmds = np.array([cmd for _, cmd, _ in rows], float)
     for i, (obs, cmd, busy) in enumerate(rows):
         if busy:
             continue
         hand = obs[3:6]
-        grip_now = rows[i - 1][1][3] if i else cmd[3]
-        action = rows[-1][1]
-        for _, later, _ in rows[i:]:
-            if later[3] != grip_now:
-                there = np.linalg.norm(later[:3] - hand) <= ARRIVED
-                action = later if there else np.array([*later[:3], grip_now])
-                break
-            if np.linalg.norm(later[:3] - hand) >= LOOK:
-                action = np.array([*later[:3], grip_now])
-                break
+        grip_now = cmds[i - 1, 3] if i else cmd[3]
+        later = cmds[i:]
+        changed = later[:, 3] != grip_now
+        far = np.linalg.norm(later[:, :3] - hand, axis=1) >= LOOK
+        first_change = int(np.argmax(changed)) if changed.any() else len(later)
+        first_far = int(np.argmax(far)) if far.any() else len(later)
+        if first_change < len(later) and first_change <= first_far:
+            there = np.linalg.norm(later[first_change, :3] - hand) <= ARRIVED
+            action = later[first_change] if there else np.array([*later[first_change, :3], grip_now])
+        elif first_far < len(later):
+            action = np.array([*later[first_far, :3], grip_now])
+        else:
+            action = cmds[-1]
         X.append(obs)
         Y.append(action)
     return np.array(X, float).reshape(-1, 7), np.array(Y, float).reshape(-1, 4)
+
+
+def _still(before: tuple[np.ndarray, np.ndarray, bool], after: tuple[np.ndarray, np.ndarray, bool]) -> bool:
+    """Nothing moved between two samples: the same command, and the cube, the gripper and its fingers within
+    STILL of where they were."""
+    return bool(np.array_equal(before[1], after[1]) and np.max(np.abs(after[0] - before[0])) < STILL)
 
 
 def stack(demos: Sequence[Demo]) -> tuple[np.ndarray, np.ndarray]:

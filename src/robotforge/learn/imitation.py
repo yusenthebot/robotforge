@@ -663,7 +663,15 @@ class ImitationLesson(Lesson):
         ctx, rec = self.ctx, self.recording
         if ctx is None or rec is None:
             return
-        rec.add(obs, follow.target, follow.grip, busy)
+        rec.add(obs, follow.target, follow.grip, busy, float(data.time))
+        if rec.full:
+            self.recording = None
+            ctx.results["summary"] = _text(
+                f"这次示范动了 {bc.MAX_ROWS * bc.DT:.0f} 秒还没放进盒子，不再记录。点「新方块」再来。",
+                f"This demonstration has been moving for {bc.MAX_ROWS * bc.DT:.0f} s without reaching the bin; "
+                "it is no longer recorded. Press New cube to start again.",
+            )
+            return
         # The panel shows a pair from a second ago: a sample's action is what the learner did after it.
         X, Y = bc.label(rec.rows[-PANEL_LAG:])
         if len(X):

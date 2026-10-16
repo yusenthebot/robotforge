@@ -122,6 +122,19 @@ def test_a_held_cube_stays_in_the_gripper_at_a_learners_pace(pg):
     assert live["cube"][2] - bc.DESK > HIGH - 0.03
 
 
+def test_time_before_the_first_move_is_not_recorded(pg):
+    """A learner reads the step for a minute before moving: the demonstration keeps a second of that, not 600
+    samples of the arm standing at home (which outnumbered the real samples and set the network back)."""
+    p = _player(pg)
+    p.play(60.0)
+    _show_a_pick(p)
+    demo = p.lesson.demos[0]
+    assert len(demo.X) <= 100 and demo.seconds < 15.0
+    # at home: the first samples while the fingers open and the arm settles, then PAUSE_KEEP of standing still
+    standing = [k for k in range(len(demo.X)) if np.linalg.norm(demo.X[k, 3:6] - demo.X[0, 3:6]) < 0.001]
+    assert len(standing) <= bc.PAUSE_KEEP + 2
+
+
 def test_labels_skip_pauses_and_close_only_where_the_learner_closed():
     """A pause is labelled with the move that ended it; the way down is labelled 'go down', not 'close' (the copies
     closed 2 to 3 cm over the cube when the last 3 cm of the way down were labelled with the grip change)."""
