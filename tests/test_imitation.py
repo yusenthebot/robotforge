@@ -16,7 +16,17 @@ import pytest
 from robotforge.learn import cloning as bc
 from robotforge.learn import imitation
 from robotforge.learn.engine import LessonError
-from robotforge.learn.playthrough import Player, Press, Set, _show_a_pick, _show_more, _take_it_from_here
+from robotforge.learn.playthrough import (
+    GRASP,
+    HIGH,
+    Player,
+    Press,
+    Set,
+    _drag,
+    _show_a_pick,
+    _show_more,
+    _take_it_from_here,
+)
 from robotforge.playground import Playground
 
 
@@ -92,6 +102,24 @@ def test_a_demonstration_is_recorded_as_see_do_pairs(pg):
     table = update["live"]["table"]
     assert [r["label"]["en"] for r in table["rows"] if "label" in r] == ["#1"]
     assert {"demos", "tests"} <= set(update["live"].get("drawing") or lesson.drawing())
+
+
+def test_a_held_cube_stays_in_the_gripper_at_a_learners_pace(pg):
+    """Grasped, lifted 10 cm and held still for 15 s: still in the gripper. Without the no-slip pass (cloning.NOSLIP)
+    it crept down 3.6 mm a second and was back on the desk 7.5 s after the lift (measured 2026-10-17)."""
+    p = _player(pg)
+    p.play(0.1)
+    x, y, _ = p.update["live"]["cube"]
+    _drag(p, x, y, HIGH)
+    _drag(p, x, y, GRASP)
+    p.play(0.5)
+    Set(grip=1).apply(p)
+    p.play(0.5)
+    _drag(p, x, y, HIGH)
+    p.play(15.0)
+    live = p.update["live"]
+    assert np.linalg.norm(np.subtract(live["hand"], live["cube"])) < 0.01
+    assert live["cube"][2] - bc.DESK > HIGH - 0.03
 
 
 def test_labels_skip_pauses_and_close_only_where_the_learner_closed():

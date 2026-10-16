@@ -63,6 +63,12 @@ SETTLE = 0.5  # s after the cube lands in the bin with the gripper open, before 
 # at 0.5 (71% at 8 demonstrations, 83% at 0.7); with it the threshold matters little (12 sets of 5
 # demonstrations: 83.0% at 0.5, worst set 54%; 83.3% at 0.7, worst set 62%).
 SURE = 0.7
+# MuJoCo's soft contacts let a held cube creep down between the fingers: lifted 10 cm through the sliders and held
+# still, it slid 3.6 mm a second and was back on the desk 7.5 s after the lift, so a learner carrying at their own
+# pace (one slider at a time, a pause between moves: 10 to 15 s) lost it. The no-slip pass stops the creep: the
+# gripper-to-cube gap held at 5 mm for 20 s (an elliptic cone with impratio 10 still crept 0.15 mm a second).
+# It costs about a third more time per roll-out (an IK pick 0.16 -> 0.21 s). Measured 2026-10-17.
+NOSLIP = 5
 
 # The network: three small nets whose answers are averaged. One net's success swung between 20 and 57% with
 # its random start (4 demonstrations); three, with weight decay, held 57 to 75% (and 88 to 95% at 8).
@@ -129,7 +135,9 @@ def build_model() -> mujoco.MjModel:
     for joint in spec.joints:
         if joint.name.startswith(f"{ARM}/"):
             joint.actgravcomp = True
-    return spec.compile()
+    model = spec.compile()
+    model.opt.noslip_iterations = NOSLIP
+    return model
 
 
 def in_region(xy: Sequence[float]) -> bool:
