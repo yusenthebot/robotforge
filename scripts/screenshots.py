@@ -294,6 +294,28 @@ def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
 
+def _built(names: tuple[str, ...], spacing: float = 0.62) -> Callable[[Any], None]:
+    """A world with some of the look tests' robots built from parts, in a row along y."""
+
+    def world(pg: Any) -> None:
+        sys.path.insert(0, str(ROOT / "tests"))
+        from built_robots import GALLERY
+
+        for i, name in enumerate(names):
+            pg.add_robot(name, build=GALLERY[name], pos=[0.0, spacing * (i - (len(names) - 1) / 2)])
+
+    return world
+
+
+def _materials(pg: Any) -> None:
+    """One small robot four times: printed PLA, anodised aluminium, carbon fibre and rubber."""
+    sys.path.insert(0, str(ROOT / "tests"))
+    from test_builder_looks import MATERIAL_PROBE
+
+    for i, material in enumerate(("pla", "aluminum", "carbon", "rubber")):
+        pg.add_robot(material, build={**MATERIAL_PROBE, "material": material}, pos=[0.0, 0.3 * i - 0.45])
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -323,6 +345,13 @@ SHOTS = [
         settle=0.2,
     ),
     Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
+    # Robots built from parts, dressed: a dog, a sensor rover, a carbon spider and a dog carrying an arm.
+    Shot(
+        "built_robots",
+        _built(("dog", "scout", "spider", "centaur")),
+        page="window.__robotforge.lookAt([1.65, -0.3, 0.72], [0.0, 0.0, 0.1]);",
+    ),
+    Shot("built_materials", _materials, page="window.__robotforge.lookAt([0.75, -0.25, 0.55], [0.0, 0.0, 0.12]);"),
 ]
 
 
