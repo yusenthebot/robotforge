@@ -220,7 +220,7 @@ class Layout:
             pts = part.pos + (part.rot @ (part.local @ corners.T)).T
             self._keep(part.parent, pts.min(axis=0), pts.max(axis=0))
         act = actuator_for(build, part.spec)
-        if act is None or part.spec.shape == "wheel":
+        if act is None or part.spec.shape == "wheel" or not build.servo_caps:
             return
         actuator = components.actuator(act.model)
         if is_servo_case(actuator) and part.spec.joint.type == "hinge":

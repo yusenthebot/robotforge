@@ -271,8 +271,6 @@ def _actuator_housing(
     if visible:  # the case on the parent, the horn turning with the part
         vis.hide(knuckle)
         looks.servo(vis, parent, body, part, actuator, axis, layout)
-    elif part.spec.shape not in ("wheel", "caster"):  # servos not drawn: the hinge still shows as a joint
-        looks.passive(vis, body, axis, _cover_radius(part.spec))
 
 
 def _cover_radius(spec: PartSpec) -> float:
