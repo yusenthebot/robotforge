@@ -29,13 +29,15 @@ def hanging_arm(
     color: str,
     grip_color: str,
     home: Sequence[float] = (0, -30, -70, 100),
+    mirror: bool = True,
 ) -> list[dict[str, Any]]:
     """Two arms built from parts that hang from shoulders on either side: a turn about the upright axis (so the arm
     swings toward a target), shoulder and elbow pitch, a wrist and a gripper. The left arm is written once at `at`
     (meters on the parent, y > 0) and mirrored, so both stay alike when one is changed. Parts are left_arm,
     left_upper, left_fore, left_wrist, left_hand and their right_ copies; the arms answer to "<robot>/left_hand" and
     "<robot>/right_hand". `home` is [turn, shoulder, elbow, wrist] in degrees: a negative shoulder raises the arm
-    forward, a negative elbow bends the forearm up, and the default holds the hand in front, pointing down."""
+    forward, a negative elbow bends the forearm up, and the default holds the hand in front, pointing down. Hung from
+    a part that is mirrored itself (a shoulder), pass mirror=False: the parent's copy carries the other arm."""
     turn, shoulder, elbow, wrist = home
     return [
         {
@@ -47,7 +49,7 @@ def hanging_arm(
             "size": [0.036, 0.022],
             "direction": "down",
             "color": GRAPHITE,
-            "mirror": True,
+            "mirror": mirror,
         },
         {
             "name": "left_upper",

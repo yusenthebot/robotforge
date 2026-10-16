@@ -11,7 +11,10 @@ def centaur() -> dict[str, Any]:
     """Four legs that walk on the quadruped gait, and an upper body with a head and two arms with grippers.
 
     The legs are the builder's dog legs, a little longer. The torso stands on the front of the body, over the front
-    legs, with the shoulders low enough that the arms reach the ground in front of it.
+    legs, with the shoulders low enough that the arms reach the ground in front of it. The shoulders are broad: hung
+    from the sides of the torso the arms ran into the body and the front thighs right under them, and the left hand
+    reached 4 floor points on a 10 cm grid; 7.5 cm further out it reaches 14. At home the forearms point forward with
+    the hands 13 cm up, clear of the ground while it walks.
     """
     return {
         "color": "#3a7ca5",
@@ -82,7 +85,28 @@ def centaur() -> dict[str, Any]:
                     {"type": "camera", "name": "right_eye", "at": [0.034, -0.016, 0.042]},
                 ],
             },
-            *hanging_arm("torso", [0, 0.087, 0.118], upper=0.18, fore=0.18, color=IVORY, grip_color="#3a7ca5"),
+            {  # a light bracket each side, out past the body and the front thighs
+                "name": "left_shoulder",
+                "parent": "torso",
+                "at": [0, 0.065, 0.118],
+                "joint": "fixed",
+                "shape": "cylinder",
+                "size": [0.042, 0.1],
+                "mass": 0.03,
+                "direction": "left",
+                "color": "main",
+                "mirror": True,
+            },
+            *hanging_arm(
+                "left_shoulder",
+                [0, 0.078, -0.021],
+                upper=0.18,
+                fore=0.18,
+                color=IVORY,
+                grip_color="#3a7ca5",
+                home=(0, -20, -110, 130),  # forearms forward, hands 13 cm up: held in, it walks a little faster
+                mirror=False,
+            ),
         ],
     }
 
