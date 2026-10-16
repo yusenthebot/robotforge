@@ -136,6 +136,26 @@ def test_a_mirrored_leg_is_the_reflection_of_the_original():
     )
 
 
+def test_a_part_colored_main_follows_the_robot_color(pg):
+    """Parts in a design's accent color had it written out, so recoloring the robot changed only its base and wheel
+    rims; "main" makes a part follow the robot's color."""
+    from robotforge.design import components
+
+    build = copy.deepcopy(DOG)
+    build["parts"][1]["color"] = "main"  # the thighs
+    pg.add_robot("dog", build=build)
+
+    def thigh_is(color: str) -> bool:
+        m = pg.session.model
+        body = m.body("dog/left_thigh_1").id
+        rgba = [m.geom_rgba[g] for g in range(m.ngeom) if m.geom_bodyid[g] == body]
+        return any(np.allclose(c, components.color(color), atol=1e-3) for c in rgba)
+
+    assert thigh_is("orange")
+    pg.update_part("dog", "robot", {"color": "teal"})
+    assert thigh_is("teal") and not thigh_is("orange")
+
+
 def test_spawn_height_puts_the_feet_on_the_floor():
     robot = builder.build_robot(DOG)
     assert 0.1 < robot.spawn_height < 0.25

@@ -68,7 +68,8 @@ def guide() -> dict[str, Any]:
             'or {"model", "control": position|velocity|torque, "gear"}',
             "shape": f"{', '.join(SIZE_HINT)}; size per shape: {SIZE_HINT}",
             "direction": "the link grows from its joint this way (down for a leg); unset = centered on the joint",
-            "offset, color, material, mass, friction, collide": "look and physics of the shape",
+            "offset, color, material, mass, friction, collide": 'look and physics of the shape; color "main" '
+            "follows the robot's color, so recoloring the robot recolors the part",
             "foot": "true adds a rubber ball at the end",
             "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", "range"}',
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",

@@ -19,6 +19,7 @@ import numpy as np
 from robotforge.design import components
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
+    MAIN_COLOR,
     BaseSpec,
     BuildSpec,
     PartSpec,
@@ -281,7 +282,7 @@ def _shape(
     material = spec.material or ("rubber" if shape == "caster" else build.material)
     is_base = isinstance(spec, BaseSpec)
     default_rgba = accent if is_base else (DARK if shape in ("wheel", "caster") else SHELL)
-    rgba = components.color(spec.color) if spec.color is not None else default_rgba
+    rgba = _rgba(spec.color, default_rgba, accent)
     kwargs: dict = {"rgba": rgba}
     if spec.mass is not None:
         kwargs["mass"] = spec.mass
@@ -354,6 +355,13 @@ def _shape(
             vis.hide(g)
             rim = min(0.006, r * 0.2, length * 0.2)
             vis.add(body, "shell", rgba, M.cylinder(r, length, segments=48, bevel=rim), (a + b) / 2, M.z_to(b - a))
+
+
+def _rgba(color, default: list[float], main: list[float]) -> list[float]:
+    """A shape's color: its own, the robot's main color ("main"), or the default for its kind."""
+    if color is None:
+        return default
+    return main if color == MAIN_COLOR else components.color(color)
 
 
 def _segment(spec: BaseSpec | PartSpec) -> tuple[np.ndarray, np.ndarray]:
