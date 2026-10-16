@@ -402,11 +402,25 @@ Rounds 1-3 done, 2026-10-14.
   - `codex exec` without `< /dev/null` waits on stdin forever (lost 10 minutes again).
   - The A1's learned forward walk arcs (42 degrees in 4 s) and a 1 s turn right after walking gets only 16 degrees of its 88 deg/s; round 32 works on both.
 
+## Round 32 (2026-10-16): phase E, second multi-agent round, plus E5 docs
+
+- Three Workflow agents with up to three adversarial review rounds each; two branches merged, one held back.
+- Agent error audit (36 commits): `scripts/agent_errors.py` calls every tool with plausible agent mistakes and grades the answers; forgiving forms where one reading exists (names in other capitals, "the dog", numbers as text, null as not given), and every refusal names the argument, the value and what would work. Tool descriptions and instructions were trimmed.
+  Review follow-ups I fixed: worlds saved under the old folder names ("Café" in caf) open by their name again; a pick-and-place point within reach is no longer told to "move it nearer".
+- Quadrupeds stand on their gait from load (14 commits): a never-moved dog, Go2, built dog or hexapod takes a viewer drag or a shove: fresh-robot bench 12 falls in 32 before, 0 after. Legs set by hand keep their angle through edits and lessons; robots on ramps stand as before.
+- Push recovery follow-up from round 31's E2 fix agent (it left patches when its worktree was removed under it): a hand that keeps dragging is still a push, so the 3 s cut-off only applies to a blocked robot (long drags: 2 of 8 flips before, 0 after); the terrain bench tells crossing from going around.
+- Straight walks and quick turns: held back. The heading term and MJCF imports work, but switching out of the walk tipped the template dog over on a right turn; round 33 continues the branch. Its independent fix (the autopilot arenas take the sensors arena's physics options) is merged.
+- E5: `scripts/screenshots.py` takes the README's pictures of the real viewer (headless Chrome over the DevTools protocol, lessons played through page clicks); README now shows the park, the kitchen, the imported A1, RL II with the A1 and with the lesson's robots, the PID twins and the obstacle course.
+- Found while taking the pictures, fixed: the obstacle course chip said 驾驶小车 for a dog; "-0.0 m"; the course plot magnified millimetre settling; at 1280 x 800 the third PID twin reached under the plots and on a phone off the screen (lesson cameras can now ask to fit every robot); run labels broke inside words.
+- Verified: 877 passed / 20 skipped, 3 slow, smoke, playtest 20 of 20, push bench 0 falls in 24; CI green on 35e2765.
+- What did NOT work:
+  - Three review rounds were not enough to bring any branch to "ship"; the reviewers kept finding real regressions, so I merge what is better than main and keep a list.
+  - A second WebSocket client starting a lesson leaves the page that shows it without plot history (screenshots now play lessons through the page; real users start lessons from their own page).
+  - Every quadruped in a world now runs its gait: headless simulation is about 20 percent slower with several dogs; a forward drag by the back still flips a never-moved template dog.
+
 ## Next-round seed
 
-Round 32 is running as a Workflow (wf_428bfbd5-245): quadrupeds steady from the moment a world opens (a drag before any move still flips them), learned walks that go straight and switch to turning quickly plus MJCF imports in RL II and the sensors lesson's integrator warning, and an audit of every agent-facing error message and token cost.
-Then E5: README and lesson docs with screenshots.
-Waiting on the user: `learn_walk` tool, `claude auth login`, a licence, PyPI/.mcpb release.
+Round 33 is running (wf_e788486f-0f5), on the user's new direction (2026-10-16: better assets, unique robots that are heterogeneous, spliced together, complex): a gallery of at least 8 working robots built from parts (wheel-legged biped, rocker-bogie rover, centaur, mobile manipulator, ...), more real Menagerie robots plus real robots carrying other robots (an arm on a Go2), visual dressing for robots built from parts, and the straight-walks branch made safe. Open from round 32: a forward drag by the back flips a never-moved dog; gaits for idle quadrupeds cost 20 percent of headless speed.
 
 ## Frontier
 
@@ -415,6 +429,7 @@ Waiting on the user: `learn_walk` tool, `claude auth login`, a licence, PyPI/.mc
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Done in round 30: edits and lesson round trips keep robots and objects where they are.
+- Done in round 32: agent errors that say how to fix them, quadrupeds that stand on their gait from load, README pictures from the real viewer.
 - Done in round 31: a playtester that plays every lesson (20 of 20 finish), quadrupeds that take a push on their gait, URDF imports that learn to walk, the public repo installed and driven by Codex end to end.
 - Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
