@@ -447,9 +447,15 @@ class Planner:
         cells = _search_open(grid, room >= body.need, start, goal, heuristic)
         if cells is not None:
             return NoWay("climb", f"no way to {label} for {self.robot}: {self._climb(nav, cells)}")
-        # As a point (no room needed), is there a way? Then a gap on it is too narrow.
+        # As a point (no room needed), is there a way? Then a gap on it is too narrow. That way keeps to the middle
+        # of the gaps, so its narrowest point is the gap itself: the shortest way hugged the wall of a corridor 0.6 m
+        # wide, and the Go2 was told the way through was 0.10 m wide. Widths count whole cells (each side of a gap
+        # loses up to one to the walls round it), and so does what the robot needs.
         point = nav.lethal == 0
-        cells = _search_open(grid, point, start, goal, heuristic)
+        middle = (body.need / np.maximum(nav.room, grid.res / 2)) ** 2
+        cells = (
+            None if nav_grid.enclosed(grid, point, goal, start) else astar(grid, point, middle, start, goal, heuristic)
+        )
         if cells is not None:
             tight = min(cells, key=lambda c: nav.room[c])
             width = 2 * float(nav.room[tight]) + grid.res
@@ -458,7 +464,7 @@ class Planner:
             return NoWay(
                 "too_narrow",
                 f"no way to {label} for {self.robot}: the way through is about {width:.2f} m wide near "
-                f"[{x:.2f}, {y:.2f}]{_among(what, ' between ')}, and it needs {2 * body.need:.2f} m",
+                f"[{x:.2f}, {y:.2f}]{_among(what, ' between ')}, and it needs {2 * body.need + grid.res:.2f} m",
             )
         d = self.destination
         here = grid.cell(*d.point)

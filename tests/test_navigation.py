@@ -4,6 +4,7 @@ robot (move with to=...), and move without a destination behaving as it always d
 import asyncio
 import json
 import math
+import re
 from pathlib import Path
 
 import mujoco
@@ -607,6 +608,17 @@ def test_no_way_says_why(pg, build, cause):
         pg.behaviors.navigate("rover", [3.0, 0.0])
     assert caught.value.cause == cause, str(caught.value)
     assert TRIP + "rover" not in pg.session.controllers
+
+
+def test_too_narrow_gives_the_width_of_the_gap(pg):
+    """Regression: the width came from the narrowest point of the shortest way, which hugged a side of the gap: a
+    gap 0.25 m wide was "about 0.10 m wide", and so was a corridor of the maze 0.6 m wide for the Go2."""
+    pg.add_robot("rover", template="rover", pos=[0.0, 1.0])
+    _pen(pg, 0.25)
+    with pytest.raises(NoWay) as caught:
+        pg.behaviors.navigate("rover", [3.0, 0.0])
+    width = float(re.search(r"about ([0-9.]+) m wide", str(caught.value)).group(1))
+    assert caught.value.cause == "too_narrow" and 0.15 <= width <= 0.3, str(caught.value)
 
 
 def test_a_robot_standing_beside_the_path_is_passed_not_waited_for(pg):
