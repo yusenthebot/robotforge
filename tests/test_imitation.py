@@ -155,6 +155,42 @@ def test_new_cube_while_it_trains_calls_the_try_off(pg):
     assert not any(e.startswith("try:") for e in p.ctx.events)
 
 
+def test_take_over_while_it_trains_is_refused(pg):
+    """Let it try with the network, then Take over before it moves: accepted, it kept a "correction" half a second
+    later (the cube from the demonstration was still in the bin), and the try then started anyway."""
+    p = _player(pg)
+    _show_a_pick(p)
+    _unlock_all(p)
+    Set(method=1, where=1).apply(p)
+    Press("try").apply(p)
+    assert p.lesson.busy and p.lesson.hands.pilot is None  # training on the lesson's thread
+    with pytest.raises(LessonError, match="still training"):
+        Press("take_over").apply(p)
+    assert p.lesson.recording is None
+    _finish_try(p)
+    assert [d.correction for d in p.lesson.demos] == [False]
+    assert not {"took_over", "corrected"} & p.ctx.events
+
+
+def test_a_try_is_taken_over_once_and_a_cube_already_in_the_bin_ends_nothing(pg):
+    """A second Take over after the correction was kept found the cube in the bin and kept a 7-pair "correction"
+    of nothing 0.65 s later. Underneath: a recording ends only once the cube has been out of the bin."""
+    p = _player(pg)
+    _show_a_pick(p)
+    _unlock_all(p)
+    Set(method=0, where=1).apply(p)
+    Press("try", 2.0).apply(p)
+    Press("take_over").apply(p)
+    _take_it_from_here(p)
+    lesson = p.lesson
+    assert [d.correction for d in lesson.demos] == [False, True]
+    with pytest.raises(LessonError, match="taken this try over already"):
+        Press("take_over").apply(p)
+    lesson.recording = bc.Recording(np.array(lesson.trial["spot"]), float(p.session.data.time), correction=True)
+    p.play(2 * bc.SETTLE + 1.0)
+    assert len(lesson.demos) == 2 and lesson.recording is not None
+
+
 def test_labels_skip_pauses_and_close_only_where_the_learner_closed():
     """A pause is labelled with the move that ended it; the way down is labelled 'go down', not 'close' (the copies
     closed 2 to 3 cm over the cube when the last 3 cm of the way down were labelled with the grip change)."""

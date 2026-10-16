@@ -701,7 +701,9 @@ class ImitationLesson(Lesson):
                 "The cube fell off the desk; this one does not count. Press New cube to start again.",
             )
             return
-        done = scene.in_bin(data) and follow.grip < 0.5 and not follow.busy(now)
+        inside = scene.in_bin(data)
+        rec.carried = rec.carried or not inside
+        done = inside and rec.carried and follow.grip < 0.5 and not follow.busy(now)
         if not done:
             self.in_bin_since = None
             return
@@ -842,16 +844,22 @@ class ImitationLesson(Lesson):
         assert hands is not None
         if trial is None or trial["method"] == "ik":
             raise LessonError("take over from a learned method's try: press Let it try first")
-        if self.pending is not None:
+        # A try that has not started is still training (its learner is not back yet, or not picked up): taking over
+        # then recorded a "correction" of nothing, kept it as soon as the cube from the last demonstration was found
+        # in the bin, and the try started afterwards anyway.
+        if self.pending is not None or (hands.pilot is None and trial["ok"] is None):
             raise LessonError("it is still training; take over once it moves")
         if self.recording is not None:
             raise LessonError("you are already steering: finish the pick, or press New cube")
+        if trial.get("taken"):  # a second take-over found the cube in the bin and recorded a correction of nothing
+            raise LessonError("you have taken this try over already: press Let it try for another")
         if isinstance(hands.pilot, bc.Pilot):
             trial["path"] = hands.pilot.path[-TRY_PATH:]
             hands.pilot = None
         elif trial["ok"]:
             raise LessonError("it got this one by itself: there is nothing to correct")
         trial["ok"] = False
+        trial["taken"] = True
         hand = hands.follow.hand(data)
         ctx.values.update(tx=round(float(hand[0]), 3), ty=round(float(hand[1]), 3))
         ctx.values["tz"] = round(float(np.clip(hand[2] - bc.DESK, *SLIDERS["tz"])), 3)

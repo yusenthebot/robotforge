@@ -348,6 +348,9 @@ class Recording:
     still: int = 0  # samples in a row in which nothing moved
     moved: bool = False  # the learner has made their first move
     full: bool = False  # MAX_ROWS reached: the recording takes no more
+    # the cube has been out of the bin since the recording opened: only then does a cube in the bin end it (a
+    # Take over pressed with the cube already there was kept at once as a correction of nothing)
+    carried: bool = False
 
     def add(self, obs: np.ndarray, target: np.ndarray, grip: float, busy: bool, now: float | None = None) -> None:
         row = (obs.copy(), np.array([*target, grip], float), busy)
