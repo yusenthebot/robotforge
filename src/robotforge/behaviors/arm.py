@@ -26,10 +26,12 @@ GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 
 
 class OutOfReach(ValueError):
-    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...)."""
+    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...);
+    `points` has every key point by name, reached or not, for advice on where to move things."""
 
-    def __init__(self, robot: str, bad: list[str]):
+    def __init__(self, robot: str, bad: list[str], points: dict[str, np.ndarray] | None = None):
         self.bad = bad
+        self.points = points or {}
         super().__init__(f"{robot} cannot reach the {' and the '.join(bad)} with its gripper pointing down")
 
 
@@ -226,9 +228,10 @@ class ArmMotion:
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])
-        bad = self.unreachable({"object": grasp, "above object": above, "place": drop, "above place": above_drop})
+        points = {"object": grasp, "above object": above, "place": drop, "above place": above_drop}
+        bad = self.unreachable(points)
         if bad:
-            raise OutOfReach(self.robot, bad)
+            raise OutOfReach(self.robot, bad, points)
         start = self.tool_target_end()
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))

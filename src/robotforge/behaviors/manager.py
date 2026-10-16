@@ -72,6 +72,43 @@ def _how_to_move(kind: Kind) -> str:
     return "robots lists what each robot can do"
 
 
+DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
+
+
+def _where_it_works(
+    arm: ArmMotion, base: np.ndarray, reach: float, what: str, at: np.ndarray, heights: list[float]
+) -> str:
+    """Advice for a pick-and-place point the gripper cannot point down at: the distances from the base, along the
+    same line and at the same heights, where it can, and a position there. "Within reach, so move it further"
+    sent an agent the wrong way three times: the template arm points down only within about 0.3 m of its base
+    at a bin's carrying height, though it reaches 0.52 m."""
+    toward = np.asarray(at[:2], float) - base[:2]
+    now = float(np.linalg.norm(toward))
+    toward = toward / now if now > 1e-6 else np.array([1.0, 0.0])
+    works = [
+        r
+        for r in np.arange(DOWN_BAND_STEP, reach + 1e-9, DOWN_BAND_STEP)
+        # the highest point first: it fails most often, and a failure there settles it
+        if all(arm.reach_error(np.array([*(base[:2] + r * toward), z])) <= REACH_TOL for z in sorted(heights)[::-1])
+    ]
+    if not works:
+        return (
+            f"no point on that side of the base at {'that height' if len(heights) == 1 else 'those heights'} works "
+            f"with the gripper pointing down: put the {what} lower, nearer the height of the arm's shoulder"
+        )
+    i = min(range(len(works)), key=lambda k: abs(works[k] - now))
+    # One sample in from the edge of where it works (the samples are DOWN_BAND_STEP apart), if that works too.
+    inner = i - 1 if works[i] < now else i + 1
+    near = 0 <= inner < len(works) and abs(works[inner] - works[i]) < 1.5 * DOWN_BAND_STEP
+    best = float(works[inner] if near else works[i])
+    xy = [round(float(v), 2) for v in base[:2] + best * toward]
+    way = "nearer" if best < now else "further from the base"
+    return (
+        f"there the gripper points down only {works[0]:.2f} to {works[-1]:.2f} m from the base, so move the {what} "
+        f"{way}: to about {xy} ({best:.2f} m)"
+    )
+
+
 def ideal_reach(speed: float, turn: float, seconds: float) -> float:
     """How far from its start a robot ends that moves at `speed` m/s turning `turn` rad/s for `seconds`, if it does
     exactly that: speed x seconds in a straight line, the chord of the arc when it turns (0 after a full circle).
@@ -630,33 +667,40 @@ class BehaviorManager:
             try:
                 arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
             except OutOfReach as exc:
-                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target)) from exc
+                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)) from exc
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}
 
     def _pick_out_of_reach(
-        self, arm: ArmMotion, exc: OutOfReach, object_at: np.ndarray, target_at: np.ndarray, target: str | list[float]
+        self,
+        arm: ArmMotion,
+        exc: OutOfReach,
+        object_at: np.ndarray,
+        target_at: np.ndarray,
+        target: str | list[float],
+        obj: str,
     ) -> str:
         """What move_arm says about a point, for the two a pick-and-place has: how far each one that is out of reach
-        is, how far the arm goes, and the target in meters if its numbers look like centimetres."""
+        is, how far the arm goes, where along the same line from the base it would work, and the target in meters
+        if its numbers look like centimetres."""
         base, reach = arm.base_and_reach(self.session.data)
         points = {"object": object_at, "place": target_at}
         far = {("target" if b.split()[-1] == "place" else "object"): points[b.split()[-1]] for b in exc.bad}
         away = " and ".join(f"{np.linalg.norm(p - base):.2f}" for p in far.values())
         one = len(far) == 1
-        # Within its reach the gripper can still fail to point down there (too close to the base, too low or too
-        # high): "move it nearer" would then send the agent the wrong way.
-        beyond = all(np.linalg.norm(p - base) > 0.97 * reach for p in far.values())
-        fix = (
-            f"move {'it' if one else 'them'} nearer"
-            if beyond
-            else "that is within its reach, but not with the gripper pointing down there: move "
-            f"{'it' if one else 'them'} a little further from the base or nearer the height of the arm's shoulder"
-        )
+        named = isinstance(target, str) and not NUMBER_LIST.fullmatch(target)
+        names = {"object": obj, "target": target if named else "target"}
+        fixes = []
+        for what, at in far.items():
+            # Both heights the tool works at over it (on it and above it) move with the thing.
+            suffix = "place" if what == "target" else "object"
+            heights = [float(p[2]) for name, p in exc.points.items() if name.split()[-1] == suffix] or [float(at[2])]
+            fixes.append(_where_it_works(arm, base, reach, names.get(what, what), at, heights))
         text = (
             f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
-            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; {fix}"
+            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; "
+            + "; ".join(fixes)
         )
         if "target" in far and (not isinstance(target, str) or NUMBER_LIST.fullmatch(target)):  # not a named object
             text += wording.in_meters(target_at[:2], float(np.linalg.norm(target_at - base)), reach)

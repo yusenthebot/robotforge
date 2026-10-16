@@ -344,10 +344,10 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             {"robot": "arm", "object": "ball", "target": [3.0, 3.0]},
             ["arm cannot reach the target", "it is 4.", "m from the arm's base, which reaches about", "nearer"],
         ),
-        (  # within reach, but not pointing down: "nearer" would be the wrong way (review of the audit)
+        (  # within reach, but too close to point down: "nearer" would be the wrong way (review of the audit)
             "pick_and_place",
             {"robot": "arm", "object": "ball", "target": [0.02, 0.0]},
-            ["arm cannot reach the target", "within its reach, but not with the gripper pointing down"],
+            ["arm cannot reach the target", "the gripper points down only", "move the target further from the base"],
         ),
         (
             "pick_and_place",

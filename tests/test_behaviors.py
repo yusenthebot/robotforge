@@ -137,6 +137,28 @@ def test_unreachable_pick_is_refused_with_advice(pg):
         pg.behaviors.pick_and_place("arm", "cube", [0.2, 0.2])
 
 
+def test_a_bin_within_reach_but_too_far_to_point_down_into_is_moved_nearer_not_further(pg):
+    """A session moved the workshop's bin to 0.36 m, was told "within its reach ... move it a little further from
+    the base", and failed three more times moving it further: the template arm points down into a bin only within
+    about 0.3 m of its base. The error now says where along that line it works, and that spot works."""
+    import re
+
+    pg.add_robot("arm", template="arm")
+    pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
+    pg.add_object("bin", shape="bin", pos=[0.3, -0.2])
+    with pytest.raises(BehaviorError) as refused:
+        pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    said = str(refused.value)
+    assert "move the bin nearer" in said and "further" not in said, said
+    spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
+    assert 0.2 < math.hypot(*spot) < 0.32
+    pg.update_object("bin", pos=spot)
+    arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    pg.run_fast(lambda: arm.done, 40.0)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("green_cube", info["region"])["success"]
+
+
 def test_wrong_behavior_for_robot_kind_is_explained(pg):
     pg.add_robot("arm", template="arm")
     with pytest.raises(BehaviorError, match="only legged robots"):
