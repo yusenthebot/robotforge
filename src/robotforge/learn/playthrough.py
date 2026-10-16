@@ -796,6 +796,7 @@ RECIPES: dict[str, Recipe] = {
             "ik": (Answer(1), Set(method=2), Press("test", until="training")),
             "quiz": (Answer(1),),
         },
+        slow=True,  # trains networks on the lesson's thread: 25 s here, numpy's speed on other machines unmeasured
         wall_limit=240.0,  # the sweep trains a network five times on a busy machine
     ),
     "maze_escape": Recipe({"escape": (Do(_out_of_the_maze, "drive the way out, cell by cell"),)}, sim_limit=240.0),

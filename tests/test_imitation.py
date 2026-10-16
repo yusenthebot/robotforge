@@ -197,6 +197,7 @@ def test_copying_works_beside_a_demonstration_and_fails_far_from_it(pg):
         Press("try").apply(p)
 
 
+@pytest.mark.slow  # 25 s: trains the network six times (CI runs the slow tests on Ubuntu)
 def test_tests_and_the_sweep_give_the_measured_success(pg):
     """Five demonstrations by the scripted learner, then the three methods at the 24 spots and the sweep.
 
