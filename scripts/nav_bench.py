@@ -217,7 +217,9 @@ def report(all_records: list[dict[str, Any]]) -> str:
     short = Counter((r["robot"], r["why"]) for r in records if r["outcome"] == "short")
     refused = Counter((r["robot"], r["why"]) for r in records if r["outcome"] == "no_way")
     lines += ["", "Failed trips by cause: " + (_counts(failed) or "none") + "."]
-    lines += ["Ended short of an object, as planned, by cause: " + (_counts(short) or "none") + "."]
+    lines += [
+        "Ended short as the planner said (beside what it cannot reach), by cause: " + (_counts(short) or "none") + "."
+    ]
     lines += ["No way (the planner's answer) by cause: " + (_counts(refused) or "none") + "."]
     total = [r for r in records if r["outcome"] in ("arrived", "failed")]
     arrived = [r for r in total if r["outcome"] == "arrived"]
