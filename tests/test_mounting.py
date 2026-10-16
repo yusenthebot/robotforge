@@ -173,15 +173,15 @@ def test_a_mount_that_lifting_cannot_free_is_told_to_go_elsewhere():
 
 
 @pytest.mark.parametrize("humanoid, mount", [("op3", "so_arm100"), ("g1", "piper")])
-def test_on_a_humanoid_top_is_its_upper_body_not_inside_its_torso(pg, humanoid, mount):
+def test_on_a_humanoid_top_is_its_upper_body_not_inside_its_torso(humanoid, mount):
     """Regression: on top of a humanoid's main body (its pelvis) is inside its torso, and a mount there was refused
     (G1 with a PiPER, T1 with an SO-100). It goes on what is on top: the head, or the shoulders of a head narrower
     than its base."""
-    pg.add_robot("bot", library=humanoid, mounts=[{"library": mount}])
-    m, d = pg.session.model, pg.session.data
-    mujoco.mj_forward(m, d)
-    base = next(b for b in range(m.nbody) if m.body(b).name.startswith("bot/arm/"))
-    pelvis = next(b for b in range(m.nbody) if m.body_parentid[b] == 0 and m.body(b).name.startswith("bot/"))
+    built = mounting.attach(library.build(humanoid), [MountEntry.model_validate({"library": mount})], "bot")
+    m = built.spec.compile()
+    d = mounting._posed(m, built.home_qpos)
+    base = next(b for b in range(m.nbody) if m.body(b).name.startswith("arm/"))
+    pelvis = 1
     assert m.body_parentid[base] != pelvis and d.xpos[base][2] > d.xpos[pelvis][2] + 0.1
 
 
@@ -459,7 +459,8 @@ def test_an_arm_without_a_gripper_will_not_pick_and_says_how_to_mount_one(pg):
 def test_a_gripper_goes_only_on_a_bare_flange_unless_told_where(pg, carrier):
     """Regression: with no flange to go on, a gripper went on top: of a Panda's base, beside its own hand, or on a dog's
     back, where it is a dead weight."""
-    with pytest.raises(ValueError, match=f"goes on the bare flange of an arm, and {carrier} has none"):
+    bare = f"goes on the bare flange of an arm without a gripper, such as a ur5e, and {carrier} has none; carry one"
+    with pytest.raises(ValueError, match=bare):
         pg.add_robot(carrier, library=carrier, mounts=[{"library": "robotiq_2f85"}])
     pg.add_robot(carrier, library=carrier, mounts=[{"library": "robotiq_2f85", "at": "top"}])  # said so: it goes
 
@@ -467,6 +468,80 @@ def test_a_gripper_goes_only_on_a_bare_flange_unless_told_where(pg, carrier):
 def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
     with pytest.raises(ValueError, match="at 'tool' needs an arm with a bare flange"):
         pg.add_robot("go2", library="go2", mounts=[{"library": "robotiq_2f85", "at": "tool"}])
+
+
+# ---- a gripper on an arm a robot carries ----------------------------------------------------------------------------
+
+
+def test_a_dog_carries_an_arm_and_the_gripper_on_its_flange_picks_a_cube(pg):
+    """Regression: a gripper could go only on the flange of an arm added on its own. Spot with a UR5e and a Robotiq was
+    refused ("mount it on an arm such as ur5e"), and at the wrist link the gripper was a robot of its own, listed as an
+    arm, while pick_and_place on the UR5e asked for the gripper just refused."""
+    result = pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+    assert "anymal: gripper: Robotiq 2F-85 on anymal/arm's flange; it is now anymal/arm's gripper" in result["notes"]
+    assert pg.behaviors.robots()[0]["arms"] == ["anymal/arm"]
+    m = pg.session.model
+    assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "anymal/arm/gripper") >= 0
+    assert mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, "anymal/arm/flange") < 0  # taken by the gripper
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.0, 0.65])
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[0.0, -0.65])
+    _run(pg, 1.5)
+    arm, info = pg.behaviors.pick_and_place("anymal/arm", "cube", "bin")
+    _arm_done(pg, "anymal/arm")
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+    assert pg.behaviors.pose("anymal")["upright"]
+
+
+def test_a_gripper_on_a_carried_arm_can_be_named_and_wrong_names_say_which_flanges_there_are(pg):
+    mounts = [{"library": "ur5e"}, {"library": "robotiq_2f85", "at": "arm/tool"}]
+    pg.add_robot("anymal", library="anymal_c", mounts=mounts)
+    assert pg.behaviors.robots()[0]["arms"] == ["anymal/arm"]
+    with pytest.raises(
+        ValueError, match=r"at 'claw/tool' needs an arm with a bare flange on 'claw' .*give at 'arm/tool'"
+    ):
+        pg.update_robot("anymal", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85", "at": "claw/tool"}])
+
+
+def test_a_gripper_mounted_off_a_flange_is_no_arm(pg):
+    """A gripper on a dog's body has no arm to move it: it is not listed among the arms, nor worked as one."""
+    mounts = [{"library": "piper"}, {"library": "robotiq_2f85", "at": "base", "shift": [-0.25, 0.0, 0.1]}]
+    pg.add_robot("anymal", library="anymal_c", mounts=mounts)
+    assert pg.behaviors.robots()[0]["arms"] == ["anymal/arm"]
+    with pytest.raises(ValueError, match="'anymal/gripper' is not an arm of anymal; use anymal/arm"):
+        pg.behaviors.move_arm("anymal/gripper", [0.3, 0.0, 0.5])
+
+
+def test_an_arm_given_our_gripper_template_compiles_and_picks(pg):
+    """Regression: the gripper template measures its grasp point with a sensor, which still named the old site after
+    the gripper became the arm's: "unrecognized name 'gripper/tcp' of sensorized object"."""
+    pg.add_robot("ur", library="ur5e", mounts=[{"template": "gripper"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.1])
+    _run(pg, 0.5)
+    arm, info = pg.behaviors.pick_and_place("ur", "cube", [0.35, -0.25])
+    _arm_done(pg, "ur")
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
+def test_an_arm_on_a_dog_without_a_gripper_says_how_to_give_it_one(pg):
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.0, 0.65])
+    expected = 'update_robot("anymal", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])'
+    with pytest.raises(
+        ValueError, match=re.escape(f"anymal/arm has no gripper to pick with; mount one on its flange: {expected}")
+    ):
+        pg.behaviors.pick_and_place("anymal/arm", "cube", [0.0, -0.65])
+
+
+def test_a_robot_that_lost_its_arm_says_mounts_puts_one_back(pg):
+    """Regression: after update_robot(mounts=[]), move_arm on its arm pointed to the builder (add_robot with build)."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
+    pg.update_robot("go2", mounts=[])
+    with pytest.raises(
+        ValueError, match=re.escape('go2 carries no arm (update_robot("go2", mounts=[{"library": "piper"}])')
+    ):
+        pg.behaviors.move_arm("go2/arm", [0.3, 0.0, 0.4])
 
 
 # ---- where it goes, and what is refused ---------------------------------------------------------------------------
@@ -586,6 +661,11 @@ def test_real_a_ur5e_with_a_robotiq_gripper_picks_a_cube(pg):
     _arm_done(pg, "ur")
     _run(pg, 1.0)
     assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_anymal_carrying_a_ur5e_with_a_robotiq_picks_across_its_back(pg):
+    test_a_dog_carries_an_arm_and_the_gripper_on_its_flange_picks_a_cube(pg)
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")

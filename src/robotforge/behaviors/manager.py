@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import math
 import re
 import sys
@@ -239,9 +240,13 @@ class BehaviorManager:
             raise BehaviorError(f"{named!r} is a part of {found}, not a robot; use {found}")
         if arms:
             raise BehaviorError(f"{named!r} is not an arm of {found}; use {' or '.join(arms)}")
-        raise BehaviorError(
-            f"{named!r} is not an arm: {found} carries no arm (add_robot with build can mount one: see builder_guide)"
+        entry = _entry(found, world)
+        how = (
+            "add_robot with build can mount one: see builder_guide"
+            if entry is None or entry.build is not None
+            else f'update_robot("{found}", mounts=[{{"library": "piper"}}]) puts one on it'
         )
+        raise BehaviorError(f"{named!r} is not an arm: {found} carries no arm ({how})")
 
     def kind(self, robot: str) -> Kind:
         return self._kind(robot, self._world())  # read once: it comes from the file
@@ -676,10 +681,7 @@ class BehaviorManager:
         with self.session.lock:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
-                raise BehaviorError(
-                    f"{name} has no gripper to pick with; mount one from the library, e.g. add_robot with "
-                    'mounts=[{"library": "robotiq_2f85"}]'
-                )
+                raise BehaviorError(f"{name} has no gripper to pick with; {self._gripper_hint(name)}")
             self._check_carrier(name)  # before its motion takes hold of the arm
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
@@ -692,6 +694,14 @@ class BehaviorManager:
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}
+
+    def _gripper_hint(self, arm: str) -> str:
+        """How to give an arm without a gripper one: on its flange, as the next of the robot's mounts."""
+        owner = arm.split("/", 1)[0]
+        entry = _entry(owner, self._world())
+        mounts = [m.model_dump(exclude_defaults=True) for m in entry.mounts] if entry is not None else []
+        listed = json.dumps([*mounts, {"library": "robotiq_2f85"}])
+        return f'mount one on its flange: update_robot("{owner}", mounts={listed})'
 
     def _pick_out_of_reach(
         self, arm: ArmMotion, exc: OutOfReach, object_at: np.ndarray, target_at: np.ndarray, target: str | list[float]

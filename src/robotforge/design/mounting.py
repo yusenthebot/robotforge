@@ -8,9 +8,10 @@ named "go2" is "go2/arm" in the world, and move_arm and pick_and_place work it a
 Where it goes (`at`):
 - "top" (the default): on the carrier's top as you see it, on a flat spot near its centre of mass (see SPOTS): a dog's
   back, a humanoid's head (its main body, the pelvis, lies inside its torso). A camera, an arm on a dog's back.
-- "tool": an arm's flange (the "flange" site library.Tool puts on arms without a gripper). A gripper mounted there
-  becomes the arm's own: its grasp point and actuator are the arm's "tcp" and "gripper", so a UR5e with a Robotiq
-  2F-85 works like a Franka Panda. This is the default for a gripper on such an arm.
+- "tool": an arm's flange (the "flange" site library.Tool puts on arms without a gripper): the carrier's own, or else
+  that of the one arm mounted on it before ("<mount>/tool" names one). A gripper mounted there becomes the arm's own:
+  its grasp point and actuator are the arm's "tcp" and "gripper", so a UR5e with a Robotiq 2F-85 works like a Franka
+  Panda, on the floor or on Spot's back. This is the default for a gripper where there is such a flange.
 - the name of any body of the carrier, as in its own file: the mount goes on that body's origin.
 `shift` moves it from there (m, in that frame) and `rotate` turns it ([roll, pitch, yaw] in degrees, as in the builder).
 """
@@ -148,7 +149,7 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRob
             raise ValueError(f"robot {robot!r}, mount {name!r}: cannot build {what(mount)}: {exc}") from exc
         radius = _footprint(child)
         ride_on(child.spec, spec)
-        at = mount.at or _default_at(spec, mount, robot, name)
+        at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
         body, pos, quat, where = _place(spec, home_qpos, at, robot, name, [p.name for p in placed], radius)
         rot = np.zeros(4)
         mujoco.mju_mat2Quat(rot, _euler(mount.rotate).ravel())
@@ -163,10 +164,14 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRob
         placed.append(_Placed(name, body.name, frame, up, list(mount.shift), radius))
         home_qpos.update({f"{name}/{k}": v for k, v in child.home_qpos.items()})
         home_ctrl.update({f"{name}/{k}": v for k, v in child.home_ctrl.items()})
-        if at == "tool" and _site(spec, f"{name}/tcp") is not None:
-            _complete_the_arm(spec, name, home_ctrl)
-            notes.append(f"{name}: {what(mount)} on the arm's flange; it is now the arm's gripper")
+        arm = _flange_owner(at, spec, [p.name for p in placed])
+        if arm is not None and _site(spec, f"{name}/tcp") is not None:
+            _complete_the_arm(spec, name, arm, home_ctrl)
+            whose = f"{robot}/{arm.rstrip('/')}'s" if arm else "the arm's"
+            notes.append(f"{name}: {what(mount)} on {whose} flange; it is now {whose} gripper")
         else:
+            if is_gripper(mount) and _site(spec, f"{name}/tcp") is not None:
+                _rename_site(spec, f"{name}/tcp", f"{name}/grasp")  # no arm moves it: not an arm to work
             notes.append(f"{name}: {what(mount)} mounted {where}")
         notes += [f"{name}: {n}" for n in child.notes]
     _check_overlaps(spec, home_qpos, robot, placed)
@@ -187,17 +192,40 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRob
 # ---- where a mount goes --------------------------------------------------------------------------------------------
 
 
-def _default_at(spec: mujoco.MjSpec, mount: Mount, robot: str, name: str) -> str:
-    """ "tool" for a gripper on an arm with a bare flange, else "top". A gripper anywhere else would be a dead weight
-    on a dog's back or on top of another gripper's arm, so that needs an `at` of its own."""
+def _default_at(spec: mujoco.MjSpec, mount: Mount, robot: str, name: str, mounted: list[str]) -> str:
+    """ "tool" for a gripper where there is a bare flange (see _flange), else "top". A gripper anywhere else would be a
+    dead weight on a dog's back or on top of another gripper's arm, so that needs an `at` of its own."""
     if not is_gripper(mount):
         return "top"
-    if _site(spec, "flange") is not None:
+    flanges = _flanges(spec, mounted)
+    if len(flanges) == 1:
         return "tool"
+    if flanges:
+        tools = " or ".join(f"'{arm}tool'" for arm in flanges)
+        raise ValueError(f"robot {robot!r}, mount {name!r}: {robot} has {len(flanges)} bare flanges; give at {tools}")
+    gripper = mount.library or "robotiq_2f85"
     raise ValueError(
-        f"robot {robot!r}, mount {name!r}: {what(mount)} goes on the bare flange of an arm, and {robot} has none "
-        "(it is no arm, or its arm has a gripper already); mount it on an arm such as ur5e, or give at"
+        f"robot {robot!r}, mount {name!r}: {what(mount)} goes on the bare flange of an arm without a gripper, such "
+        f"as a ur5e, and {robot} has none; carry one first and the gripper after it, e.g. "
+        f'mounts=[{{"library": "ur5e"}}, {{"library": "{gripper}"}}], or give at'
     )
+
+
+def _flanges(spec: mujoco.MjSpec, mounted: list[str]) -> dict[str, mujoco.MjsSite]:
+    """The bare flanges a gripper can go on, by the name prefix of their arm: "" for the robot's own (an arm without a
+    gripper), "arm/" for that of the arm mounted as "arm". The robot's own comes first and alone."""
+    own = _site(spec, "flange")
+    if own is not None:
+        return {"": own}
+    return {f"{m}/": site for m in mounted if (site := _site(spec, f"{m}/flange")) is not None}
+
+
+def _flange_owner(at: str, spec: mujoco.MjSpec, mounted: list[str]) -> str | None:
+    """For a mount at "tool" or "<mount>/tool": the name prefix of the arm whose flange that is (see _flanges)."""
+    if at == "tool":
+        return next(iter(_flanges(spec, mounted)), None)
+    arm, slash, rest = at.partition("/")
+    return f"{arm}/" if slash and rest == "tool" and arm in mounted else None
 
 
 def _place(
@@ -212,14 +240,24 @@ def _place(
     """(body, position, orientation in it, words for the notes) of a mount point. `mounted` names the mounts already
     on the robot: a second one does not stand on the first. `radius` is the mount's base's (see _footprint)."""
     identity = np.array([1.0, 0.0, 0.0, 0.0])
-    if at == "tool":
-        flange = _site(spec, "flange")
-        if flange is None:
+    if at == "tool" or at.endswith("/tool"):
+        flanges = _flanges(spec, mounted)
+        arm = _flange_owner(at, spec, mounted)
+        if arm is None or arm not in flanges:
+            there = "on it" if at == "tool" else f"on {at.removesuffix('/tool')!r}"
+            known = " or ".join(f"'{a}tool'" for a in flanges)
             raise ValueError(
-                f"robot {robot!r}, mount {name!r}: at 'tool' needs an arm with a bare flange (a library arm without a "
-                "gripper, such as ur5e); give at a body name or 'top'"
+                f"robot {robot!r}, mount {name!r}: at {at!r} needs an arm with a bare flange {there} (a library arm "
+                f"without a gripper, such as ur5e); give at {known or 'a body name'} or 'top'"
             )
-        return flange.parent, np.array(flange.pos, float), np.array(flange.quat, float), "on the arm's flange"
+        if at == "tool" and len(flanges) > 1:
+            raise ValueError(
+                f"robot {robot!r}, mount {name!r}: {robot} has {len(flanges)} bare flanges; give at "
+                + " or ".join(f"'{a}tool'" for a in flanges)
+            )
+        flange = flanges[arm]
+        whose = f"{robot}/{arm.rstrip('/')}'s" if arm else "the arm's"
+        return flange.parent, np.array(flange.pos, float), np.array(flange.quat, float), f"on {whose} flange"
     if at == "top":
         return _on_top(spec, home_qpos, mounted, radius)
     body = spec.body(at)
@@ -323,22 +361,34 @@ def _corners(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:
 # ---- a gripper on an arm -------------------------------------------------------------------------------------------
 
 
-def _complete_the_arm(spec: mujoco.MjSpec, name: str, home_ctrl: dict[str, float]) -> None:
-    """The gripper's grasp point and actuator become the arm's "tcp" and "gripper"; its bare flange is gone."""
-    for site in ("tcp", "flange"):
+def _complete_the_arm(spec: mujoco.MjSpec, name: str, arm: str, home_ctrl: dict[str, float]) -> None:
+    """The gripper's grasp point and actuator become the arm's "tcp" and "gripper" ("arm/tcp" for an arm mounted as
+    "arm", see _flanges); its bare flange is gone."""
+    for site in (f"{arm}tcp", f"{arm}flange"):
         found = _site(spec, site)
         if found is not None:
             spec.delete(found)
-    _site(spec, f"{name}/tcp").name = "tcp"
+    _rename_site(spec, f"{name}/tcp", f"{arm}tcp")
     actuator = next((a for a in spec.actuators if a.name == f"{name}/gripper"), None)
     if actuator is not None:
-        actuator.name = "gripper"
+        actuator.name = f"{arm}gripper"
         if f"{name}/gripper" in home_ctrl:
-            home_ctrl["gripper"] = home_ctrl.pop(f"{name}/gripper")
+            home_ctrl[f"{arm}gripper"] = home_ctrl.pop(f"{name}/gripper")
 
 
 def _site(spec: mujoco.MjSpec, name: str) -> mujoco.MjsSite | None:
     return next((s for s in spec.sites if s.name == name), None)
+
+
+def _rename_site(spec: mujoco.MjSpec, old: str, new: str) -> None:
+    """Rename a site and the sensors that name it: our gripper template measures its "tcp" with a sensor, and a UR5e
+    given that gripper failed to compile ("unrecognized name 'gripper/tcp' of sensorized object")."""
+    _site(spec, old).name = new
+    for sensor in spec.sensors:
+        if sensor.objtype == mujoco.mjtObj.mjOBJ_SITE and sensor.objname == old:
+            sensor.objname = new
+        if sensor.reftype == mujoco.mjtObj.mjOBJ_SITE and sensor.refname == old:
+            sensor.refname = new
 
 
 # ---- checks ----------------------------------------------------------------------------------------------------------
