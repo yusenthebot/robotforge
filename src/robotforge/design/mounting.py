@@ -53,6 +53,7 @@ FLAT = 0.002  # m: spots this much flatter than another are no flatter
 # into the torso from below, stuck 117 mm deep whatever it was told.
 LIFT_TRIES = 6
 LIFT_MAX = 0.15
+PAYLOAD_SLACK = 0.05  # kg: the catalog's masses are rounded; the arm a limit was measured with stays within it
 
 
 class Mount(Protocol):
@@ -128,16 +129,17 @@ class _Placed:
     radius: float  # of its base (see _footprint)
 
 
-def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRobot:
+def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str, model: str | None = None) -> BuiltRobot:
     """`carrier` with every mount attached, its home pose extended, and checked: a mount that overlaps the carrier is
     refused with the overlap in millimetres and the shift that lifts it clear, and a floating carrier rises if a mount
-    hangs below its feet."""
+    hangs below its feet. `model` names the carrier in the library, whose Payload says how much it carries."""
     if not mounts:
         return carrier
     spec = carrier.spec
     home_qpos, home_ctrl = dict(carrier.home_qpos), dict(carrier.home_ctrl)
     notes = list(carrier.notes)
     placed: list[_Placed] = []
+    carried: list[tuple[str, float]] = []  # (what, kg)
     before = _lowest(spec, home_qpos) if carrier.floating else 0.0
     for mount in mounts:
         name = default_name(mount)
@@ -147,7 +149,8 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRob
             child = build_child(mount)
         except ValueError as exc:
             raise ValueError(f"robot {robot!r}, mount {name!r}: cannot build {what(mount)}: {exc}") from exc
-        radius = _footprint(child)
+        radius, mass = _footprint(child)
+        carried.append((what(mount), mass))
         ride_on(child.spec, spec)
         at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
         body, pos, quat, where = _place(spec, home_qpos, at, robot, name, [p.name for p in placed], radius)
@@ -174,6 +177,7 @@ def attach(carrier: BuiltRobot, mounts: Sequence[Mount], robot: str) -> BuiltRob
                 _rename_site(spec, f"{name}/tcp", f"{name}/grasp")  # no arm moves it: not an arm to work
             notes.append(f"{name}: {what(mount)} mounted {where}")
         notes += [f"{name}: {n}" for n in child.notes]
+    notes += _check_payload(robot, model, carried)
     _check_overlaps(spec, home_qpos, robot, placed)
     spawn = carrier.spawn_height
     if carrier.floating:
@@ -320,20 +324,73 @@ def _on_top(
     return spec.body(name), pos, quat, f"on top of {name or 'its main body'}"
 
 
-def _footprint(child: BuiltRobot) -> float:
+def _footprint(child: BuiltRobot) -> tuple[float, float]:
     """The radius (m) of the disk a robot's base stands on: how far its fixed shapes reach from its origin, sideways,
-    in the narrower direction (see FOOTPRINT_RANGE)."""
+    in the narrower direction (see FOOTPRINT_RANGE); and the robot's mass (kg)."""
     model = child.spec.compile()
+    mass = float(model.body_subtreemass[0])
     data = _posed(model, child.home_qpos)
     root = 1
     welded = [b for b in range(1, model.nbody) if model.body_weldid[b] == model.body_weldid[root]]
     shapes = _surface(model, welded)
     if not shapes:
-        return FOOTPRINT_RANGE[0]
+        return FOOTPRINT_RANGE[0], mass
     rot = data.xmat[root].reshape(3, 3)
     points = np.vstack([(_corners(model, data, g) - data.xpos[root]) @ rot for g in shapes])
     reach = min(-points[:, 0].min(), points[:, 0].max(), -points[:, 1].min(), points[:, 1].max())
-    return float(np.clip(reach, *FOOTPRINT_RANGE))
+    return float(np.clip(reach, *FOOTPRINT_RANGE)), mass
+
+
+def carried_mass(model: mujoco.MjModel, robot: str, mounts: Sequence[Mount]) -> float:
+    """The mass (kg) of the robots mounted on `robot` in a compiled world."""
+    prefixes = tuple(f"{robot}/{default_name(m)}/" for m in mounts)
+    return float(sum(model.body_mass[b] for b in range(model.nbody) if model.body(b).name.startswith(prefixes)))
+
+
+def loaded_speed(model: str | None, kg: float) -> float | None:
+    """The top speed (m/s) of a library robot carrying `kg` more than it walks with at full speed (see
+    library.Payload), or None."""
+    from robotforge.design import library
+
+    payload = library.get(model).payload if model is not None else None
+    return payload.slow if payload is not None and kg > payload.full + PAYLOAD_SLACK else None
+
+
+def _check_payload(robot: str, model: str | None, carried: list[tuple[str, float]]) -> list[str]:
+    """Refuse mounts heavier than a library carrier carries (see library.Payload), naming lighter arms that it does;
+    a note when it carries them at a lower speed."""
+    from robotforge.design import library
+
+    payload = library.get(model).payload if model is not None else None
+    total = sum(kg for _, kg in carried)
+    if payload is None or total <= payload.full + PAYLOAD_SLACK:
+        return []
+    title = library.get(model).title
+    if total > payload.most + PAYLOAD_SLACK:
+        load = (
+            f"{carried[0][0]} weighs {total:.1f} kg"
+            if len(carried) == 1
+            else f"{' and '.join(w for w, _ in carried)} weigh {total:.1f} kg together"
+        )
+        lighter = sorted(  # one-armed: ALOHA is a two-armed station, not something to carry
+            (
+                r
+                for r in library.CATALOG.values()
+                if r.kind == "arm" and len(r.tools) == 1 and r.mass <= payload.most + PAYLOAD_SLACK
+            ),
+            key=lambda r: -r.mass,
+        )
+        hint = (
+            f": try {', '.join(f'{r.name} ({r.mass:g} kg)' for r in lighter[:3])}"
+            if lighter
+            else "; no arm in the library is that light"
+        )
+        how = f" ({payload.describe()})" if payload.most > payload.full else ""
+        raise ValueError(f"robot {robot!r}: {load}, and a {title} carries at most {payload.most:g} kg{how}{hint}")
+    return [
+        f"carrying {total:.1f} kg, more than the {payload.full:g} kg it walks with at full speed, {robot} walks at "
+        f"{payload.slow:g} m/s at most"
+    ]
 
 
 def _mounted_body(model: mujoco.MjModel, body: int, mounted: list[str]) -> bool:

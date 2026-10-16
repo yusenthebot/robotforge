@@ -48,6 +48,22 @@ class Tool:
 
 
 @dataclass(frozen=True)
+class Payload:
+    """What a walking robot carries on top: the robots mounted on it (mounting.py), by their mass, measured with the
+    library's arms on the real model (docs/BUILDER.md has the table). Up to `full` kg it walks as fast as it does
+    without; up to `most` kg at `slow` m/s at most; anything heavier is refused."""
+
+    full: float
+    most: float
+    slow: float
+
+    def describe(self) -> str:
+        if self.most <= self.full:
+            return f"up to {self.most:g} kg"
+        return f"up to {self.full:g} kg at full speed, {self.most:g} kg at {self.slow:g} m/s"
+
+
+@dataclass(frozen=True)
 class LibraryRobot:
     name: str
     title: str
@@ -69,6 +85,8 @@ class LibraryRobot:
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
     walks: bool = True  # False: the robot stands and balances, but move cannot walk it yet
     tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
+    mass: float = 0.0  # kg, of the model at the pinned commit
+    payload: Payload | None = None  # walkers: what they carry (see Payload)
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -83,6 +101,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "unitree_go2",
             "go2.xml",
+            mass=15.21,
+            # Carries (measured, see docs/BUILDER.md) a Z1 at full speed; an xArm 7 at 0.1 m/s (a Panda toppled it
+            # turning, a UR5e standing).
+            payload=Payload(4.7, 12.1, 0.1),
             servo_kp=100.0,  # what Menagerie uses for Go1, which has the same motor family
         ),
         LibraryRobot(
@@ -94,6 +116,9 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "unitree_go1",
             "go1.xml",
+            mass=12.74,
+            # Carries (measured, see docs/BUILDER.md) a Z1 at full speed; an xArm 7 at 0.15 m/s (a Panda toppled it).
+            payload=Payload(4.7, 12.1, 0.15),
         ),
         LibraryRobot(
             "a1",
@@ -104,16 +129,24 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "unitree_a1",
             "a1.xml",
+            mass=12.45,
+            # Carries (measured, see docs/BUILDER.md) a Z1 at full speed; an xArm 7 at 0.1 m/s (a Panda toppled it).
+            payload=Payload(4.7, 12.1, 0.1),
         ),
         LibraryRobot(
             "spot",
             "Boston Dynamics Spot",
             "quadruped",
-            "Large industrial robot dog, 32 kg, 12 joints (no arm).",
+            "Large industrial robot dog with 12 joints and room on its back for an arm; this model weighs 50 kg (the "
+            "real one 32 kg).",
             "Boston Dynamics (model by Clearpath Robotics)",
             "BSD-3-Clause",
             "boston_dynamics_spot",
             "spot.xml",
+            mass=50.34,
+            # Carries (measured, see docs/BUILDER.md) an xArm 7 at full speed; a Panda at 0.15 m/s (a UR5e toppled it
+            # turning).
+            payload=Payload(12.1, 17.5, 0.15),
             max_speed=0.35,  # measured: tops out at 0.36-0.39 m/s however long the stride
         ),
         LibraryRobot(
@@ -125,6 +158,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "franka_emika_panda",
             "panda.xml",
+            mass=17.45,
             tools=(Tool("hand", 0.1034, gripper="actuator8"),),  # Franka's own flange-to-TCP distance
         ),
         LibraryRobot(
@@ -137,6 +171,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "trs_so_arm100",
             "so_arm100.xml",
+            mass=1.17,
             # The jaws reach along the fixed jaw's -y; the pads span 0.047-0.106 m. Grasped in the middle of the pads
             # (0.077 m), the jaw tips went 9 mm into the floor at a 4 cm cube's middle, so it could not pick from the
             # floor at all; 16 mm short of the tips they clear it by 4 mm. The grasp point sits 26 mm off the fixed
@@ -153,6 +188,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "MIT",
             "agilex_piper",
             "piper.xml",
+            mass=2.37,
             # centre of the fingertip pads (the pads span 0.075-0.135 m past the flange)
             tools=(Tool("link6", 0.12, gripper="gripper"),),
         ),
@@ -165,6 +201,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "unitree_g1",
             "g1.xml",
+            mass=33.34,
+            # Carries (measured, see docs/BUILDER.md) a PiPER at full speed (1 m/s); a Z1 at 0.3 m/s (it fell at 1 m/s;
+            # an xArm 7 at 0.3).
+            payload=Payload(2.4, 4.7, 0.3),
             home_key="stand",
         ),
         LibraryRobot(
@@ -176,6 +216,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "anybotics_anymal_c",
             "anymal_c.xml",
+            mass=44.97,
+            # Carries (measured, see docs/BUILDER.md) an xArm 7 at full speed; a UR5e with a Robotiq at 0.2 m/s (a Panda
+            # rocked it 27 degrees turning at 0.36).
+            payload=Payload(12.1, 22.1, 0.2),
             # Lower than the stance of Menagerie's MJX keyframe (0.52, 0.785 rad), where the legs are nearly straight:
             # on those our trot swung a knee through straight and it fell within 6 s; on these it walks 0.3 m/s.
             home=tuple(
@@ -198,6 +242,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "google_barkour_vb",
             "barkour_vb.xml",
+            mass=14.5,
+            # Carries (measured, see docs/BUILDER.md) a PiPER at full speed; a Z1 rocked it 16 to 21 degrees even at 0.1
+            # m/s.
+            payload=Payload(2.4, 2.4, 0.3),
             # On the stance of Menagerie's scene keyframe (hip 0.5, knee 1.0 rad) our trot walked it backwards
             # (-1.4 m in 10 s at 0.3 m/s); on these bent knees it walks 3.0 m, straight.
             home=tuple(
@@ -215,6 +263,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "robotis_op3",
             "op3.xml",
+            mass=3.15,
+            # Carries (measured, see docs/BUILDER.md) our 0.08 kg gripper template; a 1 kg Robotiq on its head toppled
+            # it turning, an SO-100 walking.
+            payload=Payload(0.1, 0.1, 0.1),
             # No keyframe in Menagerie: knees soft like our template's (hip and ankle 0.35 rad, knee 0.7). Each joint
             # turns the way its axis says; the right leg's pitch axes point the other way.
             home=(
@@ -238,6 +290,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "Apache-2.0",
             "booster_t1",
             "t1.xml",
+            mass=31.61,
+            # Carries (measured, see docs/BUILDER.md) an SO-100 at full speed; a PiPER at 0.06 m/s (it fell at 0.12; a
+            # Z1 even at 0.05).
+            payload=Payload(1.2, 2.4, 0.06),
             # On Menagerie's kp 75, kv 5 servos the balance gait kept it standing within 2 degrees but it fell at its
             # first steps, even at 0.05 m/s, and a 0.4 m/s shove knocked it over. Stiffer and damped, it walks 0.05
             # to 0.14 m/s within 6 degrees, turns at keyboard commands, and takes 0.4 m/s shoves within 9.
@@ -254,6 +310,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "unitree_z1",
             "z1_gripper.xml",
+            mass=4.69,
             # The grasp point is the middle of the fingertip pads (0.172-0.2 m along link06's x), 1 cm above the fixed
             # jaw's pad: a cube rests on that jaw and the moving one closes onto it (at 0 rad; -1.52 is wide open).
             tools=(
@@ -277,6 +334,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "universal_robots_ur5e",
             "ur5e.xml",
+            mass=20.99,
             tools=(Tool("attachment_site"),),
         ),
         LibraryRobot(
@@ -288,6 +346,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "ufactory_xarm7",
             "xarm7.xml",
+            mass=12.07,
             # link_tcp is the fingertips; the pads end 2 mm short of them and reach 3.9 cm up. Grasped at the tips, a
             # 4 cm cube was held by its top 18 mm and slipped out on 4 of 6 carries. 15 mm deeper the pads hold 2.4 cm
             # of it and still clear the floor by 7 mm: 6 of 6.
@@ -303,6 +362,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "aloha",
             "aloha.xml",
+            mass=8.52,
             home_key="neutral_pose",
             tools=(
                 Tool("left/gripper", axis=(1.0, 0.0, 0.0), gripper="left/gripper", arm="left/"),
@@ -318,6 +378,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-2-Clause",
             "robotiq_2f85",
             "2f85.xml",
+            mass=1.05,
             home_key=None,
             tools=(Tool("pinch", gripper="fingers_actuator", closes_high=True),),
         ),
@@ -358,6 +419,8 @@ def catalog() -> list[dict[str, Any]]:
             "summary": r.summary,
             "maker": r.maker,
             "license": r.license,
+            "mass_kg": r.mass,
+            **({"carries": r.payload.describe()} if r.payload is not None else {}),
             "download_mb": download_mb(r.name),
             "downloaded": is_downloaded(r.name),
         }

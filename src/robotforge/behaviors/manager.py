@@ -22,7 +22,7 @@ from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
-from robotforge.design import library
+from robotforge.design import library, mounting
 from robotforge.design.world import ObjectEntry, RobotEntry, World
 from robotforge.sim.session import SimSession
 
@@ -419,11 +419,20 @@ class BehaviorManager:
                 return self._rhythm_walker(robot, existing, create)
             raise BehaviorError(str(exc)) from exc
         top = library.get(entry.library).max_speed if entry is not None and entry.library else None
+        loaded = self._loaded_speed(robot, entry)
+        if loaded is not None:  # it carries more than it walks with at full speed (see library.Payload)
+            top = loaded if top is None else min(top, loaded)
         if top is not None and isinstance(ctrl, (quadruped.QuadrupedGait, humanoid.HumanoidController)):
             ctrl.limit_speed(top)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _loaded_speed(self, robot: str, entry: RobotEntry | None) -> float | None:
+        """The top speed of a library robot carrying more than it walks with at full speed, or None."""
+        if entry is None or not entry.mounts:
+            return None
+        return mounting.loaded_speed(entry.library, mounting.carried_mass(self.session.model, robot, entry.mounts))
 
     def _policy_walker(self, robot: str, walker: str, existing: Any, create: bool, entry: RobotEntry | None):
         """A learned walking policy (ONNX, optional extra `policy`) in place of the gait."""
@@ -436,6 +445,9 @@ class BehaviorManager:
         except (PolicyUnavailable, ValueError) as exc:
             other = "; or use walker 'gait' (built in), 'rl' or 'rhythm'" if "no policy named" in str(exc) else ""
             raise BehaviorError(f"{exc}{other}") from exc
+        loaded = self._loaded_speed(robot, entry)
+        if loaded is not None:
+            ctrl.limit_speed(loaded)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl

@@ -178,7 +178,7 @@ def test_on_a_humanoid_top_is_its_upper_body_not_inside_its_torso(humanoid, moun
     (G1 with a PiPER, T1 with an SO-100). It goes on what is on top: the head, or the shoulders of a head narrower
     than its base."""
     built = mounting.attach(library.build(humanoid), [MountEntry.model_validate({"library": mount})], "bot")
-    m = built.spec.compile()
+    m = built.spec.compile()  # an OP3 carries no SO-100 in a world (too heavy), but where it would go still matters
     d = mounting._posed(m, built.home_qpos)
     base = next(b for b in range(m.nbody) if m.body(b).name.startswith("arm/"))
     pelvis = 1
@@ -544,6 +544,41 @@ def test_a_robot_that_lost_its_arm_says_mounts_puts_one_back(pg):
         pg.behaviors.move_arm("go2/arm", [0.3, 0.0, 0.4])
 
 
+# ---- how much a robot carries ---------------------------------------------------------------------------------------
+
+
+def test_a_dog_refuses_an_arm_heavier_than_it_carries_and_names_lighter_ones(pg):
+    """Regression: a Go2 took a 21 kg UR5e and had fallen over before it was told to walk."""
+    heavy = (
+        r"Universal Robots UR5e weighs 21\.0 kg, and a Unitree Go2 carries at most 12\.1 kg \(up to 4\.7 kg at full "
+        r"speed, 12\.1 kg at 0\.1 m/s\): try xarm7 \(12\.07 kg\), z1 \(4\.69 kg\), piper \(2\.37 kg\)"
+    )
+    with pytest.raises(ValueError, match=heavy):
+        pg.add_robot("go2", library="go2", mounts=[{"library": "ur5e"}])
+    with pytest.raises(ValueError, match="SO-ARM100 weighs 0.8 kg, and a Robotis OP3 carries at most 0.1 kg; no arm"):
+        pg.add_robot("op3", library="op3", mounts=[{"library": "so_arm100"}])
+    assert pg.current_world().robots == []
+
+
+def test_a_dog_carrying_a_heavy_arm_walks_slower_and_says_so(pg):
+    """Regression: robots kept offering a carrier's unloaded top speed, and a Go2 told to walk 0.3 m/s with a Panda
+    on its back crawled 7 cm in 6 s."""
+    result = pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}])
+    assert any("carrying 21.0 kg, more than the 12.1 kg it walks with at full speed" in n for n in result["notes"])
+    assert pg.behaviors.robots()[0]["max_speed"] == pytest.approx(0.2)
+    moved = pg.behaviors.move("anymal", 0.5, 0.0)
+    assert moved["notes"] == ["speed 0.5 m/s is above max_speed 0.2, so it moves at 0.2"]
+    pg.update_robot("anymal", mounts=[{"library": "piper"}])
+    assert pg.behaviors.robots()[0]["max_speed"] > 0.5  # a PiPER it carries at full speed
+
+
+def test_the_library_lists_what_robots_weigh_and_carry():
+    rows = {r["name"]: r for r in library.catalog()}
+    assert rows["piper"]["mass_kg"] == 2.37 and "carries" not in rows["piper"]
+    assert rows["go2"]["carries"] == "up to 4.7 kg at full speed, 12.1 kg at 0.1 m/s"
+    assert rows["op3"]["carries"] == "up to 0.1 kg"
+
+
 # ---- where it goes, and what is refused ---------------------------------------------------------------------------
 
 
@@ -685,3 +720,16 @@ async def test_real_a_t1_carrying_an_so100_stops_without_falling_and_its_arm_mov
     assert "carrier_stopped" in json.loads(result.content[0].text)
     _run(pg, 3.0)
     assert pg.behaviors.pose("t1")["upright"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_a_t1_carrying_a_piper_walks_at_its_lower_top_speed_without_falling(pg):
+    """Regression: robots offered a T1 with a PiPER its unloaded 0.12 m/s, at which it fell backwards within 4 s."""
+    pg.add_robot("t1", library="t1", mounts=[{"library": "piper"}])
+    assert pg.behaviors.robots()[0]["max_speed"] == pytest.approx(0.06)
+    _run(pg, 2.0)
+    start = pg.behaviors.pose("t1")["position"]
+    pg.behaviors.move("t1", 0.12, 0.0)
+    _run(pg, 10.0)
+    end = pg.behaviors.pose("t1")
+    assert end["upright"] and end["position"][0] - start[0] > 0.4

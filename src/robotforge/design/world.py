@@ -372,7 +372,7 @@ def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
 
 def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
     """The robot as built from its source, with the robots it carries mounted on it."""
-    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name)
+    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name, entry.library)
 
 
 def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
