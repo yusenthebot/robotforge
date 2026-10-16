@@ -277,3 +277,23 @@ def test_a_robot_named_exactly_is_found_without_reading_world_yaml(pg, monkeypat
     assert pg.behaviors.stop("dog")["robot"] == "dog"
     with pytest.raises(AssertionError, match="world.yaml was read"):
         pg.behaviors.pose("Dog")
+
+
+def test_a_leg_joint_without_end_stops_keeps_its_knee_bending_one_way():
+    """Regression: ANYmal C's knees turn +-540 degrees; reaching for a foot target near full stretch, the IK
+    swung one through straight to bend the other way and the robot spun round and fell."""
+    import numpy as np
+
+    from robotforge.behaviors import quadruped
+
+    chain = quadruped.Chain(
+        qpos_adr=np.arange(3),
+        dof_adr=np.arange(3),
+        lower=np.array([-0.7, -9.4, -9.4]),
+        upper=np.array([0.5, 9.4, 9.4]),
+        body=1,
+        local_point=np.zeros(3),
+    )
+    kept = quadruped._keep_branch(chain, np.array([0.0, 0.8, -1.4]))
+    np.testing.assert_allclose(kept.lower, [-0.7, 0.8 - math.pi / 2, -1.4 - math.pi / 2])
+    np.testing.assert_allclose(kept.upper, [0.5, 0.8 + math.pi / 2, -1.4 + math.pi / 2])
