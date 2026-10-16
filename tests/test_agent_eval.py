@@ -40,7 +40,7 @@ BASELINE = {
     ),
     "go2_turn": (True, None),
     # Asked to drive "a little", it drove 0.293 m; the prompt now asks for about half a meter.
-    "urdf_rover": (False, {"a robot imported from my_rover.urdf": True, "moved >= 0.3 m": False}),
+    "urdf_rover": (False, {"a robot imported from my_rover.urdf": True, "went >= 0.3 m the way it was sent": False}),
     "hexapod_build": (True, {"it is a hexapod": True}),
     "rover_rock": (True, {"a rover and a rock": True, "upright at the end": True}),
     # It opened lesson 6 and built the cart-pole, but never ran a controller.
@@ -48,13 +48,20 @@ BASELINE = {
     "fix_workshop": (True, {"green_cube starts where it was": True, "an arm call handled it": True}),
     # Run on the same commit after the task was added: open_world failed on the misspelled template, the agent
     # searched for the file (the error did not say where it is), fixed it and walked the dog 1.04 m.
-    "fix_garden": (True, {"the dog walked >= 0.5 m in the garden": True}),
+    "fix_garden": (True, {"the dog walked >= 0.5 m forward in the garden": True}),
     # On 15fddbb: lesson 6, then only compare_controllers, which runs off-screen; the observe after it shows time 0.
     "learn_control_table_only": (False, {"ran a balance controller live": False}),
     # On f281b69: compare_controllers, then run_controller(pd) live with a push at 3 s.
     "learn_control_live": (True, {"ran a balance controller live": True}),
+    # On ae450e3: a hexapod on xl430 servos sent forwards at 0.12 m/s for 5 s went 0.21 m backwards; counted as
+    # distance it passed, and the agent told the user it had walked.
+    "hexapod_backwards": (False, {"it is a hexapod": True, "went >= 0.2 m the way it was sent": False}),
 }
-TASK_OF = {"learn_control_table_only": "learn_control", "learn_control_live": "learn_control"}
+TASK_OF = {
+    "learn_control_table_only": "learn_control",
+    "learn_control_live": "learn_control",
+    "hexapod_backwards": "hexapod_build",
+}
 
 
 @pytest.mark.parametrize("task", list(BASELINE))
@@ -274,6 +281,25 @@ def _drove(robot: str, to: list[float], upright: bool) -> str:
     return _event("move", {"robot": robot, "speed": 0.3, "seconds": 5}, moved)
 
 
+def test_progress_is_measured_the_way_a_move_sent_the_robot(ev):
+    def moved(speed, turn, to, heading=0.0):
+        start = {"robot": "dog", "position": [0, 0, 0.3], "heading_deg": heading, "upright": True}
+        end = {"robot": "dog", "position": to, "heading_deg": heading, "upright": True}
+        result = {"from": start, "to": end, "distance_m": abs(to[0]), "turned_deg": 0, "stopped": True}
+        return _event("move", {"robot": "dog", "speed": speed, "turn": turn, "seconds": 4}, result)
+
+    def went(*events):
+        return ev.progress(ev.parse_events(list(events)), "dog")
+
+    assert went(moved(0.3, 0, [1.0, 0, 0.3])) == pytest.approx(1.0)
+    assert went(moved(0.3, 0, [-0.4, 0, 0.3])) == pytest.approx(-0.4)  # sent forwards, went backwards
+    assert went(moved(-0.3, 0, [-1.0, 0, 0.3])) == pytest.approx(1.0)  # sent backwards, and went
+    assert went(moved(0.3, 0, [0, 1.0, 0.3], heading=90)) == pytest.approx(1.0)  # facing +y
+    # A quarter arc to the left: the chord points 45 degrees left, and the end lies along it.
+    arc = 0.3 / (3.14159 / 8) * 2**0.5
+    assert went(moved(0.3, 3.14159 / 8, [arc / 2**0.5, arc / 2**0.5, 0.3])) == pytest.approx(arc, rel=1e-3)
+
+
 def test_a_dog_that_walked_to_the_rock_is_not_a_rover(ev, tmp_path):
     world = ROCK_WORLD.format(name="dog", template="quadruped")
     events = [_opened("rock"), _drove("dog", [1.5, 0, 0.3], True)]
@@ -327,7 +353,7 @@ def test_the_garden_passes_once_its_dog_walks_in_the_repaired_world(ev, tmp_path
     # Walked before the garden opened: in whatever world was open then, not the garden.
     walk = _garden_walk()
     early = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "c", {"garden": fixed}, walk[0], walk[2], walk[1]))
-    assert _verdict(early)["the dog walked >= 0.5 m in the garden"] is False
+    assert _verdict(early)["the dog walked >= 0.5 m forward in the garden"] is False
     # A new world instead of the user's garden, with its ball lost.
     lost = fixed.replace("objects:", "objects: []\nold:")
     gone = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path / "d", {"garden": lost}, *_garden_walk()))
@@ -351,7 +377,7 @@ def test_a_dog_walked_in_another_world_is_not_the_gardens_dog(ev, tmp_path):
     park = "name: park\nfloor:\n  style: checker\nrobots:\n- name: dog\n  template: quadruped\n"
     events = [_garden_walk()[0], _opened("park"), _drove("dog", [1.0, 0, 0.3], True)]
     outcome = ev.score(ev.TASKS["fix_garden"], _made_up(tmp_path, {"garden": fixed, "park": park}, *events))
-    assert not outcome.passed and _verdict(outcome)["the dog walked >= 0.5 m in the garden"] is False
+    assert not outcome.passed and _verdict(outcome)["the dog walked >= 0.5 m forward in the garden"] is False
 
 
 def test_a_dog_on_grass_must_walk_on_the_grass(ev, tmp_path):

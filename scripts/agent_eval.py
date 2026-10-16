@@ -389,6 +389,46 @@ def travelled(session: Session, robot: str) -> float:
     return max(measured, net)
 
 
+MOVE_DEFAULTS = {"speed": 0.2, "turn": 0.0, "seconds": 3.0}  # robotforge's move tool, for arguments left out
+
+
+def _sent(speed: float, turn: float, seconds: float, heading_deg: float) -> tuple[float, float] | None:
+    """The way a move sends a robot facing heading_deg, as a unit vector in the world: straight ahead (or back, for
+    a negative speed), or along the chord of its arc when it turns; None for a turn on the spot or a full circle."""
+    angle = turn * seconds
+    if abs(angle) < 1e-6:
+        dx, dy = speed * seconds, 0.0
+    else:
+        dx, dy = speed / turn * math.sin(angle), speed / turn * (1.0 - math.cos(angle))
+    size, h = math.hypot(dx, dy), math.radians(heading_deg)
+    if size < 1e-6:
+        return None
+    return (dx * math.cos(h) - dy * math.sin(h)) / size, (dx * math.sin(h) + dy * math.cos(h)) / size
+
+
+def progress(session: Session, robot: str, yaw_deg: float = 0.0) -> float:
+    """How far `robot` went the way it was sent (meters; negative when it went the other way): each move's
+    displacement along the way its speed and turn sent it, or its first to last reported position along the way it
+    faced first (a script or `simulate` can move it too, and yaw_deg is how it was saved), whichever is more. A
+    hexapod on weak servos sent forwards went 0.21 m backwards; counted as distance, it passed "walk a few steps"."""
+    along = 0.0
+    for c in session.ours:
+        m = c.data
+        if c.tool != "move" or not isinstance(m, dict) or (m.get("from") or {}).get("robot") != robot:
+            continue
+        start, end = _pose(m.get("from") or {}), _pose(m.get("to") or {})
+        args = {**MOVE_DEFAULTS, **{k: v for k, v in c.args.items() if k in MOVE_DEFAULTS and v is not None}}
+        if start is None or end is None or "distance_m" not in m:
+            continue
+        way = _sent(float(args["speed"]), float(args["turn"]), float(args["seconds"]), start.heading_deg or 0.0)
+        along += (end.x - start.x) * way[0] + (end.y - start.y) * way[1] if way else 0.0
+    seen = poses(session, robot)
+    if not seen:
+        return along
+    h = math.radians(seen[0].heading_deg if seen[0].heading_deg is not None else yaw_deg)
+    return max(along, (seen[-1].x - seen[0].x) * math.cos(h) + (seen[-1].y - seen[0].y) * math.sin(h))
+
+
 def turned_left(session: Session, robot: str) -> float:
     """Degrees turned to the left over all moves (a right turn counts against it)."""
     return sum(float(m.get("turned_deg") or 0) for m in moves(session, robot))
@@ -514,11 +554,15 @@ def _named(world: World, robot: dict[str, Any]) -> str:
 
 def _walk_criteria(ev: Evidence, world: World, robot: dict[str, Any], kind: str, at_least: float) -> list[Criterion]:
     name, there = robot["name"], ev.seen(world)
-    distance = travelled(there, name)
+    went = progress(there, name, float(robot.get("yaw") or 0))
     upright = upright_at_end(there, name)
     return [
         Criterion(f"a {kind}", True, _named(world, robot)),
-        Criterion(f"moved >= {at_least} m", distance >= at_least, f"{distance:.2f} m"),
+        Criterion(
+            f"went >= {at_least} m the way it was sent",
+            went >= at_least,
+            f"{went:.2f} m ({travelled(there, name):.2f} m in all)",
+        ),
         Criterion("upright at the end", upright is True, str(upright)),
     ]
 
@@ -801,7 +845,8 @@ def check_fix_garden(ev: Evidence) -> list[Criterion]:
     if world is None:
         return [Criterion("the garden world is still there", False, "gone")]
     there = ev.seen(world)
-    walked, upright = travelled(there, "dog"), upright_at_end(there, "dog")
+    dog = next((r for r in world.robots if r.get("name") == "dog"), {})
+    walked, upright = progress(there, "dog", float(dog.get("yaw") or 0)), upright_at_end(there, "dog")
     kinds = world.kinds
     return [
         Criterion(
@@ -814,7 +859,7 @@ def check_fix_garden(ev: Evidence) -> list[Criterion]:
             world.object("ball") is not None,
             ", ".join(o.get("name", "") for o in world.objects),
         ),
-        Criterion(f"the dog walked >= {GARDEN_WALK} m in the garden", walked >= GARDEN_WALK, f"{walked:.2f} m"),
+        Criterion(f"the dog walked >= {GARDEN_WALK} m forward in the garden", walked >= GARDEN_WALK, f"{walked:.2f} m"),
         Criterion("upright at the end", upright is True, str(upright)),
     ]
 

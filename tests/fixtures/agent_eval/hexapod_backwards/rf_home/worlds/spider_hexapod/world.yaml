@@ -1,0 +1,84 @@
+name: spider_hexapod
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: spider
+  template: null
+  file: null
+  library: null
+  build:
+    color: '#354653'
+    material: carbon
+    servo: xl430
+    servo_caps: true
+    base:
+      shape: box
+      size:
+      - 0.46
+      - 0.18
+      - 0.075
+      mass: 0.7
+      sensors:
+      - imu
+    parts:
+    - name: left_hip
+      at:
+      - 0.18
+      - 0.09
+      - 0
+      joint:
+        axis: x
+        range:
+        - -45
+        - 65
+        home: 30
+      shape: none
+      mirror: true
+      repeat:
+        count: 3
+        along: back
+        spacing: 0.18
+    - name: left_thigh
+      parent: left_hip
+      at:
+      - 0
+      - 0.045
+      - 0
+      joint:
+        axis: y
+        range:
+        - -70
+        - 140
+        home: 46
+      shape: capsule
+      size:
+      - 0.025
+      - 0.15
+      direction: down
+      color: '#ed9b35'
+    - name: left_shin
+      parent: left_thigh
+      at: end
+      joint:
+        axis: y
+        range:
+        - -150
+        - -15
+        home: -92
+      shape: capsule
+      size:
+      - 0.021
+      - 0.16
+      direction: down
+      foot: true
+      color: '#455966'
+      sensors:
+      - touch
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects: []
