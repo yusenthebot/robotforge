@@ -243,7 +243,8 @@ LESSONS: tuple[Lesson, ...] = (
         ),
         check=(
             'The front_cam image shows the red ball ahead, and find names it (object "ball") at about x 0.78: '
-            "2 cm short of its middle, because the camera sees only the ball's near half.",
+            "2 cm short of its middle, because the camera sees only the ball's near half; its about_cm (about 2) "
+            "says how far off a find may be.",
             "While turning, the third rover/gyro value (rotation about the vertical axis) is clearly positive, "
             "about 0.6 rad/s for the 1.0 commanded: measuring beats assuming. After stop it is near 0.",
         ),
