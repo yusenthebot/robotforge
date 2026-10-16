@@ -8,6 +8,8 @@ are `<part>_<type>` (the base's IMU is plain `imu`, like the templates').
 from __future__ import annotations
 
 import dataclasses
+import difflib
+import functools
 import math
 from dataclasses import dataclass, field
 
@@ -25,10 +27,11 @@ from robotforge.design.builder.schema import (
     axis_vector,
     control_of,
 )
-from robotforge.design.templates.base import DARK, GEOM, SHELL, new_spec, servo_joint
+from robotforge.design.templates.base import DARK, GEOM, SHELL, BuiltRobot, new_spec, servo_joint
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
+from robotforge.sim.actuators import is_position_servo
 
 # MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
 RANGE_DIST = 1 << int(mujoco.mjtRayDataField.mjRAYDATA_DIST)
@@ -508,6 +511,8 @@ def _mount(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembl
     for joint in list(root.joints) if root is not None else []:
         if joint.type == mujoco.mjtJoint.mjJNT_FREE:  # it rides on this part now instead of moving freely
             child.spec.delete(joint)
+    if mount.home:
+        _pose_mounted(child, mount.home, part.name)
     if child.spec.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
         spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
         spec.option.impratio = max(spec.option.impratio, child.spec.option.impratio)
@@ -519,6 +524,37 @@ def _mount(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembl
     out.home_ctrl.update({f"{part.name}/{k}": v for k, v in child.home_ctrl.items()})
     out.mounted[part.name] = what
     out.notes += [f"{part.name}: {n}" for n in child.notes]
+
+
+def _pose_mounted(child: BuiltRobot, home: dict[str, float], owner: str) -> None:
+    """Start a mounted robot in another pose: its joints set (degrees, meters for slides) and its servos aimed there."""
+    model = child.spec.compile()
+    hinge, slide = int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)
+    joint_name = functools.partial(mujoco.mj_id2name, model, mujoco.mjtObj.mjOBJ_JOINT)
+    movable = [joint_name(j) for j in range(model.njnt) if model.jnt_type[j] in (hinge, slide)]
+    for name, value in home.items():
+        j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if j < 0 or name not in movable:
+            close = difflib.get_close_matches(name, movable, n=2)
+            hint = f" Did you mean {' or '.join(close)}?" if close else ""
+            raise ValueError(
+                f"part {owner!r}: the mounted robot has no joint {name!r} to set at home.{hint} Its joints: "
+                f"{', '.join(movable)}"
+            )
+        is_hinge = int(model.jnt_type[j]) == hinge
+        q = math.radians(value) if is_hinge else float(value)
+        lo, hi = model.jnt_range[j]
+        if model.jnt_limited[j] and not lo - 1e-6 <= q <= hi + 1e-6:
+            shown = (math.degrees(lo), math.degrees(hi)) if is_hinge else (lo, hi)
+            unit = "degrees" if is_hinge else "m"
+            raise ValueError(
+                f"part {owner!r}: home {name} {value:g} is outside its range [{shown[0]:.4g}, {shown[1]:.4g}] {unit}"
+            )
+        child.home_qpos[name] = q
+        for a in range(model.nu):
+            on_it = model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT and model.actuator_trnid[a, 0] == j
+            if on_it and is_position_servo(model, a):
+                child.home_ctrl[mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)] = q
 
 
 # ---- small helpers ----------------------------------------------------------------------------------

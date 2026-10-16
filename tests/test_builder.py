@@ -728,6 +728,47 @@ def test_arm_built_from_parts_with_a_mounted_gripper_picks_and_places(pg):
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
+LIFT_ARM = {  # an arm on a lifting column: it reaches a high shelf only by raising itself
+    "base": {"shape": "box", "size": [0.2, 0.2, 0.04], "fixed": True},
+    "parts": [
+        {
+            "name": "lift",
+            "at": "top",
+            "joint": {"type": "slide", "axis": "z", "range": [0, 0.3]},
+            "actuator": {"model": "belt_rail", "gear": 2},
+            "shape": "box",
+            "size": [0.06, 0.06, 0.2],
+            "mass": 0.3,
+            "direction": "up",
+        },
+        {
+            "name": "arm",
+            "parent": "lift",
+            "at": "end",
+            "robot": {"template": "arm", "params": {"reach": 0.45, "base_height": 0.03, "servo": "bldc_joint"}},
+        },
+    ],
+}
+
+
+def test_a_mounted_robot_starts_in_the_home_pose_its_mount_gives():
+    folded = copy.deepcopy(LIFT_ARM)
+    folded["parts"][1]["robot"]["home"] = {"yaw": 180, "shoulder": -30}
+    model = _model(folded)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    assert data.joint("r/arm/yaw").qpos[0] == pytest.approx(np.pi)
+    assert data.joint("r/arm/shoulder").qpos[0] == pytest.approx(np.radians(-30))
+    assert data.actuator("r/arm/shoulder").ctrl[0] == pytest.approx(np.radians(-30))  # the servo holds it there
+    assert data.joint("r/arm/elbow").qpos[0] == pytest.approx(1.45)  # the rest keep the template's own home
+    folded["parts"][1]["robot"]["home"] = {"elbo": 10}
+    with pytest.raises(ValueError, match="no joint 'elbo'.*Did you mean elbow"):
+        builder.build_robot(folded)
+    folded["parts"][1]["robot"]["home"] = {"elbow": 170}
+    with pytest.raises(ValueError, match="outside its range"):
+        builder.build_robot(folded)
+
+
 def test_range_sensors_compile_and_measure_distance():
     """A rangefinder and a lidar ring on a built robot compile (MuJoCo 3.15 needs their data spec set) and read
     the distance to a wall."""

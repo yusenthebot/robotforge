@@ -220,6 +220,10 @@ class RobotMount(_Strict):
     template: str | None = None
     library: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
+    home: dict[str, float] = Field(
+        default_factory=dict,
+        description="its starting pose: joint name -> degrees (meters for a slide), e.g. an arm folded for driving",
+    )
 
     @model_validator(mode="after")
     def _one(self) -> RobotMount:

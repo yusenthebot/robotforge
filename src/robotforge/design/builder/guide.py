@@ -74,8 +74,9 @@ def guide() -> dict[str, Any]:
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",
             "repeat": '{"count", "around": axis} ring | {"count", "along": axis, "spacing"} row | '
             '{"count", "chain": true} each copy hangs on the previous one (snakes, tentacles); names get _1, _2...',
-            "robot": '{"template": "arm"|"gripper"|..., "params": {...}} or {"library": "so_arm100"}: mount a whole '
-            "robot on this part (an arm on a rover, a gripper on an arm built from parts)",
+            "robot": '{"template": "arm"|"gripper"|..., "params": {...}} or {"library": "piper"}: mount a whole '
+            'robot on this part (an arm on a rover, a gripper on an arm built from parts); "home": {joint: degrees} '
+            "starts it in another pose (an arm folded for driving)",
         },
         "behaviors": (
             "Built robots get sliders and set_controls like any robot, and the built-in behaviors when their shape "
