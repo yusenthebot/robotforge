@@ -382,11 +382,11 @@ STEPS = (
             "comes only from the camera).\nThen press Shuffle to move the cubes and pick again.",
         ),
         done=_text(
-            "它没用方块的名字，也没偷看仿真里的真实位置，只用了相机画面。瞄偏 1.2 厘米以内爪子都夹得住，"
-            "偏 2 厘米时 12 次里有 5 次会把方块推歪。",
-            "It used no cube names and never peeked at the simulator's true positions: only the picture. The "
-            "gripper still closes on a cube aimed up to 1.2 cm off; 2 cm off, it pushed the cube aside in 5 of 12 "
-            "tries.",
+            "它没用方块的名字，也没偷看仿真里的真实位置，只用了相机画面。我们试了 84 次：瞄偏 1.2 厘米以内次次都夹住，"
+            "偏 2 厘米时大约每 6 次就有 1 次把方块推歪。",
+            "It used no cube names and never peeked at the simulator's true positions: only the picture. In 84 tries "
+            "the gripper closed on every cube aimed up to 1.2 cm off; 2 cm off, it pushed about one cube in six "
+            "aside.",
         ),
         check=_picked,
         unlock=("pick", "shuffle"),
