@@ -330,6 +330,20 @@ def _more_carriers(pg: Any) -> None:
     pg.add_robot("ur5e", library="ur5e", pos=[0.0, -1.6], mounts=[{"library": "robotiq_2f85"}])
 
 
+def _complex_splices(pg: Any) -> None:
+    """Three robots spliced from three or more: an ANYmal C carrying a UR5e that wears a Robotiq gripper, a Go2 with a
+    PiPER and an SO-100 side by side, and a Spot with a Z1 and a PiPER."""
+    pg.add_robot(
+        "anymal", library="anymal_c", pos=[0.0, 1.6], mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}]
+    )
+    pg.add_robot(
+        "go2", library="go2", pos=[0.0, 0.2], mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}]
+    )
+    pg.add_robot(
+        "spot", library="spot", pos=[0.0, -1.2], mounts=[{"library": "z1"}, {"name": "arm2", "library": "piper"}]
+    )
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -369,6 +383,7 @@ SHOTS = [
         settle=2.0,
     ),
     Shot("splice_more_carriers", _more_carriers, page=_look((3.6, -1.2, 1.5), (0.0, 0.0, 0.45)), settle=3.0),
+    Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
 ]
 
 
