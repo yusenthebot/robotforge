@@ -224,6 +224,13 @@ EXIT_WAIT = 2.0  # s
 # then start the next rhythm as learned; "fade" to home and wait until it is calm, then fade the next rhythm in.
 STYLES = ("hold", "fade")
 EXITS = ("fade", "hold")  # leaving a turn, the same two ways
+# A turn's walking version is dropped (the robot steadying first) only if that falls at least DROP_MARGIN times fewer
+# in the turn's switch_checks: one fall in about 85 sequences is noise. Dropped on any fall more, the turns of 3 of 6
+# imported A1 walks went (1 to 4 falls against 0 to 3 steadying first) and their 1 s turns after walking slowed to
+# about half the rate (one from 121% and 95% of it to 52% and 44%), while the bench's falls stayed the same: 35 in
+# 1200 sequences either way (scripts/rhythm_bench.py leads). Those of 3 template dog walks, dropped on 2 to 4 more,
+# fell 22 times in the bench when put back.
+DROP_MARGIN = 2  # falls
 
 
 class _Joints:
@@ -382,8 +389,7 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
 def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedWalk:
     """How the walk switches, checked by driving the robot (alone in `model`) the way move and the keyboard do: how it
     steadies leaving the walk (`switching`, STYLES), and for each turn whether it begins straight out of the walk with
-    its walking version or steadies first, and how it is left (EXITS). Each turn's ways are tried in that order, its
-    style's own way of leaving first, on its switch_checks; the first that tips the robot over least is kept. Of the
+    its walking version or steadies first, and how it is left (EXITS), on its switch_checks (_turn_switching). Of the
     two styles, fading is kept only if it tips the robot over less than holding: a check that finds no fall does not
     show a rare one cannot happen, and holding was the safer one wherever a robot steadies when held. Also returns how
     fast a turn asked for right after walking turns in its first second each way, as move then plays it. Reporting the
@@ -420,23 +426,45 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
 def _turn_switching(
     model: mujoco.MjModel, robot: str, walk: SavedWalk, side: str, sign: float, enough: int | None
 ) -> tuple[int, dict[str, Any], list[float]]:
-    """The way into and out of one turn that tips the robot over least in its switch_checks (stopping once a way
-    reaches `enough` falls), the first tried winning a tie: its falls, its fields, and its first-second angles."""
+    """The way into and out of one turn, checked on its switch_checks (counting up to `enough` falls): it begins with
+    its walking version straight out of the walk, unless steadying first tips the robot over at least DROP_MARGIN
+    times fewer; either way it is left the way that tips it over least (EXITS, the style's own first, winning a tie).
+    Its falls, its fields, and its first-second angles."""
     walking = getattr(walk, f"turn_{side}_walking")
-    at = getattr(walk, f"turn_{side}_walking_at")
-    exits = sorted(EXITS, key=lambda e: e != walk.switching)  # the style's own way of leaving first
-    begins = ((walking, at), (None, None)) if walking is not None else ((None, None),)
     best: tuple[int, dict[str, Any], list[float]] | None = None
-    for theta, theta_at in begins:
-        for exit_ in exits:
-            update = {f"turn_{side}_walking": theta, f"turn_{side}_walking_at": theta_at, f"turn_{side}_exit": exit_}
-            limit = enough if best is None else best[0] if enough is None else min(enough, best[0])
-            first: list[float] = []
-            falls = _falls(model, robot, walk.model_copy(update=update), switch_checks(walk.freq, sign), limit, first)
-            if best is None or falls < best[0]:
-                best = (falls, update, first)
-            if falls == 0:
-                return best
+    if walking is not None:
+        best = _turn_exit(model, robot, walk, side, sign, walking, getattr(walk, f"turn_{side}_walking_at"), enough)
+        if best[0] < DROP_MARGIN:  # steadying first cannot fall that much less
+            return best
+    decides = enough if best is None else best[0] - DROP_MARGIN + 1  # counting steadying's falls only this far
+    steady = _turn_exit(model, robot, walk, side, sign, None, None, decides)
+    return steady if best is None or steady[0] <= best[0] - DROP_MARGIN else best
+
+
+def _turn_exit(
+    model: mujoco.MjModel,
+    robot: str,
+    walk: SavedWalk,
+    side: str,
+    sign: float,
+    walking: list[float] | None,
+    at: list[float] | None,
+    enough: int | None,
+) -> tuple[int, dict[str, Any], list[float]]:
+    """Of the ways of leaving one turn (EXITS, the style's own first), the one that tips the robot over least in its
+    switch_checks with the turn beginning as `walking` and `at` say (None: steadying first), the first winning a tie,
+    counting up to `enough` falls: its falls, its fields, and its first-second angles."""
+    exits = sorted(EXITS, key=lambda e: e != walk.switching)
+    best: tuple[int, dict[str, Any], list[float]] | None = None
+    for exit_ in exits:
+        update = {f"turn_{side}_walking": walking, f"turn_{side}_walking_at": at, f"turn_{side}_exit": exit_}
+        limit = enough if best is None else best[0] if enough is None else min(enough, best[0])
+        first: list[float] = []
+        falls = _falls(model, robot, walk.model_copy(update=update), switch_checks(walk.freq, sign), limit, first)
+        if best is None or falls < best[0]:
+            best = (falls, update, first)
+        if falls == 0:
+            break
     assert best is not None
     return best
 

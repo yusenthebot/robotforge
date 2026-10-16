@@ -348,6 +348,37 @@ def test_switches_keep_the_first_way_that_tips_the_robot_over_least(monkeypatch,
     assert rhythm_walk.learn_switches(solo, "crab", _walk("crab", names)).turn_left_exit is None  # no turns yet
 
 
+@pytest.mark.parametrize(("more_falls", "kept_walking"), [(1, True), (2, False)])
+def test_a_walking_turn_is_dropped_only_if_steadying_first_falls_clearly_less(monkeypatch, more_falls, kept_walking):
+    """Regression: a walking turn was dropped on a single fall more than steadying first, in about 85 checks: 3 of 6
+    imported A1 walks lost theirs, their 1 s turns after walking slowed to about half the rate, and the bench fell as
+    often as before. It is dropped only DROP_MARGIN falls or more apart."""
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.behaviors.rhythm_walk import Played
+
+    seen: dict[tuple, int] = {}
+
+    def play(model, robot, walk, commands):
+        """The left turn begun out of the walk falls in the first `more_falls` sequences of each way checked."""
+        turns = [c for c in commands if c[1]]
+        if not turns:
+            return [Played(0.0, False), Played(0.0, False)]
+        fell = False
+        if turns[0][1] > 0 and walk.turn_left_walking is not None and commands[0][0] > 0:
+            way = (walk.switching, walk.turn_left_exit)
+            seen[way] = seen.get(way, 0) + 1
+            fell = seen[way] <= more_falls
+        return [Played(0.0, False), Played(0.5, False), Played(0.0, fell)]
+
+    monkeypatch.setattr(rhythm_walk, "play_alone", play)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    names = joint_names(solo, Body.find(solo, "crab"))
+    still = [0.0] * 3 * len(names)
+    walk = _walk("crab", names, turn_left=still, turn_right=still, turn_rate=1.0, turn_left_walking=still)
+    kept = rhythm_walk.learn_switches(solo, "crab", walk)
+    assert (kept.turn_left_walking is not None) == kept_walking
+
+
 @pytest.mark.parametrize("kept", ["before", "to hold"])
 def test_a_walk_kept_before_or_to_hold_switches_as_walks_always_did(pg, kept):
     """Regression: with faster switching (stop fading to home, rhythms starting once the robot is calm), the walk the
