@@ -182,3 +182,32 @@ def test_the_hand_written_pick_needs_no_demonstrations(pg):
     with pytest.raises(LessonError, match="show it once first"):
         Set(method=0).apply(p)
         Press("try").apply(p)
+
+
+def test_w_a_s_d_move_the_target_along_the_desk(pg):
+    p = _player(pg)
+    start = dict(p.ctx.values)
+    p.handle("drive", speed=0.14, turn=0.0)  # W, as the viewer sends it (70% of the lesson's 0.2 m/s)
+    p.play(0.4)
+    p.handle("drive", speed=0.0, turn=-0.14)  # D
+    p.play(0.5)
+    p.handle("drive", speed=0.0, turn=0.0)
+    p.play(1.0)
+    v = p.ctx.values
+    assert v["tx"] - start["tx"] == pytest.approx(0.056, abs=0.01)
+    assert v["ty"] - start["ty"] == pytest.approx(-0.07, abs=0.01)
+    hand = p.update["live"]["hand"]
+    assert np.linalg.norm(np.subtract(hand[:2], [v["tx"], v["ty"]])) < 0.01  # the gripper went there
+
+
+def test_reset_starts_the_demonstration_over_and_keeps_the_ones_recorded(pg):
+    p = _player(pg)
+    _show_a_pick(p)
+    Press("new_cube").apply(p)
+    p.play(1.0)
+    pg.session.reset()  # R in the viewer
+    update = p.play(0.2)
+    lesson = p.lesson
+    assert pg.lessons.active and len(lesson.demos) == 1 and lesson.recording is not None
+    assert np.allclose(update["live"]["cube"][:2], bc.HOME_SPOT, atol=1e-3)
+    assert update["live"]["recording"] is True
