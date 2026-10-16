@@ -591,6 +591,11 @@ class BehaviorManager:
     def pick_and_place(self, robot: str, obj: str, target: str | list[float]) -> tuple[ArmMotion, dict[str, Any]]:
         with self.session.lock:
             arm = self._arm(robot)
+            if arm.gripper < 0:
+                raise BehaviorError(
+                    f"{arm.robot} has no gripper to pick with; mount one from the library, e.g. add_robot with "
+                    'mounts=[{"library": "robotiq_2f85"}]'
+                )
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
             place, place_top, region = self._place_target(target)

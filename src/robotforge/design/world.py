@@ -20,7 +20,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from robotforge import wording
-from robotforge.design import builder, components, importer, library, props, templates, terrain
+from robotforge.design import builder, components, importer, library, mounting, props, templates, terrain
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 
@@ -55,6 +55,45 @@ class Floor(_Strict):
     friction: float = Field(1.0, gt=0, le=3)
 
 
+class MountEntry(_Strict):
+    """A whole robot carried by another one (see mounting.py): {"library": "piper"} on a Go2's back."""
+
+    name: str | None = None  # default: what it is ("arm", "gripper")
+    library: str | None = None
+    template: str | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    at: str | None = None  # "top" (default), "tool" (an arm's flange; default for a gripper there) or a body name
+    shift: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])  # m, from `at`, in its frame
+    rotate: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])  # [roll, pitch, yaw] in degrees
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return _check_name(v) if v is not None else None
+
+    @field_validator("template")
+    @classmethod
+    def _template(cls, v: str | None) -> str | None:
+        return templates.canonical(v) if v is not None else None
+
+    @field_validator("library")
+    @classmethod
+    def _library(cls, v: str | None) -> str | None:
+        return library.canonical(v) if v is not None else None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> MountEntry:
+        if (self.template is None) == (self.library is None):
+            raise ValueError('a mount is {"library": "piper"} or {"template": "arm", "params": {...}}')
+        if self.library is not None:
+            library.get(self.library)
+        else:
+            templates.get(self.template)
+        if len(self.shift) != 3 or len(self.rotate) != 3:
+            raise ValueError("a mount's shift is [x, y, z] in meters and its rotate [roll, pitch, yaw] in degrees")
+        return self
+
+
 class RobotEntry(_Strict):
     name: str
     template: str | None = None
@@ -64,6 +103,7 @@ class RobotEntry(_Strict):
     params: dict[str, Any] = Field(default_factory=dict)
     pos: list[float] = Field(default_factory=lambda: [0.0, 0.0])  # x, y (and optional z) in meters
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
+    mounts: list[MountEntry] = Field(default_factory=list)  # robots it carries (see mounting.py)
 
     @field_validator("name")
     @classmethod
@@ -182,6 +222,9 @@ class World(_Strict):
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
+        for robot in data["robots"]:
+            if not robot["mounts"]:  # most robots carry nothing: their entries read as before mounts existed
+                del robot["mounts"]
         return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
@@ -328,6 +371,11 @@ def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
 
 
 def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
+    """The robot as built from its source, with the robots it carries mounted on it."""
+    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name)
+
+
+def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
     if entry.template is not None:
         try:
             return templates.build(entry.template, entry.params)

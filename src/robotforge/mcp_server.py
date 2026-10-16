@@ -246,10 +246,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     @server.tool()
     def list_library() -> str:
-        """List real robots that add_robot(library=...) loads: Unitree Go2 and other robot dogs (move and the keyboard
-        walk them), arms like the Franka Panda and AgileX PiPER (move_arm and pick_and_place work) and the Unitree
-        G1 humanoid (walks with a learned policy). The first add_robot of each downloads it from MuJoCo Menagerie
-        (size in download_mb, usually 5-30 s) and caches it."""
+        """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
+        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work),
+        humanoids (G1, Robotis OP3, Booster T1) and a gripper to mount on an arm (Robotiq 2F-85). The first add_robot
+        of each downloads it from MuJoCo Menagerie (size in download_mb, usually 5-30 s) and caches it."""
         from robotforge.design import library
 
         with _tool_errors():
@@ -278,9 +278,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         yaw: float = 0.0,
         library: str | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         or built from parts (build, see builder_guide).
+
+        mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
+        pick_and_place "go2/arm"); on an arm such as ur5e, {"library": "robotiq_2f85"} becomes its gripper. Each
+        mount: library or template, optional name, at ("top" by default, "tool" for an arm's flange, or a body name),
+        shift [x, y, z] in meters and rotate [roll, pitch, yaw] in degrees.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -298,28 +304,42 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}. pos is [x, y] in meters (height is
         automatic); yaw is in degrees."""
         with _tool_errors():
-            for wanted in [library, *build_edit.libraries_in(build)]:
+            for wanted in [library, *build_edit.libraries_in(build), *_mounted_libraries(mounts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
             added = await asyncio.to_thread(
-                playground.add_robot, name, template, file, params, pos, yaw, library=library, build=build
+                playground.add_robot,
+                name,
+                template,
+                file,
+                params,
+                pos,
+                yaw,
+                library=library,
+                build=build,
+                mounts=mounts,
             )
             return _json(added)
 
     @server.tool()
-    def update_robot(
+    async def update_robot(
+        ctx: Context,
         name: str,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, build replaces
-        its whole description (add_part / update_part change one part)."""
+        its whole description (add_part / update_part change one part). mounts replaces the robots it carries (see
+        add_robot; [] takes them all off)."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw, build))
+            for wanted in _mounted_libraries(mounts):
+                await _download_with_progress(wanted, ctx)
+            return _json(await asyncio.to_thread(playground.update_robot, name, params, pos, yaw, build, mounts))
 
     @server.tool()
     def add_object(
@@ -677,6 +697,11 @@ PROGRESS_INTERVAL = 1.0  # s between progress notifications during a download
 # Downloads in flight, by library robot: a call retried after a client timeout joins the running
 # download instead of starting a second one.
 _downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
+
+
+def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
+    """The library robots a mounts list names, to download before the world is compiled."""
+    return [m["library"] for m in mounts or [] if isinstance(m, dict) and isinstance(m.get("library"), str)]
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:

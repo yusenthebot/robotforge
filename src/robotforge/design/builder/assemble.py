@@ -488,7 +488,7 @@ def _camera_axes(look: np.ndarray) -> list[float]:
 
 
 def _mount(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembly) -> None:
-    from robotforge.design import library, templates
+    from robotforge.design import library, mounting, templates
 
     mount = part.spec.robot
     try:
@@ -500,15 +500,7 @@ def _mount(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembl
             what = library.get(mount.library).title
     except ValueError as exc:
         raise ValueError(f"part {part.name!r}: cannot build the mounted robot: {exc}") from exc
-    root = child.spec.worldbody.first_body()
-    for joint in list(root.joints) if root is not None else []:
-        if joint.type == mujoco.mjtJoint.mjJNT_FREE:  # it rides on this part now instead of moving freely
-            child.spec.delete(joint)
-    if child.spec.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
-        spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
-        spec.option.impratio = max(spec.option.impratio, child.spec.option.impratio)
-    for name in ("timestep", "integrator", "cone", "impratio"):
-        setattr(child.spec.option, name, getattr(spec.option, name))
+    mounting.ride_on(child.spec, spec)  # it rides on this part now instead of moving freely
     frame = body.add_frame(pos=[0, 0, 0])
     spec.attach(child.spec, prefix=f"{part.name}/", frame=frame)
     out.home_qpos.update({f"{part.name}/{k}": v for k, v in child.home_qpos.items()})

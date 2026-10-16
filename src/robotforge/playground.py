@@ -23,7 +23,16 @@ from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
+from robotforge.design.world import (
+    CompiledWorld,
+    Floor,
+    MountEntry,
+    ObjectEntry,
+    RobotEntry,
+    World,
+    spawn_height,
+    tidy_name,
+)
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry
 from robotforge.sim.actuators import is_position_servo
@@ -254,6 +263,7 @@ class Playground:
         yaw: float = 0.0,
         library: str | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
@@ -267,6 +277,7 @@ class Playground:
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw,
+                mounts=mounts or [],
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
@@ -292,13 +303,14 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
-            if not params and pos is None and yaw is None and build is None:
-                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
+            if not params and pos is None and yaw is None and build is None and mounts is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw, build or mounts")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
@@ -307,6 +319,8 @@ class Playground:
                 robot.yaw = yaw
             if build is not None:
                 _built(robot).build = build
+            if mounts is not None:  # the whole list: [] takes every mounted robot off
+                robot.mounts = [MountEntry.model_validate(m) for m in mounts]
 
         return _noted(self._edit(change), _yaw_note(yaw))
 
