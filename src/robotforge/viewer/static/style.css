@@ -1280,3 +1280,8 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 8px;
   background: var(--hover);
 }
+
+/* A lesson camera's own picture: the switch between the picture and the mask sits in the panel's head. */
+.camview .plot-head { align-items: center; }
+.camview .seg button { height: 22px; padding: 0 9px; font-size: 11.5px; }
+.camview-note { margin: 4px 0 2px; font-size: 12px; line-height: 1.5; color: var(--muted); }

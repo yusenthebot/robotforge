@@ -170,6 +170,7 @@ function openLesson(desc) {
   $("lesson-title").textContent = pick(desc.title);
   $("lesson-drive").hidden = !desc.drive;
   pip.setup(desc.rig);
+  camview.setup(desc.rig);
   renderControls();
   renderStep();
   needCamera = true;
@@ -185,6 +186,7 @@ function closeLesson() {
   api.followBody(null);
   overlays.clear();
   pip.teardown();
+  camview.teardown();
   document.body.classList.remove("in-lesson");
   $("lesson-panel").hidden = true;
   $("lesson-plots").hidden = true;
@@ -223,8 +225,10 @@ export function lessonUpdate(msg) {
   const resultChanged = JSON.stringify(state?.results) !== JSON.stringify(msg.results);
   // A drawing comes with one update only (when it changes): keep it, or a slow frame may miss it.
   const drawing = msg.live?.drawing ?? state?.drawing ?? null;
+  const pictures = msg.live?.vision?.pictures ?? state?.pictures ?? null; // a lesson camera's, likewise
   state = msg;
   state.drawing = drawing;
+  state.pictures = pictures;
   plots.add(msg.samples);
   if (unlockChanged) {
     renderControls();
@@ -245,6 +249,7 @@ export function lessonUpdate(msg) {
   if (follow !== followWanted && api.followBody(follow)) followWanted = follow;
   renderFormula(msg.live?.formula ?? null);
   renderTable(msg.live?.table ?? null);
+  camview.update();
 }
 
 // The controller's sum with live numbers, one row per term; a row appears once its step shows it.
@@ -1588,6 +1593,151 @@ const pip = {
   },
 };
 
+// What the lesson's own camera sees, as the physics side rendered it: the picture or the color finder's mask,
+// the blobs it found boxed and the biggest one's centroid crossed. Pictures come only when they change.
+const camview = {
+  wrap: null,
+  canvas: null,
+  ctx: null,
+  note: null,
+  seg: null,
+  size: [320, 240],
+  view: "picture", // "picture" or "mask"
+  chosen: false, // the learner picked a view during this step: the step's own suggestion no longer applies
+  step: -1,
+  images: { picture: null, mask: null },
+  shown: null, // the pictures last decoded
+  setup(rig) {
+    this.teardown();
+    if (rig?.kind !== "vision") return;
+    this.size = rig.image;
+    this.wrap = document.createElement("section");
+    this.wrap.className = "plot pip camview";
+    const head = document.createElement("div");
+    head.className = "plot-head";
+    const title = document.createElement("span");
+    title.className = "plot-title";
+    title.textContent = t("robot_camera");
+    this.seg = document.createElement("div");
+    this.seg.className = "seg";
+    for (const view of ["picture", "mask"]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.view = view;
+      b.textContent = t(`camera_${view}`);
+      b.addEventListener("click", () => {
+        this.view = view;
+        this.chosen = true;
+        this.syncSeg();
+        this.draw();
+      });
+      this.seg.append(b);
+    }
+    head.append(title, this.seg);
+    this.canvas = document.createElement("canvas");
+    this.canvas.width = this.size[0] * 2; // twice the picture, so the boxes and the cross stay sharp
+    this.canvas.height = this.size[1] * 2;
+    this.canvas.style.aspectRatio = `${this.size[0]} / ${this.size[1]}`;
+    this.ctx = this.canvas.getContext("2d");
+    this.note = document.createElement("p");
+    this.note.className = "camview-note";
+    this.note.hidden = true;
+    this.wrap.append(head, this.canvas, this.note);
+    $("lesson-plots").prepend(this.wrap); // what the robot sees comes first
+    this.view = "picture";
+    this.chosen = false;
+    this.step = -1;
+    this.syncSeg();
+    this.draw();
+  },
+  teardown() {
+    this.wrap?.remove();
+    this.wrap = this.canvas = this.ctx = this.note = this.seg = null;
+    this.images = { picture: null, mask: null };
+    this.shown = null;
+  },
+  syncSeg() {
+    for (const b of this.seg?.children ?? []) b.setAttribute("aria-pressed", String(b.dataset.view === this.view));
+  },
+  update() {
+    if (!this.wrap || !state) return;
+    const v = state.live?.vision;
+    if (!v) return;
+    if (state.step !== this.step) {
+      this.step = state.step;
+      this.chosen = false;
+    }
+    if (!this.chosen && v.view && v.view !== this.view) {
+      this.view = v.view;
+      this.syncSeg();
+    }
+    this.note.hidden = !v.note;
+    this.canvas.hidden = !!v.note;
+    this.seg.hidden = !!v.note;
+    if (v.note) this.note.textContent = pick(v.note);
+    const pictures = state.pictures;
+    if (pictures && pictures !== this.shown) {
+      this.shown = pictures;
+      for (const key of ["picture", "mask"]) {
+        const img = new Image();
+        img.onload = () => {
+          if (this.shown !== pictures) return; // a newer frame is on its way
+          this.images[key] = img;
+          this.draw();
+        };
+        img.src = pictures[key];
+      }
+    }
+    this.draw();
+  },
+  draw() {
+    const g = this.ctx;
+    if (!g) return;
+    const { width: W, height: H } = this.canvas;
+    const s = W / this.size[0];
+    const img = this.images[this.view];
+    g.fillStyle = `#${api.color("--hover").getHexString()}`;
+    g.fillRect(0, 0, W, H);
+    if (!img) {
+      g.fillStyle = `#${api.color("--muted").getHexString()}`;
+      g.font = `${12 * s}px -apple-system, "Segoe UI", "PingFang SC", sans-serif`;
+      g.textAlign = "center";
+      g.fillText(t("camera_waiting"), W / 2, H / 2);
+      return;
+    }
+    g.imageSmoothingEnabled = this.view === "picture"; // the mask stays a grid of pixels
+    g.drawImage(img, 0, 0, W, H);
+    const blobs = state?.live?.vision?.blobs ?? [];
+    const amber = `#${api.color("--amber").getHexString()}`;
+    const other = this.view === "mask" ? "rgba(122, 162, 247, 0.95)" : "rgba(255, 255, 255, 0.85)";
+    blobs.forEach((b, k) => {
+      const [x0, y0, x1, y1] = b.box;
+      g.lineWidth = k === 0 ? 2.5 : 1.5;
+      g.strokeStyle = k === 0 ? amber : other;
+      g.strokeRect(x0 * s - 2, y0 * s - 2, (x1 - x0 + 1) * s + 4, (y1 - y0 + 1) * s + 4);
+    });
+    const best = blobs[0];
+    if (best) {
+      const [x, y, r] = [best.u * s, best.v * s, 7 * s];
+      g.strokeStyle = "rgba(0, 0, 0, 0.55)"; // a dark edge keeps the cross readable on the white mat
+      g.lineWidth = 4.5;
+      cross(g, x, y, r);
+      g.strokeStyle = amber;
+      g.lineWidth = 2.2;
+      cross(g, x, y, r);
+    }
+  },
+};
+
+function cross(g, x, y, r) {
+  g.beginPath();
+  g.moveTo(x - r, y);
+  g.lineTo(x + r, y);
+  g.moveTo(x, y - r);
+  g.lineTo(x, y + r);
+  g.stroke();
+}
+
 // Robots side by side: a name tag over each, its workspace as a cloud of reachable points, and the
 // targets of the running test (the one each robot is on drawn larger, done ones faded).
 function faceoffRig(rig) {
@@ -1966,7 +2116,80 @@ function planRig(rig) {
   };
 }
 
+// A camera on a post: what it sees as a pyramid down to the floor, the ray through the centroid to where it
+// meets the plane (drawn too) or to the middle of the depth camera's box, the estimate as an amber ball and the
+// cube's true middle as a blue ring, both drawn through the cube.
+function visionRig(rig) {
+  const group = new THREE.Group();
+  const ink = api.color("--ink");
+  const amber = api.color("--amber");
+  const blue = api.color("--plot-blue");
+  const eye = new THREE.Vector3().fromArray(rig.eye);
+  const [R, U, F] = [rig.right, rig.up, rig.forward].map((v) => new THREE.Vector3().fromArray(v));
+  const tanV = Math.tan(THREE.MathUtils.degToRad(rig.fovy / 2));
+  const tanH = (tanV * rig.image[0]) / rig.image[1];
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => {
+    const dir = F.clone().addScaledVector(R, a * tanH).addScaledVector(U, b * tanV);
+    return eye.clone().addScaledVector(dir, -eye.z / dir.z); // where the corner's ray meets the floor
+  });
+  const pts = [];
+  corners.forEach((c, k) => pts.push(eye, c, c, corners[(k + 1) % 4]));
+  const frustum = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), lineMat(ink, 0.45));
+  const onTop = (m) => Object.assign(m, { depthTest: false });
+  // The ray as a thin rod: a one-pixel line is lost against the mat from across the room.
+  const line = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), onTop(basic(amber, 0.9)));
+  const along = new THREE.Vector3(0, 1, 0);
+  const estimate = new THREE.Mesh(new THREE.SphereGeometry(0.007, 20, 12), onTop(basic(amber, 1)));
+  const truth = new THREE.Mesh(new THREE.RingGeometry(0.009, 0.013, 32), onTop(basic(blue, 1, true)));
+  const gap = dashedLine(blue, 0.9);
+  const ray = new THREE.Group();
+  ray.add(line, estimate, truth, gap);
+  const [mw, mh] = rig.mat.size;
+  const sheet = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), basic(blue, 0.14, true));
+  const rim = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(mw, mh)), lineMat(blue, 0.6));
+  const plane = new THREE.Group();
+  plane.add(sheet, rim);
+  const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), lineMat(amber, 0.9));
+  const parts = { frustum, ray, plane, box };
+  group.add(frustum, ray, plane, box);
+  group.traverse((o) => {
+    o.renderOrder = 6; // over the cubes, which the estimate sits inside of
+  });
+  return {
+    group,
+    parts,
+    frame() {
+      const v = state.live?.vision ?? {};
+      const est = v.estimate ? new THREE.Vector3().fromArray(v.estimate) : null;
+      line.visible = estimate.visible = gap.visible = !!est;
+      if (est) {
+        const span = est.clone().sub(eye);
+        line.position.copy(eye).addScaledVector(span, 0.5);
+        line.quaternion.setFromUnitVectors(along, span.clone().normalize());
+        line.scale.set(0.0018, span.length(), 0.0018);
+        estimate.position.copy(est);
+      }
+      truth.visible = !!v.truth;
+      if (v.truth) {
+        const at = new THREE.Vector3().fromArray(v.truth);
+        truth.position.copy(at);
+        truth.quaternion.copy(api.camera.quaternion); // the ring faces the viewer
+        if (est) setPoints(gap, [est, at]);
+      }
+      if (plane.visible) plane.visible = v.plane !== undefined;
+      // On the table the sheet lies just over the mat, which is a few millimetres thick, so it shows.
+      if (plane.visible) plane.position.set(rig.mat.center[0], rig.mat.center[1], Math.max(v.plane, rig.mat.top + 0.001));
+      if (box.visible) box.visible = !!(v.box && est);
+      if (box.visible) {
+        box.position.copy(est);
+        box.scale.set(...v.box.map((x) => Math.max(x, 0.002)));
+      }
+    },
+  };
+}
+
 const RIGS = {
+  vision: visionRig,
   gait: gaitRig,
   plan: planRig,
   joint: jointRig,

@@ -107,6 +107,7 @@ FINISHED: dict[str, Callable[[Player], bool]] = {
     "move": lambda p: p.lesson.run is None or bool(p.lesson.run.get("finished")),  # a planned arm move
     "shoves": lambda p: p.lesson.next_shove is None,  # a round of ever harder shoves
     "run": lambda p: "run" in p.ctx.results,  # a challenge's scored run
+    "pick": lambda p: p.lesson.picking is None,  # the seeing lesson's pick-and-place
 }
 
 
@@ -236,6 +237,7 @@ class Recipe:
     slow: bool = False  # trains on a background thread or runs long tests: out of the quick test run
     sim_limit: float = 120.0  # s of physics one step may take
     wall_limit: float = 120.0  # s on the clock one step may take
+    needs_gl: bool = False  # looks through a camera: cannot be played without offscreen OpenGL
 
 
 @dataclass
@@ -655,6 +657,18 @@ RECIPES: dict[str, Recipe] = {
             "noise": (Set(noise_a=2, noise_b=2, filter_b=1, speed_a=1, speed_b=1), Press("run", CLEAN)),
             "quiz": (Answer(1),),
         }
+    ),
+    "seeing": Recipe(
+        {
+            "look": (Drag("red_cube", (0.21, -0.11, 0.03)),),
+            "mask": (Set(width=15),),
+            "where": (Answer(0), Set(height=2)),
+            "pick": (Press("pick", until="pick"),),
+            "depth": (Press("test"), Set(depth=1), Press("test")),
+            "light": (Set(light=1), Wait(0.5), Set(balance=1, clean=1), Wait(0.5)),
+            "quiz": (Answer(1),),
+        },
+        needs_gl=True,
     ),
     "gait": Recipe(
         {
