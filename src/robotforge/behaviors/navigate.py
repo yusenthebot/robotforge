@@ -601,8 +601,9 @@ class Navigator:
             self._finish(t, "stopped", "fell", "it fell over on the way")
             return
         if self.deadline is not None and t >= self.deadline - 1e-9:
-            left = math.dist(xy, self.plan.points[-1])
-            self._finish(t, "stopped", "out_of_time", f"it ran out of time {left:.2f} m from the end of its path")
+            s, _ = self._project(xy)
+            left = float(self._after[self._seg] - s)
+            self._finish(t, "stopped", "out_of_time", f"it ran out of time with {left:.2f} m of its path to go")
             return
         if self.state == "facing":
             self._face(t, xy, yaw)

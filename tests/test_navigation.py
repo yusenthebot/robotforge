@@ -562,6 +562,23 @@ async def test_move_to_a_place_reports_the_trip(pg):
 
 
 @pytest.mark.anyio
+async def test_a_trip_out_of_time_goes_on_when_sent_again(pg):
+    """A trip longer than one call (60 s at most; a humanoid walks 5 m in that) stops when the time is up, and the
+    note says to call again; the next call goes on from where it stopped."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        call = {"robot": "dog", "to": [2.0, 0.0], "seconds": 3}
+        first = json.loads((await client.call_tool("move", call)).content[0].text)
+        assert first["arrived"] is False and first["why"] == "out_of_time", first
+        assert "call move with the same to again" in first["note"]
+        call.pop("seconds")
+        second = json.loads((await client.call_tool("move", call)).content[0].text)
+        assert second["arrived"] is True and second["path_m"] < first["path_m"], (first, second)
+
+
+@pytest.mark.anyio
 async def test_move_without_a_destination_is_unchanged(pg):
     """speed left out is 0.2 m/s and seconds left out 3 s, exactly as before move took a destination."""
     pg.add_robot("dog", template="quadruped")
@@ -572,3 +589,10 @@ async def test_move_without_a_destination_is_unchanged(pg):
         left_out = json.loads((await client.call_tool("move", {"robot": "dog"})).content[0].text)
     assert given["sim_seconds"] == left_out["sim_seconds"] == 3.0
     assert given["distance_m"] == left_out["distance_m"] > 0.3
+    schema = next(t for t in await _tools(server) if t.name == "move").input_schema["properties"]
+    assert schema["speed"]["default"] == 0.2 and schema["seconds"]["default"] == 3.0  # as an agent reads them
+
+
+async def _tools(server):
+    async with Client(server) as client:
+        return (await client.list_tools()).tools
