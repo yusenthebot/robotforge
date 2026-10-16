@@ -66,7 +66,9 @@ def tentacle() -> dict[str, Any]:
     """A soft-looking robot arm: eight short segments that bend alternately up-down and side to side, tapering toward a
     gripper, on a turret that turns it toward its target. Standing at home it curls forward like a question mark.
 
-    The lower segments carry the rest of the tentacle, so their servos have gearboxes (2:1, then 1.5:1).
+    A servo holds its angle only as stiffly as its gain, and eight of them add up: on hobby servos the tip sat 2 to 3 cm
+    off where move_arm put it. The three lowest joints, which carry the most, are joint modules and the others have a
+    2:1 gearbox, which brings it to about a centimetre, like the other arms.
     """
     parts: list[dict[str, Any]] = [
         {
@@ -90,13 +92,14 @@ def tentacle() -> dict[str, Any]:
             "at": "end",
             "joint": joint,
             "size": [round(0.054 - 0.028 * share, 3), round(0.078 - 0.026 * share, 3)],
+            "mass": round(0.05 - 0.025 * share, 3),  # thin-walled shells
             "direction": "up",
             "color": "#7a4fbf" if i % 2 == 0 else "#a98ad8",
         }
-        if i < 3:
+        if i < 3:  # stiff joint modules where the most weight hangs on them
+            segment["actuator"] = "bldc_joint"
+        elif i < 7:
             segment["actuator"] = {"model": "sts3215", "gear": 2}
-        elif i < 5:
-            segment["actuator"] = {"model": "sts3215", "gear": 1.5}
         parts.append(segment)
         parent = segment["name"]
     parts.append(
