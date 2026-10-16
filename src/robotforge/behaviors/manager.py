@@ -48,6 +48,30 @@ class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
 
 
+def _height_out_of_reach(point: np.ndarray, base: np.ndarray) -> str:
+    """ "is too high at z 1.20 m for the arm, whose shoulder is at 0.47 m" for a height the gripper cannot get to."""
+    where = "high" if point[2] > base[2] else "low"
+    return (
+        f"is too {where} at z {point[2]:.2f} m for the arm, whose shoulder is at {base[2]:.2f} m; "
+        "give a point nearer that height"
+    )
+
+
+WITHIN_REACH = "that is within its reach, but not with the gripper pointing down there: move {it} "
+
+
+def _reach_fix(out: float, reach: float) -> str:
+    """Which way to move a point the gripper cannot reach pointing down ({it} is left to fill in). Within its reach
+    the gripper can still fail to point down there: by the base, or a little too far for the reach worked out (the
+    hand hanging below the stretched-out arm, joint limits not counted). "Nearer" would send a point by the base the
+    wrong way."""
+    if out > 0.97 * reach:  # a height it cannot get to has a reach of 0: away from there too
+        return "move {it} nearer"
+    if out < 0.5 * reach:
+        return WITHIN_REACH + "a little further from the base"
+    return WITHIN_REACH + "a little nearer, or nearer the height of the arm's shoulder"
+
+
 def _a(kind: Kind) -> str:
     """ "a quadruped", "an arm"; a robot no behavior code recognizes is "a robot of no known kind"."""
     if kind == Kind.OTHER:
@@ -553,17 +577,25 @@ class BehaviorManager:
         return arm
 
     def _out_of_reach(self, arm: ArmMotion, target: np.ndarray) -> str:
-        """Why a point cannot be reached, in numbers: how far it is, how far the arm goes, and whether the
-        numbers look like centimetres (the usual mistake)."""
+        """Why a point cannot be reached, in numbers: how far out it is, how far the arm reaches at that height
+        with its gripper pointing down, and whether the numbers look like centimetres (the usual mistake)."""
         point = [round(float(v), 3) for v in target]
-        base, reach = arm.base_and_reach(self.session.data)
-        distance = float(np.linalg.norm(target - base))
         head = f"{arm.robot} cannot reach {point}"
         if target[2] < 0:
             return f"{head}: z is below the floor; give z of 0 or more"
-        if distance > reach * 1.05:
-            return f"{head}: {wording.too_far(point, distance, reach)}"
-        return f"{head} with its gripper pointing down, though it is within the arm's {reach:.2f} m reach; try nearer"
+        at = arm.down_reach(self.session.data, target)
+        if at.reach == 0.0:
+            distance = float(np.linalg.norm(target - at.base))
+            if wording.in_meters(point, distance, at.longest):  # far out of reach because it is in centimetres
+                return f"{head}: {wording.too_far(point, distance, at.longest)}"
+            return f"{head}: {_height_out_of_reach(target, at.base)}"
+        if at.out > at.reach * 1.05:
+            return f"{head}: {wording.too_far(point, at.out, at.reach)}"
+        way = "further from its base" if at.out < 0.5 * at.reach else "nearer, or nearer the height of its shoulder"
+        return (
+            f"{head} with its gripper pointing down, though it is within the arm's {at.reach:.2f} m reach at that "
+            f"height; try a point a little {way}"
+        )
 
     def set_gripper(self, robot: str, state: str) -> ArmMotion:
         with self.session.lock:
@@ -590,29 +622,35 @@ class BehaviorManager:
     def _pick_out_of_reach(
         self, arm: ArmMotion, exc: OutOfReach, object_at: np.ndarray, target_at: np.ndarray, target: str | list[float]
     ) -> str:
-        """What move_arm says about a point, for the two a pick-and-place has: how far each one that is out of reach
-        is, how far the arm goes, and the target in meters if its numbers look like centimetres."""
-        base, reach = arm.base_and_reach(self.session.data)
+        """What move_arm says about a point, for the two a pick-and-place has: how far out each one that is out of
+        reach is, how far the arm reaches at its height, and the target in meters if its numbers look like
+        centimetres."""
         points = {"object": object_at, "place": target_at}
         far = {("target" if b.split()[-1] == "place" else "object"): points[b.split()[-1]] for b in exc.bad}
-        away = " and ".join(f"{np.linalg.norm(p - base):.2f}" for p in far.values())
+        measured = {name: arm.down_reach(self.session.data, p) for name, p in far.items()}
+        head = f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
         one = len(far) == 1
-        # Within its reach the gripper can still fail to point down there (too close to the base, too low or too
-        # high): "move it nearer" would then send the agent the wrong way.
-        beyond = all(np.linalg.norm(p - base) > 0.97 * reach for p in far.values())
-        fix = (
-            f"move {'it' if one else 'them'} nearer"
-            if beyond
-            else "that is within its reach, but not with the gripper pointing down there: move "
-            f"{'it' if one else 'them'} a little further from the base or nearer the height of the arm's shoulder"
-        )
-        text = (
-            f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
-            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; {fix}"
-        )
         if "target" in far and (not isinstance(target, str) or NUMBER_LIST.fullmatch(target)):  # not a named object
-            text += wording.in_meters(target_at[:2], float(np.linalg.norm(target_at - base)), reach)
-        return text
+            at = measured["target"]
+            cm = wording.in_meters(target_at[:2], at.out, at.reach or at.longest)
+        else:
+            cm = ""
+        high = [
+            f"the {name} {_height_out_of_reach(far[name], at.base)}" for name, at in measured.items() if not at.reach
+        ]
+        if high and not cm:
+            return head + "; ".join(high)
+        outs = " and ".join(f"{at.out:.2f}" for at in measured.values())
+        reaches = " and ".join(dict.fromkeys(f"{at.reach or at.longest:.2f}" for at in measured.values()))
+        fixes = {name: _reach_fix(at.out, at.reach) for name, at in measured.items()}
+        if len(set(fixes.values())) == 1:
+            fix = next(iter(fixes.values())).format(it="it" if one else "them")
+        else:
+            fix = "; ".join(f"the {name}: {text.format(it='it')}" for name, text in fixes.items())
+        return (
+            f"{head}{'it is' if one else 'they are'} {outs} m from the arm's base, which reaches about {reaches} m "
+            f"at {'that height' if one else 'those heights'}; {fix}{cm}"
+        )
 
     def placed(self, obj: str, region: dict[str, Any]) -> dict[str, Any]:
         """Check whether `obj` ended up inside the target region."""

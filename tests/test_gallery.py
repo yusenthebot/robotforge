@@ -11,6 +11,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import find_free_port
 from robotforge.design import gallery
 from robotforge.mcp_server import build_server
@@ -240,6 +241,25 @@ def test_the_lift_picker_raises_its_column_to_move_a_cube_to_a_higher_table(pg):
     assert _pick(pg, "picker", "cube", "high")["success"]
     assert pg.session.data.qpos[lift] > 0.15  # it reached the higher table by raising the column
     assert pg.behaviors.pose("picker")["position"][:2] == pytest.approx([0.0, 0.0], abs=0.02)  # the base held still
+
+
+def test_a_lift_arm_out_of_reach_is_told_to_bring_the_cube_nearer(pg):
+    """Its reach was measured from the foot of the column with the lift and the arm stretched out straight (0.98 m), so
+    a cube too far away was said to be within reach and to be moved further from the base."""
+    pg.add_robot("picker", design="lift_picker")
+    pg.add_object("far", shape="table", size=[0.5, 0.3, 0.4], pos=[0.75, 0.15], fixed=True)
+    pg.add_object("near", shape="table", size=[0.26, 0.26, 0.45], pos=[0.45, -0.25], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.75, 0.1, 0.42])
+    _run(pg, 0.5)
+    with pytest.raises(
+        BehaviorError, match=r"it is 0.66 m from the arm's base, which reaches about 0.5\d m .*; move it nearer$"
+    ):
+        pg.behaviors.pick_and_place("picker", "cube", "near")
+    pg.update_object("cube", pos=[0.6, 0.1, 0.42])  # just beyond its 0.49 m with the gripper down
+    _run(pg, 0.5)
+    with pytest.raises(BehaviorError, match="move it a little nearer") as refused:
+        pg.behaviors.pick_and_place("picker", "cube", "near")
+    assert "further" not in str(refused.value)
 
 
 def test_the_mobile_panda_drives_then_lifts_a_cube_off_the_floor_onto_a_table(pg):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import mujoco
 import numpy as np
@@ -34,6 +35,15 @@ class OutOfReach(ValueError):
     def __init__(self, robot: str, bad: list[str]):
         self.bad = bad
         super().__init__(f"{robot} cannot reach the {' and the '.join(bad)} with its gripper pointing down")
+
+
+class DownReach(NamedTuple):
+    """A point against an arm's reach with its gripper pointing down."""
+
+    base: np.ndarray  # the arm's first hinge, raised or lowered toward the point by a lift it rides on
+    out: float  # m from the base to the point, across the floor
+    reach: float  # m the arm reaches out at the point's height; 0 at a height it cannot get to
+    longest: float  # m it reaches out at the height of its base
 
 
 @dataclass
@@ -76,6 +86,10 @@ class ArmMotion:
         # when it turns about an upright axis (an arm with none, like one hanging from a shoulder, moves in
         # straight lines).
         self.yaw = _yaw_index(model, joints, home_qpos)
+        # Slides in the chain: those before the first hinge are a lift that carries the whole arm up and down.
+        self._slides = {j for j in joints if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_SLIDE}
+        first_hinge = next((i for i, j in enumerate(joints) if j not in self._slides), len(joints))
+        self._lifts = joints[:first_hinge]
         self.base_body = int(model.jnt_bodyid[joints[self.yaw if self.yaw is not None else 0]])
         # Bodies the arm's joints move, and the robot they belong to: IK answers must not run them into
         # each other, into whatever carries the arm, or into the floor.
@@ -111,12 +125,23 @@ class ArmMotion:
         self.ik.base_qpos[:] = data.qpos
         self._read_base(data)
 
-    def base_and_reach(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
-        """Where the arm's first joint is, and about how far the arm reaches from it: the spacing of its
-        joints along the chain plus the tool offset, as for an arm stretched out straight."""
-        points = [*(data.xanchor[j] for j in self.joints), data.site_xpos[self.site]]
-        reach = sum(float(np.linalg.norm(b - a)) for a, b in zip(points, points[1:], strict=False))
-        return np.array(points[0], float), reach
+    def down_reach(self, data: mujoco.MjData, point: np.ndarray) -> DownReach:
+        """How a point compares with the arm's reach with its gripper pointing down (see DownReach). The arm reaches
+        with its hinges stretched out to the wrist and the hand hanging below. A lift the arm rides on carries the
+        first hinge up or down toward the point rather than adding reach: measured from the foot of the column,
+        stretched out straight, a picker claimed 0.98 m for an arm that reaches 0.47 m with its gripper down, and
+        points too far away were said to be too near."""
+        point = np.asarray(point, float)
+        anchors = [data.xanchor[j] for j in self.joints if j not in self._slides]
+        arm = sum(float(np.linalg.norm(b - a)) for a, b in zip(anchors, anchors[1:], strict=False))
+        wrist = point + np.array([0.0, 0.0, float(np.linalg.norm(data.site_xpos[self.site] - anchors[-1]))])
+        base = np.array(anchors[0], float)
+        for j in self._lifts:
+            axis, now = data.xaxis[j], float(data.qpos[self.ik.model.jnt_qposadr[j]])
+            lo, hi = self.ik.model.jnt_range[j]
+            base += (float(np.clip(now + (wrist - base) @ axis, lo, hi)) - now) * axis
+        here = float(np.sqrt(max(arm**2 - (wrist[2] - base[2]) ** 2, 0.0)))
+        return DownReach(base, float(np.linalg.norm(point[:2] - base[:2])), here, arm)
 
     # ---- planning ------------------------------------------------------------------
 
