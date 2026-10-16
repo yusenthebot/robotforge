@@ -228,12 +228,17 @@ CATALOG: dict[str, LibraryRobot] = {
             "t1",
             "Booster T1",
             "humanoid",
-            "1.2 m, 32 kg humanoid with 23 joints, built for robot soccer; stands and keeps its balance (no walk yet).",
+            "1.2 m, 32 kg humanoid with 23 joints, built for robot soccer; walks slowly (0.12 m/s) with move and the "
+            "keyboard.",
             "Booster Robotics",
             "Apache-2.0",
             "booster_t1",
             "t1.xml",
-            walks=False,  # measured: the balance gait keeps it standing within 2 degrees, but it falls at 0.05 m/s
+            # On Menagerie's kp 75, kv 5 servos the balance gait kept it standing within 2 degrees but it fell at its
+            # first steps, even at 0.05 m/s, and a 0.4 m/s shove knocked it over. Stiffer and damped, it walks 0.05
+            # to 0.14 m/s within 6 degrees, turns at keyboard commands, and takes 0.4 m/s shoves within 9.
+            stiffer_servos=(150.0, 12.0),
+            max_speed=0.12,  # measured: 1.13 m in 10 s at 0.12; at the gait's own 0.17 it fell within 2 s
         ),
         LibraryRobot(
             "z1",

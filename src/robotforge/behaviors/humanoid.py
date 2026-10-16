@@ -244,6 +244,11 @@ class HumanoidController:
             self._pose_t = 0.0
             self._pending = None
 
+    def limit_speed(self, top: float) -> None:
+        """Lower the fastest accepted speed to what this robot is known to walk at (m/s)."""
+        self.max_speed = min(self.max_speed, top)
+        self.command(self.command_speed, self.command_turn)
+
     def play(self, name: str) -> None:
         """Strike a named pose (see POSES); walking stops first."""
         if name not in POSES:

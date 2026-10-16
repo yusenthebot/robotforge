@@ -414,6 +414,25 @@ def test_op3_stands_and_walks_on_the_balance_gait_found_from_its_legs(pg):
     assert end["position"][0] - start[0] > 0.45 and end["upright"]
 
 
+def test_soft_joint_servos_are_stiffened_keeping_their_force_limits():
+    model = library.build("anymal_c").spec.compile()
+    legs = [a for a in range(model.nu) if model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT]
+    assert len(legs) == 12
+    for a in legs:
+        assert model.actuator_gainprm[a, 0] == 300 and tuple(model.actuator_biasprm[a, :3]) == (0, -300, -10)
+        assert tuple(model.actuator_forcerange[a]) == (-80, 80)
+
+
+def test_a_library_humanoid_walks_no_faster_than_its_known_top_speed(pg, monkeypatch):
+    """Booster T1 fell within 2 s at the 0.17 m/s its gait allows, and walks at 0.12; the catalog's top speed binds
+    humanoids as it does dogs."""
+    monkeypatch.setitem(library.CATALOG, "op3", dataclasses.replace(library.CATALOG["op3"], max_speed=0.06))
+    pg.add_robot("bot", library="op3")
+    assert pg.behaviors.robots()[0]["max_speed"] == 0.06
+    moved = pg.behaviors.move("bot", 0.2, 0.0)
+    assert moved["notes"] == ["speed 0.2 m/s is above max_speed 0.06, so it moves at 0.06"]
+
+
 def test_a_humanoid_that_cannot_walk_yet_stands_and_says_so(pg, monkeypatch):
     monkeypatch.setitem(library.CATALOG, "op3", dataclasses.replace(library.CATALOG["op3"], walks=False))
     pg.add_robot("bot", library="op3")
@@ -517,6 +536,24 @@ def test_real_go2_walks(pg):
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("push", [(0.3, 0.0), (-0.3, 0.0), (0.0, 0.3)])
+@pytest.mark.parametrize("name", ["op3", "t1"])
+def test_real_humanoids_on_the_balance_gait_take_a_shove(pg, name, push):
+    """A T1 on Menagerie's soft servos (kp 75, kv 5) fell over at 0.4 m/s and swayed 12 to 20 degrees at 0.3."""
+    pg.add_robot("bot", library=name)
+    _run(pg, 2.0)
+    m, d = pg.session.model, pg.session.data
+    trunk = pg.behaviors._root_body("bot")
+    dof = m.jnt_dofadr[m.body_jntadr[trunk]]
+    d.qvel[dof : dof + 2] += push
+    tilt = 0.0
+    for _ in range(80):
+        _run(pg, 0.05)
+        tilt = max(tilt, math.degrees(math.acos(min(1.0, d.xmat[trunk].reshape(3, 3)[2, 2]))))
+    assert tilt < 10 and pg.behaviors.pose("bot")["upright"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
 @pytest.mark.parametrize("name", ["op3", "t1"])
 def test_real_humanoid_stands_ten_seconds_on_the_balance_gait(pg, name):
     pg.add_robot("bot", library=name)
@@ -540,7 +577,9 @@ def test_real_dogs_turn_at_keyboard_commands_without_rocking_onto_their_knees(pg
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
-@pytest.mark.parametrize("name, speed, distance", [("anymal_c", 0.3, 2.4), ("barkour", 0.3, 2.4), ("op3", 0.1, 0.8)])
+@pytest.mark.parametrize(
+    "name, speed, distance", [("anymal_c", 0.3, 2.4), ("barkour", 0.3, 2.4), ("op3", 0.1, 0.8), ("t1", 0.12, 0.9)]
+)
 def test_real_new_walkers_walk_ten_seconds(pg, name, speed, distance):
     pg.add_robot("bot", library=name)
     _run(pg, 2.0)

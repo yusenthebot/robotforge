@@ -392,7 +392,7 @@ class BehaviorManager:
                 return self._rhythm_walker(robot, existing, create)
             raise BehaviorError(str(exc)) from exc
         top = self._library_top_speed(robot)
-        if top is not None and isinstance(ctrl, quadruped.QuadrupedGait):
+        if top is not None and isinstance(ctrl, (quadruped.QuadrupedGait, humanoid.HumanoidController)):
             ctrl.limit_speed(top)
         if create:
             self.session.set_controller(robot, ctrl)
@@ -409,7 +409,7 @@ class BehaviorManager:
         return policies.for_robot(entry.library) is not None
 
     def _walks(self, robot: str) -> bool:
-        """False for a library robot that stands and balances but has no walk yet (Booster T1)."""
+        """False for a library robot that stands and balances but has no walk yet (none at present)."""
         entry = self._entry(robot)
         return entry is None or entry.library is None or library.get(entry.library).walks
 
