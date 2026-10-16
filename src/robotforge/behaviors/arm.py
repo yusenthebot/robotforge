@@ -16,7 +16,7 @@ import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.sim.actuators import drives_joint
-from robotforge.sim.geometry import highest_point
+from robotforge.sim.geometry import highest_point, ray
 
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
@@ -31,13 +31,26 @@ GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 # Where the gripper only passes by, high above a grasp or a place, it may lean this far (rad: 20, 35, 50 degrees)
 # away from the base or toward it. Grasping and placing still point down.
 TILTS = (0.35, 0.6, 0.9)
+# An arm riding on a robot carries things over that robot's body: a PiPER on a Go2 swept a cube into the dog's head.
+# So the carry clears the robot's shapes under its way: the ring sector the tool sweeps about the arm's base from above
+# the grasp to above the place, widened by the object, the jaws around it (CARRY_MARGIN, m) and ARC_MARGIN (rad) at
+# either end, looked at with rays every CARRY_STEP (m). A carry that turns about half a turn may go round either way
+# (AMBIGUOUS_TURN, rad from half a turn), so then it is the whole ring. Only what lies under it counts: the highest
+# shape anywhere on the carrier made a rover with a 25 cm mast behind its arm refuse picks in front of it.
+CARRY_MARGIN = 0.04
+ARC_MARGIN = 0.25
+CARRY_STEP = 0.01
+AMBIGUOUS_TURN = 0.5
 
 
 class OutOfReach(ValueError):
-    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...)."""
+    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...).
+    `over` is (the body, its top in m) of the robot carrying the arm that the carry had to clear, when only the points
+    high above the object and the place were out of reach: that height is then why."""
 
-    def __init__(self, robot: str, bad: list[str]):
+    def __init__(self, robot: str, bad: list[str], over: tuple[str, float] | None = None):
         self.bad = bad
+        self.over = over
         super().__init__(f"{robot} cannot reach the {' and the '.join(bad)} with its gripper pointing down")
 
 
@@ -255,12 +268,15 @@ class ArmMotion:
         grasp = obj_pos.copy()
         drop = place + [0, 0, obj_half_height + 0.01]
         rim = max(place_top if place_top is not None else place[2], grasp[2] - obj_half_height)
-        if self.free_adr is not None:
-            # Riding on a robot, the arm swings round its base over that robot's body: a PiPER on a Go2 carrying a
-            # cube from one side to the other at bin height swept it into the dog's head and lost it.
-            rim = max(rim, self._carrier_top())
         travel_z = max(grasp[2], drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
+        over = None
+        if self.free_adr is not None:  # riding on a robot: clear what of it lies under the carry (see CARRY_MARGIN)
+            found = self._carrier_under(grasp, drop, obj_half_height, travel_z - 2 * obj_half_height - 0.03)
+            if found is not None:
+                top, geom = found
+                travel_z = top + 2 * obj_half_height + 0.03
+                over = (self.ik.model.body(int(self.ik.model.geom_bodyid[geom])).name, top)
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])
         points = {"object": grasp, "above object": above, "place": drop, "above place": above_drop}
@@ -270,7 +286,8 @@ class ArmMotion:
             if (self._solve_tilting(p)[1] if name.startswith("above") else self.reach_error(p)) > REACH_TOL
         ]
         if bad:
-            raise OutOfReach(self.robot, bad)
+            high_only = all(name.startswith("above") for name in bad)
+            raise OutOfReach(self.robot, bad, over if high_only else None)
         start = self.tool_target_end()
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach", tilt=True))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
@@ -281,19 +298,50 @@ class ArmMotion:
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", tilt=True))
 
-    def _carrier_top(self) -> float:
-        """The height (m) of the highest collision shape of the robot carrying the arm, the arm left out."""
+    def _carrier_under(self, a: np.ndarray, b: np.ndarray, half: float, floor: float) -> tuple[float, int] | None:
+        """The highest point (m) of the robot carrying the arm (the arm left out) under the way an object `half` high
+        is carried from above `a` to above `b` (see CARRY_MARGIN), and the geom there; None when nothing of the robot
+        there rises above `floor` (m)."""
         m, d = self.ik.model, self.ik.data
         self.ik.point(self.chain, self.q)  # poses every body, the carrier where it is now (see sync)
         mine = f"{self.robot}/"
-        tops = [
-            float(highest_point(m, d, g)[2])
-            for g in range(m.ngeom)
-            if int(m.body_rootid[m.geom_bodyid[g]]) == self._robot_root
-            and not (m.body(int(m.geom_bodyid[g])).name or "").startswith(mine)
-            and (m.geom_contype[g] or m.geom_conaffinity[g])
-        ]
-        return max(tops, default=0.0)
+        da, db = np.asarray(a, float)[:2] - self.base_xy, np.asarray(b, float)[:2] - self.base_xy
+        ra, rb = float(np.linalg.norm(da)), float(np.linalg.norm(db))
+        margin = half + CARRY_MARGIN
+        r_lo, r_hi = max(0.0, min(ra, rb) - margin), max(ra, rb) + margin
+        ta = float(np.arctan2(da[1], da[0]))
+        turn = self._sweep(ta, float(np.arctan2(db[1], db[0]))) if min(ra, rb) > 1e-3 else 2 * np.pi
+        whole = abs(abs(turn) - np.pi) < AMBIGUOUS_TURN or abs(turn) >= 2 * np.pi - 2 * ARC_MARGIN
+        tops = {}
+        for g in range(m.ngeom):
+            body = int(m.geom_bodyid[g])
+            if int(m.body_rootid[body]) != self._robot_root or (m.body(body).name or "").startswith(mine):
+                continue
+            if not (m.geom_contype[g] or m.geom_conaffinity[g]):
+                continue
+            top = float(highest_point(m, d, g)[2])
+            reach = float(np.linalg.norm(d.geom_xpos[g][:2] - self.base_xy))
+            if top > floor and r_lo - m.geom_rbound[g] <= reach <= r_hi + m.geom_rbound[g]:
+                tops[g] = top
+        if not tops:
+            return None
+        start_z = max(tops.values()) + 0.01
+        down = np.array([0.0, 0.0, -1.0])
+        best: tuple[float, int] | None = None
+        for r in np.arange(r_lo, r_hi + CARRY_STEP / 2, CARRY_STEP):
+            if whole:
+                angles = np.arange(0.0, 2 * np.pi, CARRY_STEP / max(r, CARRY_STEP))
+            else:
+                spread = ARC_MARGIN + margin / max(r, margin)
+                side = 1.0 if turn >= 0 else -1.0
+                angles = ta + side * np.arange(-spread, abs(turn) + spread, CARRY_STEP / max(r, CARRY_STEP))
+            for angle in angles:
+                start = np.array([*(self.base_xy + r * np.array([np.cos(angle), np.sin(angle)])), start_z])
+                for g in tops:
+                    dist = ray(m, d, g, start, down)
+                    if dist >= 0 and start_z - dist > floor and (best is None or start_z - dist > best[0]):
+                        best = (start_z - dist, g)
+        return best
 
     def tool_target_end(self) -> np.ndarray:
         """Where the tool will be once the queued moves are done."""

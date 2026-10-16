@@ -27,7 +27,7 @@ import numpy as np
 
 from robotforge import wording
 from robotforge.design.templates.base import BuiltRobot
-from robotforge.sim.geometry import collides, lowest_point, visible
+from robotforge.sim.geometry import collides, lowest_point, ray, visible
 
 OVERLAP_ERROR = 0.004  # m: deeper than this, the mount and its carrier are inside each other (as the builder's check)
 OPTIONS = ("timestep", "integrator", "cone", "impratio")  # physics options a mounted robot takes from its carrier
@@ -254,7 +254,7 @@ def _on_top(
 
     def height(x: float, y: float) -> tuple[float, int] | None:
         start = origin + rot @ np.array([x, y, above])
-        hits = [(h, g) for g in shapes if (h := _ray(model, data, g, start, down)) >= 0]
+        hits = [(h, g) for g in shapes if (h := ray(model, data, g, start, down)) >= 0]
         return (above - min(hits)[0], min(hits)[1]) if hits else None
 
     spots = []  # (the base's height there, the median height under it, offset, the geom at the top)
@@ -311,15 +311,6 @@ def _surface(model: mujoco.MjModel, bodies: Sequence[int]) -> list[int]:
         shown = [g for g in geoms if visible(model, g)]
         out += shown or [g for g in geoms if collides(model, g)]
     return out
-
-
-def _ray(model: mujoco.MjModel, data: mujoco.MjData, g: int, start: np.ndarray, down: np.ndarray) -> float:
-    """How far down from `start` the ray meets geom `g`, or -1."""
-    if int(model.geom_type[g]) == int(mujoco.mjtGeom.mjGEOM_MESH):
-        return float(mujoco.mj_rayMesh(model, data, g, start, down))
-    return float(
-        mujoco.mju_rayGeom(data.geom_xpos[g], data.geom_xmat[g], model.geom_size[g], start, down, model.geom_type[g])
-    )
 
 
 def _corners(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:
@@ -465,8 +456,8 @@ def _span(
     """Where the line through `point` along `up` enters and leaves these shapes (m from `point`), and the geom it
     leaves through at the top; None if it misses them."""
     far = 2.0  # m, from well outside any robot
-    downward = [(d, g) for g in geoms if (d := _ray(model, data, g, point + far * up, -up)) >= 0]
-    upward = [d for g in geoms if (d := _ray(model, data, g, point - far * up, up)) >= 0]
+    downward = [(d, g) for g in geoms if (d := ray(model, data, g, point + far * up, -up)) >= 0]
+    upward = [d for g in geoms if (d := ray(model, data, g, point - far * up, up)) >= 0]
     if not downward or not upward:
         return None
     distance, geom = min(downward)

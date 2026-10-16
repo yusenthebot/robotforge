@@ -25,6 +25,17 @@ def visible(model: mujoco.MjModel, geom: int) -> bool:
     return int(model.geom_group[geom]) < VISIBLE_GROUPS
 
 
+def ray(model: mujoco.MjModel, data: mujoco.MjData, geom: int, start: np.ndarray, direction: np.ndarray) -> float:
+    """How far from `start` along the unit vector `direction` the ray meets `geom`, or -1 when it misses it."""
+    if int(model.geom_type[geom]) == int(G.mjGEOM_MESH):
+        return float(mujoco.mj_rayMesh(model, data, geom, start, direction))
+    return float(
+        mujoco.mju_rayGeom(
+            data.geom_xpos[geom], data.geom_xmat[geom], model.geom_size[geom], start, direction, model.geom_type[geom]
+        )
+    )
+
+
 def lowest_point(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> np.ndarray:
     """The world point of `geom` with the smallest z, exact for the common shapes."""
     return _furthest(model, data, geom, -1.0)

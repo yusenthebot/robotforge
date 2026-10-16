@@ -330,6 +330,51 @@ def test_mobile_manipulator_drives_then_picks_with_its_mounted_arm(pg):
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
+def test_a_mast_behind_a_rovers_arm_leaves_picks_in_front_of_it_alone(pg):
+    """Regression: an arm on a moving robot carried things above the highest shape anywhere on that robot, so a 25 cm
+    mast 19 cm behind the arm made this pick in front of it slow (15 cm mast) or refused (25 and 35 cm masts)."""
+    build = copy.deepcopy(MOBILE_ARM)
+    mast = {"name": "mast", "at": "top", "shift": [-0.13, 0, 0.175], "shape": "cylinder", "size": [0.03, 0.35]}
+    build["parts"].append({**mast, "joint": "fixed"})
+    pg.add_robot("mm", build=build)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.2, 0.0])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[0.95, 0.32], fixed=True)
+    pg.behaviors.move("mm", 0.3, 0.0)
+    _run(pg, 3.0)
+    pg.behaviors.stop("mm")
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("mm", "cube", "bin")
+    carry = next(wp for wp in arm.queue if wp.label == "carry")
+    assert carry.position[2] < 0.25  # as without the mast: over the bin's rim, not over the mast's top (0.41 m)
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+def test_a_carry_over_a_tall_part_of_the_rover_is_refused_naming_that_part(pg):
+    """Too high to carry over, the refusal blamed the object and the target ("move them a little further from the
+    base") instead of the part of the robot in the way."""
+    build = copy.deepcopy(MOBILE_ARM)
+    build["parts"] += [
+        {"name": "boom", "at": [0.3, 0, 0.04], "shape": "box", "size": [0.2, 0.04, 0.02], "joint": "fixed"},
+        {
+            "name": "post",
+            "parent": "boom",
+            "at": [0.1, 0, 0],
+            "shift": [0, 0, 0.15],
+            "shape": "cylinder",
+            "size": [0.03, 0.3],
+            "joint": "fixed",
+        },
+    ]
+    pg.add_robot("mm", build=build)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.3, 0.25])
+    pg.add_object("bin", shape="bin", size=[0.12, 0.12, 0.05], pos=[0.3, -0.25], fixed=True)
+    _run(pg, 0.5)
+    with pytest.raises(ValueError, match=r"over mm's post, whose top is 0\.4\d m high, .*does not pass over post"):
+        pg.behaviors.pick_and_place("mm", "cube", "bin")
+
+
 def test_an_arm_carried_at_a_heading_reaches_targets_on_either_side(pg):
     """Review HIGH 4: the IK seed did not wrap angles, so with the rover facing +y the place to its left
     (a world heading near 180 degrees) seeded at -268 degrees, clipped to the joint limit, and was refused."""

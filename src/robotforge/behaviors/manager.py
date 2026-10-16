@@ -668,6 +668,16 @@ class BehaviorManager:
         base, reach = arm.base_and_reach(self.session.data)
         points = {"object": object_at, "place": target_at}
         far = {("target" if b.split()[-1] == "place" else "object"): points[b.split()[-1]] for b in exc.bad}
+        if exc.over is not None:  # it reaches both, but not high enough above them to carry over its carrier
+            body, top = exc.over
+            owner, _, part = body.partition("/")
+            part = part.split("/", 1)[0] or owner
+            return (
+                f"{arm.robot} carries things from the object to the target over {owner}'s {part}, whose top is "
+                f"{top:.2f} m high, and cannot lift them that high above the {' and the '.join(far)}; put the object "
+                f"and the target where the carry between them does not pass over {part} (on the same side of {owner}, "
+                "say)"
+            )
         away = " and ".join(f"{np.linalg.norm(p - base):.2f}" for p in far.values())
         one = len(far) == 1
         # Within its reach the gripper can still fail to point down there (too close to the base, too low or too

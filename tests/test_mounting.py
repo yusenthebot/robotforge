@@ -285,22 +285,31 @@ async def test_a_script_picks_from_a_walking_dog_after_it_stops(pg):
 
 def test_an_arm_on_a_dog_carries_things_over_the_dogs_back(pg):
     """Regression: the carry height came from the bin's rim alone, and swinging round its base from one side of a Go2
-    to the other, a PiPER swept the cube through the dog's head at 15 cm and lost it."""
+    to the other, a PiPER swept the cube through the dog's head at 15 cm and lost it. Here the carry passes over the
+    stand-in's hips."""
     pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
-    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.15, 0.3])
-    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[0.15, -0.35])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.0, 0.3])
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[0.0, -0.35])
     _run(pg, 1.0)
     m, d = pg.session.model, pg.session.data
-    back = max(
-        highest_point(m, d, g)[2]
-        for g in range(m.ngeom)
-        if m.body(m.geom_bodyid[g]).name.startswith("go2/")
-        and not m.body(m.geom_bodyid[g]).name.startswith("go2/arm/")
-        and (m.geom_contype[g] or m.geom_conaffinity[g])
-    )
-    arm, _ = pg.behaviors.pick_and_place("go2/arm", "cube", "bin")
+    hips = max(highest_point(m, d, g)[2] for g in range(m.ngeom) if m.body(m.geom_bodyid[g]).name.endswith("_hip"))
+    arm, placed = pg.behaviors.pick_and_place("go2/arm", "cube", "bin")
     carry = next(wp for wp in arm.queue if wp.label == "carry")
-    assert carry.position[2] >= back + 0.04 + 0.03 - 1e-3  # the cube's bottom clears the dog by 3 cm
+    assert carry.position[2] >= hips + 0.04 + 0.03 - 1e-3  # the cube's bottom clears the dog by 3 cm
+    cube = m.body("cube").id
+    dog = {b for b in range(m.nbody) if m.body(b).name.startswith("go2/") and "/arm/" not in m.body(b).name}
+    touched = set()
+    for _ in range(160):
+        _run(pg, 0.1)
+        for c in d.contact[: d.ncon]:
+            bodies = {int(m.geom_bodyid[g]) for g in c.geom}
+            if cube in bodies and bodies & dog:
+                touched |= bodies & dog
+        if arm.done:
+            break
+    _run(pg, 0.5)
+    assert not touched
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 
 def test_an_arm_on_a_dog_turns_its_gripper_down_gently(pg):
