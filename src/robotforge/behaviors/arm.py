@@ -271,8 +271,8 @@ class ArmMotion:
         bad = self.unreachable({"object": grasp, "above object": above, "place": drop, "above place": above_drop})
         if bad:
             raise OutOfReach(self.robot, bad)
-        carry_z = self._carry_height(grasp, drop, travel_z, obj_half_height)
-        if carry_z is None:
+        across = self._carry_height(grasp, drop, travel_z, obj_half_height)
+        if across is None:
             under, fix = "the robot carrying the arm", "put both on the same side of the robot, or turn it"
             if int(self.ik.model.body_jntnum[self._robot_root]) == 0:  # bolted to the floor: no robot to turn
                 under, fix = "its own base", "move the object or the place"
@@ -281,6 +281,7 @@ class ArmMotion:
                 f"load would hit {under}, or the gripper cannot point down there, even carried "
                 f"{CARRY_RAISES * CARRY_RAISE:.1f} m higher; {fix}"
             )
+        carry_z, carry_turn, carry_joints = across
         above[2] = above_drop[2] = travel_z = carry_z
         start = self.tool_target_end()
         # Starting low (an arm folded over the robot that carries it), go up first and across at the carrying height:
@@ -305,33 +306,82 @@ class ArmMotion:
         # With the object in or under the gripper the arm keeps to the paths checked here: straight up and down, and
         # across the way _carry_height went round. Choosing the way across when it started, from where the IK put the
         # base joint, a scorpion's tail went round the other side, right over its body, and flung the cube.
-        across = self._planned_turn(above, above_drop)
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend", turn=0.0))
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
         self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", turn=0.0))
-        carry = Waypoint(above_drop, None, self._time(above, above_drop), "carry", turn=across, load=obj_half_height)
-        self.queue.append(carry)
+        carry_time = self._time(above, above_drop)
+        if carry_joints is not None:
+            carry_time = max(carry_time, float(np.max(np.abs(carry_joints - self._solve(above)[0]))) / JOINT_SPEED)
+        self.queue.append(
+            Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=obj_half_height)
+        )
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0))
 
-    def _carry_height(self, grasp: np.ndarray, drop: np.ndarray, low: float, load_half_height: float) -> float | None:
+    def _carry_height(
+        self, grasp: np.ndarray, drop: np.ndarray, low: float, load_half_height: float
+    ) -> tuple[float, float | None, np.ndarray | None] | None:
         """The lowest height from `low` up at which the tool reaches every point of the way across, around the base
-        from above the object to above the place, and the load it carries clears the robot the arm rides on. A
-        Go2's PiPER moving a floor cube from its left to its right swung it round in front at 10 cm, where its
-        gripper cannot point down without hitting the dog's head: the arm stalled, then jumped and flung the cube.
-        At 30 cm the gripper got past, but the cube under it struck the head and was knocked out of its fingers.
-        None when no height up to CARRY_RAISES tries works."""
+        from above the object to above the place, and the load it carries clears the robot the arm rides on; and the
+        way round (rad, None for an arm that moves in straight lines), or the joint angles to carry it to joint by
+        joint when no way round works (see _joint_carry). The way the base joint can go from where the IK
+        puts it over the object comes first, at any height; then the other way round, if the joint can go that way
+        too. Planned from where the tool points instead, a scorpion's tail, which reaches behind it by bending back
+        over the top, went round the side it could not turn to. A Go2's PiPER moving a floor cube from its left to
+        its right swung it round in front at 10 cm, where its gripper cannot point down without hitting the dog's
+        head: the arm stalled, then jumped and flung the cube. At 30 cm the gripper got past, but the cube under it
+        struck the head and was knocked out of its fingers. None when no height up to CARRY_RAISES tries works."""
         if self.yaw is None:
-            return low
-        turn = self._planned_turn(grasp, drop)
+            return low, None, None
+        da, db = grasp[:2] - self.base_xy, drop[:2] - self.base_xy
+        step = float(np.arctan2(da[0] * db[1] - da[1] * db[0], da @ db))  # signed, -pi..pi
+        joint = float(self._solve(np.array([grasp[0], grasp[1], low]))[0][self.yaw])
+        planned = self._inside_limits(step, joint)
+        other = planned - np.copysign(2 * np.pi, planned)
+        for turn in (planned, *([other] if self._overrun(other, joint) <= JOINT_SLACK else [])):
+            for k in range(CARRY_RAISES + 1):
+                z = low + k * CARRY_RAISE
+                a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
+                # The first height's ends are checked with the other key points.
+                if self._carries_across(a, b, turn, load_half_height, ends=k > 0):
+                    return z, turn, None
         for k in range(CARRY_RAISES + 1):
             z = low + k * CARRY_RAISE
-            a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
-            # The first height's ends are checked with the other key points.
-            if self._carries_across(a, b, turn, load_half_height, ends=k > 0):
-                return z
+            joints = self._joint_carry(
+                np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z]), load_half_height
+            )
+            if joints is not None:
+                return z, None, joints
         return None
+
+    def _joint_carry(self, a: np.ndarray, b: np.ndarray, load_half_height: float) -> np.ndarray | None:
+        """The joint angles over the place for a carry from `a` to `b` made joint by joint, when no way round the base
+        keeps the gripper pointing down: the pose nearest the one over the object, if on the way there the arm clears
+        itself and the robot it rides on, and the load clears that robot and the floor (checked at twice as many
+        points as a way round, as a joint move swings wider); None otherwise. A scorpion's tail, which reaches behind
+        it by bending back over the top, cannot keep its claw pointing down while it turns from one side to the other
+        behind it, but gets there joint by joint."""
+        start, err, _ = self._solve(a)
+        if err > REACH_TOL:
+            return None
+        now, self.q = self.q, start  # solved from the pose over the object, to change as little as it can
+        try:
+            end, err, _ = self._solve(b)
+        finally:
+            self.q = now
+        if err > REACH_TOL:
+            return None
+        self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
+        under = self._carrier_boxes()
+        for s in np.linspace(0, 1, 2 * CARRY_CHECKS + 2)[1:-1]:
+            q = start + (end - start) * s
+            if self._collides(q):
+                return None
+            p = self.ik.point(self.chain, q)
+            if p[2] - load_half_height < LOAD_CLEARANCE or not self._load_clears(p, load_half_height, under):
+                return None
+        return end
 
     def _carries_across(
         self, a: np.ndarray, b: np.ndarray, turn: float, load_half_height: float, ends: bool = True
@@ -340,13 +390,17 @@ class ArmMotion:
         gripper pointing down, and a load of this half height under it clears the robot the arm rides on."""
         self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
         under = self._carrier_boxes()
-        clear = all(
+        clear = all(self._load_clears(p, load_half_height, under) for p in self._way_around(a, b, turn))
+        return clear and self._reaches_around(a, b, ends, turn)
+
+    @staticmethod
+    def _load_clears(p: np.ndarray, load_half_height: float, under: list[tuple[np.ndarray, np.ndarray, float]]) -> bool:
+        """Whether a load of this half height hanging under the tool at `p` clears the boxes of the robot under it."""
+        return all(
             p[2] - load_half_height > top + LOAD_CLEARANCE
-            for p in self._way_around(a, b, turn)
             for center, half, top in under
             if np.all(np.abs(p[:2] - center) < half + load_half_height + LOAD_CLEARANCE)
         )
-        return clear and self._reaches_around(a, b, ends, turn)
 
     def _planned_turn(self, a: np.ndarray, b: np.ndarray) -> float | None:
         """How far a move from `a` to `b` turns about the base, the way the base joint can go; None for an arm with
@@ -461,10 +515,14 @@ class ArmMotion:
         wp = replace(wp, duration=max(wp.duration, self._path_length(start, wp.position) / SPEED))
         if err > REACH_TOL:
             return wp  # as near as it gets
+        steps = max(1, round(wp.duration * self.rate_hz))
         if wp.turn is None:
-            if restarted or float(self._axis0 @ DOWN) < FAR_FROM_DOWN:
-                # The goal lies in another elbow or wrist branch, which no straight tool path reaches, or the tool
-                # starts far from pointing down (an arm folded for driving): move joint by joint instead, as
+            free = not restarted and float(self._axis0 @ DOWN) >= FAR_FROM_DOWN
+            if not free or self._follow(self.q, start, wp.position, steps, self._axis0)[1] > REACH_TOL:
+                # The goal lies in another elbow or wrist branch, which no straight tool path reaches, the tool
+                # starts far from pointing down (an arm folded for driving), or the arm cannot follow the path from
+                # here (a scorpion's tail reaching behind it flips over its back, and going round with the tail ran
+                # into the limit of its base joint and stopped 30 cm short): move joint by joint instead, as
                 # industrial arms do, slowly enough not to fling a load. Turning the wrist over along a straight
                 # path, a folded PiPER still had it sideways on the way down and swept the cube away.
                 return self._joint_move(wp, goal)
@@ -473,7 +531,6 @@ class ArmMotion:
         # from another pose with the tool where it is (down by the object, changing pose could knock it). Moving joint
         # by joint instead, a tentacle's hand swung in sideways on the way down and pushed the cube 4 cm, and a Panda
         # base swung its load 250 degrees on the way down and threw it.
-        steps = max(1, round(wp.duration * self.rate_hz))
         rises = float(wp.position[2]) > float(start[2]) + APPROACH / 2  # off the object or the place
         if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps)[1] <= REACH_TOL:
             return wp
@@ -488,14 +545,18 @@ class ArmMotion:
         travel = float(np.max(np.abs(goal - self.q)))
         return replace(wp, duration=max(wp.duration, travel / JOINT_SPEED), joints=goal)
 
-    def _follow(self, q: np.ndarray, a: np.ndarray, b: np.ndarray, steps: int) -> tuple[np.ndarray, float]:
+    def _follow(
+        self, q: np.ndarray, a: np.ndarray, b: np.ndarray, steps: int, axis0: np.ndarray = DOWN
+    ) -> tuple[np.ndarray, float]:
         """The pose the arm ends in when it follows the current move's path from `a` to `b` (turning self._turn)
-        from pose `q`, tick by tick as update() does, and how far the tool strays from the path on the way (m)."""
+        from pose `q`, with the tool turning from `axis0` to pointing down, tick by tick as update() does, and how far
+        the tool strays from the path on the way (m)."""
         worst = 0.0
         for k in range(1, steps + 1):
             u = k / steps
             s = u * u * (3 - 2 * u)
-            q, err = self.ik.solve(self.chain, self._arc_point(a, b, s), q, iterations=6, axis=(self.tool_axis, DOWN))
+            axis = (self.tool_axis, _turn_toward(axis0, DOWN, s))
+            q, err = self.ik.solve(self.chain, self._arc_point(a, b, s), q, iterations=6, axis=axis)
             worst = max(worst, err)
         return q, max(worst, float(np.linalg.norm(self.ik.point(self.chain, q) - b)))
 

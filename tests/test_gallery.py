@@ -496,6 +496,14 @@ CHECKED_WAYS = {
     # Next to its base the tentacle's IK found the grasp in another pose: moving there joint by joint, the hand
     # swung in sideways and pushed the cube 4 cm.
     "tentacle beside its base": ("tentacle", "r", [-0.014, -0.167], [0.27, 0.153]),
+    # The scorpion's tail reaches behind it by bending back over the top. Going round to a cube behind it, its base
+    # joint ran into its limit and the claw stopped 30 cm short.
+    "scorpion to a cube behind it": ("scorpion", "r/claw", [-0.5, 0.05], [0.05, 0.35]),
+    # Behind it, 45 degrees round: no way round keeps the claw pointing down over the leg between, so the carry goes
+    # joint by joint; planned from where the claw points, it was refused.
+    "scorpion round behind it": ("scorpion", "r/claw", [-0.4, -0.1], [-0.2, -0.2]),
+    # From its right to behind its left, across its back: refused the same way.
+    "scorpion across its back": ("scorpion", "r/claw", [0.15, -0.35], [-0.25, 0.0]),
 }
 
 
