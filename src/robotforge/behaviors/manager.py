@@ -543,6 +543,11 @@ class BehaviorManager:
             return robot
         kind = self.kind(robot)
         arms = self.arms(robot)
+        if not arms and kind == Kind.ARM:  # an arm whose model marks no tool point (the SO-100 from the library)
+            raise BehaviorError(
+                f"{robot} is an arm, but its model marks no tool point for move_arm, gripper and pick_and_place to "
+                "steer; set_controls moves its joints"
+            )
         if not arms:
             raise BehaviorError(f"{robot} is {_a(kind)}, not an arm, and carries none; {_how_to_move(kind)}")
         if len(arms) > 1:

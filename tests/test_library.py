@@ -115,6 +115,13 @@ def test_fixed_base_arm_sits_on_the_floor_and_holds_its_home_pose():
     assert data.joint("arm/Elbow").qpos[0] == pytest.approx(0.6, abs=0.05)
 
 
+def test_an_arm_without_a_tool_point_says_so_rather_than_that_it_is_not_an_arm(pg):
+    """The SO-100's model marks no tool point: move_arm answered "arm is an arm, not an arm, and carries none"."""
+    pg.add_robot("arm", library="so_arm100")
+    with pytest.raises(ValueError, match="arm is an arm, but its model marks no tool point .*; set_controls moves"):
+        pg.behaviors.move_arm("arm", [0.2, 0.0, 0.1])
+
+
 # ---- walking -----------------------------------------------------------------------------------
 
 
