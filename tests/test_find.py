@@ -300,6 +300,30 @@ def test_a_cube_in_the_gripper_is_located_at_its_height_and_said_to_be_held(need
         assert "held_by: that robot holds it" in found["how"]
 
 
+def test_a_cube_on_the_one_the_gripper_closed_on_is_held_too(needs_gl, tmp_path, monkeypatch):
+    """An agent closed the gripper at the found middle of a red cube on a blue one: the fingers took the wider blue
+    cube and lifted both. The red one touches only the blue one, yet the hand covers part of it (1.5 cm off)."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("desk")
+    pg.add_robot("arm", template="arm")
+    pg.add_object("under", shape="box", size=[0.05, 0.05, 0.05], pos=[0.25, 0.1], color="blue")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1, 0.075], color="red")
+    pg.simulate(1.0)
+    x, y, z = _cube_from(pg, "default")["position"]
+    for aim, grip in (([x, y, z + 0.08], "open"), ([x, y, z], None)):
+        pg.behaviors.move_arm("arm", aim, grip)
+        pg.simulate(1.0)
+    pg.behaviors.set_gripper("arm", "close")
+    pg.simulate(1.0)
+    pg.behaviors.move_arm("arm", [x, y, z + 0.08])
+    pg.simulate(1.0)
+    assert pg.session.data.body("cube").xpos[2] > 0.12  # lifted with the blue one under it
+    cube = _cube_from(pg, "default")
+    assert cube["held_by"] == "arm", cube
+    assert abs(cube["position"][2] - pg.session.data.body("cube").xpos[2]) < 0.01  # its height is still right
+
+
 def test_a_ball_in_front_of_a_bench_is_not_pulled_back_to_it(needs_gl, tmp_path, monkeypatch):
     """From the park dog's camera the ball's edge blends in the bench 1.6 m behind it: it came out 77 cm off."""
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))

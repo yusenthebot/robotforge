@@ -251,25 +251,46 @@ def _driven(model: mujoco.MjModel) -> set[int]:
 
 
 def _held(model: mujoco.MjModel, touching: np.ndarray | None, driven: set[int]) -> dict[str, str]:
-    """The loose objects a robot holds, and which robot: everything such an object touches is part of that robot
-    (a gripper's fingers), and nothing else carries it (not the floor, a table or another object). From the
-    simulator's contacts at the moment of the picture, as the names are."""
+    """The loose objects a robot holds, and which robot, from the simulator's contacts at the moment of the
+    picture, as the names are. Loose objects touching each other go together (a cube resting on the one the
+    gripper closed on is carried too): a group is held when what it touches outside itself is only robots' parts,
+    nothing fixed and not the floor."""
     if touching is None or not len(touching):
         return {}
-    roots = model.body_rootid[model.geom_bodyid[touching]]
-    others: dict[int, set[int]] = {}
-    for a, b in roots.tolist():
+    kinds: dict[int, str] = {}  # top body: "object", "robot" or "fixed"
+
+    def kind(body: int) -> str:
+        if body not in kinds:
+            kinds[body] = next(iter(_name(model, "body", body, driven))) if body else "fixed"
+        return kinds[body]
+
+    links: dict[int, set[int]] = {}
+    for a, b in model.body_rootid[model.geom_bodyid[touching]].tolist():
         if a != b:
-            others.setdefault(a, set()).add(b)
-            others.setdefault(b, set()).add(a)
-    held = {}
-    for body, by in others.items():
-        thing = _name(model, "body", body, driven) if body else {}
-        if "object" not in thing or 0 in by:  # body 0 is the world's: the floor and everything fixed
+            links.setdefault(a, set()).add(b)
+            links.setdefault(b, set()).add(a)
+    held: dict[str, str] = {}
+    done: set[int] = set()
+    for start in links:
+        if start in done or kind(start) != "object":
             continue
-        holders = [_name(model, "body", other, driven) for other in sorted(by)]
-        if all("robot" in h for h in holders):
-            held[thing["object"]] = holders[0]["robot"]
+        group: set[int] = set()
+        outside: set[int] = set()
+        todo = [start]
+        while todo:  # the loose objects touching this one, and what they touch that is not loose
+            body = todo.pop()
+            if body in group:
+                continue
+            group.add(body)
+            for other in links[body]:
+                if kind(other) == "object":
+                    todo.append(other)
+                else:
+                    outside.add(other)
+        done |= group
+        if outside and all(kind(o) == "robot" for o in outside):
+            robot = _name(model, "body", min(outside), driven)["robot"]
+            held.update({_name(model, "body", body, driven)["object"]: robot for body in group})
     return held
 
 
