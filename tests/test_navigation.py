@@ -562,6 +562,8 @@ def test_a_robot_goes_onto_terrain_it_climbs_and_next_to_terrain_it_does_not(pg)
     beside = _trip(pg, "dog", "high")
     assert beside.result()["arrived"] and beside.plan.face is not None, beside.result()
     assert 1.3 < pg.behaviors.pose("dog")["position"][1] < 1.9  # on the floor in front of its edge at y = 1.9
+    with pytest.raises(BehaviorError, match="Objects, robots and terrain patches in this world: low, high"):
+        pg.behaviors.navigate("dog", "ramp")
 
 
 def test_a_trip_sent_off_without_waiting_says_how_it_ended(pg):

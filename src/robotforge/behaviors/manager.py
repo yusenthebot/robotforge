@@ -581,7 +581,10 @@ class BehaviorManager:
         found = wording.match(to, [*objects, *robots, *terrain])
         if found is None:
             known = [*objects, *robots, *terrain]
-            raise BehaviorError(wording.unknown("object, robot or terrain", to, known) + " (or give a point [x, y])")
+            many = "objects, robots and terrain patches"
+            raise BehaviorError(
+                wording.unknown("object, robot or terrain patch", to, known, many=many) + " (or give a point [x, y])"
+            )
         if found in robots:
             return navigation.robot_destination(model, data, found)
         destination = navigation.find_destination(model, data, found)
