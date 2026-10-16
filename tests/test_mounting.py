@@ -132,6 +132,15 @@ def test_a_dog_walks_to_a_cube_and_its_arm_puts_it_in_a_bin(pg):
     assert after["upright"] and np.linalg.norm(np.subtract(after["position"][:2], stood[:2])) < 0.05
 
 
+def test_a_robot_imported_from_a_file_carries_a_library_arm(pg):
+    pg.add_robot(
+        "dog", file=str(FIXTURES / "unitree_go2" / "go2.xml"), pos=[0, 0, 0.5], mounts=[{"library": "so_arm100"}]
+    )
+    assert pg.behaviors.arms("dog") == ["dog/arm"]
+    m = pg.session.model
+    assert m.body_parentid[m.body("dog/arm/Base").id] == m.body("dog/base").id
+
+
 def test_a_template_arm_can_ride_on_a_library_dog(pg):
     pg.add_robot("go2", library="go2", mounts=[{"template": "arm", "params": {"reach": 0.4}}])
     assert pg.behaviors.arms("go2") == ["go2/arm"]
