@@ -195,10 +195,10 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
         driven = json.loads(
             (await client.call_tool("move", {"robot": "rover", "speed": 0.15, "seconds": 2})).content[0].text
         )
-        # Stopped, said at the top, with its commands at rest: "speed": 0.15 beside a nested "stopped" still read as
-        # driving, and an agent called stop right after it.
-        assert driven["stopped"] is True and driven["behavior"]["speed"] == 0 and driven["behavior"]["turn"] == 0
-        assert driven["moved_at"] == {"speed": pytest.approx(0.15), "turn": 0}
+        # Stopped, said at the top ("speed": 0.15 beside a nested "stopped" still read as driving, and an agent
+        # called stop right after it); behavior is how it moved, as the controller reports it.
+        assert driven["stopped"] is True and "stopped" not in driven["behavior"]
+        assert driven["behavior"]["speed"] == pytest.approx(0.15) and driven["behavior"]["turn"] == 0
         assert "note" not in driven  # it covered the ground it was asked to
         state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
         assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
@@ -206,7 +206,7 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
             (await client.call_tool("move", {"robot": "dog", "speed": 0.3, "seconds": 2})).content[0].text
         )
         # The gait's speed ramps up from 0: at the start it read as a dog standing still.
-        assert walked["stopped"] is True and walked["moved_at"]["speed"] > 0.2 and walked["behavior"]["speed"] == 0
+        assert walked["stopped"] is True and walked["behavior"]["speed"] > 0.2
 
 
 @pytest.mark.anyio

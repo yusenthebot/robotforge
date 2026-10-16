@@ -420,10 +420,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
         (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
         in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
-        ("stopped": true, no need to call stop) and reports the distance, with a note saying why when it fell far
-        short; seconds=null keeps moving until `stop`. The user watches in real time if the viewer is open. walker
-        (legged robots): "gait" = the built-in controller, "rl" = this robot's learned policy
-        (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
+        ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
+        saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
+        the viewer is open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned
+        policy (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
         `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
         driving uses the same walker."""
         with _tool_errors():
@@ -450,11 +450,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             run = await run_until(track, seconds)
             why = playground.behaviors.shortfall(robot, seconds, before["position"])
             moving = playground.session.controllers.get(robot)
-            status = {**status, **(moving.status() if moving is not None else {})}  # keeps the clamp notes
-            moved_at = {key: status[key] for key in ("speed", "turn") if key in status}
-            # Its commands now, after the stop: a result that showed "speed": 0.2 (even beside a nested "stopped")
-            # read as still driving, and agents called stop after nearly every timed move.
-            status.update(dict.fromkeys(moved_at, 0.0))
+            # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
+            # the clamp notes from the start kept.
+            status = {**status, **(moving.status() if moving is not None else {})}
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)
             if settled is not None:  # a humanoid finishes its step first; measure where it really stops
@@ -471,8 +469,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     "to": after,
                     "distance_m": round(moved, 3),
                     "turned_deg": round(turned, 1),
-                    "stopped": True,  # no need to call stop
-                    "moved_at": moved_at,  # its speed and turn while it moved, after any clamping
+                    # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going
+                    # and called stop after nearly every timed move.
+                    "stopped": True,
                     **run,
                     "behavior": status,
                     **({"note": why} if why else {}),
