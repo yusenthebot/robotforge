@@ -44,6 +44,7 @@ CRUISE_SHARE, CRUISE_MAX = 0.8, 0.5  # default top speed: this share of max_spee
 TURN_ON_SPOT, TURN_DONE = math.radians(50.0), math.radians(20.0)  # start and stop turning on the spot
 SHARP = math.radians(35.0)  # a corner that turns this much is driven to and turned at on the spot
 TURN_GAIN = 2.0  # rad/s of turn per rad of heading error
+MIN_LOOK = 0.1  # m: the lookahead is halved down to this where the straight way to it is short of room
 SLOW_GAIN = 1.2  # m/s of speed per m left to the end or to a sharp corner
 MIN_SPEED_SHARE = 0.3  # of the top speed, at the least, until it is there
 PROGRESS = 0.05  # m of headway that counts as getting on
@@ -766,13 +767,27 @@ class Navigator:
         for k in range(self._seg + 1, len(p) - 1):
             if _turn_at(p, k) > SHARP:
                 corner_left = left_here - self._after[k]
-                return (p[k] if corner_left <= look else self._point_at(s, look)), corner_left
+                return (p[k] if corner_left <= look else self._roomy(xy, s, look)), corner_left
         a, b = p[-2], p[-1]
         if self._seg == len(p) - 2 and float((self._last_xy - a) @ (b - a)) > self._seg_len[-1] ** 2:
             return b.copy(), math.inf  # walked past the end, further than OVERSHOOT: back to it
         # Up to the end the aim stays a lookahead ahead, on the line through the end: aiming at the end itself, the
         # bearing swings across as the robot draws near with a few cm to one side, and a gait's turn lags behind.
-        return self._point_at(s, look), math.inf
+        return self._roomy(xy, s, look), math.inf
+
+    def _roomy(self, xy: np.ndarray, s: float, look: float) -> np.ndarray:
+        """The path point `look` meters ahead, or a nearer one if the straight way to it has less room than the
+        robot needs: steering for a point past two gentle corners cuts across both, and on the obstacle course a
+        rover cut the corner where the path met a ramp's toe, put a wheel on the ramp's side and stuck there."""
+        target = self._point_at(s, look)
+        nav = self.planner.last_map
+        if nav is None:
+            return target
+        limit = min(self.planner.body.need, nav_grid.room_at(nav.grid, nav.room, xy))
+        while look > MIN_LOOK and nav_grid.room_along(nav.grid, nav.room, xy, target) < limit - 1e-9:
+            look /= 2
+            target = self._point_at(s, look)
+        return target
 
     def _point_at(self, s: float, ahead: float) -> np.ndarray:
         """The path point `ahead` meters on from `s` along the current segment, on past the end in its direction."""

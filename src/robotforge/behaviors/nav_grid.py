@@ -209,6 +209,20 @@ def _line_room(grid: Grid, a: tuple[int, int], b: tuple[int, int], room: np.ndar
     return float(room[rows, cols].min())
 
 
+def room_at(grid: Grid, room: np.ndarray, p: np.ndarray) -> float:
+    """The room (m) at world point p, 0 off the grid."""
+    r, c = grid.cell(float(p[0]), float(p[1]))
+    return float(room[r, c]) if grid.inside(r, c) else 0.0
+
+
+def room_along(grid: Grid, room: np.ndarray, p: np.ndarray, q: np.ndarray) -> float:
+    """The least room (m) along the straight line between world points p and q, 0 if it leaves the grid."""
+    a, b = grid.cell(float(p[0]), float(p[1])), grid.cell(float(q[0]), float(q[1]))
+    if not (grid.inside(*a) and grid.inside(*b)):
+        return 0.0
+    return _line_room(grid, a, b, room)
+
+
 def length(points: list[tuple[float, float]] | np.ndarray) -> float:
     """Length of a polyline, m."""
     p = np.asarray(points, float)

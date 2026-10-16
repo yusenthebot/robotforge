@@ -381,6 +381,17 @@ def test_the_end_of_a_path_is_aimed_along_not_at(pg):
     assert (target - end) @ along > 0.1  # on the line, past the end
 
 
+def test_the_follower_does_not_cut_a_corner_into_a_ramp_side(pg):
+    """Regression: steering for a point a lookahead ahead, past two gentle corners, a rover cut across both where
+    its path met the obstacle course's ramp at its toe, put a wheel on the ramp's side and stuck there
+    (scripts/nav_bench.py). The lookahead now shrinks while the straight way to it is short of room."""
+    pg.add_robot("rover", template="rover")
+    pg.load_scene("obstacle_course")
+    pg.update_robot("rover", pos=[7.3, -0.85], yaw=-17.9)
+    trip = _trip(pg, "rover", "start", limit=60)
+    assert trip.result()["arrived"], trip.result()
+
+
 def test_pushed_off_its_path_it_plans_again_and_still_arrives(pg):
     pg.add_robot("rover", template="rover", pos=[-2.0, 0.0], yaw=0)
     pg.add_object("wall", shape="wall", pos=[0.0, 0.0], size=[2.0, 0.1, 0.5], yaw=90)
