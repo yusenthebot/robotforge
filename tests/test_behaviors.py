@@ -265,6 +265,21 @@ async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
     assert stalled["distance_m"] < 0.05 and "wheels barely turned" in stalled["note"]
 
 
+@pytest.mark.anyio
+async def test_a_short_move_on_flat_ground_is_not_told_it_was_held_back(pg):
+    """A snake told 0.2 m/s for 1 s covers 0.03 m while it gets going, and was told "something held it back (a wall
+    or an object in the way, a slope)" on empty, flat ground (review). The first second of a move is not judged."""
+    import test_builder
+
+    pg.add_robot("snake", build=test_builder.SNAKE)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        nudged = json.loads(
+            (await client.call_tool("move", {"robot": "snake", "speed": 0.2, "seconds": 1})).content[0].text
+        )
+    assert nudged["distance_m"] < 0.1 and "note" not in nudged, nudged
+
+
 def test_the_ideal_reach_of_a_move_is_the_chord_of_its_arc():
     assert ideal_reach(0.3, 0.0, 3.0) == pytest.approx(0.9)
     assert ideal_reach(0.3, 1.0, 2 * math.pi) == pytest.approx(0.0, abs=1e-9)  # a full circle

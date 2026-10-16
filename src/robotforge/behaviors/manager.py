@@ -49,6 +49,10 @@ SHORTFALL_FRACTION = 0.25
 SHORTFALL_MIN_ASKED = (
     0.1  # m: a move whose ideal reach is shorter (a nudge, a turn on the spot, a circle) is not judged
 )
+# s of every timed move left out of its ideal reach: getting going from a stand. Short moves on flat ground (0.3 to
+# 3 s, 11 robots, two speeds each) needed up to 0.5 s of it to stay clear of the note (Spot at 0.3 m/s for 0.8 s
+# covered 0.03 m); without it a snake told 0.2 m/s for 1 s (0.03 m) and a Go2 for 0.5 s were told "held back".
+SHORTFALL_STARTUP = 1.0
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
 
 
@@ -519,14 +523,16 @@ class BehaviorManager:
         ctrl = self.session.controllers.get(robot)
         speed = abs(float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0))
         turn = abs(float(getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0)) or 0.0))
-        asked = ideal_reach(speed, turn, seconds)
+        going = max(0.0, seconds - SHORTFALL_STARTUP)
+        asked = ideal_reach(speed, turn, going)
         now = self.pose(robot)
         moved = math.dist(now["position"][:2], start[:2])
         if asked < SHORTFALL_MIN_ASKED or moved >= SHORTFALL_FRACTION * asked or not now["upright"]:
             return None
-        motion = f"{speed:g} m/s for {seconds:g} s"
-        if turn * seconds >= 1e-6:
-            motion = f"{speed:g} m/s turning {turn:g} rad/s for {seconds:g} s: the chord of that arc"
+        motion = f"{speed:g} m/s for {seconds:g} s, less {SHORTFALL_STARTUP:g} s to get going"
+        if turn * going >= 1e-6:
+            motion = f"{speed:g} m/s turning {turn:g} rad/s for {seconds:g} s, less {SHORTFALL_STARTUP:g} s to get "
+            motion += "going: the chord of that arc"
         text = f"{robot} ended {moved:.2f} m from its start, of the {asked:.2f} m asked ({motion})"
         if not isinstance(ctrl, DiffDrive):
             return f"{text}: something held it back (a wall or an object in the way, a slope); look with observe"
