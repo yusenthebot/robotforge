@@ -383,7 +383,7 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
     whose right turn was kept to fade then fell in 2 of 25 walk, 1 s turn, walk sequences (asked at every point of the
     stride), one kept to hold in 10 of 25. Fading everywhere, 6 dog walks still fell 12 times in 2100 sequences of
     move, gap and idle; holding (and beginning the turns that do not fall out of the walk), in none, but 6 imported A1
-    walks fell 520 times (fading, 71: an A1 rocks on after it is held still)."""
+    walks fell 520 times (fading, 71)."""
     if not walk.turns:
         return walk
     best: tuple[int, dict[str, Any], list[float]] | None = None
@@ -810,8 +810,8 @@ class RhythmWalker:
         (in files that have them) right out of the walk; those start at once, or at the next point of the stride they
         were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
         When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
-        16 degrees of the 88 it promised; a walk that holds still before other switches still begins its turns that
-        way."""
+        16 degrees of the 88 it promised. A walk kept to hold home before other switches begins its walking turns
+        straight out of the walk all the same."""
         # Only out of the walk as it plays (or walks on to a turn): a robot stopped a moment ago is fading to home, a
         # pose and a point of the stride its walking turns were never checked from. Any switch within a quarter second
         # of the walk's last update used to count, so a turn soon after a stop began at once wherever the stride was.
