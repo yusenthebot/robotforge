@@ -431,7 +431,7 @@ class BuildSpec(_Strict):
     servo: str = Field("sts3215", description="default actuator for hinges")
     motor: str = Field("tt_motor", description="default actuator for wheels and continuous joints")
     linear: str = Field("l16", description="default actuator for slide joints")
-    servo_caps: bool = Field(True, description="draw each joint's servo as a dark knuckle (it carries its mass)")
+    servo_caps: bool = Field(True, description="draw each joint's servo or motor, case and horn (it carries its mass)")
 
     @field_validator("color")
     @classmethod

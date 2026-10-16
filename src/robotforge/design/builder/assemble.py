@@ -15,6 +15,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design import components
+from robotforge.design.builder import looks
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
     BaseSpec,
@@ -25,9 +26,8 @@ from robotforge.design.builder.schema import (
     axis_vector,
     control_of,
 )
-from robotforge.design.templates.base import DARK, GEOM, SHELL, new_spec, servo_joint
+from robotforge.design.templates.base import DARK, GEOM, SHELL, BuiltRobot, new_spec, servo_joint
 from robotforge.design.visuals import Visuals
-from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
 # MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
@@ -36,7 +36,7 @@ LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator push
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
 WHEEL_DAMPING = 0.002
 INVISIBLE = [0.0, 0.0, 0.0, 0.0]
-MOTOR_YELLOW = [0.95, 0.8, 0.2, 1.0]
+MOTOR_YELLOW = looks.MOTOR_YELLOW
 FOOT_FRICTION = [1.2, 0.02, 0.002]
 CASTER_FRICTION = [0.02, 0.001, 0.0001]
 MIN_MASS = 0.005  # kg for a bare joint with no shape: MuJoCo needs mass on every moving body
@@ -57,26 +57,33 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
     vis = Visuals(spec)
+    # Mounted robots are built first: the dressing keeps screws and vents off the spot each one stands on.
+    mounted = {p.name: _mounted_robot(p) for p in placed if p.spec.robot is not None}
+    reach = {name: looks.footprint(child.spec) for name, (child, _) in mounted.items()}
+    layout = looks.Layout.of(build, placed, reach)
     base = spec.worldbody.add_body(name="base")
     if not build.base.fixed:
         base.add_freejoint(name="root")
-    _shape(base, build.base, build, np.eye(3), accent, "base", vis)
-    _sensors(spec, base, "base", build.base, np.eye(3))
+    _shape(base, build.base, build, np.eye(3), accent, "base", vis, layout)
+    _sensors(spec, base, "base", build.base, np.eye(3), vis, layout)
     bodies: dict[str, mujoco.MjsBody] = {"base": base}
     for part in placed:
         parent = bodies[part.parent]
         body = parent.add_body(name=part.name, pos=part.pos.tolist(), quat=_quat(part.rot))
         bodies[part.name] = body
-        _joint(spec, parent, body, part, build, out, vis)
+        _joint(spec, parent, body, part, build, out, vis, layout)
         outward = part.local @ np.array([0.0, 1.0, 0.0])
         if float((part.rot @ outward) @ part.pos) < 0:  # wheels show their rim on the outside
             outward = -outward
-        _shape(body, part.spec, build, part.local, accent, part.name, vis, outward)
+        _shape(body, part.spec, build, part.local, accent, part.name, vis, layout, outward, part)
         if part.spec.foot:
-            _foot(body, part)
-        _sensors(spec, body, part.name, part.spec, part.local)
+            _foot(body, part, vis)
+        _sensors(spec, body, part.name, part.spec, part.local, vis, layout)
         if part.spec.robot is not None:
-            _mount(spec, body, part, out)
+            child, what = mounted[part.name]
+            _mount(spec, body, part, out, child, what)
+            if part.spec.robot.template is not None:  # a library robot's own base is a mesh of unknown size
+                looks.mount_plate(vis, body, reach[part.name])
     vis.finish()
     return out
 
@@ -92,11 +99,17 @@ def _joint(
     build: BuildSpec,
     out: Assembly,
     vis: Visuals,
+    layout: looks.Layout,
 ) -> None:
     j = part.spec.joint
     if j.type == "fixed":
         if part.spec.shape == "none" and part.spec.robot is None:
             _min_mass(body)
+        direction = looks.direction_of(part.spec, part.local)
+        bolted = part.spec.shape in ("capsule", "cylinder", "sphere") and direction is not None
+        if bolted and layout.centers.get(part.parent) is not None:  # a flange where it meets its parent
+            neck = 0.42 if part.spec.shape == "sphere" else 1.0  # a sphere stands on a neck narrower than itself
+            looks.fixed(vis, body, direction, neck * link_radius(part.spec))
         return
     hinge = j.type == "hinge"
     # A hinge axis is a rotation (a mirror flips it with the motion); a slide axis is a plain direction.
@@ -125,6 +138,8 @@ def _joint(
         if part.spec.shape == "none":
             _min_mass(body)
         out.home_qpos[name] = home
+        if hinge and part.spec.shape not in ("wheel", "caster"):
+            looks.passive(vis, body, np.asarray(axis), _cover_radius(part.spec))
         return
 
     actuator = _geared(components.actuator(act_spec.model), act_spec.gear)
@@ -168,7 +183,7 @@ def _joint(
         act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
         act.forcerange = [-actuator.stall_torque, actuator.stall_torque]
     out.home_qpos[name] = home
-    _actuator_housing(parent, body, part, actuator, np.asarray(axis), build.servo_caps, vis)
+    _actuator_housing(parent, body, part, actuator, np.asarray(axis), build.servo_caps, vis, layout, joint_range)
 
 
 def _geared(part: components.Actuator, gear: float) -> components.Actuator:
@@ -198,6 +213,8 @@ def _actuator_housing(
     axis: np.ndarray,
     visible: bool,
     vis: Visuals,
+    layout: looks.Layout,
+    joint_range: tuple[float, float] | None,
 ) -> None:
     """The servo or motor itself: drawn where a builder would put it and carrying its mass, never colliding."""
     rgba = DARK if visible else INVISIBLE
@@ -209,7 +226,7 @@ def _actuator_housing(
         half_w = part.spec.size[1] / 2
         length = min(sx, 0.06)
         center = part.pos + inboard * (half_w + length / 2 + 0.003)
-        parent.add_geom(
+        motor = parent.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[max(sy, sz) / 2, length / 2, 0],
             pos=center.tolist(),
@@ -219,11 +236,14 @@ def _actuator_housing(
             contype=0,
             conaffinity=0,
         )
+        if visible:
+            vis.hide(motor)
+            looks.wheel_motor(vis, parent, part.parent, center, inboard, max(sy, sz) / 2, length, actuator.name, layout)
         return
     if actuator.kind == "linear":
         # The actuator body stays on the parent and pushes the part along the axis.
         axis_parent = part.rot @ axis
-        parent.add_geom(
+        housing = parent.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[sy / 2, sz / 2, sx / 2],
             pos=part.pos.tolist(),
@@ -233,6 +253,9 @@ def _actuator_housing(
             contype=0,
             conaffinity=0,
         )
+        if visible and joint_range is not None:
+            vis.hide(housing)
+            looks.linear(vis, parent, body, part, actuator, axis, joint_range, layout)
         return
     # A rotary servo as a knuckle around its output axis at the joint.
     knuckle = body.add_geom(
@@ -244,11 +267,16 @@ def _actuator_housing(
         contype=0,
         conaffinity=0,
     )
-    if visible:  # drawn as a joint drum with metal horns on both faces
+    if visible:  # the case on the parent, the horn turning with the part
         vis.hide(knuckle)
-        r = min(sx, sy) / 2 + 0.002
-        for preset, mesh in P.drum(r, sz / 2, r * 0.7).items():
-            vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), M.z_to(axis))
+        looks.servo(vis, parent, body, part, actuator, axis, layout)
+    elif part.spec.shape not in ("wheel", "caster"):  # servos not drawn: the hinge still shows as a joint
+        looks.passive(vis, body, axis, _cover_radius(part.spec))
+
+
+def _cover_radius(spec: PartSpec) -> float:
+    """How big a joint cover has to be to hide where the part's link starts."""
+    return link_radius(spec) if spec.shape != "none" else 0.007
 
 
 def _min_mass(body: mujoco.MjsBody) -> None:
@@ -266,7 +294,9 @@ def _shape(
     accent: list[float],
     owner: str,
     vis: Visuals,
+    layout: looks.Layout,
     outward: np.ndarray | None = None,
+    part: Placed | None = None,
 ) -> None:
     shape = spec.shape
     if shape == "none":
@@ -274,7 +304,8 @@ def _shape(
     material = spec.material or ("rubber" if shape == "caster" else build.material)
     is_base = isinstance(spec, BaseSpec)
     default_rgba = accent if is_base else (DARK if shape in ("wheel", "caster") else SHELL)
-    rgba = components.color(spec.color) if spec.color is not None else default_rgba
+    rgba = looks.part_color(spec, material, default_rgba)
+    surface = looks.look_of(material)
     kwargs: dict = {"rgba": rgba}
     if spec.mass is not None:
         kwargs["mass"] = spec.mass
@@ -300,9 +331,18 @@ def _shape(
         g = body.add_geom(type=GEOM.mjGEOM_BOX, size=[s / 2 for s in size], pos=center.tolist(), **kwargs)
         half = [s / 2 for s in size]  # the box is axis-aligned in the body frame, like its collision box
         vis.hide(g)
-        vis.add(body, "shell", rgba, M.rounded_box(*half, min(min(half) * 0.25, 0.006), segments=3), center)
+        looks.box(vis, body, owner, half, center, rgba, surface, layout, is_base)
     elif shape in ("sphere", "caster"):
-        body.add_geom(type=GEOM.mjGEOM_SPHERE, size=[size[0] / 2, 0, 0], pos=center.tolist(), **kwargs)
+        g = body.add_geom(type=GEOM.mjGEOM_SPHERE, size=[size[0] / 2, 0, 0], pos=center.tolist(), **kwargs)
+        vis.hide(g)
+        if shape == "caster":
+            up = _toward_parent(part, layout)
+            ball, look = (P.METAL, "metal") if spec.color is None else (rgba, surface)
+            looks.caster(vis, body, center, size[0] / 2, up, ball, look)
+        else:
+            direction = looks.direction_of(spec, local) if isinstance(spec, PartSpec) else None
+            up = direction if direction is not None else np.array([0.0, 0.0, 1.0])
+            looks.sphere(vis, body, center, size[0] / 2, up, rgba, surface)
     elif shape == "wheel":
         axis = local @ np.array([0.0, 1.0, 0.0])
         r, half_w = size[0] / 2, size[1] / 2
@@ -334,30 +374,17 @@ def _shape(
             vis.hide(geom)
         rim = accent if spec.color is None else rgba
         face = outward if outward is not None else axis
-        colors = {"rubber": P.RUBBER, "shell": rim, "dark": DARK, "metal": P.METAL}
-        for preset, mesh in P.tyre(r, half_w).items():  # spokes on the rim show the wheel turn
-            vis.add(body, preset, colors[preset], mesh, center, M.z_to(face))
+        looks.wheel(vis, body, center, r, half_w, face, rim)  # spokes on the rim show the wheel turn
     else:  # capsule or cylinder from end to end
-        start, end = _segment(spec)
+        start, end = looks.segment(spec)
         gtype = GEOM.mjGEOM_CAPSULE if shape == "capsule" else GEOM.mjGEOM_CYLINDER
         g = body.add_geom(type=gtype, size=[size[0] / 2, 0, 0], fromto=[*(local @ start), *(local @ end)], **kwargs)
-        if shape == "cylinder":  # a softened rim instead of a knife edge
-            a, b = local @ start, local @ end
-            length, r = float(np.linalg.norm(b - a)), size[0] / 2
-            vis.hide(g)
-            rim = min(0.006, r * 0.2, length * 0.2)
-            vis.add(body, "shell", rgba, M.cylinder(r, length, segments=48, bevel=rim), (a + b) / 2, M.z_to(b - a))
-
-
-def _segment(spec: BaseSpec | PartSpec) -> tuple[np.ndarray, np.ndarray]:
-    offset = np.asarray(spec.offset, float)
-    length = spec.size[1]
-    direction = getattr(spec, "direction", None)
-    if direction is not None:
-        d = np.asarray(axis_vector(direction), float)
-        return offset, offset + d * length
-    u = np.asarray(axis_vector(getattr(spec, "axis", "z")), float)
-    return offset - u * length / 2, offset + u * length / 2
+        vis.hide(g)
+        a, b = local @ start, local @ end
+        if shape == "cylinder":
+            looks.cylinder(vis, body, owner, a, b, size[0] / 2, rgba, surface, layout, is_base)
+        else:
+            looks.link(vis, body, a, b, size[0] / 2, rgba, surface, _hinge_axis(part))
 
 
 def link_radius(spec: BaseSpec | PartSpec) -> float:
@@ -368,32 +395,60 @@ def link_radius(spec: BaseSpec | PartSpec) -> float:
     return 0.01
 
 
-def _foot(body: mujoco.MjsBody, part: Placed) -> None:
+def _toward_parent(part: Placed | None, layout: looks.Layout) -> np.ndarray:
+    """In a part's body frame: the way into its parent's shape (a caster's socket goes that way), else up."""
+    if part is not None:
+        center = layout.centers.get(part.parent)
+        if center is not None and np.linalg.norm(center - part.pos) > 1e-6:
+            return part.rot.T @ ((center - part.pos) / np.linalg.norm(center - part.pos))
+        return part.rot.T @ np.array([0.0, 0.0, 1.0])
+    return np.array([0.0, 0.0, 1.0])
+
+
+def _hinge_axis(part: Placed | None) -> np.ndarray | None:
+    """The hinge a part swings on, in its body frame (its link is drawn flattened along it)."""
+    if part is None or part.spec.joint.type != "hinge" or part.spec.joint.continuous:
+        return None
+    return part.axis(axis_vector(part.spec.joint.axis))
+
+
+def _foot(body: mujoco.MjsBody, part: Placed, vis: Visuals) -> None:
     radius = max(0.01, 1.25 * link_radius(part.spec))
-    body.add_geom(
+    center = part.vec(link_end(part.spec))
+    ball = body.add_geom(
         type=GEOM.mjGEOM_SPHERE,
         size=[radius, 0, 0],
-        pos=part.vec(link_end(part.spec)).tolist(),
+        pos=center.tolist(),
         rgba=DARK,
         friction=FOOT_FRICTION,
         density=components.MATERIALS["rubber"],
     )
+    vis.hide(ball)
+    toward = -center / np.linalg.norm(center) if np.linalg.norm(center) > 1e-6 else np.array([0.0, 0.0, 1.0])
+    looks.foot(vis, body, center, radius, toward, 0.85 * link_radius(part.spec))
 
 
 # ---- sensors ----------------------------------------------------------------------------------------
 
 
 def _sensors(
-    spec: mujoco.MjSpec, body: mujoco.MjsBody, owner: str, part: BaseSpec | PartSpec, local: np.ndarray
+    spec: mujoco.MjSpec,
+    body: mujoco.MjsBody,
+    owner: str,
+    part: BaseSpec | PartSpec,
+    local: np.ndarray,
+    vis: Visuals,
+    layout: looks.Layout,
 ) -> None:
     from robotforge.design.builder.expand import anchor
 
     used: dict[str, int] = {}
+    up = layout.frames[owner][0].T @ np.array([0.0, 0.0, 1.0])  # the robot's up, in this body's frame
     for sensor in part.sensors:
         where = local @ anchor(part, sensor.at, "the base" if owner == "base" else f"part {owner!r}")
         look = local @ np.asarray(axis_vector(sensor.direction), float)
         name = sensor.name or _sensor_name(owner, sensor, used)
-        _add_sensor(spec, body, name, sensor, where, look, part)
+        _add_sensor(spec, body, name, sensor, where, look, part, vis, up)
 
 
 def _sensor_name(owner: str, sensor: SensorSpec, used: dict[str, int]) -> str:
@@ -411,6 +466,8 @@ def _add_sensor(
     where: np.ndarray,
     look: np.ndarray,
     part: BaseSpec | PartSpec,
+    vis: Visuals,
+    up: np.ndarray,
 ) -> None:
     S, OBJ = mujoco.mjtSensor, mujoco.mjtObj
     if sensor.type == "imu":
@@ -424,6 +481,7 @@ def _add_sensor(
             ("orientation", S.mjSENS_FRAMEQUAT),
         ):
             spec.add_sensor(name=f"{prefix}{kind}", type=stype, objtype=OBJ.mjOBJ_SITE, objname=site)
+        looks.imu(vis, body, where, np.array([0.0, 0.0, 1.0]))
         return
     if sensor.type == "touch":
         radius = max(0.012, 1.4 * link_radius(part)) if isinstance(part, PartSpec) and part.foot else None
@@ -433,8 +491,8 @@ def _add_sensor(
         return
     if sensor.type == "camera":
         body.add_camera(name=name, pos=where.tolist(), xyaxes=_camera_axes(look), fovy=sensor.fov)
-        # A small lens so you can see where the camera sits and which way it looks.
-        body.add_geom(
+        # A small lens so you can see where the camera sits and which way it looks (drawn as a board camera).
+        lens = body.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[0.009, 0.006, 0],
             pos=(where - look * 0.004).tolist(),
@@ -444,6 +502,8 @@ def _add_sensor(
             contype=0,
             conaffinity=0,
         )
+        vis.hide(lens)
+        looks.camera(vis, body, where, look, up)
         return
     if sensor.type == "rangefinder":
         body.add_site(name=name, pos=where.tolist(), quat=_z_to(look), size=[0.004, 0, 0], rgba=[1, 0.3, 0.2, 0.8])
@@ -451,10 +511,11 @@ def _add_sensor(
             name=name, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=name, cutoff=sensor.range
         )
         ray.intprm[0] = RANGE_DIST
+        looks.rangefinder(vis, body, where, look, up)
         return
     # lidar: a spinning puck, modelled as a ring of rangefinders in the owner's horizontal plane
     up = np.array([0.0, 0.0, 1.0])
-    body.add_geom(
+    puck = body.add_geom(
         type=GEOM.mjGEOM_CYLINDER,
         size=[0.022, 0.012, 0],
         pos=(where + up * 0.012).tolist(),
@@ -463,6 +524,8 @@ def _add_sensor(
         contype=0,
         conaffinity=0,
     )
+    vis.hide(puck)
+    looks.lidar(vis, body, where, up)
     for i in range(sensor.rays):
         angle = 2 * math.pi * i / sensor.rays
         ray = np.array([math.cos(angle), math.sin(angle), 0.0])
@@ -487,19 +550,22 @@ def _camera_axes(look: np.ndarray) -> list[float]:
 # ---- mounted robots ---------------------------------------------------------------------------------
 
 
-def _mount(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembly) -> None:
+def _mounted_robot(part: Placed) -> tuple[BuiltRobot, str]:
+    """The template or library robot a part carries, and what to call it."""
     from robotforge.design import library, templates
 
     mount = part.spec.robot
     try:
         if mount.template is not None:
-            child = templates.build(mount.template, mount.params)
-            what = f"{mount.template} template"
-        else:
-            child = library.build(mount.library, mount.params)
-            what = library.get(mount.library).title
+            return templates.build(mount.template, mount.params), f"{mount.template} template"
+        return library.build(mount.library, mount.params), library.get(mount.library).title
     except ValueError as exc:
         raise ValueError(f"part {part.name!r}: cannot build the mounted robot: {exc}") from exc
+
+
+def _mount(
+    spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembly, child: BuiltRobot, what: str
+) -> None:
     root = child.spec.worldbody.first_body()
     for joint in list(root.joints) if root is not None else []:
         if joint.type == mujoco.mjtJoint.mjJNT_FREE:  # it rides on this part now instead of moving freely
