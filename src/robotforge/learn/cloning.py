@@ -15,6 +15,19 @@ than the next made the labels disagree (5 to 25% at 8 demonstrations). Labelled 
 goes 3 cm ahead of the gripper, or the next grip change", the same human-like demonstrations (speeds 0.12 to
 0.4 m/s, pauses up to 1.5 s, 6 mm aiming errors) gave the network 88 to 95% at 8 demonstrations. The constants
 below say what each of the later fixes (ARRIVED, SURE, JITTER) was measured to do.
+
+Those figures, and the ones with the constants, are for a teacher at the sliders' pace, who moves the target no
+faster than the gripper follows it. A teacher who drags the ball like a mouse does (0.2 to 0.6 m/s, so the
+gripper lags behind it, then waits for it), aims 4 mm off and pauses 0.5 to 1 s before a click teaches it less:
+on 18 such sets of five demonstrations recorded through the lesson's controls (2026-10-17) the network got 46 to
+92% of the 24 spots (mean 63% dragged at 0.6 m/s, 77% at 0.2 m/s), 12 to 75% 6 cm or more away, and beside a
+demonstration 100% in 17 sets and 60% in one (it grasped the cube 1 cm higher than it had been shown, carried
+it in a way no demonstration did, and let go short of the bin). Over these 18 sets and the 12 of the constants,
+none of twice the training steps, wider or less regularised nets, less jitter, capping the move at LOOK, or
+closing only where it also says it has arrived raised the mean by more than a point (less weight decay and a
+6 mm arrival gate lost 11 to 13); seeing the cube from the gripper instead of on the desk took the mouse-paced
+sets from 68 to 73% and the sliders' from 88 to 85%. What helps is more and more varied demonstrations, and
+corrections (DAgger), which is what the lesson teaches.
 """
 
 from __future__ import annotations
@@ -61,8 +74,9 @@ SETTLE = 0.5  # s after the cube lands in the bin with the gripper open, before 
 # The network's grip is a number, 0 open to 1 closed; the arm switches once it is this far from the grip it has.
 # Before the ARRIVED rule it closed a centimetre or two over the cube at 0.5 (71% at 8 demonstrations, 83% at
 # 0.7). With ARRIVED, JITTER and the no-slip pass, 0.7 left an unsure network hovering over the cube (0.59 there,
-# after slow demonstrations) until the try timed out: on 12 sets of 5 demonstrations 0.5 took the mean from 83% to
-# 88%, the worst set from 58% to 71%, and beside a demonstration from 80-100% to 100% in every set (2026-10-17).
+# after slow demonstrations) until the try timed out: on 12 sets of 5 demonstrations taught at the sliders' pace
+# 0.5 took the mean from 83% to 88%, the worst set from 58% to 71%, and beside a demonstration from 80-100% to 100%
+# in every one of those sets (2026-10-17; mouse-paced teaching does worse, see the module notes).
 SURE = 0.5
 # MuJoCo's soft contacts let a held cube creep down between the fingers: lifted 10 cm through the sliders and held
 # still, it slid 3.6 mm a second and was back on the desk 7.5 s after the lift, so a learner carrying at their own
@@ -89,9 +103,10 @@ DECAY = 3e-3
 BATCH = 128
 # m: in training the gripper's position is shaken this much and the target kept where it was, so the network
 # also learns to come back to the path from a little off it: a fix for covariate shift (as DART does). On 11
-# sets of 5 demonstrations (4 recorded through the viewer, 7 scripted with human-like speeds, pauses and aim,
-# 2026-10-17) it took success at the 24 spots from 74% (25 to 95) to 83% (62 to 95), and beside a
-# demonstration from 96% (60 to 100) to 100% in every set.
+# sets of 5 demonstrations taught at the sliders' pace (4 recorded through the viewer, 7 scripted with human-like
+# speeds, pauses and aim, 2026-10-17) it took success at the 24 spots from 74% (25 to 95) to 83% (62 to 95), and
+# beside a demonstration from 96% (60 to 100) to 100% in each of those sets; half as much (5 mm) did no better on
+# the 18 mouse-paced sets of the module notes (67% against 68%).
 JITTER = 0.01
 NEIGHBOURS = 3
 

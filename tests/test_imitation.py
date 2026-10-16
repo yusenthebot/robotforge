@@ -283,9 +283,11 @@ def test_tests_and_the_sweep_give_the_measured_success(pg):
 
     Measured on macOS arm64, 2026-10-17, with the no-slip pass and SURE 0.5: copying 4% of the 24 spots, 100%
     beside a demonstration, 0% 6 cm or more away; the network 88%, 100%, 62% (sweep: 4, 21, 67, 71, 88% with 1 to
-    5 demonstrations); the hand-written pick 100% everywhere. On 12 sets of five demonstrations (4 recorded through
-    the viewer, 3 by a deliberately rough teacher) the network ranged 71 to 92%, 100% beside a demonstration in
-    every set: the tolerances leave that much room for other machines' floating point."""
+    5 demonstrations); the hand-written pick 100% everywhere. These are a scripted teacher's numbers: it moves the
+    sliders at their pace and aims exactly. On 12 sets of five taught at that pace (4 recorded through the viewer,
+    3 by a deliberately rough teacher) the network ranged 71 to 92%, 100% beside a demonstration; the tolerances
+    leave that much room for other machines' floating point. Teaching like a mouse (fast drags, 4 mm off) gave
+    46 to 92%, and beside a demonstration 60% in one set of 18 (learn/cloning.py, module notes)."""
     p = _player(pg)
     _show_a_pick(p)
     _show_more(p)
