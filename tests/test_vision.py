@@ -204,6 +204,18 @@ def test_exposure_is_for_one_picture_only(needs_gl):
     assert np.array_equal(session.model.vis.headlight.diffuse, before[1])
 
 
+def test_depth_leaves_no_mujoco_log_behind(needs_gl, tmp_path, monkeypatch):
+    """On a Mac every new renderer's first depth picture made MuJoCo append a warning to MUJOCO_LOG.TXT in the
+    folder robotforge was started from."""
+    monkeypatch.chdir(tmp_path)
+    model, data, _ = _palette_world()
+    renderer = SnapshotRenderer()
+    renderer.layers_of(model, data, "top", 64, 48, 0)
+    renderer.close()
+    assert not (tmp_path / "MUJOCO_LOG.TXT").exists()
+    assert mujoco.get_mju_user_warning() is None  # MuJoCo's own handling is back for everything else
+
+
 @pytest.mark.parametrize("template", ["arm", "gripper", "rover", "quadruped", "humanoid"])
 def test_a_template_robots_camera_sees_out_past_its_own_lens(needs_gl, template):
     """The arm's wrist camera sat behind its lens and saw the bezel as a black ring round every picture (15 % of

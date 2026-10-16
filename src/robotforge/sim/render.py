@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import io
+import logging
 import sys
 import threading
 import warnings
@@ -38,6 +39,7 @@ VIEWS: dict[str, tuple[float, float, float]] = {
 MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown with some ground around it
 
 MAX_PIXELS = 1280 * 960
+log = logging.getLogger(__name__)
 
 
 class RenderUnavailable(RuntimeError):
@@ -190,7 +192,8 @@ class SnapshotRenderer:
         pinhole = vision.Pinhole.from_scene(r.scene, key[1], key[2])
         r.enable_depth_rendering()
         try:
-            depth = r.render().copy()
+            with _quiet_clip_control():
+                depth = r.render().copy()
         finally:
             r.disable_depth_rendering()
         seen = None
@@ -213,6 +216,31 @@ class Layers:
     depth: np.ndarray
     geoms: np.ndarray | None
     camera: vision.Pinhole
+
+
+CLIP_CONTROL = "ARB_clip_control unavailable"  # macOS OpenGL 4.1 has no reverse-Z depth; MuJoCo says so
+
+
+@contextlib.contextmanager
+def _quiet_clip_control() -> Iterator[None]:
+    """Drop MuJoCo's warning that the depth buffer is less precise without ARB_clip_control (macOS): MuJoCo writes
+    it to stderr and appends it to a MUJOCO_LOG.TXT in whatever folder robotforge was started from. On a Mac the
+    seeing lesson's depth estimates are still within 4 mm at half a metre. Other warnings meanwhile go to the log."""
+    previous = mujoco.get_mju_user_warning()
+
+    def handler(message: str) -> None:
+        if CLIP_CONTROL in message:
+            return
+        if previous is not None:
+            previous(message)
+        else:
+            log.warning("MuJoCo: %s", message)
+
+    mujoco.set_mju_user_warning(handler)
+    try:
+        yield
+    finally:
+        mujoco.set_mju_user_warning(previous)
 
 
 @contextlib.contextmanager
