@@ -26,7 +26,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
-from robotforge.behaviors.manager import CARRIER_WAIT, BehaviorError
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
@@ -492,12 +492,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
 
     async def carrier_stands(robot: str) -> dict[str, Any]:
         """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
-        still = playground.behaviors.stop_carrier(robot)
-        if still is None:
+        stop = playground.behaviors.stop_carrier(robot)
+        if stop is None:
             return {}
-        waited = await run_until(still, CARRIER_WAIT)
-        owner = robot.split("/", 1)[0]
-        return {"carrier_stopped": f"{owner} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
+        waited = await run_until(stop.still, stop.seconds)
+        return {"carrier_stopped": f"{stop.robot} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
 
     @server.tool()
     def stop(robot: str) -> str:

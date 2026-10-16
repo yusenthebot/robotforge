@@ -7,6 +7,7 @@ import math
 import re
 import sys
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -43,10 +44,12 @@ LEARN_A_WALK = (
 # An arm riding on a robot plans its motion where things are when it starts, so its carrier must stand still: a Go2
 # walking on at 0.3 m/s carried its PiPER past the cube and fell over as the arm reached out. Still is this slow
 # (m/s, rad/s) for CARRIER_CALM s. Told to stop after walking 0.3 or 0.5 m/s, a Go2 with a PiPER is that still within
-# 0.9 s; the tools wait up to CARRIER_WAIT s for it.
+# 0.9 s; the tools wait up to CARRIER_WAIT s for it. A robot that balances sways for longer (a T1 with an SO-100 on its
+# head, stopped after walking 0.1 to 0.12 m/s, stood still after 2.5 to 4.1 s): for those, CARRIER_WAIT_SWAYING s.
 CARRIER_STILL, CARRIER_STILL_TURN = 0.03, 0.05
 CARRIER_CALM = 0.2
 CARRIER_WAIT = 3.0
+CARRIER_WAIT_SWAYING = 6.0
 
 GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy's own name
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
@@ -54,6 +57,16 @@ NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)
 
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
+
+
+@dataclass(frozen=True)
+class CarrierStop:
+    """A robot carrying an arm, told to stop so the arm can work from it: `still` turns true once it has stood still
+    long enough (see CARRIER_STILL); wait for that at most `seconds` of simulated time."""
+
+    robot: str
+    still: Callable[[], bool]
+    seconds: float
 
 
 def _a(kind: Kind) -> str:
@@ -544,7 +557,10 @@ class BehaviorManager:
         return arms[0]
 
     def _arm(self, robot: str) -> ArmMotion:
-        name = self._arm_name(robot)
+        return self._arm_motion(self._arm_name(robot))
+
+    def _arm_motion(self, name: str) -> ArmMotion:
+        """The motion controller of the arm `name` (as _arm_name gives it), made the first time it is needed."""
         existing = self.session.controllers.get(name)
         if isinstance(existing, ArmMotion):
             existing.sync(self.session.data)
@@ -559,14 +575,19 @@ class BehaviorManager:
         self.session.set_controller(name, arm)
         return arm
 
-    def stop_carrier(self, robot: str) -> Callable[[], bool] | None:
-        """For an arm riding on a robot that moves (see CARRIER_STILL): stop the robot, and return a check that turns
-        true once it has stood still long enough for the arm to start. None when there is nothing to wait for."""
+    def stop_carrier(self, robot: str) -> CarrierStop | None:
+        """For an arm riding on a robot that moves (see CARRIER_STILL): stop the robot, and say when it has stood still
+        long enough for the arm to start. None when there is nothing to wait for."""
         with self.session.lock:
-            owner = _carrier(self._arm_name(robot))
-            if owner is None or not self._carrier_moving(owner):
+            arm = self._arm_name(robot)
+            owner = _carrier(arm)
+            if owner is None:
+                return None
+            self._refuse_stepping_carrier(owner, arm)
+            if not self._carrier_moving(owner):
                 return None
             self.stop(owner)
+            swaying = isinstance(self.session.controllers.get(owner), (humanoid.HumanoidController, WheelBalancer))
         calm_since: list[float] = []
 
         def still() -> bool:
@@ -577,7 +598,16 @@ class BehaviorManager:
                 calm_since.append(now)
             return bool(calm_since) and now - calm_since[0] >= CARRIER_CALM
 
-        return still
+        return CarrierStop(owner, still, CARRIER_WAIT_SWAYING if swaying else CARRIER_WAIT)
+
+    def _refuse_stepping_carrier(self, owner: str, arm: str) -> None:
+        """A robot on a learned walk (G1) never stands still: its policy keeps stepping in place, at 0.2 to 0.35 m/s in
+        every couple of seconds, so an arm on it could never start (see CARRIER_STILL)."""
+        if _is_policy_walker(self.session.controllers.get(owner)):
+            raise BehaviorError(
+                f"{owner} keeps stepping in place on its learned walk and never stands still, so {arm} cannot work "
+                "from it; an arm works on a robot that stands still: a robot dog (go2, spot, anymal_c), a rover or a T1"
+            )
 
     def _carrier_motion(self, owner: str) -> tuple[float, float]:
         """How fast a robot's main body moves over the floor (m/s) and turns (rad/s)."""
@@ -596,6 +626,7 @@ class BehaviorManager:
         owner = _carrier(arm)
         if owner is None:
             return
+        self._refuse_stepping_carrier(owner, arm)
         if _told_to_move(self.session.controllers.get(owner)):
             raise BehaviorError(
                 f"{owner} is moving, and {arm} plans its motion where things are now; stop {owner} first, then "
@@ -612,8 +643,9 @@ class BehaviorManager:
         if target.shape != (3,):
             raise BehaviorError(f"position must be [x, y, z] in meters (world frame), got {list(position)}")
         with self.session.lock:
-            arm = self._arm(robot)
-            self._check_carrier(arm.robot)
+            name = self._arm_name(robot)
+            self._check_carrier(name)  # before its motion takes hold of the arm
+            arm = self._arm_motion(name)
             if arm.reach_error(target) > REACH_TOL:
                 raise BehaviorError(self._out_of_reach(arm, target))
             arm.move_to(target, gripper)
@@ -642,13 +674,14 @@ class BehaviorManager:
 
     def pick_and_place(self, robot: str, obj: str, target: str | list[float]) -> tuple[ArmMotion, dict[str, Any]]:
         with self.session.lock:
-            arm = self._arm(robot)
-            if arm.gripper < 0:
+            name = self._arm_name(robot)
+            if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
                 raise BehaviorError(
-                    f"{arm.robot} has no gripper to pick with; mount one from the library, e.g. add_robot with "
+                    f"{name} has no gripper to pick with; mount one from the library, e.g. add_robot with "
                     'mounts=[{"library": "robotiq_2f85"}]'
                 )
-            self._check_carrier(arm.robot)
+            self._check_carrier(name)  # before its motion takes hold of the arm
+            arm = self._arm_motion(name)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
             place, place_top, region = self._place_target(target)

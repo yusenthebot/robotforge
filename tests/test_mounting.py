@@ -15,6 +15,7 @@ from mcp import Client
 
 from robotforge import tool_input
 from robotforge.behaviors import Kind
+from robotforge.behaviors.manager import CARRIER_WAIT, CARRIER_WAIT_SWAYING
 from robotforge.cli import find_free_port
 from robotforge.design import library, mounting
 from robotforge.design.templates.base import BuiltRobot
@@ -229,14 +230,53 @@ def test_an_arm_on_a_walking_dog_waits_until_the_dog_stands(pg):
         pg.behaviors.pick_and_place("go2/arm", "cube", [1.05, -0.3])
     with pytest.raises(ValueError, match="go2 is moving"):
         pg.behaviors.move_arm("go2", [1.0, 0.0, 0.4])
-    still = pg.behaviors.stop_carrier("go2/arm")
-    assert still is not None and not still()
+    stop = pg.behaviors.stop_carrier("go2/arm")
+    assert stop is not None and not stop.still() and stop.seconds == CARRIER_WAIT
     with pytest.raises(ValueError, match=r"go2 is still coming to a stand \(0\.\d\d m/s\); give it a second"):
         pg.behaviors.pick_and_place("go2/arm", "cube", [1.05, -0.3])
-    pg.run_fast(still, 3.0)
-    assert still() and pg.behaviors.stop_carrier("go2/arm") is None  # standing: nothing to wait for
+    pg.run_fast(stop.still, stop.seconds)
+    assert stop.still() and pg.behaviors.stop_carrier("go2/arm") is None  # standing: nothing to wait for
     x, y, _ = pg.behaviors.pose("go2")["position"]
     pg.behaviors.move_arm("go2/arm", [x + 0.3, y, 0.45])
+
+
+def test_an_arm_on_a_robot_that_keeps_stepping_is_refused_at_once(pg):
+    """Regression: a G1 on its learned walk steps in place (0.2 to 0.35 m/s every couple of seconds), so after its
+    first move each call waited 3 s for it to stand still and failed with "give it a second": the arm on it could never
+    work again. It is refused at once and says where an arm does work, and nothing takes hold of the arm."""
+    pg.add_robot("g1", library="g1", mounts=[{"library": "piper"}])
+    stepping = r"g1 keeps stepping in place on its learned walk and never stands still, so g1/arm cannot work from it"
+    for _ in range(2):
+        with pytest.raises(ValueError, match=stepping + r"; .*a robot dog \(go2, spot, anymal_c\), a rover or a T1"):
+            pg.behaviors.move_arm("g1/arm", [0.3, 0.0, 1.2])
+        with pytest.raises(ValueError, match=stepping):
+            pg.behaviors.stop_carrier("g1/arm")
+        _run(pg, 1.0)
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.4, 0.0])
+    with pytest.raises(ValueError, match=stepping):
+        pg.behaviors.pick_and_place("g1/arm", "cube", [0.4, 0.3])
+    assert "g1/arm" not in pg.session.controllers
+
+
+@pytest.mark.anyio
+async def test_an_arm_on_a_humanoid_waits_longer_for_it_to_stand(pg):
+    """A humanoid sways for a while after it stops (a T1 with an SO-100: 2.5 to 4.1 s), longer than the 3 s the tools
+    waited for a robot dog, so the first move_arm after a walk was always refused."""
+    pg.add_robot("h", template="humanoid", mounts=[{"template": "arm", "params": {"reach": 0.2}}])
+    _run(pg, 1.0)
+    pg.behaviors.move("h", 0.1, 0.0)
+    _run(pg, 2.0)
+    stop = pg.behaviors.stop_carrier("h/arm")
+    assert stop is not None and stop.robot == "h" and stop.seconds == CARRIER_WAIT_SWAYING > CARRIER_WAIT
+    server = build_server(pg, find_free_port(8796))
+    pg.behaviors.move("h", 0.1, 0.0)
+    _run(pg, 2.0)
+    x, y, _ = pg.behaviors.pose("h")["position"]
+    async with Client(server) as client:
+        result = await client.call_tool("move_arm", {"robot": "h/arm", "position": [x + 0.13, y, 0.4]})
+    assert not result.is_error, result.content[0].text
+    assert json.loads(result.content[0].text)["carrier_stopped"].startswith("h stopped first and stood still after")
+    assert pg.behaviors.pose("h")["upright"]
 
 
 @pytest.mark.anyio
@@ -534,3 +574,22 @@ def test_real_a_ur5e_with_a_robotiq_gripper_picks_a_cube(pg):
     _arm_done(pg, "ur")
     _run(pg, 1.0)
     assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.anyio
+async def test_real_a_t1_carrying_an_so100_stops_without_falling_and_its_arm_moves(pg):
+    """Regression: told to stop after a walk, a T1 with an SO-100 on its head swayed further and further sideways and
+    fell over (its roll was damped as for a 0.2 m leg); and it sways for 3 to 4 s, so the tools gave up waiting."""
+    pg.add_robot("t1", library="t1", mounts=[{"library": "so_arm100"}])
+    _run(pg, 2.0)
+    pg.behaviors.move("t1", 0.12, 0.0)
+    _run(pg, 3.0)
+    x, y, _ = pg.behaviors.pose("t1")["position"]
+    server = build_server(pg, find_free_port(8795))
+    async with Client(server) as client:
+        result = await client.call_tool("move_arm", {"robot": "t1/arm", "position": [x + 0.25, y, 1.1]})
+    assert not result.is_error, result.content[0].text
+    assert "carrier_stopped" in json.loads(result.content[0].text)
+    _run(pg, 3.0)
+    assert pg.behaviors.pose("t1")["upright"]

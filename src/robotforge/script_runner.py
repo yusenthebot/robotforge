@@ -26,7 +26,7 @@ import mujoco
 import numpy as np
 
 import robotforge
-from robotforge.behaviors.manager import CARRIER_WAIT, BehaviorError
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script import ENV_PORT, ENV_TOKEN
 
@@ -205,9 +205,9 @@ class ScriptRunner:
 
     async def _carrier_stands(self, robot: str) -> None:
         """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
-        still = self.pg.behaviors.stop_carrier(robot)
-        if still is not None:
-            await self._advance(still, CARRIER_WAIT)
+        stop = self.pg.behaviors.stop_carrier(robot)
+        if stop is not None:
+            await self._advance(stop.still, stop.seconds)
 
     async def _op_move_arm(self, req) -> list[float]:
         await self._carrier_stands(req["robot"])
