@@ -281,7 +281,7 @@ def _free_run(nav: Any, start: tuple[float, float], way: float, most: float = 1.
 
 def dead_ends(nav: Any, free: np.ndarray, ring: float = 0.6) -> list[tuple[float, float, float]]:
     """Free cells at the end of a dead end, at least 0.8 m apart: (x, y, the way in, rad). Around one, on a circle
-    `ring` m across, the free cells make a single short arc: the way it is entered."""
+    `ring` m round it, the free cells make a single short arc: the way it is entered."""
     angles = np.linspace(-math.pi, math.pi, 36, endpoint=False)
     found: list[tuple[float, float, float]] = []
     for r, c in np.argwhere(free)[::3]:
