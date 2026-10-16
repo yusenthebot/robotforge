@@ -9,12 +9,12 @@ knows its body.
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
 its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
-Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride, once the walk has played a
-second, starts faded in from the stride as its walking version learned to, at once or at the next point of the stride
-it was checked to start from safely (a stop asked just before is let go of); any other switch while moving first
-steadies the robot on its home pose, the way checked to tip it over least (`learn_switches`): holding home until it
-stands still and starting the new rhythm as learned, or fading to home until it is calm and fading the new rhythm in.
-It cannot back up or change speed, and the status says so.
+Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride, once the walk has played
+WALKED_MIN, starts faded in from the stride as its walking version learned to, at once or at the next point of the
+stride it was checked to start from safely (a stop asked just before is let go of); any other switch while moving
+first steadies the robot on its home pose, the way checked to tip it over least (`learn_switches`): holding home until
+it stands still and starting the new rhythm as learned, or fading to home until it is calm and fading the new rhythm
+in. It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -162,6 +162,15 @@ WALK_STARTS = (0.5, 0.8, 1.1, 1.4, 1.7, 2.0)
 # of the walk reached 67% of the rate on average over 90 tries on 6 template dog walks and 70% on 6 A1 walks; with 40,
 # 72% and 84% (scripts/rhythm_bench.py switch --trials 15).
 WALKING_ROUNDS = 40
+# A turn begins straight out of the walk only once the walk has played WALKED_MIN; asked sooner, the robot steadies
+# first, as before turns learned to begin out of the walk. In random runs of 60 commands (each 0.3 to 1.5 s, the next
+# at once), where a walk is often short and follows steadying out of a turn, 6 template dog walks with no such gate fell
+# 16 times in 14400 commands against 7 for the same walks switched as before, 10 of them in or after a turn begun out
+# of a walk 0.06 to 1.04 s old. Gated at 1 s (the earliest moment the walking turns were checked from), 80 times in
+# 86400 commands against 66 for the walks kept and switched as before; leaving out one walk whose turn from standing
+# tips it over either way, 21 against 10, 8 of the 11 more in or after a turn begun out of a walk 1.0 to 1.47 s old.
+# Gated at 1.5 s, 75 (13 leaving that walk out), none of them in or after a turn begun out of the walk.
+WALKED_MIN = 1.5  # s
 # A turn's walking version is checked from more moments of the walk as move plays it, a tenth of a second apart (at
 # 2 Hz, each of 5 points of the stride 8 or 9 times), each for TURN_CHECK seconds. Of the tuned turn and the one from
 # standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the walk,
@@ -227,15 +236,9 @@ STOP_GRACE = 0.06  # s: three updates
 # asked within STOP_GRACE of letting go plays as one asked at once from a later point of the stride, so the gaps are
 # longer: the walk has stopped, and the robot steadies first.
 SWITCH_TRIES = 25
-SWITCH_WALK = (1.0, 4.5)  # s
+SWITCH_WALK = (WALKED_MIN, 4.5)  # s
 SWITCH_ENDS = 5
 SWITCH_GAPS = (0.12, 0.18, 0.28)  # s, from asking to stop: 0.06 to 0.22 s after the walk stopped
-# A turn begins straight out of the walk only once the walk has played as long as the earliest moment its walking
-# version was checked from; asked sooner, the robot steadies first. In random runs of commands (each 0.3 to 1.5 s, the
-# next at once), where a walk is often short and follows steadying out of a turn, 6 template dog walks fell 16 times in
-# 14400 commands, 10 of them in or after a turn begun out of a walk 0.06 to 1.04 s old (the same walks switched as
-# before: 7); gated at 1 s, 10 times, and 27 in 43200 (walks kept and switched as before: 26).
-WALKED_MIN = min(WALK_CHECKS[0], SWITCH_WALK[0])  # s
 SWITCH_ON = 2.0  # s
 EXIT_WAIT = 2.0  # s
 # Leaving the walk (SavedWalk.switching), holding first: "hold" home at once and wait until the robot stands still,
