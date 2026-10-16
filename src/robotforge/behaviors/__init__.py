@@ -62,6 +62,12 @@ def home_pose(model: mujoco.MjModel):
     return model.key_qpos[key].copy() if key >= 0 else model.qpos0.copy()
 
 
+def home_controls(model: mujoco.MjModel) -> np.ndarray:
+    """ctrl of the world's home keyframe (every servo aimed at its home angle), or zeros without one."""
+    key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    return model.key_ctrl[key].copy() if key >= 0 else np.zeros(model.nu)
+
+
 @dataclass(frozen=True)
 class WheelSet:
     """Driven wheels of a differential or skid-steer robot, grouped by side."""

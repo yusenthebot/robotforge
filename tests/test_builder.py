@@ -427,6 +427,62 @@ def test_two_wheeled_robot_balances_by_itself_and_drives(pg):
     assert end["upright"] and end["position"][0] > 0.8
 
 
+WHEEL_LEGS = {  # two legs that end in wheels: the knees are servos, which give a little under the body's weight
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.13, 0.17, 0.09]},
+    "parts": [
+        {
+            "name": "left_thigh",
+            "at": [0, 0.105, -0.02],
+            "joint": {"axis": "y", "range": [-30, 100], "home": 40},
+            "size": [0.03, 0.12],
+            "direction": "down",
+            "mirror": True,
+        },
+        {
+            "name": "left_shin",
+            "parent": "left_thigh",
+            "at": "end",
+            "joint": {"axis": "y", "range": [-150, 0], "home": -80},
+            "size": [0.025, 0.12],
+            "direction": "down",
+        },
+        {
+            "name": "left_wheel",
+            "parent": "left_shin",
+            "at": "end",
+            "shift": [0, 0.032, 0],
+            "shape": "wheel",
+            "size": [0.13, 0.03],
+        },
+    ],
+}
+
+
+def test_a_wheel_legged_robot_balances_in_place_and_stays_there_when_it_crouches(pg):
+    """The balanced lean was worked out with the legs straightening (their controls were 0) and stiff, so it was a
+    degree off and the robot rolled 0.2 m back holding the difference; a crouch set by hand moved the balance point
+    and rolled it 0.34 m (standing taller) to 1.17 m (crouching deep)."""
+    pg.add_robot("ascent", build=WHEEL_LEGS)
+    assert pg.behaviors.robots()[0]["kind"] == "balancer"
+    _run(pg, 0.5)
+    start = pg.behaviors.pose("ascent")["position"]
+    _run(pg, 4.0)
+    assert abs(pg.behaviors.pose("ascent")["position"][0] - start[0]) < 0.03
+    for thigh, shin in ((15, -30), (70, -140)):  # taller, then deep
+        pg.set_controls(
+            {
+                f"ascent/{side}_{part}": np.radians(angle)
+                for side in ("left", "right")
+                for part, angle in (("thigh", thigh), ("shin", shin))
+            }
+        )
+        _run(pg, 4.0)
+        end = pg.behaviors.pose("ascent")
+        assert end["upright"] and abs(end["position"][0] - start[0]) < 0.05, (thigh, end)
+    assert end["position"][2] < start[2] - 0.08  # it did crouch
+
+
 def test_two_wheels_and_a_caster_that_sits_a_little_high_is_a_rover(pg):
     """Review HIGH 1: a caster a few millimetres above the wheels' lowest point (common in imported URDFs;
     the robot tips onto it) made a plain rover look like a self-balancer, which then fought its own caster."""

@@ -7,6 +7,8 @@ MuJoCo predicts how a small change in each of them, and in the wheel command, pl
 out over one control period (finite differences on the real model, contacts and motor
 limits included); the Riccati equation turns that linear model into the best gains.
 Driving is the same balancing with a moving reference: lean, roll, keep up.
+Every other actuator (legs that hold a crouch, an arm) stays at its home control while the
+balancer works out its model, as it does while the robot balances.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
-from robotforge.behaviors import find_wheels
+from robotforge.behaviors import find_wheels, home_controls
 from robotforge.sim.geometry import collides, lowest_point
 
 CONTROL_HZ = 100.0
@@ -30,6 +32,11 @@ R_WEIGHT = 0.05
 SPEED_SMOOTHING = 0.6  # s: commands ramp in, a sudden full-speed command would tip it over
 MAX_LEAN_SPEED = 0.6  # share of the wheels' top speed offered for driving; the rest is for balancing
 POSITION_SLACK = 0.4  # m: after a shove, stop chasing the old spot beyond this
+# Finding the balanced lean: legs held by servos (a wheel-legged robot's crouch) give a little under the leaned
+# weight, which moves the center of mass off the axle again, so the lean is corrected until it stays put. A wheel
+# biped built from parts stood 1.1 degrees off with one pass and rolled 0.15 m back holding the difference.
+EQUILIBRIUM_PASSES = 6
+EQUILIBRIUM_TOL = 1e-3  # rad of center of mass off the axle that counts as balanced
 
 
 @dataclass(frozen=True)
@@ -114,6 +121,7 @@ def _stands_on_its_own(model: mujoco.MjModel, qpos: np.ndarray, root: int, wheel
     for sign in (1.0, -1.0):
         mujoco.mj_resetData(model, data)
         data.qpos[:] = qpos
+        data.ctrl[:] = home_controls(model)  # legs keep their crouch rather than straighten (ctrl 0)
         tip = np.zeros(4)
         mujoco.mju_axisAngle2Quat(tip, lateral, math.radians(SETTLE_TIP_DEG) * sign)
         quat = np.array(data.qpos[qadr + 3 : qadr + 7])
@@ -155,6 +163,13 @@ def axle_point(data: mujoco.MjData, b: Balancer) -> np.ndarray:
     return (data.xpos[b.wheel_bodies[0]] + data.xpos[b.wheel_bodies[1]]) / 2
 
 
+def com_lean(data: mujoco.MjData, b: Balancer, fwd: np.ndarray) -> float:
+    """How far the center of mass leans ahead of the axle, as an angle: 0 when balanced whatever the joints do
+    (legs that crouch or stretch, an arm that reaches out)."""
+    com, axle = data.subtree_com[b.root], axle_point(data, b)
+    return math.atan2(float((com - axle) @ fwd), float(com[2] - axle[2]))
+
+
 def _omega(data: mujoco.MjData, b: Balancer) -> np.ndarray:
     """Body angular velocity in world coordinates (free joints store it in the body frame)."""
     return data.xmat[b.root].reshape(3, 3) @ data.qvel[b.dadr + 3 : b.dadr + 6]
@@ -194,22 +209,27 @@ def equilibrium(model: mujoco.MjModel, b: Balancer, home_qpos: np.ndarray) -> tu
     """Full physics state of the robot resting balanced (center of mass over the axle), and its lean."""
     data = mujoco.MjData(model)
     data.qpos[:] = home_qpos
+    data.ctrl[:] = home_controls(model)
     mujoco.mj_forward(model, data)
     fwd, left = heading_frame(data, b)
-    axle = axle_point(data, b)
-    com = data.subtree_com[b.root]
-    lean = math.atan2(float((com - axle) @ fwd), float(com[2] - axle[2]))
-    set_lean(model, data, b, axle, left, -lean)
-    # Let the tyres settle into the floor with the lean and the spot held, so the linearization starts at rest.
-    held = data.qpos[b.qadr : b.qadr + 7].copy()
-    for _ in range(int(0.3 / model.opt.timestep)):
-        mujoco.mj_step(model, data)
-        z = data.qpos[b.qadr + 2]
-        data.qpos[b.qadr : b.qadr + 7] = held
-        data.qpos[b.qadr + 2] = z
-        vz = data.qvel[b.dadr + 2]
-        data.qvel[:] = 0.0
-        data.qvel[b.dadr + 2] = vz
+    held_dofs = [*range(b.dadr, b.dadr + 6), *b.wheel_dofs]
+    for attempt in range(EQUILIBRIUM_PASSES):
+        off = com_lean(data, b, fwd)
+        if attempt > 0 and abs(off) < EQUILIBRIUM_TOL:
+            break
+        set_lean(model, data, b, axle_point(data, b), left, -off)
+        # Let the tyres settle into the floor, and joints held by servos give under the load, with the lean and the
+        # spot held, so the linearization starts at rest.
+        held = data.qpos[b.qadr : b.qadr + 7].copy()
+        for _ in range(int(0.3 / model.opt.timestep)):
+            mujoco.mj_step(model, data)
+            z = data.qpos[b.qadr + 2]
+            data.qpos[b.qadr : b.qadr + 7] = held
+            data.qpos[b.qadr + 2] = z
+            vz = data.qvel[b.dadr + 2]
+            data.qvel[held_dofs] = 0.0
+            data.qvel[b.dadr + 2] = vz
+        mujoco.mj_forward(model, data)
     data.qvel[:] = 0.0
     mujoco.mj_forward(model, data)
     size = mujoco.mj_stateSize(model, mujoco.mjtState.mjSTATE_FULLPHYSICS)
@@ -222,6 +242,7 @@ def equilibrium(model: mujoco.MjModel, b: Balancer, home_qpos: np.ndarray) -> tu
 def linearize(model: mujoco.MjModel, b: Balancer, state: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """x' = A x + B u over one control period, for x = [lean, lean rate, position, speed] and u = wheel speed."""
     data = mujoco.MjData(model)
+    data.ctrl[:] = home_controls(model)  # the state holds no controls; roll_out sets only the wheels'
     full = mujoco.mjtState.mjSTATE_FULLPHYSICS
     mujoco.mj_setState(model, data, state, full)
     mujoco.mj_forward(model, data)
@@ -344,6 +365,10 @@ class WheelBalancer:
             x[2] = float(np.clip(x[2], -POSITION_SLACK, POSITION_SLACK))
             self._ref = axle - fwd * x[2]
         error = x - np.array([self.lean, 0.0, 0.0, self.speed])
+        # The lean is measured on the center of mass: for a rigid body it is the same number, but a robot that
+        # changes its crouch moves its balance point, and balancing the old lean rolled it away (0.34 m standing
+        # up taller, 1.17 m crouching deep).
+        error[0] = com_lean(data, b, fwd)
         roll = self.speed / b.radius - float((self.K @ error)[0])
         spin = self.turn * b.track / (2 * b.radius)
         for act, sign, side in zip(b.wheels, b.signs, (-1.0, 1.0), strict=True):
