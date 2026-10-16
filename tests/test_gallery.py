@@ -401,6 +401,30 @@ def test_the_go2_with_an_arm_walks_and_moves_a_cube_between_tables(pg):
     assert joint_by_joint[:1] == ["approach"]
 
 
+# Floor picks where the summary says the mobile Panda works: in front and to the sides, 0.4 to 0.7 m from the arm and
+# 10 cm or more clear of the base (drawn at random; 40 of 40 such picks landed with the real Panda).
+MOBILE_PANDA_FLOOR = [
+    ([0.177, 0.637], [0.395, -0.469]),  # front left to front right
+    ([0.617, -0.017], [-0.188, -0.53]),  # straight ahead to beside the right wheel
+    ([0.058, -0.641], [0.059, 0.612]),  # right side to left side, round the front
+    ([0.604, 0.129], [-0.203, 0.452]),  # ahead to beside the left wheel
+]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize(("cube", "target"), MOBILE_PANDA_FLOOR)
+def test_real_mobile_panda_works_the_floor_in_front_and_to_the_sides(tmp_path, monkeypatch, cube, target):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.delenv("ROBOTFORGE_MENAGERIE", raising=False)
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("real")
+    playground.add_robot("r", design="mobile_panda")
+    playground.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=cube)
+    _run(playground, 0.5)
+    placed = _pick(playground, "r/arm", "cube", target)
+    assert placed["success"], placed
+
+
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
 def test_real_go2_arm_carries_a_floor_cube_from_one_side_to_the_other_over_the_dogs_head(tmp_path, monkeypatch):
     """Swung round in front at 10 cm the gripper could not point down without hitting the head and flung the cube; at

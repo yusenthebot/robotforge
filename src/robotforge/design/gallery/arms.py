@@ -137,7 +137,7 @@ DESIGNS = [
     Design(
         "tentacle",
         "an eight-segment tentacle arm that bends every way, with a gripper at its tip: move_arm and pick_and_place "
-        "work the floor around it, up to 0.2 m high",
+        "work the floor 0.2 to 0.35 m around it, up to 0.2 m high",
         tentacle,
     ),
 ]

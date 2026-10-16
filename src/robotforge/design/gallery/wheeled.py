@@ -442,7 +442,7 @@ DESIGNS = [
     Design(
         "mobile_panda",
         "a real Franka Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy base that turns on the spot: "
-        "move drives it; pick_and_place with mobile_panda/arm works the floor and tables all around",
+        "move drives it; pick_and_place with mobile_panda/arm works 0.4 to 0.7 m out, not behind",
         mobile_panda,
     ),
     Design(
