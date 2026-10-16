@@ -47,6 +47,7 @@ GAIT_WALKERS = ("gait", "rl", RHYTHM)  # the walker names that are not a policy'
 NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)+\s*[\])]?\s*")
 TRIP = "__navigate__"  # session controller key of a robot's trip to a destination: TRIP + robot (see navigate)
 MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.MAX_POSITION)
+MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid walks at 0.09)
 
 
 class BehaviorError(ValueError):
@@ -472,6 +473,11 @@ class BehaviorManager:
         why, when there is no way; the Navigator returned says how the trip goes (`done`, `result()`)."""
         if speed is not None and not math.isfinite(speed):
             raise BehaviorError(f"speed must be a finite number, got {speed}")
+        if speed is not None and abs(speed) < MIN_TRIP_SPEED:
+            raise BehaviorError(
+                f"speed {speed:g} would not get it anywhere: with to, speed is its top speed on the way (at least "
+                f"{MIN_TRIP_SPEED:g} m/s); leave speed out for the robot's own pace"
+            )
         robot = self.resolve(robot)
         named = to if isinstance(to, str) and not NUMBER_LIST.fullmatch(to) else None
         if named is not None and wording.match(named, [robot]) == robot:

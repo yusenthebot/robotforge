@@ -11,7 +11,7 @@ import pytest
 from mcp import Client
 
 from robotforge.behaviors import nav_grid, nav_map
-from robotforge.behaviors.manager import TRIP
+from robotforge.behaviors.manager import TRIP, BehaviorError
 from robotforge.behaviors.nav_grid import Grid
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge.onnx_policy import PolicyWalker, onnxruntime_available
@@ -521,6 +521,13 @@ def test_a_trip_sent_off_without_waiting_says_how_it_ended(pg):
     assert done and done[0]["last_trip"]["arrived"], pg.behaviors.status()
     pg.behaviors.move("rover", 0.0, 0.5)  # moved again: that trip is old news
     assert not [s for s in pg.behaviors.status() if s.get("navigating") == "rover"]
+
+
+def test_a_trip_needs_a_speed_that_gets_somewhere(pg):
+    pg.add_robot("rover", template="rover")
+    with pytest.raises(BehaviorError, match="leave speed out"):
+        pg.behaviors.navigate("rover", [1.5, 0.0], speed=0.0)
+    assert pg.behaviors.trip("rover") is None
 
 
 def test_driving_by_hand_ends_a_trip(pg):
