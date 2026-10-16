@@ -21,6 +21,8 @@ from robotforge.design.templates.base import SHELL
 from robotforge.design.visuals import parts as P
 from robotforge.design.world import World, compile_world
 from robotforge.sim.geometry import collides
+from robotforge.sim.render import SnapshotRenderer
+from robotforge.sim.session import SimSession
 
 # Mesh triangles a built robot may draw: its base with the base's sensors, plus so many per part. A part
 # with its servo case and horn measured 1.4k to 1.7k (2026-10-17), a wheel with its gear motor about 3k.
@@ -533,3 +535,40 @@ def test_a_camera_under_or_beside_its_robot_stays_on_its_point(needs_gl, face):
     point = {"bottom": [0.0, 0.0, -0.025], "left": [0.0, 0.08, 0.0]}[face]
     assert np.allclose(model.cam_pos[cam], point)
     assert _own_pixels(model, cam) <= 0.015 * 120 * 160
+
+
+CAMERA = {"type": "camera", "fov": 90}  # at the part's middle, looking forward
+EMBEDDED = {  # cameras inside or on their own part, among its other modules and hardware
+    "on a ball's side": {"base": {"shape": "sphere", "size": [0.1], "sensors": [{**CAMERA, "at": "left"}]}},
+    "in a small ball with a lidar": {"base": {"shape": "sphere", "size": [0.03], "sensors": ["lidar", CAMERA]}},
+    "in a box with a lidar": {"base": {"shape": "box", "size": [0.1, 0.08, 0.04], "sensors": ["lidar", CAMERA]}},
+    "in a bare joint's cover": {
+        "base": {"shape": "box", "size": [0.2, 0.16, 0.06]},
+        "parts": [
+            {"name": "pivot", "at": "top", "shift": [0, 0, 0.03], "shape": "none", "joint": {"axis": "y"}},
+        ],
+    },
+}
+EMBEDDED["in a small ball with a lidar"]["base"]["sensors"].insert(1, "rangefinder")
+EMBEDDED["in a box with a lidar"]["base"]["sensors"][0] = {"type": "lidar", "at": "center"}
+EMBEDDED["in a bare joint's cover"]["parts"][0].update(actuator="none", sensors=[{**CAMERA, "direction": "left"}])
+
+
+def _snapshot(model: mujoco.MjModel, camera: str) -> np.ndarray:
+    data = _home(model)
+    return SnapshotRenderer().rgb(SimSession(model=model, data=data), camera, 160, 120).astype(int)
+
+
+@pytest.mark.parametrize("case", list(EMBEDDED))
+def test_a_camera_inside_its_part_sees_through_its_dressing(needs_gl, case):
+    """What observe shows from a robot camera inside or on its own part is what the bare part showed: the
+    part's shape, culled from inside. Covers, modules and shells drawn round the camera filled 13 to 30 % of
+    such pictures (a lidar's window, a cover's caps, a ball's seam core seen from its surface)."""
+    build = {"color": "blue", **copy.deepcopy(EMBEDDED[case])}
+    build["base"]["fixed"] = True
+    dressed = _compile(build)
+    with visuals.disabled():
+        bare = _compile(build)
+    camera = next(dressed.camera(c).name for c in range(dressed.ncam) if dressed.camera(c).name.startswith("r/"))
+    differ = np.abs(_snapshot(dressed, camera) - _snapshot(bare, camera)).max(axis=2) > 12
+    assert differ.mean() < 0.05
