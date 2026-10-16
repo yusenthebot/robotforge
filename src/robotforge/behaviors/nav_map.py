@@ -59,7 +59,10 @@ STEP_SHARE, STEP_LIKE = 0.5, 0.15
 # - a rover built from parts with 2 cm casters: curb 0.5 cm crossed, 1.0 cm stopped;
 # - template dog (gait lift 4.3 cm): curb 5 cm crossed, 6 cm stopped; ramp 15 degrees, 18 stalled;
 # - Unitree Go2 on the gait (lift 7.1 cm): curb 5 cm crossed, 7 cm stopped; ramp 10 degrees, 12 fell over;
-# - template humanoid: curb 0.5 cm crossed, 1 cm fell over; ramp 8 degrees, 10 fell over.
+# - template humanoid: curb 0.5 cm crossed, 1 cm fell over; ramp 8 degrees, 10 fell over. Walking along the park's
+#   hills it fell where they leaned 4 degrees across its way (scripts/nav_bench.py), so it keeps to 3.
+# And with the follower holding the heading up 3 m wide ramps (no falling off a side): the rover built from parts
+# climbed 3 and 7 degrees and stuck at the foot of 5, 9 and 12, its front caster caught on the ramp's toe.
 WHEEL_STEP = 0.3  # wheels climb a step of this share of the smallest rolling radius (wheel or caster)
 LEG_STEP_MAX = 0.05  # m: a legged robot climbs up to its gait's foot lift, but no robot we tried did 7 cm
 FLAT_STEP = 0.005  # m: robots that only walk on flat ground (humanoids, snakes, learned rhythm walks)
@@ -67,11 +70,12 @@ SLOPE_DEG = {
     Kind.ROVER: 15.0,
     Kind.QUADRUPED: 10.0,  # the Go2 limit; the template dog climbs 15
     Kind.HEXAPOD: 10.0,
-    Kind.HUMANOID: 8.0,
+    Kind.HUMANOID: 3.0,
     Kind.BALANCER: 5.0,  # not measured: leaning to balance on a slope is hard, so kept low
     Kind.SNAKE: 5.0,  # not measured
 }
 OTHER_SLOPE_DEG = 5.0  # learned rhythm walks and anything else: not measured
+CASTER_SLOPE_DEG = 3.0  # wheeled robots with a caster ahead of the drive wheels (see above)
 
 
 @dataclass(frozen=True)
@@ -113,13 +117,17 @@ def measure_body(model: mujoco.MjModel, data: mujoco.MjData, robot: str, kind: K
     radius = float(max(-low[1], high[1]))
     reach = float(max(math.hypot(x, y) for x in (low[0], high[0]) for y in (low[1], high[1])))
     lift = getattr(walker, "lift", None)
+    slope_deg = SLOPE_DEG.get(kind, OTHER_SLOPE_DEG)
     if kind in (Kind.ROVER, Kind.BALANCER):
-        step = WHEEL_STEP * _rolling_radius(model, data, robot, walker, heading, center)
+        radius_rolling, caster = _rolling_radius(model, data, robot, walker, heading, center)
+        step = WHEEL_STEP * radius_rolling
+        if caster:
+            slope_deg = min(slope_deg, CASTER_SLOPE_DEG)
     elif kind in (Kind.QUADRUPED, Kind.HEXAPOD) and isinstance(lift, float):
         step = min(lift, LEG_STEP_MAX)
     else:
         step = FLAT_STEP
-    slope = math.radians(SLOPE_DEG.get(kind, OTHER_SLOPE_DEG))
+    slope = math.radians(slope_deg)
     mass = float(model.body_subtreemass[root])
     pushes = kind in (Kind.ROVER, Kind.BALANCER)
     return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope, pushes)
@@ -150,14 +158,16 @@ def robot_geoms(model: mujoco.MjModel, robot: str) -> list[int]:
     return [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) in bodies]
 
 
-def _rolling_radius(model, data, robot: str, walker: object, heading: np.ndarray, center: np.ndarray) -> float:
-    """What sets the step a wheeled robot climbs: its drive wheels, or a smaller caster ahead of them. A caster
-    behind is dragged up after the wheels: the template rover (trailing caster r 1.6 cm) crossed 1 cm, while
-    a rover from parts with a 2 cm caster in front stopped at 1 cm."""
+def _rolling_radius(
+    model, data, robot: str, walker: object, heading: np.ndarray, center: np.ndarray
+) -> tuple[float, bool]:
+    """What sets the step a wheeled robot climbs: its drive wheels, or a smaller caster ahead of them; and whether
+    it has a caster ahead. A caster behind is dragged up after the wheels: the template rover (trailing caster
+    r 1.6 cm) crossed 1 cm, while a rover from parts with a 2 cm caster in front stopped at 1 cm."""
     wheel = float(getattr(walker, "radius", 0.0) or 0.0)
     boxes = {g: _extent(model, data, g, heading, center) for g in robot_geoms(model, robot) if collides(model, g)}
     if not boxes:
-        return wheel
+        return wheel, False
     bottom = min(b[0][2] for b in boxes.values())
     axle = float(data.xpos[root_body(model, robot)][0])  # fallback when the walker does not say
     wheels = [*getattr(walker, "left", ()), *getattr(walker, "right", ())]
@@ -171,7 +181,7 @@ def _rolling_radius(model, data, robot: str, walker: object, heading: np.ndarray
         if low[2] - bottom < 0.005 and int(model.geom_type[g]) in round_types and (low[0] + high[0]) / 2 > axle + 1e-3
     ]
     radii = [r for r in (wheel, *ahead) if r > 0]
-    return min(radii) if radii else 0.0
+    return (min(radii) if radii else 0.0), bool(ahead)
 
 
 def _extent(model, data, g: int, frame: np.ndarray, origin: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -473,16 +483,17 @@ def build(
 
 def _mark_steps(ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, lethal: np.ndarray) -> None:
     """Mark the higher cell of every pair of side-by-side cells whose ground differs by more than the robot
-    climbs. Between two cells of one smooth surface (a ramp, a hill) the slope itself is allowed for too:
-    a 15 degree ramp rises 1.3 cm per 5 cm cell, more than the rover's whole 1 cm step."""
+    climbs. Where either cell is on a smooth surface (a ramp, a hill, or its foot on the floor) the slope itself
+    is allowed for too: a 15 degree ramp rises 1.3 cm per 5 cm cell, more than the rover's whole 1 cm step, and
+    its first cell read as a 2 cm step up from the floor."""
     rise = res * math.tan(body.slope)
     for axis in (0, 1):
         a = ground.take(range(0, ground.shape[axis] - 1), axis=axis)
         b = ground.take(range(1, ground.shape[axis]), axis=axis)
-        both_smooth = smooth.take(range(0, ground.shape[axis] - 1), axis=axis) & smooth.take(
+        either_smooth = smooth.take(range(0, ground.shape[axis] - 1), axis=axis) | smooth.take(
             range(1, ground.shape[axis]), axis=axis
         )
-        limit = body.step + np.where(both_smooth, rise, 0.0)
+        limit = body.step + np.where(either_smooth, rise, 0.0)
         jump = np.abs(a - b) > limit
         tall = np.abs(a - b) > min(STEP_SHARE * body.height, STEP_LIKE)
         cause = np.where(tall, OBSTACLE, STEP).astype(np.int8)

@@ -246,6 +246,48 @@ def test_a_humanoid_and_a_go2_arrive_in_the_warehouse(pg):
     assert pg.behaviors.pose("bot")["upright"]
 
 
+def _ramp(pg: Playground, angle: float) -> None:
+    """A ramp 3 m wide up to a landing, its foot at x = -0.25 and its landing from 1.25 to 3.25."""
+    params = {"angle": angle, "length": 1.5, "landing": 2.0, "width": 3.0, "direction": "up"}
+    pg.add_terrain("ramp", name="ramp", pos=[1.5, 0.0], params=params)
+
+
+def test_the_foot_of_a_ramp_is_no_step_but_its_sides_are():
+    """Regression: the slope's rise over one cell was allowed only between two cells of a ramp, so where the ramp
+    starts on the floor its first cell (up to a cell's rise) read as a step: a rover with a 0.6 cm step had no way
+    onto ramps it climbs, depending on where the grid's cells fell (scripts/nav_bench.py, a 15 degree ramp)."""
+    ground = np.zeros((4, 10))
+    ground[1:, 5:] = 0.009 * np.arange(1, 6)  # rows 1 to 3: a 10 degree ramp from column 5; row 0: floor beside it
+    smooth = np.zeros(ground.shape, bool)
+    smooth[1:, 5:] = True
+    lethal = np.zeros(ground.shape, np.int8)
+    body = nav_map.Body(0.1, 0.15, 0.1, 0.1, 1.0, step=0.006, slope=math.radians(15))
+    nav_map._mark_steps(ground, smooth, body, 0.05, lethal)
+    assert not lethal[2:].any()  # up the ramp from its foot (rows away from its side): fine
+    assert (lethal[1, 7:] == nav_map.STEP).all()  # off its side, where it is 2.7 cm and more above the floor: a step
+    assert not lethal[1, 5:7].any()  # near the foot its side is low enough to drive off
+
+
+def test_a_rover_with_small_wheels_drives_up_a_ramp(pg):
+    pg.add_robot("rover", template="rover", params={"wheel_radius": 0.02}, pos=[-1.0, 0.0], yaw=0)
+    _ramp(pg, 10)
+    trip = _trip(pg, "rover", [2.5, 0.0])
+    assert trip.result()["arrived"], trip.result()
+    assert pg.behaviors.pose("rover")["position"][2] > 0.26  # up on the landing, 0.26 m above the floor
+
+
+def test_a_rover_with_a_caster_in_front_is_told_it_cannot_climb_a_ramp(pg):
+    """Regression: a rover built from parts was sent up ramps a rover climbs and stuck at the foot of 5, 9 and 12
+    degree ones, its front caster caught on the toe (scripts/nav_bench.py: twice in the park's hills)."""
+    from test_builder import MOBILE_ARM
+
+    pg.add_robot("mm", build=MOBILE_ARM, pos=[-1.0, 0.0], yaw=0)
+    _ramp(pg, 9)
+    with pytest.raises(NoWay) as caught:
+        pg.behaviors.navigate("mm", [2.5, 0.0])
+    assert caught.value.cause == "climb" and "slope" in str(caught.value), str(caught.value)
+
+
 def test_a_robot_built_from_parts_stops_where_its_arm_reaches_the_object(pg):
     from test_builder import MOBILE_ARM
 
