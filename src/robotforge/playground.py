@@ -169,7 +169,8 @@ class Playground:
         p = Path(path).expanduser()
         if importer.is_importable(p):
             if not p.is_file():
-                raise PlaygroundError(f"file not found: {p} (give the path of {importer.formats_hint()})")
+                # The path as the caller wrote it (Path would print it with backslashes on Windows)
+                raise PlaygroundError(f"file not found: {path} (give the path of {importer.formats_hint()})")
             try:
                 compiled = importer.compile_standalone(p, options)
             except ValueError as exc:

@@ -347,7 +347,10 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
     if not path.is_absolute() and base_dir is not None:
         path = base_dir / path
     if not path.exists():
-        raise ValueError(f"robot {entry.name!r}: file not found: {path} (give the path of {importer.formats_hint()})")
+        where = "" if Path(entry.file).expanduser() == path else f", looked in {path}"  # relative to the world folder
+        raise ValueError(
+            f"robot {entry.name!r}: file not found: {entry.file}{where} (give the path of {importer.formats_hint()})"
+        )
     if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
         try:
             result = importer.import_file(path, entry.params)
