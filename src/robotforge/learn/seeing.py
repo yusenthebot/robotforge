@@ -871,25 +871,24 @@ class SeeingLesson(Lesson):
             return _text(
                 "掩码里一块也没有：放宽范围或调低下限。", "Nothing in the mask: widen the range or lower the minimums."
             )
+        # Two lines (the panel keeps line breaks): what the mask holds, then where the biggest blob is.
         names = [NAMES.get(on or "", _text("别的", "other")) for on in seen.on[:4]]
-        more = len(seen.on) - len(names)
-        zh = "、".join(n["zh"] for n in names) + (f" 等 {len(seen.on)} 块" if more > 0 else "")
-        en = ", ".join(n["en"] for n in names) + (f" and {more} more" if more > 0 else "")
+        more = len(seen.on) > len(names)
+        zh = "、".join(n["zh"] for n in names) + ("……" if more else "")
+        en = ", ".join(n["en"] for n in names) + (", ..." if more else "")
         best = seen.blobs[0]
         plural = "s" if len(seen.blobs) != 1 else ""
-        text = _text(
-            f"{len(seen.blobs)} 块：{zh} · 质心 ({best.u:.0f}, {best.v:.0f})",
-            f"{len(seen.blobs)} blob{plural}: {en} · centroid ({best.u:.0f}, {best.v:.0f})",
-        )
+        where = {"zh": f"最大一块的质心 ({best.u:.0f}, {best.v:.0f})", "en": f"biggest at ({best.u:.0f}, {best.v:.0f})"}
         err = ctx.results.get("seen", {}).get("err_cm")
         if err is not None:
-            text = {
-                k: v + (f" · 误差 {err:.1f} cm" if k == "zh" else f" · error {err:.1f} cm") for k, v in text.items()
-            }
+            where = {"zh": f"{where['zh']} · 误差 {err:.1f} cm", "en": f"{where['en']} · error {err:.1f} cm"}
         if seen.size is not None and ctx.values["depth"]:
             dims = " × ".join(f"{s * 100:.1f}" for s in seen.size)
-            text = {k: v + (f" · 盒子 {dims} cm" if k == "zh" else f" · box {dims} cm") for k, v in text.items()}
-        return text
+            where = {"zh": f"{where['zh']} · 盒子 {dims} cm", "en": f"{where['en']} · box {dims} cm"}
+        return _text(
+            f"掩码里 {len(seen.blobs)} 块：{zh}\n{where['zh']}",
+            f"Mask: {len(seen.blobs)} blob{plural} ({en})\n{where['en']}",
+        )
 
     def drain_samples(self) -> list[dict[str, float]]:
         out, self.samples = self.samples, []

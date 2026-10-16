@@ -1644,6 +1644,7 @@ const camview = {
     this.note.hidden = true;
     this.wrap.append(head, this.canvas, this.note);
     $("lesson-plots").prepend(this.wrap); // what the robot sees comes first
+    plotTabs.sync(); // and in a small window it is the first tab, not a panel above the tabs
     this.view = "picture";
     this.chosen = false;
     this.step = -1;
