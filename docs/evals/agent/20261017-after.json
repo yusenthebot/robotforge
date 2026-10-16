@@ -1,0 +1,234 @@
+{
+ "label": "after",
+ "commit": "f281b69",
+ "started": "20261017-020940",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 4,
+  "tasks": 4,
+  "tool_calls": 37,
+  "failed_calls": 0,
+  "shell_commands": 7,
+  "input_tokens": 928219,
+  "uncached_input_tokens": 140507,
+  "output_tokens": 3792,
+  "mean_wall_seconds": 61.9
+ },
+ "tasks": [
+  {
+   "task": "dog_grass",
+   "lang": "zh",
+   "covers": [
+    "template",
+    "walk",
+    "floor"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "on grass",
+     "ok": true,
+     "observed": "floor grass"
+    },
+    {
+     "name": "a quadruped",
+     "ok": true,
+     "observed": "dog_grass/dog"
+    },
+    {
+     "name": "moved >= 1.0 m",
+     "ok": true,
+     "observed": "3.05 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 5,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 151140,
+   "cached_input_tokens": 124032,
+   "output_tokens": 527,
+   "reasoning_tokens": 0,
+   "wall_seconds": 56.0,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已完成：四足机器狗在草地上向前走了 **10 秒**，前进约 **3.05 米**，保持站立并已停止。 [打开 3D 场景](http://127.0.0.1:8739/)"
+  },
+  {
+   "task": "urdf_rover",
+   "lang": "en",
+   "covers": [
+    "import",
+    "drive"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot imported from my_rover.urdf",
+     "ok": true,
+     "observed": "my_rover_drive/my_rover"
+    },
+    {
+     "name": "moved >= 0.3 m",
+     "ok": true,
+     "observed": "0.49 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 6,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 2,
+   "input_tokens": 204770,
+   "cached_input_tokens": 171136,
+   "output_tokens": 684,
+   "reasoning_tokens": 0,
+   "wall_seconds": 60.6,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Loaded your URDF and drove the rover forward **0.495 meters**. It stayed upright, held its heading, and stopped with both wheel controls at zero. View it in the [robotforge viewer](http://127.0.0.1:8738/)."
+  },
+  {
+   "task": "learn_control",
+   "lang": "zh",
+   "covers": [
+    "lessons",
+    "controllers"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "opened the control lesson (lessons 6)",
+     "ok": true,
+     "observed": "lessons opened: [6]"
+    },
+    {
+     "name": "ran a balance controller",
+     "ok": true,
+     "observed": "2 successful run_controller/compare_controllers"
+    }
+   ],
+   "tool_calls": 10,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 265393,
+   "cached_input_tokens": 226944,
+   "output_tokens": 1419,
+   "reasoning_tokens": 54,
+   "wall_seconds": 63.5,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "lessons",
+    "lessons",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "compare_controllers",
+    "observe",
+    "run_controller",
+    "observe",
+    "stop"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "可以。我们每次学一个概念，再做一个小实验，先不用写代码。 **第一步：理解机器人怎样“接住自己”。** 想象你用手掌托着一根竖直的扫帚。扫帚往右倒，你会把手向右移动，赶到它下面。 两轮平衡机器人也类似：身体往前倾，轮子就向前赶，让支撑点追上身体。倾斜后，重力会让它继续倒，所以需要不断调整。 这个循环叫**反馈控制（feedback control）**： **测量倾斜 → 决定电机出力 → 身体运动 → 再测量。** 我已经搭好一个[小车倒立摆实验](http://127.0.0.1:8738/)，用它模拟这个过程。第 3 秒给杆一次扰动，结果是： | 控制方式 | 结果 | |---|..."
+  },
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot and a rock",
+     "ok": true,
+     "observed": "mars_rover_rock/mars_rover, big_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "1.50 m"
+    },
+    {
+     "name": "ended within 0.6 m of it",
+     "ok": true,
+     "observed": "0.42 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "None"
+    }
+   ],
+   "tool_calls": 16,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 306916,
+   "cached_input_tokens": 265600,
+   "output_tokens": 1162,
+   "reasoning_tokens": 58,
+   "wall_seconds": 67.5,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "list_algorithms",
+    "observe",
+    "run_controller",
+    "stop",
+    "observe",
+    "update_robot",
+    "run_controller",
+    "stop",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已完成：火星车向前行驶约 1.08 米，停在大石头旁边，车头留出约 20 厘米空隙。已确认车轮停止、车身平稳。 [打开 3D 场景查看](http://127.0.0.1:8739/)"
+  }
+ ]
+}

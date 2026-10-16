@@ -1,0 +1,433 @@
+{
+ "label": "baseline",
+ "commit": "2f614f8",
+ "started": "20261017-014810",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 5,
+  "tasks": 8,
+  "tool_calls": 71,
+  "failed_calls": 0,
+  "shell_commands": 14,
+  "input_tokens": 1995032,
+  "uncached_input_tokens": 279064,
+  "output_tokens": 7415,
+  "mean_wall_seconds": 63.4
+ },
+ "tasks": [
+  {
+   "task": "dog_grass",
+   "lang": "zh",
+   "covers": [
+    "template",
+    "walk",
+    "floor"
+   ],
+   "passed": false,
+   "criteria": [
+    {
+     "name": "a quadruped",
+     "ok": false,
+     "observed": "none in any world"
+    }
+   ],
+   "tool_calls": 0,
+   "failed_calls": 0,
+   "other_mcp_calls": 2,
+   "shell_commands": 3,
+   "input_tokens": 117775,
+   "cached_input_tokens": 92416,
+   "output_tokens": 436,
+   "reasoning_tokens": 17,
+   "wall_seconds": 50.6,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [],
+   "failures": [],
+   "problems": [],
+   "final_message": "当前会话没有加载 robotforge 工具，因此还没能创建机器狗或运行仿真。 请新开一个 Codex 会话，让插件重新连接，然后发送同一句话：“给我一只四足机器狗，放在草地上，让它往前走 10 秒。”"
+  },
+  {
+   "task": "arm_cube",
+   "lang": "en",
+   "covers": [
+    "template",
+    "objects",
+    "pick and place"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "an arm",
+     "ok": true,
+     "observed": "red_cube_pick/arm"
+    },
+    {
+     "name": "a red object",
+     "ok": true,
+     "observed": "red_cube"
+    },
+    {
+     "name": "it ended in a box or bin",
+     "ok": true,
+     "observed": "red_cube last at [0.0551, 0.2718, 0.0249]"
+    }
+   ],
+   "tool_calls": 10,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 2,
+   "input_tokens": 271490,
+   "cached_input_tokens": 239488,
+   "output_tokens": 919,
+   "reasoning_tokens": 11,
+   "wall_seconds": 69.2,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "add_object",
+    "observe",
+    "pick_and_place",
+    "observe",
+    "move_arm",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Built a simulated robot arm and successfully placed the red cube inside the blue box. Verified its position and the final image. [Open the 3D viewer](http://127.0.0.1:8738/) to inspect the result."
+  },
+  {
+   "task": "go2_turn",
+   "lang": "zh",
+   "covers": [
+    "real robot",
+    "walk",
+    "turn"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a Go2 from the library",
+     "ok": true,
+     "observed": "go2_turn/go2"
+    },
+    {
+     "name": "moved >= 0.3 m",
+     "ok": true,
+     "observed": "1.60 m"
+    },
+    {
+     "name": "turned left >= 30 deg",
+     "ok": true,
+     "observed": "88 deg"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 13,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 259642,
+   "cached_input_tokens": 221312,
+   "output_tokens": 869,
+   "reasoning_tokens": 28,
+   "wall_seconds": 61.1,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_library",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "list_walkers",
+    "observe",
+    "move",
+    "move",
+    "stop",
+    "observe",
+    "move",
+    "stop",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已放好 Unitree Go2 的真实机型仿真模型，让它先向前走约 **0.9 米**，再向左转约 **90°**，最后停下，全程保持直立。 打开[三维场景](http://127.0.0.1:8738/)查看，也可以用 **W、A、S、D** 继续控制它。"
+  },
+  {
+   "task": "urdf_rover",
+   "lang": "en",
+   "covers": [
+    "import",
+    "drive"
+   ],
+   "passed": false,
+   "criteria": [
+    {
+     "name": "a robot imported from my_rover.urdf",
+     "ok": true,
+     "observed": "my_rover_drive/my_rover"
+    },
+    {
+     "name": "moved >= 0.3 m",
+     "ok": false,
+     "observed": "0.29 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 2,
+   "input_tokens": 258567,
+   "cached_input_tokens": 221952,
+   "output_tokens": 828,
+   "reasoning_tokens": 29,
+   "wall_seconds": 60.5,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "stop",
+    "observe",
+    "set_controls",
+    "simulate"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Loaded your rover and drove it forward **29.3 cm** over two seconds. It stayed upright, kept a straight heading, and is now stopped. The importer added the missing wheel motors. You can explore it in the [3D viewer](http://127.0.0.1:8739/) and drive with W A S D."
+  },
+  {
+   "task": "hexapod_build",
+   "lang": "zh",
+   "covers": [
+    "parts",
+    "walk"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot built from parts",
+     "ok": true,
+     "observed": "spider_hexapod/spider"
+    },
+    {
+     "name": "it is a hexapod",
+     "ok": true,
+     "observed": "hexapod"
+    },
+    {
+     "name": "moved >= 0.2 m",
+     "ok": true,
+     "observed": "0.60 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 346629,
+   "cached_input_tokens": 299648,
+   "output_tokens": 1453,
+   "reasoning_tokens": 131,
+   "wall_seconds": 65.7,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "builder_guide",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "update_robot",
+    "update_robot",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已经拼好并试走成功！六条腿、18 个关节，采用两组三条腿交替支撑的步态。 它在仿真中走了约 **5 秒，前进 60 厘米**，保持直立，现已停止。 打开 [3D 视窗](http://127.0.0.1:8738/)，可以查看机器人，并用 **W、A、S、D** 继续控制它。"
+  },
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot and a rock",
+     "ok": true,
+     "observed": "mars_rover_rock/mars_rover, big_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "2.40 m"
+    },
+    {
+     "name": "ended within 0.6 m of it",
+     "ok": true,
+     "observed": "0.47 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "None"
+    }
+   ],
+   "tool_calls": 16,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 336252,
+   "cached_input_tokens": 296832,
+   "output_tokens": 1235,
+   "reasoning_tokens": 84,
+   "wall_seconds": 74.7,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "list_templates",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "observe",
+    "move",
+    "stop",
+    "observe",
+    "update_robot",
+    "move",
+    "stop",
+    "move",
+    "stop",
+    "simulate",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "火星车和大石头已搭好，车已前进约 1.93 米，在石头旁停稳，车头留有约 30 厘米空隙。 [打开实时视窗](http://127.0.0.1:8739/)查看，也可以用 W A S D 接着驾驶。"
+  },
+  {
+   "task": "learn_control",
+   "lang": "zh",
+   "covers": [
+    "lessons",
+    "controllers"
+   ],
+   "passed": false,
+   "criteria": [
+    {
+     "name": "opened the control lesson (lessons 6)",
+     "ok": true,
+     "observed": "lessons opened: [6]"
+    },
+    {
+     "name": "ran a balance controller",
+     "ok": false,
+     "observed": "0 successful run_controller/compare_controllers"
+    }
+   ],
+   "tool_calls": 5,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 152778,
+   "cached_input_tokens": 128896,
+   "output_tokens": 1016,
+   "reasoning_tokens": 22,
+   "wall_seconds": 67.4,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "lessons",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "可以。我们每次学一个概念，再做一个小实验，不需要先懂高等数学。 我已搭好一个 **60 厘米长的倒立摆**，目前杆子竖直、小车没有施力。打开[仿真界面](http://127.0.0.1:8738/)，点击 **Learn／学习**，可以进入 PID 动手课程。 **第一步：机器人为什么要不停调整？** 想象你把扫帚竖在手掌上。扫帚往右倒，手就要往右追，让支撑点赶到它下面。两轮平衡机器人向前倾时，也需要让轮子向前追。 机器人不断重复这件事： **测量倾斜 → 计算该怎么动 → 电机出力 → 再测量。** 这叫反馈控制（feedback control）。平衡看起来是“站着不动”，实际上是..."
+  },
+  {
+   "task": "fix_workshop",
+   "lang": "en",
+   "covers": [
+    "edit a world",
+    "recover from a mistake",
+    "pick and place"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "the ball is blue",
+     "ok": true,
+     "observed": "blue"
+    },
+    {
+     "name": "the green cube ended in the bin",
+     "ok": true,
+     "observed": "last at [0.2528, -0.18, 0.0249], containers ['bin']"
+    },
+    {
+     "name": "arm, cube and ball still there",
+     "ok": true,
+     "observed": "arm, green_cube, ball"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 251899,
+   "cached_input_tokens": 215424,
+   "output_tokens": 659,
+   "reasoning_tokens": 65,
+   "wall_seconds": 57.8,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "open_world",
+    "open_viewer",
+    "show_world",
+    "update_object",
+    "observe",
+    "update_object",
+    "pick_and_place",
+    "observe",
+    "show_world"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Opened your workshop and painted the ball blue. I moved the bin within reach, and the arm successfully dropped the green cube inside."
+  }
+ ]
+}

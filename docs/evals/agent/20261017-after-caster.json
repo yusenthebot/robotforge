@@ -1,0 +1,83 @@
+{
+ "label": "after-caster",
+ "commit": "3724596",
+ "started": "20261017-022145",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 1,
+  "tasks": 1,
+  "tool_calls": 13,
+  "failed_calls": 0,
+  "shell_commands": 1,
+  "input_tokens": 302827,
+  "uncached_input_tokens": 39787,
+  "output_tokens": 992,
+  "mean_wall_seconds": 63.9
+ },
+ "tasks": [
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot and a rock",
+     "ok": true,
+     "observed": "mars_rover_rock/mars_rover, big_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "2.40 m"
+    },
+    {
+     "name": "ended within 0.6 m of it",
+     "ok": true,
+     "observed": "0.42 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "None"
+    }
+   ],
+   "tool_calls": 13,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 302827,
+   "cached_input_tokens": 263040,
+   "output_tokens": 992,
+   "reasoning_tokens": 25,
+   "wall_seconds": 63.9,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "observe",
+    "list_algorithms",
+    "run_controller",
+    "stop",
+    "observe",
+    "set_controls",
+    "simulate",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "火星车和大石头已搭好，车已驶到石头旁并停稳。已确认两侧车轮控制归零，车身没有转动。 可以打开 [3D 场景](http://127.0.0.1:8739/) 查看。"
+  }
+ ]
+}
