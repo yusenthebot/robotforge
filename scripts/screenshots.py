@@ -127,7 +127,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                         break
 
 
-async def _capture(chrome_port: int, port: int, shot: Shot, out: Path) -> None:
+async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str) -> None:
     """Open the viewer in a tab, wait until it has drawn, put the world in the shot's state while the page
     watches (so plots have their history), and capture it."""
     import websockets
@@ -152,7 +152,8 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path) -> None:
         await page.call("Emulation.setFocusEmulationEnabled", enabled=True)
         settings = "".join(f"localStorage.setItem({k!r}, {v!r});" for k, v in shot.storage.items())
         await page.call("Page.addScriptToEvaluateOnNewDocument", source=f"try {{ {settings} }} catch (e) {{}}")
-        await page.call("Page.navigate", url=f"http://127.0.0.1:{port}/")
+        # The page's language from the URL: headless Chrome on a Mac keeps the system's, whatever --lang says.
+        await page.call("Page.navigate", url=f"http://127.0.0.1:{port}/?lang={lang}")
         end = time.monotonic() + READY_TIMEOUT
         drawn = "!!(window.__robotforge && window.__robotforge.scene && window.__robotforge.time > 0)"
         while not await page.eval(drawn):
@@ -219,7 +220,7 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     out = out_dir / f"{shot.name}.jpg"
     try:
         _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
-        asyncio.run(_capture(chrome_port, port, shot, out))
+        asyncio.run(_capture(chrome_port, port, shot, out, lang))
     finally:
         for proc in (chrome, server):
             proc.terminate()

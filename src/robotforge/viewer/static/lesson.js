@@ -235,7 +235,7 @@ export function lessonUpdate(msg) {
     bench.syncLocks();
   } else syncControls();
   if (stepChanged || quizChanged || resultChanged) renderStep();
-  $("lesson-readout").textContent = readout(msg.live);
+  showReadout(readout(msg.live));
   // A lesson may frame each robot its own way (a small one close up, a tall one from further back).
   const view = msg.live?.view ? JSON.stringify(msg.live.view) : null;
   if (view && view !== viewWanted) {
@@ -284,6 +284,35 @@ function renderFormula(rows) {
     value.textContent = text(r.value);
     note.textContent = r.note ? text(r.note) : "";
     note.hidden = !r.note;
+  });
+}
+
+// The readout keeps its line breaks and wraps a line too long for the panel. A line of items ("odometry 0.00 m
+// ahead 2.08 m", "angle 3.0° · target 5°") wraps between items only: each item is one unbreakable piece, so
+// neither a label and its value nor the characters of a Chinese label are split. A plain sentence wraps as text.
+let readoutShown = null;
+function showReadout(text) {
+  if (text === readoutShown) return;
+  readoutShown = text;
+  const el = $("lesson-readout");
+  el.replaceChildren();
+  text.split("\n").forEach((line, k) => {
+    if (k) el.append("\n");
+    const parts = line.split(/( {2,}| · )/);
+    if (parts.length < 3) {
+      el.append(line);
+      return;
+    }
+    parts.forEach((part, i) => {
+      if (i % 2) {
+        el.append(part.replace(/^ /, "\u00a0")); // the dot stays with the item before it; the line breaks after
+        return;
+      }
+      const item = document.createElement("span");
+      item.className = "readout-item";
+      item.textContent = part;
+      el.append(item);
+    });
   });
 }
 

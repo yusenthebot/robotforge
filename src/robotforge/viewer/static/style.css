@@ -1033,6 +1033,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--muted);
   white-space: pre-wrap; /* line breaks kept, and a long line wraps instead of running out of the panel */
 }
+.lesson-readout .readout-item { white-space: nowrap; } /* a label and its value wrap as one (lesson.js) */
 
 .lesson-finished {
   margin: 0 14px 14px;
