@@ -1,7 +1,8 @@
 """Arm motions: move the gripper to points in space and pick-and-place objects.
 
 A motion is a queue of Cartesian waypoints. Each control tick interpolates the
-tool point along a smooth path and solves IK with the gripper pointing down.
+tool point along a smooth path and solves IK with the gripper pointing down
+(leaning a little, high above a grasp or a place, where a short arm cannot point down; see TILTS).
 """
 
 from __future__ import annotations
@@ -24,6 +25,11 @@ RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nea
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
+# Short arms cannot point the gripper straight down everywhere: a PiPER's wrist (joint 5, +-70 degrees) cannot above
+# about 13 cm at 30 cm out, nor an SO-100's above about 9 cm, so neither could lift a cube over an 8 cm bin's rim.
+# Where the gripper only passes by, high above a grasp or a place, it may lean this far (rad: 20, 35, 50 degrees)
+# away from the base or toward it. Grasping and placing still point down.
+TILTS = (0.35, 0.6, 0.9)
 
 
 class OutOfReach(ValueError):
@@ -41,6 +47,7 @@ class Waypoint:
     duration: float
     label: str
     joints: np.ndarray | None = None  # a joint-space move to these angles instead of a tool position
+    tilt: bool = False  # the gripper may lean there (see TILTS)
 
 
 class ArmMotion:
@@ -99,6 +106,7 @@ class ArmMotion:
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._axis0 = DOWN  # where the tool pointed when the current move began
+        self._axis1 = DOWN  # where it points at the end of the current move
         self._turn: float | None = None  # how far the current move turns about the base, rad
         self.current_label = "idle"
         self.log: list[str] = []
@@ -127,8 +135,27 @@ class ArmMotion:
     def reach_error(self, target: np.ndarray) -> float:
         return self._solve(target)[1]
 
-    def _solve(self, target: np.ndarray) -> tuple[np.ndarray, float, bool]:
-        """Joint values for the tool at `target` pointing down: (q, position error, needed a restart).
+    def _solve_tilting(self, target: np.ndarray) -> tuple[np.ndarray, float, bool, np.ndarray]:
+        """As _solve, but where the tool cannot point down there it may lean (see TILTS): (q, position error, needed a
+        restart, the way the tool points)."""
+        q, err, restarted = self._solve(target)
+        if err <= REACH_TOL:
+            return q, err, restarted, DOWN
+        out = np.asarray(target, float)[:2] - self.base_xy
+        if np.linalg.norm(out) < 1e-3:
+            out = np.array([np.cos(self.base_yaw), np.sin(self.base_yaw)])
+        out = np.array([*(out / np.linalg.norm(out)), 0.0])
+        for angle in TILTS:
+            for side in (1.0, -1.0):  # leaning out, as an arm reaching high does, then in
+                axis = np.cos(angle) * DOWN + side * np.sin(angle) * out
+                q2, err2, restarted2 = self._solve(target, axis)
+                if err2 <= REACH_TOL:
+                    return q2, err2, restarted2, axis
+        return q, err, restarted, DOWN
+
+    def _solve(self, target: np.ndarray, down: np.ndarray = DOWN) -> tuple[np.ndarray, float, bool]:
+        """Joint values for the tool at `target` pointing down (or along `down`): (q, position error, needed a
+        restart).
 
         Damped least squares from the current pose can stall on a joint limit or in the wrong elbow
         branch for points the arm reaches easily some other way, so a stuck solve tries again from
@@ -139,7 +166,7 @@ class ArmMotion:
         # From the pose the arm is in, then with its base turned toward the target: the first keeps an arm
         # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
         for start in (self.q, seed):
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
             if err2 <= REACH_TOL and not self._collides(q2):
                 return q2, err2, False
             if err2 < err:
@@ -149,7 +176,7 @@ class ArmMotion:
         for _ in range(RESTARTS):
             start = rng.uniform(self.chain.lower, self.chain.upper)
             start[0] = seed[0]
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, down))
             if err2 <= REACH_TOL and not self._collides(q2):
                 travel = float(np.max(np.abs(q2 - self.q)))
                 if best is None or travel < best[2]:  # of the answers that work, the one nearest to now
@@ -231,18 +258,23 @@ class ArmMotion:
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])
-        bad = self.unreachable({"object": grasp, "above object": above, "place": drop, "above place": above_drop})
+        points = {"object": grasp, "above object": above, "place": drop, "above place": above_drop}
+        bad = [
+            name
+            for name, p in points.items()
+            if (self._solve_tilting(p)[1] if name.startswith("above") else self.reach_error(p)) > REACH_TOL
+        ]
         if bad:
             raise OutOfReach(self.robot, bad)
         start = self.tool_target_end()
-        self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
+        self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach", tilt=True))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
-        self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift"))
-        self.queue.append(Waypoint(above_drop, None, self._time(above, above_drop), "carry"))
+        self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", tilt=True))
+        self.queue.append(Waypoint(above_drop, None, self._time(above, above_drop), "carry", tilt=True))
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower"))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
-        self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat"))
+        self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", tilt=True))
 
     def tool_target_end(self) -> np.ndarray:
         """Where the tool will be once the queued moves are done."""
@@ -281,7 +313,9 @@ class ArmMotion:
             if wp.joints is not None:
                 self._branch = (self.q.copy(), wp.joints)
             elif wp.position is not None:
-                goal, err, restarted = self._solve(wp.position)
+                goal, err, restarted, self._axis1 = (
+                    self._solve_tilting(wp.position) if wp.tilt else (*self._solve(wp.position), DOWN)
+                )
                 if err <= REACH_TOL:
                     self._turn = self._path_turn(start, wp.position, float(goal[0] - self.q[0]))
                 if restarted and err <= REACH_TOL:
@@ -309,7 +343,8 @@ class ArmMotion:
                 self.q = q0 + (q1 - q0) * s
             else:
                 target = self._arc_point(start, wp.position, s)
-                axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
+                # e.g. out of a home pose, or leaning out over a bin, gradually
+                axis = (self.tool_axis, _turn_toward(self._axis0, self._axis1, s))
                 self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
         data.ctrl[self.actuators] = self.q
         if u >= 1.0:

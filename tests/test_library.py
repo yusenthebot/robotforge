@@ -512,6 +512,28 @@ def test_two_armed_aloha_has_an_arm_on_each_side(pg):
     assert pg.session.model.actuator(arm.gripper).name == "aloha/right/gripper"
 
 
+def test_a_piper_leans_over_a_bins_rim_to_put_a_cube_in(pg):
+    """Regression: a PiPER's wrist cannot point its gripper down above about 13 cm at 30 cm out, so it refused to lift
+    a cube over an 8 cm bin's rim. High above the grasp and the place its gripper may now lean; it still grasps and
+    places pointing down, and move_arm still only points down."""
+    pg.add_robot("arm", library="piper")
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.3, -0.3])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=[0.3, 0.3], color="blue")
+    _run(pg, 1.0)
+    arm = pg.behaviors._arm("arm")
+    _, error, _, axis = arm._solve_tilting(np.array([0.3, 0.3, 0.15]))
+    assert error < 0.008 and np.degrees(np.arccos(-axis[2])) == pytest.approx(20, abs=1)  # it leans 20 degrees
+    with pytest.raises(ValueError, match="cannot reach .* with its gripper pointing down"):
+        pg.behaviors.move_arm("arm", [0.3, 0.3, 0.15])
+    motion, info = pg.behaviors.pick_and_place("arm", "cube", "bin")
+    for _ in range(80):
+        _run(pg, 0.25)
+        if motion.done:
+            break
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
 def test_suggestions_for_a_misspelt_robot_start_like_it():
     with pytest.raises(library.LibraryError, match="Did you mean go2, go1, op3"):
         library.get("go3")
@@ -621,6 +643,7 @@ PICK_LAYOUTS = {
 # The arms with a gripper that pick from the floor: (robot, arm, mounts, base (x, y), 1 facing +x or -1 facing -x).
 PICKERS = {
     "panda": ("panda", "bot", None, (0.0, 0.0), 1),
+    "piper": ("piper", "bot", None, (0.0, 0.0), 1),
     "xarm7": ("xarm7", "bot", None, (0.0, 0.0), 1),
     "ur5e_2f85": ("ur5e", "bot", [{"library": "robotiq_2f85"}], (0.0, 0.0), 1),
     "aloha_left": ("aloha", "bot/left", None, (-0.469, -0.019), 1),
@@ -639,6 +662,35 @@ def test_real_arms_pick_a_cube_into_a_bin(pg, picker, layout):
     pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=bin_at, color="blue")
     _run(pg, 1.0)
     motion, info = pg.behaviors.pick_and_place(arm, "cube", "bin")
+    for _ in range(80):
+        _run(pg, 0.25)
+        if motion.done:
+            break
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
+# The SO-100 picks in front of it (its -y), within about 0.27 m: cube and tray (x, y) around its base at (0, -0.045).
+SO100_LAYOUTS = {
+    "front": ([0.2, -0.15], [0.05, -0.28]),
+    "side": ([0.0, -0.3], [0.2, -0.2]),
+    "across": ([0.2, -0.1], [-0.2, -0.1]),
+    "back_across": ([-0.2, -0.15], [0.2, -0.15]),
+    "near": ([0.12, -0.18], [-0.12, -0.2]),
+}
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("layout", SO100_LAYOUTS)
+def test_real_so100_picks_a_cube_from_the_floor_into_a_tray(pg, layout):
+    """Regression: grasping in the middle of its long jaws would have put their tips into the floor, so it could not
+    pick from the floor at all."""
+    cube, tray = SO100_LAYOUTS[layout]
+    pg.add_robot("bot", library="so_arm100")
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=cube)
+    pg.add_object("tray", shape="bin", size=[0.16, 0.16, 0.04], pos=tray, color="blue")
+    _run(pg, 1.0)
+    motion, info = pg.behaviors.pick_and_place("bot", "cube", "tray")
     for _ in range(80):
         _run(pg, 0.25)
         if motion.done:

@@ -131,14 +131,18 @@ CATALOG: dict[str, LibraryRobot] = {
             "so_arm100",
             "SO-ARM100",
             "arm",
-            "Low-cost 3D-printed 5-joint arm with gripper, used with LeRobot.",
+            "Low-cost 3D-printed 5-joint arm with gripper, used with LeRobot; picks small things up to about 0.27 m in "
+            "front of it.",
             "The Robot Studio",
             "Apache-2.0",
             "trs_so_arm100",
             "so_arm100.xml",
-            # The jaws reach along the fixed jaw's -y; the pads span 0.047-0.106 m. The grasp point sits 12 mm off the
-            # fixed jaw's pad (x 0.008), where a 4 cm cube touches it, and the moving jaw closes onto it.
-            tools=(Tool("Fixed_Jaw", 0.077, axis=(0.0, -1.0, 0.0), shift=(-0.012, 0.0, 0.0), gripper="Jaw"),),
+            # The jaws reach along the fixed jaw's -y; the pads span 0.047-0.106 m. Grasped in the middle of the pads
+            # (0.077 m), the jaw tips went 9 mm into the floor at a 4 cm cube's middle, so it could not pick from the
+            # floor at all; 16 mm short of the tips they clear it by 4 mm. The grasp point sits 26 mm off the fixed
+            # jaw's pad (x 0.008): that jaw comes down 6 mm beside the cube, not on its edge, and the moving jaw
+            # pushes the cube against it. 5 of 6 floor layouts within 0.27 m; at 0.12 m off the pad, 1 of 6.
+            tools=(Tool("Fixed_Jaw", 0.09, axis=(0.0, -1.0, 0.0), shift=(-0.018, 0.0, 0.0), gripper="Jaw"),),
         ),
         LibraryRobot(
             "piper",
