@@ -109,6 +109,17 @@ def test_rover_drives_and_turns(pg):
     assert abs(pg.behaviors.pose("rover")["heading_deg"] - before) > 30
 
 
+def test_a_rover_with_big_wheels_rolls_on_its_caster(pg):
+    """The template's caster ball took the floor's grip (MuJoCo uses the larger friction unless a geom has
+    priority) and braked: on 7 cm wheels this 1.7 kg rover covered 2 % of its way, the eval's Mars rover none."""
+    pg.add_robot("rover", template="rover", params={"wheel_radius": 0.07})
+    start = pg.behaviors.pose("rover")["position"]
+    pg.behaviors.move("rover", 0.3, 0.0)
+    _run(pg, 3.0)
+    end = pg.behaviors.pose("rover")["position"]
+    assert end[0] - start[0] > 0.75 * 0.3 * 3.0
+
+
 def test_arm_puts_the_red_cube_in_the_bin(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, -0.12], color="red")
@@ -176,8 +187,9 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
 @pytest.mark.anyio
 async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
     """A session built a 0.6 m solid aluminum rover on hobby gearmotors; it moved 2 mm in 6 s and the agent was
-    told only distance_m 0.002, so it had to guess."""
-    params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "jga25", "material": "aluminum"}
+    told only distance_m 0.002, so it had to guess. (That one rolls now that its caster no longer brakes; this one,
+    on the smallest motors, pushes with 1.3 N for 54 kg and cannot.)"""
+    params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("mars_rover", template="rover", params=params)
     server = build_server(pg, find_free_port(8790))
     async with Client(server) as client:

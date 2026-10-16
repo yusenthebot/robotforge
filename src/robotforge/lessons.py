@@ -153,7 +153,7 @@ LESSONS: tuple[Lesson, ...] = (
         check=(
             "distance_m is close to speed x seconds (about 0.9 m for 0.3 m/s over 3 s).",
             "turned_deg is positive (a left turn) but below the ideal turn x seconds (1 rad/s for 3 s is 172 "
-            "degrees; about 125 is normal): speeding up and wheel slip eat the rest, a good point to discuss.",
+            "degrees; about 150 is normal): speeding up and wheel slip eat the rest, a good point to discuss.",
         ),
         challenge="Drive a full circle back to the start, see how far off it ends, and work out why.",
     ),
