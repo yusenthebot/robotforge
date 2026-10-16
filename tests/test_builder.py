@@ -301,6 +301,12 @@ def test_a_build_without_parts_changes_its_fields_and_keeps_the_legs(pg):
     assert built["servo"] == "bldc_joint"
     assert built["base"] == {**HEXAPOD["base"], "mass": 0.8}  # the size and shape it had are kept
     assert any("kept its" in note and "servo, base" in note for note in out["notes"])
+    # The same merge as update_part(robot, "robot" | "base"): null puts a field back to its default, and a field
+    # that is neither robot-wide nor the base is refused with the list of robot-wide settings.
+    pg.update_robot("spider", build={"servo": None})
+    assert "servo" not in pg.current_world().robots[0].build
+    with pytest.raises(ValueError, match="robot-wide settings are"):
+        pg.update_robot("spider", build={"legs": 6})
     pg.update_robot("spider", build={**HEXAPOD, "parts": HEXAPOD["parts"][:3]})  # with parts: the whole robot
     assert len(pg.current_world().robots[0].build["parts"]) == 3
 

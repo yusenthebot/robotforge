@@ -817,15 +817,17 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
 
 
 def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """A robot's build with the fields of `new` changed and its parts kept. An agent that sent
-    build={"servo": ..., "base": {...}} to change the servos of a hexapod got a bare box: a build without parts
-    was taken as the whole robot. A field that is a dict (base) is merged too, so {"base": {"mass": 0.8}} keeps
-    the base's shape and size."""
-    merged = dict(old)
-    for key, value in new.items():
-        same = isinstance(value, dict) and isinstance(old.get(key), dict)
-        merged[key] = {**old[key], **value} if same else value
-    return merged
+    """A robot's build with the fields of `new` changed and its parts kept, as update_part(robot, "robot" or "base")
+    changes them. An agent that sent build={"servo": ..., "base": {...}} to change the servos of a hexapod got a bare
+    box: a build without parts was taken as the whole robot."""
+    robot_wide = {key: value for key, value in new.items() if key != "base"}
+    out = build_edit.update_part(old, "robot", robot_wide) if robot_wide else old
+    base = new.get("base")
+    if isinstance(base, dict) and base:
+        out = build_edit.update_part(out, "base", base)  # {"base": {"mass": 0.8}} keeps its shape and size
+    elif "base" in new:
+        out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
+    return out
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
