@@ -144,6 +144,51 @@ def test_a_cost_near_walls_keeps_paths_in_the_middle_of_a_corridor():
     assert min(middle) >= 8 and max(middle) <= 11  # away from both walls between the ends
 
 
+def test_on_a_ramp_paths_go_straight_up_or_down_it():
+    """Columns 30 to 49 are a ramp (and the ground around it a robot's length wide) whose way up is +x: there steps
+    go only along x, and pulled strings keep within 8 degrees of x. Without that, the path from the bottom left to
+    the top right crossed it at 45 degrees."""
+    grid = Grid(0.0, 0.0, 0.05, 60, 80)
+    free = np.ones(grid.shape, bool)
+    aim = np.full(grid.shape, np.nan)
+    aim[:, 30:50] = 0.0
+    goal, h = _goal_at(grid, (55, 75))
+    path = nav_grid.astar(grid, free, np.zeros(grid.shape), (5, 5), goal, h, nav_grid.along(aim))
+    assert path is not None
+    for (r0, c0), (r1, c1) in zip(path, path[1:], strict=False):
+        if np.isfinite(aim[r0, c0]) or np.isfinite(aim[r1, c1]):
+            assert r0 == r1, ((r0, c0), (r1, c1))
+    room = np.full(grid.shape, 1.0)
+    pulled = nav_grid.pull_string(grid, path, room, 0.5, aim, math.radians(4.0))
+    assert len(pulled) <= 4, pulled  # in, along, out: no zigzag
+    assert _worst_on_ramp(pulled, aim) <= math.radians(4.0)
+    # A ramp turned 30 degrees still has a way through, its steps within 23 degrees of its way (the diagonals),
+    # with no sharp corner on it (lines that go within 4 degrees of its way where the steps allow, 26.6 degrees).
+    aim[np.isfinite(aim)] = math.radians(30.0)
+    path = nav_grid.astar(grid, free, np.zeros(grid.shape), (5, 5), goal, h, nav_grid.along(aim))
+    assert path is not None
+    pulled = nav_grid.pull_string(grid, path, room, 0.5, aim, math.radians(4.0))
+    assert _worst_on_ramp(pulled, aim) <= math.radians(23.0)
+    on_ramp = [_heading(a, b) for a, b in zip(pulled, pulled[1:], strict=False) if _over(a, b, aim)]
+    assert max(on_ramp) - min(on_ramp) < math.radians(20.0)
+
+
+def _heading(a: tuple[int, int], b: tuple[int, int]) -> float:
+    return math.atan2(b[0] - a[0], b[1] - a[1])  # rows run along y, columns along x
+
+
+def _over(a: tuple[int, int], b: tuple[int, int], aim: np.ndarray) -> bool:
+    rows, cols = nav_grid.line_cells(a, b)
+    return bool(np.isfinite(aim[rows, cols]).any())
+
+
+def _worst_on_ramp(pulled: list, aim: np.ndarray) -> float:
+    """How far (rad) the lines of `pulled` over cells `aim` gives a way to go off it, at worst."""
+    way = float(np.nanmax(aim))
+    worst = [abs(math.asin(math.sin(_heading(a, b) - way))) for a, b in zip(pulled, pulled[1:], strict=False)]
+    return max(w for w, (a, b) in zip(worst, zip(pulled, pulled[1:], strict=False), strict=True) if _over(a, b, aim))
+
+
 # ---- maps of compiled scenes -----------------------------------------------------------------------------------
 
 
@@ -329,6 +374,29 @@ def test_the_foot_of_a_ramp_is_no_step_but_its_sides_are():
     assert not lethal[2:].any()  # up the ramp from its foot (rows away from its side): fine
     assert (lethal[1, 7:] == nav_map.STEP).all()  # off its side, where it is 2.7 cm and more above the floor: a step
     assert not lethal[1, 5:7].any()  # near the foot its side is low enough to drive off
+
+
+def test_a_dog_lines_up_with_a_ramp_on_the_floor_and_climbs_it_straight(pg):
+    """Regression: paths crossed ramps at any angle and turned on them. The real Go2, sent up the warehouse dock
+    (8 degrees) round its toe at 15 to 20 degrees off its slope, swung round, slid down sideways and fell (6 in 28
+    trips, scripts/nav_bench.py --case dock). Now the path turns onto the ramp's way before the ramp, the robot lines
+    up there on the spot, and climbs straight."""
+    pg.add_robot("dog", template="quadruped", pos=[-1.2, 1.2], yaw=90)
+    _ramp(pg, 8)
+    trip = pg.behaviors.navigate("dog", "ramp", seconds=60)
+    k = min(trip.plan.pivots)  # where it turns onto the ramp's way: on the floor, before the ramp's foot
+    a, b = trip.plan.points[k], trip.plan.points[k + 1]
+    assert a[0] < -0.25 - trip.planner.body.reach and abs(math.atan2(b[1] - a[1], b[0] - a[0])) < math.radians(4.0)
+    m, d = pg.session.model, pg.session.data
+    root = nav_map.root_body(m, "dog")
+    off = []
+    while not trip.done:
+        pg.run_fast(lambda: trip.done, 0.1)
+        if -0.25 < d.xpos[root][0] < 1.25:  # its middle over the slope
+            off.append(abs(math.degrees(math.atan2(d.xmat[root][3], d.xmat[root][0]))))
+    assert trip.result()["arrived"], trip.result()
+    assert pg.behaviors.pose("dog")["position"][2] > 0.35 and pg.behaviors.pose("dog")["upright"]  # landing 0.21 m
+    assert off and max(off) < 12.0, max(off)  # it was 21 degrees off, its path straight across the ramp's foot
 
 
 def test_a_ramp_or_stairs_by_name_is_its_landing(pg):

@@ -88,6 +88,9 @@ OTHER_SLOPE_DEG = 5.0  # learned rhythm walks and anything else: not measured
 # off their paths near the top and gave up (scripts/nav_bench.py).
 HILL_SLOPE_DEG = {Kind.QUADRUPED: 5.0, Kind.HEXAPOD: 5.0}
 CASTER_SLOPE_DEG = 3.0  # wheeled robots with a caster ahead of the drive wheels (see above)
+# m beyond the robot's furthest corner, around a ramp, where it goes only straight up or down the ramp (ramp_aim):
+# a gait slowing for a corner steps a few cm past it before it turns there.
+RUN_UP = 0.1
 
 
 @dataclass(frozen=True)
@@ -257,6 +260,7 @@ class Columns:
     high: np.ndarray
     owner: int  # index into the map's names
     tilted: bool  # its top leans (a ramp slab): its edges are a slope, not a step
+    axis: float | None = None  # rad, the way up its top (a ramp slab), seen from above
 
 
 def geom_columns(
@@ -301,7 +305,16 @@ def geom_columns(
         return None
     cells = rows.ravel()[keep] * grid.cols + cols.ravel()[keep]
     low, high = np.broadcast_to(low, keep.shape)[keep], np.broadcast_to(high, keep.shape)[keep]
-    return Columns(cells, low, high, owner, tilted)
+    return Columns(cells, low, high, owner, tilted, _uphill(rot) if tilted else None)
+
+
+def _uphill(rot: np.ndarray) -> float | None:
+    """The way up a tilted box's top face, seen from above (rad): its face that looks most upward leans downhill."""
+    i = int(np.argmax(np.abs(rot[2, :])))
+    up = rot[:, i] * math.copysign(1.0, rot[2, i])
+    if math.hypot(up[0], up[1]) < 1e-9:
+        return None
+    return math.atan2(-up[1], -up[0])
 
 
 def _slab(
@@ -340,6 +353,8 @@ class NavMap:
     owner: np.ndarray  # int32 index into names of what makes a cell lethal, -1 for none
     names: list[str]
     floor: np.ndarray  # m, the floor and heightfields alone, under whatever stands on them
+    # rad, on and near a ramp: the way up it, along which alone the robot moves there (NaN elsewhere; see ramp_aim)
+    aim: np.ndarray | None = None
     room: np.ndarray = field(init=False)  # m from each cell center to the nearest lethal cell's edge
     free: np.ndarray = field(init=False)  # cells where the robot's center fits and that it can get to
 
@@ -495,6 +510,7 @@ def build(
     ground = floor.copy()
     rooted = []
     hanging = []
+    slabs = []  # (cells, way up) of the ramps' tops
     for col in columns:
         # What starts lower than the robot can pass under is as good as standing on the ground: the robot can
         # only be on top of it. A ramp is a tilted plank whose underside lifts off the floor, a bench seat or a
@@ -515,6 +531,8 @@ def build(
         owner[cells[top]] = col.owner
         if col.tilted:
             smooth[cells[top]] = True
+            if col.axis is not None:
+                slabs.append((cells[top], col.axis))
     lethal = np.zeros(n, np.int8)
     for col, hangs in hanging:
         cells = col.cells[hangs]
@@ -530,9 +548,42 @@ def build(
     lethal2 = lethal.reshape(grid.shape)
     if blocked is not None:
         lethal2[blocked] = OBSTACLE
+    aim = ramp_aim(grid, [(cells[lethal[cells] == FREE], axis) for cells, axis in slabs], body.reach + RUN_UP)
     return NavMap(
-        grid, body, ground2, lethal2, owner.reshape(grid.shape), list(names or layer.names), floor.reshape(grid.shape)
+        grid,
+        body,
+        ground2,
+        lethal2,
+        owner.reshape(grid.shape),
+        list(names or layer.names),
+        floor.reshape(grid.shape),
+        aim,
     )
+
+
+def ramp_aim(grid: Grid, slabs: list[tuple[np.ndarray, float]], near: float) -> np.ndarray | None:
+    """The way up the nearest ramp (rad) in every cell whose center is within `near` (m) of a ramp's top it can stand
+    on, NaN elsewhere; None without ramps. There a robot goes only straight up or down the ramp: sent up the
+    warehouse dock (8 degrees) at an angle, round its toe and turning on it, the Go2 swung round, slid down sideways
+    and fell, 6 times in 28 trips (scripts/nav_bench.py --case dock). Near the ramp too, so that it has lined up
+    before its feet reach the toe, and is all the way onto the landing before it turns."""
+    slabs = [(cells, axis) for cells, axis in slabs if len(cells)]
+    if not slabs:
+        return None
+    aim = np.full(grid.shape, np.nan)
+    best = np.full(grid.shape, np.inf)
+    pad = math.ceil(near / grid.res) + 2
+    for cells, axis in slabs:
+        rows, cols = np.unravel_index(cells, grid.shape)
+        r0, r1 = max(int(rows.min()) - pad, 0), min(int(rows.max()) + pad + 1, grid.rows)
+        c0, c1 = max(int(cols.min()) - pad, 0), min(int(cols.max()) + pad + 1, grid.cols)
+        mask = np.zeros((r1 - r0, c1 - c0), bool)
+        mask[rows - r0, cols - c0] = True
+        away = clearance(mask, grid.res, near + grid.res)
+        nearer = (away <= near) & (away < best[r0:r1, c0:c1])
+        best[r0:r1, c0:c1][nearer] = away[nearer]
+        aim[r0:r1, c0:c1][nearer] = axis
+    return aim
 
 
 def _mark_steps(ground: np.ndarray, smooth: np.ndarray, body: Body, res: float, lethal: np.ndarray) -> None:

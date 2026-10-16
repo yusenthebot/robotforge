@@ -22,6 +22,14 @@ from dataclasses import dataclass
 import numpy as np
 
 SQRT2 = math.sqrt(2.0)
+# The eight steps from a cell, by the way they go (rad): +x, -x, +y, -y, then the diagonals. Bit k of a cell's
+# entry in `allowed` (see along) lets a step of kind k into or out of it.
+STEP_WAYS = (0.0, math.pi, math.pi / 2, -math.pi / 2, math.pi / 4, 3 * math.pi / 4, -math.pi / 4, -3 * math.pi / 4)
+ANY_WAY = 0xFF
+# Steps on a ramp keep within this of its way up or down: just over half the 45 degrees between two of the grid's
+# eight directions, so whichever way a ramp is turned at least one of them is let through.
+STEP_SLACK = math.radians(23.0)
+PAST = 12  # cells; see pull_string
 
 
 @dataclass(frozen=True)
@@ -92,6 +100,20 @@ def _shifted_min(values: np.ndarray, reach: int, axis: int, fill: float) -> np.n
     return out
 
 
+def along(aim: np.ndarray | None, slack: float = STEP_SLACK) -> np.ndarray | None:
+    """The steps let into or out of each cell (bits as in STEP_WAYS): all of them, but where `aim` gives a way
+    (rad, NaN for none) only those within `slack` of it or of its opposite."""
+    if aim is None:
+        return None
+    allowed = np.full(aim.shape, ANY_WAY, np.int64)
+    aimed = np.isfinite(aim)
+    allowed[aimed] = 0
+    for k, way in enumerate(STEP_WAYS):
+        fits = np.abs(np.sin(way - aim[aimed])) <= math.sin(slack)
+        allowed[aimed] |= np.where(fits, 1 << k, 0)
+    return allowed
+
+
 def astar(
     grid: Grid,
     free: np.ndarray,
@@ -99,23 +121,31 @@ def astar(
     start: tuple[int, int],
     goal: np.ndarray,
     heuristic: np.ndarray,
+    allowed: np.ndarray | None = None,
 ) -> list[tuple[int, int]] | None:
     """The cheapest 8-connected path of free cells from `start` to any cell where `goal` is true, or None.
 
     `penalty` (>= 0) raises the cost of entering a cell: a step costs its length times 1 + the mean penalty
-    of the two cells. `heuristic` is a lower bound of the distance (m) from each cell to the goal region."""
+    of the two cells. `heuristic` is a lower bound of the distance (m) from each cell to the goal region.
+    `allowed` (from `along`) says which way a step may go into or out of each cell."""
     rows, cols = grid.shape
     width = cols + 2  # a blocked border all round, so no step needs a bounds check
     ok = np.pad(free & np.isfinite(penalty), 1, constant_values=False).ravel().tolist()
     weight = np.pad(1.0 + np.nan_to_num(penalty), 1, constant_values=1.0).ravel().tolist()
     target = np.pad(goal & free, 1, constant_values=False).ravel().tolist()
     guess = np.pad(heuristic, 1, constant_values=0.0).ravel().tolist()
+    ways = None if allowed is None else np.pad(allowed, 1, constant_values=ANY_WAY).ravel().tolist()
     first = (start[0] + 1) * width + start[1] + 1
     if not grid.inside(*start) or not ok[first]:
         return None
     res = grid.res
-    straight = [(1, res), (-1, res), (width, res), (-width, res)]
-    diagonal = [(width + 1, 1, width), (width - 1, -1, width), (-width + 1, 1, -width), (-width - 1, -1, -width)]
+    straight = [(1, res, 1), (-1, res, 2), (width, res, 4), (-width, res, 8)]
+    diagonal = [
+        (width + 1, 1, width, 16),
+        (width - 1, -1, width, 32),
+        (-width + 1, 1, -width, 64),
+        (-width - 1, -1, -width, 128),
+    ]
     cost = {first: 0.0}
     parent = {first: -1}
     done = set()
@@ -131,11 +161,13 @@ def astar(
         done.add(here)
         base = cost[here]
         w = weight[here]
-        steps = [(here + d, length) for d, length in straight]
+        steps = [(here + d, length, bit) for d, length, bit in straight]
         # A diagonal step needs both cells beside it free: cutting a corner would scrape it.
-        steps += [(here + d, res * SQRT2) for d, a, b in diagonal if ok[here + a] and ok[here + b]]
-        for nxt, length in steps:
+        steps += [(here + d, res * SQRT2, bit) for d, a, b, bit in diagonal if ok[here + a] and ok[here + b]]
+        for nxt, length, bit in steps:
             if not ok[nxt] or nxt in done:
+                continue
+            if ways is not None and not ways[here] & ways[nxt] & bit:
                 continue
             g = base + length * 0.5 * (w + weight[nxt])
             if g < cost.get(nxt, math.inf):
@@ -215,32 +247,63 @@ def reachable(grid: Grid, free: np.ndarray, start: tuple[int, int] | np.ndarray)
     return seen
 
 
-def pull_string(grid: Grid, path: list[tuple[int, int]], room: np.ndarray, need: float) -> list[tuple[int, int]]:
+def pull_string(
+    grid: Grid,
+    path: list[tuple[int, int]],
+    room: np.ndarray,
+    need: float,
+    aim: np.ndarray | None = None,
+    slack: float = 0.0,
+) -> list[tuple[int, int]]:
     """The corners of `path`: a cell is skipped when the straight line past it keeps at least as much room as
-    the path did there, up to `need` (m; a line with that much room is always fine)."""
+    the path did there, up to `need` (m; a line with that much room is always fine), and over cells where `aim`
+    gives a way (a ramp), goes within `slack` (rad) of it. Lines that keep the room are tried up to PAST cells
+    beyond the last one aimed well enough: on a ramp turned between the grid's directions the path is a staircase,
+    whose short lines are all off its way and longer ones run along it."""
     if len(path) <= 2:
         return list(path)
-    along = np.array([room[c] for c in path])
+    room_on_path = np.array([room[c] for c in path])
     kept = [0]
     i = 0
     while i < len(path) - 1:
-        j = i + 1
-        while j + 1 < len(path) and _line_room(grid, path[i], path[j + 1], room) >= min(
-            need, float(along[i : j + 2].min())
+        j = best = i + 1
+        while (
+            j + 1 < len(path)
+            and j + 1 - best <= PAST
+            and _line_room(grid, path[i], path[j + 1], room) >= min(need, float(room_on_path[i : j + 2].min()))
         ):
             j += 1
-        kept.append(j)
-        i = j
+            if _line_aimed(path[i], path[j], aim, slack):
+                best = j
+        kept.append(best)
+        i = best
     return [path[k] for k in kept]
 
 
-def _line_room(grid: Grid, a: tuple[int, int], b: tuple[int, int], room: np.ndarray) -> float:
-    """The least room over the cells a straight line from cell a to cell b passes, sampled every third of a
-    cell (both ends included)."""
+def _line_aimed(a: tuple[int, int], b: tuple[int, int], aim: np.ndarray | None, slack: float) -> bool:
+    """Whether the straight line from cell a to cell b goes within `slack` of the way `aim` gives on every cell it
+    passes that has one."""
+    if aim is None:
+        return True
+    rows, cols = line_cells(a, b)
+    ways = aim[rows, cols]
+    ways = ways[np.isfinite(ways)]
+    if not len(ways):
+        return True
+    heading = math.atan2(b[0] - a[0], b[1] - a[1])  # rows run along y, columns along x
+    return bool((np.abs(np.sin(heading - ways)) <= math.sin(slack)).all())
+
+
+def line_cells(a: tuple[int, int], b: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
+    """The cells a straight line from cell a to cell b passes, sampled every third of a cell (both ends included)."""
     n = max(2, math.ceil(3 * math.hypot(b[0] - a[0], b[1] - a[1])) + 1)
     t = np.linspace(0.0, 1.0, n)
-    rows = np.rint(a[0] + (b[0] - a[0]) * t).astype(int)
-    cols = np.rint(a[1] + (b[1] - a[1]) * t).astype(int)
+    return np.rint(a[0] + (b[0] - a[0]) * t).astype(int), np.rint(a[1] + (b[1] - a[1]) * t).astype(int)
+
+
+def _line_room(grid: Grid, a: tuple[int, int], b: tuple[int, int], room: np.ndarray) -> float:
+    """The least room over the cells a straight line from cell a to cell b passes (see line_cells)."""
+    rows, cols = line_cells(a, b)
     return float(room[rows, cols].min())
 
 

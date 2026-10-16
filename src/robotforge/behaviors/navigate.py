@@ -46,6 +46,11 @@ SNAP = 0.5  # m: a point inside an obstacle is replaced by the nearest free spot
 CRUISE_SHARE, CRUISE_MAX = 0.8, 0.5  # default top speed: this share of max_speed, at most this many m/s
 TURN_ON_SPOT, TURN_DONE = math.radians(50.0), math.radians(20.0)  # start and stop turning on the spot
 SHARP = math.radians(35.0)  # a corner that turns this much is driven to and turned at on the spot
+# Where the path turns onto a ramp it turns on the spot until it heads this nearly along the way up (or down), and
+# the path's lines on a ramp keep within ON_RAMP of it: the Go2 slid down the warehouse dock heading 15 to 20 degrees
+# off it. A gait turning on the spot overshoots by a few degrees, so LINE_UP is not much tighter.
+LINE_UP = math.radians(6.0)
+ON_RAMP = math.radians(4.0)
 TURN_GAIN = 2.0  # rad/s of turn per rad of heading error
 MIN_LOOK = 0.1  # m: the lookahead is halved down to this where the straight way to it is short of room
 SLOW_GAIN = 1.2  # m/s of speed per m left to the end or to a sharp corner
@@ -185,6 +190,7 @@ class Plan:
     note: str | None = None
     within_reach: bool | None = None  # for a robot with an arm sent to an object
     short: str | None = None  # why it ends short (a NoWay cause): only near an object, or by a point it cannot reach
+    pivots: frozenset[int] = frozenset()  # points where it lines up on the spot with the way on, up or down a ramp
 
 
 class Planner:
@@ -237,21 +243,26 @@ class Planner:
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
         goals, away = self._goals(nav, data, first)
         penalty = nav.penalty()
+        ways = nav_grid.along(nav.aim)  # on and near a ramp, only straight up or down it
         level, cells = -1, None
         if not nav_grid.enclosed(grid, nav.free, np.logical_or.reduce(goals), first):
             level, cells = next(
-                ((k, found) for k, goal in enumerate(goals) if (found := self._search(nav, penalty, first, goal))),
+                (
+                    (k, found)
+                    for k, goal in enumerate(goals)
+                    if (found := self._search(nav, penalty, first, goal, ways))
+                ),
                 (-1, None),
             )
         short = None
         if cells is None and away is not None:  # an object it cannot get next to: as near to it as it gets
             near = self._nearest(nav, first, away)
-            cells = self._search(nav, penalty, first, near) if near is not None else None
+            cells = self._search(nav, penalty, first, near, ways) if near is not None else None
             if cells is not None:
                 level, short = len(goals), self._why_not(nav, first, np.logical_or.reduce(goals)).cause
         if cells is None:
             raise self._why_not(nav, first, np.logical_or.reduce(goals))
-        corners = pull_string(grid, cells, nav.room, self.body.reach + 0.1)
+        corners = pull_string(grid, cells, nav.room, self.body.reach + 0.1, nav.aim, ON_RAMP)
         points = [start_xy]
         if escape:
             points.append(grid.center(*first))
@@ -274,7 +285,7 @@ class Planner:
             # simulation for every robot. A segment of no length leaves it to arrive, or to face the object.
             pts = np.vstack([pts, pts])
         heights = np.array([nav.ground_at(x, y) for x, y in pts])
-        plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact)
+        plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact, pivots=_pivots(nav, pts))
         if not exact:
             plan.note = self._short_note(nav, cells[-1], on_point, away)
         plan.short = self._point_cause(nav) if on_point and not exact else short
@@ -283,8 +294,8 @@ class Planner:
         return plan
 
     @staticmethod
-    def _search(nav: NavMap, penalty: np.ndarray, first: tuple[int, int], goal: np.ndarray):
-        return astar(nav.grid, nav.free, penalty, first, goal, _heuristic(nav.grid, goal))
+    def _search(nav: NavMap, penalty: np.ndarray, first: tuple[int, int], goal: np.ndarray, ways: np.ndarray | None):
+        return astar(nav.grid, nav.free, penalty, first, goal, _heuristic(nav.grid, goal), ways)
 
     def _label(self) -> str:
         d = self.destination
@@ -421,6 +432,15 @@ class Planner:
         grid, body = nav.grid, self.body
         heuristic = _heuristic(grid, goal)
         label = self._label()
+        if nav.aim is not None:  # a way there, but not straight up or down a ramp on it
+            cells = _search_open(grid, nav.free, start, goal, heuristic)
+            if cells is not None:
+                ramp = next((nav.blocker(c) for c in cells if np.isfinite(nav.aim[c]) and nav.blocker(c)), "a ramp")
+                return NoWay(
+                    "too_narrow",
+                    f"no way to {label} for {self.robot}: it goes up or down {ramp} only straight along its slope, "
+                    "and there is no room to line up with it first",
+                )
         # Without the steps and slopes it cannot climb, is there a way? Then they are what is in the way.
         obstacles = nav.lethal == OBSTACLE
         room = clearance(obstacles, grid.res, body.reach + 0.3)
@@ -477,6 +497,22 @@ def _search_open(grid: Grid, free: np.ndarray, start: tuple[int, int], goal: np.
     if nav_grid.enclosed(grid, free, goal, start):
         return None
     return astar(grid, free, np.zeros(grid.shape), start, goal, heuristic)
+
+
+def _pivots(nav: NavMap, points: np.ndarray) -> frozenset[int]:
+    """The points, off a ramp and away from it, where the path turns onto a ramp's way (see nav_map.ramp_aim): the
+    robot lines up there on the spot, on level ground, before its feet reach the ramp."""
+    if nav.aim is None:
+        return frozenset()
+    grid, found = nav.grid, set()
+    for k in range(len(points) - 1):
+        a, b = grid.cell(*points[k]), grid.cell(*points[k + 1])
+        if not (grid.inside(*a) and grid.inside(*b)) or np.isfinite(nav.aim[a]):
+            continue
+        rows, cols = nav_grid.line_cells(a, b)
+        if np.isfinite(nav.aim[rows, cols]).any():
+            found.add(k)
+    return frozenset(found)
 
 
 def _near_terrain(nav: NavMap) -> np.ndarray:
@@ -605,6 +641,7 @@ class Navigator:
     _yields: int = field(default=0, init=False)
     _others_at: dict[str, np.ndarray] = field(default_factory=dict, init=False)  # where they were for the plan
     _retried: bool = field(default=False, init=False)  # planned again at the end of a path to a taken point
+    _lined_up: int = field(default=-1, init=False)  # the last pivot (plan point) it lined up at
 
     def __post_init__(self) -> None:
         self.first_length = self.plan.length
@@ -623,6 +660,7 @@ class Navigator:
         p = self.plan.points
         self._seg = 0
         self._spinning = False
+        self._lined_up = -1
         self._best_left = math.inf
         seg = np.diff(p, axis=0)
         self._seg_len = np.linalg.norm(seg, axis=1)
@@ -722,6 +760,12 @@ class Navigator:
         target, corner_left = self._target(xy, s)
         bearing = math.atan2(target[1] - xy[1], target[0] - xy[0])
         alpha = _wrap(bearing - yaw)
+        if self.turns_in_place and self._seg in self.plan.pivots and self._lined_up != self._seg:
+            if abs(alpha) > LINE_UP:  # a ramp ahead: lined up here, on level ground, not on the way up
+                self._spinning = True
+                self.walker.command(0.0, self._turn(alpha))
+                return
+            self._lined_up = self._seg
         if self.turns_in_place and (abs(alpha) > TURN_ON_SPOT or (self._spinning and abs(alpha) > TURN_DONE)):
             self._spinning = True
             self.walker.command(0.0, self._turn(alpha))
@@ -815,7 +859,7 @@ class Navigator:
         look = float(np.clip(0.25 + 0.8 * self.cruise, 0.3, 0.7))
         left_here = self._after[self._seg] - s  # path left from the robot's projection
         for k in range(self._seg + 1, len(p) - 1):
-            if _turn_at(p, k) > SHARP:
+            if _turn_at(p, k) > SHARP or k in self.plan.pivots:
                 corner_left = left_here - self._after[k]
                 return (p[k] if corner_left <= look else self._roomy(xy, s, look)), corner_left
         a, b = p[-2], p[-1]
