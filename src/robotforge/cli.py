@@ -29,19 +29,44 @@ DEFAULT_PORT = 8737
 log = logging.getLogger("robotforge")
 
 
+def _server_socket() -> socket.socket:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if sys.platform == "win32":
+        # SO_REUSEADDR means "share the port" on Windows, so the probe would call a port in use free.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    else:
+        # Same option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    return s
+
+
 def port_is_free(port: int, host: str = "127.0.0.1") -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        if sys.platform == "win32":
-            # SO_REUSEADDR means "share the port" on Windows, so the probe would call a port in use free.
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-        else:
-            # Same option uvicorn uses, so sockets lingering in TIME_WAIT don't count as busy.
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    with _server_socket() as s:
         try:
             s.bind((host, port))
         except OSError:
             return False
         return True
+
+
+def listen_on_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> socket.socket:
+    """A socket listening on the first free port from `start`, for the viewer to serve on.
+
+    Holding the port closes the gap between finding it free and binding it: two MCP servers started at the same
+    moment (two agent sessions) both found 8737 free, and the second one's viewer then failed to bind and took
+    its MCP server down with it, so that session had no robotforge tools at all."""
+    for port in range(start, start + attempts):
+        sock = _server_socket()
+        try:
+            sock.bind((host, port))
+            sock.listen()  # at once: until a socket listens, Linux lets a second SO_REUSEADDR socket bind its port
+        except OSError:
+            sock.close()
+            continue
+        return sock
+    if attempts == 1:
+        raise RuntimeError(f"port {start} is already in use")
+    raise RuntimeError(f"no free port in {start}-{start + attempts - 1}")
 
 
 def has_display(platform: str = sys.platform, env: Mapping[str, str] = os.environ) -> bool:

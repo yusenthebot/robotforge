@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 import urllib.request
@@ -6,6 +7,7 @@ import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters
 
+from robotforge import mcp_server
 from robotforge.cli import find_free_port
 from robotforge.mcp_server import VIEWER_UI_URI, build_server
 from robotforge.playground import Playground
@@ -106,3 +108,46 @@ async def test_stdio_server_keeps_stdout_clean_and_serves_the_viewer():
         assert opened["viewer_url"] == f"http://127.0.0.1:{port}/"
         html = urllib.request.urlopen(opened["viewer_url"], timeout=5).read().decode()
         assert "robotforge" in html
+
+
+def test_servers_started_together_take_different_viewer_ports(monkeypatch):
+    """Two agent sessions started at once (scripts/agent_eval.py runs two): both MCP servers found port 8737 free,
+    the second one's viewer then failed to bind and its whole server exited, so that session had no tools. Each
+    server now holds its port from the moment it picks it."""
+    started = []
+
+    class Started:
+        def __init__(self, playground, port, viewer_socket=None):
+            started.append((port, viewer_socket))
+
+        def run(self, transport):  # the second server picks its port while the first is still starting
+            pass
+
+    monkeypatch.setattr(mcp_server, "build_server", Started)
+    mcp_server.run()
+    mcp_server.run()
+    try:
+        (first, held), (second, _) = started
+        assert first != second
+        assert held is not None and held.getsockname()[1] == first
+    finally:
+        for _, sock in started:
+            if sock is not None:
+                sock.close()
+
+
+async def test_two_stdio_servers_started_together_both_serve():
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-c", "from robotforge.cli import main; main(['mcp'])"],
+        env={"ROBOTFORGE_NO_BROWSER": "1"},
+    )
+
+    async def viewer_url() -> str:
+        async with Client(params, read_timeout_seconds=60) as client:
+            opened = _data(await client.call_tool("open_viewer", {"launch_browser": False}))
+            urllib.request.urlopen(opened["viewer_url"], timeout=5).read()
+            return opened["viewer_url"]
+
+    urls = await asyncio.gather(viewer_url(), viewer_url())
+    assert urls[0] != urls[1]

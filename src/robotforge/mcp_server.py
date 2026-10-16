@@ -12,6 +12,7 @@ import inspect
 import logging
 import os
 import re
+import socket
 import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -28,7 +29,7 @@ from mcp.types import ToolAnnotations
 from robotforge import lessons, tool_input, wording
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.bridge import mcp_tools as policy_tools
-from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
+from robotforge.cli import DEFAULT_PORT, listen_on_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
@@ -179,7 +180,9 @@ def _lean_schemas(server: MCPServer) -> None:
         tool.parameters = lean(tool.parameters)
 
 
-def build_server(playground: Playground, port: int) -> MCPServer:
+def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
+    """The MCP server and its viewer on `port`; `viewer_socket`, when given, is already listening there (run()
+    takes the port before anything else can)."""
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
     playground.viewer_url = f"http://{HOST}:{port}/"
@@ -212,7 +215,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             create_app(hub), host=HOST, port=port, log_level="warning", access_log=False, log_config=None
         )
         viewer = uvicorn.Server(config)
-        task = asyncio.create_task(viewer.serve())
+        task = asyncio.create_task(viewer.serve(sockets=[viewer_socket] if viewer_socket else None))
         log.info("viewer at %s", playground.viewer_url)
         try:
             yield
@@ -770,5 +773,6 @@ def run(model: Path | None = None, port: int | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")  # stderr
     session = SimSession.from_path(model) if model else None
     playground = Playground(session=session) if session else Playground.with_demo()
-    chosen = port if port is not None else find_free_port(DEFAULT_PORT, HOST)
-    build_server(playground, chosen).run("stdio")
+    # Taken and held from here on, not just found free: see listen_on_free_port.
+    viewer_socket = listen_on_free_port(port if port is not None else DEFAULT_PORT, HOST, 1 if port is not None else 50)
+    build_server(playground, viewer_socket.getsockname()[1], viewer_socket=viewer_socket).run("stdio")
