@@ -11,7 +11,6 @@ by the same balance feedback.
 
 from __future__ import annotations
 
-import dataclasses
 import math
 from dataclasses import dataclass, field
 
@@ -557,11 +556,20 @@ def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Human
         model, robot, home_qpos, legs, soles, {}, root_joint, None, roles=tuple(roles), foot_rotations=tuple(flats)
     )
     # A taller robot topples slower but needs more ankle per degree of tilt: Booster T1 (0.55 m legs) leaned 7 degrees
-    # and wobbled on our template's gains, and stands within 2 degrees with them scaled like the gait's timing.
+    # and wobbled on our template's gains, and stands within 2 degrees with them scaled like the gait's timing. Sideways
+    # it also sways slower, so its roll is damped for longer (rate gains scaled once more): with the pitch gains alone
+    # scaled, a T1 carrying an SO-100 on its head (1.2 kg) swayed further and further sideways after it stopped walking
+    # and fell over within 2 s, and with every gain scaled once it still fell after walking 6 or 10 s. Scaled so, it
+    # stops within 5 degrees, and a T1 on its own walks 1.26 m in 10 s at 0.12 m/s (was 1.13).
     scale = math.sqrt(ctrl.leg_length / TEMPLATE_LEG)
     base = BalanceGains()
-    ctrl.gains = dataclasses.replace(
-        base, ankle_pitch=base.ankle_pitch * scale, ankle_pitch_rate=base.ankle_pitch_rate * scale
+    ctrl.gains = BalanceGains(
+        ankle_pitch=base.ankle_pitch * scale,
+        ankle_pitch_rate=base.ankle_pitch_rate * scale,
+        ankle_roll=base.ankle_roll * scale,
+        ankle_roll_rate=base.ankle_roll_rate * scale**2,
+        hip_roll=base.hip_roll * scale,
+        hip_roll_rate=base.hip_roll_rate * scale**2,
     )
     return ctrl
 
