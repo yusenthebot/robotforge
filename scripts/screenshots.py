@@ -294,6 +294,77 @@ def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
 
+def _slide(control: str, value: float) -> str:
+    """Page script: move a lesson slider as a learner's drag ends."""
+    return (
+        f"{{ const i = document.querySelector('input[data-control=\"{control}\"]'); i.value = {value}; "
+        "i.dispatchEvent(new Event('input')); }"
+    )
+
+
+def _tick(control: str) -> str:
+    return f"document.querySelector('input[data-control=\"{control}\"]').click();"
+
+
+def _choose(control: str, option: int) -> str:
+    return f"document.querySelector('[data-choice=\"{control}\"] button:nth-child({option + 1})').click();"
+
+
+def _answer(option: int) -> str:
+    return f"document.querySelector('#lesson-quiz-options button:nth-child({option + 1})').click();"
+
+
+_NEXT = "document.getElementById('lesson-next').click();"
+
+
+def _drag(body: str, to: tuple[float, float, float]) -> str:
+    """Page script: grab a body with the mouse and pull it to `to` (world m), in small moves, and let go."""
+    return f"""
+        {{
+            const rf = window.__robotforge;
+            const view = document.getElementById("view");
+            const id = rf.scene.bodies.findIndex((b) => b.name === {json.dumps(body)});
+            const [x0, y0] = rf.screenOf(id);
+            const [x1, y1] = rf.screenOfPoint({json.dumps(list(to))});
+            const at = (x, y) => ({{ clientX: x, clientY: y, button: 0, pointerId: 7, bubbles: true }});
+            view.dispatchEvent(new PointerEvent("pointerdown", at(x0, y0)));
+            for (let k = 1; k <= 12; k++) {{
+                const [x, y] = [x0 + ((x1 - x0) * k) / 12, y0 + ((y1 - y0) * k) / 12];
+                view.dispatchEvent(new PointerEvent("pointermove", at(x, y)));
+                {_SLEEP.format(ms=60)}
+            }}
+            {_SLEEP.format(ms=400)}
+            view.dispatchEvent(new PointerEvent("pointerup", at(x1, y1)));
+        }}
+    """
+
+
+# The seeing lesson, played up to each picture: the red cube dragged, the mask narrowed, the height guessed.
+_SEEING_MASK = (_drag("red_cube", (0.2, -0.12, 0.03)), _wait(1.5), _NEXT, _wait(1.5))
+_SEEING_WHERE = (*_SEEING_MASK, _slide("width", 15), _wait(1.0), _NEXT, _wait(0.5), _answer(0), _wait(1.0))
+_SEEING_LIGHT = (
+    *_SEEING_WHERE,
+    _slide("height", 2),
+    _wait(1.0),
+    _NEXT,
+    _wait(0.5),
+    _press("pick"),
+    _wait(12.0),
+    _NEXT,
+    _wait(0.5),
+    _press("test"),
+    _wait(1.0),
+    _tick("depth"),
+    _wait(0.5),
+    _press("test"),
+    _wait(1.0),
+    _NEXT,
+    _wait(0.5),
+    _choose("light", 1),
+    _wait(1.5),
+)
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -323,6 +394,15 @@ SHOTS = [
         settle=0.2,
     ),
     Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
+    Shot("lesson_seeing_mask", _nothing, page=_lesson("seeing", *_SEEING_MASK)),
+    Shot("lesson_seeing_where", _nothing, page=_lesson("seeing", *_SEEING_WHERE)),
+    Shot("lesson_seeing_depth", _nothing, page=_lesson("seeing", *_SEEING_LIGHT[:-4])),
+    Shot("lesson_seeing_evening", _nothing, page=_lesson("seeing", *_SEEING_LIGHT)),
+    Shot(
+        "lesson_seeing_fixed",
+        _nothing,
+        page=_lesson("seeing", *_SEEING_LIGHT, _tick("balance"), _tick("clean"), _wait(1.5)),
+    ),
 ]
 
 
