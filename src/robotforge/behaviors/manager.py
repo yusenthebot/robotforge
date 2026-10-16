@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import dataclasses
 import math
 import re
 import sys
@@ -565,16 +566,17 @@ class BehaviorManager:
         world = self._world()
         objects = [o.name for o in world.objects] if world else self._movable()
         robots = [r for r in self._names(world) if r != robot]
-        found = wording.match(to, [*objects, *robots])
+        terrain = [t.name for t in world.terrain] if world else []  # "go up the ramp", "to the stairs"
+        found = wording.match(to, [*objects, *robots, *terrain])
         if found is None:
-            known = [*objects, *robots]
-            raise BehaviorError(wording.unknown("object or robot", to, known) + " (or give a point [x, y])")
+            known = [*objects, *robots, *terrain]
+            raise BehaviorError(wording.unknown("object, robot or terrain", to, known) + " (or give a point [x, y])")
         if found in robots:
             return navigation.robot_destination(model, data, found)
         destination = navigation.find_destination(model, data, found)
         if destination is None:
             raise BehaviorError(f"{found} is not in the simulation; reload the world (load_world)")
-        return destination
+        return dataclasses.replace(destination, terrain=True) if found in terrain else destination
 
     def _carried_arm(self, robot: str, data: mujoco.MjData) -> navigation.Arm | None:
         """The arm a moving robot carries (the first, if it has several), for stopping within its reach."""

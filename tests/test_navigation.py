@@ -500,6 +500,18 @@ def test_an_object_it_cannot_get_next_to_is_not_arrived_at(pg, width, arrived):
     assert 2.5 - width / 2 - 0.5 < x < 2.5 - width / 2  # it went up to the block either way
 
 
+def test_a_robot_goes_onto_terrain_it_climbs_and_next_to_terrain_it_does_not(pg):
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0], yaw=0)
+    pg.add_terrain("platform", name="low", pos=[2.5, 0.0], params={"size": [1.2, 1.2], "height": 0.02})
+    pg.add_terrain("platform", name="high", pos=[0.0, 2.5], params={"size": [1.2, 1.2], "height": 0.1})
+    onto = _trip(pg, "dog", "low")
+    assert onto.result()["arrived"] and onto.plan.face is None, onto.result()
+    assert math.dist(pg.behaviors.pose("dog")["position"][:2], [2.5, 0.0]) < 0.15
+    beside = _trip(pg, "dog", "high")
+    assert beside.result()["arrived"] and beside.plan.face is not None, beside.result()
+    assert 1.3 < pg.behaviors.pose("dog")["position"][1] < 1.9  # on the floor in front of its edge at y = 1.9
+
+
 def test_driving_by_hand_ends_a_trip(pg):
     pg.add_robot("rover", template="rover")
     trip = pg.behaviors.navigate("rover", [3.0, 0.0])

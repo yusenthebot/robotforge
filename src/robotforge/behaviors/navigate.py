@@ -101,6 +101,7 @@ class Destination:
     root: int = -1  # its root body (moving objects), left out of the map's obstacles while it is the goal
     z: float = 0.0  # height of its middle, for an arm's reach
     loose: bool = False  # it moves (a free joint): something an arm might pick up, so its reach is checked
+    terrain: bool = False  # a terrain patch: go onto its middle if the robot can stand there, else next to it
 
     def describe(self) -> dict[str, Any]:
         at = [round(self.point[0], 3), round(self.point[1], 3)]
@@ -235,7 +236,7 @@ class Planner:
             points.append(grid.center(*first))
         points += [grid.center(*c) for c in corners[1:]]
         d = self.destination
-        on_point = not d.name or d.onto
+        on_point = self._onto(nav)
         exact = level == 0 and (not on_point or self._point_is_free(nav))
         if on_point and exact:
             # The point itself, in place of the search's last cell center next to it: a stub of a few cm from one
@@ -277,6 +278,12 @@ class Planner:
         here = nav.grid.cell(*self.destination.point)
         return nav.grid.inside(*here) and bool(nav.free[here])
 
+    def _onto(self, nav: NavMap) -> bool:
+        """Whether it goes to the destination's point itself (a point, a mark on the floor, the middle of a ramp's
+        landing or a platform it climbs), rather than stopping next to it, facing it."""
+        d = self.destination
+        return not d.name or d.onto or (d.terrain and self._point_is_free(nav))
+
     def _short_note(self, nav: NavMap, end: tuple[int, int], on_point: bool, away: np.ndarray | None) -> str:
         """Why the path ends short of where the robot was sent."""
         d, grid = self.destination, nav.grid
@@ -314,7 +321,7 @@ class Planner:
         grid, d = nav.grid, self.destination
         xs, ys = grid.centers()
         to_point = np.hypot(xs - d.point[0], ys - d.point[1])
-        if not d.name or d.onto:
+        if self._onto(nav):
             if self._point_is_free(nav):
                 return [to_point <= grid.res], None
             # The nearest spot it can get to: free cells nearby can be out of reach too, on top of a wide block
