@@ -62,8 +62,13 @@ STEP_SHARE, STEP_LIKE = 0.5, 0.15
 #   hills it fell where they leaned 4 degrees across its way (scripts/nav_bench.py), so it keeps to 3.
 # And with the follower holding the heading up 3 m wide ramps (no falling off a side): the rover built from parts
 # climbed 3 and 7 degrees and stuck at the foot of 5, 9 and 12, its front caster caught on the ramp's toe.
+# One curb is not a flight of stairs. Sent by the follower over three steps up to a landing and three down (1.6 m
+# wide, 0.3 m treads), straight on and from 0.3 to 0.6 m to one side: the template dog climbed 3 and 3.5 cm steps
+# every time and fell once in three on 4 cm (and stuck on the obstacle course's 4 cm stairs in scripts/nav_bench.py);
+# the Go2 climbed 2.5 cm every time, fell once in three on 3 cm and every time on 3.5 and 4 cm.
 WHEEL_STEP = 0.3  # wheels climb a step of this share of the smallest rolling radius (wheel or caster)
-LEG_STEP_MAX = 0.05  # m: a legged robot climbs up to its gait's foot lift, but no robot we tried did 7 cm
+LEG_STEP_SHARE = 0.7  # of the gait's foot lift: the dog's 3.5 cm stairs were 0.82 of its 4.3 cm lift
+LEG_STEP_MAX = 0.025  # m, for any legged robot: the Go2's stairs, whatever its 7.1 cm lift
 FLAT_STEP = 0.005  # m: robots that only walk on flat ground (humanoids, snakes, learned rhythm walks)
 SLOPE_DEG = {
     Kind.ROVER: 15.0,
@@ -123,7 +128,7 @@ def measure_body(model: mujoco.MjModel, data: mujoco.MjData, robot: str, kind: K
         if caster:
             slope_deg = min(slope_deg, CASTER_SLOPE_DEG)
     elif kind in (Kind.QUADRUPED, Kind.HEXAPOD) and isinstance(lift, float):
-        step = min(lift, LEG_STEP_MAX)
+        step = min(LEG_STEP_SHARE * lift, LEG_STEP_MAX)
     else:
         step = FLAT_STEP
     slope = math.radians(slope_deg)

@@ -164,13 +164,13 @@ def test_walls_and_table_legs_block_but_a_high_table_top_does_not(pg):
 def test_what_a_robot_climbs_decides_steps_and_slopes(pg):
     pg.add_robot("rover", template="rover", pos=[0.0, 0.0])
     pg.add_robot("dog", template="quadruped", pos=[0.0, 3.0])
-    pg.add_terrain("curb", name="curb", pos=[1.5, 1.5], params={"size": [0.3, 5.0], "height": 0.03})
+    pg.add_terrain("curb", name="curb", pos=[1.5, 1.5], params={"size": [0.3, 5.0], "height": 0.02})
     pg.add_terrain("ramp", name="gentle", pos=[-2.5, 0.0], params={"angle": 8, "length": 1.5, "direction": "up"})
     pg.add_terrain("ramp", name="steep", pos=[-2.5, 3.0], params={"angle": 20, "length": 1.0, "direction": "up"})
     rover, dog = _map(pg, "rover"), _map(pg, "dog")
     curb = ((1.3, 1.7), (1.0, 2.0))
-    assert nav_map.STEP in _codes(rover, *curb)  # 3 cm: the rover climbs 1 cm...
-    assert _codes(dog, *curb) == {nav_map.FREE}  # ...the dog's gait lifts its feet 4.3 cm
+    assert nav_map.STEP in _codes(rover, *curb)  # 2 cm: the rover climbs 1 cm...
+    assert _codes(dog, *curb) == {nav_map.FREE}  # ...the dog 2.5 cm (its gait lifts its feet 4.3 cm)
     assert _codes(rover, (-3.2, -2.6), (-0.3, 0.3)) == {nav_map.FREE}  # 8 degrees: within the rover's 15
     assert _fits(rover, -3.0, 0.0) and rover.ground_at(-3.0, 0.0) > 0.03
     assert nav_map.SLOPE in _codes(rover, (-3.0, -2.8), (2.9, 3.1))  # 20 degrees
