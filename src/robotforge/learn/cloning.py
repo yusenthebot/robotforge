@@ -60,9 +60,9 @@ STUCK_MOVE = 0.01  # m
 SETTLE = 0.5  # s after the cube lands in the bin with the gripper open, before it counts
 # The network's grip is a number, 0 open to 1 closed; the arm switches once it is this far from the grip it has.
 # Before the ARRIVED rule it closed a centimetre or two over the cube at 0.5 (71% at 8 demonstrations, 83% at
-# 0.7). With ARRIVED, JITTER and the no-slip pass, 0.7 left an unsure network hovering at 0.6 over the cube or
-# the bin: on 12 sets of 5 demonstrations 0.5 took the mean from 83% to 88%, the worst set from 58% to 71%, and
-# beside a demonstration from 80-100% to 100% in every set (2026-10-17).
+# 0.7). With ARRIVED, JITTER and the no-slip pass, 0.7 left an unsure network hovering over the cube (0.59 there,
+# after slow demonstrations) until the try timed out: on 12 sets of 5 demonstrations 0.5 took the mean from 83% to
+# 88%, the worst set from 58% to 71%, and beside a demonstration from 80-100% to 100% in every set (2026-10-17).
 SURE = 0.5
 # MuJoCo's soft contacts let a held cube creep down between the fingers: lifted 10 cm through the sliders and held
 # still, it slid 3.6 mm a second and was back on the desk 7.5 s after the lift, so a learner carrying at their own
