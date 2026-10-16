@@ -138,6 +138,20 @@ def test_panda_moves_a_floor_cube_round_its_base_without_throwing_it(pg, cube, t
     assert placed["success"], placed
 
 
+def test_piper_carries_the_long_way_round_to_a_place_just_past_its_base_joint_limit(pg):
+    """The place is 0.6 degrees past the PiPER's +-150 degree base joint limit, behind it on the right. Planning the
+    short way round, through the back where the gripper cannot point down, refused the pick as one that would hit
+    "the robot carrying the arm", though the PiPER stands alone and lands it the long way round."""
+    pg.add_robot("piper", library="piper")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.083, 0.244])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("piper", "cube", [-0.224, -0.126])
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    placed = pg.behaviors.placed(info["object"], info["region"])
+    assert placed["success"], placed
+
+
 def test_an_arm_without_a_tool_point_says_so_rather_than_that_it_is_not_an_arm(pg):
     """The SO-100's model marks no tool point: move_arm answered "arm is an arm, not an arm, and carries none"."""
     pg.add_robot("arm", library="so_arm100")

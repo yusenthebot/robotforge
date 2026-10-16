@@ -471,6 +471,31 @@ def test_every_arm_does_a_second_job_somewhere_else(pg, design):
     assert pg.behaviors.pose("r")["upright"]
 
 
+# Floor picks that went wrong once the pick had been checked and accepted: (design, arm, cube, target).
+CHECKED_WAYS = {
+    # The carry was checked going 167 degrees one way round and went 193 the other, right over the body: thrown.
+    "scorpion over its body": ("scorpion", "r/claw", [-0.129, -0.37], [0.006, 0.327]),
+    # Checked going 239 degrees round, it went 121 the other way into the Panda's first joint limit and stalled.
+    "mobile_panda round the front": ("mobile_panda", "r/arm", [-0.033, -0.36], [-0.175, 0.338]),
+    # A 310 degree carry timed as the 0.52 m straight line between its ends: the hand flew at 1.1 m/s.
+    "mobile_panda the long way": ("mobile_panda", "r/arm", [-0.497, 0.095], [-0.471, -0.42]),
+    # Next to its base the tentacle's IK found the grasp in another pose: moving there joint by joint, the hand
+    # swung in sideways and pushed the cube 4 cm.
+    "tentacle beside its base": ("tentacle", "r", [-0.014, -0.167], [0.27, 0.153]),
+}
+
+
+@pytest.mark.parametrize("case", list(CHECKED_WAYS))
+def test_a_pick_goes_the_way_it_was_checked_and_lands(pg, case):
+    design, arm, cube, target = CHECKED_WAYS[case]
+    pg.add_robot("r", design=design)
+    pg.add_object("cube", shape="box", size=CUBE, pos=cube)
+    _run(pg, 0.5)
+    placed = _pick(pg, arm, "cube", target)
+    assert placed["success"], placed
+    assert pg.behaviors.pose("r")["upright"]
+
+
 def test_the_twin_arm_works_one_cube_with_each_hand_and_leaves_its_waist_alone(pg):
     pg.add_robot("twin", design="twin_arm")
     pg.add_object("table", shape="table", size=[0.3, 0.7, 0.35], pos=[0.42, 0.0], fixed=True)
