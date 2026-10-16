@@ -584,6 +584,17 @@ def test_in_a_corridor_too_narrow_to_turn_round_it_backs_up(pg):
     assert abs(pg.behaviors.pose("dog")["heading_deg"]) < 20  # backed all the way, facing as it was
 
 
+def test_with_room_to_turn_it_turns_rather_than_backing_off_its_path(pg):
+    """Regression: half turned, 120 degrees off its way, with a hair less room than it needs to turn, the Go2 backed
+    up along its tail, sideways off its path, into the desk lab's desk, and got stuck there."""
+    pg.add_robot("go2", library="go2")
+    pg.load_scene("desk_lab")
+    pg.update_robot("go2", pos=[-0.25, 0.6], yaw=14.0)
+    pg.run_fast(lambda: False, 0.5)
+    trip = _trip(pg, "go2", [-1.75, -0.15], limit=40)
+    assert trip.result()["arrived"] and trip.result()["time_s"] < 20, trip.result()
+
+
 def test_something_the_map_did_not_show_is_driven_round(pg):
     pg.add_robot("rover", template="rover", pos=[-1.5, 0.0], yaw=0)
     pg.add_object("crate", shape="box", pos=[0.0, 3.0], size=[0.5, 0.5, 0.3], mass=20.0)

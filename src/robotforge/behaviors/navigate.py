@@ -57,11 +57,13 @@ TURN_GAIN = 2.0  # rad/s of turn per rad of heading error
 # corridor (which reset the check on headway), and fell (scripts/nav_bench.py --case narrow).
 SPIN_JAM = 3.0  # s
 SPIN_GAIN = math.radians(10.0)
-# With the way on behind it (more than BEHIND off its heading) where it has no room to turn on the spot, a robot that
-# walks backwards backs up along its path, at BACK_SHARE of its top speed, until there is room to turn, or until the
-# way on is no longer behind it (less than STILL_BEHIND off), at a bend, where it turns on the spot as before: backing
-# round the bends of a maze of 0.6 m corridors, its tail swinging out, the Go2 fell more often than it turned there.
-BEHIND, STILL_BEHIND = math.radians(120.0), math.radians(100.0)
+# With the way on behind it (more than BEHIND off its heading) where it has CRAMPED m less room than it needs to turn
+# on the spot, a robot that walks backwards backs up along its path, at BACK_SHARE of its top speed, until there is
+# room to turn, or until the way on is no longer behind it (less than STILL_BEHIND off), at a bend, where it turns on
+# the spot as before. Backing round the bends of a maze of 0.6 m corridors, its tail swinging out, the Go2 fell more
+# often than it turned there; backing from 120 degrees off, half turned, it went sideways off its path into a desk.
+BEHIND, STILL_BEHIND = math.radians(150.0), math.radians(120.0)
+CRAMPED = 0.05
 BACK_SHARE = 0.5
 BACK_TURN = 0.4  # of its turn rate, at most, steering its tail along the path
 MIN_LOOK = 0.1  # m: the lookahead is halved down to this where the straight way to it is short of room
@@ -958,7 +960,7 @@ class Navigator:
     def _cramped(self, xy: np.ndarray) -> bool:
         """Whether it has less room where it stands than it needs to turn on the spot."""
         nav = self.planner.last_map
-        return nav is not None and nav_grid.room_at(nav.grid, nav.room, xy) < self.planner.body.reach
+        return nav is not None and nav_grid.room_at(nav.grid, nav.room, xy) < self.planner.body.reach - CRAMPED
 
     def _turn(self, alpha: float) -> float:
         rate = float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate))
