@@ -294,6 +294,55 @@ def _nothing(pg: Any) -> None:
     """Lessons build their own world."""
 
 
+def _design(name: str, extras: Callable[[Any], None] | None = None) -> Callable[[Any], None]:
+    """A world with one gallery design in it (named after the design), and what it works with."""
+
+    def world(pg: Any) -> None:
+        pg.add_robot(name, design=name)
+        if extras is not None:
+            extras(pg)
+
+    return world
+
+
+def _twin_table(pg: Any) -> None:
+    pg.add_object("table", shape="table", size=[0.3, 0.7, 0.35], pos=[0.42, 0.0], fixed=True, color="#9c6b3f")
+    pg.add_object("red", shape="box", size=[0.04, 0.04, 0.04], pos=[0.35, -0.15, 0.37])
+    pg.add_object("blue", shape="box", size=[0.04, 0.04, 0.04], pos=[0.35, 0.15, 0.37], color="blue")
+
+
+def _rocks(pg: Any) -> None:
+    pg.set_terrain("rough", params={"size": [6, 6], "height": 0.04})
+
+
+def _gallery_line_up(pg: Any) -> None:
+    """Several designs side by side, for an overview picture."""
+    for name, pos in (
+        ("mars_rover", [0.0, 1.2]),
+        ("centaur", [0.0, 0.4]),
+        ("wheel_biped", [0.0, -0.3]),
+        ("scorpion", [0.0, -0.95]),
+        ("lift_picker", [-0.9, 0.9]),
+        ("twin_arm", [-0.9, -0.2]),
+        ("tentacle", [-0.9, -1.0]),
+    ):
+        pg.add_robot(name, design=name, pos=pos)
+
+
+# One picture per gallery design: (design, extra world, camera offset from the robot in metres).
+GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float, float]]] = [
+    ("wheel_biped", None, (0.75, -0.55, 0.3)),
+    ("lift_picker", None, (1.6, -1.25, 1.05)),
+    ("mars_rover", _rocks, (0.85, -0.7, 0.45)),
+    ("wheel_dog", None, (0.8, -0.6, 0.35)),
+    ("centaur", None, (0.9, -0.7, 0.45)),
+    ("scorpion", None, (0.75, -0.6, 0.45)),
+    ("go2_arm", None, (1.1, -0.85, 0.55)),
+    ("twin_arm", _twin_table, (1.25, -0.9, 0.55)),
+    ("tentacle", None, (0.95, -0.75, 0.45)),
+]
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -323,6 +372,16 @@ SHOTS = [
         settle=0.2,
     ),
     Shot("challenge_obstacle_course", _nothing, page=_lesson("obstacle_course", _wait(2.0))),
+    *(
+        Shot(f"gallery_{name}", _design(name, extras), page=_look_at([name], offset), settle=3.0)
+        for name, extras, offset in GALLERY_SHOTS
+    ),
+    Shot(
+        "gallery",
+        _gallery_line_up,
+        page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
+        settle=3.0,
+    ),
 ]
 
 
