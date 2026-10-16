@@ -247,12 +247,15 @@ EXIT_WAIT = 2.0  # s
 # then start the next rhythm as learned; "fade" to home and wait until it is calm, then fade the next rhythm in.
 STYLES = ("hold", "fade")
 EXITS = ("fade", "hold")  # leaving a turn, the same two ways
-# A turn's walking version is dropped (the robot steadying first) only if that falls at least DROP_MARGIN times fewer
-# in the turn's switch_checks: one fall in about 85 sequences is noise. Dropped on any fall more, the turns of 3 of 6
-# imported A1 walks went (1 to 4 falls against 0 to 3 steadying first) and their 1 s turns after walking slowed to
-# about half the rate (one from 121% and 95% of it to 52% and 44%), while the bench's falls stayed the same: 35 in
-# 1200 sequences either way (scripts/rhythm_bench.py leads). Those of 3 template dog walks, dropped on 2 to 4 more,
-# fell 22 times in the bench when put back.
+# A turn's walking version that falls DROP_MARGIN times or more in the turn's switch_checks is dropped (the robot
+# steadying first, as before turns began out of the walk), unless steadying first falls more; one fall in about 85
+# sequences is noise. Dropped on any fall more than steadying first, the turns of 3 of 6 imported A1 walks went (1 to 4
+# falls against 0 to 3) and their 1 s turns after walking slowed to about half the rate (one from 121% and 95% of it to
+# 52% and 44%), while the bench's falls stayed the same: 35 in 1200 sequences either way (scripts/rhythm_bench.py
+# leads). Dropped only on 2 or more falls than steadying first, a template dog walk's left turn that fell twice, as
+# often as steadying first, was kept and fell in 4 of its 100 bench sequences (left by holding home instead, 8),
+# steadying first in none; those of 3 other dog walks, dropped on 2 to 4 falls more, fell 22 times in the bench when
+# put back.
 DROP_MARGIN = 2  # falls
 
 
@@ -450,18 +453,17 @@ def _turn_switching(
     model: mujoco.MjModel, robot: str, walk: SavedWalk, side: str, sign: float, enough: int | None
 ) -> tuple[int, dict[str, Any], list[float]]:
     """The way into and out of one turn, checked on its switch_checks (counting up to `enough` falls): it begins with
-    its walking version straight out of the walk, unless steadying first tips the robot over at least DROP_MARGIN
-    times fewer; either way it is left the way that tips it over least (EXITS, the style's own first, winning a tie).
-    Its falls, its fields, and its first-second angles."""
+    its walking version straight out of the walk if that falls fewer than DROP_MARGIN times, or fewer than steadying
+    first; else the robot steadies first. Either way it is left the way that tips it over least (EXITS, the style's
+    own first, winning a tie). Its falls, its fields, and its first-second angles."""
     walking = getattr(walk, f"turn_{side}_walking")
-    best: tuple[int, dict[str, Any], list[float]] | None = None
-    if walking is not None:
-        best = _turn_exit(model, robot, walk, side, sign, walking, getattr(walk, f"turn_{side}_walking_at"), enough)
-        if best[0] < DROP_MARGIN:  # steadying first cannot fall that much less
-            return best
-    decides = enough if best is None else best[0] - DROP_MARGIN + 1  # counting steadying's falls only this far
-    steady = _turn_exit(model, robot, walk, side, sign, None, None, decides)
-    return steady if best is None or steady[0] <= best[0] - DROP_MARGIN else best
+    if walking is None:
+        return _turn_exit(model, robot, walk, side, sign, None, None, enough)
+    best = _turn_exit(model, robot, walk, side, sign, walking, getattr(walk, f"turn_{side}_walking_at"), enough)
+    if best[0] < DROP_MARGIN:  # one fall is noise
+        return best
+    steady = _turn_exit(model, robot, walk, side, sign, None, None, best[0] + 1)  # counting until it falls more
+    return best if steady[0] > best[0] else steady
 
 
 def _turn_exit(
