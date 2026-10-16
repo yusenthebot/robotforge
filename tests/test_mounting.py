@@ -5,6 +5,7 @@ Offline against the Menagerie stand-ins in tests/fixtures/menagerie, like test_l
 
 import json
 import os
+import re
 from pathlib import Path
 
 import mujoco
@@ -15,9 +16,12 @@ from mcp import Client
 from robotforge import tool_input
 from robotforge.behaviors import Kind
 from robotforge.cli import find_free_port
-from robotforge.design.world import World, compile_world
+from robotforge.design import library, mounting
+from robotforge.design.templates.base import BuiltRobot
+from robotforge.design.world import MountEntry, World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
+from robotforge.sim.geometry import lowest_point
 from robotforge.sim.session import SimSession
 
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
@@ -89,20 +93,88 @@ def test_an_arm_rides_on_top_of_a_dogs_back(pg):
 def test_a_mount_rests_on_the_surface_under_it_not_on_a_shells_bounding_box():
     """Regression: the top came from the bounding boxes of the shapes over the middle, and the real Go2's shell is
     curved, so a PiPER floated 3 cm over its back. Rays dropped onto the shapes find the surface itself."""
-    from robotforge.design import mounting
-
     spec = mujoco.MjSpec.from_string(
         """<mujoco><worldbody><body name="trunk"><freejoint/>
         <geom type="box" size="0.2 0.1 0.04"/>
-        <geom type="box" size="0.2 0.05 0.005" pos="0 0 0.045" euler="0 25 0" contype="0" conaffinity="0" group="2"/>
+        <geom type="box" size="0.3 0.1 0.005" pos="0 0 0.1" euler="0 25 0" contype="0" conaffinity="0" group="2"/>
         </body></worldbody></mujoco>"""
     )
-    top = mounting._top(spec, {})
-    # The slanted plate's bounding box reaches 0.13 m. Its top face passes 0.005 m above its centre (0.045 m) and drops
-    # by tan(25 deg) per metre along x: at the footprint's back edge (x = -0.03 m) it is 6.5 cm high.
+    _, top, _, _ = mounting._on_top(spec, {}, [], 0.03)
+    # The slanted plate's bounding box reaches 0.23 m. Its top face passes 0.005 m above its centre (0.1 m) and drops
+    # by tan(25 deg) per metre along x. Sloping the same everywhere, nowhere is flatter than over the centre of mass
+    # (x = 0), and there the highest point under the base is at its back edge (x = -0.03 m), 12 cm high.
     a = np.radians(25)
-    surface = 0.045 + 0.005 * np.cos(a) + (0.03 + 0.005 * np.sin(a)) * np.tan(a)
-    assert top[2] == pytest.approx(surface, abs=1e-4) and top[2] < 0.07
+    surface = 0.1 + 0.005 * np.cos(a) + (0.03 + 0.005 * np.sin(a)) * np.tan(a)
+    assert top[2] == pytest.approx(surface, abs=1e-4) and top[2] < 0.13
+
+
+def _carrier(xml: str) -> BuiltRobot:
+    return BuiltRobot(spec=mujoco.MjSpec.from_string(xml), floating=True)
+
+
+def _base_bottom(built: BuiltRobot, mount: str = "arm") -> float:
+    """The lowest point of what a mount's base looks like, in its carrier's frame (the carrier stands at the origin)."""
+    model = built.spec.compile()
+    data = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, data)
+    base = next(b for b in range(model.nbody) if model.body(b).name.startswith(f"{mount}/"))
+    return min(float(lowest_point(model, data, g)[2]) for g in mounting._surface(model, [base]))
+
+
+# Spot's back: what you see (its yellow shell), and a collision box 9 mm above it that nobody sees.
+SHELL_AND_BOX = """<mujoco><worldbody><body name="body"><freejoint/>
+    <geom type="box" size="0.3 0.1 0.04" contype="0" conaffinity="0" group="2"/>
+    <geom type="box" size="0.3 0.1 0.049" group="3"/>
+    </body></worldbody></mujoco>"""
+
+
+def test_a_mount_rests_on_what_you_see_not_on_a_hidden_collision_box():
+    """Regression: a Z1 on Spot rested on its invisible collision box and hovered 9 mm over the shell, and shifting it
+    down to the shell was refused, measured against that box. A mount and the body it is welded to never touch in the
+    simulation; only the looks matter."""
+    piper = [MountEntry.model_validate({"library": "piper"})]
+    built = mounting.attach(_carrier(SHELL_AND_BOX), piper, "spot")
+    assert _base_bottom(built) == pytest.approx(0.04, abs=5e-4)
+    sunk = [MountEntry.model_validate({"library": "piper", "shift": [0, 0, -0.009]})]
+    with pytest.raises(ValueError, match=r"mount 'arm' sits 9 mm inside spot \(body\) at the home pose; shift "):
+        mounting.attach(_carrier(SHELL_AND_BOX), sunk, "spot")
+
+
+def test_a_narrow_knob_does_not_hold_a_mount_up():
+    """Regression: resting on the highest point at the middle, a Z1 perched on the 13 mm payload knob of Spot's back.
+    It stands beside the knob, flat on the back."""
+    box = '<geom type="box" size="0.3 0.1 0.049" group="3"/>'
+    knob = SHELL_AND_BOX.replace(box, '<geom type="box" size="0.015 0.02 0.0065" pos="0 0 0.0465"/>')
+    built = mounting.attach(_carrier(knob), [MountEntry.model_validate({"library": "piper"})], "spot")
+    assert _base_bottom(built) == pytest.approx(0.04, abs=5e-4)
+
+
+@pytest.mark.parametrize(
+    "carrier, mount, at",
+    [("go2", "piper", "base"), ("op3", "so_arm100", "head_pan_link")],
+)
+def test_the_shift_an_overlap_refusal_suggests_lifts_the_mount_clear(carrier, mount, at):
+    """Regression: the hint lifted a mount by how deep it sat from where it would be with no shift, so following it on a
+    G1 left a PiPER stuck 117 mm inside the torso. The shift it suggests now is one that was tried."""
+    entry = {"library": mount, "at": at}
+    with pytest.raises(ValueError, match=r"shift \[([-\d., ]+)\] lifts it clear") as refused:
+        mounting.attach(library.build(carrier), [MountEntry.model_validate(entry)], carrier)
+    shift = [float(v) for v in re.search(r"shift \[([-\d., ]+)\]", str(refused.value)).group(1).split(",")]
+    built = mounting.attach(library.build(carrier), [MountEntry.model_validate({**entry, "shift": shift})], carrier)
+    assert any(f"mounted on {at}" in note for note in built.notes)
+
+
+def test_a_mount_that_lifting_cannot_free_is_told_to_go_elsewhere():
+    """Mounted at a humanoid's middle (inside its torso), lifting it only runs it into the head."""
+    entry = MountEntry.model_validate({"library": "so_arm100", "at": "body_link"})
+    with pytest.raises(ValueError, match="lifting it does not get it clear; mount it somewhere else with at"):
+        mounting.attach(library.build("op3"), [entry], "op3")
+
+
+def test_on_a_humanoid_top_is_its_head(pg):
+    """Regression: on top of a humanoid's main body (its pelvis) is inside its torso, and a mount there was refused."""
+    result = pg.add_robot("op3", library="op3", mounts=[{"library": "so_arm100"}])
+    assert "op3: arm: SO-ARM100 mounted on top of head_pan_link" in result["notes"]
 
 
 def test_the_dog_still_walks_with_the_arm_on_its_back(pg):
@@ -250,6 +322,15 @@ def test_an_arm_without_a_gripper_will_not_pick_and_says_how_to_mount_one(pg):
         pg.behaviors.pick_and_place("ur", "cube", [0.3, -0.2])
 
 
+@pytest.mark.parametrize("carrier", ["panda", "go2"])
+def test_a_gripper_goes_only_on_a_bare_flange_unless_told_where(pg, carrier):
+    """Regression: with no flange to go on, a gripper went on top: of a Panda's base, beside its own hand, or on a dog's
+    back, where it is a dead weight."""
+    with pytest.raises(ValueError, match=f"goes on the bare flange of an arm, and {carrier} has none"):
+        pg.add_robot(carrier, library=carrier, mounts=[{"library": "robotiq_2f85"}])
+    pg.add_robot(carrier, library=carrier, mounts=[{"library": "robotiq_2f85", "at": "top"}])  # said so: it goes
+
+
 def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
     with pytest.raises(ValueError, match="at 'tool' needs an arm with a bare flange"):
         pg.add_robot("go2", library="go2", mounts=[{"library": "robotiq_2f85", "at": "tool"}])
@@ -259,7 +340,7 @@ def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
 
 
 def test_a_mount_inside_its_carrier_is_refused_with_the_overlap(pg):
-    with pytest.raises(ValueError, match=r"mount .arm. sits \d+ mm inside go2 at the home pose; move it with shift"):
+    with pytest.raises(ValueError, match=r"mount 'arm' sits 57 mm inside go2 \(base\) at the home pose; shift \["):
         pg.add_robot("go2", library="go2", mounts=[{"library": "piper", "at": "base"}])
     assert pg.current_world().robots == []  # nothing half-added
 

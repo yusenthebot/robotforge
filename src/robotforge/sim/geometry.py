@@ -10,9 +10,19 @@ import numpy as np
 G = mujoco.mjtGeom
 
 
+# Geoms in groups from this one up are hidden, as in MuJoCo's own viewer and ours (scene.VISIBLE_GROUP_LIMIT):
+# Menagerie puts its collision shapes in group 3.
+VISIBLE_GROUPS = 3
+
+
 def collides(model: mujoco.MjModel, geom: int) -> bool:
     """True for geoms that take part in contacts (not purely visual)."""
     return bool(model.geom_contype[geom] or model.geom_conaffinity[geom])
+
+
+def visible(model: mujoco.MjModel, geom: int) -> bool:
+    """True for geoms that are drawn: what a robot looks like (visual meshes, or shapes that are both)."""
+    return int(model.geom_group[geom]) < VISIBLE_GROUPS
 
 
 def lowest_point(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> np.ndarray:
