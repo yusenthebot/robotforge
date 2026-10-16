@@ -537,10 +537,18 @@ class BehaviorManager:
         far = {("target" if b.split()[-1] == "place" else "object"): points[b.split()[-1]] for b in exc.bad}
         away = " and ".join(f"{np.linalg.norm(p - base):.2f}" for p in far.values())
         one = len(far) == 1
+        # Within its reach the gripper can still fail to point down there (too close to the base, too low or too
+        # high): "move it nearer" would then send the agent the wrong way.
+        beyond = all(np.linalg.norm(p - base) > 0.97 * reach for p in far.values())
+        fix = (
+            f"move {'it' if one else 'them'} nearer"
+            if beyond
+            else "that is within its reach, but not with the gripper pointing down there: move "
+            f"{'it' if one else 'them'} a little further from the base or nearer the height of the arm's shoulder"
+        )
         text = (
             f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
-            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; "
-            f"move {'it' if one else 'them'} nearer"
+            f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; {fix}"
         )
         if "target" in far and (not isinstance(target, str) or NUMBER_LIST.fullmatch(target)):  # not a named object
             text += wording.in_meters(target_at[:2], float(np.linalg.norm(target_at - base)), reach)
