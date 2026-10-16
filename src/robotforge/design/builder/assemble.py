@@ -34,6 +34,7 @@ from robotforge.design.visuals import parts as P
 RANGE_DIST = 1 << int(mujoco.mjtRayDataField.mjRAYDATA_DIST)
 LINEAR_SATURATION = 0.005  # m of position error at which a linear actuator pushes with full force
 LOOKS_OUT = 0.7  # |cos| of the angle between a sensor's view and its face's normal above which it looks out of it
+STANDS_UP = 0.5  # cos of the angle between a face's normal and the robot's up from which a module stands on it
 PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead of swinging forever
 WHEEL_DAMPING = 0.002
 INVISIBLE = [0.0, 0.0, 0.0, 0.0]
@@ -466,6 +467,11 @@ class _Mount:
     seat: np.ndarray  # the same spot on the drawn shell (a hinged link is drawn tapered, not as its capsule)
     along: np.ndarray | None  # which way a board's long side runs
 
+    @property
+    def on_top(self) -> bool:
+        """On a face that looks up (within 60 degrees), where a module can stand."""
+        return self.normal is not None and float(self.normal @ self.up) >= STANDS_UP
+
     def lift(self, half_width: float, half_height: float, frame: np.ndarray) -> np.ndarray | None:
         """Where a module that looks along its face (a camera on top looking forward) stands so it sits on the
         face instead of halfway into it: its middle raised by its half size across the face. None when it
@@ -525,10 +531,11 @@ def _add_sensor(
         spec.add_sensor(name=name, type=S.mjSENS_TOUCH, objtype=OBJ.mjOBJ_SITE, objname=name)
         return
     if sensor.type == "camera":
-        # A camera on a face it does not look out of (on top, looking forward) stands on that face: from
-        # halfway into the shell it saw the inside of the robot.
+        # A camera on top that looks along it (forward) stands on the top, like a roof camera, and sees
+        # over it. Anywhere else the camera stays on its point, its module sunk into the face round it:
+        # hung under a belly or off a side it would mostly film the robot itself, or the floor from below.
         frame = looks.camera_frame(look, up)
-        lifted = mount.lift(looks.CAMERA_HALF, looks.CAMERA_HALF, frame)
+        lifted = mount.lift(looks.CAMERA_HALF, looks.CAMERA_HALF, frame) if mount.on_top else None
         eye = where if lifted is None else lifted
         body.add_camera(name=name, pos=eye.tolist(), xyaxes=_camera_axes(look), fovy=sensor.fov)
         # The camera's mass, where it has always been (drawn as the board camera round the camera point).

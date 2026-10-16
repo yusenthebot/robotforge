@@ -507,3 +507,29 @@ def test_a_lead_screw_with_nothing_near_its_far_end_ends_free():
     }
     assert highest["r/rf_dark"] < top + 0.005  # the pan, the vent, the motor: no bracket up in the air
     assert highest["r/rf_metal"] < top + 0.08 + 0.0056 + 0.001  # the screw ends level with the nut at full stroke
+
+
+ROVER = {  # a low rover: 19 mm from the floor to its belly
+    "color": "blue",
+    "base": {"shape": "box", "size": [0.24, 0.16, 0.05]},
+    "parts": [
+        {"name": "left_wheel", "at": [0.0, 0.095, -0.012], "shape": "wheel", "size": [0.065, 0.025], "mirror": True},
+        {"name": "caster", "at": [-0.09, 0, -0.025], "shape": "caster", "size": [0.016]},
+        {"name": "caster2", "at": [0.09, 0, -0.025], "shape": "caster", "size": [0.016]},
+    ],
+}
+
+
+@pytest.mark.parametrize("face", ["bottom", "left"])
+def test_a_camera_under_or_beside_its_robot_stays_on_its_point(needs_gl, face):
+    """Only a camera on top stands on its face. One on the bottom looking forward was moved out of the face by
+    half its housing: under a low rover it hung 10.5 mm lower and the robot's belly filled 42 % of its picture
+    (with less ground clearance it went below the floor). One on a side looked along its own side panel. Both
+    stay where the camera point is, as before the dressing, and see out of the robot."""
+    build = copy.deepcopy(ROVER)
+    build["base"]["sensors"] = [{"type": "camera", "at": face, "direction": "forward"}]
+    model = _compile(build)
+    cam = model.camera("r/base_cam").id
+    point = {"bottom": [0.0, 0.0, -0.025], "left": [0.0, 0.08, 0.0]}[face]
+    assert np.allclose(model.cam_pos[cam], point)
+    assert _own_pixels(model, cam) <= 0.015 * 120 * 160
