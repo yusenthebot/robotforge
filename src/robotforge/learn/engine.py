@@ -235,7 +235,8 @@ class Lesson:
     summary: Text = {}
     minutes: int = 10
     # {"max_speed", "turn"}: the keyboard drives the lesson's robot. Keys that steer something else (a gripper's
-    # target) add "label" (Text: what they move) and "robot": False (no drive ring around the robot).
+    # target) add "label" (Text: what they move) and "robot": False (no drive ring around the robot); on_drive then
+    # gets velocities along the world's x and y, which the viewer turns from where the keys point on screen.
     drive: dict[str, Any] | None = None
     controls: tuple[Control, ...] = ()
     plots: tuple[Plot, ...] = ()

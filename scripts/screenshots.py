@@ -378,6 +378,26 @@ _CARRYING = """
 """
 
 
+# W A S D in the imitation lesson go the way they point on screen (in the world's axes A moved the ball right from
+# this camera): hold A, then W, and fail the shot if the ball went another way.
+_KEYS = """
+    await sleep(800);
+    const hold = async (key) => {
+        const at = rf.screenOfPoint(live().target);
+        window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+        await sleep(600);
+        window.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+        await sleep(400);
+        const to = rf.screenOfPoint(live().target);
+        return [to[0] - at[0], to[1] - at[1]];
+    };
+    const [ax, ay] = await hold("a");
+    const [wx, wy] = await hold("w");
+    if (!(ax < -20 && Math.abs(ay) < -ax / 2)) throw new Error(`A moved the ball ${ax}, ${ay} px: not left`);
+    if (!(wy < -10 && Math.abs(wx) < -wy / 2)) throw new Error(`W moved the ball ${wx}, ${wy} px: not up`);
+"""
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -417,6 +437,7 @@ SHOTS = [
     ),
     Shot("lesson_imitation_correct", _nothing, page=_imitation("correct"), settle=1.0),
     Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
+    Shot("lesson_imitation_keys", _nothing, page=_lesson("imitation", _TEACH, _KEYS), settle=0.3),
 ]
 
 
