@@ -107,7 +107,7 @@ def scorpion() -> dict[str, Any]:
                 "joint": {"range": [-80, 80], "home": -20},
                 "size": [0.022, 0.09],
                 "direction": "forward",
-                "color": "#b4532a",
+                "color": "main",
             },
             {
                 "name": "tibia",
@@ -137,7 +137,7 @@ def scorpion() -> dict[str, Any]:
                 "actuator": {"model": "sts3215", "gear": 2},
                 "size": [0.034, 0.15],
                 "direction": "up",
-                "color": "#b4532a",
+                "color": "main",
             },
             {
                 "name": "tail_2",
@@ -147,7 +147,7 @@ def scorpion() -> dict[str, Any]:
                 "actuator": {"model": "sts3215", "gear": 2},
                 "size": [0.03, 0.15],
                 "direction": "up",
-                "color": "#b4532a",
+                "color": "main",
             },
             {
                 "name": "tail_3",
@@ -156,7 +156,7 @@ def scorpion() -> dict[str, Any]:
                 "joint": {**tail, "home": 60},
                 "size": [0.026, 0.13],
                 "direction": "up",
-                "color": "#b4532a",
+                "color": "main",
             },
             {
                 "name": "tail_4",

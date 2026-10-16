@@ -50,7 +50,7 @@ def twin_arm() -> dict[str, Any]:
                 "shape": "box",
                 "size": [0.09, 0.12, 0.07],
                 "direction": "up",
-                "color": accent,
+                "color": "main",
                 "sensors": [
                     {"type": "camera", "name": "left_eye", "at": [0.045, 0.028, 0.035]},
                     {"type": "camera", "name": "right_eye", "at": [0.045, -0.028, 0.035]},
@@ -94,7 +94,7 @@ def tentacle() -> dict[str, Any]:
             "size": [round(0.054 - 0.028 * share, 3), round(0.078 - 0.026 * share, 3)],
             "mass": round(0.05 - 0.025 * share, 3),  # thin-walled shells
             "direction": "up",
-            "color": "#7a4fbf" if i % 2 == 0 else "#a98ad8",
+            "color": "main" if i % 2 == 0 else "#a98ad8",
         }
         if i < 3:  # stiff joint modules where the most weight hangs on them
             segment["actuator"] = "bldc_joint"

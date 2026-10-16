@@ -71,6 +71,17 @@ def test_a_design_is_added_by_name_and_kept_as_its_parts(pg):
     assert "right_shin" in [pg.session.model.body(b).name.split("/")[-1] for b in range(pg.session.model.nbody)]
 
 
+def test_recoloring_a_design_recolors_its_accent_parts(pg):
+    from robotforge.design import components
+
+    pg.add_robot("hopper", design="wheel_biped")
+    pg.update_part("hopper", "robot", {"color": "purple"})
+    m = pg.session.model
+    cover = m.body("hopper/cover").id
+    rgba = [m.geom_rgba[g] for g in range(m.ngeom) if m.geom_bodyid[g] == cover]
+    assert any(np.allclose(c, components.color("purple"), atol=1e-3) for c in rgba)
+
+
 def test_a_design_comes_alone_and_a_wrong_name_says_what_there_is(pg):
     with pytest.raises(PlaygroundError, match="leave out template.*update_part"):
         pg.add_robot("x", template="arm", design="centaur")

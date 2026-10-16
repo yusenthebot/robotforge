@@ -34,7 +34,7 @@ def wheel_biped() -> dict[str, Any]:
                 "shape": "box",
                 "size": [0.12, 0.15, 0.014],
                 "direction": "up",
-                "color": "orange",
+                "color": "main",
             },
             {
                 "name": "left_thigh",
@@ -261,7 +261,7 @@ def mars_rover() -> dict[str, Any]:
                 "shape": "cylinder",
                 "size": [0.075, 0.008],
                 "direction": "up",
-                "color": GOLD,
+                "color": "main",
             },
             # The sampling arm, built from parts on the front of the body so it reaches down to the ground (a template
             # arm on the deck cannot bend below its own base). Stowed upright and folded between the front wheels.
