@@ -436,6 +436,40 @@ def test_pushed_off_its_path_it_plans_again_and_still_arrives(pg):
     assert result["arrived"] and result["replans"] >= 1, result
 
 
+def test_a_robot_already_next_to_the_object_turns_to_face_it(pg):
+    """Regression: next to the object already, the plan was one point, and the follower read a segment that was not
+    there: IndexError at every step, and as the trip stayed attached, the simulation stood still for every robot.
+    Here the rover faces away, and it is nudged before the first step, as one still slowing down would be."""
+    pg.add_robot("rover", template="rover", pos=[0.0, 0.0], yaw=180)
+    pg.add_object("crate", shape="box", pos=[0.32, 0.0], size=[0.12, 0.12, 0.12], mass=5.0)
+    pg.run_fast(lambda: False, 0.5)
+    trip = pg.behaviors.navigate("rover", "crate", seconds=20)
+    assert len(trip.plan.points) == 2 and trip.plan.length < 0.05
+    m, d = pg.session.model, pg.session.data
+    adr = m.jnt_qposadr[m.body_jntadr[nav_map.root_body(m, "rover")]]
+    d.qpos[adr + 1] += 0.12
+    mujoco.mj_forward(m, d)
+    pg.run_fast(lambda: trip.done, 21)
+    result = trip.result()
+    assert result["arrived"], result
+    assert abs(pg.behaviors.pose("rover")["heading_deg"]) < 30  # it turned round to face the crate
+
+
+def test_a_trip_that_breaks_ends_and_the_world_goes_on(pg, monkeypatch):
+    """A bug in following a path ends that trip with why "error"; it must never stop the simulation."""
+    pg.add_robot("rover", template="rover")
+    trip = pg.behaviors.navigate("rover", [2.0, 0.0])
+
+    def broken(*args):
+        raise IndexError("a bug")
+
+    monkeypatch.setattr(trip, "_follow", broken)
+    pg.run_fast(lambda: False, 1.0)
+    assert pg.session.data.time > 0.9
+    assert trip.done and trip.result()["why"] == "error" and "a bug" in trip.result()["note"]
+    assert pg.behaviors.trip("rover") is None
+
+
 def test_something_the_map_did_not_show_is_driven_round(pg):
     pg.add_robot("rover", template="rover", pos=[-1.5, 0.0], yaw=0)
     pg.add_object("crate", shape="box", pos=[0.0, 3.0], size=[0.5, 0.5, 0.3], mass=20.0)

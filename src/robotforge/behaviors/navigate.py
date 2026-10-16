@@ -14,6 +14,7 @@ goes onto it).
 
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,6 +27,8 @@ from robotforge.behaviors import nav_grid, nav_map
 from robotforge.behaviors.nav_grid import Grid, astar, clearance, pull_string
 from robotforge.behaviors.nav_map import OBSTACLE, SLOPE, STEP, Body, NavMap, StaticLayer
 from robotforge.sim.geometry import collides
+
+log = logging.getLogger(__name__)
 
 RATE_HZ = 20.0  # follower updates per sim second; the walker under it runs at its own rate
 ARRIVE_TOL = 0.08  # m from the final point that counts as there
@@ -248,6 +251,11 @@ class Planner:
             else:
                 points.append(d.point)
         pts = _dedupe(np.array(points, float))
+        if len(pts) == 1:
+            # Already where it was sent (next to an object, in its own cell): a path of one point has no segment,
+            # and the follower, which reads the segment it is on, raised IndexError at every step, freezing the
+            # simulation for every robot. A segment of no length leaves it to arrive, or to face the object.
+            pts = np.vstack([pts, pts])
         heights = np.array([nav.ground_at(x, y) for x, y in pts])
         plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact)
         if not exact:
@@ -561,6 +569,7 @@ class Navigator:
     traveled: float = 0.0
     end_time: float | None = None
     first_length: float = field(init=False)
+    _last_t: float | None = field(default=None, init=False)  # sim time of its last update
     _seg: int = field(default=0, init=False)
     _spinning: bool = field(default=False, init=False)
     _best_left: float = field(default=math.inf, init=False)
@@ -601,7 +610,17 @@ class Navigator:
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         if self.done:
             return
+        try:
+            self._update(data)
+        except Exception as exc:
+            # A bug in following a path must end this trip, not every step of the simulation: a controller that
+            # raises stays attached and raises again at the next step, and the world stands still for all robots.
+            log.exception("%s's trip failed", self.robot)
+            self._finish(float(data.time), "stopped", "error", f"the trip broke off on an internal error: {exc}")
+
+    def _update(self, data: mujoco.MjData) -> None:
         t = float(data.time)
+        self._last_t = t
         root = self.planner.root
         xy = data.xpos[root][:2].copy()
         rot = data.xmat[root]
@@ -882,13 +901,19 @@ class Navigator:
 
     # -- the outcome --
 
+    def _ended_at(self) -> float:
+        """When it ended, or when it was last updated if it has not (yet): never NaN, which is not JSON."""
+        if self.end_time is not None:
+            return self.end_time
+        return self._last_t if self._last_t is not None else self.start_time
+
     def result(self) -> dict[str, Any]:
         out: dict[str, Any] = {
             "arrived": self.arrived,
             "destination": self.planner.destination.describe(),
             "path_m": round(self.first_length, 2),
             "distance_m": round(self.traveled, 2),
-            "time_s": round((self.end_time if self.end_time is not None else math.nan) - self.start_time, 2),
+            "time_s": round(self._ended_at() - self.start_time, 2),
         }
         if self.replans:
             out["replans"] = self.replans
