@@ -71,9 +71,19 @@
      "observed": "red_cube"
     },
     {
-     "name": "it ended in a box or bin",
+     "name": "red_cube starts outside the bin",
      "ok": true,
-     "observed": "red_cube last at [0.0551, 0.2718, 0.0249]"
+     "observed": "saved at [0.25, -0.12]"
+    },
+    {
+     "name": "an arm call handled it",
+     "ok": true,
+     "observed": "pick_and_place"
+    },
+    {
+     "name": "red_cube ended in a bin",
+     "ok": true,
+     "observed": "last at [0.0551, 0.2718, 0.0249], bins ['box']"
     }
    ],
    "tool_calls": 10,
@@ -282,24 +292,24 @@
    "passed": true,
    "criteria": [
     {
-     "name": "a robot and a rock",
+     "name": "a rover and a rock",
      "ok": true,
-     "observed": "mars_rover_rock/mars_rover, big_rock"
+     "observed": "mars_rover_rock/mars_rover (rover), big_rock"
     },
     {
      "name": "rock >= 1.0 m away at the start",
      "ok": true,
-     "observed": "2.40 m"
+     "observed": "2.23 m"
     },
     {
-     "name": "ended within 0.6 m of it",
+     "name": "ended within 0.5 m of it",
      "ok": true,
-     "observed": "0.47 m"
+     "observed": "0.30 m from its outline (0.47 m from its center)"
     },
     {
      "name": "upright at the end",
      "ok": true,
-     "observed": "None"
+     "observed": "True"
     }
    ],
    "tool_calls": 16,
@@ -382,7 +392,6 @@
    "lang": "en",
    "covers": [
     "edit a world",
-    "recover from a mistake",
     "pick and place"
    ],
    "passed": true,
@@ -393,9 +402,19 @@
      "observed": "blue"
     },
     {
-     "name": "the green cube ended in the bin",
+     "name": "green_cube starts where it was",
      "ok": true,
-     "observed": "last at [0.2528, -0.18, 0.0249], containers ['bin']"
+     "observed": "saved at [0.25, 0.1]"
+    },
+    {
+     "name": "an arm call handled it",
+     "ok": true,
+     "observed": "pick_and_place"
+    },
+    {
+     "name": "green_cube ended in a bin",
+     "ok": true,
+     "observed": "last at [0.2528, -0.18, 0.0249], bins ['bin']"
     },
     {
      "name": "arm, cube and ball still there",
