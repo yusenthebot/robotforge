@@ -500,17 +500,33 @@ def test_real_new_walkers_walk_ten_seconds(pg, name, speed, distance):
     assert end["position"][0] - start[0] > distance and abs(end["position"][1] - start[1]) < 0.5 and end["upright"]
 
 
+# Cube and bin (x, y) around an arm's base, for an arm facing +x: in front, from the front to either side, and long
+# carries across it. An xArm 7 gripping at its fingertips dropped the cube on four of these.
+PICK_LAYOUTS = {
+    "front": ([0.4, 0.15], [0.35, -0.25]),
+    "to_left": ([0.35, 0.0], [0.0, 0.4]),
+    "to_right": ([0.35, 0.0], [0.0, -0.4]),
+    "carry_left": ([0.3, -0.3], [0.3, 0.3]),
+    "carry_right": ([0.3, 0.3], [0.3, -0.3]),
+    "diagonal": ([0.45, -0.1], [0.2, 0.35]),
+}
+# The arms with a gripper that pick from the floor: (robot, arm, mounts, base (x, y), 1 facing +x or -1 facing -x).
+PICKERS = {
+    "panda": ("panda", "bot", None, (0.0, 0.0), 1),
+    "xarm7": ("xarm7", "bot", None, (0.0, 0.0), 1),
+    "ur5e_2f85": ("ur5e", "bot", [{"library": "robotiq_2f85"}], (0.0, 0.0), 1),
+    "aloha_left": ("aloha", "bot/left", None, (-0.469, -0.019), 1),
+    "aloha_right": ("aloha", "bot/right", None, (0.469, -0.019), -1),
+}
+
+
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
-@pytest.mark.parametrize(
-    "name, arm, cube, bin_at",
-    [
-        ("xarm7", "bot", [0.4, 0.15], [0.35, -0.25]),
-        ("aloha", "bot/left", [-0.15, 0.1], [-0.1, -0.15]),
-        ("aloha", "bot/right", [0.15, -0.1], [0.1, 0.15]),
-    ],
-)
-def test_real_new_arms_pick_a_cube_into_a_bin(pg, name, arm, cube, bin_at):
-    pg.add_robot("bot", library=name)
+@pytest.mark.parametrize("layout", PICK_LAYOUTS)
+@pytest.mark.parametrize("picker", PICKERS)
+def test_real_arms_pick_a_cube_into_a_bin(pg, picker, layout):
+    name, arm, mounts, base, facing = PICKERS[picker]
+    cube, bin_at = ([base[0] + facing * x, base[1] + y] for x, y in PICK_LAYOUTS[layout])
+    pg.add_robot("bot", library=name, mounts=mounts)
     pg.add_object("cube", shape="box", size=[0.04] * 3, pos=cube)
     pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.08], pos=bin_at, color="blue")
     _run(pg, 1.0)

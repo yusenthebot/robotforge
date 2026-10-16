@@ -272,7 +272,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "BSD-3-Clause",
             "ufactory_xarm7",
             "xarm7.xml",
-            tools=(Tool("link_tcp", gripper="gripper", closes_high=True),),
+            # link_tcp is the fingertips; the pads end 2 mm short of them and reach 3.9 cm up. Grasped at the tips, a
+            # 4 cm cube was held by its top 18 mm and slipped out on 4 of 6 carries. 15 mm deeper the pads hold 2.4 cm
+            # of it and still clear the floor by 7 mm: 6 of 6.
+            tools=(Tool("link_tcp", -0.015, gripper="gripper", closes_high=True),),
         ),
         LibraryRobot(
             "aloha",
