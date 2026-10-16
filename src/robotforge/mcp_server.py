@@ -12,6 +12,7 @@ import inspect
 import logging
 import os
 import re
+import socket
 import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -181,6 +182,14 @@ def _lean_schemas(server: MCPServer) -> None:
 
 
 def build_server(playground: Playground, port: int) -> MCPServer:
+    """The MCP server, with the viewer on `port`. Port 0 takes a free port from the system and holds it from now
+    on: a port only found free (find_free_port) can be taken by another process before the viewer listens, and
+    then the viewer exits (tests run side by side on one machine hit that)."""
+    held: socket.socket | None = None
+    if port == 0:
+        held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        held.bind((HOST, 0))
+        port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
     playground.viewer_url = f"http://{HOST}:{port}/"
@@ -213,7 +222,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             create_app(hub), host=HOST, port=port, log_level="warning", access_log=False, log_config=None
         )
         viewer = uvicorn.Server(config)
-        task = asyncio.create_task(viewer.serve())
+        task = asyncio.create_task(viewer.serve(sockets=[held] if held is not None else None))
         log.info("viewer at %s", playground.viewer_url)
         try:
             yield
@@ -221,6 +230,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             viewer.should_exit = True
             with contextlib.suppress(Exception):
                 await task
+            if held is not None:
+                held.close()
             playground.renderer.close()
 
     server = _Server(
