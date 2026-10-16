@@ -822,6 +822,23 @@ def test_two_arms_on_one_turntable_reach_without_turning_it_and_follow_it_when_i
     assert pg.session.data.qpos[turntable] == pytest.approx(np.radians(40), abs=0.02)
 
 
+def test_an_arm_folded_low_rises_before_it_swings_around_to_its_target(pg):
+    """An arm folded backward, low, swung around toward the cube at that height and ran into the wall beside it; it
+    now goes up to the carrying height first and swings around above the wall."""
+    folded = copy.deepcopy(LIFT_ARM)
+    folded["parts"][1]["robot"]["home"] = {"yaw": 180}
+    pg.add_robot("tower", build=folded)
+    pg.add_object("high", shape="table", size=[0.2, 0.2, 0.55], pos=[0.0, 0.28], fixed=True)
+    pg.add_object("low", shape="table", size=[0.2, 0.2, 0.3], pos=[0.0, -0.28], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, 0.28, 0.57])
+    pg.add_object("wall", shape="box", size=[0.12, 0.12, 0.5], pos=[-0.18, 0.18], fixed=True)  # back left
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("tower", "cube", "low")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
 def test_a_mounted_robot_starts_in_the_home_pose_its_mount_gives():
     folded = copy.deepcopy(LIFT_ARM)
     folded["parts"][1]["robot"]["home"] = {"yaw": 180, "shoulder": -30}

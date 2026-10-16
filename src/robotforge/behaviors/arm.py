@@ -18,12 +18,14 @@ from robotforge.sim.actuators import drives_joint, is_position_servo
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
 APPROACH = 0.07  # m above a grasp or place point
+RISE_MIN = 0.05  # m: a tool this far below the carrying height rises straight up before it moves across
 REACH_TOL = 0.008  # m: an IK answer further than this from the target means "cannot reach"
 RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nearest start gets stuck
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 UPRIGHT = 0.9  # an arm's first hinge turns it toward a target when its axis is this close to vertical (cosine)
+FAR_FROM_DOWN = 0.7  # cosine: a tool pointing more than 45 degrees off down moves joint by joint to a goal
 
 
 class OutOfReach(ValueError):
@@ -241,6 +243,12 @@ class ArmMotion:
         if bad:
             raise OutOfReach(self.robot, bad)
         start = self.tool_target_end()
+        # Starting low (an arm folded over the robot that carries it), go up first and across at the carrying height:
+        # swinging around at the folded height ran a picker's hand into the table beside it.
+        risen = np.array([start[0], start[1], travel_z])
+        if start[2] < travel_z - RISE_MIN and self.reach_error(risen) <= REACH_TOL:
+            self.queue.append(Waypoint(risen, self._grip("open"), self._time(start, risen), "rise"))
+            start = risen
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
@@ -283,21 +291,26 @@ class ArmMotion:
             start = data.site_xpos[self.site].copy()
             self._branch = None
             self._turn = None
+            # Where the tool points now. On a robot that drives or walks too: an arm carried folded, gripper forward,
+            # that was told it pointed down already snapped its wrist over on the first tick and the kick shoved the
+            # robot 0.25 m.
+            self._axis0 = data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
             if wp.joints is not None:
                 self._branch = (self.q.copy(), wp.joints)
             elif wp.position is not None:
                 goal, err, restarted = self._solve(wp.position)
                 if err <= REACH_TOL and self.yaw is not None:
                     self._turn = self._path_turn(start, wp.position, float(goal[self.yaw] - self.q[self.yaw]))
-                if restarted and err <= REACH_TOL:
-                    # The goal lies in another elbow or wrist branch, which no straight tool path reaches:
-                    # move joint by joint instead, as industrial arms do, slowly enough not to fling a load.
+                turned = float(self._axis0 @ DOWN) < FAR_FROM_DOWN
+                if (restarted or turned) and err <= REACH_TOL:
+                    # The goal lies in another elbow or wrist branch, which no straight tool path reaches, or the
+                    # tool starts far from pointing down (an arm folded for driving): move joint by joint instead,
+                    # as industrial arms do, slowly enough not to fling a load. Turning the wrist over along a
+                    # straight path, a folded PiPER still had it sideways on the way down and swept the cube away.
                     self._branch = (self.q.copy(), goal)
                     travel = float(np.max(np.abs(goal - self.q)))
                     wp = Waypoint(wp.position, wp.gripper, max(wp.duration, travel / JOINT_SPEED), wp.label)
             self._segment = (start, wp, t)
-            rot = data.xmat[self.chain.body].reshape(3, 3) if self.free_adr is None else None
-            self._axis0 = rot @ self.tool_axis if rot is not None else DOWN
             self.current_label = wp.label
             if wp.gripper is not None and self.gripper >= 0:
                 data.ctrl[self.gripper] = wp.gripper
