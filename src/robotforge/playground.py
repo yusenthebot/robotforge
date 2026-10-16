@@ -295,6 +295,7 @@ class Playground:
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
+        kept: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -307,9 +308,18 @@ class Playground:
             if yaw is not None:
                 robot.yaw = yaw
             if build is not None:
-                _built(robot).build = build
+                entry = _built(robot)
+                parts = (entry.build or {}).get("parts") or []
+                if "parts" in build or not parts:
+                    entry.build = build
+                else:
+                    entry.build = _merged_build(entry.build, build)
+                    kept.append(
+                        f"{robot.name}: kept its {len(parts)} parts and changed only {', '.join(build)}; a build "
+                        'without "parts" changes the fields it gives (send "parts" to replace them)'
+                    )
 
-        return _noted(self._edit(change), _yaw_note(yaw))
+        return _noted(self._edit(change), _yaw_note(yaw), *kept)
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -804,6 +814,18 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
     if max(abs(v) for v in values) / 100 <= limit:
         text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
     raise PlaygroundError(text)
+
+
+def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """A robot's build with the fields of `new` changed and its parts kept. An agent that sent
+    build={"servo": ..., "base": {...}} to change the servos of a hexapod got a bare box: a build without parts
+    was taken as the whole robot. A field that is a dict (base) is merged too, so {"base": {"mass": 0.8}} keeps
+    the base's shape and size."""
+    merged = dict(old)
+    for key, value in new.items():
+        same = isinstance(value, dict) and isinstance(old.get(key), dict)
+        merged[key] = {**old[key], **value} if same else value
+    return merged
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:

@@ -290,6 +290,21 @@ def test_built_hexapod_walks_with_a_tripod_gait(pg):
     assert end["upright"]
 
 
+def test_a_build_without_parts_changes_its_fields_and_keeps_the_legs(pg):
+    """An agent in the eval sent update_robot(build={"servo": ..., "base": {...}}) to give a hexapod stronger servos
+    and got a bare box of 1 part: a build without parts was taken as the whole robot."""
+    pg.add_robot("spider", build=HEXAPOD)
+    joints = pg.session.model.nu
+    out = pg.update_robot("spider", build={"servo": "bldc_joint", "base": {"mass": 0.8}})
+    built = pg.current_world().robots[0].build
+    assert len(built["parts"]) == len(HEXAPOD["parts"]) and pg.session.model.nu == joints
+    assert built["servo"] == "bldc_joint"
+    assert built["base"] == {**HEXAPOD["base"], "mass": 0.8}  # the size and shape it had are kept
+    assert any("kept its" in note and "servo, base" in note for note in out["notes"])
+    pg.update_robot("spider", build={**HEXAPOD, "parts": HEXAPOD["parts"][:3]})  # with parts: the whole robot
+    assert len(pg.current_world().robots[0].build["parts"]) == 3
+
+
 def test_bad_build_leaves_the_world_unchanged(pg):
     pg.add_robot("dog", build=DOG)
     bad = copy.deepcopy(DOG)
