@@ -436,19 +436,19 @@ DESIGNS = [
     Design(
         "lift_picker",
         "driving base with a lifting column and an arm with a gripper: move drives it; pick_and_place raises the "
-        "column as it needs to, so it picks off the floor or a table",
+        "column to reach tables 0.15 to 0.75 m high within 0.4 m (not the floor)",
         lift_picker,
     ),
     Design(
         "mobile_panda",
-        "a real Franka Emika Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy base that turns on the "
-        "spot: move drives it, move_arm and pick_and_place work mobile_panda/arm",
+        "a real Franka Panda arm (MuJoCo Menagerie, downloaded on first use) on a heavy base that turns on the spot: "
+        "move drives it; pick_and_place with mobile_panda/arm works the floor and tables all around",
         mobile_panda,
     ),
     Design(
         "mars_rover",
-        "six-wheel rocker-bogie rover with a camera mast and a small arm: move drives it over rough ground, "
-        "move_arm and pick_and_place work its sampling arm (mars_rover/hand)",
+        "six-wheel rocker-bogie rover with a camera mast and a small arm: move drives it over rough ground; "
+        "pick_and_place with mars_rover/hand works the ground just ahead",
         mars_rover,
     ),
     Design(

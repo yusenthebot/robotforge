@@ -236,20 +236,20 @@ def go2_arm() -> dict[str, Any]:
 DESIGNS = [
     Design(
         "centaur",
-        "four legs on the quadruped gait with a torso, a head and two arms with grippers: move walks it, move_arm "
-        "and pick_and_place work centaur/left_hand and centaur/right_hand",
+        "four legs on the quadruped gait, a torso, a head and two arms: move walks it; pick_and_place with "
+        "centaur/left_hand or centaur/right_hand works the floor in front, up to 0.3 m high",
         centaur,
     ),
     Design(
         "scorpion",
-        "six legs on the tripod gait and a tail that curls over its back to a claw: move walks it, move_arm and "
-        "pick_and_place work scorpion/claw",
+        "six legs on the tripod gait and a tail that curls over its back to a claw: move walks it; pick_and_place "
+        "with scorpion/claw works the floor around it, up to 0.3 m high",
         scorpion,
     ),
     Design(
         "go2_arm",
-        "a real Unitree Go2 carrying a real AgileX PiPER arm (both from MuJoCo Menagerie, downloaded on first use): "
-        "move walks it, move_arm and pick_and_place work go2_arm/arm",
+        "a real Unitree Go2 carrying a real AgileX PiPER arm (MuJoCo Menagerie, downloaded on first use): move walks "
+        "it; pick_and_place with go2_arm/arm works beside it, from the floor up to 0.45 m high",
         go2_arm,
     ),
 ]

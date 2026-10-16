@@ -130,14 +130,14 @@ def tentacle() -> dict[str, Any]:
 DESIGNS = [
     Design(
         "twin_arm",
-        "a torso with two arms and grippers on a turning waist, on a pedestal: move_arm and pick_and_place work "
-        "twin_arm/left_hand and twin_arm/right_hand",
+        "a torso with two arms and grippers on a turning waist, on a pedestal: pick_and_place with "
+        "twin_arm/left_hand or twin_arm/right_hand works a table 0.15 to 0.6 m high in front",
         twin_arm,
     ),
     Design(
         "tentacle",
         "an eight-segment tentacle arm that bends every way, with a gripper at its tip: move_arm and pick_and_place "
-        "work it",
+        "work the floor around it, up to 0.2 m high",
         tentacle,
     ),
 ]
