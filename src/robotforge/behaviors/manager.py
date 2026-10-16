@@ -118,10 +118,10 @@ class BehaviorManager:
                 kind = robot_kind(self.session.model, name, told.get(name))
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
-                        self._mobile_controller(name, kind, create=True)
+                        self._mobile_controller(name, kind, world, create=True)
                 elif kind in STEPPING and in_world:
                     with contextlib.suppress(BehaviorError):
-                        gait = self._mobile_controller(name, kind, create=True, walker="gait")
+                        gait = self._mobile_controller(name, kind, world, create=True, walker="gait")
                         gait.level_standing = False  # it stands as on its servos until moved (see QuadrupedGait)
                         self._standing[name] = gait
 
@@ -167,15 +167,16 @@ class BehaviorManager:
             arms = self.arms(name)
             if arms and arms != [name]:  # e.g. an arm riding on a rover: drive the robot, work the arm
                 info["arms"] = arms
-            if kind in MOBILE and self._learned_humanoid(name):  # its policy's card says, without loading it
-                learned = self.learned_walkers().get(name)
+            entry = _entry(name, world)
+            if kind in MOBILE and _learned_humanoid(entry):  # its policy's card says, without loading it
+                learned = self._learned_walkers(world).get(name)
                 if learned is not None:
                     info["max_speed"] = round(learned["max_speed"], 3)
-            elif kind in MOBILE and not self._walks(name):
+            elif kind in MOBILE and not _walks(entry):
                 info["walks"] = False  # it stands and keeps its balance, but move cannot walk it yet
             elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
-                    info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
+                    info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)
             walk = self._kept_walk_or_none(name)
             if walk is not None:
                 info["learned_walk"] = walk.describe()
@@ -230,7 +231,9 @@ class BehaviorManager:
         )
 
     def kind(self, robot: str) -> Kind:
-        world = self._world()  # read once: it comes from the file
+        return self._kind(robot, self._world())  # read once: it comes from the file
+
+    def _kind(self, robot: str, world: World | None) -> Kind:
         robot = self._resolve(robot, world)
         if "/" in robot:  # "rover/arm": an arm mounted on a robot is an arm, whatever carries it
             return Kind.ARM
@@ -254,7 +257,8 @@ class BehaviorManager:
         robot = self.resolve(robot)
         if walker is not None:
             walker = wording.match(walker, GAIT_WALKERS) or walker
-        kind = self.kind(robot)
+        world = self._world()  # read once: a keyboard drives the robot with a move every few frames
+        kind = self._kind(robot, world)
         if "/" in robot:
             owner = robot.split("/", 1)[0]
             raise BehaviorError(
@@ -266,8 +270,9 @@ class BehaviorManager:
                 raise BehaviorError(self._cannot_move(robot, kind))
         elif kind not in MOBILE:
             raise BehaviorError(self._cannot_move(robot, kind))
-        if walker in (None, "gait") and not self._walks(robot):
-            title = library.get(self._entry(robot).library).title
+        entry = _entry(robot, world)
+        if walker in (None, "gait") and not _walks(entry):
+            title = library.get(entry.library).title
             raise BehaviorError(
                 f"{robot} ({title}) has no walk yet: it stands and keeps its balance on the built-in gait, which "
                 "cannot step with it without falling. Robots that walk: list_library"
@@ -279,7 +284,7 @@ class BehaviorManager:
                 f"{robot} is {_a(kind)}; walker {walker!r} is for quadrupeds and humanoids, so leave walker out"
             )
         with self.session.lock:
-            ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
+            ctrl = self._mobile_controller(robot, kind, world, create=True, walker=walker)
             _check_standing(ctrl)
             ctrl.command(speed, turn)
             standing = self._standing.pop(robot, None)
@@ -361,21 +366,24 @@ class BehaviorManager:
             self.session.set_controller(robot, ctrl)
         return ctrl
 
-    def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
+    def _mobile_controller(self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None):
+        """The controller that walks or drives a robot: the one it has, or a new one (see MOBILE). `world` is the
+        open world as the caller read it."""
         existing = self.session.controllers.get(robot)
         if walker is None and _is_mover(existing):  # keep whatever walks it now, e.g. for WASD driving
             return existing
         if walker == RHYTHM or kind not in MOBILE:
             return self._rhythm_walker(robot, existing, create)
+        entry = _entry(robot, world)
         if walker not in (None, "gait") and kind in LEGGED:
-            return self._policy_walker(robot, walker, existing, create)
+            return self._policy_walker(robot, walker, existing, create, entry)
         if isinstance(existing, WALKERS):
             return existing
         m = self.session.model
         try:
-            if kind == Kind.HUMANOID and self._learned_humanoid(robot):
+            if kind == Kind.HUMANOID and _learned_humanoid(entry):
                 # A real humanoid with a learned walk (G1) walks with that policy only.
-                return self._policy_walker(robot, "rl", existing, create)
+                return self._policy_walker(robot, "rl", existing, create, entry)
             if kind == Kind.HUMANOID and mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/left_foot") >= 0:
                 ctrl = humanoid.for_template(m, robot, self.home_qpos())
             elif kind == Kind.HUMANOID:  # a real one (OP3, T1): legs found in its kinematic tree
@@ -392,40 +400,19 @@ class BehaviorManager:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
             raise BehaviorError(str(exc)) from exc
-        top = self._library_top_speed(robot)
+        top = library.get(entry.library).max_speed if entry is not None and entry.library else None
         if top is not None and isinstance(ctrl, (quadruped.QuadrupedGait, humanoid.HumanoidController)):
             ctrl.limit_speed(top)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
 
-    def _learned_humanoid(self, robot: str) -> bool:
-        """A humanoid from the library with a learned walking policy (like G1); others (OP3, T1, our template's)
-        stand and walk on the built-in balance gait."""
-        from robotforge.bridge import policies  # light: cards only, no onnxruntime
-
-        entry = self._entry(robot)
-        if entry is None or entry.library is None or library.get(entry.library).kind != "humanoid":
-            return False
-        return policies.for_robot(entry.library) is not None
-
-    def _walks(self, robot: str) -> bool:
-        """False for a library robot that stands and balances but has no walk yet (none at present)."""
-        entry = self._entry(robot)
-        return entry is None or entry.library is None or library.get(entry.library).walks
-
-    def _entry(self, robot: str) -> RobotEntry | None:
-        world = self._world()
-        return next((r for r in world.robots if r.name == robot), None) if world else None
-
-    def _policy_walker(self, robot: str, walker: str, existing: Any, create: bool):
+    def _policy_walker(self, robot: str, walker: str, existing: Any, create: bool, entry: RobotEntry | None):
         """A learned walking policy (ONNX, optional extra `policy`) in place of the gait."""
         from robotforge.bridge.onnx_policy import PolicyUnavailable, PolicyWalker, walker_for
 
         if isinstance(existing, PolicyWalker) and walker in ("rl", existing.spec.name):
             return existing
-        world = self._world()
-        entry = next((r for r in world.robots if r.name == robot), None) if world else None
         try:
             ctrl = walker_for(self.session.model, robot, entry.library if entry else None, walker)
         except (PolicyUnavailable, ValueError) as exc:
@@ -437,9 +424,11 @@ class BehaviorManager:
 
     def learned_walkers(self) -> dict[str, dict[str, Any]]:
         """Legged robots that have a learned walking policy: {robot: {policy, max_speed, active}}."""
+        return self._learned_walkers(self._world())
+
+    def _learned_walkers(self, world: World | None) -> dict[str, dict[str, Any]]:
         from robotforge.bridge import policies  # light: cards only, no onnxruntime
 
-        world = self._world()
         if world is None:
             return {}
         out = {}
@@ -454,11 +443,6 @@ class BehaviorManager:
                 "active": _is_policy_walker(active),
             }
         return out
-
-    def _library_top_speed(self, robot: str) -> float | None:
-        world = self._world()
-        entry = next((r for r in world.robots if r.name == robot), None) if world else None
-        return library.get(entry.library).max_speed if entry is not None and entry.library else None
 
     def stop(self, robot: str) -> dict[str, Any]:
         robot = self.resolve(robot)
@@ -481,13 +465,15 @@ class BehaviorManager:
     def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
         """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
         robot = self.resolve(robot)
-        kind = self.kind(robot)
+        world = self._world()
+        kind = self._kind(robot, world)
         if kind != Kind.HUMANOID:
             raise BehaviorError(f"{robot} is {_a(kind)}, and only humanoids strike poses; {_how_to_move(kind)}")
         if name not in humanoid.POSES:
             raise BehaviorError(f"unknown pose {name!r}; choose one of: {', '.join(humanoid.POSES)}")
         with self.session.lock:
-            ctrl = self._mobile_controller(robot, kind, create=True, walker="gait")  # poses need the built-in one
+            # Poses need the built-in controller.
+            ctrl = self._mobile_controller(robot, kind, world, create=True, walker="gait")
             if not isinstance(ctrl, humanoid.HumanoidController):
                 raise BehaviorError(f"{robot} walks with a learned policy, which has no poses")
             body_moves = any(k.drop or k.lean for k in humanoid.POSES[name][1])
@@ -541,14 +527,15 @@ class BehaviorManager:
         robot = self.resolve(robot, arm=True)  # unknown robots get the usual message
         if "/" in robot:
             return robot
-        entry = self._entry(robot)
+        world = self._world()
+        entry = _entry(robot, world)
         if entry is not None and (entry.template == "gripper" or library.kind_of(entry.library) == "gripper"):
             what = library.get(entry.library).title if entry.library else "a gripper template"
             raise BehaviorError(
                 f"{robot} is a gripper on its own ({what}), with no arm to move it; mount it on an arm's bare flange, "
                 f'e.g. add_robot with library ur5e and mounts=[{{"library": "{entry.library or "robotiq_2f85"}"}}]'
             )
-        kind = self.kind(robot)
+        kind = self._kind(robot, world)
         arms = self.arms(robot)
         if not arms:
             raise BehaviorError(f"{robot} is {_a(kind)}, not an arm, and carries none; {_how_to_move(kind)}")
@@ -800,6 +787,25 @@ def _told_kind(entry: Any) -> str | None:
     """The kind a world entry declares: its template, or for a library robot what the catalog says
     (G1's joints are not named like our template's, so its shape alone does not say humanoid)."""
     return entry.template or (library.get(entry.library).kind if entry.library else None)
+
+
+def _entry(robot: str, world: World | None) -> RobotEntry | None:
+    return next((r for r in world.robots if r.name == robot), None) if world else None
+
+
+def _learned_humanoid(entry: RobotEntry | None) -> bool:
+    """A humanoid from the library with a learned walking policy (like G1); others (OP3, T1, our template's) stand and
+    walk on the built-in balance gait."""
+    from robotforge.bridge import policies  # light: cards only, no onnxruntime
+
+    if entry is None or entry.library is None or library.get(entry.library).kind != "humanoid":
+        return False
+    return policies.for_robot(entry.library) is not None
+
+
+def _walks(entry: RobotEntry | None) -> bool:
+    """False for a library robot that stands and balances but has no walk yet (none at present)."""
+    return entry is None or entry.library is None or library.get(entry.library).walks
 
 
 def _carrier(arm: str) -> str | None:

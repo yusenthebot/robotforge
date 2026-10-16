@@ -16,7 +16,7 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from robotforge import modes, wording
 from robotforge.behaviors.manager import BehaviorManager
@@ -306,6 +306,7 @@ class Playground:
         mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
+        mounted = None if mounts is None else _mounts(mounts)
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -319,8 +320,8 @@ class Playground:
                 robot.yaw = yaw
             if build is not None:
                 _built(robot).build = build
-            if mounts is not None:  # the whole list: [] takes every mounted robot off
-                robot.mounts = [MountEntry.model_validate(m) for m in mounts]
+            if mounted is not None:  # the whole list: [] takes every mounted robot off
+                robot.mounts = mounted
 
         return _noted(self._edit(change), _yaw_note(yaw))
 
@@ -839,6 +840,18 @@ def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
     if given != name:
         result["notes"] = [*result.get("notes", []), f"{given!r} is saved as {name!r}: names are lowercase with _"]
     return result
+
+
+class _Mounts(BaseModel):
+    mounts: list[MountEntry]
+
+
+def _mounts(mounts: list[Any]) -> list[MountEntry]:
+    """A mounts list checked as add_robot checks it, so that errors say where: "mounts[0]: ..."."""
+    try:
+        return _Mounts.model_validate({"mounts": mounts}).mounts
+    except ValidationError as exc:
+        raise PlaygroundError(_validation_message(exc)) from exc
 
 
 def _validation_message(exc: ValidationError) -> str:

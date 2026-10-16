@@ -433,6 +433,24 @@ def test_a_library_humanoid_walks_no_faster_than_its_known_top_speed(pg, monkeyp
     assert moved["notes"] == ["speed 0.2 m/s is above max_speed 0.06, so it moves at 0.06"]
 
 
+def test_driving_and_listing_robots_read_world_yaml_once(pg, monkeypatch):
+    """The keyboard drives a robot with a move every few frames and the viewer lists robots often; each read of
+    world.yaml parses it. Regression: the checks added for library robots read it two to five times a call."""
+    pg.add_robot("go2", library="go2")
+    pg.add_robot("op3", library="op3", pos=[1, 1])
+    reads = []
+    load = pg.store.load
+    monkeypatch.setattr(pg.store, "load", lambda: reads.append(1) or load())
+    for call in (
+        lambda: pg.behaviors.move("go2", 0.2, 0.1),
+        lambda: pg.behaviors.move("op3", 0.05, 0.0),
+        pg.behaviors.robots,
+    ):
+        reads.clear()
+        call()
+        assert len(reads) == 1
+
+
 def test_a_humanoid_that_cannot_walk_yet_stands_and_says_so(pg, monkeypatch):
     monkeypatch.setitem(library.CATALOG, "op3", dataclasses.replace(library.CATALOG["op3"], walks=False))
     pg.add_robot("bot", library="op3")

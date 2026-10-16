@@ -424,6 +424,16 @@ def test_update_robot_puts_on_and_takes_off_mounts(pg):
     assert pg.behaviors.arms("go2") == []
 
 
+def test_update_robot_says_which_mount_is_wrong(pg):
+    """Regression: add_robot said "mounts[0]: ..." and update_robot only " must be an object"."""
+    pg.add_robot("go2", library="go2")
+    with pytest.raises(ValueError, match=r"^mounts\[0\] must be an object, got 'piper'"):
+        pg.update_robot("go2", mounts=["piper"])
+    with pytest.raises(ValueError, match=r"^mounts\[1\]: a mount's shift is \[x, y, z\]"):
+        pg.update_robot("go2", mounts=[{"library": "piper"}, {"library": "z1", "shift": [1]}])
+    assert pg.current_world().robots[0].mounts == []  # nothing half-changed
+
+
 def test_an_empty_mounts_list_filled_in_beside_another_change_keeps_the_arm():
     schema = {"properties": {"name": {}, "pos": {}, "mounts": {}}, "required": ["name"]}
     tidied = tool_input.tidy("update_robot", schema, {"name": "go2", "pos": [1, 0], "mounts": []})
