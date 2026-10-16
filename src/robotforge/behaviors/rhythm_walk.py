@@ -9,12 +9,12 @@ knows its body.
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
 its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
-Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride starts faded in from the stride
-as its walking version learned to, at once or at the next point of the stride it was checked to start from safely (a
-stop asked just before is let go of); any other switch while moving first steadies the robot on its home pose, the way
-checked to tip it over least (`learn_switches`): holding home until it stands still and starting the new rhythm as
-learned, or fading to home until it is calm and fading the new rhythm in. It cannot back up or change speed, and the
-status says so.
+Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride, once the walk has played a
+second, starts faded in from the stride as its walking version learned to, at once or at the next point of the stride
+it was checked to start from safely (a stop asked just before is let go of); any other switch while moving first
+steadies the robot on its home pose, the way checked to tip it over least (`learn_switches`): holding home until it
+stands still and starting the new rhythm as learned, or fading to home until it is calm and fading the new rhythm in.
+It cannot back up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -227,6 +227,12 @@ SWITCH_TRIES = 25
 SWITCH_WALK = (1.0, 4.5)  # s
 SWITCH_ENDS = 5
 SWITCH_GAPS = (0.16, 0.22, 0.32)  # s, from asking to stop: 0.06 to 0.22 s after the walk stopped
+# A turn begins straight out of the walk only once the walk has played as long as the earliest moment its walking
+# version was checked from; asked sooner, the robot steadies first. In random runs of commands (each 0.3 to 1.5 s, the
+# next at once), where a walk is often short and follows steadying out of a turn, 6 template dog walks fell 16 times in
+# 14400 commands, 10 of them in or after a turn begun out of a walk 0.06 to 1.04 s old (the same walks switched as
+# before: 7); gated at 1 s, 10 times, and 27 in 43200 (walks kept and switched as before: 26).
+WALKED_MIN = min(WALK_CHECKS[0], SWITCH_WALK[0])  # s
 SWITCH_ON = 2.0  # s
 EXIT_WAIT = 2.0  # s
 # Leaving the walk (SavedWalk.switching), holding first: "hold" home at once and wait until the robot stands still,
@@ -863,8 +869,8 @@ class RhythmWalker:
         were checked to begin at safely, walking on until then. Any other switch while moving steadies on home first.
         When every switch waited until the robot stood still, a 1 s turn right after walking turned the imported A1
         16 degrees of the 88 it promised. A walk kept to hold home before other switches begins its walking turns
-        straight out of the walk all the same. A stop asked while the walk plays comes STOP_GRACE later, so what is
-        asked by then switches straight out of the walk too."""
+        straight out of the walk all the same, once the walk has played WALKED_MIN. A stop asked while the walk plays
+        comes STOP_GRACE later, so what is asked by then switches straight out of the walk too."""
         # Only out of the walk as it plays (or walks on to a turn, or to a stop): a robot stopped a moment ago is
         # fading to home, a pose and a point of the stride its walking turns were never checked from. Any switch within
         # a quarter second of the walk's last update used to count, so a turn soon after a stop began at once wherever
@@ -887,7 +893,7 @@ class RhythmWalker:
             return
         elif self._still(data):
             self._start(data, now, self.mode, fade=False)
-        elif self.mode != "forward" and out_of_walk and f"{self.mode} walking" in self.rhythms:
+        elif self.mode != "forward" and out_of_walk and self._walked(now) and f"{self.mode} walking" in self.rhythms:
             wait = self._wait_for_stride(now)
             if wait > 0.0:
                 self.turn_at = now + wait
@@ -896,6 +902,10 @@ class RhythmWalker:
         else:
             self.rhythm, self.t0, self.steady_from = None, None, now
             self._settle(data, now)
+
+    def _walked(self, now: float) -> bool:
+        """Whether the walk has played long enough for a turn to begin straight out of it (WALKED_MIN)."""
+        return self.t0 is not None and now - self.t0 >= WALKED_MIN - 0.5 / CONTROL_HZ
 
     def _wait_for_stride(self, now: float) -> float:
         """How long (s) the walk plays on before the asked turn may begin out of it: until the next point of the

@@ -161,10 +161,10 @@ def test_a_kept_walk_drives_a_robot_built_from_parts(pg):
     assert not pg.session.controllers["crab"].walking  # holds its home pose
 
 
-def _swinging(pg, walking: bool = False, kept_before: bool = False, **more) -> RhythmWalker:
+def _swinging(pg, walking: bool = False, kept_before: bool = False, walked: float = 1.2, **more) -> RhythmWalker:
     """The starfish with a made-up walk and turns (big swings, all in step; the turns' walking versions swing the
-    other way round, if `walking`), walking mid-stride. A walk kept now names its home pose and how it switches;
-    `kept_before` leaves both out, as files kept before did."""
+    other way round, if `walking`), walking mid-stride, `walked` seconds into the walk. A walk kept now names its home
+    pose and how it switches; `kept_before` leaves both out, as files kept before did."""
     pg.add_robot("crab", build=STAR)
     model = pg.session.model
     body = Body.find(model, "crab")
@@ -183,7 +183,7 @@ def _swinging(pg, walking: bool = False, kept_before: bool = False, **more) -> R
     walker = pg.session.controllers["crab"]
     pg.run_fast(lambda: False, 0.1)
     assert walker.t0 == pytest.approx(0.0, abs=0.03)  # standing still already: the walk starts at once, as learned
-    pg.run_fast(lambda: False, 1.1)  # mid-stride
+    pg.run_fast(lambda: False, walked - 0.1)  # mid-stride
     return walker
 
 
@@ -268,6 +268,21 @@ def test_a_quick_key_change_turns_straight_out_of_the_walk(pg):
     pg.run_fast(lambda: False, 1.0)
     pg.behaviors.stop("crab")  # nothing asked by then: it steadies on home
     assert pg.run_fast(lambda: walker.rhythm is None, 1.0) == pytest.approx(STOP_GRACE, abs=0.025)
+
+
+@pytest.mark.parametrize(("walked", "steadies"), [(0.5, True), (1.1, False)])
+def test_a_turn_asked_early_in_the_walk_steadies_first(pg, walked, steadies):
+    """Regression: in random runs of commands, 6 template dog walks fell 16 times in 14400 commands against 7 switched
+    as before, 10 of them in or after a turn begun out of a walk 0.06 to 1.04 s old, often one started out of a turn.
+    Its walking version was checked from walks at least 1 s old (WALKED_MIN); asked sooner, the robot steadies first."""
+    walker = _swinging(pg, walking=True, walked=walked)
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.playing == "left"
+    if steadies:
+        assert walker.rhythm is None and walker.steady_from is not None
+    else:
+        assert walker.rhythm == "left walking"
 
 
 def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
