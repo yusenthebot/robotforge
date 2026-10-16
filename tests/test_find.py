@@ -125,6 +125,38 @@ async def test_a_failure_while_looking_still_returns_the_state(pg, monkeypatch):
         assert "finding failed (RuntimeError: depth buffer lost)" in state["note"] and "cube_a" in state["free_bodies"]
 
 
+def test_numbers_on_the_picture_cover_no_other_find():
+    """On a cube standing on another, the lower one's number sat on its box's top edge, under the upper box."""
+    rgb = np.full((240, 320, 3), 200, np.uint8)
+    lower, upper = (120, 120, 160, 160), (120, 84, 160, 119)  # x0, y0, x1, y1: the upper one rests on the lower
+    found = [finder.Seen({"n": n}, box) for n, box in ((1, lower), (2, upper))]
+    marked = np.array(Image.open(io.BytesIO(finder.marked_png(rgb, found))))
+    tags = vision.blobs((marked == finder.TAG).all(axis=-1), min_area=20)
+    assert len(tags) == 2  # each number on its own dark tag
+    for tag in tags:
+        tx0, ty0, tx1, ty1 = tag.box
+        covered = [box for box in (lower, upper) if tx0 <= box[2] and box[0] <= tx1 and ty0 <= box[3] and box[1] <= ty1]
+        assert not covered, (tag.box, covered)
+
+
+async def test_the_marked_picture_is_as_bright_as_observe_and_skipped_without_an_image(needs_gl, pg, monkeypatch):
+    """The boxes were drawn on the finder's darker picture (its exposure is 0.6), and it was drawn and encoded
+    even when the agent asked for no image."""
+    plain = np.array(Image.open(io.BytesIO(pg.snapshot("default"))).convert("RGB"), dtype=float)
+    _, png = pg.find("default", "red")
+    marked = np.array(Image.open(io.BytesIO(png)).convert("RGB"), dtype=float)
+    assert abs(marked.mean() - plain.mean()) < 0.02 * plain.mean()
+
+    def no_drawing(*_args, **_kwargs):
+        raise AssertionError("drew the picture for a find without an image")
+
+    monkeypatch.setattr(finder, "marked_png", no_drawing)
+    async with Client(build_server(pg, 0)) as client:
+        result = await client.call_tool("observe", {"view": "top", "find": "red", "include_image": False})
+        assert not result.is_error and len(result.content) == 1
+        assert _state(result)["found"]["objects"][0]["object"] == "cube_a"
+
+
 def test_a_mechanism_with_motors_is_a_robot_even_without_a_robot_prefix(needs_gl, tmp_path, monkeypatch):
     """The demo model is a plain MJCF: its blue arm's bodies have no "arm/" prefix, and it came back as
     {"fixed": "base"}, as if it were built into the world."""

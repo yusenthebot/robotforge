@@ -673,7 +673,7 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             image = None
             if find:
                 try:
-                    state["found"], image = playground.find(view, find, width, height)
+                    state["found"], image = playground.find(view, find, width, height, image=include_image)
                 except RenderUnavailable as exc:
                     state["note"] = f"Cannot look for {find}: {exc} Everything else in this state is accurate."
                 except PlaygroundError:
@@ -684,8 +684,6 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                         f"Cannot look for {find}: finding failed ({type(exc).__name__}: {exc}). Everything else in "
                         "this state is accurate."
                     )
-                if not include_image:
-                    image = None
             elif include_image:
                 try:
                     image = playground.snapshot(view, width, height)

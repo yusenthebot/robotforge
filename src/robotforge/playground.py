@@ -725,16 +725,21 @@ class Playground:
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
 
-    def find(self, view: str, color: str, width: int = 640, height: int = 480) -> tuple[dict[str, Any], bytes]:
-        """observe(find=...): the things of `color` that `view` sees, located by color and depth, and the
-        picture with each one boxed and numbered."""
+    def find(
+        self, view: str, color: str, width: int = 640, height: int = 480, image: bool = True
+    ) -> tuple[dict[str, Any], bytes | None]:
+        """observe(find=...): the things of `color` that `view` sees, located by color and depth, and (with
+        `image`) the picture as the 3D view shows it, each find boxed and numbered."""
         try:
             finder.colors(color)
-            layers = self.renderer.layers(self.session, view, width, height, geoms=True, exposure=vision.EXPOSURE)
+            layers = self.renderer.layers(
+                self.session, view, width, height, geoms=True, exposure=vision.EXPOSURE, shown=image
+            )
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
         found = finder.find(layers, color)
-        return finder.summary(view, color, found), finder.marked_png(layers.rgb, found)
+        marked = finder.marked_png(layers.shown, found) if layers.shown is not None else None
+        return finder.summary(view, color, found), marked
 
     # ---- helpers ----------------------------------------------------------------------
 

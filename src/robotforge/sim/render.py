@@ -11,7 +11,7 @@ import threading
 import warnings
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import mujoco
@@ -152,12 +152,24 @@ class SnapshotRenderer:
         height: int = 480,
         geoms: bool = False,
         exposure: float = 1.0,
+        shown: bool = False,
     ) -> Layers:
         """The picture, the depth and (with `geoms`) which geom each pixel shows, from one camera at one moment.
-        `exposure` scales every light for this picture only, as a camera's exposure setting would."""
+        `exposure` scales every light for this picture only, as a camera's exposure setting would; with `shown`
+        the same moment is also drawn at the 3D view's brightness, the picture to show a person."""
         _check_size(width, height)
-        with self._lock, session.lock, _exposed(session.model, exposure):
-            return self._take_layers(session.model, session.data, view, width, height, session.version, geoms)
+        with self._lock, session.lock:
+            with _exposed(session.model, exposure):
+                out = self._take_layers(session.model, session.data, view, width, height, session.version, geoms)
+            if not shown:
+                return out
+            if exposure == 1.0:
+                return replace(out, shown=out.rgb)
+            h, w = out.rgb.shape[:2]
+            camera = _camera_for(session.model, view, session.data, w / h)
+            key = (session.version, w, h)
+            picture = _on_gl_thread(self._camera_picture, session.model, session.data, camera, key)
+            return replace(out, shown=picture)
 
     def layers_of(
         self,
@@ -184,6 +196,12 @@ class SnapshotRenderer:
         height = min(height, model.vis.global_.offheight)
         camera = _camera_for(model, view, data, width / height)
         return _on_gl_thread(self._layers, model, data, camera, (version, width, height), geoms)
+
+    def _camera_picture(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]):
+        """What the camera sees, without the model's marker sites, as _layers draws it (on the GL thread)."""
+        self._ready(model, key)
+        self._renderer.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
+        return self._renderer.render().copy()
 
     def _layers(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int], geoms: bool):
         self._ready(model, key)
@@ -235,6 +253,7 @@ class Layers:
     camera: vision.Pinhole
     model: mujoco.MjModel
     touching: np.ndarray | None = None  # with the geoms: the pairs of geoms in contact at that moment (Nx2)
+    shown: np.ndarray | None = None  # asked for with `shown`: the picture at the 3D view's brightness
 
 
 CLIP_CONTROL = "ARB_clip_control unavailable"  # macOS OpenGL 4.1 has no reverse-Z depth; MuJoCo says so

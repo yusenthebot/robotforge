@@ -11,13 +11,14 @@ found as orange never pushes the apple off the list.
 
 from __future__ import annotations
 
+import functools
 import io
 from dataclasses import dataclass
 from typing import Any
 
 import mujoco
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from robotforge.sim import vision
 from robotforge.sim.render import Layers
@@ -46,7 +47,11 @@ DOUBTS = {
     "held_by": "that robot holds it, and its hand may cover part of it",
     "merged": "loose objects of its color touching it, found as one; the position is the middle of them all",
 }
-MARK = (255, 190, 0)  # the boxes drawn round the finds
+MARK = (255, 190, 0)  # the boxes drawn round the finds, and their numbers
+TAG = (20, 20, 20)  # behind a number, so it reads on a light floor as on a dark one
+MIN_LABEL = 12  # px: the numbers' height, at least; the default 10 px font was hard to read on a 640 px picture
+LABEL_SHARE = 40  # the numbers are this share of the picture's width tall (16 px on a 640 px picture)
+BIG_BOX = 4  # tags wide and high: a box this big (round a shelf, a counter) may have other finds' tags inside it
 FLAGS = ("cut_off", "hidden", "side_on", "raised")  # vision.Found's doubts, passed on when they hold
 MERGED_SHARE = 0.03  # of a blob's pixels (and MIN_AREA at least): another loose object this big in it is part of it
 
@@ -121,22 +126,106 @@ def summary(view: str, color: str, found: list[Seen]) -> dict[str, Any]:
 
 
 def marked_png(rgb: np.ndarray, found: list[Seen]) -> bytes:
-    """The picture with a numbered box round each reported find's blob, as observe returns it."""
+    """The picture with a numbered box round each reported find's blob, as observe returns it.
+
+    A number sits on a dark tag next to its box, wherever it covers no other number and no other box (a box far
+    bigger than the tag, round a shelf or a floor, may have tags inside it): on a cube standing on another, the
+    lower one's number on its box's top edge was hidden under the upper one's box. In a crowd a tag goes further
+    out, with a line to its box; only when nothing is free does it go inside its own box.
+    """
     image = Image.fromarray(rgb)
     draw = ImageDraw.Draw(image)
-    line = max(2, round(rgb.shape[1] / 320))
-    pad = line + 1  # px between a blob and its box, so the box does not cover the blob's edge
     h, w = rgb.shape[:2]
-    for seen in found[:MAX_FOUND]:
-        x0, y0, x1, y1 = seen.box
-        box = (max(x0 - pad, 0), max(y0 - pad, 0), min(x1 + pad, w - 1), min(y1 + pad, h - 1))
+    line = max(2, round(w / 320))
+    pad = line + 1  # px between a blob and its box, so the box does not cover the blob's edge
+    font = _font(max(MIN_LABEL, round(w / LABEL_SHARE)))
+    shown = found[:MAX_FOUND]
+    boxes = [
+        (max(x0 - pad, 0), max(y0 - pad, 0), min(x1 + pad, w - 1), min(y1 + pad, h - 1))
+        for x0, y0, x1, y1 in (seen.box for seen in shown)
+    ]
+    for box in boxes:
         draw.rectangle(box, outline=MARK, width=line)
-        label = str(seen.entry["n"])
-        above = box[1] - 12 >= 0  # the number sits on the box's top edge, or inside it at the picture's top
-        draw.text((box[0] + 2, box[1] - 12 if above else box[1] + line + 1), label, fill=MARK)
+    tags: dict[int, tuple[int, int, int, int]] = {}
+    texts: dict[int, tuple[str, int, int]] = {}
+    # Small boxes choose first: a big one has room all round it.
+    for i in sorted(range(len(shown)), key=lambda k: _area(boxes[k])):
+        label = str(shown[i].entry["n"])
+        left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
+        tw, th = right - left + 2 * line, bottom - top + 2 * line  # the tag: the number and a margin round it
+        others = [b for k, b in enumerate(boxes) if k != i]
+        places = [(x, y, x + tw - 1, y + th - 1) for x, y in _places(boxes[i], tw, th, line)]
+        fits = [t for t in places if t[0] >= 0 and t[1] >= 0 and t[2] < w and t[3] < h]
+        free = [
+            t
+            for t in fits
+            if not any(_overlap(t, o) for o in tags.values()) and not any(_covers(t, o, tw, th) for o in others)
+        ]
+        tags[i] = (free or fits or places[-1:])[0]
+        texts[i] = (label, line - left, line - top)
+    for i, tag in tags.items():  # a line from a tag that does not touch its box
+        x0, y0, x1, y1 = boxes[i]
+        cx, cy = (tag[0] + tag[2]) / 2, (tag[1] + tag[3]) / 2
+        bx, by = min(max(cx, x0), x1), min(max(cy, y0), y1)
+        tx, ty = min(max(bx, tag[0]), tag[2]), min(max(by, tag[1]), tag[3])
+        if abs(tx - bx) > 1 or abs(ty - by) > 1:
+            draw.line((tx, ty, bx, by), fill=MARK, width=max(1, line // 2))
+    for i, tag in tags.items():
+        label, dx, dy = texts[i]
+        draw.rectangle(tag, fill=TAG)
+        draw.text((tag[0] + dx, tag[1] + dy), label, fill=MARK, font=font)
     buf = io.BytesIO()
     image.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
+
+
+def _places(box: tuple[int, int, int, int], tw: int, th: int, line: int) -> list[tuple[int, int]]:
+    """Where a tag tw by th may go round a box, nearest first: on its edges, then up to three tags further out,
+    and last inside the box's corner."""
+    x0, y0, x1, y1 = box
+    near = [(x0, y0 - th), (x0, y1 + 1), (x1 + 1, y0), (x0 - tw, y0)]
+    far = [
+        place
+        for k in (1, 2, 3)
+        for place in (
+            (x0 + k * tw, y0 - th),
+            (x0 - k * tw, y0 - th),
+            (x0, y0 - (k + 1) * th),
+            (x0 + k * tw, y1 + 1),
+            (x0 - k * tw, y1 + 1),
+            (x0, y1 + 1 + k * th),
+            (x1 + 1 + k * tw, y0),
+            (x0 - (k + 1) * tw, y0),
+        )
+    ]
+    return [*near, *far, (x0 + line, y0 + line)]
+
+
+def _covers(tag: tuple[int, int, int, int], box: tuple[int, int, int, int], tw: int, th: int) -> bool:
+    """The tag hides part of the box: it overlaps it, and the box is not so big (BIG_BOX tags each way) that a
+    tag inside it is just a label on the scenery."""
+    if not _overlap(tag, box):
+        return False
+    big = box[2] - box[0] >= BIG_BOX * tw and box[3] - box[1] >= BIG_BOX * th
+    inside = box[0] < tag[0] and tag[2] < box[2] and box[1] < tag[1] and tag[3] < box[3]
+    return not (big and inside)
+
+
+def _overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+
+
+def _area(box: tuple[int, int, int, int]) -> int:
+    return (box[2] - box[0] + 1) * (box[3] - box[1] + 1)
+
+
+@functools.cache
+def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    """Pillow's own font at `size` px (it ships one since 10.1), or its small bitmap font where FreeType is missing."""
+    try:
+        return ImageFont.load_default(size=size)
+    except (ImportError, OSError, TypeError):
+        return ImageFont.load_default()
 
 
 def _rank(what: dict[str, str], merged: list[str]) -> int:
