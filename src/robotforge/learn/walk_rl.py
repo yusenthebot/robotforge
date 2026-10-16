@@ -119,8 +119,10 @@ def _turn_seconds(trained: dict[str, Any], freq: float) -> int:
     switches are checked (rhythm_walk.learn_switches) on the sequences of one way out of the walk and one per turn,
     SWITCH_PASSES times over for the robots that try more. With the sim running at real time, as in the viewer, an
     MJCF critter that trained 15 rounds in 4.4 s learned all but the switch checks in 109 s (this said 120), and an
-    imported A1 that trained 30 rounds in 11.2 s in 139 s (this said 150). When the sim runs as fast as it can while
-    the robot trains, as the tests drive it, a round takes longer and this says too much."""
+    imported A1 that trained 30 rounds in 11.2 s in 139 s (this said 150); with them, an A1 that trained in 12.8 s in
+    about 205 s in the viewer driven headless (scripts/screenshots.py lesson_your_robot_kept; this says 190). When the
+    sim runs as fast as it can while the robot trains, as the tests drive it, a round takes longer and this says too
+    much."""
     steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
     turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * 2 * rhythm_walk.WALKING_ROUNDS
     played = [
