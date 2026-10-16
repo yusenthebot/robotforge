@@ -7,6 +7,7 @@ import math
 import re
 import sys
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -77,40 +78,111 @@ def _how_to_move(kind: Kind) -> str:
 
 
 DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
+CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
+TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
+
+
+@dataclass(frozen=True)
+class Room:
+    """What a thing the advice moves must keep clear of, seen from above."""
+
+    radius: float  # of the thing moved, all ways round (m)
+    boxes: list[tuple[float, float, float, float]]  # the arm's base: (x min, y min, x max, y max)
+    others: list[tuple[np.ndarray, float]]  # the other thing of the pick: (x y, radius)
+    names: str  # what those are, for the message
+
+    def clear(self, xy: np.ndarray) -> bool:
+        for x0, y0, x1, y1 in self.boxes:
+            if math.hypot(max(x0 - xy[0], 0.0, xy[0] - x1), max(y0 - xy[1], 0.0, xy[1] - y1)) < self.radius + CLEARANCE:
+                return False
+        return all(math.dist(xy, at) >= self.radius + r + CLEARANCE for at, r in self.others)
+
+
+def footprint_radius(entry: ObjectEntry | None, fallback: float = 0.03) -> float:
+    """Half the width of an object seen from above, all ways round (m): half the diagonal of a box, bin or table,
+    half the diameter of a ball, can or rock (their size starts with it)."""
+    if entry is None:
+        return fallback
+    return math.hypot(entry.size[0], entry.size[1]) / 2 if len(entry.size) >= 3 else entry.size[0] / 2
+
+
+def _turned(direction: np.ndarray, degrees: float) -> np.ndarray:
+    c, s = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
+    return np.array([c * direction[0] - s * direction[1], s * direction[0] + c * direction[1]])
 
 
 def _where_it_works(
-    arm: ArmMotion, base: np.ndarray, reach: float, what: str, at: np.ndarray, heights: list[float]
+    arm: ArmMotion, base: np.ndarray, reach: float, what: str, at: np.ndarray, heights: list[float], room: Room
 ) -> str:
     """Advice for a pick-and-place point the gripper cannot point down at: the distances from the base, along the
-    same line and at the same heights, where it can, and a position there. "Within reach, so move it further"
-    sent an agent the wrong way three times: the template arm points down only within about 0.3 m of its base
-    at a bin's carrying height, though it reaches 0.52 m."""
+    same line and at the same heights, where it can and the thing fits, and a position there; another side of the
+    base when nothing fits on that line. "Within reach, so move it further" sent an agent the wrong way three times:
+    the template arm points down only within about 0.3 m of its base at a bin's carrying height, though it reaches
+    0.52 m. A bin sent onto the arm's stand was pushed off beside the cube and caught nothing."""
     toward = np.asarray(at[:2], float) - base[:2]
     now = float(np.linalg.norm(toward))
-    toward = toward / now if now > 1e-6 else np.array([1.0, 0.0])
-    works = [
-        r
-        for r in np.arange(DOWN_BAND_STEP, reach + 1e-9, DOWN_BAND_STEP)
+    if now > 1e-6:
+        own = toward / now
+    else:  # on the base itself: start on the side away from the other thing
+        away = base[:2] - room.others[0][0] if room.others else np.zeros(2)
+        own = away / np.linalg.norm(away) if np.linalg.norm(away) > 1e-6 else np.array([1.0, 0.0])
+    radii = np.arange(DOWN_BAND_STEP, reach + 1e-9, DOWN_BAND_STEP)
+
+    def down(xy: np.ndarray) -> bool:
         # the highest point first: it fails most often, and a failure there settles it
-        if all(arm.reach_error(np.array([*(base[:2] + r * toward), z])) <= REACH_TOL for z in sorted(heights)[::-1])
-    ]
-    if not works:
+        return all(arm.reach_error(np.array([*xy, z])) <= REACH_TOL for z in sorted(heights)[::-1])
+
+    pointing = [float(r) for r in radii if down(base[:2] + r * own)]
+    if not pointing:
         return (
             f"no point on that side of the base at {'that height' if len(heights) == 1 else 'those heights'} works "
             f"with the gripper pointing down: put the {what} lower, nearer the height of the arm's shoulder"
         )
-    i = min(range(len(works)), key=lambda k: abs(works[k] - now))
-    # One sample in from the edge of where it works (the samples are DOWN_BAND_STEP apart), if that works too.
-    inner = i - 1 if works[i] < now else i + 1
-    near = 0 <= inner < len(works) and abs(works[inner] - works[i]) < 1.5 * DOWN_BAND_STEP
-    best = float(works[inner] if near else works[i])
-    xy = [round(float(v), 2) for v in base[:2] + best * toward]
+    # The thing's own line first, then the other sides of the base nearest the other thing first: the shortest
+    # carry (a mobile arm told to swing a cube over its rover to a bin behind it dropped it there). A side where
+    # only the edge of the band fits is a last resort: a bin put there was reached, but the cube fell short of it.
+    beside = room.others[0][0] - base[:2] if room.others else own
+    beside = beside / np.linalg.norm(beside) if np.linalg.norm(beside) > 1e-6 else own
+    lines = [own, *(_turned(beside, s * k * TURN_STEP) for k in range(int(180 / TURN_STEP) + 1) for s in (1, -1))]
+    found: list[tuple[np.ndarray, list[float]]] = []
+    for i, line in enumerate(lines):
+        # Clear first (cheap); the arm points down at about the same distances all round its base.
+        fits = [r for r in pointing if room.clear(base[:2] + r * line) and (i == 0 or down(base[:2] + r * line))]
+        if fits:
+            found.append((line, fits))
+            if _inside(fits):
+                break
+    if not found:
+        return (
+            f"the gripper points down only {pointing[0]:.2f} to {pointing[-1]:.2f} m from the base, and nowhere "
+            f"there does the {what} clear {room.names}: make room around the arm"
+        )
+    line, fits = next(((u, f) for u, f in found if _inside(f)), found[0])
+    best = _nearest_inside(fits, now)
+    xy = [round(float(v), 2) for v in base[:2] + best * line]
+    span = f"the gripper points down only {pointing[0]:.2f} to {pointing[-1]:.2f} m from the base"
+    if not np.allclose(line, own):
+        return (
+            f"along that line nothing works ({span}, where the {what} would hit {room.names}); move the {what} to "
+            f"about {xy} ({best:.2f} m from the base, on another side)"
+        )
+    if best != _nearest_inside(pointing, now):  # only when it changes the advice: the message stays short
+        clear = f"{fits[0]:.2f} to {fits[-1]:.2f} m" if fits[-1] > fits[0] else f"{fits[0]:.2f} m"
+        span += f" ({clear} clear of {room.names})"
     way = "nearer" if best < now else "further from the base"
-    return (
-        f"there the gripper points down only {works[0]:.2f} to {works[-1]:.2f} m from the base, so move the {what} "
-        f"{way}: to about {xy} ({best:.2f} m)"
-    )
+    return f"there {span}, so move the {what} {way}: to about {xy} ({best:.2f} m)"
+
+
+def _inside(radii: list[float]) -> list[float]:
+    """The distances from the base whose neighbours on both sides work too (the samples are DOWN_BAND_STEP apart):
+    a spot on the edge of where it works is reached in the plan and missed in the carry."""
+    steps = {round(r / DOWN_BAND_STEP) for r in radii}
+    return [r for r in radii if {round(r / DOWN_BAND_STEP) - 1, round(r / DOWN_BAND_STEP) + 1} <= steps]
+
+
+def _nearest_inside(radii: list[float], now: float) -> float:
+    """Of the distances from the base where it works, the one nearest to `now` away from the edge if there is one."""
+    return min(_inside(radii) or radii, key=lambda r: abs(r - now))
 
 
 def ideal_reach(speed: float, turn: float, seconds: float) -> float:
@@ -697,12 +769,20 @@ class BehaviorManager:
         one = len(far) == 1
         named = isinstance(target, str) and not NUMBER_LIST.fullmatch(target)
         names = {"object": obj, "target": target if named else "target"}
+        size = footprint_radius(self._object_entry(obj))
+        # How wide each thing is from above: a named target is itself (a bin); at a position, the object lands there.
+        widths = {"object": size, "target": footprint_radius(self._object_entry(target)) if named else size}
+        boxes = arm.footprint(self.session.model, self.session.data)
         fixes = []
         for what, at in far.items():
             # Both heights the tool works at over it (on it and above it) move with the thing.
             suffix = "place" if what == "target" else "object"
             heights = [float(p[2]) for name, p in exc.points.items() if name.split()[-1] == suffix] or [float(at[2])]
-            fixes.append(_where_it_works(arm, base, reach, names.get(what, what), at, heights))
+            # Clear of the arm's base and, when both are things on the floor, of the other one.
+            other = "target" if what == "object" else "object"
+            keep = [({"object": object_at, "target": target_at}[other][:2], widths[other])] if named else []
+            room = Room(widths[what], boxes, keep, "the arm's base" + (f" and the {names[other]}" if keep else ""))
+            fixes.append(_where_it_works(arm, base, reach, names[what], at, heights, room))
         text = (
             f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
             f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; "

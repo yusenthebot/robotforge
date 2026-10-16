@@ -159,6 +159,29 @@ def test_a_bin_within_reach_but_too_far_to_point_down_into_is_moved_nearer_not_f
     assert pg.behaviors.placed("green_cube", info["region"])["success"]
 
 
+def test_a_bin_on_the_arms_base_is_sent_where_it_clears_the_base_and_the_cube(pg):
+    """A bin at the arm's base was told "move the bin further from the base: to about [0.1, 0.0]". There it sat on
+    the 0.055 m stand, was pushed off beside the cube and the pick placed nothing (review). The advice now keeps the
+    bin clear of the base and of the cube, and the pick works at the spot it names."""
+    import re
+
+    pg.add_robot("arm", template="arm")
+    pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
+    pg.add_object("bin", shape="bin", pos=[0.0, 0.0])
+    with pytest.raises(BehaviorError) as refused:
+        pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    said = str(refused.value)
+    spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
+    bin_radius = math.hypot(0.2, 0.15) / 2  # the bin's default size, all ways round
+    assert math.hypot(*spot) > 0.055 + bin_radius, said  # off the stand
+    assert math.dist(spot, [0.25, 0.1]) > bin_radius + 0.02, said  # not over the cube
+    pg.update_object("bin", pos=spot)
+    arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    pg.run_fast(lambda: arm.done, 40.0)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("green_cube", info["region"])["success"]
+
+
 def test_wrong_behavior_for_robot_kind_is_explained(pg):
     pg.add_robot("arm", template="arm")
     with pytest.raises(BehaviorError, match="only legged robots"):
