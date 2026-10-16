@@ -16,29 +16,26 @@ def wheel_biped() -> dict[str, Any]:
     return {
         "color": "orange",
         "motor": "jga25",
-        "base": {
-            "shape": "box",
-            "size": [0.13, 0.17, 0.09],
-            "color": GRAPHITE,
-            "sensors": [
-                "imu",  # two stereo cameras look ahead like a pair of eyes
-                {"type": "camera", "name": "left_eye", "at": [0.065, 0.034, 0.012]},
-                {"type": "camera", "name": "right_eye", "at": [0.065, -0.034, 0.012]},
-            ],
-        },
+        # A drum lying across the robot, its hips at the two ends.
+        "base": {"shape": "cylinder", "size": [0.13, 0.17], "axis": "y", "sensors": ["imu"]},
         "parts": [
-            {
-                "name": "cover",
-                "at": "top",
+            {  # a dark face plate with two cameras for eyes
+                "name": "visor",
+                "at": "front",
                 "joint": "fixed",
                 "shape": "box",
-                "size": [0.12, 0.15, 0.014],
-                "direction": "up",
-                "color": "main",
+                "size": [0.012, 0.12, 0.05],
+                "direction": "forward",
+                "offset": [-0.004, 0, 0.008],
+                "color": "#15191f",
+                "sensors": [
+                    {"type": "camera", "name": "left_eye", "at": [0.012, 0.03, 0.008]},
+                    {"type": "camera", "name": "right_eye", "at": [0.012, -0.03, 0.008]},
+                ],
             },
             {
                 "name": "left_thigh",
-                "at": [0, 0.105, -0.02],
+                "at": [0, 0.105, -0.01],
                 "joint": {"axis": "y", "range": [-30, 100], "home": 40},
                 "size": [0.03, 0.12],
                 "direction": "down",

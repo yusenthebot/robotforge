@@ -74,12 +74,13 @@ def test_a_design_is_added_by_name_and_kept_as_its_parts(pg):
 def test_recoloring_a_design_recolors_its_accent_parts(pg):
     from robotforge.design import components
 
-    pg.add_robot("hopper", design="wheel_biped")
-    pg.update_part("hopper", "robot", {"color": "purple"})
+    pg.add_robot("scorpion", design="scorpion")
+    pg.update_part("scorpion", "robot", {"color": "purple"})
     m = pg.session.model
-    cover = m.body("hopper/cover").id
-    rgba = [m.geom_rgba[g] for g in range(m.ngeom) if m.geom_bodyid[g] == cover]
-    assert any(np.allclose(c, components.color("purple"), atol=1e-3) for c in rgba)
+    for part in ("base", "femur_4", "tail_2"):  # the body and the parts in its accent color
+        body = m.body(f"scorpion/{part}").id
+        rgba = [m.geom_rgba[g] for g in range(m.ngeom) if m.geom_bodyid[g] == body]
+        assert any(np.allclose(c, components.color("purple"), atol=1e-3) for c in rgba), part
 
 
 def test_a_design_comes_alone_and_a_wrong_name_says_what_there_is(pg):
