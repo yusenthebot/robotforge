@@ -41,9 +41,10 @@ def _play(pg: Playground, seconds: float) -> dict:
 def _run(pg: Playground, test: str) -> dict:
     pg.lessons.handle({"action": "press", "control": test})
     for _ in range(90):
-        update = _play(pg, 1.0)
+        _play(pg, 1.0)
         if pg.lessons.lesson.test is None:
-            return update
+            # A step is checked before the tick's results come in, so it passes on the next tick, as in the viewer.
+            return _play(pg, 0.05)
     raise AssertionError(f"the {test} test did not finish")
 
 

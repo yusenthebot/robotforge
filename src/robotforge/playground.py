@@ -20,7 +20,7 @@ from pydantic import ValidationError
 
 from robotforge import modes, wording
 from robotforge.behaviors.manager import BehaviorManager
-from robotforge.design import importer, scenes, terrain
+from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
@@ -275,9 +275,12 @@ class Playground:
         yaw: float = 0.0,
         library: str | None = None,
         build: dict[str, Any] | None = None,
+        design: str | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
+        if design is not None:
+            build = design_build(design, template=template, file=file, library=library, build=build, params=params)
         try:
             entry = RobotEntry(
                 name=name,
@@ -818,6 +821,21 @@ def _unused(name: str, taken: set[str]) -> str:
         n += 1
         out = f"{name}_{n}"
     return out
+
+
+def design_build(design: str, **others: Any) -> dict[str, Any]:
+    """The build a gallery design starts from. A design is the robot's whole description, so it comes alone;
+    the world keeps it as the robot's build, ready to change part by part."""
+    extra = [k for k, v in others.items() if v]  # params={} is no params
+    if extra:
+        raise PlaygroundError(
+            f"design is a whole robot on its own; leave out {', '.join(extra)}. Change it after adding it, part by "
+            'part: update_part, e.g. part="robot", changes={"color": "red"}'
+        )
+    try:
+        return gallery.build(design)
+    except ValueError as exc:
+        raise PlaygroundError(str(exc)) from None
 
 
 def _built(robot: RobotEntry) -> RobotEntry:

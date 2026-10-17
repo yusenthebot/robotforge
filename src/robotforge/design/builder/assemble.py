@@ -8,6 +8,8 @@ are `<part>_<type>` (the base's IMU is plain `imu`, like the templates').
 from __future__ import annotations
 
 import dataclasses
+import difflib
+import functools
 import math
 from dataclasses import dataclass, field
 
@@ -18,6 +20,7 @@ from robotforge.design import components
 from robotforge.design.builder import looks
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
+    MAIN_COLOR,
     BaseSpec,
     BuildSpec,
     PartSpec,
@@ -29,6 +32,7 @@ from robotforge.design.builder.schema import (
 from robotforge.design.templates.base import DARK, GEOM, SHELL, BuiltRobot, new_spec, servo_joint
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import parts as P
+from robotforge.sim.actuators import is_position_servo
 
 # MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
 RANGE_DIST = 1 << int(mujoco.mjtRayDataField.mjRAYDATA_DIST)
@@ -39,9 +43,15 @@ PASSIVE_DAMPING = 0.01  # N*m*s/rad on unpowered joints, so they settle instead 
 WHEEL_DAMPING = 0.002
 INVISIBLE = [0.0, 0.0, 0.0, 0.0]
 MOTOR_YELLOW = looks.MOTOR_YELLOW
+MIN_HUB = 0.01  # m: the shortest a wheel's motor is drawn
 FOOT_FRICTION = [1.2, 0.02, 0.002]
 CASTER_FRICTION = [0.02, 0.001, 0.0001]
 MIN_MASS = 0.005  # kg for a bare joint with no shape: MuJoCo needs mass on every moving body
+# The physics every world runs a robot with (world.compile_world), so the checks judge a build the way it will move.
+# Explicit Euler, a fresh spec's default, made the stiff position servos of a mounted Franka Panda chatter at their
+# force limits, and the build was told they were too weak to hold the arm up.
+WORLD_TIMESTEP = 0.002  # s
+WORLD_INTEGRATOR = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
 
 
 @dataclass
@@ -57,6 +67,7 @@ class Assembly:
 
 def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     spec = new_spec()
+    spec.option.timestep, spec.option.integrator = WORLD_TIMESTEP, WORLD_INTEGRATOR
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
     vis = Visuals(spec, rays=False)  # the dressing never changes what a rangefinder or lidar measures
@@ -227,14 +238,17 @@ def _actuator_housing(
         axis_parent = part.rot @ axis
         inboard = -axis_parent if float(axis_parent @ part.pos) > 0 else axis_parent
         half_w = part.spec.size[1] / 2
-        length = min(sx, 0.06)
+        # It fits between the wheel and the middle of what carries it: a wheel hung just outboard of a leg gets a
+        # short hub motor there, where a full-length can stuck out through the leg on the inside.
+        room = abs(float(axis_parent @ part.pos)) - half_w - 0.003
+        length = min(sx, 0.06, max(room, MIN_HUB))
         center = part.pos + inboard * (half_w + length / 2 + 0.003)
         motor = parent.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
             size=[max(sy, sz) / 2, length / 2, 0],
             pos=center.tolist(),
             quat=_z_to(axis_parent),
-            rgba=MOTOR_YELLOW if visible else INVISIBLE,
+            rgba=(MOTOR_YELLOW if actuator.name == "tt_motor" else P.METAL) if visible else INVISIBLE,
             mass=actuator.mass,
             contype=0,
             conaffinity=0,
@@ -312,7 +326,8 @@ def _shape(
     material = spec.material or ("rubber" if shape == "caster" else build.material)
     is_base = isinstance(spec, BaseSpec)
     default_rgba = accent if is_base else (DARK if shape in ("wheel", "caster") else SHELL)
-    rgba = looks.part_color(spec, material, default_rgba)
+    # "main": the robot's own color (the gallery's designs paint trims with it)
+    rgba = accent if spec.color == MAIN_COLOR else looks.part_color(spec, material, default_rgba)
     surface = looks.look_of(material)
     kwargs: dict = {"rgba": rgba}
     if spec.mass is not None:
@@ -626,6 +641,8 @@ def _mount(
     for joint in list(root.joints) if root is not None else []:
         if joint.type == mujoco.mjtJoint.mjJNT_FREE:  # it rides on this part now instead of moving freely
             child.spec.delete(joint)
+    if part.spec.robot.home:
+        _pose_mounted(child, part.spec.robot.home, part.name)
     if child.spec.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
         spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
         spec.option.impratio = max(spec.option.impratio, child.spec.option.impratio)
@@ -637,6 +654,37 @@ def _mount(
     out.home_ctrl.update({f"{part.name}/{k}": v for k, v in child.home_ctrl.items()})
     out.mounted[part.name] = what
     out.notes += [f"{part.name}: {n}" for n in child.notes]
+
+
+def _pose_mounted(child: BuiltRobot, home: dict[str, float], owner: str) -> None:
+    """Start a mounted robot in another pose: its joints set (degrees, meters for slides) and its servos aimed there."""
+    model = child.spec.compile()
+    hinge, slide = int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)
+    joint_name = functools.partial(mujoco.mj_id2name, model, mujoco.mjtObj.mjOBJ_JOINT)
+    movable = [joint_name(j) for j in range(model.njnt) if model.jnt_type[j] in (hinge, slide)]
+    for name, value in home.items():
+        j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if j < 0 or name not in movable:
+            close = difflib.get_close_matches(name, movable, n=2)
+            hint = f" Did you mean {' or '.join(close)}?" if close else ""
+            raise ValueError(
+                f"part {owner!r}: the mounted robot has no joint {name!r} to set at home.{hint} Its joints: "
+                f"{', '.join(movable)}"
+            )
+        is_hinge = int(model.jnt_type[j]) == hinge
+        q = math.radians(value) if is_hinge else float(value)
+        lo, hi = model.jnt_range[j]
+        if model.jnt_limited[j] and not lo - 1e-6 <= q <= hi + 1e-6:
+            shown = (math.degrees(lo), math.degrees(hi)) if is_hinge else (lo, hi)
+            unit = "degrees" if is_hinge else "m"
+            raise ValueError(
+                f"part {owner!r}: home {name} {value:g} is outside its range [{shown[0]:.4g}, {shown[1]:.4g}] {unit}"
+            )
+        child.home_qpos[name] = q
+        for a in range(model.nu):
+            on_it = model.actuator_trntype[a] == mujoco.mjtTrn.mjTRN_JOINT and model.actuator_trnid[a, 0] == j
+            if on_it and is_position_servo(model, a):
+                child.home_ctrl[mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)] = q
 
 
 # ---- small helpers ----------------------------------------------------------------------------------

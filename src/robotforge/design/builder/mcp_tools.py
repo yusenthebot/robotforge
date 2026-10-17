@@ -41,9 +41,10 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     async def update_part(robot: str, part: str, changes: dict[str, Any]) -> str:
-        """Change fields of one part of a robot built from parts; nested fields (joint, actuator, repeat) merge and
-        null resets a field to its default. part="base" edits the base, part="robot" the robot-wide settings (color,
-        material, servo, motor, linear, servo_caps). Copies made by mirror or repeat follow their source.
+        """Change fields of one part of a robot built from parts; nested fields (joint, actuator, repeat, a mounted
+        robot's params and home) merge and null resets a field to its default. part="base" edits the base,
+        part="robot" the robot-wide settings (color, material, servo, motor, linear, servo_caps). Copies made by
+        mirror or repeat follow their source.
 
         Examples: update_part(robot="dog", part="left_thigh", changes={"size": [0.022, 0.15], "joint": {"home":
         50}}); update_part(robot="dog", part="robot", changes={"servo": "xl430"})"""

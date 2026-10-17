@@ -68,20 +68,28 @@ def guide() -> dict[str, Any]:
             'or {"model", "control": position|velocity|torque, "gear"}',
             "shape": f"{', '.join(SIZE_HINT)}; size per shape: {SIZE_HINT}",
             "direction": "the link grows from its joint this way (down for a leg); unset = centered on the joint",
-            "offset, color, material, mass, friction, collide": "look and physics of the shape",
+            "offset, color, material, mass, friction, collide": 'look and physics of the shape; color "main" '
+            "follows the robot's color, so recoloring the robot recolors the part",
             "foot": "true adds a rubber ball at the end",
             "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", "range"}',
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",
             "repeat": '{"count", "around": axis} ring | {"count", "along": axis, "spacing"} row | '
             '{"count", "chain": true} each copy hangs on the previous one (snakes, tentacles); names get _1, _2...',
-            "robot": '{"template": "arm"|"gripper"|..., "params": {...}} or {"library": "so_arm100"}: mount a whole '
-            "robot on this part (an arm on a rover, a gripper on an arm built from parts)",
+            "robot": '{"template": "arm"|"gripper"|..., "params": {...}} or {"library": "piper"}: mount a whole '
+            'robot on this part (an arm on a rover, a gripper on an arm built from parts); "home": {joint: degrees} '
+            "starts it in another pose (an arm folded for driving)",
         },
         "behaviors": (
             "Built robots get sliders and set_controls like any robot, and the built-in behaviors when their shape "
             "fits: 4 or 6 legs of 3 hinges walk (move, WASD); speed-driven wheels on both sides drive; exactly two "
             "wheels on one axle balance by themselves (LQR); a chain of 4+ side-to-side servos slithers; a mounted "
             "arm or gripper works with move_arm / pick_and_place (robot name 'rover' or 'rover/arm')."
+        ),
+        "designs": (
+            "To start from something bigger: add_robot(name, design=...) adds a ready-made robot from the gallery "
+            "(list_templates lists them: a wheel-legged biped, a Mars rover, a centaur, a Go2 with an arm, a Panda "
+            "on a mobile base...) as parts in this schema; show_world shows them, and add_part / update_part change "
+            "them like any build."
         ),
         "checks": (
             "Each build is dropped onto a floor before it is saved: overlapping parts or parts in the floor are "

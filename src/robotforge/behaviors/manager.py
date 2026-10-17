@@ -19,7 +19,7 @@ import numpy as np
 from robotforge import wording
 from robotforge.behaviors import Kind, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
-from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach
+from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
@@ -66,6 +66,15 @@ MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid 
 
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
+
+
+def _height_out_of_reach(point: np.ndarray, base: np.ndarray) -> str:
+    """ "is too high at z 1.20 m for the arm, whose shoulder is at 0.47 m" for a height the gripper cannot get to."""
+    where = "high" if point[2] > base[2] else "low"
+    return (
+        f"is too {where} at z {point[2]:.2f} m for the arm, whose shoulder is at {base[2]:.2f} m; "
+        "give a point nearer that height"
+    )
 
 
 def _a(kind: Kind) -> str:
@@ -359,6 +368,8 @@ class BehaviorManager:
         named = f"{found}/{part.strip()}"
         arms = self.arms(found)
         mounted = wording.match(named, arms)
+        if mounted is None and arm:
+            mounted = self._arm_hanging_from(found, part.strip(), arms)
         if mounted is not None:
             return mounted
         if not arm:
@@ -368,6 +379,18 @@ class BehaviorManager:
         raise BehaviorError(
             f"{named!r} is not an arm: {found} carries no arm (add_robot with build can mount one: see builder_guide)"
         )
+
+    def _arm_hanging_from(self, robot: str, part: str, arms: list[str]) -> str | None:
+        """The arm a part of `robot` belongs to, for the tools that work an arm: an arm built from parts answers to
+        the part its gripper is mounted on ("centaur/left_hand"), and its shoulder ("centaur/left_arm") or forearm
+        should find it too. Only the arm's own moving parts count: the robot's body, its wheels or a waist two arms
+        share are not an arm."""
+        m = self.session.model
+        body = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f"{robot}/{wording.squash(part)}")
+        if body < 0:
+            return None
+        sites = {name: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{name}/tcp") for name in arms}
+        return next((name for name, site in sites.items() if body in arm_bodies(m, site)), None)
 
     def kind(self, robot: str) -> Kind:
         world = self._world()  # read once: it comes from the file
@@ -863,11 +886,14 @@ class BehaviorManager:
         d = self.session.data
         root = self._root_body(robot)
         rot = d.xmat[root].reshape(3, 3)
+        ctrl = self.session.controllers.get(robot)
+        # A balancer knows best: a wheel-legged robot that folds its legs back tips its body far over, balanced.
+        upright = not ctrl.fallen if isinstance(ctrl, WheelBalancer) else rot[2, 2] > 0.7
         return {
             "robot": robot,
             "position": [round(float(v), 3) for v in d.xpos[root]],
             "heading_deg": round(math.degrees(math.atan2(rot[1, 0], rot[0, 0])), 1),
-            "upright": bool(rot[2, 2] > 0.7),
+            "upright": bool(upright),
         }
 
     def _root_body(self, robot: str) -> int:
@@ -899,6 +925,11 @@ class BehaviorManager:
             return robot
         kind = self.kind(robot)
         arms = self.arms(robot)
+        if not arms and kind == Kind.ARM:  # an arm whose model marks no tool point (the SO-100 from the library)
+            raise BehaviorError(
+                f"{robot} is an arm, but its model marks no tool point for move_arm, gripper and pick_and_place to "
+                "steer; set_controls moves its joints"
+            )
         if not arms:
             raise BehaviorError(f"{robot} is {_a(kind)}, not an arm, and carries none; {_how_to_move(kind)}")
         if len(arms) > 1:
@@ -933,17 +964,25 @@ class BehaviorManager:
         return arm
 
     def _out_of_reach(self, arm: ArmMotion, target: np.ndarray) -> str:
-        """Why a point cannot be reached, in numbers: how far it is, how far the arm goes, and whether the
-        numbers look like centimetres (the usual mistake)."""
+        """Why a point cannot be reached, in numbers: how far out it is, how far the arm reaches at that height
+        with its gripper pointing down, and whether the numbers look like centimetres (the usual mistake)."""
         point = [round(float(v), 3) for v in target]
-        base, reach = arm.base_and_reach(self.session.data)
-        distance = float(np.linalg.norm(target - base))
         head = f"{arm.robot} cannot reach {point}"
         if target[2] < 0:
             return f"{head}: z is below the floor; give z of 0 or more"
-        if distance > reach * 1.05:
-            return f"{head}: {wording.too_far(point, distance, reach)}"
-        return f"{head} with its gripper pointing down, though it is within the arm's {reach:.2f} m reach; try nearer"
+        at = arm.down_reach(self.session.data, target)
+        if at.reach == 0.0:
+            distance = float(np.linalg.norm(target - at.base))
+            if wording.in_meters(point, distance, at.longest):  # far out of reach because it is in centimetres
+                return f"{head}: {wording.too_far(point, distance, at.longest)}"
+            return f"{head}: {_height_out_of_reach(target, at.base)}"
+        if at.out > at.reach * 1.05:
+            return f"{head}: {wording.too_far(point, at.out, at.reach)}"
+        way = "further from its base" if at.out < 0.5 * at.reach else "nearer, or nearer the height of its shoulder"
+        return (
+            f"{head} with its gripper pointing down, though it is within the arm's {at.reach:.2f} m reach at that "
+            f"height; try a point a little {way}"
+        )
 
     def set_gripper(self, robot: str, state: str) -> ArmMotion:
         with self.session.lock:

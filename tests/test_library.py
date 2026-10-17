@@ -115,6 +115,50 @@ def test_fixed_base_arm_sits_on_the_floor_and_holds_its_home_pose():
     assert data.joint("arm/Elbow").qpos[0] == pytest.approx(0.6, abs=0.05)
 
 
+@pytest.mark.parametrize(
+    ("cube", "target"),
+    [
+        ([-0.335, 0.445], [0.034, -0.536]),  # from behind on the left to in front on the right
+        ([-0.409, -0.018], [0.105, 0.548]),  # from right behind it round to its left
+    ],
+)
+def test_panda_moves_a_floor_cube_round_its_base_without_throwing_it(pg, cube, target):
+    """Crossing high from its raised home pose and coming straight down, the Panda twisted its upper arm (its first
+    and third joints line up while the shoulder is upright) and reached the cube that way. The carry then went the
+    long way round into its first joint's limit, and the first cube here was thrown 2.4 m past the place as the
+    lowering swung through 334 degrees (the real Panda threw it 2.3 m).
+    """
+    pg.add_robot("panda", library="panda")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=cube)
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("panda", "cube", target)
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    placed = pg.behaviors.placed(info["object"], info["region"])
+    assert placed["success"], placed
+
+
+def test_piper_carries_the_long_way_round_to_a_place_just_past_its_base_joint_limit(pg):
+    """The place is 0.6 degrees past the PiPER's +-150 degree base joint limit, behind it on the right. Planning the
+    short way round, through the back where the gripper cannot point down, refused the pick as one that would hit
+    "the robot carrying the arm", though the PiPER stands alone and lands it the long way round."""
+    pg.add_robot("piper", library="piper")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.083, 0.244])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("piper", "cube", [-0.224, -0.126])
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    placed = pg.behaviors.placed(info["object"], info["region"])
+    assert placed["success"], placed
+
+
+def test_an_arm_without_a_tool_point_says_so_rather_than_that_it_is_not_an_arm(pg):
+    """The SO-100's model marks no tool point: move_arm answered "arm is an arm, not an arm, and carries none"."""
+    pg.add_robot("arm", library="so_arm100")
+    with pytest.raises(ValueError, match="arm is an arm, but its model marks no tool point .*; set_controls moves"):
+        pg.behaviors.move_arm("arm", [0.2, 0.0, 0.1])
+
+
 # ---- walking -----------------------------------------------------------------------------------
 
 

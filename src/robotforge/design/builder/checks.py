@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+from robotforge.behaviors.balance import find_balancer
 from robotforge.design import components
 from robotforge.design.builder.assemble import Assembly
 from robotforge.sim.actuators import is_position_servo
@@ -82,6 +83,23 @@ def _home(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> Non
         a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, act)
         if a >= 0:
             data.ctrl[a] = value
+
+
+def _balances(assembly: Assembly) -> bool:
+    """Whether the robot is one the built-in balancer drives (it stands on two driven wheels and nothing else), so
+    tipping over when left alone is expected of it. Without this the wheel-legged biped, which balances well, was
+    told to get more feet or a caster. Uses the spec checked last (on its floor, at its spawn height)."""
+    parent = mujoco.MjSpec()
+    for name in ("timestep", "integrator", "cone", "impratio", "iterations", "ls_iterations", "noslip_iterations"):
+        setattr(parent.option, name, getattr(assembly.spec.option, name))  # the physics it was checked with
+    parent.attach(assembly.spec, prefix="robot/", frame=parent.worldbody.add_frame())
+    model = parent.compile()
+    data = mujoco.MjData(model)
+    for joint, value in assembly.home_qpos.items():
+        j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"robot/{joint}")
+        if j >= 0:
+            data.qpos[model.jnt_qposadr[j]] = value
+    return find_balancer(model, "robot", data.qpos.copy()) is not None
 
 
 def part_of(model: mujoco.MjModel, body: int) -> str:
@@ -173,7 +191,7 @@ def _settle(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> l
         )
     if assembly.floating:
         up = float(data.xmat[base].reshape(3, 3)[2, 2])
-        if up < 0.7:
+        if up < 0.7 and not _balances(assembly):
             notes.append(
                 "note: the robot does not stay upright by itself (it tips over within a second at rest); give it "
                 "more feet, a wider stance, a caster, or a balance controller."

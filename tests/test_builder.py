@@ -10,8 +10,10 @@ import numpy as np
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
+from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import find_free_port
-from robotforge.design import builder
+from robotforge.design import builder, gallery
+from robotforge.design.visuals import HIDDEN_GROUP
 from robotforge.design.world import World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
@@ -133,6 +135,26 @@ def test_a_mirrored_leg_is_the_reflection_of_the_original():
     assert data.xaxis[model.joint("r/right_shin_1").id] == pytest.approx(
         data.xaxis[model.joint("r/left_shin_1").id], abs=1e-9
     )
+
+
+def test_a_part_colored_main_follows_the_robot_color(pg):
+    """Parts in a design's accent color had it written out, so recoloring the robot changed only its base and wheel
+    rims; "main" makes a part follow the robot's color."""
+    from robotforge.design import components
+
+    build = copy.deepcopy(DOG)
+    build["parts"][1]["color"] = "main"  # the thighs
+    pg.add_robot("dog", build=build)
+
+    def thigh_is(color: str) -> bool:
+        m = pg.session.model
+        body = m.body("dog/left_thigh_1").id
+        rgba = [m.geom_rgba[g] for g in range(m.ngeom) if m.geom_bodyid[g] == body]
+        return any(np.allclose(c, components.color(color), atol=1e-3) for c in rgba)
+
+    assert thigh_is("orange")
+    pg.update_part("dog", "robot", {"color": "teal"})
+    assert thigh_is("teal") and not thigh_is("orange")
 
 
 def test_spawn_height_puts_the_feet_on_the_floor():
@@ -451,6 +473,174 @@ def test_two_wheeled_robot_balances_by_itself_and_drives(pg):
     assert end["upright"] and end["position"][0] > 0.8
 
 
+WHEEL_LEGS = {  # two legs that end in wheels: the knees are servos, which give a little under the body's weight
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.13, 0.17, 0.09]},
+    "parts": [
+        {
+            "name": "left_thigh",
+            "at": [0, 0.105, -0.02],
+            "joint": {"axis": "y", "range": [-30, 100], "home": 40},
+            "size": [0.03, 0.12],
+            "direction": "down",
+            "mirror": True,
+        },
+        {
+            "name": "left_shin",
+            "parent": "left_thigh",
+            "at": "end",
+            "joint": {"axis": "y", "range": [-150, 0], "home": -80},
+            "size": [0.025, 0.12],
+            "direction": "down",
+        },
+        {
+            "name": "left_wheel",
+            "parent": "left_shin",
+            "at": "end",
+            "shift": [0, 0.032, 0],
+            "shape": "wheel",
+            "size": [0.13, 0.03],
+        },
+    ],
+}
+
+
+def test_a_wheel_legged_robot_balances_in_place_and_stays_there_when_it_crouches(pg):
+    """The balanced lean was worked out with the legs straightening (their controls were 0) and stiff, so it was a
+    degree off and the robot rolled 0.2 m back holding the difference; a crouch set by hand moved the balance point
+    and rolled it 0.34 m (standing taller) to 1.17 m (crouching deep)."""
+    pg.add_robot("ascent", build=WHEEL_LEGS)
+    assert pg.behaviors.robots()[0]["kind"] == "balancer"
+    _run(pg, 0.5)
+    start = pg.behaviors.pose("ascent")["position"]
+    _run(pg, 4.0)
+    assert abs(pg.behaviors.pose("ascent")["position"][0] - start[0]) < 0.03
+    for thigh, shin in ((15, -30), (70, -140)):  # taller, then deep
+        pg.set_controls(
+            {
+                f"ascent/{side}_{part}": np.radians(angle)
+                for side in ("left", "right")
+                for part, angle in (("thigh", thigh), ("shin", shin))
+            }
+        )
+        _run(pg, 4.0)
+        end = pg.behaviors.pose("ascent")
+        assert end["upright"] and abs(end["position"][0] - start[0]) < 0.05, (thigh, end)
+    assert end["position"][2] < start[2] - 0.08  # it did crouch
+
+
+def test_a_wheel_legged_robot_whose_body_tips_back_as_it_crouches_keeps_balancing(pg):
+    """Folding the thighs back slowly keeps the weight over the axle while the body tips back with them. The fall check
+    read the body's pitch: 46 degrees back it called the robot fallen, cut the wheels, and it fell flat 0.36 m away."""
+    pg.add_robot("ascent", build=WHEEL_LEGS)
+    _run(pg, 1.0)
+    start = pg.behaviors.pose("ascent")["position"]
+    m, d = pg.session.model, pg.session.data
+    goals = (("thigh", 90), ("shin", -60))
+    legs = {f"ascent/{side}_{part}": goal for side in ("left", "right") for part, goal in goals}
+    before = {name: float(d.ctrl[m.actuator(name).id]) for name in legs}
+    for step in range(1, 41):  # over 2 s
+        s = step / 40
+        pg.set_controls({name: (1 - s) * before[name] + s * np.radians(goal) for name, goal in legs.items()})
+        _run(pg, 0.05)
+    _run(pg, 2.0)
+    end = pg.behaviors.pose("ascent")
+    assert not pg.session.controllers["ascent"].fallen
+    assert end["upright"]  # balancing, though its body leans far back
+    assert np.linalg.norm(np.subtract(end["position"][:2], start[:2])) < 0.05
+
+
+def test_only_a_robot_with_nothing_to_hold_it_up_is_told_it_tips_over():
+    """The wheel-legged biped tips over left alone, as every self-balancer does, and was told to get more feet, a wider
+    stance or a caster, though the built-in balancer keeps it up; a robot that tips with nothing to hold it up still
+    hears it."""
+    tips = "does not stay upright by itself"
+    assert not any(tips in n for n in builder.build_robot(gallery.build("wheel_biped")).notes)
+    stilt = {  # a box on one stilt, off its middle
+        "base": {"shape": "box", "size": [0.1, 0.1, 0.1]},
+        "parts": [
+            {"name": "stilt", "at": [0.04, 0, -0.05], "joint": "fixed", "size": [0.01, 0.2], "direction": "down"}
+        ],
+    }
+    assert any(tips in n for n in builder.build_robot(stilt).notes)
+
+
+def _cart_with_a_head(head_height: float) -> dict:
+    """A cart with an arm at the back and a block (a head, a sensor box) at the front, in the way of the arm's swing
+    from one side to the other."""
+    return {
+        "motor": "jga25",
+        "base": {"shape": "box", "size": [0.4, 0.24, 0.06], "mass": 4.0},
+        "parts": [
+            {"name": "left_wheel", "at": [0, 0.14, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+            {"name": "front_caster", "at": [0.16, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {"name": "rear_caster", "at": [-0.16, 0, -0.04], "shape": "caster", "size": [0.04]},
+            {
+                "name": "head",
+                "at": "top",
+                "shift": [0.15, 0, 0],
+                "joint": "fixed",
+                "shape": "box",
+                "size": [0.08, 0.16, head_height],
+                "direction": "up",
+            },
+            {"name": "arm", "at": "top", "shift": [-0.12, 0, 0], "robot": {"template": "arm", "home": {"yaw": 90}}},
+        ],
+    }
+
+
+def test_an_arm_carries_a_load_over_the_robot_it_rides_on_or_says_it_cannot(pg):
+    """Moving a floor cube from the cart's left to its right swings it round in front, at 10 cm: the cube struck the
+    block in the way, was dropped short and the pick still ran to the end. The load now goes over the block, and
+    where nothing gets over it the pick is refused with the reason."""
+    pg.add_robot("cart", build=_cart_with_a_head(0.08))
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("cart/arm", "cube", [-0.12, -0.28])
+    assert [round(float(w.position[2]), 2) for w in motion.queue if w.label == "carry"] == [0.25]
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed(info["object"], info["region"])["success"]
+    pg.update_part("cart", "head", {"size": [0.08, 0.16, 0.16]})  # too tall for the arm to get a cube over it
+    pg.add_object("another", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
+    _run(pg, 0.5)
+    with pytest.raises(BehaviorError, match="cannot carry it across: .*put both on the same side of the robot"):
+        pg.behaviors.pick_and_place("cart/arm", "another", [-0.12, -0.28])
+
+
+def _wheel_motor(model: mujoco.MjModel, carrier: str) -> int:
+    """The drawn gear motor of the wheel on `carrier`: the shown cylinder on that body nothing collides with (the
+    knee's servo is one too, drawn as a mesh over a hidden one)."""
+    body = model.body(carrier).id
+    cylinder = int(mujoco.mjtGeom.mjGEOM_CYLINDER)
+    found = [
+        g
+        for g in range(model.ngeom)
+        if model.geom_bodyid[g] == body
+        and model.geom_type[g] == cylinder
+        and not model.geom_contype[g]
+        and model.geom_group[g] < HIDDEN_GROUP
+    ]
+    assert len(found) == 1, found
+    return found[0]
+
+
+def test_a_wheel_hung_on_a_leg_gets_a_hub_motor_that_stays_outside_the_leg():
+    """The motor was drawn as a 6 cm can inboard of the wheel, which on a leg stuck out through the leg."""
+    from robotforge.design.builder.assemble import MOTOR_YELLOW
+    from robotforge.design.visuals import parts as P
+
+    model = _model(WHEEL_LEGS)
+    motor = _wheel_motor(model, "r/left_shin")
+    center, half = model.geom_pos[motor], model.geom_size[motor][1]
+    assert center[1] - half >= 0.0 and center[1] + half <= 0.032 - 0.015  # between the leg's middle and the wheel
+    assert list(model.geom_rgba[motor]) == pytest.approx(P.METAL)  # a JGA25 is a metal can
+    tt = copy.deepcopy(WHEEL_LEGS)
+    tt["motor"] = "tt_motor"
+    toy = _model(tt)
+    assert list(toy.geom_rgba[_wheel_motor(toy, "r/left_shin")]) == pytest.approx(MOTOR_YELLOW)  # a TT's yellow case
+
+
 def test_two_wheels_and_a_caster_that_sits_a_little_high_is_a_rover(pg):
     """Review HIGH 1: a caster a few millimetres above the wheels' lowest point (common in imported URDFs;
     the robot tips onto it) made a plain rover look like a self-balancer, which then fought its own caster."""
@@ -660,6 +850,154 @@ def test_arm_built_from_parts_with_a_mounted_gripper_picks_and_places(pg):
     pg.run_fast(lambda: arm.done, 40)
     _run(pg, 0.5)
     assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+LIFT_ARM = {  # an arm on a lifting column: it reaches a high shelf only by raising itself
+    "base": {"shape": "box", "size": [0.2, 0.2, 0.04], "fixed": True},
+    "parts": [
+        {
+            "name": "lift",
+            "at": "top",
+            "joint": {"type": "slide", "axis": "z", "range": [0, 0.3]},
+            "actuator": {"model": "belt_rail", "gear": 2},
+            "shape": "box",
+            "size": [0.06, 0.06, 0.2],
+            "mass": 0.3,
+            "direction": "up",
+        },
+        {
+            "name": "arm",
+            "parent": "lift",
+            "at": "end",
+            "robot": {"template": "arm", "params": {"reach": 0.45, "base_height": 0.03, "servo": "bldc_joint"}},
+        },
+    ],
+}
+
+
+def test_an_arm_on_a_lift_raises_it_to_reach_a_high_table(pg):
+    """The arm's joints were its hinges only, so a cube on a table above the arm's reach from where the lift stood was
+    refused as out of reach; the lift is a joint the arm rides on and is now steered with the others."""
+    pg.add_robot("tower", build=LIFT_ARM)
+    pg.add_object("high", shape="table", size=[0.2, 0.2, 0.55], pos=[0.0, -0.28], fixed=True)
+    pg.add_object("low", shape="table", size=[0.2, 0.2, 0.3], pos=[0.0, 0.28], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, -0.28, 0.57])
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("tower", "cube", "low")
+    assert "tower/lift" in [mujoco.mj_id2name(pg.session.model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in arm.joints]
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+TWIN = {  # two arms on one turntable
+    "base": {"shape": "cylinder", "size": [0.16, 0.06], "fixed": True},
+    "parts": [
+        {
+            "name": "turntable",
+            "at": "top",
+            "joint": {"axis": "z", "range": [-180, 180]},
+            "shape": "box",
+            "size": [0.08, 0.38, 0.03],
+            "direction": "up",
+        },
+        {
+            "name": "left_arm",
+            "parent": "turntable",
+            "at": "end",
+            "shift": [0, 0.14, 0],
+            "robot": {"template": "arm", "params": {"reach": 0.35, "base_height": 0.03}},
+        },
+        {
+            "name": "right_arm",
+            "parent": "turntable",
+            "at": "end",
+            "shift": [0, -0.14, 0],
+            "robot": {"template": "arm", "params": {"reach": 0.35, "base_height": 0.03}},
+        },
+    ],
+}
+
+
+def _tool_error(pg: Playground, arm, target: list[float]) -> float:
+    return float(np.linalg.norm(pg.session.data.site_xpos[arm.site] - np.asarray(target)))
+
+
+def test_two_arms_on_one_turntable_reach_without_turning_it_and_follow_it_when_it_turns(pg):
+    """Both arms counted the turntable as their own first joint, so each turned it toward its target (and the other
+    arm away from its own); and an arm's IK assumed the turntable stood where it started, so after it was turned by
+    hand the arm missed its target by the turn."""
+    pg.add_robot("twin", build=TWIN)
+    assert pg.behaviors.robots()[0]["arms"] == ["twin/left_arm", "twin/right_arm"]
+    turntable = pg.session.model.joint("twin/turntable").qposadr[0]
+    target = [0.12, 0.3, 0.15]
+    left = pg.behaviors.move_arm("twin/left_arm", target)
+    pg.run_fast(lambda: left.done, 10)
+    _run(pg, 0.5)
+    assert _tool_error(pg, left, target) < 0.015  # small hobby servos sag about a centimetre
+    assert abs(pg.session.data.qpos[turntable]) < 0.01  # it did not turn the turntable
+    pg.set_controls({"twin/turntable": np.radians(40)})
+    _run(pg, 1.5)
+    target = [0.3, 0.0, 0.12]
+    right = pg.behaviors.move_arm("twin/right_arm", target)
+    pg.run_fast(lambda: right.done, 10)
+    _run(pg, 0.5)
+    assert _tool_error(pg, right, target) < 0.015
+    assert pg.session.data.qpos[turntable] == pytest.approx(np.radians(40), abs=0.02)
+
+
+def test_an_arm_folded_low_rises_before_it_swings_around_to_its_target(pg):
+    """An arm folded backward, low, swung around toward the cube at that height and ran into the wall beside it; it
+    now goes up to the carrying height first and swings around above the wall."""
+    folded = copy.deepcopy(LIFT_ARM)
+    folded["parts"][1]["robot"]["home"] = {"yaw": 180}
+    pg.add_robot("tower", build=folded)
+    pg.add_object("high", shape="table", size=[0.2, 0.2, 0.55], pos=[0.0, 0.28], fixed=True)
+    pg.add_object("low", shape="table", size=[0.2, 0.2, 0.3], pos=[0.0, -0.28], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.0, 0.28, 0.57])
+    pg.add_object("wall", shape="box", size=[0.12, 0.12, 0.5], pos=[-0.18, 0.18], fixed=True)  # back left
+    _run(pg, 0.5)
+    arm, placed = pg.behaviors.pick_and_place("tower", "cube", "low")
+    pg.run_fast(lambda: arm.done, 40)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("cube", placed["region"])["success"]
+
+
+def test_a_mounted_panda_is_not_called_too_weak(monkeypatch):
+    """The build check ran explicit Euler, a fresh spec's default, where the Panda's stiff servos (kp 4500) chatter at
+    their 87 N*m limits holding the arm still, so every build carrying one was told its arm was too weak; worlds run
+    the implicit integrator the check now uses too."""
+    from pathlib import Path
+
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(Path(__file__).parent / "fixtures" / "menagerie"))
+    build = {
+        "base": {"shape": "box", "size": [0.6, 0.45, 0.15], "mass": 40.0},
+        "parts": [
+            {"name": "left_wheel", "at": [0.2, 0.26, -0.05], "shape": "wheel", "size": [0.16, 0.06], "mirror": True},
+            {"name": "left_rear", "at": [-0.2, 0.26, -0.05], "shape": "wheel", "size": [0.16, 0.06], "mirror": True},
+            {"name": "arm", "at": "top", "robot": {"library": "panda"}},
+        ],
+    }
+    notes = " ".join(builder.build_robot(build).notes)
+    assert "Franka Emika Panda" in notes and "too weak" not in notes
+
+
+def test_a_mounted_robot_starts_in_the_home_pose_its_mount_gives():
+    folded = copy.deepcopy(LIFT_ARM)
+    folded["parts"][1]["robot"]["home"] = {"yaw": 180, "shoulder": -30}
+    model = _model(folded)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    assert data.joint("r/arm/yaw").qpos[0] == pytest.approx(np.pi)
+    assert data.joint("r/arm/shoulder").qpos[0] == pytest.approx(np.radians(-30))
+    assert data.actuator("r/arm/shoulder").ctrl[0] == pytest.approx(np.radians(-30))  # the servo holds it there
+    assert data.joint("r/arm/elbow").qpos[0] == pytest.approx(1.45)  # the rest keep the template's own home
+    folded["parts"][1]["robot"]["home"] = {"elbo": 10}
+    with pytest.raises(ValueError, match="no joint 'elbo'.*Did you mean elbow"):
+        builder.build_robot(folded)
+    folded["parts"][1]["robot"]["home"] = {"elbow": 170}
+    with pytest.raises(ValueError, match="outside its range"):
+        builder.build_robot(folded)
 
 
 def test_range_sensors_compile_and_measure_distance():

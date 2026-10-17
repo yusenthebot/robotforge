@@ -89,9 +89,16 @@ def _vec3(value: list[float], what: str) -> list[float]:
     return value
 
 
+# A part's color that follows the robot's main color: recolor the robot once and these parts change with it.
+MAIN_COLOR = "main"
+
+
 def _check_color(value: Color | None) -> Color | None:
-    if value is not None:
-        components.color(value)
+    if value is not None and value != MAIN_COLOR:
+        try:
+            components.color(value)
+        except ValueError as exc:
+            raise ValueError(f'{exc}, or "{MAIN_COLOR}" for the robot\'s own color') from None
     return value
 
 
@@ -220,6 +227,10 @@ class RobotMount(_Strict):
     template: str | None = None
     library: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
+    home: dict[str, float] = Field(
+        default_factory=dict,
+        description="its starting pose: joint name -> degrees (meters for a slide), e.g. an arm folded for driving",
+    )
 
     @model_validator(mode="after")
     def _one(self) -> RobotMount:
