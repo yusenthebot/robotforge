@@ -564,6 +564,8 @@ def _built(names: tuple[str, ...], spacing: float = 0.62) -> Callable[[Any], Non
         for i, name in enumerate(names):
             pg.add_robot(name, build=gallery[name], pos=[0.0, spacing * (i - (len(names) - 1) / 2)])
 
+    return world
+
 
 def _design(name: str, extras: Callable[[Any], None] | None = None) -> Callable[[Any], None]:
     """A world with one gallery design in it (named after the design), and what it works with."""
