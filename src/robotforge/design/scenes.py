@@ -168,6 +168,8 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.tips = [
         "pick_and_place('arm', 'red_cup', 'bowl') clears the island",
         "the jars on the wall shelf and the sink are out of the arm's reach: try a taller arm",
+        "a robot that walks or drives starts on one of robot_places, clear of the furniture, and goes to the island "
+        "with move(robot, to='island')",
     ]
     return c
 
@@ -229,7 +231,9 @@ def _warehouse(rng: random.Random, opts: dict[str, float]) -> Content:
     c.ground_slots = [Slot((-5.5, 2.6), 0), Slot((-5.5, -0.4), 0), Slot((2.0, -0.4), 0)]
     c.starter = [{"name": "rover", "template": "rover"}]
     c.tips = [
-        "drive down the aisle between the racks (move('rover', 0.4)) or up the ramp onto the dock",
+        # A tip that drove straight (move('rover', 0.4)) had an agent split the trip to the dock in two by hand.
+        "move('rover', to='dock') finds its own way round the racks and up the ramp onto the dock; "
+        "move('rover', 0.4) drives straight down the aisle between the racks",
         "crates are loose: a robot can push them off the pallets",
     ]
     return c
@@ -279,7 +283,8 @@ def _park(rng: random.Random, opts: dict[str, float]) -> Content:
     c.ground_slots = [Slot((0.0, -1.0), 0), Slot((-1.5, -1.0), 0), Slot((1.5, -1.4), 0)]
     c.starter = [{"name": "dog", "template": "quadruped"}]
     c.tips = [
-        "walk along the path (move('dog', 0.3)), then turn left into the hills",
+        "move('dog', to='bench_1') finds its own way to a bench round the trees and rocks; move('dog', 0.3) walks "
+        "straight along the path, and turning left takes it into the hills",
         "the red ball is loose: nudge it with a robot",
     ]
     return c
@@ -339,6 +344,7 @@ def _maze(rng: random.Random, opts: dict[str, float]) -> Content:
     c.tips = [
         f"the entrance is at the south-west corner, the goal (green mark) beyond the north-east corner at "
         f"[{goal[0]:.2f}, {goal[1]:.2f}]",
+        "move('rover', to='goal') finds its own way through to the green mark",
         "load_scene('maze', seed=7) makes a different maze; options rows, cols and cell change its size",
     ]
     return c
