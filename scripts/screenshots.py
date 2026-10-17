@@ -115,7 +115,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                 await asyncio.sleep(msg["wait"])
                 continue
             await ws.send(json.dumps({"id": f"shot{k}", **msg}))
-            if msg.get("type") == "lesson_open":  # a slow request: wait for its reply
+            if msg.get("type") in ("lesson_open", "go_to"):  # a slow request: wait for its reply
                 while True:
                     raw = await ws.recv()
                     if isinstance(raw, bytes):  # body poses stream as binary frames
@@ -268,6 +268,36 @@ def _walk(robot: str, speed: float) -> dict[str, Any]:
     return {"type": "teleop", "robot": robot, "speed": speed, "turn": 0.0}
 
 
+# A rover built from parts that carries an arm (tests/test_builder.py builds the same one).
+MOBILE_ARM = {
+    "color": "yellow",
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.34, 0.22, 0.06], "mass": 3.0, "sensors": ["imu"]},
+    "parts": [
+        {"name": "left_wheel", "at": [0, 0.13, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "front_caster", "at": [0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "rear_caster", "at": [-0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "arm", "at": "top", "shift": [0.06, 0, 0], "robot": {"template": "arm", "params": {"reach": 0.45}}},
+    ],
+}
+
+
+def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> Callable[[Any], None]:
+    """A world builder: these robots, then the scene, which puts them on its free spots."""
+
+    def build(pg: Any) -> None:
+        for name, source in robots.items():
+            pg.add_robot(name, **source)
+        pg.load_scene(scene, seed=seed)
+
+    return build
+
+
+def _go(robot: str, to: list[float] | str) -> dict[str, Any]:
+    """Send a robot somewhere along a planned path (move with to=...)."""
+    return {"type": "go_to", "robot": robot, "to": to}
+
+
 def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
     """Page script: aim the camera at the middle of these robots, from `offset` metres away."""
     return f"""
@@ -303,6 +333,35 @@ SHOTS = [
         settle=1.0,
     ),
     Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
+    # Navigation: the path still ahead shows as an amber line on the ground while the robot follows it.
+    Shot(
+        "nav_warehouse",
+        _in_scene("warehouse", {"go2": {"library": "go2"}}),
+        viewer=[_go("go2", [6.0, -1.4]), {"wait": 6.0}],
+        page="window.__robotforge.lookAt([0.5, -7.5, 7.5], [0.5, 0.6, 0]);",
+        settle=0.5,
+    ),
+    Shot(
+        "nav_maze",
+        _in_scene("maze", {"rover": {"template": "rover"}}),
+        viewer=[_go("rover", [-2.0, 2.0]), {"wait": 0.5}],  # the far corner cell, through the entrance
+        page="window.__robotforge.lookAt([0.0, -3.4, 6.6], [0.0, 0.1, 0]);",
+        settle=0.5,
+    ),
+    Shot(
+        "nav_kitchen",
+        _in_scene("kitchen", {"mm": {"build": MOBILE_ARM}, "dog": {"template": "quadruped"}}),
+        viewer=[_go("mm", "fruit"), _go("dog", [1.4, 1.0]), {"wait": 0.2}],
+        page="window.__robotforge.lookAt([0.6, -4.2, 3.4], [0.0, 0.3, 0.2]);",
+        settle=0.2,
+    ),
+    Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them
+        "nav_obstacle_course",
+        _in_scene("obstacle_course", {"dog": {"template": "quadruped"}}),
+        viewer=[_go("dog", "finish"), {"wait": 2.0}],
+        page="window.__robotforge.lookAt([-2.4, -5.0, 3.8], [6.8, 0.5, 0]);",
+        settle=0.5,
+    ),
     Shot("import_a1", _a1, page=_look_at(["a1"], (0.9, -1.1, 0.55))),
     Shot(
         "lesson_your_robot",

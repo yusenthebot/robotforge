@@ -606,7 +606,9 @@ function readTheme() {
 
 function accentMaterial(opts) {
   // Pulled toward the camera in depth so a ring lying on the floor never sinks into it at a distance.
+  // Amber from the start: readTheme recolors the ones made so far, and a marker made after it stayed white.
   const m = new THREE.MeshBasicMaterial({
+    color: theme.amber,
     transparent: true,
     depthWrite: false,
     polygonOffset: true,
@@ -786,6 +788,23 @@ function endDrag(e) {
 }
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
+
+// Double-click the ground: the selected robot finds its way there round whatever is in the way (move with a
+// destination) and shows its path. A robot or a loose object under the pointer is for dragging, not a place;
+// so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
+canvas.addEventListener("dblclick", (e) => {
+  const robot = driveTarget();
+  if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
+  setPointer(e);
+  const hit = raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
+  if (!hit || !hit.face) return;
+  const body = hit.object.userData.body;
+  if (body > 0 && sceneDesc.bodies[body]?.dynamic) return;
+  const up = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (up.z < 0.7) return;
+  const to = [+hit.point.x.toFixed(3), +hit.point.y.toFixed(3)];
+  request({ type: "go_to", robot: robot.name, to }).catch((err) => toast(err.message)); // no way: it says why
+});
 
 const dragTarget = new THREE.Vector3();
 function updateDragVisual(target) {
@@ -1058,6 +1077,7 @@ function applyState(s) {
   paused = s.paused;
   rtf = s.rtf;
   behaviors = s.behaviors || [];
+  updatePaths(behaviors);
   const play = $("btn-play");
   play.classList.toggle("is-paused", paused);
   const tip = t(paused ? "play_tip" : "pause_tip");
@@ -1730,6 +1750,126 @@ function hideMarker() {
   markerDot.visible = markerPad.visible = markerPin.visible = false;
 }
 
+// ---------------------------------------------------------------- planned paths
+
+// A robot sent somewhere (move with a destination) shows the way still ahead of it: a thin amber line on the
+// ground and a ring where it ends. The server sends the path (x, y and the ground height at each corner) with
+// every state message while the robot follows it, and stops once it is there, so the line goes with it.
+const PATH_WIDTH = 0.035; // m, seen from nearby
+// CSS px it keeps on screen from further away, across the line of sight: with the whole obstacle course in view
+// (15 to 20 m off, looking down at 38 degrees) a 3.5 cm line was 1 to 2 px wide and hard to make out.
+const PATH_MIN_PX = 3;
+const PATH_LIFT = 0.012; // m above the ground: it lies on the floor without flickering into it
+const PATH_STEP = 0.15; // m between the points that follow a hill or a ramp along a straight stretch
+const pathMaterial = accentMaterial({ opacity: 0.9, side: THREE.DoubleSide });
+const pathEndGeometry = new THREE.RingGeometry(0.055, 0.085, 40);
+const paths = new Map(); // robot -> { line, end, key }
+
+function updatePaths(list) {
+  const live = new Set();
+  for (const b of list) {
+    if (!b.navigating || !Array.isArray(b.path) || b.path.length < 2) continue;
+    live.add(b.navigating);
+    let shape = paths.get(b.navigating);
+    if (!shape) {
+      shape = {
+        line: new THREE.Mesh(new THREE.BufferGeometry(), pathMaterial),
+        end: new THREE.Mesh(pathEndGeometry, pathMaterial),
+        key: "",
+      };
+      shape.line.renderOrder = shape.end.renderOrder = 3;
+      scene3.add(shape.line, shape.end);
+      paths.set(b.navigating, shape);
+    }
+    const key = JSON.stringify(b.path);
+    if (key === shape.key) continue;
+    shape.key = key;
+    shape.points = groundPoints(b.path);
+    ribbon(shape.line.geometry, shape.points);
+    shape.end.position.copy(shape.points[shape.points.length - 1]);
+    shape.end.scale.setScalar(pathWidth(shape.end.position) / PATH_WIDTH);
+  }
+  for (const [robot, shape] of paths) {
+    if (live.has(robot)) continue;
+    scene3.remove(shape.line, shape.end);
+    shape.line.geometry.dispose();
+    paths.delete(robot);
+  }
+}
+
+// The path's corners, with points in between that sit on the scenery under them (a hill, a ramp). The ray starts
+// a little above the height the server gives, so a table the path runs under is not taken for the ground.
+function groundPoints(path) {
+  const out = [];
+  for (let i = 0; i < path.length; i++) {
+    const [x, y, z] = path[i];
+    out.push(new THREE.Vector3(x, y, groundHeight(x, y, z + 0.3, z) + PATH_LIFT));
+    if (i === path.length - 1) break;
+    const [x2, y2, z2] = path[i + 1];
+    const n = Math.floor(Math.hypot(x2 - x, y2 - y) / PATH_STEP);
+    for (let k = 1; k < n; k++) {
+      const f = k / n;
+      const px = x + (x2 - x) * f;
+      const py = y + (y2 - y) * f;
+      const pz = z + (z2 - z) * f;
+      out.push(new THREE.Vector3(px, py, groundHeight(px, py, pz + 0.3, pz) + PATH_LIFT));
+    }
+  }
+  return out;
+}
+
+// Each frame: the further a stretch of path is from the camera, the wider it is drawn, at least PATH_MIN_PX across
+// on screen. Rebuilt only once the camera has moved by a few percent of its distance to the path.
+function updatePathWidths() {
+  if (!paths.size || !hasSize()) return;
+  for (const shape of paths.values()) {
+    const middle = shape.line.geometry.boundingSphere?.center;
+    if (!middle || !shape.points) continue;
+    const away = camera.position.distanceTo(middle);
+    if (shape.seenFrom && shape.seenFrom.distanceTo(camera.position) < 0.03 * away) continue;
+    shape.seenFrom = camera.position.clone();
+    ribbon(shape.line.geometry, shape.points);
+    const end = shape.points[shape.points.length - 1];
+    shape.end.scale.setScalar(pathWidth(end) / PATH_WIDTH);
+  }
+}
+
+// Width (m) of the path at a point: PATH_WIDTH, or wider from far away (a flat line seen at a slant foreshortens).
+function pathWidth(p) {
+  if (!hasSize()) return PATH_WIDTH;
+  const away = Math.max(camera.position.distanceTo(p), 1e-6);
+  const perPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / window.innerHeight; // m per px, 1 m off
+  const across = Math.max((camera.position.z - p.z) / away, 0.3);
+  return Math.max(PATH_WIDTH, (away * perPx * PATH_MIN_PX) / across);
+}
+
+// A flat strip along the points (pathWidth wide at each), mitred at the corners.
+function ribbon(geometry, points) {
+  const pos = [];
+  const index = [];
+  for (let i = 0; i < points.length; i++) {
+    const before = points[Math.max(i - 1, 0)];
+    const after = points[Math.min(i + 1, points.length - 1)];
+    const dir = new THREE.Vector2(after.x - before.x, after.y - before.y).normalize();
+    let side = new THREE.Vector2(-dir.y, dir.x);
+    if (i > 0 && i < points.length - 1) {
+      const into = new THREE.Vector2(points[i].x - before.x, points[i].y - before.y).normalize();
+      const miter = Math.max(0.35, Math.abs(side.dot(new THREE.Vector2(-into.y, into.x))));
+      side = side.multiplyScalar(1 / miter);
+    }
+    const w = pathWidth(points[i]) / 2;
+    const p = points[i];
+    pos.push(p.x + side.x * w, p.y + side.y * w, p.z, p.x - side.x * w, p.y - side.y * w, p.z);
+    if (i > 0) {
+      const a = 2 * (i - 1);
+      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geometry.setIndex(index);
+  geometry.computeBoundingSphere();
+}
+
 // ---------------------------------------------------------------- render loop
 
 let frames = 0;
@@ -1764,6 +1904,7 @@ function loop() {
   updateFollow();
   controls.update();
   updateRing();
+  updatePathWidths();
   refreshDragVisual();
   lessonFrame();
   renderer.render(scene3, camera);

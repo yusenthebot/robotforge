@@ -27,6 +27,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
@@ -45,6 +46,7 @@ log = logging.getLogger(__name__)
 
 VIEWER_UI_URI = "ui://robotforge/viewer.html"
 FAST_WALL_LIMIT = 60.0  # computer seconds one unwatched run may take
+MOVE_SPEED = 0.2  # m/s, move's speed when none is given (with a destination: the robot's own pace)
 HOST = "127.0.0.1"
 
 INSTRUCTIONS = wording.unwrap(
@@ -71,7 +73,8 @@ under them. To build a scene from a sentence, combine load_scene, add_terrain an
 with observe(view="overview").
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
-snake slither; pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
+snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
+the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots with kind, arms and
 positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
 prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer gives the
@@ -117,6 +120,10 @@ class _Server(MCPServer):
         if tool is None:
             raise ToolError(tool_input.unknown_tool(name, names))
         arguments = tool_input.tidy(name, tool.parameters, arguments)
+        if name == "move" and arguments.get("to") is not None:
+            # A trip goes on until it gets there: left out, its time limit is the longest a call may run, not a
+            # plain move's 3 s, which would stop it on the way; and it goes at its own pace, not a plain move's speed.
+            arguments = {"seconds": MAX_SIM_SECONDS, "speed": None, **arguments}
         try:
             return await super().call_tool(name, arguments, context)
         except UnexpectedToolError:
@@ -408,9 +415,53 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 await asyncio.sleep(0)
         return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
+    async def go_to(
+        robot: str, to: str | list[float], speed: float | None, turn: float, seconds: float | None, walker: str | None
+    ) -> dict[str, Any]:
+        """move with a destination: plan, follow the path until there (or out of time), report how it went."""
+        if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:
+            raise PlaygroundError(
+                f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; with to, seconds=null starts the "
+                "trip and returns at once"
+            )
+        if turn:
+            raise PlaygroundError("turn is not used with to: the robot steers along its path itself; leave turn out")
+        before = playground.behaviors.pose(robot)
+        try:
+            trip = playground.behaviors.navigate(robot, to, speed, walker, seconds)
+        except NoWay as exc:  # not a mistake in the call: the answer is that it cannot get there, and why
+            return {
+                "arrived": False,
+                "destination": exc.destination,
+                "path_m": 0.0,
+                "why": exc.cause,
+                "note": str(exc),
+                "from": before,
+            }
+        if seconds is None:
+            started = {k: v for k, v in trip.status().items() if k != "path"}
+            return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
+        # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
+        run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
+        if not trip.done:  # the viewer's clock lagged behind the wall clock: end the trip here
+            playground.behaviors.stop(robot)
+        settled = playground.behaviors.settled(robot)
+        if settled is not None:  # a humanoid finishes its step first; report where it really stops
+            await run_until(settled, 3.0)
+        extra = {k: run[k] for k in ("shown_live", "stopped_early") if k in run}
+        result = trip.result()
+        if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
+            result["note"] += "; call move with the same to again to go on (seconds=null lets it walk on meanwhile)"
+        return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
+
     @server.tool()
     async def move(
-        robot: str, speed: float = 0.2, turn: float = 0.0, seconds: float | None = 3.0, walker: str | None = None
+        robot: str,
+        speed: float | None = MOVE_SPEED,
+        turn: float = 0.0,
+        seconds: float | None = 3.0,
+        walker: str | None = None,
+        to: str | list[float] | None = None,
     ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
         a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
@@ -420,9 +471,15 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned policy
         (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
         `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
-        driving uses the same walker."""
+        driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
+        round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
+        reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
+        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
+            if to is not None:
+                return _json(await go_to(robot, to, speed, turn, seconds, walker))
+            speed = MOVE_SPEED if speed is None else speed
             if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
                 raise PlaygroundError(
                     f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; "

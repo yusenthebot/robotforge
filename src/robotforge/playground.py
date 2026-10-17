@@ -97,6 +97,16 @@ class Playground:
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
 
+        def go_to(msg: dict[str, Any]) -> dict[str, Any]:
+            """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
+            Planned off the hub's event loop: 60 to 220 ms in the scenes, over a second for a place closed off in the
+            park (working out why), and the stream stood still for that long."""
+            to = msg["to"] if isinstance(msg["to"], str) else [float(v) for v in msg["to"]]
+            speed = float(msg["speed"]) if msg.get("speed") is not None else None
+            walker = msg.get("walker")
+            trip = self.behaviors.navigate(str(msg["robot"]), to, speed, str(walker) if walker else None)
+            return {"path_m": round(trip.plan.length, 2)}
+
         def extras() -> dict[str, Any]:
             world = self.current_world()
             robots = self.behaviors.robots()
@@ -135,6 +145,7 @@ class Playground:
         hub.handlers["teleop"] = teleop
         hub.handlers["lesson"] = self.lessons.handle
         hub.slow_handlers["lesson_open"] = lesson_open
+        hub.slow_handlers["go_to"] = go_to
 
         def lesson_bench(msg: dict[str, Any]) -> dict[str, Any]:
             """Sweeps run many tests on copies of the rig: off the hub thread, answered when done."""

@@ -684,7 +684,7 @@ input[type="range"]::-moz-range-thumb {
   position: fixed;
   top: calc(var(--gutter) + 44px);
   right: var(--gutter);
-  width: 300px;
+  width: 310px; /* at 300 "Drive the selected robot" (146 px) wrapped in its 142 px column, "robot" alone below */
   padding: 14px 16px;
   border-radius: var(--radius);
 }
