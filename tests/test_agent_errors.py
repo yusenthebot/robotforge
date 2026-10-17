@@ -344,10 +344,10 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             {"robot": "arm", "object": "ball", "target": [3.0, 3.0]},
             ["arm cannot reach the target", "it is 4.", "m from the arm's base, which reaches about", "nearer"],
         ),
-        (  # within reach, but not pointing down: "nearer" would be the wrong way (review of the audit)
+        (  # within reach, but too close to point down: "nearer" would be the wrong way (review of the audit)
             "pick_and_place",
             {"robot": "arm", "object": "ball", "target": [0.02, 0.0]},
-            ["arm cannot reach the target", "within its reach, but not with the gripper pointing down"],
+            ["arm cannot reach the target", "the gripper points down only", "move the target further from the base"],
         ),
         (
             "pick_and_place",
@@ -474,6 +474,25 @@ async def test_a_world_file_edited_by_hand_is_explained_by_every_tool_that_reads
     assert "robot number 1: name is required" in await lab.refused("remove", name="ball")
     file.write_text("name: lab\nfloor: [1\n", encoding="utf-8")
     assert "world.yaml is not valid YAML at line" in await lab.refused("robots")
+    await lab.restore()
+
+
+async def test_a_world_that_does_not_open_says_where_its_file_is(lab):
+    """An agent in the eval told only "unknown template 'quadrupd'" looked for the file in ~/.robotforge, read the
+    troubleshooting page and searched the disk before it found and fixed it. The world open before stays open:
+    the broken one used to become the one edits went to, while the simulation still ran the last one."""
+    garden = lab.playground.store.dir.parent / "garden" / "world.yaml"
+    garden.parent.mkdir()
+    garden.write_text("name: garden\nrobots:\n- name: pup\n  template: quadrupd\n", encoding="utf-8")
+    text = await lab.refused("open_world", name_or_path="garden")
+    assert "unknown template 'quadrupd'. Did you mean quadruped?" in text
+    assert f"the world is {garden}: fix it there, then open_world again" in text
+    assert lab.playground.store.dir.name == "lab"
+    listed = json.loads(await lab.accepted("robots"))
+    assert "pup" not in {r["name"] for r in listed["robots"]}  # the broken file's robot is not in the session
+    garden.write_text(garden.read_text(encoding="utf-8").replace("quadrupd", "quadruped"), encoding="utf-8")
+    assert json.loads(await lab.accepted("open_world", name_or_path="garden"))["robots"] == ["pup"]
+    lab.playground.store = type(lab.playground.store)(lab.playground.store.dir.parent / "lab")
     await lab.restore()
 
 

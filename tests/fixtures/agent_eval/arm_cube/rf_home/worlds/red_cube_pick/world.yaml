@@ -1,0 +1,43 @@
+name: red_cube_pick
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: arm
+  template: arm
+  file: null
+  library: null
+  build: null
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects:
+- name: red_cube
+  shape: box
+  size:
+  - 0.04
+  - 0.04
+  - 0.04
+  pos:
+  - 0.25
+  - -0.12
+  yaw: 0.0
+  color: red
+  mass: null
+  fixed: false
+- name: box
+  shape: bin
+  size:
+  - 0.14
+  - 0.14
+  - 0.05
+  pos:
+  - 0.05
+  - 0.28
+  yaw: 0.0
+  color: blue
+  mass: null
+  fixed: true

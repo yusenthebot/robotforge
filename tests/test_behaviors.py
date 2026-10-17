@@ -4,7 +4,7 @@ import math
 import pytest
 from mcp import Client
 
-from robotforge.behaviors.manager import BehaviorError
+from robotforge.behaviors.manager import BehaviorError, ideal_reach
 from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
@@ -109,6 +109,17 @@ def test_rover_drives_and_turns(pg):
     assert abs(pg.behaviors.pose("rover")["heading_deg"] - before) > 30
 
 
+def test_a_rover_with_big_wheels_rolls_on_its_caster(pg):
+    """The template's caster ball took the floor's grip (MuJoCo uses the larger friction unless a geom has
+    priority) and braked: on 7 cm wheels this 1.7 kg rover covered 2 % of its way, the eval's Mars rover none."""
+    pg.add_robot("rover", template="rover", params={"wheel_radius": 0.07})
+    start = pg.behaviors.pose("rover")["position"]
+    pg.behaviors.move("rover", 0.3, 0.0)
+    _run(pg, 3.0)
+    end = pg.behaviors.pose("rover")["position"]
+    assert end[0] - start[0] > 0.75 * 0.3 * 3.0
+
+
 def test_arm_puts_the_red_cube_in_the_bin(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, -0.12], color="red")
@@ -124,6 +135,51 @@ def test_unreachable_pick_is_refused_with_advice(pg):
     pg.add_object("cube", pos=[0.9, 0.0])
     with pytest.raises(BehaviorError, match="cannot reach"):
         pg.behaviors.pick_and_place("arm", "cube", [0.2, 0.2])
+
+
+def test_a_bin_within_reach_but_too_far_to_point_down_into_is_moved_nearer_not_further(pg):
+    """A session moved the workshop's bin to 0.36 m, was told "within its reach ... move it a little further from
+    the base", and failed three more times moving it further: the template arm points down into a bin only within
+    about 0.3 m of its base. The error now says where along that line it works, and that spot works."""
+    import re
+
+    pg.add_robot("arm", template="arm")
+    pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
+    pg.add_object("bin", shape="bin", pos=[0.3, -0.2])
+    with pytest.raises(BehaviorError) as refused:
+        pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    said = str(refused.value)
+    assert "move the bin nearer" in said and "further" not in said, said
+    spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
+    assert 0.2 < math.hypot(*spot) < 0.32
+    pg.update_object("bin", pos=spot)
+    arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    pg.run_fast(lambda: arm.done, 40.0)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("green_cube", info["region"])["success"]
+
+
+def test_a_bin_on_the_arms_base_is_sent_where_it_clears_the_base_and_the_cube(pg):
+    """A bin at the arm's base was told "move the bin further from the base: to about [0.1, 0.0]". There it sat on
+    the 0.055 m stand, was pushed off beside the cube and the pick placed nothing (review). The advice now keeps the
+    bin clear of the base and of the cube, and the pick works at the spot it names."""
+    import re
+
+    pg.add_robot("arm", template="arm")
+    pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
+    pg.add_object("bin", shape="bin", pos=[0.0, 0.0])
+    with pytest.raises(BehaviorError) as refused:
+        pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    said = str(refused.value)
+    spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
+    bin_radius = math.hypot(0.2, 0.15) / 2  # the bin's default size, all ways round
+    assert math.hypot(*spot) > 0.055 + bin_radius, said  # off the stand
+    assert math.dist(spot, [0.25, 0.1]) > bin_radius + 0.02, said  # not over the cube
+    pg.update_object("bin", pos=spot)
+    arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
+    pg.run_fast(lambda: arm.done, 40.0)
+    _run(pg, 0.5)
+    assert pg.behaviors.placed("green_cube", info["region"])["success"]
 
 
 def test_wrong_behavior_for_robot_kind_is_explained(pg):
@@ -149,6 +205,129 @@ async def test_move_and_pick_tools_report_results(pg):
         assert json.loads(placed.content[0].text)["success"] is True
         listed = json.loads((await client.call_tool("robots", {})).content[0].text)
         assert {r["name"]: r["kind"] for r in listed["robots"]} == {"dog": "quadruped", "arm": "arm"}
+
+
+@pytest.mark.anyio
+async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest(pg):
+    """Agents in the eval called stop after nearly every timed move (the result showed the rover still driving at
+    0.15 m/s), then saw the wheels still commanded in observe and zeroed them with set_controls and simulate."""
+    pg.add_robot("rover", template="rover")
+    pg.add_robot("dog", template="quadruped", pos=[0, 1.5])
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        driven = json.loads(
+            (await client.call_tool("move", {"robot": "rover", "speed": 0.15, "seconds": 2})).content[0].text
+        )
+        # Stopped, said at the top ("speed": 0.15 beside a nested "stopped" still read as driving, and an agent
+        # called stop right after it); behavior is how it moved, as the controller reports it.
+        assert driven["stopped"] is True and "stopped" not in driven["behavior"]
+        assert driven["behavior"]["speed"] == pytest.approx(0.15) and driven["behavior"]["turn"] == 0
+        assert "note" not in driven  # it covered the ground it was asked to
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        walked = json.loads(
+            (await client.call_tool("move", {"robot": "dog", "speed": 0.3, "seconds": 2})).content[0].text
+        )
+        # The gait's speed ramps up from 0: at the start it read as a dog standing still.
+        assert walked["stopped"] is True and walked["behavior"]["speed"] > 0.2
+
+
+@pytest.mark.anyio
+async def test_stop_after_run_controller_stops_a_rovers_wheels(pg):
+    """run_controller leaves its controller attached; stop removed it but left the wheel speeds it last set, and
+    the rover in the eval went on spinning (0.11 m and a quarter turn in 2 s) until the agent zeroed them."""
+    pg.add_robot("rover", template="rover")
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        ran = await client.call_tool(
+            "run_controller",
+            {"robot": "rover", "task": "drive_to", "method": "pd", "task_params": {"goal": [0.8, 0.4]}, "seconds": 2},
+        )
+        assert json.loads(ran.content[0].text)["keeps_running"] is True
+        await client.call_tool("stop", {"robot": "rover"})
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        before = pg.behaviors.pose("rover")
+        await client.call_tool("simulate", {"seconds": 2})
+        after = pg.behaviors.pose("rover")
+    assert math.dist(before["position"][:2], after["position"][:2]) < 0.02
+    assert abs(after["heading_deg"] - before["heading_deg"]) < 3
+
+
+@pytest.mark.anyio
+async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
+    """A session built a 0.6 m solid aluminum rover on hobby gearmotors; it moved 2 mm in 6 s and the agent was
+    told only distance_m 0.002, so it had to guess. (That one rolls now that its caster no longer brakes; this one,
+    on the smallest motors, pushes with 1.3 N for 54 kg and cannot.)"""
+    params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
+    pg.add_robot("mars_rover", template="rover", params=params)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        result = await client.call_tool("move", {"robot": "mars_rover", "speed": 0.3, "seconds": 3})
+        moved = json.loads(result.content[0].text)
+    assert moved["distance_m"] < 0.05
+    assert "wheels barely turned" in moved["note"] and "kg" in moved["note"] and "stronger motors" in moved["note"]
+
+
+@pytest.mark.anyio
+async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
+    """Lesson 2's challenge drives a full circle back to the start; the move ended 0.23 m from its start and was
+    told "its wheels turned but it did not get anywhere", judged against speed x seconds (1.89 m). A turning move
+    is judged by its arc's chord, so only a robot that really stalls on the arc gets the note."""
+    pg.add_robot("rover", template="rover")
+    params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
+    pg.add_robot("heavy", template="rover", params=params, pos=[0, 2])
+    pg.add_robot("dog", template="quadruped", pos=[0, -2])
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        circle = {"robot": "rover", "speed": 0.3, "turn": 1.0, "seconds": 6.3}
+        looped = json.loads((await client.call_tool("move", circle)).content[0].text)
+        stalled = json.loads(
+            (await client.call_tool("move", {**circle, "robot": "heavy", "seconds": 4})).content[0].text
+        )
+        # Judged as 5.3 s of turning after a 1 s start, the dog's circle was a 0.28 m chord it had not made.
+        walked = json.loads((await client.call_tool("move", {**circle, "robot": "dog"})).content[0].text)
+    assert looped["turned_deg"] > 270 and looped["distance_m"] < 0.5 and "note" not in looped
+    assert walked["distance_m"] < 0.2 and "note" not in walked, walked
+    assert stalled["distance_m"] < 0.05 and "wheels barely turned" in stalled["note"]
+
+
+@pytest.mark.anyio
+async def test_a_short_move_on_flat_ground_is_not_told_it_was_held_back(pg):
+    """A snake told 0.2 m/s for 1 s covers 0.03 m while it gets going, and was told "something held it back (a wall
+    or an object in the way, a slope)" on empty, flat ground (review). The first second of a move is not judged."""
+    import test_builder
+
+    pg.add_robot("snake", build=test_builder.SNAKE)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        nudged = json.loads(
+            (await client.call_tool("move", {"robot": "snake", "speed": 0.2, "seconds": 1})).content[0].text
+        )
+    assert nudged["distance_m"] < 0.1 and "note" not in nudged, nudged
+
+
+@pytest.mark.anyio
+async def test_a_robot_that_went_backwards_is_told_so(pg):
+    """The eval's hexapod on weak servos was sent forwards at 0.12 m/s for 5 s and went 0.21 m backwards; it had
+    moved, so the shortfall note (judged by distance) said nothing, and the agent reported a walk."""
+    import test_builder
+
+    pg.add_robot("spider", build=test_builder.SPIDER)
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        moved = json.loads(
+            (await client.call_tool("move", {"robot": "spider", "speed": 0.12, "seconds": 5})).content[0].text
+        )
+    assert moved["to"]["position"][0] < moved["from"]["position"][0] - 0.1, moved
+    assert "m backwards instead of the 0.48 m asked" in moved["note"] and "stronger servos" in moved["note"]
+
+
+def test_the_ideal_reach_of_a_move_is_the_chord_of_its_arc():
+    assert ideal_reach(0.3, 0.0, 3.0) == pytest.approx(0.9)
+    assert ideal_reach(0.3, 1.0, 2 * math.pi) == pytest.approx(0.0, abs=1e-9)  # a full circle
+    assert ideal_reach(0.3, -1.0, math.pi) == pytest.approx(0.6)  # a half circle to the right: its diameter
+    assert ideal_reach(-0.2, 0.5, 1e-3) == pytest.approx(2e-4)
 
 
 @pytest.fixture

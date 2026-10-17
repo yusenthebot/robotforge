@@ -1,0 +1,567 @@
+{
+ "label": "head",
+ "commit": "15fddbb",
+ "started": "20261017-031624",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 8,
+  "tasks": 9,
+  "tool_calls": 74,
+  "failed_calls": 6,
+  "shell_commands": 17,
+  "sessions_with_problems": 1,
+  "input_tokens": 2268016,
+  "uncached_input_tokens": 444656,
+  "output_tokens": 7846,
+  "mean_wall_seconds": 78.8
+ },
+ "tasks": [
+  {
+   "task": "dog_grass",
+   "lang": "zh",
+   "covers": [
+    "template",
+    "walk",
+    "floor"
+   ],
+   "prompt": "给我一只四足机器狗，放在草地上，让它往前走 10 秒。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "on grass",
+     "ok": true,
+     "observed": "floor grass"
+    },
+    {
+     "name": "a quadruped",
+     "ok": true,
+     "observed": "dog_grass/dog"
+    },
+    {
+     "name": "went >= 1.0 m the way it was sent",
+     "ok": true,
+     "observed": "3.05 m (3.05 m in all)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 5,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 149603,
+   "cached_input_tokens": 115200,
+   "output_tokens": 535,
+   "reasoning_tokens": 0,
+   "wall_seconds": 47.4,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已完成：四足机器狗在草地上向前走了 **10 秒**，前进约 **3.05 米**，保持直立并已停止。 [打开 3D 场景](http://127.0.0.1:8738/)"
+  },
+  {
+   "task": "arm_cube",
+   "lang": "en",
+   "covers": [
+    "template",
+    "objects",
+    "pick and place"
+   ],
+   "prompt": "Build me a robot arm and have it put a red cube into a box.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "an arm",
+     "ok": true,
+     "observed": "red_cube_pick/arm"
+    },
+    {
+     "name": "a red object",
+     "ok": true,
+     "observed": "red_cube"
+    },
+    {
+     "name": "red_cube starts outside the bin",
+     "ok": true,
+     "observed": "saved at [0.25, -0.12]"
+    },
+    {
+     "name": "an arm call handled it",
+     "ok": true,
+     "observed": "pick_and_place"
+    },
+    {
+     "name": "red_cube ended in a bin",
+     "ok": true,
+     "observed": "last at [0.0553, 0.2725, 0.0249], bins ['box']"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 232833,
+   "cached_input_tokens": 193024,
+   "output_tokens": 842,
+   "reasoning_tokens": 0,
+   "wall_seconds": 42.3,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "add_object",
+    "observe",
+    "pick_and_place",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_skills_extension::host_service: failed to install system skills: io error while remove existing system skills dir: Directory not empty (os error 66)"
+   ],
+   "final_message": "Built a five-joint robot arm and successfully placed the red cube inside the blue box in simulation. Verified its final position, within 1 cm of the box’s center. [Open the 3D viewer](http://127.0.0.1:8739/) to inspect the scene and try the joint sliders."
+  },
+  {
+   "task": "go2_turn",
+   "lang": "zh",
+   "covers": [
+    "real robot",
+    "walk",
+    "turn"
+   ],
+   "prompt": "我想看看真正的 Unitree Go2 机器狗。帮我放一台，让它往前走几步，再向左转个弯。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a Go2 from the library",
+     "ok": true,
+     "observed": "go2_left_turn/go2"
+    },
+    {
+     "name": "went >= 0.3 m the way it was sent",
+     "ok": true,
+     "observed": "1.29 m (1.30 m in all)"
+    },
+    {
+     "name": "turned left >= 30 deg",
+     "ok": true,
+     "observed": "76 deg"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 8,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 253050,
+   "cached_input_tokens": 182656,
+   "output_tokens": 703,
+   "reasoning_tokens": 17,
+   "wall_seconds": 44.0,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "list_library",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已放入 Unitree Go2 的真实机型仿真模型：先前进约 **0.83 米**，再边走边向左转约 **77°**，目前已停稳，没有摔倒。 [打开 3D 视图查看 Go2](http://127.0.0.1:8738/)，也可以用 **W A S D** 继续操控。"
+  },
+  {
+   "task": "urdf_rover",
+   "lang": "en",
+   "covers": [
+    "import",
+    "drive"
+   ],
+   "prompt": "I downloaded a robot description to {work}/my_rover/urdf/my_rover.urdf. Can you load it and drive it forward about half a meter?",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot imported from my_rover.urdf",
+     "ok": true,
+     "observed": "my_rover_drive/my_rover"
+    },
+    {
+     "name": "went >= 0.3 m the way it was sent",
+     "ok": true,
+     "observed": "0.50 m (0.50 m in all)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 6,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 2,
+   "input_tokens": 220438,
+   "cached_input_tokens": 184576,
+   "output_tokens": 693,
+   "reasoning_tokens": 0,
+   "wall_seconds": 46.8,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Loaded your URDF and drove the rover forward **0.504 meters**. It stayed upright, held its heading, and stopped. The importer automatically added the missing wheel motors. View it in the [live viewer](http://127.0.0.1:8739/)."
+  },
+  {
+   "task": "hexapod_build",
+   "lang": "zh",
+   "covers": [
+    "parts",
+    "walk"
+   ],
+   "prompt": "用零件帮我拼一个六条腿的机器人，像蜘蛛那样，然后让它走几步。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot built from parts",
+     "ok": true,
+     "observed": "spider_hexapod/spider"
+    },
+    {
+     "name": "it is a hexapod",
+     "ok": true,
+     "observed": "hexapod"
+    },
+    {
+     "name": "went >= 0.2 m the way it was sent",
+     "ok": true,
+     "observed": "0.55 m (0.55 m in all)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 8,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 194473,
+   "cached_input_tokens": 155264,
+   "output_tokens": 893,
+   "reasoning_tokens": 8,
+   "wall_seconds": 44.1,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "builder_guide",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "update_part",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "拼好了：六条腿、18 个可动关节的蜘蛛式机器人。 已让它走了 **5 秒，前进约 55 厘米**，身体保持直立，并已停下。 打开 [3D 窗口](http://127.0.0.1:8738/) 查看，按 **W A S D** 可以继续操控。"
+  },
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "prompt": "造一台火星车，再放一块大石头，把车开到石头旁边停下。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a rover and a rock",
+     "ok": true,
+     "observed": "mars_rock_exploration/mars_rover (rover), large_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "1.69 m"
+    },
+    {
+     "name": "ended within 0.5 m of it",
+     "ok": true,
+     "observed": "0.38 m from its outline (0.64 m from its center)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 10,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 263549,
+   "cached_input_tokens": 224640,
+   "output_tokens": 839,
+   "reasoning_tokens": 16,
+   "wall_seconds": 54.7,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "list_templates",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "list_algorithms",
+    "observe",
+    "run_controller",
+    "stop",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "已造好火星车，放置了一块大石头，并把车开到石头旁停下。车身保持直立，车头距石头约 40 厘米，轮子控制已归零。"
+  },
+  {
+   "task": "learn_control",
+   "lang": "zh",
+   "covers": [
+    "lessons",
+    "controllers"
+   ],
+   "prompt": "我是新手，想学控制算法，比如 PID 是怎么让机器人保持平衡的。能一步步教我吗？",
+   "passed": false,
+   "criteria": [
+    {
+     "name": "opened the control lesson (lessons 6)",
+     "ok": true,
+     "observed": "lessons opened: [6]"
+    },
+    {
+     "name": "ran a balance controller live",
+     "ok": false,
+     "observed": "0 run_controller (success []), 1 compare_controllers (off-screen)"
+    }
+   ],
+   "tool_calls": 7,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 185970,
+   "cached_input_tokens": 129280,
+   "output_tokens": 1109,
+   "reasoning_tokens": 21,
+   "wall_seconds": 60.5,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "lessons",
+    "lessons",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "compare_controllers",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "可以。我们每次学一个概念，先看现象，再理解公式，不需要先会高等数学。 **第一步：机器人为什么要不停调整？** 想象你用手掌托着一根竖直的扫帚：扫帚向右倒，你就把手往右移，接住它。两轮平衡机器人也类似：身体向前倾，轮子就要及时往前赶。 这个不断重复的过程叫**反馈控制（feedback control）**： 测量倾斜 → 计算调整量 → 电机动作 → 再测量。 我已搭好一个“小车托着竖杆”的倒立摆仿真。在同样运行 6 秒、第 3 秒受到扰动的实验里： | 控制方式 | 结果 | |---|---| | 不做控制 | 约第 3.35 秒失去平衡 | | PD 控制 | 撑过扰动，结束时偏..."
+  },
+  {
+   "task": "fix_workshop",
+   "lang": "en",
+   "covers": [
+    "edit a world",
+    "pick and place"
+   ],
+   "prompt": "Open my workshop world. Paint the ball blue, and have the arm drop the green cube into the bin.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "the ball is blue",
+     "ok": true,
+     "observed": "blue"
+    },
+    {
+     "name": "green_cube starts where it was",
+     "ok": true,
+     "observed": "saved at [0.25, 0.1]"
+    },
+    {
+     "name": "an arm call handled it",
+     "ok": true,
+     "observed": "pick_and_place"
+    },
+    {
+     "name": "green_cube ended in a bin",
+     "ok": true,
+     "observed": "last at [0.2517, -0.15, 0.0249], bins ['bin']"
+    },
+    {
+     "name": "arm, cube and ball still there",
+     "ok": true,
+     "observed": "arm, green_cube, ball"
+    }
+   ],
+   "tool_calls": 15,
+   "failed_calls": 4,
+   "other_mcp_calls": 0,
+   "shell_commands": 4,
+   "input_tokens": 522292,
+   "cached_input_tokens": 437760,
+   "output_tokens": 1598,
+   "reasoning_tokens": 340,
+   "wall_seconds": 65.4,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "open_world",
+    "open_viewer",
+    "show_world",
+    "update_object",
+    "pick_and_place!",
+    "update_object",
+    "pick_and_place!",
+    "observe",
+    "update_object",
+    "pick_and_place!",
+    "update_object",
+    "pick_and_place!",
+    "update_object",
+    "pick_and_place",
+    "observe"
+   ],
+   "failures": [
+    {
+     "tool": "pick_and_place",
+     "args": "{\"robot\": \"arm\", \"object\": \"green_cube\", \"target\": \"bin\"}",
+     "error": "arm cannot reach the target with its gripper pointing down: it is 1.27 m from the arm's base, which reaches about 0.52 m; move it nearer"
+    },
+    {
+     "tool": "pick_and_place",
+     "args": "{\"robot\": \"arm\", \"object\": \"green_cube\", \"target\": \"bin\"}",
+     "error": "arm cannot reach the target with its gripper pointing down: it is 0.36 m from the arm's base, which reaches about 0.52 m; that is within its reach, but not with the gripper pointing down there: move it a little further from the base or nearer the height of the arm's shoulder"
+    },
+    {
+     "tool": "pick_and_place",
+     "args": "{\"robot\": \"arm\", \"object\": \"green_cube\", \"target\": \"bin\"}",
+     "error": "arm cannot reach the target with its gripper pointing down: it is 0.43 m from the arm's base, which reaches about 0.52 m; that is within its reach, but not with the gripper pointing down there: move it a little further from the base or nearer the height of the arm's shoulder"
+    },
+    {
+     "tool": "pick_and_place",
+     "args": "{\"robot\": \"arm\", \"object\": \"green_cube\", \"target\": \"bin\"}",
+     "error": "arm cannot reach the target with its gripper pointing down: it is 0.49 m from the arm's base, which reaches about 0.52 m; that is within its reach, but not with the gripper pointing down there: move it a little further from the base or nearer the height of the arm's shoulder"
+    }
+   ],
+   "problems": [],
+   "final_message": "Opened your workshop and painted the ball blue. I moved the bin within reach, then the arm dropped the green cube inside. Verified visually and in the simulation."
+  },
+  {
+   "task": "fix_garden",
+   "lang": "en",
+   "covers": [
+    "open a world",
+    "recover from a mistake",
+    "walk"
+   ],
+   "prompt": "Open my garden world and have the dog walk forward about a meter.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "garden opens with its dog a quadruped",
+     "ok": true,
+     "observed": "dog: quadruped"
+    },
+    {
+     "name": "the ball is still there",
+     "ok": true,
+     "observed": "ball"
+    },
+    {
+     "name": "the dog walked >= 0.5 m forward in the garden",
+     "ok": true,
+     "observed": "1.03 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 6,
+   "failed_calls": 2,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 245808,
+   "cached_input_tokens": 200960,
+   "output_tokens": 634,
+   "reasoning_tokens": 13,
+   "wall_seconds": 304.0,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "open_world!",
+    "open_world!",
+    "open_world",
+    "open_viewer",
+    "move",
+    "observe"
+   ],
+   "failures": [
+    {
+     "tool": "open_world",
+     "args": "{\"name\": \"garden\"}",
+     "error": "open_world has no parameter 'name' (parameters: name_or_path)"
+    },
+    {
+     "tool": "open_world",
+     "args": "{\"name_or_path\": \"garden\"}",
+     "error": "robot 'dog': unknown template 'quadrupd'. Did you mean quadruped? Templates: arm, quadruped, humanoid, rover, cartpole, gripper (the world is RUN/tasks/fix_garden/rf_home/worlds/garden/world.yaml: fix it there, then open_world again)"
+    }
+   ],
+   "problems": [],
+   "final_message": "Opened your [garden world](http://127.0.0.1:8738/) after fixing a template typo. The dog walked forward **1.03 meters** and stopped upright."
+  }
+ ]
+}

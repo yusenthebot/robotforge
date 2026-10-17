@@ -23,6 +23,10 @@ OVERLAP_ERROR = 0.004  # m: deeper than this, two parts are inside each other
 SETTLE_SECONDS = 1.0
 WEAK = 0.95  # share of an actuator's force limit used just to hold still: it cannot hold its pose
 STRAINED = 0.6  # little headroom left for walking or lifting (the humanoid tests fall from about 67 %)
+# The same for a robot on four or more feet: a walk holds it on half of them, about twice the load. A 3.2 kg hexapod
+# with roll-pitch-pitch legs built in the agent eval, sent forwards for 5 s, made 82 % of the way at 36 % standing,
+# 37 % at 46, 6 % at 48 and went backwards from 54 % (the agent's xl430 build); the test dog still made 87 % at 50 %.
+WALK_STRAINED = 0.45
 _DIVERGENCE = (mujoco.mjtWarning.mjWARN_BADQPOS, mujoco.mjtWarning.mjWARN_BADQVEL, mujoco.mjtWarning.mjWARN_BADQACC)
 
 
@@ -135,13 +139,14 @@ def _settle(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> l
         )
     notes: list[str] = []
     weak, strained = [], []
+    walker = assembly.floating and assembly.feet >= 4
     for a in servos:
         limit = float(model.actuator_forcerange[a][1])
         share = peak[a] / limit if limit > 0 else 0.0
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
         if share >= WEAK:
             weak.append((name, share, limit))
-        elif share >= STRAINED:
+        elif share >= (WALK_STRAINED if walker else STRAINED):
             strained.append((name, share, limit))
     servos_by_strength = sorted(
         (a for a in components.ACTUATORS.values() if a.kind == "servo"), key=lambda a: a.stall_torque
@@ -153,7 +158,14 @@ def _settle(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> l
             f"warning: too weak: {names} use all their force just to hold the home pose, so the robot sags. "
             f"Use stronger servos (by strength: {stronger}), add gear: 2 to those parts, or make the robot lighter."
         )
-    if strained:
+    if strained and walker:
+        names = ", ".join(f"{n} ({s:.0%})" for n, s, _ in strained[:4])
+        notes.append(
+            f"note: little headroom to walk: {names} of their force is used standing on all {assembly.feet} feet; a "
+            "walk holds the robot on half of them, about twice that, so it may fall short or slide backwards. "
+            f"Stronger servos give it room (by strength: {stronger})."
+        )
+    elif strained:
         names = ", ".join(f"{n} ({s:.0%})" for n, s, _ in strained[:4])
         notes.append(
             f"note: little headroom: {names} of their force is used standing still; walking or lifting may be too "

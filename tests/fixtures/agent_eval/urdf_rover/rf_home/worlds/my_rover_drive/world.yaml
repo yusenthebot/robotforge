@@ -1,0 +1,17 @@
+name: my_rover_drive
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: my_rover
+  template: null
+  file: RUN/tasks/urdf_rover/work/my_rover/urdf/my_rover.urdf
+  library: null
+  build: null
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects: []

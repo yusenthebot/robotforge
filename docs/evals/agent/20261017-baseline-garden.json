@@ -1,0 +1,84 @@
+{
+ "label": "baseline-garden",
+ "commit": "2f614f8",
+ "started": "20261017-030810",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 1,
+  "tasks": 1,
+  "tool_calls": 6,
+  "failed_calls": 1,
+  "shell_commands": 6,
+  "sessions_with_problems": 0,
+  "input_tokens": 381775,
+  "uncached_input_tokens": 34511,
+  "output_tokens": 880,
+  "mean_wall_seconds": 58.2
+ },
+ "tasks": [
+  {
+   "task": "fix_garden",
+   "lang": "en",
+   "covers": [
+    "open a world",
+    "recover from a mistake",
+    "walk"
+   ],
+   "prompt": "Open my garden world and have the dog walk forward about a meter.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "garden opens with its dog a quadruped",
+     "ok": true,
+     "observed": "dog: quadruped"
+    },
+    {
+     "name": "the ball is still there",
+     "ok": true,
+     "observed": "ball"
+    },
+    {
+     "name": "the dog walked >= 0.5 m forward in the garden",
+     "ok": true,
+     "observed": "1.04 m"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 6,
+   "failed_calls": 1,
+   "other_mcp_calls": 0,
+   "shell_commands": 6,
+   "input_tokens": 381775,
+   "cached_input_tokens": 347264,
+   "output_tokens": 880,
+   "reasoning_tokens": 8,
+   "wall_seconds": 58.2,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "open_world!",
+    "open_world",
+    "open_viewer",
+    "robots",
+    "move",
+    "observe"
+   ],
+   "failures": [
+    {
+     "tool": "open_world",
+     "args": "{\"name_or_path\": \"garden\"}",
+     "error": "robot 'dog': unknown template 'quadrupd'. Did you mean quadruped? Templates: arm, quadruped, humanoid, rover, cartpole, gripper"
+    }
+   ],
+   "problems": [],
+   "final_message": "Opened your [garden world](http://127.0.0.1:8738/) after fixing a robot-type typo. The dog walked forward **1.04 meters** and stopped, remaining upright."
+  }
+ ]
+}

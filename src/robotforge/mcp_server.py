@@ -31,7 +31,7 @@ from robotforge import lessons, tool_input, wording
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
-from robotforge.cli import DEFAULT_PORT, find_free_port, open_in_browser
+from robotforge.cli import DEFAULT_PORT, listen_on_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
@@ -189,12 +189,13 @@ def _lean_schemas(server: MCPServer) -> None:
         tool.parameters = lean(tool.parameters)
 
 
-def build_server(playground: Playground, port: int) -> MCPServer:
-    """The MCP server, with the viewer on `port`. Port 0 takes a free port from the system and holds it as long as
+def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
+    """The MCP server, with the viewer on `port`. `viewer_socket`, when given, is already listening there (run()
+    takes the port before anything else can). Port 0 takes a free port from the system and holds it as long as
     the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
     listens, and then the viewer exits (tests run side by side on one machine hit that)."""
-    held: socket.socket | None = None
-    if port == 0:
+    held: socket.socket | None = viewer_socket
+    if held is None and port == 0:
         held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         held.bind((HOST, 0))
         port = held.getsockname()[1]
@@ -339,8 +340,9 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
     ) -> str:
-        """Change a robot's template params (merged), position or heading. For a robot built from parts, build replaces
-        its whole description (add_part / update_part change one part)."""
+        """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
+        "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
+        keeps the parts (add_part / update_part change one part)."""
         with _tool_errors():
             return _json(playground.update_robot(name, params, pos, yaw, build))
 
@@ -482,10 +484,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
         a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
         (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
-        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops and
-        reports the distance; seconds=null keeps moving until `stop`. The user watches in real time if the viewer is
-        open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned policy
-        (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
+        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
+        ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
+        saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
+        the viewer is open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned
+        policy (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
         `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
         driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
@@ -516,6 +519,11 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                 return False
 
             run = await run_until(track, seconds)
+            why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
+            moving = playground.session.controllers.get(robot)
+            # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
+            # the clamp notes from the start kept.
+            status = {**status, **(moving.status() if moving is not None else {})}
             playground.behaviors.stop(robot)
             settled = playground.behaviors.settled(robot)
             if settled is not None:  # a humanoid finishes its step first; measure where it really stops
@@ -532,8 +540,12 @@ def build_server(playground: Playground, port: int) -> MCPServer:
                     "to": after,
                     "distance_m": round(moved, 3),
                     "turned_deg": round(turned, 1),
+                    # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going
+                    # and called stop after nearly every timed move.
+                    "stopped": True,
                     **run,
                     "behavior": status,
+                    **({"note": why} if why else {}),
                 }
             )
 
@@ -864,5 +876,6 @@ def run(model: Path | None = None, port: int | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")  # stderr
     session = SimSession.from_path(model) if model else None
     playground = Playground(session=session) if session else Playground.with_demo()
-    chosen = port if port is not None else find_free_port(DEFAULT_PORT, HOST)
-    build_server(playground, chosen).run("stdio")
+    # Taken and held from here on, not just found free: see listen_on_free_port.
+    viewer_socket = listen_on_free_port(port if port is not None else DEFAULT_PORT, HOST, 1 if port is not None else 50)
+    build_server(playground, viewer_socket.getsockname()[1], viewer_socket=viewer_socket).run("stdio")

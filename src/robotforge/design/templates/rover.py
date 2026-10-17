@@ -70,6 +70,12 @@ class Rover(Template):
             pos=[-p.length / 2 + caster_r, 0, caster_r - r],
             rgba=DARK,
             friction=[0.02, 0.001, 0.0001],
+            # MuJoCo takes the larger friction of two touching geoms unless one has priority, so the ball dragged
+            # with the floor's grip (1.0) instead of its own 0.02: a brake carrying a share of the weight. Of 96
+            # designs (2 motors x 3 materials x 4 lengths x 4 wheel sizes, 3 s at 0.3 m/s) 80 covered under a
+            # quarter of their way, among them a 1.7 kg rover on 7 cm wheels and the agent eval's Mars rover;
+            # with priority 32 do, all pushing with at most 1.1 % of their weight. The builder's casters had it.
+            priority=1,
             density=components.MATERIALS["rubber"],
         )
         socket = chassis.add_geom(

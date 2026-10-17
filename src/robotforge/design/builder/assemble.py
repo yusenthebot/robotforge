@@ -49,6 +49,7 @@ class Assembly:
     home_ctrl: dict[str, float] = field(default_factory=dict)
     floating: bool = True
     mounted: dict[str, str] = field(default_factory=dict)  # part -> "arm template" etc.
+    feet: int = 0  # parts with foot: true, counted after mirror and repeat
     notes: list[str] = field(default_factory=list)
 
 
@@ -74,6 +75,7 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         _shape(body, part.spec, build, part.local, accent, part.name, vis, outward)
         if part.spec.foot:
             _foot(body, part)
+            out.feet += 1
         _sensors(spec, body, part.name, part.spec, part.local)
         if part.spec.robot is not None:
             _mount(spec, body, part, out)

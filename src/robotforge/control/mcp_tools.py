@@ -144,7 +144,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
     ) -> str:
         """Run several algorithms on the same robot and task from the world's current state and return a table: reward
         (higher is better), success, the task's key number, effort in joules and computer time per simulated second.
-        Runs off-screen; the live world is unchanged.
+        Runs off-screen: the live world is unchanged and nothing moves in the viewer (run_controller runs one live).
 
         methods defaults to every algorithm that fits the task (list_algorithms) and may include trained policies,
         e.g. ["lqr", "mpc", "policy:pole_balance"]; method_params maps a method to its settings, e.g. {"mpc":

@@ -252,8 +252,17 @@ class Playground:
 
     @_one_edit_at_a_time
     def open_world(self, name_or_path: str) -> dict[str, Any]:
-        self.store = WorldStore.open(name_or_path)
-        return self._load_world(self.store.compile())
+        store = WorldStore.open(name_or_path)
+        try:
+            compiled = store.compile()
+        except ValueError as exc:
+            # Where the file is: an agent told only "unknown template 'quadrupd'" looked for it in ~/.robotforge,
+            # read the troubleshooting page and searched the disk before it found and fixed it (agent eval).
+            raise PlaygroundError(f"{exc} (the world is {store.file}: fix it there, then open_world again)") from exc
+        # Only now: a world that did not open used to become the one edits went to while the simulation still
+        # ran the last one, so robots listed the broken file's dog and add_object failed on its template.
+        self.store = store
+        return self._load_world(compiled)
 
     @_one_edit_at_a_time
     def add_robot(
@@ -306,6 +315,7 @@ class Playground:
         build: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
+        kept: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -318,9 +328,25 @@ class Playground:
             if yaw is not None:
                 robot.yaw = yaw
             if build is not None:
-                _built(robot).build = build
+                entry = _built(robot)
+                if not (entry.build or {}).get("parts") or "parts" in build:
+                    entry.build = build
+                    return
+                # A build without parts changes the fields it gives and keeps the parts: an agent in the eval sent
+                # build={"servo": ..., "base": {...}} to give its hexapod stronger servos, got a bare box and had
+                # to send all 19 parts again.
+                if not build:
+                    raise PlaygroundError(
+                        f"build {{}} changes nothing on {robot.name}: give the fields to change (servo, base, ...), or "
+                        '"parts" to replace the whole robot'
+                    )
+                entry.build = _merged_build(entry.build, build)
+                kept.append(
+                    f'{robot.name}: kept its parts and changed only {", ".join(build)}; a build without "parts" '
+                    'changes the fields it gives (send "parts" to replace them)'
+                )
 
-        return _noted(self._edit(change), _yaw_note(yaw))
+        return _noted(self._edit(change), _yaw_note(yaw), *kept)
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -831,6 +857,19 @@ def _check_meters(label: str, values: list[float] | None, limit: float) -> None:
     if max(abs(v) for v in values) / 100 <= limit:
         text += f"; use meters (in cm that would be {[round(v / 100, 3) for v in values]})"
     raise PlaygroundError(text)
+
+
+def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """A robot's build with the fields of `new` changed and its parts kept, as update_part(robot, "robot" or "base")
+    changes them, so null puts a field back to its default and an unknown field is refused the same way."""
+    robot_wide = {key: value for key, value in new.items() if key != "base"}
+    out = build_edit.update_part(old, "robot", robot_wide) if robot_wide else old
+    base = new.get("base")
+    if isinstance(base, dict) and base:
+        out = build_edit.update_part(out, "base", base)  # {"base": {"mass": 0.8}} keeps its shape and size
+    elif "base" in new:
+        out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
+    return out
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:

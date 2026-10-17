@@ -540,6 +540,14 @@ _DRAG = """
 """
 
 
+def _mars_rover(pg: Any) -> None:
+    """The rover an agent built in scripts/agent_eval.py's rover_rock task: 0.5 m of solid aluminum on 9 cm
+    wheels and 12 V gearmotors, with the rock it had to reach."""
+    params = {"color": "white", "length": 0.5, "width": 0.36, "wheel_radius": 0.09, "motor": "jga25"}
+    pg.add_robot("mars_rover", template="rover", params={**params, "material": "aluminum"})
+    pg.add_object("big_rock", shape="rock", size=[1.2, 0.85], pos=[3.0, 0.0], color="#875c46", fixed=True)
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -620,6 +628,13 @@ SHOTS = [
     Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
     Shot("lesson_imitation_keys", _nothing, page=_lesson("imitation", _TEACH, _KEYS), settle=0.3),
     Shot("lesson_imitation_drag", _nothing, page=_lesson("imitation", _TEACH, _DRAG), settle=0.3),
+    Shot(  # driving at 0.3 m/s from the left: it rolls to the rock (before its caster was fixed it stood still)
+        "eval_mars_rover",
+        _mars_rover,
+        viewer=[{"type": "teleop", "robot": "mars_rover", "speed": 0.3, "turn": 0.0}, {"wait": 5.0}],
+        page="window.__robotforge.lookAt([1.6, -3.4, 1.9], [1.6, 0.0, 0.2]);",
+        settle=0.5,
+    ),
 ]
 
 

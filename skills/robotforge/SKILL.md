@@ -54,7 +54,7 @@ Never say something worked because the call returned. Read the numbers, and look
 | After | Check |
 |---|---|
 | `add_robot`, `add_object` | it is listed; `observe()` shows it where expected; for imports read `doctor` (fixed, unfixed, notes) |
-| `move` | `distance_m`, `turned_deg`, `to.upright` |
+| `move` | `distance_m`, `turned_deg`, `to.upright`, any `note` (why it fell short); with `seconds` it has stopped already (`stopped: true`, no `stop` needed) |
 | `pose` | `upright` |
 | `move_arm` | `tool_position` against the target (within about 3 cm) |
 | `pick_and_place` | `success`, `object_position` |

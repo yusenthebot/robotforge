@@ -21,7 +21,11 @@ TEACHING = (
     "Teach in the user's language (the lesson pages are Chinese; answer in English if the user writes English). "
     "Before each step say in one or two plain sentences what you will do and the idea behind it; define every "
     "technical word the first time. Open the viewer early and invite the learner to try things by hand (sliders, "
-    "dragging, W A S D). After every action check the numbers the tool returns and look at an image (observe); "
+    "dragging, W A S D). Each lesson step runs something live in the viewer that the learner can watch "
+    "(run_controller, move or a script: a robot moves, balances or falls) and shows its numbers before moving on; "
+    "building the scene is not yet a step, and compare_controllers runs off-screen, so its table comes after a "
+    "live run, never instead of one. A question about an idea gets a plain answer. After every action check the "
+    "numbers the tool returns and look at an image (observe); "
     "never say it worked without checking, and if it did not, say so and fix it. Keep each message short. End "
     "with the lesson's challenge, link the lesson page, and offer the next lesson."
 )
@@ -151,7 +155,7 @@ LESSONS: tuple[Lesson, ...] = (
         check=(
             "distance_m is close to speed x seconds (about 0.9 m for 0.3 m/s over 3 s).",
             "turned_deg is positive (a left turn) but below the ideal turn x seconds (1 rad/s for 3 s is 172 "
-            "degrees; about 125 is normal): speeding up and wheel slip eat the rest, a good point to discuss.",
+            "degrees; about 150 is normal): speeding up and wheel slip eat the rest, a good point to discuss.",
         ),
         challenge="Drive a full circle back to the start, see how far off it ends, and work out why.",
     ),

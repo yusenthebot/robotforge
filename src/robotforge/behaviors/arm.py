@@ -6,6 +6,7 @@ tool point along a smooth path and solves IK with the gripper pointing down.
 
 from __future__ import annotations
 
+import itertools
 from collections import deque
 from dataclasses import dataclass
 
@@ -26,10 +27,12 @@ GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 
 
 class OutOfReach(ValueError):
-    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...)."""
+    """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...);
+    `points` has every key point by name, reached or not, for advice on where to move things."""
 
-    def __init__(self, robot: str, bad: list[str]):
+    def __init__(self, robot: str, bad: list[str], points: dict[str, np.ndarray] | None = None):
         self.bad = bad
+        self.points = points or {}
         super().__init__(f"{robot} cannot reach the {' and the '.join(bad)} with its gripper pointing down")
 
 
@@ -116,6 +119,26 @@ class ArmMotion:
         points = [*(data.xanchor[j] for j in self.joints), data.site_xpos[self.site]]
         reach = sum(float(np.linalg.norm(b - a)) for a, b in zip(points, points[1:], strict=False))
         return np.array(points[0], float), reach
+
+    def footprint(self, model: mujoco.MjModel, data: mujoco.MjData) -> list[tuple[float, float, float, float]]:
+        """Where the part of the robot that the arm's joints do not move stands, seen from above: (x min, y min, x
+        max, y max) in the world for each of its collision shapes, the arm's stand or the robot that carries it.
+        A bin suggested 0.1 m from the template arm's base landed on its 0.055 m stand, was pushed off beside the
+        cube and caught nothing (review)."""
+        boxes = []
+        for g in range(model.ngeom):
+            body = int(model.geom_bodyid[g])
+            if int(model.body_rootid[body]) != self._robot_root or body in self._moving:
+                continue
+            if not (model.geom_contype[g] or model.geom_conaffinity[g]):  # a picture only: nothing pushes on it
+                continue
+            center, half = model.geom_aabb[g][:3], model.geom_aabb[g][3:]
+            frame = data.geom_xmat[g].reshape(3, 3)
+            signs = itertools.product((-1, 1), repeat=3)
+            corners = np.array([data.geom_xpos[g] + frame @ (center + np.multiply(s, half)) for s in signs])
+            low, high = corners[:, :2].min(axis=0), corners[:, :2].max(axis=0)
+            boxes.append((float(low[0]), float(low[1]), float(high[0]), float(high[1])))
+        return boxes
 
     # ---- planning ------------------------------------------------------------------
 
@@ -226,9 +249,10 @@ class ArmMotion:
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])
-        bad = self.unreachable({"object": grasp, "above object": above, "place": drop, "above place": above_drop})
+        points = {"object": grasp, "above object": above, "place": drop, "above place": above_drop}
+        bad = self.unreachable(points)
         if bad:
-            raise OutOfReach(self.robot, bad)
+            raise OutOfReach(self.robot, bad, points)
         start = self.tool_target_end()
         self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
         self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend"))
