@@ -199,6 +199,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     if held is None and port == 0:
         held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         held.bind((HOST, 0))
+        held.listen()  # Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
         port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
