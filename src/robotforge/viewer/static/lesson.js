@@ -2222,6 +2222,10 @@ function visionRig(rig) {
       if (box.visible) {
         box.position.copy(est);
         box.scale.set(...v.box.map((x) => Math.max(x, 0.002)));
+      }
+    },
+  };
+}
 
 // Teaching by showing: the amber target the gripper follows (drag it), where cubes can appear, every
 // demonstration (a ring where the cube was, the gripper's path), the last test's spots (green: picked, red:
@@ -2344,7 +2348,6 @@ function imitateRig(rig) {
 
 const RIGS = {
   vision: visionRig,
-
   imitate: imitateRig,
   gait: gaitRig,
   plan: planRig,
