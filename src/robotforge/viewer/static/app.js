@@ -667,8 +667,9 @@ function updateRing() {
   const robot = robotByName(selected);
   // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
   const box = selected ? robotBox(selected, { baseOnly: !robot?.max_speed }) : null;
-  // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise.
-  if (!box || (lessonActive() && !lessonDriveSpec())) {
+  // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise, and so it is
+  // when the keys steer something else (a gripper's target: the drive spec says robot: false).
+  if (!box || (lessonActive() && (!lessonDriveSpec() || lessonDriveSpec().robot === false))) {
     ring.visible = false;
     return;
   }
@@ -1142,8 +1143,9 @@ function sendDrive() {
   const lessonDrive = lessonDriveSpec();
   if (lessonDrive) {
     // A lesson with a robot to drive takes the keys; the lesson's own controller turns them into wheel speeds.
-    const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
-    const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+    let fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
+    let left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+    if (lessonDrive.robot === false) [fwd, left] = screenToWorld(fwd, left);
     const cmd = { type: "lesson", action: "drive", speed: fwd * lessonDrive.max_speed * 0.7, turn: left * lessonDrive.turn * 0.7 };
     const key = `lesson:${cmd.speed}:${cmd.turn}`;
     if (key === lastDrive) return;
@@ -1158,6 +1160,23 @@ function sendDrive() {
   lastDrive = key;
   send(cmd);
 }
+
+// Keys that steer a target over the ground (the drive spec says robot: false) go the way they point on screen: W
+// away from the viewer, A to the left, whichever way the camera looks. The lesson takes x and y in the world (speed
+// along x, turn along y); in the world's own axes A moved the target right from the imitation lesson's camera.
+function screenToWorld(fwd, left) {
+  const ahead = camera.getWorldDirection(new THREE.Vector3()).setZ(0);
+  if (ahead.lengthSq() < 1e-6) ahead.set(0, 1, 0).applyQuaternion(camera.quaternion).setZ(0); // straight down: screen up
+  ahead.normalize();
+  const x = fwd * ahead.x - left * ahead.y; // left of ahead is ahead turned a quarter anticlockwise: (-y, x)
+  const y = fwd * ahead.y + left * ahead.x;
+  return [Number(x.toFixed(3)), Number(y.toFixed(3))];
+}
+
+// The camera turned while a key is held: the held key now points another way.
+controls.addEventListener("change", () => {
+  if (pressed.size && lessonDriveSpec()?.robot === false) sendDrive();
+});
 
 function stopDriving() {
   // Switching robots mid-drive must not leave the old one walking off on its own.

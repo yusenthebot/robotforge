@@ -169,6 +169,8 @@ function openLesson(desc) {
   $("lesson-chapter").textContent = pick(desc.chapter);
   $("lesson-title").textContent = pick(desc.title);
   $("lesson-drive").hidden = !desc.drive;
+  // A lesson may say what its keys move ("Move the gripper"); otherwise they drive its robot.
+  $("lesson-drive").querySelector("[data-i18n]").textContent = desc.drive?.label ? pick(desc.drive.label) : t("lesson_drive");
   pip.setup(desc.rig);
   camview.setup(desc.rig);
   renderControls();
@@ -247,19 +249,23 @@ export function lessonUpdate(msg) {
   const follow = msg.live?.follow ?? null;
   // Only when the lesson asks for a different body, so orbiting the camera away stays yours.
   if (follow !== followWanted && api.followBody(follow)) followWanted = follow;
-  renderFormula(msg.live?.formula ?? null);
+  renderFormula(msg.live?.formula ?? null, msg.live?.formula_title ?? null);
   renderTable(msg.live?.table ?? null);
   camview.update();
 }
 
-// The controller's sum with live numbers, one row per term; a row appears once its step shows it.
-function renderFormula(rows) {
+// The controller's sum with live numbers, one row per term; a row appears once its step shows it. A lesson whose
+// rows are not a controller's says what they are instead (the imitation lesson: a pair being recorded).
+function renderFormula(rows, title) {
   const box = $("lesson-formula");
   const shown = new Set(state?.shown ?? []);
   const visible = (rows ?? []).filter((r) => shown.has(r.show));
   box.hidden = visible.length === 0;
   if (box.hidden) return;
   const text = (x) => (typeof x === "string" ? x : pick(x));
+  const heading = title ? text(title) : t("formula_title");
+  const head = box.querySelector("[data-i18n]");
+  if (head.textContent !== heading) head.textContent = heading;
   const list = $("lesson-formula-rows");
   if (list.childElementCount !== visible.length) {
     list.replaceChildren(
@@ -506,7 +512,7 @@ const plotTabs = {
 };
 
 function tabLabel(section) {
-  if (section.classList.contains("faceoff-table")) return t("plots_table");
+  if (section.classList.contains("faceoff-table")) return section.dataset.tab || t("plots_table"); // a table may name its tab
   if (section.classList.contains("bench")) return t("plots_record", { n: bench.state?.runs?.length ?? 0 });
   const title = section.querySelector(".plot-title")?.textContent ?? "";
   return title.replace(/\s*\([^)]*\)$/, ""); // the unit stays on the plot itself
@@ -637,8 +643,10 @@ const bench = {
       chip.textContent = `#${run.id}`;
       const settings = document.createElement("span");
       settings.className = "run-settings";
-      // Each setting stays on one line with its value; lines break after a dot, never before one.
-      settings.textContent = spec.params.map((p) => `${this.label(p)}\u00a0${this.value(p, run.params[p])}`).join("\u00a0· ");
+      // Each setting stays on one line with its value; lines break after a dot, never before one. A setting the run
+      // did not use is left out (the hand-written pick learns from no demonstrations).
+      const used = spec.params.filter((p) => run.params[p] !== undefined);
+      settings.textContent = used.map((p) => `${this.label(p)}\u00a0${this.value(p, run.params[p])}`).join("\u00a0· ");
       th.append(chip, settings);
       tr.append(th);
       spec.metrics.forEach((m, k) => {
@@ -838,6 +846,7 @@ function renderTable(table) {
   if (key === tableKey) return;
   tableKey = key;
   tableBox.hidden = !table;
+  tableBox.dataset.tab = table?.tab ? pick(table.tab) : ""; // e.g. a list of demonstrations, not robots side by side
   plotTabs.sync();
   if (!table) return;
   $("lesson-plots").hidden = false;
@@ -2213,6 +2222,121 @@ function visionRig(rig) {
       if (box.visible) {
         box.position.copy(est);
         box.scale.set(...v.box.map((x) => Math.max(x, 0.002)));
+
+// Teaching by showing: the amber target the gripper follows (drag it), where cubes can appear, every
+// demonstration (a ring where the cube was, the gripper's path), the last test's spots (green: picked, red:
+// missed) and the arm's own try (violet). Demonstrations and tests arrive only when they change.
+function imitateRig(rig) {
+  const amber = api.color("--amber");
+  const blue = api.color("--plot-blue");
+  const green = api.color("--plot-green");
+  const red = api.color("--bad");
+  const violet = api.color("--plot-violet");
+  const ink = api.color("--ink");
+  const z0 = rig.desk + 0.002; // just above the desk
+  const onDesk = (x, y) => new THREE.Vector3(x, y, z0);
+  const onTop = (m) => Object.assign(m, { depthTest: false });
+
+  // Seen through the fingers it sits between: it is the handle the learner drags.
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.014, 24, 12), onTop(basic(amber, 0.95)));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.026, 24, 12), onTop(basic(amber, 0.22)));
+  const marker = new THREE.Group();
+  marker.add(ball, halo);
+  const error = dashedLine(amber, 0.9);
+  const target = new THREE.Group();
+  target.add(marker, error);
+
+  // The ring sector cubes appear in: its outline and a faint fill on the desk.
+  const [r0, r1] = rig.region.r;
+  const [d0, d1] = rig.region.deg.map((d) => THREE.MathUtils.degToRad(d));
+  const arc = (r, a, b) => {
+    const out = [];
+    for (let k = 0; k <= 48; k++) {
+      const t = a + ((b - a) * k) / 48;
+      out.push(onDesk(rig.base[0] + r * Math.cos(t), rig.base[1] + r * Math.sin(t)));
+    }
+    return out;
+  };
+  const outline = [...arc(r1, d0, d1), ...arc(r0, d1, d0)];
+  const region = new THREE.Group();
+  const shape = new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y)));
+  const fill = new THREE.Mesh(new THREE.ShapeGeometry(shape), basic(ink, 0.05, true));
+  fill.position.z = z0 - 0.001;
+  const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(outline), lineMat(ink, 0.3));
+  region.add(fill, edge);
+
+  const demos = new THREE.Group();
+  const tests = new THREE.Group();
+  const trialPath = new THREE.Line(new THREE.BufferGeometry(), onTop(lineMat(violet, 0.95)));
+  const trialRing = new THREE.Mesh(new THREE.RingGeometry(0.026, 0.034, 40), onTop(basic(violet, 0.95, true)));
+  const trial = new THREE.Group();
+  trial.add(trialPath, trialRing);
+  const parts = { target, region, demos, tests, trial };
+  const group = new THREE.Group();
+  group.add(...Object.values(parts));
+  group.traverse((o) => {
+    o.renderOrder = 5; // after the desk and the arm: drawn over them
+  });
+
+  const clear = (g) => {
+    for (const child of [...g.children]) {
+      child.geometry?.dispose();
+      child.material?.dispose();
+      g.remove(child);
+    }
+  };
+  let shown = null; // the drawing on screen
+  const draw = (d) => {
+    shown = d;
+    clear(demos);
+    for (const demo of d.demos ?? []) {
+      const color = demo.fix ? violet : blue; // a correction, taken over from the arm's own try
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.03, 40), onTop(basic(color, 0.9, true)));
+      ring.position.copy(onDesk(...demo.spot));
+      const path = new THREE.Line(new THREE.BufferGeometry().setFromPoints(demo.path.map((p) => new THREE.Vector3(...p))), lineMat(color, 0.7));
+      ring.renderOrder = path.renderOrder = 5;
+      demos.add(ring, path);
+    }
+    clear(tests);
+    for (const t of d.tests ?? []) {
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.011, 24), onTop(basic(t.ok ? green : red, 0.95, true)));
+      dot.position.copy(onDesk(...t.spot));
+      dot.renderOrder = 6;
+      tests.add(dot);
+    }
+  };
+  let trialShown = "";
+  return {
+    group,
+    parts,
+    dragTarget: {
+      mesh: ball,
+      level: true, // over the desk at its height (Shift: up and down), so it lands right over what the pointer is on
+      // Back to the sliders: forward and sideways from the arm's base, height over the desk.
+      toControls(hit) {
+        const round = (v) => Number(v.toFixed(3));
+        return { tx: round(hit.x - rig.base[0]), ty: round(hit.y - rig.base[1]), tz: round(hit.z - rig.desk) };
+      },
+    },
+    frame() {
+      const live = state.live;
+      if (!live?.target) return;
+      const goal = new THREE.Vector3().fromArray(live.target);
+      marker.position.copy(goal);
+      marker.visible = !live.trying; // during a try the arm steers itself: nothing to drag
+      setPoints(error, [new THREE.Vector3().fromArray(live.hand), goal]);
+      const d = state.drawing;
+      if (d && d !== shown) draw(d);
+      const tr = live.trial;
+      trial.visible = trial.visible && !!tr;
+      if (tr) {
+        const key = `${tr.spot}:${tr.path.length}:${tr.ok}`;
+        if (key !== trialShown) {
+          trialShown = key;
+          trialRing.position.copy(onDesk(...tr.spot));
+          if (tr.path.length > 1) setPoints(trialPath, tr.path.map((p) => new THREE.Vector3(...p)));
+          trialPath.visible = tr.path.length > 1;
+        }
       }
     },
   };
@@ -2220,6 +2344,8 @@ function visionRig(rig) {
 
 const RIGS = {
   vision: visionRig,
+
+  imitate: imitateRig,
   gait: gaitRig,
   plan: planRig,
   joint: jointRig,
@@ -2261,12 +2387,24 @@ function startTargetDrag(e) {
   if (!ray.intersectObject(t.mesh, false).length) return;
   e.stopPropagation(); // not a camera orbit, and not a body drag
   e.preventDefault();
+  let lift = null; // where a Shift-drag started: only the height changes
   if (t.toControls) {
-    // A target in 3D slides on the plane facing the camera through it, where the pointer can follow it.
+    // A target in 3D slides on the plane facing the camera through it, where the pointer can follow it. A level
+    // target slides on the level plane through it instead: on the facing plane a drag that looked right on screen
+    // left it 2 to 3 cm off the cube along the line of sight. With Shift it slides up and down a wall facing the
+    // camera.
     const at = t.mesh.getWorldPosition(new THREE.Vector3());
-    t.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(ray.ray.direction.clone().negate(), at);
+    let normal = ray.ray.direction.clone().negate();
+    if (t.level) {
+      const wall = normal.clone().setZ(0);
+      if (e.shiftKey && wall.lengthSq() > 1e-6) {
+        normal = wall.normalize();
+        lift = at;
+      } else if (!e.shiftKey) normal = new THREE.Vector3(0, 0, 1);
+    }
+    t.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, at);
   }
-  targetDrag = { sent: 0 };
+  targetDrag = { sent: 0, lift };
   api.canvas.classList.add("dragging");
 }
 
@@ -2275,6 +2413,7 @@ function moveTargetDrag(e) {
   const t = overlays.target();
   const hit = new THREE.Vector3();
   if (!api.rayAt(e.clientX, e.clientY).ray.intersectPlane(t.plane, hit)) return;
+  if (targetDrag.lift) hit.setX(targetDrag.lift.x).setY(targetDrag.lift.y);
   if (t.toControls) targetDrag.at = t.toControls(hit);
   else {
     const rel = hit.sub(t.origin);

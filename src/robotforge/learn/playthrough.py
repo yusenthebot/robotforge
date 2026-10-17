@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from robotforge.learn import autopilot, balance, challenges, gait, ik, pd, sensors, twins
+from robotforge.learn import autopilot, balance, challenges, gait, ik, imitation, pd, sensors, twins
 from robotforge.learn.engine import LessonError, Step
 
 if TYPE_CHECKING:
@@ -108,6 +108,8 @@ FINISHED: dict[str, Callable[[Player], bool]] = {
     "shoves": lambda p: p.lesson.next_shove is None,  # a round of ever harder shoves
     "run": lambda p: "run" in p.ctx.results,  # a challenge's scored run
     "pick": lambda p: p.lesson.picking is None,  # the seeing lesson's pick-and-place
+    # the imitation lesson's try: the arm on its own, after any training it waited for
+    "try": lambda p: p.lesson.hands.pilot is None and p.lesson.pending is None and not p.lesson.busy,
 }
 
 
@@ -181,13 +183,16 @@ class Wait(Move):
 @dataclass(frozen=True)
 class Sweep(Move):
     control: str
+    until: str | None = None  # a sweep that runs on the lesson's own thread: wait for it to end (a FINISHED name)
 
     def apply(self, p: Player) -> None:
         p.handle("sweep", control=self.control)
+        if self.until is not None:
+            p.wait_for(self.until)
         p.play(TICK)
 
     def __str__(self) -> str:
-        return f"sweep {self.control}"
+        return f"sweep {self.control}" + (f", until the {self.until} ends" if self.until else "")
 
 
 @dataclass(frozen=True)
@@ -538,6 +543,67 @@ def _step_until_close(p: Player) -> None:
             break
 
 
+# ---- teaching by showing ----------------------------------------------------------------------------------
+
+DRAG_SPEED = 0.2  # m/s: the scripted learner drags the ball this fast (the arm follows at up to 0.25)
+HIGH = 0.1  # m over the desk: carried high enough to clear the bin's rim
+GRASP = 0.025  # m over the desk: the cube's middle, and 5 mm more
+FIND_THE_TOGGLE = 0.5  # s a learner takes to move from the ball to the grip toggle
+
+
+def _drag(p: Player, tx: float, ty: float, tz: float) -> None:
+    """Drag the amber ball to (tx, ty, tz), in small moves as the viewer sends them, then wait (at most 3 s) for
+    the gripper to get there, as a learner watching the arm does."""
+    v = p.ctx.values
+    start = np.array([v["tx"], v["ty"], v["tz"]], float)
+    goal = np.array([tx, ty, tz], float)
+    moves = max(1, math.ceil(float(np.linalg.norm(goal - start)) / (DRAG_SPEED * TICK)))
+    for k in range(1, moves + 1):
+        x, y, z = start + (goal - start) * k / moves
+        Set(tx=x, ty=y, tz=z).apply(p)
+    for _ in range(round(3.0 / TICK)):
+        live = p.update["live"]
+        if np.linalg.norm(np.subtract(live["hand"], live["target"])) < 0.01:
+            break
+        p.play(TICK)
+
+
+def _show_a_pick(p: Player) -> None:
+    """One demonstration with the lesson's own controls: the gripper over the cube where the screen shows it,
+    down, close, up, over the bin, open; then wait until the record has kept it."""
+    before = p.ctx.results.get("demos", 0)
+    p.play(TICK)
+    x, y, _ = p.update["live"]["cube"]  # the arm's base is at the desk's origin: x, y are the sliders' values
+    bin_x, bin_y, _ = p.lesson.rig(p.session.model)["bin"]
+    _drag(p, x, y, HIGH)
+    _drag(p, x, y, GRASP)
+    p.play(FIND_THE_TOGGLE)
+    Set(grip=1).apply(p)
+    p.play(FIND_THE_TOGGLE)
+    _drag(p, x, y, HIGH)
+    _drag(p, bin_x, bin_y, HIGH)
+    p.play(FIND_THE_TOGGLE)
+    Set(grip=0).apply(p)
+    for _ in range(round(3.0 / TICK)):
+        if p.ctx.results.get("demos", 0) > before:
+            break
+        p.play(TICK)
+
+
+def _take_it_from_here(p: Player) -> None:
+    """After Take over: open the gripper if the arm had closed it, then carry the cube to the bin from there."""
+    if p.ctx.values["grip"]:
+        Set(grip=0).apply(p)
+        p.play(FIND_THE_TOGGLE)
+    _show_a_pick(p)
+
+
+def _show_more(p: Player) -> None:
+    while p.ctx.results.get("demos", 0) < imitation.DEMOS_WANTED:
+        Press("new_cube", 0.3).apply(p)
+        _show_a_pick(p)
+
+
 # ---- the recipes -----------------------------------------------------------------------------------------
 
 JOINT_TEST = pd.TEST_SECONDS + 0.4  # a Run test and its result coming in
@@ -723,6 +789,29 @@ RECIPES: dict[str, Recipe] = {
         slow=True,
         sim_limit=math.inf,
         wall_limit=600.0,
+    ),
+    "imitation": Recipe(
+        {
+            "show": (Do(_show_a_pick, "steer the gripper to the cube, close it, carry it over the bin, open"),),
+            "copy": (Answer(0), Press("try", until="try")),
+            "far": (Answer(1), Set(where=1), Press("try", until="try")),
+            "more": (Do(_show_more, f"New cube, then show it again, until {imitation.DEMOS_WANTED} are kept"),),
+            "test": (Answer(2), Press("test", until="training")),
+            "network": (Answer(1), Set(method=1), Press("test", until="training")),
+            "how_many": (Answer(1), Sweep("use", until="training")),
+            "correct": (
+                Answer(1),
+                Set(method=0, where=1),
+                Press("try", 2.0),  # it heads for where the cube was in the demonstrations: take over on the way
+                Press("take_over"),
+                Do(_take_it_from_here, "open the gripper if it closed, then carry the cube to the bin"),
+                Press("try", until="try"),
+            ),
+            "ik": (Answer(1), Set(method=2), Press("test", until="training")),
+            "quiz": (Answer(1),),
+        },
+        slow=True,  # trains networks on the lesson's thread: 25 s here, numpy's speed on other machines unmeasured
+        wall_limit=240.0,  # the sweep trains a network five times on a busy machine
     ),
     "maze_escape": Recipe({"escape": (Do(_out_of_the_maze, "drive the way out, cell by cell"),)}, sim_limit=240.0),
     "shove_survival": Recipe({"survive": (Wait(0.5), Set(controller=2), Wait(0.5), Press("start", 0.2, until="run"))}),

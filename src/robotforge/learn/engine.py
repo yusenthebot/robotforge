@@ -234,7 +234,10 @@ class Lesson:
     title: Text = {}
     summary: Text = {}
     minutes: int = 10
-    drive: dict[str, float] | None = None  # {"max_speed", "turn"}: the keyboard drives the lesson's robot
+    # {"max_speed", "turn"}: the keyboard drives the lesson's robot. Keys that steer something else (a gripper's
+    # target) add "label" (Text: what they move) and "robot": False (no drive ring around the robot); on_drive then
+    # gets velocities along the world's x and y, which the viewer turns from where the keys point on screen.
+    drive: dict[str, Any] | None = None
     controls: tuple[Control, ...] = ()
     plots: tuple[Plot, ...] = ()
     steps: tuple[Step, ...] = ()
@@ -257,8 +260,9 @@ class Lesson:
     def on_drive(self, speed: float, turn: float, ctx: LessonContext) -> None:
         """W A S D: forward speed in m/s and turn rate in rad/s, for lessons with `drive`."""
 
-    def run_sweep(self, sweep: Sweep, ctx: LessonContext) -> list[dict[str, Any]]:
-        """The lesson's test once per value of `sweep.control`: [{"x": value, metric: result, ...}]."""
+    def run_sweep(self, sweep: Sweep, ctx: LessonContext) -> list[dict[str, Any]] | None:
+        """The lesson's test once per value of `sweep.control`: [{"x": value, metric: result, ...}]. A sweep too slow
+        to hold up the lesson returns None and runs on its own thread, setting ctx.sweep as its points come in."""
         raise LessonError("this lesson has no sweeps")
 
     def drain_samples(self) -> list[dict[str, float]]:
@@ -504,8 +508,9 @@ class LessonRunner:
         if control_id not in self._unlocked():
             raise LessonError(f"{control_id} unlocks in a later step")
         points = self.lesson.run_sweep(sweep, self.ctx)  # on copies of the model: the live run goes on
-        self.ctx.sweep = {"control": control_id, "points": points}
-        self.ctx.bench_version += 1
+        if points is not None:  # None: the lesson sweeps on its own thread and fills in ctx.sweep point by point
+            self.ctx.sweep = {"control": control_id, "points": points}
+            self.ctx.bench_version += 1
         self.ctx.events.add(f"swept:{control_id}")
 
     def _answer(self, choice: int) -> None:

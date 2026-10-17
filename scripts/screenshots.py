@@ -395,6 +395,150 @@ _SEEING_LIGHT = (
     _wait(1.5),
 )
 
+# The imitation lesson, played in the page as a learner plays it: the sliders moved a centimetre at a time (as a
+# drag moves them), the grip toggle clicked, the guesses made, the buttons pressed, Next after every step.
+_TEACH = """
+    const rf = window.__robotforge;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const live = () => rf.lesson().live;
+    const passed = (id) => rf.lesson().passed.includes(id);
+    const until = async (ok, seconds) => {
+        for (let k = 0; k < seconds * 20 && !ok(); k++) await sleep(50);
+    };
+    const control = (id) => document.querySelector(`#lesson-controls [data-control="${id}"]`);
+    const press = (id) => document.querySelector(`button[data-control="${id}"]`).click();
+    const choose = (id, k) => document.querySelector(`[data-choice="${id}"]`).children[k].click();
+    const answer = (k) => document.querySelectorAll(".quiz-option")[k].click();
+    const next = async () => { document.getElementById("lesson-next").click(); await sleep(400); };
+    const slide = async (goal) => {
+        const ids = Object.keys(goal);
+        const start = Object.fromEntries(ids.map((id) => [id, Number(control(id).value)]));
+        const n = Math.max(1, Math.ceil(Math.hypot(...ids.map((id) => goal[id] - start[id])) / 0.01));
+        for (let i = 1; i <= n; i++) {
+            for (const id of ids) {
+                control(id).value = start[id] + ((goal[id] - start[id]) * i) / n;
+                control(id).dispatchEvent(new Event("input"));
+            }
+            await sleep(50);
+        }
+        await until(() => Math.hypot(...live().hand.map((v, j) => v - live().target[j])) < 0.012, 3);
+    };
+    const grip = async () => { control("grip").click(); await sleep(600); };
+    const demo = async () => {
+        const before = rf.lesson().results.demos ?? 0;
+        const [x, y] = live().cube;
+        await slide({ tx: x, ty: y, tz: 0.1 });
+        await slide({ tz: 0.025 });
+        await sleep(400);
+        await grip();
+        await slide({ tz: 0.1 });
+        await slide({ tx: 0.05, ty: 0.28 });  // over the bin (learn/cloning.py BIN_XY)
+        await sleep(400);
+        await grip();
+        await until(() => (rf.lesson().results.demos ?? 0) > before, 4);
+    };
+"""
+
+
+def _imitation(until: str, then: str = "") -> str:
+    """Page script: play the imitation lesson up to the step `until`, its experiment done, then `then`."""
+    plays = {
+        "show": "await demo(); await until(() => passed('show'), 3);",
+        "copy": "await next(); answer(0); press('try'); await until(() => passed('copy'), 20);",
+        "far": "await next(); answer(1); choose('where', 1); press('try'); await until(() => passed('far'), 20);",
+        "more": """await next();
+            while ((rf.lesson().results.demos ?? 0) < 5) { press('new_cube'); await sleep(400); await demo(); }
+            await until(() => passed('more'), 3);""",
+        "test": "await next(); answer(2); press('test'); await until(() => passed('test'), 60);",
+        "network": """await next(); answer(1); choose('method', 1); await sleep(300); press('test');
+            await until(() => passed('network'), 90);""",
+        "how_many": """await next(); answer(1); await sleep(300);
+            document.querySelector('.sweep-buttons button').click(); await until(() => passed('how_many'), 180);""",
+        "correct": """await next(); answer(1); choose('method', 0); choose('where', 1); await sleep(300);
+            press('try'); await sleep(2000); press('take_over'); await sleep(300);
+            if (control('grip').checked) await grip();
+            await demo(); press('try'); await until(() => passed('correct'), 30);""",
+        "ik": """await next(); answer(1); choose('method', 2); await sleep(300); press('test');
+            await until(() => passed('ik'), 90);""",
+    }
+    steps = list(plays)
+    return _lesson("imitation", _TEACH, *(plays[s] for s in steps[: steps.index(until) + 1]), then)
+
+
+# The first demonstration caught mid-way: the cube in the gripper on its way to the bin, the panel scrolled to
+# the pair being recorded and the sliders.
+_CARRYING = """
+    const [x, y] = live().cube;
+    await slide({ tx: x, ty: y, tz: 0.1 });
+    await slide({ tz: 0.025 });
+    await sleep(400);
+    await grip();
+    await slide({ tz: 0.1 });
+    await slide({ tx: (x + 0.05) / 2, ty: (y + 0.28) / 2 });
+    document.getElementById("lesson-panel").scrollTop = 1e6;
+"""
+
+
+# A try caught mid-way, the panel on what it sees and does right now (its header said "the controller right now"
+# over the learner's recorded pairs): fail the shot if the header does not say whose numbers they are.
+_TRYING = """
+    await demo();
+    await until(() => passed('show'), 3);
+    await next();
+    answer(0);
+    press('try');
+    await sleep(700);  // on its way down to the cube (copying beside a demonstration has it in the bin by 2 s)
+    document.getElementById("lesson-formula").scrollIntoView({ block: "center" });
+    const head = document.querySelector("#lesson-formula .section-title").textContent;
+    if (!/sees and does now|此刻看到/.test(head)) throw new Error(`the formula's header reads ${head}`);
+"""
+
+
+# W A S D in the imitation lesson go the way they point on screen (in the world's axes A moved the ball right from
+# this camera): hold A, then W, and fail the shot if the ball went another way.
+_KEYS = """
+    await sleep(800);
+    const hold = async (key) => {
+        const at = rf.screenOfPoint(live().target);
+        window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+        await sleep(600);
+        window.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
+        await sleep(400);
+        const to = rf.screenOfPoint(live().target);
+        return [to[0] - at[0], to[1] - at[1]];
+    };
+    const [ax, ay] = await hold("a");
+    const [wx, wy] = await hold("w");
+    if (!(ax < -20 && Math.abs(ay) < -ax / 2)) throw new Error(`A moved the ball ${ax}, ${ay} px: not left`);
+    if (!(wy < -10 && Math.abs(wx) < -wy / 2)) throw new Error(`W moved the ball ${wx}, ${wy} px: not up`);
+"""
+
+# Dragging the ball in the imitation lesson: it slides level, so a drag to the point over the cube (at the ball's
+# height) lands right over it, and a Shift-drag lowers it there (on the plane facing the camera it ended 4 cm off).
+_DRAG = """
+    await sleep(800);
+    const canvas = document.querySelector("canvas");
+    const ev = (type, x, y, el, shiftKey) => el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y,
+        button: 0, buttons: type === "pointerup" ? 0 : 1, pointerId: 1, bubbles: true, isPrimary: true, shiftKey }));
+    const drag = async (to, shift) => {
+        const at = rf.screenOfPoint(live().target);
+        ev("pointerdown", at[0], at[1], canvas, shift);
+        for (let k = 1; k <= 30; k++) {
+            ev("pointermove", at[0] + ((to[0] - at[0]) * k) / 30, at[1] + ((to[1] - at[1]) * k) / 30, window, shift);
+            await sleep(40);
+        }
+        ev("pointerup", to[0], to[1], window, shift);
+        await sleep(2500);
+        return [...live().target];
+    };
+    const [x, y, z] = live().cube;
+    const over = await drag(rf.screenOfPoint([x, y, live().target[2]]), false);
+    const down = await drag(rf.screenOfPoint([x, y, z + 0.005]), true);
+    const off = (p) => Math.hypot(p[0] - x, p[1] - y);
+    if (off(over) > 0.005) throw new Error(`the drag ended ${off(over)} m off the cube across the desk`);
+    if (off(down) > 0.005 || down[2] - z > 0.015) throw new Error(`the Shift-drag ended at ${down}, cube ${[x, y, z]}`);
+"""
+
 
 SHOTS = [
     Shot(
@@ -463,6 +607,19 @@ SHOTS = [
         _nothing,
         page=_lesson("seeing", *_SEEING_LIGHT, _tick("balance"), _tick("clean"), _wait(1.5)),
     ),
+    Shot("lesson_imitation_show", _nothing, page=_lesson("imitation", _TEACH, _CARRYING), settle=0.3),
+    Shot("lesson_imitation_trying", _nothing, page=_lesson("imitation", _TEACH, _TRYING), settle=0.2),
+    Shot("lesson_imitation_network", _nothing, page=_imitation("network"), settle=1.0),
+    Shot(
+        "lesson_imitation_sweep",
+        _nothing,
+        page=_imitation("how_many", 'document.getElementById("lesson-plots").scrollTop = 1e6;'),
+        settle=1.0,
+    ),
+    Shot("lesson_imitation_correct", _nothing, page=_imitation("correct"), settle=1.0),
+    Shot("lesson_imitation_compare", _nothing, page=_imitation("ik"), settle=1.0),
+    Shot("lesson_imitation_keys", _nothing, page=_lesson("imitation", _TEACH, _KEYS), settle=0.3),
+    Shot("lesson_imitation_drag", _nothing, page=_lesson("imitation", _TEACH, _DRAG), settle=0.3),
 ]
 
 
