@@ -357,14 +357,17 @@ def see_out_of_own_part(model: mujoco.MjModel, data: mujoco.MjData, scene: mujoc
         rgba = model.geom_rgba[g]
         if rgba[3] <= 0 or scene.ngeom >= scene.maxgeom:
             continue
+        added = scene.geoms[scene.ngeom]
         mujoco.mjv_initGeom(
-            scene.geoms[scene.ngeom],
+            added,
             int(model.geom_type[g]),
             model.geom_size[g].astype(np.float64),
             data.geom_xpos[g].astype(np.float64),
             data.geom_xmat[g].astype(np.float64),
             rgba.astype(np.float32),
         )
+        # Who it is, for segmentation pictures (the seeing lesson's): a fresh geom's segid broke MuJoCo's lookup.
+        added.objtype, added.objid, added.segid = int(mujoco.mjtObj.mjOBJ_GEOM), g, scene.ngeom
         scene.ngeom += 1
     return True
 

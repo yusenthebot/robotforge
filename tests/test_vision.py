@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from robotforge.design.world import World, compile_world
-from robotforge.sim import vision
+from robotforge.sim import render, vision
 from robotforge.sim.render import SnapshotRenderer
 
 RED, GREEN, BLUE = (230, 40, 30), (40, 200, 70), (40, 90, 230)
@@ -348,3 +348,30 @@ def test_a_camera_picture_shows_no_marker_sites(needs_gl):
     drawn = layers.depth < layers.camera.far * vision.SKY
     assert not (drawn & (layers.geoms < 0)).any()  # every pixel drawn is a geom's
     assert not vision.find(layers.rgb, layers.depth, layers.camera, "orange")
+
+
+def test_a_camera_seeing_out_of_its_own_part_keeps_segmentation_ids_valid():
+    """Merging the dressed robots with the seeing lesson: the bare shapes put back for a camera inside its own part
+    came with a stale segid, and segmentation pictures failed with IndexError (index -536870911) once the scene
+    had held other geoms."""
+    world = World.model_validate({"name": "w", "robots": [{"name": "bot", "template": "humanoid"}]})
+    model = compile_world(world).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    mujoco.mj_forward(model, data)
+    scene = mujoco.MjvScene(model, maxgeom=4000)
+    for g in range(scene.maxgeom):
+        scene.geoms[g].segid = -536870912  # what a reused scene's free slots may hold
+    changed = []
+    for cam in range(model.ncam):
+        camera = mujoco.MjvCamera()
+        camera.type, camera.fixedcamid = mujoco.mjtCamera.mjCAMERA_FIXED, cam
+        mujoco.mjv_updateScene(model, data, mujoco.MjvOption(), None, camera, mujoco.mjtCatBit.mjCAT_ALL, scene)
+        before = scene.ngeom
+        if render.see_out_of_own_part(model, data, scene, cam) and scene.ngeom > before:
+            changed.append((before, scene.ngeom))
+            break
+    assert changed, "no template humanoid camera sits inside its own dressed part any more"
+    before, after = changed[0]
+    for i in range(before, after):
+        assert scene.geoms[i].segid == i and scene.geoms[i].objtype == mujoco.mjtObj.mjOBJ_GEOM
