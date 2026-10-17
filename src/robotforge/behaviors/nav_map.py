@@ -568,8 +568,8 @@ def ramp_aim(grid: Grid, slabs: list[tuple[np.ndarray, float]], near: float) -> 
     """The way up the nearest ramp (rad) in every cell whose center is within `near` (m) of a ramp's top it can stand
     on, NaN elsewhere; None without ramps. There a robot goes only straight up or down the ramp: sent up the
     warehouse dock (8 degrees) at an angle, round its toe and turning on it, the Go2 swung round, slid down sideways
-    and fell, 6 times in 28 trips (scripts/nav_bench.py --case dock). Near the ramp too, so that it has lined up
-    before its feet reach the toe, and is all the way onto the landing before it turns."""
+    and fell or stuck, 6 and 8 times in two runs of 28 trips (scripts/nav_bench.py --case dock). Near the ramp too, so
+    that it has lined up before its feet reach the toe, and is all the way onto the landing before it turns."""
     slabs = [(cells, axis) for cells, axis in slabs if len(cells)]
     if not slabs:
         return None
