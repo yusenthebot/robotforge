@@ -13,7 +13,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.cli import find_free_port
 from robotforge.design import builder, gallery
-from robotforge.design.visuals import HIDDEN_GROUP
 from robotforge.design.world import World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
@@ -609,17 +608,22 @@ def test_an_arm_carries_a_load_over_the_robot_it_rides_on_or_says_it_cannot(pg):
 
 
 def _wheel_motor(model: mujoco.MjModel, carrier: str) -> int:
-    """The drawn gear motor of the wheel on `carrier`: the shown cylinder on that body nothing collides with (the
-    knee's servo is one too, drawn as a mesh over a hidden one)."""
+    """The gear motor of the wheel on `carrier`: the cylinder on that body nothing collides with, in a gear motor's
+    color (the knee's servo is one too, in the servo's dark case). Dressed robots draw a mesh over both and hide
+    the cylinders, so the group says nothing here."""
+    from robotforge.design.builder.assemble import MOTOR_YELLOW
+    from robotforge.design.visuals import parts as P
+
     body = model.body(carrier).id
     cylinder = int(mujoco.mjtGeom.mjGEOM_CYLINDER)
+    colors = [np.asarray(c, float) for c in (MOTOR_YELLOW, P.METAL)]
     found = [
         g
         for g in range(model.ngeom)
         if model.geom_bodyid[g] == body
         and model.geom_type[g] == cylinder
         and not model.geom_contype[g]
-        and model.geom_group[g] < HIDDEN_GROUP
+        and any(np.allclose(model.geom_rgba[g], c, atol=1e-3) for c in colors)
     ]
     assert len(found) == 1, found
     return found[0]

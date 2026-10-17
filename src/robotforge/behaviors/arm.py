@@ -142,6 +142,14 @@ class ArmMotion:
         self.ik.base_qpos[:] = data.qpos
         self._read_base(data)
 
+    def base_and_reach(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
+        """Where the arm's first hinge is, and about how far the arm reaches from it: the spacing of its hinges
+        along the chain plus the tool offset, as for an arm stretched out straight. A lift the arm rides on carries
+        that hinge up and down rather than adding reach (see down_reach)."""
+        points = [*(data.xanchor[j] for j in self.joints if j not in self._slides), data.site_xpos[self.site]]
+        reach = sum(float(np.linalg.norm(b - a)) for a, b in zip(points, points[1:], strict=False))
+        return np.array(points[0], float), reach
+
     def down_reach(self, data: mujoco.MjData, point: np.ndarray) -> DownReach:
         """How a point compares with the arm's reach with its gripper pointing down (see DownReach). The arm reaches
         with its hinges stretched out to the wrist and the hand hanging below. A lift the arm rides on carries the
