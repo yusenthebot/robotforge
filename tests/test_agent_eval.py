@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures" / "agent_eval"
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"  # offline stand-ins for the Go2 and the PiPER
 SCRIPT = Path(__file__).parents[1] / "scripts" / "agent_eval.py"
 
 
@@ -56,12 +57,27 @@ BASELINE = {
     # On ae450e3: a hexapod on xl430 servos sent forwards at 0.12 m/s for 5 s went 0.21 m backwards; counted as
     # distance it passed, and the agent told the user it had walked.
     "hexapod_backwards": (False, {"it is a hexapod": True, "went >= 0.2 m the way it was sent": False}),
+    # On main at c2e37cd, the tasks for going somewhere, the gallery and the camera, all four done:
+    # the starter rover from [-5.5, 2.6] to a waypoint at the ramp's foot, then up onto the dock;
+    "warehouse_dock": (True, {"started >= 3.0 m from the dock's top": True, "ended on the dock's top": True}),
+    # the centaur design in the park, 2.8 m to bench_1;
+    "centaur_bench": (True, {"a centaur: four legs that walk and two arms": True}),
+    # the wrist camera saw no red (it looks down beside the base), the top view found block_2, then the pick;
+    "find_red": (True, {"found before an arm handled it": True, "the other cubes are still out of the bin": True}),
+    # the go2_arm design put at [-2, 0] by the agent, 0.72 m to the island.
+    "go2_arm_kitchen": (True, {"a Go2 carrying an arm": True, "not next to the island at the start": True}),
 }
 TASK_OF = {
     "learn_control_table_only": "learn_control",
     "learn_control_live": "learn_control",
     "hexapod_backwards": "hexapod_build",
 }
+
+
+@pytest.fixture(autouse=True)
+def offline_menagerie(monkeypatch):
+    """The Go2 and the PiPER a world mounts compile from the offline stand-ins, never a download."""
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
 
 
 @pytest.mark.parametrize("task", list(BASELINE))
@@ -564,3 +580,148 @@ def test_a_fixture_keeps_which_world_each_result_is_in(ev):
     assert json.loads(ev._trim_result("open_model", json.dumps({"model": "a.urdf", "joints": [1] * 99}))) == {
         "model": "a.urdf"
     }
+
+
+# ---- going somewhere, the gallery and the camera (main at c2e37cd) -------------------------------------------
+
+
+def _copy(tmp_path: Path, fixture: str) -> Path:
+    import shutil
+
+    return Path(shutil.copytree(FIXTURES / fixture, tmp_path / "run" / "tasks" / fixture))
+
+
+def _edit_world(task_dir: Path, world: str, change) -> None:
+    """Change a recorded world as a session might have left it instead (change takes and edits its YAML data)."""
+    import yaml
+
+    path = task_dir / "rf_home" / "worlds" / world / "world.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    change(data)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _robot(data: dict, name: str) -> dict:
+    return next(r for r in data["robots"] if r["name"] == name)
+
+
+def test_a_ramps_landing_and_the_gaps_seen_from_above(ev):
+    dock = {"type": "ramp", "pos": [5.0, -1.4], "yaw": 0, "angle": 8, "length": 2.1, "landing": 2.0, "width": 2.4}
+    xs, ys = zip(*ev.landing({**dock, "direction": "up"}), strict=True)
+    assert (min(xs), max(xs), min(ys), max(ys)) == pytest.approx((5.05, 7.05, -2.6, -0.2))
+    xs, _ = zip(*ev.landing({**dock, "direction": "up_down"}), strict=True)  # the landing between two slopes
+    assert (min(xs), max(xs)) == pytest.approx((5.0 - 3.1 + 2.1, 5.0 - 3.1 + 4.1))
+    xs, _ = zip(*ev.landing({**dock, "direction": "down", "yaw": 180}), strict=True)  # first, then turned round
+    assert (min(xs), max(xs)) == pytest.approx((5.05, 7.05))
+    assert ev.landing({"type": "stairs", "pos": [0, 0]}) is None
+    square = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    assert ev.polygon_gap(square, [(2, 0), (3, 0), (3, 1), (2, 1)]) == pytest.approx(1.0)
+    assert ev.polygon_gap(square, [(1.5, 1.5)]) == pytest.approx(0.5**0.5)  # corner to corner
+    assert ev.polygon_gap(square, [(0.5, 0.5)]) == 0.0  # inside
+    turned = [(1.5, 0.5), (2.0, 1.0), (1.5, 1.5), (1.0, 1.0)]  # a diamond touching the square's side
+    assert ev.polygon_gap(square, turned) == 0.0
+    # A robot 0.4 m long facing a counter's side from 1.0 m away (its middle), its nose 0.2 m off it.
+    counter = {"shape": "counter", "pos": [0.0, 0.0], "size": [1.4, 0.8, 0.9]}
+    assert ev._gap_to(-1.0, 0.0, 0.0, (-0.3, 0.1, -0.15, 0.15), counter) == pytest.approx(0.2)
+
+
+def test_a_trip_counts_as_sent_toward_its_destination(ev):
+    """move(to=...) plans its own way, turns and all: the way it was sent is toward the destination, not the way it
+    faced when it set off (a dog facing +x sent to a point behind it went the right way)."""
+    start = {"robot": "dog", "position": [0, 0, 0.3], "heading_deg": 0, "upright": True}
+    end = {"robot": "dog", "position": [-1.0, 0.0, 0.3], "heading_deg": 180, "upright": True}
+    result = {"arrived": True, "destination": {"point": [-1.0, 0.0]}, "distance_m": 1.1, "from": start, "to": end}
+    session = ev.parse_events([_event("move", {"robot": "dog", "to": [-1, 0]}, result)])
+    assert ev.progress(session, "dog") == pytest.approx(1.0)
+
+
+def test_the_warehouse_dock_is_measured_from_the_saved_start_to_the_top(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["warehouse_dock"], FIXTURES / "warehouse_dock")
+    assert _verdict(outcome)["ended on the dock's top"] and outcome.tools.count("move") == 2
+    far = next(c for c in outcome.criteria if c["name"].startswith("started >="))
+    assert far["observed"] == "10.92 m"  # from [-5.5, 2.6] to the landing's corner at [5.05, -0.2]
+    # Put on the dock by hand (its saved place moved there): no trip across the warehouse.
+    teleported = _copy(tmp_path / "a", "warehouse_dock")
+    _edit_world(teleported, "warehouse", lambda d: _robot(d, "rover").update(pos=[6.0, -1.4]))
+    assert _verdict(ev.score(ev.TASKS["warehouse_dock"], teleported))["started >= 3.0 m from the dock's top"] is False
+    # Stopped on the ramp, short of the top (as the trip and the observe after it report it).
+    short = _copy(tmp_path / "b", "warehouse_dock")
+    events = short / "events.jsonl"
+    text = events.read_text(encoding="utf-8")
+    assert text.count("5.977,") == 1 and text.count("5.9768,") == 1
+    events.write_text(text.replace("5.977,", "4.2,").replace("5.9768,", "4.2,"), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["warehouse_dock"], short))
+    assert verdict["ended on the dock's top"] is False and verdict["started >= 3.0 m from the dock's top"]
+
+
+def test_a_centaur_must_be_one_and_must_walk_to_the_bench(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["centaur_bench"], FIXTURES / "centaur_bench")
+    assert "centaur_park/centaur (quadruped, arms ['centaur/left_hand', 'centaur/right_hand'])" in str(outcome.criteria)
+    # Saved beside the bench it ended at: it walked, but not to the bench.
+    beside = _copy(tmp_path / "a", "centaur_bench")
+    _edit_world(beside, "centaur_park", lambda d: _robot(d, "centaur").update(pos=[-2.8, -0.4], yaw=180))
+    verdict = _verdict(ev.score(ev.TASKS["centaur_bench"], beside))
+    assert verdict["not next to a bench at the start"] is False and verdict["ended within 0.5 m of a bench"]
+    # A dog from parts with no arms: not a centaur, though it walked there.
+    armless = _copy(tmp_path / "b", "centaur_bench")
+
+    def no_hands(data):
+        build = _robot(data, "centaur")["build"]
+        build["parts"] = [p for p in build["parts"] if not str(p.get("name", "")).endswith("hand")]
+
+    _edit_world(armless, "centaur_park", no_hands)
+    verdict = _verdict(ev.score(ev.TASKS["centaur_bench"], armless))
+    assert verdict["a centaur: four legs that walk and two arms"] is False and verdict["ended within 0.5 m of a bench"]
+
+
+def test_the_red_cube_must_be_found_by_the_camera_before_it_is_picked(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["find_red"], FIXTURES / "find_red")
+    found = next(c for c in outcome.criteria if c["name"].startswith("the camera found"))
+    assert found["observed"] == "3 observe(find=...): red, red, red; saw ['block_2']"
+    lines = (FIXTURES / "find_red" / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    looks = [i for i, line in enumerate(lines) if '"find": "red"' in line and '"item.completed"' in line]
+    picked = next(i for i, line in enumerate(lines) if '"tool": "pick_and_place"' in line)
+    # Picked without looking: the world file says which cube is red, but the user asked for the camera.
+    blind = _copy(tmp_path / "a", "find_red")
+    (blind / "events.jsonl").write_text("\n".join(x for i, x in enumerate(lines) if i not in looks), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["find_red"], blind))
+    assert verdict["the camera found block_2, the red cube"] is False and verdict["block_2 ended in a bin"]
+    # Looked only after picking it (the last observe saw it in the bin).
+    late = _copy(tmp_path / "b", "find_red")
+    kept = [x for i, x in enumerate(lines) if i not in looks or i > picked]
+    (late / "events.jsonl").write_text("\n".join(kept), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["find_red"], late))
+    assert verdict["the camera found block_2, the red cube"] and verdict["found before an arm handled it"] is False
+
+
+def test_the_wrong_cube_in_the_bin_does_not_pass(ev, tmp_path):
+    seen = {"found": {"view": "top", "color": "red", "objects": [{"n": 1, "object": "block_2"}]}, "time": 0}
+    placed = {"success": True, "object_position": [-0.05, 0.3, 0.025], "object": "block_1", "target": "bin"}
+    events = [
+        _opened("desk"),
+        _event("observe", {"view": "top", "find": "red"}, seen),
+        _event("pick_and_place", {"robot": "arm", "object": "block_1", "target": "bin"}, placed),
+    ]
+    outcome = ev.score(ev.TASKS["find_red"], _made_up(tmp_path, {"desk": ev.DESK}, *events))
+    verdict = _verdict(outcome)
+    assert not outcome.passed and verdict["the camera found block_2, the red cube"]
+    assert verdict["block_2 ended in a bin"] is False and verdict["the other cubes are still out of the bin"] is False
+
+
+def test_a_go2_saved_inside_the_island_made_no_trip_to_it(ev, tmp_path):
+    """Added without a place after load_scene, a robot stands at [0, 0], inside the kitchen's island: pushed out,
+    it is next to the island at once."""
+    inside = _copy(tmp_path / "a", "go2_arm_kitchen")
+    _edit_world(inside, "go2_arm_kitchen", lambda d: _robot(d, "go2_arm").update(pos=[0.0, 0.0]))
+    verdict = _verdict(ev.score(ev.TASKS["go2_arm_kitchen"], inside))
+    assert verdict["not next to the island at the start"] is False and verdict["a Go2 carrying an arm"]
+    # The plain Go2 from the library carries no arm.
+    plain = _copy(tmp_path / "b", "go2_arm_kitchen")
+    _edit_world(plain, "go2_arm_kitchen", lambda d: _robot(d, "go2_arm").update(build=None, library="go2"))
+    assert _verdict(ev.score(ev.TASKS["go2_arm_kitchen"], plain))["a Go2 carrying an arm"] is False
+
+
+def test_a_fixture_keeps_what_the_camera_found(ev):
+    found = {"view": "top", "color": "red", "how": "x" * 400, "objects": [{"n": 1, "object": "block_2", "pixels": 9}]}
+    trimmed = json.loads(ev._trim_result("observe", json.dumps({"time": 1, "joints": {"a": 1}, "found": found})))
+    assert trimmed == {"time": 1, "found": {"view": "top", "color": "red", "objects": [{"n": 1, "object": "block_2"}]}}
