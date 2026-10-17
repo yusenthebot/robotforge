@@ -44,6 +44,7 @@ def main() -> int:
     from robotforge.learn import LESSONS
     from robotforge.learn.playthrough import RECIPES, play
     from robotforge.playground import Playground
+    from robotforge.sim.render import render_unavailable_reason
 
     ids = args.lessons.split(",") if args.lessons else list(LESSONS)
     unknown = [i for i in ids if i not in LESSONS]
@@ -51,6 +52,12 @@ def main() -> int:
         parser.error(f"unknown lessons: {', '.join(unknown)}; lessons: {', '.join(LESSONS)}")
     if args.quick:
         ids = [i for i in ids if not (i in RECIPES and RECIPES[i].slow)]
+    no_gl = render_unavailable_reason()
+    if no_gl is not None:
+        camera = [i for i in ids if i in RECIPES and RECIPES[i].needs_gl]
+        if camera:
+            print(f"skipping {', '.join(camera)}: no offscreen OpenGL here ({no_gl})")
+        ids = [i for i in ids if i not in camera]
 
     print(f"menagerie: {os.environ['ROBOTFORGE_MENAGERIE']}", flush=True)
     reports = []

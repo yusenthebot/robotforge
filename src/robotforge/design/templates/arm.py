@@ -120,7 +120,9 @@ class Arm(Template):
             parent, z = roll, 0.024
 
         tool = parent.add_body(name="hand", pos=[0, 0, z])
-        tool.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
+        # Just in front of its lens (_dress_wrist_camera puts the lens 7.5 mm out, 1 mm deep): from the palm it
+        # looked out through its own bezel, a black ring round the middle of every picture.
+        tool.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0095], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
         tcp_z = 0.0
         if p.gripper:
             tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis)

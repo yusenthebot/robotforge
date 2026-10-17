@@ -12,7 +12,9 @@ import inspect
 import logging
 import os
 import re
+import socket
 import time
+import weakref
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any, Literal
@@ -77,7 +79,8 @@ snake slither; with to=[x, y] or an object's name it finds its own way there rou
 the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots with kind, arms and
 positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
-prefixed "<robot>/"). observe reports state with an image so you can check your work. open_viewer gives the
+prefixed "<robot>/"). observe reports state with an image so you can check your work; observe(find="red") locates
+colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
 user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
 real time.
 
@@ -90,9 +93,9 @@ run or compare it as method "policy:<name>".
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
 "第三课"), call lessons(number) and follow its plan. The viewer's Learn button (学习) also has hands-on lessons
-(PID, inverse kinematics, motion planning, sensors, gaits, balance, reinforcement learning, face-offs
-against the real PiPER, Franka Panda and Unitree G1, star challenges): suggest them to beginners who want to
-understand robots (open_viewer, then press Learn).
+(PID, inverse kinematics, motion planning, sensors, finding objects with a camera, gaits, balance, reinforcement
+learning, face-offs against the real PiPER, Franka Panda and Unitree G1, star challenges): suggest them to beginners
+who want to understand robots (open_viewer, then press Learn).
 
 Learned walkers: list_walkers shows neural-network walking policies (a Go2 walk ships with robotforge);
 move(..., walker="rl") uses one instead of the built-in gait. Any robot that walks on jointed legs (built
@@ -187,6 +190,14 @@ def _lean_schemas(server: MCPServer) -> None:
 
 
 def build_server(playground: Playground, port: int) -> MCPServer:
+    """The MCP server, with the viewer on `port`. Port 0 takes a free port from the system and holds it as long as
+    the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
+    listens, and then the viewer exits (tests run side by side on one machine hit that)."""
+    held: socket.socket | None = None
+    if port == 0:
+        held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        held.bind((HOST, 0))
+        port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
     playground.viewer_url = f"http://{HOST}:{port}/"
@@ -219,7 +230,10 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             create_app(hub), host=HOST, port=port, log_level="warning", access_log=False, log_config=None
         )
         viewer = uvicorn.Server(config)
-        task = asyncio.create_task(viewer.serve())
+        # uvicorn closes the sockets it serves on when it stops, so it gets a copy of the held one: the port stays
+        # bound for the next session on this server (the second one found nothing listening when it was given the
+        # held socket itself).
+        task = asyncio.create_task(viewer.serve(sockets=[held.dup()] if held is not None else None))
         log.info("viewer at %s", playground.viewer_url)
         try:
             yield
@@ -236,6 +250,8 @@ def build_server(playground: Playground, port: int) -> MCPServer:
         extensions=[apps],
         lifespan=lifespan,
     )
+    if held is not None:
+        weakref.finalize(server, held.close)  # the port is let go with the server
     _plain_tools(server)
 
     @server.tool()
@@ -696,15 +712,36 @@ def build_server(playground: Playground, port: int) -> MCPServer:
             return _json(playground.control(action))
 
     @server.tool()
-    def observe(view: str = "default", width: int = 640, height: int = 480, include_image: bool = True) -> list:
+    def observe(
+        view: str = "default",
+        width: int = 640,
+        height: int = 480,
+        include_image: bool = True,
+        find: str | None = None,
+    ) -> list:
         """Report the state (joint angles, controls, free body positions, sensors, contacts) and, by default, a
         rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
         front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
-        from describe_model."""
+        from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
+        with world positions estimated from the picture and the name of what those pixels show (for
+        pick_and_place)."""
         with _tool_errors():
             state = playground.state()
             image = None
-            if include_image:
+            if find:
+                try:
+                    state["found"], image = playground.find(view, find, width, height, image=include_image)
+                except RenderUnavailable as exc:
+                    state["note"] = f"Cannot look for {find}: {exc} Everything else in this state is accurate."
+                except PlaygroundError:
+                    raise  # a wrong view or color: the message says which exist
+                except Exception as exc:  # the state is still worth having when looking fails
+                    log.exception("finding colors failed")
+                    state["note"] = (
+                        f"Cannot look for {find}: finding failed ({type(exc).__name__}: {exc}). Everything else in "
+                        "this state is accurate."
+                    )
+            elif include_image:
                 try:
                     image = playground.snapshot(view, width, height)
                 except RenderUnavailable as exc:

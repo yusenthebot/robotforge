@@ -31,7 +31,9 @@ def _lessons() -> list:
 
 
 @pytest.mark.parametrize("lesson_id", _lessons())
-def test_the_lesson_can_be_played_to_the_end(pg, lesson_id):
+def test_the_lesson_can_be_played_to_the_end(pg, lesson_id, request):
+    if RECIPES[lesson_id].needs_gl:
+        request.getfixturevalue("needs_gl")  # a lesson that looks through a camera skips without OpenGL
     report = play(pg, lesson_id)
     assert report.ok, report.explain()
     assert not pg.lessons.active  # and left again, so nothing trains on in the background
