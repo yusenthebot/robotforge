@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image
 
 from robotforge import wording
+from robotforge.design.visuals import HIDDEN_GROUP, VISUAL_GROUP
 from robotforge.sim import vision
 from robotforge.sim.session import SimSession
 
@@ -41,6 +42,13 @@ MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown wit
 MAX_PIXELS = 1280 * 960
 TOUCHING = 0.001  # m: geoms a contact holds closer than this touch (a contact with a margin can be further apart)
 log = logging.getLogger(__name__)
+EMBEDDED = 0.001  # m: a robot camera inside its own part, or this close to its shape, sees out as through the bare part
+_PRIMITIVES = {
+    int(mujoco.mjtGeom.mjGEOM_SPHERE),
+    int(mujoco.mjtGeom.mjGEOM_CAPSULE),
+    int(mujoco.mjtGeom.mjGEOM_CYLINDER),
+    int(mujoco.mjtGeom.mjGEOM_BOX),
+}
 
 
 class RenderUnavailable(RuntimeError):
@@ -128,6 +136,8 @@ class SnapshotRenderer:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera)
+        if isinstance(camera, str):
+            see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
         return self._renderer.render().copy()
 
     def _ready(self, model: mujoco.MjModel, key: tuple[int, int, int]) -> None:
@@ -201,12 +211,16 @@ class SnapshotRenderer:
         """What the camera sees, without the model's marker sites, as _layers draws it (on the GL thread)."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
+        if isinstance(camera, str):
+            see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
         return self._renderer.render().copy()
 
     def _layers(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int], geoms: bool):
         self._ready(model, key)
         r = self._renderer
         r.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
+        if isinstance(camera, str):
+            see_out_of_own_part(model, data, r.scene, model.camera(camera).id)
         rgb = r.render().copy()
         pinhole = vision.Pinhole.from_scene(r.scene, key[1], key[2])
         r.enable_depth_rendering()
@@ -313,6 +327,73 @@ def _check_size(width: int, height: int) -> None:
             f"image size {width}x{height} is out of range: width and height are pixels, each at least 16, "
             f"and width*height is at most {MAX_PIXELS}"
         )
+
+
+def see_out_of_own_part(model: mujoco.MjModel, data: mujoco.MjData, scene: mujoco.MjvScene, cam: int) -> bool:
+    """A robot camera inside its own part (the default camera sits at the part's middle) or on its surface sees
+    its part as the bare shape physics gives it, as a rangefinder's ray does: the dressing drawn over the shape
+    (parting lines, modules, covers, servo cases) would fill its picture with the part's insides. Run after the
+    scene is updated; returns True when it changed the scene."""
+    body = int(model.cam_bodyid[cam])
+    own = np.flatnonzero(model.geom_bodyid == body)
+    covered = [int(g) for g in own if model.geom_group[g] == HIDDEN_GROUP and int(model.geom_type[g]) in _PRIMITIVES]
+    dressing = {int(g) for g in own if model.geom_group[g] == VISUAL_GROUP and _is_dressing(model, int(g))}
+    if not dressing:
+        return False
+    # The part's shape is what collides; the rest carry the mass of its hardware (the camera's own lens among them).
+    shapes = [g for g in covered if model.geom_contype[g] or model.geom_conaffinity[g]]
+    eye = data.cam_xpos[cam]
+    if shapes:  # inside or on the part's shape
+        embedded = any(_distance(model, data, g, eye) <= EMBEDDED for g in shapes)
+    else:  # a part with no shape (a bare joint) or one that does not collide: inside its dressing
+        embedded = any(_in_box(model, data, g, eye) for g in dressing)
+    if not embedded:
+        return False
+    for i in range(scene.ngeom):
+        geom = scene.geoms[i]
+        if geom.objtype == mujoco.mjtObj.mjOBJ_GEOM and geom.objid in dressing:
+            geom.rgba[3] = 0.0  # MuJoCo draws nothing of a geom with no opacity, not even its shadow
+    for g in covered:
+        rgba = model.geom_rgba[g]
+        if rgba[3] <= 0 or scene.ngeom >= scene.maxgeom:
+            continue
+        mujoco.mjv_initGeom(
+            scene.geoms[scene.ngeom],
+            int(model.geom_type[g]),
+            model.geom_size[g].astype(np.float64),
+            data.geom_xpos[g].astype(np.float64),
+            data.geom_xmat[g].astype(np.float64),
+            rgba.astype(np.float32),
+        )
+        scene.ngeom += 1
+    return True
+
+
+def _is_dressing(model: mujoco.MjModel, geom: int) -> bool:
+    """A visual mesh added by design.visuals (its material is `<robot>/rf_<preset>`), not an imported model's own."""
+    mat = int(model.geom_matid[geom])
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, mat) if mat >= 0 else None
+    return bool(name) and name.rsplit("/", 1)[-1].startswith("rf_")
+
+
+def _in_box(model: mujoco.MjModel, data: mujoco.MjData, geom: int, point: np.ndarray) -> bool:
+    """True when `point` lies inside the geom's bounding box (MuJoCo's geom_aabb: middle and half extents)."""
+    p = data.geom_xmat[geom].reshape(3, 3).T @ (np.asarray(point, float) - data.geom_xpos[geom])
+    middle, half = model.geom_aabb[geom][:3], model.geom_aabb[geom][3:]
+    return bool(np.all(np.abs(p - middle) <= half))
+
+
+def _distance(model: mujoco.MjModel, data: mujoco.MjData, geom: int, point: np.ndarray) -> float:
+    """How far `point` lies outside a primitive geom (negative inside; a box's corners count as square)."""
+    p = data.geom_xmat[geom].reshape(3, 3).T @ (np.asarray(point, float) - data.geom_xpos[geom])
+    size, kind = model.geom_size[geom], int(model.geom_type[geom])
+    if kind == mujoco.mjtGeom.mjGEOM_SPHERE:
+        return float(np.linalg.norm(p) - size[0])
+    if kind == mujoco.mjtGeom.mjGEOM_CAPSULE:
+        return float(np.linalg.norm([p[0], p[1], max(abs(p[2]) - size[1], 0.0)]) - size[0])
+    if kind == mujoco.mjtGeom.mjGEOM_CYLINDER:
+        return float(max(np.hypot(p[0], p[1]) - size[0], abs(p[2]) - size[1]))
+    return float(np.max(np.abs(p) - size))
 
 
 def _camera_for(

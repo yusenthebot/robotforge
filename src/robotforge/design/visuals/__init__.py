@@ -8,6 +8,11 @@ and from MuJoCo's renderer (group does not affect physics).
 Materials are named `rf_<preset>` (see PRESETS); the geom rgba is the color, the preset says how
 the surface reflects. Robots get their names prefixed when attached to a world, so a robot's
 geoms arrive as `<robot>/rf_shell`; props keep the bare `rf_wood`, `rf_foliage`, ...
+
+Rangefinders and lidars cast MuJoCo rays, and a ray hits visual geoms too. Dressing that reaches
+past its collision shape (a servo case, a screw head) would change what they read, so `Visuals`
+can make its meshes transparent to rays (`rays=False`): MuJoCo's ray skips a geom whose material
+is fully transparent, while renderers color it with the geom's own rgba.
 """
 
 from __future__ import annotations
@@ -24,6 +29,8 @@ from robotforge.design.visuals.mesh import Mesh, merge
 
 VISUAL_GROUP = 2  # drawn by the viewer and MuJoCo's renderer (Menagerie puts its visual meshes here too)
 HIDDEN_GROUP = 3  # collision-only primitives covered by a mesh
+# MuJoCo's default geom rgba: a geom left at it is drawn in its material's color instead of its own.
+DEFAULT_RGBA = (0.5, 0.5, 0.5, 1.0)
 
 
 @dataclass(frozen=True)
@@ -40,6 +47,8 @@ PRESETS: dict[str, Preset] = {
     "shell": Preset(0.5, 0.75, 0.0, roughness=0.35),  # glossy painted plastic (accent / shell color)
     "dark": Preset(0.22, 0.35, roughness=0.6),  # matte dark plastic, anodized structure
     "metal": Preset(0.85, 0.8, 0.04, metallic=1.0, roughness=0.35),  # brushed aluminium, bolts, axles
+    "aluminum": Preset(0.75, 0.7, 0.05, metallic=0.8, roughness=0.4),  # anodised aluminium parts in their color
+    "carbon": Preset(0.95, 0.95, 0.06, roughness=0.15),  # clear-coated carbon fibre (the viewer adds the weave)
     "rubber": Preset(0.04, 0.05, roughness=0.95),  # tyres, foot pads
     "glass": Preset(1.0, 0.95, 0.08, roughness=0.05),  # lenses, visors
     "led": Preset(0.3, 0.6, emission=0.85, roughness=0.3),  # small glowing indicator
@@ -75,8 +84,9 @@ def material_name(preset: str) -> str:
     return f"rf_{preset}"
 
 
-def ensure_material(spec: mujoco.MjSpec, preset: str, known: set[str] | None = None) -> str:
-    """Add the `rf_<preset>` material to `spec` once; returns its name."""
+def ensure_material(spec: mujoco.MjSpec, preset: str, known: set[str] | None = None, rays: bool = True) -> str:
+    """Add the `rf_<preset>` material to `spec` once; returns its name. With `rays` False the material is
+    fully transparent, which only rays look at (geoms using it are colored by their own rgba)."""
     name = material_name(preset)
     if known is not None and name in known:
         return name
@@ -91,6 +101,7 @@ def ensure_material(spec: mujoco.MjSpec, preset: str, known: set[str] | None = N
             emission=p.emission,
             metallic=p.metallic,
             roughness=p.roughness,
+            rgba=[1.0, 1.0, 1.0, 1.0 if rays else 0.0],
         )
     if known is not None:
         known.add(name)
@@ -104,11 +115,12 @@ class Visuals:
     geoms however many little parts it shows.
     """
 
-    def __init__(self, spec: mujoco.MjSpec, owner: str | None = None) -> None:
+    def __init__(self, spec: mujoco.MjSpec, owner: str | None = None, rays: bool = True) -> None:
         self.spec = spec
         # Mesh names are rf_<owner>_<preset>: the body name for a robot (its spec is its own), the
         # object's name for a prop (unique in the world, and props on the world body share no body name).
         self.owner = owner
+        self.rays = rays  # False: rangefinders and lidars see through these meshes (see the module notes)
         self.on = enabled()
         self._groups: dict[tuple, tuple[mujoco.MjsBody, str, list[float], list[Mesh]]] = {}
         self._materials: set[str] = set()
@@ -128,6 +140,8 @@ class Visuals:
         color = [float(c) for c in rgba]
         if len(color) == 3:
             color.append(1.0)
+        if not self.rays and tuple(color) == DEFAULT_RGBA:  # would be drawn in the transparent material's color
+            color = [0.501, 0.501, 0.501, 1.0]
         key = (body.name, preset, tuple(round(c, 4) for c in color))
         if key not in self._groups:
             self._groups[key] = (body, preset, color, [])
@@ -166,7 +180,7 @@ class Visuals:
             body.add_geom(
                 type=mujoco.mjtGeom.mjGEOM_MESH,
                 meshname=name,
-                material=ensure_material(self.spec, preset, self._materials),
+                material=ensure_material(self.spec, preset, self._materials, self.rays),
                 rgba=color,
                 contype=0,
                 conaffinity=0,

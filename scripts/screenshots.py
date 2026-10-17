@@ -548,6 +548,32 @@ def _mars_rover(pg: Any) -> None:
     pg.add_object("big_rock", shape="rock", size=[1.2, 0.85], pos=[3.0, 0.0], color="#875c46", fixed=True)
 
 
+def _built_robots() -> Any:
+    """The robots built from parts that the look tests use (tests/built_robots.py, plain data)."""
+    sys.path.insert(0, str(ROOT / "tests"))
+    import built_robots
+
+    return built_robots
+
+
+def _built(names: tuple[str, ...], spacing: float = 0.62) -> Callable[[Any], None]:
+    """A world with some of the look tests' robots built from parts, in a row along y."""
+
+    def world(pg: Any) -> None:
+        gallery = _built_robots().GALLERY
+        for i, name in enumerate(names):
+            pg.add_robot(name, build=gallery[name], pos=[0.0, spacing * (i - (len(names) - 1) / 2)])
+
+    return world
+
+
+def _materials(pg: Any) -> None:
+    """One small robot four times: printed PLA, anodised aluminium, carbon fibre and rubber."""
+    probe = _built_robots().MATERIAL_PROBE
+    for i, material in enumerate(("pla", "aluminum", "carbon", "rubber")):
+        pg.add_robot(material, build={**probe, "material": material}, pos=[0.0, 0.3 * i - 0.45])
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -634,6 +660,17 @@ SHOTS = [
         viewer=[{"type": "teleop", "robot": "mars_rover", "speed": 0.3, "turn": 0.0}, {"wait": 5.0}],
         page="window.__robotforge.lookAt([1.6, -3.4, 1.9], [1.6, 0.0, 0.2]);",
         settle=0.5,
+    ),
+    # Robots built from parts, dressed: a dog, a sensor rover, a carbon spider and a dog carrying an arm.
+    Shot(
+        "built_robots",
+        _built(("dog", "scout", "spider", "centaur")),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.8, -0.28, 0.66], [0.0, 0.0, 0.1]);",
+    ),
+    Shot(
+        "built_materials",
+        _materials,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -0.25, 0.55], [0.0, 0.0, 0.12]);",
     ),
 ]
 

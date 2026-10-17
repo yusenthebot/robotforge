@@ -43,6 +43,11 @@ const PRESETS = {
   rf_shell: { physical: true, roughness: 0.34, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.28 },
   rf_dark: { roughness: 0.55, metalness: 0.12 },
   rf_metal: { roughness: 0.32, metalness: 1 },
+  // Parts built from aluminium keep their color: anodised metal with a light seal coat, lit a little more by the
+  // studio (a metal takes its brightness from reflections, and at plain strength a blue part turned navy).
+  rf_aluminum: { physical: true, roughness: 0.3, metalness: 0.72, clearcoat: 0.2, clearcoatRoughness: 0.3, env: 1.45 },
+  // Carbon fibre: a woven layer under a glossy clear coat (the weave is drawn in the shader, see addWeave).
+  rf_carbon: { physical: true, roughness: 0.42, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.06, weave: true },
   rf_rubber: { roughness: 0.92, metalness: 0 },
   rf_glass: { physical: true, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04 },
   rf_led: { roughness: 0.3, metalness: 0, glow: 2.2 },
@@ -85,6 +90,7 @@ export function surfaceMaterial(materialName, color, opacity) {
     transparent,
     opacity,
     depthWrite: !transparent,
+    envMapIntensity: p.env ?? 1,
   };
   const mat = p.physical
     ? new THREE.MeshPhysicalMaterial({
@@ -99,5 +105,51 @@ export function surfaceMaterial(materialName, color, opacity) {
     mat.emissive = color.clone();
     mat.emissiveIntensity = p.glow;
   }
+  if (p.weave) addWeave(mat);
   return mat;
+}
+
+// A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few
+// shader instructions. Each face takes the plane its normal points out of. Where one tow is
+// smaller than a pixel the weave fades to its average instead of shimmering.
+const WEAVE_PITCH = 0.004; // m, the width of one tow (a 12K carbon twill, the coarse weave robot plates show)
+
+function addWeave(mat) {
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWeavePos;\nvarying vec3 vWeaveNormal;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWeavePos = position;\nvWeaveNormal = normal;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+varying vec3 vWeavePos;
+varying vec3 vWeaveNormal;
+float weaveTow;
+float weaveFade;`
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+{
+  vec3 an = abs(vWeaveNormal);
+  vec2 plane = an.x > an.y && an.x > an.z ? vWeavePos.yz : (an.y > an.z ? vWeavePos.xz : vWeavePos.xy);
+  vec2 p = plane / ${WEAVE_PITCH.toFixed(5)};
+  vec2 cell = floor(p);
+  vec2 f = fract(p);
+  bool alongX = mod(cell.x + cell.y, 4.0) < 2.0; // the tow on top steps one cell per row: a twill
+  float across = alongX ? f.y : f.x;
+  float ridge = sin(3.14159265 * across); // a tow is a flat ridge with a dark gap to the next one
+  weaveFade = clamp((0.4 - max(fwidth(p.x), fwidth(p.y))) / 0.23, 0.0, 1.0); // full at 6 px a tow, gone at 2.5
+  weaveTow = alongX ? 1.0 : 0.0;
+  diffuseColor.rgb *= mix(0.86, mix(0.68, 1.04, ridge), weaveFade);
+}`
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+roughnessFactor *= mix(1.0, weaveTow > 0.5 ? 0.82 : 1.18, weaveFade); // tows at right angles catch light differently`
+      );
+  };
+  mat.customProgramCacheKey = () => "rf-weave";
 }

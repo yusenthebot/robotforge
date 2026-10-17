@@ -148,6 +148,18 @@ def test_meshes_are_closed_and_face_outward():
     assert np.allclose(box.vertices.max(axis=0), [0.1, 0.05, 0.02])
 
 
+def test_vertices_at_one_spot_share_a_smoothing_key_like_numpy_unique():
+    """loft's smoothing keys come from a lexsort; they must group (and number) vertices as np.unique does."""
+    rng = np.random.default_rng(7)
+    for _ in range(50):
+        verts = rng.integers(0, 4, (int(rng.integers(1, 80)), 3)) * 0.001 + rng.normal(0, 1e-9, (1, 3))
+        _, inverse = np.unique(np.round(verts * 1e7).astype(np.int64), axis=0, return_inverse=True)
+        np.testing.assert_array_equal(M._position_keys(verts), inverse.reshape(-1))
+    assert M._position_keys(np.zeros((0, 3))).size == 0
+    # A pole (a ring of one point) closes a sphere: its triangles stay, the degenerate ones do not.
+    assert len(M.sphere(0.05, rings=4, segments=8).faces) == 2 * 8 + 2 * 8 * 2
+
+
 def test_unknown_material_preset_is_rejected():
     with pytest.raises(ValueError, match="unknown material preset"):
         visuals.material_name("chrome")

@@ -166,7 +166,7 @@ def z_to(direction: Sequence[float]) -> np.ndarray:
     d = np.asarray(direction, dtype=float)
     d = d / (np.linalg.norm(d) or 1.0)
     z = np.array([0.0, 0.0, 1.0])
-    axis = np.cross(z, d)
+    axis = _cross(z, d)
     s, c = float(np.linalg.norm(axis)), float(z @ d)
     if s < 1e-9:
         return np.eye(3) if c > 0 else rot_x(math.pi)
@@ -238,16 +238,12 @@ def _band(rings: list[np.ndarray], n: int, closed: bool) -> Mesh:
     m = len(rings)
     i = np.arange(n if closed else n - 1)
     j = (i + 1) % n
-    point = [bool(np.ptp(r, axis=0).max() < 1e-12) for r in rings]
-    faces = []
-    for k in range(m - 1):
-        a, b = k * n + i, k * n + j
-        c, d = (k + 1) * n + j, (k + 1) * n + i
-        if not point[k]:  # next to a pole one triangle per quad is enough, the other has no area
-            faces.append(np.stack([a, b, c], axis=1))
-        if not point[k + 1]:
-            faces.append(np.stack([a, c, d], axis=1))
-    faces = np.vstack(faces).astype(np.int32)
+    point = np.array([np.ptp(r, axis=0).max() < 1e-12 for r in rings])
+    k = np.arange(m - 1)[:, None] * n  # every band between two rings at once (a loop of np.stack was slow)
+    a, b, c, d = k + i, k + j, k + n + j, k + n + i
+    quads = np.stack([np.stack([a, b, c], axis=-1), np.stack([a, c, d], axis=-1)], axis=1)  # (bands, 2, n, 3)
+    keep = np.stack([~point[:-1], ~point[1:]], axis=1)  # next to a pole one triangle per quad has no area
+    faces = quads[keep].reshape(-1, 3).astype(np.int32)
     return Mesh(verts, np.zeros_like(verts), faces, _position_keys(verts))
 
 
@@ -278,10 +274,19 @@ def _signed_volume(rings: list[np.ndarray], n: int) -> float:
 
 
 def _position_keys(verts: np.ndarray) -> np.ndarray:
-    """Same key for vertices at the same spot (poles, wrap seams), so they share a normal."""
+    """Same key for vertices at the same spot (poles, wrap seams), so they share a normal.
+
+    The keys are np.unique(q, axis=0)'s inverse, found with a lexsort, which is several times faster."""
     q = np.round(verts * 1e7).astype(np.int64)
-    _, inverse = np.unique(q, axis=0, return_inverse=True)
-    return inverse.reshape(-1).astype(np.int64)
+    if len(q) == 0:
+        return np.zeros(0, dtype=np.int64)
+    order = np.lexsort((q[:, 2], q[:, 1], q[:, 0]))
+    ranked = q[order]
+    new = np.ones(len(q), dtype=bool)
+    new[1:] = np.any(ranked[1:] != ranked[:-1], axis=1)
+    keys = np.empty(len(q), dtype=np.int64)
+    keys[order] = np.cumsum(new) - 1
+    return keys
 
 
 def _finish(mesh: Mesh) -> Mesh:
@@ -341,6 +346,79 @@ def rounded_box(hx: float, hy: float, hz: float, radius: float, segments: int = 
         z = (hz - rb) + rb * math.cos(a)
         rings.append(at_z(rounded_rect(hx - inset, hy - inset, max(rc - inset, 1e-5), per), z))
     return loft(rings)
+
+
+@cached
+def slab(
+    hx: float,
+    hy: float,
+    z0: float,
+    z1: float,
+    bottom: float,
+    top: float,
+    corner: float,
+    segments: int = 3,
+    per_corner: int = 3,
+    fence: bool = True,
+    bottom_cap: bool = True,
+    top_cap: bool = True,
+    rims: tuple[float, float] = (0.0, 0.0),
+) -> Mesh:
+    """A rounded-rectangle block from z0 to z1 with its own edge radius at the bottom and at the top.
+
+    Two slabs stacked with a small gap make a shell with a parting line: a soft outer edge and a
+    crisp seam, which one rounded box cannot do. `corner` is the radius of the vertical edges.
+    With `fence` every flat face is bordered by a thin strip (see _fenced), so a big face shades
+    flat instead of fading into the curve beside it; small parts can do without.
+
+    Without `bottom_cap` or `top_cap` that end is open: the faces at a parting line look into the
+    shell, where only a camera inside it could see them. `rims` keeps a flat border that wide round
+    the open bottom and top, so a narrow gap beside it still closes.
+    """
+    h = (z1 - z0) / 2
+    rb = max(min(bottom, hx, hy, h), 1e-5)
+    rt = max(min(top, hx, hy, h), 1e-5)
+
+    def ring(inset: float, z: float) -> np.ndarray:
+        rect = rounded_rect(hx - inset, hy - inset, max(corner - inset, 1e-5), per_corner)
+        return at_z(_fenced(rect) if fence else rect, z)
+
+    angles = np.linspace(0.0, math.pi / 2, segments + 1)
+    rings = [ring(rb * (1 - math.sin(a)), z0 + rb * (1 - math.cos(a))) for a in angles]
+    straight = (z1 - rt) - (z0 + rb)
+    if fence and straight > 1e-5:  # fence the flat sides top and bottom as well
+        rings += [ring(0.0, z0 + rb + straight * _FENCE), ring(0.0, z1 - rt - straight * _FENCE)]
+    rings += [ring(rt * (1 - math.sin(a)), z1 - rt * (1 - math.cos(a))) for a in angles[::-1]]
+    inner = 0.8 * min(hx, hy)  # a rim never closes the opening
+    creases = []  # a rim is creased off its edge, so the edge shades as it does next to a cap
+    if not bottom_cap and rims[0] > 0:
+        rings.insert(0, ring(min(rb + rims[0], inner), z0))
+        creases.append(1)
+    if not top_cap and rims[1] > 0:
+        rings.append(ring(min(rt + rims[1], inner), z1))
+        creases.append(len(rings) - 2)
+    return loft(rings, sharp=creases, cap_start=bottom_cap, cap_end=top_cap)
+
+
+_FENCE = 0.004  # share of a flat face given to the strip that fences it off from the curve next to it
+
+
+def _fenced(ring2: np.ndarray) -> np.ndarray:
+    """A rounded rectangle with two extra points on each straight side, just inside its ends.
+
+    Smooth normals average the faces around a vertex; without the extra points the vertex where a
+    corner meets a flat side leans toward the corner, and that lean is interpolated across the
+    whole side: a long flat face shades like a shallow curve. The thin strip takes the blend.
+    """
+    corners = 4
+    per = len(ring2) // corners
+    out = []
+    for k in range(corners):
+        arc = ring2[k * per : (k + 1) * per]
+        out.extend(arc)
+        a, b = arc[-1], ring2[((k + 1) * per) % len(ring2)]
+        out += [a + (b - a) * _FENCE, b + (a - b) * _FENCE]
+    return np.array(out)
 
 
 @cached
@@ -408,13 +486,14 @@ def link(
     rounding: tuple[float, float] = (1.0, 1.0),
     stations: int = 5,
     per_corner: int = 3,
+    domes: int = 4,
 ) -> Mesh:
     """A tapered limb along z from 0 to `length`: rounded-rectangle sections from half extents
-    `start` (x, y) to `end`, ends domed by `rounding` times the end section's smaller half extent."""
+    `start` (x, y) to `end`, ends domed by `rounding` times the end section's smaller half extent.
+    A thick limb needs more `per_corner` points round its section and more `domes` rings per end."""
     rings = []
     d0 = rounding[0] * min(start)
     d1 = rounding[1] * min(end)
-    domes = 4
     count = 4 * (per_corner + 1)
     for a in np.linspace(0.0, math.pi / 2, domes + 1):  # bottom dome
         k = math.sin(a)
