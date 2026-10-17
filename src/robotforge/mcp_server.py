@@ -473,7 +473,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
         # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
         run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
-        if not trip.done:  # the viewer's clock lagged behind the wall clock: end the trip here
+        # Standing now, not at its walker's next tick (and a trip the viewer's lagging clock left going ends here):
+        # an observe right after a trip showed the rover's wheels still driven at 3.4 rad/s, and the agent called
+        # stop. A trip sent since (a double-click in the viewer) is left to go on.
+        if playground.behaviors.trip(robot) in (None, trip):
             playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
         if settled is not None:  # a humanoid finishes its step first; report where it really stops
@@ -482,7 +485,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         result = trip.result()
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
             result["note"] += "; call move with the same to again to go on (seconds=null lets it walk on meanwhile)"
-        return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
+        # Stopped, said at the top as a timed move says it: after a trip, agents in the eval called stop on a robot
+        # that already stood (2 of 6 sessions that sent one somewhere).
+        here = playground.behaviors.pose(robot)
+        return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
     @server.tool()
     async def move(
@@ -505,7 +511,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why."""
+        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
+        where it ended ("stopped": true, no need to call stop)."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if to is not None:

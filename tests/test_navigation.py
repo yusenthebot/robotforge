@@ -833,6 +833,22 @@ async def test_move_to_a_place_reports_the_trip(pg):
 
 
 @pytest.mark.anyio
+async def test_a_trip_says_the_robot_stopped_where_it_ended(pg):
+    """In the agent eval (main at c2e37cd) two of six sessions that sent a robot somewhere called stop right after
+    the trip, on a robot that already stood: a timed move says "stopped" at the top, a trip did not."""
+    pg.add_robot("rover", template="rover")
+    server = build_server(pg, find_free_port(8790))
+    async with Client(server) as client:
+        result = json.loads((await client.call_tool("move", {"robot": "rover", "to": [1.0, 0.5]})).content[0].text)
+        assert result["arrived"] is True and result["stopped"] is True, result
+        assert list(result)[:2] == ["arrived", "stopped"]  # at the top, where it is read first
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        listed = json.loads((await client.call_tool("robots", {})).content[0].text)
+        assert not any(b.get("navigating") == "rover" and "last_trip" not in b for b in listed["behaviors"])
+
+
+@pytest.mark.anyio
 async def test_a_trip_out_of_time_goes_on_when_sent_again(pg):
     """A trip longer than one call (60 s at most; a humanoid walks 5 m in that) stops when the time is up, and the
     note says to call again; the next call goes on from where it stopped."""
