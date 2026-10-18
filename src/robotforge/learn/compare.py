@@ -603,14 +603,14 @@ class HumanoidFaceOff(FaceOff):
             id="meet",
             title=_text("两种走路的办法", "Two ways to walk"),
             body=_text(
-                "左边是我们的模板人形：0.45 米高、不到 2 千克、20 个舵机。它的控制器是人写的：先规划脚落在哪，"
+                "前面是我们的模板人形：0.45 米高、不到 2 千克、20 个舵机。它的控制器是人写的：先规划脚落在哪，"
                 "再用“倒立摆”模型和 ZMP（零力矩点）预观控制算出身体该怎么晃，脚才不会翻。\n"
-                "右边是 Unitree G1：1.3 米、33 千克、29 个电机。它的控制器是一个神经网络，没有人告诉它怎么迈步："
+                "后面是 Unitree G1：1.3 米、33 千克、29 个电机。它的控制器是一个神经网络，没有人告诉它怎么迈步："
                 "UniLab 让 2048 个仿真的 G1 同时练习，练了 2200 轮（这台电脑上约 1 小时），每走稳一步就加分。\n"
-                "看下面的规格表，然后点「下一步」。",
-                "On the left, our template humanoid: 0.45 m tall, under 2 kg, 20 servos. Its controller was written "
+                "看规格表，然后点「下一步」。",
+                "In front, our template humanoid: 0.45 m tall, under 2 kg, 20 servos. Its controller was written "
                 "by people: it plans where each foot lands, then uses an inverted pendulum model and ZMP (zero moment "
-                "point) preview control to work out how the body must sway so the foot never tips.\nOn the right, the "
+                "point) preview control to work out how the body must sway so the foot never tips.\nBehind it, the "
                 "Unitree G1: 1.3 m, 33 kg, 29 motors. Its controller is a neural network that nobody told how to "
                 "step: UniLab had 2048 simulated G1s practise at once for 2200 rounds (about an hour on this "
                 "computer), scoring points for every steady step.\nRead the spec table, then press Next.",
