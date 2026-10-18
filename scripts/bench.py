@@ -76,11 +76,11 @@ NOISE = {
 }
 TIME_NOISE = (0.3, 0.0)
 MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
-# Speeds over the machine check timed with each world (MachineCheck), against 0d0b444 on unchanged physics code: 36
-# world runs at load 21 to 161 differed by -11 to +4 percent where that world's check moved less than a quarter
-# (raw speeds up to 47 percent), and by -16 to +7 percent where it moved more (a review saw arm_pick at -18): a
-# world slows or speeds 1.2 to 1.4 times as much as the small check, so the further the machine moved, the more a
-# relative change leans the way it moved, and the wider the floor.
+# Speeds over the machine check timed with each world (MachineCheck), against 0d0b444 on unchanged physics code: in
+# 72 world runs at load 21 to 161, -11 to +4 percent where that world's check moved less than a quarter (raw speeds
+# -20 to +28), and -23 to +7 where it moved more (raw -53 to +57; at 15 percent, 8 of those 54 read "worse"): a
+# world slows or speeds 1.2 to 1.4 times as much as the small check, more so with Python controllers (objects_20,
+# with none, stayed within 2 percent), so the further the machine moved, the more a relative change leans its way.
 MACHINE_RELATIVE_NOISE = 0.15
 MACHINE_MOVED = 1.25  # the check this much faster or slower than in the run compared with
 MACHINE_MOVED_NOISE = 0.25
@@ -313,7 +313,8 @@ def table(
     budgets: list[dict[str, Any]],
     busy: bool = False,
 ) -> list[str]:
-    """One row per metric. On a busy machine timings get no better or worse: the change is shown, not judged."""
+    """One row per metric. On a busy machine raw timings get no better or worse (the change is shown, not
+    judged); speeds over the machine check still do, since the check moved with the machine."""
     by_metric = {b["metric"]: b for b in budgets}
     lines = [f"{'metric':<40} {'now':>10} {'unit':<8} {'before':>10} {'change':>8}  {'budget':<14} status"]
     for name, m in now.items():
@@ -322,7 +323,8 @@ def table(
         change = "" if c.get("change") is None else f"{100 * c['change']:+.0f}%{'*' if c.get('relative') else ''}"
         limit = "" if b is None else f"{'<=' if b['kind'] == 'max' else '>='} {_fmt(b['limit'], m['unit'])}"
         status = "" if b is None else b["status"]
-        if c.get("verdict") in ("better", "worse") and not (busy and m["unit"] in LOAD_SENSITIVE):
+        unjudged = busy and m["unit"] in LOAD_SENSITIVE and not c.get("relative")
+        if c.get("verdict") in ("better", "worse") and not unjudged:
             status = f"{status} ({c['verdict']})".strip()
         lines.append(
             f"{name:<40} {_fmt(m['value'], m['unit']):>10} {m['unit']:<8} "
@@ -1359,8 +1361,9 @@ def main(argv: list[str] | None = None) -> int:
     if any(c.get("relative") for c in compared.values()):
         print(
             "\n* steps/s changes allow for the machine's speed, timed in each world's own process. A busier machine"
-            " than last time slows a world about 1.2 to 1.4 times as much as the check (a faster one speeds it as"
-            " much), so where the check moved more than a quarter the change leans that way and needs 25 percent"
+            " than last time slows a world (most, one with Python controllers) about 1.2 to 1.4 times as much as the"
+            " check, a faster one speeds it as much: where the check moved more than a quarter, the change leans that"
+            " way and needs 25 percent to count"
         )
     if busy:
         print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")

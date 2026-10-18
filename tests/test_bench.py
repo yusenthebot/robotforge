@@ -464,13 +464,17 @@ def test_the_table_shows_the_change_and_the_budget(bench):
     header, row = bench.table(now, compared, budgets)
     assert "budget" in header
     assert "300" in row and "600" in row and "-50%" in row and "<= 500" in row and "ok (better)" in row
-    # On a busy machine a timing's change is shown but not judged; a size is judged however busy the machine
+    # On a busy machine a raw timing's change is shown but not judged; a size is judged however busy the machine,
+    # and so is a speed over the machine check, which moved with the machine
     now["install.installed_mb"] = m(200, "MB", "lower")
     compared = bench.compare(
         now, {**now, "imports.cli_ms": m(600, "ms", "lower"), "install.installed_mb": m(160, "MB", "lower")}
     )
     _, timing, size = bench.table(now, compared, budgets, busy=True)
     assert "-50%" in timing and "better" not in timing and "(worse)" in size
+    speed = {"physics.dog_idle.steps_per_s": m(50000, "steps/s", "higher", machine=150000)}
+    compared = bench.compare(speed, {"physics.dog_idle.steps_per_s": m(69403, "steps/s", "higher", machine=150000)})
+    assert "(worse)" in bench.table(speed, compared, [], busy=True)[1]
 
 
 def test_the_budget_file_names_metrics_the_bench_measures(bench):
