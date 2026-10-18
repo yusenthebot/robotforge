@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import json
 import math
 import threading
 from collections.abc import Callable
@@ -20,11 +21,22 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge import modes, wording
+from robotforge.behaviors import robot_kind
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
+from robotforge.design.builder import plate
 from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
+from robotforge.design.world import (
+    CompiledWorld,
+    Floor,
+    ObjectEntry,
+    RobotEntry,
+    World,
+    compile_world,
+    spawn_height,
+    tidy_name,
+)
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry, finder, lidar, placement, vision
 from robotforge.sim.actuators import is_position_servo
@@ -335,7 +347,8 @@ class Playground:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
         found: list[str] = []
-        replaced: list[str] = []
+        swap = self._replacing(name, build) if build is not None and _whole(build) else None
+        replaced = [swap] if swap else []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -352,8 +365,8 @@ class Playground:
                 if robot.build is None and _whole(build):
                     # A whole robot from parts in place of a template, library robot or file, where it stands: both
                     # lidar sessions in the eval sent the maze's starter rover a build with a lidar (update_robot,
-                    # then add_part), were refused, and removed it to add the same robot again.
-                    replaced.append(f"{robot.name}: now built from parts (it was {_source(robot)})")
+                    # then add_part), were refused, and removed it to add the same robot again. _replacing has
+                    # checked that it carries the old robot or is one of the same kind.
                     robot.template = robot.file = robot.library = None
                     robot.params = {}
                     robot.build = build
@@ -379,6 +392,72 @@ class Playground:
         result = self._edit(change)
         placed = self._clear_start(found[0], pos, asked=True)[1] if pos is not None else None
         return _noted(result, _yaw_note(yaw), *replaced, *kept, placed)
+
+    def _replacing(self, name: str, build: dict[str, Any]) -> str | None:
+        """The note for a whole build sent to a template, library or file robot, or None for one built from parts.
+        A build that carries the old robot on a part, or makes a robot of the same kind, replaces it where it
+        stands; any other is refused with the build that keeps it. Rebuilt on the word of the add_part refusal, a
+        quadruped given a base with a lidar became a 1 kg box with no joints, and a Go2 given a lidar puck a 1.1 kg
+        cylinder; the only sign was "now built from parts"."""
+        store = self._require_store()
+        entry = _find(store.load().robots, name, "robot")
+        if entry.build is not None:
+            return None
+        source, mount = _source(entry), plate.mount_of(entry)
+        if mount is not None and plate.mounts(build, mount):
+            return f"{entry.name}: now built from parts, carrying {source} as it was"
+        before, joints = self.behaviors.kind(entry.name).value, _moving_joints(self.session.model, entry.name)
+        try:
+            model = self._compiled_with(entry.name, build)
+        except (ValueError, ValidationError):
+            return None  # the edit itself says what is wrong with the build
+        after, now = robot_kind(model, entry.name).value, _moving_joints(model, entry.name)
+        if after == before:
+            return (
+                f"{entry.name}: now built from parts (it was {source}), still {_a(before)}, with {_joints(now)} where "
+                f"it had {joints}"
+            )
+        raise PlaygroundError(
+            self._keep_it(
+                entry,
+                build,
+                f"this build would turn {entry.name}, {_a(before)} with {_joints(joints)} from {source}, into a robot "
+                f"of kind {after} with {_joints(now)}: the {before} would be gone",
+            )
+        )
+
+    def _keep_it(self, entry: RobotEntry, build: dict[str, Any], why: str, part: bool = False) -> str:
+        """`why` a change to a robot not built from parts is refused, and the build that keeps the robot: carried
+        under a plate, as the gallery's go2_arm carries a Go2, with `build`'s parts and base sensors on the plate (for
+        add_part, `part`, a place in the parts for the agent's own). Offered only when the plate and the robot compile
+        and are still the same kind of robot (a humanoid is not, so far)."""
+        mount, kind, source = plate.mount_of(entry), self.behaviors.kind(entry.name).value, _source(entry)
+        if mount is None:
+            return f"{why}. A robot from a file cannot be carried on a plate: build one from parts (builder_guide)"
+        model = self.session.model
+        bare = plate.carried(model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
+        try:
+            still = robot_kind(self._compiled_with(entry.name, bare), entry.name).value == kind
+        except (ValueError, ValidationError):
+            still = False
+        if not still:
+            return f"{why}. Carried on a plate, {source} would no longer be {_a(kind)}: build one from parts instead"
+        recipe = json.dumps(bare if part else plate.carried(model, entry.name, mount, build))
+        if part:
+            recipe = recipe[: -len("]}")] + ", <the part>]}"
+        return (
+            f"{why}. Keep it on a plate: update_robot({json.dumps(entry.name)}, build={recipe}); joints become "
+            f"{entry.name}/{bare['parts'][0]['name']}/..."
+        )
+
+    def _compiled_with(self, name: str, build: dict[str, Any]) -> mujoco.MjModel:
+        """The open world compiled with robot `name` built from `build` instead, saving nothing."""
+        store = self._require_store()
+        world = store.load().model_copy(deep=True)
+        robot = next(r for r in world.robots if r.name == name)
+        robot.template = robot.file = robot.library = None
+        robot.params, robot.build = {}, build
+        return compile_world(World.model_validate(world.model_dump()), store.dir).model
 
     def _clear_start(self, robot: str, pos: list[float], asked: bool) -> tuple[list[float] | None, str | None]:
         """Whether `robot`, just put at `pos`, stands inside something: furniture, a wall, a ramp, another robot.
@@ -407,7 +486,7 @@ class Playground:
 
     @_one_edit_at_a_time
     def add_part(self, robot: str, part: dict[str, Any]) -> dict[str, Any]:
-        return self._edit_build(robot, lambda b: build_edit.add_part(b, part))
+        return self._edit_build(robot, lambda b: build_edit.add_part(b, part), adding=part)
 
     @_one_edit_at_a_time
     def update_part(self, robot: str, part: str, changes: dict[str, Any]) -> dict[str, Any]:
@@ -426,7 +505,20 @@ class Playground:
         result["removed_parts"] = removed
         return result
 
-    def _edit_build(self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    def _edit_build(
+        self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]], adding: dict | None = None
+    ) -> dict[str, Any]:
+        entry = _find(self._require_store().load().robots, robot, "robot")
+        if entry.build is None and isinstance(adding, dict):  # a part for a template or library robot
+            raise PlaygroundError(
+                self._keep_it(
+                    entry,
+                    {},
+                    f"{entry.name} comes from {_source(entry)}: parts go on robots built from parts",
+                    part=True,
+                )
+            )
+
         def change(w: World) -> None:
             entry = _built(_find(w.robots, robot, "robot"))
             entry.build = change_build(entry.build)
@@ -922,9 +1014,8 @@ def _built(robot: RobotEntry) -> RobotEntry:
     if robot.build is None:
         raise PlaygroundError(
             f"{robot.name} comes from {_source(robot)}; parts and sensors (a lidar, a camera) are edited only on "
-            f'robots built from parts. update_robot("{robot.name}", build={{"base": ..., "parts": [...]}}) makes it '
-            "one where it stands (builder_guide). To build on a template, mount it as a part: "
-            '{"name": "arm", "robot": {"template": "arm"}}'
+            "robots built from parts. add_part on it says how to carry it on a plate and add parts there; to "
+            'build on a template, mount it as a part: {"name": "arm", "robot": {"template": "arm"}}'
         )
     return robot
 
@@ -962,6 +1053,27 @@ def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     elif "base" in new:
         out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
     return out
+
+
+def _moving_joints(model: mujoco.MjModel, robot: str) -> int:
+    """How many hinges and slides robot `robot` has in a compiled world."""
+    moving = (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+    return sum(
+        int(model.jnt_type[j]) in moving
+        and (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or "").startswith(f"{robot}/")
+        for j in range(model.njnt)
+    )
+
+
+def _a(kind: str) -> str:
+    """A robot kind with its article: an arm, a quadruped, a robot of kind other."""
+    if kind == "other":
+        return "a robot of kind other"
+    return f"an {kind}" if kind[0] in "aeiou" else f"a {kind}"
+
+
+def _joints(count: int) -> str:
+    return f"{count} joint" if count == 1 else f"{count} joints"
 
 
 def _xy(pos: list[float]) -> str:

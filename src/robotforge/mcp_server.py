@@ -377,7 +377,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
         keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
-        build (a base or parts) becomes a robot built from parts where it stands, e.g. to carry sensors (a lidar)."""
+        build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
+        mounted part or is a robot of the same kind; any other is refused with the build that keeps it."""
         with _tool_errors():
             return _json(playground.update_robot(name, params, pos, yaw, build))
 
