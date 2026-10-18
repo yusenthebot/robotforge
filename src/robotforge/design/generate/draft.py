@@ -60,6 +60,7 @@ class Draft:
     obstacles: dict[str, Footprint] = field(default_factory=dict)  # fixed things on the floor, by name
     keepout: list[Footprint] = field(default_factory=list)  # door ways, paths, the robots' starts
     walls: set[str] = field(default_factory=set)  # obstacles that are walls (furniture stands against them)
+    obstacles_on: dict[str, Footprint] = field(default_factory=dict)  # things fixed on tops, by name
     wall_thick: float = 0.0  # m: rooms' rectangles run along the middle of their walls
     surfaces: list[Surface] = field(default_factory=list)
     rooms: dict[str, Footprint] = field(default_factory=dict)  # room name -> its floor

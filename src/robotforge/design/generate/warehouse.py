@@ -20,6 +20,7 @@ YELLOW = [0.95, 0.78, 0.2, 1]
 WALL = [0.72, 0.74, 0.76, 1]
 UNIT = (2.0, 0.6, 2.0)  # one rack: length, depth, height
 AISLE = 2.4  # m between two racks that face each other
+PACKING = 0.65  # m, the packing table's top
 DOCK = {"angle": 8, "length": 2.1, "landing": 2.0, "width": 2.4}
 
 
@@ -87,15 +88,16 @@ def build(draft: Draft, wish: Wish) -> None:
     # a packing table with a tote on it, where parcels are taken
     table = draft.in_middle(open_area, 1.4, 0.7, gap=0.6)
     if table is not None:
-        name = draft.put("packing_table", "table", table, [1.4, 0.7, 0.8], color=[0.62, 0.48, 0.34, 1])
-        top = draft.surface(name, table, 0.8, room=None)
-        tote = Footprint(*table.world(0.35, 0.0), 0.2, 0.15, table.yaw)
+        # low enough that a lift picker (it reaches 0.9 m) puts a parcel down inside the tote over its rim
+        name = draft.put("packing_table", "table", table, [1.4, 0.7, PACKING], color=[0.62, 0.48, 0.34, 1])
+        top = draft.surface(name, table, PACKING, room=None)
+        tote = Footprint(*table.world(0.35, -0.35 + 0.13), 0.16, 0.12, table.yaw)  # near an edge, for an arm
         top.items.append(tote)
         c.add(
             draft.name("tote"),
             "bin",
-            [round(tote.x, 3), round(tote.y, 3), 0.8],
-            size=[0.4, 0.3, 0.12],
+            [round(tote.x, 3), round(tote.y, 3), PACKING],
+            size=[0.32, 0.24, 0.1],
             yaw=table.yaw,
             color="blue",
         )

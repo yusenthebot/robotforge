@@ -233,3 +233,13 @@ def test_a_lift_picker_can_put_things_into_a_loose_bowl(tmp_path, monkeypatch):
     m, d = pg.session.model, pg.session.data
     place = fetch.place_for(m, d, "bowl", "bin", m.body("cube").id, 0.03)
     assert place.spots
+
+
+def test_going_to_the_room_the_robot_is_in_starts_it_in_another(home):
+    """The robot starts in the first room; "go to the kitchen" from the kitchen would be done before it began."""
+    result = home.add_task("go to the kitchen")
+    assert result["task"]["status"]["done"] is False
+    assert any("away from kitchen" in n for n in result["notes"])
+    start = home.current_world().tasks[0].start.robot
+    robot = home.current_world().robots[0]
+    assert [round(v, 3) for v in robot.pos[:2]] == [round(v, 3) for v in start[:2]]

@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable
+from typing import Any
 
 from robotforge.design import props
 from robotforge.design.generate import things
@@ -27,6 +28,7 @@ WALL_COLOR = [0.9, 0.88, 0.84, 1]
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
 DARK = [0.2, 0.21, 0.23, 1]
+WHITE = [0.92, 0.92, 0.9, 1]
 FABRIC = ([0.36, 0.45, 0.6, 1], [0.55, 0.38, 0.32, 1], [0.42, 0.52, 0.4, 1], [0.6, 0.56, 0.5, 1])
 # room kind -> (width, depth) in m, and the floor marker's tint (a hint of color over the wood)
 ROOM_SIZES = {
@@ -326,7 +328,16 @@ def _on_top(
         fp = Footprint(round(x, 3), round(y, 3), hx, hy, a.yaw)
         if any(fp.overlaps(o, 0.03) for o in surface.items):
             continue
-        surface.items.append(fp)
+        keep = []
+        if shape != "box":  # a mechanism: the top beside it kept clear, where an arm stands to work it
+            # a cabinet's handle is on its right (its door hinges on the left and sweeps the front): there only
+            towards = (1,) if shape == "cabinet" else (1, -1)
+            sides = [Footprint(*a.world(lx + side * (hx + 0.2), ly), 0.16, min(0.16, a.hy), a.yaw) for side in towards]
+            keep = [z for z in sides if all(a.contains(cx, cy, -1e-3) for cx, cy in z.corners())
+                    and not any(z.overlaps(o, 0.0) for o in surface.items)][:1]  # fmt: skip
+            if not keep:
+                continue
+        surface.items += [fp, *keep]
         placed = draft.put(f"{room}_{name}", shape, fp, size, z=surface.z, **fields)
         return placed
     return None
@@ -352,22 +363,37 @@ ARM_ROOM = 0.5  # m of counter kept clear in front of it: an arm stands there to
 
 
 def _counter_chest(draft: Draft, room: str, top: Surface) -> str | None:
-    """A drawer chest at one end of a counter, its drawer pulling out along the counter, with the counter in front
-    of it kept clear for an arm to stand and work it (as on the kitchen scene's island)."""
-    a = top.area
-    if a.hx < CHEST[0] / 2 + ARM_ROOM + 0.05:
-        return None
-    end = draft.rng.choice((1, -1))
-    lx = end * (a.hx - CHEST[1] / 2 - 0.02)
-    x, y = a.world(lx, 0.0)
-    # its own -y (where the drawer comes out) toward the counter's middle
-    yaw = a.yaw + (-90.0 if end > 0 else 90.0)
-    fp = Footprint(round(x, 3), round(y, 3), CHEST[0] / 2, CHEST[1] / 2, yaw)
-    clear = Footprint(*a.world(lx - end * (CHEST[1] / 2 + ARM_ROOM / 2), 0.0), ARM_ROOM / 2, a.hy, a.yaw)
-    top.items += [fp, clear]
-    name = draft.put(f"{room}_drawer", "drawer", fp, list(CHEST), z=top.z, color=[0.92, 0.92, 0.9, 1])
-    draft.surface(name, fp, top.z + CHEST[2], room=room, inset=0.03, kind="chest")
+    """A drawer chest at one end of a counter (see _at_end), its top a surface too."""
+    name = _at_end(draft, room, top, "drawer", list(CHEST), "drawer", [0.92, 0.92, 0.9, 1])
+    if name is not None:
+        fp = draft.obstacles_on[name]
+        draft.surface(name, fp, top.z + CHEST[2], room=room, inset=0.03, kind="chest")
     return name
+
+
+def _at_end(draft: Draft, room: str, top: Surface, shape: str, size: list[float], name: str, color: Any) -> str | None:
+    """A drawer chest or a cabinet at one end of a top, its front (where its drawer or door comes out) toward the
+    top's middle, with the top in front of it kept clear for an arm to stand and work it (as on the kitchen scene's
+    island, where the arm faces the drawer from 0.5 m)."""
+    a = top.area
+    length, depth = size[0], size[1]
+    if a.hx < depth / 2 + ARM_ROOM + 0.05 or a.hy < length / 2:
+        return None
+    ends = [1, -1]
+    draft.rng.shuffle(ends)
+    for end in ends:
+        lx = end * (a.hx - depth / 2 - 0.02)
+        x, y = a.world(lx, 0.0)
+        yaw = a.yaw + (-90.0 if end > 0 else 90.0)  # its own -y toward the top's middle
+        fp = Footprint(round(x, 3), round(y, 3), length / 2, depth / 2, yaw)
+        clear = Footprint(*a.world(lx - end * (depth / 2 + ARM_ROOM / 2), 0.0), ARM_ROOM / 2, a.hy, a.yaw)
+        if any(fp.overlaps(o, 0.02) or clear.overlaps(o, 0.0) for o in top.items):
+            continue
+        top.items += [fp, clear]
+        placed = draft.put(f"{room}_{name}", shape, fp, size, z=top.z, color=color)
+        draft.obstacles_on[placed] = fp
+        return placed
+    return None
 
 
 def _living_room(draft: Draft, room: str, rect: Footprint) -> None:
@@ -528,7 +554,8 @@ FURNISH: dict[str, Callable[[Draft, str, Footprint], None]] = {
 }
 
 
-FURNITURE_SAID = ("table", "desk", "shelf", "counter", "drawer", "sofa", "bed")  # what stands on the floor
+# what stands on the floor and may be said with a room (a drawer is the room's own chest, on a counter in a kitchen)
+FURNITURE_SAID = ("table", "desk", "shelf", "counter", "sofa", "bed")
 
 
 def _asked_furniture(
@@ -577,7 +604,7 @@ def _asked_furniture(
 
 
 MECHANISM_SIZES = {
-    "cabinet": [0.32, 0.26, 0.3],
+    "cabinet": [0.3, 0.24, 0.2],
     "button": [0.04, 0.05],
     "switch": [0.06, 0.04, 0.03],
     "lever": [0.15],
@@ -589,8 +616,9 @@ def _mechanism(draft: Draft, concept: str, room: str) -> bool:
     """A cabinet, button, switch, lever or valve on a top in `room` 0.7 to 1.0 m high, at its front edge."""
     tops = [s for s in draft.surfaces if s.room == room and 0.7 <= s.z <= 1.0 and s.clearance > 0.5]
     draft.rng.shuffle(tops)
-    color = [0.92, 0.92, 0.9, 1] if concept == "cabinet" else "red"
-    return any(_on_top(draft, room, top, concept, MECHANISM_SIZES[concept], concept, color=color) for top in tops)
+    if concept == "cabinet":  # at a top's end facing along it, like a drawer chest: its door opens to the arm
+        return any(_at_end(draft, room, t, "cabinet", MECHANISM_SIZES["cabinet"], "cabinet", WHITE) for t in tops)
+    return any(_on_top(draft, room, top, concept, MECHANISM_SIZES[concept], concept, color="red") for top in tops)
 
 
 def _things(draft: Draft, wish: Wish, names: list[str], kinds: list[str]) -> None:

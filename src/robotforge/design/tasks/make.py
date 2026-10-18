@@ -471,7 +471,10 @@ def _add_arm(objects, thing, place, world, out: Plan, spawn_height) -> str:
     spots = []
     # in front of it first (where its drawer or door comes out, as on the kitchen scene's island), then beside it
     ahead = [(0.0, -d) for d in (0.5, 0.46, 0.54, 0.42)]
-    beside = [(side * d, ly) for d in (0.26, 0.3, 0.22, 0.34) for side in (1, -1) for ly in (0.0, 0.06, -0.06)]
+    if o["shape"] == "cabinet":  # beside the handle (on its right), clear of the door as it swings open
+        ahead = [(0.1, -0.42), (0.12, -0.46), (0.06, -0.4)] + ahead
+    towards = (1,) if o["shape"] == "cabinet" else (1, -1)  # a cabinet's door sweeps its front, from the left
+    beside = [(side * d, ly) for d in (0.26, 0.3, 0.22, 0.34) for side in towards for ly in (0.0, 0.06, -0.06)]
     for lx, ly in ahead + beside:
         x, y = mech.world(lx, ly)
         base_fp = Footprint(x, y, 0.08, 0.08)
