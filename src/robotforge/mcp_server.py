@@ -75,7 +75,8 @@ things with a moving part (drawer, cabinet with a door, button, switch, lever, v
 (rope, cloth). Any arm can hold with end_effector="suction" (a suction cup: flat things fingers cannot get round) or
 "magnet" (steel things only), in add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
-end effector on an arm's flange (on="cart/arm"; another one swaps it), a sensor on a wrist or any body (at). Its
+end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
+suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
 checks say the mass, how far the centre of mass is inside what the robot stands on, each arm's reach and what it can
 hit or hold; a robot that would tip or fall is refused with what to change. save_as keeps the combination as a design
 (add_robot(design=...) or mount(what=...) uses it again); remove("cart/arm") takes a mount off.
@@ -355,9 +356,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     @server.tool()
     def list_library() -> str:
         """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
-        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work),
-        humanoids (G1, Robotis OP3, Booster T1) and a gripper to mount on an arm (Robotiq 2F-85). The first add_robot
-        of each downloads it from MuJoCo Menagerie (size in download_mb, usually 5-30 s) and caches it."""
+        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work), humanoids
+        (G1, Robotis OP3, Booster T1) and grippers and hands to mount on an arm (Robotiq 2F-85, Franka Hand, LEAP and
+        Allegro hands). The first add_robot of each downloads it from MuJoCo Menagerie (size in download_mb, usually
+        5-30 s) and caches it."""
         from robotforge.design import library
 
         with _tool_errors():

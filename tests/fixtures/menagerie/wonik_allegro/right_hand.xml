@@ -1,0 +1,241 @@
+<!-- Offline stand-in of MuJoCo Menagerie's wonik_allegro/right_hand.xml: its bodies, joints, actuators and names, with boxes round its meshes and no visual meshes. -->
+<mujoco model="allegro_right">
+  <compiler angle="radian"/>
+
+  <option impratio="10" cone="elliptic"/>
+
+  <default>
+    <default class="allegro_right">
+      <joint damping="0.1" axis="0 1 0"/>
+      <geom density="800"/>
+      <general biastype="affine" biasprm="0 -1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" material="black"/>
+        <default class="palm_visual">
+          <geom mesh="base_link"/>
+        </default>
+        <default class="base_visual">
+          <geom mesh="link_0.0"/>
+        </default>
+        <default class="proximal_visual">
+          <geom mesh="link_1.0"/>
+        </default>
+        <default class="medial_visual">
+          <geom mesh="link_2.0"/>
+        </default>
+        <default class="distal_visual">
+          <geom mesh="link_3.0"/>
+        </default>
+        <default class="fingertip_visual">
+          <geom material="white" mesh="link_3.0_tip"/>
+        </default>
+        <default class="thumbtip_visual">
+          <geom material="white" mesh="link_15.0_tip"/>
+        </default>
+      </default>
+      <default class="collision">
+        <geom type="box" group="3"/>
+        <default class="palm_collision">
+          <geom size="0.0204 0.0565 0.0475"/>
+        </default>
+        <default class="base_collision">
+          <geom size="0.0098 0.01375 0.0082"/>
+          <default class="thumb_base_collision">
+            <geom size="0.0179 0.017 0.02275"/>
+          </default>
+        </default>
+        <default class="proximal_collision">
+          <geom size="0.0098 0.01375 0.027"/>
+          <default class="thumb_proximal_collision">
+            <geom size="0.0098 0.01375 0.00885"/>
+          </default>
+        </default>
+        <default class="medial_collision">
+          <geom size="0.0098 0.01375 0.0192"/>
+          <default class="thumb_medial_collision">
+            <geom size="0.0098 0.01375 0.0257"/>
+          </default>
+        </default>
+        <default class="distal_collision">
+          <geom size="0.0098 0.01375 0.008"/>
+          <default class="thumb_distal_collision">
+            <geom size="0.0098 0.01375 0.0157"/>
+          </default>
+        </default>
+        <default class="fingertip_collision">
+          <geom size="0.012 0.01 0" type="capsule"/>
+          <default class="thumbtip_collision">
+            <geom size="0.012 0.008 0"/>
+          </default>
+        </default>
+      </default>
+      <default class="base">
+        <joint range="-0.47 0.47" axis="0 0 1"/>
+        <general ctrlrange="-0.47 0.47"/>
+      </default>
+      <default class="proximal">
+        <joint range="-0.196 1.61"/>
+        <general ctrlrange="-0.196 1.61"/>
+      </default>
+      <default class="medial">
+        <joint range="-0.174 1.709"/>
+        <general ctrlrange="-0.174 1.709"/>
+      </default>
+      <default class="distal">
+        <joint range="-0.227 1.618"/>
+        <general ctrlrange="-0.227 1.618"/>
+      </default>
+      <default class="thumb_base">
+        <joint range="0.263 1.396" axis="-1 0 0"/>
+        <general ctrlrange="0.263 1.396"/>
+      </default>
+      <default class="thumb_proximal">
+        <joint range="-0.105 1.163" axis="0 0 1"/>
+        <general ctrlrange="-0.105 1.163"/>
+      </default>
+      <default class="thumb_medial">
+        <joint range="-0.189 1.644"/>
+        <general ctrlrange="-0.189 1.644"/>
+      </default>
+      <default class="thumb_distal">
+        <joint range="-0.162 1.719"/>
+        <general ctrlrange="-0.162 1.719"/>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <material name="black" rgba="0.2 0.2 0.2 1"/>
+    <material name="white" rgba="0.9 0.9 0.9 1"/>
+  </asset>
+
+  <worldbody>
+    <body name="palm" childclass="allegro_right" quat="0 0.707107 0 0.707107">
+      <inertial pos="-0.00898561 -0.0039571 -0.0402693" quat="0.471798 0.881692 0.00304807 -0.00406115" mass="0.351356" diaginertia="0.000447697 0.000300671 0.000243545"/>
+      <geom class="palm_collision" pos="-0.0093 0 -0.0475" mass="0"/>
+      <body name="ff_base" pos="0 0.0435 -0.001542" quat="0.999048 -0.0436194 0 0">
+        <inertial pos="-0.000778127 -1.02867e-05 0.00828249" quat="0.684133 0.685936 -0.175375 0.175209" mass="0.00723202" diaginertia="7.65377e-07 6.88843e-07 3.55046e-07"/>
+        <joint name="ffj0" class="base"/>
+        <geom class="base_collision" pos="0 0 0.0082" mass="0"/>
+        <body name="ff_proximal" pos="0 0 0.0164">
+          <inertial pos="2.75233e-08 -9.05955e-05 0.0269998" quat="1 -3.06231e-06 -2.89204e-07 5.68994e-06" mass="0.0272761" diaginertia="1.18624e-05 1.12768e-05 2.26587e-06"/>
+          <joint name="ffj1" class="proximal"/>
+          <geom class="proximal_collision" pos="0 0 0.027" mass="0"/>
+          <body name="ff_medial" pos="0 0 0.054">
+            <inertial pos="-0.000192882 -7.79042e-05 0.022586" quat="0.999903 -0.000287005 0.0139235 0.000170085" mass="0.0184637" diaginertia="4.28733e-06 3.63564e-06 1.67367e-06"/>
+            <joint name="ffj2" class="medial"/>
+            <geom class="medial_collision" pos="0 0 0.0192" mass="0"/>
+            <body name="ff_distal" pos="0 0 0.0384">
+              <inertial pos="-0.000520806 -3.32499e-06 0.00725129" quat="0.687752 0.687718 0.164452 -0.164304" mass="0.00751231" diaginertia="7.9638e-07 7.28166e-07 3.77752e-07"/>
+              <joint name="ffj3" class="distal"/>
+              <geom class="distal_collision" pos="0 0 0.008" mass="0"/>
+              <body name="ff_tip">
+                <inertial pos="7.27631e-12 -1.15603e-07 0.0254028" quat="1 -4.87628e-05 0 0" mass="0.00684452" diaginertia="4.55823e-07 4.55814e-07 4.49559e-07"/>
+                <geom class="fingertip_collision" pos="0 0 0.019" mass="0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="mf_base" pos="0 0 0.0007">
+        <inertial pos="-0.000778127 -1.02867e-05 0.00828249" quat="0.684133 0.685936 -0.175375 0.175209" mass="0.00723202" diaginertia="7.65377e-07 6.88843e-07 3.55046e-07"/>
+        <joint name="mfj0" class="base"/>
+        <geom class="base_collision" pos="0 0 0.0082" mass="0"/>
+        <body name="mf_proximal" pos="0 0 0.0164">
+          <inertial pos="2.75233e-08 -9.05955e-05 0.0269998" quat="1 -3.06231e-06 -2.89204e-07 5.68994e-06" mass="0.0272761" diaginertia="1.18624e-05 1.12768e-05 2.26587e-06"/>
+          <joint name="mfj1" class="proximal"/>
+          <geom class="proximal_collision" pos="0 0 0.027" mass="0"/>
+          <body name="mf_medial" pos="0 0 0.054">
+            <inertial pos="-0.000192882 -7.79042e-05 0.022586" quat="0.999903 -0.000287005 0.0139235 0.000170085" mass="0.0184637" diaginertia="4.28733e-06 3.63564e-06 1.67367e-06"/>
+            <joint name="mfj2" class="medial"/>
+            <geom class="medial_collision" pos="0 0 0.0192" mass="0"/>
+            <body name="mf_distal" pos="0 0 0.0384">
+              <inertial pos="-0.000520806 -3.32499e-06 0.00725129" quat="0.687752 0.687718 0.164452 -0.164304" mass="0.00751231" diaginertia="7.9638e-07 7.28166e-07 3.77752e-07"/>
+              <joint name="mfj3" class="distal"/>
+              <geom class="distal_collision" pos="0 0 0.008" mass="0"/>
+              <body name="mf_tip">
+                <inertial pos="7.27631e-12 -1.15603e-07 0.0254028" quat="1 -4.87628e-05 0 0" mass="0.00684452" diaginertia="4.55823e-07 4.55814e-07 4.49559e-07"/>
+                <geom class="fingertip_collision" pos="0 0 0.019" mass="0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="rf_base" pos="0 -0.0435 -0.001542" quat="0.999048 0.0436194 0 0">
+        <inertial pos="-0.000778127 -1.02867e-05 0.00828249" quat="0.684133 0.685936 -0.175375 0.175209" mass="0.00723202" diaginertia="7.65377e-07 6.88843e-07 3.55046e-07"/>
+        <joint name="rfj0" class="base"/>
+        <geom class="base_collision" pos="0 0 0.0082" mass="0"/>
+        <body name="rf_proximal" pos="0 0 0.0164">
+          <inertial pos="2.75233e-08 -9.05955e-05 0.0269998" quat="1 -3.06231e-06 -2.89204e-07 5.68994e-06" mass="0.0272761" diaginertia="1.18624e-05 1.12768e-05 2.26587e-06"/>
+          <joint name="rfj1" class="proximal"/>
+          <geom class="proximal_collision" pos="0 0 0.027" mass="0"/>
+          <body name="rf_medial" pos="0 0 0.054">
+            <inertial pos="-0.000192882 -7.79042e-05 0.022586" quat="0.999903 -0.000287005 0.0139235 0.000170085" mass="0.0184637" diaginertia="4.28733e-06 3.63564e-06 1.67367e-06"/>
+            <joint name="rfj2" class="medial"/>
+            <geom class="medial_collision" pos="0 0 0.0192" mass="0"/>
+            <body name="rf_distal" pos="0 0 0.0384">
+              <inertial pos="-0.000520806 -3.32499e-06 0.00725129" quat="0.687752 0.687718 0.164452 -0.164304" mass="0.00751231" diaginertia="7.9638e-07 7.28166e-07 3.77752e-07"/>
+              <joint name="rfj3" class="distal"/>
+              <geom class="distal_collision" pos="0 0 0.008" mass="0"/>
+              <body name="rf_tip">
+                <inertial pos="7.27631e-12 -1.15603e-07 0.0254028" quat="1 -4.87628e-05 0 0" mass="0.00684452" diaginertia="4.55823e-07 4.55814e-07 4.49559e-07"/>
+                <geom class="fingertip_collision" pos="0 0 0.019" mass="0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="th_base" pos="-0.0182 0.019333 -0.045987" quat="0.477714 -0.521334 -0.521334 -0.477714">
+        <inertial pos="-0.0179151 0.00802441 0.0123141" quat="0.700903 0.0591414 -0.0631653 0.707989" mass="0.0382581" diaginertia="1.07532e-05 9.16559e-06 7.10908e-06"/>
+        <joint name="thj0" class="thumb_base"/>
+        <geom class="thumb_base_collision" pos="-0.0179 0.009 0.0145" mass="0"/>
+        <body name="th_proximal" pos="-0.027 0.005 0.0399">
+          <inertial pos="-0.000782027 -1.02494e-05 0.00810455" quat="0.683918 0.68572 -0.176217 0.176045" mass="0.00721931" diaginertia="7.63749e-07 6.874e-07 3.53931e-07"/>
+          <joint name="thj1" class="thumb_proximal"/>
+          <geom class="thumb_proximal_collision" pos="0 0 0.00885" mass="0"/>
+          <body name="th_medial" pos="0 0 0.0177">
+            <inertial pos="-0.000164336 1.71482e-05 0.0211119" quat="0.99996 3.0351e-05 -0.00896424 0.000113182" mass="0.0224965" diaginertia="7.52764e-06 6.58333e-06 2.14106e-06"/>
+            <joint name="thj2" class="thumb_medial"/>
+            <geom class="thumb_medial_collision" pos="0 0 0.0257" mass="0"/>
+            <body name="th_distal" pos="0 0 0.0514">
+              <inertial pos="0 3.67706e-06 0.013075" quat="0.999998 0.00194544 0 0" mass="0.0163345" diaginertia="2.91378e-06 2.5902e-06 1.35652e-06"/>
+              <joint name="thj3" class="thumb_distal"/>
+              <geom class="thumb_distal_collision" pos="0 0 0.0157" mass="0"/>
+              <body name="th_tip">
+                <inertial pos="7.27631e-12 -1.15603e-07 0.0410028" quat="1 -4.87628e-05 0 0" mass="0.00684452" diaginertia="4.55823e-07 4.55814e-07 4.49559e-07"/>
+                <geom class="thumbtip_collision" pos="0 0 0.035" mass="0"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="palm" body2="ff_base"/>
+    <exclude body1="palm" body2="mf_base"/>
+    <exclude body1="palm" body2="rf_base"/>
+    <exclude body1="palm" body2="th_base"/>
+    <exclude body1="palm" body2="th_proximal"/>
+  </contact>
+
+  <actuator>
+    <general name="ffa0" class="base" joint="ffj0"/>
+    <general name="ffa1" class="proximal" joint="ffj1"/>
+    <general name="ffa2" class="medial" joint="ffj2"/>
+    <general name="ffa3" class="distal" joint="ffj3"/>
+    <general name="mfa0" class="base" joint="mfj0"/>
+    <general name="mfa1" class="proximal" joint="mfj1"/>
+    <general name="mfa2" class="medial" joint="mfj2"/>
+    <general name="mfa3" class="distal" joint="mfj3"/>
+    <general name="rfa0" class="base" joint="rfj0"/>
+    <general name="rfa1" class="proximal" joint="rfj1"/>
+    <general name="rfa2" class="medial" joint="rfj2"/>
+    <general name="rfa3" class="distal" joint="rfj3"/>
+    <general name="tha0" class="thumb_base" joint="thj0"/>
+    <general name="tha1" class="thumb_proximal" joint="thj1"/>
+    <general name="tha2" class="thumb_medial" joint="thj2"/>
+    <general name="tha3" class="thumb_distal" joint="thj3"/>
+  </actuator>
+</mujoco>

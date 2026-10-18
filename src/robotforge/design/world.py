@@ -891,4 +891,18 @@ def _add_home_key(spec: mujoco.MjSpec, model: mujoco.MjModel, homes) -> None:
             a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/{act}")
             if a >= 0:
                 ctrl[a] = value
-    spec.add_key(name="home", qpos=qpos.tolist(), ctrl=ctrl.tolist())
+    if not any(_eased_gripper(model, a) for a in range(model.nu)):
+        spec.add_key(name="home", qpos=qpos.tolist(), ctrl=ctrl.tolist())
+        return
+    # A hand's gripper eases toward its target (hands.py): it starts at rest there, open, not shut and opening.
+    act = np.zeros(model.na)
+    for a in range(model.nu):
+        if _eased_gripper(model, a):
+            act[model.actuator_actadr[a]] = ctrl[a]
+    spec.add_key(name="home", qpos=qpos.tolist(), ctrl=ctrl.tolist(), act=act.tolist())
+
+
+def _eased_gripper(model: mujoco.MjModel, a: int) -> bool:
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""
+    eased = int(model.actuator_dyntype[a]) == int(mujoco.mjtDyn.mjDYN_FILTEREXACT)
+    return eased and name.endswith("gripper") and int(model.actuator_trntype[a]) == int(mujoco.mjtTrn.mjTRN_TENDON)

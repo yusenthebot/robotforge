@@ -34,17 +34,18 @@ def register(server: MCPServer, playground: Playground) -> None:
         save_as: str | None = None,
     ) -> str:
         """Mount anything on anything: a robot (a library arm such as ur5e or piper, a template), an end effector (a
-        library gripper such as robotiq_2f85; or gripper, suction, magnet) or a sensor type (camera, lidar, lidar3d,
-        imu, force_torque, ...) on robot `on`, or on one of its mounts as "robot/mount" ("rover/arm"). An end effector
-        goes on that arm's flange and swaps out the one there (a quick change); a robot goes on top, or at a body name;
-        a sensor on the arm's wrist or the robot's base, or at a body name. at: "top", "tool" (a flange) or a body;
-        shift [x, y, z] m and rotate [roll, pitch, yaw] degrees from there. A robot stands on an adapter plate sized to
-        both sides (adapter=false: none). params: template params or sensor options. Every mount is checked once on:
-        mass, centre of mass, whether a walking or wheeled carrier still stands and how much margin it keeps, each arm's
-        reach from its mount, what it can hit of its carrier and whether it can hold its tool stretched out; a robot
-        that would tip or fall, or an arm that cannot hold itself, is refused saying what to change. save_as keeps the
-        robot with all it carries as a design (add_robot(design=...) adds it again, mount(what=<design>) mounts it
-        whole); with no what it saves as it is. remove("rover/arm") takes a mount off with what is on it."""
+        library gripper or hand: robotiq_2f85, panda_hand, the dexterous leap_hand and allegro_hand; or gripper,
+        suction, magnet) or a sensor type (camera, lidar, lidar3d, imu, force_torque, ...) on robot `on`, or on one of
+        its mounts as "robot/mount" ("rover/arm"). An end effector goes on that arm's flange and swaps out the one there
+        (a quick change); a robot goes on top, or at a body name; a sensor on the arm's wrist or the robot's base, or at
+        a body name. at: "top", "tool" (a flange) or a body; shift [x, y, z] m and rotate [roll, pitch, yaw] degrees
+        from there. A robot stands on an adapter plate sized to both sides (adapter=false: none). params: template
+        params or sensor options. Every mount is checked once on: mass, centre of mass, whether a walking or wheeled
+        carrier still stands and how much margin it keeps, each arm's reach from its mount, what it can hit of its
+        carrier and whether it can hold its tool stretched out; a robot that would tip or fall, or an arm that cannot
+        hold itself, is refused saying what to change. save_as keeps the robot with all it carries as a design
+        (add_robot(design=...) adds it again, mount(what=<design>) mounts it whole); with no what it saves as it is.
+        remove("rover/arm") takes a mount off with what is on it."""
         with _tool_errors():
             sort = None
             if what is not None:

@@ -191,7 +191,7 @@ class Hand:
         arm.queue.extend(going)
         self._follow(*paths[0], "reach in")
         self._follow(*paths[1], "descend")
-        arm.queue.append(Waypoint(None, arm._grip("close"), 0.6, "grasp"))
+        arm.queue.append(Waypoint(None, arm._grip("close"), arm.grip_time, "grasp"))
         self._follow(*paths[2], "lift", half)
         self._follow(*paths[3], "draw back", half)
         if coming is not None:
@@ -320,7 +320,7 @@ class Hand:
             *going,
             self._follow_move(*paths[0], "reach in"),
             self._follow_move(*paths[1], "descend"),
-            Waypoint(None, arm._grip("close"), 0.6, "grasp"),
+            Waypoint(None, arm._grip("close"), arm.grip_time, "grasp"),
             self._follow_move(*paths[2], "lift", half),
             self._follow_move(drawn, a, back, _angle(turn, down_turn), "draw back", half),
             *coming,
