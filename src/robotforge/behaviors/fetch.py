@@ -51,6 +51,9 @@ MAX_CHECKS = 40  # spots checked by IK in one search
 # A spot counts when the arm reaches from it shifted this far each way and turned this much each way too.
 SHIFT = 0.03  # m
 TWIST = math.radians(5.0)
+# A robot that walks: its gait sways and turns in steps, and creeping it stops 6 cm aside or 8 degrees off (a Go2).
+WALK_SHIFT, WALK_TWIST = 0.07, math.radians(10.0)
+WALKERS = ("quadruped", "hexapod", "humanoid")
 PENETRATE = 0.002  # m: deeper overlaps of the robot with something, posed at a spot, rule it out
 POS_TOL, YAW_TOL = 0.015, math.radians(2.0)  # where creeping into a spot stops
 ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm reaches from SHIFT off)
@@ -136,6 +139,7 @@ class Stand:
         self._out: dict[tuple[float, bool], float] = {}
         self.robot_bodies = {b for b in range(model.nbody) if int(model.body_rootid[b]) == self.root}
         self.ground: nav_map.NavMap | None = None  # the map whose ground heights the robot is posed on (spots_for)
+        self.walks = False  # a robot that walks stops less exactly (_robust)
         self.skip: set[int] = set()  # roots of what may overlap the robot (a load it carries)
 
     def qpos_at(self, xy, heading: float) -> np.ndarray:
@@ -227,10 +231,14 @@ class Stand:
     def grip(self, xy, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]) -> float | None:
         """The first of `tilts` (0: straight down) with which the arm, the robot at `xy` and `heading`, reaches
         `target` and `lift` m above it; None if none does."""
+        # Pointing down it also goes over the load at the height it holds loads at (ArmMotion.pick_up): a Go2's PiPER
+        # reached a toy on the floor and 7 cm over it, and not 45 cm over it from 7 cm aside.
+        travel = target.copy()
+        travel[2] = max(float(target[2]), float(self.hold_at(xy, heading)[2])) + APPROACH_UP
         with self.arm.carried_to(self.qpos_at(xy, heading)):
             for tilt in tilts:
                 if tilt == 0.0:
-                    if all(self.arm.quick_error(p) <= REACH_TOL for p in (target, target + [0.0, 0.0, lift])):
+                    if all(self.arm.quick_error(p) <= REACH_TOL for p in (target, target + [0.0, 0.0, lift], travel)):
                         return tilt
                 elif self.hand.reaches(target, tilt, lift):
                     return tilt
@@ -296,13 +304,14 @@ def _robust(
     stand: Stand, xy: np.ndarray, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]
 ) -> bool:
     c, s = math.cos(heading), math.sin(heading)
+    shift, twist = (WALK_SHIFT, WALK_TWIST) if stand.walks else (SHIFT, TWIST)
     shifts = [
-        np.array([c, s]) * SHIFT,
-        np.array([-c, -s]) * SHIFT,
-        np.array([-s, c]) * SHIFT,
-        np.array([s, -c]) * SHIFT,
+        np.array([c, s]) * shift,
+        np.array([-c, -s]) * shift,
+        np.array([-s, c]) * shift,
+        np.array([s, -c]) * shift,
     ]
-    poses = [(xy + d, heading) for d in shifts] + [(xy, heading + TWIST), (xy, heading - TWIST)]
+    poses = [(xy + d, heading) for d in shifts] + [(xy, heading + twist), (xy, heading - twist)]
     return all(stand.grip(p, h, target, lift, tilts) is not None for p, h in poses)
 
 
@@ -611,6 +620,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     hold_local = np.array([c * off[0] + s * off[1], -s * off[0] + c * off[1], off[2]])
     stand = Stand(model, data, robot, arm, hold_q, body)
     stand.hold_local = hold_local
+    stand.walks = manager.kind(robot).value in WALKERS
     start = np.array(data.xpos[root][:2], float)
     tucked = _posed(model, data, arm, hold_q)
     holds = holding(data, arm, body, half)
@@ -626,10 +636,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
 
     def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
         def queue(hold: np.ndarray) -> None:
-            if tilt == 0.0:
-                _pick_down(stand.hand, target, half, hold)
-            else:
-                stand.hand.pick(target, half, hold, tilt, stand.hold_q, radius)
+            _pick(stand.hand, target, half, hold, tilt, stand.hold_q, radius)
 
         return stand.rehearse(xy, heading, tilt, queue)
 
@@ -1269,7 +1276,11 @@ class Errand:
             walker.command(0.0, 0.0)
             return True
         backs = getattr(walker, "max_reverse", 1.0) > 0 and type(walker).__name__ != "RhythmWalker"
-        if abs(aside) > ASIDE_TOL:
+        walks = self.manager.kind(self.robot).value in WALKERS
+        aside_tol, yaw_tol, pos_tol = (
+            (WALK_SHIFT, WALK_TWIST / 2, WALK_SHIFT / 2) if walks else (ASIDE_TOL, YAW_TOL, POS_TOL)
+        )
+        if abs(aside) > aside_tol:
             alpha = _wrap(math.atan2(off[1], off[0]) - yaw)
             way = 1.0
             if backs and abs(alpha) > math.pi / 2:
@@ -1280,10 +1291,10 @@ class Errand:
                 dist = float(np.linalg.norm(off))
                 walker.command(way * min(CREEP_SPEED, max(0.03, 1.5 * dist)), float(np.clip(1.5 * alpha, -0.3, 0.3)))
             return False
-        if abs(twist) > YAW_TOL:
+        if abs(twist) > yaw_tol:
             walker.command(0.0, _turn(twist))
             return False
-        if abs(along) > POS_TOL and (along > 0 or backs):
+        if abs(along) > pos_tol and (along > 0 or backs):
             speed = math.copysign(min(CREEP_SPEED, max(0.03, 1.5 * abs(along))), along)
             walker.command(speed, float(np.clip(1.5 * twist, -0.3, 0.3)))
             return False
