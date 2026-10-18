@@ -149,6 +149,10 @@ class ObjectEntry(_Strict):
         info = props.SHAPES[self.shape]
         if len(self.size) not in info.size_lengths or any(s <= 0 for s in self.size):
             raise ValueError(f"object {self.name!r}: {self.shape} size is {info.size_hint} in meters")
+        try:
+            mechanisms.check_size(self.shape, self.size, info.size_hint)
+        except ValueError as exc:
+            raise ValueError(f"object {self.name!r}: {exc}") from exc
         if len(self.pos) not in (2, 3):
             raise ValueError(f"object {self.name!r}: pos is [x, y] or [x, y, z]")
         components.color(self.color)

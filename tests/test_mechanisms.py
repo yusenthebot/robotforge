@@ -70,6 +70,39 @@ def test_every_mechanism_is_an_object_whose_state_observe_reports(pg):
     assert state["belt"]["speed_m_s"] == design.DEFAULT_SPEED and state["belt"]["running"]
     assert state["rope"]["type"] == "rope" and state["cloth"]["type"] == "cloth"
     assert "mechanisms" not in json.dumps(pg.behaviors.status())  # the watcher is not a robot's behavior
+    from robotforge.viewer.server import ViewerHub
+
+    assert all(b["robot"] != mechanisms.KEY for b in ViewerHub(pg.session).state_message()["behaviors"])
+    # A rope's and a cloth's hundreds of unnamed joints stay out of observe's joints (they filled them with
+    # "joint8" to "joint40"); the mechanisms section sums them up.
+    assert not any(name.startswith("joint") for name in pg.state()["joints"])
+
+
+def test_only_a_worlds_conveyors_and_buttons_are_watched(pg):
+    """Found by the world's objects, not joint names: a robot built from parts with a slide called "belt" had it
+    snapped back every 1.5 cm, as if it were a conveyor's."""
+    pg.add_robot(
+        "slider",
+        build={
+            "base": {"shape": "box", "size": [0.3, 0.2, 0.06]},
+            "parts": [
+                {
+                    "name": "belt",
+                    "at": "top",
+                    "joint": {"type": "slide", "axis": "x", "range": [-0.05, 0.05]},
+                    "shape": "box",
+                    "size": [0.1, 0.1, 0.03],
+                }
+            ],
+        },
+    )
+    joints = [mujoco.mj_id2name(pg.session.model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in range(pg.session.model.njnt)]
+    assert "slider/belt" in joints
+    assert mechanisms.KEY not in pg.session.controllers  # nothing in this world to watch
+    pg.add_object("line", shape="conveyor", pos=[2.0, 0.0])
+    watcher = pg.session.controllers[mechanisms.KEY]
+    adr = int(pg.session.model.jnt_qposadr[pg.session.model.joint("line/belt").id])
+    assert watcher.belts == [adr]
 
 
 def test_a_moving_part_does_not_touch_its_own_carcass():
@@ -132,6 +165,23 @@ def test_a_box_rides_at_the_belt_speed_behind_a_queue_at_the_stop(pg):
     pg.run_fast(lambda: False, 1.0)
     after = [float(pg.session.data.body(f"held{i}").xpos[0]) for i in range(10)]
     assert np.max(np.abs(np.subtract(after, before))) < 0.005  # the queue only eases back a little
+
+
+def test_too_small_a_mechanism_is_refused_with_the_smallest_it_can_be():
+    """Built smaller, a part came out with no room and MuJoCo said only "size 2 must be positive in geom"."""
+    with pytest.raises(ValueError, match="a conveyor needs height >= 0.06 m"):
+        ObjectEntry(name="line", shape="conveyor", size=[1.0, 0.3, 0.04])
+    with pytest.raises(ValueError, match="a valve needs wheel diameter >= 0.08 m, height >= 0.04 m"):
+        ObjectEntry(name="tap", shape="valve", size=[0.02, 0.01])
+    smallest = [
+        ObjectEntry(name=f"m{i}", shape=shape, size=list(size), pos=[2.0 * i, 0.0])
+        for i, (shape, size) in enumerate(design.MIN_SIZES.items())
+    ]
+    model = compile_world(World(objects=smallest)).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    mujoco.mj_step(model, data, 250)
+    assert np.isfinite(data.qpos).all()
 
 
 def test_a_speed_is_only_for_conveyors(pg):

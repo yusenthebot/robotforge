@@ -13,6 +13,7 @@ a real belt. A button's presses are counted as they happen, so a quick press bet
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import mujoco
@@ -28,17 +29,22 @@ class Watcher:
 
     hidden = True  # not a behavior of any robot: left out of the lists agents and the viewer read
 
-    def __init__(self, model: mujoco.MjModel) -> None:
+    def __init__(self, model: mujoco.MjModel, shapes: dict[str, str]) -> None:
+        """Watch the conveyors and buttons among the world's objects (`shapes`: name -> shape). Found by the world's
+        objects, not by joint names: a robot built from parts with a slide called "belt" would have been snapped
+        back every 1.5 cm."""
         self.rate_hz = 1.0 / model.opt.timestep
         self.belts: list[int] = []  # qpos addresses of belt slides
         self.buttons: dict[str, int] = {}  # button name -> qpos address of its cap
-        for j in range(model.njnt):
-            name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
-            owner, _, part = name.partition("/")
-            if part == "belt" and int(model.jnt_type[j]) == mujoco.mjtJoint.mjJNT_SLIDE:
+        for name, shape in shapes.items():
+            part = {"conveyor": "belt", "button": "cap"}.get(shape)
+            j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{name}/{part}") if part else -1
+            if j < 0 or int(model.jnt_type[j]) != mujoco.mjtJoint.mjJNT_SLIDE:
+                continue
+            if shape == "conveyor":
                 self.belts.append(int(model.jnt_qposadr[j]))
-            elif part == "cap" and int(model.jnt_type[j]) == mujoco.mjtJoint.mjJNT_SLIDE:
-                self.buttons[owner] = int(model.jnt_qposadr[j])
+            else:
+                self.buttons[name] = int(model.jnt_qposadr[j])
         self.presses = dict.fromkeys(self.buttons, 0)
         self._down = dict.fromkeys(self.buttons, False)
 
@@ -61,16 +67,18 @@ class Watcher:
         return {"behavior": "mechanisms", "presses": dict(self.presses)}
 
 
-def install(session: Any) -> None:
-    """Give the session's current model a watcher, or take it away when the model has nothing to watch."""
-    watcher = Watcher(session.model)
+def install(session: Any, shapes: dict[str, str]) -> None:
+    """Give the session's current model a watcher for the world objects `shapes` (name -> shape), or take it away
+    when there is nothing to watch."""
+    watcher = Watcher(session.model, shapes)
     session.set_controller(KEY, watcher if watcher.needed else None)
 
 
-def attach(session: Any) -> None:
-    """Keep a watcher on the session from now on: after every reset and model swap, which clear controllers."""
-    session.reset_hooks.append(lambda: install(session))
-    install(session)
+def attach(session: Any, shapes: Callable[[], dict[str, str]]) -> None:
+    """Keep a watcher on the session from now on: after every reset and model swap, which clear controllers.
+    `shapes` gives the world's objects as they are then (name -> shape)."""
+    session.reset_hooks.append(lambda: install(session, shapes()))
+    install(session, shapes())
 
 
 def read(model: mujoco.MjModel, data: mujoco.MjData, shapes: dict[str, str], watcher: Any = None) -> dict:

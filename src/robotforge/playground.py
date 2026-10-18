@@ -83,6 +83,7 @@ class Playground:
     lessons: LessonRunner = field(init=False)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
+    _soft: tuple[int, set[int]] = field(default=(-1, set()), init=False, repr=False)  # see _soft_bodies
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -90,7 +91,8 @@ class Playground:
         )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
-        mechanisms.attach(self.session)  # belts keep running and button presses are counted, through resets
+        # belts keep running and button presses are counted, through resets
+        mechanisms.attach(self.session, self._mechanism_shapes)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -745,8 +747,11 @@ class Playground:
         m, d = self.session.model, self.session.data
         with self.session.lock:
             joints = {}
+            soft = self._soft_bodies()
             for j in range(m.njnt):
                 jtype = int(m.jnt_type[j])
+                if int(m.jnt_bodyid[j]) in soft:  # a rope's or cloth's hundreds: its summary is in "mechanisms"
+                    continue
                 if jtype in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
                     joints[_name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or f"joint{j}"] = round(
                         float(d.qpos[m.jnt_qposadr[j]]), 4
@@ -771,6 +776,19 @@ class Playground:
             if moving:  # drawers, doors, buttons, switches, levers, valves, belts, ropes, cloths
                 out["mechanisms"] = _limit_dict(moving)
             return out
+
+    def _soft_bodies(self) -> set[int]:
+        """The bodies of the world's ropes and cloths, whose unnamed joints observe leaves out: one 0.6 m cloth and
+        a rope filled its 40 joints with "joint8" to "joint40" and pushed out the joints of anything added later."""
+        version, bodies = self._soft
+        if version != self.session.version:
+            m = self.session.model
+            shapes = self._mechanism_shapes().items()
+            prefixes = tuple(f"{name}/" for name, shape in shapes if shape in ("rope", "cloth"))
+            named = (_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in range(m.nbody))
+            bodies = {b for b, name in enumerate(named) if prefixes and name.startswith(prefixes)}
+            self._soft = (self.session.version, bodies)
+        return bodies
 
     def _mechanism_shapes(self) -> dict[str, str]:
         """The world's mechanisms and soft things by name, read once per compiled model: scripts poll state()

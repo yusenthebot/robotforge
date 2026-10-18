@@ -103,6 +103,32 @@ SWITCH_RANGE = math.radians(25)
 LEVER_RANGE = math.radians(40)
 
 
+# The smallest sizes each one is built at, by its size's fields (props.SHAPES gives their names): smaller, its parts
+# came out with no room (a drawer front of negative width, a conveyor's legs below the floor) and MuJoCo refused the
+# world with "size 2 must be positive in geom, Element name ''".
+MIN_SIZES: dict[str, tuple[float, ...]] = {
+    "drawer": (0.1, 0.1, 0.07),
+    "cabinet": (0.1, 0.08, 0.08),
+    "button": (0.01, 0.02),
+    "switch": (0.02, 0.02, 0.01),
+    "lever": (0.03,),
+    "valve": (0.08, 0.04),
+    "conveyor": (0.2, 0.05, 0.06),
+    "rope": (0.05, 0.002),
+    "cloth": (0.1, 0.1),
+}
+
+
+def check_size(shape: str, size: list[float], hint: str) -> None:
+    """ValueError when `size` is too small for `shape` to be built, saying the smallest it can be."""
+    least = MIN_SIZES.get(shape)
+    if least is None or len(size) != len(least) or all(s >= m for s, m in zip(size, least, strict=True)):
+        return
+    fields = [f.strip() for f in hint.strip("[]").split(",")]
+    small = [f"{f} >= {m:g} m" for f, s, m in zip(fields, size, least, strict=True) if s < m]
+    raise ValueError(f"a {shape} needs {', '.join(small)} (size is {hint})")
+
+
 def home(shape: str, name: str, speed: float | None) -> tuple[dict[str, float], dict[str, float]]:
     """A mechanism's starting joint values and controls, by name after "<object>/": a switch starts off, a lever
     back, a conveyor at its speed."""
@@ -457,8 +483,8 @@ def _conveyor(spec: mujoco.MjSpec, carcass: mujoco.MjsBody, name: str, size: lis
             [0, sy * (width / 2 + 0.014), top + rail_h - (rail_h + 0.05) / 2],
             rgba,
         )
-        for sx in (1, -1):
-            leg_h = top - 0.05
+        leg_h = top - 0.05
+        for sx in (1, -1) if leg_h > 0.005 else ():  # a low conveyor sits on its frame
             _box(
                 carcass,
                 None,
