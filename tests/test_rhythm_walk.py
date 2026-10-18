@@ -552,11 +552,12 @@ def test_a_dog_keeps_its_gait_and_offers_its_learned_walk_as_a_mode(pg):
     assert isinstance(pg.session.controllers["dog"], QuadrupedGait)
 
 
-def test_a_walking_turn_begins_only_at_points_of_the_stride_it_fell_from_at_no_moment():
+def test_a_walking_turn_that_fell_from_any_moment_is_not_begun_out_of_the_walk():
     """Turns tuned to begin out of the walk spin faster, but some tipped robots over from moments they were not tuned
-    on. Each is checked from moments of the walk; the points of the stride it fell from are left out (at 2 Hz a
-    moment 0.6 s in is 0.2 of a stride along), and one that fell from every point is not kept."""
-    from robotforge.behaviors.rhythm_walk import _mean_wait, _walking_turn
+    on. Each is checked from moments of the walk, and one that fell from any of them is not begun out of the walk.
+    Begun only at the points of the stride they never fell from, as before, the turns of template dog walks fell
+    more often than the dogs steadied first in random walk, turn and walk on sequences."""
+    from robotforge.behaviors.rhythm_walk import _walking_turn
     from robotforge.control.cpg import Start
 
     solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "dog", "template": "quadruped"}]}))
@@ -573,22 +574,18 @@ def test_a_walking_turn_begins_only_at_points_of_the_stride_it_fell_from_at_no_m
     toppling = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
     n = check.body.joints
     swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.3), np.zeros(n)]))
-    times = (0.5, 0.6, 1.0, 0.7)  # stride points 0, 0.2, 0 again and 0.4
-    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times)[1] is None  # anywhere
-    assert _walking_turn((swing,), 1.0, check, first, [standing, toppling, standing, standing], times)[1] == [0.0, 0.4]
-    assert _walking_turn((swing,), 1.0, check, first, [standing, standing, toppling, standing], times)[1] == [0.2, 0.4]
-    assert _walking_turn((swing,), 1.0, check, first, [toppling, standing, standing, toppling], times) is None  # 1 of 3
-    assert _walking_turn((swing,), 1.0, check, first, [toppling] * 4, times) is None
-    assert _mean_wait([0.0]) == pytest.approx(0.5)  # half a stride on average
-    assert _mean_wait([0.0, 0.5]) == pytest.approx(0.25)
+    still = Rhythm.still(n)
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4) is swing
+    assert _walking_turn((swing,), 1.0, check, first, [standing, toppling, standing, standing]) is None
+    assert _walking_turn((still, swing), 1.0, check, first, [standing] * 4) in (still, swing)  # the one turning most
 
 
 def test_a_walking_turn_that_comes_near_falling_is_left_out(monkeypatch):
-    """Regression: begun out of the walk only at points of the stride it never fell from, a turn could still come
-    near to falling there, and in random walk-turn-walk sequences the turns of template dog and imported A1 walks fell
-    more often than the robots steadied first (11 in 2880 against 6 for the dog, 162 in 1440 against 147 for the A1).
-    Each that fell had leaned more than 30 degrees from some moment of its checks. A turn that leans the trunk
-    ROOM_TILT or more from a moment at its points is not begun out of the walk."""
+    """Regression: a turn could come near to falling from the moments it was checked from without falling, and in
+    random walk-turn-walk sequences the turns of template dog and imported A1 walks fell more often than the robots
+    steadied first (11 in 2880 against 6 for the dog, 162 in 1440 against 147 for the A1). Each that fell had leaned
+    more than 30 degrees from some moment of its checks. A turn that leans the trunk ROOM_TILT or more from any of
+    them is not begun out of the walk."""
     from robotforge.behaviors import rhythm_walk
     from robotforge.behaviors.rhythm_walk import _walking_turn
     from robotforge.control.cpg import Start
@@ -604,11 +601,10 @@ def test_a_walking_turn_that_comes_near_falling_is_left_out(monkeypatch):
     swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.3), np.zeros(n)]))
     lean = check.rollout(swing, start=standing)["tilt"]
     assert 0.0 < lean < math.radians(60.0)  # it sways, and stays up
-    times = (0.5, 0.6, 0.7, 0.8)
     monkeypatch.setattr(rhythm_walk, "ROOM_TILT", lean + 1e-3)
-    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times) is not None
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4) is swing
     monkeypatch.setattr(rhythm_walk, "ROOM_TILT", lean - 1e-3)
-    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times) is None
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4) is None
 
 
 def test_a_walk_that_falls_before_its_first_moment_keeps_no_walking_turns(monkeypatch):

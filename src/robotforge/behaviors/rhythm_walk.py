@@ -81,6 +81,7 @@ class SavedWalk(BaseModel):
     turn_left_walking: list[float] | None = None  # the turns tuned again to begin straight out of the walk
     turn_right_walking: list[float] | None = None
     # Where in its stride (0 to 1, from where the walk's rhythm starts) each walking turn may begin; None: anywhere.
+    # Walks kept now leave it out: a turn that fell from some point of the stride is not begun out of the walk at all.
     turn_left_walking_at: list[float] | None = None
     turn_right_walking_at: list[float] | None = None
     # How it steadies leaving the walk (and any rhythm whose way out is not given), checked when its turns are learned:
@@ -179,23 +180,18 @@ COURSE_GATE = 0.1
 # A turn's walking version is checked from more moments of the walk as move plays it, from WALKED_MIN to 5 s at every
 # update (at 2 Hz, each of 25 points of the stride 7 times), each for TURN_CHECK seconds. Of the tuned turn and the one
 # from standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the
-# walk, at any point of the stride if it fell from none of the moments, else only at the points it never fell from (at
-# least MIN_SAFE of them), the robot walking on until the next one, and only if it leaned less than ROOM_TILT from
-# every moment at those points. If none, the robot steadies first. Checked on
-# 21 moments of the walk as the trainer played it, an A1 left turn kept for 1 of the 5 points fell in 4 of 15 tries
-# straight out of the walk; checked like this, the left turns of 6 A1 walks fell in 1 of 90. Checked a tenth of a
-# second apart (5 points of the stride), a template dog walk's left turn was kept for any point and fell in 3 of its
-# 100 bench sequences, begun at 0.28 of its stride; every update, it fell from 4 of 176 moments, at 0.28 to 0.36.
+# walk, if it fell from none of the moments and leaned the trunk less than ROOM_TILT, half the way to a fall, from
+# each; if none did, the robot steadies first. Checked on 21 moments of the walk as the trainer played it, an A1 left
+# turn kept for 1 of the 5 points fell in 4 of 15 tries straight out of the walk; every update, a template dog walk's
+# left turn fell from 4 of 176 moments, at 0.28 to 0.36 of its stride. Begun out of the walk only at the points of the
+# stride they never fell from, the turns of 12 template dog walks still fell more often than the dogs steadied first,
+# in random walk, turn and walk on sequences with a slightly pushed start (scripts/rhythm_bench.py oos, --bench-seed 1,
+# 4 and 6: 11 in 2880 against 6, 14 in 4320 against 10, 29 in 14400 against 19; switched as 7a4aa92 switched, 4, 4
+# and 18), and those of 6 imported A1 walks 162 times in 1440 against 147. Every turn that fell had leaned more than 30
+# degrees from some checked moment, or fallen from one, and those that did neither had not fallen; kept only then, 15
+# against 14 (13 switched as 7a4aa92 switched, --bench-seed 7, a 1 s turn after walking getting 53 to 55% of the
+# rate in its first second against 42).
 WALK_CHECKS = tuple(round(WALKED_MIN + k / CONTROL_HZ, 2) for k in range(round((5.0 - WALKED_MIN) * CONTROL_HZ) + 1))
-MIN_SAFE = 0.5  # share of the points of the stride checked
-# A turn begins straight out of the walk only if, from every moment checked at the points of the stride it may begin
-# at, the trunk leans less than ROOM_TILT, half the way to a fall; else the robot steadies first. Begun out of the walk
-# only where it never fell, the turns of 8 template dog walks and 6 imported A1 walks still fell more often than the
-# robots steadied first in random walk-turn-walk sequences, each started with a small random push (scripts/
-# rhythm_bench.py oos --bench-seed 1): 11 in 2880 sequences against 6 for the dog (4 switched as 7a4aa92 switched,
-# the robot holding home until still before any rhythm), 162 in 1440 against 147 for the A1 (498). Every turn that
-# fell there had leaned 31 to 37 degrees from some moment of its checks; of those that leaned 30 or less (one or both
-# sides of 5 dog walks, all of the starfish's), none fell.
 ROOM_TILT = math.radians(30.0)
 TURN_CHECK = 2.0  # s
 FIRST_SECOND = 1.0  # s: what a short turn command gets
@@ -663,23 +659,10 @@ def learn_walking_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed
             tuned.append(turn)
         check = Trainer(model, robot, Reward(turn=sign), TURN_CHECK, walk.freq, home=home)
         first = Trainer(model, robot, Reward(turn=sign), FIRST_SECOND, walk.freq, home=home)
-        chosen = _walking_turn((*tuned, standing), sign, check, first, checks, WALK_CHECKS)
+        chosen = _walking_turn((*tuned, standing), sign, check, first, checks)
         if chosen is not None:
-            learned[f"{side}_walking"] = joints.to_saved(chosen[0].theta)
-            learned[f"{side}_walking_at"] = chosen[1]
+            learned[f"{side}_walking"] = joints.to_saved(chosen.theta)
     return walk.model_copy(update=learned)
-
-
-def stride_phase(t: float, freq: float) -> float:
-    """Where in its stride (0 up to 1) a rhythm is `t` seconds after it started, to a thousandth."""
-    return round((t * freq) % 1.0, 3) % 1.0
-
-
-def _mean_wait(phases: Sequence[float]) -> float:
-    """How long (in strides) the next of `phases` is away from a point of the stride picked at random, on average."""
-    ring = sorted(phases)
-    gaps = [((ring[(i + 1) % len(ring)] - p) % 1.0) or 1.0 for i, p in enumerate(ring)]
-    return sum(g * g for g in gaps) / 2.0
 
 
 def _walking_turn(
@@ -688,31 +671,19 @@ def _walking_turn(
     check: Trainer,
     first: Trainer,
     moments: Sequence[Start],
-    times: Sequence[float],
-) -> tuple[Rhythm, list[float] | None] | None:
-    """Of `turns`, the one to begin out of the walk, and the points of the stride it may begin at (None: any). Each is
-    started from `moments` (`times` s into the walk) for `check`'s seconds; a point of the stride it fell from at any
-    of them is left out. Of the turns with at least MIN_SAFE of the points left that never leaned the trunk ROOM_TILT
-    from a moment at those points, the one that turns the most in `first`'s seconds wins, counting the wait for its
-    next point. None if each falls from more or comes nearer to falling."""
-    freq = check.freq
-    phases = [stride_phase(t, freq) for t in times[: len(moments)]]
-    best: tuple[float, Rhythm, list[float] | None] | None = None
+) -> Rhythm | None:
+    """Of `turns`, the one to begin out of the walk: each is started from `moments` of the walk for `check`'s
+    seconds, and of those that fell from none of them and leaned the trunk less than ROOM_TILT from each, the one that
+    turns the most in `first`'s seconds. None if each fell or came nearer to falling."""
+    best: tuple[float, Rhythm] | None = None
     for turn in turns:
-        tried = [(p, check.rollout(turn, start=m)) for p, m in zip(phases, moments, strict=True)]
-        unsafe = {p for p, r in tried if r["fell"]}
-        safe = sorted(set(phases) - unsafe)
-        if not safe or len(safe) < MIN_SAFE * len(set(phases)):  # fell from most: too close to falling anywhere
+        tried = [check.rollout(turn, start=m) for m in moments]
+        if any(r["fell"] or r["tilt"] >= ROOM_TILT for r in tried):
             continue
-        if max(r["tilt"] for p, r in tried if p not in unsafe) >= ROOM_TILT:  # no room to spare where it stayed up
-            continue
-        angles = [sign * first.rollout(turn, start=m)["turned"] for p, m in zip(phases, moments, strict=True)]
-        angle = float(np.mean([a for a, p in zip(angles, phases, strict=True) if p not in unsafe]))
-        wait = _mean_wait(safe) / freq if unsafe else 0.0
-        score = angle * max(0.0, 1.0 - wait / first.seconds)
-        if best is None or score > best[0]:
-            best = (score, turn, safe if unsafe else None)
-    return None if best is None else (best[1], best[2])
+        angle = float(np.mean([sign * first.rollout(turn, start=m)["turned"] for m in moments]))
+        if best is None or angle > best[0]:
+            best = (angle, turn)
+    return None if best is None else best[1]
 
 
 def _wrapped(angle: float) -> float:
