@@ -7,7 +7,8 @@ around and how fast it went. From then on `move` and the keyboard drive that rob
 knows its body.
 
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
-its own, each saved in the same file once learned: to hold its heading (`learn_steering`), and to turn on the spot,
+its own, each saved in the same file once learned: to hold its heading and keep to the line it was asked to walk
+along (`learn_steering`), and to turn on the spot,
 one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
 Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride, once the walk has played
 WALKED_MIN, starts faded in from the stride as its walking version learned to, at once or at the next point of the
@@ -745,8 +746,8 @@ def joint_names(model: mujoco.MjModel, body: Body) -> list[str]:
 
 
 class RhythmWalker:
-    """Drives a robot with a kept walk: forward plays the walk (holding the heading it started with, if it learned
-    to), a turn plays a turn (once learned), each from its start as in training, standing still at home; stop goes
+    """Drives a robot with a kept walk: forward plays the walk (keeping to the line it started on, if it learned to
+    steer), a turn plays a turn (once learned), each from its start as in training, standing still at home; stop goes
     back to the home pose."""
 
     rate_hz = CONTROL_HZ
@@ -873,8 +874,8 @@ class RhythmWalker:
 
     def _heading_error(self, data: mujoco.MjData, walked: float, dt: float) -> float:
         """How far (rad) the walk should steer back, `walked` seconds after it started: toward an aim that comes back
-        to the course by STEER_RELAX, never more than STEER_LEASH away, with the correction coming in over
-        STEER_RAMP."""
+        by STEER_RELAX to the course, turned toward the line the walk started on if it is beside it (LINE_AHEAD,
+        LINE_CUT), never more than STEER_LEASH away, with the correction coming in over STEER_RAMP."""
         yaw = trunk_yaw(data, self.body)
         across = np.array([-math.sin(self.course), math.cos(self.course)])
         side = float((data.xpos[self.body.trunk][:2] - self.origin) @ across)  # m to the left of the line
