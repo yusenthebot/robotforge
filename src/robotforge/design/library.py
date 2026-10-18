@@ -144,6 +144,9 @@ CATALOG: dict[str, LibraryRobot] = {
             mass=12.45,
             # Carries (measured, see docs/BUILDER.md) a Z1 at full speed; an xArm 7 at 0.1 m/s (a Panda toppled it).
             payload=Payload(4.7, 12.1, 0.1),
+            # On Menagerie's kp 100 it rolled 4 to 5 degrees each step and fell on a 12 degree ramp and on 8 cm stairs
+            # that a Go1 (the same servos) climbs; stiffer and damped it climbs both (scripts/legged_bench.py).
+            stiffer_servos=(150.0, 3.0),
         ),
         LibraryRobot(
             "spot",
@@ -268,6 +271,10 @@ CATALOG: dict[str, LibraryRobot] = {
                 for leg in ("front_left", "hind_left", "front_right", "hind_right")
                 for joint, angle in (("hip", 0.7), ("knee", 1.4))
             ),
+            # Menagerie's servos (kp 50, damping 0.5, tuned for MJX training) gave way under its 14.5 kg: it stalled at
+            # the foot of a 12 degree ramp and tipped over on 3.5 cm gravel. Twice as stiff and damped, it climbs the
+            # ramp and crosses the gravel at 0.36 m/s, straight within 2 degrees (scripts/legged_bench.py).
+            stiffer_servos=(100.0, 3.0),
             # Menagerie paints each part its own bright color; the real robot is a light shell on dark legs.
             recolor=(
                 ((0.8, 0.749, 0.914), (0.86, 0.87, 0.88)),  # body: an off-white shell

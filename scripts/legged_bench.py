@@ -1,6 +1,7 @@
 """How well does every legged robot in the library walk? Measure it, robot by robot and ground by ground.
 
-    uv run python scripts/legged_bench.py [--robots go2,a1,...] [--cases flat,slope,...] [--jobs 4] [--json out.json]
+    uv run python scripts/legged_bench.py [--robots go2,a1,...] [--cases flat,slope,...] [--trials 5] [--speed 0.6]
+                                          [--jobs 4] [--json out.json]
 
 Every run adds one robot to an empty world and drives it with `move`, the way an agent or the
 keyboard does (no walker named: each robot walks on what its library entry makes it walk with).
@@ -19,12 +20,14 @@ Cases:
 For each it reports success, the average forward speed (m/s along the way it faced at the start),
 whether it fell (trunk tilted past 45 degrees), the heading drift (degrees, end against start, for the
 straight walks; the turn rate for turn) and how far it strayed sideways. Library robots are downloaded
-on first use; set ROBOTFORGE_MENAGERIE to a checkout to work offline.
+on first use; set ROBOTFORGE_MENAGERIE to a checkout to work offline. With --trials N each case runs N times from
+starts a little back or ahead, aside and turned (the first from the usual start) and the table counts successes.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import math
 import os
@@ -76,16 +79,29 @@ class Result:
     seconds: float
     walker: str = ""
     note: str = ""
+    trial: int = 0
 
 
-def _setup(robot: str, case: str):
+def _start(trial: int) -> tuple[list[float], float]:
+    """Where a trial starts: trial 0 at the origin facing +x, later ones up to 15 cm back or 5 cm ahead, 10 cm to
+    either side and 5 degrees off, seeded by the trial's number, so each trial meets the ground differently."""
+    if trial == 0:
+        return [0.0, 0.0], 0.0
+    import numpy as np
+
+    rng = np.random.default_rng(trial)
+    return [float(rng.uniform(-0.15, 0.05)), float(rng.uniform(-0.1, 0.1))], float(rng.uniform(-5.0, 5.0))
+
+
+def _setup(robot: str, case: str, trial: int = 0):
     from robotforge.playground import Playground
 
     os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_legged_")
     pg = Playground.with_demo()
     pg.new_world(f"legged_{robot}_{case}")
     mounts = [{"library": PAYLOADS[robot]}] if case == "payload" and robot in PAYLOADS else None
-    pg.add_robot(robot, library=robot, mounts=mounts)
+    pos, yaw = _start(trial)
+    pg.add_robot(robot, library=robot, mounts=mounts, pos=pos, yaw=yaw)
     patch = PATCHES.get(case)
     if patch is not None:
         rest = {k: v for k, v in patch.items() if k not in ("type", "style")}
@@ -114,12 +130,12 @@ def _walker(pg, robot: str) -> str:
     return spec.name if spec is not None else type(ctrl).__name__
 
 
-def run(robot: str, case: str) -> Result:
+def run(robot: str, case: str, trial: int = 0, share: float = SPEED_SHARE, walker: str | None = None) -> Result:
     import numpy as np
 
     if case == "payload" and robot not in PAYLOADS:
         return Result(robot, case, False, 0.0, False, 0.0, 0.0, 0.0, note="skipped: carries no library arm")
-    pg = _setup(robot, case)
+    pg = _setup(robot, case, trial)
     behaviors, session = pg.behaviors, pg.session
     data = session.data
     trunk, dof = _trunk(pg, robot)
@@ -159,10 +175,9 @@ def run(robot: str, case: str) -> Result:
     def sideways() -> float:
         return float((data.xpos[trunk] - start) @ left)
 
-    walker = ""
     t_start = float(data.time)
     if case == "turn":
-        behaviors.move(robot, 0.0, 1.0)
+        behaviors.move(robot, 0.0, 1.0, walker=walker)
         walker = _walker(pg, robot)
         fell = watch(4.0)
         seconds = float(data.time) - t_start
@@ -172,8 +187,8 @@ def run(robot: str, case: str) -> Result:
         ok = not fell and math.degrees(turned) >= 90.0 and strayed < max(leg, 0.15)
         return Result(robot, case, ok, 0.0, fell, round(rate, 1), round(strayed, 2), round(seconds, 1), walker)
 
-    speed = SPEED_SHARE * top
-    behaviors.move(robot, speed, 0.0)
+    speed = share * top
+    behaviors.move(robot, speed, 0.0, walker=walker)
     walker = _walker(pg, robot)
     patch = PATCHES.get(case)
     end, half_width, length = FLAT_RUN, math.inf, 0.0
@@ -206,23 +221,30 @@ def run(robot: str, case: str) -> Result:
         seconds = float(data.time) - t_start
         note = "" if walking or fell else "stopped walking"
     else:
-        limit = min(60.0, 2.5 * (end + 0.5) / max(speed, 0.02) + 3.0)
+        # A patch lies across the world's x axis wherever the trial started (see _start); flat ground is measured
+        # from the start.
+        x0 = 0.0 if patch is None else float(start[0])
+
+        def along() -> float:
+            return x0 + forward() if patch is None else float(data.xpos[trunk][0])
+
+        limit = min(60.0, 2.5 * (end - x0 + 0.5) / max(speed, 0.02) + 3.0)
         off_patch = 0.0
         fell = False
         t0 = float(data.time)
         while data.time - t0 < limit and not fell:
             fell = watch(0.1)
-            if GAP <= forward() <= GAP + length:
-                off_patch = max(off_patch, abs(sideways()))
-            if forward() > end + 0.3:
+            if GAP <= along() <= GAP + length:
+                off_patch = max(off_patch, abs(float(data.xpos[trunk][1])))
+            if along() > end + 0.3:
                 break
         seconds = float(data.time) - t_start
         around = off_patch > half_width
-        ok = not fell and forward() > end and not around
-        if around and forward() > end:
+        ok = not fell and along() > end and not around
+        if around and along() > end:
             note = "went around the patch"
         elif not ok and not fell:
-            note = f"stalled at {forward():.2f} of {end:.2f} m"
+            note = f"stalled at x {along():.2f} of {end:.2f} m"
     drift = (math.degrees(turned) + 180.0) % 360.0 - 180.0
     return Result(
         robot,
@@ -238,11 +260,33 @@ def run(robot: str, case: str) -> Result:
     )
 
 
-def _run(args: tuple[str, str]) -> Result:
+def _run(args: tuple) -> Result:
     try:
-        return run(*args)
+        return dataclasses.replace(run(*args), trial=args[2])
     except Exception as exc:  # report the failure in the table rather than lose the whole batch
-        return Result(args[0], args[1], False, 0.0, False, 0.0, 0.0, 0.0, note=f"error: {type(exc).__name__}: {exc}")
+        note = f"error: {type(exc).__name__}: {exc}"
+        return Result(args[0], args[1], False, 0.0, False, 0.0, 0.0, 0.0, note=note, trial=args[2])
+
+
+def summary(results: list[Result]) -> str:
+    """One line per robot and case over its trials: how many succeeded, mean speed, falls, mean |drift|."""
+    groups: dict[tuple[str, str], list[Result]] = {}
+    for r in results:
+        groups.setdefault((r.robot, r.case), []).append(r)
+    lines = [f"{'robot':<9} {'case':<8} success  speed m/s  falls  |drift| deg  walker"]
+    for (robot, case), rs in groups.items():
+        ok = sum(r.success for r in rs)
+        speed = sum(r.speed for r in rs) / len(rs)
+        falls = sum(r.fell for r in rs)
+        drift = sum(abs(r.drift) for r in rs) / len(rs)
+        unit = "deg/s" if case == "turn" else ""
+        lines.append(
+            f"{robot:<9} {case:<8} {ok:>2}/{len(rs):<2}    {speed:5.2f}     {falls:>3}    {drift:6.1f}{unit:<5}  "
+            f"{rs[0].walker}"
+        )
+    total = sum(r.success for r in results)
+    lines.append(f"{total} of {len(results)} runs passed")
+    return "\n".join(lines)
 
 
 def table(results: list[Result]) -> str:
@@ -264,12 +308,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--robots", default=",".join(ROBOTS))
     parser.add_argument("--cases", default=",".join(CASES))
     parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--trials", type=int, default=1, help="runs per robot and case, from different starts")
+    parser.add_argument("--speed", type=float, default=SPEED_SHARE, help="share of each robot's top speed")
+    parser.add_argument("--walker", default=None, help="walk with this walker (move's walker), not the default")
     parser.add_argument("--json", help="also write the results here")
     args = parser.parse_args(argv)
-    jobs = [(r, c) for r in args.robots.split(",") for c in args.cases.split(",")]
+    jobs = [
+        (r, c, t, args.speed, args.walker)
+        for r in args.robots.split(",")
+        for c in args.cases.split(",")
+        for t in range(args.trials)
+    ]
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         results = list(pool.map(_run, jobs))
-    print(table(results))
+    print(table(results) if args.trials == 1 else summary(results))
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump([asdict(r) for r in results], f, indent=1)
