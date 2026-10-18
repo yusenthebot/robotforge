@@ -986,7 +986,26 @@ function focusRobot(name) {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const dir = camera.position.clone().sub(controls.target).normalize();
   const d = fitDistance(Math.max(sphere.radius, 0.15)) * 2.2; // room around it to see where it goes
-  moveCamera(sphere.center.clone().add(dir.multiplyScalar(d)), sphere.center, true);
+  moveCamera(sphere.center.clone().add(clearSight(name, sphere.center, dir, d).multiplyScalar(d)), sphere.center, true);
+}
+
+// The way from a robot to the camera, turned around the vertical as little as it takes for nothing to stand in
+// between: on a phone, whose narrow view puts the camera twice as far back, the park's tree hid the Go2 just picked.
+const sightRay = new THREE.Raycaster();
+const UP = new THREE.Vector3(0, 0, 1);
+const SIGHT_TURNS = [0, 20, -20, 40, -40, 60, -60, 90, -90, 120, -120, 150, -150, 180]; // degrees
+function clearSight(name, center, dir, d) {
+  const others = [];
+  worldRoot.traverse((o) => {
+    if (o.isMesh && o.visible && !o.userData.isPlane && robotOfBody.get(o.userData.body) !== name) others.push(o);
+  });
+  sightRay.far = d;
+  for (const turn of SIGHT_TURNS) {
+    const way = dir.clone().applyAxisAngle(UP, THREE.MathUtils.degToRad(turn));
+    sightRay.set(center, way);
+    if (!sightRay.intersectObjects(others, false).length) return way;
+  }
+  return dir; // walled in: keep the view the learner had
 }
 
 function renderSelection() {
