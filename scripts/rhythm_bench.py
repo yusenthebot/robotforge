@@ -6,6 +6,9 @@
         [--idle 3] [--long 20] [--min-share 0.6] [--keep DIR | --walks DIR]
     uv run python scripts/rhythm_bench.py leads --walks DIR [--robots dog,star] [--seeds 1,2,3] [--paths move,gap]
         [--jobs 4] [--json]
+    uv run python scripts/rhythm_bench.py oos --walks DIR [--robots dog,star] [--seeds 1,2,3] [--cases 40]
+        [--bench-seed 0] [--nudge 0.02] [--paths move,chain] [--switchings kept,base] [--jobs 4] [--json]
+    uv run python scripts/rhythm_bench.py straight [--walks DIR] [--robots dog,star] [--seeds 1,2,3] [--long 20]
     add --import a1=path/to/a1.urdf (or any URDF or MJCF file) to bench a robot from a file too
 
 forward: each run teaches one robot to walk forward the way the RL II lesson's Learn button does
@@ -49,6 +52,23 @@ as the next call comes at once.) Each sequence starts from standing in a reset w
 past 60 degrees at any update) per robot, path and side with the call each came in (s<seed>c<call>; call 0 is the
 walk before the turn), the 1 s turn's share of the learned rate (per walk the median over its leads, and over all
 tries how many reached --min-share), and per robot how many distinct sequences fell after the walk before the turn.
+
+oos: out-of-sample switching. Plays walks kept with switch --keep through --cases sequences per path drawn at random
+(--bench-seed draws others), none on the grid the switch checks or leads play: move and idle (walk 0.2 to 6 s, turn
+0.3 to 2.5 s either way, walk on 0.3 to 4 s, each move call ending with a stop, idle with 0.05 to 3 s of sim time
+after each), held (the turn asked while still walking), keys (W let go, A or D 0 to 0.4 s later, and back), chain (6 to
+10 key changes, each held 0.2 to 3 s) and after (a turn, a walk of 1.4 to 4 s out of it, the turn out of that walk,
+walking on). Each starts from standing in a reset world, nudged by --nudge (m/s and rad/s, at random, the same for
+each switching), and is played three ways on exactly the same case: as kept, switched as 7a4aa92 switched every walk
+but with its steering (steered), and as 7a4aa92 plays the file (base). It reports the falls after the first call
+per robot, path and switching, and the share of the rate a turn straight out of a walk of 1.5 s or more got in its
+first second.
+
+straight: lateral drift per metre. Walks each robot forward from standing for --long seconds (20) as move plays it:
+a walk kept with switch --keep (--walks), else one trained as the lesson trains it, with what the code under test
+learns after Keep (its steering, if it has one). It reports how far it got along the heading it started with, how
+far it ended to the side of that line per metre along it, the most it was to the side, and the heading change. Run it
+with PYTHONPATH pointing at an older checkout's src for the numbers before a change.
 """
 
 from __future__ import annotations
