@@ -26,7 +26,6 @@ import numpy as np
 MIN_RAYS = 3  # a ring: fewer numbered rangefinders are separate sensors
 RAY = re.compile(r"(.+)_(\d+)")
 SIDES = (("front", 45.0), ("left", 135.0), ("back", 180.0))  # by |bearing|, with right for the negative half
-MAX_LAYERS = 12  # the robot's own shapes one ray goes through (in and out of each) before what it measures
 PAST = 1e-4  # m a ray starts again beyond a shape of the robot's own
 
 
@@ -71,7 +70,9 @@ def seen(model: mujoco.MjModel, data: mujoco.MjData, sensor: int) -> float:
     """What rangefinder `sensor` reads with its own robot seen through, in MuJoCo's terms: the distance (at most its
     cutoff), or -1 for nothing at all. The ray is cast again the way MuJoCo casts it (every geom group, static
     geoms too, leaving out the site's body); each time it meets a shape of the same robot (one tree of bodies under
-    the world) it carries on from just beyond. A rangefinder on the world itself reads as MuJoCo has it."""
+    the world) it carries on from just beyond, until it meets something else or its cutoff. A rangefinder on the
+    world itself reads as MuJoCo has it. It used to give up after 12 of the robot's own shapes: a lidar inside a
+    Go2's trunk goes through its meshes and collision shapes, and 8 of 64 rays saw no wall 0.85 to 1.45 m away."""
     value = float(data.sensordata[model.sensor_adr[sensor]])
     site = int(model.sensor_objid[sensor])
     own = int(model.body_rootid[model.site_bodyid[site]])
@@ -81,7 +82,9 @@ def seen(model: mujoco.MjModel, data: mujoco.MjData, sensor: int) -> float:
     look = data.site_xmat[site].reshape(3, 3)[:, 2].copy()  # a rangefinder looks along its +z
     cutoff = float(model.sensor_cutoff[sensor])
     gone, hit = 0.0, np.zeros(1, np.int32)
-    for layer in range(MAX_LAYERS):
+    # Each cast goes on past what it met, so the cutoff ends it; the count bounds one with none, or shapes that
+    # touch: in and out of every shape twice over.
+    for layer in range(4 * int(model.ngeom) + 8):
         far = mujoco.mj_ray(model, data, start, look, None, 1, int(model.site_bodyid[site]), hit)
         if far < 0:
             return -1.0

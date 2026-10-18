@@ -190,3 +190,23 @@ def test_a_rangefinder_on_the_world_reads_as_mujoco_has_it():
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     assert lidar.seen(model, data, 0) == pytest.approx(0.95) == data.sensordata[0]
+
+
+def test_a_ray_goes_through_as_many_of_its_robots_shapes_as_stand_in_the_way():
+    """Regression: a ray gave up after 12 of its own robot's shapes and read nothing. A 64-ray lidar inside a real
+    Go2's trunk on a plate goes through its meshes and collision shapes, and 8 rays saw no wall 0.85 to 1.45 m away.
+    Here 16 thin plates of the robot's own (on a body of its own, which MuJoCo's rangefinder does not leave out)
+    stand between the eye and a wall: in and out of each is 32 casts."""
+    plates = "".join(
+        f'<geom type="box" size="0.002 0.2 0.2" pos="{0.02 + 0.01 * k:.3f} 0 0" rgba="1 1 1 0.3"/>' for k in range(16)
+    )
+    xml = f"""<mujoco><worldbody>
+      <body name="bot/base" pos="0 0 0.3"><freejoint/><site name="eye" zaxis="1 0 0"/>
+        <geom type="sphere" size="0.01"/><body name="bot/hull">{plates}</body></body>
+      <geom name="wall" type="box" size="0.05 1 1" pos="1 0 0.3"/>
+    </worldbody><sensor><rangefinder name="bot/ahead" site="eye" cutoff="4"/></sensor></mujoco>"""
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    assert data.sensordata[0] == pytest.approx(0.018, abs=1e-3)  # MuJoCo's own reading: the first plate
+    assert lidar.seen(model, data, 0) == pytest.approx(0.95, abs=1e-3)  # the wall's face, past every plate
