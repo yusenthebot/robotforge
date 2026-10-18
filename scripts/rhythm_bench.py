@@ -604,8 +604,8 @@ def as_base(walk):
     """The walk switched as 7a4aa92 switches every kept walk: any switch while moving holds home until the robot stands
     still (SETTLE_MAX at most) and starts the next rhythm as learned, and a stop holds home at once."""
     sides = ("left", "right")
-    cleared = {f"turn_{s}_walking{part}": None for s in sides for part in ("", "_at")}
-    return walk.model_copy(update={**cleared, "switching": None, **{f"turn_{s}_exit": None for s in sides}})
+    cleared = {f"turn_{s}_{field}": None for s in sides for field in ("walking", "exit")}
+    return walk.model_copy(update={**cleared, "switching": None})
 
 
 def _oos_cases(path: str, count: int, rng) -> list[tuple[list[tuple[str, float, float, float]], int | None]]:

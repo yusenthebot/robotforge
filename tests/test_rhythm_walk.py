@@ -83,15 +83,11 @@ def test_a_saved_walk_checks_its_numbers():
         update={
             "turn_left_walking": [0.0] * 6,
             "turn_right_walking": [0.0] * 6,
-            "turn_left_walking_at": [0.0, 0.4],
             "switching": "fade",
         }
     )
     assert walking.turns_from_walking and SavedWalk.model_validate(walking.model_dump()) == walking
-    assert old.switching is None and old.turn_left_walking_at is None  # switches as walks kept before did
-    for bad in ([], [1.0], [math.nan]):
-        with pytest.raises(ValidationError, match="stride phases"):
-            _walk("crab", ["a", "b"], turn_left_walking_at=bad)
+    assert old.switching is None  # switches as walks kept before did
     with pytest.raises(ValidationError):
         _walk("crab", ["a", "b"], switching="snap")
 
@@ -203,37 +199,11 @@ def test_a_turn_out_of_the_walk_starts_at_once_faded_in_from_the_stride(pg):
     assert pg.session.data.ctrl[walker.actuators] == pytest.approx(np.clip(turn, walker.lower, walker.upper), abs=0.05)
 
 
-def test_a_turn_that_fell_from_some_points_of_the_stride_waits_for_one_it_did_not(pg):
-    """Regression: a turn that tipped the template dog over from 2 of 21 moments of its walk was not kept for
-    starting out of the walk at all, so the robot steadied first and a 1 s turn straight after walking turned 14% of
-    its rate. It now walks on to the next point of the stride it never fell from (less than a stride) and turns
-    there."""
-    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
-    assert walker.walking_at == {"left": [0.3], "right": None}
-    walked_from, freq = walker.t0, walker.walk.freq
-    pg.behaviors.move("crab", 0.0, 0.8)
-    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
-    assert walker.playing == "left" and walker.rhythm == "forward" and walker.turn_at is not None  # walking on
-    pg.behaviors.move("crab", 0.2, 0.0)  # let go before it began: it walks on, as it was
-    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
-    assert walker.rhythm == "forward" and walker.t0 == walked_from and walker.turn_at is None
-    pg.behaviors.move("crab", 0.0, 0.8)
-    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
-    asked = walker.clock
-    phase = ((asked - walked_from) * freq) % 1.0
-    assert walker.turn_at - asked == pytest.approx(((0.3 - phase) % 1.0) / freq, abs=0.011)
-    began = pg.run_fast(lambda: walker.rhythm == "left walking", 1.0)
-    assert began < 1.0 / freq + 0.05  # within a stride
-    assert ((walker.t0 - walked_from) * freq) % 1.0 == pytest.approx(0.3, abs=0.03)  # at the point it was safe from
-    assert walker.fade_from is not None  # faded in from the stride
-
-
-def test_a_turn_soon_after_a_stop_steadies_first_instead_of_skipping_the_stride_check(pg):
+def test_a_turn_soon_after_a_stop_steadies_first_instead_of_beginning_out_of_the_walk(pg):
     """Regression: a turn asked for within a quarter second of a stop counted as out of the walk, but the walk no
-    longer played, so its walking version began at once wherever the stride was (here at 0.48 to 0.88 of it where
-    only 0.3 was checked safe), from joints half way home. It turns as from standing, once steady, as after any other
-    stop."""
-    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    longer played, so its walking version began at once from joints half way home, a pose it was never checked from.
+    It turns as from standing, once steady, as after any other stop."""
+    walker = _swinging(pg, walking=True)
     pg.behaviors.stop("crab")
     pg.run_fast(lambda: False, STOP_GRACE + 0.06)  # letting go of W, then pressing A a moment after it stopped
     assert walker.rhythm is None
@@ -245,9 +215,9 @@ def test_a_turn_soon_after_a_stop_steadies_first_instead_of_skipping_the_stride_
 def test_a_quick_key_change_turns_straight_out_of_the_walk(pg):
     """Regression: letting go of W and pressing A a moment later sends a stop between the two; taken at once, the robot
     steadied first, and a 1 s turn one update after letting go of W turned the template dog 27 to 70% of its rate. A
-    stop asked while the walk plays comes STOP_GRACE later: a turn asked by then begins straight out of the walk (at a
-    point of the stride it was checked safe from), and the walk asked again plays on."""
-    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
+    stop asked while the walk plays comes STOP_GRACE later: a turn asked by then begins straight out of the walk, and
+    the walk asked again plays on."""
+    walker = _swinging(pg, walking=True)
     walked_from = walker.t0
     pg.behaviors.stop("crab")
     pg.run_fast(lambda: False, 0.02)
@@ -258,8 +228,8 @@ def test_a_quick_key_change_turns_straight_out_of_the_walk(pg):
     pg.behaviors.stop("crab")
     pg.run_fast(lambda: False, 0.02)
     pg.behaviors.move("crab", 0.0, 0.8)  # A one update after letting go of W
-    began = pg.run_fast(lambda: walker.rhythm == "left walking", 1.0)
-    assert ((walker.t0 - walked_from) * walker.walk.freq) % 1.0 == pytest.approx(0.3, abs=0.03), f"after {began:.2f}"
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.rhythm == "left walking" and walker.steady_from is None and walker.fade_from is not None
     pg.behaviors.stop("crab")  # out of a turn the stop comes at once
     pg.run_fast(lambda: False, 0.02)
     assert walker.rhythm is None and walker.stop_at is None
@@ -305,13 +275,6 @@ def test_a_turn_out_of_a_walk_begun_off_its_course_steadies_first(pg):
     pg.behaviors.move("crab", 0.0, 0.8)
     pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
     assert walker.playing == "left" and walker.rhythm in (None, "left")  # steadying, or still and turning as learned
-
-
-def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
-    walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
-    pg.behaviors.move("crab", 0.0, -0.8)  # the right turn may begin anywhere
-    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
-    assert walker.rhythm == "right walking" and walker.turn_at is None
 
 
 def test_other_switches_while_moving_steady_on_home_until_calm(pg):
@@ -398,12 +361,12 @@ def test_switches_keep_the_first_way_that_tips_the_robot_over_least(monkeypatch,
     names = joint_names(solo, Body.find(solo, "crab"))
     still = [0.0] * 3 * len(names)
     turns = {"turn_left": still, "turn_right": still, "turn_rate": 1.0}
-    walking = {"turn_left_walking": still, "turn_right_walking": still, "turn_right_walking_at": [0.2]}
+    walking = {"turn_left_walking": still, "turn_right_walking": still}
     kept = rhythm_walk.learn_switches(solo, "crab", _walk("crab", names, **turns, **walking))
     style = "fade" if held_walk_falls else "hold"
     assert kept.switching == style
     assert kept.turn_left_walking is not None and kept.turn_left_exit == style  # no falls: the style's own way out
-    assert kept.turn_right_walking is None and kept.turn_right_walking_at is None and kept.turn_right_exit == style
+    assert kept.turn_right_walking is None and kept.turn_right_exit == style
     checks = len(rhythm_walk.switch_checks(2.0, 1.0))
     assert tried.count((style, "left", True, style)) == checks  # the first way on each side, checked in full
     assert tried.count((style, "right", False, style)) == checks
