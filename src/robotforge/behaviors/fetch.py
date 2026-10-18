@@ -29,7 +29,7 @@ import numpy as np
 from robotforge.behaviors import nav_map
 from robotforge.behaviors.arm import JOINT_SPEED, REACH_TOL, ArmMotion, OutOfReach, Waypoint
 from robotforge.behaviors.navigate import NoWay
-from robotforge.behaviors.reach_in import Hand, sweeps_clear
+from robotforge.behaviors.reach_in import LOADED_TILT, Hand, sweeps_clear
 from robotforge.sim.geometry import collides
 
 if TYPE_CHECKING:
@@ -66,7 +66,6 @@ FREE_GAP = 0.015  # m kept between a load put down and what already stands there
 WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, with the arm's own weight
 GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of what its friction can hold
 STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
-LOADED_TILT = math.radians(45.0)  # how far off pointing down a gripper with a load may turn on a joint move
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 
 
@@ -645,7 +644,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
             if tilt == 0.0:
                 arm.put_down(spot, half, place.top)
             else:
-                stand.hand.put(spot, half, place.top, tilt, radius)
+                stand.hand.put(spot, half, place.top, tilt)
 
         return stand.rehearse(xy, heading, tilt, queue)
 
@@ -796,14 +795,16 @@ def _nowhere(
     could stand, or its arm's base gets no nearer than the arm reaches out at that height."""
     arm = stand.arm
     at = arm.down_reach(arm.ik.data, point)
-    if at.reach <= MIN_OUT:
+    out = stand.out_at(float(point[2]))
+    tilted = stand.out_at(float(point[2]), True) if stand.hand.tilts else out
+    if at.reach <= MIN_OUT or max(out, tilted) <= MIN_OUT:
         where = "high" if point[2] > at.base[2] else "low"
         return (
             f"{what} is too {where} for {arm.robot}, at z {point[2]:.2f} m: it points its gripper down only between "
-            f"{_heights(arm)} m high"
+            f"{_heights(arm)} m high, and reaching in with its hand tilted gets no further than {tilted:.2f} m from "
+            f"its base there"
         )
     everywhere = np.ones(nav.grid.shape, bool)
-    out = stand.out_at(float(point[2]))
     near = _nearest_base(stand, nav, reach, point)
     if near is None:
         far = _nearest_base(stand, nav, everywhere, point)
@@ -813,7 +814,8 @@ def _nowhere(
     return (
         f"nowhere {robot} can stand does its arm reach {what}: the nearest its arm's base gets is {near:.2f} m from it "
         f"(seen from above), and at that height (z {point[2]:.2f} m) {arm.robot} points its gripper down at most "
-        f"{out:.2f} m from its base; put it nearer the edge or lower down, or use a robot that reaches further"
+        f"{out:.2f} m from its base and reaches in tilted at most {tilted:.2f} m, with room for the arm round it "
+        f"less; put it nearer the edge or lower down, or use a robot that reaches further"
     )
 
 
@@ -1202,7 +1204,7 @@ class Errand:
             if tilt == 0.0:
                 self.arm.put_down(target, self.half, self.place.top)
             else:
-                self.hand.put(target, self.half, self.place.top, tilt, self.radius)
+                self.hand.put(target, self.half, self.place.top, tilt)
 
         failed = self._first_tilt(self.drop, queue)
         if failed is not None:
@@ -1255,7 +1257,8 @@ class Errand:
         self._leave()
 
     def _leave(self) -> None:
-        self.arm._warm = None  # the arm plans as it did before the errand
+        self.arm._warm = None  # the arm plans and moves as it did before the errand
+        self.arm.carry_weight = False
         if self._noslip is not None:
             self.manager.session.model.opt.noslip_iterations = self._noslip
             self._noslip = None
@@ -1268,10 +1271,12 @@ class Errand:
         if self._noslip is None and model.opt.noslip_iterations < NOSLIP:
             self._noslip = int(model.opt.noslip_iterations)
             model.opt.noslip_iterations = NOSLIP
+        self.arm.carry_weight = True
 
     def interrupt(self, note: str, time: float) -> None:
         if not self.done:
             self.state, self.why, self.note, self.ended = "failed", "interrupted", note, time
+        self.arm.carry_weight = False
         if self._noslip is not None:
             self.manager.session.model.opt.noslip_iterations = self._noslip
             self._noslip = None

@@ -146,6 +146,8 @@ class ArmMotion:
         self.current_label = "idle"
         self.log: list[str] = []
         self._warm: np.ndarray | None = None  # the last answer quick_error found (or warm_up)
+        self.carry_weight = False  # the servos also hold up the arm's weight (_command); fetch.Errand sets it
+        self._bias = np.zeros(model.nv)
 
     def _read_base(self, data: mujoco.MjData) -> None:
         self.base_xy = data.xpos[self.base_body][:2].copy()
@@ -797,7 +799,7 @@ class ArmMotion:
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
-            data.ctrl[self.actuators] = self.q
+            data.ctrl[self.actuators] = self._command(self.q)
             return
         start, wp, t0 = self._segment
         u = min(1.0, (t - t0) / wp.duration)
@@ -814,9 +816,27 @@ class ArmMotion:
                 target = self._arc_point(start, wp.position, s)
                 axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
                 self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
-        data.ctrl[self.actuators] = self.q
+        data.ctrl[self.actuators] = self._command(self.q)
         if u >= 1.0:
             self._segment = None
+
+    def _command(self, q: np.ndarray) -> np.ndarray:
+        """The position servos' targets for joint values `q`: `q` itself, or with `carry_weight` set, `q` plus how far
+        the arm's own weight pulls each servo back there (its gravity torque over the servo's stiffness), so that the
+        arm stands where it is asked. Unhelped, a mobile Panda reaching in tilted sagged 9 mm and closed its fingers
+        on an apple below its middle, and the apple rolled off the pads."""
+        if not self.carry_weight:
+            return q
+        m, d = self.ik.model, self.ik.data
+        self.ik.point(self.chain, q)
+        d.qvel[:] = 0.0
+        mujoco.mj_rne(m, d, 0, self._bias)
+        out = np.array(q, float)
+        for i, (j, a) in enumerate(zip(self.joints, self.actuators, strict=True)):
+            kp = -float(m.actuator_biasprm[a, 1]) * abs(float(m.actuator_gear[a, 0]))
+            if int(m.actuator_biastype[a]) == mujoco.mjtBias.mjBIAS_AFFINE and kp > 0:
+                out[i] += self._bias[m.jnt_dofadr[j]] / kp
+        return out
 
     def _plan_move(self, wp: Waypoint, start: np.ndarray) -> Waypoint:
         """Work out how a move to a tool position goes, as it starts with the tool at `start`: which way round the
