@@ -111,6 +111,22 @@ def test_things_on_a_conveyor_ride_at_its_speed_for_as_long_as_it_runs(pg):
     assert pg.state()["mechanisms"]["belt"]["speed_m_s"] == -0.1
 
 
+def test_a_box_rides_at_the_belt_speed_behind_a_queue_at_the_stop(pg):
+    """Ten boxes held at a stop rub on the belt with their weight: with a soft drive (200 N per m/s) the belt, and a
+    box still riding on it, went 37% slow."""
+    pg.add_object("belt", shape="conveyor", size=[2.0, 0.12, 0.6], pos=[0, 0], speed=0.1)
+    pg.add_object("stop", shape="box", size=[0.03, 0.14, 0.06], pos=[0.97, 0.0, 0.63], fixed=True, color="yellow")
+    for i in range(10):
+        pg.add_object(f"held{i}", shape="box", size=[0.05] * 3, pos=[0.927 - 0.0505 * i, 0.0, 0.626], color="red")
+    pg.add_object("rider", shape="box", size=[0.05] * 3, pos=[-0.9, 0.0, 0.626], color="blue")
+    pg.run_fast(lambda: False, 1.0)
+    x0 = float(pg.session.data.body("rider").xpos[0])
+    pg.run_fast(lambda: False, 3.0)
+    speed = (float(pg.session.data.body("rider").xpos[0]) - x0) / 3.0
+    assert speed == pytest.approx(0.1, rel=0.03)
+    assert float(pg.session.data.body("held0").xpos[0]) == pytest.approx(0.927, abs=0.005)  # still at the stop
+
+
 def test_a_speed_is_only_for_conveyors(pg):
     with pytest.raises(ValueError, match="speed is a conveyor's belt speed"):
         pg.add_object("cube", shape="box", speed=0.2)

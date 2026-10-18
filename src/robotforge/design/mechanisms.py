@@ -40,7 +40,10 @@ MATTE = "prop_matte"
 # frame by the same amount, never more past either end than this.
 BELT_WRAP = 0.015  # m
 BELT_THICK = 0.01  # m
-CONVEYOR_KV = 200.0  # N per m/s: the drive holds its speed under a few kilos of boxes within a centimetre a second
+# N per m/s: the drive's stiffness. Things held against a stop rub on the belt with all their weight (0.74 N for each
+# of the factory's 75 g boxes): at 200 the belt ran 40% slow behind a queue of 16, and everything still riding with
+# it. A velocity servo is integrated implicitly (implicitfast), so a stiff one stays stable (see the force limit).
+CONVEYOR_KV = 10000.0
 BUTTON_TRAVEL = 0.008  # m a button goes down
 PRESSED_AT = 0.6  # fraction of its travel past which a button reads as pressed
 
@@ -501,8 +504,8 @@ def _conveyor(spec: mujoco.MjSpec, carcass: mujoco.MjsBody, name: str, size: lis
     act.set_to_velocity(kv=CONVEYOR_KV)
     act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
     act.ctrlrange = [-0.5, 0.5]
-    act.forcelimited = mujoco.mjtLimited.mjLIMITED_TRUE
-    act.forcerange = [-150.0, 150.0]
+    # No force limit: clipped, the force no longer follows the speed error the implicit integrator counts on, and the
+    # stiff drive chattered between full push and full pull, the belt standing still at a set 0.05 m/s.
 
 
 # ---- rope and cloth (MuJoCo composites and flex) ---------------------------------------------------------
