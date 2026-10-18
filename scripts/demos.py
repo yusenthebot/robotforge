@@ -379,6 +379,21 @@ def _follow_level(robot: str, offset: tuple[float, float, float], ease: float = 
     """
 
 
+# Legged robots on rough ground (G8): the quadrupeds in their lanes (screenshots.py) and the humanoids walking.
+
+
+def _humanoids(pg: Any) -> None:
+    pg.add_robot("g1", library="g1", pos=[0.0, 0.9])
+    pg.add_robot("t1", library="t1", pos=[0.0, -0.4])
+    pg.add_robot("op3", library="op3", pos=[0.0, -1.3])
+
+
+def _humanoids_walk(pg: Any) -> None:
+    pg.behaviors.move("g1", 0.45, 0.5)  # a circle of about 0.9 m radius
+    pg.behaviors.move("t1", 0.1, 0.0)
+    pg.behaviors.move("op3", 0.09, 0.0)
+
+
 DEMOS = [
     Demo(
         "gallery_tour",
@@ -510,6 +525,30 @@ DEMOS = [
         timeline=[(0.5, S._press("train"))],
         page=S._lesson("learn_to_walk"),
         settle=0.5,
+    ),
+    Demo(  # four quadrupeds up and down 8 cm stairs they see, each in its own lane
+        "legged_stairs",
+        S._lanes("stairs", S.LANE_STAIRS, 2.0),
+        17.0,
+        timeline=[(0.5, S._move_all(0.3))],
+        page="window.__robotforge.select(null);" + _follow("a1", (-2.4, -3.3, 1.9), ease=0.04),
+        settle=1.0,
+    ),
+    Demo(  # and across 3.5 cm gravel
+        "legged_gravel",
+        S._lanes("rough", S.LANE_GRAVEL, 3.0, style="rock"),
+        15.0,
+        timeline=[(0.5, S._move_all(0.35))],
+        page="window.__robotforge.select(null);" + _follow("a1", (-2.4, -3.3, 1.9), ease=0.04),
+        settle=1.0,
+    ),
+    Demo(  # the humanoids: G1 on its learned walk round a circle, T1 and OP3 on the balance controller
+        "legged_humanoids",
+        _humanoids,
+        16.0,
+        timeline=[(0.5, _humanoids_walk)],
+        page="window.__robotforge.select(null);" + _orbit((0.3, 0.7, 0.5), 5.0, 1.4, 15.0, -30.0, 16.0),
+        settle=1.0,
     ),
     # The factory: the belt brings boxes to the stop, the camera says their colors, the suction cup sorts them (the
     # sorter of scripts/factory_bench.py, in real time). Close on the arm, so the cup is seen taking hold.
