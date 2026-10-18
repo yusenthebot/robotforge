@@ -1100,6 +1100,21 @@ class BehaviorManager:
     def floor_map(self, robot: str, data: mujoco.MjData, carrying: str | None = None) -> nav_map.NavMap:
         """Where the robot's middle may go on the floor, as a trip would plan it now, with the robot as posed in
         `data` (its arm tucked in, a load in its gripper): for where to stand to work (fetch.py)."""
+        return self._fetch_planner(robot, data, carrying, None).map(data)
+
+    def way_from(
+        self, robot: str, data: mujoco.MjData, to: str | list[float], carrying: str | None = None
+    ) -> tuple[navigation.Plan, nav_map.NavMap]:
+        """The trip to `to` from where the robot stands in `data` (posed elsewhere, its arm tucked, a load in its
+        gripper) and the map it is planned on; raises navigation.NoWay, saying why, if there is none: for a spot to
+        pick something up from that the robot can then leave with it (fetch.py)."""
+        planner = self._fetch_planner(robot, data, carrying, to)
+        plan = planner.plan(data)
+        return plan, planner.last_map
+
+    def _fetch_planner(
+        self, robot: str, data: mujoco.MjData, carrying: str | None, to: str | list[float] | None
+    ) -> navigation.Planner:
         model = self.session.model
         kind = self.kind(robot)
         ctrl = self._mobile_controller(robot, kind, create=False)
@@ -1111,10 +1126,13 @@ class BehaviorManager:
         if carrying is not None:
             load = self._body(carrying)
             body = nav_map.with_load(model, data, robot, body, load)
-        x, y = data.xpos[self._root_body(robot)][:2]
-        here = navigation.Destination((float(x), float(y)))
-        planner = navigation.Planner(model, robot, body, here, None, self._layers(self.session.version), carried=load)
-        return planner.map(data)
+        if to is None:
+            x, y = data.xpos[self._root_body(robot)][:2]
+            destination = navigation.Destination((float(x), float(y)))
+        else:
+            destination = self._destination(robot, to, model, data)
+        layers = self._layers(self.session.version)
+        return navigation.Planner(model, robot, body, destination, None, layers, carried=load)
 
     def _pick_out_of_reach(
         self,

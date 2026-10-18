@@ -68,6 +68,8 @@ ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm re
 LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on, creeping the rest
 LEG_RETRIES = 2  # trips planned again from where the robot got stuck, in one errand
 REPLANS = 2  # spots looked for again from where the robot stopped, in one errand
+CLEAR_AFTER = 0.12  # m the hand rises straight up off a load it put down before it folds back
+LEAVE_TURN = math.radians(35.0)  # a robot with no room to turn sets off at most this far off its heading (_can_leave)
 CREEP_SPEED, CREEP_TURN = 0.08, 0.5  # m/s and rad/s at most, creeping
 CREEP_SECONDS = 12.0
 STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm did not reach
@@ -214,6 +216,17 @@ class Stand:
             else:
                 self._out[key] = max(_reach_out(self.arm, z, yaw + turn) for turn in ways)
         return self._out[key]
+
+    def posed(self, xy, heading: float, load: int = -1) -> mujoco.MjData:
+        """A copy of the world with the robot at `xy` and `heading`, the arm tucked, and `load` in its gripper."""
+        d = mujoco.MjData(self.model)
+        d.qpos[:] = self.qpos_at(xy, heading)
+        joint = int(self.model.body_jntadr[load]) if load > 0 else -1
+        if joint >= 0 and int(self.model.jnt_type[joint]) == mujoco.mjtJoint.mjJNT_FREE:
+            adr = int(self.model.jnt_qposadr[joint])
+            d.qpos[adr : adr + 3] = self.hold_at(xy, heading)
+        mujoco.mj_kinematics(self.model, d)
+        return d
 
     def rehearse(self, xy, heading: float, tilt: float, plan: Callable[[np.ndarray], None]) -> bool:
         """Whether `plan(hold)` (queueing a pick or a put on the arm, `hold` the tool point it holds a load at over
@@ -643,11 +656,14 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     center = np.array(data.xpos[body], float)
     pick: Spot | None = None
 
+    place_to = _place_to(place, target)
+
     def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
         def queue(hold: np.ndarray) -> None:
             _pick(stand.hand, target, half, hold, tilt, stand.hold_q, radius)
 
-        return stand.rehearse(xy, heading, tilt, queue)
+        # And it can leave with the load from there.
+        return stand.rehearse(xy, heading, tilt, queue) and _can_leave(manager, stand, xy, heading, obj, body, place_to)
 
     here = None if holds else stand.grip(start, heading, center, APPROACH_UP, (0.0, *stand.hand.tilts))
     if not holds and (here is None or not pick_from(start, heading, center, here)):
@@ -700,6 +716,30 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     return Errand(manager, robot, arm, obj, body, half, radius, hold_local, hold_q, pick, drop, place, held=holds)
 
 
+def _can_leave(manager: BehaviorManager, stand: Stand, xy, heading: float, obj: str, body: int, to) -> bool:
+    """Whether the robot standing at `xy` and `heading` with the load folded over it finds a way to `to`, and can set
+    off on it: turning on the spot only where it has room to (the load makes it wider), else along its way or straight
+    back. Facing the island in the aisle behind it, a mobile Panda found a way planned that began with a turn it had
+    no room for once it held the apple, and never got out."""
+    try:
+        plan, nav = manager.way_from(stand.robot, stand.posed(xy, heading, body), to, carrying=obj)
+    except NoWay as exc:
+        log.info("%s would have no way from [%.2f, %.2f] with the %s: %s", stand.robot, xy[0], xy[1], obj, exc)
+        return False
+    ahead = next((p for p in plan.points[1:] if math.dist(p, plan.points[0]) > 0.05), None)
+    if ahead is None:
+        return True
+    turn = abs(_wrap(math.atan2(ahead[1] - plan.points[0][1], ahead[0] - plan.points[0][0]) - heading))
+    cell = nav.grid.cell(float(plan.points[0][0]), float(plan.points[0][1]))
+    roomy = nav.grid.inside(*cell) and float(nav.room[cell]) >= nav.body.reach
+    return roomy or turn < LEAVE_TURN or turn > math.pi - LEAVE_TURN
+
+
+def _place_to(place: Place, target):
+    """Where a trip with the load heads for: the place's name, or its point."""
+    return place.name if not place.name.startswith("[") else [float(v) for v in place.region["center"][:2]]
+
+
 def _spot_from_here(errand: Errand, data: mujoco.MjData, picking: bool) -> Spot | None:
     """Another spot to pick the load up from (or to put it down on its spot on the place from), looked for from where
     the robot stands now, as plan() looks for the first."""
@@ -715,10 +755,14 @@ def _spot_from_here(errand: Errand, data: mujoco.MjData, picking: bool) -> Spot 
     if picking:
         center = np.array(data.xpos[errand.body], float)
 
+        place_to = _place_to(errand.place, None)
+
         def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
-            return stand.rehearse(
+            if not stand.rehearse(
                 xy, heading, tilt, lambda hold: _pick(stand.hand, target, half, hold, tilt, stand.hold_q, radius)
-            )
+            ):
+                return False
+            return _can_leave(manager, stand, xy, heading, errand.obj, errand.body, place_to)
 
         nav = manager.floor_map(errand.robot, _posed(model, data, arm, errand.hold_q))
         reach = _reachable_cells(nav, start)
@@ -1250,7 +1294,20 @@ class Errand:
             return
         self.held = False
         self.placed_at = [round(float(v), 3) for v in data.xpos[self.body]]
+        # Straight up off what it put down first: folding back from just over it, a Panda's wrist knocked a cup it
+        # had put on the table onto the floor.
+        self.arm.sync(data)
+        start = self.arm.tool_target_end()
+        up = start + [0.0, 0.0, CLEAR_AFTER]
+        if self.arm.reach_error(up) <= REACH_TOL:
+            self.arm.queue.append(Waypoint(up, None, self.arm._time(start, up), "rise", turn=0.0))
+            self.step = "clearing"
+            return
         self._begin_tuck(t, data, "tucking_after")
+
+    def _on_clearing(self, t: float, data: mujoco.MjData) -> None:
+        if self.arm.done:
+            self._begin_tuck(t, data, "tucking_after")
 
     def _on_tucking_after(self, t: float, data: mujoco.MjData) -> None:
         if self.arm.done:
@@ -1363,6 +1420,22 @@ class Errand:
         walker.command(0.0, 0.0)
         return True
 
+    def _leaves(self, data: mujoco.MjData) -> bool:
+        """Whether the robot, where it stands, would find a way to the place with the load folded over it."""
+        model = self.manager.session.model
+        self.arm.sync(data)
+        stand = Stand(model, data, self.robot, self.arm, self.hold_q, self.body)
+        stand.hold_local = self.hold
+        root = self.manager.root(self.robot)
+        rot = data.xmat[root].reshape(3, 3)
+        heading = math.atan2(rot[1, 0], rot[0, 0])
+        xy = data.xpos[root][:2].copy()
+        try:
+            return _can_leave(self.manager, stand, xy, heading, self.obj, self.body, _place_to(self.place, None))
+        except (FetchError, ValueError) as exc:
+            log.info("%s: could not check the way out: %s", self.robot, exc)
+            return True
+
     def _begin_tuck(self, t: float, data: mujoco.MjData, step: str) -> None:
         if self._unstick(data, lambda t, d: self._begin_tuck(t, d, step)):
             return
@@ -1395,6 +1468,12 @@ class Errand:
 
     def _start_pick(self, t: float, data: mujoco.MjData) -> None:
         if self._unstick(data, self._start_pick):
+            return
+        if self.pick is not None and not self._leaves(data):
+            # Stopped turned across the aisle it came into (68 degrees off): no way out with the load from there.
+            if self._again(t, data, self.pick, "to_object"):
+                return
+            self._fail(data, "stuck", f"from where it stopped it could not leave with the {self.obj}")
             return
         self.arm.sync(data)
         center = np.array(data.xpos[self.body], float)
