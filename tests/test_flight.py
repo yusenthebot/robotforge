@@ -260,6 +260,50 @@ def test_rotor_parts_are_bolted_on_and_thrust_is_for_rotors():
         builder.parse({"parts": [{"name": "w", "shape": "wheel", "size": [0.1, 0.02], "thrust": 5}]})
 
 
+# ---- library aircraft (offline stand-ins in tests/fixtures/menagerie) -------------------------------------
+
+
+@pytest.fixture
+def library_pg(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(Path(__file__).parent / "fixtures" / "menagerie"))
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("air")
+    return playground
+
+
+def test_the_skydio_x2_flies_on_its_own_four_thrust_motors(library_pg):
+    from robotforge.design import library
+
+    assert library.get("Skydio X2").kind == "aircraft"
+    out = library_pg.add_robot("x2", library="skydio_x2")
+    assert any("Skydio X2 from MuJoCo Menagerie (Apache-2.0" in n for n in out["notes"])
+    robot = library_pg.behaviors.robots()[0]
+    assert robot["kind"] == "aircraft" and robot["model"] == "Skydio X2"
+    assert robot["flight"]["rotors"] == 4 and robot["flight"]["thrust_to_weight"] == pytest.approx(4.0, rel=0.02)
+    fc = FlightController(library_pg.session.model, "x2")
+    assert [r.name for r in fc.frame.rotors] == ["thrust1", "thrust2", "thrust3", "thrust4"]
+    assert [r.spin for r in fc.frame.rotors] == [1, -1, 1, -1]  # from the signs of the model's reaction torques
+    trip = library_pg.behaviors.navigate("x2", [[0, 0, 1.5], [1.5, 1.0, 1.5]], None, None, 30)
+    library_pg.run_fast(lambda: trip.done, 31)
+    result = trip.result()
+    assert result["arrived"], result
+    assert np.linalg.norm(np.subtract(result["position"], [1.5, 1.0, 1.5])) < 0.08
+
+
+def test_the_crazyflie_gets_its_real_rotors_and_flies(library_pg):
+    out = library_pg.add_robot("cf", library="crazyflie")
+    assert any("stand in for the model's body_thrust" in n for n in out["notes"])
+    names = [mujoco.mj_id2name(library_pg.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in range(4)]
+    assert names == ["cf/m1", "cf/m2", "cf/m3", "cf/m4"]
+    trip = library_pg.behaviors.navigate("cf", [[0, 0, 1.0], [1.0, 0.0, 1.0], [1.0, 0.0, 0.0]], None, None, 30)
+    library_pg.run_fast(lambda: trip.done, 31)
+    result = trip.result()
+    assert result["arrived"] and result["landed"], result
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
