@@ -112,14 +112,17 @@ def lift_picker() -> dict[str, Any]:
             {
                 "name": "lift",
                 "at": "top",
-                "shift": [0.1, 0, 0.002],
-                "joint": {"type": "slide", "axis": "z", "range": [0, 0.26]},  # 4 cm stay in the sleeve
+                # Its foot sits down in the chassis, above the casters, so it rises 0.33 m and 4 cm stay in the
+                # sleeve: at 0.26 the arm reached a kitchen island's apple only at the top of the column and could not
+                # lift it off.
+                "shift": [0.1, 0, -0.068],
+                "joint": {"type": "slide", "axis": "z", "range": [0, 0.33]},
                 # 2:1 gives 80 N for the 2 kg it lifts and 0.25 m/s, so it keeps up with the arm (at 3:1 it lagged
                 # behind and the arm carried the cube low, into the table it was going to).
                 "actuator": {"model": "belt_rail", "gear": 2},
                 "shape": "box",
-                "size": [0.085, 0.085, 0.31],
-                "mass": 0.4,  # an aluminium tube, not a solid block
+                "size": [0.085, 0.085, 0.38],
+                "mass": 0.5,  # an aluminium tube, not a solid block
                 "direction": "up",
                 "color": STEEL,
             },

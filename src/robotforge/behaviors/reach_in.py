@@ -17,6 +17,7 @@ OutOfReach or ValueError, as ArmMotion's own do.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 
 import mujoco
 import numpy as np
@@ -94,6 +95,12 @@ class Hand:
         `starts`, then from `restarts` random settings (the base turned toward the point). Reaching over a counter
         whose top is level with its shoulder, a Panda's IK from its own pose put its elbow into the counter; the
         elbow-up pose that clears it came from a restart."""
+        return next(self._solutions(point, turns, starts, restarts), None)
+
+    def _solutions(
+        self, point: np.ndarray, turns: list[np.ndarray], starts: list[np.ndarray], restarts: int = 0
+    ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """The answers solve looks through, in turn, one per start that works out."""
         arm = self.arm
         rng = np.random.default_rng(0)
         seed = arm._seed(point)
@@ -107,22 +114,32 @@ class Hand:
                         start[arm.yaw] = seed[arm.yaw]
                 q, err = arm.ik.solve(arm.chain, point, start, iterations=60, rotation=turn)
                 if err <= REACH_TOL and self._off(q, turn) <= ROT_TOL and self._clear(q):
-                    return q, turn
-        return None
+                    yield q, turn
 
     def reaches(self, point: np.ndarray, tilt: float, lift: float) -> bool:
         """Whether the arm reaches `point` with the hand tilted, from where it comes in and up `lift` above: a quick
         check for searches (from the pose it is in, the last answer and with its base turned toward the point)."""
         arm = self.arm
         turns = self.turns(tilt, self.toward(point))
-        starts = [arm.q, arm._seed(point), *(() if arm._warm is None else (arm._seed(point, arm._warm),))]
-        found = self.solve(point, turns, starts, QUICK_RESTARTS)
-        if found is None:
-            return False
-        q, turn = found
-        arm._warm = q
+        # Also from its home pose turned toward the point: from its pose tucked over the robot, a lift picker's quick
+        # check found no tilted pose over an apple on an island that it reached from home.
+        starts = [arm.q, arm._seed(point), arm._seed(point, arm.home)]
+        if arm._warm is not None:
+            starts.append(arm._seed(point, arm._warm))
         come_in = point - self.axis(tilt, self.toward(point)) * IN
-        return all(self.solve(p, [turn], [q]) is not None for p in (point + [0.0, 0.0, lift], come_in))
+        # Both the way the pick and the put go, knot by knot from the pose at the point (_path), from each answer
+        # in turn: from its pose tucked over the robot, a lift picker's IK put its hand over an apple on an island in
+        # a pose from which it could not lift it, and from home in one it could; and solved in one jump, a lift
+        # picker with its column near the top found no pose 7 cm over an apple it then lifted along the path.
+        for q, turn in self._solutions(point, turns, starts, QUICK_RESTARTS):
+            try:
+                for p in (point + [0.0, 0.0, lift], come_in):
+                    self._path(q, point, turn, p, turn)
+            except OutOfReach:
+                continue
+            arm._warm = q
+            return True
+        return False
 
     # ---- the moves ------------------------------------------------------------------------------------
 
