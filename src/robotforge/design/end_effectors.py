@@ -184,9 +184,12 @@ def _magnet(holder: mujoco.MjsBody, tool: ToolSpec, vis: Visuals, name: str) -> 
         mass=0.25,
     )
     core_body = holder.add_body(name=f"{name}_core", pos=[0, 0, face])
+    # Square, under its round look: a box face meets a flat face in contacts at its corners, which share the pull
+    # evenly. As a disc it held 5.25 kg of a 150 N pull; as a square it holds as the cup does for its pull.
+    side = tool.pad_half * 0.88
     core = core_body.add_geom(
-        type=GEOM.mjGEOM_CYLINDER,
-        size=[tool.pad_half, 0.002, 0],
+        type=GEOM.mjGEOM_BOX,
+        size=[side, side, 0.002],
         pos=[0, 0, -0.002],
         rgba=STEEL,
         mass=0.02,
