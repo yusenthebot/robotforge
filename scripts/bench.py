@@ -260,13 +260,32 @@ def load_budgets(path: Path) -> dict[str, dict[str, Any]]:
     return budgets
 
 
+LOAD_UNKNOWN = (
+    "load average unknown (this system keeps none, as Windows does not): only the machine check can say the machine"
+    " was slow"
+)
+
+
+def load_average() -> list[float] | None:
+    """The 1, 5 and 15 minute load averages, or None where the system keeps none (Windows)."""
+    try:
+        return [round(v, 1) for v in os.getloadavg()]
+    except (AttributeError, OSError):
+        return None
+
+
+def core_count() -> int:
+    return os.cpu_count() or 1
+
+
 def wait_for_calm(seconds: float) -> None:
     """Wait (at most `seconds`) until the last minute's load average drops below the number of cores."""
-    if not hasattr(os, "getloadavg"):
+    if load_average() is None:
+        print(f"not waiting for a calm machine: {LOAD_UNKNOWN}", file=sys.stderr)
         return
-    end, cores = time.monotonic() + seconds, os.cpu_count() or 1
-    while os.getloadavg()[0] >= cores and time.monotonic() < end:
-        print(f"waiting for a calm machine: load {os.getloadavg()[0]:.0f} on {cores} cores", file=sys.stderr)
+    end, cores = time.monotonic() + seconds, core_count()
+    while (load := load_average()) is not None and load[0] >= cores and time.monotonic() < end:
+        print(f"waiting for a calm machine: load {load[0]:.0f} on {cores} cores", file=sys.stderr)
         time.sleep(30)
 
 
@@ -363,8 +382,9 @@ def machine() -> dict[str, Any]:
         "mujoco": mujoco.__version__,
         "numpy": numpy.__version__,
     }
-    with contextlib.suppress(OSError, AttributeError):
-        info["load"] = [round(v, 1) for v in os.getloadavg()]
+    load = load_average()
+    if load is not None:  # left out where unknown: a record says only what was measured
+        info["load"] = load
     return info
 
 
@@ -1312,7 +1332,7 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
     if args.ab:
-        print(f"{args.ab} -> this tree ({git_sha()}), load {machine().get('load')}", flush=True)
+        print(f"{args.ab} -> this tree ({git_sha()}), load {machine().get('load', 'unknown')}", flush=True)
         ab_physics(args.ab, args.worlds or list(WORLDS), args.rounds)
         return 0
     try:  # before minutes of measuring: a budget on a metric that does not exist is a mistake to fix first
@@ -1334,7 +1354,7 @@ def main(argv: list[str] | None = None) -> int:
     sha = git_sha()
     before_machine = machine()
     results, errors = run(sections, args.quick, args.shots, args.worlds)
-    load_after = [round(v, 1) for v in os.getloadavg()] if hasattr(os, "getloadavg") else None
+    load_after = load_average()
     record = {
         "started": started.isoformat(timespec="seconds"),
         "sha": sha,
@@ -1351,10 +1371,10 @@ def main(argv: list[str] | None = None) -> int:
     if against is not None and against.is_file():
         old = json.loads(against.read_text(encoding="utf-8"))
         before = flatten(old.get("results", {}))
-        then, here = old.get("machine", {}).get("load", ["?"])[0], before_machine.get("load", ["?"])[0]
+        then, here = old.get("machine", {}).get("load", ["unknown"])[0], before_machine.get("load", ["unknown"])[0]
         print(f"compared with {against.name} (load {then} then, {here} now)")
     compared = compare(now, before)
-    cores = os.cpu_count() or 1
+    cores = core_count()
     loads = [load[0] for load in (before_machine.get("load"), load_after) if load]
     busy = busy_reason(loads, cores, now, budget_spec)
     budgets = check_budgets(now, budget_spec, ran, busy is not None)
@@ -1366,6 +1386,8 @@ def main(argv: list[str] | None = None) -> int:
             " check, a faster one speeds it as much: where the check moved more than a quarter, the change leans that"
             " way and needs 25 percent to count"
         )
+    if not loads:
+        print(f"\nnote: {LOAD_UNKNOWN}")
     if busy:
         print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")
     over = [b for b in budgets if b["status"] == "over"]

@@ -199,12 +199,19 @@ def test_a_partial_or_quick_run_is_never_the_previous_run(bench, tmp_path):
     assert bench.missing_parts(stub["results"])[:4] == ["install", "imports", "viewer", "mcp"]
 
 
-def _fake_main(bench, monkeypatch, results: dict, load: float = 1.0):
+CORES = 8  # the cores main() is told the machine has: what it measures is stubbed, never this runner's
+
+
+def _fake_main(bench, monkeypatch, results: dict, load: float | None = 1.0):
+    """main() over `results` on a machine of CORES cores at `load` (None: a system that keeps no load average, as
+    Windows does not), whatever machine runs the test and however busy it is."""
     errors = [f"{part}: {found['error']}" for part, found in results.items() if "error" in found]  # as run() says
+    loads = None if load is None else [load, load, load]
     monkeypatch.setattr(bench, "run", lambda sections, quick, shots, worlds=None: (results, errors))
     monkeypatch.setattr(bench, "git_sha", lambda: "abc1234")
-    monkeypatch.setattr(bench, "machine", lambda: {"load": [load, load, load]})
-    monkeypatch.setattr(bench.os, "getloadavg", lambda: (load, load, load))
+    monkeypatch.setattr(bench, "machine", lambda: {} if loads is None else {"load": loads})
+    monkeypatch.setattr(bench, "load_average", lambda: loads)
+    monkeypatch.setattr(bench, "core_count", lambda: CORES)
 
 
 def test_a_partial_run_neither_replaces_a_complete_one_nor_becomes_the_baseline(bench, tmp_path, monkeypatch, capsys):
@@ -278,10 +285,13 @@ def test_exit_codes_say_over_busy_or_unchecked(bench, tmp_path, monkeypatch, cap
     assert "UNMEASURED  mcp.idle_cpu_pct" in capsys.readouterr().out
 
 
-def test_a_slower_robotforge_is_over_budget_not_a_busy_machine(bench, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("load", [5.0, None])
+def test_a_slower_robotforge_is_over_budget_not_a_busy_machine(bench, tmp_path, monkeypatch, capsys, load):
     """One extra mj_forward per step in Session.step: objects_20 and the dog ran at half their speed while the
     machine check, in the same processes, stayed above its floor. That is a regression (exit 1), not a busy
-    machine (3). Numbers from that run at load 14; floors from the real budget.json."""
+    machine (3). Numbers from that run (load 14 on 18 cores, here 5 on CORES); floors from the real budget.json.
+    Where the load average is unknown (Windows) the machine check alone tells, and the run says so. (On Ubuntu CI
+    the load it read was its own, 5 on 4 cores, and the run came out busy.)"""
     real = json.loads(BUDGET.read_text(encoding="utf-8"))["budgets"]
     names = ("physics.objects_20.steps_per_s", "physics.dog_idle.steps_per_s", bench.MACHINE)
     budget = tmp_path / "budget.json"
@@ -291,15 +301,29 @@ def test_a_slower_robotforge_is_over_budget_not_a_busy_machine(bench, tmp_path, 
     found["physics"]["objects_20.steps_per_s"] = m(5780, "steps/s", "higher")
     found["physics"]["dog_idle.steps_per_s"] = m(32581, "steps/s", "higher")
     found["physics"]["machine.steps_per_s"] = m(175665, "steps/s", "higher")
-    _fake_main(bench, monkeypatch, found, load=5.0)
+    _fake_main(bench, monkeypatch, found, load=load)
     assert bench.main(["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]) == 1
     out = capsys.readouterr().out
     assert "OVER BUDGET  physics.objects_20.steps_per_s" in out and "OVER BUDGET  physics.dog_idle.steps_per_s" in out
     assert "INCONCLUSIVE" not in out and "busy" not in out
+    assert ("load average unknown" in out) == (load is None)
     # The same speeds with the machine check under its floor: then the machine was slow, and nobody can tell
     found["physics"]["machine.steps_per_s"] = m(120000, "steps/s", "higher", slowest="objects_20")
     assert bench.main(["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]) == 3
     assert "the machine check ran 120,000 steps/s, under its floor" in capsys.readouterr().out
+
+
+def test_a_system_without_a_load_average_runs_and_says_it_is_unknown(bench, monkeypatch, capsys):
+    """Regression: Windows has no os.getloadavg. The bench reads the load as unknown there, records none, and does
+    not wait for a calm machine it cannot see."""
+    monkeypatch.delattr(bench.os, "getloadavg", raising=False)
+    assert bench.load_average() is None
+    assert "load" not in bench.machine()
+    monkeypatch.setattr(bench.time, "sleep", lambda s: pytest.fail("waited for a load it cannot read"))
+    bench.wait_for_calm(60)
+    assert "load average unknown" in capsys.readouterr().err
+    monkeypatch.setattr(bench.os, "getloadavg", lambda: (3.14, 2.0, 1.0), raising=False)
+    assert bench.load_average() == [3.1, 2.0, 1.0]
 
 
 def test_a_budget_on_a_metric_that_does_not_exist_stops_the_run(bench, tmp_path, monkeypatch, capsys):
