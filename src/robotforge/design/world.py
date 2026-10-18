@@ -44,6 +44,12 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _unset(value: object) -> bool:
+    """For fields added after worlds were first saved: left out of a world.yaml while unset, so a world that does not
+    use them saves exactly as it did."""
+    return value is None
+
+
 def _check_name(value: str) -> str:
     if not NAME_RE.match(value):
         raise ValueError(
@@ -76,7 +82,7 @@ class RobotEntry(_Strict):
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
     # What its arm holds with, whatever the arm came with: "suction" (a suction cup), "magnet" (an electromagnet),
     # or "gripper" (the arm's own fingers); None keeps it as built. See end_effectors.py.
-    end_effector: str | None = None
+    end_effector: str | None = Field(None, exclude_if=_unset)
 
     @field_validator("name")
     @classmethod
@@ -126,8 +132,10 @@ class ObjectEntry(_Strict):
     mass: float | None = Field(None, gt=0, description="kg; default from size and the material's density")
     fixed: bool = False
     # What a loose box, ball or can is made of: its default mass, and steel is what an electromagnet holds.
-    material: Literal["plastic", "wood", "steel"] | None = None
-    speed: float | None = Field(None, ge=-0.5, le=0.5, description="m/s a conveyor's belt runs at (conveyors only)")
+    material: Literal["plastic", "wood", "steel"] | None = Field(None, exclude_if=_unset)
+    speed: float | None = Field(
+        None, ge=-0.5, le=0.5, description="m/s a conveyor's belt runs at (conveyors only)", exclude_if=_unset
+    )
 
     @model_validator(mode="before")
     @classmethod

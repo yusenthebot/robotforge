@@ -13,7 +13,7 @@ from robotforge.behaviors import operate
 from robotforge.behaviors.arm import ArmMotion, servo_stiffness, servo_targets
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.design import mechanisms as design
-from robotforge.design.world import ObjectEntry, World, compile_world
+from robotforge.design.world import ObjectEntry, RobotEntry, World, compile_world
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim import mechanisms
@@ -182,6 +182,24 @@ def test_too_small_a_mechanism_is_refused_with_the_smallest_it_can_be():
     mujoco.mj_resetDataKeyframe(model, data, 0)
     mujoco.mj_step(model, data, 250)
     assert np.isfinite(data.qpos).all()
+
+
+def test_the_new_fields_are_saved_only_when_set():
+    """A world that uses no end effector, belt speed or material saves exactly as it did before they existed (old
+    world.yaml files and the tests that read them stay as they were); one that sets them keeps them."""
+    plain = World(robots=[RobotEntry(name="arm", template="arm")], objects=[ObjectEntry(name="cube", shape="box")])
+    text = plain.to_yaml()
+    assert "end_effector" not in text and "speed" not in text and "material" not in text
+    used = World(
+        robots=[RobotEntry(name="arm", template="arm", end_effector="suction")],
+        objects=[
+            ObjectEntry(name="belt", shape="conveyor", speed=0.2),
+            ObjectEntry(name="nut", shape="box", material="steel"),
+        ],
+    )
+    again = World.from_yaml(used.to_yaml())
+    assert again.robots[0].end_effector == "suction"
+    assert again.objects[0].speed == 0.2 and again.objects[1].material == "steel"
 
 
 def test_a_speed_is_only_for_conveyors(pg):
