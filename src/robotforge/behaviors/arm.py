@@ -514,10 +514,67 @@ class ArmMotion:
         return q
 
     def move_to(self, target, gripper: str | None = None, from_point: np.ndarray | None = None) -> None:
+        """Queue a move of the tool to `target`. An arm riding on a robot, setting off from rest, goes over that robot
+        where the plain way would run into it (see _way_over)."""
         target = np.asarray(target, float)
         start = from_point if from_point is not None else self.tool_target_end()
+        if self._rides and from_point is None and self.done:
+            over = self._way_over(start, target)
+            if over:
+                self.queue.extend([replace(over[0], gripper=self._grip(gripper)), *over[1:]])
+                return
         dist = float(np.linalg.norm(target - start)) if start is not None else 0.2
         self.queue.append(Waypoint(target, self._grip(gripper), max(0.5, dist / SPEED), "move"))
+
+    def _way_over(self, start: np.ndarray, target: np.ndarray) -> list[Waypoint]:
+        """For an arm riding on a robot: nothing when a plain move from `start` to `target` keeps off that robot (see
+        _plain_clear); else up, across and down at the lowest height, CARRY_RAISE steps above both, where it keeps off
+        it all the way (see _goes_down_clear and _follows_clear). Raises ValueError when no height up to CARRY_RAISES
+        steps works. Swung low round the front from its left to its right, a Z1 on Spot caught its gripper on the
+        dog's front leg and stopped 67 cm short."""
+        if self._plain_clear(start, target):
+            return []
+        low = max(float(start[2]), float(target[2]))
+        for k in range(1, CARRY_RAISES + 1):
+            z = low + k * CARRY_RAISE
+            a, b = np.array([start[0], start[1], z]), np.array([target[0], target[1], z])
+            if self._lean_error(a) > REACH_TOL or self._lean_error(b) > REACH_TOL:
+                continue
+            if not (self._goes_down_clear(a, start) and self._goes_down_clear(b, target)):
+                continue
+            turn = self._path_turn(a, b) if self.yaw is not None else 0.0
+            if not (self._reaches_around(a, b, False, turn) and self._follows_clear(a, b, turn)):
+                continue
+            return [
+                Waypoint(a, None, self._time(start, a), "rise", tilt=True),
+                Waypoint(b, None, self._time(a, b), "move over", turn=turn, tilt=True),
+                Waypoint(target, None, self._time(b, target) + 0.3, "move", turn=0.0),
+            ]
+        raise ValueError(
+            f"{self.robot} cannot get to {[round(float(v), 3) for v in target]} without running into the robot "
+            f"carrying it, even going {CARRY_RAISES * CARRY_RAISE:.1f} m higher on the way; give a point on the same "
+            "side of that robot, or turn the robot"
+        )
+
+    def _plain_clear(self, start: np.ndarray, target: np.ndarray) -> bool:
+        """Whether a plain move from `start` to `target`, the arm at rest in the pose it is in, keeps off itself and
+        the robot carrying it as _plan_move makes it: round the base in a line where it can follow that, else joint by
+        joint. True where the arm cannot reach `target` at all: that is for the reach check to say."""
+        goal, err, restarted = self._solve(target)
+        if err > REACH_TOL:
+            return True
+        self.ik.point(self.chain, self.q)
+        axis0 = self.ik.data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
+        planned, self._turn = self._turn, (self._path_turn(start, target) if self.yaw is not None else None)
+        try:
+            steps = max(1, round(max(0.5, self._path_length(start, target) / SPEED) * self.rate_hz))
+            aim = lambda s: {"axis": (self.tool_axis, _turn_toward(axis0, DOWN, s))}  # noqa: E731
+            free = not restarted and float(axis0 @ DOWN) >= FAR_FROM_DOWN
+            if free and self._follow(self.q, start, target, steps, aim, clear=True)[1] <= REACH_TOL:
+                return True
+        finally:
+            self._turn = planned
+        return not any(self._collides(self.q + (goal - self.q) * s) for s in np.linspace(0, 1, 2 * FOLLOW_CHECKS + 1))
 
     def set_gripper(self, state: str, wait: float = 0.5) -> None:
         self.queue.append(Waypoint(None, self._grip(state), wait, f"gripper {state}"))
@@ -1041,7 +1098,7 @@ class ArmMotion:
         aim = self._aim(wp)
         if wp.turn is None:
             free = not restarted and float(self._axis0 @ self._axis1) >= FAR_FROM_DOWN
-            if not free or self._follow(self.q, start, wp.position, steps, aim)[1] > REACH_TOL:
+            if not free or self._follow(self.q, start, wp.position, steps, aim, clear=self._rides)[1] > REACH_TOL:
                 # The goal lies in another elbow or wrist branch, which no straight tool path reaches, the tool
                 # starts far from pointing where it should (an arm folded for driving), or the arm cannot follow the
                 # path from here (a scorpion's tail reaching behind it flips over its back, and going round with the

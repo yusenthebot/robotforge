@@ -511,6 +511,34 @@ def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
 # ---- a gripper on an arm a robot carries ----------------------------------------------------------------------------
 
 
+def test_an_arm_on_a_dog_moved_to_its_other_side_goes_over_the_dog(pg):
+    """Regression: move_arm swung a carried arm low round the dog in a line from one side to the other, into the dog:
+    a UR5e on ANYmal struck the dog's body with its wrist and stopped 71 cm from the target (a Z1 on Spot caught its
+    gripper on the front leg, 67 cm). It now rises, goes over and comes down, touching nothing of the dog."""
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+    _run(pg, 1.5)
+    pg.behaviors.move_arm("anymal/arm", [0.35, 0.45, 0.35])
+    _arm_done(pg, "anymal/arm")
+    target = np.array([0.35, -0.45, 0.35])
+    arm = pg.behaviors.move_arm("anymal/arm", target)
+    assert [wp.label for wp in arm.queue] == ["rise", "move over", "move"]
+    m, d = pg.session.model, pg.session.data
+    dog = {b for b in range(m.nbody) if m.body(b).name.startswith("anymal/") and b not in arm._moving}
+    hits = set()
+    for _ in range(200):
+        _run(pg, 0.1)
+        for c in d.contact[: d.ncon]:
+            bodies = {int(m.geom_bodyid[g]) for g in c.geom}
+            if bodies & arm._moving and bodies & dog:
+                hits |= {m.body(b).name for b in bodies}
+        if arm.done:
+            break
+    _run(pg, 0.5)
+    assert not hits, hits
+    assert np.linalg.norm(d.site_xpos[arm.site] - target) < 0.03
+    assert pg.behaviors.pose("anymal")["upright"]
+
+
 def test_a_dog_carries_an_arm_and_the_gripper_on_its_flange_picks_a_cube(pg):
     """Regression: a gripper could go only on the flange of an arm added on its own. Spot with a UR5e and a Robotiq was
     refused ("mount it on an arm such as ur5e"), and at the wrist link the gripper was a robot of its own, listed as an

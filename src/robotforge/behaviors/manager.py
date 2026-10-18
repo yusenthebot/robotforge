@@ -1089,7 +1089,10 @@ class BehaviorManager:
             arm = self._arm_motion(name)
             if arm.reach_error(target) > REACH_TOL:
                 raise BehaviorError(self._out_of_reach(arm, target))
-            arm.move_to(target, gripper)
+            try:
+                arm.move_to(target, gripper)
+            except ValueError as exc:  # a riding arm with no way there that keeps off its carrier
+                raise BehaviorError(str(exc)) from exc
         return arm
 
     def _out_of_reach(self, arm: ArmMotion, target: np.ndarray) -> str:
