@@ -360,6 +360,14 @@ class Planner:
         d = self.destination
         return not d.name or d.onto or (d.terrain and self._point_is_free(nav))
 
+    def _on_mark(self, data: mujoco.MjData, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        """The cells over the destination's flat mark, kept a robot's reach in from its edges: a room's floor marker
+        has a dining table at its middle, and "go to the dining room" stopped at the doorway as 'inside the table'."""
+        boxes = [nav_map.world_extent(self.model, data, g) for g in self.destination.geoms]
+        low, high = np.min([b[0] for b in boxes], axis=0), np.max([b[1] for b in boxes], axis=0)
+        inset = self.body.reach
+        return (xs >= low[0] + inset) & (xs <= high[0] - inset) & (ys >= low[1] + inset) & (ys <= high[1] - inset)
+
     def _short_note(self, nav: NavMap, end: tuple[int, int], on_point: bool, away: np.ndarray | None) -> str:
         """Why the path ends short of where the robot was sent."""
         d, grid = self.destination, nav.grid
@@ -403,6 +411,8 @@ class Planner:
             # The nearest spot it can get to: free cells nearby can be out of reach too, on top of a wide block
             # (its top is level ground, with walls all round) or behind a wall.
             candidates = nav_grid.reachable(grid, nav.free, start) & (to_point <= self.body.reach + SNAP)
+            if d.onto and d.geoms:  # a wide mark (a room's floor): anywhere on it, its middle under a table or not
+                candidates = candidates | (nav_grid.reachable(grid, nav.free, start) & self._on_mark(data, xs, ys))
             if not candidates.any():  # nothing near it either: on a step it cannot climb, or deep in something
                 raise self._why_not(nav, start, to_point <= grid.res)
             nearest = float(to_point[candidates].min())
@@ -656,6 +666,7 @@ class Navigator:
     start_time: float
     deadline: float | None  # sim time it must be done by
     still_mine: Callable[[], bool] = lambda: True  # False once something else drives the robot
+    ready: Callable[[], bool] = lambda: True  # False while it waits to set off (its arm folding over it)
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
     backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
@@ -750,6 +761,10 @@ class Navigator:
             s, _ = self._project(xy)
             left = float(self._after[self._seg] - s)
             self._finish(t, "stopped", "out_of_time", f"it ran out of time with {left:.2f} m of its path to go")
+            return
+        if not self.ready():
+            self.walker.command(0.0, 0.0)
+            self._since = t  # waiting is not being stuck
             return
         if self.state == "facing":
             self._face(t, xy, yaw)

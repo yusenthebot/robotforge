@@ -131,3 +131,15 @@ Notes saying it could follow the handle only part of the way mean the same, part
 
 The factory (`load_scene("factory")`): a conveyor brings colored boxes to a stop next to an arm with a suction cup and a red, a green and a blue bin. `observe(view="top", find="red")` names the red boxes; `set_controls({"conveyor/speed": 0})` stops the belt while picking; `pick_and_place("arm", "box_3", "red_bin")` sorts one.
 Explain: a suction cup holds by pressing a flat face against it (air pressure), a magnet holds only steel, fingers hold by squeezing; the right tool depends on the thing.
+
+## 9. A robot dog with an arm around the house
+
+"去厨房把苹果拿到客厅的桌上", "打开抽屉把方块拿出来", "按一下按钮".
+
+1. `load_scene("home")`: a kitchen and a living room with a swing door between them; the starter robot is `go2_arm` (a Go2 with a PiPER) in the living room. The rugs name the rooms: `move(robot="go2_arm", to="kitchen")` walks there, pushing the door open on the way.
+2. `pick_and_place(robot="go2_arm/arm", object="apple", target="living_table")`: it walks to the kitchen table, picks the apple up, carries it folded over its back through the door and puts it on the living-room table. Check `success`, `went` and `driven_m`.
+3. `operate(robot="go2_arm/arm", target="chest", action="open")`: it walks to a spot beside the chest from which its arm follows the drawer all the way out, clear of it, and opens it (`stood_at`, `went`). Then `pick_and_place(robot="go2_arm/arm", object="block", target="kitchen_table")` takes the block out of the drawer.
+4. `operate(robot="go2_arm/arm", target="button", action="press")`: it walks over and presses the button on the side table; `observe()` shows `mechanisms.button.presses`.
+
+The same works with `mobile_panda` or `lift_picker` (wheeled bases with an arm) added to the home. Everything is low for a dog's arm (tables 0.36 m); taller arms reach the counter too.
+Explain: the base and the arm plan together. The robot picks where to stand from what the arm must reach, rehearses the whole job there first, and plans again where it really stops.

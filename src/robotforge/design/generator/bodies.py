@@ -30,6 +30,13 @@ SCHEMES: tuple[tuple[str, str], ...] = (
     ("#ef6f5e", "#23395d"),  # coral and navy
 )
 DARK = "#1d2026"
+HIP_SPACING = 2.0  # a quadruped's front and back hips at least this many leg (thigh) lengths apart
+HIP_WIDTH = 0.58  # and its left and right hips this many
+TORSO_WIDTH = (0.14, 0.16)  # m times the size: how wide a two-armed quadruped is (its torso is 0.13)
+ARM_BACK = 0.12  # an arm on a walker's back stands this share of its length behind the middle
+# Its gripper hangs forward over the head at home: on a robot 1.6 times the size a head that big was in its way.
+HEAD_UNDER_ARM = 0.08  # m, the largest head under an arm
+CARGO_TALL = 1.5  # a rover with an arm: its cargo box at most this many times as tall as the rover is long
 
 
 def r3(v: float) -> float:
@@ -131,9 +138,14 @@ def base_sensors(plan: Plan, lidar_at: Any = "top", camera: bool = False) -> lis
     return sensors
 
 
+TOOLS = {"suction": "suction_cup", "magnet": "magnet"}  # the templates that hold without fingers
+
+
 def gripper(hand: str, color: str, opening: float = 0.06) -> dict[str, Any]:
-    params: dict[str, Any] = {"color": color, "opening": opening}
-    return {"template": "gripper", "params": params}
+    """The hand on the end of a chain built from parts: the gripper template, or a suction cup or magnet."""
+    if hand in TOOLS:
+        return {"template": TOOLS[hand]}
+    return {"template": "gripper", "params": {"color": color, "opening": opening}}
 
 
 def arm_on_top(plan: Plan, look: Look, reach: float, shift: float, home: dict[str, float] | None = None):
@@ -168,12 +180,37 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     leg = r3(0.12 * plan.height * s)
     notes: list[str] = []
     spacing = r3(length - 0.06 * s)
-    if plan.height > 1.15 and spacing < 2 * leg:
-        # Measured: a dog 1.35 times as big with legs 1.4 times as long pitched over in 4 of 5 variations at
-        # 0.25 m/s; with its hips as far apart as a leg is long it walked every time.
-        spacing = r3(2 * leg)
+    if spacing < HIP_SPACING * leg:
+        # Hips closer than two leg lengths, the front and back feet step into each other: 2026-10-19 sweep
+        # (scripts/gen_bench.py sweep, 4 seeds, 0.25 m/s): body x0.6 and x0.7 walked 1 in 8, x0.8 4 in 8, x0.9 7 in
+        # 8, while every one with its hips two legs apart walked; a dog 1.35 times as big with legs 1.4 times as
+        # long pitched over in 4 of 5 variations until its body was lengthened.
+        asked = length
+        spacing = r3(HIP_SPACING * leg)
         length = r3(spacing + 0.06 * s)
-        notes.append(f"its body is {length:.2f} m long, so its long legs do not tip it over")
+        if length > asked * 1.03 and (plan.length < 1 or plan.height > 1):  # not for a seed's few percent
+            why = "its front and back feet would step into each other"
+            notes.append(
+                f"its body is {length:.2f} m long, not shorter: with its hips closer than two leg lengths {why}; "
+                "shorter legs make a shorter dog"
+                if plan.length < 1
+                else f"its body is {length:.2f} m long for its long legs: shorter, {why}"
+            )
+    narrowest, widest = TORSO_WIDTH
+    if plan.arms >= 2 and not narrowest * s <= width <= widest * s:
+        # Two arms hang from a torso as wide as a default dog: wider, its front thighs swung into them; narrower (x0.6
+        # or x0.8), it tipped over or barely walked (2026-10-19 sweep).
+        width = r3(min(max(width, narrowest * s), widest * s))
+        notes.append(
+            f"its body is {width:.2f} m wide: a two-armed dog is as wide as its torso, or it tips or kicks its arms"
+        )
+    if width < HIP_WIDTH * leg:
+        # Narrow and long-legged, it tips over sideways: legs x1.8 on a body x0.6 or x0.8 wide walked 1 in 6, x0.9
+        # wide 3 in 3; x1.6 legs walked from x0.7 wide (2026-10-19 sweep).
+        asked = width
+        width = r3(HIP_WIDTH * leg)
+        if width > asked * 1.03 and (plan.width < 1 or plan.height > 1):
+            notes.append(f"its body is {width:.2f} m wide, not narrower: on its long legs a narrower one tips over")
     hip_y = r3(width / 2)
     parts: list[dict[str, Any]] = [
         {
@@ -211,8 +248,9 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     base = {
         "shape": "box",
         "size": [length, width, thick],
-        "mass": r3(1.0 * s**3 * plan.length * plan.width),  # a shell over the battery, not a solid print
-        "sensors": base_sensors(plan),
+        # a shell over the battery, not a solid print, as heavy as it is long and wide
+        "mass": r3(1.0 * s * length / 0.3 * width / 0.14),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     return {"color": look.main, "base": base, "parts": parts}, notes
@@ -273,7 +311,7 @@ def insect(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "shape": "capsule" if look.round_head else "box",
         "size": [r3(width), r3(length - width)] if look.round_head else [length, width, thick],
         "mass": r3(0.9 * s**3 * plan.length * plan.width),
-        "sensors": base_sensors(plan),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     if look.round_head:
@@ -296,10 +334,15 @@ def spider(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "shape": "cylinder",
         "size": [diameter, r3(0.055 * s)],
         "mass": r3(0.9 * s**3 * plan.width**2),
-        "sensors": base_sensors(plan, camera=not plan.head),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     return {"color": look.main, "base": base, "parts": parts}, []
+
+
+def _headless(plan: Plan) -> bool:
+    """A camera on the base: there is no head (or torso with one) to carry the eyes."""
+    return not plan.head
 
 
 def _legged_dress(plan: Plan, look: Look, length: float, width: float, thick: float) -> list[dict[str, Any]]:
@@ -318,9 +361,10 @@ def _legged_dress(plan: Plan, look: Look, length: float, width: float, thick: fl
         out += torso_with_arms("top", shift, plan, look, riser=riser, raised=raised)
     else:
         if plan.arms == 1:
-            out.append(arm_on_top(plan, look, min(0.38 * s, 0.42), -length * 0.12))
+            out.append(arm_on_top(plan, look, min(0.38 * s, 0.42), -length * ARM_BACK))
         if plan.head:
-            out += head("base", [r3(length / 2 - 0.03 * s), 0, r3(thick / 2)], 0.07 * s, look, plan)
+            size = 0.07 * s if plan.arms == 0 else min(0.07 * s, HEAD_UNDER_ARM)
+            out += head("base", [r3(length / 2 - 0.03 * s), 0, r3(thick / 2)], size, look, plan)
     return out
 
 
@@ -404,8 +448,8 @@ def torso_with_arms(
         home=(0, -60, -50, 110) if raised else (0, -20, -110, 130),
         mirror=False,
     )
-    if plan.hand != "gripper":
-        arms[-1]["robot"]["params"]["end_effector"] = plan.hand
+    if plan.hand != "gripper":  # a suction cup or magnet on each wrist in place of the gripper
+        arms[-1]["robot"] = gripper(plan.hand, look.main)
     return parts + arms
 
 
@@ -459,8 +503,15 @@ def wheeled(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         )
     top_parts: list[dict[str, Any]] = []
     tall = plan.cargo or plan.height > 1.25
+    notes: list[str] = []
     if tall:  # a courier's cargo box, as tall as the plan asks
         box_h = r3(0.3 * plan.height * s)
+        if plan.arms and box_h > CARGO_TALL * length:
+            # Short rovers with an arm on a box twice as tall as they are long tipped over driving off (2026-10-19).
+            box_h = r3(CARGO_TALL * length)
+            notes.append(
+                f"its cargo box is {box_h:.2f} m tall, not taller: with an arm on it, a shorter rover tips over"
+            )
         top_parts.append(
             {
                 "name": "cargo",
@@ -540,7 +591,7 @@ def wheeled(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "sensors": sensors,
         "material": look.material,
     }
-    return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, []
+    return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, notes
 
 
 # ---- balancer, snake, arm, humanoid ------------------------------------------------------------------------------
@@ -564,14 +615,11 @@ def balancer(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     ]
     if plan.head:
         parts += head("base", "top", 0.07 * s, look, plan, pan=False)
-    if plan.arms:
-        notes = ["a balancer carries no arms: it would topple reaching out; ask for a wheeled robot with an arm"]
-    else:
-        notes = []
+    notes: list[str] = []  # arms come off the plan in clamp()
     base = {
         "shape": "box",
         "size": [depth, width, tall],
-        "sensors": base_sensors(plan),
+        "sensors": base_sensors(plan, camera=not plan.head),
         "material": look.material,
     }
     return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, notes
@@ -640,12 +688,16 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
                 "robot": gripper(plan.hand, look.accent, 0.05),
             },
         ]
-    notes = ["a snake has one head: it got jaws (a gripper)"] if plan.arms > 1 else []
+    notes: list[str] = []  # a second arm comes off the plan in clamp()
     base = {"shape": "box", "size": [r3(0.09 * s), r3(0.06 * s), r3(0.045 * s)], "sensors": sensors}
     # Measured: on hobby servos a snake 1.6 times the size did not move at all (1.3 times: 0.43 m in 6 s on sts3215);
-    # on joint modules it slithered 0.85 m in 6 s.
+    # on joint modules it slithered 0.85 m in 6 s. On mg996r servos twelve segments went 15 to 44 % of the way when
+    # carbon or aluminum, and 0.6-size snakes with jaws 30 %; on sts3215 all but a long aluminum one (53 %) went the
+    # whole way (2026-10-19, scripts/gen_bench.py sweep --body snake).
     k = plan.size * plan.width
-    servo = "mg996r" if k <= 1.15 else "sts3215" if k <= 1.4 else "bldc_joint"
+    chain = plan.segments * plan.length / 8  # times the 8-segment snake's length
+    heavy = chain > 1.5
+    servo = "bldc_joint" if k > 1.2 or heavy else "sts3215"
     return {"color": look.main, "servo": servo, "base": base, "parts": parts}, notes
 
 
@@ -662,6 +714,7 @@ def standing_arm(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "fixed": True,
         "color": GRAPHITE,
         "material": look.material,
+        "sensors": base_sensors(plan, lidar_at="front", camera=True)[1:],  # no imu: it is bolted down
     }
     if two:
         parts = torso_with_arms("top", [0, 0, 0], plan, look, raised=True)
@@ -723,7 +776,4 @@ def humanoid(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         params["material"] = plan.material
     if height > 0.5:  # measured: 0.54 m fell on hobby servos in some variations; on joint modules 0.65 m walks
         params["servo"] = "bldc_joint"
-    notes = []
-    if plan.arms and plan.hand != "gripper":
-        notes.append("a humanoid's hands hold nothing yet; ask for a wheeled or legged robot with an arm")
-    return {"template": "humanoid", "params": params}, notes
+    return {"template": "humanoid", "params": params}, []  # what it cannot carry came off the plan in clamp()

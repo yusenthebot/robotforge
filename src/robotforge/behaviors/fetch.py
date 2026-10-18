@@ -298,6 +298,7 @@ def spots_for(
     below: list[tuple[np.ndarray, np.ndarray, float]] = (),
     penalties: list[float] | None = None,
     rehearse: Callable[[np.ndarray, float, np.ndarray, float], bool] | None = None,
+    max_checks: int = MAX_CHECKS,
 ) -> tuple[Spot | None, int]:
     """The best spot from which the arm works on one of `targets` and on each `lift` m above it: near the robot's
     start, the point at a comfortable distance from the arm's base and ahead of it rather than behind, with room
@@ -306,7 +307,7 @@ def spots_for(
     when no spot works that way. `grid_reach`: the cells the robot can get to. `below`: boxes (low xy, high xy, top
     z) of what the targets stand on, which the arm's base must not be under. `rehearse(xy, heading, target, tilt)`
     plans the whole pick or put from a spot that passes the quick checks: a spot whose plan does not work out is
-    passed over."""
+    passed over. At most `max_checks` spots are checked by IK each way (straight down, then tilted)."""
     penalties = penalties or [0.0] * len(targets)
     stand.ground = nav
     checked = 0
@@ -323,7 +324,7 @@ def spots_for(
         )
         checks = 0
         for _, xy, heading, target in candidates:
-            if checks >= MAX_CHECKS:
+            if checks >= max_checks:
                 break
             if not stand.fits(xy, heading):
                 continue
@@ -558,7 +559,7 @@ def place_for(
     region = {"center": [float(center[0]), float(center[1]), top], "half_xy": extent.tolist(), "min_z": top - 0.01}
     if not spots:
         raise FetchError(f"the {target} is too small to put it on: {2 * half[0]:.2f} by {2 * half[1]:.2f} m")
-    standing = _standing_on(model, data, center[:2], extent, top, load)
+    standing = _standing_on(model, data, center[:2], extent, top, load, target)
     free = [p for p in spots if all(math.dist(p[:2], xy) >= radius + r + FREE_GAP for _, xy, r in standing)]
     if not free:
         names = sorted({name for name, _, _ in standing})
@@ -608,15 +609,22 @@ def _named_geoms(model: mujoco.MjModel, name: str) -> list[int]:
 
 
 def _standing_on(
-    model: mujoco.MjModel, data: mujoco.MjData, center: np.ndarray, extent: np.ndarray, top: float, load: int
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    center: np.ndarray,
+    extent: np.ndarray,
+    top: float,
+    load: int,
+    surface: str | None = None,
 ) -> list[tuple[str, np.ndarray, float]]:
-    """Loose things that stand on a surface (its middle, half extents and height): (name, x y, radius)."""
+    """Loose things that stand on a surface (its middle, half extents and height): (name, x y, radius). A loose
+    surface (a bowl, a tote: `surface`) does not stand on its own floor: a bowl said it was full of itself."""
     out = []
     for b in range(1, model.nbody):
         if int(model.body_rootid[b]) != b or b == load or not model.body_dofnum[b]:
             continue
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or ""
-        if "/" in name:  # a robot
+        if "/" in name or name == surface:  # a robot, or the bowl itself
             continue
         geoms = [
             g for g in range(model.ngeom) if int(model.body_rootid[model.geom_bodyid[g]]) == b and collides(model, g)

@@ -72,20 +72,21 @@ def ref(text: str) -> Ref | None:
     things = words.find(rest, words.THINGS)
     goal = _hits(rest, *GOAL_WORDS)
     named = re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b", t)  # an object's own name, red_cup
-    # the first thing said is the one meant; the rest say where it is ("the cup on the table")
-    concept = things[0].concept if things else None
+    # the thing meant: English says it first ("the cup on the table"), Chinese last ("台面上的柜子", the cabinet)
+    head = (things[-1] if re.search(r"[\u4e00-\u9fff]", t) else things[0]) if things else None
+    concept = head.concept if head else None
     if concept is None and goal:
         concept = "goal"
     if concept is None and rooms:
         concept = "room"
     color = None
     if things:
-        color = words._color_before(rest, things[0].start)
+        color = words._color_before(rest, head.start)
     return Ref(
         text=t,
         concept=concept,
         color=color,
-        room=rooms[-1].concept if rooms else None,
+        room=rooms[0].concept if rooms else None,
         name=named[0] if named else None,
     )
 
