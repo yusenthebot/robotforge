@@ -242,6 +242,15 @@ class FlightController:
         elif self.phase == "landing":
             self.phase = "flying"
 
+    def hold_at(self, point: list[float] | np.ndarray) -> None:
+        """Fly to `point` and hold it (taking off first if it stands): the hover task's "cascade" method."""
+        self.mission = None
+        self.speed = self.side = self.climb = self.turn = 0.0
+        if self.phase in ("landed", "spooling"):
+            self._take_off()
+        self.phase, self.mode = "flying", "hold"
+        self.target = np.asarray(point, float).copy()
+
     def hover(self) -> None:
         """Stop where it is: brake and hold that point in the air (a landed aircraft stays down)."""
         self.mission = None

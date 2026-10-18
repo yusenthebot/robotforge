@@ -89,7 +89,9 @@ real time.
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
 of points flies a path ("a 3 m square at 2 m": to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]); a last point with z 0 lands
-there; stop hovers. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds its place. Viewer keys:
+there; stop hovers. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds its place;
+compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR and MPC.
+Viewer keys:
 W A S D fly, arrow keys turn and go forward or back, E climbs, Q descends (and lands).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).

@@ -30,7 +30,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
-   - aircraft (kind `aircraft` in `robots`): `move(robot, to=[x, y, z])` takes off and flies there, then hovers; a list of points flies a path, e.g. a 3 m square at 2 m: `to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]`; a last point with z 0 lands there (one call can take off, fly the path and land); `stop` hovers in place; `simulate(seconds, wind=[x, y])` blows a gust to show how it holds its place; the viewer flies it with W A S D, the arrow keys, E (up) and Q (down);
+   - aircraft (kind `aircraft` in `robots`): `move(robot, to=[x, y, z])` takes off and flies there, then hovers; a list of points flies a path, e.g. a 3 m square at 2 m: `to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]`; a last point with z 0 lands there (one call can take off, fly the path and land); `stop` hovers in place; `simulate(seconds, wind=[x, y])` blows a gust to show how it holds its place; the viewer flies it with W A S D, the arrow keys, E (up) and Q (down); `compare_controllers(drone, task="hover", push_at=3)` compares its own flight controller (`cascade`: position, attitude, body rates) with `lqr` and `mpc`, and `run_controller` flies it with one of them until `stop`, which hands it back to the flight controller;
    - `move_arm` / `gripper` / `pick_and_place`: arms;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;

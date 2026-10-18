@@ -190,6 +190,10 @@ const STRINGS = {
     mode_reach_mpc_desc: "Plans the arm's motion toward the target.",
     mode_goto_mpc: "Drive to a goal with MPC",
     mode_goto_mpc_desc: "Plans a route to a goal about a meter away.",
+    mode_hover_lqr: "Hover with LQR",
+    mode_hover_lqr_desc: "One linear rule for every rotor, worked out from the physics around a hover.",
+    mode_hover_mpc: "Hover with MPC",
+    mode_hover_mpc_desc: "Tries out futures every 20 ms and keeps the best.",
   },
   zh: {
     robots: "机器人",
@@ -380,6 +384,10 @@ const STRINGS = {
     mode_reach_mpc_desc: "规划手臂动作去够目标点。",
     mode_goto_mpc: "MPC 开到目标",
     mode_goto_mpc_desc: "规划路线开到一米外的目标点。",
+    mode_hover_lqr: "LQR 悬停",
+    mode_hover_lqr_desc: "从悬停附近的物理算出一条线性规则，同时管所有旋翼。",
+    mode_hover_mpc: "MPC 悬停",
+    mode_hover_mpc_desc: "每 20 毫秒试出许多种未来，挑最好的。",
   },
 };
 

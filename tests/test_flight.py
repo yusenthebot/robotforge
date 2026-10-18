@@ -404,3 +404,58 @@ def test_side_and_climb_are_for_aircraft(pg):
     pg.add_robot("rover", template="rover", pos=[0.0, 1.0])
     with pytest.raises(ValueError, match="only aircraft"):
         pg.behaviors.move("rover", 0.0, 0.0, climb=0.5)
+
+
+# ---- the hover task: the flight controller, LQR and MPC on the same aircraft --------------------------------
+
+
+def test_hover_compares_the_flight_controller_lqr_and_mpc_after_a_push(pg):
+    import copy
+
+    from robotforge.control.compare import compare_methods
+
+    _trip(pg, [0.0, 0.0, 1.5])
+    pg.run_fast(lambda: False, 1.0)
+    table = compare_methods(
+        "hover",
+        ["cascade", "lqr", "mpc", "none"],
+        5.0,
+        model=pg.session.model,
+        robot="drone",
+        data=copy.copy(pg.session.data),
+        seed=None,
+        push_at=2.0,
+    )
+    results = {r.method: r for r in table.results}
+    for method in ("cascade", "lqr"):
+        assert results[method].success, results[method].report  # back on the spot after the shove
+        assert results[method].report["position_error_m"] < 0.05
+    assert not results["mpc"].failed
+    assert results["none"].failed  # without control it drops out of the sky
+    assert results["lqr"].reward > results["none"].reward
+
+
+def test_after_lqr_flew_it_stop_hands_it_back_to_the_flight_controller(pg):
+    from robotforge.control.methods import make_controller
+    from robotforge.control.tasks import make_task
+
+    _trip(pg, [0.5, 0.0, 1.2])
+    session = pg.session
+    task = make_task("hover", session.model, "drone")
+    task.begin(session.data)
+    session.set_controller("drone", make_controller("lqr", task, session.model, session.data))
+    pg.run_fast(lambda: False, 2.0)
+    assert np.linalg.norm(np.subtract(pg.behaviors.pose("drone")["position"], [0.5, 0.0, 1.2])) < 0.05
+    out = pg.behaviors.stop("drone")
+    assert "flight controller took over" in out["note"]
+    pg.run_fast(lambda: False, 3.0)  # it holds its place instead of dropping with its rotors at rest
+    assert np.linalg.norm(np.subtract(pg.behaviors.pose("drone")["position"], [0.5, 0.0, 1.2])) < 0.08
+    assert pg.behaviors.robots()[0]["flight"]["state"] == "flying"
+
+
+def test_the_hover_task_refuses_a_robot_that_does_not_fly(pg):
+    from robotforge.control.tasks import TaskError, make_task
+
+    pg.add_robot("rover", template="rover", pos=[0.0, 1.0])
+    with pytest.raises(TaskError, match="no rotors"):
+        make_task("hover", pg.session.model, "rover")

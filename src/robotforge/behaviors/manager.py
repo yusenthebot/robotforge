@@ -662,6 +662,16 @@ class BehaviorManager:
                     # showed the wheels still commanded, and agents zeroed them by hand (set_controls, simulate).
                     ctrl.update(self.session.model, self.session.data)
                 return {"robot": robot, "stopped": True}
+            if ctrl is not None and self.kind(robot) == Kind.AIRCRAFT:
+                # LQR, MPC or a policy was flying it: the flight controller takes over where it is. Resting its
+                # rotors like a stopped wheel's motor would drop it out of the sky.
+                with contextlib.suppress(BehaviorError):
+                    self._mobile_controller(robot, Kind.AIRCRAFT, create=True)
+                    return {
+                        "robot": robot,
+                        "stopped": True,
+                        "note": f"the flight controller took over; {flight.STOP_NOTE}",
+                    }
             if ctrl is not None:
                 self.session.set_controller(robot, None)
                 self._rest_speed_and_force_actuators(robot)
