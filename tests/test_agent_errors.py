@@ -378,7 +378,8 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("train_policy", {"task": "walk", "robot": "cat"}, ["no robot named 'cat'"]),
         ("training_status", {"name": "nope"}, ["no policy named 'nope'", "train_policy"]),
         ("lessons", {"number": "three"}, ["number must be a whole number", "'three'"]),
-        ("add_part", {"robot": "dog", "part": {"name": "tail"}}, ["dog comes from the quadruped template", "build"]),
+        # A template robot is carried on a plate for its parts, and a wrong part says what is wrong with it.
+        ("add_part", {"robot": "dog", "part": {"name": "tail"}}, ["part 'tail'", "size is required"]),
         ("write_script", {"name": "../evil", "code": "print(1)"}, ["script name '../evil'", "pick_cube"]),
         (
             "write_script",

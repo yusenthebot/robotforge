@@ -356,7 +356,9 @@ class Playground:
         kept: list[str] = []
         found: list[str] = []
         swap = self._replacing(name, build) if build is not None and _whole(build) else None
-        replaced = [swap] if swap else []
+        replaced = [swap[0]] if swap else []
+        if swap:
+            build = swap[1]  # a lidar alone for a template or library robot: the robot carried with it on a plate
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -401,19 +403,23 @@ class Playground:
         placed = self._clear_start(found[0], pos) if pos is not None else None
         return _noted(result, _yaw_note(yaw), *replaced, *kept, placed)
 
-    def _replacing(self, name: str, build: dict[str, Any]) -> str | None:
-        """The note for a whole build sent to a template, library or file robot, or None for one built from parts.
-        A build that carries the old robot on a part, or makes a robot of the same kind, replaces it where it
-        stands; any other is refused with the build that keeps it. Rebuilt on the word of the add_part refusal, a
-        quadruped given a base with a lidar became a 1 kg box with no joints, and a Go2 given a lidar puck a 1.1 kg
-        cylinder; the only sign was "now built from parts"."""
+    def _replacing(self, name: str, build: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        """The note for a whole build sent to a template, library or file robot, and the build to save, or None for
+        one built from parts. A build that carries the old robot on a part, or makes a robot of the same kind,
+        replaces it where it stands; sensors alone go on a plate that carries the robot; any other is refused with
+        the build that keeps it. Rebuilt on the word of the add_part refusal, a quadruped given a base with a lidar
+        became a 1 kg box with no joints, and a Go2 given a lidar puck a 1.1 kg cylinder; the only sign was "now
+        built from parts"."""
         store = self._require_store()
         entry = _find(store.load().robots, name, "robot")
         if entry.build is not None:
             return None
         source, mount = _source(entry), plate.mount_of(entry)
         if mount is not None and plate.mounts(build, mount):
-            return f"{entry.name}: now built from parts, carrying {source} as it was"
+            return f"{entry.name}: now built from parts, carrying {source} as it was", build
+        if mount is not None and _sensors_only(build):
+            carried, note = self._carry(entry, build, lambda b: b, "with the sensors on the plate")
+            return note, carried
         before, joints = self.behaviors.kind(entry.name).value, _moving_joints(self.session.model, entry.name)
         try:
             model = self._compiled_with(entry.name, build)
@@ -421,10 +427,11 @@ class Playground:
             return None  # the edit itself says what is wrong with the build
         after, now = robot_kind(model, entry.name).value, _moving_joints(model, entry.name)
         if after == before:
-            return (
+            note = (
                 f"{entry.name}: now built from parts (it was {source}), still {_a(before)}, with {_joints(now)} where "
                 f"it had {joints}"
             )
+            return note, build
         raise PlaygroundError(
             self._keep_it(
                 entry,
@@ -434,11 +441,46 @@ class Playground:
             )
         )
 
-    def _keep_it(self, entry: RobotEntry, build: dict[str, Any], why: str, part: bool = False) -> str:
+    def _carry(
+        self, entry: RobotEntry, build: dict[str, Any], add: Callable[[dict[str, Any]], dict[str, Any]], what: str
+    ) -> tuple[dict[str, Any], str]:
+        """`entry`, a template or library robot, carried under a plate as the gallery's go2_arm carries a Go2, with
+        `build`'s base sensors on the plate and `add` applied to that build (add_part's part), and the note saying
+        so; refused (PlaygroundError) when the result would no longer be the same kind of robot. In both of the
+        reviewer's sessions the agent first called add_part to give a robot from the library or a template a lidar,
+        and was refused with this build to send instead: one failed call in 9 or 10."""
+        mount, kind, source = plate.mount_of(entry), self.behaviors.kind(entry.name).value, _source(entry)
+        if mount is None:
+            raise PlaygroundError(
+                f"{entry.name} comes from a file: parts and sensors go on robots built from parts, and one from a "
+                "file cannot be carried on a plate; build one from parts (builder_guide)"
+            )
+        bare = plate.carried(self.session.model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
+        whole = add(bare)  # a part that is wrong says so here, as on any robot built from parts
+        try:
+            after = robot_kind(self._compiled_with(entry.name, bare), entry.name).value
+            if after == kind:  # the plate keeps it what it was; then the part has its say (it may overlap the robot)
+                after = robot_kind(self._compiled_with(entry.name, whole), entry.name).value
+        except ValidationError as exc:  # as an edit says it (a part with no size)
+            raise PlaygroundError(_validation_message(exc)) from exc
+        if after != kind:
+            limit = " (a current limit: a humanoid cannot ride a plate yet)" if kind == "humanoid" else ""
+            raise PlaygroundError(
+                f"{entry.name} comes from {source}, and parts and sensors go on robots built from parts; carried on a "
+                f"plate it would no longer be {_a(kind)}{limit}: build one from parts instead (builder_guide)"
+            )
+        hung = bare["parts"][0]["name"]
+        note = (
+            f"{entry.name} comes from {source}, so it now rides a {bare['base']['mass']:g} kg plate as its base, "
+            f"{what} (the gallery's go2_arm layout), still {_a(kind)}; its joints are now {entry.name}/{hung}/..."
+        )
+        return whole, note
+
+    def _keep_it(self, entry: RobotEntry, build: dict[str, Any], why: str) -> str:
         """`why` a change to a robot not built from parts is refused, and the build that keeps the robot: carried
-        under a plate, as the gallery's go2_arm carries a Go2, with `build`'s parts and base sensors on the plate (for
-        add_part, `part`, a place in the parts for the agent's own). Offered only when the plate and the robot compile
-        and are still the same kind of robot (a humanoid is not, so far)."""
+        under a plate, as the gallery's go2_arm carries a Go2, with `build`'s parts and base sensors on the plate.
+        Offered only when the plate and the robot compile and are still the same kind of robot (a humanoid is not,
+        so far)."""
         mount, kind, source = plate.mount_of(entry), self.behaviors.kind(entry.name).value, _source(entry)
         if mount is None:
             return f"{why}. A robot from a file cannot be carried on a plate: build one from parts (builder_guide)"
@@ -449,10 +491,9 @@ class Playground:
         except (ValueError, ValidationError):
             still = False
         if not still:
-            return f"{why}. Carried on a plate, {source} would no longer be {_a(kind)}: build one from parts instead"
-        recipe = json.dumps(bare if part else plate.carried(model, entry.name, mount, build))
-        if part:
-            recipe = recipe[: -len("]}")] + ", <the part>]}"
+            limit = " (a current limit: a humanoid cannot ride a plate yet)" if kind == "humanoid" else ""
+            return f"{why}. Carried on a plate, {source} would no longer be {_a(kind)}{limit}: build one from parts"
+        recipe = json.dumps(plate.carried(model, entry.name, mount, build))
         return (
             f"{why}. Keep it on a plate: update_robot({json.dumps(entry.name)}, build={recipe}); joints become "
             f"{entry.name}/{bare['parts'][0]['name']}/..."
@@ -573,15 +614,16 @@ class Playground:
         self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]], adding: dict | None = None
     ) -> dict[str, Any]:
         entry = _find(self._require_store().load().robots, robot, "robot")
-        if entry.build is None and isinstance(adding, dict):  # a part for a template or library robot
-            raise PlaygroundError(
-                self._keep_it(
-                    entry,
-                    {},
-                    f"{entry.name} comes from {_source(entry)}: parts go on robots built from parts",
-                    part=True,
-                )
-            )
+        if entry.build is None and isinstance(adding, dict):  # a part for a template or library robot: on a plate
+            name = adding.get("name", "the part")
+            whole, note = self._carry(entry, {}, change_build, f"with {name} on the plate")
+
+            def carry_it(w: World) -> None:
+                found = _find(w.robots, robot, "robot")
+                found.template = found.file = found.library = None
+                found.params, found.build = {}, whole
+
+            return _noted(self._edit(carry_it), note)
 
         def change(w: World) -> None:
             entry = _built(_find(w.robots, robot, "robot"))
@@ -1087,12 +1129,18 @@ def _whole(build: dict[str, Any]) -> bool:
     return isinstance(build, dict) and ("base" in build or "parts" in build)
 
 
+def _sensors_only(build: dict[str, Any]) -> bool:
+    """A build that is nothing but sensors for the base: {"base": {"sensors": [...]}}."""
+    base = build.get("base")
+    return set(build) == {"base"} and isinstance(base, dict) and set(base) == {"sensors"} and bool(base["sensors"])
+
+
 def _built(robot: RobotEntry) -> RobotEntry:
     if robot.build is None:
         raise PlaygroundError(
             f"{robot.name} comes from {_source(robot)}; parts and sensors (a lidar, a camera) are edited only on "
-            "robots built from parts. add_part on it says how to carry it on a plate and add parts there; to "
-            'build on a template, mount it as a part: {"name": "arm", "robot": {"template": "arm"}}'
+            "robots built from parts. add_part on it carries it on a plate and adds the part there; to build on a "
+            'template, mount it as a part: {"name": "arm", "robot": {"template": "arm"}}'
         )
     return robot
 

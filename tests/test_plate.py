@@ -1,5 +1,5 @@
-"""A robot that is not built from parts, given parts or sensors: kept, carried under a plate, or replaced by one of the
-same kind, and never silently turned into a box."""
+"""A robot that is not built from parts, given parts or sensors: carried under a plate with them, or replaced by one of
+the same kind, and never silently turned into a box."""
 
 from __future__ import annotations
 
@@ -24,15 +24,15 @@ ROVER = {
 }
 
 
-def _plated(error: PlaygroundError, part: dict | None = None) -> dict:
-    """The build a refusal offers, the robot carried on a plate, with `part` in add_part's place for it."""
+def _plated(error: PlaygroundError) -> dict:
+    """The build a refusal offers, the robot carried on a plate."""
     found = re.search(r"build=(\{.*\})\); joints become", str(error))
     assert found, str(error)
-    text = found[1]
-    if part is not None:
-        assert text.endswith(", <the part>]}"), text
-        text = text.replace("<the part>", json.dumps(part))
-    return json.loads(text)
+    return json.loads(found[1])
+
+
+def _build(pg: Playground, name: str) -> dict:
+    return next(r for r in pg.current_world().robots if r.name == name).build
 
 
 @pytest.fixture
@@ -44,16 +44,14 @@ def world(tmp_path, monkeypatch):
     return pg
 
 
-def test_a_quadruped_given_only_a_lidar_is_not_turned_into_a_box(world):
+def test_a_quadruped_given_only_a_lidar_rides_a_plate_with_it(world):
     """Regression: update_robot("dog", build={"base": {"sensors": ["lidar"]}}) on the quadruped template made a 1 kg
-    box with no joints, kind other, and said only "now built from parts". It is refused with the build that keeps
-    the dog, and that build walks it with the lidar on its back."""
+    box with no joints, kind other, and said only "now built from parts". Sensors alone now go on a plate that
+    carries the dog, and it walks with the lidar on its back."""
     world.add_robot("dog", template="quadruped")
-    with pytest.raises(PlaygroundError, match="into a robot of kind other with 0 joints") as refused:
-        world.update_robot("dog", build={"base": {"sensors": ["lidar"]}})
-    assert world.current_world().robots[0].template == "quadruped"  # nothing changed
-    done = world.update_robot("dog", build=_plated(refused.value))
-    assert any("carrying the quadruped template as it was" in n for n in done["notes"])
+    done = world.update_robot("dog", build={"base": {"sensors": ["lidar"]}})
+    note = next(n for n in done["notes"] if "plate as its base" in n)
+    assert "with the sensors on the plate" in note and "still a quadruped" in note and "dog/quadruped/..." in note
     assert world.behaviors.kind("dog").value == "quadruped" and _moving(world, "dog") == 12
     world.run_fast(lambda: False, 0.5)
     start = world.behaviors.pose("dog")["position"]
@@ -64,22 +62,51 @@ def test_a_quadruped_given_only_a_lidar_is_not_turned_into_a_box(world):
     assert world.state()["lidars"]["dog/base_lidar"]["hits"] == 0  # its own legs are not obstacles
 
 
-def test_add_part_on_a_go2_offers_the_plate_with_a_place_for_the_part(world):
+def test_a_build_that_is_another_robot_is_refused_with_the_one_that_keeps_it(world):
+    world.add_robot("dog", template="quadruped")
+    box = {"base": {"size": [0.3, 0.2, 0.1], "sensors": ["lidar"]}}
+    with pytest.raises(PlaygroundError, match="into a robot of kind other with 0 joints") as refused:
+        world.update_robot("dog", build=box)
+    assert world.current_world().robots[0].template == "quadruped"  # nothing changed
+    done = world.update_robot("dog", build=_plated(refused.value))
+    assert any("carrying the quadruped template as it was" in n for n in done["notes"])
+    assert world.behaviors.kind("dog").value == "quadruped" and _moving(world, "dog") == 12
+
+
+def test_add_part_on_a_go2_carries_it_on_a_plate_with_the_part(world):
     """The add_part refusal for a library robot used to suggest a whole rebuild, and a Go2 rebuilt with a lidar puck
-    became a 1.1 kg cylinder. Now it offers the Go2 on a plate, the gallery's go2_arm layout (the plate 64.5 mm above
-    the Go2's frame), with a place for the part on the plate."""
+    became a 1.1 kg cylinder; then it offered the plate as a build to send. In both of the reviewer's sessions the
+    agent's first sensor call was add_part, a guaranteed failed call. add_part now carries the Go2 on a plate, the
+    gallery's go2_arm layout (the plate 64.5 mm above the Go2's frame), with the part on the plate."""
     world.add_robot("go2", library="go2")
     puck = {"name": "puck", "at": "top", "shape": "cylinder", "size": [0.07, 0.04], "joint": "fixed"}
     puck["sensors"] = ["lidar"]
-    with pytest.raises(PlaygroundError, match="parts go on robots built from parts") as refused:
-        world.add_part("go2", puck)
-    offered = _plated(refused.value, puck)
-    assert offered["parts"][0] == {"name": "go2", "at": [0, 0, -0.0645], "robot": {"library": "go2"}}
-    assert offered["parts"][1] == puck and "joints become go2/go2/..." in str(refused.value)
-    with pytest.raises(PlaygroundError, match="the quadruped would be gone"):  # a puck alone is no Go2
-        world.update_robot("go2", build={"parts": [offered["parts"][1]]})
-    world.update_robot("go2", build=offered)
+    done = world.add_part("go2", puck)
+    built = _build(world, "go2")
+    assert built["parts"][0] == {"name": "go2", "at": [0, 0, -0.0645], "robot": {"library": "go2"}}
+    assert built["parts"][1] == puck
+    note = next(n for n in done["notes"] if "plate as its base" in n)
+    assert "with puck on the plate" in note and "joints are now go2/go2/..." in note, note
     assert world.behaviors.kind("go2").value == "quadruped" and _moving(world, "go2") == 12
+    assert "go2/puck_lidar" in world.state()["lidars"]
+    world.undo()  # one edit
+    assert next(r for r in world.current_world().robots if r.name == "go2").library == "go2"
+    with pytest.raises(PlaygroundError, match="the quadruped would be gone"):  # a puck alone is no Go2
+        world.update_robot("go2", build={"parts": [puck]})
+
+
+def test_a_template_with_params_is_carried_with_them(world):
+    """The add_part refusal for a quadruped with params ran to 345 characters; the carry needs none."""
+    world.add_robot("dog", template="quadruped", params={"leg_length": 0.3})
+    world.add_part("dog", {"name": "eye", "at": "front", "shape": "box", "size": [0.03, 0.03, 0.02], "joint": "fixed"})
+    assert _build(world, "dog")["parts"][0]["robot"] == {"template": "quadruped", "params": {"leg_length": 0.3}}
+
+
+def test_a_wrong_part_for_a_template_robot_says_what_is_wrong_with_the_part(world):
+    world.add_robot("dog", template="quadruped")
+    with pytest.raises(ValueError, match="tail"):
+        world.add_part("dog", {"name": "tail", "shape": "teapot"})
+    assert world.current_world().robots[0].template == "quadruped"
 
 
 def test_a_whole_robot_of_the_same_kind_still_replaces_a_template_and_the_note_says_what_it_is(world):
@@ -91,8 +118,10 @@ def test_a_whole_robot_of_the_same_kind_still_replaces_a_template_and_the_note_s
 
 def test_a_humanoid_that_cannot_ride_a_plate_is_told_so(world):
     world.add_robot("h", template="humanoid")
-    with pytest.raises(PlaygroundError, match="would no longer be a humanoid: build one from parts instead"):
+    with pytest.raises(PlaygroundError, match="would no longer be a humanoid") as refused:
         world.add_part("h", {"name": "puck", "at": "top", "shape": "sphere", "size": [0.05], "sensors": ["lidar"]})
+    assert "a current limit: a humanoid cannot ride a plate yet" in str(refused.value)
+    assert world.current_world().robots[0].template == "humanoid"
 
 
 def _moving(pg: Playground, robot: str) -> int:
@@ -104,15 +133,13 @@ def _moving(pg: Playground, robot: str) -> int:
 def test_an_arm_fixed_to_the_floor_is_carried_on_a_plate_under_it(world):
     world.add_robot("arm", template="arm")
     eye = {"name": "eye", "at": "top", "shape": "box", "size": [0.03, 0.03, 0.02], "joint": "fixed"}
-    with pytest.raises(PlaygroundError, match="joints become arm/arm/") as refused:
-        world.add_part("arm", eye)
-    offered = _plated(refused.value, eye)
-    assert offered["base"]["fixed"] is True and offered["parts"][0] == {
+    world.add_part("arm", eye)
+    built = _build(world, "arm")
+    assert built["base"]["fixed"] is True and built["parts"][0] == {
         "name": "arm",
         "at": "top",
         "robot": {"template": "arm"},
     }
-    world.update_robot("arm", build=offered)
     assert world.behaviors.kind("arm").value == "arm"
 
 
@@ -120,9 +147,8 @@ def test_the_plate_rests_on_the_rover_lid_not_on_a_dressing_meshs_box(world):
     """The box round a dressing mesh turned in the rover template's frame reached 7.1 cm, where its lid is 3.7 cm,
     and the plate floated 3 cm above the lid in the viewer. Rays down onto the body find the lid."""
     world.add_robot("rover", template="rover")
-    with pytest.raises(PlaygroundError) as refused:
-        world.add_part("rover", dict(LIDAR_PUCK))
-    drop = -_plated(refused.value, dict(LIDAR_PUCK))["parts"][0]["at"][2]
+    world.add_part("rover", dict(LIDAR_PUCK))
+    drop = -_build(world, "rover")["parts"][0]["at"][2]
     assert 0.037 + 0.006 < drop < 0.05  # the lid's top, half the plate and the gap; the box gave 0.0785
 
 

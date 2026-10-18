@@ -121,12 +121,18 @@ def anyio_backend():
 
 def test_the_mazes_starter_rover_can_be_rebuilt_with_a_lidar_where_it_stands(tmp_path, monkeypatch):
     """Both lidar sessions in the eval sent the maze's starter rover (a template) a build with a lidar, through
-    update_robot and then add_part, were refused, and removed it to add the same robot again at the start mark."""
+    update_robot and then add_part, were refused, and removed it to add the same robot again at the start mark.
+    add_part now carries it on a plate with the lidar where it stands, and a whole car with one replaces it."""
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
     pg.load_scene("maze")
-    with pytest.raises(PlaygroundError, match=r'update_robot\("rover", build='):
-        pg.add_part("rover", {"name": "puck", "at": "top", "sensors": ["lidar"]})
+    puck = {"name": "puck", "at": "top", "shape": "cylinder", "size": [0.06, 0.03], "joint": "fixed"}
+    carried = pg.add_part("rover", {**puck, "sensors": ["lidar"]})
+    assert any("plate as its base, with puck on the plate" in n for n in carried["notes"]), carried["notes"]
+    rover = pg.current_world().robots[0]
+    assert rover.template is None and rover.pos == [-2.0, -3.0] and rover.yaw == 90
+    assert pg.state()["lidars"]["rover/puck_lidar"]["rays"] == 16
+    pg.undo()
     done = pg.update_robot("rover", build=_car(16))
     assert any("rover: now built from parts (it was the rover template)" in n for n in done["notes"])
     rover = pg.current_world().robots[0]

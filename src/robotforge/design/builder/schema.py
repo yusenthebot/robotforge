@@ -318,7 +318,7 @@ class _Body(_Strict):
     def _check_size(self, shape: str) -> None:
         need = SIZE_COUNT[shape]
         if not self.size and need:
-            raise ValueError(f"size is required: a {shape} has size {SIZE_HINT[shape]} in meters")
+            raise ValueError(f"size is required: give one, a {shape} has size {SIZE_HINT[shape]} in meters")
         if len(self.size) != need or any(s <= 0 for s in self.size):
             raise ValueError(f"a {shape} has size {SIZE_HINT[shape]} in meters, got {self.size!r}")
         if any(s > 5.0 for s in self.size):

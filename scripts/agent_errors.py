@@ -159,8 +159,21 @@ CASES: list[Case] = [
     c("update_robot", "pos as text", "accept", name="dog", pos="0.5, 1.2"),
     # A whole build of the same kind replaces a template robot where it stands, and says what it is now.
     c("update_robot", "build on a template robot", "accept", note="still a quadruped", name="dog", build=EXAMPLE_DOG),
-    c("update_robot", "only a sensor for a template robot", name="dog", build={"base": {"sensors": ["lidar"]}}),
-    c("add_part", "a lidar for a template robot", robot="dog", part={"name": "puck", "sensors": ["lidar"]}),
+    # Sensors or a part for a template robot: it rides a plate that carries them, and the answer says so.
+    c(
+        "update_robot",
+        "only a sensor for a template robot",
+        "accept",
+        note="plate as its base, with the sensors on the plate",
+        name="dog",
+        build={"base": {"sensors": ["lidar"]}},
+    ),
+    c(
+        "add_part",
+        "a lidar part with no size for a template robot",
+        robot="dog",
+        part={"name": "puck", "sensors": ["lidar"]},
+    ),
     # -- objects
     c("add_object", "shape called ball", "accept", name="b2", shape="ball", size=[0.05], pos=[0.4, 0.1]),
     c("add_object", "shape called cube", "accept", name="b2", shape="cube", pos=[0.4, 0.1]),
@@ -423,6 +436,8 @@ CASES: list[Case] = [
     c(
         "add_part",
         "robot made from a template",
+        "accept",
+        note="plate as its base, with tail on the plate",
         robot="dog",
         part={"name": "tail", "at": "back", "shape": "sphere", "size": [0.03]},
     ),
