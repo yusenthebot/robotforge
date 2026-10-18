@@ -1244,17 +1244,23 @@ def _at(call: Call, robot: str) -> tuple[float, float] | None:
     return (float(pos[0]), float(pos[1])) if pos and len(pos) >= 2 else None
 
 
-def lidar_hits(call: Call, stem: str, rays: int, reach: float) -> list[float] | None:
-    """The readings of lidar `stem` in an observe that reported at least three of its rays, keeping the rays that
-    hit something (a rangefinder reads -1, or as far as it reaches, when nothing is there); None when it did not
-    report the lidar."""
-    sensors = call.data.get("sensors") if isinstance(call.data, dict) else None
+def lidar_read(call: Call, stem: str, rays: int, reach: float) -> tuple[int, list[float]] | None:
+    """What an observe reported of lidar `stem`: how many of its rays, and the readings of those that hit something
+    (a rangefinder reads -1, or as far as it reaches, when nothing is there). observe's "lidars" has every ray
+    (null for no hit); before it, the rays were sensors among the first 40 observe lists, so a long ring came cut
+    short. None when it reported none of them."""
+    data = call.data if isinstance(call.data, dict) else {}
+    whole = (data.get("lidars") or {}).get(stem)
+    if isinstance(whole, dict) and isinstance(whole.get("ranges_m"), list):
+        ranges = whole["ranges_m"]
+        return len(ranges), [float(v) for v in ranges if isinstance(v, (int, float)) and v > 0]
+    sensors = data.get("sensors")
     if not isinstance(sensors, dict):
         return None
     read = [v for i in range(rays) if isinstance(v := sensors.get(f"{stem}_{i}"), (int, float))]
-    if len(read) < 3:
+    if not read:
         return None
-    return [float(v) for v in read if 0 < v < (reach - 1e-3 if reach > 0 else math.inf)]
+    return len(read), [float(v) for v in read if 0 < v < (reach - 1e-3 if reach > 0 else math.inf)]
 
 
 def check_lidar_maze(ev: Evidence) -> list[Criterion]:
@@ -1274,15 +1280,16 @@ def check_lidar_maze(ev: Evidence) -> list[Criterion]:
             lidars = world.lidars.get(name, {})
             seen = poses(there, name)
             x, y, _ = _start(robot, seen or [Pose(0.0, 0.0, 0.0, None)])  # world.yaml saves [0, 0] when unplaced
-            inside = []  # (lidar, its hits) of each observe that read a lidar with the robot inside the maze
+            inside = []  # (lidar, rays reported, its hits, where) of each observe with the robot inside the maze
             for call in there.ours:
                 where = _at(call, name) if call.tool == "observe" and call.ok else None
                 for stem, (rays, reach) in lidars.items():
-                    hits = lidar_hits(call, stem, rays, reach) if where else None
-                    if hits is not None and _within(*where, edge):
-                        inside.append((stem, hits, where))
+                    read = lidar_read(call, stem, rays, reach) if where and _within(*where, edge) else None
+                    if read is not None:
+                        inside.append((stem, read[0], read[1], where))
             last = inside[-1] if inside else None
-            nearest = min(last[1]) if last and last[1] else None
+            whole = last is not None and last[1] == lidars[last[0]][0]  # the nearest hit is known only from every ray
+            nearest = min(last[2]) if whole and last[2] else None
             crit = [
                 Criterion(
                     "a robot carrying a lidar, in a maze",
@@ -1296,10 +1303,15 @@ def check_lidar_maze(ev: Evidence) -> list[Criterion]:
                     f"y {edge[2]:.2f} to {edge[3]:.2f}",
                 ),
                 Criterion(
-                    "read its lidar inside the maze, a wall in sight",
+                    "read its whole lidar inside the maze, a wall in sight",
                     nearest is not None,
                     f"{len(inside)} observe with the lidar inside"
-                    + (f", the last at [{last[2][0]:.2f}, {last[2][1]:.2f}]" if last else ""),
+                    + (
+                        f", the last at [{last[3][0]:.2f}, {last[3][1]:.2f}] with {last[1]} of its "
+                        f"{lidars[last[0]][0]} rays, {len(last[2])} hitting"
+                        if last
+                        else ""
+                    ),
                 ),
                 Criterion(
                     "the answer says how far the nearest wall is",

@@ -66,6 +66,18 @@ BASELINE = {
     "find_red": (True, {"found before an arm handled it": True, "the other cubes are still out of the bin": True}),
     # the go2_arm design put at [-2, 0] by the agent, 0.72 m to the island.
     "go2_arm_kitchen": (True, {"a Go2 carrying an arm": True, "not next to the island at the start": True}),
+    # On 9bf99c0, the tasks that are not lessons. A 64-ray lidar car driven 0.87 m into the maze: observe listed 40
+    # sensors, 37 of them its rays, and the script the agent wrote to read them all got the same 37. Its answer,
+    # 0.43 m, happens to be right (all 64 rays recomputed at that pose: ray 16, 0.43 m), but nothing it read could
+    # say so.
+    "lidar_maze": (
+        False,
+        {
+            "a robot carrying a lidar, in a maze": True,
+            "started outside the maze (at its entrance)": True,
+            "read its whole lidar inside the maze, a wall in sight": False,
+        },
+    ),
 }
 TASK_OF = {
     "learn_control_table_only": "learn_control",
@@ -725,3 +737,140 @@ def test_a_fixture_keeps_what_the_camera_found(ev):
     found = {"view": "top", "color": "red", "how": "x" * 400, "objects": [{"n": 1, "object": "block_2", "pixels": 9}]}
     trimmed = json.loads(ev._trim_result("observe", json.dumps({"time": 1, "joints": {"a": 1}, "found": found})))
     assert trimmed == {"time": 1, "found": {"view": "top", "color": "red", "objects": [{"n": 1, "object": "block_2"}]}}
+
+
+# ---- the tasks that are not lessons: a lidar in the maze, a video of a robot from parts (9bf99c0) ---------------
+
+
+def _said(text: str) -> str:
+    return json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": text}})
+
+
+MAZE_WORLD = FIXTURES / "lidar_maze" / "rf_home" / "worlds" / "lidar_maze" / "world.yaml"
+
+
+def _lidar_seen(where: list[float], nearest: float, rays: int = 64) -> str:
+    """An observe as robotforge answers it now: the whole lidar under "lidars"."""
+    ranges = [round(nearest + 0.01 * abs(i - 16), 3) for i in range(rays)]
+    whole = {"rays": rays, "range_m": 5.0, "hits": rays, "nearest_m": nearest, "nearest_side": "left"}
+    state = {
+        "time": 6,
+        "free_bodies": {"lidar_car/base": [*where, 0.06]},
+        "lidars": {"lidar_car/base_lidar": {**whole, "ranges_m": ranges}},
+    }
+    return _event("observe", {"view": "top"}, state)
+
+
+def _maze_session(tmp_path: Path, *events: str, world: str | None = None) -> Path:
+    text = world if world is not None else MAZE_WORLD.read_text(encoding="utf-8")
+    return _made_up(tmp_path, {"lidar_maze": text}, _opened("lidar_maze"), *events)
+
+
+def test_the_answer_is_held_to_the_whole_lidar_read_inside_the_maze(ev, tmp_path):
+    inside = [-2.0, -2.13]
+    good = _maze_session(tmp_path / "a", _lidar_seen(inside, 0.43), _said("最近的墙在左边，约 43 厘米。"))
+    assert ev.score(ev.TASKS["lidar_maze"], good).passed
+    wrong = _maze_session(tmp_path / "b", _lidar_seen(inside, 0.43), _said("最近的墙大约 0.9 米远。"))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], wrong))
+    assert verdict["read its whole lidar inside the maze, a wall in sight"]
+    assert verdict["the answer says how far the nearest wall is"] is False
+    # Read at the start mark, outside the maze: the car never drove in.
+    outside = _maze_session(tmp_path / "c", _lidar_seen([-2.0, -3.0], 0.5), _said("最近的墙 0.5 米。"))
+    assert (
+        _verdict(ev.score(ev.TASKS["lidar_maze"], outside))["read its whole lidar inside the maze, a wall in sight"]
+        is False
+    )
+
+
+def test_a_lidar_car_saved_inside_the_maze_did_not_start_at_its_entrance(ev, tmp_path):
+    import yaml
+
+    data = yaml.safe_load(MAZE_WORLD.read_text(encoding="utf-8"))
+    _robot(data, "lidar_car").update(pos=[-2.0, -2.13])
+    placed = _maze_session(tmp_path, _lidar_seen([-2.0, -2.13], 0.43), _said("0.43 m"), world=yaml.safe_dump(data))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], placed))
+    assert verdict["started outside the maze (at its entrance)"] is False
+    assert verdict["the answer says how far the nearest wall is"]
+
+
+def test_the_maze_starter_rover_carries_no_lidar(ev, tmp_path):
+    import yaml
+
+    data = yaml.safe_load(MAZE_WORLD.read_text(encoding="utf-8"))
+    data["robots"] = [{"name": "lidar_car", "template": "rover", "pos": [-2.0, -3.0], "yaw": 90}]
+    plain = _maze_session(tmp_path, _lidar_seen([-2.0, -2.13], 0.43), _said("0.43 m"), world=yaml.safe_dump(data))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], plain))
+    assert verdict["a robot carrying a lidar, in a maze"] is False
+
+
+def test_distances_are_read_in_meters_from_an_answer(ev):
+    said = ev.distances_said("左边约 0.43 米，前方 1.2m，速度 0.2 m/s，另一面 43 厘米，then 50 cm and 0.5 meters")
+    assert said == [0.43, 1.2, 0.43, 0.5, 0.5]
+    assert ev.said_near([0.4], 0.43) and not ev.said_near([0.3], 0.43) and ev.said_near([2.2], 2.5)
+
+
+def _gif(path: Path, frames: int = 20, moving: bool = True, ms: int = 100) -> Path:
+    from PIL import Image, ImageDraw
+
+    images = []
+    for i in range(frames):
+        im = Image.new("RGB", (160, 120), (200, 200, 200))
+        x = 5 + 6 * i if moving else 5
+        ImageDraw.Draw(im).rectangle([x, 40, x + 20, 60], fill=(30, 160, 150))
+        images.append(im)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    images[0].save(path, save_all=True, append_images=images[1:], duration=ms, loop=0)
+    return path
+
+
+def test_a_video_of_the_robot_from_parts_must_be_there_and_move(ev, tmp_path):
+    """The recorded session left MP4s in its working folder; a fixture keeps no video, so each case puts one there."""
+    task = ev.TASKS["parts_video"]
+    none = _copy(tmp_path / "a", "parts_video")
+    verdict = _verdict(ev.score(task, none))
+    assert verdict["a robot built from parts"] and verdict["it moved >= 0.2 m"]
+    assert verdict["a video >= 1 s in which something moves"] is False
+    good = _copy(tmp_path / "b", "parts_video")
+    _gif(good / "work" / "pip.gif")
+    outcome = ev.score(task, good)
+    assert outcome.passed, outcome.criteria
+    assert "pip.gif: 20 frames, 2.0 s" in outcome.criteria[-1]["observed"]
+    still = _copy(tmp_path / "c", "parts_video")
+    _gif(still / "rf_home" / "worlds" / "pip_rover" / "videos" / "pip.gif", moving=False)
+    assert _verdict(ev.score(task, still))["a video >= 1 s in which something moves"] is False
+    short = _copy(tmp_path / "d", "parts_video")
+    _gif(short / "work" / "pip.gif", frames=5)
+    assert _verdict(ev.score(task, short))["a video >= 1 s in which something moves"] is False
+
+
+def test_a_video_saved_elsewhere_counts_when_the_answer_names_it_and_it_is_new(ev, tmp_path):
+    import os
+
+    task = ev.TASKS["parts_video"]
+    named = _copy(tmp_path / "a", "parts_video")
+    elsewhere = _gif(tmp_path / "Desktop" / "pip.gif")
+    with (named / "events.jsonl").open("a", encoding="utf-8") as f:
+        f.write(_said(f"Here is the video: [pip.gif]({elsewhere})") + "\n")
+    assert ev.score(task, named).passed
+    started = json.loads((named / "meta.json").read_text(encoding="utf-8"))["started"]
+    os.utime(elsewhere, (started - 3600, started - 3600))  # there before the session: not its video
+    assert _verdict(ev.score(task, named))["a video >= 1 s in which something moves"] is False
+
+
+def test_a_robot_that_never_moved_is_not_a_video_of_it_moving(ev, tmp_path):
+    world = (FIXTURES / "parts_video" / "rf_home" / "worlds" / "pip_rover" / "world.yaml").read_text(encoding="utf-8")
+    still = _made_up(tmp_path, {"pip_rover": world}, _opened("pip_rover"))
+    _gif(still / "work" / "pip.gif")
+    verdict = _verdict(ev.score(ev.TASKS["parts_video"], still))
+    assert verdict["a robot built from parts"] and verdict["it moved >= 0.2 m"] is False
+
+
+def test_a_fixture_keeps_each_lidar_whole(ev):
+    state = {
+        "time": 1,
+        "joints": {"a": 1},
+        "sensors": {"c/imu": [0, 0, 1], "c/l_0": 0.5},
+        "lidars": {"c/l": {"rays": 3}},
+    }
+    kept = json.loads(ev._trim_result("observe", json.dumps(state)))
+    assert kept == {"time": 1, "lidars": {"c/l": {"rays": 3}}, "sensors": {"c/l_0": 0.5}}
