@@ -1,13 +1,14 @@
 """How light is robotforge? Measure it the same way every time and hold it to a budget.
 
     uv run python scripts/bench.py [--only install imports physics viewer mcp] [--worlds dog_idle ...]
-        [--quick] [--no-save] [--wait-calm MIN] [--budget docs/bench/budget.json]
+        [--quick] [--save | --no-save] [--wait-calm MIN] [--budget docs/bench/budget.json]
         [--against docs/bench/<run>.json] [--shots <folder>]
     uv run python scripts/bench.py --ab <rev> [--worlds ...] [--rounds 3]
 
 Measures, each in fresh processes:
-- install: the built wheel, and the wheel plus its runtime dependencies installed in a clean uv venv in a temp
-  folder (bytes on disk, packages, the biggest ones, and the download those wheels make per uv.lock);
+- install: the built wheel, and the wheel plus its runtime dependencies at the versions uv.lock pins, installed in a
+  clean uv venv in a temp folder (bytes on disk, packages with their versions, the biggest ones, and the download
+  those wheels make);
 - imports: `import robotforge`, `robotforge.cli` (what every command loads) and `robotforge.mcp_server`, best of
   several runs, the packages that take the time (python -X importtime) and which heavy modules got loaded;
 - physics: headless steps per second (process time, so a busy machine slows it less; each 50 ms slice the best
@@ -16,11 +17,15 @@ Measures, each in fresh processes:
   per second and the time one frame takes to draw, and the viewer server's peak memory;
 - mcp: `robotforge mcp` started to tools listed, the latency of common calls, and the server's memory.
 
-Writes docs/bench/<date>-<sha>.json, prints a table that compares with the previous run there and with the
-budgets in docs/bench/budget.json, and exits 1 when a budget is exceeded (2 when a measurement failed).
-Timings on a busy machine run slow: the run records the load average and says so next to a failed budget, and
---wait-calm waits for the load to drop first. Two runs an hour apart on a shared machine can differ more than a
-change does, so --ab measures a change instead: the physics worlds on this tree and on revision <rev>, alternately.
+Writes docs/bench/<date>-<sha>.json, prints a table that compares with the previous complete run there and with
+the budgets in docs/bench/budget.json. Exits 0 when every budget is met, 1 when one is exceeded, 2 when a
+measurement failed or a budget went unchecked, and 3 when only timings went over on a busy machine (load above the
+cores, or the control world objects_20, with no robotforge code in its loop, under its own floor): rerun calm.
+A quick or partial run (--quick, --only, --worlds) is not saved unless --save, and then as <date>-<sha>-partial.json,
+which no later run compares with. Physics speeds are compared relative to objects_20, so a busier machine than last
+time does not read as a slower robotforge; --wait-calm waits for the load to drop first. Two runs an hour apart on a
+shared machine can still differ more than a change does, so --ab measures a change instead: imports, cold start and
+the physics worlds on this tree and on revision <rev>, alternately.
 The physics, viewer and MCP parts use the real Menagerie Go2 (downloaded once into the cache); the viewer part
 needs Google Chrome (or CHROME=...). Maintainer tool, not part of robotforge.
 """
@@ -58,9 +63,32 @@ TOP_N = 8  # rows of "where the time or the bytes go" kept in a result
 # A change within this share or this amount is noise, by unit: sizes on disk are exact; speeds and times on a shared
 # machine are not (the same commit measured 103,000 and 75,000 steps/s for the idle dog at the same load average,
 # minutes apart), and a 2 ms call that takes 3 ms once is not a regression. Measured memory wobbles a few percent.
-NOISE = {"MB": (0.02, 1.0), "KB": (0.02, 10.0), "": (0.0, 0.0), "ms": (0.3, 2.0), "s": (0.3, 0.05), "%": (0.3, 1.0)}
+NOISE = {
+    "MB": (0.02, 1.0),
+    "KB": (0.02, 10.0),
+    "": (0.0, 0.0),
+    "ms": (0.3, 2.0),
+    "s": (0.3, 0.05),
+    "%": (0.3, 1.0),
+    "share": (0.3, 0.02),  # of step time in controllers: 0.005 against 0.012 is no change worth a line
+}
 TIME_NOISE = (0.3, 0.0)
 MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
+# A process that compiles the Go2's OBJ meshes peaks 480 MB one run and 535 MB the next on the same build.
+MESH_MEMORY_NOISE = (0.15, 20.0)
+# Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code.
+LOAD_SENSITIVE = ("steps/s", "ms", "s", "fps", "%")
+# The world with no robotforge code in its loop (only MuJoCo): how fast this machine was during the run.
+CONTROL = "physics.objects_20.steps_per_s"
+
+# Every metric each part can produce, so budget.json cannot name one that does not exist (a typo would turn a
+# budget off without a word) and a renamed metric shows up as an error, not as a budget gone quiet.
+INSTALL_METRICS = ("wheel_kb", "installed_mb", "packages", "download_mb")
+IMPORT_METRICS = ("ms", "cpu_ms", "heavy")  # per import target, e.g. imports.cli_cpu_ms
+PHYSICS_METRICS = ("steps_per_s", "controllers_share", "peak_mb")  # per world, e.g. physics.dog_idle.peak_mb
+VIEWER_METRICS = ("cold_start_s", "fps", "frame_ms", "server_peak_mb", "idle_cpu_pct")
+MCP_CALLS = ("new_world", "add_robot", "move", "observe")
+MCP_METRICS = ("start_s", *(f"{call}_ms" for call in MCP_CALLS), "server_rss_mb", "idle_cpu_pct")
 
 
 # ---- results: metrics, comparison, budgets ---------------------------------------------------------------
@@ -83,14 +111,65 @@ def flatten(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
+def import_key(target: str) -> str:
+    """robotforge.cli -> cli: how an import target is named in the results."""
+    return target.removeprefix("robotforge.")
+
+
+def known_metrics() -> set[str]:
+    """Every "section.name" a complete run measures."""
+    names = {f"install.{n}" for n in INSTALL_METRICS}
+    names |= {f"imports.{import_key(t)}_{n}" for t in IMPORT_TARGETS for n in IMPORT_METRICS}
+    names |= {f"physics.{w}.{n}" for w in WORLDS for n in PHYSICS_METRICS}
+    names |= {f"viewer.{n}" for n in VIEWER_METRICS}
+    return names | {f"mcp.{n}" for n in MCP_METRICS}
+
+
+def part_of(name: str) -> str:
+    """The part of a run a metric comes from: its section, or physics.<world> for a physics metric."""
+    section, _, rest = name.partition(".")
+    return f"physics.{rest.split('.')[0]}" if section == "physics" else section
+
+
+def parts(sections: list[str], worlds: list[str]) -> set[str]:
+    """The parts a run with these sections and physics worlds covers."""
+    out = {s for s in sections if s != "physics"}
+    return out | ({f"physics.{w}" for w in worlds} if "physics" in sections else set())
+
+
+def missing_parts(results: dict[str, Any]) -> list[str]:
+    """What a complete run has and these results do not (or got only an error for)."""
+    missing = [s for s in SECTIONS if not isinstance(results.get(s), dict) or "error" in results[s]]
+    if "physics" not in missing:
+        missing += [f"physics.{w}" for w in WORLDS if f"{w}.steps_per_s" not in results["physics"]]
+    return missing
+
+
+def is_baseline(record: dict[str, Any]) -> bool:
+    """Whether later runs may compare with this one: complete and not quick. Records say whether they are partial;
+    older ones did not, so for those it is read from their results."""
+    if record.get("quick") or record.get("partial"):
+        return False
+    return "partial" in record or not missing_parts(record.get("results", {}))
+
+
 def _noise(m: dict[str, Any]) -> tuple[float, float]:
     if m.get("noise"):
         return tuple(m["noise"])
     return NOISE.get(m.get("unit", ""), TIME_NOISE)
 
 
+def machine_scale(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> float | None:
+    """How much faster this machine ran the control world now than then (0.6: 40 percent slower), or None."""
+    a, b = (now.get(CONTROL) or {}).get("value"), (before.get(CONTROL) or {}).get("value")
+    return a / b if a and b else None
+
+
 def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Per metric: the previous value, the change and a verdict (better, worse, same, new), from flattened results."""
+    """Per metric: the previous value, the change and a verdict (better, worse, same, new), from flattened results.
+    Physics speeds change relative to the control world when both runs measured it ("relative": True): a world
+    that slowed by as much as the control did is the machine, not robotforge."""
+    scale = machine_scale(now, before)
     out = {}
     for name, m in now.items():
         old = before.get(name)
@@ -99,18 +178,40 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             out[name] = {"before": None, "change": None, "verdict": "new"}
             continue
         prev = float(old["value"])
-        change = (value - prev) / abs(prev) if prev else (0.0 if value == prev else math.inf)
+        relative = scale is not None and m.get("unit") == "steps/s" and name != CONTROL
+        ref = prev * scale if relative else prev
+        change = (value - ref) / abs(ref) if ref else (0.0 if value == ref else math.inf)
         share, amount = _noise(m)
-        if abs(change) <= share or abs(value - prev) <= amount:
+        if abs(change) <= share or abs(value - ref) <= amount:
             verdict = "same"
         else:
             verdict = "better" if (change < 0) == (m.get("better") == "lower") else "worse"
         out[name] = {"before": prev, "change": round(change, 4), "verdict": verdict}
+        if relative:
+            out[name]["relative"] = True
     return out
 
 
-def check_budgets(now: dict[str, dict[str, Any]], budgets: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Each budget against its metric: ok, over (exceeded) or unmeasured (that part did not run)."""
+def busy_reason(loads: list[float], cores: int, now: dict[str, dict[str, Any]], budgets: dict[str, Any]) -> str | None:
+    """Why this run's timings cannot be held to their budgets, or None: the load average went above the number of
+    cores, or the control world ran under its own floor (then the machine, not the code, was slow)."""
+    peak = max(loads, default=0.0)
+    if peak > cores:
+        return f"load average {peak:.0f} on {cores} cores"
+    value, floor = (now.get(CONTROL) or {}).get("value"), (budgets.get(CONTROL) or {}).get("min")
+    if value is not None and floor is not None and value < floor:
+        return f"the control world ran {value:,.0f} steps/s, under its floor of {floor:,.0f}"
+    return None
+
+
+def check_budgets(
+    now: dict[str, dict[str, Any]],
+    budgets: dict[str, dict[str, Any]],
+    ran: set[str] | None = None,
+    busy: bool = False,
+) -> list[dict[str, Any]]:
+    """Each budget against its metric: ok, over (exceeded), inconclusive (a timing over on a busy machine),
+    unmeasured (its part ran but gave no number) or not run (`ran`, the parts this run covered, left it out)."""
     out = []
     for name, budget in budgets.items():
         m = now.get(name)
@@ -123,9 +224,9 @@ def check_budgets(now: dict[str, dict[str, Any]], budgets: dict[str, dict[str, A
         else:
             raise ValueError(f"budget {name!r} needs a max or a min")
         if value is None:
-            row["status"] = "unmeasured"
+            row["status"] = "unmeasured" if ran is None or part_of(name) in ran else "not run"
         elif (row["kind"] == "max" and value > row["limit"]) or (row["kind"] == "min" and value < row["limit"]):
-            row["status"] = "over"
+            row["status"] = "inconclusive" if busy and m.get("unit") in LOAD_SENSITIVE else "over"
         else:
             row["status"] = "ok"
         out.append(row)
@@ -133,10 +234,15 @@ def check_budgets(now: dict[str, dict[str, Any]], budgets: dict[str, dict[str, A
 
 
 def load_budgets(path: Path) -> dict[str, dict[str, Any]]:
+    """The budgets in `path` (none when there is no file); a budget on a metric the bench does not measure is an
+    error, so a typo cannot switch a budget off."""
     if not path.is_file():
         return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data.get("budgets", {})
+    budgets = json.loads(path.read_text(encoding="utf-8")).get("budgets", {})
+    unknown = sorted(set(budgets) - known_metrics())
+    if unknown:
+        raise ValueError(f"{path.name} has budgets on metrics the bench does not measure: {', '.join(unknown)}")
+    return budgets
 
 
 def wait_for_calm(seconds: float) -> None:
@@ -150,22 +256,25 @@ def wait_for_calm(seconds: float) -> None:
 
 
 def previous_run(directory: Path) -> Path | None:
-    """The newest run in `directory` by the time it records (the budget file is not a run)."""
+    """The newest complete run in `directory` by the time it records (partial and quick runs, and the budget
+    file, are not runs to compare with)."""
     runs = []
     for p in directory.glob("*.json"):
         if p.name == BUDGET_FILE.name:
             continue
         try:
-            started = json.loads(p.read_text(encoding="utf-8")).get("started")
-        except (OSError, ValueError):
+            record = json.loads(p.read_text(encoding="utf-8"))
+            # astimezone: times with different UTC offsets, and one without (taken as local), compare correctly
+            started = dt.datetime.fromisoformat(record["started"]).astimezone()
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             continue
-        if started:
-            runs.append((started, p))
-    return max(runs)[1] if runs else None
+        if is_baseline(record):
+            runs.append((started, p.name, p))
+    return max(runs)[2] if runs else None
 
 
-def run_name(started: dt.datetime, sha: str) -> str:
-    return f"{started:%Y-%m-%d}-{sha}.json"
+def run_name(started: dt.datetime, sha: str, partial: bool = False) -> str:
+    return f"{started:%Y-%m-%d}-{sha}{'-partial' if partial else ''}.json"
 
 
 # ---- the table ----------------------------------------------------------------------------------------------
@@ -191,7 +300,7 @@ def table(
     for name, m in now.items():
         c = compared.get(name, {})
         b = by_metric.get(name)
-        change = "" if c.get("change") is None else f"{100 * c['change']:+.0f}%"
+        change = "" if c.get("change") is None else f"{100 * c['change']:+.0f}%{'*' if c.get('relative') else ''}"
         limit = "" if b is None else f"{'<=' if b['kind'] == 'max' else '>='} {_fmt(b['limit'], m['unit'])}"
         status = "" if b is None else b["status"]
         if c.get("verdict") in ("better", "worse"):
@@ -212,9 +321,11 @@ def _git(*args: str) -> str:
 
 
 def git_sha() -> str:
-    """The commit measured; "-dirty" when the code (src, scripts) has changes not committed yet."""
+    """The commit measured; "-dirty" when the code (src, scripts) or its dependencies (pyproject.toml, uv.lock)
+    have changes not committed yet."""
     sha = _git("rev-parse", "--short", "HEAD") or "nogit"
-    return f"{sha}-dirty" if _git("status", "--porcelain", "--", "src", "pyproject.toml") else sha
+    changed = _git("status", "--porcelain", "--", "src", "scripts", "pyproject.toml", "uv.lock")
+    return f"{sha}-dirty" if changed else sha
 
 
 def machine() -> dict[str, Any]:
@@ -339,7 +450,17 @@ def _wait_http(url: str, timeout: float, proc: subprocess.Popen | None = None) -
 # ---- install ------------------------------------------------------------------------------------------------
 
 
+def _uv_install(command: list[str]) -> None:
+    done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", check=False)
+    if done.returncode != 0:  # no network: what the uv cache has will do
+        done = subprocess.run([*command, "--offline"], capture_output=True, text=True, encoding="utf-8", check=False)
+        if done.returncode != 0:
+            raise RuntimeError(f"{' '.join(command[1:3])} failed: {done.stderr.strip()[-400:]}")
+
+
 def bench_install(quick: bool) -> dict[str, Any]:
+    """The wheel and its runtime dependencies at the versions uv.lock pins, so the size moves only when robotforge
+    or its lock does (a plain `uv pip install <wheel>` would take whatever upstream released since)."""
     uv = shutil.which("uv")
     if not uv:
         raise RuntimeError("uv not found on PATH")
@@ -348,16 +469,21 @@ def bench_install(quick: bool) -> dict[str, Any]:
         dist = tmp_path / "dist"
         subprocess.run([uv, "build", "--wheel", "--out-dir", str(dist), str(ROOT)], check=True, capture_output=True)
         wheel = next(dist.glob("robotforge-*.whl"))
+        locked = tmp_path / "locked.txt"
+        export = [uv, "export", "--frozen", "--no-dev", "--no-emit-project", "--no-hashes", "-o", str(locked)]
+        subprocess.run(export, cwd=ROOT, check=True, capture_output=True)
         venv = tmp_path / "venv"
         version = f"{sys.version_info.major}.{sys.version_info.minor}"
         subprocess.run([uv, "venv", "--python", version, str(venv)], check=True, capture_output=True)
         python = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-        install = [uv, "pip", "install", "--python", str(python), str(wheel)]
-        done = subprocess.run(install, capture_output=True, text=True, encoding="utf-8", check=False)
-        if done.returncode != 0:  # no network: what the uv cache has will do
-            done = subprocess.run([*install, "--offline"], capture_output=True, text=True, encoding="utf-8")
-            if done.returncode != 0:
-                raise RuntimeError(f"uv pip install failed: {done.stderr.strip()[-400:]}")
+        _uv_install([uv, "pip", "install", "--python", str(python), "-r", str(locked)])
+        _uv_install([uv, "pip", "install", "--python", str(python), "--no-deps", str(wheel)])
+        # The locked set must satisfy what the wheel asks for, or uv.lock is behind pyproject.toml
+        check = subprocess.run(
+            [uv, "pip", "check", "--python", str(python)], capture_output=True, text=True, encoding="utf-8"
+        )
+        if check.returncode != 0:
+            raise RuntimeError(f"uv.lock does not satisfy the wheel (uv lock?): {check.stdout.strip()[-400:]}")
         site = Path(
             subprocess.run(
                 [str(python), "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
@@ -367,26 +493,31 @@ def bench_install(quick: bool) -> dict[str, Any]:
                 check=True,
             ).stdout.strip()
         )
-        sizes = _installed_sizes(site)
-        total = sum(sizes.values())
-        download = _download_size(sizes)
-        top = sorted(sizes.items(), key=lambda kv: -kv[1])[:TOP_N]
+        found = _installed(site)
+        total = sum(size for _version, size in found.values())
+        download = _download_size(found)
+        top = sorted(found.items(), key=lambda kv: -kv[1][1])[:TOP_N]
+        versions = sorted(f"{name}=={version}" for name, (version, _size) in found.items())
         return {
             "wheel_kb": metric(wheel.stat().st_size / 1024, "KB", "lower"),
             "installed_mb": metric(
-                total / 2**20, "MB", "lower", top=[[name, round(size / 2**20, 1)] for name, size in top]
+                total / 2**20,
+                "MB",
+                "lower",
+                top=[[f"{name}=={version}", round(size / 2**20, 1)] for name, (version, size) in top],
             ),
-            "packages": metric(len(sizes), "", "lower"),
+            "packages": metric(len(found), "", "lower", versions=versions),
             "download_mb": metric(None if download is None else download / 2**20, "MB", "lower"),
         }
 
 
-def _installed_sizes(site: Path) -> dict[str, int]:
-    """Bytes on disk per installed distribution, from each one's RECORD (pip and setuptools left out)."""
-    sizes: dict[str, int] = {}
+def _installed(site: Path) -> dict[str, tuple[str, int]]:
+    """Version and bytes on disk per installed distribution, from each one's RECORD (pip and setuptools left out)."""
+    found: dict[str, tuple[str, int]] = {}
     claimed: set[Path] = set()
     for info in site.glob("*.dist-info"):
-        name = info.name.split("-")[0].lower().replace("_", "-")
+        name, _, version = info.name.removesuffix(".dist-info").partition("-")
+        name = name.lower().replace("_", "-")
         if name in ("pip", "setuptools", "wheel"):
             continue
         total = 0
@@ -399,12 +530,12 @@ def _installed_sizes(site: Path) -> dict[str, int]:
                 continue
             claimed.add(path)
             total += path.stat().st_size
-        sizes[name] = total
-    return sizes
+        found[name] = (version, total)
+    return found
 
 
-def _download_size(installed: dict[str, int]) -> int | None:
-    """Bytes of the wheels uv.lock lists for this platform, for the installed distributions."""
+def _download_size(installed: dict[str, tuple[str, int]]) -> int | None:
+    """Bytes of the wheels uv.lock lists for this platform, for the installed distributions at their versions."""
     try:
         import tomllib
 
@@ -419,6 +550,8 @@ def _download_size(installed: dict[str, int]) -> int | None:
         name = package["name"].lower().replace("_", "-")
         if name not in installed or name == "robotforge":
             continue
+        if package.get("version") != installed[name][0]:
+            return None  # installed is not what the lock lists: its wheel sizes would describe another set
         best: tuple[int, int] | None = None
         for wheel in package.get("wheels", []):
             filename = wheel["url"].rsplit("/", 1)[-1]
@@ -481,7 +614,7 @@ def bench_imports(quick: bool) -> dict[str, Any]:
         samples = [_import_once(target)[0] for _ in range(runs)]
         best = min(samples, key=lambda s: s["wall"])
         _, log = _import_once(target, importtime=True)
-        key = target.replace("robotforge.", "") if target != "robotforge" else "robotforge"
+        key = import_key(target)
         out[f"{key}_ms"] = metric(
             1000 * best["wall"], "ms", "lower", modules=best["modules"], offenders=import_offenders(log)
         )
@@ -506,6 +639,7 @@ class World:
     check: Callable[[Any, Any], dict[str, Any]]  # what the run did (small), so a broken world is not timed quietly
     seconds: float = 4.0  # sim time measured
     warm: float = 0.5  # sim time run before measuring
+    memory_noise: tuple[float, float] = MEMORY_NOISE  # how much its peak memory wobbles from run to run
 
 
 def _nothing(pg: Any) -> None:
@@ -595,14 +729,14 @@ WORLDS: dict[str, World] = {
     # Never moved: stands on its gait from the start, as a beginner finds it.
     "dog_idle": World(_dog, _nothing, _stood("dog")),
     "dog_walk": World(_dog, _walk("dog"), _went("dog")),
-    "go2_idle": World(_go2, _nothing, _stood("go2")),
-    "go2_walk": World(_go2, _walk("go2"), _went("go2")),
+    "go2_idle": World(_go2, _nothing, _stood("go2"), memory_noise=MESH_MEMORY_NOISE),
+    "go2_walk": World(_go2, _walk("go2"), _went("go2"), memory_noise=MESH_MEMORY_NOISE),
     # The learned walk (a neural network policy) standing still: it holds its spot.
-    "go2_rl_idle": World(_go2, _walk("go2", 0.0, "rl"), _went("go2")),
+    "go2_rl_idle": World(_go2, _walk("go2", 0.0, "rl"), _went("go2"), memory_noise=MESH_MEMORY_NOISE),
     # Keeps its balance from the start: a walking controller (footsteps, ZMP preview, leg IK) standing still.
     "humanoid_idle": World(_humanoid, _nothing, _stood("humanoid")),
     "arm_pick": World(_arm_world, _arm_start, _arm_check, seconds=8.0, warm=0.0),
-    "warehouse_nav": World(_warehouse, _warehouse_start, _went("go2"), seconds=6.0),
+    "warehouse_nav": World(_warehouse, _warehouse_start, _went("go2"), seconds=6.0, memory_noise=MESH_MEMORY_NOISE),
     "objects_20": World(_objects, _nothing, _objects_check, seconds=3.0, warm=0.0),
 }
 
@@ -700,7 +834,7 @@ def bench_physics(quick: bool, worlds: list[str] | None = None) -> dict[str, Any
         info = {k: r[k] for k in r if k not in ("steps_per_s", "rtf", "controllers_share", "peak_mb")}
         out[f"{name}.steps_per_s"] = metric(r["steps_per_s"], "steps/s", "higher", **info)
         out[f"{name}.controllers_share"] = metric(r["controllers_share"], "share", "lower")
-        out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower", noise=MEMORY_NOISE)
+        out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower", noise=WORLDS[name].memory_noise)
     return out
 
 
@@ -990,7 +1124,7 @@ async def _mcp_session(home: Path, calls: int) -> dict[str, Any]:
     params = StdioServerParameters(
         command=_robotforge_command(), args=["mcp", "--port", str(port)], env=_child_env(home)
     )
-    latencies: dict[str, list[float]] = {"new_world": [], "add_robot": [], "move": [], "observe": []}
+    latencies: dict[str, list[float]] = {call: [] for call in MCP_CALLS}
     rss: list[float] = []
 
     async def timed(label: str, tool: str, /, **args: Any) -> Any:
@@ -1064,6 +1198,12 @@ def run(
             errors.append(f"{section}: {type(exc).__name__}: {exc}")
             results[section] = {"error": f"{type(exc).__name__}: {exc}"[:600]}
         errors += [f"{section}: {k}: {v[-200:]}" for k, v in results[section].items() if k.endswith("_error")]
+        known = known_metrics()
+        errors += [
+            f"{name}: measured, but known_metrics() does not list it (add it there)"
+            for name in flatten({section: results[section]})
+            if name not in known
+        ]
         print(f"    {section} took {time.perf_counter() - t0:.0f} s", file=sys.stderr, flush=True)
     return results, errors
 
@@ -1075,10 +1215,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--wait-calm", type=float, default=0.0, metavar="MIN", help="first wait up to MIN minutes for a calm machine"
     )
-    parser.add_argument("--no-save", action="store_true", help="print only; write nothing to docs/bench")
+    saving = parser.add_mutually_exclusive_group()
+    saving.add_argument("--no-save", action="store_true", help="print only; write nothing to docs/bench")
+    saving.add_argument(
+        "--save", action="store_true", help="also save a quick or partial run, as <date>-<sha>-partial.json"
+    )
     parser.add_argument("--out", type=Path, default=BENCH_DIR)
     parser.add_argument("--budget", type=Path, default=BUDGET_FILE)
-    parser.add_argument("--against", type=Path, help="compare with this run (default: the newest in --out)")
+    parser.add_argument("--against", type=Path, help="compare with this run (default: the newest complete one)")
     parser.add_argument("--shots", type=Path, help="save a picture of the viewer frame measured here")
     parser.add_argument("--worlds", nargs="*", choices=list(WORLDS), help="physics: only these worlds")
     parser.add_argument("--ab", metavar="REV", help="time imports and physics on this tree and REV alternately")
@@ -1095,20 +1239,34 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{args.ab} -> this tree ({git_sha()}), load {machine().get('load')}", flush=True)
         ab_physics(args.ab, args.worlds or list(WORLDS), args.rounds)
         return 0
+    try:  # before minutes of measuring: a budget on a metric that does not exist is a mistake to fix first
+        budget_spec = load_budgets(args.budget)
+    except ValueError as exc:
+        print(f"ERROR  {exc}")
+        return 2
     if args.shots:
         args.shots.mkdir(parents=True, exist_ok=True)
     if args.wait_calm > 0:
         wait_for_calm(args.wait_calm * 60)
+    sections = args.only or list(SECTIONS)
+    worlds = args.worlds or list(WORLDS)
+    ran = parts(sections, worlds)
+    # Only a complete run is a baseline: a partial one saved under the same name would replace it, and the next
+    # complete run would compare with a stub.
+    partial = args.quick or ran != parts(list(SECTIONS), list(WORLDS))
     started = dt.datetime.now().astimezone()
     sha = git_sha()
     before_machine = machine()
-    results, errors = run(args.only or list(SECTIONS), args.quick, args.shots, args.worlds)
+    results, errors = run(sections, args.quick, args.shots, args.worlds)
+    load_after = [round(v, 1) for v in os.getloadavg()] if hasattr(os, "getloadavg") else None
     record = {
         "started": started.isoformat(timespec="seconds"),
         "sha": sha,
         "quick": args.quick,
+        "partial": partial,
+        "covers": sorted(ran),
         "machine": before_machine,
-        "load_after": [round(v, 1) for v in os.getloadavg()] if hasattr(os, "getloadavg") else None,
+        "load_after": load_after,
         "results": results,
     }
     now = flatten(results)
@@ -1120,29 +1278,46 @@ def main(argv: list[str] | None = None) -> int:
         then, here = old.get("machine", {}).get("load", ["?"])[0], before_machine.get("load", ["?"])[0]
         print(f"compared with {against.name} (load {then} then, {here} now)")
     compared = compare(now, before)
-    budgets = check_budgets(now, load_budgets(args.budget))
+    cores = os.cpu_count() or 1
+    loads = [load[0] for load in (before_machine.get("load"), load_after) if load]
+    busy = busy_reason(loads, cores, now, budget_spec)
+    budgets = check_budgets(now, budget_spec, ran, busy is not None)
     print("\n".join(table(now, compared, budgets)))
-    load = before_machine.get("load", [0.0])[0]
-    busy = load > (os.cpu_count() or 1)
+    scale = machine_scale(now, before)
+    if scale is not None:
+        print(
+            f"\n* steps/s changes are relative to objects_20 (only MuJoCo in its loop), which ran {scale - 1:+.0%}: "
+            "how much faster or slower the machine was than then"
+        )
     if busy:
-        print(f"\nnote: load average {load} on {os.cpu_count()} cores: timings run slow on a machine this busy")
+        print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")
     over = [b for b in budgets if b["status"] == "over"]
+    inconclusive = [b for b in budgets if b["status"] == "inconclusive"]
+    unmeasured = [b for b in budgets if b["status"] == "unmeasured"]
     for b in over:
         print(f"OVER BUDGET  {b['metric']} = {b['value']} ({b['kind']} {b['limit']}): {b['why']}")
+    for b in inconclusive:
+        print(f"INCONCLUSIVE  {b['metric']} = {b['value']} ({b['kind']} {b['limit']}), on a busy machine")
+    for b in unmeasured:
+        print(f"UNMEASURED  {b['metric']}: its part ran but gave no number, so this budget went unchecked")
     for e in errors:
         print(f"ERROR  {e}")
-    if errors and not (args.no_save or args.quick):
+    if errors and not args.no_save:
         # A run with parts missing would become the next run's "previous": not a record.
         print("\nnot saved: parts of the run failed")
-    elif not (args.no_save or args.quick):
+    elif partial and not args.save and not args.no_save:
+        print("\nnot saved: a quick or partial run (--save writes it as <date>-<sha>-partial.json)")
+    elif not args.no_save:
         args.out.mkdir(parents=True, exist_ok=True)
-        path = args.out / run_name(started, sha)
+        path = args.out / run_name(started, sha, partial)
         record["budgets"] = {b["metric"]: b["status"] for b in budgets}
         path.write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"\nwrote {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
-    if errors:
+    if errors or unmeasured:
         return 2
-    return 1 if over else 0
+    if over:
+        return 1
+    return 3 if inconclusive else 0
 
 
 if __name__ == "__main__":

@@ -77,6 +77,21 @@ def test_measured_memory_wobbles_but_a_size_on_disk_does_not(bench):
         {"physics.dog.peak_mb": m(155, "MB", "lower", noise=bench.MEMORY_NOISE)},
     )
     assert peak["physics.dog.peak_mb"]["verdict"] == "same"
+    # A Go2 world peaked at 480 MB and then 535 MB on the same build: its meshes' compile wobbles more
+    go2 = bench.WORLDS["go2_walk"].memory_noise
+    out = bench.compare({"x": m(535, "MB", "lower", noise=go2)}, {"x": m(480, "MB", "lower", noise=go2)})
+    assert out["x"]["verdict"] == "same"
+    out = bench.compare({"x": m(175, "MB", "lower", noise=bench.MEMORY_NOISE)}, {"x": m(155, "MB", "lower")})
+    assert out["x"]["verdict"] == "worse"  # the dog's 13 percent is a change (trimesh and Pillow loaded again)
+
+
+def test_a_tiny_share_of_controller_time_that_moves_is_not_a_regression(bench):
+    """objects_20 spends 0.0046 and then 0.0124 of its time in controllers (it has none): not '+170% worse'."""
+    m = bench.metric
+    out = bench.compare({"x": m(0.0124, "share", "lower")}, {"x": m(0.0046, "share", "lower")})
+    assert out["x"]["verdict"] == "same"
+    out = bench.compare({"x": m(0.25, "share", "lower")}, {"x": m(0.10, "share", "lower")})
+    assert out["x"]["verdict"] == "worse"
 
 
 def test_a_size_that_grows_past_two_percent_is_worse(bench):
@@ -101,7 +116,7 @@ def test_budgets_flag_what_is_over_and_what_was_not_measured(bench):
         "mcp.start_s": {"max": 3},
         "install.installed_mb": {"max": 200},
     }
-    rows = {r["metric"]: r for r in bench.check_budgets(now, budgets)}
+    rows = {r["metric"]: r for r in bench.check_budgets(now, budgets, ran={"imports", "physics.dog", "viewer", "mcp"})}
     assert rows["imports.cli_ms"] == {
         "metric": "imports.cli_ms",
         "value": 900,
@@ -113,7 +128,9 @@ def test_budgets_flag_what_is_over_and_what_was_not_measured(bench):
     assert rows["physics.dog.steps_per_s"]["status"] == "over"  # a minimum not reached
     assert rows["viewer.fps"]["status"] == "ok"
     assert rows["mcp.start_s"]["status"] == "unmeasured"  # it ran but measured nothing
-    assert rows["install.installed_mb"]["status"] == "unmeasured"  # that part did not run
+    assert rows["install.installed_mb"]["status"] == "not run"  # that part did not run
+    # Without knowing what ran, a missing number is unmeasured: never quietly fine
+    assert bench.check_budgets(now, {"install.installed_mb": {"max": 200}})[0]["status"] == "unmeasured"
     with pytest.raises(ValueError, match="needs a max or a min"):
         bench.check_budgets(now, {"viewer.fps": {"why": "no limit"}})
 
@@ -126,14 +143,194 @@ def test_a_value_at_its_limit_is_within_budget(bench):
     assert [r["status"] for r in rows] == ["ok", "ok"]
 
 
+def _unit(name: str) -> str:
+    for end, unit in (("steps_per_s", "steps/s"), ("share", "share"), ("_mb", "MB"), ("_kb", "KB"), ("_pct", "%")):
+        if name.endswith(end):
+            return unit
+    return {"fps": "fps"}.get(name.rsplit(".", 1)[-1]) or (
+        "ms" if name.endswith("_ms") else "s" if name.endswith("_s") else ""
+    )
+
+
+def _results(bench, value: float = 1.0, only: set[str] | None = None) -> dict:
+    """Results with every metric a complete run measures (or those of the parts in `only`)."""
+    out: dict = {}
+    for name in sorted(bench.known_metrics()):
+        if only is None or bench.part_of(name) in only:
+            section, _, rest = name.partition(".")
+            out.setdefault(section, {})[rest] = bench.metric(value, _unit(name), "lower")
+    return out
+
+
+def _record(bench, started: str, **extra) -> str:
+    return json.dumps({"started": started, "results": _results(bench), **extra})
+
+
 def test_the_previous_run_is_the_newest_by_its_start_not_by_file_name(bench, tmp_path):
     assert bench.previous_run(tmp_path) is None
-    (tmp_path / "2026-10-18-aaaaaaa.json").write_text(json.dumps({"started": "2026-10-18T09:00:00+08:00"}))
-    (tmp_path / "2026-10-17-zzzzzzz.json").write_text(json.dumps({"started": "2026-10-18T21:00:00+08:00"}))
+    (tmp_path / "2026-10-18-aaaaaaa.json").write_text(_record(bench, "2026-10-18T09:00:00+08:00"))
+    (tmp_path / "2026-10-17-zzzzzzz.json").write_text(_record(bench, "2026-10-18T21:00:00+08:00"))
     (tmp_path / "budget.json").write_text(json.dumps({"started": "2099-01-01T00:00:00+08:00", "budgets": {}}))
     (tmp_path / "broken.json").write_text("{not json")
     (tmp_path / "notes.json").write_text(json.dumps({"something": "else"}))
+    (tmp_path / "odd.json").write_text(json.dumps({"started": "yesterday", "results": {}}))
     assert bench.previous_run(tmp_path).name == "2026-10-17-zzzzzzz.json"
+
+
+def test_runs_are_ordered_by_their_moment_across_utc_offsets(bench, tmp_path):
+    """09:00 at UTC-7 is 16:00 UTC, later than 10:00 at UTC+8 (02:00 UTC), though "09" sorts first as text."""
+    (tmp_path / "a.json").write_text(_record(bench, "2026-10-18T09:00:00-07:00"))
+    (tmp_path / "b.json").write_text(_record(bench, "2026-10-18T10:00:00+08:00"))
+    assert bench.previous_run(tmp_path).name == "a.json"
+
+
+def test_a_partial_or_quick_run_is_never_the_previous_run(bench, tmp_path):
+    """A one-world run must not become what the next complete run compares with."""
+    (tmp_path / "2026-10-18-full.json").write_text(_record(bench, "2026-10-18T09:00:00+08:00"))
+    partial = {"started": "2026-10-18T10:00:00+08:00", "partial": True, "results": _results(bench)}
+    (tmp_path / "2026-10-18-new-partial.json").write_text(json.dumps(partial))
+    (tmp_path / "quick.json").write_text(_record(bench, "2026-10-18T11:00:00+08:00", quick=True))
+    # Saved before records said whether they were partial: only the dog in its physics, as the bug left it
+    stub = {"started": "2026-10-18T12:00:00+08:00", "results": _results(bench, only={"physics.dog_idle"})}
+    (tmp_path / "2026-10-18-old.json").write_text(json.dumps(stub))
+    errored = {"started": "2026-10-18T13:00:00+08:00", "results": {**_results(bench), "viewer": {"error": "no"}}}
+    (tmp_path / "errored.json").write_text(json.dumps(errored))
+    assert bench.previous_run(tmp_path).name == "2026-10-18-full.json"
+    assert bench.missing_parts(stub["results"])[:4] == ["install", "imports", "viewer", "mcp"]
+
+
+def _fake_main(bench, monkeypatch, results: dict, load: float = 1.0):
+    monkeypatch.setattr(bench, "run", lambda sections, quick, shots, worlds=None: (results, []))
+    monkeypatch.setattr(bench, "git_sha", lambda: "abc1234")
+    monkeypatch.setattr(bench, "machine", lambda: {"load": [load, load, load]})
+    monkeypatch.setattr(bench.os, "getloadavg", lambda: (load, load, load))
+
+
+def test_a_partial_run_neither_replaces_a_complete_one_nor_becomes_the_baseline(bench, tmp_path, monkeypatch, capsys):
+    """The run that lost objects_20: a complete record, then `--only physics --worlds dog_idle` at the same commit
+    on the same day wrote over it, and the next run compared with the stub."""
+    budget = tmp_path / "budget.json"
+    budget.write_text(json.dumps({"budgets": {}}))
+    out = tmp_path / "runs"
+    _fake_main(bench, monkeypatch, _results(bench))
+    assert bench.main(["--out", str(out), "--budget", str(budget)]) == 0
+    (full,) = out.glob("*.json")
+    assert full.name.endswith("-abc1234.json")
+    complete = full.read_text()
+
+    _fake_main(bench, monkeypatch, _results(bench, 2.0, only={"physics.dog_idle"}))
+    args = ["--only", "physics", "--worlds", "dog_idle", "--out", str(out), "--budget", str(budget)]
+    assert bench.main(args) == 0
+    assert "not saved: a quick or partial run" in capsys.readouterr().out
+    assert [p.name for p in out.glob("*.json")] == [full.name] and full.read_text() == complete
+
+    assert bench.main([*args, "--save"]) == 0
+    partial = out / full.name.replace(".json", "-partial.json")
+    assert {p.name for p in out.glob("*.json")} == {full.name, partial.name}
+    assert full.read_text() == complete
+    assert json.loads(partial.read_text())["covers"] == ["physics.dog_idle"]
+    assert bench.previous_run(out) == full
+
+
+def test_exit_codes_say_over_busy_or_unchecked(bench, tmp_path, monkeypatch, capsys):
+    budget = tmp_path / "budget.json"
+    budget.write_text(
+        json.dumps(
+            {
+                "budgets": {
+                    "physics.dog_idle.steps_per_s": {"min": 5.0, "why": "a speed"},
+                    "imports.cli_heavy": {"max": 0, "why": "a count"},
+                    "mcp.idle_cpu_pct": {"max": 2, "why": "needs ps"},
+                }
+            }
+        )
+    )
+    m = bench.metric
+
+    def results(speed: float = 10.0, heavy: int = 0, idle: float | None = 0.5) -> dict:
+        found = _results(bench)
+        found["physics"]["dog_idle.steps_per_s"] = m(speed, "steps/s", "higher")
+        found["imports"]["cli_heavy"] = m(heavy, "", "lower")
+        found["mcp"]["idle_cpu_pct"] = m(idle, "%", "lower")
+        return found
+
+    args = ["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]
+    cases = [
+        (results(), 1.0, 0),
+        (results(speed=1.0), 1.0, 1),  # too slow on a calm machine: a regression
+        (results(speed=1.0), 999.0, 3),  # too slow on a busy one: cannot tell
+        (results(speed=1.0, heavy=1), 999.0, 1),  # a count is a count, however busy the machine
+        (results(idle=None), 1.0, 2),  # no ps: the budget went unchecked, and says so
+    ]
+    for found, load, code in cases:
+        _fake_main(bench, monkeypatch, found, load)
+        assert bench.main(args) == code, (load, code)
+    assert "UNMEASURED  mcp.idle_cpu_pct" in capsys.readouterr().out
+
+
+def test_a_budget_on_a_metric_that_does_not_exist_stops_the_run(bench, tmp_path, monkeypatch, capsys):
+    budget = tmp_path / "budget.json"
+    budget.write_text(json.dumps({"budgets": {"physics.dog_idle.step_per_s": {"min": 5, "why": "typo"}}}))
+    with pytest.raises(ValueError, match="step_per_s"):
+        bench.load_budgets(budget)
+    monkeypatch.setattr(bench, "run", lambda *a, **k: pytest.fail("measured despite a broken budget file"))
+    assert bench.main(["--no-save", "--budget", str(budget)]) == 2
+    assert "physics.dog_idle.step_per_s" in capsys.readouterr().out
+
+
+def test_a_busy_machine_makes_timings_over_budget_inconclusive(bench):
+    m = bench.metric
+    budgets = {"physics.objects_20.steps_per_s": {"min": 8500}}
+    calm = {"physics.objects_20.steps_per_s": m(14000, "steps/s", "higher")}
+    slow = {"physics.objects_20.steps_per_s": m(6000, "steps/s", "higher")}
+    assert bench.busy_reason([5.0, 8.0], 18, calm, budgets) is None
+    assert "load average 40 on 18 cores" in bench.busy_reason([12.0, 40.0], 18, calm, budgets)
+    assert "under its floor" in bench.busy_reason([5.0], 18, slow, budgets)
+    now = {
+        "physics.dog_idle.steps_per_s": m(10, "steps/s", "higher"),
+        "physics.dog_idle.peak_mb": m(900, "MB", "lower"),
+        "imports.cli_heavy": m(2, "", "lower"),
+        "physics.dog_idle.controllers_share": m(0.9, "share", "lower"),
+    }
+    budgets = {name: {"min": 1000} if name.endswith("steps_per_s") else {"max": 0.5} for name in now}
+    rows = {r["metric"]: r["status"] for r in bench.check_budgets(now, budgets, busy=True)}
+    assert rows == {
+        "physics.dog_idle.steps_per_s": "inconclusive",
+        "physics.dog_idle.peak_mb": "over",
+        "imports.cli_heavy": "over",
+        "physics.dog_idle.controllers_share": "over",
+    }
+
+
+def test_speeds_compare_relative_to_the_control_world(bench):
+    """A machine 40 percent slower than last time slows every world: that is no regression of robotforge."""
+    m = bench.metric
+    before = {
+        "physics.objects_20.steps_per_s": m(10000, "steps/s", "higher"),
+        "physics.dog_idle.steps_per_s": m(100000, "steps/s", "higher"),
+        "physics.go2_walk.steps_per_s": m(20000, "steps/s", "higher"),
+        "physics.dog_idle.peak_mb": m(150, "MB", "lower"),
+    }
+    now = {
+        "physics.objects_20.steps_per_s": m(6000, "steps/s", "higher"),
+        "physics.dog_idle.steps_per_s": m(61000, "steps/s", "higher"),  # slowed as the machine did
+        "physics.go2_walk.steps_per_s": m(7000, "steps/s", "higher"),  # slowed much more: the code
+        "physics.dog_idle.peak_mb": m(150, "MB", "lower"),
+    }
+    out = bench.compare(now, before)
+    assert bench.machine_scale(now, before) == pytest.approx(0.6)
+    assert out["physics.dog_idle.steps_per_s"] == {
+        "before": 100000.0,
+        "change": 0.0167,
+        "verdict": "same",
+        "relative": True,
+    }
+    assert out["physics.go2_walk.steps_per_s"]["verdict"] == "worse"
+    assert out["physics.objects_20.steps_per_s"]["verdict"] == "worse"  # the control itself: plainly slower
+    assert "relative" not in out["physics.objects_20.steps_per_s"] and "relative" not in out["physics.dog_idle.peak_mb"]
+    # Without the control in both runs, speeds compare as they are
+    del before["physics.objects_20.steps_per_s"]
+    assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
 
 
 def test_flatten_names_metrics_by_section_and_skips_errors(bench):
@@ -174,11 +371,17 @@ def test_the_table_shows_the_change_and_the_budget(bench):
 def test_the_budget_file_names_metrics_the_bench_measures(bench):
     data = json.loads(BUDGET.read_text(encoding="utf-8"))
     assert data["budgets"], "budget.json has no budgets"
+    known = bench.known_metrics()
     for name, budget in data["budgets"].items():
-        section, _, rest = name.partition(".")
-        assert section in bench.SECTIONS, name
-        if section == "physics":
-            world = rest.split(".")[0]
-            assert world in bench.WORLDS, name
+        assert name in known, f"{name}: no part of the bench measures it"
         assert ("max" in budget) != ("min" in budget), f"{name}: give a max or a min"
         assert budget.get("why"), f"{name}: say where the number comes from"
+    assert bench.CONTROL in data["budgets"], "the control world needs a floor, or a busy machine goes unnoticed"
+
+
+def test_the_known_metrics_are_what_a_real_run_measured(bench):
+    """The newest complete run in docs/bench, measured for real, names no metric the list lacks."""
+    newest = bench.previous_run(BUDGET.parent)
+    assert newest is not None, "docs/bench has no complete run"
+    measured = set(bench.flatten(json.loads(newest.read_text(encoding="utf-8"))["results"]))
+    assert measured <= bench.known_metrics(), sorted(measured - bench.known_metrics())
