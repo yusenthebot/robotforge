@@ -30,11 +30,12 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     def load_scene(
-        preset: SceneName,
+        preset: SceneName | None = None,
         seed: int = 0,
         keep_robots: bool = True,
         starter: bool = True,
         options: dict[str, float] | None = None,
+        description: str | None = None,
     ) -> str:
         """Fill the open world with a ready-made scene, replacing its floor, terrain and objects (undo restores them);
         with no world open, opens one named after the scene. Robots are kept and moved to the scene's places (arms
@@ -42,9 +43,19 @@ def register(server: MCPServer, playground: Playground) -> None:
         starter robot unless starter=false. seed changes the layout (maze paths, tree spots, crates); options size
         some scenes, e.g. load_scene("maze", seed=3, options={"rows": 7, "cols": 7}). Afterwards it is ordinary
         world.yaml content: move, remove or add objects freely. The result's "scene" field says where robots went
-        and what to try; the water scenes put boats and ROVs on the water."""
+        and what to try; the water scenes put boats and ROVs on the water.
+
+        description, instead of preset, generates a world from one sentence (English or Chinese): a home with the
+        rooms it names ("a flat with a kitchen, a living room and two bedrooms"; walls with doorways, furniture by
+        room, each room's floor a marker named after it), a warehouse (rows of racks, pallets, a packing table, a
+        loading dock) or an outdoor place (park, forest, hillside, beach; hills, rough ground, stairs, a ramp,
+        stepping stones; trees, rocks, benches). Things it names ("three apples", "a red cup", "four desks") are put
+        where the rules allow: on tops 0.3 to 1.0 m high, apart, within an arm's reach of floor the robot can get to,
+        and still there after the physics has run. seed gives another layout of the same sentence; the starter robot
+        is the one the sentence names (dog, Go2, rover, humanoid, arm) or one that fits (a lift_picker indoors).
+        scene.generated says what was understood, the rooms and the things to pick up."""
         with _tool_errors():
-            return _json(playground.load_scene(preset, seed, keep_robots, starter, options))
+            return _json(playground.load_scene(preset, seed, keep_robots, starter, options, description))
 
     @server.tool()
     def set_terrain(

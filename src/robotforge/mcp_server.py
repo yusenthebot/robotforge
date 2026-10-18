@@ -82,8 +82,10 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. To build a scene from a sentence, combine load_scene, add_terrain
-and add_object, then check it with observe(view="overview").
+and objects stand on the ground under them. load_scene(description="a flat with a kitchen and a bedroom, three
+apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
+with terrain, things placed on tops within reach and steady; edit it like any world and check it with
+observe(view="overview").
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
