@@ -401,12 +401,13 @@ def test_a_stale_lock_says_what_uv_found(bench, monkeypatch):
     found = "The package `httpx` requires `certifi`, but it's not installed"
 
     def fake_run(command, **kwargs):
-        return subprocess.CompletedProcess(command, 1, stdout="", stderr=found + "\n")
+        said = f"Using Python 3.12.13 environment at: /tmp/rf-bench-install-x/venv\nFound 1 incompatibility\n{found}\n"
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=said)
 
     monkeypatch.setattr(bench.subprocess, "run", fake_run)
     with pytest.raises(RuntimeError, match="uv.lock does not satisfy the wheel") as caught:
         bench._pip_check("uv", Path("python"))
-    assert str(caught.value).endswith(found)
+    assert str(caught.value).endswith(found) and "rf-bench-install" not in str(caught.value)
     monkeypatch.setattr(bench.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
     bench._pip_check("uv", Path("python"))
 

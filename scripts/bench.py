@@ -519,7 +519,8 @@ def _pip_check(uv: str, python: Path) -> None:
         [uv, "pip", "check", "--python", str(python)], capture_output=True, text=True, encoding="utf-8", check=False
     )
     if check.returncode != 0:
-        reason = (check.stderr.strip() or check.stdout.strip())[-400:]
+        said = (check.stderr.strip() or check.stdout.strip()).splitlines()
+        reason = " ".join(line for line in said if not line.startswith("Using Python"))[-400:]  # not the temp venv
         raise RuntimeError(f"uv.lock does not satisfy the wheel (uv lock?): {reason}")
 
 
