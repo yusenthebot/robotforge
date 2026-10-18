@@ -27,6 +27,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin).
    Sensors go on any robot's body with `add_sensor` (camera rgb, depth or segmentation, 2D or 3D lidar, IMU, encoders, force_torque at a wrist, touch arrays on feet, rangefinder, GPS, odometry; rate, noise, latency in `options`); `read_sensors` reads them, `remove("robot/sensor")` takes one off.
+   The viewer draws what added sensors sense: lidar rays and points, a camera's picture beside the view, IMU, encoder and force plots, touch pads and force arrows; `open_viewer(show=["go2/front_cam"])` also draws one the robot came with and brings a camera's picture up.
 4. **Viewer early.** Call `open_viewer()` as soon as a robot exists and tell the user what they can do: drag the robot, drive with W A S D, and use the panels.
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.

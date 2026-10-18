@@ -372,6 +372,15 @@ class Playground:
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
 
+    def show_sensors(self, names: list[str]) -> list[str]:
+        """Draw these sensors in the viewer (open_viewer(show=...)); returns their full names."""
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.show(names, robots)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+
     # ---- robots built from parts ------------------------------------------------------
 
     @_one_edit_at_a_time

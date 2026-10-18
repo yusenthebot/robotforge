@@ -92,6 +92,8 @@ force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS o
 ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
 nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
+The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
+a robot's own sensors and brings a camera's picture up.
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -231,13 +233,20 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         resource_uri=VIEWER_UI_URI,
         description=(
             "Open the live 3D viewer (play/pause, actuator sliders, drag the robot). "
-            "Returns the viewer URL; hosts with MCP Apps show it inline."
+            "Returns the viewer URL; hosts with MCP Apps show it inline. "
+            "It draws the sensors added with add_sensor (lidar rays and points, camera pictures, IMU and force plots); "
+            'show=["go2/front_cam"] or ["go2"] draws others too (a robot\'s own) and brings a camera\'s picture up.'
         ),
     )
-    def open_viewer(launch_browser: bool = True) -> str:
+    def open_viewer(launch_browser: bool = True, show: list[str] | None = None) -> str:
+        with _tool_errors():
+            shown = playground.show_sensors(show) if show else []
         if launch_browser and not os.environ.get("ROBOTFORGE_NO_BROWSER"):
             open_in_browser(playground.viewer_url)
-        return _json({"viewer_url": playground.viewer_url, "model": playground.session.source})
+        out = {"viewer_url": playground.viewer_url, "model": playground.session.source}
+        if shown:
+            out["showing"] = shown
+        return _json(out)
 
     def serving() -> list[socket.socket] | None:
         """The sockets this session's viewer serves on. uvicorn closes them when it stops, so it gets a copy of

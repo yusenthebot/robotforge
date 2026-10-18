@@ -93,11 +93,39 @@ A sensor is declared in the model itself, as a MuJoCo custom text `rf_sensor:<na
 A library robot's own MuJoCo sensors (a G1's IMU) come back raw under `other_sensors`.
 add_sensor's own MuJoCo sensors are named `rf_...` and are left out of `observe`'s raw `sensors`; `observe` lists every sensor in one line in `sensor_summary`.
 
-## The viewer message
+## The viewer
 
-While the world has sensors the viewer's WebSocket carries a `sensors` message ten times a second (viewer/server.py documents its fields).
-Each entry has the sensor's `name`, `robot`, `type`, world `pos` and `quat` and what drawing it needs: a lidar's hit points (at most 1200), a camera's field of view and mode, a force-torque sensor's force and torque as world vectors, an IMU's values, each touch zone's position and force.
-The viewer does not draw them yet.
+The viewer draws what the sensors sense.
+In the world: a lidar's hit points colored by distance (near red, far blue, over the middle of the distances it sees) with some of its rays fading out from the sensor, a camera's frustum on the robot, touch pads that light up green with their force, contact arrows from the feet and a force arrow at a force-torque sensor, a rangefinder's beam.
+Beside the view, for the selected robot: what one of its cameras sees and live plots of its IMUs (acceleration, turn rate, tilt), force-torque sensors (force, torque, payload, with what the wrist holds) and encoders (a leg, or a run of six joints, at a time).
+
+The picture is rendered in the browser with three.js from the camera's pose, so it works where the server has no OpenGL.
+A depth picture has the colors read_sensors(image=true) gives an agent, with its scale under it; a segmentation picture has the server's palette and names what it sees; an rgb picture is drawn as the view is, without its haze.
+Side by side with the server's pictures of the same moment, the depth and segmentation pictures match.
+
+The robots drawer lists the selected robot's sensors with a switch each, and one for the arrows.
+Sensors put on with add_sensor show from the start; a robot's own (a template's IMU, camera and foot pads, a part's sensors) are listed and stay off until switched on, so a world without added sensors looks as it did.
+`open_viewer(show=["go2/front_cam"])` (or a robot's name for all of its sensors) lets an agent switch sensors on and bring a camera's picture up.
+In a lesson nothing is drawn.
+Pads and arrows are drawn through the robot's own legs, but not through a rack or a wall standing between them and the eye.
+On a phone the views are a strip at the top, one at a time in tabs; with the drawer or the world panel open beside a narrow window they step aside.
+
+While the world has sensors the viewer's WebSocket carries a `sensors` message ten times a second; viewer/server.py documents its fields and `src/robotforge/viewer/static/sensorkit.js` lists the ones the page reads (a test checks the server sends them).
+Each entry has the sensor's `name`, `robot`, `type`, whether it was `added`, world `pos` and `quat`, the `body` it rides on with its place there (`local_pos`, `local_quat`), and what drawing it needs: a lidar's hit points (at most 1200), a camera's field of view, mode and range, a force-torque sensor's force and torque as world vectors and payload, an IMU's values, each touch zone's force and place on its body.
+What sits on a robot follows its body in every frame drawn; a scan's points stay where they were measured.
+
+Measured in headless Chrome (`--use-angle=metal`, 1280 x 800 at 2x) with the Go2 in the warehouse carrying a 10 Hz 3D lidar (1200 points drawn, 150 rays), the depth camera's picture beside the view and four touch pads, on the development Mac while other jobs shared it:
+
+| | frames a second | page main thread | render per frame (GPU work finished) |
+|---|---|---|---|
+| sensors drawn | 60 | 74 ms a second, 1.2 ms a frame | 0.86 ms |
+| the same sensors switched off | 60 | 52 ms a second, 0.9 ms a frame | 0.47 ms |
+| the same world without sensors | 60 | 45 to 56 ms a second | |
+| sensors drawn, CPU slowed 4x | 60 | 302 ms a second, 5.0 ms a frame | |
+| switched off, CPU slowed 4x | 60 | 176 ms a second, 2.9 ms a frame | |
+
+The frame rate is the display's 60 everywhere; main-thread time comes from Chrome's own task counters over 8 s.
+The depth picture is drawn ten times a second and reaches the panel 7 ms after it is rendered (read back without stalling the page).
 
 ## Measured
 

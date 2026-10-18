@@ -12,7 +12,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from mcp import Client
 
+from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sensors import camera
 from robotforge.viewer import scene
@@ -100,6 +102,33 @@ def test_touch_pads_are_described_on_their_body(pg):
     bottom = [xpos + xmat @ np.array(p) for p in pad["cells_local"]]
     assert all(abs(p[2]) < 0.004 for p in bottom)  # on the block's bottom face, which rests on the floor
     assert pad["total_n"] == pytest.approx(2.0 * 9.81, rel=0.05)
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_open_viewer_shows_a_robot_s_own_camera(pg, monkeypatch):
+    """open_viewer(show=...) asks the page to draw sensors it would keep hidden (a template's camera) and says which;
+    a robot's name stands for all of its sensors, and a wrong name is refused with the ones there are."""
+    monkeypatch.setenv("ROBOTFORGE_NO_BROWSER", "1")
+    pg.add_robot("dog", template="quadruped")
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        opened = await client.call_tool("open_viewer", {"show": ["dog/front cam"]})
+        assert not opened.is_error, opened.content[0].text
+        assert json.loads(opened.content[0].text)["showing"] == ["dog/front_cam"]
+        first = pg.sensors.viewer_message()["show"]
+        assert first["names"] == ["dog/front_cam"]
+        everything = await client.call_tool("open_viewer", {"show": ["dog"]})
+        assert set(json.loads(everything.content[0].text)["showing"]) >= {"dog/front_cam", "dog/imu"}
+        assert pg.sensors.viewer_message()["show"]["seq"] == first["seq"] + 1  # each request applied once by the page
+        wrong = await client.call_tool("open_viewer", {"show": ["dog/lidar"]})
+        assert wrong.is_error and "front_cam" in wrong.content[0].text
+        plain = await client.call_tool("open_viewer", {})
+        assert "showing" not in json.loads(plain.content[0].text)
 
 
 # ---- the helpers agree with the server -----------------------------------------------------------------------

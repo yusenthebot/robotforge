@@ -2004,6 +2004,7 @@ initSensors({
   world: () => worldRoot,
   desc: () => sceneDesc,
   selected: () => selected,
+  select: (robot) => select(robot),
   inLesson: () => lessonActive(),
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   shift: () => shiftForDrawers(),

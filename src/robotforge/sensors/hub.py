@@ -32,6 +32,8 @@ class SensorHub:
         self.session = session
         self._renderer = None
         self._render_lock = threading.Lock()
+        # Sensors an agent asked the viewer to draw (open_viewer(show=...)): the page applies each request once.
+        self.viewer_show: dict[str, Any] | None = None
         session.reset_hooks.append(self.rebuild)
         self.rebuild()
 
@@ -92,6 +94,19 @@ class SensorHub:
                 )
             out.append(by_name[found])
         return list(dict.fromkeys(out))
+
+    def show(self, names: list[str], robots: list[str]) -> list[str]:
+        """Ask the viewer to draw these sensors, "robot/sensor" or a robot's name for all of its sensors: a robot's
+        own (a template's camera) are hidden until shown, and a camera's picture comes up beside the view."""
+        out: list[str] = []
+        for given in names:
+            robot, _, local = given.partition("/")
+            robot = self.resolve_robot(robot, robots)
+            out += [s.name for s in self.chosen(robot, [local] if local else None)]
+        shown = list(dict.fromkeys(out))
+        seq = (self.viewer_show or {}).get("seq", 0) + 1
+        self.viewer_show = {"seq": seq, "names": shown}
+        return shown
 
     # ---- reading ---------------------------------------------------------------------------------------------
 
@@ -202,7 +217,10 @@ class SensorHub:
                     log.exception("sensor %s could not be described for the viewer", sensor.name)
             # The model's version: body ids mean that model's bodies, and the page draws on the one it has loaded.
             version = session.version
-            return {"type": "sensors", "version": version, "time": round(float(data.time), 4), "sensors": entries}
+            msg = {"type": "sensors", "version": version, "time": round(float(data.time), 4), "sensors": entries}
+            if self.viewer_show is not None:
+                msg["show"] = self.viewer_show
+            return msg
 
 
 def _mount(sensor: Sensor, model: mujoco.MjModel) -> dict[str, Any]:

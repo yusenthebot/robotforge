@@ -73,6 +73,7 @@ const peaks = new Map(); // sensor name -> the largest force seen lately (N)
 const chosen = {}; // sensor name -> shown or not, as switched in the drawer; otherwise it shows if it was added
 let arrowsOn = true;
 let listKey = ""; // what the drawer's list shows, to rebuild it only when that changes
+let shownSeq = 0; // the last request to show sensors that was applied (open_viewer(show=...))
 
 export function initSensors(context) {
   api = context;
@@ -149,9 +150,27 @@ export function sensorsUpdate(msg) {
       drawings.delete(name);
     }
   }
-  if (changed) sensorsSelect();
+  if (msg.show && msg.show.seq !== shownSeq) applyShow(msg.show);
+  else if (changed) sensorsSelect();
   else renderSummaries();
   views.plot();
+}
+
+// An agent asked for these sensors to be drawn (open_viewer(show=...)): switch them on, select their robot and
+// bring a camera's picture up. Each request is applied once, so the drawer's switches stay the user's afterwards.
+function applyShow(show) {
+  shownSeq = show.seq;
+  let robot = null;
+  for (const name of show.names) {
+    const e = entries.get(name);
+    if (!e) continue;
+    chosen[name] = true;
+    api.storageSet(`robotforge.sensor.${name}`, "1");
+    robot ??= e.robot;
+    if (e.type === "camera") pip.name = name;
+  }
+  if (robot !== null && robot !== api.selected()) api.select(robot); // its drawer list and views follow
+  else sensorsSelect();
 }
 
 function remember(e) {
