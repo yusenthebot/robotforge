@@ -1214,6 +1214,7 @@ class Errand:
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
     _pads: tuple | None = None  # the finger pads' geoms and contact settings before the errand firmed them
+    _rolls: tuple | None = None  # the load's geoms and their condim before the errand gave it rolling friction
     _retries: int = 0  # trips planned again after getting stuck
     _replans: int = 0  # spots looked for again from where the robot stopped (_again)
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
@@ -1753,7 +1754,14 @@ class Errand:
         SQUEEZE newtons a cm short of closed, up to its force limit. Menagerie's Panda and PiPER grippers are servos
         as soft as springs (1 N and 0.4 N a cm short) and ours 2 N: a cup slid out of the Panda's hand, and a lift
         picker driving to a loading dock lost a parcel squeezed with 4 N. At 100 N an apple squeezed off-centre shot
-        out of the Panda's pads. All of it only for the errand: a fixed arm picks with the robot as it was built."""
+        out of the Panda's pads. The load also feels its rolling friction (condim 6): with MuJoCo's condim 4 an apple a
+        lift picker put down on a table rolled on at 3 cm/s from the nudge of the fingers letting go, and off the
+        edge (for every round thing in a world it would cost a fifth more time a step in the kitchen). All of it only
+        for the errand: a fixed arm picks with the robot as it was built."""
+        if self._rolls is None:
+            own = np.array([g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == self.body], int)
+            self._rolls = (own, model.geom_condim[own].copy())
+            model.geom_condim[own] = np.maximum(model.geom_condim[own], 6)
         if self._noslip is None and model.opt.noslip_iterations < NOSLIP:
             self._noslip = int(model.opt.noslip_iterations)
             model.opt.noslip_iterations = NOSLIP
@@ -1781,6 +1789,9 @@ class Errand:
         if self._noslip is not None:
             model.opt.noslip_iterations = self._noslip
             self._noslip = None
+        if self._rolls is not None:
+            model.geom_condim[self._rolls[0]] = self._rolls[1]
+            self._rolls = None
         if self._squeezed is not None:
             model.actuator_gainprm[self.arm.gripper], model.actuator_biasprm[self.arm.gripper] = self._squeezed
             self._squeezed = None

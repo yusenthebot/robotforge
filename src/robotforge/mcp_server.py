@@ -77,16 +77,16 @@ rough ground, stairs, ramps, stepping stones, curbs, platforms); robots and obje
 under them. To build a scene from a sentence, combine load_scene, add_terrain and add_object, then check it
 with observe(view="overview").
 
-Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
-snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
-the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
-arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
-pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table");
-robots lists robots with kind, arms and positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
-prefixed "<robot>/"). observe reports state with an image so you can check your work; observe(find="red") locates
-colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
-user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
-real time.
+Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a snake
+slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to the
+fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work arms (an arm
+mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks, pick_and_place fetches: it
+goes to the object and carries it to the target, "bring the apple to the table"); robots lists robots with kind,
+arms and positions. For anything custom, set_controls / simulate drive actuators directly (names from
+describe_model, prefixed "<robot>/"). observe reports state with an image so you can check your work;
+observe(find="red") locates colored objects in a camera's picture and names them ("pick the red one"). open_viewer
+gives the user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out
+in real time.
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);

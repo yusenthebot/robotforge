@@ -49,12 +49,16 @@ def test_a_lift_picker_goes_round_a_wall_for_a_cube_and_puts_it_on_a_table(pg):
     assert isinstance(errand, fetch.Errand)
     gripper = errand.arm.gripper
     gains = model.actuator_gainprm[gripper].copy(), model.actuator_biasprm[gripper].copy()
-    stiffer = []
+    cube = model.body("cube").id
+    own = [g for g in range(model.ngeom) if model.geom_bodyid[g] == cube]
+    condim = model.geom_condim[own].copy()
+    stiffer, rolling = [], []
     root = pg.behaviors.root("picker")
     beyond_wall = []  # where its middle was while the wall stood between it and the cube
 
     def step() -> bool:
         stiffer.append(model.actuator_gainprm[gripper, 0] > gains[0][0])
+        rolling.append(bool(np.all(model.geom_condim[own] == 6)))
         x, y = pg.session.data.xpos[root][:2]
         beyond_wall.append(abs(x) < 1.0 and 0.75 < y < 0.85)
         return errand.done
@@ -70,8 +74,8 @@ def test_a_lift_picker_goes_round_a_wall_for_a_cube_and_puts_it_on_a_table(pg):
     assert not any(beyond_wall)  # never through it
     assert result["driven_m"] > 5.0 and result["picked_up_at"] == pytest.approx([0.0, 1.45, 0.47], abs=0.01)
     # While it ran its gripper squeezed harder and the no-slip pass ran; afterwards the world is as it was.
-    assert any(stiffer)
-    assert model.opt.noslip_iterations == 0
+    assert any(stiffer) and any(rolling)
+    assert model.opt.noslip_iterations == 0 and np.array_equal(model.geom_condim[own], condim)
     assert np.allclose(model.actuator_gainprm[gripper], gains[0]) and np.allclose(
         model.actuator_biasprm[gripper], gains[1]
     )
