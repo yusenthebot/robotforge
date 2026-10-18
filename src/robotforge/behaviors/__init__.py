@@ -21,6 +21,7 @@ class Kind(StrEnum):
     SNAKE = "snake"  # a chain of side-to-side joints that slithers
     BOAT = "boat"  # floats and drives with thrusters that push along the water
     ROV = "rov"  # an underwater robot: thrusters that push up and down too
+    AIRCRAFT = "aircraft"  # rotors (thrust actuators) on a free-moving airframe: flies
     OTHER = "other"
 
 
@@ -31,6 +32,11 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
 
     def has(obj: mujoco.mjtObj, name: str) -> bool:
         return mujoco.mj_name2id(model, obj, f"{robot}/{name}") >= 0
+
+    from robotforge.behaviors.airframe import is_aircraft  # lazy: keeps this package light
+
+    if template == "drone" or is_aircraft(model, robot):
+        return Kind.AIRCRAFT
 
     if has(mujoco.mjtObj.mjOBJ_SITE, "tcp") or (_has_mounted_tool(model, robot) and not _floating(model, robot)):
         return Kind.ARM  # an arm, or a fixed robot built from parts with a gripper mounted on it

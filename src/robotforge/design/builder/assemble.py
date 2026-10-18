@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design import components
-from robotforge.design.builder import looks, thrusters
+from robotforge.design.builder import looks, rotor, thrusters
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
     MAIN_COLOR,
@@ -90,7 +90,10 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         outward = part.local @ np.array([0.0, 1.0, 0.0])
         if float((part.rot @ outward) @ part.pos) < 0:  # wheels show their rim on the outside
             outward = -outward
-        _shape(body, part.spec, build, part.local, accent, part.name, vis, layout, outward, part)
+        if part.spec.shape == "rotor":
+            rotor.build(spec, body, part, vis)  # a motor, propeller and thrust actuator
+        else:
+            _shape(body, part.spec, build, part.local, accent, part.name, vis, layout, outward, part)
         if part.spec.foot:
             _foot(body, part, vis)
             out.feet += 1

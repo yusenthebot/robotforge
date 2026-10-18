@@ -326,6 +326,18 @@ def test_robots_built_with_thrusters_are_boats_and_rovs(pg):
     assert pg.behaviors.pose("raft")["position"][0] > 1.5
 
 
+def test_an_rov_with_strong_lift_thrusters_is_no_aircraft(pg):
+    """Four up thrusters that could lift it out of the water looked like rotors to the airframe check: a sub built
+    so was flown as a drone instead of piloted as an ROV."""
+    from robotforge.behaviors.airframe import is_aircraft
+
+    lift = [{"at": [x, y, 0.05], "direction": "up", "force": 150} for x in (0.2, -0.2) for y in (0.15, -0.15)]
+    strong = {**SUB, "base": {**SUB["base"], "thrusters": SUB["base"]["thrusters"][:2] + lift}}
+    pg.add_robot("sub", build=strong, pos=[0, 2])
+    assert not is_aircraft(pg.session.model, "sub")
+    assert pg.behaviors.kind("sub") == Kind.ROV
+
+
 def test_the_viewer_scene_carries_the_water(pg):
     model = pg.session.model
     desc = viewer_scene.describe(model, 1, [])

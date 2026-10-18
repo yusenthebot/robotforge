@@ -10,11 +10,12 @@ from robotforge import wording
 from robotforge.control.tasks.balance import Balance
 from robotforge.control.tasks.base import Batch, Robot, StateLayout, Task, TaskError, TaskParams
 from robotforge.control.tasks.drive import DriveTo
+from robotforge.control.tasks.hover import Hover
 from robotforge.control.tasks.legged import Stand, Walk
 from robotforge.control.tasks.reach import Reach
 from robotforge.control.tasks.wheel_balance import WheelBalance
 
-TASKS: dict[str, type[Task]] = {t.name: t for t in (Reach, Balance, Stand, Walk, DriveTo)}
+TASKS: dict[str, type[Task]] = {t.name: t for t in (Reach, Balance, Stand, Walk, DriveTo, Hover)}
 
 
 def make_task(name: str, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None) -> Task:

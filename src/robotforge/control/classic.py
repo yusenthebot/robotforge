@@ -76,7 +76,12 @@ class GaitBase:
         ghost = copy.copy(self.gait)
         ghost.legs = [copy.copy(leg) for leg in self.gait.legs]
         scratch = types.SimpleNamespace(
-            time=0.0, xquat=data.xquat, qvel=data.qvel, qfrc_applied=data.qfrc_applied, ctrl=np.array(data.ctrl)
+            time=0.0,
+            xquat=data.xquat,
+            xmat=data.xmat,
+            qvel=data.qvel,
+            qfrc_applied=data.qfrc_applied,
+            ctrl=np.array(data.ctrl),
         )
         out = np.empty((len(times), len(self.task.actuators)))
         for i, dt in enumerate(times):
