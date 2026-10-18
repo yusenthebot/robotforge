@@ -191,17 +191,23 @@ def test_a_viewer_that_says_what_it_took_in_is_sent_only_a_few_frames_ahead():
     hub = ViewerHub(SimSession.from_path(DEMO))
     pacing, old = Page(), Page()
     hub.clients.update({pacing, old})
-    hub.seen(pacing)
 
     async def send(n):
         for _ in range(n):
             await hub._send_poses(b"pose")
 
+    asyncio.run(send(5))  # before it first says "seen", a page is sent every frame
+    hub.seen(pacing)  # it took in the first of them: 4 are unread, more than MAX_POSES_AHEAD
     asyncio.run(send(10))
-    assert pacing.frames == server.MAX_POSES_AHEAD and old.frames == 10
-    hub.seen(pacing)
+    assert pacing.frames == 5 and old.frames == 15
+    for _ in range(4):
+        hub.seen(pacing)  # it caught up
     asyncio.run(send(10))
-    assert pacing.frames == 2 * server.MAX_POSES_AHEAD and old.frames == 20
+    assert pacing.frames == 5 + server.MAX_POSES_AHEAD and old.frames == 25
+    for _ in range(20):  # a page taking in a frame for each frame sent keeps getting them all
+        hub.seen(pacing)
+        asyncio.run(send(1))
+    assert pacing.frames == 5 + server.MAX_POSES_AHEAD + 20
 
 
 def test_seen_messages_are_taken_without_an_error():

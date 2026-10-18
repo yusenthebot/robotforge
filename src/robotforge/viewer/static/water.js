@@ -62,6 +62,13 @@ export function waterLook(water, floorMaterial) {
   return water.density > 1010 ? "sea" : "lake";
 }
 
+// The still level at (x, y) (null where there is no water): what paths and the selection ring rest on.
+export function stillLevel(state, x, y) {
+  const a = state.water.area;
+  if (a && (x < a[0] || x > a[2] || y < a[1] || y > a[3])) return null;
+  return state.water.level;
+}
+
 // Height of the surface at (x, y) at time t, as the physics has it (null where there is no water).
 export function surfaceAt(water, x, y, t) {
   const a = water.area;
@@ -195,6 +202,10 @@ export function makeWater(water, look, center, renderer) {
   }
   group.traverse((o) => {
     if (!o.isMesh) return;
+    // No rays: a ray against the wavy sheet tests every one of its up to 260 thousand triangles. The ring, the
+    // paths and the pick each cast them, and a boat's path, measured every 15 cm at each state message, kept a
+    // page busy for seconds and its picture 15 s behind the simulation. What rests on the water uses stillLevel.
+    o.raycast = () => {};
     o.receiveShadow = true;
     o.castShadow = false;
     o.renderOrder = 1;

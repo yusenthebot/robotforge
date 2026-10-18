@@ -116,7 +116,9 @@ class ViewerHub:
         # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
         self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
-        self._ahead: dict[WebSocket, int] = {}  # pose frames sent since each pacing viewer last said "seen"
+        # Pose frames sent to each viewer, and how many it said it took in (only viewers that say so are paced).
+        self._sent: dict[WebSocket, int] = {}
+        self._seen: dict[WebSocket, int] = {}
 
     # ---- scene description (cached per model version) -------------------------------
 
@@ -237,25 +239,28 @@ class ViewerHub:
             self.clients.discard(ws)
 
     def seen(self, ws: WebSocket) -> None:
-        """The viewer took in the pose frames sent to it: it may be sent MAX_POSES_AHEAD more."""
-        self._ahead[ws] = 0
+        """The viewer took in one more pose frame."""
+        self._seen[ws] = self._seen.get(ws, 0) + 1
+
+    def forget(self, ws: WebSocket) -> None:
+        self.clients.discard(ws)
+        self._sent.pop(ws, None)
+        self._seen.pop(ws, None)
 
     async def _send_poses(self, data: bytes) -> None:
         dead = []
         for ws in list(self.clients):
-            ahead = self._ahead.get(ws)
-            if ahead is not None and ahead >= MAX_POSES_AHEAD:
-                continue  # it is still drawing: a newer frame goes once it has
+            sent, seen = self._sent.get(ws, 0), self._seen.get(ws)
+            if seen is not None and sent - seen >= MAX_POSES_AHEAD:
+                continue  # it has not taken in what it has: a newer frame goes once it has
             try:
                 await ws.send_bytes(data)
             except (WebSocketDisconnect, RuntimeError):
                 dead.append(ws)
                 continue
-            if ahead is not None:
-                self._ahead[ws] = ahead + 1
+            self._sent[ws] = sent + 1
         for ws in dead:
-            self.clients.discard(ws)
-            self._ahead.pop(ws, None)
+            self.forget(ws)
 
     async def run(self) -> None:
         """Step physics in real time and stream poses until cancelled.
@@ -331,8 +336,7 @@ def create_app(hub: ViewerHub) -> Starlette:
         except WebSocketDisconnect:
             pass
         finally:
-            hub.clients.discard(ws)
-            hub._ahead.pop(ws, None)
+            hub.forget(ws)
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):

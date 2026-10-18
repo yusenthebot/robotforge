@@ -5,7 +5,7 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
-import { SURFACE_GEOM, leaveWater, makeWater, waterFrame, waterLook } from "./water.js";
+import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -655,7 +655,9 @@ const DOWN = new THREE.Vector3(0, 0, -1);
 function groundHeight(x, y, top, fallback) {
   groundRay.set(new THREE.Vector3(x, y, top), DOWN);
   const hit = groundRay.intersectObjects(groundMeshes, false).find((h) => h.object.visible);
-  return hit ? hit.point.z : fallback;
+  const ground = hit ? hit.point.z : fallback;
+  const level = water ? stillLevel(water, x, y) : null; // the water takes no rays (water.js): on it, its level
+  return level !== null && level > ground && level <= top ? level : ground;
 }
 
 const hasMesh = (id) => bodyNodes[id]?.children.some((o) => o.isMesh && o.visible);
