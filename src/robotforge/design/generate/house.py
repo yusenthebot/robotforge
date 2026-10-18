@@ -22,6 +22,7 @@ from robotforge.design.generate.words import Wish
 WALL_HEIGHT = 1.1  # m: low enough to look into from above, high enough that robots do not see over it
 WALL_THICK = 0.1
 DOOR = 1.1  # m wide doorways
+COUNTER = 0.85  # m, a counter's top: a lift picker reaches things standing on it (it reaches up to 0.9 m)
 WALL_COLOR = [0.9, 0.88, 0.84, 1]
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
@@ -104,9 +105,13 @@ def build(draft: Draft, wish: Wish) -> None:
         )
     _walls(draft, list(zip(names, rects, strict=True)))
     asked = {c: n for c, n in wish.counts.items()}
+    # furniture said in a room ("the bedroom desk") goes in first, so the room's usual pieces do not leave it no space
+    placed = {c: r for c, r in wish.rooms_of.items() if c in FURNITURE_SAID and r in kinds}
+    for concept, kind in placed.items():
+        _asked_furniture(draft, {concept: asked.get(concept, 0)}, names, kinds, only=kind)
     for name, kind in zip(names, kinds, strict=True):
         FURNISH.get(kind, _room)(draft, name, draft.rooms[name])
-    _asked_furniture(draft, asked, names, kinds)
+    _asked_furniture(draft, {c: n for c, n in asked.items() if c not in placed}, names, kinds)
     # The robot starts in the first room (the hall, as it were), so the floor it can get to is known before things
     # go on surfaces: a thing out of every robot's reach would be a task nobody can do.
     start = draft.slot((draft.rooms[names[0]].x, draft.rooms[names[0]].y))
@@ -257,7 +262,7 @@ def _counter(
     rect: Footprint,
     length: float,
     depth: float = 0.6,
-    height: float = 0.9,
+    height: float = COUNTER,
     name: str = "counter",
     sides: tuple[str, ...] | None = None,
 ) -> tuple[str, Footprint] | None:
@@ -315,7 +320,8 @@ def _on_top(
         return None
     for _ in range(30):
         lx = draft.rng.uniform(-a.hx + hx, a.hx - hx)
-        ly = a.hy - hy if shape == "box" else -a.hy + hy  # a TV at the back, a chest at the front edge
+        # a TV at the back; a mechanism near the front edge, with room beside it on the top for an arm to work it
+        ly = a.hy - hy if shape == "box" else min(-a.hy + hy + 0.08, 0.0)
         x, y = a.world(lx, ly)
         fp = Footprint(round(x, 3), round(y, 3), hx, hy, a.yaw)
         if any(fp.overlaps(o, 0.03) for o in surface.items):
@@ -331,7 +337,7 @@ def _kitchen(draft: Draft, room: str, rect: Footprint) -> None:
     counter = _counter(draft, room, rect, min(2.4, max(x1 - x0, y1 - y0) - 1.3))
     if counter is not None:
         name, fp = counter
-        top = _top(draft, name, fp, 0.9, room, kind="counter")
+        top = _top(draft, name, fp, COUNTER, room, kind="counter")
         _counter_chest(draft, room, top)
     spot = draft.against_wall(rect, 0.7, 0.7)
     if spot is not None:
@@ -522,7 +528,12 @@ FURNISH: dict[str, Callable[[Draft, str, Footprint], None]] = {
 }
 
 
-def _asked_furniture(draft: Draft, asked: dict[str, int], names: list[str], kinds: list[str]) -> None:
+FURNITURE_SAID = ("table", "desk", "shelf", "counter", "drawer", "sofa", "bed")  # what stands on the floor
+
+
+def _asked_furniture(
+    draft: Draft, asked: dict[str, int], names: list[str], kinds: list[str], only: str | None = None
+) -> None:
     """Furniture the sentence asked for by number ("four desks"), added to the rooms it belongs in until there are
     that many, and mechanisms ("a button", "a cabinet") put where an arm can work them."""
 
@@ -531,7 +542,8 @@ def _asked_furniture(draft: Draft, asked: dict[str, int], names: list[str], kind
 
     for concept, n in asked.items():
         want = max(n, 1)
-        rooms = [nm for nm, k in zip(names, kinds, strict=True) if HOME_OF.get(concept) == k] or names
+        rooms = [nm for nm, k in zip(names, kinds, strict=True) if k == only] if only else []
+        rooms = rooms or [nm for nm, k in zip(names, kinds, strict=True) if HOME_OF.get(concept) == k] or names
         made = count(concept)
         k = 0
         while made < want and k < 3 * want:
@@ -545,7 +557,7 @@ def _asked_furniture(draft: Draft, asked: dict[str, int], names: list[str], kind
             elif concept == "counter":
                 done = _counter(draft, room, rect, 1.6)
                 if done:
-                    _top(draft, done[0], done[1], 0.9, room)
+                    _top(draft, done[0], done[1], COUNTER, room)
             elif concept == "drawer":
                 done = _chest(draft, room, rect, (0.45, 0.45, 0.6))
             elif concept == "sofa":
@@ -588,7 +600,9 @@ def _things(draft: Draft, wish: Wish, names: list[str], kinds: list[str]) -> Non
     asked = {c: n for c, n in wish.counts.items() if c in ITEMS}
     by_room: dict[str, list] = {name: [] for name in names}
     for concept, n in asked.items():
-        home = [nm for nm, k in zip(names, kinds, strict=True) if HOME_OF.get(concept) == k] or names
+        said = wish.rooms_of.get(concept)  # "the red cup in the kitchen" is in the kitchen
+        home = [nm for nm, k in zip(names, kinds, strict=True) if k == said]
+        home = home or [nm for nm, k in zip(names, kinds, strict=True) if HOME_OF.get(concept) == k] or names
         for k, item in enumerate(things.several(concept, n or 2, draft.rng, wish.colors.get(concept))):
             by_room[home[k % len(home)]].append(item)
     used: dict[str, set[str]] = {}  # concept -> colors given so far: names stay apart ("red_cup", "blue_cup")

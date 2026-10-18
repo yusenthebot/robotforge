@@ -143,7 +143,7 @@ def _stock(draft: Draft, rack: str, fp: Footprint, yaw: float) -> None:
         board = Footprint(*fp.world(0.0, -props.PANEL / 2), UNIT[0] / 2 - props.PANEL, UNIT[1] / 2 - props.PANEL, yaw)
         if LOW <= lo <= HIGH:
             # parcels go at the aisle edge: only the front 20 cm of the board
-            front = Footprint(*board.world(0.0, -board.hy + 0.12), board.hx, 0.12, yaw)
+            front = Footprint(*board.world(0.0, -board.hy + 0.09), board.hx, 0.06, yaw)
             draft.surface(rack, front, lo, clearance=hi - lo - props.PANEL, room=None, inset=0.02, kind="shelf")
             continue
         for lx in (-0.55, 0.55):

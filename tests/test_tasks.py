@@ -145,14 +145,15 @@ def home(tmp_path, monkeypatch):
 
 
 def test_add_task_finds_the_thing_and_the_place_by_kind_color_and_room(home):
-    result = home.add_task("bring the apple from the kitchen to the bedroom desk")
+    result = home.add_task("bring the apple from the kitchen to the coffee table in the living room")
     task = result["task"]
-    assert (task["kind"], task["robot"], task["object"], task["target"]) == ("bring", "picker", "apple", "bedroom_desk")
+    want = ("bring", "picker", "apple", "living_room_coffee_table")
+    assert (task["kind"], task["robot"], task["object"], task["target"]) == want
     assert task["status"]["done"] is False and task["status"]["distance_m"] > 3
     saved = home.current_world().tasks[0]
     assert saved.start.robot is not None and saved.start.objects["apple"]
     status = home.task_status()["bring_apple"]
-    assert status["done"] is False and status["goal"] == "apple in or on bedroom_desk"
+    assert status["done"] is False and status["goal"] == "apple in or on living_room_coffee_table"
     home.remove("bring_apple")
     assert home.current_world().tasks == []
 
@@ -201,3 +202,34 @@ def test_a_task_saved_with_a_world_is_a_learning_environment(home):
     # the reward is the check's: minus the distance still to go, per second
     verdict = env.task.verdict(env.data)
     assert reward == pytest.approx(-verdict.distance * env.control_dt, rel=1e-6)
+
+
+def test_the_thing_taken_is_one_not_already_where_it_has_to_go(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("shelf")
+    pg.add_object("desk", shape="table", size=[1.0, 0.6, 0.75], pos=[1.0, 0.0])
+    pg.add_object("cup_a", shape="cylinder", size=[0.06, 0.085], pos=[1.0, 0.0, 0.7925])  # on the desk already
+    pg.add_object("cup_b", shape="cylinder", size=[0.06, 0.085], pos=[-1.0, 0.0])
+    pg.add_robot("picker", design="lift_picker", pos=[0.0, -1.0])
+    result = pg.add_task("put a cup on the desk")
+    assert result["task"]["object"] == "cup_b"
+
+
+def test_chinese_names_the_thing_last_and_english_first():
+    assert read.read("打开厨房台面上的柜子").thing.concept == "cabinet"
+    assert read.read("open the cabinet on the kitchen counter").thing.concept == "cabinet"
+
+
+def test_a_lift_picker_can_put_things_into_a_loose_bowl(tmp_path, monkeypatch):
+    """A loose bin (a bowl) stood on its own floor, so a fetch called it full of itself."""
+    from robotforge.behaviors import fetch
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("bowl")
+    pg.add_object("bowl", shape="bin", size=[0.26, 0.26, 0.07], pos=[1.0, 0.0])
+    pg.add_object("cube", shape="box", size=[0.045, 0.045, 0.045], pos=[-1.0, 0.0])
+    m, d = pg.session.model, pg.session.data
+    place = fetch.place_for(m, d, "bowl", "bin", m.body("cube").id, 0.03)
+    assert place.spots

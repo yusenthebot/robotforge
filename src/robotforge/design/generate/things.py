@@ -35,7 +35,8 @@ def make(concept: str, rng: random.Random, color: str | None = None) -> Item:
     if concept == "plate":
         return Item("plate", "cylinder", (0.16, 0.015), color or "white", 0.2)
     if concept == "bowl":
-        return Item("bowl", "bin", (0.15, 0.15, 0.06), color or "white", 0.15)
+        # a wide bowl: room on its floor for a gripper to put a cup or an apple down inside its walls
+        return Item("bowl", "bin", (0.26, 0.26, 0.07), color or "white", 0.25)
     if concept == "ball":
         return Item("ball", "sphere", (0.06,), pick, 0.08, named=named)
     if concept == "book":
@@ -47,9 +48,10 @@ def make(concept: str, rng: random.Random, color: str | None = None) -> Item:
     if concept == "toy":
         return Item("toy", "box", (0.06, 0.05, 0.08), pick, 0.1, named=named)
     if concept == "box":
+        # a small carton, narrow enough for a gripper (the warehouse scene's parcels)
         if color:
-            return Item("box", "box", (0.06, 0.06, 0.09), color, 0.25, named=named)
-        return Item("box", "box", (0.06, 0.06, 0.09), CARDBOARD, 0.25, named="parcel")
+            return Item("box", "box", (0.05, 0.05, 0.08), color, 0.3, named=named)
+        return Item("box", "box", (0.05, 0.05, 0.08), CARDBOARD, 0.3, named="parcel")
     raise ValueError(f"no thing called {concept!r}")
 
 

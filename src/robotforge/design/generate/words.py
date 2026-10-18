@@ -113,7 +113,7 @@ THINGS: Lexicon = {
     "bowl": (("bowl",), ("碗",)),
     "ball": (("ball", "toy ball"), ("球", "皮球")),
     "book": (("book",), ("书本", "一本书", "书")),
-    "can": (("cans", "soda can", "tin can", "bottle", "jar", "tin"), ("罐子", "瓶子", "罐头", "易拉罐", "瓶")),
+    "can": (("can", "soda can", "tin can", "bottle", "jar", "tin"), ("罐子", "瓶子", "罐头", "易拉罐", "瓶")),
     "cube": (("cube", "block", "brick"), ("方块", "积木")),
     "box": (("box", "carton", "parcel", "package", "crate"), ("盒子", "箱子", "纸箱", "包裹", "快递")),
     "toy": (("toy", "teddy"), ("玩具", "玩偶")),
@@ -259,6 +259,7 @@ class Wish:
     size: float = 1.0
     robot: str | None = None
     understood: list[str] = field(default_factory=list)  # the words it acted on, for the summary
+    rooms_of: dict[str, str] = field(default_factory=dict)  # THINGS concept -> the room said with it ("bedroom desk")
 
     def summary(self) -> str:
         parts = [self.kind]
@@ -285,7 +286,12 @@ class Hit:
     end: int
 
 
+MODAL_CAN = re.compile(r"\bcans?\b(?!\s+(?:you|i|we|they|it|he|she|be|make|build|do|have|get|put|give|add)\b)")
+
+
 def _en_pattern(phrase: str) -> re.Pattern[str]:
+    if phrase == "can":  # "a can of soda", not "can you make..."
+        return MODAL_CAN
     words = r"[\s-]+".join(re.escape(w) for w in phrase.split())
     return re.compile(rf"\b{words}(?:e?s)?\b")
 
@@ -413,12 +419,18 @@ def read(text: str) -> Wish:
         wish.kind = "outdoor"
     elif any(h.concept in ("rack", "pallet", "conveyor") for h in things):
         wish.kind = "warehouse"
+    wanted: dict[str, int] = {}  # a room said twice ("from the kitchen ... in the kitchen") is one room
     for hit in rooms:
         n = _count_before(low, hit.start) or 1
-        wish.rooms += [hit.concept] * min(n, 4)
+        wanted[hit.concept] = max(wanted.get(hit.concept, 0), min(n, 4))
         wish.understood.append(low[hit.start : hit.end])
+    for room, n in wanted.items():
+        wish.rooms += [room] * n
     wish.room_count = _room_count(low)
     for hit in things:
+        room = _room_with(low, hit, rooms)
+        if room is not None:
+            wish.rooms_of.setdefault(hit.concept, room)
         n = _count_before(low, hit.start)
         wish.counts[hit.concept] = min(max(wish.counts.get(hit.concept, 0), n or 0), MAX_COUNT)
         color = _color_before(low, hit.start)
@@ -440,6 +452,19 @@ def read(text: str) -> Wish:
     if wish.kind != "warehouse" and "dock" in wish.terrain:
         wish.terrain[wish.terrain.index("dock")] = "platform"  # a loading dock belongs to a warehouse
     return wish
+
+
+def _room_with(text: str, thing: Hit, rooms: list[Hit]) -> str | None:
+    """The room said with a thing: just before it ("the bedroom desk", "卧室的书桌", "卧室里的书桌") or just after
+    ("the desk in the bedroom")."""
+    for r in rooms:
+        between = text[r.end : thing.start] if r.end <= thing.start else text[thing.end : r.start]
+        before = r.end <= thing.start
+        if before and re.fullmatch(r"\s*(?:'s\s*)?|[的里中上内]{0,2}", between):
+            return r.concept
+        if not before and re.fullmatch(r"\s*(?:in|from|of|inside)\s+(?:the|a|an|my)?\s*", between):
+            return r.concept
+    return None
 
 
 def _color_before(text: str, at: int) -> str | None:

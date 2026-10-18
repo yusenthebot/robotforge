@@ -7,6 +7,7 @@ plugin, and a deterministic check reads what really happened.
     uv run python scripts/agent_eval.py --compare BEFORE.json [MORE.json] [--after AFTER.json ...]
     uv run python scripts/agent_eval.py --fixture RUN_DIR/tasks/NAME tests/fixtures/agent_eval/NAME
     uv run python scripts/agent_eval.py --list
+    uv run python scripts/agent_eval.py --suite SUITE [--only suite_case_01,...]  # a generated suite's cases
 
 Every task is one `codex exec --json` session with a fresh ROBOTFORGE_HOME, so the worlds it leaves on disk are
 its own; at most MAX_JOBS sessions run at once, each for at most MAX_SESSION_SECONDS. The plugin is installed
@@ -1646,6 +1647,98 @@ TASKS: dict[str, Task] = {
     )
 }
 
+
+# ---- generated suites (scripts/task_suite.py) -------------------------------------------------------------------
+
+EDITS = ("update_object", "remove", "add_object", "update_robot")  # what would move a thing without doing the task
+
+
+def _last(points: list[Any]) -> tuple[float, float, float] | None:
+    return tuple(float(v) for v in points[-1][:3]) if points else None
+
+
+def mechanism_readings(session: Session, name: str) -> list[dict[str, Any]]:
+    """What robotforge reported a mechanism doing, in order: observe's "mechanisms" and operate's state."""
+    out = []
+    for call in session.ours:
+        data = call.data
+        if not isinstance(data, dict):
+            continue
+        if call.tool == "observe" and isinstance((data.get("mechanisms") or {}).get(name), dict):
+            out.append(data["mechanisms"][name])
+        elif call.tool == "operate" and data.get("target") == name and isinstance(data.get("state"), dict):
+            out.append(data["state"])
+    return out
+
+
+def suite_state(session: Session, task: Any, first: bool = False) -> Any:
+    """The task's state as robotforge reported it in the session: its last (or first) report of each part."""
+    from robotforge.design.tasks.check import State
+
+    pick = (lambda xs: xs[:1]) if first else (lambda xs: xs[-1:])
+    seen = pick(poses(session, task.robot))
+    things = {}
+    for name in (task.object, task.target):
+        if name:
+            p = _last(pick(object_positions(session, name)))
+            if p is not None:
+                things[name] = p
+    readings = pick(mechanism_readings(session, task.object)) if task.object else []
+    return State(
+        robot=(seen[0].x, seen[0].y, 0.0) if seen else None,
+        upright=seen[0].upright if seen else None,
+        things=things,
+        mechanisms={task.object: readings[0]} if readings else {},
+    )
+
+
+def check_suite_case(case: Any, original: Path) -> Check:
+    """The case's own task check (design/tasks/check.py) on the positions the session's tool calls reported, against
+    the world as the suite made it; and the thing moved by the robot, not by editing the world."""
+
+    def check(ev: Evidence) -> list[Criterion]:
+        from robotforge.design.tasks.check import judge
+        from robotforge.design.world import World as Saved
+
+        made = Saved.from_yaml((original / "world.yaml").read_text(encoding="utf-8"))
+        task = made.tasks[0]
+        world = next((w for w in ev.worlds if w.name == case.name), None)
+        if world is None:
+            return [Criterion(f"the world {case.name}", False, "not on disk")]
+        seen = ev.seen(world)
+        verdict = judge(task, made, suite_state(seen, task), suite_state(seen, task, first=True))
+        edited = [
+            c.tool
+            for c in seen.ours
+            if c.ok and c.tool in EDITS and {task.object, task.target} & {c.args.get("name"), c.args.get("object")}
+        ]
+        return [
+            Criterion(f"task check: {task.describe()}", verdict.done, verdict.why),
+            Criterion("done by the robot, not by editing the world", not edited, ", ".join(edited) or "no edits"),
+        ]
+
+    return check
+
+
+def suite_tasks(folder: Path) -> dict[str, Task]:
+    """A Task per case of a suite made by scripts/task_suite.py: its world copied into the session's robotforge home,
+    the prompt a user would type, and the task's own check."""
+    from robotforge.design.tasks.suite import load_suite
+
+    out = {}
+    for case in load_suite(folder):
+        original = folder / "worlds" / case.name
+
+        def setup(_work: Path, home: Path, src: Path = original, name: str = case.name) -> None:
+            shutil.copytree(src, home / "worlds" / name, ignore=shutil.ignore_patterns(".history", "build"))
+
+        out[f"suite_{case.name}"] = Task(
+            f"suite_{case.name}", case.lang, ("generated world", "task", case.kind), case.prompt(),
+            check_suite_case(case, original), setup,
+        )  # fmt: skip
+    return out
+
+
 # ---- one task's outcome -----------------------------------------------------------------------------------
 
 
@@ -2220,7 +2313,17 @@ def main(argv: list[str] | None = None) -> int:
         "--fixture", nargs=2, type=Path, metavar=("TASK_DIR", "DEST"), help="trim one session into a test fixture"
     )
     parser.add_argument("--list", action="store_true", help="print the tasks")
+    parser.add_argument(
+        "--suite",
+        type=Path,
+        metavar="FOLDER",
+        help="run a generated suite (scripts/task_suite.py) instead of the tasks",
+    )
     options = parser.parse_args(argv)
+    if options.suite:  # its cases join the tasks, and are what runs unless --only names others
+        cases = suite_tasks(options.suite)
+        TASKS.update(cases)
+        options.only = options.only or ",".join(cases)
     if options.list:
         for t in TASKS.values():
             print(f"{t.name:16s}{t.lang:4s}{t.prompt}\n{'':20s}covers: {', '.join(t.covers)}")

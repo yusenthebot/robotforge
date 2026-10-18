@@ -99,12 +99,6 @@ def plan(
     out = Plan(task=None, notes=notes)  # type: ignore[arg-type]
     kind = asked.kind
     thing = place = None
-    if kind != "go_to":
-        if asked.thing is None or asked.thing.concept in (None, "room", "goal"):
-            raise TaskProblem(f"say what to {kind.replace('_', ' ')}: the sentence names no thing ({sentence!r})")
-        thing = _find(objects, world, asked.thing, notes)
-        if thing is None:
-            thing = _add_thing(world, objects, asked.thing, robots, rng, out)
     if kind in ("go_to", "bring", "put", "push"):
         if asked.place is None:
             raise TaskProblem(f"say where: {kind.replace('_', ' ')} to what? ({sentence!r})")
@@ -113,6 +107,16 @@ def plan(
             place = _add_bin(world, objects, asked.place, rng, out, robots)
         if place is None:
             raise TaskProblem(_missing(asked.place, objects, world))
+    if kind != "go_to":
+        if asked.thing is None or asked.thing.concept in (None, "room", "goal"):
+            raise TaskProblem(f"say what to {kind.replace('_', ' ')}: the sentence names no thing ({sentence!r})")
+        # of the things that fit, one not where it has to go already (a can generated on the shelf it is to go to)
+        there = _already(objects, place) if place is not None else None
+        thing = _find(objects, world, asked.thing, notes, there)
+        if thing is None:
+            thing = _add_thing(world, objects, asked.thing, robots, rng, out)
+        elif there is not None and there(next(o for o in objects if o["name"] == thing)):
+            notes.append(f"{thing} is in or on {place} already: the task is done before it starts")
     chosen = _robot(kind, asked.robot, robot, robots, objects, thing, place, world, out, spawn_height)
     entry = _robot_entry(world, chosen)
     start = Start(
@@ -192,7 +196,17 @@ def _colored(o: dict[str, Any], color: str | None) -> bool:
     return isinstance(o.get("color"), str) and o["color"] == color
 
 
-def _find(objects: list[dict[str, Any]], world: Any, ref: Ref, notes: list[str]) -> str | None:
+def _already(objects: list[dict[str, Any]], place: str) -> Any:
+    """Whether a thing (an object's entry) is in or on `place` as the world stands."""
+    from robotforge.design.tasks.check import _miss, region
+
+    reg = region({"objects": objects, "terrain": []}, place)
+    if reg is None:
+        return lambda o: False
+    return lambda o: _miss(reg, (o["pos"][0], o["pos"][1], o["pos"][2] if len(o["pos"]) == 3 else 0.0)) == 0.0
+
+
+def _find(objects: list[dict[str, Any]], world: Any, ref: Ref, notes: list[str], done: Any = None) -> str | None:
     if ref.name and any(o["name"] == ref.name for o in objects):
         return ref.name
     exact = wording.match(ref.text.replace("the ", "").strip(), [o["name"] for o in objects])
@@ -206,6 +220,8 @@ def _find(objects: list[dict[str, Any]], world: Any, ref: Ref, notes: list[str])
             break
     if not found:
         return None
+    if done is not None:  # those not there yet first
+        found.sort(key=lambda o: bool(done(o)))
     if len(found) > 1:
         notes.append(
             f"{len(found)} things fit {ref.text!r}: took {found[0]['name']} (others: "
@@ -226,11 +242,13 @@ def _find_place(objects: list[dict[str, Any]], world: Any, ref: Ref, notes: list
         marks = [o["name"] for o in objects if o["shape"] == "marker" and o["name"] in ("goal", "finish", "target")]
         marks = marks or [o["name"] for o in objects if o["shape"] == "marker" and o["name"] not in _rooms(objects)]
         return marks[0] if marks else None
+    for t in world.terrain:  # a terrain patch said by its name ("the loading dock") before anything it is near
+        if re.search(rf"\b{re.escape(t.name)}\b", ref.text):
+            return t.name
     if ref.concept is not None:
-        found = _find(objects, world, ref, notes)
-        if found is not None:
-            return found
-    for n in [o["name"] for o in objects] + [t.name for t in world.terrain]:  # a name said as it is ("the dock")
+        # a kind of thing said and none found: no place (not a room whose name the words happen to contain)
+        return _find(objects, world, ref, notes)
+    for n in [o["name"] for o in objects]:  # a name said as it is ("the dock")
         if re.search(rf"\b{re.escape(n)}\b", ref.text):
             return n
     return None
@@ -437,8 +455,15 @@ def _add_arm(objects, thing, place, world, out: Plan, spawn_height) -> str:
     base = float(o["pos"][2]) if len(o["pos"]) == 3 else 0.0
     taken = {r.name for r in world.robots} | {x["name"] for x in objects}
     name = "arm" if "arm" not in taken else next(f"arm_{k}" for k in range(2, 99) if f"arm_{k}" not in taken)
-    top = next((s for s in surfaces_of(objects) if abs(s.z - base) < 0.02 and s.area.grown(0.05).contains(
-        o["pos"][0], o["pos"][1]) and s.owner != thing), None)  # fmt: skip
+    under = [
+        s
+        for s in surfaces_of(objects)
+        if s.owner != thing
+        and s.kind in ("table", "chest")
+        and s.z <= base + 0.01
+        and s.area.grown(0.05).contains(o["pos"][0], o["pos"][1])
+    ]
+    top = max(under, key=lambda s: s.z) if under and base - max(s.z for s in under) < 0.2 else None  # fmt: skip
     hx, hy = props.footprint(o["shape"], o["size"])
     mech = Footprint(o["pos"][0], o["pos"][1], hx, hy, float(o.get("yaw") or 0.0))
     entry = RobotEntry(name=name, template="arm")
@@ -446,7 +471,7 @@ def _add_arm(objects, thing, place, world, out: Plan, spawn_height) -> str:
     spots = []
     # in front of it first (where its drawer or door comes out, as on the kitchen scene's island), then beside it
     ahead = [(0.0, -d) for d in (0.5, 0.46, 0.54, 0.42)]
-    beside = [(side * d, -0.06) for d in (0.34, 0.3, 0.38) for side in (1, -1)]
+    beside = [(side * d, ly) for d in (0.26, 0.3, 0.22, 0.34) for side in (1, -1) for ly in (0.0, 0.06, -0.06)]
     for lx, ly in ahead + beside:
         x, y = mech.world(lx, ly)
         base_fp = Footprint(x, y, 0.08, 0.08)
