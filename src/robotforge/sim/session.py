@@ -80,6 +80,8 @@ class SimSession:
     # Run with the actuator's id after set_ctrl sets it by hand (a viewer slider, set_controls), e.g. so a robot
     # standing on a gait it never asked for lets go of that joint.
     ctrl_hooks: list[Callable[[int], None]] = field(default_factory=list, repr=False)
+    # Run after every physics step with the model and data, e.g. so sensors sample at their rates (sensors/hub.py).
+    step_hook: Callable[[mujoco.MjModel, mujoco.MjData], None] | None = field(default=None, repr=False)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
@@ -182,6 +184,8 @@ class SimSession:
                 self._run_controllers()
                 self._apply_drag()
                 mujoco.mj_step(self.model, self.data)
+                if self.step_hook is not None:
+                    self.step_hook(self.model, self.data)
 
     def _run_controllers(self) -> None:
         t = self.data.time

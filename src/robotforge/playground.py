@@ -25,6 +25,9 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
+from robotforge.sensors import edit as sensor_edit
+from robotforge.sensors import without_sensors
+from robotforge.sensors.hub import SensorHub
 from robotforge.sim import carry, finder, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
@@ -80,6 +83,7 @@ class Playground:
     behaviors: BehaviorManager = field(init=False)
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
+    sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -88,6 +92,7 @@ class Playground:
         )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
+        self.sensors = SensorHub(self.session)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -158,6 +163,7 @@ class Playground:
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
         hub.state_extras = lambda: {"mode": modes.current(self)}
+        hub.sensor_stream = self.sensors.viewer_message
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
@@ -211,7 +217,7 @@ class Playground:
                 for j in range(m.njnt)
             ]
             actuators = [self._actuator_info(a) for a in range(m.nu)]
-            sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
+            sensors = [n for s in range(m.nsensor) if not _added_sensor(n := _name(m, mujoco.mjtObj.mjOBJ_SENSOR, s))]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
         return {
@@ -351,6 +357,21 @@ class Playground:
 
         return _noted(self._edit(change), _yaw_note(yaw), *kept)
 
+    @_one_edit_at_a_time
+    def add_sensor(self, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Put a sensor on any robot (sensors/edit.py); remove("robot/sensor") takes it off."""
+        return sensor_edit.add(self, robot, fields)
+
+    def read_sensors(
+        self, robot: str, names: list[str] | None = None, image: bool = False, full: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.read(self.sensors.resolve_robot(robot, robots), names, image, full)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+
     # ---- robots built from parts ------------------------------------------------------
 
     @_one_edit_at_a_time
@@ -417,6 +438,11 @@ class Playground:
 
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
+        world = self.current_world()
+        sensor = sensor_edit.find(world, name) if world is not None else None
+        if sensor is not None:  # "go2/lidar": a sensor added to a robot
+            return sensor_edit.remove(self, *sensor)
+
         def change(w: World) -> None:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
             found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
@@ -480,7 +506,8 @@ class Playground:
         # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
         # New ground under them (terrain, a scene) starts everything fresh: their heights would no longer fit.
         if before.terrain == after.terrain:
-            unchanged = [r.name for r in after.robots if r in before.robots]
+            kept = [without_sensors(r) for r in before.robots]  # a sensor added or removed moves no robot
+            unchanged = [r.name for r in after.robots if without_sensors(r) in kept]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
                 carried = carry.restore(self.session.model, self.session.data, live, unchanged)
@@ -746,9 +773,12 @@ class Playground:
             ctrl = {self._actuator_info(a)["name"]: round(float(d.ctrl[a]), 4) for a in range(m.nu)}
             sensors = {}
             for s in range(m.nsensor):
+                name = _name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"
+                if _added_sensor(name):  # read_sensors and observe's sensor_summary report those
+                    continue
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
                 values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+                sensors[name] = values[0] if dim == 1 else values
             return {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
@@ -914,6 +944,11 @@ def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
 
 def _validation_message(exc: ValidationError) -> str:
     return wording.validation_message(exc)
+
+
+def _added_sensor(name: str) -> bool:
+    """A MuJoCo sensor that add_sensor made (rf_<sensor>_...): its readings come through read_sensors."""
+    return name.startswith("rf_") or "/rf_" in name
 
 
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
