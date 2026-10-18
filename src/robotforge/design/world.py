@@ -134,6 +134,18 @@ class RobotEntry(_Strict):
     # or "gripper" (the arm's own fingers); None keeps it as built. See end_effectors.py.
     end_effector: str | None = Field(None, exclude_if=_unset)
     sensors: list[SensorEntry] = Field(default_factory=list)  # added to any robot (add_sensor), see sensors/
+    # A robot made from a sentence (add_robot(describe=...)): the plan its build came from (body, counts, factors,
+    # seed and the sentences so far), so a later sentence changes it (update_robot(describe=...)). See generator/.
+    generated: dict[str, Any] | None = Field(None, exclude_if=_unset)
+
+    @field_validator("generated")
+    @classmethod
+    def _generated(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is not None:
+            from robotforge.design.generator.plan import Plan  # lazy: only worlds with generated robots need it
+
+            Plan.from_dict(v)
+        return v
 
     @field_validator("name")
     @classmethod

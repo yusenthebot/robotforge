@@ -6,9 +6,11 @@ on:
   pull_request:
 
 # A newer push to the same branch makes the older run pointless.
+# Lanes land on main every few minutes and a run takes about half an hour: a running run finishes,
+# and only the newest waiting push runs after it, so main keeps getting a full result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read

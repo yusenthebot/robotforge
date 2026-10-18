@@ -242,6 +242,39 @@ def _dogs(pg: Any) -> None:
     pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0])
 
 
+# Three robots generated from a sentence each, side by side: one drives, two walk (S.GENERATED 1, 0 and 4).
+GENERATED_THREE = [("courier", 1, [0.0, 1.25]), ("mantis", 0, [0.0, 0.0]), ("dog", 4, [0.0, -1.2])]
+
+
+def _generated_three(pg: Any) -> None:
+    for name, sentence, pos in GENERATED_THREE:
+        pg.add_robot(name, describe=S.GENERATED[sentence], pos=pos)
+
+
+def _follow_group(robots: list[str], offset: tuple[float, float, float], ease: float = 0.05) -> str:
+    """Page script: keep the camera on the middle of these robots from `offset` metres away, easing after it."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge;
+        const ids = {json.dumps(robots)}.map(
+            (r) => rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id);
+        const off = {json.dumps(list(offset))};
+        const mid = () => {{
+            const ps = ids.map((i) => rf.bodyPosition(i));
+            return [0, 1, 2].map((k) => ps.reduce((s, p) => s + p[k], 0) / ps.length);
+        }};
+        (async () => {{
+            let at = mid();
+            while (window.__cam === me) {{
+                const p = mid();
+                at = at.map((v, i) => v + {ease} * (p[i] - v));
+                rf.lookAt(at.map((v, i) => v + off[i]), [at[0], at[1], 0.15]);
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
 def _kitchen_fetch(pg: Any) -> None:
     """A mobile Panda in the kitchen, planning to bring the apple from the island to the dining table; the world is
     paused until the recording plays it (the plan takes seconds, and the errand would start while the page loads)."""
@@ -520,6 +553,14 @@ DEMOS = [
         timeline=[(0.2, S._sorting)],
         page="window.__robotforge.select(null);" + _orbit((0.3, -0.26, 0.6), 0.78, 0.52, -66.0, 30.0, 42.0),
         settle=0.5,
+    ),
+    Demo(
+        "generated_three",
+        _generated_three,
+        15.0,
+        timeline=[(0.5, _move(name, 0.25)) for name, *_ in GENERATED_THREE],
+        page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.45, -2.0, 1.05)),
+        settle=1.0,
     ),
 ]
 
