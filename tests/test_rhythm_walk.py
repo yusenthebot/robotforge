@@ -639,6 +639,7 @@ def test_a_walk_thrown_off_course_steers_back_to_the_heading_it_started_with(pg)
         mujoco.mj_kinematics(model, data)
 
     walker.course = walker.aim = 0.0
+    walker.origin = pg.session.data.xpos[walker.body.trunk][:2].copy()  # on its line, which runs along +x
     face(-1.0)  # spun a long way to the right
     assert walker._heading_error(data, 10.0, 0.02) == pytest.approx(rhythm_walk.STEER_SPAN)  # corrects fully
     assert walker.aim == pytest.approx(-1.0 + rhythm_walk.STEER_LEASH)  # its aim no further off than the leash
@@ -648,8 +649,36 @@ def test_a_walk_thrown_off_course_steers_back_to_the_heading_it_started_with(pg)
     assert walker.aim == pytest.approx(-0.1 - rhythm_walk.STEER_LEASH + rhythm_walk.STEER_RELAX, abs=0.003)
     for _ in range(500):
         walker._heading_error(data, 10.0, 0.02)
-    assert walker.aim == pytest.approx(0.0)  # all the way back
-    assert walker._heading_error(data, 1.0, 0.02) == pytest.approx(0.1 / rhythm_walk.STEER_RAMP)  # easing in
+    assert walker.aim == pytest.approx(0.0, abs=1e-3)  # all the way back
+    assert walker._heading_error(data, 1.0, 0.02) == pytest.approx(0.1 / rhythm_walk.STEER_RAMP, abs=1e-3)  # easing in
+
+
+def test_a_walk_beside_its_line_steers_back_onto_it(pg):
+    """Regression: holding its heading, a walk that went a little crabwise walked on beside the line it started on:
+    over 20 s from standing, 8 kept template dog walks ended 0.10 m to the side per metre walked on average and 6
+    imported A1 walks 0.18 (scripts/rhythm_bench.py straight). It aims back at the line, LINE_AHEAD further along it,
+    at most LINE_CUT off the course."""
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.control.cpg import trunk_yaw
+
+    walker = _swinging(pg)
+    data = pg.session.data
+    course = trunk_yaw(data, walker.body)
+    walker.course = walker.aim = course  # facing along its line, 0.3 m to the left of it
+    left = np.array([-math.sin(course), math.cos(course)])
+    walker.origin = data.xpos[walker.body.trunk][:2] - 0.3 * left
+    for _ in range(500):
+        error = walker._heading_error(data, 10.0, 0.02)
+    assert walker.aim == pytest.approx(course - math.atan2(0.3, rhythm_walk.LINE_AHEAD))
+    assert error < -0.2  # rad: it steers right, back toward the line
+    walker.origin = data.xpos[walker.body.trunk][:2] + 5.0 * left  # far to the right of it: at most LINE_CUT
+    for _ in range(500):
+        walker._heading_error(data, 10.0, 0.02)
+    assert walker.aim == pytest.approx(course + rhythm_walk.LINE_CUT)
+    walker.origin = data.xpos[walker.body.trunk][:2].copy()  # on it: the aim comes back to the course
+    for _ in range(500):
+        walker._heading_error(data, 10.0, 0.02)
+    assert walker.aim == pytest.approx(course)
 
 
 def test_a_walk_asked_for_out_of_a_turn_holds_the_heading_it_was_asked_at(pg):
