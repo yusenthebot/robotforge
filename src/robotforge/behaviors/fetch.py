@@ -720,14 +720,27 @@ def _reach_out(arm: ArmMotion, z: float, way: float | None = None) -> float:
     where the arm's zero points)."""
     way = arm.base_yaw if way is None else way
     ahead = np.array([math.cos(way), math.sin(way)])
-    best = 0.0
-    for r in np.arange(0.05, 1.5, 0.02):
-        p = np.array([*(arm.base_xy + r * ahead), z])
-        if arm.quick_error(p) <= REACH_TOL:
-            best = float(r)
-        elif best > 0:
-            break
+
+    def at(r: float) -> np.ndarray:
+        return np.array([*(arm.base_xy + r * ahead), z])
+
+    def scan(first: float) -> float:
+        best = 0.0
+        for r in np.arange(first, 1.5, 0.02):
+            if arm.quick_error(at(r)) <= REACH_TOL:
+                best = float(r)
+            elif best > 0:
+                break
+        return best
+
+    best = scan(0.05)
+    if best == 0.0:  # nothing from the pose it is in (a lift folded low): find one point the long way, go on from it
+        first = next((r for r in WARM_OUT if arm.warm_up(at(r))), None)
+        best = scan(first) if first is not None else 0.0
     return best
+
+
+WARM_OUT = (0.2, 0.3, 0.4, 0.5, 0.12, 0.6)  # m from the base where _reach_out looks the long way
 
 
 def _heights(arm: ArmMotion) -> str:

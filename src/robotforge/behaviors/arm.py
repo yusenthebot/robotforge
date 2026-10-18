@@ -39,8 +39,10 @@ LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying th
 # behind its base, where its first joint cannot point (14 degrees each side on a Panda), twists the rest of the way
 JOINT_SLACK = 0.35
 PATH_SAMPLES = 33  # points a path around the base is measured at: 32 chords of at most 11 degrees in a full turn
-HOLD_STEP = 0.02  # m between the points tried for holding a load over the robot (hold_point)
-HOLD_SPOTS = 16  # spots over the robot tried, nearest the middle of the arm's base and the robot's first
+HOLD_STEP = 0.02  # m between the heights tried for holding a load over the robot (hold_point)
+HOLD_GRID = 0.04  # m between the spots over the robot tried for it
+HOLD_SPREAD = 0.5  # m of height a held load is raised rather than held a meter further off the robot's middle
+HOLD_TRIES = 400  # IK checks hold_point makes at most
 HOLD_RISE = 0.6  # m above the robot's lowest top that a load is held at most
 
 
@@ -133,6 +135,7 @@ class ArmMotion:
         self._reposed: Waypoint | None = None  # the move the arm last changed its pose for (once is enough)
         self.current_label = "idle"
         self.log: list[str] = []
+        self._warm: np.ndarray | None = None  # the last answer quick_error found (or warm_up)
 
     def _read_base(self, data: mujoco.MjData) -> None:
         self.base_xy = data.xpos[self.base_body][:2].copy()
@@ -205,15 +208,30 @@ class ArmMotion:
 
     def quick_error(self, target: np.ndarray) -> float:
         """reach_error from the two starts it tries first (the pose the arm is in, and with its base turned toward the
-        target), without the restarts from random settings: for searches over many points, about 20 times cheaper.
-        It may call a point out of reach that the arm reaches in another elbow or wrist branch."""
+        target), and from the last answer that worked, without the restarts from random settings: for searches over
+        many points, about 20 times cheaper. It may call a point out of reach that the arm reaches in another elbow
+        or wrist branch. The last answer carries a search on: a picker folded low over its base reaches nothing on a
+        counter from there, and does from its column raised for the point before."""
         best = np.inf
-        for start in (self.q, self._seed(target)):
+        starts = [self.q, self._seed(target)]
+        if self._warm is not None:
+            starts.append(self._seed(target, self._warm))
+        for start in starts:
             q, err = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
             if err <= REACH_TOL and not self._collides(q):
+                self._warm = q
                 return err
             best = min(best, max(err, REACH_TOL * 1.01))
         return best
+
+    def warm_up(self, target: np.ndarray) -> bool:
+        """Whether the arm reaches `target` (as reach_error, with the restarts), keeping the answer as the start
+        quick_error tries last."""
+        q, err, _ = self._solve(target)
+        if err > REACH_TOL:
+            return False
+        self._warm = q
+        return True
 
     @contextlib.contextmanager
     def carried_to(self, qpos: np.ndarray) -> Iterator[ArmMotion]:
@@ -288,9 +306,10 @@ class ArmMotion:
                 pairs.add((min(g1, g2), max(g1, g2)))
         return pairs
 
-    def _seed(self, target: np.ndarray) -> np.ndarray:
-        """Start IK with the base already turned toward the target; DLS alone can stall on big turns."""
-        q = self.q.copy()
+    def _seed(self, target: np.ndarray, q: np.ndarray | None = None) -> np.ndarray:
+        """Start IK from `q` (the pose the arm is in) with the base already turned toward the target; DLS alone can
+        stall on big turns."""
+        q = (self.q if q is None else q).copy()
         d = np.asarray(target)[:2] - self.base_xy
         i = self.yaw
         if i is not None and np.linalg.norm(d) > 1e-3:
@@ -559,9 +578,13 @@ class ArmMotion:
     def hold_point(self, load_half_height: float, load_radius: float) -> np.ndarray | None:
         """Where the tool holds a load (or nothing) while the robot carrying the arm drives or walks: over the robot,
         the load inside its outline seen from above, so nothing sticks out to catch on furniture, and clear of it by
-        LOAD_CLEARANCE; as low as the arm gets it there (a load held high swings), and near the middle between the
-        arm's base and the robot's. None for an arm that cannot fold over its robot that way. A world point, for the
-        robot as it stands now."""
+        LOAD_CLEARANCE; low (a load held high swings) and near the middle between the arm's base and the robot's,
+        HOLD_SPREAD m of height counting as much as a meter off that middle ahead or behind, or half a meter to a side
+        (where it tips the robot and sticks out). None for an arm that cannot fold over its robot that way. A world
+        point, for the robot as it stands now.
+
+        Every spot over the robot is tried, nearest that middle first: a Panda cannot hold anything low next to its
+        own base, and does behind it, over the back of its deck."""
         d = self.ik.data
         self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
         under = self._carrier_boxes()
@@ -582,25 +605,37 @@ class ArmMotion:
             return None
         base = frame @ (self.base_xy - root[:2])
         aim = np.clip(base / 2, low, high)  # between the arm's base and the robot's middle
-        xs = np.arange(low[0], high[0] + 1e-9, HOLD_STEP)
-        ys = np.arange(low[1], high[1] + 1e-9, HOLD_STEP)
-        spots = sorted(((x, y) for x in xs for y in ys), key=lambda p: float(np.hypot(p[0] - aim[0], p[1] - aim[1])))
-        bottom = min(top for _, _, top in under)
-        best: tuple[float, int, np.ndarray] | None = None
-        for rank, (x, y) in enumerate(spots[:HOLD_SPOTS]):
-            xy = root[:2] + np.array([c * x - s * y, s * x + c * y])
-            for z in np.arange(bottom + LOAD_CLEARANCE + load_half_height, bottom + HOLD_RISE, HOLD_STEP):
-                if best is not None and z >= best[0]:
+        ceiling = min(top for _, _, top in under) + HOLD_RISE
+        # Best first: each spot by the lowest score it could have, the load just clear of what is under it there.
+        spots = []
+        for x in np.arange(low[0], high[0] + 1e-9, HOLD_GRID):
+            for y in np.arange(low[1], high[1] + 1e-9, HOLD_GRID):
+                xy = root[:2] + np.array([c * x - s * y, s * x + c * y])
+                floor = max(
+                    (top for center, half, top in under if np.all(np.abs(xy - center) < half + load_radius)),
+                    default=-np.inf,
+                )
+                lowest = max(floor + LOAD_CLEARANCE + load_half_height + 0.005, ceiling - HOLD_RISE)
+                spread = HOLD_SPREAD * float(np.hypot(x - aim[0], 2 * (y - aim[1])))  # off to a side: twice
+                spots.append((lowest + spread, lowest, spread, xy))
+        spots.sort(key=lambda spot: spot[0])
+        best: tuple[float, np.ndarray] | None = None  # (score, point)
+        tries = 0
+        for bound, lowest, spread, xy in spots:
+            if best is not None and bound >= best[0] or tries >= HOLD_TRIES:
+                break  # the spots left can only score worse
+            for z in np.arange(lowest, ceiling, HOLD_STEP):
+                if best is not None and z + spread >= best[0]:
                     break
                 p = np.array([*xy, z])
-                if not self._load_clears(p, load_half_height, under) or self.quick_error(p) > REACH_TOL:
+                if not self._load_clears(p, load_half_height, under):
                     continue
-                q = self._solve(p)[0]
-                if self._load_hits_arm(q, p, load_half_height, load_radius):
+                tries += 1
+                if self.quick_error(p) > REACH_TOL or self._load_hits_arm(self._warm, p, load_half_height, load_radius):
                     continue
-                best = (float(z), rank, p)
+                best = (float(z) + spread, p)
                 break
-        return None if best is None else best[2]
+        return None if best is None else best[1]
 
     def _load_hits_arm(self, q: np.ndarray, p: np.ndarray, half_height: float, radius: float) -> bool:
         """Whether a load held at `p` with the arm at `q` overlaps the arm's own links (other than the hand holding it),
