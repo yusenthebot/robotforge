@@ -476,7 +476,7 @@ async function applyScene(desc) {
   wantFrame = false;
   follow = null;
   tween = null;
-  fitWhenPosed = null; // asked for the scene this one replaces
+  fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
 }
 
@@ -607,6 +607,21 @@ function aimLessonCamera(eye, target, fit) {
   moveCamera(fit ? fitRig(away, goal) : away, goal, true);
 }
 
+// A rig fitted at its scene's first poses is fitted once more when it has settled, unless the view was moved by hand
+// meanwhile: the PID triplets' arms hang at first and rise level within half a second, and the third then reached
+// off a phone's screen (a reload, which fits the settled rig, kept it in).
+const RIG_SETTLE_MS = 800;
+let refitRig = null; // { eye, target, at } of the lesson camera to fit again
+function refitSettledRig() {
+  if (!refitRig || performance.now() < refitRig.at) return;
+  const { eye, target } = refitRig;
+  refitRig = null;
+  if (lessonCamera()?.fit !== true) return; // the lesson has gone, or asks for no fit
+  const kept = follow?.body; // a camera move drops the follow the lesson asked for; keep it
+  aimLessonCamera(eye, target, true);
+  if (kept !== undefined) startFollowBody(kept, { keepTween: true });
+}
+
 function applyPoses(buffer) {
   if (!sceneDesc) return;
   const f = new Float32Array(buffer);
@@ -629,9 +644,13 @@ function applyPoses(buffer) {
       const goal = new THREE.Vector3().fromArray(own.target);
       const eye = fitToFree(new THREE.Vector3().fromArray(own.eye), goal);
       moveCamera(own.fit ? fitRig(eye, goal) : eye, goal, false);
+      if (own.fit) refitRig = { eye: own.eye, target: own.target, at: performance.now() + RIG_SETTLE_MS };
     }
     else if (pendingFit === "camera") frameCamera();
-    else if (fitWhenPosed) aimLessonCamera(fitWhenPosed.eye, fitWhenPosed.target, true);
+    else if (fitWhenPosed) {
+      aimLessonCamera(fitWhenPosed.eye, fitWhenPosed.target, true);
+      refitRig = { ...fitWhenPosed, at: performance.now() + RIG_SETTLE_MS };
+    }
     fitWhenPosed = null;
     pendingFit = null;
     $("loading").hidden = true;
@@ -1341,6 +1360,7 @@ function updateFollow() {
 controls.addEventListener("start", () => {
   follow = null;
   tween = null;
+  refitRig = null; // the learner's own view stays
 });
 
 function driveKey(e, down) {
@@ -2036,6 +2056,7 @@ function loop() {
   requestAnimationFrame(loop);
   healCamera();
   updateViewShift();
+  refitSettledRig();
   updateTween();
   updateFollow();
   controls.update();

@@ -150,6 +150,40 @@ def test_a_window_that_joins_a_lesson_frames_its_rig_as_a_reload_does(viewer):
     assert joined == pytest.approx(reloaded, rel=0.02)
 
 
+RIG_ACROSS = """(async () => {
+    const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
+    const rf = window.__robotforge;
+    const { scene, camera } = rf.three();
+    camera.updateMatrixWorld();
+    const out = {};
+    scene.traverse((o) => {
+        const name = o.isMesh && o.visible && rf.scene.bodies[o.userData.body]?.name;
+        if (!name || !name.includes("/")) return;
+        const b = new THREE.Box3().setFromObject(o), robot = name.split("/")[0];
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+            const px = ((new THREE.Vector3(x, y, z).project(camera).x + 1) / 2) * innerWidth;
+            const e = (out[robot] ??= [px, px]);
+            out[robot] = [Math.min(e[0], px), Math.max(e[1], px)];
+        }
+    });
+    return { robots: out, width: innerWidth };
+})()"""
+
+
+def test_a_lesson_rig_that_settles_after_its_first_poses_is_framed_as_it_stands(viewer):
+    """The PID triplets' arms hang at their first poses and rise level within half a second: framed at the first
+    poses, the third arm then reached off a phone's right edge (a reload, which framed the settled rig, kept it in)."""
+
+    async def scenario(tab, _server):
+        await _start(tab, "pid_twins")
+        await tab.until("!window.__robotforge.tweening()")
+        return await tab.eval(RIG_ACROSS)
+
+    seen = viewer("phone", "en", scenario)
+    assert sorted(seen["robots"]) == ["a", "b", "c"], seen
+    assert all(left >= 0 and right <= seen["width"] for left, right in seen["robots"].values()), seen
+
+
 def test_finishing_a_lesson_brings_the_lesson_complete_box_into_view(viewer):
     """The box sits at the foot of the lesson panel: below the fold, Finish looked as if it did nothing."""
 
