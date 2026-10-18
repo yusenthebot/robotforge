@@ -31,7 +31,7 @@ const $ = (id) => document.getElementById(id);
 
 const MAX_POINTS = 1200; // hit points the server sends per lidar at most (sensors/lidar.py VIEW_POINTS)
 const MAX_RAYS = { lidar: 360, lidar3d: 150 }; // rays drawn: a 3D scan's every ray would be a solid fog
-const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.45, 0.04] }; // opacity of a ray at the sensor and at its hit
+const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.32, 0.03] }; // opacity of a ray at the sensor and at its hit
 const POINT_PX = 4.5; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
 const FRUSTUM_HALF = 0.045; // m: half the height of a camera's frustum where it ends, whatever its field of view

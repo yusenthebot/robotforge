@@ -282,6 +282,13 @@ DEMOS = [
         timeline=[(0.8, _move("go2", 0.45))],
         page=_follow("go2", (0.84, 0.72, 0.5), ease=0.05),
     ),
+    Demo(  # what the sensors sense: the 3D lidar's points stream down the aisle, the depth picture rides beside it
+        "sensors_go2_aisle",
+        S._sensing_go2((-4.8, 2.6)),
+        16.0,
+        timeline=[(0.8, _go("go2", [1.6, 2.6]))],
+        page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
+    ),
     Demo(
         "lesson_learn_to_walk",
         lambda pg: None,
