@@ -1214,7 +1214,10 @@ class BehaviorManager:
             other = "target" if what == "object" else "object"
             keep = [({"object": object_at, "target": target_at}[other][:2], widths[other])] if named else []
             room = Room(widths[what], boxes, keep, "the arm's base" + (f" and the {names[other]}" if keep else ""))
-            fixes.append(_where_it_works(arm, base, reach, names[what], at, heights, room))
+            # Out to where the tool gets at all at those heights (see ArmMotion.farthest), not the arm's length.
+            data, xy = self.session.data, np.asarray(at[:2], float)
+            out = min(arm.farthest(data, np.array([*xy, z]), name.startswith("above")) for name, z in heights.items())
+            fixes.append(_where_it_works(arm, base, min(reach, out + DOWN_BAND_STEP), names[what], at, heights, room))
         text = (
             f"{arm.robot} cannot reach the {' and the '.join(far)} with its gripper pointing down: "
             f"{'it is' if one else 'they are'} {away} m from the arm's base, which reaches about {reach:.2f} m; "

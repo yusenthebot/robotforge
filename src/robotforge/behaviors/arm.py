@@ -291,6 +291,23 @@ class ArmMotion:
         here = float(np.sqrt(max(arm**2 - (wrist[2] - base[2]) ** 2, 0.0)))
         return DownReach(base, float(np.linalg.norm(point[:2] - base[:2])), here, arm)
 
+    def farthest(self, data: mujoco.MjData, point: np.ndarray, lean: bool = False) -> float:
+        """How far out (m, across the floor from its first hinge, see down_reach) the tool can get at all at the
+        height of `point`, pointing down or, with `lean`, leaning as far as TILTS let it: no key point of a
+        pick-and-place further out works there (see key_point_error). Advice on where a refused pick works tried every
+        2 cm out to a UR5e's whole 1.46 m length from ANYmal's back, and took 11 s, most of it on points it could not
+        get anywhere near."""
+        point = np.asarray(point, float)
+        anchors = [data.xanchor[j] for j in self.joints if j not in self._slides]
+        hand = float(np.linalg.norm(data.site_xpos[self.site] - anchors[-1]))
+        farthest = 0.0
+        for tilt in (0.0, *(TILTS if lean else ())):
+            # Leaning, the wrist is lower above the point and the tool reaches out past it.
+            wrist_lower = hand * (1.0 - np.cos(tilt))
+            at = self.down_reach(data, point - np.array([0.0, 0.0, wrist_lower]))
+            farthest = max(farthest, at.reach + hand * np.sin(tilt))
+        return farthest
+
     def footprint(self, model: mujoco.MjModel, data: mujoco.MjData) -> list[tuple[float, float, float, float]]:
         """Where the part of the robot that the arm's joints do not move stands, seen from above: (x min, y min, x
         max, y max) in the world for each of its collision shapes, the arm's stand or the robot that carries it.
@@ -1370,11 +1387,13 @@ class ArmMotion:
     def _short_of_carrier(
         self, wp: Waypoint, start: np.ndarray, steps: int, aim: Callable[[float], dict[str, Any]], **keep: Any
     ) -> Waypoint:
-        """The move `wp` of an arm riding on a robot, that no pose here follows clear of that robot, ending where it
-        still is clear: the robot has shifted under the arm since the plan checked it. Lowering a cube behind ANYmal,
+        """The move `wp` of an arm riding on a robot, that no pose here follows clear of that robot, ending before it
+        would run into it: the robot has shifted under the arm since the plan checked it. Lowering a cube behind ANYmal,
         whose hind thigh had moved 1.3 cm into the way checked when the pick was planned, a UR5e went on down anyway,
-        caught its forearm on the thigh and let go of the cube 7 cm from the place."""
-        _, off, passed = self._follow_until(self.q, start, wp.position, steps, aim, **keep)
+        caught its forearm on the thigh and let go of the cube 7 cm from the place. Only running into it counts here,
+        not coming nearer than the move's clearance: stopped that soon, a UR5e closed its jaws above a cube beside the
+        dog's front leg that it reached with its wrist 5 mm from the leg."""
+        _, off, passed = self._follow_until(self.q, start, wp.position, steps, aim, clear=True)
         if off < np.inf:
             return wp
         return replace(wp, position=self._arc_point(start, wp.position, passed), pose=None)

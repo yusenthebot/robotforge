@@ -633,7 +633,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
-            arm = playground.behaviors.move_arm(robot, position, gripper)
+            # Planned off the event loop: going over a carrier it can take a second, and the viewer froze meanwhile.
+            arm = await asyncio.to_thread(playground.behaviors.move_arm, robot, position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
             return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
@@ -654,7 +655,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
-            arm, info = playground.behaviors.pick_and_place(robot, object, target)
+            # Planned off the event loop: on a carrier, or advising where a refused pick works, that can take seconds,
+            # and the viewer froze meanwhile.
+            arm, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target)
             object = info["object"]  # as the world spells it
             run = await run_until(lambda: arm.done, 40.0)
             settle = await run_until(lambda: False, 0.5)
