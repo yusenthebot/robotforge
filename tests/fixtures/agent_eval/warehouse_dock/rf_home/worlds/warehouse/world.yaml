@@ -1,0 +1,837 @@
+name: warehouse
+floor:
+  style: concrete
+  friction: 1.0
+terrain:
+- type: ramp
+  name: dock
+  pos:
+  - 5.0
+  - -1.4
+  yaw: 0.0
+  style: concrete
+  friction: null
+  angle: 8.0
+  length: 2.1
+  width: 2.4
+  direction: up
+  landing: 2.0
+robots:
+- name: rover
+  template: rover
+  file: null
+  library: null
+  build: null
+  params: {}
+  pos:
+  - -5.5
+  - 2.6
+  yaw: 0.0
+objects:
+- name: back_wall
+  shape: wall
+  size:
+  - 14.0
+  - 0.2
+  - 3.0
+  pos:
+  - 0.0
+  - 5.0
+  yaw: 0.0
+  color:
+  - 0.72
+  - 0.74
+  - 0.76
+  - 1.0
+  mass: null
+  fixed: true
+- name: side_wall
+  shape: wall
+  size:
+  - 7.2
+  - 0.2
+  - 3.0
+  pos:
+  - -7.0
+  - 1.5
+  yaw: 90.0
+  color:
+  - 0.72
+  - 0.74
+  - 0.76
+  - 1.0
+  mass: null
+  fixed: true
+- name: rack_1
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - -4.0
+  - 3.9
+  yaw: 0.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_3
+  shape: box
+  size:
+  - 0.45
+  - 0.4
+  - 0.32
+  pos:
+  - -4.0155
+  - 3.9
+  - 0.972
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_2
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - -2.0
+  - 3.9
+  yaw: 0.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_5
+  shape: box
+  size:
+  - 0.4
+  - 0.4
+  - 0.27
+  pos:
+  - -2.24
+  - 3.9
+  - 0.551
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_6
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.32
+  pos:
+  - -1.6588
+  - 3.9
+  - 1.764
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_3
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - 0.0
+  - 3.9
+  yaw: 0.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_8
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.23
+  pos:
+  - 0.3855
+  - 3.9
+  - 0.531
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_9
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.23
+  pos:
+  - -0.0724
+  - 3.9
+  - 0.927
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_4
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - 2.0
+  - 3.9
+  yaw: 0.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_11
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.25
+  pos:
+  - 2.3355
+  - 3.9
+  - 0.541
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_12
+  shape: box
+  size:
+  - 0.4
+  - 0.4
+  - 0.23
+  pos:
+  - 2.3741
+  - 3.9
+  - 0.927
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_5
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - -4.0
+  - 1.3
+  yaw: 180.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_14
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.25
+  pos:
+  - -3.5925
+  - 1.3
+  - 1.333
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_15
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.24
+  pos:
+  - -3.6663
+  - 1.3
+  - 1.724
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_6
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - -2.0
+  - 1.3
+  yaw: 180.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_17
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.26
+  pos:
+  - -2.4615
+  - 1.3
+  - 0.15
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_18
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.32
+  pos:
+  - -2.0118
+  - 1.3
+  - 0.576
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_19
+  shape: box
+  size:
+  - 0.45
+  - 0.4
+  - 0.29
+  pos:
+  - -1.9478
+  - 1.3
+  - 0.957
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_20
+  shape: box
+  size:
+  - 0.5
+  - 0.4
+  - 0.27
+  pos:
+  - -2.2336
+  - 1.3
+  - 1.739
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_7
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - 0.0
+  - 1.3
+  yaw: 180.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_22
+  shape: box
+  size:
+  - 0.45
+  - 0.4
+  - 0.25
+  pos:
+  - -0.2837
+  - 1.3
+  - 0.145
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_23
+  shape: box
+  size:
+  - 0.4
+  - 0.4
+  - 0.22
+  pos:
+  - 0.5294
+  - 1.3
+  - 0.526
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_24
+  shape: box
+  size:
+  - 0.4
+  - 0.4
+  - 0.23
+  pos:
+  - 0.2834
+  - 1.3
+  - 0.927
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: rack_8
+  shape: shelf
+  size:
+  - 2.0
+  - 0.6
+  - 2.0
+  pos:
+  - 2.0
+  - 1.3
+  yaw: 180.0
+  color:
+  - 0.36
+  - 0.45
+  - 0.56
+  - 1.0
+  mass: null
+  fixed: true
+- name: crate_26
+  shape: box
+  size:
+  - 0.45
+  - 0.4
+  - 0.3
+  pos:
+  - 2.027
+  - 1.3
+  - 1.358
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: crate_27
+  shape: box
+  size:
+  - 0.4
+  - 0.4
+  - 0.3
+  pos:
+  - 2.4345
+  - 1.3
+  - 1.754
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 4.0
+  fixed: false
+- name: pallet_1
+  shape: pallet
+  size:
+  - 1.2
+  - 0.8
+  - 0.144
+  pos:
+  - -4.5
+  - -1.6
+  yaw: 1.4368189364985575
+  color:
+  - 0.72
+  - 0.58
+  - 0.4
+  - 1.0
+  mass: null
+  fixed: false
+- name: crate_29
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -4.8
+  - -1.8
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_30
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -4.2
+  - -1.8
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_31
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -4.8
+  - -1.4
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_32
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -4.2
+  - -1.4
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: pallet_2
+  shape: pallet
+  size:
+  - 1.2
+  - 0.8
+  - 0.144
+  pos:
+  - -2.6
+  - -1.9
+  yaw: 1.2751201719296947
+  color:
+  - 0.72
+  - 0.58
+  - 0.4
+  - 1.0
+  mass: null
+  fixed: false
+- name: crate_34
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -2.9
+  - -2.1
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_35
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -2.3
+  - -2.1
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_36
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -2.9
+  - -1.7
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_37
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -2.3
+  - -1.7
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: pallet_3
+  shape: pallet
+  size:
+  - 1.2
+  - 0.8
+  - 0.144
+  pos:
+  - -0.8
+  - -1.5
+  yaw: -0.1175138163274081
+  color:
+  - 0.72
+  - 0.58
+  - 0.4
+  - 1.0
+  mass: null
+  fixed: false
+- name: crate_39
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -1.1
+  - -1.7
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_40
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -0.5
+  - -1.7
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: crate_41
+  shape: box
+  size:
+  - 0.5
+  - 0.36
+  - 0.3
+  pos:
+  - -1.1
+  - -1.3
+  - 0.294
+  yaw: 0.0
+  color:
+  - 0.74
+  - 0.58
+  - 0.38
+  - 1.0
+  mass: 5.0
+  fixed: false
+- name: column_1
+  shape: pillar
+  size:
+  - 0.4
+  - 3.0
+  pos:
+  - -6.3
+  - 0.6
+  yaw: 0.0
+  color:
+  - 0.62
+  - 0.62
+  - 0.6
+  - 1.0
+  mass: null
+  fixed: true
+- name: column_2
+  shape: pillar
+  size:
+  - 0.4
+  - 3.0
+  pos:
+  - 4.6
+  - 3.6
+  yaw: 0.0
+  color:
+  - 0.62
+  - 0.62
+  - 0.6
+  - 1.0
+  mass: null
+  fixed: true
+- name: lane_north
+  shape: marker
+  size:
+  - 9.0
+  - 0.08
+  pos:
+  - -1.0
+  - 3.35
+  yaw: 0.0
+  color:
+  - 0.95
+  - 0.78
+  - 0.2
+  - 1.0
+  mass: null
+  fixed: true
+- name: lane_south
+  shape: marker
+  size:
+  - 9.0
+  - 0.08
+  pos:
+  - -1.0
+  - 1.85
+  yaw: 0.0
+  color:
+  - 0.95
+  - 0.78
+  - 0.2
+  - 1.0
+  mass: null
+  fixed: true

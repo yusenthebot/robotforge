@@ -1,0 +1,446 @@
+{
+ "label": "reviewfix",
+ "commit": "ef22541",
+ "started": "20261018-223817",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 7,
+  "tasks": 7,
+  "tool_calls": 60,
+  "failed_calls": 1,
+  "shell_commands": 13,
+  "sessions_with_problems": 0,
+  "input_tokens": 1774654,
+  "uncached_input_tokens": 287294,
+  "output_tokens": 6276,
+  "mean_wall_seconds": 64.6
+ },
+ "tasks": [
+  {
+   "task": "dog_grass",
+   "lang": "zh",
+   "covers": [
+    "template",
+    "walk",
+    "floor"
+   ],
+   "prompt": "给我一只四足机器狗，放在草地上，让它往前走 10 秒。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "on grass",
+     "ok": true,
+     "observed": "floor grass"
+    },
+    {
+     "name": "a quadruped",
+     "ok": true,
+     "observed": "dog_grass/dog"
+    },
+    {
+     "name": "went >= 1.0 m the way it was sent",
+     "ok": true,
+     "observed": "3.69 m (3.69 m in all)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 6,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 151809,
+   "cached_input_tokens": 128512,
+   "output_tokens": 560,
+   "reasoning_tokens": 13,
+   "wall_seconds": 52.2,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "已让四足机器狗在草地上向前走了 **10 秒**，前进约 **3.69 米**，保持直立并已自动停止。 [打开 3D 场景](http://127.0.0.1:8738/)"
+  },
+  {
+   "task": "arm_cube",
+   "lang": "en",
+   "covers": [
+    "template",
+    "objects",
+    "pick and place"
+   ],
+   "prompt": "Build me a robot arm and have it put a red cube into a box.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "an arm",
+     "ok": true,
+     "observed": "red_cube_pick_place/arm"
+    },
+    {
+     "name": "a red object",
+     "ok": true,
+     "observed": "red_cube"
+    },
+    {
+     "name": "red_cube starts outside the bin",
+     "ok": true,
+     "observed": "saved at [0.25, -0.12]"
+    },
+    {
+     "name": "an arm call handled it",
+     "ok": true,
+     "observed": "pick_and_place"
+    },
+    {
+     "name": "red_cube ended in a bin",
+     "ok": true,
+     "observed": "last at [0.055, 0.2721, 0.0249], bins ['box']"
+    }
+   ],
+   "tool_calls": 11,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 320118,
+   "cached_input_tokens": 247040,
+   "output_tokens": 991,
+   "reasoning_tokens": 9,
+   "wall_seconds": 79.9,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "add_object",
+    "observe",
+    "pick_and_place",
+    "observe",
+    "move_arm",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "Built a five-joint robot arm and successfully placed the red cube inside the blue box in simulation. Verified its position and the final image, then moved the gripper clear. [Open the 3D viewer](http://127.0.0.1:8739/) to inspect the scene."
+  },
+  {
+   "task": "hexapod_build",
+   "lang": "zh",
+   "covers": [
+    "parts",
+    "walk"
+   ],
+   "prompt": "用零件帮我拼一个六条腿的机器人，像蜘蛛那样，然后让它走几步。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot built from parts",
+     "ok": true,
+     "observed": "spider_hexapod/spider"
+    },
+    {
+     "name": "it is a hexapod",
+     "ok": true,
+     "observed": "hexapod"
+    },
+    {
+     "name": "went >= 0.2 m the way it was sent",
+     "ok": true,
+     "observed": "0.47 m (0.47 m in all)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 7,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 231788,
+   "cached_input_tokens": 204544,
+   "output_tokens": 979,
+   "reasoning_tokens": 79,
+   "wall_seconds": 58.7,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "builder_guide",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "拼好了！六条腿、18 个活动关节，用两组三条腿交替迈步。 已向前走了 **4 秒，约 47 厘米**，保持直立，现已停止。 [打开机器人查看器](http://127.0.0.1:8738/) · [查看行走动图](RUN/tasks/hexapod_build/rf_home/worlds/spider_hexapod/videos/spider-20261018-224005.gif)"
+  },
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "prompt": "造一台火星车，再放一块大石头，把车开到石头旁边停下。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a rover and a rock",
+     "ok": true,
+     "observed": "mars_rover_rock/mars_rover (rover), big_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "1.69 m"
+    },
+    {
+     "name": "ended within 0.5 m of it",
+     "ok": true,
+     "observed": "0.21 m from its outline (0.48 m from its center)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 8,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 266874,
+   "cached_input_tokens": 206464,
+   "output_tokens": 680,
+   "reasoning_tokens": 8,
+   "wall_seconds": 61.7,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已完成：六轮火星车驶出约 1.46 米，停在大石头旁边，车身保持直立，六个车轮的驱动已归零。 [打开 3D 场景](http://127.0.0.1:8739/)"
+  },
+  {
+   "task": "lidar_maze",
+   "lang": "zh",
+   "covers": [
+    "scene",
+    "parts",
+    "lidar",
+    "drive"
+   ],
+   "prompt": "把一台带激光雷达的小车放到迷宫入口，让它开进迷宫里，然后告诉我激光雷达看到了什么：离它最近的墙有多远？",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot carrying a lidar, in a maze",
+     "ok": true,
+     "observed": "lidar_maze/lidar_rover, lidars ['lidar_rover/base_lidar']"
+    },
+    {
+     "name": "started outside the maze (at its entrance)",
+     "ok": true,
+     "observed": "saved at [-2.00, -3.00], the maze spans x -2.55 to 2.55, y -2.55 to 2.55"
+    },
+    {
+     "name": "its lidar read inside the maze, a wall in reach",
+     "ok": true,
+     "observed": "1 lidar readings inside (observe), the walls 0.45 m away"
+    },
+    {
+     "name": "the answer says how far the nearest wall is",
+     "ok": true,
+     "observed": "nearest wall 0.45 m at [-2.00, -2.08]; the answer calls 0.426 m nearest"
+    }
+   ],
+   "tool_calls": 10,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 208885,
+   "cached_input_tokens": 177664,
+   "output_tokens": 883,
+   "reasoning_tokens": 45,
+   "wall_seconds": 52.9,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_scenes",
+    "builder_guide",
+    "new_world",
+    "load_scene",
+    "list_templates",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "小车已从入口向前开了约 **0.92 米**，进入迷宫并停下。 激光雷达（LiDAR）扫描结果： - **最近的墙在左侧，距雷达约 0.426 米（42.6 厘米）**。 - 前方最近约 0.514 米。 - 右侧最近约 0.588 米。 这些距离从雷达位置算起。雷达向四周发出测距射线，用返回的距离判断墙在哪里。"
+  },
+  {
+   "task": "parts_video",
+   "lang": "en",
+   "covers": [
+    "parts",
+    "drive or walk",
+    "record a video"
+   ],
+   "prompt": "Build me a small robot out of parts, any design you like, get it moving, and record a short video of it that I can share.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot built from parts",
+     "ok": true,
+     "observed": "pip_parts_rover/pip"
+    },
+    {
+     "name": "it moved >= 0.2 m",
+     "ok": true,
+     "observed": "1.96 m"
+    },
+    {
+     "name": "a video >= 1 s in which something moves",
+     "ok": true,
+     "observed": "work/pip_robot.mp4: 196 frames, 9.8 s, frames change 0.029; rf_home/worlds/pip_parts_rover/videos/pip_showtime.gif: 196 frames, 10.1 s, frames change 0.029"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 5,
+   "input_tokens": 326163,
+   "cached_input_tokens": 293632,
+   "output_tokens": 1505,
+   "reasoning_tokens": 87,
+   "wall_seconds": 85.8,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "builder_guide",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "write_script",
+    "run_script",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "Built **Pip**, a simulated nine-part rover with four powered wheels and a teal head. It drove about 1.5 metres during the recording and stayed upright. [Download the 10-second MP4]( RUN/tasks/parts_video/work/pip_robot.mp4) — ready to share."
+  },
+  {
+   "task": "go2_arm_kitchen",
+   "lang": "en",
+   "covers": [
+    "gallery design",
+    "real robot",
+    "scene",
+    "go to an object"
+   ],
+   "prompt": "Put a Go2 robot dog with an arm on its back in the kitchen, and have it walk over to the island.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a Go2 carrying an arm",
+     "ok": true,
+     "observed": "go2_arm_kitchen/go2_arm (mounts ['go2', 'piper'], arms ['go2_arm/arm'])"
+    },
+    {
+     "name": "not next to the island at the start",
+     "ok": true,
+     "observed": "1.86 m from island, saved at [-2.00, -2.00]"
+    },
+    {
+     "name": "went >= 0.3 m",
+     "ok": true,
+     "observed": "2.03 m"
+    },
+    {
+     "name": "ended within 0.5 m of the island",
+     "ok": true,
+     "observed": "0.20 m from island (from its outline), at [-0.81, -0.79]"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 9,
+   "failed_calls": 1,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 269017,
+   "cached_input_tokens": 229504,
+   "output_tokens": 678,
+   "reasoning_tokens": 7,
+   "wall_seconds": 61.3,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "show_world!",
+    "list_templates",
+    "new_world",
+    "load_scene",
+    "add_robot",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [
+    {
+     "tool": "show_world",
+     "args": "{}",
+     "error": "no world is open; call new_world first (or open_world for an existing one)"
+    }
+   ],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "Done—the Go2 with a back-mounted PiPER arm walked 2.13 m to the kitchen island and stopped upright. [Open the live viewer](http://127.0.0.1:8738/)."
+  }
+ ]
+}

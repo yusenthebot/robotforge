@@ -100,7 +100,8 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         if part.spec.robot is not None:
             child, what = mounted[part.name]
             _mount(spec, body, part, out, child, what)
-            if part.spec.robot.template is not None:  # a library robot's own base is a mesh of unknown size
+            # A library robot's own base is a mesh of unknown size; one hanging under its parent stands on nothing.
+            if part.spec.robot.template is not None and not _hangs(part):
                 looks.mount_plate(vis, body, reach[part.name])
     vis.finish()
     return out
@@ -622,6 +623,13 @@ def _camera_axes(look: np.ndarray) -> list[float]:
 
 
 # ---- mounted robots ---------------------------------------------------------------------------------
+
+
+def _hangs(part: Placed) -> bool:
+    """Whether a mounted robot hangs under what its part is on: that parent is on the robot's own up side, as the
+    plate is for a template robot carried under one (plate.py). The adapter plate a mounted robot stands on was drawn
+    there too: a disc 0.48 m across through a carried quadruped's trunk, and one under a carried rover's chassis."""
+    return float((-part.rot.T @ part.pos)[2]) > 1e-6
 
 
 def _mounted_robot(part: Placed) -> tuple[BuiltRobot, str]:
