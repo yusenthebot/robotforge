@@ -87,6 +87,10 @@ class SensorHub:
         out = []
         for given in names:
             local = given.split("/", 1)[1] if given.startswith(f"{robot}/") else given
+            reader = self.suite.owner.get(f"{robot}/{local}")
+            if local not in by_name and reader is not None and reader.robot == robot:
+                out.append(reader)  # one of MuJoCo's own sensors behind it: "accel" is read by the imu
+                continue
             found = local if local in by_name else wording.match(local, list(by_name))
             if found is None:
                 raise SensorError(

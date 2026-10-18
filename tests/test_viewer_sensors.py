@@ -84,6 +84,14 @@ def test_every_field_the_viewer_reads_is_sent(pg):
     assert np.allclose(np.array(body) + lidar["local_pos"], lidar["pos"], atol=1e-3)
 
 
+def test_a_sensor_is_found_by_the_mujoco_sensors_it_reads(pg):
+    """read_sensors and open_viewer take the names describe_model lists for the MuJoCo sensors behind one."""
+    pg.add_robot("dog", template="quadruped")
+    reading, _ = pg.read_sensors("dog", ["dog/orientation"])
+    assert list(reading["sensors"]) == ["imu"]
+    assert pg.show_sensors(["dog/accel"]) == ["dog/imu"]
+
+
 def test_a_robot_s_own_sensors_are_not_marked_added(pg):
     pg.add_robot("dog", template="quadruped")
     entries = pg.sensors.viewer_message()["sensors"]
@@ -125,6 +133,9 @@ async def test_open_viewer_shows_a_robot_s_own_camera(pg, monkeypatch):
         everything = await client.call_tool("open_viewer", {"show": ["dog"]})
         assert set(json.loads(everything.content[0].text)["showing"]) >= {"dog/front_cam", "dog/imu"}
         assert pg.sensors.viewer_message()["show"]["seq"] == first["seq"] + 1  # each request applied once by the page
+        # describe_model lists the MuJoCo sensors behind the IMU: a Codex session asked to show "dog/accel".
+        native = await client.call_tool("open_viewer", {"show": ["dog/accel", "dog/gyro"]})
+        assert json.loads(native.content[0].text)["showing"] == ["dog/imu"]
         wrong = await client.call_tool("open_viewer", {"show": ["dog/lidar"]})
         assert wrong.is_error and "front_cam" in wrong.content[0].text
         plain = await client.call_tool("open_viewer", {})

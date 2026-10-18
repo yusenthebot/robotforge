@@ -226,11 +226,14 @@ class Suite:
         self.stepped = [s for s in self.sensors.values() if not s.lazy]
         # MuJoCo sensors some definition reads: the rest of a robot's MuJoCo sensors are its own (a G1's IMU).
         self.covered: set[str] = set()
+        # Which sensor reads each of those: describe_model lists them ("dog/accel"), and agents name them so.
+        self.owner: dict[str, Sensor] = {}
         for s in self.sensors.values():
             native = s.decl.data.get("native", {})
             data = s.decl.data
             names = [*native.values(), *data.get("touch", data.get("cells", [])), *data.get("rays_native", [])]
             self.covered.update(s.decl.full(n) for n in names)
+            self.owner.update({s.decl.full(n): s for n in names})
 
     def prime(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         """Take every sampled sensor's first sample from the state as it is (after a load, a reset or an edit
