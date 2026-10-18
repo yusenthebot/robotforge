@@ -246,7 +246,8 @@ def test_an_mjcf_file_names_what_it_left_unnamed_and_starts_in_its_home_keyframe
 @pytest.mark.parametrize("path", sorted(MENAGERIE.glob("*/*.xml")), ids=lambda p: p.parent.name)
 def test_menagerie_models_load_from_their_mjcf_file_in_their_home_pose(path):
     """The offline Menagerie stand-ins, added by file rather than from the library: every motor belongs to the robot,
-    the home pose is the file's (the G1's first keyframe is called stand) and the world runs."""
+    the home pose is the file's (the G1's first keyframe is called stand) and the world runs. A drone has no joint but
+    its free one, so no pose to keep."""
     alone = mujoco.MjModel.from_xml_path(str(path))
     key = next((k for k in range(alone.nkey) if alone.key(k).name == "home"), 0)
     model = compile_world(World.model_validate({"robots": [{"name": "it", "file": str(path)}]})).model
@@ -254,6 +255,7 @@ def test_menagerie_models_load_from_their_mjcf_file_in_their_home_pose(path):
     joints = [j for j in range(alone.njnt) if int(alone.jnt_type[j]) != mujoco.mjtJoint.mjJNT_FREE]
     want = [alone.key(key).qpos[alone.jnt_qposadr[j]] for j in joints]
     mine = [model.key("home").qpos[model.jnt_qposadr[model.joint(f"it/{alone.joint(j).name}").id]] for j in joints]
-    assert joints and mine == pytest.approx(want)
+    assert mine == pytest.approx(want)
+    assert joints or path.parent.name in ("bitcraze_crazyflie_2", "skydio_x2")
     data = _settle(model, 0.5)
     assert np.isfinite(data.qacc).all()
