@@ -86,6 +86,10 @@ and objects stand on the ground under them. load_scene(description="a flat with 
 apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
 observe(view="overview").
+add_task("bring the red cup from the kitchen to the bedroom desk") turns a sentence into a task saved with the world:
+a goal with a success check, a reward and randomized starts (go to, bring, put, pick up, push, open, close, press,
+switch on); it adds the thing or the robot the task needs. observe lists each task under "tasks" with done and
+distance_m: check it after acting, and say the task is done only when observe says so.
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
@@ -986,6 +990,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
+            tasks = playground.task_status()
+            if tasks:  # the open world's tasks (add_task): done or not, and how far still to go
+                state["tasks"] = tasks
             try:
                 lines = playground.sensors.lines()
             except Exception as exc:  # the sensors' lines are a bonus: the state comes back without them, and says so

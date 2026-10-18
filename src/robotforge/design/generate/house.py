@@ -328,28 +328,40 @@ def _on_top(
 
 def _kitchen(draft: Draft, room: str, rect: Footprint) -> None:
     x0, x1, y0, y1 = rect.bounds()
-    counter = _counter(draft, room, rect, min(2.4, max(x1 - x0, y1 - y0) - 1.6))
+    counter = _counter(draft, room, rect, min(2.4, max(x1 - x0, y1 - y0) - 1.3))
     if counter is not None:
         name, fp = counter
         top = _top(draft, name, fp, 0.9, room, kind="counter")
-        if draft.rng.random() < 0.8:
-            chest = _on_top(draft, room, top, "drawer", [0.3, 0.3, 0.14], "drawer", color=[0.92, 0.92, 0.9, 1])
-            if chest is not None:
-                chest_fp = draft.content.objects[-1]
-                draft.surface(
-                    chest,
-                    Footprint(chest_fp["pos"][0], chest_fp["pos"][1], 0.15, 0.15, chest_fp["yaw"]),
-                    0.9 + 0.14,
-                    room=room,
-                    inset=0.03,
-                    kind="chest",
-                )
+        _counter_chest(draft, room, top)
     spot = draft.against_wall(rect, 0.7, 0.7)
     if spot is not None:
         fp, _ = spot
         fridge = draft.put(f"{room}_fridge", "box", fp, [0.7, 0.7, 1.8], z=0.9, color=[0.94, 0.94, 0.95, 1], fixed=True)
         draft.obstacles[fridge] = fp
     _table(draft, room, rect, (1.2, 0.8, 0.75))
+
+
+CHEST = (0.3, 0.3, 0.14)  # a drawer chest on a kitchen counter
+ARM_ROOM = 0.5  # m of counter kept clear in front of it: an arm stands there to open it
+
+
+def _counter_chest(draft: Draft, room: str, top: Surface) -> str | None:
+    """A drawer chest at one end of a counter, its drawer pulling out along the counter, with the counter in front
+    of it kept clear for an arm to stand and work it (as on the kitchen scene's island)."""
+    a = top.area
+    if a.hx < CHEST[0] / 2 + ARM_ROOM + 0.05:
+        return None
+    end = draft.rng.choice((1, -1))
+    lx = end * (a.hx - CHEST[1] / 2 - 0.02)
+    x, y = a.world(lx, 0.0)
+    # its own -y (where the drawer comes out) toward the counter's middle
+    yaw = a.yaw + (-90.0 if end > 0 else 90.0)
+    fp = Footprint(round(x, 3), round(y, 3), CHEST[0] / 2, CHEST[1] / 2, yaw)
+    clear = Footprint(*a.world(lx - end * (CHEST[1] / 2 + ARM_ROOM / 2), 0.0), ARM_ROOM / 2, a.hy, a.yaw)
+    top.items += [fp, clear]
+    name = draft.put(f"{room}_drawer", "drawer", fp, list(CHEST), z=top.z, color=[0.92, 0.92, 0.9, 1])
+    draft.surface(name, fp, top.z + CHEST[2], room=room, inset=0.03, kind="chest")
+    return name
 
 
 def _living_room(draft: Draft, room: str, rect: Footprint) -> None:
