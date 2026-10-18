@@ -325,6 +325,79 @@ def test_the_centaur_does_not_reach_down_between_its_front_legs(pg):
         pg.behaviors.pick_and_place("r/left_hand", "cube", [0.411, 0.155])
 
 
+def _carried(pg: Playground, arm: str, obj: str, target) -> tuple[dict, float]:
+    """A pick and place run to its end: where the object ended up, and how high the tool went on the carry (m)."""
+    motion, info = pg.behaviors.pick_and_place(arm, obj, target)
+    data, high = pg.session.data, 0.0
+    for _ in range(round(40 / 0.02)):
+        _run(pg, 0.02)
+        if motion.current_label == "carry":
+            high = max(high, float(data.site_xpos[motion.site][2]))
+        if motion.done:
+            break
+    _run(pg, 0.5)
+    return pg.behaviors.placed(info["object"], info["region"]), high
+
+
+def test_the_centaur_carries_low_over_its_own_shoulder(pg):
+    """Regression: the centaur's shoulder bracket, which its arm hangs from and turns about, counted as carrier to
+    clear: a cube went into the bin at its side carried at 41 cm, and after a walk at 61 cm, where the hand stalled."""
+    pg.add_robot("r", design="centaur")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.39, 0.12])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[0.31, 0.31], fixed=True)
+    _run(pg, 0.5)
+    arm = pg.behaviors._arm_motion("r/left_hand")
+    m = arm.ik.model
+    assert {m.body(b).name for b in arm._own_base} == {"r/left_shoulder"}
+    assert not {m.body(int(m.geom_bodyid[g])).name for g in arm._carrier_tops()} & {"r/left_shoulder"}
+    placed, high = _carried(pg, "r/left_hand", "cube", "bin")
+    assert placed["success"], placed
+    assert high < 0.2, high
+
+
+def test_the_mobile_panda_carries_low_round_the_front_of_its_chassis(pg):
+    """Regression: the load was held to clear all of the chassis in the sector the arm swept, which only the arm's
+    links pass over: the mobile Panda carried floor cubes round its front at 30 cm, and from that high, coming down
+    beside the chassis, its hand missed the cube. The load clears what lies under its own way round."""
+    pg.add_robot("r", design="mobile_panda")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.617, -0.017])
+    _run(pg, 0.5)
+    placed, high = _carried(pg, "r/arm", "cube", [-0.188, -0.53])
+    assert placed["success"], placed
+    assert high < 0.25, high
+
+
+def test_the_mobile_panda_squares_its_jaws_with_its_wrist_alone(pg):
+    """Regression: over this cube the Panda's wrist starts 3 mm from its forearm. Held to keep 5 mm there while its
+    jaws turned square to the cube, it changed pose instead, twisting its arm against its base joint's limit, and
+    dropped the cube 6 cm from the place. Links already that close may stay so, coming no closer."""
+    pg.add_robot("r", design="mobile_panda")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[-0.235, -0.359])
+    _run(pg, 0.5)
+    placed = _pick(pg, "r/arm", "cube", [0.477, -0.291])
+    assert placed["success"], placed
+
+
+def test_a_panda_keeps_its_hand_from_its_forearm_before_they_touch(pg):
+    """Regression: checked only for running into itself, a mobile Panda turning its jaws square bent its hand to 1 mm
+    from its forearm; lagging its servos the hand came into the forearm, stuck there and closed 4 cm beside the cube.
+    Its wrist bending toward the forearm is stopped while the two are still millimetres apart."""
+    pg.add_robot("r", design="mobile_panda")
+    _run(pg, 0.5)
+    arm = pg.behaviors._arm_motion("r/arm")
+    home = arm.q.copy()
+    start = arm._self_gaps(home)
+    assert arm._clear_of_itself(home, start)
+    bent = home.copy()
+    for bent[5] in np.arange(home[5], arm.chain.lower[5], -0.01):  # the wrist (joint 6) bending the hand in
+        if not arm._clear_of_itself(bent, start):
+            break
+    else:
+        pytest.fail("the hand bent all the way in")
+    assert not arm._collides(bent)
+    assert arm._self_gaps(bent).min() > 0.001
+
+
 def test_an_arm_built_from_parts_answers_to_the_parts_it_hangs_from(pg):
     pg.add_robot("centaur", design="centaur")
     assert pg.behaviors.resolve("centaur/left_arm", arm=True) == "centaur/left_hand"
