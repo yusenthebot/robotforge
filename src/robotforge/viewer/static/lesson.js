@@ -196,6 +196,7 @@ function openLesson(desc) {
 function closeLesson() {
   lesson = null;
   state = null;
+  early = null;
   followWanted = viewWanted = null;
   api.followBody(null);
   overlays.clear();
@@ -226,20 +227,36 @@ export function lessonScene(desc) {
   }
 }
 
+// What a lesson sends only when it changes (its drawing, its camera's pictures), from updates that came before the
+// lesson's scene had loaded here: the motion planning lesson's first drawing was lost, so its target never showed.
+let early = null; // { lesson, drawing, pictures }
+
 export function lessonUpdate(msg) {
   if (msg.ended) {
     closeLesson();
     return;
   }
-  if (!lesson || msg.lesson !== lesson.id) return;
+  if (!lesson || msg.lesson !== lesson.id) {
+    if (msg.lesson) {
+      const kept = early?.lesson === msg.lesson ? early : null;
+      early = {
+        lesson: msg.lesson,
+        drawing: msg.live?.drawing ?? kept?.drawing ?? null,
+        pictures: msg.live?.vision?.pictures ?? kept?.pictures ?? null,
+      };
+    }
+    return;
+  }
+  const before = early?.lesson === msg.lesson ? early : null;
+  early = null;
   const stepChanged = !state || state.step !== msg.step || state.passed.length !== msg.passed.length;
   const unlockChanged = !state || state.unlocked.join() !== msg.unlocked.join();
   if (msg.bench) bench.update(msg.bench);
   const quizChanged = JSON.stringify(state?.quiz) !== JSON.stringify(msg.quiz);
   const resultChanged = JSON.stringify(state?.results) !== JSON.stringify(msg.results);
   // A drawing comes with one update only (when it changes): keep it, or a slow frame may miss it.
-  const drawing = msg.live?.drawing ?? state?.drawing ?? null;
-  const pictures = msg.live?.vision?.pictures ?? state?.pictures ?? null; // a lesson camera's, likewise
+  const drawing = msg.live?.drawing ?? state?.drawing ?? before?.drawing ?? null;
+  const pictures = msg.live?.vision?.pictures ?? state?.pictures ?? before?.pictures ?? null; // a lesson camera's, likewise
   state = msg;
   state.drawing = drawing;
   state.pictures = pictures;
@@ -2149,6 +2166,7 @@ function planRig(rig) {
   const clash = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 10), Object.assign(basic(red, 0.95), { depthTest: false }));
   clash.renderOrder = 6; // seen through the fence it is inside of
   const goal = new THREE.Mesh(new THREE.SphereGeometry(0.018, 20, 12), basic(amber, 0.9));
+  clash.visible = goal.visible = false; // until a drawing places them (not as two dots at the world's origin)
   straight.add(sweep, sweepDots, clash, goal);
   const branches = [blue, violet].map((c) => new THREE.LineSegments(new THREE.BufferGeometry(), lineMat(c, 0.75)));
   // The nodes as dots too: one-pixel lines alone vanish at this distance.
@@ -2167,6 +2185,7 @@ function planRig(rig) {
     shown = d;
     grownAt = performance.now();
     goal.position.fromArray(d.goal);
+    goal.visible = true;
     const pts = (d.straight ?? []).map((p) => new THREE.Vector3().fromArray(p));
     sweep.visible = sweepDots.visible = pts.length > 1;
     if (sweep.visible) {

@@ -408,3 +408,28 @@ def test_a_face_off_tables_words_stay_inside_their_columns(viewer):
             .filter((td) => td.scrollWidth > td.clientWidth + 1).map((td) => td.textContent)""")
 
     assert viewer("laptop", "en", scenario) == []
+
+
+MARKERS = """(() => {
+    const out = [];
+    window.__robotforge.three().scene.traverse((o) => {
+        if (!o.isMesh || o.geometry.type !== "SphereGeometry" || o.geometry.parameters.radius !== 0.018) return;
+        let shown = o.visible;
+        for (let p = o.parent; p; p = p.parent) shown = shown && p.visible;
+        if (shown) out.push(o.getWorldPosition(o.position.clone()).toArray().map((v) => Math.round(v * 1000) / 1000));
+    });
+    return out;
+})()"""
+
+
+def test_the_motion_planning_target_shows_where_it_is(viewer):
+    """The lesson sends its drawing once; it came before the lesson's scene had loaded in the page and was dropped,
+    so step 1's "amber ball on the right" never showed, and the target and the clash marker sat at the world's
+    origin as two dots between the arms."""
+
+    async def scenario(tab, _server):
+        await _start(tab, "arm_planning")
+        return await tab.eval(MARKERS)
+
+    shown = viewer("laptop", "en", scenario)
+    assert len(shown) == 1 and shown[0] != [0, 0, 0], shown  # the target alone, at its place
