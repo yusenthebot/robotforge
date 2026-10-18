@@ -10,9 +10,9 @@ The way there is straight legs. A leg that would run into something goes over it
 whichever is shorter and clear all the way. Every leg is checked, the climb at the start and the way down at the
 end too (a drone sent to hover beside a tree's trunk once climbed over the tree and came down through its crown),
 two ways: the aircraft's own shape (a disc as wide as its rotors reach, as tall as it is) swept along the leg
-against the boxes round every solid thing, which no table leg slips through, and rays for the ground and hills,
-whose boxes would be the whole patch. When nothing is clear it says what is in the way, and the caller adds points
-around it.
+against the boxes round every solid thing, which no table leg slips through, and rays for the ground, hills and
+ramps, whose boxes would fill the air over them. When nothing is clear it says what is in the way, and the caller
+adds points around it.
 """
 
 from __future__ import annotations
@@ -52,6 +52,7 @@ BURIED = 0.5  # m: a point no deeper than this inside something is a landing on 
 UNDER = 0.15  # m kept between its top and an overhang (a crown, a table) it flies under
 COLUMN_STOP = 0.15  # m above the touchdown the way down is checked to (a slope beside the spot is not in the way)
 TOUCHDOWN_TOL = 0.15  # m: a landing further than this from where it was planned did not land there
+MAX_SLOPE = 25.0  # degrees of ground it lands on (its skids tip over at about 38)
 TOO_WIDE = 15.0  # m: something wider than this is flown over, never round (and seen by rays, not its box)
 SWEEP_STEP = 0.05  # m between the places along a leg its shape is checked at
 
@@ -112,6 +113,8 @@ class Airspace:
                 continue
             if not (model.geom_contype[g] or model.geom_conaffinity[g]) or group >= len(SOLID) or not SOLID[group]:
                 continue
+            if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_BOX and np.abs(data.geom_xmat[g][6:]).max() < 0.999:
+                continue  # a tilted slab (a ramp): its box would fill the air over the slope; rays see it
             lo, hi = world_extent(model, data, g)
             if np.any(hi - lo > TOO_WIDE):
                 continue
@@ -294,9 +297,16 @@ def _landing_at(space: Airspace, point: np.ndarray, k: int, asked: list[Any], ha
     spot = space.spot(point)
     if spot.exit is None:  # out in the air: a landing only at the surface under it
         floor = (spot.surface if spot.surface is not None else 0.0) + space.rest
-        if has_z and point[2] <= floor + LAND_MARGIN:
-            return True, floor
-        return False, float(point[2])
+        if not has_z or point[2] > floor + LAND_MARGIN:
+            return False, float(point[2])
+        down = np.array([point[0], point[1], floor])
+        if point[2] <= 0.0 and space.first_hit(down, down + UP * (space.height + UNDER)) is not None:
+            # "On the ground" where it does not fit under what is over the spot (a ramp's slab, a low step): on top
+            sky = np.array([point[0], point[1], GROUND_PROBE])
+            top = ground_height(space.model, space.data, sky, space.own, space.root)
+            if top is not None and top + space.rest > floor + 1e-3:
+                return True, top + space.rest
+        return True, floor
     what = spot.inside.name if spot.inside is not None else "the ground"
     top = spot.top if spot.top is not None else spot.exit
     if has_z and top - float(point[2]) <= BURIED:  # a little under the top of a rock, a hill, a crown: on it
@@ -358,6 +368,7 @@ def plan_flight(
             doing = "land" if landing else "hover"
             raise NoWay("blocked", f"there is no room to {doing} at {where}: it would touch {crowded.name}")
         if landing:
+            _check_slope(space, goal)
             legs, touchdown = _landing(space, start, goal, notes)
         else:
             legs = _route(space, start, goal, notes)
@@ -367,6 +378,26 @@ def plan_flight(
     if touchdown is not None:
         length += max(0.0, float(points[-1][2] - touchdown[2]))
     return FlightPlan(points, land, length, notes, touchdown)
+
+
+def _check_slope(space: Airspace, touchdown: np.ndarray) -> None:
+    """Refuse ground too steep to land on: the heights under the ends of its skids, as far apart as it is wide."""
+    reach = 0.6 * space.radius
+    above = touchdown[2] - space.rest + reach + 0.02  # over ground as steep as 45 degrees, under a ramp's slab
+    heights = {}
+    for dx, dy in ((reach, 0.0), (-reach, 0.0), (0.0, reach), (0.0, -reach)):
+        probe = np.array([touchdown[0] + dx, touchdown[1] + dy, above])
+        heights[dx, dy] = ground_height(space.model, space.data, probe, space.own, space.root)
+    if any(h is None for h in heights.values()):
+        return
+    gx = (heights[reach, 0.0] - heights[-reach, 0.0]) / (2 * reach)
+    gy = (heights[0.0, reach] - heights[0.0, -reach]) / (2 * reach)
+    slope = math.degrees(math.atan(math.hypot(gx, gy)))
+    if slope > MAX_SLOPE:
+        where = [round(float(v), 2) for v in touchdown[:2]]
+        raise NoWay(
+            "too_steep", f"the ground at {where} slopes {slope:.0f} degrees, too steep to land on; pick a flatter spot"
+        )
 
 
 def _take_off(space: Airspace, here: np.ndarray, lift: float, floor: float, notes: list[str]) -> np.ndarray:
@@ -423,16 +454,23 @@ def _route(space: Airspace, a: np.ndarray, b: np.ndarray, notes: list[str]) -> l
         return [b]
     thing = hit[1]
     ways = [w for w in (_over(space, a, b, thing), *_round(space, a, b, thing)) if w is not None]
-    clear = [(length, legs, note) for length, legs, note in ways if _clear(space, a, legs)]
+    clear, blockers = [], []
+    for length, legs, note in ways:
+        blocker = _blocker(space, a, legs)
+        if blocker is None:
+            clear.append((length, legs, note))
+        else:
+            blockers.append(blocker.name)
     if not clear:
+        to = [round(float(v), 2) for v in b]
         if thing.top + CLEARANCE + space.rest > MAX_ALTITUDE:
             why = f"too tall to fly over ({thing.top:.1f} m)"
         else:
-            why = "and so is something else when it goes over or round it"
+            others = sorted(set(blockers) - {thing.name})
+            runs_into = f"runs into {', '.join(others)}" if others else "is blocked too"
+            why = f"and going over or round it {runs_into}"
         raise NoWay(
-            "blocked",
-            f"{thing.name} is in the way of the straight flight to {[round(float(v), 2) for v in b]}, {why}; add "
-            "points around it",
+            "blocked", f"{thing.name} is in the way of the straight flight to {to}, {why}; add points around it"
         )
     _, legs, note = min(clear, key=lambda c: c[0])
     notes.append(note)
@@ -486,9 +524,14 @@ def _round(
     return out
 
 
-def _clear(space: Airspace, a: np.ndarray, legs: list[np.ndarray]) -> bool:
+def _blocker(space: Airspace, a: np.ndarray, legs: list[np.ndarray]) -> Thing | None:
+    """The first thing a path from a through `legs` runs into, or None."""
     path = [a, *legs]
-    return all(space.first_hit(p, q) is None for p, q in zip(path[:-1], path[1:], strict=True))
+    for p, q in zip(path[:-1], path[1:], strict=True):
+        hit = space.first_hit(p, q)
+        if hit is not None:
+            return hit[1]
+    return None
 
 
 def _dedupe(points: list[np.ndarray]) -> list[np.ndarray]:

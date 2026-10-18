@@ -9,7 +9,7 @@ import pytest
 from robotforge.behaviors import Kind, robot_kind
 from robotforge.behaviors.air import AIR, attach_air
 from robotforge.behaviors.airframe import AirframeError, Mixer, find_airframe
-from robotforge.behaviors.flight import FlightController, Mission
+from robotforge.behaviors.flight import FlightController, Mission, ground_height
 from robotforge.design.world import World, compile_world
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -291,6 +291,23 @@ def test_a_point_inside_something_is_refused_and_z_is_a_world_height(pg):
         pg.behaviors.navigate("drone", [3.0, 0.0, 3.5], None, None, 10)
     result, _ = _clean_trip(pg, [-2.0, 0.0, 0.75])  # the tabletop's height: a landing on it
     assert result["arrived"] and result["landed"] and result["position"][2] > 0.75
+
+
+def test_it_lands_on_a_slope_where_it_was_sent_and_refuses_one_too_steep(pg):
+    from robotforge.behaviors.navigate import NoWay
+
+    ramp = {"angle": 18, "length": 2.0, "width": 2.0, "direction": "up"}
+    pg.add_terrain("ramp", name="slope", pos=[3.0, 0.0], params=ramp)
+    result, _ = _clean_trip(pg, [2.8, 0.0, 0.0])  # z 0 under the slope: on it
+    assert result["arrived"] and result["landed"]  # it slid 0.75 m down a 19 degree hill, pressing on
+    assert np.hypot(result["position"][0] - 2.8, result["position"][1]) < 0.15
+    here = np.array(pg.behaviors.pose("drone")["position"])
+    pg.run_fast(lambda: False, 2.0)
+    assert np.linalg.norm(np.array(pg.behaviors.pose("drone")["position"]) - here) < 0.03  # and stays
+    pg.add_terrain("ramp", name="cliff", pos=[3.0, 4.0], params={**ramp, "angle": 35})
+    top = ground_height(pg.session.model, pg.session.data, np.array([2.8, 4.0, 50.0]))
+    with pytest.raises(NoWay, match="slopes 35 degrees, too steep"):  # on it, at its height
+        pg.behaviors.navigate("drone", [2.8, 4.0, top], None, None, 30)
 
 
 def test_a_landing_that_comes_down_somewhere_else_did_not_arrive(pg):

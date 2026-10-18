@@ -1,10 +1,12 @@
 """Measure how well aircraft fly: hover, a step, a square, a landing, a gust, and other airframes.
 
-    uv run python scripts/flight_bench.py [--real]
+    uv run python scripts/flight_bench.py [--real] [--park TRIPS]
 
 Runs headless on the same Playground the MCP tools use (move(to=...) is behaviors.navigate). The library aircraft
 come from MuJoCo Menagerie (downloaded once into the cache) with --real, else from the offline stand-ins in
-tests/fixtures/menagerie. Prints one table; every number is measured, none is assumed. Maintainer tool.
+tests/fixtures/menagerie. Prints one table; every number is measured, none is assumed. With --park it flies that
+many trips to random points round the park's trees, bench and picnic table instead (a third of them landings) and
+counts how they went, and what it touched on the way that it should not have. Maintainer tool.
 """
 
 from __future__ import annotations
@@ -129,6 +131,56 @@ def speed(pg: Any, robot: str) -> dict[str, float]:
     return {"steps_per_s": n / (time.perf_counter() - t0)}
 
 
+def park(trips: int, seed: int = 1) -> dict[str, Any]:
+    """Random trips round the park: arrived, refused (and why), touched something while flying, landed elsewhere."""
+    import mujoco
+
+    from robotforge.behaviors.navigate import NoWay
+
+    pg = _playground("park")
+    pg.add_robot("uav", template="drone")
+    pg.load_scene("park", seed=0)
+    m, d = pg.session.model, pg.session.data
+    rng = np.random.default_rng(seed)
+    counts: dict[str, Any] = {"trips": trips, "arrived": 0, "refused": {}, "not_arrived": {}, "touched": 0}
+    touched_what: set[str] = set()
+    for k in range(trips):
+        x, y = rng.uniform(-7.0, 8.5), rng.uniform(-6.0, 7.0)
+        z = 0.0 if k % 3 == 2 else float(rng.uniform(0.4, 3.0))
+        try:
+            trip = pg.behaviors.navigate("uav", [x, y, z], None, None, 60.0)
+        except (NoWay, ValueError) as exc:
+            counts["refused"][f"{k}: {[round(x, 2), round(y, 2), round(z, 2)]}"] = str(exc)[:160]
+            continue
+        fc = pg.session.controllers["uav"]
+        own = fc.frame.descendants
+        hit = False
+        while not trip.done and d.time < 1e5:
+            pg.session.step(10)
+            if fc.phase != "flying":
+                continue
+            for c in d.contact[: d.ncon]:
+                a, b = int(m.geom_bodyid[c.geom1]) in own, int(m.geom_bodyid[c.geom2]) in own
+                if a == b:
+                    continue
+                g = int(c.geom2 if a else c.geom1)
+                name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or f"body {int(m.geom_bodyid[g])}"
+                if name not in ("floor",) and fc.altitude > 0.05:
+                    hit = True
+                    touched_what.add(name.split("/")[0])
+        result = trip.result()
+        counts["touched"] += hit
+        if result["arrived"]:
+            counts["arrived"] += 1
+        else:
+            why = result.get("why", "?")
+            counts["not_arrived"][f"{k}: {why}"] = result.get("note", "")[:200]
+            if why == "crashed":
+                pg.control("reset")
+    counts["touched_what"] = sorted(touched_what)
+    return counts
+
+
 def run(label: str, add: dict[str, Any], tests: list) -> dict[str, Any]:
     row: dict[str, Any] = {"aircraft": label}
     for test in tests:
@@ -145,12 +197,23 @@ def run(label: str, add: dict[str, Any], tests: list) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--real", action="store_true", help="the real Menagerie models (downloads them once)")
+    parser.add_argument("--park", type=int, metavar="TRIPS", help="random trips round the park instead")
     args = parser.parse_args()
     os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf-flight-")
     if not args.real:
         os.environ["ROBOTFORGE_MENAGERIE"] = str(ROOT / "tests" / "fixtures" / "menagerie")
     sys.path.insert(0, str(ROOT / "src"))
     from robotforge.design.builder.guide import EXAMPLE_HEXACOPTER
+
+    if args.park:
+        for k, v in park(args.park).items():
+            if isinstance(v, dict):
+                print(f"  {k:14s} {len(v)}")
+                for what, why in v.items():
+                    print(f"      {what}: {why}")
+            else:
+                print(f"  {k:14s} {v}")
+        return
 
     def mission(pg: Any, robot: str) -> dict[str, float]:  # take off, a square, land: one trip each
         out = {}

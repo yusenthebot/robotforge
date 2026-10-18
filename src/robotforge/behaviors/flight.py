@@ -46,6 +46,11 @@ MAX_TILT = math.radians(35.0)
 MAX_TURN = 1.5  # rad/s of yaw
 SPOOL_DOWN = 0.5  # s from touchdown to motors off
 TOUCHDOWN = 0.02  # m of clearance at which it is down
+# The land detector, as real flight stacks have one: this close to the ground under its middle and touching it
+# for LAND_DETECT, it is down. On a slope one skid holds its middle higher than TOUCHDOWN, and pressing on until it
+# got that low it tipped onto the round skid and slid 0.75 m down a 19 degree hill.
+SITTING = 0.15  # m
+LAND_DETECT = 0.1  # s
 ARRIVE_TOL = 0.04  # m from the target, with the speed below ARRIVE_SPEED, counts as there
 ARRIVE_SPEED = 0.1
 UPSIDE_DOWN = 0.0  # the body's up axis below the horizon: crashed
@@ -195,6 +200,8 @@ class FlightController:
         self._t: float | None = None
         self._integral = np.zeros(3)
         self._spool_from = 0.0
+        self._contact = 0.0  # s it has touched the ground lately while landing (a skid on a slope bounces)
+        self._closing = 0.0  # m/s down, the last time it was clear of the ground: how hard it touches down
         self._started = False
         self._p = np.zeros(3)
         self._v = np.zeros(3)
@@ -326,7 +333,7 @@ class FlightController:
         mixed = self.frame.mixer.mix(thrust, torque)
         self.saturated = mixed.saturated
         data.ctrl[self.actuators] = mixed.controls
-        self._touchdown(t)
+        self._touchdown(model, data, t, dt)
 
     def _held_by_hand(self, rot: np.ndarray) -> None:
         """A hand in the viewer is moving it: it goes along, and holds where it is let go, as the walkers do. It
@@ -436,15 +443,34 @@ class FlightController:
         ref.drive(np.array([0.0, 0.0, -speed]), dt)
         ref.p[2] = max(ref.p[2], floor - 0.3)  # below the ground a little: it keeps pressing down until it touches
 
-    def _touchdown(self, t: float) -> None:
-        if self.phase != "landing" or self.altitude > TOUCHDOWN:
+    def _touchdown(self, model: mujoco.MjModel, data: mujoco.MjData, t: float, dt: float) -> None:
+        if self.phase != "landing":
+            self._contact = 0.0
             return
-        self.touchdown_speed = float(abs(min(self._v[2], 0.0)))
+        falling = float(abs(min(self._v[2], 0.0)))
+        if self.altitude > 0.05:
+            self._closing = falling
+        if self.altitude < SITTING and self._touching(model, data):
+            self._contact += dt
+        else:  # a skid sliding on a hill touches on and off: lose time slower than it is gained
+            self._contact = max(0.0, self._contact - 0.5 * dt)
+        if self.altitude > TOUCHDOWN and self._contact < LAND_DETECT:
+            return
+        self._contact = 0.0
+        self.touchdown_speed = max(self._closing, falling)
         self.phase = "spooling"
         self._spool_from = t
         if self.mission is not None and not self.mission.done and self.mission.land:
             self.mission.state = "landed"
             self.mission.touchdown_speed = self.touchdown_speed
+
+    def _touching(self, model: mujoco.MjModel, data: mujoco.MjData) -> bool:
+        """Whether it touches anything that is not itself."""
+        own = self.frame.descendants
+        for c in data.contact[: data.ncon]:
+            if (int(model.geom_bodyid[c.geom1]) in own) != (int(model.geom_bodyid[c.geom2]) in own):
+                return True
+        return False
 
     # ---- the three loops ------------------------------------------------------------------------
 
