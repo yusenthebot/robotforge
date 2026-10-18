@@ -1415,14 +1415,16 @@ def check_parts_video(ev: Evidence) -> list[Criterion]:
         rows.append((robot, [Criterion("a robot built from parts", True, _named(world, robot)), moved]))
     crit = _best(rows, [Criterion("a robot built from parts", False, "none in any world")])
     seen = []
+    task_dir = ev.work.parent.resolve()
     for path in video_files(ev):
+        name = path.relative_to(task_dir).as_posix() if path.is_relative_to(task_dir) else path.name
         info = video_info(path)
         if isinstance(info, str):
-            seen.append((False, f"{path.name}: {info}"))
+            seen.append((False, f"{name}: {info}"))
             continue
         frames, seconds, change = info
         ok = frames >= VIDEO_FRAMES and seconds >= VIDEO_SECONDS and change >= VIDEO_CHANGE
-        seen.append((ok, f"{path.name}: {frames} frames, {seconds:.1f} s, frames change {change:.3f}"))
+        seen.append((ok, f"{name}: {frames} frames, {seconds:.1f} s, frames change {change:.3f}"))
     seen.sort(key=lambda s: not s[0])
     crit.append(
         Criterion(

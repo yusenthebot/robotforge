@@ -834,7 +834,7 @@ def test_a_video_of_the_robot_from_parts_must_be_there_and_move(ev, tmp_path):
     _gif(good / "work" / "pip.gif")
     outcome = ev.score(task, good)
     assert outcome.passed, outcome.criteria
-    assert "pip.gif: 20 frames, 2.0 s" in outcome.criteria[-1]["observed"]
+    assert "work/pip.gif: 20 frames, 2.0 s" in outcome.criteria[-1]["observed"]
     still = _copy(tmp_path / "c", "parts_video")
     _gif(still / "rf_home" / "worlds" / "pip_rover" / "videos" / "pip.gif", moving=False)
     assert _verdict(ev.score(task, still))["a video >= 1 s in which something moves"] is False
