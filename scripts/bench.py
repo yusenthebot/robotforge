@@ -18,15 +18,16 @@ Measures, each in fresh processes:
 - mcp: `robotforge mcp` started to tools listed, the latency of common calls, and the server's memory.
 
 Writes docs/bench/<date>-<sha>.json, prints a table that compares with the previous complete run there and with
-the budgets in docs/bench/budget.json. Exits 0 when every budget is met, 1 when one is exceeded, 2 when a
-measurement failed or a budget went unchecked, and 3 when only timings went over on a busy machine (load above the
-cores, or the control world objects_20, with no robotforge code in its loop, under its own floor): rerun calm.
-A quick or partial run (--quick, --only, --worlds) is not saved unless --save, and then as <date>-<sha>-partial.json,
-which no later run compares with. Physics speeds are compared relative to a MuJoCo-only machine check timed with
-each world (objects_20 for older runs), so a busier machine than last time reads less as a slower robotforge;
---wait-calm waits for the load to drop first. Two runs an hour apart on a shared machine can still differ more than a
-change does, so --ab measures a change instead: imports, cold start and the physics worlds on this tree and on
-revision <rev>, alternately.
+the budgets in docs/bench/budget.json. Exits 1 when a budget is exceeded (even if another part failed), else 2 when a
+measurement failed or a budget went unchecked, else 3 when only timings went over on a busy machine, else 0. Busy:
+the load average above the cores, or the machine check (a MuJoCo model built here, no robotforge code, timed in
+each world's process) under its floor in budget.json; then timings over budget say nothing about the code: rerun
+calm. A quick or partial run (--quick, --only, --worlds) is not saved unless --save, and then as
+<date>-<sha>-partial.json, which no later run compares with. Physics speeds are compared relative to that machine
+check, so a busier machine than last time reads less as a slower robotforge (less so for Python-heavy and large
+worlds, which a busy machine slows more than the check); --wait-calm waits for the load to drop first. Two runs an
+hour apart on a shared machine can still differ more than a change does, so --ab measures a change instead:
+imports, cold start and the physics worlds on this tree and on revision <rev>, alternately.
 The physics, viewer and MCP parts use the real Menagerie Go2 (downloaded once into the cache); the viewer part
 needs Google Chrome (or CHROME=...). Maintainer tool, not part of robotforge.
 """
@@ -77,13 +78,16 @@ TIME_NOISE = (0.3, 0.0)
 MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
 # Speeds over the machine check timed with each world (MachineCheck): in two pairs of physics runs at load 11 to 16
 # they differed by -8 to +3 and -6 to +2 percent, where the raw speeds differed by up to 28 percent.
-MACHINE_RELATIVE_NOISE = (0.15, 0.0)
+MACHINE_RELATIVE_NOISE = 0.15
 # A process that compiles the Go2's OBJ meshes peaks 480 MB one run and 535 MB the next on the same build.
 MESH_MEMORY_NOISE = (0.15, 20.0)
 # Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code.
 LOAD_SENSITIVE = ("steps/s", "ms", "s", "fps", "%")
-# The world with no robotforge code in its loop (only MuJoCo): how fast this machine was during the run.
-CONTROL = "physics.objects_20.steps_per_s"
+# How fast this machine ran during the run: the slowest of the machine checks timed in each world's process
+# (MachineCheck, a model built in this script and stepped by MuJoCo alone). No world can serve: even objects_20,
+# which has no controllers, steps through Session.step (7 percent of its time) on robotforge's solver settings, so a
+# slowdown in that shared code would read as a busy machine.
+MACHINE = "physics.machine.steps_per_s"
 
 # Every metric each part can produce, so budget.json cannot name one that does not exist (a typo would turn a
 # budget off without a word) and a renamed metric shows up as an error, not as a budget gone quiet.
@@ -124,7 +128,7 @@ def known_metrics() -> set[str]:
     """Every "section.name" a complete run measures."""
     names = {f"install.{n}" for n in INSTALL_METRICS}
     names |= {f"imports.{import_key(t)}_{n}" for t in IMPORT_TARGETS for n in IMPORT_METRICS}
-    names |= {f"physics.{w}.{n}" for w in WORLDS for n in PHYSICS_METRICS}
+    names |= {f"physics.{w}.{n}" for w in WORLDS for n in PHYSICS_METRICS} | {MACHINE}
     names |= {f"viewer.{n}" for n in VIEWER_METRICS}
     return names | {f"mcp.{n}" for n in MCP_METRICS}
 
@@ -138,7 +142,7 @@ def part_of(name: str) -> str:
 def parts(sections: list[str], worlds: list[str]) -> set[str]:
     """The parts a run with these sections and physics worlds covers."""
     out = {s for s in sections if s != "physics"}
-    return out | ({f"physics.{w}" for w in worlds} if "physics" in sections else set())
+    return out | ({part_of(MACHINE), *(f"physics.{w}" for w in worlds)} if "physics" in sections else set())
 
 
 def missing_parts(results: dict[str, Any]) -> list[str]:
@@ -163,18 +167,11 @@ def _noise(m: dict[str, Any]) -> tuple[float, float]:
     return NOISE.get(m.get("unit", ""), TIME_NOISE)
 
 
-def machine_scale(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> float | None:
-    """How much faster this machine ran the control world now than then (0.6: 40 percent slower), or None."""
-    a, b = (now.get(CONTROL) or {}).get("value"), (before.get(CONTROL) or {}).get("value")
-    return a / b if a and b else None
-
-
 def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Per metric: the previous value, the change and a verdict (better, worse, same, new), from flattened results.
-    Physics speeds change relative to the machine ("relative": True): to the machine check timed in the same
-    process when both runs have it, else to the control world when both runs measured it. A world that slowed by
-    as much as the machine did is the machine, not robotforge."""
-    control = machine_scale(now, before)
+    A world's speed changes relative to the machine ("relative": True) when both runs timed the machine check in
+    that world's process: a world that slowed by as much as the machine did is the machine, not robotforge. Runs
+    from before the check compare as measured, with the wider noise of raw timings."""
     out = {}
     for name, m in now.items():
         old = before.get(name)
@@ -183,12 +180,10 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             out[name] = {"before": None, "change": None, "verdict": "new"}
             continue
         prev = float(old["value"])
-        scale, share, amount = None, *_noise(m)
-        if m.get("unit") == "steps/s":
-            if m.get("machine") and old.get("machine"):
-                scale, (share, amount) = m["machine"] / old["machine"], MACHINE_RELATIVE_NOISE
-            elif name != CONTROL:
-                scale = control  # older runs: the control world, timed at another moment, so the wider noise
+        scale, (share, amount) = None, _noise(m)
+        if m.get("unit") == "steps/s" and m.get("machine") and old.get("machine"):
+            scale = m["machine"] / old["machine"]
+            share, amount = m.get("relative_noise") or MACHINE_RELATIVE_NOISE, 0.0
         relative = scale is not None
         ref = prev * scale if relative else prev
         change = (value - ref) / abs(ref) if ref else (0.0 if value == ref else math.inf)
@@ -204,13 +199,14 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
 
 def busy_reason(loads: list[float], cores: int, now: dict[str, dict[str, Any]], budgets: dict[str, Any]) -> str | None:
     """Why this run's timings cannot be held to their budgets, or None: the load average went above the number of
-    cores, or the control world ran under its own floor (then the machine, not the code, was slow)."""
+    cores, or the machine check ran under its floor (then the machine, not the code, was slow). Only the check
+    tells: it runs no robotforge code, so a slowdown in robotforge leaves it where it was and fails the budgets."""
     peak = max(loads, default=0.0)
     if peak > cores:
         return f"load average {peak:.0f} on {cores} cores"
-    value, floor = (now.get(CONTROL) or {}).get("value"), (budgets.get(CONTROL) or {}).get("min")
+    value, floor = (now.get(MACHINE) or {}).get("value"), (budgets.get(MACHINE) or {}).get("min")
     if value is not None and floor is not None and value < floor:
-        return f"the control world ran {value:,.0f} steps/s, under its floor of {floor:,.0f}"
+        return f"the machine check ran {value:,.0f} steps/s, under its floor of {floor:,.0f}"
     return None
 
 
@@ -488,12 +484,7 @@ def bench_install(quick: bool) -> dict[str, Any]:
         python = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
         _uv_install([uv, "pip", "install", "--python", str(python), "-r", str(locked)])
         _uv_install([uv, "pip", "install", "--python", str(python), "--no-deps", str(wheel)])
-        # The locked set must satisfy what the wheel asks for, or uv.lock is behind pyproject.toml
-        check = subprocess.run(
-            [uv, "pip", "check", "--python", str(python)], capture_output=True, text=True, encoding="utf-8"
-        )
-        if check.returncode != 0:
-            raise RuntimeError(f"uv.lock does not satisfy the wheel (uv lock?): {check.stdout.strip()[-400:]}")
+        _pip_check(uv, python)
         site = Path(
             subprocess.run(
                 [str(python), "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"],
@@ -519,6 +510,17 @@ def bench_install(quick: bool) -> dict[str, Any]:
             "packages": metric(len(found), "", "lower", versions=versions),
             "download_mb": metric(None if download is None else download / 2**20, "MB", "lower"),
         }
+
+
+def _pip_check(uv: str, python: Path) -> None:
+    """The locked set must satisfy what the wheel asks for, or uv.lock is behind pyproject.toml. uv prints what
+    is wrong on stderr."""
+    check = subprocess.run(
+        [uv, "pip", "check", "--python", str(python)], capture_output=True, text=True, encoding="utf-8", check=False
+    )
+    if check.returncode != 0:
+        reason = (check.stderr.strip() or check.stdout.strip())[-400:]
+        raise RuntimeError(f"uv.lock does not satisfy the wheel (uv lock?): {reason}")
 
 
 def _installed(site: Path) -> dict[str, tuple[str, int]]:
@@ -884,6 +886,12 @@ def bench_physics(quick: bool, worlds: list[str] | None = None) -> dict[str, Any
         out[f"{name}.steps_per_s"] = metric(r["steps_per_s"], "steps/s", "higher", **info)
         out[f"{name}.controllers_share"] = metric(r["controllers_share"], "share", "lower")
         out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower", noise=WORLDS[name].memory_noise)
+    checks = {
+        name: out[f"{name}.steps_per_s"]["machine"] for name in worlds or list(WORLDS) if f"{name}.steps_per_s" in out
+    }
+    if checks:  # the slowest moment of the run: a world timed then may have crossed its floor with no code change
+        slowest = min(checks, key=checks.get)
+        out["machine.steps_per_s"] = metric(checks[slowest], "steps/s", "higher", slowest=slowest)
     return out
 
 
@@ -1333,11 +1341,9 @@ def main(argv: list[str] | None = None) -> int:
     budgets = check_budgets(now, budget_spec, ran, busy is not None)
     print("\n".join(table(now, compared, budgets)))
     if any(c.get("relative") for c in compared.values()):
-        scale = machine_scale(now, before)
-        control = "" if scale is None else f"; objects_20, with only MuJoCo in its loop, ran {scale - 1:+.0%}"
         print(
-            "\n* steps/s changes allow for the machine's speed, timed in each world's own process (for older runs,"
-            f" by the objects_20 world){control}"
+            "\n* steps/s changes allow for the machine's speed, timed in each world's own process. A busier machine"
+            " than last time still slows Python-heavy and large worlds more than the check: there the change leans low"
         )
     if busy:
         print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")
@@ -1363,10 +1369,11 @@ def main(argv: list[str] | None = None) -> int:
         record["budgets"] = {b["metric"]: b["status"] for b in budgets}
         path.write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"\nwrote {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
-    if errors or unmeasured:
-        return 2
+    # A budget exceeded is the answer even when another part failed: the failure must not hide a regression
     if over:
         return 1
+    if errors or unmeasured:
+        return 2
     return 3 if inconclusive else 0
 
 

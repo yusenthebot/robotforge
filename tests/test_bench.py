@@ -200,7 +200,8 @@ def test_a_partial_or_quick_run_is_never_the_previous_run(bench, tmp_path):
 
 
 def _fake_main(bench, monkeypatch, results: dict, load: float = 1.0):
-    monkeypatch.setattr(bench, "run", lambda sections, quick, shots, worlds=None: (results, []))
+    errors = [f"{part}: {found['error']}" for part, found in results.items() if "error" in found]  # as run() says
+    monkeypatch.setattr(bench, "run", lambda sections, quick, shots, worlds=None: (results, errors))
     monkeypatch.setattr(bench, "git_sha", lambda: "abc1234")
     monkeypatch.setattr(bench, "machine", lambda: {"load": [load, load, load]})
     monkeypatch.setattr(bench.os, "getloadavg", lambda: (load, load, load))
@@ -228,7 +229,7 @@ def test_a_partial_run_neither_replaces_a_complete_one_nor_becomes_the_baseline(
     partial = out / full.name.replace(".json", "-partial.json")
     assert {p.name for p in out.glob("*.json")} == {full.name, partial.name}
     assert full.read_text() == complete
-    assert json.loads(partial.read_text())["covers"] == ["physics.dog_idle"]
+    assert json.loads(partial.read_text())["covers"] == ["physics.dog_idle", "physics.machine"]
     assert bench.previous_run(out) == full
 
 
@@ -255,17 +256,50 @@ def test_exit_codes_say_over_busy_or_unchecked(bench, tmp_path, monkeypatch, cap
         return found
 
     args = ["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]
+
+    def failing(found: dict, part: str) -> dict:
+        return {**found, part: {"error": "RuntimeError: Google Chrome not found"}}
+
     cases = [
         (results(), 1.0, 0),
         (results(speed=1.0), 1.0, 1),  # too slow on a calm machine: a regression
         (results(speed=1.0), 999.0, 3),  # too slow on a busy one: cannot tell
         (results(speed=1.0, heavy=1), 999.0, 1),  # a count is a count, however busy the machine
         (results(idle=None), 1.0, 2),  # no ps: the budget went unchecked, and says so
+        # Over budget wins over a part that failed or a budget unchecked: neither may hide a regression
+        (failing(results(heavy=1), "viewer"), 1.0, 1),
+        (results(heavy=1, idle=None), 1.0, 1),
+        (failing(results(), "viewer"), 1.0, 2),
+        (failing(results(speed=1.0), "viewer"), 999.0, 2),  # a failure outranks a busy machine's maybe
     ]
     for found, load, code in cases:
         _fake_main(bench, monkeypatch, found, load)
         assert bench.main(args) == code, (load, code)
     assert "UNMEASURED  mcp.idle_cpu_pct" in capsys.readouterr().out
+
+
+def test_a_slower_robotforge_is_over_budget_not_a_busy_machine(bench, tmp_path, monkeypatch, capsys):
+    """One extra mj_forward per step in Session.step: objects_20 and the dog ran half as fast while the machine
+    check, in the same processes, ran as fast as ever. That is a regression (exit 1), not a busy machine (3).
+    Numbers from that run; floors from the real budget.json."""
+    real = json.loads(BUDGET.read_text(encoding="utf-8"))["budgets"]
+    names = ("physics.objects_20.steps_per_s", "physics.dog_idle.steps_per_s", bench.MACHINE)
+    budget = tmp_path / "budget.json"
+    budget.write_text(json.dumps({"budgets": {name: real[name] for name in names}}))
+    m = bench.metric
+    found = _results(bench)
+    found["physics"]["objects_20.steps_per_s"] = m(4652, "steps/s", "higher", machine=222000)
+    found["physics"]["dog_idle.steps_per_s"] = m(29533, "steps/s", "higher", machine=225000)
+    found["physics"]["machine.steps_per_s"] = m(222000, "steps/s", "higher", slowest="objects_20")
+    _fake_main(bench, monkeypatch, found, load=5.0)
+    assert bench.main(["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]) == 1
+    out = capsys.readouterr().out
+    assert "OVER BUDGET  physics.objects_20.steps_per_s" in out and "OVER BUDGET  physics.dog_idle.steps_per_s" in out
+    assert "INCONCLUSIVE" not in out and "busy" not in out
+    # The same speeds with the machine check under its floor: then the machine was slow, and nobody can tell
+    found["physics"]["machine.steps_per_s"] = m(120000, "steps/s", "higher", slowest="objects_20")
+    assert bench.main(["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]) == 3
+    assert "the machine check ran 120,000 steps/s, under its floor" in capsys.readouterr().out
 
 
 def test_a_budget_on_a_metric_that_does_not_exist_stops_the_run(bench, tmp_path, monkeypatch, capsys):
@@ -280,12 +314,15 @@ def test_a_budget_on_a_metric_that_does_not_exist_stops_the_run(bench, tmp_path,
 
 def test_a_busy_machine_makes_timings_over_budget_inconclusive(bench):
     m = bench.metric
-    budgets = {"physics.objects_20.steps_per_s": {"min": 8500}}
-    calm = {"physics.objects_20.steps_per_s": m(14000, "steps/s", "higher")}
-    slow = {"physics.objects_20.steps_per_s": m(6000, "steps/s", "higher")}
+    budgets = {bench.MACHINE: {"min": 165000}, "physics.objects_20.steps_per_s": {"min": 8500}}
+    calm = {bench.MACHINE: m(220000, "steps/s", "higher")}
+    slow = {bench.MACHINE: m(120000, "steps/s", "higher")}
     assert bench.busy_reason([5.0, 8.0], 18, calm, budgets) is None
     assert "load average 40 on 18 cores" in bench.busy_reason([12.0, 40.0], 18, calm, budgets)
     assert "under its floor" in bench.busy_reason([5.0], 18, slow, budgets)
+    # A world under its floor says nothing about the machine, however slow: it may be the code
+    world_slow = {**calm, "physics.objects_20.steps_per_s": m(4652, "steps/s", "higher")}
+    assert bench.busy_reason([5.0], 18, world_slow, budgets) is None
     now = {
         "physics.dog_idle.steps_per_s": m(10, "steps/s", "higher"),
         "physics.dog_idle.peak_mb": m(900, "MB", "lower"),
@@ -302,35 +339,25 @@ def test_a_busy_machine_makes_timings_over_budget_inconclusive(bench):
     }
 
 
-def test_speeds_compare_relative_to_the_control_world(bench):
-    """A machine 40 percent slower than last time slows every world: that is no regression of robotforge."""
+def test_speeds_from_runs_without_the_machine_check_compare_as_measured(bench):
+    """Older runs have no machine check: no world stands in for it (objects_20 runs robotforge's step too), so their
+    speeds compare as they are, with the wide noise of raw timings."""
     m = bench.metric
     before = {
         "physics.objects_20.steps_per_s": m(10000, "steps/s", "higher"),
         "physics.dog_idle.steps_per_s": m(100000, "steps/s", "higher"),
-        "physics.go2_walk.steps_per_s": m(20000, "steps/s", "higher"),
-        "physics.dog_idle.peak_mb": m(150, "MB", "lower"),
+        "physics.go2_walk.steps_per_s": m(20000, "steps/s", "higher", machine=220000),
     }
     now = {
-        "physics.objects_20.steps_per_s": m(6000, "steps/s", "higher"),
-        "physics.dog_idle.steps_per_s": m(61000, "steps/s", "higher"),  # slowed as the machine did
-        "physics.go2_walk.steps_per_s": m(7000, "steps/s", "higher"),  # slowed much more: the code
-        "physics.dog_idle.peak_mb": m(150, "MB", "lower"),
+        "physics.objects_20.steps_per_s": m(6000, "steps/s", "higher", machine=130000),
+        "physics.dog_idle.steps_per_s": m(80000, "steps/s", "higher", machine=130000),
+        "physics.go2_walk.steps_per_s": m(15000, "steps/s", "higher", machine=220000),
     }
     out = bench.compare(now, before)
-    assert bench.machine_scale(now, before) == pytest.approx(0.6)
-    assert out["physics.dog_idle.steps_per_s"] == {
-        "before": 100000.0,
-        "change": 0.0167,
-        "verdict": "same",
-        "relative": True,
-    }
-    assert out["physics.go2_walk.steps_per_s"]["verdict"] == "worse"
-    assert out["physics.objects_20.steps_per_s"]["verdict"] == "worse"  # the control itself: plainly slower
-    assert "relative" not in out["physics.objects_20.steps_per_s"] and "relative" not in out["physics.dog_idle.peak_mb"]
-    # Without the control in both runs, speeds compare as they are
-    del before["physics.objects_20.steps_per_s"]
-    assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
+    assert out["physics.objects_20.steps_per_s"] == {"before": 10000.0, "change": -0.4, "verdict": "worse"}
+    assert out["physics.dog_idle.steps_per_s"] == {"before": 100000.0, "change": -0.2, "verdict": "same"}
+    # Both runs timed the check with go2_walk: relative, and the machine did not move, so 25 percent is the code
+    assert out["physics.go2_walk.steps_per_s"]["relative"] and out["physics.go2_walk.steps_per_s"]["verdict"] == "worse"
 
 
 def test_speeds_compare_relative_to_the_machine_check_in_their_own_process(bench):
@@ -367,6 +394,21 @@ def test_the_machine_check_costs_the_same_every_time(bench):
                 check.time(k)
         rates.append(check.steps_per_s)
     assert max(rates) / min(rates) < 1.25, rates
+
+
+def test_a_stale_lock_says_what_uv_found(bench, monkeypatch):
+    """uv pip check prints the broken requirements on stderr, not stdout: the message must carry them."""
+    found = "The package `httpx` requires `certifi`, but it's not installed"
+
+    def fake_run(command, **kwargs):
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr=found + "\n")
+
+    monkeypatch.setattr(bench.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="uv.lock does not satisfy the wheel") as caught:
+        bench._pip_check("uv", Path("python"))
+    assert str(caught.value).endswith(found)
+    monkeypatch.setattr(bench.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, "", ""))
+    bench._pip_check("uv", Path("python"))
 
 
 def test_flatten_names_metrics_by_section_and_skips_errors(bench):
@@ -412,7 +454,7 @@ def test_the_budget_file_names_metrics_the_bench_measures(bench):
         assert name in known, f"{name}: no part of the bench measures it"
         assert ("max" in budget) != ("min" in budget), f"{name}: give a max or a min"
         assert budget.get("why"), f"{name}: say where the number comes from"
-    assert bench.CONTROL in data["budgets"], "the control world needs a floor, or a busy machine goes unnoticed"
+    assert bench.MACHINE in data["budgets"], "the machine check needs a floor, or a busy machine goes unnoticed"
 
 
 def test_the_known_metrics_are_what_a_real_run_measured(bench):
