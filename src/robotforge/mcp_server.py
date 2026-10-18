@@ -538,7 +538,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why. Aircraft (drones)
         fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
         its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
-        a table's height) lands there; a point under a crown or a table hovers there. A landed aircraft takes off
+        a table's height) lands there; a point under a crown or a table hovers there. A landing where something
+        stands (a ball, a crate, a robot), on top of what moves or a crown, or at an edge is refused, and the refusal
+        names a spot nearby on the same surface that has room. A landed aircraft takes off
         first, a leg that would hit something goes over or round it, and the result adds touchdown_m_s, or hovering
         and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
         (taking off first)."""
