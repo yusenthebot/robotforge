@@ -318,7 +318,7 @@ def test_a_lesson_opens_at_the_top_of_its_panel(viewer):
         await _start(tab, "pd_control")
         return scrolled, await tab.eval("document.getElementById('lesson-panel').scrollTop")
 
-    scrolled, top = viewer("laptop", "en", scenario)
+    scrolled, top = viewer("phone", "en", scenario)  # the lesson sheet is 40% of a phone: it scrolls
     assert scrolled > 0 and top == 0
 
 
