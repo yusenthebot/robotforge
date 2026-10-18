@@ -141,6 +141,7 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
                 f"length x{length:.2f} became x{best:.2f}: a snake longer than {SNAKE_SPINE} m crawls (fewer "
                 "segments or a smaller snake can be longer)"
             )
+    _equipment(plan, changes, notes)
     tall = HUMANOID_HEIGHT * size * height
     if plan.body == "humanoid" and not HUMANOID_RANGE[0] <= tall <= HUMANOID_RANGE[1]:
         meters = min(max(tall, HUMANOID_RANGE[0]), HUMANOID_RANGE[1])
@@ -150,3 +151,29 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
             f"{HUMANOID_RANGE[1]} m tall (taller ones fell over walking)"
         )
     return replace(plan, **changes), notes
+
+
+def _equipment(plan: Plan, changes: dict[str, Any], notes: list[str]) -> None:
+    """What a body cannot carry comes off the plan with a note, so the plan says what the robot has."""
+    if plan.body == "humanoid":
+        if plan.lidar:
+            changes["lidar"] = False
+            notes.append('a humanoid carries no lidar yet; a wheeled or legged robot can ("a rover with a lidar")')
+        if plan.hand != "gripper":
+            changes["hand"] = "gripper"
+            notes.append("a humanoid's hands hold nothing yet; ask for a wheeled or legged robot with an arm")
+        if plan.camera != plan.head:
+            changes["camera"] = plan.head
+            notes.append(
+                "a humanoid's camera is in its head: it has both or neither"
+                + ("" if plan.head else "; this one has no head, so no camera")
+            )
+        if plan.material not in (None, "pla", "aluminum", "carbon"):
+            changes["material"] = None
+            notes.append(f"a humanoid is printed, aluminum or carbon, not {plan.material}")
+    if plan.body == "balancer" and plan.arms:
+        changes["arms"] = 0
+        notes.append("a balancer carries no arms: it would topple reaching out; ask for a wheeled robot with an arm")
+    if plan.body == "snake" and changes.get("arms", plan.arms) > 1:
+        changes["arms"] = 1
+        notes.append("a snake has one head: it got jaws (a gripper) for its arms")

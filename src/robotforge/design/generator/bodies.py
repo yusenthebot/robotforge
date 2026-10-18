@@ -133,9 +133,14 @@ def base_sensors(plan: Plan, lidar_at: Any = "top", camera: bool = False) -> lis
     return sensors
 
 
+TOOLS = {"suction": "suction_cup", "magnet": "magnet"}  # the templates that hold without fingers
+
+
 def gripper(hand: str, color: str, opening: float = 0.06) -> dict[str, Any]:
-    params: dict[str, Any] = {"color": color, "opening": opening}
-    return {"template": "gripper", "params": params}
+    """The hand on the end of a chain built from parts: the gripper template, or a suction cup or magnet."""
+    if hand in TOOLS:
+        return {"template": TOOLS[hand]}
+    return {"template": "gripper", "params": {"color": color, "opening": opening}}
 
 
 def arm_on_top(plan: Plan, look: Look, reach: float, shift: float, home: dict[str, float] | None = None):
@@ -232,7 +237,7 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "size": [length, width, thick],
         # a shell over the battery, not a solid print, as heavy as it is long and wide
         "mass": r3(1.0 * s * length / 0.3 * width / 0.14),
-        "sensors": base_sensors(plan),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     return {"color": look.main, "base": base, "parts": parts}, notes
@@ -293,7 +298,7 @@ def insect(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "shape": "capsule" if look.round_head else "box",
         "size": [r3(width), r3(length - width)] if look.round_head else [length, width, thick],
         "mass": r3(0.9 * s**3 * plan.length * plan.width),
-        "sensors": base_sensors(plan),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     if look.round_head:
@@ -316,10 +321,15 @@ def spider(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "shape": "cylinder",
         "size": [diameter, r3(0.055 * s)],
         "mass": r3(0.9 * s**3 * plan.width**2),
-        "sensors": base_sensors(plan, camera=not plan.head),
+        "sensors": base_sensors(plan, camera=_headless(plan)),
         "material": look.material,
     }
     return {"color": look.main, "base": base, "parts": parts}, []
+
+
+def _headless(plan: Plan) -> bool:
+    """A camera on the base: there is no head (or torso with one) to carry the eyes."""
+    return not plan.head
 
 
 def _legged_dress(plan: Plan, look: Look, length: float, width: float, thick: float) -> list[dict[str, Any]]:
@@ -424,8 +434,8 @@ def torso_with_arms(
         home=(0, -60, -50, 110) if raised else (0, -20, -110, 130),
         mirror=False,
     )
-    if plan.hand != "gripper":
-        arms[-1]["robot"]["params"]["end_effector"] = plan.hand
+    if plan.hand != "gripper":  # a suction cup or magnet on each wrist in place of the gripper
+        arms[-1]["robot"] = gripper(plan.hand, look.main)
     return parts + arms
 
 
@@ -584,14 +594,11 @@ def balancer(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     ]
     if plan.head:
         parts += head("base", "top", 0.07 * s, look, plan, pan=False)
-    if plan.arms:
-        notes = ["a balancer carries no arms: it would topple reaching out; ask for a wheeled robot with an arm"]
-    else:
-        notes = []
+    notes: list[str] = []  # arms come off the plan in clamp()
     base = {
         "shape": "box",
         "size": [depth, width, tall],
-        "sensors": base_sensors(plan),
+        "sensors": base_sensors(plan, camera=not plan.head),
         "material": look.material,
     }
     return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, notes
@@ -660,7 +667,7 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
                 "robot": gripper(plan.hand, look.accent, 0.05),
             },
         ]
-    notes = ["a snake has one head: it got jaws (a gripper)"] if plan.arms > 1 else []
+    notes: list[str] = []  # a second arm comes off the plan in clamp()
     base = {"shape": "box", "size": [r3(0.09 * s), r3(0.06 * s), r3(0.045 * s)], "sensors": sensors}
     # Measured: on hobby servos a snake 1.6 times the size did not move at all (1.3 times: 0.43 m in 6 s on sts3215);
     # on joint modules it slithered 0.85 m in 6 s. On mg996r servos twelve segments went 15 to 44 % of the way when
@@ -686,6 +693,7 @@ def standing_arm(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "fixed": True,
         "color": GRAPHITE,
         "material": look.material,
+        "sensors": base_sensors(plan, lidar_at="front", camera=True)[1:],  # no imu: it is bolted down
     }
     if two:
         parts = torso_with_arms("top", [0, 0, 0], plan, look, raised=True)
@@ -747,7 +755,4 @@ def humanoid(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         params["material"] = plan.material
     if height > 0.5:  # measured: 0.54 m fell on hobby servos in some variations; on joint modules 0.65 m walks
         params["servo"] = "bldc_joint"
-    notes = []
-    if plan.arms and plan.hand != "gripper":
-        notes.append("a humanoid's hands hold nothing yet; ask for a wheeled or legged robot with an arm")
-    return {"template": "humanoid", "params": params}, notes
+    return {"template": "humanoid", "params": params}, []  # what it cannot carry came off the plan in clamp()
