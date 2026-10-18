@@ -44,6 +44,7 @@ BELT_THICK = 0.01  # m
 # of the factory's 75 g boxes): at 200 the belt ran 40% slow behind a queue of 16, and everything still riding with
 # it. A velocity servo is integrated implicitly (implicitfast), so a stiff one stays stable (see the force limit).
 CONVEYOR_KV = 10000.0
+BELT_RAMP = 0.1  # s, the drive's time constant: speed changes take about three times this
 BUTTON_TRAVEL = 0.008  # m a button goes down
 PRESSED_AT = 0.6  # fraction of its travel past which a button reads as pressed
 
@@ -502,6 +503,11 @@ def _conveyor(spec: mujoco.MjSpec, carcass: mujoco.MjsBody, name: str, size: lis
         )
     act = spec.add_actuator(name=f"{name}/speed", target=f"{name}/belt", trntype=mujoco.mjtTrn.mjTRN_JOINT)
     act.set_to_velocity(kv=CONVEYOR_KV)
+    # A soft start and stop, as a conveyor's drive has: the speed it drives at follows the one it is set to over
+    # BELT_RAMP seconds. Stopped in one step instead, the stiff drive's 1000 N kick reached the contacts before the
+    # implicit integrator took it back, and a box waiting at the stop was thrown 25 mm back up the belt.
+    act.dyntype = mujoco.mjtDyn.mjDYN_FILTEREXACT
+    act.dynprm[0] = BELT_RAMP
     act.ctrllimited = mujoco.mjtLimited.mjLIMITED_TRUE
     act.ctrlrange = [-0.5, 0.5]
     # No force limit: clipped, the force no longer follows the speed error the implicit integrator counts on, and the

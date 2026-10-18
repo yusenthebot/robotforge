@@ -125,6 +125,13 @@ def test_a_box_rides_at_the_belt_speed_behind_a_queue_at_the_stop(pg):
     speed = (float(pg.session.data.body("rider").xpos[0]) - x0) / 3.0
     assert speed == pytest.approx(0.1, rel=0.03)
     assert float(pg.session.data.body("held0").xpos[0]) == pytest.approx(0.927, abs=0.005)  # still at the stop
+    # and stays there when the belt stops: stopped in one step, the stiff drive's kick threw the box at the stop of
+    # the factory 25 mm back up the belt
+    before = [float(pg.session.data.body(f"held{i}").xpos[0]) for i in range(10)]
+    pg.set_controls({"belt/speed": 0.0})
+    pg.run_fast(lambda: False, 1.0)
+    after = [float(pg.session.data.body(f"held{i}").xpos[0]) for i in range(10)]
+    assert np.max(np.abs(np.subtract(after, before))) < 0.005  # the queue only eases back a little
 
 
 def test_a_speed_is_only_for_conveyors(pg):
