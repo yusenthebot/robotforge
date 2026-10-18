@@ -270,14 +270,25 @@ SIGHT = """(async () => {
     const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
     const rf = window.__robotforge;
     const { scene, camera } = rf.three();
-    const target = new THREE.Vector3().fromArray(rf.cameraTarget());
-    const ray = new THREE.Raycaster(camera.position.clone(), target.clone().sub(camera.position).normalize());
-    ray.far = camera.position.distanceTo(target);
     const robot = new Set(rf.scene.bodies.filter((b) => b.name.startsWith("dog/")).map((b) => b.id));
+    const box = new THREE.Box3();
     const meshes = [];
-    scene.traverse((o) => { if (o.isMesh && o.visible && o.userData.body !== undefined) meshes.push(o); });
-    return ray.intersectObjects(meshes, false).filter((h) => !robot.has(h.object.userData.body))
-      .map((h) => rf.scene.bodies[h.object.userData.body].name);
+    scene.traverse((o) => {
+        if (!o.isMesh || !o.visible || o.userData.body === undefined || o.userData.isPlane) return;
+        if (robot.has(o.userData.body)) box.expandByObject(o);
+        else meshes.push(o);
+    });
+    // The robot's middle and the corners of its box drawn in by a sixth, near the robot's own outline.
+    const inner = box.clone().expandByVector(box.getSize(new THREE.Vector3()).multiplyScalar(-1 / 6));
+    const points = [box.getCenter(new THREE.Vector3())];
+    for (const x of [inner.min.x, inner.max.x]) for (const y of [inner.min.y, inner.max.y])
+        for (const z of [inner.min.z, inner.max.z]) points.push(new THREE.Vector3(x, y, z));
+    return points.flatMap((p) => {
+        const way = p.clone().sub(camera.position);
+        const ray = new THREE.Raycaster(camera.position.clone(), way.clone().normalize());
+        ray.far = way.length();
+        return ray.intersectObjects(meshes, false).map((h) => rf.scene.bodies[h.object.userData.body].name);
+    });
 })()"""
 
 
@@ -287,7 +298,15 @@ def _dog_behind_a_wall(pg: Any) -> None:
     pg.add_object("wall", shape="box", size=[0.05, 1.2, 0.8], pos=[0.6, -0.8], fixed=True, yaw=-52.0)
 
 
-def test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between(viewer):
+def _dog_half_behind_a_wall(pg: Any) -> None:
+    """The same wall moved sideways until a ray from the robot's middle just passes its end: it hides half the dog,
+    as the warehouse's shelf hid half the Go2 picked from the list."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0])
+    pg.add_object("wall", shape="box", size=[0.05, 1.2, 1.2], pos=[1.1, -0.42], fixed=True, yaw=-52.0)
+
+
+@pytest.mark.parametrize("world", [_dog_behind_a_wall, _dog_half_behind_a_wall], ids=["wall", "half-wall"])
+def test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between(viewer, world):
     """On a phone the camera stood twice as far back as on a laptop, and in the park a tree was between it and the
     Go2 just picked from the list: the screen was all foliage."""
 
@@ -299,7 +318,7 @@ def test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between(viewer):
         await tab.until("!window.__robotforge.tweening()")
         return await tab.eval(SIGHT)
 
-    assert viewer("phone", "en", scenario, world=_dog_behind_a_wall) == []
+    assert viewer("phone", "en", scenario, world=world) == []
 
 
 TITLE_LINES = """(() => {

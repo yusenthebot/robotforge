@@ -986,26 +986,46 @@ function focusRobot(name) {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const dir = camera.position.clone().sub(controls.target).normalize();
   const d = fitDistance(Math.max(sphere.radius, 0.15)) * 2.2; // room around it to see where it goes
-  moveCamera(sphere.center.clone().add(clearSight(name, sphere.center, dir, d).multiplyScalar(d)), sphere.center, true);
+  moveCamera(sphere.center.clone().add(clearSight(name, box, dir, d).multiplyScalar(d)), sphere.center, true);
 }
 
 // The way from a robot to the camera, turned around the vertical as little as it takes for nothing to stand in
 // between: on a phone, whose narrow view puts the camera twice as far back, the park's tree hid the Go2 just picked.
+// The view is clear when the robot's middle and the corners of its box (drawn in a little, to the robot's own
+// outline) all see the camera: a ray from the middle alone passed the warehouse shelf hiding half the Go2.
 const sightRay = new THREE.Raycaster();
 const UP = new THREE.Vector3(0, 0, 1);
 const SIGHT_TURNS = [0, 20, -20, 40, -40, 60, -60, 90, -90, 120, -120, 150, -150, 180]; // degrees
-function clearSight(name, center, dir, d) {
+const SIGHT_INSET = 0.15; // share of the box each corner is drawn in by
+function clearSight(name, box, dir, d) {
   const others = [];
   worldRoot.traverse((o) => {
-    if (o.isMesh && o.visible && !o.userData.isPlane && robotOfBody.get(o.userData.body) !== name) others.push(o);
+    const body = o.userData.body;
+    if (!o.isMesh || !o.visible || body === undefined || o.userData.isPlane) return;
+    if (robotOfBody.get(body) !== name) others.push(o);
   });
-  sightRay.far = d;
+  const center = box.getCenter(new THREE.Vector3());
+  const inner = box.clone().expandByVector(box.getSize(new THREE.Vector3()).multiplyScalar(-SIGHT_INSET));
+  const points = [center];
+  for (const x of [inner.min.x, inner.max.x]) for (const y of [inner.min.y, inner.max.y]) for (const z of [inner.min.z, inner.max.z]) points.push(new THREE.Vector3(x, y, z));
+  const eye = new THREE.Vector3();
+  const toward = new THREE.Vector3();
+  let best = dir; // walled in on every side: keep the view the learner had, or the least hidden one
+  let fewest = points.length;
   for (const turn of SIGHT_TURNS) {
     const way = dir.clone().applyAxisAngle(UP, THREE.MathUtils.degToRad(turn));
-    sightRay.set(center, way);
-    if (!sightRay.intersectObjects(others, false).length) return way;
+    eye.copy(center).addScaledVector(way, d);
+    let blocked = 0;
+    for (const p of points) {
+      toward.copy(eye).sub(p);
+      sightRay.set(p, toward.clone().normalize());
+      sightRay.far = toward.length();
+      if (sightRay.intersectObjects(others, false).length && ++blocked >= fewest) break;
+    }
+    if (blocked === 0) return way;
+    if (blocked < fewest) [best, fewest] = [way, blocked];
   }
-  return dir; // walled in: keep the view the learner had
+  return best;
 }
 
 function renderSelection() {
