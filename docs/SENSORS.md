@@ -101,7 +101,7 @@ The viewer does not draw them yet.
 
 ## Measured
 
-`uv run python scripts/sensor_bench.py` measures every claim against the truth (2026-10-18, Apple M-series, a machine shared with other work).
+`uv run python scripts/sensor_bench.py` measures every claim against the truth (2026-10-18, on the development Mac while other jobs shared it).
 
 | what | set up | measured |
 |---|---|---|
