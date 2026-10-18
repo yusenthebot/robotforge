@@ -46,7 +46,7 @@ MAX_DESCENT = 1.0  # m/s down, away from the ground
 LAND_SPEED = 0.22  # m/s down at touchdown
 ACCEL = 2.0  # m/s^2 the reference speeds up and slows down at, across
 ACCEL_UP = 1.5  # m/s^2 up and down
-MAX_TILT = math.radians(30.0)
+MAX_TILT = math.radians(35.0)
 MAX_TURN = 1.5  # rad/s of yaw
 SPOOL_DOWN = 0.5  # s from touchdown to motors off
 TOUCHDOWN = 0.02  # m of clearance at which it is down
@@ -66,9 +66,10 @@ OBSERVER_TAU = 0.04  # s, how quickly the disturbance estimate follows a push
 SMOOTHING = 5.0  # rad/s: the reference's acceleration is low-passed this fast (see Reference)
 K_ATT = np.array([7.0, 7.0, 2.5])
 K_RATE = np.array([20.0, 20.0, 6.0])
-# Air: rotor drag per kg of aircraft (N s/m per kg) and the drag coefficient times area per m^2 of plan view.
+# Air: rotor drag per kg of aircraft (N s/m per kg), and body drag as the drag coefficient times frontal area per
+# square meter of span (a 0.65 m camera drone: CdA 0.025 m^2).
 ROTOR_DRAG = 0.12
-BODY_CD = 0.25
+BODY_CD = 0.06
 AIR_DENSITY = 1.225
 
 
@@ -78,6 +79,8 @@ CONTROLLER = (
 )
 STOP_NOTE = "it hovers where it is; to land, move it with to=[x, y, 0] (the spot to land on)"
 MAX_POINTS = 50
+# Geom groups the altimeter and the look ahead see: what a drone can bump into, not the visual meshes (group 2).
+SOLID = np.array([1, 1, 0, 1, 1, 1], dtype=np.uint8)
 
 
 class FlightError(ValueError):
@@ -542,7 +545,7 @@ def ground_height(
     down = np.array([0.0, 0.0, -1.0])
     geom = np.zeros(1, dtype=np.int32)
     for _ in range(6):
-        dist = mujoco.mj_ray(model, data, start, down, None, 1, root, geom)
+        dist = mujoco.mj_ray(model, data, start, down, SOLID, 1, root, geom)
         if dist < 0:
             return None
         hit = start + down * dist
@@ -756,7 +759,7 @@ def _first_hit(
         start = a + offset
         travelled = 0.0
         for _ in range(6):
-            dist = mujoco.mj_ray(model, data, start, u, None, 1, fc.frame.root, geom)
+            dist = mujoco.mj_ray(model, data, start, u, SOLID, 1, fc.frame.root, geom)
             if dist < 0 or travelled + dist > length:
                 break
             g = int(geom[0])
