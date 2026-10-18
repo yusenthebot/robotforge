@@ -30,7 +30,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
-   - `move_arm` / `gripper` / `pick_and_place`: arms;
+   - `move_arm` / `gripper` / `pick_and_place`: arms; with an arm on a robot that drives or walks (`mobile_panda`, `lift_picker`, `go2_arm`), `pick_and_place` fetches: the robot goes over, picks the thing up, carries it and puts it down ("bring the apple to the table"), and says what it did or why it cannot before it moves;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;
    - `write_script` + `run_script`: custom sequences, loops and logic the user can keep;
