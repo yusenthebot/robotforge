@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.control import (
     TASKS,
     Box,
@@ -322,7 +321,7 @@ async def test_mcp_tools_run_and_compare_controllers(tmp_path, monkeypatch):
     pg.new_world("lab")
     pg.add_robot("pole", template="cartpole", pos=[0, 1.0])
     pg.add_robot("arm", template="arm")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         listed = json.loads((await client.call_tool("list_algorithms", {})).content[0].text)
         assert {t["name"] for t in listed["tasks"]} == set(TASKS) and "lqr" in listed["algorithms"]
@@ -555,7 +554,7 @@ async def test_mcp_run_controller_survives_resets_and_slow_machines(tmp_path, mo
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
     pg.new_world("lab")
     pg.add_robot("pole", template="cartpole")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         lqr = {"robot": "pole", "task": "balance", "method": "lqr"}
         bad = await client.call_tool("run_controller", {**lqr, "seconds": 2, "push_at": 3})
