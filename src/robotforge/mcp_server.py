@@ -631,10 +631,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
         it and reports whether the object ended up there. An arm on a robot that drives or walks (a mobile
         manipulator, "rover/arm") goes over by itself when the object or the target is out of its reach: it walks or
-        drives next to the object, picks it up, carries it held over its back, goes next to the target and puts it
-        down; the result then says where it went ("went": path_m, distance_m, time_s each; "driven_m"). go=false keeps
-        the robot where it stands and refuses instead. It refuses before moving when the object is too heavy or too big
-        for the gripper, there is no way there, nowhere it can stand reaches it, or the target is full."""
+        drives next to the object, picks it up (reaching in with its hand tilted when pointing down does not reach,
+        as over a kitchen counter), carries it folded over its back, goes next to the target and puts it down; the
+        result then says what it did ("went": path_m, distance_m, time_s each; "driven_m", "picked_up_at",
+        "put_down_at", "hand_tilt_deg", "errand_s"). go=false keeps the robot where it stands and refuses instead. It
+        refuses before moving when the object is too heavy or too big for the gripper, there is no way there, nowhere
+        it can stand reaches it, or the target is full."""
         with _tool_errors():
             motion, info = playground.behaviors.pick_and_place(
                 playground.behaviors.resolve(robot, arm=True), object, target, go

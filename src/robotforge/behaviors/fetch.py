@@ -1,18 +1,26 @@
 """Fetch and carry: an arm that rides on a robot that drives or walks gets the robot to go where the arm reaches.
 
 pick_and_place uses this for such an arm when the object or the place is out of the arm's reach from where the robot
-stands (BehaviorManager.pick_and_place): the robot goes next to the object, picks it up, holds it over its own back
-with the arm tucked in while it goes next to the place, and puts it down there.
+stands (BehaviorManager.pick_and_place): the robot goes next to the object, picks it up, folds the arm over its own
+back with the load in its gripper (the pose for the way, ArmMotion.hold_pose: inside the robot's outline, so the robot
+is no wider than its trips were planned for), goes next to the place, and puts it down there.
+
+Before it moves it refuses what it cannot do, saying why: a load too big for the gripper or too heavy for the arm,
+a place with no free spot, no way there, or nowhere to stand from which the arm reaches.
 
 Where to stand: around the object, spots on the floor at a few distances and bearings from where the arm's base would
-be, with the robot turned so that the object lies ahead of the arm or to one side of it. A spot is kept if the robot's
-map calls it free floor it can get to and its shapes, posed there in a copy of the world, touch nothing; the most
-promising are checked by IK, with the robot moved there in the IK's own copy, and a spot is kept only if the arm
-reaches from it a few cm and degrees off too, as navigation stops within 8 cm and 12 degrees. The last of that the
-robot creeps out (Errand._align), and the arm checks its reach again from where the robot really stands.
+be. A spot is kept if the robot's map calls it free floor it can get to and its shapes, posed there in a copy of the
+world, touch nothing; the most promising are checked by IK, with the robot moved there in the IK's own copy, first
+with the gripper pointing down and then also with the hand reaching in tilted (reach_in.py), as people reach across a
+counter; the whole pick or put is then planned from the spot (Stand.rehearse), and a spot is preferred whose quick
+check also holds a few cm and degrees off, since navigation stops within 8 cm and 12 degrees (more for a robot that
+walks). Where the robot really stops, the arm plans again; if it does not reach from there, a rover creeps into the
+spot and then, like a robot that walks, looks for another spot from where it stands (_spot_from_here).
 
-Things go round the robot on the way (navigate.py), the load in its gripper with them: left out of the obstacles and
-counted in its footprint (nav_map.with_load).
+While it goes on, the errand runs MuJoCo's no-slip pass, has the gripper squeeze harder and the arm's servos hold up
+its weight (Errand._hold_fast), and puts all that back when it ends. Things go round the robot on the way
+(navigate.py), the load in its gripper with them: left out of the obstacles and counted in its footprint
+(nav_map.with_load).
 """
 
 from __future__ import annotations
@@ -1101,6 +1109,7 @@ class Errand:
     _tries: int = 0
     _creep: tuple[float, Spot] | None = None  # (since when, into which spot)
     tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
+    tilts: dict[str, float] = field(default_factory=dict)  # the same for the pick and the put
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
     _retries: int = 0  # trips planned again after getting stuck
@@ -1394,7 +1403,7 @@ class Errand:
         def queue(tilt: float) -> None:
             _pick(self.hand, center, self.half, hold, tilt, self.hold_q, self.radius)
 
-        failed = self._first_tilt(self.pick, queue)
+        failed = self._first_tilt(self.pick, queue, "pick")
         self.picked_at = [round(float(v), 3) for v in center]
         if failed is not None:
             if self._again(t, data, self.pick, "to_object"):
@@ -1417,7 +1426,7 @@ class Errand:
             else:
                 self.hand.put(target, self.half, self.place.top, tilt)
 
-        failed = self._first_tilt(self.drop, queue)
+        failed = self._first_tilt(self.drop, queue, "put")
         if failed is not None:
             if self._again(t, data, self.drop, "to_place"):
                 return
@@ -1429,7 +1438,7 @@ class Errand:
             return
         self.step = "placing"
 
-    def _first_tilt(self, spot: Spot | None, queue: Callable[[float], None]) -> Exception | None:
+    def _first_tilt(self, spot: Spot | None, queue: Callable[[float], None], which: str) -> Exception | None:
         """Queue the arm's moves with the first tilt of the hand that works from where the robot stands: the one the
         spot was chosen for, then straight down, then the others; the last error if none works."""
         tilts = [0.0, *self.hand.tilts]
@@ -1445,6 +1454,7 @@ class Errand:
                 failed = exc
                 continue
             self.tilt = tilt
+            self.tilts[which] = tilt
             return None
         return failed
 
@@ -1542,6 +1552,8 @@ class Errand:
             out["picked_up_at"] = self.picked_at
         if self.placed_at is not None:
             out["put_down_at"] = self.placed_at
+        if self.tilts:  # how far off straight down the hand reached in (reach_in.py), for the pick and the put
+            out["hand_tilt_deg"] = {k: round(math.degrees(v)) for k, v in self.tilts.items()}
         if self.ended is not None:
             out["errand_s"] = round(self.ended - self.started, 2)
         if self.state != "done":
