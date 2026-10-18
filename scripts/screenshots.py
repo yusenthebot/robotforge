@@ -19,6 +19,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import math
 import os
 import shutil
 import socket
@@ -1057,6 +1058,79 @@ G3_SHOTS = [
     ),
 ]
 
+# The fifteen sentences the robot generator was proven with (tests/test_generator.py), each one robot.
+GENERATED = [
+    "a six-legged robot with two arms",
+    "a tall wheeled courier with a lidar",
+    "a snake with a gripper head",
+    "a small orange robot dog",
+    "a big carbon fiber quadruped with long legs and a camera head",
+    "a spider robot in black and red",
+    "a six-wheeled mars rover with an arm",
+    "a self-balancing robot on two wheels",
+    "a robot arm with six joints and a suction cup",
+    "a long green snake with 12 segments",
+    "a centaur in white and gold",
+    "a tall humanoid",
+    "a wheeled robot with two arms",
+    "一只带激光雷达的蓝色四足机器狗",
+    "a tentacle arm with a gripper",
+]
+
+
+def _generated_line_up(pg: Any) -> None:
+    """All fifteen generated robots facing the camera: tall ones at the back, the two snakes lying across in front.
+    Places are metres toward the camera (from the south-east) and to its left."""
+    view = math.radians(-42)
+    toward, left = (math.cos(view), math.sin(view)), (math.sin(view), -math.cos(view))
+    places = [(i, -1.2, c - 2.0) for c, i in enumerate([11, 1, 8, 6, 12])]
+    places += [(i, 0.0, c - 2.0) for c, i in enumerate([0, 10, 14, 4, 13])]
+    places += [(i, 1.1, c - 1.0) for c, i in enumerate([3, 7, 5])]
+    places += [(2, 2.0, 0.85), (9, 2.0, -0.85)]
+    for i, a, b in places:
+        pos = [round(a * toward[0] + b * left[0], 3), round(a * toward[1] + b * left[1], 3)]
+        snake = "snake" in GENERATED[i]
+        pg.add_robot(f"g{i + 1:02d}", describe=GENERATED[i], pos=pos, yaw=48 if snake else -42)
+
+
+def _frame_robot(robot: str, direction=(1.0, -0.85, 0.55), scale: float = 1.9, least: float = 0.6) -> str:
+    """Page script: nothing selected, the camera along `direction` from the middle of all of `robot`'s bodies (half
+    way up from the ground to its highest one), far enough to see the whole robot whatever its size."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const ours = (b) => b.name.startsWith({json.dumps(robot + "/")});
+        const mine = rf.scene.bodies.map((b, i) => [b, i]).filter(([b]) => ours(b));
+        const ps = mine.map(([, i]) => rf.bodyPosition(i));
+        const lo = [0, 1, 2].map((k) => Math.min(...ps.map((p) => p[k])));
+        const hi = [0, 1, 2].map((k) => Math.max(...ps.map((p) => p[k])));
+        const mid = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, Math.max(hi[2], 0.06) / 2];
+        const span = Math.max(0.8 * Math.max(hi[0] - lo[0], hi[1] - lo[1]), 1.5 * hi[2], 0.25);
+        const d = {json.dumps(list(direction))}, n = Math.hypot(...d), far = Math.max({least}, {scale} * span);
+        rf.lookAt(mid.map((v, k) => v + (d[k] / n) * far), mid);
+    """
+
+
+def _generated(sentence: str) -> Callable[[Any], None]:
+    def world(pg: Any) -> None:
+        pg.add_robot("bot", describe=sentence)
+
+    return world
+
+
+# One picture per generated robot (gen_01 ... gen_15), for the gallery grid; and all fifteen together.
+GENERATED_SHOTS = [
+    Shot(f"gen_{i + 1:02d}", _generated(sentence), page=_frame_robot("bot"), settle=2.5)
+    for i, sentence in enumerate(GENERATED)
+] + [
+    Shot(
+        "generated_robots",
+        _generated_line_up,
+        page="window.__robotforge.select(null);" + _look((3.1, -2.75, 1.75), (0.4, -0.35, 0.1)),
+        settle=3.0,
+    )
+]
+
 
 SHOTS = [
     Shot(
@@ -1360,6 +1434,7 @@ SHOTS = [
         settle=0.5,
     ),
     *G3_SHOTS,
+    *GENERATED_SHOTS,
 ]
 
 
@@ -1379,6 +1454,51 @@ def main() -> None:
         t0 = time.monotonic()
         path = take(shot, args.out, args.lang)
         print(f"{shot.name}: {path} ({time.monotonic() - t0:.0f} s)")
+    singles = [args.out / f"gen_{i + 1:02d}.jpg" for i in range(len(GENERATED))]
+    if all(p.is_file() for p in singles) and (not args.only or any(n.startswith("gen_") for n in args.only)):
+        print(f"generated grid: {generated_grid(singles, args.out / 'generated_grid.jpg')}")
+
+
+def generated_grid(singles: list[Path], out: Path, cols: int = 5) -> Path:
+    """The gen_ pictures in a grid, each cropped to its robot (no viewer bars) with its sentence under it."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    tile_w, tile_h, caption, gap, margin, title_h = 560, 380, 54, 14, 28, 76
+    crop = (220, 110, 1380, 900)  # of a SAVED_WIDTH (1600 x 1000) picture
+
+    def font(size: int) -> Any:
+        for name in ("/System/Library/Fonts/Hiragino Sans GB.ttc", "C:/Windows/Fonts/msyh.ttc"):
+            if Path(name).is_file():  # one with Chinese, for the Chinese sentence
+                return ImageFont.truetype(name, size)
+        return ImageFont.load_default(size)
+
+    rows = -(-len(singles) // cols)
+    sheet = Image.new(
+        "RGB",
+        (2 * margin + cols * tile_w + (cols - 1) * gap, 2 * margin + title_h + rows * (tile_h + caption + gap) - gap),
+        (236, 239, 243),
+    )
+    draw = ImageDraw.Draw(sheet)
+    draw.text((margin, margin), "robotforge: robots generated from one sentence each", font=font(34), fill=(29, 32, 38))
+    draw.text(
+        (margin, margin + 44),
+        'add_robot(name, describe="...")  -  built from parts, checked by the builder; each one walks, drives, '
+        "slithers or reaches (real viewer, real simulation)",
+        font=font(19),
+        fill=(90, 96, 106),
+    )
+    for i, (path, sentence) in enumerate(zip(singles, GENERATED, strict=True)):
+        tile = Image.open(path).convert("RGB").crop(crop).resize((tile_w, tile_h), Image.Resampling.LANCZOS)
+        r, c = divmod(i, cols)
+        x, y = margin + c * (tile_w + gap), margin + title_h + r * (tile_h + caption + gap)
+        sheet.paste(tile, (x, y))
+        draw.rectangle([x, y + tile_h, x + tile_w - 1, y + tile_h + caption - 1], fill=(255, 255, 255))
+        draw.text((x + 12, y + tile_h + 8), f"{i + 1:02d}", font=font(17), fill=(200, 120, 30))
+        text = f'"{sentence}"'
+        size = 19 if draw.textlength(text, font=font(19)) < tile_w - 56 else 15
+        draw.text((x + 44, y + tile_h + 6), text, font=font(size), fill=(29, 32, 38))
+    sheet.save(out, "JPEG", quality=88, optimize=True)
+    return out
 
 
 if __name__ == "__main__":

@@ -132,7 +132,9 @@ def guide() -> dict[str, Any]:
             "To start from something bigger: add_robot(name, design=...) adds a ready-made robot from the gallery "
             "(list_templates lists them: a wheel-legged biped, a Mars rover, a centaur, a Go2 with an arm, a Panda "
             "on a mobile base...) as parts in this schema; show_world shows them, and add_part / update_part change "
-            "them like any build."
+            'them like any build. Or say it in one sentence: add_robot(name, describe="a six-legged robot with two '
+            'arms") generates one from these parts that moves at once; update_robot(name, describe="make it longer") '
+            "changes it."
         ),
         "checks": (
             "Each build is dropped onto a floor before it is saved: overlapping parts or parts in the floor are "
