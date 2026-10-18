@@ -317,3 +317,66 @@ def test_the_rov_is_there_only_within_a_few_centimeters(pg):
     result = trip.result()
     assert result["arrived"] and result["error_m"] <= 0.04
     assert result["depth_m"] == pytest.approx(LEVEL - 0.5, abs=0.05)
+
+
+# ---- land robots in shallow water ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def wading(tmp_path, monkeypatch) -> Playground:
+    """A quadruped standing in water 12 cm deep, with small waves."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground.with_demo()
+    playground.new_world("shallows")
+    playground.set_floor("sand", water={"level": 0.12, "waves": 0.03})
+    playground.add_robot("dog", template="quadruped", pos=[0, 0])
+    return playground
+
+
+def test_a_dog_standing_in_shallow_water_is_not_held(wading, monkeypatch):
+    """The gait reads qfrc_applied on its trunk as a hand dragging it in the viewer: with the water's forces written
+    there it thought it was held on all but one of its updates, and skipped settling and its standing limits."""
+    from robotforge.behaviors.quadruped import QuadrupedGait
+
+    seen = []
+    original = QuadrupedGait._recovering
+
+    def spy(self, t, dt, measured, roll, moving, fallen, held):
+        seen.append(held)
+        return original(self, t, dt, measured, roll, moving, fallen, held)
+
+    monkeypatch.setattr(QuadrupedGait, "_recovering", spy)
+    wading.behaviors.move("dog", 0.0, 0.0)
+    wading.session.step(1000)
+    assert len(seen) > 100 and not any(seen)
+    root = marine.root_body(wading.session.model, "dog")
+    dof = int(wading.session.model.body_dofadr[root])
+    assert not wading.session.data.qfrc_applied[dof : dof + 6].any()
+    assert wading.state()["water"]["afloat"], "the water did reach its legs"
+
+
+def test_a_dog_in_shallow_water_costs_about_what_a_crate_does(wading):
+    """Its legs' wet links went through mj_applyFT one by one, so a wading quadruped cost four floating crates; now
+    every body's wrench goes to MuJoCo at once."""
+    import time
+
+    def per_call(session) -> float:
+        best = math.inf
+        for _ in range(5):
+            start = time.perf_counter()
+            for _ in range(100):
+                session.water.apply(session.model, session.data)
+            best = min(best, (time.perf_counter() - start) / 100)
+        session.data.xfrc_applied[:] = 0
+        return best
+
+    wading.session.step(100)
+    dog = per_call(wading.session)
+    crate = SimSession.from_xml(
+        "<mujoco><custom><numeric name='robotforge_water' data='1 1 1000 0 4 30 0 0 0 0 0 0 0'/></custom>"
+        "<worldbody><body pos='0 0 1'><freejoint/><geom type='box' size='0.3 0.2 0.1' density='500'/></body>"
+        "</worldbody></mujoco>"
+    )
+    assert crate.water is not None
+    assert dog < 3.0 * per_call(crate), f"{dog * 1e6:.0f} us"
+    assert dog < 1e-3

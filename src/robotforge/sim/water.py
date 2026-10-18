@@ -14,10 +14,12 @@ each physics step all cells of all bodies are evaluated at once with numpy:
 - thrusters: site actuators whose site is named "...thruster..." push like any MuJoCo site actuator (a rotor),
   but a propeller out of the water pushes nothing, so their thrust fades as they leave it.
 
-Forces go into qfrc_applied, which the session clears and refills every step (the viewer's drag spring is added
-there too), so they never pile up with a push someone writes into xfrc_applied. A body whose free joint carries
-it alone (a crate, a buoy, a boat, an ROV) gets its generalized force directly; anything jointed goes through
-mj_applyFT.
+The forces are worked out from where things are in this step: the session runs mj_step1 (which poses the model),
+then `apply`, then mj_step2. Worked out before mj_step, from the pose of the step before, they lagged a step, and
+a light plate slapping the water gained energy from the lag until it flew off. They reach MuJoCo as one wrench per
+body in xfrc_applied, so MuJoCo maps them onto the joints in C (a jointed robot costs no more than a crate), and
+the session puts back what was there after mj_step2: qfrc_applied keeps meaning a hand in the viewer to the
+controllers that read it, and pushes written into xfrc_applied stay as they were written.
 
 The water a world has rides along in the compiled model as a custom numeric field (`robotforge_water`), so every
 way a model is loaded (a world, a saved MJCF, the viewer, a lesson's copy) knows whether it has water.
@@ -284,7 +286,7 @@ def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 class Hydro:
-    """The water forces for one compiled model; `apply` adds them to qfrc_applied before each step.
+    """The water forces for one compiled model; `apply` adds them to xfrc_applied in each step.
 
     The step is a fixed number of whole-array numpy operations whatever the number of bodies (sums go through
     small dense matrices, cells are sorted by kind so each kind's formula runs on one slice), so a harbor of
@@ -316,12 +318,17 @@ class Hydro:
         self.cell_half = np.array(cells.half, float).reshape(-1, 3)[order]
         self.cell_volume = np.array(cells.volume, float)[order]
         self.cell_kind = kind[order]
+        self._cell_model_geom = np.array(geoms, int)[self.cell_geom] if geoms else np.zeros(0, int)
         self._blocks = [(k, np.nonzero(self.cell_kind == k)[0]) for k in (KIND_BOX, KIND_ELLIPSOID, KIND_DISC)]
         self._blocks = [(k, slice(int(ix[0]), int(ix[-1]) + 1)) for k, ix in self._blocks if len(ix)]
         n_geoms, n_cells = len(geoms), len(self.cell_geom)
-        self._cells_to_geoms = np.zeros((n_geoms, n_cells))
-        self._cells_to_geoms[self.cell_geom, np.arange(n_cells)] = 1.0
-        self.geom_volume = self._cells_to_geoms @ self.cell_volume
+        # Sums over each shape's cells: the cells of one shape lie in at most two runs (a capsule's slabs and its
+        # ends sit in different kinds' slices), summed with one reduceat and then a small run-to-shape matrix.
+        self._run_start = np.flatnonzero(np.r_[True, self.cell_geom[1:] != self.cell_geom[:-1]]) if n_cells else None
+        runs = self.cell_geom[self._run_start] if n_cells else np.zeros(0, int)
+        self._runs_to_geoms = np.zeros((n_geoms, len(runs)))
+        self._runs_to_geoms[runs, np.arange(len(runs))] = 1.0
+        self.geom_volume = self.per_geom(self.cell_volume)
         bodies = model.geom_bodyid[self.geoms] if n_geoms else np.zeros(0, int)
         self.bodies, self.geom_body = np.unique(bodies, return_inverse=True)  # geom -> index into self.bodies
         self._geoms_to_bodies = np.zeros((len(self.bodies), n_geoms))
@@ -337,35 +344,20 @@ class Hydro:
         self.drag = np.array([DRAG_COEFFICIENT.get(int(model.geom_type[g]), 1.0) for g in geoms], float)[:, None]
         self._geom_bodyid = model.geom_bodyid[self.geoms]
         self._geom_rootid = model.body_rootid[self._geom_bodyid]
+        # For the step that has nothing in the water (a robot on the shore of a lake): each shape's bounding sphere
+        # and the highest crest the waves reach.
+        self._geom_rbound = model.geom_rbound[self.geoms] if n_geoms else np.zeros(0)
+        self._crest = water.level + float(np.abs(self._wave_amp).sum())
         dt = model.opt.timestep
         # The cap on explicit drag (DRAG_CAP), per geom from its body's mass and smallest principal inertia.
         self._force_cap = (DRAG_CAP * np.maximum(model.body_mass[self._geom_bodyid], 1e-6) / dt)[:, None]
         inertia = np.maximum(model.body_inertia[self._geom_bodyid].min(axis=1), 1e-9) if n_geoms else np.zeros(0)
         self._turn_cap = (DRAG_CAP * inertia / dt)[:, None]
-        free = self._free_dofs()
-        self._free = np.nonzero(free >= 0)[0]
-        self._free_dof = free[self._free][:, None] + np.arange(6)  # (n, 6) dof indices
-        self._free_body = self.bodies[self._free]
-        self._jointed = np.nonzero(free < 0)[0]
         self._thrusters()
         self.ever_wet = np.zeros(len(self.bodies), bool)
         self.last_wet: np.ndarray | None = None  # per water body, m^3 below the surface at the last step
 
     # ---- set up -------------------------------------------------------------------------------------------
-
-    def _free_dofs(self) -> np.ndarray:
-        """Per water body: its free joint's first dof if that joint carries it alone (no parent, no children),
-        else -1 (mj_applyFT then)."""
-        m = self.model
-        children = np.bincount(m.body_parentid[1:], minlength=m.nbody)
-        out = np.full(len(self.bodies), -1, int)
-        for i, b in enumerate(self.bodies):
-            if m.body_parentid[b] != 0 or children[b] or m.body_jntnum[b] != 1:
-                continue
-            j = int(m.body_jntadr[b])
-            if m.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
-                out[i] = int(m.jnt_dofadr[j])
-        return out
 
     def _thrusters(self) -> None:
         """Marine thrusters: site actuators on a site named "...thruster...", with the propeller's radius."""
@@ -382,15 +374,21 @@ class Hydro:
         self.thruster_sites = np.array(sites, int)
         self._prop_radius = np.maximum(m.site_size[self.thruster_sites, 0], 0.01) if sites else np.zeros(0)
 
+    def per_geom(self, values: np.ndarray) -> np.ndarray:
+        """Sums of per-cell `values` (cells, ...) over each shape's cells."""
+        if self._run_start is None:
+            return np.zeros((0, *np.shape(values)[1:]))
+        return self._runs_to_geoms @ np.add.reduceat(values, self._run_start, axis=0)
+
     # ---- the surface ----------------------------------------------------------------------------------------
 
     def surface(self, x: np.ndarray, y: np.ndarray, t: float) -> np.ndarray:
         """Height of the water surface at points (x, y) at time t; DRY (far below anything) where there is none."""
-        x, y = np.asarray(x, float), np.asarray(y, float)
-        h = np.full(np.broadcast_shapes(x.shape, y.shape), self.water.level)
+        x, y = np.broadcast_arrays(np.asarray(x, float), np.asarray(y, float))
+        h = np.full(x.shape, self.water.level)
         if len(self._wave_amp):
-            phase = np.multiply.outer(x, self._wave_k[0]) + np.multiply.outer(y, self._wave_k[1])
-            h = h + np.sin(phase - self._wave_omega * t + self._wave_phase) @ self._wave_amp
+            phase = np.stack([x, y], axis=-1) @ self._wave_k
+            h = h + np.sin(phase - (self._wave_omega * t - self._wave_phase)) @ self._wave_amp
         if self.water.area is not None:
             x0, y0, x1, y1 = self.water.area
             h = np.where((x >= x0) & (x <= x1) & (y >= y0) & (y <= y1), h, DRY)
@@ -416,8 +414,8 @@ class Hydro:
     def cells(self, data: mujoco.MjData, lift: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Each cell's wet volume (m^3) and the world centroid of that wet part. `lift` (per water body, m) raises
         bodies for the floating height search at spawn (see float_height)."""
-        rot = data.geom_xmat[self.geoms][self.cell_geom].reshape(-1, 3, 3)
-        center = data.geom_xpos[self.geoms][self.cell_geom] + np.einsum("nij,nj->ni", rot, self.cell_center)
+        rot = data.geom_xmat[self._cell_model_geom].reshape(-1, 3, 3)
+        center = data.geom_xpos[self._cell_model_geom] + np.einsum("nij,nj->ni", rot, self.cell_center)
         if lift is not None:
             center[:, 2] += lift[self.geom_body[self.cell_geom]]
         up = rot[:, 2, :]  # the world z of each local axis
@@ -454,10 +452,11 @@ class Hydro:
     def wrenches(self, data: mujoco.MjData) -> tuple[np.ndarray, np.ndarray]:
         """Force and moment about the world origin on every water body (world frame), (n, 3) each."""
         nb = len(self.bodies)
-        if not len(self.geoms):
+        if not len(self.geoms) or not (data.geom_xpos[self.geoms, 2] - self._geom_rbound < self._crest).any():
+            self.last_wet = np.zeros(nb)  # all of it above the highest crest
             return np.zeros((nb, 3)), np.zeros((nb, 3))
         wet, centroid = self.cells(data)
-        sums = self._cells_to_geoms @ np.column_stack([wet, wet[:, None] * centroid])  # (geoms, 4)
+        sums = self.per_geom(np.column_stack([wet, wet[:, None] * centroid]))  # (geoms, 4)
         geom_wet, moment = sums[:, 0], sums[:, 1:]
         weight = self.rho * GRAVITY
         per_geom = np.zeros((len(self.geoms), 7))
@@ -499,21 +498,12 @@ class Hydro:
         return np.einsum("nij,nj->ni", rot, f_local), np.einsum("nij,nj->ni", rot, t_local)
 
     def apply(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        """Add this step's water forces to data.qfrc_applied (which the session clears before)."""
+        """Add this step's water forces to data.xfrc_applied, as a force and a torque about each body's center of
+        mass. `data` is posed for this step (mj_step1); the session takes the forces out again after mj_step2."""
         if len(self.bodies):
             force, moment = self.wrenches(data)
-            if len(self._free):  # a free body alone: translation in the world frame, rotation in its own frame
-                f = force[self._free]
-                about_origin = moment[self._free] - _cross(data.xpos[self._free_body], f)
-                rot = data.xmat[self._free_body].reshape(-1, 3, 3)
-                data.qfrc_applied[self._free_dof] += np.column_stack([f, np.einsum("nji,nj->ni", rot, about_origin)])
-            for i in self._jointed:
-                b = int(self.bodies[i])
-                if not force[i].any() and not moment[i].any():
-                    continue
-                com = data.xipos[b]
-                torque = moment[i] - np.cross(com, force[i])
-                mujoco.mj_applyFT(model, data, force[i], torque, com, b, data.qfrc_applied)
+            torque = moment - _cross(data.xipos[self.bodies], force)  # about each body's center of mass
+            data.xfrc_applied[self.bodies] += np.column_stack([force, torque])  # self.bodies has no repeats
         if len(self.thruster_actuators):
             self._thrust(model, data)
 
@@ -525,20 +515,17 @@ class Hydro:
         p = data.site_xpos[self.thruster_sites]
         top = self.surface(p[:, 0], p[:, 1], float(data.time))
         wet = np.clip(((top - p[:, 2]) / self._prop_radius + 1) / 2, 0.0, 1.0)
-        for k in np.nonzero((wet < 1.0) & (push != 0))[0]:
-            a, site = int(self.thruster_actuators[k]), int(self.thruster_sites[k])
-            gear = model.actuator_gear[a]
-            rot = data.site_xmat[site].reshape(3, 3)
-            scale = -(1 - wet[k]) * push[k]
-            mujoco.mj_applyFT(
-                model,
-                data,
-                scale * (rot @ gear[:3]),
-                scale * (rot @ gear[3:]),
-                p[k],
-                int(model.site_bodyid[site]),
-                data.qfrc_applied,
-            )
+        out = np.nonzero((wet < 1.0) & (push != 0))[0]
+        if not len(out):
+            return
+        sites = self.thruster_sites[out]
+        gear = model.actuator_gear[self.thruster_actuators[out]]
+        rot = data.site_xmat[sites].reshape(-1, 3, 3)
+        scale = (-(1 - wet[out]) * push[out])[:, None]
+        f = scale * np.einsum("nij,nj->ni", rot, gear[:, :3])
+        bodies = model.site_bodyid[sites]
+        tau = scale * np.einsum("nij,nj->ni", rot, gear[:, 3:]) + _cross(p[out] - data.xipos[bodies], f)
+        np.add.at(data.xfrc_applied, bodies, np.column_stack([f, tau]))  # two thrusters can share a body
 
     # ---- for pilots -----------------------------------------------------------------------------------------
 
@@ -558,7 +545,7 @@ class Hydro:
         if not mine.any():
             return 0.0, 0.0
         wet, _ = self.cells(data, lift=lift)
-        share = (self._cells_to_geoms @ wet) / np.maximum(self.geom_volume, 1e-12)
+        share = self.per_geom(wet) / np.maximum(self.geom_volume, 1e-12)
         rot = data.geom_xmat[self.geoms].reshape(-1, 3, 3)[mine]
         up = np.abs(rot[:, 2, :])
         weight = (self.rho * share[mine])[:, None]
@@ -623,7 +610,7 @@ def float_height(
 
     def buoyancy(shift: np.ndarray) -> np.ndarray:
         wet, _ = hydro.cells(data, lift=np.where(chosen, shift[np.maximum(pick, 0)], 0.0))
-        per_body = hydro._geoms_to_bodies @ (hydro._cells_to_geoms @ wet)
+        per_body = hydro._geoms_to_bodies @ hydro.per_geom(wet)
         return np.bincount(pick[chosen], per_body[chosen], minlength=len(roots)) * still.density * GRAVITY
 
     low, high = np.full(len(roots), -span), np.full(len(roots), span)

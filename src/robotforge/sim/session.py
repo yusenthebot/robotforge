@@ -190,9 +190,29 @@ class SimSession:
             for _ in range(n):
                 self._run_controllers()
                 self._apply_drag()
-                if self.water is not None:
-                    self.water.apply(self.model, self.data)
-                mujoco.mj_step(self.model, self.data)
+                if self.water is None:
+                    mujoco.mj_step(self.model, self.data)
+                else:
+                    self._step_in_water()
+
+    def _step_in_water(self) -> None:
+        """One step with the water's forces worked out from this step's pose (sim/water.py), added to xfrc_applied
+        for this step only: what was there before (pushes from other code) is put back after it."""
+        m, d = self.model, self.data
+        split = m.opt.integrator != mujoco.mjtIntegrator.mjINT_RK4  # RK4 cannot run in two halves
+        if split:
+            mujoco.mj_step1(m, d)
+        else:  # pose it for the water, then a whole step
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_comPos(m, d)
+            mujoco.mj_comVel(m, d)
+        pushes = d.xfrc_applied.copy()
+        self.water.apply(m, d)
+        if split:
+            mujoco.mj_step2(m, d)
+        else:
+            mujoco.mj_step(m, d)
+        d.xfrc_applied[:] = pushes
 
     def _run_controllers(self) -> None:
         t = self.data.time

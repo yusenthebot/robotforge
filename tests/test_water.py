@@ -186,20 +186,76 @@ def test_heave_settles_a_dropped_crate_within_seconds():
     assert np.mean(zs) == pytest.approx(LEVEL, abs=0.003)
 
 
-def test_the_world_frame_force_matches_mj_apply_ft():
-    """The free-body shortcut gives the same generalized force as MuJoCo's own mj_applyFT."""
+def test_the_pushes_reach_the_joints_as_mj_apply_ft_puts_them():
+    """The water's wrench per body, given to MuJoCo in xfrc_applied, moves the body as the same force and moment
+    through mj_applyFT would."""
     session = _pool(G.mjGEOM_BOX, [0.3, 0.2, 0.1], 500, quat=(0.97, 0.15, 0.1, 0.05), z=LEVEL - 0.02)
     m, d = session.model, session.data
     d.qvel[:] = [0.3, -0.2, 0.1, 0.5, -0.4, 0.2]
     mujoco.mj_forward(m, d)
-    d.qfrc_applied[:] = 0
-    session.water.apply(m, d)
-    fast = d.qfrc_applied.copy()
     force, moment = session.water.wrenches(d)
+    session.water.apply(m, d)
+    mujoco.mj_forward(m, d)
+    through_xfrc = d.qacc.copy()
+    d.xfrc_applied[:] = 0
     com = d.xipos[1]
-    reference = np.zeros(m.nv)
-    mujoco.mj_applyFT(m, d, force[0], moment[0] - np.cross(com, force[0]), com, 1, reference)
-    assert fast == pytest.approx(reference, abs=1e-9)
+    mujoco.mj_applyFT(m, d, force[0], moment[0] - np.cross(com, force[0]), com, 1, d.qfrc_applied)
+    mujoco.mj_forward(m, d)
+    assert through_xfrc == pytest.approx(d.qacc, abs=1e-9)
+
+
+def test_a_float_on_a_joint_floats_like_a_free_one():
+    """A raft on a slide joint (a jointed body, as the links of a robot are) floats at the draft Archimedes says."""
+    spec = mujoco.MjSpec()
+    spec.option.timestep = 0.002
+    spec.worldbody.add_geom(type=G.mjGEOM_PLANE, size=[0, 0, 1])
+    raft = spec.worldbody.add_body(name="raft", pos=[0, 0, LEVEL + 0.05])
+    raft.add_joint(type=mujoco.mjtJoint.mjJNT_SLIDE, axis=[0, 0, 1])
+    raft.add_geom(type=G.mjGEOM_BOX, size=[0.3, 0.2, 0.1], density=500)
+    water.encode(spec, water.Water(level=LEVEL))
+    model = spec.compile()
+    session = SimSession(model=model, data=mujoco.MjData(model))
+    mujoco.mj_forward(model, session.data)
+    assert LEVEL - (_rest_height(session) - 0.1) == pytest.approx(0.1, rel=0.01)
+
+
+def test_water_leaves_qfrc_applied_and_pushes_in_xfrc_applied_as_they_were():
+    """qfrc_applied means a hand in the viewer to the gaits that read it, and a push someone writes into
+    xfrc_applied stays: the water's forces are there for mj_step2 only."""
+    session = _pool(G.mjGEOM_BOX, [0.3, 0.2, 0.1], 500, z=LEVEL)
+    push = np.array([0.0, 30.0, 0.0, 0.0, 0.0, 0.0])
+    session.data.xfrc_applied[1] = push
+    session.step(50)
+    assert not session.data.qfrc_applied.any()
+    assert session.data.xfrc_applied[1] == pytest.approx(push)
+    assert session.data.qvel[1] > 0.08  # the push still pushed: 30 N on 24 kg for 0.1 s
+
+
+@pytest.mark.parametrize(
+    ("size", "mass", "tilt", "drop", "waves"),
+    [([0.5, 0.5, 0.005], 0.3, 23, 0.5, 0.05), ([0.3, 0.2, 0.01], 0.15, 23, 0.5, 0.0)],
+)
+def test_a_thin_light_plate_slaps_the_water_and_settles(size, mass, tilt, drop, waves):
+    """Forces from the pose of the step before lagged a step: a 1 m sheet of 0.3 kg dropped tilted into the water
+    gained energy from the lag until it flew off at hundreds of m/s. From this step's pose it settles."""
+    a = math.radians(tilt) / 2
+    spec = mujoco.MjSpec()
+    spec.option.timestep = 0.002
+    spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    spec.worldbody.add_geom(type=G.mjGEOM_PLANE, size=[0, 0, 1])
+    sheet = spec.worldbody.add_body(name="sheet", pos=[0, 0, LEVEL + drop], quat=[math.cos(a), math.sin(a), 0, 0])
+    sheet.add_freejoint()
+    sheet.add_geom(type=G.mjGEOM_BOX, size=size, mass=mass)
+    water.encode(spec, water.Water(level=LEVEL, waves=waves))
+    model = spec.compile()
+    session = SimSession(model=model, data=mujoco.MjData(model))
+    mujoco.mj_forward(model, session.data)
+    fastest = 0.0
+    for _ in range(2500):  # 5 s
+        session.step(2)
+        fastest = max(fastest, float(np.abs(session.data.qvel).max()))
+    assert fastest < 10.0, f"|qvel| reached {fastest:.0f}"
+    assert abs(session.data.xpos[1][2] - LEVEL) < 0.1
 
 
 # ---- waves and thrusters ------------------------------------------------------------------------------------
