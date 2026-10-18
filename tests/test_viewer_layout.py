@@ -185,6 +185,24 @@ def test_a_parked_robot_does_not_fill_its_plots_with_wobble(viewer):
     assert span["imu"] >= 1.0, axes  # the lesson's own smallest span
 
 
+def test_a_quantity_that_cannot_go_negative_is_not_drawn_below_zero(viewer):
+    """Widened evenly around the data to its smallest span, a converged distance drew ticks 2, 0 and -2 mm, the
+    distance travelled 0.1, 0 and -0.1 m, and the floor covered 5, 0 and -5 %."""
+
+    async def scenario(tab, _server):
+        axes = {}
+        for lesson, wait in (("sensors", 3.0), ("ik_arm", 4.0), ("lidar_autopilot", 3.0)):
+            await _start(tab, lesson)
+            await asyncio.sleep(wait)  # the rover parked, the arm on its target, the vacuums setting off
+            axes |= {f"{lesson}:{a['id']}": a["range"] for a in await tab.eval("window.__robotforge.plotAxes()")}
+        return axes
+
+    axes = viewer("laptop", "en", scenario)
+    for plot in ("sensors:distance", "sensors:range", "ik_arm:err", "lidar_autopilot:covered"):
+        lo, hi = axes[plot]
+        assert lo >= -0.02 * (hi - lo), (plot, axes[plot])  # at most a settling's hair below zero: no tick there
+
+
 def test_a_joint_sliders_value_sits_on_its_names_baseline(viewer):
     """The small mono value sat 3 px above the joint's name."""
 
