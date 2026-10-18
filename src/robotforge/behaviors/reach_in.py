@@ -16,6 +16,7 @@ OutOfReach or ValueError, as ArmMotion's own do.
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Iterator
 
@@ -35,6 +36,7 @@ TURN_SPEED = 0.8  # rad/s the hand turns at most along a path
 STAGE_STEP = 0.03  # m between the stages tried, from the point in toward the arm's base
 STAGE_RISE = 0.2  # m higher than asked that a stage may be, for the arm to clear the counter
 CONTACT = 0.001  # m: an arm overlapping something else deeper than this touches it
+ANSWERS = 4  # IK answers over where the hand comes in that a tilted pick is worked out from, in turn (_direct)
 RESTARTS = 16  # random IK starts for the pose a tilted pick or put goes in from, when the arm's own do not do
 LOADED_TILT = math.radians(45.0)  # how far off pointing down a gripper with a load may turn on a joint move
 RISE = 0.1  # m a hand rises first when a joint move straight from where it is would hit something
@@ -249,57 +251,78 @@ class Hand:
         LOADED_TILT of down, or carried round over `hold` the way the tool points. None when no such way works out.
         Round by a stage pointing down (_way), a Panda took 38 s for one pick; this way 10."""
         arm = self.arm
-        half = load[0]
         level = self.turns(0.0, toward)
         for turn, down_turn in zip(self.turns(tilt, toward), level, strict=True):
-            starts = [arm.q, arm._seed(first), *(() if arm._warm is None else (arm._seed(first, arm._warm),))]
-            found = self.solve(first, [turn], starts, RESTARTS)
-            if found is None:
-                continue
-            q, a, paths = found[0], first, []
-            try:
-                hover, down = self._hover(found[0], first, turn)
-                paths.append((down, hover, first, 0.0))
-                for b in then:
-                    knots = self._path(q, a, turn, b, turn)
-                    paths.append((knots, a, b, 0.0))
-                    q, a = knots[-1], b
-                z = max(a[2], first[2] + CLEAR)
-                back, inward = self._stage(toward, z, a, q, turn, down_turn)
-            except OutOfReach:
-                continue
-            going = self._joint_way(arm.q, down[0], None, "approach")
-            if going is None:
-                continue
-            drawn = inward[::-1].copy()  # from the lifted load back to where the hand points down
-            coming = self._joint_way(drawn[-1], hold_q, load, "carry", LOADED_TILT)
-            if coming is None:
-                across = arm._carry_height(back, hold, back[2], half)
-                if across is None:
-                    continue
-                carry_z, carry_turn, carry_joints = across
-                coming = []
-                start = back
-                if carry_z > back[2] + 1e-6:
-                    start = np.array([back[0], back[1], carry_z])
-                    coming.append(Waypoint(start, None, arm._time(back, start), "lift", turn=0.0, load=half))
-                over = np.array([hold[0], hold[1], carry_z])
-                time = arm._time(start, over)
-                if carry_joints is not None:
-                    coming.append(Waypoint(over, None, time, "carry", carry_joints, turn=carry_turn, load=half))
-                else:
-                    coming.append(Waypoint(over, None, time, "carry", turn=carry_turn, load=half))
-            return [
-                Waypoint(None, arm._grip("open"), 0.3, "approach"),
-                *going,
-                self._follow_move(*paths[0], "reach in"),
-                self._follow_move(*paths[1], "descend"),
-                Waypoint(None, arm._grip("close"), 0.6, "grasp"),
-                self._follow_move(*paths[2], "lift", half),
-                self._follow_move(drawn, a, back, _angle(turn, down_turn), "draw back", half),
-                *coming,
-            ]
+            # Each of the first few IK answers in turn, from home too: which branch the pose over the load is in
+            # decides whether the hand can rise from it and draw back, and the first answer from a lift picker's tuck
+            # depended on how the robot had stood when it worked the tuck out.
+            starts = [arm.q, arm._seed(first), arm._seed(first, arm.home)]
+            if arm._warm is not None:
+                starts.append(arm._seed(first, arm._warm))
+            for q_first, _ in itertools.islice(self._solutions(first, [turn], starts, RESTARTS), ANSWERS):
+                moves = self._direct_from(q_first, turn, down_turn, toward, first, then, hold_q, load, hold)
+                if moves is not None:
+                    return moves
         return None
+
+    def _direct_from(
+        self,
+        q_first: np.ndarray,
+        turn: np.ndarray,
+        down_turn: np.ndarray,
+        toward: np.ndarray,
+        first: np.ndarray,
+        then: list[np.ndarray],
+        hold_q: np.ndarray,
+        load: tuple[float, float],
+        hold: np.ndarray,
+    ) -> list[Waypoint] | None:
+        """_direct's moves from one pose over where the hand comes in (`q_first`), or None."""
+        arm = self.arm
+        half = load[0]
+        q, a, paths = q_first, first, []
+        try:
+            hover, down = self._hover(q_first, first, turn)
+            paths.append((down, hover, first, 0.0))
+            for b in then:
+                knots = self._path(q, a, turn, b, turn)
+                paths.append((knots, a, b, 0.0))
+                q, a = knots[-1], b
+            z = max(a[2], first[2] + CLEAR)
+            back, inward = self._stage(toward, z, a, q, turn, down_turn)
+        except OutOfReach:
+            return None
+        going = self._joint_way(arm.q, down[0], None, "approach")
+        if going is None:
+            return None
+        drawn = inward[::-1].copy()  # from the lifted load back to where the hand points down
+        coming = self._joint_way(drawn[-1], hold_q, load, "carry", LOADED_TILT)
+        if coming is None:
+            across = arm._carry_height(back, hold, back[2], half)
+            if across is None:
+                return None
+            carry_z, carry_turn, carry_joints = across
+            coming = []
+            start = back
+            if carry_z > back[2] + 1e-6:
+                start = np.array([back[0], back[1], carry_z])
+                coming.append(Waypoint(start, None, arm._time(back, start), "lift", turn=0.0, load=half))
+            over = np.array([hold[0], hold[1], carry_z])
+            time = arm._time(start, over)
+            if carry_joints is not None:
+                coming.append(Waypoint(over, None, time, "carry", carry_joints, turn=carry_turn, load=half))
+            else:
+                coming.append(Waypoint(over, None, time, "carry", turn=carry_turn, load=half))
+        return [
+            Waypoint(None, arm._grip("open"), 0.3, "approach"),
+            *going,
+            self._follow_move(*paths[0], "reach in"),
+            self._follow_move(*paths[1], "descend"),
+            Waypoint(None, arm._grip("close"), 0.6, "grasp"),
+            self._follow_move(*paths[2], "lift", half),
+            self._follow_move(drawn, a, back, _angle(turn, down_turn), "draw back", half),
+            *coming,
+        ]
 
     def _hover(self, q_first: np.ndarray, first: np.ndarray, turn: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Where over `first` (reached at `q_first`) the hand gets to joint by joint, and the path down from there:
