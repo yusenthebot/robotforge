@@ -181,9 +181,11 @@ COURSE_GATE = 0.1
 # in random walk, turn and walk on sequences with a slightly pushed start (scripts/rhythm_bench.py oos, --bench-seed 1,
 # 4 and 6: 11 in 2880 against 6, 14 in 4320 against 10, 29 in 14400 against 19; switched as 7a4aa92 switched, 4, 4
 # and 18), and those of 6 imported A1 walks 162 times in 1440 against 147. Every turn that fell had leaned more than 30
-# degrees from some checked moment, or fallen from one, and those that did neither had not fallen; kept only then, 15
-# against 14 (13 switched as 7a4aa92 switched, --bench-seed 7, a 1 s turn after walking getting 53 to 55% of the
-# rate in its first second against 42).
+# degrees from some checked moment, or fallen from one, and those that did neither had not fallen. Kept only then,
+# end to end with everything learned after Keep (keeps_steering too), 8 template dog walks fell 72 times in 7200
+# sequences against 111 for the same walks switched and played as 7a4aa92 did, none of them worse than that at p < 0.05
+# in a sign test on the same sequences, and a 1 s turn after walking got 53 to 54% of the rate in its first second
+# against 41 (oos --bench-seed 91, a seed never tuned on).
 WALK_CHECKS = tuple(round(WALKED_MIN + k / CONTROL_HZ, 2) for k in range(round((5.0 - WALKED_MIN) * CONTROL_HZ) + 1))
 ROOM_TILT = math.radians(30.0)
 TURN_CHECK = 2.0  # s
@@ -279,7 +281,8 @@ DROP_MARGIN = 2  # falls
 # without it. holds_heading only walks from standing, and switch_checks walk on for SWITCH_ON, so a template dog walk
 # whose steering fell in 5 of 9 walks after a left turn from standing (none without it, each 2.6 to 4.4 s into the walk)
 # kept it, and in random walk, turn and walk sequences 8 dog walks kept so fell 124 times against 72 for the same walks
-# switched as 7a4aa92 switched, 94 against 44 for that walk alone.
+# switched as 7a4aa92 switched, 94 against 44 for that walk alone. Checked so, that walk's steering goes (4 falls in 40
+# against none), and 8 dog walks kept since fell 72 times against 111 (see WALK_CHECKS).
 STEER_TURNS = tuple(round(0.3 + 0.2 * k, 2) for k in range(12))  # s: 0.3 to 2.5, at different points of the stride
 STEER_LEADS = 8  # of the SWITCH_TRIES moments of the walk switch_checks turn out of
 STEER_ON = 5.0  # s
