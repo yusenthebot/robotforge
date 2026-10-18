@@ -383,18 +383,24 @@ def _dog_in_a_yard(pg: Any) -> None:
         pg.add_object(f"post_{i}", shape="box", size=[0.2, 0.2, 1.0], pos=[x, y], fixed=True)
 
 
-@pytest.mark.parametrize("size", ["laptop", "wide"])
-def test_fit_view_fills_the_free_view_with_the_scene(viewer, size):
+@pytest.mark.parametrize("size, drawer", [("laptop", None), ("wide", None), ("tablet", "drawer"), ("tablet", "world")])
+def test_fit_view_fills_the_free_view_with_the_scene(viewer, monkeypatch, size, drawer):
     """Fit view framed the scene's bounding sphere: seen from above a scene is flat and its corners empty, so the
-    park filled 45% of a laptop's height and its robots were 16 px tall."""
+    park filled 45% of a laptop's height and its robots were 16 px tall. Coming in from there, it never went further
+    out: on a tablet with the robots drawer or the scene panel open, the free view is narrower than the sphere, and
+    60 to 130 px of the scene stayed under the panel."""
+    monkeypatch.setitem(qa.SIZES, "tablet", (820, 1180, 2))
 
     async def scenario(tab, _server):
+        if drawer:
+            await tab.run(f"document.getElementById('{drawer}-toggle').click();")
+            await asyncio.sleep(1.0)
         await tab.run("document.getElementById('btn-frame').click();")
         await tab.until("!window.__robotforge.tweening()")
         await asyncio.sleep(0.5)
         return await tab.eval(CONTENT_EXTENT)
 
-    seen = viewer(size, "en", scenario, world=_dog_in_a_yard)
+    seen = viewer(size, "zh-CN" if drawer else "en", scenario, world=_dog_in_a_yard)
     c, f = seen["content"], seen["free"]
     assert f["left"] <= c["left"] and c["right"] <= f["right"] and f["top"] <= c["top"] and c["bottom"] <= f["bottom"]
     fill = max((c["right"] - c["left"]) / (f["right"] - f["left"]), (c["bottom"] - c["top"]) / (f["bottom"] - f["top"]))

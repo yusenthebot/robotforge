@@ -529,13 +529,15 @@ function frameCamera({ animate = false } = {}) {
   }
   const sphere = contentSphere();
   const d = fitDistance(Math.max(sphere.radius, 0.08));
-  // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
-  // surfaces that nearly touch flicker); fog hides everything well before the far plane.
-  camera.near = Math.min(Math.max(d / 400, 0.004), 0.05);
-  camera.far = d * 40;
-  camera.updateProjectionMatrix();
   const eye = sphere.center.clone().add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
   const fit = fitContent(eye, sphere.center, fitDistance(0.08) / d);
+  // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
+  // surfaces that nearly touch flicker); fog hides everything well before the far plane. Set for the
+  // distance the camera ends at, which in a narrow free view is further than the sphere's.
+  const reach = Math.max(d, fit.eye.distanceTo(fit.target));
+  camera.near = Math.min(Math.max(reach / 400, 0.004), 0.05);
+  camera.far = reach * 40;
+  camera.updateProjectionMatrix();
   moveCamera(fit.eye, fit.target, animate);
 }
 
@@ -543,8 +545,10 @@ function frameCamera({ animate = false } = {}) {
 // part's box), centred in the free part of the window: seen from above a scene is flat, its corners are often empty
 // and its near side reaches further down the screen than its far side up, and the sphere left the park's robots
 // 16 px tall on a laptop, with empty grass all round. The look-at point moves over the ground, keeping its height.
+// Where a panel leaves the free part narrower than the sphere (a tablet with the robots drawer open), go further out.
 const CONTENT_MARGIN = 0.85; // share of the free half-width and half-height the scene may fill (room for a ring, a path)
 const CONTENT_CLOSEST = 0.3; // never nearer than this share of the sphere's distance
+const CONTENT_FURTHEST = 3; // never further than this many times the sphere's distance
 function fitContent(eye, target, least) {
   const corners = [];
   const boxes = contentBoxes();
@@ -565,10 +569,11 @@ function fitContent(eye, target, least) {
   const rise = Math.max(0.2, back.z); // how much a step over the ground moves a point up the screen
   const tanV = Math.tan(THREE.MathUtils.degToRad(probe.fov) / 2);
   const [W, H] = [window.innerWidth, window.innerHeight];
-  const far = eye.distanceTo(target);
-  const near = Math.max(CONTENT_CLOSEST, least) * far; // and no nearer than a small robot's own framing
+  const start = eye.distanceTo(target);
+  const closest = Math.max(CONTENT_CLOSEST, least) * start; // and no nearer than a small robot's own framing
+  const furthest = CONTENT_FURTHEST * start;
   const center = target.clone();
-  let dist = far;
+  let dist = start;
   const p = new THREE.Vector3();
   // The scene's extent on the screen from (center, dist), -1 to 1 across the view; null when a part is behind.
   const extent = () => {
@@ -587,15 +592,15 @@ function fitContent(eye, target, least) {
   for (let i = 0; i < 8; i++) {
     const e = extent();
     if (!e) {
-      dist = Math.min(far, dist * 1.25);
+      dist = Math.min(furthest, dist * 1.25);
       continue;
     }
     // Over the ground until the scene's middle on the screen is the picture's middle, then nearer or further.
     center.addScaledVector(across, ((e[0] + e[1]) / 2) * tanV * probe.aspect * dist);
     center.addScaledVector(ahead, (((e[2] + e[3]) / 2) * tanV * dist) / rise);
-    dist = Math.min(far, Math.max(near, dist * fill(e)));
+    dist = Math.min(furthest, Math.max(closest, dist * fill(e)));
   }
-  for (let e = extent(); dist < far && (!e || fill(e) > 1); e = extent()) dist = Math.min(far, dist * 1.04);
+  for (let e = extent(); dist < furthest && (!e || fill(e) > 1); e = extent()) dist = Math.min(furthest, dist * 1.04);
   return { eye: center.clone().addScaledVector(back, dist), target: center };
 }
 
