@@ -78,8 +78,15 @@ BASELINE = {
             "the answer says how far the nearest wall is": True,
         },
     ),
+    # On ef22541, after the lidar saw past its own robot: the car read its 64 rays from "lidars" 0.92 m into the
+    # maze and said the nearest hedge was 0.426 m to its left; worked out from world.yaml it is 0.45 m.
+    "lidar_maze_ef22541": (
+        True,
+        {"its lidar read inside the maze, a wall in reach": True, "the answer says how far the nearest wall is": True},
+    ),
 }
 TASK_OF = {
+    "lidar_maze_ef22541": "lidar_maze",
     "learn_control_table_only": "learn_control",
     "learn_control_live": "learn_control",
     "hexapod_backwards": "hexapod_build",
