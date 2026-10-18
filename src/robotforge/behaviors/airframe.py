@@ -34,6 +34,7 @@ class Rotor:
     body: int  # the body its site is on
     position: np.ndarray  # site position in the root body frame, relative to the center of mass (m)
     axis: np.ndarray  # thrust direction in the root body frame (unit), zero for a pure moment actuator
+    push: np.ndarray  # force on the airframe per newton of actuator force, root body frame (gear[0:3] turned)
     spin: int  # +1: turns counter-clockwise about its axis, -1 clockwise, 0 no reaction torque modelled
     low: float  # control range
     high: float
@@ -234,7 +235,8 @@ def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = N
             low, high = (0.0, 4 * mass * 9.81) if norm > EPS else (-1.0, 1.0)
         name = (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or "").split("/", 1)[-1]
         spin = 0 if abs(reaction) < EPS else (-1 if reaction > 0 else 1)  # the body turns against the propeller
-        rotors.append(Rotor(a, name, int(model.site_bodyid[site]), spos, axis, spin, low, high))
+        push = srot @ gear[:3]
+        rotors.append(Rotor(a, name, int(model.site_bodyid[site]), spos, axis, push, spin, low, high))
     allocation = np.array(columns, float).T  # 4 x n
     mixer = Mixer(allocation, np.array([r.low for r in rotors]), np.array([r.high for r in rotors]))
     gravity = float(np.linalg.norm(model.opt.gravity)) or 9.81
