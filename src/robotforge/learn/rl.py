@@ -336,6 +336,7 @@ class RLLesson(Lesson):
                 Series("mean", {"zh": "这一轮平均", "en": "average this round"}, "amber"),
             ),
             window=float(ITERATIONS),
+            span=2.0,  # the first rounds' scores, a few tenths apart, are not drawn as big swings
         ),
     )
     steps = STEPS

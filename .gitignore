@@ -12,3 +12,6 @@ build/
 .pytest_cache/
 MUJOCO_LOG.TXT
 .claude/worktrees/
+# iCloud Desktop sync leaves conflict copies such as "manager 2.py"; they are never ours
+* [0-9]
+* [0-9].*

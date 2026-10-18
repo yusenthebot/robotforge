@@ -206,14 +206,14 @@ _SERVED_ONCE_PER_SOCKET = sys.platform == "win32"
 
 def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
     """The MCP server, with the viewer on `port`. `viewer_socket`, when given, is already listening there (run()
-    takes the port before anything else can). Port 0 takes a free port from the system and holds it as long as
-    the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
-    listens, and then the viewer exits (tests run side by side on one machine hit that)."""
+    takes the port before anything else can). Otherwise the port (0: any free one) is taken here and held as long
+    as the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
+    listens, and then the viewer exits. Tests side by side on one machine hit that: with many agents testing at
+    once, a test lost port 8791 between finding it free and its first session (2026-10-18)."""
     held: socket.socket | None = viewer_socket
-    if held is None and port == 0:
-        held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        held.bind((HOST, 0))
-        held.listen()  # Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+    if held is None:
+        # Listening at once: Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+        held = listen_on_free_port(port, HOST, attempts=1)
         port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)

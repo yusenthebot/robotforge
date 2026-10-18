@@ -150,6 +150,7 @@ class MazeChallenge(Challenge):
             {"zh": "离出口的距离", "en": "Distance to the exit"},
             "m",
             (Series("d", {"zh": "距离", "en": "distance"}, "amber"),),
+            floor=0.0,
         ),
     )
 
@@ -391,7 +392,11 @@ class ShoveChallenge(Challenge):
     )
     plots = (
         Plot(
-            "tilt", {"zh": "机身倾斜", "en": "Body tilt"}, "°", (Series("tilt", {"zh": "倾斜", "en": "tilt"}, "ink"),)
+            "tilt",
+            {"zh": "机身倾斜", "en": "Body tilt"},
+            "°",
+            (Series("tilt", {"zh": "倾斜", "en": "tilt"}, "ink"),),
+            floor=0.0,
         ),
     )
     steps = (

@@ -320,18 +320,22 @@ class IKArmLesson(Lesson):
             _text("离目标多远", "Distance to the target"),
             "mm",
             (Series("err", _text("误差", "error"), "amber"),),
+            floor=0.0,
         ),
         Plot(
             "w",
             _text("可操作度（起始姿态 = 100）", "Manipulability (home pose = 100)"),
             "",
             (Series("w", _text("可操作度", "manipulability"), "blue"),),
+            span=20.0,  # on a scale where home is 100, holding still it drew 131 to 132 as a jump across the plot
+            floor=0.0,
         ),
         Plot(
             "step",
             _text("关节一步转多少", "Joint step per tick"),
             "°",
             (Series("step", _text("最大的那个关节", "largest joint"), "violet"),),
+            floor=0.0,
         ),
     )
     steps = STEPS
@@ -420,6 +424,8 @@ class IKArmLesson(Lesson):
             "piper": (_text("AgileX PiPER", "AgileX PiPER"), "blue"),
         }
         lanes = {"ours": -LANE, "piper": LANE}
+        # Name tags just above each arm, as in the planning lesson (at 0.75 m both floated far over the arms).
+        tops = {"ours": 0.5, "piper": 0.6}
         return {
             "kind": "arm3d",
             "bases": {name: [0.0, lanes[name], 0.0] for name in ARMS},
@@ -430,7 +436,7 @@ class IKArmLesson(Lesson):
                     "color": tags[name][1],
                     "real": name == "piper",
                     "base": [0.0, lanes[name], 0.0],
-                    "top": 0.75,
+                    "top": tops[name],
                     "cloud": [],
                 }
                 for name in ARMS
