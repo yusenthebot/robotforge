@@ -23,7 +23,6 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from PIL import Image
 
 from robotforge.sensors import declare
 from robotforge.sensors.runtime import Sensor
@@ -207,6 +206,8 @@ class Camera(Sensor):
             picture = depth_picture(value["depth"], self.range)
         else:
             picture = segmentation_picture(layers.geoms, layers.model)
+        from PIL import Image  # here: Pillow is heavy, and only a picture asked for needs it
+
         buf = io.BytesIO()
         Image.fromarray(picture).save(buf, format="PNG", optimize=True)
         return buf.getvalue()
