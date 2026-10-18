@@ -17,18 +17,27 @@ import numpy as np
 
 def _fast_solve() -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
     """numpy.linalg.solve without its Python wrapping (array checks, an error-state context): the same LAPACK
-    routine, so the same numbers, in a quarter of the time on the 3 x 3 systems IK solves a thousand times a second
-    for a walking robot. Its private home in numpy may move; then IK uses the public function."""
+    routine, so the same numbers, in a third of the time on the 3 x 3 and 6 x 6 systems IK solves a thousand times
+    a second for a walking robot. Its private home in numpy may move; then IK uses the public function."""
     try:
         from numpy.linalg import _umath_linalg
 
         def solve(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-            # numpy.linalg.solve raises only when LAPACK finds the matrix singular; IK's are damped, so never.
-            return _umath_linalg.solve1(a, b, signature="dd->d")
+            x = _umath_linalg.solve1(a, b, signature="dd->d")
+            # A singular matrix comes back as NaN here, where numpy.linalg.solve raises: hand any result that is
+            # not finite to it, so a caller gets its LinAlgError instead of NaN joint targets. One sum of a few
+            # floats: far cheaper than numpy's error-state context on every call.
+            if not math.isfinite(sum(x.tolist())):
+                return np.linalg.solve(a, b)
+            return x
 
-        a, b = np.array([[2.0, 0.5, 0.0], [0.5, 3.0, 0.1], [0.0, 0.1, 1.0]]), np.array([1.0, -2.0, 0.5])
-        if np.array_equal(solve(a, b), np.linalg.solve(a, b)):
-            return solve
+        rng = np.random.default_rng(7)
+        for n in (3, 6):  # the sizes IK solves: a point, and a point with an axis or a rotation
+            j = rng.standard_normal((n, n))
+            a, b = j @ j.T + 1e-3 * np.eye(n), rng.standard_normal(n)
+            if not np.array_equal(solve(a, b), np.linalg.solve(a, b)):
+                return np.linalg.solve
+        return solve
     except (ImportError, AttributeError, TypeError, ValueError):
         pass
     return np.linalg.solve
@@ -91,6 +100,8 @@ class IKSolver:
         """
         if axis is not None and rotation is not None:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
+        if not damping > 0:  # also NaN: undamped, J J^T is singular wherever the chain is stretched or folded
+            raise ValueError(f"IK damping must be positive, got {damping}")
         # Walking robots solve this four times a plan, a hundred plans a second, so what is the same every
         # iteration is done once and small vectors are measured with floats: the same numbers as before.
         q = np.asarray(q_init, float).clip(chain.lower, chain.upper)  # np.clip's own ufunc, without its wrapper
