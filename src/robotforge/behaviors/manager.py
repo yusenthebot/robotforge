@@ -558,13 +558,17 @@ class BehaviorManager:
         return out
 
     def _can_learn_walk(self, robot: str) -> bool:
+        return self._cannot_learn_walk(robot) is None
+
+    def _cannot_learn_walk(self, robot: str) -> str | None:
+        """Why `robot` cannot learn a walk of its own in RL II, None if it can."""
         from robotforge.control.cpg import Body, CPGError
 
         try:
             Body.find(self.session.model, robot)
-        except CPGError:
-            return False
-        return True
+        except CPGError as exc:
+            return str(exc)
+        return None
 
     def kept_walk(self, robot: str) -> SavedWalk | None:
         """The walk `robot` learned in the RL II lesson and kept in this world's folder, if any."""
@@ -585,16 +589,28 @@ class BehaviorManager:
     def _rhythm_walker(self, robot: str, existing: Any, create: bool) -> RhythmWalker:
         walk = self.kept_walk(robot)
         if walk is None:
-            raise BehaviorError(f"{robot} has not learned a walk of its own; {LEARN_A_WALK}")
+            why = self._cannot_learn_walk(robot)
+            how = LEARN_A_WALK if why is None else f"and it cannot learn one in the RL II lesson: {why}"
+            raise BehaviorError(f"{robot} has not learned a walk of its own; {how}")
         if isinstance(existing, RhythmWalker) and existing.walk == walk:
             return existing
         try:
-            ctrl = RhythmWalker(self.session.model, robot, walk, self.home_qpos())
+            ctrl = RhythmWalker(self.session.model, robot, walk, self._walk_home(robot, walk))
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _walk_home(self, robot: str, walk: SavedWalk) -> np.ndarray:
+        """The pose a kept walk swings around when its file does not say (one kept before files said). An MJCF
+        robot's home was then the file's zero pose, its keyframe dropped as the world was built: played around the
+        crouched keyframe instead, a critter's walk went 0.88 m in 4 s instead of 1.25."""
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        if walk.home is None and entry is not None and entry.mjcf_file:
+            return self.session.model.qpos0.copy()
+        return self.home_qpos()
 
     def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
         existing = self.session.controllers.get(robot)
@@ -875,6 +891,7 @@ class BehaviorManager:
             turn_rate=navigation.turn_rate_for(kind.value, ctrl),
             turns_in_place=not isinstance(ctrl, SnakeGait),
             backs_up=not isinstance(ctrl, (SnakeGait, RhythmWalker)) and getattr(ctrl, "max_reverse", 1.0) > 0,
+            turns_walking=not isinstance(ctrl, RhythmWalker),
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
