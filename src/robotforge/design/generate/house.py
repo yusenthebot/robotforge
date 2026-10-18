@@ -16,7 +16,7 @@ from typing import Any
 
 from robotforge.design import props
 from robotforge.design.generate import things
-from robotforge.design.generate.draft import Draft
+from robotforge.design.generate.draft import WALK_GAP, Draft
 from robotforge.design.generate.space import Footprint, Surface
 from robotforge.design.generate.words import Wish
 
@@ -120,6 +120,7 @@ def build(draft: Draft, wish: Wish) -> None:
     start = draft.slot((draft.rooms[names[0]].x, draft.rooms[names[0]].y))
     if start is None:
         raise ValueError("no free floor for a robot to start on")
+    _connect(draft, start.pos, names)
     draft.map_floor(start.pos)
     _things(draft, wish, names, kinds)
     slots = [start]
@@ -129,6 +130,37 @@ def build(draft: Draft, wish: Wish) -> None:
             slots.append(s)
     draft.content.ground_slots = slots
     draft.content.floor = {"style": "wood"}
+
+
+def _connect(draft: Draft, start: tuple[float, float], names: list[str]) -> None:
+    """Take chairs away until a robot gets from its start into every room: a dining table's chairs closed the way
+    across a narrow dining room, and the rooms beyond it could not be reached."""
+    from robotforge.design.generate.draft import ROBOT_RADIUS
+    from robotforge.design.generate.space import FloorMap
+
+    def shut() -> list[str]:
+        floor = FloorMap.of(draft.bounds, list(draft.obstacles.values()), ROBOT_RADIUS)
+        floor.flood(*start)
+        return [n for n in names if not _reached(floor, draft.rooms[n])]
+
+    closed = shut()
+    chairs = [n for n in draft.obstacles if "_chair_" in n]
+    while closed and chairs:
+        chair = chairs.pop()
+        del draft.obstacles[chair]
+        draft.content.objects = [o for o in draft.content.objects if o["name"] not in (chair, f"{chair}_back")]
+        closed = shut()
+    if closed:
+        draft.notes.append(f"furniture closes off {', '.join(closed)}: a robot cannot get in from the start")
+
+
+def _reached(floor: Any, room: Footprint) -> bool:
+    x0, x1, y0, y1 = room.bounds()
+    for x in [x0 + (x1 - x0) * k / 8 for k in range(1, 8)]:
+        for y in [y0 + (y1 - y0) * k / 8 for k in range(1, 8)]:
+            if floor.reachable(x, y):
+                return True
+    return False
 
 
 # ---- rooms and walls ------------------------------------------------------------------------------------
@@ -244,13 +276,14 @@ def _table(
     wall: bool = False,
     name: str = "table",
     color: list[float] | None = None,
+    gap: float = WALK_GAP,
 ) -> str | None:
     length, depth, height = size
     if wall:
         spot = draft.against_wall(rect, length, depth)
         fp = spot[0] if spot else None
     else:
-        fp = draft.in_middle(rect, length, depth)
+        fp = draft.in_middle(rect, length, depth, gap)
     if fp is None:
         return None
     full = f"{room}_{name}" if not name.startswith(room) else name
@@ -428,7 +461,8 @@ def _office(draft: Draft, room: str, rect: Footprint) -> None:
 
 
 def _dining_room(draft: Draft, room: str, rect: Footprint) -> None:
-    table = _table(draft, room, rect, (1.6, 0.9, 0.75))
+    # room round it for the chairs and, past them, to walk by
+    table = _table(draft, room, rect, (1.6, 0.9, 0.75), gap=WALK_GAP + 0.5)
     if table is not None:
         _chairs(draft, room, draft.obstacles[table])
     _counter(draft, room, rect, 1.4, 0.45, 0.85, name="sideboard")

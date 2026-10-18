@@ -1178,7 +1178,7 @@ def _world_overview(sentence: str) -> str:
     xs = [o["pos"][0] for o in objects if o["shape"] != "marker"] or [0.0]
     ys = [o["pos"][1] for o in objects if o["shape"] != "marker"] or [0.0]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.4, 4.0)
+    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.4, 5.5)
     eye = (round(cx + 0.18 * span, 2), round(cy - 0.78 * span, 2), round(0.72 * span, 2))
     return "window.__robotforge.select(null); " + _look(eye, (round(cx, 2), round(cy + 0.04 * span, 2), 0.0))
 
