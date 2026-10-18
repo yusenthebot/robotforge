@@ -429,21 +429,39 @@ def test_a_slider_value_has_a_space_before_its_unit(viewer):
     assert viewer("laptop", "en", scenario) == ["0.10\u00a0m/s"]
 
 
-def test_the_docks_focus_ring_on_a_phone_stays_off_its_neighbour(viewer):
-    """2 px apart on a phone, the Reset button's ring ran 2 px over the speed buttons beside it."""
+RINGS = """(async () => {
+    const out = [];
+    const tools = [...document.querySelectorAll(".dock > *")].filter((el) => el.getClientRects().length);
+    for (const b of document.querySelectorAll(".dock > button, .dock .seg button")) {
+        if (!b.getClientRects().length) continue;
+        b.focus();  // a keyboard's focus: the ring shows
+        await new Promise((r) => setTimeout(r, 50));
+        const cs = getComputedStyle(b), r = b.getBoundingClientRect();
+        const reach = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);  // past the button's edge
+        // Its neighbours: the buttons beside it in its segment, or the dock's items beside it.
+        const row = b.closest(".seg") ? [...b.parentElement.children] : tools;
+        const me = row.indexOf(b);
+        const prev = row[me - 1]?.getBoundingClientRect().right ?? -1e9;
+        const next = row[me + 1]?.getBoundingClientRect().left ?? 1e9;
+        out.push({ label: b.textContent.trim() || b.id, shown: cs.outlineStyle !== "none",
+                   left: r.left - reach, prev, right: r.right + reach, next });
+    }
+    return out;
+})()"""
+
+
+@pytest.mark.parametrize("size", ["phone", "laptop"])
+def test_the_docks_focus_rings_stay_off_their_neighbours(viewer, size):
+    """2 px apart on a phone, the Reset button's ring ran 2 px over the speed buttons beside it; and the speed
+    buttons, edge to edge at every size, each ran 4 px over the next."""
 
     async def scenario(tab, _server):
-        await tab.run("document.getElementById('btn-reset').focus();")  # a keyboard's focus: the ring shows
-        await asyncio.sleep(0.3)
-        return await tab.eval("""(() => {
-            const b = document.getElementById("btn-reset"), cs = getComputedStyle(b);
-            const ring = b.getBoundingClientRect().right + parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
-            return { ring, next: document.getElementById("speed").getBoundingClientRect().left,
-                     shown: cs.outlineStyle !== "none" };
-        })()""")
+        return await tab.eval(RINGS)
 
-    seen = viewer("phone", "en", scenario)
-    assert seen["shown"] and seen["ring"] <= seen["next"], seen
+    rings = viewer(size, "en", scenario)
+    assert len(rings) == 8, rings  # play, reset, four speeds, fit, record
+    for ring in rings:
+        assert ring["shown"] and ring["prev"] <= ring["left"] + 0.01 and ring["right"] <= ring["next"] + 0.01, ring
 
 
 def test_a_face_off_tables_words_stay_inside_their_columns(viewer):

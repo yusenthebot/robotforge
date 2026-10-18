@@ -553,6 +553,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .seg button:hover { color: var(--ink); }
+.seg button:focus-visible { outline-offset: -2px; } /* edge to edge: a ring outside ran 4 px over the next button */
 
 .seg button[aria-pressed="true"] {
   background: var(--panel-solid);
