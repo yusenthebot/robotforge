@@ -126,6 +126,7 @@ class Destination:
     z: float = 0.0  # height of its middle, for an arm's reach
     loose: bool = False  # it moves (a free joint): something an arm might pick up, so its reach is checked
     terrain: bool = False  # a terrain patch: go onto its middle if the robot can stand there, else next to it
+    face: tuple[float, float] | None = None  # a point: turn to face this at the end (a robot that will work there)
 
     def describe(self) -> dict[str, Any]:
         at = [round(self.point[0], 3), round(self.point[1], 3)]
@@ -219,9 +220,11 @@ class Planner:
         destination: Destination,
         arm: Arm | None = None,
         layers: dict | None = None,
+        carried: int = -1,
     ) -> None:
         self.model, self.robot, self.body, self.destination, self.arm = model, robot, body, destination, arm
         self.layers = layers if layers is not None else {}  # robot -> StaticLayer, shared per compiled world
+        self.carried = carried  # root body of a load the robot carries in its gripper: not in its way
         self.root = nav_map.root_body(model, robot)
         self.last_map: NavMap | None = None
         self._own: StaticLayer | None = None  # a coarser layer that reaches a far destination, for this trip only
@@ -244,17 +247,26 @@ class Planner:
             self._own = layer
         return layer
 
-    def plan(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> Plan:
-        """A path from where the robot is now. Raises NoWay, saying why, when there is none."""
+    def map(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> NavMap:
+        """The map of where the robot's center may go, as things stand now (it is kept as last_map)."""
         start_xy = (float(data.xpos[self.root][0]), float(data.xpos[self.root][1]))
         layer = self._layer(data, start_xy)
         grid = layer.grid
         names = list(layer.names)  # moving things add their names for this plan only
         skip = {self.destination.root} if self.destination.root > 0 else set()
+        if self.carried > 0:
+            skip.add(self.carried)
         moving = nav_map.dynamic_columns(self.model, data, self.robot, self.body, grid, names, skip)
         nav = nav_map.build(layer, self.body, moving, _disks(grid, blockers), names)
         self.last_map = nav
         nav.free_from(grid.cell(*start_xy))
+        return nav
+
+    def plan(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> Plan:
+        """A path from where the robot is now. Raises NoWay, saying why, when there is none."""
+        start_xy = (float(data.xpos[self.root][0]), float(data.xpos[self.root][1]))
+        nav = self.map(data, blockers)
+        grid = nav.grid
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
         goals, away = self._goals(nav, data, first)
         penalty = nav.penalty()
@@ -300,7 +312,8 @@ class Planner:
             # simulation for every robot. A segment of no length leaves it to arrive, or to face the object.
             pts = np.vstack([pts, pts])
         heights = np.array([nav.ground_at(x, y) for x, y in pts])
-        plan = Plan(pts, heights, nav_grid.length(pts), None if on_point else d.point, exact, pivots=_pivots(nav, pts))
+        face = d.face if on_point and exact and d.face is not None else None if on_point else d.point
+        plan = Plan(pts, heights, nav_grid.length(pts), face, exact, pivots=_pivots(nav, pts))
         if not exact:
             plan.note = self._short_note(nav, cells[-1], on_point, away)
         plan.short = self._point_cause(nav) if on_point and not exact else short

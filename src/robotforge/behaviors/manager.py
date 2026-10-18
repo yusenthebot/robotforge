@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import Kind, fetch, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
@@ -250,6 +250,7 @@ class BehaviorManager:
         self._standing: dict[str, Any] = {}  # robot -> the gait start_balancing stood it on, until it is moved
         self._last_trips: dict[str, dict[str, Any]] = {}  # robot -> how its last trip ended, until it is moved again
         self._live_trips: dict[str, navigation.Navigator] = {}  # robot -> the trip it is on
+        self._errands: dict[str, fetch.Errand] = {}  # robot -> the errand it is on (pick_and_place that goes over)
         session.reset_hooks.append(self._trips_after_reset)
         session.reset_hooks.append(self.start_balancing)
         session.ctrl_hooks.append(self._set_by_hand)
@@ -700,11 +701,16 @@ class BehaviorManager:
         speed: float | None = None,
         walker: str | None = None,
         seconds: float | None = None,
+        *,
+        face: tuple[float, float] | None = None,
+        carrying: str | None = None,
     ) -> navigation.Navigator:
         """Send a robot that moves to `to`: a point [x, y] (m) or the name of an object or another robot. It plans
         a path around what is in the way and follows it with its own walker (`walker` as for move) at up to
         `speed` m/s, for at most `seconds` of sim time (None: until it gets there). Raises navigation.NoWay, saying
-        why, when there is no way; the Navigator returned says how the trip goes (`done`, `result()`)."""
+        why, when there is no way; the Navigator returned says how the trip goes (`done`, `result()`).
+        A trip to a point can end turned to `face` a point; `carrying` names a loose object the robot holds in its
+        gripper, which goes with it: not in its way, and part of its footprint (see fetch.Errand)."""
         if speed is not None and not math.isfinite(speed):
             raise BehaviorError(f"speed must be a finite number, got {speed}")
         if speed is not None and abs(speed) < MIN_TRIP_SPEED:
@@ -732,12 +738,18 @@ class BehaviorManager:
                 "teach it turns in the RL II lesson, or drive it with move and turn"
             )
         destination = self._destination(robot, to, model, data)
+        if face is not None and destination.name is None:
+            destination = dataclasses.replace(destination, face=(float(face[0]), float(face[1])))
         try:
             body = nav_map.measure_body(model, data, robot, kind, ctrl)
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
+        load = -1
+        if carrying is not None:
+            load = self._body(carrying)
+            body = nav_map.with_load(model, data, robot, body, load)
         arm = self._carried_arm(robot, data)
-        planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version))
+        planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version), carried=load)
         try:
             plan = planner.plan(data)
         except navigation.NoWay as exc:
@@ -811,6 +823,9 @@ class BehaviorManager:
             if not trip.done:
                 trip.interrupt("the world was reset or changed while it was on the way; send it again")
                 self._last_trips[robot] = trip.result()
+        errands, self._errands = self._errands, {}
+        for errand in errands.values():
+            errand.interrupt("the world was reset or changed while it was on its errand; ask again", errand.started)
 
     def _layers(self, version: int) -> dict:
         """The static map layers of this compiled world, shared by all trips in it (see navigation.Planner)."""
@@ -992,19 +1007,114 @@ class BehaviorManager:
             arm.set_gripper(state)
         return arm
 
-    def pick_and_place(self, robot: str, obj: str, target: str | list[float]) -> tuple[ArmMotion, dict[str, Any]]:
+    def pick_and_place(
+        self, robot: str, obj: str, target: str | list[float], go: bool = True
+    ) -> tuple[ArmMotion | fetch.Errand, dict[str, Any]]:
+        """Pick `obj` up and put it on or in `target`. An arm that rides on a robot that drives or walks, told to fetch
+        something out of its reach from where the robot stands, has the robot go over (fetch.Errand): to the object,
+        then with it to the place. `go=False` keeps the robot where it is and refuses instead, as before. Returns what
+        does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}."""
         with self.session.lock:
             arm = self._arm(robot)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
-            place, place_top, region = self._place_target(target)
+            goes = go and self._goes(arm.robot)
             try:
-                arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
-            except OutOfReach as exc:
-                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)) from exc
-            except ValueError as exc:
-                raise BehaviorError(str(exc)) from exc
-        return arm, {"object": obj, "target": target, "region": region}
+                place, place_top, region = self._place_target(target)
+            except BehaviorError:
+                if not goes or self._place_kind(target) != "terrain":
+                    raise
+                place = None  # a terrain patch: only a robot that goes over puts things on one
+            if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
+                try:
+                    arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
+                except OutOfReach as exc:
+                    if not goes:
+                        raise BehaviorError(
+                            self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
+                        ) from exc
+                except ValueError as exc:
+                    raise BehaviorError(str(exc)) from exc
+                else:
+                    return arm, {"object": obj, "target": target, "region": region}
+            errand = self._fetch(arm, obj, target)
+        return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def _goes(self, arm: str) -> bool:
+        """Whether the arm rides on a robot that drives or walks itself somewhere."""
+        if "/" not in arm:
+            return False
+        owner = arm.split("/", 1)[0]
+        return self.kind(owner) in MOBILE
+
+    def _place_kind(self, target: str | list[float]) -> str | None:
+        """What a target is, for fetch.place_for: an object's shape, "terrain" for a terrain patch, None for a point."""
+        if not isinstance(target, str) or NUMBER_LIST.fullmatch(target):
+            return None
+        world = self._world()
+        if world is None:
+            return None
+        found = wording.match(target, [o.name for o in world.objects])
+        if found is not None:
+            return next(o.shape for o in world.objects if o.name == found)
+        return "terrain" if wording.match(target, [t.name for t in world.terrain]) is not None else None
+
+    def _fetch(self, arm: ArmMotion, obj: str, target: str | list[float]) -> fetch.Errand:
+        """Start an errand for `arm`'s robot to bring `obj` to `target` (session lock held)."""
+        robot = arm.robot.split("/", 1)[0]
+        _check_standing(self._mobile_controller(robot, self.kind(robot), create=True))
+        kind = self._place_kind(target)
+        named = target
+        if isinstance(target, str) and NUMBER_LIST.fullmatch(target):
+            named = [float(w) for w in re.split(r"[^\d.+-]+", target.strip(" []()")) if w]
+        elif isinstance(target, str):
+            world = self._world()
+            names = [*(o.name for o in world.objects), *(t.name for t in world.terrain)] if world else []
+            named = wording.match(target, names) or target
+        try:
+            errand = fetch.plan(self, arm, obj, named, kind)
+        except fetch.FetchError as exc:
+            raise BehaviorError(str(exc)) from exc
+        self._end_trip(robot)
+        self._last_trips.pop(robot, None)
+        self.session.set_controller(fetch.KEY + robot, errand)
+        self._errands[robot] = errand
+        return errand
+
+    def errand(self, robot: str) -> fetch.Errand | None:
+        """The robot's errand (pick_and_place that goes over), while it is on one."""
+        found = self.session.controllers.get(fetch.KEY + robot)
+        return found if isinstance(found, fetch.Errand) else None
+
+    def errand_ended(self, errand: fetch.Errand) -> None:
+        """Called by an errand as it ends (inside a sim step, the session lock held)."""
+        if self.session.controllers.get(fetch.KEY + errand.robot) is errand:
+            self.session.set_controller(fetch.KEY + errand.robot, None)
+        if self._errands.get(errand.robot) is errand:
+            del self._errands[errand.robot]
+
+    def root(self, robot: str) -> int:
+        """The body a robot's position and heading are read from."""
+        return self._root_body(robot)
+
+    def floor_map(self, robot: str, data: mujoco.MjData, carrying: str | None = None) -> nav_map.NavMap:
+        """Where the robot's middle may go on the floor, as a trip would plan it now, with the robot as posed in
+        `data` (its arm tucked in, a load in its gripper): for where to stand to work (fetch.py)."""
+        model = self.session.model
+        kind = self.kind(robot)
+        ctrl = self._mobile_controller(robot, kind, create=False)
+        try:
+            body = nav_map.measure_body(model, data, robot, kind, ctrl)
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        load = -1
+        if carrying is not None:
+            load = self._body(carrying)
+            body = nav_map.with_load(model, data, robot, body, load)
+        x, y = data.xpos[self._root_body(robot)][:2]
+        here = navigation.Destination((float(x), float(y)))
+        planner = navigation.Planner(model, robot, body, here, None, self._layers(self.session.version), carried=load)
+        return planner.map(data)
 
     def _pick_out_of_reach(
         self,

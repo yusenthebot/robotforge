@@ -20,6 +20,7 @@ width to pass straight through a gap, the distance to its furthest corner to tur
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass, field
 
@@ -160,6 +161,34 @@ def measure_body(model: mujoco.MjModel, data: mujoco.MjData, robot: str, kind: K
     pushes = kind in (Kind.ROVER, Kind.BALANCER)
     hill = math.radians(HILL_SLOPE_DEG[kind]) if kind in HILL_SLOPE_DEG else None
     return Body(radius, reach, float(high[0]), float(high[2] - low[2]), mass, max(step, 0.003), slope, pushes, hill)
+
+
+def with_load(model: mujoco.MjModel, data: mujoco.MjData, robot: str, body: Body, load: int) -> Body:
+    """`body` grown to take in a load the robot carries (the body `load`, held in its gripper), where it sticks out
+    beyond the robot: its width, its corners, its front and its top. Its mass is left out: it does not change
+    what the robot climbs or pushes aside."""
+    root = root_body(model, robot)
+    rot = data.xmat[root].reshape(3, 3)
+    yaw = math.atan2(rot[1, 0], rot[0, 0])
+    heading = np.array([[math.cos(yaw), math.sin(yaw), 0.0], [-math.sin(yaw), math.cos(yaw), 0.0], [0, 0, 1.0]])
+    center = data.xpos[root]
+    root_of = model.body_rootid[model.geom_bodyid]
+    geoms = [g for g in range(model.ngeom) if int(root_of[g]) == load and collides(model, g)]
+    if not geoms:
+        return body
+    boxes = [_extent(model, data, g, heading, center) for g in geoms]
+    low, high = np.min([b[0] for b in boxes], axis=0), np.max([b[1] for b in boxes], axis=0)
+    radius = max(body.radius, float(max(-low[1], high[1])))
+    reach = max(body.reach, *(math.hypot(x, y) for x in (low[0], high[0]) for y in (low[1], high[1])))
+    own = [_extent(model, data, g, heading, center) for g in robot_geoms(model, robot) if collides(model, g)]
+    bottom = min(b[0][2] for b in own) if own else float(low[2])  # its height counts from its lowest point
+    return dataclasses.replace(
+        body,
+        radius=radius,
+        reach=float(reach),
+        front=max(body.front, float(high[0])),
+        height=max(body.height, float(high[2]) - float(bottom)),
+    )
 
 
 def footprint_radius(model: mujoco.MjModel, data: mujoco.MjData, robot: str) -> float:

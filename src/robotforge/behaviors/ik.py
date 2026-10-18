@@ -68,6 +68,7 @@ class IKSolver:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
         q = np.clip(np.asarray(q_init, float).copy(), chain.lower, chain.upper)
         err = np.inf
+        damped = {3: damping * np.eye(3), 6: damping * np.eye(6)}
         for _ in range(iterations):
             self._set(chain, q)
             p = self._point(chain)
@@ -79,7 +80,7 @@ class IKSolver:
                 local_axis, want = axis
                 rot = self.data.xmat[chain.body].reshape(3, 3)
                 have = rot @ local_axis
-                e_rot = np.cross(have, want) * axis_weight
+                e_rot = _cross(have, want) * axis_weight
                 J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
                 e = np.concatenate([e, e_rot])
             elif rotation is not None:
@@ -88,7 +89,7 @@ class IKSolver:
                 e = np.concatenate([e, e_rot])
             if err < tol and (len(e) == 3 or np.linalg.norm(e[3:]) < tol * 10):
                 break
-            JJt = J @ J.T + damping * np.eye(J.shape[0])
+            JJt = J @ J.T + damped[J.shape[0]]
             q = np.clip(q + J.T @ np.linalg.solve(JJt, e), chain.lower, chain.upper)
         return q, err
 
@@ -101,6 +102,11 @@ class IKSolver:
     def _point(self, chain: Chain) -> np.ndarray:
         rot = self.data.xmat[chain.body].reshape(3, 3)
         return self.data.xpos[chain.body] + rot @ chain.local_point
+
+
+def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """a x b for two 3-vectors, as np.cross computes it but without its overhead (a third of an IK step's time)."""
+    return np.array([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]])
 
 
 def _rotation_error(have_quat: np.ndarray, want: np.ndarray) -> np.ndarray:

@@ -214,8 +214,8 @@ class ScriptRunner:
 
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
-        arm, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
-        await self._advance(lambda: arm.done, 40.0)
+        motion, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
+        await self._advance(lambda: motion.done, getattr(motion, "time_limit", 40.0))  # an errand goes over first
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
 

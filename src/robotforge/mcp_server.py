@@ -28,6 +28,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
+from robotforge.behaviors import fetch
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -606,16 +607,35 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json({"gripper": state, **run})
 
     @server.tool()
-    async def pick_and_place(robot: str, object: str, target: str | list[float]) -> str:
-        """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box) or a
-        floor position [x, y]. Plans the motion, checks reach first, runs it and reports whether the object ended up
-        there."""
+    async def pick_and_place(robot: str, object: str, target: str | list[float], go: bool = True) -> str:
+        """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
+        position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
+        it and reports whether the object ended up there. An arm on a robot that drives or walks (a mobile
+        manipulator, "rover/arm") goes over by itself when the object or the target is out of its reach: it walks or
+        drives next to the object, picks it up, carries it held over its back, goes next to the target and puts it
+        down; the result then says where it went ("went": path_m, distance_m, time_s each; "driven_m"). go=false keeps
+        the robot where it stands and refuses instead. It refuses before moving when the object is too heavy or too big
+        for the gripper, there is no way there, nowhere it can stand reaches it, or the target is full."""
         with _tool_errors():
-            arm, info = playground.behaviors.pick_and_place(
-                playground.behaviors.resolve(robot, arm=True), object, target
+            motion, info = playground.behaviors.pick_and_place(
+                playground.behaviors.resolve(robot, arm=True), object, target, go
             )
             object = info["object"]  # as the world spells it
-            run = await run_until(lambda: arm.done, 40.0)
+            errand = motion if isinstance(motion, fetch.Errand) else None
+            if errand is None:
+                run = await run_until(lambda: motion.done, 40.0)
+            else:  # a reset or a world edit ends it; one no longer attached is waited for no more
+                robot_name = errand.robot
+                run = await run_until(
+                    lambda: errand.done or playground.behaviors.errand(robot_name) is not errand, errand.time_limit
+                )
+                if not errand.done:  # out of time: it stops where it is, holding what it holds
+                    playground.behaviors.stop(robot_name)
+                    errand.interrupt(
+                        "it ran out of time; call pick_and_place again with the same object and target to go on",
+                        float(playground.session.data.time),
+                    )
+                    errand.why = "out_of_time"
             settle = await run_until(lambda: False, 0.5)
             result = playground.behaviors.placed(object, info["region"])
             return _json(
@@ -623,6 +643,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **result,
                     "object": object,
                     "target": target,
+                    **(errand.result() if errand is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
                     "shown_live": run["shown_live"],
                 }
