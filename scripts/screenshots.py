@@ -819,6 +819,16 @@ def _mechanism_row(pg: Any) -> None:
         pg.add_object(name, **fields)
 
 
+def _drawer_for(robot: str, x: float) -> Callable[[Any], None]:
+    """A library arm with a drawer chest in front of it, its bar toward the arm."""
+
+    def world(pg: Any) -> None:
+        pg.add_robot(robot, library=robot)
+        pg.add_object("chest", shape="drawer", pos=[x, 0.0], yaw=-90, color="#6b8fb3")
+
+    return world
+
+
 def _soft(pg: Any) -> None:
     pg.add_object("hook_post", shape="pillar", size=[0.04, 1.0], pos=[-0.45, 0.0])
     pg.add_object("rope", shape="rope", size=[0.6, 0.014], pos=[-0.45, -0.02, 0.98])
@@ -853,6 +863,21 @@ G3_SHOTS = [
         "g3_mechanisms",
         _mechanism_row,
         page="window.__robotforge.select(null); window.__robotforge.lookAt([0.1, -1.25, 0.65], [-0.05, 0.0, 0.1]);",
+    ),
+    # A PiPER points down only low, so it comes in to the bar from in front of the drawer, not over its top.
+    Shot(
+        "g3_piper_drawer",
+        _drawer_for("piper", 0.45),
+        actions=[(0.5, _operate("piper", "chest", "open", 0.2))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.85, -0.8, 0.62], [0.2, 0.0, 0.2]);",
+        settle=9.0,
+    ),
+    Shot(
+        "g3_panda_drawer",
+        _drawer_for("panda", 0.55),
+        actions=[(0.5, _operate("panda", "chest", "open", 0.2))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.35, -1.25, 1.0], [0.25, 0.0, 0.35]);",
+        settle=10.0,
     ),
     Shot(
         "g3_soft",
