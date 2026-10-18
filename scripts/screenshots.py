@@ -310,6 +310,21 @@ def _kitchen_panda(pg: Any) -> None:
     pg.add_robot("mm", design="mobile_panda", pos=[1.3, -1.0], yaw=90)
 
 
+def _when(body: str, condition: str, timeout: float = 150.0) -> str:
+    """Page script: wait until `condition` (JavaScript on p, the body's position) holds, as the world goes on."""
+    return f"""
+        {{
+            const rf = window.__robotforge, id = rf.scene.bodies.findIndex((b) => b.name === {json.dumps(body)});
+            const end = performance.now() + {timeout * 1000};
+            while (performance.now() < end) {{
+                const p = rf.bodyPosition(id);
+                if ({condition}) break;
+                {_SLEEP.format(ms=100)}
+            }}
+        }}
+    """
+
+
 def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
     """Page script: aim the camera at the middle of these robots, from `offset` metres away."""
     return f"""
@@ -672,22 +687,24 @@ SHOTS = [
     Shot(
         "fetch_reach_in",
         _kitchen_panda,
-        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 21.0}],
-        page=_look_at(["mm"], (1.3, -1.1, 1.5)),
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 1.0}],
+        page=_when("apple", "p[2] > 0.95") + _look_at(["mm"], (0.5, -1.0, 2.4)),  # just lifted off the island
         settle=0.2,
     ),
     Shot(
         "fetch_carry",
         _kitchen_panda,
-        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 38.0}],
-        page=_look_at(["mm"], (1.6, -1.6, 1.6)),
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 1.0}],
+        page=_when("apple", "p[2] < 0.8 && p[0] < -0.9") + _look_at(["mm"], (1.3, -1.7, 1.7)),  # on its way
         settle=0.2,
     ),
     Shot(
         "fetch_put_down",
         _kitchen_panda,
-        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 47.0}],
-        page=_look_at(["mm"], (1.5, -1.5, 1.4)),
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 1.0}],
+        page=_when("apple", "p[0] < -1.25 && p[2] < 0.8 && p[2] > 0.76")
+        + _wait(2.0)
+        + _look_at(["mm"], (1.2, -1.5, 1.5)),
         settle=0.2,
     ),
     Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them

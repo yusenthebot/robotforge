@@ -69,6 +69,7 @@ LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on
 LEG_RETRIES = 2  # trips planned again from where the robot got stuck, in one errand
 REPLANS = 2  # spots looked for again from where the robot stopped, in one errand
 CLEAR_AFTER = 0.12  # m the hand rises straight up off a load it put down before it folds back
+BACK_UP = (0.2, 0.4)  # m a robot may back up from where it worked, to find room to turn (_can_leave)
 LEAVE_TURN = math.radians(35.0)  # a robot with no room to turn sets off at most this far off its heading (_can_leave)
 CREEP_SPEED, CREEP_TURN = 0.08, 0.5  # m/s and rad/s at most, creeping
 CREEP_SECONDS = 12.0
@@ -658,12 +659,18 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
 
     place_to = _place_to(place, target)
 
+    stuck_at: list[np.ndarray] = []  # spots it reaches the load from, but could not leave with it
+
     def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
         def queue(hold: np.ndarray) -> None:
             _pick(stand.hand, target, half, hold, tilt, stand.hold_q, radius)
 
-        # And it can leave with the load from there.
-        return stand.rehearse(xy, heading, tilt, queue) and _can_leave(manager, stand, xy, heading, obj, body, place_to)
+        if not stand.rehearse(xy, heading, tilt, queue):
+            return False
+        if _can_leave(manager, stand, xy, heading, obj, body, place_to):  # and it can leave with the load
+            return True
+        stuck_at.append(np.array(xy, float))
+        return False
 
     here = None if holds else stand.grip(start, heading, center, APPROACH_UP, (0.0, *stand.hand.tilts))
     if not holds and (here is None or not pick_from(start, heading, center, here)):
@@ -671,6 +678,12 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
         reach = _reachable_cells(nav, start)
         supports = _supports(model, data, body)
         pick, _ = spots_for(stand, nav, [center], APPROACH_UP, start, reach, supports, rehearse=pick_from)
+        if pick is None and stuck_at:
+            at = ", ".join(f"[{p[0]:.2f}, {p[1]:.2f}]" for p in stuck_at[:2])
+            raise FetchError(
+                f"{arm.robot} reaches the {obj} only from where {robot} would have no room to turn and no way out "
+                f"holding it (from {at}); put it nearer an open side, or move {robot} there yourself (move with to=...)"
+            )
         if pick is None:
             raise FetchError(_nowhere(manager, stand, nav, reach, robot, center, f"the {obj}", body))
     # Where it puts it down.
@@ -730,9 +743,18 @@ def _can_leave(manager: BehaviorManager, stand: Stand, xy, heading: float, obj: 
     if ahead is None:
         return True
     turn = abs(_wrap(math.atan2(ahead[1] - plan.points[0][1], ahead[0] - plan.points[0][0]) - heading))
-    cell = nav.grid.cell(float(plan.points[0][0]), float(plan.points[0][1]))
-    roomy = nav.grid.inside(*cell) and float(nav.room[cell]) >= nav.body.reach
-    return roomy or turn < LEAVE_TURN or turn > math.pi - LEAVE_TURN
+    if turn < LEAVE_TURN or turn > math.pi - LEAVE_TURN:
+        return True
+    # Room to turn on the spot there, or a little way back (a trip backs up for room to turn).
+    for back in (0.0, *BACK_UP):
+        x = float(plan.points[0][0]) - back * math.cos(heading)
+        y = float(plan.points[0][1]) - back * math.sin(heading)
+        cell = nav.grid.cell(x, y)
+        if not (nav.grid.inside(*cell) and (back == 0.0 or nav.free[cell])):
+            break
+        if float(nav.room[cell]) >= nav.body.reach:
+            return True
+    return False
 
 
 def _place_to(place: Place, target):
