@@ -79,6 +79,21 @@ class Mount(Protocol):
     at: str | None
     shift: list[float]
     rotate: list[float]
+    design: str | None
+    adapter: bool | None
+
+
+# Templates that hold things at an arm's end, mounted on its flange like a library gripper.
+TOOL_TEMPLATES = ("gripper", "suction_cup", "magnet")
+# The adapter plate between a mount and what carries it (see with_adapter): an aluminium disk this thick (m), as wide
+# as the mount's base and at least an ISO 9409-1-50 flange (a UR's, 63 mm across), and at most PLATE_RADIUS[1].
+PLATE_THICK = 0.01
+PLATE_RADIUS = (0.0315, 0.12)
+PLATE_RIM = 0.004  # m the plate reaches past the mount's base all round
+PLATE_DENSITY = 2700.0  # kg/m^3, aluminium
+PLATE_RGBA = [0.62, 0.64, 0.68, 1.0]
+BOLT_RGBA = [0.16, 0.17, 0.2, 1.0]
+BASE_SLAB = 0.02  # m: a mount's base is what it has this close above its lowest point (see _base_radius)
 
 
 def default_name(mount: Mount) -> str:
@@ -89,22 +104,30 @@ def default_name(mount: Mount) -> str:
         return mount.name
     if mount.library is not None:
         return library.get(mount.library).kind
+    if getattr(mount, "design", None) is not None:
+        return str(mount.design)
     return str(mount.template)
 
 
 def is_gripper(mount: Mount) -> bool:
+    """Whether a mount holds things at an arm's end (it goes on a bare flange): a library gripper or hand, or our
+    gripper, suction cup or magnet."""
     from robotforge.design import library
 
     if mount.library is not None:
         return library.get(mount.library).kind == "gripper"
-    return mount.template == "gripper"
+    return mount.template in TOOL_TEMPLATES
 
 
 def what(mount: Mount) -> str:
     """The mounted robot in words: "AgileX PiPER", "arm template"."""
     from robotforge.design import library
 
-    return library.get(mount.library).title if mount.library is not None else f"{mount.template} template"
+    if mount.library is not None:
+        return library.get(mount.library).title
+    if getattr(mount, "design", None) is not None:
+        return f"the {mount.design} design"
+    return f"{mount.template} template"
 
 
 def build_child(mount: Mount) -> BuiltRobot:
@@ -112,7 +135,65 @@ def build_child(mount: Mount) -> BuiltRobot:
 
     if mount.library is not None:
         return library.build(mount.library, mount.params)
+    if getattr(mount, "design", None) is not None:
+        from robotforge.design import combine  # lazy: a saved design is built as a world builds a robot
+
+        return combine.build_design(str(mount.design))
     return templates.build(str(mount.template), mount.params)
+
+
+def with_adapter(child: BuiltRobot, on_top: bool) -> BuiltRobot:
+    """`child` standing on an adapter plate (an aluminium disk with a ring of bolts) that becomes its base: as wide as
+    its base (see _base_radius) and an ISO flange at least, PLATE_THICK thick. The plate's bottom is the child's
+    origin now, so it goes where the child would have: on top of a carrier, or on an arm's flange. Call it after
+    ride_on (the child has no free joint left)."""
+    from robotforge.design.templates.base import new_spec
+    from robotforge.design.visuals import Visuals
+    from robotforge.design.visuals import mesh as M
+    from robotforge.design.visuals import parts as P
+
+    radius = float(np.clip(_base_radius(child) + PLATE_RIM, *PLATE_RADIUS))
+    spec = new_spec()
+    for name in (*OPTIONS, "gravity"):
+        setattr(spec.option, name, getattr(child.spec.option, name))
+    plate = spec.worldbody.add_body(name="adapter_plate")
+    mass = PLATE_DENSITY * math.pi * radius**2 * PLATE_THICK
+    disk = plate.add_geom(
+        type=mujoco.mjtGeom.mjGEOM_CYLINDER,
+        size=[radius, PLATE_THICK / 2, 0.0],
+        pos=[0.0, 0.0, PLATE_THICK / 2],
+        rgba=PLATE_RGBA,
+        mass=mass,
+    )
+    vis = Visuals(spec)
+    vis.hide(disk)
+    vis.add(plate, "aluminum", PLATE_RGBA, M.cylinder(radius, PLATE_THICK, segments=48, bevel=0.0012, z0=0.0))
+    bolts = 4 if radius < 0.05 else 6 if radius < 0.08 else 8
+    ring = max(radius - 0.008, radius * 0.7)
+    vis.add(plate, "dark", BOLT_RGBA, P.bolt_circle(ring, bolts, 0.0025, 0.0016, math.pi / bolts), (0, 0, PLATE_THICK))
+    lift = PLATE_THICK + (child.spawn_height if on_top else 0.0)
+    frame = plate.add_frame(pos=[0.0, 0.0, lift])
+    spec.attach(child.spec, prefix="", frame=frame)
+    vis.finish()  # after the child: its materials are the plate's too (two of one name do not compile)
+    notes = [*child.notes, f"on a {radius * 2000:.0f} mm adapter plate ({mass * 1000:.0f} g)"]
+    return BuiltRobot(spec=spec, home_qpos=dict(child.home_qpos), home_ctrl=dict(child.home_ctrl), notes=notes)
+
+
+def _base_radius(child: BuiltRobot) -> float:
+    """How far the shapes of a robot's base reach out sideways from its origin (m): those of its fixed part within
+    BASE_SLAB of its lowest point, as you see them."""
+    model = child.spec.compile()
+    data = _posed(model, child.home_qpos)
+    root = 1
+    welded = [b for b in range(1, model.nbody) if model.body_weldid[b] == model.body_weldid[root]]
+    shapes = _surface(model, welded)
+    if not shapes:
+        return 0.0
+    points = np.vstack([_corners(model, data, g) for g in shapes]) - data.xpos[root]
+    points = points @ data.xmat[root].reshape(3, 3)  # in the root's frame
+    low = points[:, 2].min()
+    slab = points[points[:, 2] <= low + BASE_SLAB]
+    return float(np.max(np.hypot(slab[:, 0], slab[:, 1])) / math.sqrt(2.0))  # corners of boxes round a disk
 
 
 def ride_on(child: mujoco.MjSpec, carrier: mujoco.MjSpec) -> None:
@@ -188,6 +269,8 @@ def attach(
             raise ValueError(f"robot {robot!r}, mount {name!r}: cannot build {what(mount)}: {exc}") from exc
         ride_on(child.spec, spec)
         at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
+        if getattr(mount, "adapter", None):
+            child = with_adapter(child, on_top=at == "top")
         if known is not None:
             radius, mass, body_name, kept_pos, kept_quat, where = known.spots[i]
             body, pos, quat = spec.body(body_name), np.array(kept_pos), np.array(kept_quat)

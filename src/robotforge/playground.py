@@ -23,7 +23,7 @@ from pydantic import BaseModel, ValidationError
 from robotforge import modes, wording
 from robotforge.behaviors import airframe, robot_kind
 from robotforge.behaviors.manager import BehaviorManager
-from robotforge.design import gallery, importer, scenes, terrain
+from robotforge.design import combine, gallery, importer, scenes, terrain
 from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import plate
@@ -326,21 +326,37 @@ class Playground:
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
+        saved: dict[str, Any] = {}
+        if design is not None and gallery.canonical(design) is None and combine.saved_design(wording.squash(design)):
+            extra = [k for k, v in dict(template=template, file=file, library=library, build=build).items() if v]
+            if extra or params:
+                raise PlaygroundError(
+                    f"design is a whole robot on its own; leave out {', '.join(extra or ['params'])} (mount adds to it)"
+                )
+            saved = combine.entry_fields(wording.squash(design))  # a combination kept with mount(save_as=...)
+            design = None
         if design is not None:
             build = design_build(design, template=template, file=file, library=library, build=build, params=params)
         try:
-            entry = RobotEntry(
-                name=name,
-                template=template,
-                file=file,
-                library=library,
-                build=build,
-                params=params or {},
-                pos=pos or [0.0, 0.0],
-                yaw=yaw or 0.0,
-                mounts=mounts or [],
-                end_effector=end_effector,
-            )
+            if saved:
+                fields = {**saved, "name": name, "pos": pos or [0.0, 0.0], "yaw": yaw or 0.0}
+                fields["mounts"] = [*saved.get("mounts", []), *(mounts or [])]
+                if end_effector is not None:
+                    fields["end_effector"] = end_effector
+                entry = RobotEntry.model_validate(fields)
+            else:
+                entry = RobotEntry(
+                    name=name,
+                    template=template,
+                    file=file,
+                    library=library,
+                    build=build,
+                    params=params or {},
+                    pos=pos or [0.0, 0.0],
+                    yaw=yaw or 0.0,
+                    mounts=mounts or [],
+                    end_effector=end_effector,
+                )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         world = self.current_world()
@@ -628,6 +644,17 @@ class Playground:
         return self._places[1]
 
     @_one_edit_at_a_time
+    def mount(self, what: str | None, on: str, **options: Any) -> dict[str, Any]:
+        """Mount a robot, an end effector or a sensor on any body of a robot (combine.py), checked once it is on;
+        save_as keeps the result as a design."""
+        try:
+            return combine.mount(self, what, on, **options)
+        except ValueError as exc:
+            if isinstance(exc, PlaygroundError):
+                raise
+            raise PlaygroundError(str(exc)) from None
+
+    @_one_edit_at_a_time
     def add_sensor(self, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
         """Put a sensor on any robot (sensors/edit.py); remove("robot/sensor") takes it off."""
         return sensor_edit.add(self, robot, fields)
@@ -751,6 +778,8 @@ class Playground:
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
         world = self.current_world()
+        if world is not None and combine.find_mount(world, name) is not None:  # "rover/arm": a mounted robot
+            return combine.take_off(self, *combine.find_mount(world, name))
         sensor = sensor_edit.find(world, name) if world is not None else None
         if sensor is not None:  # "go2/lidar": a sensor added to a robot
             return sensor_edit.remove(self, *sensor)

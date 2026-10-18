@@ -37,6 +37,7 @@ from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, listen_on_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
+from robotforge.design import combine, mount_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
@@ -73,6 +74,11 @@ bins, furniture and architecture (walls, shelves, counters, pallets, trees, benc
 things with a moving part (drawer, cabinet with a door, button, switch, lever, valve, conveyor belt) and soft things
 (rope, cloth). Any arm can hold with end_effector="suction" (a suction cup: flat things fingers cannot get round) or
 "magnet" (steel things only), in add_robot or later in update_robot.
+mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
+end effector on an arm's flange (on="cart/arm"; another one swaps it), a sensor on a wrist or any body (at). Its
+checks say the mass, how far the centre of mass is inside what the robot stands on, each arm's reach and what it can
+hit or hold; a robot that would tip or fall is refused with what to change. save_as keeps the combination as a design
+(add_robot(design=...) or mount(what=...) uses it again); remove("cart/arm") takes a mount off.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
@@ -414,10 +420,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         nearest free place when furniture or a robot stands there); yaw is in degrees (left out: the place's
         heading, else 0)."""
         with _tool_errors():
-            parts = build
-            if design is not None:  # the robots it mounts download first, like a build's
+            parts, kept = build, []
+            if design is not None and combine.saved_design(wording.squash(design)) is not None:
+                kept = combine.libraries(wording.squash(design))  # a combination saved with mount(save_as=...)
+            elif design is not None:  # the robots it mounts download first, like a build's
                 parts = design_build(design, template=template, file=file, library=library, build=build, params=params)
-            for wanted in [library, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
+            for wanted in [library, *kept, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
@@ -744,6 +752,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
+    mount_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
 
@@ -1037,8 +1046,14 @@ _downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
 
 
 def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
-    """The library robots a mounts list names, to download before the world is compiled."""
-    return [m["library"] for m in mounts or [] if isinstance(m, dict) and isinstance(m.get("library"), str)]
+    """The library robots a mounts list names, its saved designs' too, to download before the world is compiled."""
+    out = []
+    for m in mounts or []:
+        if isinstance(m, dict) and isinstance(m.get("library"), str):
+            out.append(m["library"])
+        elif isinstance(m, dict) and isinstance(m.get("design"), str):
+            out += combine.libraries(wording.squash(m["design"]))
+    return out
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:

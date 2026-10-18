@@ -90,8 +90,13 @@ class MountEntry(_Strict):
     at: str | None = None  # "top" (default), "tool" (an arm's flange; default for a gripper there) or a body name
     shift: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])  # m, from `at`, in its frame
     rotate: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])  # [roll, pitch, yaw] in degrees
+    # A combination saved with mount(save_as=...) (see combine.py), mounted whole: a UR5e with its LEAP hand.
+    design: str | None = Field(None, exclude_if=_unset)
+    # An adapter plate between the mount and what carries it, sized to both (see mounting.adapter_plate). Left out
+    # (worlds saved before there were plates), there is none.
+    adapter: bool | None = Field(None, exclude_if=_unset)
 
-    @field_validator("name")
+    @field_validator("name", "design")
     @classmethod
     def _name(cls, v: str | None) -> str | None:
         return _check_name(v) if v is not None else None
@@ -108,11 +113,13 @@ class MountEntry(_Strict):
 
     @model_validator(mode="after")
     def _one_source(self) -> MountEntry:
-        if (self.template is None) == (self.library is None):
-            raise ValueError('a mount is {"library": "piper"} or {"template": "arm", "params": {...}}')
+        if [self.template, self.library, self.design].count(None) != 2:
+            raise ValueError(
+                'a mount is {"library": "piper"}, {"template": "arm", "params": {...}} or {"design": "<a saved one>"}'
+            )
         if self.library is not None:
             library.get(self.library)
-        else:
+        elif self.template is not None:
             templates.get(self.template)
         if len(self.shift) != 3 or len(self.rotate) != 3:
             raise ValueError("a mount's shift is [x, y, z] in meters and its rotate [roll, pitch, yaw] in degrees")
@@ -514,7 +521,25 @@ def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobo
     """The robot as built from its source, holding with the end effector it was given, with the robots it carries
     mounted on it."""
     key = _placement_key(entry, base_dir) if entry.mounts else None
-    return mounting.attach(_held_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
+    later = entry.end_effector not in (None, end_effectors.FINGERS) and entry.mounts and not _has_tool_point(entry)
+    if not later:
+        return mounting.attach(_held_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
+    # Its arms are mounted ones (a PiPER on a rover): the cup or magnet goes on them once they are on it.
+    built = mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
+    try:
+        built.notes += end_effectors.fit(built.spec, entry.end_effector, built.home_ctrl)
+    except ValueError as exc:
+        raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+    return built
+
+
+def _has_tool_point(entry: RobotEntry) -> bool:
+    """Whether the robot as its source builds it (without what it carries) has an arm's tool point."""
+    if entry.template is not None and templates.canonical(entry.template) == "arm":
+        return True
+    if entry.library is not None:
+        return bool(library.get(entry.library).tools)
+    return entry.file is not None or entry.build is not None  # these say so themselves (end_effectors.fit)
 
 
 def _placement_key(entry: RobotEntry, base_dir: Path | None) -> str:
