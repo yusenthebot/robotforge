@@ -36,7 +36,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
-- `uv run python scripts/bench.py` measures install size, import time, headless physics, the viewer in headless Chrome, MCP latency and memory (about 4 minutes), writes `docs/bench/<date>-<sha>.json`, compares with the last run and exits 1 over a budget in `docs/bench/budget.json`.
+- `uv run python scripts/bench.py` measures install size, import time, headless physics, the viewer in headless Chrome, MCP latency, memory and idle processor use (one to three minutes), writes `docs/bench/<date>-<sha>.json`, compares with the last run and exits 1 over a budget in `docs/bench/budget.json`.
   On a busy machine compare commits with `--ab <rev> --worlds ...` (both timed alternately) rather than runs an hour apart; `--only physics --worlds dog_idle` measures one part.
 - Offscreen rendering needs OpenGL. Without it (Windows CI, VMs, servers) `observe` returns the state plus a note instead of an image, and rendering tests skip with the reason.
   `ROBOTFORGE_REQUIRE_GL=1` turns those skips into failures; the Ubuntu job sets it and uses Mesa EGL (`MUJOCO_GL=egl`).
