@@ -68,14 +68,14 @@ BASELINE = {
     "go2_arm_kitchen": (True, {"a Go2 carrying an arm": True, "not next to the island at the start": True}),
     # On 9bf99c0, the tasks that are not lessons. A 64-ray lidar car driven 0.87 m into the maze: observe listed 40
     # sensors, 37 of them its rays, and the script the agent wrote to read them all got the same 37. Its answer,
-    # 0.43 m, happens to be right (all 64 rays recomputed at that pose: ray 16, 0.43 m), but nothing it read could
-    # say so.
+    # 0.43 m, is right all the same: the nearest hedge is 0.45 m from the lidar there, worked out from world.yaml.
+    # (Held to the whole ring as robotforge reported it, this session used to fail.)
     "lidar_maze": (
-        False,
+        True,
         {
-            "a robot carrying a lidar, in a maze": True,
             "started outside the maze (at its entrance)": True,
-            "read its whole lidar inside the maze, a wall in sight": False,
+            "its lidar read inside the maze, a wall in reach": True,
+            "the answer says how far the nearest wall is": True,
         },
     ),
 }
@@ -766,19 +766,59 @@ def _maze_session(tmp_path: Path, *events: str, world: str | None = None) -> Pat
     return _made_up(tmp_path, {"lidar_maze": text}, _opened("lidar_maze"), *events)
 
 
-def test_the_answer_is_held_to_the_whole_lidar_read_inside_the_maze(ev, tmp_path):
+def test_the_answer_is_held_to_the_walls_where_the_lidar_was(ev, tmp_path):
+    """The truth is worked out from the hedges in world.yaml at the pose observe reported: 0.45 m from the car at
+    [-2, -2.13]. What robotforge's lidar said there does not decide it."""
     inside = [-2.0, -2.13]
     good = _maze_session(tmp_path / "a", _lidar_seen(inside, 0.43), _said("最近的墙在左边，约 43 厘米。"))
     assert ev.score(ev.TASKS["lidar_maze"], good).passed
     wrong = _maze_session(tmp_path / "b", _lidar_seen(inside, 0.43), _said("最近的墙大约 0.9 米远。"))
     verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], wrong))
-    assert verdict["read its whole lidar inside the maze, a wall in sight"]
+    assert verdict["its lidar read inside the maze, a wall in reach"]
     assert verdict["the answer says how far the nearest wall is"] is False
     # Read at the start mark, outside the maze: the car never drove in.
     outside = _maze_session(tmp_path / "c", _lidar_seen([-2.0, -3.0], 0.5), _said("最近的墙 0.5 米。"))
     assert (
-        _verdict(ev.score(ev.TASKS["lidar_maze"], outside))["read its whole lidar inside the maze, a wall in sight"]
-        is False
+        _verdict(ev.score(ev.TASKS["lidar_maze"], outside))["its lidar read inside the maze, a wall in reach"] is False
+    )
+
+
+def test_a_reading_of_the_robot_itself_is_no_wall(ev, tmp_path):
+    """Before the lidar saw past its own robot, observe could say 0.148 m (the car's own wheels): repeating it is
+    wrong, and the true distance is right whatever observe said."""
+    inside = [-2.0, -2.13]
+    echoed = _maze_session(tmp_path / "a", _lidar_seen(inside, 0.148), _said("最近的墙只有 0.15 米。"))
+    assert _verdict(ev.score(ev.TASKS["lidar_maze"], echoed))["the answer says how far the nearest wall is"] is False
+    true = _maze_session(tmp_path / "b", _lidar_seen(inside, 0.148), _said("The nearest wall is 0.45 m to the left."))
+    assert ev.score(ev.TASKS["lidar_maze"], true).passed
+
+
+def test_only_the_distance_called_nearest_counts(ev, tmp_path):
+    """An answer naming how far the car drove (0.45 m here, the wall's distance by chance) and a wrong nearest wall
+    does not pass on the first number."""
+    inside = [-2.0, -2.13]
+    text = "小车开进了 0.45 米。最近的墙在右边 0.9 米。"
+    said = _maze_session(tmp_path, _lidar_seen(inside, 0.43), _said(text))
+    assert _verdict(ev.score(ev.TASKS["lidar_maze"], said))["the answer says how far the nearest wall is"] is False
+
+
+def test_a_lidar_read_by_a_script_counts_where_the_robot_was_seen_inside(ev, tmp_path):
+    """The whole ring need not come through observe: a script that reads the sensors after the car drove in."""
+    code = "from robotforge.script import connect\nsim = connect()\nprint(sim.sensors('lidar_car'))\n"
+    start = {"robot": "lidar_car", "position": [-2.0, -3.0, 0.06], "heading_deg": 90, "upright": True}
+    end = {"robot": "lidar_car", "position": [-2.0, -2.13, 0.06], "heading_deg": 90, "upright": True}
+    moved = {"from": start, "to": end, "distance_m": 0.87, "turned_deg": 0, "stopped": True}
+    events = [
+        _event("move", {"robot": "lidar_car", "speed": 0.15, "seconds": 6}, moved),
+        _event("write_script", {"name": "read", "code": code}, {"saved": "read.py"}),
+        _event("run_script", {"name": "read"}, {"ok": True, "exit_code": 0, "output": "..."}),
+    ]
+    scripted = _maze_session(tmp_path / "a", *events, _said("最近的墙约 0.44 米。"))
+    outcome = ev.score(ev.TASKS["lidar_maze"], scripted)
+    assert outcome.passed, outcome.criteria
+    unread = _maze_session(tmp_path / "b", events[0], _said("最近的墙约 0.44 米。"))  # nothing read the lidar
+    assert (
+        _verdict(ev.score(ev.TASKS["lidar_maze"], unread))["its lidar read inside the maze, a wall in reach"] is False
     )
 
 
@@ -807,6 +847,14 @@ def test_distances_are_read_in_meters_from_an_answer(ev):
     said = ev.distances_said("左边约 0.43 米，前方 1.2m，速度 0.2 m/s，另一面 43 厘米，then 50 cm and 0.5 meters")
     assert said == [0.43, 1.2, 0.43, 0.5, 0.5]
     assert ev.said_near([0.4], 0.43) and not ev.said_near([0.3], 0.43) and ev.said_near([2.2], 2.5)
+
+
+def test_the_distance_called_nearest_is_the_one_after_the_word(ev):
+    assert ev.nearest_said("最近的墙面距离约 **0.43 米（43 厘米）**。") == 0.43
+    assert ev.nearest_said("小车开了 0.79 m。最近的墙在左侧 0.439 m，右侧 0.65 m。") == 0.439
+    assert ev.nearest_said("The car drove 0.79 m. The nearest wall is 44 cm to the left.") == 0.44
+    assert ev.nearest_said("离它最近的墙有多远？0.44 米。") == 0.44  # the closest one to the word
+    assert ev.nearest_said("0.44 米") == 0.44 and ev.nearest_said("左边 0.44 米，右边 0.65 米") is None
 
 
 def _gif(path: Path, frames: int = 20, moving: bool = True, ms: int = 100) -> Path:

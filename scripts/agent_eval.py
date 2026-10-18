@@ -253,6 +253,36 @@ class World:
         return out
 
     @functools.cached_property
+    def lidar_mounts(self) -> dict[str, dict[str, tuple[float, float, float]]]:
+        """Where each robot's lidars sit, from the world compiled as saved: for each lidar (as in `lidars`), the
+        place its rays start in the robot's own frame seen from above (front +x, left +y), and its height above the
+        ground, in meters. {} when the world does not compile."""
+        import mujoco
+
+        if isinstance(self.compiled, str):
+            return {}
+        m, d = self.compiled.session.model, self.compiled.session.data
+        mujoco.mj_forward(m, d)
+        out: dict[str, dict[str, tuple[float, float, float]]] = {}
+        for robot, rings in self.lidars.items():
+            root = next(
+                (
+                    int(m.body_rootid[b])
+                    for b in range(m.nbody)
+                    if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith(f"{robot}/")
+                ),
+                None,
+            )
+            for stem in rings:
+                sensor = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SENSOR, f"{stem}_0")
+                if root is None or sensor < 0:
+                    continue
+                site = d.site_xpos[int(m.sensor_objid[sensor])]
+                local = d.xmat[root].reshape(3, 3).T @ (site - d.xpos[root])
+                out.setdefault(robot, {})[stem] = (float(local[0]), float(local[1]), float(site[2]))
+        return out
+
+    @functools.cached_property
     def arms(self) -> dict[str, list[str]]:
         """The arms each robot carries as robotforge's `robots` tool lists them (a centaur's two hands, the arm on
         a Go2's back), from the world compiled as saved; {} when it does not compile."""
@@ -1225,6 +1255,8 @@ def _within(x: float, y: float, edge: tuple[float, float, float, float]) -> bool
 # A distance and its unit as an answer writes it: "0.43 m", "43 cm", "0.43 米", "43 厘米"; not a speed ("0.2 m/s").
 DISTANCE = re.compile(r"(\d+(?:\.\d+)?)\s*(厘米|公分|毫米|米|cm|mm|meters?|metres?|m)(?![a-zA-Z/²])")
 UNIT_METERS = {"厘米": 0.01, "公分": 0.01, "cm": 0.01, "毫米": 0.001, "mm": 0.001}
+NEAREST = re.compile(r"最近|最短|最靠近|nearest|closest", re.IGNORECASE)
+SENTENCE_END = re.compile(r"[。！？；\n]|[.!?;](?=\s|$)")
 
 
 def distances_said(text: str) -> list[float]:
@@ -1232,9 +1264,55 @@ def distances_said(text: str) -> list[float]:
     return [float(n) * UNIT_METERS.get(unit, 1.0) for n, unit in DISTANCE.findall(text)]
 
 
+def nearest_said(text: str) -> float | None:
+    """The distance an answer gives for the nearest wall, in meters: the first distance after a word for nearest
+    (最近, nearest, closest) in the same sentence, else the distance closest to such a word, else the only distance
+    the answer names. An answer naming how far the car drove beside it (0.79 m) is held to the one it calls nearest,
+    not to any number in it. None when it cannot say which."""
+    found = [(m.start(), float(m[1]) * UNIT_METERS.get(m[2], 1.0)) for m in DISTANCE.finditer(text)]
+    words = [w.end() for w in NEAREST.finditer(text)]
+    if not found:
+        return None
+    if not words:
+        return found[0][1] if len(found) == 1 else None
+    for word in words:
+        ahead = [(at, d) for at, d in found if at >= word and not SENTENCE_END.search(text, word, at)]
+        if ahead:
+            return ahead[0][1]
+    return min(found, key=lambda f: min(abs(f[0] - w) for w in words))[1]
+
+
 def said_near(said: list[float], truth: float) -> bool:
     """Does one of the distances said match a measured one: within 6 cm, or 15% of it for far walls?"""
     return any(abs(d - truth) <= max(0.06, 0.15 * truth) for d in said)
+
+
+def _to_polygon(x: float, y: float, poly: Corners) -> float:
+    """Meters from a point to a convex polygon seen from above, 0 inside it."""
+    if not _separated([(x, y)], poly):
+        return 0.0
+    gaps = []
+    for (x0, y0), (x1, y1) in _edges(poly):
+        dx, dy = x1 - x0, y1 - y0
+        t = max(0.0, min(1.0, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy or 1.0)))
+        gaps.append(math.hypot(x - x0 - t * dx, y - y0 - t * dy))
+    return min(gaps)
+
+
+def nearest_wall(world: World, x: float, y: float, height: float, reach: float) -> float | None:
+    """How far the nearest wall is from a lidar at (x, y), `height` above the ground: worked out from the walls as
+    world.yaml has them (their footprints and heights), not from anything robotforge measured, so neither a ray
+    that hits the robot itself nor rays too few to find the nearest point can make it wrong. None when no wall
+    stands within `reach` at that height."""
+    gaps = [
+        _to_polygon(x, y, corners)
+        for o in world.objects
+        if o.get("shape") == "wall"
+        and (corners := _footprint(o))
+        and float(((o.get("size") or [0, 0, 0]) + [0, 0, 0])[2]) > height
+    ]
+    near = min(gaps, default=None)
+    return near if near is not None and near <= reach else None
 
 
 def _at(call: Call, robot: str) -> tuple[float, float] | None:
@@ -1244,52 +1322,77 @@ def _at(call: Call, robot: str) -> tuple[float, float] | None:
     return (float(pos[0]), float(pos[1])) if pos and len(pos) >= 2 else None
 
 
-def lidar_read(call: Call, stem: str, rays: int, reach: float) -> tuple[int, list[float]] | None:
-    """What an observe reported of lidar `stem`: how many of its rays, and the readings of those that hit something
-    (a rangefinder reads -1, or as far as it reaches, when nothing is there). observe's "lidars" has every ray
-    (null for no hit); before it, the rays were sensors among the first 40 observe lists, so a long ring came cut
-    short. None when it reported none of them."""
+def lidar_read(call: Call, stem: str, rays: int) -> bool:
+    """Did an observe report lidar `stem`: whole under "lidars", or some of its rays among the sensors (before
+    "lidars", observe listed 40 sensors and a long ring came cut short)."""
     data = call.data if isinstance(call.data, dict) else {}
-    whole = (data.get("lidars") or {}).get(stem)
-    if isinstance(whole, dict) and isinstance(whole.get("ranges_m"), list):
-        ranges = whole["ranges_m"]
-        return len(ranges), [float(v) for v in ranges if isinstance(v, (int, float)) and v > 0]
+    if isinstance((data.get("lidars") or {}).get(stem), dict):
+        return True
     sensors = data.get("sensors")
-    if not isinstance(sensors, dict):
-        return None
-    read = [v for i in range(rays) if isinstance(v := sensors.get(f"{stem}_{i}"), (int, float))]
-    if not read:
-        return None
-    return len(read), [float(v) for v in read if 0 < v < (reach - 1e-3 if reach > 0 else math.inf)]
+    return isinstance(sensors, dict) and any(isinstance(sensors.get(f"{stem}_{i}"), (int, float)) for i in range(rays))
+
+
+def _script_reads_sensors(session: Session) -> bool:
+    """Did a script that reads sensors run: written with sim.sensors(...) in it, then run without an error."""
+    written = {
+        str(c.args.get("name")): str(c.args.get("code", "")) for c in session.ours if c.tool == "write_script" and c.ok
+    }
+    return any(
+        c.tool == "run_script" and c.ok and ".sensors(" in written.get(str(c.args.get("name")), "")
+        for c in session.ours
+    )
 
 
 def check_lidar_maze(ev: Evidence) -> list[Criterion]:
-    """A robot carrying a lidar started outside the maze (at its entrance), drove in, read its lidar there, and the
-    answer says how far the nearest wall is, as that reading measured it. The only check that reads what the agent
-    said: the answer is what the user asked for, and it is held to robotforge's own reading."""
+    """A robot carrying a lidar started outside the maze (at its entrance), drove in, its lidar was read there, and
+    the answer says how far the nearest wall was. The only check that reads what the agent said, and it holds the
+    distance it calls nearest to the truth: worked out from the walls in world.yaml, from where the lidar was when
+    an observe reported it inside the maze (or, read by a script, where the robot was last seen inside), so the
+    check does not depend on what robotforge's sensors said."""
     rows = []
     answer = ev.session.messages[-1] if ev.session.messages else ""
-    said = distances_said(answer)
+    said = nearest_said(answer)
     for world in ev.worlds:
         edge = maze_edge(world)
         if edge is None:
             continue
         there = ev.seen(world)
+        scripted = _script_reads_sensors(there)
         for robot in world.robots:
             name = robot.get("name", "")
-            lidars = world.lidars.get(name, {})
+            lidars, mounts = world.lidars.get(name, {}), world.lidar_mounts.get(name, {})
             seen = poses(there, name)
             x, y, _ = _start(robot, seen or [Pose(0.0, 0.0, 0.0, None)])  # world.yaml saves [0, 0] when unplaced
-            inside = []  # (lidar, rays reported, its hits, where) of each observe with the robot inside the maze
+            reads = []  # (lidar, pose) of each observe that reported a lidar with the robot inside the maze
             for call in there.ours:
                 where = _at(call, name) if call.tool == "observe" and call.ok else None
-                for stem, (rays, reach) in lidars.items():
-                    read = lidar_read(call, stem, rays, reach) if where and _within(*where, edge) else None
-                    if read is not None:
-                        inside.append((stem, read[0], read[1], where))
-            last = inside[-1] if inside else None
-            whole = last is not None and last[1] == lidars[last[0]][0]  # the nearest hit is known only from every ray
-            nearest = min(last[2]) if whole and last[2] else None
+                if where is None or not _within(*where, edge):
+                    continue
+                quat = (call.data.get("sensors") or {}).get(f"{name}/orientation")
+                pose = _sensed(list(where), quat)
+                reads += [(stem, pose) for stem, (rays, _) in lidars.items() if lidar_read(call, stem, rays)]
+            inside = [p for p in seen if _within(p.x, p.y, edge)]
+            if not reads and scripted and inside and lidars:
+                reads = [(next(iter(lidars)), inside[-1])]
+            truths = []
+            for stem, pose in reads:
+                dx, dy, height = mounts.get(stem, (0.0, 0.0, 0.0))
+                if pose.heading_deg is not None:
+                    h = math.radians(pose.heading_deg)
+                    lx, ly = pose.x + dx * math.cos(h) - dy * math.sin(h), pose.y + dx * math.sin(h) + dy * math.cos(h)
+                else:  # which way it faced is unknown: the lidar is as far off the root as it is mounted
+                    lx, ly = pose.x, pose.y
+                near = nearest_wall(world, lx, ly, height, lidars[stem][1])
+                if near is not None:
+                    slack = 0.0 if pose.heading_deg is not None else math.hypot(dx, dy)
+                    truths.append((near, slack, (pose.x, pose.y)))
+            match = (
+                min(truths, key=lambda t: abs(said - t[0])) if truths and said is not None else
+                truths[-1] if truths else None
+            )  # fmt: skip
+            right = (
+                match is not None and said is not None and abs(said - match[0]) <= max(0.06, 0.15 * match[0]) + match[1]
+            )
             crit = [
                 Criterion(
                     "a robot carrying a lidar, in a maze",
@@ -1303,22 +1406,18 @@ def check_lidar_maze(ev: Evidence) -> list[Criterion]:
                     f"y {edge[2]:.2f} to {edge[3]:.2f}",
                 ),
                 Criterion(
-                    "read its whole lidar inside the maze, a wall in sight",
-                    nearest is not None,
-                    f"{len(inside)} observe with the lidar inside"
-                    + (
-                        f", the last at [{last[3][0]:.2f}, {last[3][1]:.2f}] with {last[1]} of its "
-                        f"{lidars[last[0]][0]} rays, {len(last[2])} hitting"
-                        if last
-                        else ""
-                    ),
+                    "its lidar read inside the maze, a wall in reach",
+                    bool(truths),
+                    f"{len(reads)} lidar readings inside ({'observe' if not scripted else 'observe or a script'})"
+                    + (f", the walls {', '.join(f'{t[0]:.2f}' for t in truths)} m away" if truths else ""),
                 ),
                 Criterion(
                     "the answer says how far the nearest wall is",
-                    nearest is not None and said_near(said, nearest),
-                    f"nearest {nearest:.2f} m; the answer names {[round(d, 3) for d in said] or 'no distance'}"
-                    if nearest is not None
-                    else f"no reading to hold it to; the answer names {[round(d, 3) for d in said] or 'no distance'}",
+                    right,
+                    f"nearest wall {match[0]:.2f} m at [{match[2][0]:.2f}, {match[2][1]:.2f}]; the answer calls "
+                    f"{said if said is None else round(said, 3)} m nearest"
+                    if match is not None
+                    else f"no reading to hold it to; the answer calls {said} nearest",
                 ),
             ]
             rows.append((robot, crit))
