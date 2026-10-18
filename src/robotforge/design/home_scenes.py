@@ -78,14 +78,15 @@ def home(rng: random.Random, opts: dict[str, float]) -> Content:
     ):
         x, y = x + rng.uniform(-0.08, 0.08), front + rng.uniform(0.07, 0.12)
         c.add(name, shape, [x, y, resting_z(LOW_TABLE, shape, size)], size=size, color=color)
-    # Narrow and low: a Go2 beside the drawer's way reaches its bar all the way out, and a Panda's hand fits down
-    # into the drawer between its walls (with a chest 0.36 m high they stood 0.25 m over its floor).
-    chest = [0.36, 0.4, 0.26]
+    # Low and not too wide: a Go2 beside the drawer's way reaches its bar all the way out (from beside a chest 0.5 m
+    # wide it did not), and a Panda's hand fits down into the drawer between its walls (with a chest 0.36 m high
+    # they stood 0.25 m over its floor).
+    chest = [0.4, 0.4, 0.26]
     c.add("chest", "drawer", [-0.9, 1.4], size=chest, color=WHITE)
-    # In the drawer, on its floor (the drawer's box sits 1.2 cm over the chest's bottom board), near its front and
-    # its east side: a Go2 standing beside the open drawer reaches it there, and not in the drawer's middle, 0.38 m
-    # from its arm's base.
-    x, y = -0.9 + 0.06 + rng.uniform(-0.02, 0.02), 1.4 - 0.08 + rng.uniform(-0.02, 0.02)
+    # In the drawer, on its floor (the drawer's box sits 1.2 cm over the chest's bottom board), near its front and a
+    # little to its east side: a Go2 standing beside the open drawer reaches it there, and not in the drawer's middle
+    # (0.38 m from its arm's base); 6 cm to the side, a Panda's hand came down on the drawer's wall.
+    x, y = -0.9 + 0.03 + rng.uniform(-0.015, 0.015), 1.4 - 0.08 + rng.uniform(-0.015, 0.015)
     c.add("block", "box", [x, y, 0.012 + 0.003 + 0.006 + 0.02 + 0.002], size=[0.04, 0.04, 0.04], color="green")
 
     # The living room: a sofa, the low table to bring things to and a side table with a button.

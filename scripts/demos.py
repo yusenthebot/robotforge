@@ -425,6 +425,60 @@ def _follow_level(robot: str, offset: tuple[float, float, float], ease: float = 
     """
 
 
+# ---- mobile manipulation: scripts/mobile_bench.py's jobs, in real time ----------------------------------------
+
+
+def _realtime(until: Callable[[], bool], seconds: float) -> None:
+    """mobile_bench's wait, against the wall clock: the viewer's server steps the world in real time meanwhile (a
+    busy machine runs it slower, so the wall time allowed is twice the sim time)."""
+    end = time.monotonic() + 2 * seconds
+    while not until() and time.monotonic() < end:
+        time.sleep(0.05)
+
+
+class _Job:
+    """One of mobile_bench's jobs as a demo's action (it blocks the timeline until the job is done) and its end."""
+
+    def __init__(self, job: str) -> None:
+        self.job, self.over = job, False
+
+    def __call__(self, pg: Any) -> None:
+        import mobile_bench
+
+        try:
+            result = mobile_bench.JOB_FUNCS[self.job](pg, _realtime)
+            print(f"{self.job}: {json.dumps(result)}", flush=True)
+        finally:
+            self.over = True
+
+    def until(self, pg: Any) -> bool:
+        return self.over
+
+
+def _bench_world(robot: str, job: str, seed: int = 0) -> Callable[[Any], None]:
+    """The world mobile_bench runs `job` in, with `robot` where it starts it with `seed`."""
+
+    def build(pg: Any) -> None:
+        import mobile_bench
+
+        mobile_bench.build(pg, robot, seed, job)
+
+    return build
+
+
+def _mobile(name: str, robot: str, job: str, seconds: float, camera: tuple[float, float, float], ease=0.04) -> Demo:
+    act = _Job(job)
+    return Demo(
+        name,
+        _bench_world(robot, job),
+        seconds,
+        timeline=[(0.5, act)],
+        page="window.__robotforge.select(null);" + _follow("mm", camera, ease=ease),
+        until=act.until,
+        tail=2.0,
+    )
+
+
 DEMOS = [
     Demo(
         "gallery_tour",
@@ -585,6 +639,18 @@ DEMOS = [
         page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.45, -2.0, 1.05)),
         settle=1.0,
     ),
+    # Mobile manipulation (scripts/mobile_bench.py's jobs in real time; the robot is "mm"). In the home: "go to the
+    # kitchen and bring the apple to the living-room table" through the swing door; the drawer pulled out from beside
+    # it and the block taken out; the button pressed. In the factory: a box caught off the running belt.
+    _mobile("mobile_fetch_go2", "go2_arm", "fetch", 110.0, (0.5, -2.2, 2.3)),
+    _mobile("mobile_drawer_go2", "go2_arm", "drawer", 120.0, (-0.6, -1.8, 1.7)),
+    _mobile("mobile_button_go2", "go2_arm", "button", 50.0, (1.3, -0.5, 1.3), ease=0.05),
+    _mobile("mobile_door_go2", "go2_arm", "door", 40.0, (0.3, -2.4, 2.0)),
+    _mobile("mobile_door_anymal", "anymal_ur5e", "door", 60.0, (0.2, -2.6, 2.2)),
+    _mobile("mobile_fetch_panda", "mobile_panda", "fetch", 90.0, (0.5, -2.2, 2.3)),
+    _mobile("mobile_button_panda", "mobile_panda", "button", 50.0, (1.3, -0.5, 1.4), ease=0.05),
+    _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05),
+    _mobile("mobile_button_spot", "spot_z1", "button", 60.0, (1.4, -0.6, 1.6), ease=0.05),
 ]
 
 
