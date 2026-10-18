@@ -81,8 +81,10 @@ MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
 MACHINE_RELATIVE_NOISE = 0.15
 # A process that compiles the Go2's OBJ meshes peaks 480 MB one run and 535 MB the next on the same build.
 MESH_MEMORY_NOISE = (0.15, 20.0)
-# Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code.
-LOAD_SENSITIVE = ("steps/s", "ms", "s", "fps", "%")
+# Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code. The
+# controllers' share is a ratio of two timings, but a busy machine slows Python more than MuJoCo's C: at load 161
+# the standing dog's share went from 0.12 to 0.19, over its 0.18, with no code change.
+LOAD_SENSITIVE = ("steps/s", "ms", "s", "fps", "%", "share")
 # How fast this machine ran during the run: the slowest of the machine checks timed in each world's process
 # (MachineCheck, a model built in this script and stepped by MuJoCo alone). No world can serve: even objects_20,
 # which has no controllers, steps through Session.step (7 percent of its time) on robotforge's solver settings, so a

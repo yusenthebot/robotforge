@@ -335,8 +335,10 @@ def test_a_busy_machine_makes_timings_over_budget_inconclusive(bench):
         "physics.dog_idle.steps_per_s": "inconclusive",
         "physics.dog_idle.peak_mb": "over",
         "imports.cli_heavy": "over",
-        "physics.dog_idle.controllers_share": "over",
+        # A busy machine slows the Python controllers more than MuJoCo: the dog's 0.12 read 0.19 at load 161
+        "physics.dog_idle.controllers_share": "inconclusive",
     }
+    assert {r["status"] for r in bench.check_budgets(now, budgets, busy=False)} == {"over"}
 
 
 def test_speeds_from_runs_without_the_machine_check_compare_as_measured(bench):
