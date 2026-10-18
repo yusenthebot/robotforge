@@ -1423,7 +1423,12 @@ VIDEO_SECONDS = 1.0  # "a short video": at least this long
 VIDEO_FRAMES = 10
 VIDEO_CHANGE = 0.004  # mean change of a pixel between the first and last frames (0 to 1): something moved
 VIDEO_MOVED = 0.2  # m the robot went in the session: "of it moving"
-VIDEO_PATH = re.compile(r"((?:/|~/)[^\s\"'`<>()\[\]]+?\.(?:mp4|webm|mov|mkv|avi|gif|webp))(?![\w.])", re.IGNORECASE)
+# A full path as a message writes it: /a/b.gif, ~/b.gif, and on Windows C:\a\b.gif, C:/a/b.gif or ~\b.gif. A full
+# stop after it ends the sentence, not the name (b.gif.bak and b.gifs are no videos).
+VIDEO_PATH = re.compile(
+    r"((?:/|~[/\\]|(?<!\w)[a-z]:[/\\])[^\s\"'`<>()\[\]]+?\.(?:mp4|webm|mov|mkv|avi|gif|webp))(?!\w|\.\w)",
+    re.IGNORECASE,
+)
 
 
 def video_files(ev: Evidence) -> list[Path]:

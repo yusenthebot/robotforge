@@ -15,6 +15,7 @@ from mcp import Client
 
 from robotforge import tool_input
 from robotforge.behaviors import Kind
+from robotforge.behaviors.arm import ArmMotion
 from robotforge.behaviors.manager import CARRIER_WAIT, CARRIER_WAIT_SWAYING, BehaviorError
 from robotforge.cli import find_free_port
 from robotforge.design import library, mounting
@@ -511,18 +512,32 @@ def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
 # ---- a gripper on an arm a robot carries ----------------------------------------------------------------------------
 
 
-def test_an_arm_on_a_dog_moved_to_its_other_side_goes_over_the_dog(pg):
+GOES_OVER = ["rise", "move over", "move"]
+CHANGES_POSE = ["move"]  # joint by joint into a pose that keeps off the dog (see ArmMotion._plain_clear)
+
+
+@pytest.mark.parametrize("route", ["as planned", "no plain way"])
+def test_an_arm_on_a_dog_moved_to_its_other_side_goes_over_the_dog(pg, monkeypatch, route):
     """Regression: move_arm swung a carried arm low round the dog in a line from one side to the other, into the dog:
     a UR5e on ANYmal struck the dog's body with its wrist and stopped 71 cm from the target (a Z1 on Spot caught its
     gripper on the front leg, 67 cm). It now rises, goes over and comes down, touching nothing of the dog. (From
-    35 cm up it gets round by changing pose on the way, without going over.)"""
+    35 cm up it gets round by changing pose on the way, without going over.)
+
+    At 20 cm, whether a pose to change into is found sits on an edge: the IK's fixed restarts find one or not as the
+    dog sways a millimetre either way (Ubuntu CI found one, macOS did not; on macOS 1.55 s of settling instead of
+    1.5 flips it). Both ways keep off the dog, so as planned either counts; with the plain way taken away it must go
+    over."""
     pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
     _run(pg, 1.5)
     pg.behaviors.move_arm("anymal/arm", [0.2, 0.5, 0.2])
     _arm_done(pg, "anymal/arm")
     target = np.array([0.2, -0.5, 0.2])
+    if route == "no plain way":
+        real = ArmMotion._plain_clear
+        monkeypatch.setattr(ArmMotion, "_plain_clear", lambda self, a, b, tilt=False: tilt and real(self, a, b, tilt))
     arm = pg.behaviors.move_arm("anymal/arm", target)
-    assert [wp.label for wp in arm.queue] == ["rise", "move over", "move"]
+    labels = [wp.label for wp in arm.queue]
+    assert (labels == GOES_OVER) if route == "no plain way" else (labels in (GOES_OVER, CHANGES_POSE)), labels
     m, d = pg.session.model, pg.session.data
     dog = {b for b in range(m.nbody) if m.body(b).name.startswith("anymal/") and b not in arm._moving}
     hits = set()
