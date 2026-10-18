@@ -712,15 +712,34 @@ def servo_stiffness(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
     return np.array([float(model.actuator_gainprm[a, 0]) if is_position_servo(model, a) else 0.0 for a in actuators])
 
 
-def servo_targets(data: mujoco.MjData, dofs: np.ndarray, kp: np.ndarray, q: np.ndarray) -> np.ndarray:
+def servo_damping(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each position servo's damping (its kv, force per joint speed; 0 for one that is not a position servo)."""
+    return np.array([-float(model.actuator_biasprm[a, 2]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_targets(
+    data: mujoco.MjData,
+    dofs: np.ndarray,
+    kp: np.ndarray,
+    q: np.ndarray,
+    kv: np.ndarray | None = None,
+    qdot: np.ndarray | None = None,
+) -> np.ndarray:
     """Servo targets that hold joints at `q`: each aimed past its value by what holds the arm's weight up (gravity's
     share of the bias force over the stiffness). A position servo pushes only in proportion to how far it is kept from
     its target, and these have no integral term the way a real servo's controller has: aimed at the values
     themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch.
 
     Less what MuJoCo's own gravity compensation already gives (bodies with gravcomp, as a PiPER's): counted twice,
-    a PiPER held still stood 3.7 cm too high and pressed no button."""
+    a PiPER held still stood 3.7 cm too high and pressed no button.
+
+    Given the servos' damping `kv` and the speed `qdot` the targets move at, also aimed past by what that damping takes
+    from a joint moving at that speed: a servo damps against the joint's speed, not the error's, so a moving target is
+    otherwise followed behind. A PiPER (kv 5 to kp 80, its wrist 1.5 to 10) swinging in to a drawer ran 3 cm behind
+    its plan and put a finger on the drawer's top; with it, 6 mm."""
     bias = data.qfrc_bias[dofs] - data.qfrc_gravcomp[dofs]
+    if kv is not None and qdot is not None:
+        bias = bias + kv * qdot
     return q + np.divide(bias, kp, out=np.zeros_like(bias), where=kp > 0)
 
 

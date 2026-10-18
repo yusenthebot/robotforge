@@ -302,6 +302,43 @@ def test_a_panda_opens_a_drawer_and_a_door(pg):
     assert shut["success"] and abs(shut["state"]["angle_deg"]) < 3
 
 
+def test_a_panda_comes_down_onto_a_drawer_bar_from_above(pg):
+    """Of its holds on the bar the one that comes straight down from highest: the one at a wrist limit came down 3 cm,
+    swung in low over the drawer from afar and caught a finger on its top."""
+    pg.add_robot("panda", library="panda")
+    pg.add_object("chest", shape="drawer", pos=[0.55, 0.0], yaw=-90)
+    opened = _operate(pg, "chest", "open", 0.2, robot="panda")
+    assert opened["success"] and opened["moved"] > 0.16  # 0.2 with the real Panda's meshes
+    assert not any("came down on" in note for note in opened.get("notes", []))
+
+
+def test_a_piper_takes_hold_of_a_drawer_without_touching_its_top(pg):
+    """A PiPER points down only low, so it cannot come down onto the bar from above: it comes in from the front. Its
+    servos lag a moving plan unless led by their damping (arm.servo_targets), and a swing planned 3 mm over the top
+    put a finger on it."""
+    pg.add_robot("piper", library="piper")
+    pg.add_object("chest", shape="drawer", pos=[0.45, 0.0], yaw=-90)
+    op, found, shape = operate.start(pg.behaviors, "piper", "chest", "open", 0.2)
+    touched = set()
+
+    def watch() -> bool:
+        s = pg.session
+        parts = operate._parts(s.model, "chest")
+        for con in s.data.contact[: s.data.ncon]:
+            mine, theirs = operate._arm_and(op.arm, parts, int(con.geom1), int(con.geom2))
+            if mine is not None and con.dist < 0 and op.current_label in ("approach", "reach"):
+                touched.add(operate._geom_name(s.model, theirs))
+        return op.done
+
+    pg.run_fast(watch, 60.0)
+    pg.run_fast(lambda: False, 0.3)
+    s = pg.session
+    result = operate.result(op, s.model, s.data, mechanisms.read(s.model, s.data, {found: shape})[found])
+    assert not op.aborted and touched <= {"chest/handle"}
+    assert result["moved"] > 0.1  # as far as it reaches, the note says (0.14 m)
+    assert "follow the handle only 0.1" in result["notes"][0]
+
+
 def test_a_hand_that_does_not_take_hold_stops_and_says_so(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("chest", **DRAWER)

@@ -25,6 +25,7 @@ from robotforge.behaviors.arm import (
     PAD_PRESS,
     REACH_TOL,
     ArmMotion,
+    servo_damping,
     servo_stiffness,
     servo_targets,
 )
@@ -61,7 +62,12 @@ PRE_OPENS = (0.5, 0.4, 0.3, 0.25)
 # finger came down on the top, the hand closed on nothing and the drawer did not move.
 TOUCH_OK, HANDLE_TOUCH_OK = 0.001, 0.003
 CLEAR_ABOVE = 0.03  # m above the hold the hand must come down from in a straight line, clear of the mechanism
-APPROACH_SAMPLES = 8  # poses checked along the joint move to above the handle
+APPROACH_SAMPLES = 16  # poses checked along the joint move to above the handle, at least
+SWING_STEP = 0.03  # rad, at most, between them
+# m the hand keeps from the mechanism in the middle of a swing to the handle, besides its handle, for the servos'
+# lag (see _swing_hits)
+ROUTE_CLEAR = 0.01
+FRONT_VIA = (0.06, 0.1)  # m in front of the handle the hand may come in from
 LIFT = 0.06  # m the hand rises before it swings over to the handle, when swinging straight there runs into it
 HELD_WITHIN = 0.002  # m: a contact this close counts as holding (an adhesive pad holds from 1 mm off)
 EXTRA_HOLDS = 2  # a wheel that slipped in the hand is taken hold of again for what is left, at most this often more
@@ -163,9 +169,17 @@ class Operation:
         # Fingers or not, the arm holds its weight up with its servo targets: aimed at the joint values themselves, the
         # template arm hung 1.6 cm low over a switch, closed under the knob and missed it (see arm.servo_targets).
         self._kp = servo_stiffness(arm.ik.model, arm.actuators)
+        # And their damping, to follow a moving plan without lagging behind it (see arm.servo_targets).
+        self._kv = servo_damping(arm.ik.model, arm.actuators)
+        self._last: tuple[float, np.ndarray] | None = None  # (time, arm.q) at the last update
 
     def _targets(self, data: mujoco.MjData) -> np.ndarray:
-        return servo_targets(data, self.arm.chain.dof_adr, self._kp, self.arm.q)
+        t, q = float(data.time), self.arm.q.copy()
+        qdot = np.zeros_like(q)
+        if self._last is not None and t > self._last[0]:
+            qdot = (q - self._last[1]) / (t - self._last[0])
+        self._last = (t, q)
+        return servo_targets(data, self.arm.chain.dof_adr, self._kp, q, self._kv, qdot)
 
     @property
     def done(self) -> bool:
@@ -510,7 +524,7 @@ def _one_hold(
     # A hold must also be clear of the mechanism, with the fingers opened as they will be, and come down to it
     # from a few centimetres straight above: a Panda's best hold on a drawer had its wrist at a joint limit, could
     # rise 1 cm from there, swung in from afar and landed a finger on the chest's top.
-    best: tuple[float, float, np.ndarray, list[np.ndarray], list[np.ndarray], float, list[np.ndarray]] | None = None
+    best: tuple[tuple, float, np.ndarray, list[np.ndarray], list[np.ndarray], float, list[np.ndarray]] | None = None
     clear_points = math.ceil(CLEAR_ABOVE / PATH_STEP - 1e-9) + 1
     for q_hold in _holds(arm, tip, rot0, q, fresh=first):
         opening, hit = _opening(model, arm, q_hold, parts)
@@ -524,12 +538,14 @@ def _one_hold(
                 why.append(route)
             continue
         path, reached = follow(q_hold)
-        rank = (abs(reached), -float(np.max(np.abs(q_hold - q))))
-        if best is None or rank > (abs(best[0]), best[1]):
-            best = (reached, rank[1], q_hold, path, down, opening, route)
+        # Then the one that comes down straight from highest: a Panda's hold at a wrist limit came down 3 cm, swung
+        # in low over the drawer from afar and caught a finger on its top, where another came down all of 12 cm.
+        rank = (round(abs(reached), 3), len(down), -float(np.max(np.abs(q_hold - q))))
+        if best is None or rank > best[0]:
+            best = (rank, reached, q_hold, path, down, opening, route)
     if best is None:
         return [], 0.0, q
-    reached, _, q_hold, path, down, opening, route = best
+    _, reached, q_hold, path, down, opening, route = best
     open_grip, close_grip = arm._grip("open"), arm._grip("close")
     if arm.tool is None and open_grip is not None:
         # Opened all the way, the finger behind the bar landed on the drawer's front: open only as far as the bar
@@ -586,8 +602,9 @@ def _opening(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, parts: Parts)
     return PRE_OPENS[-1], hit
 
 
-def _hits(arm: ArmMotion, q: np.ndarray, parts: Parts) -> str | None:
-    """What of the mechanism the arm at `q` runs into, as "<part of the arm> on <part of it>", or None."""
+def _hits(arm: ArmMotion, q: np.ndarray, parts: Parts, margin: float = 0.0) -> str | None:
+    """What of the mechanism the arm at `q` runs into, as "<part of the arm> on <part of it>", or None. With a
+    `margin`, also what of it other than the handle the arm comes nearer than that to."""
     m, d = arm.ik.model, arm.ik.data
     arm.ik.point(arm.chain, q)
     mujoco.mj_collision(m, d)
@@ -597,7 +614,20 @@ def _hits(arm: ArmMotion, q: np.ndarray, parts: Parts) -> str | None:
             continue
         if con.dist < -(HANDLE_TOUCH_OK if theirs in parts.handle else TOUCH_OK):
             return f"{_body_name(m, mine)} on {_geom_name(m, theirs)}"
+    if margin <= 0.0:
+        return None
+    for g in _arm_geoms(arm):
+        for h in parts.geoms - parts.handle:
+            if np.linalg.norm(d.geom_xpos[g] - d.geom_xpos[h]) - m.geom_rbound[g] - m.geom_rbound[h] > margin:
+                continue
+            if mujoco.mj_geomDistance(m, d, g, h, margin, None) < margin:
+                return f"{_body_name(m, g)} on {_geom_name(m, h)}"
     return None
+
+
+def _arm_geoms(arm: ArmMotion) -> list[int]:
+    m = arm.ik.model
+    return [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) in arm._moving and collides(m, g)]
 
 
 def _held(arm: ArmMotion, parts: Parts) -> Callable[[mujoco.MjModel, mujoco.MjData], str | None]:
@@ -654,25 +684,53 @@ def _geom_name(model: mujoco.MjModel, geom: int) -> str:
 def _route(arm: ArmMotion, q: np.ndarray, goal: np.ndarray, parts: Parts) -> list[np.ndarray] | str:
     """Joint moves from `q` to `goal` that keep the arm off the mechanism: straight there, or up from where the tool
     is first (the template arm's home pose has its hand by a cabinet's door, and swung straight from there it went
-    through the door's bar). What it runs into when neither does."""
-    hit = next((h for h in (_hits(arm, qa, parts) for qa in _between(q, goal)) if h), None)
+    through the door's bar), or by a pose in front of the handle, or both. What it runs into when none does."""
+    hit = _swing_hits(arm, q, goal, parts)
     if hit is None:
         return [goal]
     now, there = arm.ik.point(arm.chain, q).copy(), arm.ik.point(arm.chain, goal).copy()
+    lifts = []
     for z in (max(now[2], there[2]) + LIFT, now[2] + LIFT):
         # Any way the hand points on the way up (a home pose need not point down), clear of the arm itself.
         q_lift, err = arm.ik.solve(arm.chain, np.array([now[0], now[1], z]), q, iterations=60)
-        if err > REACH_TOL or arm._collides(q_lift):
-            continue
-        clear = all(_hits(arm, qa, parts) is None for a, b in ((q, q_lift), (q_lift, goal)) for qa in _between(a, b))
-        if clear and _hits(arm, q_lift, parts) is None:
-            return [q_lift, goal]
+        if err <= REACH_TOL and not arm._collides(q_lift) and _hits(arm, q_lift, parts) is None:
+            lifts.append(q_lift)
+    # Or in from the handle's front, level with where the hand comes down from: an arm that points down only low
+    # (a PiPER, below about 12 cm) has no way down from above and swung in over the drawer's top every way it went.
+    fronts = [f for f in (_front(arm, parts, there, goal, d) for d in FRONT_VIA) if f is not None]
+    for way in [*([lift] for lift in lifts), *([f] for f in fronts), *([lift, f] for lift in lifts for f in fronts)]:
+        legs = [q, *way, goal]
+        if all(_swing_hits(arm, a, b, parts) is None for a, b in zip(legs, legs[1:], strict=False)):
+            return [*way, goal]
     return hit
 
 
-def _between(a: np.ndarray, b: np.ndarray) -> list[np.ndarray]:
-    """Poses along a joint move from `a` to `b` (the ends left out)."""
-    return [a + (b - a) * (i / APPROACH_SAMPLES) for i in range(1, APPROACH_SAMPLES)]
+def _front(arm: ArmMotion, parts: Parts, there: np.ndarray, goal: np.ndarray, distance: float) -> np.ndarray | None:
+    """A pose with the tool `distance` in front of `there` (away from the mechanism's middle, level), pointing down,
+    clear of the mechanism; or None."""
+    middle = arm.ik.data.xpos[mujoco.mj_name2id(arm.ik.model, mujoco.mjtObj.mjOBJ_BODY, parts.name)]
+    out = there - middle
+    out[2] = 0.0
+    if np.linalg.norm(out) < 1e-6:
+        return None
+    q_front = _solve(arm, there + out / np.linalg.norm(out) * distance, None, goal)
+    if q_front is None or _hits(arm, q_front, parts, ROUTE_CLEAR) is not None:
+        return None
+    return q_front
+
+
+def _swing_hits(arm: ArmMotion, a: np.ndarray, b: np.ndarray, parts: Parts) -> str | None:
+    """What of the mechanism a joint move from `a` to `b` runs into or comes near, or None. A servo lags its moving
+    target in proportion to the speed, most in the middle of a smoothstep move and not at all at its ends, so the
+    poses along it keep that much more room: a PiPER swinging in over a drawer's top, planned 3 mm clear of it, put a
+    finger on it 6 mm behind its plan, and the finger, held open by a weak servo, folded the hand shut."""
+    n = max(APPROACH_SAMPLES, math.ceil(float(np.max(np.abs(b - a))) / SWING_STEP))
+    for i in range(1, n):
+        u = i / n
+        hit = _hits(arm, a + (b - a) * u, parts, ROUTE_CLEAR * 4 * u * (1 - u))
+        if hit:
+            return hit
+    return None
 
 
 def _press_legs(model, data, arm: ArmMotion, target: str, way: Way, delta: float) -> list[Leg]:
