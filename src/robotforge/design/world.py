@@ -298,6 +298,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     if world.water is not None:
         water_physics.encode(spec, world.water.physics())
         notes.append(waters.describe(world.water))
+        _moor_buoys(spec, world, ground)
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
@@ -329,6 +330,18 @@ def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Grou
             frame.pos = [frame.pos[0], frame.pos[1], frame.pos[2] + lift]
             moved = True
     return moved
+
+
+def _moor_buoys(spec: mujoco.MjSpec, world: World, ground: terrain.Ground) -> None:
+    """A buoy over water is tied to the bottom under it (see props.moor), with a little slack in its rope."""
+    for obj in world.objects:
+        if obj.shape != "buoy" or obj.fixed:
+            continue
+        x, y = obj.pos[0], obj.pos[1]
+        bottom = ground.height(x, y)
+        depth = world.water.level - bottom
+        if depth > 0.2 and world.water.covers(x, y):
+            props.moor(spec, obj.name, [x, y, bottom + 0.02], max(depth - 0.2 * obj.size[1], 0.15))
 
 
 def _float_on_water(spec: mujoco.MjSpec, model: mujoco.MjModel, world: World, homes, frames, ground) -> bool:

@@ -235,6 +235,86 @@ def _pond(vis: Placed, size, rgba, name) -> None:
     vis.add("stone", STONE, rim)
 
 
+# ---- on the water ------------------------------------------------------------------------------
+
+
+def _buoy(vis: Placed, size, rgba, name) -> None:
+    """A spar buoy: a rounded float with a white band, a steel cage on a mast and a ball top mark."""
+    from robotforge.design.props import BUOY_FLOAT
+
+    d, h = size
+    r = d / 2
+    ballast = 0.1 * h
+    top = ballast + BUOY_FLOAT * h
+    mast = 0.35 * h
+    vis.add("dark", IRON, M.cylinder(0.36 * r, ballast, segments=24, bevel=0.01 * r, z0=0.0))
+    float_profile = [
+        (0.0, ballast),
+        (0.82 * r, ballast),
+        (0.98 * r, ballast + 0.04 * h),
+        (r, ballast + 0.2 * h),
+        (0.98 * r, top - 0.03 * h),
+        (0.8 * r, top),
+        (0.0, top),
+    ]
+    vis.add("paint", rgba, M.lathe(float_profile, segments=40))
+    band = M.cylinder(r * 1.01, 0.06 * h, segments=40, z0=ballast + 0.17 * h)
+    vis.add("paint", [0.94, 0.94, 0.92, 1.0], band)
+    vis.add("metal", STEEL_LIGHT, M.cylinder(0.07 * r, mast, segments=12, z0=top))
+    cage = []
+    for k in range(4):
+        a = k * math.pi / 2 + math.pi / 4
+        leg = np.array(
+            [
+                [0.07 * r * math.cos(a), 0.07 * r * math.sin(a), top],
+                [0.42 * r * math.cos(a), 0.42 * r * math.sin(a), top + 0.6 * mast],
+            ]
+        )
+        cage.append(M.tube(leg, [0.02 * r, 0.02 * r], segments=6))
+    cage.append(M.torus(0.42 * r, 0.02 * r, segments=24, sides=6).moved((0, 0, top + 0.6 * mast)))
+    vis.add("metal", STEEL_LIGHT, M.merge(cage))
+    vis.add("paint", rgba, M.sphere(0.3 * r, rings=10, segments=20), (0, 0, top + mast + 0.25 * r))
+    vis.add("led", [1.0, 0.85, 0.4, 1.0], M.sphere(0.06 * r, rings=6, segments=10), (0, 0, top + mast + 0.58 * r))
+
+
+def _dock(vis: Placed, size, rgba, name) -> None:
+    """A wooden dock: deck planks with gaps over two stringers, round posts with dark tops, cleats and a rail of
+    fenders along its sides."""
+    from robotforge.design.props import DOCK_DECK, DOCK_DEPTH, DOCK_POST
+
+    length, width, height = size
+    planks = []
+    pitch = 0.16
+    n = max(2, int(length / pitch))
+    w = length / n
+    for i in range(n):
+        x = -length / 2 + w * (i + 0.5)
+        planks.append(
+            M.box(w / 2 - 0.006, width / 2, DOCK_DECK * 0.3, chamfer=0.004).moved((x, 0, height - DOCK_DECK * 0.3))
+        )
+    vis.add("wood", rgba, M.merge(planks))
+    stringer = []
+    for side in (1, -1):
+        stringer.append(
+            M.box(length / 2, 0.04, DOCK_DECK * 0.35).moved((0, side * (width / 2 - 0.05), height - DOCK_DECK * 0.95))
+        )
+    vis.add("wood", shade(rgba, 0.7), M.merge(stringer))
+    count = max(2, round(length / 1.3) + 1)
+    posts, caps, cleats = [], [], []
+    for i in range(count):
+        x = -length / 2 + DOCK_POST + i * (length - 2 * DOCK_POST) / (count - 1)
+        for side in (1, -1):
+            y = side * (width / 2 - DOCK_POST)
+            bottom = height - DOCK_DECK - (height - DOCK_DECK + DOCK_DEPTH)
+            posts.append(M.cylinder(DOCK_POST, height + 0.1 - bottom, segments=16, z0=bottom).moved((x, y, 0)))
+            caps.append(M.cylinder(DOCK_POST * 1.08, 0.02, segments=16, bevel=0.005, z0=height + 0.1).moved((x, y, 0)))
+            if i in (0, count - 1) or i == count // 2:
+                cleat = M.rounded_box(0.08, 0.02, 0.018, 0.008, segments=2).moved((x, y * 0.82, height + 0.02))
+                cleats.append(cleat)
+    vis.add("wood", shade(rgba, 0.62), M.merge(posts))
+    vis.add("dark", IRON, M.merge(caps + cleats))
+
+
 # ---- furniture -----------------------------------------------------------------------------------
 
 
@@ -470,6 +550,12 @@ def _crate(vis: Placed, size, rgba, name) -> None:
     vis.add("wood", rgba, M.merge(planks))
 
 
+def _steel(vis: Placed, size, rgba, name) -> None:
+    """A steel block: brushed metal with crisp, slightly chamfered edges."""
+    hx, hy, hz = (s / 2 for s in size)
+    vis.add("metal", rgba, M.box(hx, hy, hz, chamfer=min(0.004, hx * 0.08, hy * 0.08, hz * 0.08)))
+
+
 def _fridge(vis: Placed, size, rgba, name) -> None:
     hx, hy, hz = (s / 2 for s in size)
     vis.add("paint", rgba, M.rounded_box(hx, hy, hz, 0.02, segments=3, corner=0.025))
@@ -621,9 +707,11 @@ _LOOKS: dict[str, Look] = {
     "door_frame": _door_frame,
     "counter": _counter,
     "pallet": _pallet,
+    "buoy": _buoy,
+    "dock": _dock,
 }
 _NAMED: dict[str, tuple[tuple[tuple[str, ...], Look], ...]] = {
-    "box": ((("crate",), _crate), (("fridge",), _fridge), (("handle",), _handle)),
+    "box": ((("crate",), _crate), (("fridge",), _fridge), (("handle",), _handle), (("steel", "iron"), _steel)),
     "sphere": ((("apple",), _apple), (("orange", "fruit", "lemon"), _citrus), (("ball",), _ball)),
     "cylinder": (
         (("cup", "mug", "glass"), _cup),

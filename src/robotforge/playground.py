@@ -960,7 +960,7 @@ def viewer_catalog() -> dict[str, Any]:
     return {
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
-        "terrains": ["flat", *terrain.TYPES],
+        "terrains": ["flat", *(t for t in terrain.TYPES if t != "basin")],  # a hollow needs water: the lake scene
     }
 
 

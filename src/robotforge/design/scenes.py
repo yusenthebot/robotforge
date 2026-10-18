@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from robotforge.design import library, props
+from robotforge.design import library, props, water_scenes
 
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
@@ -516,6 +516,29 @@ SCENES: dict[str, Scene] = {
             "A straight course along +x: ramp, stairs, rough ground, curbs, "
             "stepping stones and bumps. Starter robot: a robot dog.",
             _obstacle_course,
+        ),
+        Scene(
+            "harbor",
+            "Harbor",
+            "A harbor on the sea: a concrete quay with bollards and cargo, a wooden dock, a breakwater with a "
+            "lighthouse, channel buoys, floating crates and a steel block on the bottom. Starter robot: a boat.",
+            water_scenes.harbor,
+            {"depth": Option(1.4, 0.5, 4.0, "water depth, m")},
+        ),
+        Scene(
+            "lake",
+            "Lake",
+            "A lake in a grassy hollow with a beach all round, a dock on the west shore, a slalom of buoys, crates "
+            "adrift, trees and rocks. Starter robot: a boat.",
+            water_scenes.lake,
+        ),
+        Scene(
+            "pool",
+            "Pool",
+            "An indoor pool, 12 x 7 m, with a tiled deck, lane lines on the bottom, a steel block to dive to and a "
+            "floating crate and balls. Starter robot: an underwater ROV.",
+            water_scenes.pool,
+            {"depth": Option(1.6, 0.6, 4.0, "water depth, m")},
         ),
     ]
 }
