@@ -1,8 +1,9 @@
-"""A pixel pass over the viewer a beginner sees: every lesson's first and last step, every panel and the dock,
-in Chinese and English, on a phone, a laptop and a wide screen.
+"""A pixel pass over the viewer: every panel and the dock, plain worlds (robots in each scene, their paths, the
+gallery's designs and their joint sliders) and every lesson's first and last step, in Chinese and English, on a
+phone, a laptop and a wide screen.
 
     uv run python scripts/viewer_qa.py --out DIR [--lessons pd_control,gait] [--no-lessons] [--no-panels]
-                                       [--sizes phone,laptop,wide] [--langs zh-CN,en]
+                                       [--no-worlds] [--sizes phone,laptop,wide] [--langs zh-CN,en]
 
 One viewer server runs in this process on a fresh ROBOTFORGE_HOME (the real Menagerie models), and one headless
 Chrome per language and size watches it at once, each sized from the start, so every page frames its own camera
@@ -469,6 +470,88 @@ async def panels(run: Pass) -> None:
     await run.everywhere(CLOSE_ALL + "document.activeElement?.blur();")
 
 
+# ---- plain worlds: robots in the scenes, their paths, the gallery's designs ------------------------------------
+
+FIT = "document.getElementById('btn-frame').click();"  # what a learner presses after a map changes under them
+MARK_SCENE = "window.__qaScene = window.__robotforge.scene;"
+NEW_SCENE = "window.__robotforge.scene !== window.__qaScene && document.getElementById('loading').hidden"
+Edit = Callable[[Any], Any]
+
+
+def _scene(preset: str) -> Edit:
+    return lambda pg: pg.load_scene(preset)
+
+
+def _go(robot: str, to: list[float]) -> Edit:
+    return lambda pg: pg.behaviors.navigate(robot, to)
+
+
+def _gallery(pg: Any) -> None:
+    """The park's robots out, an empty floor, and the gallery's line-up of designs in."""
+    for robot in [r.name for r in pg.current_world().robots]:
+        pg.remove(robot)
+    pg.clear_scene()
+    screenshots._gallery_line_up(pg)
+
+
+def _select(robot: str, drawer: bool = True) -> str:
+    opened = "document.getElementById('drawer-toggle').click();" if drawer else ""
+    return CLOSE_ALL + f"window.__robotforge.select({robot!r});" + opened
+
+
+@dataclass(frozen=True)
+class WorldView:
+    """One capture of a plain world: a change to the world in Python, as an agent's tool call makes it (None for
+    none), whether that change rebuilds the scene the pages show, then the page script of a learner's clicks."""
+
+    name: str
+    edit: Edit | None
+    script: str
+    settle: float  # s
+    rebuilds: bool = False
+
+
+# Every page sees a change to the world; only a map picked in the page frames the camera on its own, so after an
+# agent's change the pages press Fit view, as a learner would.
+WORLDS: list[WorldView] = [
+    WorldView("park_path", _go("go2", [-3.0, 2.6]), CLOSE_ALL, 3.0),
+    WorldView("park_selected", None, _select("dog", drawer=False), 1.5),
+    WorldView("kitchen", _scene("kitchen"), CLOSE_ALL + FIT, 2.5, rebuilds=True),
+    WorldView("kitchen_robots", None, _select("go2"), 2.0),
+    WorldView("warehouse", _scene("warehouse"), CLOSE_ALL + FIT, 2.5, rebuilds=True),
+    WorldView("warehouse_path", _go("go2", [6.0, -1.4]), CLOSE_ALL, 4.0),
+    WorldView("maze", _scene("maze"), CLOSE_ALL + FIT, 2.5, rebuilds=True),
+    WorldView("obstacle_course", _scene("obstacle_course"), CLOSE_ALL + FIT, 2.5, rebuilds=True),
+    WorldView("desk_lab", _scene("desk_lab"), CLOSE_ALL + FIT, 2.5, rebuilds=True),
+    WorldView("gallery", _gallery, CLOSE_ALL + FIT, 3.5, rebuilds=True),
+    WorldView("gallery_centaur", None, _select("centaur"), 2.0),
+    WorldView("gallery_centaur_end", None, "document.getElementById('drawer').scrollTop = 1e6;", 0.5),
+    WorldView(
+        "gallery_modes",
+        None,
+        _select("centaur", drawer=False)
+        + "document.getElementById('world-toggle').click();"
+        + "document.querySelector('[data-tab=\"modes\"]').click();",
+        1.0,
+    ),
+]
+
+
+async def worlds(run: Pass, server: Server) -> None:
+    for view in WORLDS:
+        if view.edit is not None:
+            await run.everywhere(MARK_SCENE)
+            await asyncio.to_thread(view.edit, server.pg)
+            if view.rebuilds:
+                await asyncio.gather(*(tab.until(NEW_SCENE) for tab in run.tabs))
+                await asyncio.sleep(1.0)  # the first poses come in and the lights are fitted
+        await run.everywhere(view.script)
+        await asyncio.gather(*(tab.until("!window.__robotforge.tweening()") for tab in run.tabs))
+        await asyncio.sleep(view.settle)
+        await run.capture(f"world_{view.name}")
+    await run.everywhere(CLOSE_ALL + "document.activeElement?.blur();")
+
+
 START = """
     if (document.getElementById("learn-toggle").getAttribute("aria-expanded") !== "true")
         document.getElementById("learn-toggle").click();
@@ -566,6 +649,9 @@ async def main_async(args: argparse.Namespace) -> int:
                     stuck = next((s for s in steps if not s.passed), None)
                     state = f"stuck at {stuck.id}: {stuck.failed}" if stuck else "played to the end"
                     print(f"  {state} ({time.monotonic() - t0:.0f} s)", flush=True)
+                if not args.no_worlds:  # last: it changes the world the lessons come back to
+                    print("worlds:", flush=True)
+                    await worlds(run, server)
             finally:
                 save()
                 await asyncio.gather(*(tab.close() for tab in tabs))
@@ -597,6 +683,7 @@ def main() -> int:
     parser.add_argument("--lessons", help="comma-separated lesson ids (default: all)")
     parser.add_argument("--no-lessons", action="store_true")
     parser.add_argument("--no-panels", action="store_true")
+    parser.add_argument("--no-worlds", action="store_true", help="skip the scenes, paths and gallery views")
     parser.add_argument("--sizes", default=",".join(SIZES))
     parser.add_argument("--langs", default=",".join(LANGS))
     return asyncio.run(main_async(parser.parse_args()))
