@@ -567,8 +567,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
         where it ended ("stopped": true, no need to call stop). record=true or a file name ("walk.gif"; .gif,
-        .webp, or .mp4 when ffmpeg is installed) saves a video of the move, the camera following the robot, in the
-        world's videos folder unless the name is a full path; "video" in the result says where."""
+        .webp, or .mp4 when ffmpeg is installed, which true picks then) saves a video of the move, the camera
+        following the robot, in the world's videos folder unless the name is a full path; "video" in the result
+        says where."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             path = video_path(record, robot, seconds)
@@ -750,9 +751,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
         the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
-        record=true or a file name ("show.gif"; .gif, .webp, or .mp4 when ffmpeg is installed) saves a video of the
-        run, the camera following everything that moves, in the world's videos folder unless the name is a full
-        path; "video" in the result says where."""
+        record=true or a file name ("show.gif"; .gif, .webp, or .mp4 when ffmpeg is installed, which true picks
+        then) saves a video of the run, the camera following the robots, in the world's videos folder unless the
+        name is a full path; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():

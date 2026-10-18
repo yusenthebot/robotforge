@@ -11,6 +11,7 @@ robot smoothly from the viewer's opening direction.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import math
 import shutil
 import subprocess
@@ -30,9 +31,11 @@ FPS = 20  # frames kept per simulated second
 WIDTH, HEIGHT = 640, 360
 MAX_FRAMES = 300  # drawn: 15 s at FPS; a longer recording plays faster, every k-th frame
 FORMATS = (".gif", ".webp", ".mp4")
-FOLLOW_SECONDS = 0.6  # the camera eases toward the robot over about this long, so it does not shake with each step
-MIN_SPAN = np.array([1.0, 1.0, 0.3])  # m of ground the picture keeps round a small robot, so its motion shows
+FOLLOW_SECONDS = 0.5  # s either side the camera averages the robot's place over, so it does not shake
+MIN_SPAN = np.array([0.7, 0.7, 0.25])  # m the picture keeps round a small robot: the floor sliding by shows it moving
 VIEW = "default"  # the direction the camera looks from: the viewer's opening one
+DRAWN = np.array([1, 1, 1, 0, 0, 0], np.uint8)  # geom groups a picture shows (3 and up are collision shapes)
+MAX_LAYERS = 6  # geoms one ray goes through on its way to the robot
 
 
 class RecordingError(ValueError):
@@ -91,11 +94,13 @@ class Recorder:
 
 
 def target(record: bool | str, folder: Path, robot: str | None) -> Path:
-    """Where a recording goes: record=true names it after the robot and the time, in `folder`; a name without a
-    folder goes in `folder` too; a path ending in .gif, .webp or .mp4 is used as given (~ is the home folder)."""
+    """Where a recording goes: record=true names it after the robot and the time, in `folder`, an MP4 when ffmpeg
+    is installed (0.4 MB where a GIF of 6 s on the park's grass took 5.6) and a GIF otherwise; a name without a folder
+    goes in `folder` too; a path ending in .gif, .webp or .mp4 is used as given (~ is the home folder)."""
     if record is True:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        return folder / f"{(robot or 'world').replace('/', '_')}-{stamp}.gif"
+        kind = ".mp4" if shutil.which("ffmpeg") else ".gif"
+        return folder / f"{(robot or 'world').replace('/', '_')}-{stamp}{kind}"
     name = str(record).strip()
     if not name:
         raise RecordingError('record is true or a file name such as "dog_walk.gif"')
@@ -135,24 +140,60 @@ def _pose(model: mujoco.MjModel, data: mujoco.MjData, rec: Recorder, i: int) -> 
 
 def _cameras(model: mujoco.MjModel, boxes: list[Any], dt_s: float) -> list[Any]:
     """A camera for each frame: from the viewer's opening direction, as far back as the robot's biggest outline
-    needs (the same all along), looking at the robot's middle eased over FOLLOW_SECONDS."""
+    needs (the same all along), looking at the robot's middle averaged over FOLLOW_SECONDS either side. The whole
+    motion is known before the first frame is drawn, so the average looks ahead as much as back: the camera does
+    not shake with each step, and does not trail behind a robot going steadily."""
     azimuth, elevation, fill = render.VIEWS[VIEW]
     if not boxes or any(b is None for b in boxes):
         return [VIEW] * len(boxes)
     span = np.maximum(np.max([high - low for low, high in boxes], axis=0), MIN_SPAN)
     fovy = float(model.vis.global_.fovy)
     distance = render._fit_distance(-span / 2, span / 2, azimuth, elevation, fill, fovy, WIDTH / HEIGHT)
-    ease = 1.0 - math.exp(-dt_s / FOLLOW_SECONDS)
-    look = (boxes[0][0] + boxes[0][1]) / 2
+    middles = np.array([(low + high) / 2 for low, high in boxes])
+    reach = max(0, round(FOLLOW_SECONDS / dt_s)) if dt_s > 0 else 0
     cams = []
-    for low, high in boxes:
-        look = look + ((low + high) / 2 - look) * ease
+    for k in range(len(middles)):
         cam = mujoco.MjvCamera()
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         cam.azimuth, cam.elevation, cam.distance = azimuth, elevation, distance
-        cam.lookat[:] = look
+        cam.lookat[:] = middles[max(0, k - reach) : k + reach + 1].mean(axis=0)
         cams.append(cam)
     return cams
+
+
+def occluders(model: mujoco.MjModel, data: mujoco.MjData, cam: Any, followed: list[int]) -> frozenset[int]:
+    """The geoms standing between the camera and the robot, to be drawn see-through: a Go2 walking in the park
+    went behind a bench, and a kitchen's counters would hide it as often. Rays from the camera to the middle and
+    the box corners of each of the robot's shapes find what is in the way (a few rays at the robot's outline
+    missed the bench's thin post; bounding spheres faded a rock beside the dog). The ground and terrain (on the
+    world body) and the robot itself never count."""
+    if not followed or isinstance(cam, str):
+        return frozenset()
+    az, el = np.radians(cam.azimuth), np.radians(cam.elevation)
+    eye = np.array(cam.lookat) - cam.distance * np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+    corners = np.array(list(itertools.product((-1.0, 1.0), repeat=3)))
+    aims = []
+    for g in followed:
+        rot, aabb = data.geom_xmat[g].reshape(3, 3), model.geom_aabb[g]
+        aims.append(data.geom_xpos[g] + rot @ aabb[:3])
+        aims.extend(data.geom_xpos[g] + (aabb[:3] + corners * aabb[3:]) @ rot.T)
+    mine, found = set(followed), set()
+    hit = np.zeros(1, np.int32)
+    for aim in aims:
+        start, toward = eye.copy(), aim - eye
+        left = float(np.linalg.norm(toward))
+        if left < 1e-6:
+            continue
+        toward /= left
+        for _ in range(MAX_LAYERS):
+            far = mujoco.mj_ray(model, data, start, toward, DRAWN, 1, -1, hit)
+            g = int(hit[0])
+            if far < 0 or far >= left - 1e-4 or g in mine:
+                break
+            if model.geom_bodyid[g] != 0:  # not the ground or terrain
+                found.add(g)
+            start, left = start + toward * (far + 1e-4), left - far - 1e-4
+    return frozenset(found)
 
 
 def save(
@@ -175,7 +216,9 @@ def save(
     cams = _cameras(model, boxes, every / rec.fps)
 
     def draw(k: int) -> np.ndarray:
-        return renderer.rgb_of(model, _pose(model, scratch, rec, picked[k]), cams[k], width, height, rec._version)
+        posed = _pose(model, scratch, rec, picked[k])
+        faded = occluders(model, posed, cams[k], geoms)
+        return renderer.rgb_of(model, posed, cams[k], width, height, rec._version, faded=faded)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     _write(path, draw, len(picked), 1000.0 / rec.fps)  # each drawn frame stands for `every` kept ones

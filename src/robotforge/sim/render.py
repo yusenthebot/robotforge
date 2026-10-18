@@ -38,6 +38,7 @@ VIEWS: dict[str, tuple[float, float, float]] = {
     "top": (90.0, -89.0, 0.75),
 }
 MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown with some ground around it
+FADED_ALPHA = 0.25  # opacity of what stands between a video's camera and its robot
 
 MAX_PIXELS = 1280 * 960
 TOUCHING = 0.001  # m: geoms a contact holds closer than this touch (a contact with a margin can be further apart)
@@ -133,24 +134,44 @@ class SnapshotRenderer:
             return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
 
     def rgb_of(
-        self, model: mujoco.MjModel, data: mujoco.MjData, camera: Any, width: int, height: int, version: int
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        camera: Any,
+        width: int,
+        height: int,
+        version: int,
+        faded: frozenset[int] = frozenset(),
     ) -> np.ndarray:
         """A picture of a model and data no session holds (a recording's frame, posed in a scratch MjData), from a
-        camera already made (an MjvCamera, or a view or camera name)."""
+        camera already made (an MjvCamera, or a view or camera name); the `faded` geoms are drawn see-through."""
         _check_size(width, height)
         with self._lock:
             width = min(width, model.vis.global_.offwidth)
             height = min(height, model.vis.global_.offheight)
             if isinstance(camera, str):
                 camera = _camera_for(model, camera, data, width / height)
-            return _on_gl_thread(self._render, model, data, camera, (version, width, height))
+            return _on_gl_thread(self._render, model, data, camera, (version, width, height), faded)
 
-    def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
+    def _render(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        camera,
+        key: tuple[int, int, int],
+        faded: frozenset[int] = frozenset(),
+    ) -> np.ndarray:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera)
         if isinstance(camera, str):
             see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
+        if faded:
+            scene = self._renderer.scene
+            for i in range(scene.ngeom):
+                g = scene.geoms[i]
+                if g.objtype == mujoco.mjtObj.mjOBJ_GEOM and g.objid in faded:
+                    g.rgba[3] = min(float(g.rgba[3]), FADED_ALPHA)
         return self._renderer.render().copy()
 
     def _ready(self, model: mujoco.MjModel, key: tuple[int, int, int]) -> None:
