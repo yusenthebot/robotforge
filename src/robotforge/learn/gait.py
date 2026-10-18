@@ -90,13 +90,13 @@ STEPS = (
         id="trot",
         title=_text("四条腿，谁和谁一起迈", "Four legs: which step together"),
         body=_text(
-            "左边是我们的模板狗，右边是 Unitree Go2，用的是同一套走路程序。先看我们的狗。\n"
+            "前面是我们的模板狗，后面是 Unitree Go2，用的是同一套走路程序。先看我们的狗。\n"
             "走路时，每条腿轮流“着地往后蹬”和“抬起往前迈”，一来一回叫一个步子周期 T。"
-            "右边的“着地”图里，每条腿一行，涂满的时候脚在地上。\n先猜，再点「走 5 秒」。",
-            "On the left is our template dog, on the right the Unitree Go2; both run the same walking code. "
+            "“着地”图里，每条腿一行，涂满的时候脚在地上。\n先猜，再点「走 5 秒」。",
+            "In front is our template dog, behind it the Unitree Go2; both run the same walking code. "
             "Our dog goes first.\n"
             "While walking, each leg takes turns pushing back on the ground and swinging forward in the air; one "
-            "round of that is a step period T. In the footfall chart on the right each leg has a row, filled "
+            "round of that is a step period T. In the footfall chart each leg has a row, filled "
             "while that foot is down.\nGuess, then press Walk 5 s.",
         ),
         done=_text(

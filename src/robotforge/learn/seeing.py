@@ -521,6 +521,7 @@ class SeeingLesson(Lesson):
             (Series("err", _text("估计到真实位置", "estimate to the true position"), "amber"),),
             window=10.0,
             span=2.0,
+            floor=0.0,
         ),
     )
     steps = STEPS

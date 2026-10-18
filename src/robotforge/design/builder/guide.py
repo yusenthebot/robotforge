@@ -41,6 +41,37 @@ EXAMPLE_DOG: dict[str, Any] = {
 }
 
 
+# Six arms in a ring with a rotor on each end (their spins alternate by themselves), on four legs.
+EXAMPLE_HEXACOPTER: dict[str, Any] = {
+    "color": "orange",
+    "material": "carbon",
+    "base": {"shape": "cylinder", "size": [0.18, 0.06], "mass": 1.1},
+    "parts": [
+        {
+            "name": "arm",
+            "shape": "capsule",
+            "size": [0.024, 0.26],
+            "direction": "forward",
+            "joint": "fixed",
+            "mass": 0.05,
+            "repeat": {"count": 6, "around": "z"},
+        },
+        {"name": "rotor", "parent": "arm", "at": "end", "shift": [0, 0, 0.012], "shape": "rotor", "size": [0.25]},
+        {
+            "name": "leg",
+            "shape": "capsule",
+            "size": [0.014, 0.16],
+            "direction": "down",
+            "at": "bottom",
+            "shift": [0.06, 0, 0],
+            "joint": "fixed",
+            "foot": True,
+            "repeat": {"count": 4, "around": "z"},
+        },
+    ],
+}
+
+
 def guide() -> dict[str, Any]:
     parts = {
         n: {"kind": a.kind, "strength": a.stall_torque, "speed": a.no_load_speed, "note": a.note}
@@ -80,12 +111,16 @@ def guide() -> dict[str, Any]:
             "robot": '{"template": "arm"|"gripper"|..., "params": {...}} or {"library": "piper"}: mount a whole '
             'robot on this part (an arm on a rover, a gripper on an arm built from parts); "home": {joint: degrees} '
             "starts it in another pose (an arm folded for driving)",
+            "rotor": 'shape "rotor", size [propeller diameter]: a motor with a propeller pushing along the part\'s '
+            'up axis (a thrust actuator); "thrust" (N, default from the size), "spin": ccw|cw. Copies in a ring or '
+            "a row alternate their spin and a mirrored copy turns the other way, as multirotors need",
         },
         "behaviors": (
             "Built robots get sliders and set_controls like any robot, and the built-in behaviors when their shape "
             "fits: 4 or 6 legs of 3 hinges walk (move, WASD); speed-driven wheels on both sides drive; exactly two "
             "wheels on one axle balance by themselves (LQR); a chain of 4+ side-to-side servos slithers; a mounted "
-            "arm or gripper works with move_arm / pick_and_place (robot name 'rover' or 'rover/arm')."
+            "arm or gripper works with move_arm / pick_and_place (robot name 'rover' or 'rover/arm'); rotors that "
+            "lift the robot fly it (move with to=[x, y, z]; the flight controller works out any rotor layout)."
         ),
         "designs": (
             "To start from something bigger: add_robot(name, design=...) adds a ready-made robot from the gallery "
@@ -99,4 +134,5 @@ def guide() -> dict[str, Any]:
         ),
         "actuators": parts,
         "example": {"name": "dog", "build": EXAMPLE_DOG},
+        "example_aircraft": {"name": "hexacopter", "build": EXAMPLE_HEXACOPTER},
     }

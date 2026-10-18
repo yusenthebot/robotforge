@@ -170,8 +170,12 @@ class SimSession:
     # ---- stepping ---------------------------------------------------------------
 
     def set_controller(self, name: str, controller: Controller | None) -> None:
-        """Attach (or with None, remove) a controller; it runs on every future step at its rate."""
+        """Attach (or with None, remove) a controller; it runs on every future step at its rate. One that pushes
+        with outside forces (a flight controller's air) has a `release` that lets go of them when it is replaced."""
         with self.lock:
+            old = self.controllers.get(name)
+            if old is not None and old is not controller and hasattr(old, "release"):
+                old.release(self.model, self.data)
             if controller is None:
                 self.controllers.pop(name, None)
                 return

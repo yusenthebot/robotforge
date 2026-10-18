@@ -38,7 +38,7 @@ AXIS_WORDS: dict[str, tuple[float, float, float]] = {
 # itself, or the tip of a link (see `direction`).
 FACE_ANCHORS = ("top", "bottom", "front", "back", "left", "right")
 ANCHORS = (*FACE_ANCHORS, "center", "start", "end")
-SHAPES = ("box", "sphere", "capsule", "cylinder", "wheel", "caster", "none")
+SHAPES = ("box", "sphere", "capsule", "cylinder", "wheel", "caster", "rotor", "none")
 SIZE_HINT = {
     "box": "[length, width, height] (along x, y, z)",
     "sphere": "[diameter]",
@@ -46,9 +46,10 @@ SIZE_HINT = {
     "cylinder": "[diameter, length]",
     "wheel": "[diameter, width]",
     "caster": "[diameter]",
+    "rotor": "[diameter] (of the propeller)",
     "none": "[] (no shape: a bare joint)",
 }
-SIZE_COUNT = {"box": 3, "sphere": 1, "capsule": 2, "cylinder": 2, "wheel": 2, "caster": 1, "none": 0}
+SIZE_COUNT = {"box": 3, "sphere": 1, "capsule": 2, "cylinder": 2, "wheel": 2, "caster": 1, "rotor": 1, "none": 0}
 MAX_PARTS = 120  # after mirror and repeat; bigger robots get slow to check and to simulate
 Material = Literal["pla", "aluminum", "carbon", "rubber"]
 Vec3 = list[float]
@@ -367,7 +368,7 @@ class PartSpec(_Body):
     )
     joint: JointSpec = Field(default_factory=JointSpec)
     actuator: ActuatorSpec | None = Field(None, description='default: the robot servo / motor; "none" = passive')
-    shape: Literal["box", "sphere", "capsule", "cylinder", "wheel", "caster", "none"] = "capsule"
+    shape: Literal["box", "sphere", "capsule", "cylinder", "wheel", "caster", "rotor", "none"] = "capsule"
     direction: str | list[float] | None = Field(
         None, description="the link grows from its joint this way (e.g. down for a leg); unset = centered on it"
     )
@@ -376,6 +377,12 @@ class PartSpec(_Body):
     mirror: bool = Field(False, description="add a mirror copy on the other side (left <-> right in its name)")
     repeat: RepeatSpec | None = None
     robot: RobotMount | None = Field(None, description="mount a template or library robot on this part")
+    spin: Literal["ccw", "cw"] = Field(
+        "ccw",
+        description="rotor: which way its propeller turns seen from above; copies in a ring or a row alternate and "
+        "a mirrored copy turns the other way, as multirotors need",
+    )
+    thrust: float | None = Field(None, gt=0, le=2000, description="rotor: the most it pushes, N (default from size)")
     passive: bool = Field(False, exclude=True)  # set from actuator: "none"
 
     @model_validator(mode="before")
@@ -390,7 +397,7 @@ class PartSpec(_Body):
         shape = data.get("shape")
         if shape in ("wheel",) and "joint" not in data:
             data["joint"] = {"type": "hinge", "axis": "y", "continuous": True}
-        if shape == "caster" and "joint" not in data:
+        if shape in ("caster", "rotor") and "joint" not in data:
             data["joint"] = "fixed"
         if data.get("robot") is not None:
             data.setdefault("shape", "none")
@@ -425,6 +432,14 @@ class PartSpec(_Body):
     @model_validator(mode="after")
     def _consistent(self) -> PartSpec:
         self._check_size(self.shape)
+        if self.shape == "rotor":
+            if self.joint.type != "fixed" or self.actuator is not None:
+                raise ValueError(
+                    "a rotor is bolted on (its joint is fixed) and drives itself: leave out joint and actuator, set "
+                    "thrust (N) for a stronger one; to tilt it, hang it on a part with a hinge"
+                )
+        elif self.thrust is not None:
+            raise ValueError('thrust is for rotor parts (shape: "rotor")')
         if self.joint.type == "fixed" and self.actuator is not None:
             raise ValueError("a fixed joint does not move, so it takes no actuator")
         if self.joint.continuous and self.actuator is not None:

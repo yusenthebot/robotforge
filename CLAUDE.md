@@ -37,6 +37,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
   Lesson playthroughs that train for a minute or more are marked `slow` and skipped by default: `uv run pytest -q -m slow` (CI runs them on Ubuntu).
   The sensor views' headless Chrome checks (`tests/test_viewer_sensors_browser.py`, slow) run only on macOS or with `ROBOTFORGE_BROWSER_TESTS=1`: run `uv run pytest -q -m slow tests/test_viewer_sensors_browser.py` before merging a change to the sensor views.
   `uv run python scripts/playtest.py` plays every lesson headless and prints which step each one reaches.
+  Layout checks in a real browser (`tests/test_viewer_layout.py`, headless Google Chrome) are marked `browser` and kept out of the default run and CI: `uv run pytest -q -m browser`.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.

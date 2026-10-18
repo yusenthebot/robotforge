@@ -216,7 +216,7 @@ STEPS = (
         body={
             "zh": "θ2 = ± arccos(…)：同一个目标点通常有两个解。虚线是另一个解。\n"
             "把目标放回圆环里，切换「肘部朝上」，看手臂换一种姿势够到同一点。",
-            "en": "theta2 = +- arccos(...): the same target usually has two solutions. "
+            "en": "theta2 = ± arccos(...): the same target usually has two solutions. "
             "The dashed arm is the other one.\n"
             "Put the target back inside the ring and flip Elbow up: the arm reaches the same point another way.",
         },
@@ -322,6 +322,7 @@ class IKLesson(Lesson):
             {"zh": "手到目标的距离", "en": "Hand to target"},
             "cm",
             (Series("err", {"zh": "误差", "en": "error"}, "blue"),),
+            floor=0.0,
         ),
         Plot(
             "angles",
