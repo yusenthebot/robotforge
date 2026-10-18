@@ -8,6 +8,7 @@ description: Use for robots and embodied AI with the robotforge MCP tools (a MuJ
 robotforge is a robot playground on the MuJoCo physics engine, made for beginners.
 The user describes a robot and a goal in plain words; you build it with the robotforge MCP tools, make it move, check the result and explain the idea behind each step.
 The tools come from the `robotforge` MCP server: Claude Code names them `mcp__plugin_robotforge_robotforge__<tool>`, Codex `mcp__robotforge__<tool>`; search your tool list for `robotforge`.
+Clients that load MCP tools on demand (recent Codex) show them only through their tool search: search it for `robotforge` before deciding they are missing.
 The very first start installs the server's Python packages and can take a minute, so if the tools are not there yet, wait and look again before anything else.
 Do not work around missing tools by importing robotforge's Python modules yourself: nothing would show in the user's viewer. Follow [references/troubleshooting.md](references/troubleshooting.md) instead.
 

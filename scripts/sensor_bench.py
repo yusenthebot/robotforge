@@ -256,7 +256,9 @@ def knobs() -> dict[str, Any]:
     return out
 
 
-def speed(seconds: float = 4.0, trials: int = 3) -> dict[str, Any]:
+def speed(seconds: float = 2.0, trials: int = 7) -> dict[str, Any]:
+    """Steps per second of CPU time (time.thread_time): on a machine shared with other work, wall time measures the
+    other work as much as this. Each setup is warmed up once, then the setups take turns, in a new order each trial."""
     setups = {
         "no sensors": [],
         "ideal 3D lidar (read only on demand)": [{"type": "lidar3d"}],
@@ -269,26 +271,30 @@ def speed(seconds: float = 4.0, trials: int = 3) -> dict[str, Any]:
         ],
     }
     worlds = {}
+    steps = int(seconds / 0.002)
     for i, (label, sensors) in enumerate(setups.items()):
         pg = warehouse_go2(f"bench_speed_{i}")
         for s in sensors:
             pg.add_sensor("go2", s)
+        pg.session.step(steps // 4)  # warm up
         worlds[label] = pg
     rates: dict[str, list[float]] = {label: [] for label in setups}
-    steps = int(seconds / 0.002)
-    for _ in range(trials):  # interleaved, so a busy moment on the machine hits every setup alike
-        for label, pg in worlds.items():
-            start = time.perf_counter()
+    rng = np.random.default_rng(0)
+    for _ in range(trials):
+        for label in rng.permutation(list(worlds)):
+            pg = worlds[str(label)]
+            start = time.thread_time()
             pg.session.step(steps)
-            rates[label].append(steps / (time.perf_counter() - start))
+            rates[str(label)].append(steps / (time.thread_time() - start))
     base = statistics.median(rates["no sensors"])
-    return {
-        label: {
+    out: dict[str, Any] = {}
+    for label, r in rates.items():
+        out[label] = {
             "steps_per_s": round(statistics.median(r)),
+            "spread": [round(min(r)), round(max(r))],
             "vs_no_sensors": f"{100 * (statistics.median(r) / base - 1):+.1f}%",
         }
-        for label, r in rates.items()
-    } | {"machine_load": os.getloadavg()[0], "cores": os.cpu_count()}
+    return out | {"machine_load": round(os.getloadavg()[0], 1), "cores": os.cpu_count()}
 
 
 TESTS = {"truth": truth, "drop": drop, "wrist": wrist, "trot": trot, "knobs": knobs, "speed": speed}
