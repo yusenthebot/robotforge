@@ -10,7 +10,8 @@ Cases:
   patch that starts 0.6 m in front of it (flat: 3 m of open floor). A success crosses the patch,
   still upright and over it rather than around it (a robot that turns off the side of a 1.2 m wide
   flight of stairs also gets past its far end).
-- turn: turn on the spot at 1 rad/s for 4 s; a success turns at least 90 degrees and stays within
+- turn: told to turn on the spot at 1 rad/s (or the fastest it turns) for TURN_SECONDS; a success turns at least
+  90 degrees (A or D held that long turns it round a corner) and stays within
   a leg length of where it stood.
 - shove: walking, 0.5 m/s added to the trunk's sideways velocity at 2 s; a success is upright and
   walking on 5 s later.
@@ -65,6 +66,7 @@ PAYLOADS = {
 SHOVE = 0.5  # m/s
 DRAG, DRAG_SECONDS, DRAG_STEPS = 0.4, 2.0, 40
 WATCH = 5.0  # s after a shove or a drag
+TURN_SECONDS = 6.0  # a humanoid takes a second to get its first step going
 
 
 @dataclass
@@ -179,7 +181,7 @@ def run(robot: str, case: str, trial: int = 0, share: float = SPEED_SHARE, walke
     if case == "turn":
         behaviors.move(robot, 0.0, 1.0, walker=walker)
         walker = _walker(pg, robot)
-        fell = watch(4.0)
+        fell = watch(TURN_SECONDS)
         seconds = float(data.time) - t_start
         rate = math.degrees(turned) / seconds
         strayed = float(np.linalg.norm((data.xpos[trunk] - start)[:2]))
