@@ -19,7 +19,6 @@ from robotforge.behaviors.manager import TRIP, BehaviorError
 from robotforge.behaviors.nav_grid import Grid
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge.onnx_policy import PolicyWalker, onnxruntime_available
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -340,6 +339,23 @@ def test_a_rover_finds_its_way_through_the_maze_without_touching_a_wall(pg):
     assert result["path_m"] > 5.0  # 3.6 m as the crow flies: it went round the hedges
     assert least > nav.body.radius  # its middle kept more than half its width from every hedge
     assert TRIP + "rover" not in pg.session.controllers  # done: the path is gone from the viewer
+
+
+def test_the_maze_tip_says_where_the_planner_goes(pg):
+    """Regression: the maze's tip said move(to='goal') "finds its own way through" the maze, and the trip went round
+    the outside of the hedges, so an agent asked to drive into the maze never did. The tip now says so, and its way
+    through (the middle first) is planned inside the hedges."""
+    pg.add_robot("rover", template="rover")
+    tip = next(t for t in pg.load_scene("maze")["scene"]["tips"] if "to='goal'" in t)
+    assert "round the outside of the hedges" in tip
+    middle = [float(v) for v in re.search(r"to=\[([-\d.]+), ([-\d.]+)\]", tip).groups()]
+
+    def inside(to) -> float:
+        trip = pg.behaviors.navigate("rover", to)
+        pg.behaviors.stop("rover")
+        return sum(abs(x) < 2.5 and abs(y) < 2.5 for x, y in trip.plan.points) / len(trip.plan.points)
+
+    assert inside("goal") == 0.0 and inside(middle) > 0.8
 
 
 def test_a_dog_walks_to_the_fridge_and_stops_facing_it(pg):
@@ -821,7 +837,7 @@ def test_driving_by_hand_ends_a_trip(pg):
 async def test_move_to_a_place_reports_the_trip(pg):
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = json.loads((await client.call_tool("move", {"robot": "dog", "to": [2.0, 0.0]})).content[0].text)
         # Without seconds a trip is not cut off after a plain move's 3 s: this one takes about 10.
@@ -833,12 +849,28 @@ async def test_move_to_a_place_reports_the_trip(pg):
 
 
 @pytest.mark.anyio
+async def test_a_trip_says_the_robot_stopped_where_it_ended(pg):
+    """In the agent eval (main at c2e37cd) two of six sessions that sent a robot somewhere called stop right after
+    the trip, on a robot that already stood: a timed move says "stopped" at the top, a trip did not."""
+    pg.add_robot("rover", template="rover")
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        result = json.loads((await client.call_tool("move", {"robot": "rover", "to": [1.0, 0.5]})).content[0].text)
+        assert result["arrived"] is True and result["stopped"] is True, result
+        assert list(result)[:2] == ["arrived", "stopped"]  # at the top, where it is read first
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        listed = json.loads((await client.call_tool("robots", {})).content[0].text)
+        assert not any(b.get("navigating") == "rover" and "last_trip" not in b for b in listed["behaviors"])
+
+
+@pytest.mark.anyio
 async def test_a_trip_out_of_time_goes_on_when_sent_again(pg):
     """A trip longer than one call (60 s at most; a humanoid walks 5 m in that) stops when the time is up, and the
     note says to call again; the next call goes on from where it stopped."""
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         call = {"robot": "dog", "to": [2.0, 0.0], "seconds": 3}
         first = json.loads((await client.call_tool("move", call)).content[0].text)
@@ -857,7 +889,7 @@ async def test_a_reset_or_an_edit_on_the_way_ends_the_trip_and_says_so(pg, how):
     ended."""
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
 
     async def disrupt():
         for _ in range(200_000):
@@ -884,7 +916,7 @@ async def test_a_reset_or_an_edit_on_the_way_ends_the_trip_and_says_so(pg, how):
 async def test_move_without_a_destination_is_unchanged(pg):
     """speed left out is 0.2 m/s and seconds left out 3 s, exactly as before move took a destination."""
     pg.add_robot("dog", template="quadruped")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         given = json.loads((await client.call_tool("move", {"robot": "dog", "speed": 0.2})).content[0].text)
         pg.session.reset()

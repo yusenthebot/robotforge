@@ -181,9 +181,9 @@ class Hand:
             coming = self._joint_way(paths[-1][0][-1], hold_q, (half, radius), "carry", LOADED_TILT)
         if coming is None:
             across = arm._carry_height(back, hold, back[2], half)
-            if across is None:
+            if across.z is None:
                 raise ValueError(f"{arm.robot} cannot swing the load round from the object to over its robot")
-            carry_z, carry_turn, carry_joints = across
+            carry_z, carry_turn, carry_joints = across.z, across.turn, across.joints
             over = np.array([hold[0], hold[1], carry_z])
             if carry_joints is None and not self._way_clear(back, over, carry_turn):
                 raise OutOfReach(arm.robot, ["object without touching what is round it"], {"object": grasp})
@@ -201,7 +201,9 @@ class Hand:
         if carry_z > back[2] + 1e-6:
             start = np.array([back[0], back[1], carry_z])
             arm.queue.append(Waypoint(start, None, arm._time(back, start), "lift", turn=0.0, load=half))
-        arm._carry(start, over, carry_turn, carry_joints, half)  # the errand lowers it to `hold` from there
+        arm.queue.append(
+            arm._carry(start, over, carry_turn, carry_joints, half)
+        )  # the errand lowers it to `hold` from there
 
     def put(self, place: np.ndarray, half: float, place_top: float | None, tilt: float) -> None:
         """Queue putting the load the gripper holds over the robot (picked up with pick_up or pick) down at `place`
@@ -216,15 +218,15 @@ class Hand:
         stage, paths = self._way(tilt, toward, above[2], above, [drop, backed])
         up = np.array([start[0], start[1], max(start[2] + APPROACH, stage[2])])
         across = arm._carry_height(up, stage, up[2], half)
-        if across is None:
+        if across.z is None:
             raise ValueError(f"{arm.robot} cannot swing the load round from over its robot to the place")
-        carry_z, carry_turn, carry_joints = across
+        carry_z, carry_turn, carry_joints = across.z, across.turn, across.joints
         up[2] = carry_z
         over_stage = np.array([stage[0], stage[1], carry_z])
         if carry_joints is None and not self._way_clear(up, over_stage, carry_turn):
             raise OutOfReach(arm.robot, ["place without touching what is round it"], {"place": drop})
         arm.queue.append(Waypoint(up, None, arm._time(start, up) + 0.3, "lift", turn=0.0, load=half))
-        arm._carry(up, over_stage, carry_turn, carry_joints, half)
+        arm.queue.append(arm._carry(up, over_stage, carry_turn, carry_joints, half))
         if carry_z > stage[2] + 1e-6:
             arm.queue.append(Waypoint(stage, None, arm._time(over_stage, stage), "lower", turn=0.0, load=half))
         self._follow(*paths[0], "reach in", half)
@@ -299,9 +301,9 @@ class Hand:
         coming = self._joint_way(drawn[-1], hold_q, load, "carry", LOADED_TILT)
         if coming is None:
             across = arm._carry_height(back, hold, back[2], half)
-            if across is None:
+            if across.z is None:
                 return None
-            carry_z, carry_turn, carry_joints = across
+            carry_z, carry_turn, carry_joints = across.z, across.turn, across.joints
             coming = []
             start = back
             if carry_z > back[2] + 1e-6:

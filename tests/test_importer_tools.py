@@ -13,7 +13,6 @@ from importer_fixtures import arm_urdf, box_stl, rover_urdf, write
 from mcp import Client
 
 from robotforge import cli
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
 
@@ -121,7 +120,7 @@ def test_imported_robot_and_template_robot_share_a_world(tmp_path):
 
 async def test_mcp_tools_return_the_doctor_field(tmp_path):
     urdf = write(tmp_path / "arm.urdf", arm_urdf())
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         opened = json.loads(_text(await client.call_tool("open_model", {"path": str(urdf)})))
         assert "actuators" in _topics(opened["doctor"], "fixed")
@@ -162,7 +161,7 @@ async def test_a_slow_import_does_not_freeze_the_event_loop(tmp_path, monkeypatc
             gaps.append(now - last)
             last = now
 
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         await client.call_tool("new_world", {"name": "slow import"})
         beat = asyncio.create_task(heartbeat())
@@ -189,7 +188,7 @@ async def test_two_imports_at_once_both_end_up_in_the_world(tmp_path, monkeypatc
 
     monkeypatch.setattr(importer, "import_file", slow_import)
     urdf = write(tmp_path / "arm.urdf", arm_urdf())
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         await client.call_tool("new_world", {"name": "two at once"})
         results = await asyncio.gather(

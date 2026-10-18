@@ -186,8 +186,13 @@ class ScriptRunner:
 
     def _op_sensors(self, req) -> dict[str, Any]:
         prefix = f"{req['robot']}/"
-        sensors = self.pg.state()["sensors"]
+        sensors = self.pg.sensor_readings()  # all of them: observe's list stops at 40, and a lidar's rays went missing
         return {k[len(prefix) :]: v for k, v in sensors.items() if k.startswith(prefix)}
+
+    def _op_sensor(self, req) -> dict[str, Any]:
+        """One sensor's reading by name, the way read_sensors gives it (no pictures: a script reads numbers)."""
+        reading, _ = self.pg.read_sensors(str(req["robot"]), [str(req["name"])], full=bool(req.get("full")))
+        return next(iter(reading["sensors"].values()))
 
     def _op_set_controls(self, req) -> None:
         self.pg.set_controls({str(k): float(v) for k, v in req["controls"].items()})
@@ -203,7 +208,14 @@ class ScriptRunner:
         await self._advance(lambda: ctrl.done, 20.0)
         return bool(self.pg.behaviors.pose(req["robot"])["upright"])
 
+    async def _carrier_stands(self, robot: str) -> None:
+        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
+        stop = self.pg.behaviors.stop_carrier(robot)
+        if stop is not None:
+            await self._advance(stop.still, stop.seconds)
+
     async def _op_move_arm(self, req) -> list[float]:
+        await self._carrier_stands(req["robot"])
         arm = self.pg.behaviors.move_arm(req["robot"], req["position"], req.get("gripper"))
         await self._advance(lambda: arm.done, 20.0)
         return [round(float(v), 4) for v in self.pg.session.data.site_xpos[arm.site]]
@@ -214,6 +226,7 @@ class ScriptRunner:
 
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
+        await self._carrier_stands(req["robot"])
         motion, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
         await self._advance(lambda: motion.done, getattr(motion, "time_limit", 40.0))  # an errand goes over first
         await self._advance(lambda: False, 0.5)

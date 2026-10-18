@@ -1,6 +1,6 @@
 ---
 name: robotforge
-description: Use for robots and embodied AI with the robotforge MCP tools (a MuJoCo playground for beginners) to build, load or import (URDF) robots, make them walk, drive or grasp, compare controllers, write robot scripts and teach lessons. 机器人仿真，具身智能入门。
+description: Use for robots and embodied AI with the robotforge MCP tools (a MuJoCo playground for beginners) to build, load or import (URDF) robots, make them walk, drive, fly or grasp, compare controllers, write robot scripts and teach lessons. 机器人仿真，具身智能入门。
 ---
 
 # robotforge
@@ -8,6 +8,7 @@ description: Use for robots and embodied AI with the robotforge MCP tools (a MuJ
 robotforge is a robot playground on the MuJoCo physics engine, made for beginners.
 The user describes a robot and a goal in plain words; you build it with the robotforge MCP tools, make it move, check the result and explain the idea behind each step.
 The tools come from the `robotforge` MCP server: Claude Code names them `mcp__plugin_robotforge_robotforge__<tool>`, Codex `mcp__robotforge__<tool>`; search your tool list for `robotforge`.
+Clients that load MCP tools on demand (recent Codex) show them only through their tool search: search it for `robotforge` before deciding they are missing.
 The very first start installs the server's Python packages and can take a minute, so if the tools are not there yet, wait and look again before anything else.
 Do not work around missing tools by importing robotforge's Python modules yourself: nothing would show in the user's viewer. Follow [references/troubleshooting.md](references/troubleshooting.md) instead.
 
@@ -18,18 +19,21 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, warehouse, park, maze, obstacle_course. Robots already in the world move to the scene's places.
    - Ground and terrain: `set_floor(style)` (checker, grass, wood, concrete, dirt, sand, rock, snow, tile); `set_terrain(type)` for the whole ground or `add_terrain(type, pos)` for one feature (hills, rough, stairs, ramp, stones, curb, platform).
 3. **Robot.** Pick the source that fits:
-   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, tuned with `params` (sizes, servo, color);
-   - library (`list_library`): real robots such as `go2` or `panda`, downloaded on first use (4-55 MB);
+   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, drone (4, 6 or 8 rotors), tuned with `params` (sizes, servo, color);
+   - library (`list_library`): real robots such as `go2`, `panda` or the `skydio_x2` and `crazyflie` drones, downloaded on first use (4-55 MB); `mounts` puts one on another, an arm on a dog's back (`add_robot(name="go2", library="go2", mounts=[{"library": "piper"}])`, then the arm is `go2/arm`, and a walking dog stops before it works) or a gripper on an arm's flange (`ur5e` with `robotiq_2f85`, also on a dog: `anymal_c` with both); each walker carries only what `list_library` says (`carries`);
    - file: `add_robot(file=...)` imports URDF, xacro, MJCF or a mesh and returns the import doctor's report;
-   - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover);
+   - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, rotors, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover, a hexacopter);
    - design (`list_templates` lists them): a ready-made unusual robot from the gallery, `add_robot(name, design="centaur")` (wheel-legged biped, Mars rover, centaur, scorpion, a Go2 carrying a PiPER arm, tentacle...), saved as parts so `update_part` changes it;
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin).
+   Sensors go on any robot's body with `add_sensor` (camera rgb, depth or segmentation, 2D or 3D lidar, IMU, encoders, force_torque at a wrist, touch arrays on feet, rangefinder, GPS, odometry; rate, noise, latency in `options`); `read_sensors` reads them, `remove("robot/sensor")` takes one off.
+   The viewer draws what added sensors sense: lidar rays and points, a camera's picture beside the view, IMU, encoder and force plots, touch pads and force arrows; `open_viewer(show=["go2/front_cam"])` also draws one the robot came with and brings a camera's picture up.
 4. **Viewer early.** Call `open_viewer()` as soon as a robot exists and tell the user what they can do: drag the robot, drive with W A S D, and use the panels.
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
+   - aircraft (kind `aircraft` in `robots`): `move(robot, to=[x, y, z])` takes off and flies there, then hovers; a list of points flies a path, e.g. a 3 m square at 2 m: `to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]`; a last point with z 0 lands there (one call can take off, fly the path and land); z is a height above the world's zero, not above the ground under it, so over a hill or a table check `clearance_m` in the result; a point under a tree's crown or a table hovers there (z at the table's height lands on it); a landing where something stands (a ball, a crate, a robot), on top of what moves or a crown, or at an edge is refused with a spot nearby on the same surface that has room; legs go over or round what is in the way; `stop` hovers in place; `simulate(seconds, wind=[x, y])` blows a gust to show how it holds its place; the viewer flies it with W and S (forward, back), A and D (sideways), the arrow keys (turn), E (up) and Q (down); dragged with the mouse it holds where it is let go; `compare_controllers(drone, task="hover", push_at=3)` compares its own flight controller (`cascade`: position, attitude, body rates) with `lqr` and `mpc`, and `run_controller` flies it with one of them until `stop`, which hands it back to the flight controller;
    - `move_arm` / `gripper` / `pick_and_place`: arms; with an arm on a robot that drives or walks (`mobile_panda`, `lift_picker`, `go2_arm`), `pick_and_place` fetches: the robot goes over, picks the thing up, carries it and puts it down ("bring the apple to the table"), and says what it did or why it cannot before it moves;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;
@@ -38,6 +42,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - a robot that no gait code knows, built from parts or imported from a URDF (`move` says so), can learn a walk of its own in the viewer's RL II lesson ("Keep this walk for my robot"); `robots` then lists its `learned_walk` and `move` uses it: forward at its own pace, and once its turns are learned (they follow keeping the walk) turning on the spot;
    - when the user asks such a robot (it has a `walk_hint`) to walk, say so before anything else and offer that lesson: about ten seconds of learning, and the walk is kept; a hand-written gait script is the fallback if they decline;
    - `train_policy` when the tool list has it: reinforcement learning (optional `rl` extra); `unilab_check` / `unilab_train` for the UniLab backend.
+   - a video to keep or share: `move(..., record=true)` or `run_script(name, record="show.gif")` saves the motion, playing in real time (record=true: a GIF; a file name picks `.gif` or `.webp`, and `.mp4` is saved as a GIF) in the world's `videos` folder; the result's `video.path` says where, to copy it from. No browser is needed.
 6. **Check, then explain.** Verify with numbers and an image (next section), explain what happened and why, offer a next step.
 
 ## Conventions
@@ -56,17 +61,21 @@ Never say something worked because the call returned. Read the numbers, and look
 |---|---|
 | `add_robot`, `add_object` | it is listed; `observe()` shows it where expected; for imports read `doctor` (fixed, unfixed, notes) |
 | `move` | `distance_m`, `turned_deg`, `to.upright`, any `note` (why it fell short); with `seconds` it has stopped already (`stopped: true`, no `stop` needed) |
+| `move` with `to`, an aircraft | `arrived`, `to.position` against the target, `max_tracking_error_m`; landing: `landed` and `touchdown_m_s` (below about 0.4 is gentle); `robots` shows its `flight.state` and `altitude_m` |
 | `pose` | `upright` |
 | `move_arm` | `tool_position` against the target (within about 3 cm) |
 | `pick_and_place` | `success`, `object_position` |
 | `run_controller` | `success`, `failed_at`, `reward`, `stopped_early`; `keeps_running` means call `stop(robot)` later |
 | `compare_controllers` | the `table` and `best`; explain with its numbers |
 | `run_script` | `ok`, `output`, traceback |
+| `add_sensor` | `sensor` name, `position_m`, the first `reading`; then `read_sensors` (lidar `ahead` and `nearest` with `bearing_deg`, depth `nearest` distance; `center_m` is depth along the axis) |
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
-`observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.
+`observe(view=...)` takes default, front, back, left, right, top, a robot's name (`view="dog"`: the default view framed on that robot), or a robot camera such as `dog/front_cam`.
 `observe(view, find="red")` (a color name, a hex code, or "all") lists what that view sees of the color: each find's world `position`, the `object` name `pick_and_place` takes, and `about_cm`, how far off the position may be.
 A flag on a find (cut_off, hidden, side_on, raised, held_by) means it may be much further off; the result's `how` says what each one it carries means.
+A lidar (a sensor on a robot built from parts) comes whole in `observe()`'s `lidars`: `nearest_m`, `nearest_bearing_deg` from the robot's front (positive is left), `nearest_side`, the nearest hit on each side, and every ray in `ranges_m` (null: nothing within range).
+A lidar or rangefinder sees past its own robot's parts (a column, the wheels), so its nearest hit is something else.
 Without OpenGL it returns the state with a note instead of an image: rely on the numbers and ask the user to look at the viewer.
 When something fails, say so plainly, read the error (it says what to do), fix it and check again.
 Report real numbers, including disappointing ones.

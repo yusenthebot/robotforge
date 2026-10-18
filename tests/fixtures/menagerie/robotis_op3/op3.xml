@@ -1,0 +1,167 @@
+<!--
+  Offline stand-in for MuJoCo Menagerie's robotis_op3/op3.xml (Apache-2.0, see that folder's LICENSE), for tests
+  only: the same bodies, joints, inertias, foot boxes and actuators; every other collision mesh is replaced by a
+  thin capsule from joint to joint (only the feet touch the floor) and the visual meshes are left out.
+-->
+<mujoco model="robotis_op3">
+  <compiler angle="radian"/>
+
+  <default>
+    <mesh scale="0.001 0.001 0.001"/>
+    <joint armature="0.045" damping="1.084" frictionloss="0.03"/>
+    <geom type="mesh" solref="0.004"/>
+    <site group="5"/>
+    <general ctrlrange="-3.14159 3.14159" forcerange="-5 5" biastype="affine" gainprm="21.1" biasprm="0 -21.1"/>
+    <default class="collision">
+      <geom group="3"/>
+      <default class="foot">
+        <geom type="box"/>
+      </default>
+    </default>
+    <default class="visual">
+      <geom contype="0" conaffinity="0" group="2" material="black"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light target="body_link" pos="4 0 1" mode="targetbodycom"/>
+    <body name="body_link" pos="0 0 0.3">
+      <inertial pos="-0.01501 0.00013 0.06582" quat="0.704708 0.704003 0.0667707 -0.0575246" mass="1.34928" diaginertia="0.00341264 0.00316574 0.00296931"/>
+      <joint type="free" armature="0" damping="0" frictionloss="0"/>
+      <geom size="0.01 0.0682518" pos="-0.0005 0 0.06825" quat="0.00366293 0 0.999993 0" type="capsule" group="3"/>
+      <geom size="0.01 0.0630912" pos="-0.0005 0.03 0.0555" quat="0.245276 0.969319 0.0161553 0" type="capsule" group="3"/>
+      <geom size="0.01 0.0630912" pos="-0.0005 -0.03 0.0555" quat="0.245276 -0.969319 0.0161553 0" type="capsule" group="3"/>
+      <geom size="0.01 0.0175" pos="0 0.0175 0" quat="0.707107 0.707107 0 0" type="capsule" group="3"/>
+      <geom size="0.01 0.0175" pos="0 -0.0175 0" quat="0.707107 -0.707107 0 0" type="capsule" group="3"/>
+      <site name="torso"/>
+      <body name="head_pan_link" pos="-0.001 0 0.1365">
+        <inertial pos="0.00233 0 0.00823" quat="0.663575 0.663575 0.244272 -0.244272" mass="0.01176" diaginertia="4.23401e-06 3.60599e-06 1.65e-06"/>
+        <joint name="head_pan"/>
+        <geom size="0.01 0.0178413" pos="0.005 0.0095 0.01425" quat="0.317248 0.839206 -0.441687 0" type="capsule" group="3"/>
+        <body name="head_tilt_link" pos="0.01 0.019 0.0285">
+          <inertial pos="0.0023 -0.01863 0.0277" quat="0.997312 0.00973825 0.0726131 -0.00102702" mass="0.13631" diaginertia="0.000107452 8.72266e-05 4.39413e-05"/>
+          <joint name="head_tilt" axis="0 -1 0"/>
+          <camera name="egocentric" quat="0.5 0.5 -0.5 -0.5" pos="0.01425 -0.019 0.04975" fovy="43.3"/>
+        </body>
+      </body>
+      <body name="l_sho_pitch_link" pos="-0.001 0.06 0.111">
+        <inertial pos="0 0.00823 -0.00233" quat="0.244272 0.663575 0.244272 0.663575" mass="0.01176" diaginertia="4.23401e-06 3.60599e-06 1.65e-06"/>
+        <joint name="l_sho_pitch" axis="0 1 0"/>
+        <geom size="0.01 0.0178413" pos="0.0095 0.01425 -0.005" quat="0.800078 0.499144 -0.332763 0" type="capsule" group="3"/>
+        <body name="l_sho_roll_link" pos="0.019 0.0285 -0.01">
+          <inertial pos="-0.01844 0.04514 0.00028" quat="0.501853 0.50038 -0.498173 0.499588" mass="0.17758" diaginertia="0.000234742 0.00022804 3.04183e-05"/>
+          <joint name="l_sho_roll" axis="-1 0 0"/>
+          <geom size="0.01 0.0452" pos="0 0.0452 -5e-05" quat="0.707498 0.706716 0 0" type="capsule" group="3"/>
+          <body name="l_el_link" pos="0 0.0904 -0.0001">
+            <inertial pos="-0.019 0.07033 0.0038" quat="0.483289 0.51617 -0.51617 0.483289" mass="0.04127" diaginertia="6.8785e-05 6.196e-05 1.2065e-05"/>
+            <joint name="l_el" axis="1 0 0"/>
+          </body>
+        </body>
+      </body>
+      <body name="r_sho_pitch_link" pos="-0.001 -0.06 0.111">
+        <inertial pos="0 -0.00823 -0.00233" quat="-0.244272 0.663575 -0.244272 0.663575" mass="0.01176" diaginertia="4.23401e-06 3.60599e-06 1.65e-06"/>
+        <joint name="r_sho_pitch" axis="0 -1 0"/>
+        <geom size="0.01 0.0178413" pos="0.0095 -0.01425 -0.005" quat="0.800078 -0.499144 -0.332763 0" type="capsule" group="3"/>
+        <body name="r_sho_roll_link" pos="0.019 -0.0285 -0.01">
+          <inertial pos="-0.01844 -0.04514 0.00028" quat="0.50038 0.501853 -0.499588 0.498173" mass="0.17758" diaginertia="0.000234742 0.00022804 3.04183e-05"/>
+          <joint name="r_sho_roll" axis="-1 0 0"/>
+          <geom size="0.01 0.0452" pos="0 -0.0452 -5e-05" quat="0.707498 -0.706716 0 0" type="capsule" group="3"/>
+          <body name="r_el_link" pos="0 -0.0904 -0.0001">
+            <inertial pos="-0.019 -0.07033 0.0038" quat="0.51617 0.483289 -0.483289 0.51617" mass="0.04127" diaginertia="6.8785e-05 6.196e-05 1.2065e-05"/>
+            <joint name="r_el" axis="1 0 0"/>
+          </body>
+        </body>
+      </body>
+      <body name="l_hip_yaw_link" pos="0 0.035 0">
+        <inertial pos="-0.00157 0 -0.00774" quat="0.499041 0.500957 0.500957 0.499041" mass="0.01181" diaginertia="4.3e-06 4.12004e-06 1.50996e-06"/>
+        <joint name="l_hip_yaw" axis="0 0 -1"/>
+        <geom size="0.01 0.0186296" pos="-0.012 0 -0.01425" quat="0.939391 0 0.342847 0" type="capsule" group="3"/>
+        <body name="l_hip_roll_link" pos="-0.024 0 -0.0285">
+          <inertial pos="0.00388 0.00028 -0.01214" quat="0.502657 0.490852 0.498494 0.507842" mass="0.17886" diaginertia="0.000125243 0.000108598 4.65693e-05"/>
+          <joint name="l_hip_roll" axis="-1 0 0"/>
+          <geom size="0.01 0.0153445" pos="0.01205 0.0095 0" quat="0.707107 0.437781 -0.555291 0" type="capsule" group="3"/>
+          <body name="l_hip_pitch_link" pos="0.0241 0.019 0">
+            <inertial pos="0.00059 -0.01901 -0.08408" quat="0.999682 0.0246915 0.00447825 -0.002482" mass="0.11543" diaginertia="0.000104996 9.63044e-05 2.47492e-05"/>
+            <joint name="l_hip_pitch" axis="0 1 0"/>
+            <geom size="0.01 0.055075" pos="0 0 -0.055075" type="capsule" group="3"/>
+            <body name="l_knee_link" pos="0 0 -0.11015">
+              <inertial pos="0 -0.02151 -0.055" mass="0.04015" diaginertia="3.715e-05 2.751e-05 1.511e-05"/>
+              <joint name="l_knee" axis="0 1 0"/>
+              <geom size="0.01 0.055" pos="0 0 -0.055" type="capsule" group="3"/>
+              <body name="l_ank_pitch_link" pos="0 0 -0.11">
+                <inertial pos="-0.02022 -0.01872 0.01214" quat="0.490852 0.502657 0.507842 0.498494" mass="0.17886" diaginertia="0.000125243 0.000108598 4.65693e-05"/>
+                <joint name="l_ank_pitch" axis="0 -1 0"/>
+                <geom size="0.01 0.0153445" pos="-0.01205 -0.0095 0" quat="0.707107 -0.437781 0.555291 0" type="capsule" group="3"/>
+                <body name="l_ank_roll_link" pos="-0.0241 -0.019 0">
+                  <inertial pos="0.02373 0.01037 -0.0276" quat="0.0078515 0.707601 0.0113965 0.706477" mass="0.06934" diaginertia="0.000115818 7.87135e-05 4.03389e-05"/>
+                  <joint name="l_ank_roll" axis="1 0 0"/>
+                  <geom class="foot" size="0.0635 0.028 0.004" pos="0.024 0.013 -0.0265" mass="0"/>
+                  <geom class="foot" size="0.057 0.039 0.004" pos="0.024 0.0125 -0.0265" mass="0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="r_hip_yaw_link" pos="0 -0.035 0">
+        <inertial pos="-0.00157 0 -0.00774" quat="0.499041 0.500957 0.500957 0.499041" mass="0.01181" diaginertia="4.3e-06 4.12004e-06 1.50996e-06"/>
+        <joint name="r_hip_yaw" axis="0 0 -1"/>
+        <geom size="0.01 0.0186296" pos="-0.012 0 -0.01425" quat="0.939391 0 0.342847 0" type="capsule" group="3"/>
+        <body name="r_hip_roll_link" pos="-0.024 0 -0.0285">
+          <inertial pos="0.00388 -0.00028 -0.01214" quat="0.507842 0.498494 0.490852 0.502657" mass="0.17886" diaginertia="0.000125243 0.000108598 4.65693e-05"/>
+          <joint name="r_hip_roll" axis="-1 0 0"/>
+          <geom size="0.01 0.0153445" pos="0.01205 -0.0095 0" quat="0.707107 -0.437781 -0.555291 0" type="capsule" group="3"/>
+          <body name="r_hip_pitch_link" pos="0.0241 -0.019 0">
+            <inertial pos="0.00059 0.01901 -0.08408" quat="0.999682 -0.0246915 0.00447825 0.002482" mass="0.11543" diaginertia="0.000104996 9.63044e-05 2.47492e-05"/>
+            <joint name="r_hip_pitch" axis="0 -1 0"/>
+            <geom size="0.01 0.055075" pos="0 0 -0.055075" type="capsule" group="3"/>
+            <body name="r_knee_link" pos="0 0 -0.11015">
+              <inertial pos="0 0.02151 -0.055" mass="0.04015" diaginertia="3.715e-05 2.751e-05 1.511e-05"/>
+              <joint name="r_knee" axis="0 -1 0"/>
+              <geom size="0.01 0.055" pos="0 0 -0.055" type="capsule" group="3"/>
+              <body name="r_ank_pitch_link" pos="0 0 -0.11">
+                <inertial pos="-0.02022 0.01872 0.01214" quat="0.498494 0.507842 0.502657 0.490852" mass="0.17886" diaginertia="0.000125243 0.000108598 4.65693e-05"/>
+                <joint name="r_ank_pitch" axis="0 1 0"/>
+                <geom size="0.01 0.0153445" pos="-0.01205 0.0095 0" quat="0.707107 0.437781 0.555291 0" type="capsule" group="3"/>
+                <body name="r_ank_roll_link" pos="-0.0241 0.019 0">
+                  <inertial pos="0.02373 -0.01037 -0.0276" quat="-0.0078515 0.707601 -0.0113965 0.706477" mass="0.06934" diaginertia="0.000115818 7.87135e-05 4.03389e-05"/>
+                  <joint name="r_ank_roll" axis="1 0 0"/>
+                  <geom class="foot" size="0.0635 0.028 0.004" pos="0.024 -0.013 -0.0265" mass="0"/>
+                  <geom class="foot" size="0.057 0.039 0.004" pos="0.024 -0.0125 -0.0265" mass="0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="l_hip_yaw_link" body2="l_hip_pitch_link"/>
+    <exclude body1="r_hip_yaw_link" body2="r_hip_pitch_link"/>
+  </contact>
+
+  <actuator>
+    <general name="head_pan_act" joint="head_pan"/>
+    <general name="head_tilt_act" joint="head_tilt"/>
+    <general name="l_sho_pitch_act" joint="l_sho_pitch"/>
+    <general name="l_sho_roll_act" joint="l_sho_roll"/>
+    <general name="l_el_act" joint="l_el"/>
+    <general name="r_sho_pitch_act" joint="r_sho_pitch"/>
+    <general name="r_sho_roll_act" joint="r_sho_roll"/>
+    <general name="r_el_act" joint="r_el"/>
+    <general name="l_hip_yaw_act" joint="l_hip_yaw"/>
+    <general name="l_hip_roll_act" joint="l_hip_roll"/>
+    <general name="l_hip_pitch_act" joint="l_hip_pitch"/>
+    <general name="l_knee_act" joint="l_knee"/>
+    <general name="l_ank_pitch_act" joint="l_ank_pitch"/>
+    <general name="l_ank_roll_act" joint="l_ank_roll"/>
+    <general name="r_hip_yaw_act" joint="r_hip_yaw"/>
+    <general name="r_hip_roll_act" joint="r_hip_roll"/>
+    <general name="r_hip_pitch_act" joint="r_hip_pitch"/>
+    <general name="r_knee_act" joint="r_knee"/>
+    <general name="r_ank_pitch_act" joint="r_ank_pitch"/>
+    <general name="r_ank_roll_act" joint="r_ank_roll"/>
+  </actuator>
+</mujoco>

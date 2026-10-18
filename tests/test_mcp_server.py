@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+import time
 import urllib.request
 
 import anyio
@@ -11,6 +12,7 @@ from mcp.client.stdio import StdioServerParameters
 from robotforge import mcp_server
 from robotforge.mcp_server import VIEWER_UI_URI, build_server
 from robotforge.playground import Playground
+from robotforge.sim.session import SimSession
 
 pytestmark = pytest.mark.anyio
 
@@ -53,6 +55,45 @@ async def test_tools_drive_the_demo_arm(gl_reason):
             assert obs.content[1].type == "image" and obs.content[1].mime_type == "image/png"
         else:  # headless machine: the state still arrives, with a note instead of an image
             assert len(obs.content) == 1 and "No image" in state["note"]
+
+
+@pytest.mark.parametrize("tool", ["move_arm", "pick_and_place"])
+async def test_an_arm_plans_its_move_off_the_event_loop(tmp_path, monkeypatch, tool):
+    """Regression: pick_and_place and move_arm planned on the server's event loop, so the live viewer froze for as
+    long as a plan took: seconds for an arm on a carrier, or for the advice on where a refused pick works."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("lab")
+    playground.add_robot("arm", template="arm")
+    playground.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.25, -0.1])
+    planner = getattr(playground.behaviors, tool)
+    planning: list[float] = []  # when the planning began and ended
+    ticks: list[float] = []  # when the event loop got round to the ticker
+
+    def slow(*args):
+        planning.append(time.monotonic())
+        time.sleep(0.3)  # planning, holding the event loop if it runs there
+        planning.append(time.monotonic())
+        return planner(*args)
+
+    monkeypatch.setattr(playground.behaviors, tool, slow)
+
+    async def tick():
+        while True:
+            await asyncio.sleep(0.01)
+            ticks.append(time.monotonic())
+
+    args = {"robot": "arm", "position": [0.25, 0.1, 0.15]}
+    if tool == "pick_and_place":
+        args = {"robot": "arm", "object": "cube", "target": [0.2, 0.15]}
+    server = build_server(playground, 0)
+    async with Client(server) as client:
+        ticker = asyncio.ensure_future(tick())
+        result = await client.call_tool(tool, args)
+        ticker.cancel()
+    assert not result.is_error, _text(result)
+    began, ended = planning
+    assert sum(began < t < ended for t in ticks) >= 10  # the loop went on ticking while the arm planned
 
 
 async def test_tool_errors_reach_the_agent_with_guidance():
@@ -114,13 +155,12 @@ async def test_servers_built_together_each_hold_their_own_viewer_port():
             assert "robotforge" in page
 
 
-@pytest.mark.parametrize("once_per_socket", [False, True], ids=["copies", "windows"])
-async def test_a_port_0_server_serves_the_viewer_to_each_session_in_turn(monkeypatch, once_per_socket):
+async def test_a_port_0_server_serves_the_viewer_to_each_session_in_turn():
     """The first session's viewer closed the held port when it shut down: the next session on the same server
     object had no viewer (connection refused) on the URL open_viewer still gave it. On Windows a copy of the held
     socket could not be served a second time (WinError 87), so there each session serves the socket itself and
-    the next one takes the port again."""
-    monkeypatch.setattr(mcp_server, "_SERVED_ONCE_PER_SOCKET", once_per_socket)
+    the next one takes the port again. Each platform runs its own path: Windows refuses the copies, and Linux
+    refuses to bind a port whose old connections (without SO_REUSEADDR) are still in TIME_WAIT."""
     playground = Playground.with_demo()
     server = build_server(playground, 0)
     for _ in range(2):
@@ -184,3 +224,21 @@ async def test_two_stdio_servers_started_together_both_serve():
 
     urls = await asyncio.gather(viewer_url(), viewer_url())
     assert urls[0] != urls[1]
+
+
+async def test_a_port_found_free_is_held_from_the_moment_the_server_is_built():
+    """Tests (and scripts) find a free port, build a server on it and start a session later. In between, another
+    process took the port (many agents testing at once, 2026-10-18: port 8791) and the viewer could not listen.
+    The server now holds the port from build_server on."""
+    import socket
+
+    from robotforge.cli import find_free_port
+
+    port = find_free_port(8790)
+    server = build_server(Playground.with_demo(), port)
+    with socket.socket() as other, pytest.raises(OSError):
+        other.bind(("127.0.0.1", port))  # anyone else after the same port finds it taken
+    async with Client(server) as client:
+        url = _data(await client.call_tool("open_viewer", {"launch_browser": False}))["viewer_url"]
+        assert url == f"http://127.0.0.1:{port}/"
+        assert "robotforge" in await asyncio.to_thread(_fetch, url)

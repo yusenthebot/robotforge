@@ -106,6 +106,9 @@ SYNONYMS = {
     "source": "code",
     "joint_targets": "controls",
     "duration_s": "seconds",
+    "video": "record",
+    "record_video": "record",
+    "save_video": "record",
 }
 # What a parameter takes, in words, for a value of the wrong shape.
 FORMS = {
@@ -228,7 +231,13 @@ def tidy(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> 
     out = {k: _read(k, v, props[k]) for k, v in arguments.items() if k in required or not _blank(v, props[k])}
     if out.get("build") == {}:
         _drop_empty_build(tool, arguments, out)
+    if tool == "update_robot" and out.get("mounts") == [] and _other_change(out):
+        del out["mounts"]  # filled in beside the change it means: taking every mounted robot off is not it
     return out
+
+
+def _other_change(out: Mapping[str, Any]) -> bool:
+    return bool(out.get("params")) or any(out.get(k) is not None for k in ("pos", "yaw")) or bool(out.get("build"))
 
 
 def _drop_empty_build(tool: str, arguments: Mapping[str, Any], out: dict[str, Any]) -> None:

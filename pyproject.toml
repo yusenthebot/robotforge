@@ -44,8 +44,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Slow tests (lessons that train for a minute or more) stay out of the default run; `-m slow` runs them.
-addopts = "-m 'not slow'"
-markers = ["slow: plays something that takes a minute or more; run with -m slow"]
+# Browser tests drive the real viewer in headless Google Chrome; `-m browser` runs them (not yet in CI).
+addopts = "-m 'not slow and not browser'"
+markers = [
+    "slow: plays something that takes a minute or more; run with -m slow",
+    "browser: drives the real viewer in headless Google Chrome; run with -m browser",
+]
 
 [tool.ruff]
 line-length = 120

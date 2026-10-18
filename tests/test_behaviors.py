@@ -5,7 +5,6 @@ import pytest
 from mcp import Client
 
 from robotforge.behaviors.manager import BehaviorError, ideal_reach
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -139,19 +138,21 @@ def test_unreachable_pick_is_refused_with_advice(pg):
 
 def test_a_bin_within_reach_but_too_far_to_point_down_into_is_moved_nearer_not_further(pg):
     """A session moved the workshop's bin to 0.36 m, was told "within its reach ... move it a little further from
-    the base", and failed three more times moving it further: the template arm points down into a bin only within
-    about 0.3 m of its base. The error now says where along that line it works, and that spot works."""
+    the base", and failed three more times moving it further: the template arm got over a bin only within about 0.3 m
+    of its base. Leaning out above it (see arm.TILTS) it gets over one at 0.36 m now, so here the bin is at 0.44 m.
+    The error says where along that line it works, as far as the arm really gets, and that spot works."""
     import re
 
     pg.add_robot("arm", template="arm")
     pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
-    pg.add_object("bin", shape="bin", pos=[0.3, -0.2])
+    pg.add_object("bin", shape="bin", pos=[0.37, -0.24])
     with pytest.raises(BehaviorError) as refused:
         pg.behaviors.pick_and_place("arm", "green_cube", "bin")
     said = str(refused.value)
     assert "move the bin nearer" in said and "further" not in said, said
+    assert "only 0.08 to 0.36 m from the base" in said, said  # where the pick really works, leaning above the bin
     spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
-    assert 0.2 < math.hypot(*spot) < 0.32
+    assert 0.2 < math.hypot(*spot) < 0.37
     pg.update_object("bin", pos=spot)
     arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
     pg.run_fast(lambda: arm.done, 40.0)
@@ -196,7 +197,7 @@ async def test_move_and_pick_tools_report_results(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, -0.12], color="red")
     pg.add_object("tray", shape="bin", size=[0.14, 0.14, 0.05], pos=[0.05, 0.28], color="blue")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("move", {"robot": "dog", "speed": 0.25, "seconds": 4})
         moved = json.loads(result.content[0].text)
@@ -213,7 +214,7 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
     0.15 m/s), then saw the wheels still commanded in observe and zeroed them with set_controls and simulate."""
     pg.add_robot("rover", template="rover")
     pg.add_robot("dog", template="quadruped", pos=[0, 1.5])
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         driven = json.loads(
             (await client.call_tool("move", {"robot": "rover", "speed": 0.15, "seconds": 2})).content[0].text
@@ -237,7 +238,7 @@ async def test_stop_after_run_controller_stops_a_rovers_wheels(pg):
     """run_controller leaves its controller attached; stop removed it but left the wheel speeds it last set, and
     the rover in the eval went on spinning (0.11 m and a quarter turn in 2 s) until the agent zeroed them."""
     pg.add_robot("rover", template="rover")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         ran = await client.call_tool(
             "run_controller",
@@ -261,7 +262,7 @@ async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
     on the smallest motors, pushes with 1.3 N for 54 kg and cannot.)"""
     params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("mars_rover", template="rover", params=params)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("move", {"robot": "mars_rover", "speed": 0.3, "seconds": 3})
         moved = json.loads(result.content[0].text)
@@ -278,7 +279,7 @@ async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
     params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("heavy", template="rover", params=params, pos=[0, 2])
     pg.add_robot("dog", template="quadruped", pos=[0, -2])
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         circle = {"robot": "rover", "speed": 0.3, "turn": 1.0, "seconds": 6.3}
         looped = json.loads((await client.call_tool("move", circle)).content[0].text)
@@ -299,7 +300,7 @@ async def test_a_short_move_on_flat_ground_is_not_told_it_was_held_back(pg):
     import test_builder
 
     pg.add_robot("snake", build=test_builder.SNAKE)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         nudged = json.loads(
             (await client.call_tool("move", {"robot": "snake", "speed": 0.2, "seconds": 1})).content[0].text
@@ -314,7 +315,7 @@ async def test_a_robot_that_went_backwards_is_told_so(pg):
     import test_builder
 
     pg.add_robot("spider", build=test_builder.SPIDER)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         moved = json.loads(
             (await client.call_tool("move", {"robot": "spider", "speed": 0.12, "seconds": 5})).content[0].text
@@ -372,6 +373,62 @@ def test_an_arm_whose_shapes_overlap_at_home_still_plans():
     assert not arm._collides(arm.home)  # ...which is the model, not a collision
 
 
+ENDLESS_ARM = """
+<mujoco>
+  <compiler angle="radian"/>
+  <worldbody>
+    <body name="arm/base">
+      <geom type="cylinder" size="0.04 0.05"/>
+      <body name="arm/link1" pos="0 0 0.06">
+        <joint name="arm/j1" axis="0 0 1"/>
+        <geom type="capsule" fromto="0 0 0 0 0 0.2" size="0.02"/>
+        <body name="arm/link2" pos="0 0 0.2">
+          <joint name="arm/j2" axis="0 1 0" range="-2 2"/>
+          <geom type="capsule" fromto="0 0 0 0.25 0 0" size="0.015"/>
+          <body name="arm/finger" pos="0.25 0 0">
+            <joint name="arm/finger" type="slide" axis="0 0 1" range="-0.03 0"/>
+            <geom type="box" size="0.01 0.01 0.01"/>
+            <site name="arm/tcp" pos="0 0 -0.05"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="arm/a1" joint="arm/j1" kp="20"/>
+    <position name="arm/a2" joint="arm/j2" kp="20"/>
+    <position name="arm/gripper" joint="arm/finger" kp="20" ctrlrange="-0.03 0"/>
+  </actuator>
+</mujoco>
+"""
+
+
+def test_an_endless_joint_turns_half_a_turn_either_way_from_home():
+    """Regression: the IK kept a joint without end stops in -180..180 degrees. A Kinova Gen3 starts with one at 180,
+    pinned at that edge, and move_arm left its gripper 34 cm from the target, jammed against its own base."""
+    import mujoco
+
+    from robotforge.behaviors.arm import ArmMotion
+
+    model = mujoco.MjModel.from_xml_string(ENDLESS_ARM)
+    home = model.qpos0.copy()
+    home[0] = math.pi
+    arm = ArmMotion(model, "arm", home)
+    assert arm.chain.lower[0] == pytest.approx(0.0) and arm.chain.upper[0] == pytest.approx(2 * math.pi)
+    assert (arm.chain.lower[1], arm.chain.upper[1]) == pytest.approx((-2, 2))  # end stops stay where they are
+
+
+def test_a_gripper_closes_at_the_bottom_of_its_range_even_below_zero():
+    """Regression: grippers closed at 0, which is wide open for a range of -0.03..0 (a Unitree Z1's is -1.52..0)."""
+    import mujoco
+
+    from robotforge.behaviors.arm import ArmMotion
+
+    model = mujoco.MjModel.from_xml_string(ENDLESS_ARM)
+    arm = ArmMotion(model, "arm", model.qpos0.copy())
+    assert (arm._grip("open"), arm._grip("close")) == (0.0, -0.03)
+
+
 def test_robots_can_be_listed_while_the_policy_module_is_still_importing(pg, monkeypatch):
     """Regression: a lesson starting the G1 imports the policy module on a worker thread; mid-import the module
     is in sys.modules without PolicyWalker, and listing robots then raised and killed the viewer's stream."""
@@ -400,3 +457,23 @@ def test_a_robot_named_exactly_is_found_without_reading_world_yaml(pg, monkeypat
     assert pg.behaviors.stop("dog")["robot"] == "dog"
     with pytest.raises(AssertionError, match="world.yaml was read"):
         pg.behaviors.pose("Dog")
+
+
+def test_a_leg_joint_without_end_stops_keeps_its_knee_bending_one_way():
+    """Regression: ANYmal C's knees turn +-540 degrees; reaching for a foot target near full stretch, the IK
+    swung one through straight to bend the other way and the robot spun round and fell."""
+    import numpy as np
+
+    from robotforge.behaviors import quadruped
+
+    chain = quadruped.Chain(
+        qpos_adr=np.arange(3),
+        dof_adr=np.arange(3),
+        lower=np.array([-0.7, -9.4, -9.4]),
+        upper=np.array([0.5, 9.4, 9.4]),
+        body=1,
+        local_point=np.zeros(3),
+    )
+    kept = quadruped._keep_branch(chain, np.array([0.0, 0.8, -1.4]))
+    np.testing.assert_allclose(kept.lower, [-0.7, 0.8 - math.pi / 2, -1.4 - math.pi / 2])
+    np.testing.assert_allclose(kept.upper, [0.5, 0.8 + math.pi / 2, -1.4 + math.pi / 2])

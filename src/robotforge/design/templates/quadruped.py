@@ -16,6 +16,8 @@ from robotforge.design.templates.base import (
     BuiltRobot,
     Template,
     TemplateParams,
+    declare_camera,
+    declare_touch,
     dress_servo,
     imu,
     new_spec,
@@ -93,6 +95,7 @@ class Quadruped(Template):
             vis.hide(geom)
         _dress_trunk(vis, trunk, L, W, H, accent, p.face)
         trunk.add_camera(name="front_cam", pos=[L / 2 + 0.01, 0, 0], xyaxes=[0, -1, 0, 0, 0, 1], fovy=75)
+        declare_camera(spec, trunk, "front_cam", 75)
         imu(spec, trunk)
 
         hip_x, hip_y = L / 2 - part.size[0] / 2, W / 2
@@ -144,6 +147,7 @@ class Quadruped(Template):
                 objtype=mujoco.mjtObj.mjOBJ_SITE,
                 objname=f"{leg}_foot",
             )
+            declare_touch(spec, lower, f"{leg}_touch", f"{leg}_foot")
             home.update({f"{leg}_hip": 0.0, f"{leg}_thigh": HOME_THIGH, f"{leg}_knee": HOME_KNEE})
             for geom in (drum, thigh_link, shin_link, foot):
                 vis.hide(geom)

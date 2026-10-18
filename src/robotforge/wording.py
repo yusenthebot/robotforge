@@ -57,8 +57,16 @@ def near(given: str, names: Iterable[str], aliases: Mapping[str, str] | None = N
     key = squash(given)
     out = [aliases[key]] if aliases and key in aliases and aliases[key] in names else []
     by_key = {squash(name): name for name in names}
-    out += [by_key[k] for k in difflib.get_close_matches(key, list(by_key), n=n)]
+    close = difflib.get_close_matches(key, list(by_key), n=max(1, len(by_key)))
+    # Equally close names: the one that starts like `given` first, since typos are rarely at the start ("go3" is go2
+    # sooner than op3; difflib alone puts op3 first).
+    close.sort(key=lambda k: (-difflib.SequenceMatcher(None, key, k).ratio(), -_common_start(key, k)))
+    out += [by_key[k] for k in close[:n]]
     return list(dict.fromkeys(out))[:n]
+
+
+def _common_start(a: str, b: str) -> int:
+    return next((i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b)))
 
 
 def choices(names: Sequence[str], limit: int = LIST_LIMIT) -> str:
@@ -68,6 +76,8 @@ def choices(names: Sequence[str], limit: int = LIST_LIMIT) -> str:
 
 
 def plural(kind: str) -> str:
+    if kind.endswith("y") and kind[-2:-1] not in ("a", "e", "i", "o", "u", ""):
+        return kind[:-1] + "ies"  # bodies, not bodys
     return kind + ("es" if kind.endswith(("ch", "sh", "s", "x")) else "s")
 
 

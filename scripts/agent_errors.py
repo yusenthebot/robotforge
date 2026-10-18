@@ -109,7 +109,7 @@ CASES: list[Case] = [
     c("open_world", "world name in capitals", "accept", name_or_path="Lab"),
     c("open_world", "name with a space", name_or_path="my lab"),
     c("open_world", "wrong parameter name", name="lab"),
-    c("show_world", "no world open", no_world=True),
+    c("show_world", "no world open", "accept", no_world=True, note="no world is open: new_world"),
     c("undo", "unknown parameter", steps=2),
     # -- add_robot
     c("add_robot", "template in capitals", "accept", name="pup", template="Quadruped", pos=[2, 0]),
@@ -157,7 +157,23 @@ CASES: list[Case] = [
     c("update_robot", "robot name with extra number", name="dog1", pos=[1, 1]),
     c("update_robot", "param out of range", name="dog", params={"leg_length": 2}),
     c("update_robot", "pos as text", "accept", name="dog", pos="0.5, 1.2"),
-    c("update_robot", "build on a template robot", name="dog", build=EXAMPLE_DOG),
+    # A whole build of the same kind replaces a template robot where it stands, and says what it is now.
+    c("update_robot", "build on a template robot", "accept", note="still a quadruped", name="dog", build=EXAMPLE_DOG),
+    # Sensors or a part for a template robot: it rides a plate that carries them, and the answer says so.
+    c(
+        "update_robot",
+        "only a sensor for a template robot",
+        "accept",
+        note="plate as its base, with the sensors on the plate",
+        name="dog",
+        build={"base": {"sensors": ["lidar"]}},
+    ),
+    c(
+        "add_part",
+        "a lidar part with no size for a template robot",
+        robot="dog",
+        part={"name": "puck", "sensors": ["lidar"]},
+    ),
     # -- objects
     c("add_object", "shape called ball", "accept", name="b2", shape="ball", size=[0.05], pos=[0.4, 0.1]),
     c("add_object", "shape called cube", "accept", name="b2", shape="cube", pos=[0.4, 0.1]),
@@ -420,6 +436,8 @@ CASES: list[Case] = [
     c(
         "add_part",
         "robot made from a template",
+        "accept",
+        note="plate as its base, with tail on the plate",
         robot="dog",
         part={"name": "tail", "at": "back", "shape": "sphere", "size": [0.03]},
     ),

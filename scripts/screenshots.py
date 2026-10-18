@@ -52,6 +52,9 @@ class Shot:
     storage: dict[str, str] = field(default_factory=lambda: {"robotforge.coached": "1", "robotforge.world": "0"})
     settle: float = 2.0  # s after the page is ready
     size: tuple[int, int] = (WIDTH, HEIGHT)  # CSS px
+    # Python calls on the robots while the page watches (a lift, so a plot has it in its history), run before the
+    # page script; a shot with one serves its world in this process instead of with `robotforge open`.
+    act: Callable[[Any], None] | None = None
 
 
 def _free_port() -> int:
@@ -127,7 +130,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                         break
 
 
-async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str) -> None:
+async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str, pg: Any = None) -> None:
     """Open the viewer in a tab, wait until it has drawn, put the world in the shot's state while the page
     watches (so plots have their history), and capture it."""
     import websockets
@@ -162,6 +165,8 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str
             await asyncio.sleep(0.25)
         if shot.viewer:
             await _drive_viewer(port, shot.viewer)
+        if shot.act is not None:
+            await asyncio.to_thread(shot.act, pg)
         await asyncio.sleep(shot.settle)
         if shot.page:
             await page.eval(f"(async () => {{ {shot.page} }})()")
@@ -186,6 +191,16 @@ def _save(png: bytes, out: Path) -> None:
     image.resize((SAVED_WIDTH, height), Image.Resampling.LANCZOS).save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)
 
 
+def _serve_here(pg: Any, port: int) -> None:
+    """Serve the playground's world from this process, for a shot that acts on its robots."""
+    import threading
+
+    from robotforge import cli
+
+    threading.Thread(target=lambda: asyncio.run(cli.serve(pg, "127.0.0.1", port, False)), daemon=True).start()
+    _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
+
+
 def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     home = Path(tempfile.mkdtemp(prefix="rf-shot-"))
     os.environ["ROBOTFORGE_HOME"] = str(home)  # the real Menagerie models (downloaded once), not the test stand-ins
@@ -197,12 +212,16 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     shot.world(pg)
     world_dir = home / "worlds" / shot.name
     port, chrome_port = _free_port(), _free_port()
-    server = subprocess.Popen(
-        [sys.executable, "-m", "robotforge", "open", str(world_dir), "--no-browser", "--port", str(port)],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    server = None
+    if shot.act is not None:
+        _serve_here(pg, port)
+    else:
+        server = subprocess.Popen(
+            [sys.executable, "-m", "robotforge", "open", str(world_dir), "--no-browser", "--port", str(port)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
     chrome = subprocess.Popen(
         [
             _chrome(),
@@ -220,9 +239,11 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     out = out_dir / f"{shot.name}.jpg"
     try:
         _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
-        asyncio.run(_capture(chrome_port, port, shot, out, lang))
+        asyncio.run(_capture(chrome_port, port, shot, out, lang, pg))
     finally:
         for proc in (chrome, server):
+            if proc is None:
+                continue
             proc.terminate()
             with contextlib.suppress(subprocess.TimeoutExpired):
                 proc.wait(timeout=10)
@@ -283,6 +304,32 @@ MOBILE_ARM = {
 }
 
 
+def _hexacopter() -> dict[str, Any]:
+    from robotforge.design.builder.guide import EXAMPLE_HEXACOPTER  # the builder guide's own example
+
+    return EXAMPLE_HEXACOPTER
+
+
+HEXACOPTER = _hexacopter()
+
+
+DRONE_ROW = [("quad", -1.6), ("hexa_t", -0.7), ("octo", 0.3), ("hexa", 1.35), ("x2", 2.4), ("cf", 3.15)]
+
+
+def _drone_family(pg: Any) -> None:
+    sources = {
+        "quad": {"template": "drone"},
+        "hexa_t": {"template": "drone", "params": {"rotors": 6, "color": "orange", "arm_length": 0.24}},
+        "octo": {"template": "drone", "params": {"rotors": 8, "color": "black", "arm_length": 0.3, "size": 0.2}},
+        "hexa": {"build": HEXACOPTER},
+        "x2": {"library": "skydio_x2"},
+        "cf": {"library": "crazyflie"},
+    }
+    for name, x in DRONE_ROW:
+        pg.add_robot(name, pos=[x, 0.0], **sources[name])
+    pg.set_floor("grass")
+
+
 def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> Callable[[Any], None]:
     """A world builder: these robots, then the scene, which puts them on its free spots."""
 
@@ -327,7 +374,6 @@ def _when(body: str, condition: str, timeout: float = 150.0) -> str:
                 if ({condition}) break;
                 {_SLEEP.format(ms=100)}
             }}
-        }}
     """
 
 
@@ -353,6 +399,20 @@ def _look_between(robot: str, body: str, offset: tuple[float, float, float]) -> 
             const mid = [(r[0] + o[0]) / 2, (r[1] + o[1]) / 2, o[2] * 0.85];
             rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
         }}
+        }}
+    """
+
+
+def _hover_look(robot: str, offset: tuple[float, float, float], drop: float) -> str:
+    """Page script: look at a hovering aircraft from `offset` metres away, aiming `drop` metres below it, so its
+    shadow on the ground shows how high it flies. Nothing is selected: the selection ring lies on the ground right
+    under the aircraft, far below it in the picture."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const p = rf.bodyPosition(rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")})).id);
+        const off = {json.dumps(list(offset))};
+        rf.lookAt(p.map((v, i) => v + off[i]), [p[0], p[1], p[2] - {drop}]);
     """
 
 
@@ -641,6 +701,67 @@ def _rocks(pg: Any) -> None:
     pg.set_terrain("rough", params={"size": [6, 6], "height": 0.04})
 
 
+def _sensing_go2(pos: tuple[float, float] = (-3.2, 2.6)) -> Callable[[Any], None]:
+    """A Go2 in the warehouse with a 3D lidar on its back, a depth camera on its nose and touch pads under its
+    feet, each added in one call as an agent would (add_sensor)."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene("warehouse", keep_robots=False, starter=False)
+        pg.add_robot("go2", library="go2", pos=list(pos))
+        pg.add_sensor("go2", {"type": "lidar3d", "rate_hz": 10})
+        pg.add_sensor("go2", {"type": "camera", "mode": "depth"})
+        for foot in ("FL", "FR", "RL", "RR"):
+            pg.add_sensor("go2", {"type": "touch", "on": foot, "rows": 2, "cols": 2})
+
+    return build
+
+
+def _panda_wrist(pg: Any) -> None:
+    """A Panda with a force-torque sensor at its wrist and a 100 g cube on the floor in front of it."""
+    pg.add_robot("panda", library="panda")
+    pg.add_object("cube", shape="box", size=[0.05, 0.05, 0.05], mass=0.1, pos=[0.5, 0.0], color="red")
+    pg.add_sensor("panda", {"type": "force_torque", "on": "hand", "name": "wrist"})
+
+
+def _lift_cube(pg: Any) -> None:
+    """The Panda takes the cube off the floor and holds it up, in real time while the page watches: the wrist's
+    force plot has the 100 g coming on in its history."""
+    b = pg.behaviors
+
+    def finish(motion: Any, seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while not motion.done and time.monotonic() < end:
+            time.sleep(0.05)
+
+    finish(b.move_arm("panda", [0.5, 0.0, 0.25], "open"), 15)
+    finish(b.move_arm("panda", [0.5, 0.0, 0.03], None), 15)
+    finish(b.set_gripper("panda", "close"), 5)
+    finish(b.move_arm("panda", [0.5, 0.0, 0.3], None), 15)
+    time.sleep(1.5)
+
+
+LIDAR_PUCK = {"name": "lidar", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
+
+
+def _on_plates(pg: Any) -> None:
+    """A template dog, a template rover and a Go2, each given a lidar puck with add_part, which carries a robot that
+    is not built from parts on a plate and puts the part there (design/builder/plate.py)."""
+    for name, source, y in (("dog", {"template": "quadruped"}, 0.55), ("rover", {"template": "rover"}, 0.0)):
+        pg.add_robot(name, **source, pos=[0.0, y])
+    pg.add_robot("go2", library="go2", pos=[0.0, -0.75])
+    for robot in pg.current_world().robots:
+        pg.add_part(robot.name, {**LIDAR_PUCK, "sensors": [{"type": "lidar", "at": "top"}]})
+
+
+def _kitchen_starts(pg: Any) -> None:
+    """Robots added without pos after load_scene: each starts on the first free one of the kitchen's robot_places,
+    clear of the island and of each other (a rover added after the Go2 used to go under its belly)."""
+    pg.load_scene("kitchen")
+    pg.add_robot("dog", design="go2_arm")
+    pg.add_robot("rover", template="rover")
+    pg.add_robot("pup", template="quadruped")
+
+
 def _gallery_line_up(pg: Any) -> None:
     """Several designs side by side, for an overview picture."""
     for name, pos in (
@@ -655,6 +776,13 @@ def _gallery_line_up(pg: Any) -> None:
     ):
         pg.add_robot(name, design=name, pos=pos)
 
+
+SENSOR_WRIST_VIEW = _look_at(["panda"], (1.05, -0.95, 0.35))
+SENSOR_CLOUD_VIEW = "window.__robotforge.lookAt([-5.0, 2.5, 1.5], [-2.5, 2.6, 0.25]);"  # down the aisle, from behind
+SENSOR_DRAWER_VIEW = (
+    'document.getElementById("drawer-toggle").click();'
+    "await new Promise((r) => setTimeout(r, 400));" + _look_at(["go2"], (1.25, -0.95, 0.7))
+)
 
 # One picture per gallery design: (design, extra world, camera offset from the robot in metres).
 GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float, float]]] = [
@@ -671,6 +799,108 @@ GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float,
 ]
 
 
+def _look(eye: tuple[float, float, float], target: tuple[float, float, float]) -> str:
+    """Page script: a fixed camera, eye and target in world meters (for robots bolted to the floor too)."""
+    return f"window.__robotforge.lookAt({json.dumps(list(eye))}, {json.dumps(list(target))});"
+
+
+def _new_walkers(pg: Any) -> None:
+    """The library's newer dogs and humanoids side by side."""
+    for i, name in enumerate(["anymal_c", "barkour", "op3", "t1"]):
+        pg.add_robot(name, library=name, pos=[0.0, 1.95 - 1.3 * i])
+
+
+def _new_arms(pg: Any) -> None:
+    """The library's newer arms, the UR5e with a Robotiq gripper on its flange."""
+    pg.add_robot("z1", library="z1", pos=[0.0, 1.6])
+    pg.add_robot("ur5e", library="ur5e", pos=[0.0, 0.55], mounts=[{"library": "robotiq_2f85"}])
+    pg.add_robot("xarm7", library="xarm7", pos=[0.0, -0.45])
+    pg.add_robot("aloha", library="aloha", pos=[0.0, -1.6])
+
+
+def _dogs_with_arms(pg: Any) -> None:
+    """A Go2 carrying an AgileX PiPER and a Spot carrying a Unitree Z1, by a cube and a bin."""
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.5], mounts=[{"library": "piper"}])
+    pg.add_robot("spot", library="spot", pos=[0.0, -0.7], mounts=[{"library": "z1"}])
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.6, 0.8], color="red")
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[1.6, 0.15], color="blue")
+
+
+def _more_carriers(pg: Any) -> None:
+    """Robots carrying robots beyond the Go2: an ANYmal C and a Barkour with PiPERs, a Booster T1 with an SO-100 on its
+    head, and a UR5e wearing a Robotiq gripper."""
+    pg.add_robot("anymal", library="anymal_c", pos=[0.0, 1.5], mounts=[{"library": "piper"}])
+    pg.add_robot("barkour", library="barkour", pos=[0.0, 0.35], mounts=[{"library": "piper"}])
+    pg.add_robot("t1", library="t1", pos=[0.0, -0.6], mounts=[{"library": "so_arm100"}])
+    pg.add_robot("ur5e", library="ur5e", pos=[0.0, -1.6], mounts=[{"library": "robotiq_2f85"}])
+
+
+def _barkour_so100(pg: Any) -> None:
+    """A Barkour carrying an SO-100: with no flat spot on its back, the arm's base rests on the handle."""
+    pg.add_robot("barkour", library="barkour", mounts=[{"library": "so_arm100"}])
+
+
+def _go2_two_arms(pg: Any) -> None:
+    """A Go2 carrying an AgileX PiPER and an SO-100 side by side (the second moved back clear of the first)."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}])
+
+
+def _spot_z1(pg: Any) -> None:
+    """A Spot carrying a Unitree Z1 beside the bump on its back."""
+    pg.add_robot("spot", library="spot", mounts=[{"library": "z1"}])
+
+
+def _anymal_ur5e(pg: Any) -> None:
+    """An ANYmal C carrying a UR5e that wears a Robotiq 2F-85 on its flange: three robots in one."""
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+
+
+# The library's newer robots for a line-up, standing: (name, library, mounts, [x, y]). The tall ones stand behind,
+# in the gaps between the short ones.
+LINE_UP = [
+    ("barkour", "barkour", [], [0.55, 1.4]),
+    ("op3", "op3", [], [0.55, 0.0]),
+    ("anymal", "anymal_c", [], [0.55, -1.4]),
+    ("z1", "z1", [], [0.55, -2.8]),
+    ("t1", "t1", [], [-0.7, 2.1]),
+    ("ur5e", "ur5e", [{"library": "robotiq_2f85"}], [-0.7, 0.7]),
+    ("xarm7", "xarm7", [], [-0.7, -0.7]),
+    ("aloha", "aloha", [], [-0.7, -2.1]),
+]
+
+
+def _line_up(pg: Any) -> None:
+    """The library's newer robots standing in two rows: walkers in front, arms behind."""
+    for name, model, mounts, pos in LINE_UP:
+        pg.add_robot(name, library=model, pos=pos, mounts=mounts)
+
+
+def _framed(robot: str, offset: tuple[float, float, float], lift: float) -> str:
+    """Page script: nothing selected, the camera `offset` metres from a point `lift` metres above `robot`'s body."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const body = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic);
+        const at = rf.bodyPosition(body.id);
+        const target = [at[0], at[1], at[2] + {lift}];
+        rf.lookAt(target.map((v, i) => v + {json.dumps(list(offset))}[i]), target);
+    """
+
+
+def _complex_splices(pg: Any) -> None:
+    """Three robots spliced from three or more: an ANYmal C carrying a UR5e that wears a Robotiq gripper, a Go2 with a
+    PiPER and an SO-100 side by side, and a Spot with a Z1 and a PiPER."""
+    pg.add_robot(
+        "anymal", library="anymal_c", pos=[0.0, 1.6], mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}]
+    )
+    pg.add_robot(
+        "go2", library="go2", pos=[0.0, 0.2], mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}]
+    )
+    pg.add_robot(
+        "spot", library="spot", pos=[0.0, -1.2], mounts=[{"library": "z1"}, {"name": "arm2", "library": "piper"}]
+    )
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -680,6 +910,12 @@ SHOTS = [
         settle=1.0,
     ),
     Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
+    Shot(
+        "kitchen_starts",
+        _kitchen_starts,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([3.0, -3.4, 2.6], [0.45, -0.35, 0.3]);",
+        settle=2.0,
+    ),
     # Navigation: the path still ahead shows as an amber line on the ground while the robot follows it.
     Shot(
         "nav_warehouse",
@@ -807,6 +1043,13 @@ SHOTS = [
         _built(("dog", "scout", "spider", "centaur")),
         page="window.__robotforge.select(null); window.__robotforge.lookAt([1.8, -0.28, 0.66], [0.0, 0.0, 0.1]);",
     ),
+    # Robots that are not built from parts, kept as they are under a plate that carries a lidar.
+    Shot(
+        "carried_on_plates",
+        _on_plates,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.9, -1.4, 1.0], [0.0, -0.1, 0.15]);",
+        settle=3.0,
+    ),
     Shot(
         "built_materials",
         _materials,
@@ -816,11 +1059,87 @@ SHOTS = [
         Shot(f"gallery_{name}", _design(name, extras), page=_look_at([name], offset), settle=3.0)
         for name, extras, offset in GALLERY_SHOTS
     ),
+    Shot("sensors_go2", _sensing_go2(), page=_look_at(["go2"], (0.85, 0.7, 0.42)), settle=1.0),
+    # What the sensors sense, drawn by the viewer: the 3D lidar's points down the aisle and what the depth camera
+    # sees beside the view; the robots drawer's sensor list; a Panda's wrist force while it lifts a cube.
+    Shot("sensors_go2_cloud", _sensing_go2(), page=SENSOR_CLOUD_VIEW, settle=2.5),
+    Shot("sensors_go2_drawer", _sensing_go2(), page=SENSOR_DRAWER_VIEW, settle=2.5),
+    Shot("sensors_panda_wrist", _panda_wrist, act=_lift_cube, page=SENSOR_WRIST_VIEW, settle=0.5),
     Shot(
         "gallery",
         _gallery_line_up,
         page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
         settle=3.0,
+    ),
+    Shot("library_new_walkers", _new_walkers, page=_look((4.2, -1.3, 1.5), (0.0, 0.0, 0.4)), settle=3.0),
+    Shot("library_new_arms", _new_arms, page=_look((3.4, -1.0, 1.6), (0.0, 0.0, 0.25)), settle=3.0),
+    Shot(
+        "splice_dogs_with_arms",
+        _dogs_with_arms,
+        viewer=[_walk("go2", 0.3), _walk("spot", 0.3), {"wait": 3.0}, _walk("go2", 0.0), _walk("spot", 0.0)],
+        page=_look((2.6, -2.3, 1.3), (1.0, 0.0, 0.35)),
+        settle=2.0,
+    ),
+    Shot("splice_more_carriers", _more_carriers, page=_look((3.6, -1.2, 1.5), (0.0, 0.0, 0.45)), settle=3.0),
+    Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
+    Shot("splice_barkour_so100", _barkour_so100, page=_framed("barkour", (1.1, -0.9, 0.5), 0.02), settle=3.0),
+    Shot("splice_go2_piper_so100", _go2_two_arms, page=_framed("go2", (-0.55, -1.3, 0.55), 0.08), settle=3.0),
+    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (1.6, -1.3, 0.75), -0.02), settle=3.0),
+    Shot("splice_anymal_ur5e_robotiq", _anymal_ur5e, page=_framed("anymal", (2.0, -1.55, 0.85), 0.0), settle=3.0),
+    Shot(
+        "library_line_up",
+        _line_up,
+        page="window.__robotforge.select(null); " + _look((4.8, -0.35, 2.7), (-0.1, -0.35, 0.25)),
+        settle=3.0,
+    ),
+    # Aircraft hovering a metre over the park's path, their shadows on the grass below: the drone template, a
+    # hexacopter built from parts (the builder guide's example), the Skydio X2.
+    Shot(
+        "drone_park",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("drone", (0.8, -1.0, 0.26), 0.16),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_hexacopter",
+        _in_scene("park", {"hexa": {"build": HEXACOPTER}}),
+        viewer=[_go("hexa", [0.0, -1.0, 0.9]), {"wait": 5.0}],
+        page=_hover_look("hexa", (0.95, -1.2, 0.32), 0.2),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_x2",
+        _in_scene("park", {"x2": {"library": "skydio_x2"}}),
+        viewer=[_go("x2", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("x2", (0.82, -1.02, 0.28), 0.12),
+        settle=0.5,
+    ),
+    # Hovering under a tree's crown beside its trunk (tree_4, its crown 2.1 m up), where it once landed on the crown.
+    Shot(
+        "drone_under_crown",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [-3.3, -4.12, 1.2]), {"wait": 14.0}],  # a 6 s flight, on a busy machine
+        page=_hover_look("drone", (1.3, -1.38, -0.12), -0.42),  # from a little below: the crown over it in view
+        settle=0.5,
+    ),
+    # Landed on the grass beside the park's loose red ball: sent to z 0 at the ball it once landed on top of it and
+    # tipped over; now that is refused, and this is the spot the refusal offers ([2.0, -0.6] has room).
+    Shot(
+        "drone_beside_ball",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [2.0, -0.6, 0.0]), {"wait": 8.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.72, -1.95, 0.52], [1.72, -0.6, 0.1]);",
+        settle=0.5,
+    ),
+    # Every aircraft side by side, each hovering a metre up: the template with 4, 6 and 8 rotors, the hexacopter
+    # built from parts, the Skydio X2 and the palm-sized Crazyflie.
+    Shot(
+        "drone_family",
+        _drone_family,
+        viewer=[_go(name, [x, 0.0, 1.0]) for name, x in DRONE_ROW] + [{"wait": 6.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -4.3, 1.85], [0.8, 0.0, 0.85]);",
+        settle=0.5,
     ),
 ]
 

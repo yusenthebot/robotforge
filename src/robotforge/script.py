@@ -69,8 +69,15 @@ class Sim:
         return self._call("joints", robot=robot)
 
     def sensors(self, robot: str) -> dict[str, Any]:
-        """Sensor readings of a robot (IMU, touch, tool position...)."""
+        """Sensor readings of a robot (IMU, touch, tool position...); rangefinders and lidar rays read past the robot's
+        own parts (-1, or their full range: nothing within it)."""
         return self._call("sensors", robot=robot)
+
+    def sensor(self, robot: str, name: str, full: bool = False) -> dict[str, Any]:
+        """One sensor's reading by name (sensors added with add_sensor, the builder's and the templates'), the
+        same as read_sensors gives, e.g. sim.sensor("go2", "lidar")["ahead"]["distance_m"]. full=True adds a
+        lidar's every range ("ranges_m", ring by ring) and a 3D lidar's points."""
+        return self._call("sensor", robot=robot, name=name, full=full)
 
     # ---- acting ----
     def set_controls(self, controls: dict[str, float]) -> None:

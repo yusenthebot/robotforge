@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design import components
-from robotforge.design.builder import looks
+from robotforge.design.builder import looks, rotor
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
     MAIN_COLOR,
@@ -32,6 +32,7 @@ from robotforge.design.builder.schema import (
 from robotforge.design.templates.base import DARK, GEOM, SHELL, BuiltRobot, new_spec, servo_joint
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import parts as P
+from robotforge.sensors import declare
 from robotforge.sim.actuators import is_position_servo
 
 # MuJoCo 3.15 rangefinders report the ray data named by this bitmask; just the distance.
@@ -89,7 +90,10 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         outward = part.local @ np.array([0.0, 1.0, 0.0])
         if float((part.rot @ outward) @ part.pos) < 0:  # wheels show their rim on the outside
             outward = -outward
-        _shape(body, part.spec, build, part.local, accent, part.name, vis, layout, outward, part)
+        if part.spec.shape == "rotor":
+            rotor.build(spec, body, part, vis)  # a motor, propeller and thrust actuator
+        else:
+            _shape(body, part.spec, build, part.local, accent, part.name, vis, layout, outward, part)
         if part.spec.foot:
             _foot(body, part, vis)
             out.feet += 1
@@ -97,7 +101,8 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         if part.spec.robot is not None:
             child, what = mounted[part.name]
             _mount(spec, body, part, out, child, what)
-            if part.spec.robot.template is not None:  # a library robot's own base is a mesh of unknown size
+            # A library robot's own base is a mesh of unknown size; one hanging under its parent stands on nothing.
+            if part.spec.robot.template is not None and not _hangs(part):
                 looks.mount_plate(vis, body, reach[part.name])
     vis.finish()
     return out
@@ -533,6 +538,8 @@ def _add_sensor(
             ("orientation", S.mjSENS_FRAMEQUAT),
         ):
             spec.add_sensor(name=f"{prefix}{kind}", type=stype, objtype=OBJ.mjOBJ_SITE, objname=site)
+        native = {"accel": f"{prefix}accel", "gyro": f"{prefix}gyro", "quat": f"{prefix}orientation"}
+        _declare(spec, sensor, name, body, site=site, native=native)
         if mount.normal is None:  # inside the body (it is usually hidden there) or at given numbers: level
             level = np.array([0.0, 0.0, 1.0])
             middle = where + level * (looks.IMU_BOX[2] - 0.0003)
@@ -546,6 +553,7 @@ def _add_sensor(
         radius = radius or max(0.01, 1.3 * link_radius(part))
         body.add_site(name=name, pos=where.tolist(), size=[radius, 0, 0], rgba=INVISIBLE)
         spec.add_sensor(name=name, type=S.mjSENS_TOUCH, objtype=OBJ.mjOBJ_SITE, objname=name)
+        _declare(spec, sensor, name, body, cells=[name], rows=1, cols=1)
         return
     if sensor.type == "camera":
         # A camera on top that looks along it (forward) stands on the top, like a roof camera, and sees
@@ -570,6 +578,7 @@ def _add_sensor(
         middle, half = looks.camera_box(eye, look)
         if not layout.hidden(owner, middle, frame, half):
             looks.camera(vis, body, eye, look, up)
+        _declare(spec, sensor, name, body, camera=name, mode="rgb", width=320, height=240, fov=sensor.fov, range=10.0)
         return
     if sensor.type == "rangefinder":
         body.add_site(name=name, pos=where.tolist(), quat=_z_to(look), size=[0.004, 0, 0], rgba=[1, 0.3, 0.2, 0.8])
@@ -583,6 +592,7 @@ def _add_sensor(
         board = mount.seat if lifted is None else lifted
         if not layout.hidden(owner, board + frame[:, 2] * (looks.RANGE_BOX[2] - 0.0006), frame, looks.RANGE_BOX):
             looks.rangefinder(vis, body, board, frame)
+        _declare(spec, sensor, name, body, site=name, native={"range": name}, range=sensor.range)
         return
     # lidar: a spinning puck, modelled as a ring of rangefinders in the owner's horizontal plane
     up = np.array([0.0, 0.0, 1.0])
@@ -606,6 +616,18 @@ def _add_sensor(
             name=site, type=S.mjSENS_RANGEFINDER, objtype=OBJ.mjOBJ_SITE, objname=site, cutoff=sensor.range
         )
         ray.intprm[0] = RANGE_DIST
+    rays = [f"{name}_{i}" for i in range(sensor.rays)]
+    _declare(spec, sensor, name, body, rays_native=rays, channels=1, rays=sensor.rays, range=sensor.range)
+
+
+KNOBS = ("rate_hz", "latency_s", "noise", "bias", "drift", "dropout", "seed")
+
+
+def _declare(spec: mujoco.MjSpec, sensor: SensorSpec, name: str, body: mujoco.MjsBody, **definition) -> None:
+    """Declare a part's sensor in the model the way add_sensor's are (sensors/declare.py), so read_sensors, scripts
+    and the viewer read it with its rate, noise and latency."""
+    knobs = {k: getattr(sensor, k) for k in KNOBS if getattr(sensor, k) is not None}
+    declare.declare(spec, {"name": name, "type": sensor.type, "body": body.name, **definition, **knobs})
 
 
 def _camera_axes(look: np.ndarray) -> list[float]:
@@ -619,6 +641,13 @@ def _camera_axes(look: np.ndarray) -> list[float]:
 
 
 # ---- mounted robots ---------------------------------------------------------------------------------
+
+
+def _hangs(part: Placed) -> bool:
+    """Whether a mounted robot hangs under what its part is on: that parent is on the robot's own up side, as the
+    plate is for a template robot carried under one (plate.py). The adapter plate a mounted robot stands on was drawn
+    there too: a disc 0.48 m across through a carried quadruped's trunk, and one under a carried rover's chassis."""
+    return float((-part.rot.T @ part.pos)[2]) > 1e-6
 
 
 def _mounted_robot(part: Placed) -> tuple[BuiltRobot, str]:
@@ -637,17 +666,11 @@ def _mounted_robot(part: Placed) -> tuple[BuiltRobot, str]:
 def _mount(
     spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, out: Assembly, child: BuiltRobot, what: str
 ) -> None:
-    root = child.spec.worldbody.first_body()
-    for joint in list(root.joints) if root is not None else []:
-        if joint.type == mujoco.mjtJoint.mjJNT_FREE:  # it rides on this part now instead of moving freely
-            child.spec.delete(joint)
+    from robotforge.design import mounting
+
+    mounting.ride_on(child.spec, spec)  # it rides on this part now instead of moving freely
     if part.spec.robot.home:
         _pose_mounted(child, part.spec.robot.home, part.name)
-    if child.spec.option.cone == mujoco.mjtCone.mjCONE_ELLIPTIC:
-        spec.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
-        spec.option.impratio = max(spec.option.impratio, child.spec.option.impratio)
-    for name in ("timestep", "integrator", "cone", "impratio"):
-        setattr(child.spec.option, name, getattr(spec.option, name))
     frame = body.add_frame(pos=[0, 0, 0])
     spec.attach(child.spec, prefix=f"{part.name}/", frame=frame)
     out.home_qpos.update({f"{part.name}/{k}": v for k, v in child.home_qpos.items()})

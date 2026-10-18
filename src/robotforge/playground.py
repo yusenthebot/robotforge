@@ -6,7 +6,9 @@ without an MCP client. Methods return plain dicts that serialize to JSON.
 
 from __future__ import annotations
 
+import copy
 import functools
+import json
 import math
 import threading
 from collections.abc import Callable
@@ -16,19 +18,34 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from robotforge import modes, wording
+from robotforge.behaviors import airframe, robot_kind
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
-from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
+from robotforge.design.builder import plate
+from robotforge.design.store import WorldStore, worlds_home
+from robotforge.design.world import (
+    CompiledWorld,
+    Floor,
+    MountEntry,
+    ObjectEntry,
+    RobotEntry,
+    World,
+    compile_world,
+    spawn_height,
+    tidy_name,
+)
 from robotforge.learn import LESSONS, LessonRunner
-from robotforge.sim import carry, finder, vision
+from robotforge.sensors import edit as sensor_edit
+from robotforge.sensors import without_sensors
+from robotforge.sensors.hub import SensorHub
+from robotforge.sim import carry, finder, lidar, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
-from robotforge.sim.session import SimSession
+from robotforge.sim.session import SimSession, fresh_data
 from robotforge.viewer.server import ViewerHub
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
@@ -80,7 +97,11 @@ class Playground:
     behaviors: BehaviorManager = field(init=False)
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
+    sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    # The ground places of the scene last loaded, and the world it went into: a robot added there without pos
+    # starts on the first free one. Not saved: a world opened later starts robots round [0, 0].
+    _places: tuple[Path, list[scenes.Slot]] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -88,6 +109,7 @@ class Playground:
         )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
+        self.sensors = SensorHub(self.session)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -95,7 +117,8 @@ class Playground:
         def teleop(msg: dict[str, Any]) -> None:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
-            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
+            air = {k: float(msg[k]) for k in ("side", "climb") if msg.get(k)}  # aircraft: sideways, up and down
+            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -121,6 +144,7 @@ class Playground:
                 "catalog": viewer_catalog(),
                 "lessons": self.lessons.catalog(),
                 "lesson": self.lessons.describe_active(),
+                "rotors": airframe.viewer_rotors(self.session.model, [r["name"] for r in robots]),
             }
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
@@ -168,6 +192,7 @@ class Playground:
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
         hub.state_extras = lambda: {"mode": modes.current(self)}
+        hub.sensor_stream = self.sensors.viewer_message
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
@@ -221,10 +246,12 @@ class Playground:
                 for j in range(m.njnt)
             ]
             actuators = [self._actuator_info(a) for a in range(m.nu)]
-            sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
+            sensors = [n for s in range(m.nsensor) if not _added_sensor(n := _name(m, mujoco.mjtObj.mjOBJ_SENSOR, s))]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
+            flying = _aircraft(m, self.behaviors)
         return {
+            **({"aircraft": flying} if flying else {}),
             "model": self.session.source,
             "counts": {"bodies": m.nbody - 1, "joints": m.njnt, "actuators": m.nu, "sensors": m.nsensor},
             "actuators": actuators,
@@ -282,10 +309,11 @@ class Playground:
         file: str | None = None,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
-        yaw: float = 0.0,
+        yaw: float | None = None,
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
@@ -300,23 +328,43 @@ class Playground:
                 build=build,
                 params=params or {},
                 pos=pos or [0.0, 0.0],
-                yaw=yaw,
+                yaw=yaw or 0.0,
+                mounts=mounts or [],
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         world = self.current_world()
         existing = next((r for r in world.robots if r.name == name), None) if world else None
-        if existing is not None and existing == entry:
+        # Without a pos (or a yaw) the call asked for no place (or heading), and the first one was given the scene's
+        # or moved clear of furniture (in the kitchen [0, 0] is inside the island): the same call again is still
+        # the same robot.
+        unasked = {**({"pos": entry.pos} if pos is None else {}), **({"yaw": entry.yaw} if yaw is None else {})}
+        if existing is not None and existing.model_copy(update=unasked) == entry:
             # Typically a retry after the client timed out while the first call was still downloading.
-            return self._unchanged(f"{name} is already in the world exactly like this; nothing to do")
+            return self._unchanged(
+                f"{name} is already in the world exactly like this (at {_xy(existing.pos)}); nothing to do"
+            )
 
         def change(w: World) -> None:
             w.robots.append(entry)
 
         result = self._edit(change)
+        if pos is None:  # a place of the scene's, or clear of what stands at [0, 0]
+            free, facing, placed = self._start_for(name, entry.pos, None if yaw is None else entry.yaw)
+        else:
+            free, facing, placed = None, None, self._clear_start(name, entry.pos)
+        if free is not None:
+
+            def move(w: World) -> None:
+                robot = _find(w.robots, name, "robot")
+                robot.pos = free
+                if facing is not None:
+                    robot.yaw = facing
+
+            result = self._edit(move, snapshot=False)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
-        return _noted(_renamed(result, given, name), _yaw_note(yaw))
+        return _noted(_renamed(result, given, name), _yaw_note(yaw), placed)
 
     @_one_edit_at_a_time
     def update_robot(
@@ -326,21 +374,40 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
+        mounted = None if mounts is None else _mounts(mounts)
+        found: list[str] = []
+        swap = self._replacing(name, build) if build is not None and _whole(build) else None
+        replaced = [swap[0]] if swap else []
+        if swap:
+            build = swap[1]  # a lidar alone for a template or library robot: the robot carried with it on a plate
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
-            if not params and pos is None and yaw is None and build is None:
-                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
+            found.append(robot.name)
+            if not params and pos is None and yaw is None and build is None and mounts is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw, build or mounts")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
                 robot.pos = pos
             if yaw is not None:
                 robot.yaw = yaw
+            if mounted is not None:  # the whole list: [] takes every mounted robot off
+                robot.mounts = mounted
             if build is not None:
+                if robot.build is None and _whole(build):
+                    # A whole robot from parts in place of a template, library robot or file, where it stands: both
+                    # lidar sessions in the eval sent the maze's starter rover a build with a lidar (update_robot,
+                    # then add_part), were refused, and removed it to add the same robot again. _replacing has
+                    # checked that it carries the old robot or is one of the same kind.
+                    robot.template = robot.file = robot.library = None
+                    robot.params = {}
+                    robot.build = build
+                    return
                 entry = _built(robot)
                 if not (entry.build or {}).get("parts") or "parts" in build:
                     entry.build = build
@@ -359,35 +426,278 @@ class Playground:
                     'changes the fields it gives (send "parts" to replace them)'
                 )
 
-        return _noted(self._edit(change), _yaw_note(yaw), *kept)
+        result = self._edit(change)
+        placed = self._clear_start(found[0], pos) if pos is not None else None
+        return _noted(result, _yaw_note(yaw), *replaced, *kept, placed)
+
+    def _replacing(self, name: str, build: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        """The note for a whole build sent to a template, library or file robot, and the build to save, or None for
+        one built from parts. A build that carries the old robot on a part, or makes a robot of the same kind,
+        replaces it where it stands; sensors alone go on a plate that carries the robot; any other is refused with
+        the build that keeps it. Rebuilt on the word of the add_part refusal, a quadruped given a base with a lidar
+        became a 1 kg box with no joints, and a Go2 given a lidar puck a 1.1 kg cylinder; the only sign was "now
+        built from parts"."""
+        store = self._require_store()
+        entry = _find(store.load().robots, name, "robot")
+        if entry.build is not None:
+            return None
+        source, mount = _source(entry), plate.mount_of(entry)
+        if mount is not None and plate.mounts(build, mount):
+            return f"{entry.name}: now built from parts, carrying {source} as it was", build
+        if mount is not None and _sensors_only(build):
+            carried, note = self._carry(entry, build, lambda b: b, "with the sensors on the plate")
+            return note, carried
+        before, joints = self.behaviors.kind(entry.name).value, _moving_joints(self.session.model, entry.name)
+        try:
+            model = self._compiled_with(entry.name, build)
+        except (ValueError, ValidationError):
+            return None  # the edit itself says what is wrong with the build
+        after, now = robot_kind(model, entry.name).value, _moving_joints(model, entry.name)
+        if after == before:
+            note = (
+                f"{entry.name}: now built from parts (it was {source}), still {_a(before)}, with {_joints(now)} where "
+                f"it had {joints}"
+            )
+            return note, build
+        raise PlaygroundError(
+            self._keep_it(
+                entry,
+                build,
+                f"this build would turn {entry.name}, {_a(before)} with {_joints(joints)} from {source}, into a robot "
+                f"of kind {after} with {_joints(now)}: the {before} would be gone",
+            )
+        )
+
+    def _carry(
+        self, entry: RobotEntry, build: dict[str, Any], add: Callable[[dict[str, Any]], dict[str, Any]], what: str
+    ) -> tuple[dict[str, Any], str]:
+        """`entry`, a template or library robot, carried under a plate as the gallery's go2_arm carries a Go2, with
+        `build`'s base sensors on the plate and `add` applied to that build (add_part's part), and the note saying
+        so; refused (PlaygroundError) when the result would no longer be the same kind of robot. In both of the
+        reviewer's sessions the agent first called add_part to give a robot from the library or a template a lidar,
+        and was refused with this build to send instead: one failed call in 9 or 10."""
+        mount, kind, source = plate.mount_of(entry), self.behaviors.kind(entry.name).value, _source(entry)
+        if mount is None:
+            raise PlaygroundError(
+                f"{entry.name} comes from a file: parts and sensors go on robots built from parts, and one from a "
+                "file cannot be carried on a plate; build one from parts (builder_guide)"
+            )
+        bare = plate.carried(self.session.model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
+        whole = add(bare)  # a part that is wrong says so here, as on any robot built from parts
+        try:
+            after = robot_kind(self._compiled_with(entry.name, bare), entry.name).value
+            if after == kind:  # the plate keeps it what it was; then the part has its say (it may overlap the robot)
+                after = robot_kind(self._compiled_with(entry.name, whole), entry.name).value
+        except ValidationError as exc:  # as an edit says it (a part with no size)
+            raise PlaygroundError(_validation_message(exc)) from exc
+        if after != kind:
+            limit = " (a current limit: a humanoid cannot ride a plate yet)" if kind == "humanoid" else ""
+            raise PlaygroundError(
+                f"{entry.name} comes from {source}, and parts and sensors go on robots built from parts; carried on a "
+                f"plate it would no longer be {_a(kind)}{limit}: build one from parts instead (builder_guide)"
+            )
+        hung = bare["parts"][0]["name"]
+        note = (
+            f"{entry.name} comes from {source}, so it now rides a {bare['base']['mass']:g} kg plate as its base, "
+            f"{what} (the gallery's go2_arm layout), still {_a(kind)}; its joints are now {entry.name}/{hung}/..."
+        )
+        return whole, note
+
+    def _keep_it(self, entry: RobotEntry, build: dict[str, Any], why: str) -> str:
+        """`why` a change to a robot not built from parts is refused, and the build that keeps the robot: carried
+        under a plate, as the gallery's go2_arm carries a Go2, with `build`'s parts and base sensors on the plate.
+        Offered only when the plate and the robot compile and are still the same kind of robot (a humanoid is not,
+        so far)."""
+        mount, kind, source = plate.mount_of(entry), self.behaviors.kind(entry.name).value, _source(entry)
+        if mount is None:
+            return f"{why}. A robot from a file cannot be carried on a plate: build one from parts (builder_guide)"
+        model = self.session.model
+        bare = plate.carried(model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
+        try:
+            still = robot_kind(self._compiled_with(entry.name, bare), entry.name).value == kind
+        except (ValueError, ValidationError):
+            still = False
+        if not still:
+            limit = " (a current limit: a humanoid cannot ride a plate yet)" if kind == "humanoid" else ""
+            return f"{why}. Carried on a plate, {source} would no longer be {_a(kind)}{limit}: build one from parts"
+        recipe = json.dumps(plate.carried(model, entry.name, mount, build))
+        return (
+            f"{why}. Keep it on a plate: update_robot({json.dumps(entry.name)}, build={recipe}); joints become "
+            f"{entry.name}/{bare['parts'][0]['name']}/..."
+        )
+
+    def _compiled_with(self, name: str, build: dict[str, Any]) -> mujoco.MjModel:
+        """The open world compiled with robot `name` built from `build` instead, saving nothing."""
+        store = self._require_store()
+        world = store.load().model_copy(deep=True)
+        robot = next(r for r in world.robots if r.name == name)
+        robot.template = robot.file = robot.library = None
+        robot.params, robot.build = {}, build
+        return compile_world(World.model_validate(world.model_dump()), store.dir).model
+
+    def _worlds(self) -> tuple[mujoco.MjModel, list[mujoco.MjData]]:
+        """The open world as it starts (every robot at its saved place, as a reset or reload_world puts them) and as
+        it is now: a place has to be free in both."""
+        with self.session.lock:
+            model, live = self.session.model, copy.copy(self.session.data)
+        return model, [fresh_data(model), live]
+
+    def _clear_start(self, robot: str, pos: list[float]) -> str | None:
+        """What `robot`, put at `pos` on purpose, stands inside (furniture, a wall, a ramp, another robot, or another
+        robot's start), as a note saying where is free; it stays there. None when it stands clear."""
+        model, (start, live) = self._worlds()
+        now = placement.inside(model, live, robot)
+        then = {k: v for k, v in placement.inside(model, start, robot).items() if k not in now}
+        if not now and not then:
+            return None
+        spot = placement.free_place(model, [start, live], robot, ((x, y, 0.0) for x, y in placement.rings(*pos[:2])))
+        where = f"; {_xy(spot)} is free" if spot is not None else ""
+        hit = now or then
+        what, deep = _names(hit), max(hit.values()) * 100
+        if now:
+            return (
+                f"{robot} starts inside {what} at {_xy(pos)} ({deep:.0f} cm deep): it will be pushed out or get stuck "
+                f"there; give it a free pos{where}"
+            )
+        return (
+            f"{robot} starts at {_xy(pos)} where {what} starts too ({deep:.0f} cm into it): after a reset or "
+            f"reload_world they stand inside each other; give it a free pos{where}"
+        )
+
+    def _start_for(
+        self, robot: str, pos: list[float], yaw: float | None
+    ) -> tuple[list[float] | None, float | None, str | None]:
+        """Where `robot`, added without pos (so at `pos`, [0, 0]), is to start instead, the heading to give it (None
+        to keep it), and the note saying so. After load_scene it is the first of the scene's robot_places free in
+        the world as it starts and as it is now, facing the way the place does unless `yaw` was given; with every
+        place taken, or no scene, the nearest free place round the first place or round `pos`, if something
+        stands at `pos`. Moved clear of the kitchen's island to the nearest free place, 0.1 m from it, a dog told
+        to walk over to the island was already there, and a rover added next went under a Go2's belly."""
+        model, worlds = self._worlds()
+        if placement.movable(model, robot) is None:  # fixed to the floor: only told
+            return None, None, self._clear_start(robot, pos)
+        slots = self._scene_places()
+
+        def turn(heading: float) -> float:  # added facing 0 degrees, or the yaw given (kept)
+            return 0.0 if yaw is not None else heading
+
+        for slot in slots:
+            found = placement.free_place(model, worlds, robot, [(*slot.pos, turn(slot.yaw))])
+            if found is not None:
+                facing = None if yaw is not None else float(slot.yaw)
+                said = "" if facing is None else f", facing {facing:g} degrees"
+                where = [found[0], found[1]]
+                return where, facing, f"{robot} starts at {_xy(where)}{said}, the first free one of robot_places"
+        if slots:
+            around, heading, why = slots[0].pos, slots[0].yaw, "the scene's robot_places are all taken"
+        else:
+            hit: dict[str, float] = {}
+            for world in worlds:
+                for name, much in placement.blocked(model, world, robot).items():
+                    hit[name] = max(hit.get(name, 0.0), much)
+            if not hit:
+                return None, None, None
+            inside = any(placement.inside(model, w, robot) for w in worlds)
+            around, heading = pos[:2], 0.0
+            why = f"{_xy(pos)} is {'inside' if inside else 'too close to'} {_names(hit)}"
+        rings = placement.rings(*around)
+        found = placement.free_place(model, worlds, robot, ((x, y, turn(heading)) for x, y in rings))
+        if found is None:
+            return None, None, self._clear_start(robot, pos)
+        facing = None if yaw is not None or not slots else float(heading)
+        free = [found[0], found[1], *pos[2:]]
+        return free, facing, f"{robot}: {why}, so it starts at {_xy(free)}, the nearest free place"
+
+    def _scene_places(self) -> list[scenes.Slot]:
+        """The ground places of the scene loaded into the open world, if one was loaded this session."""
+        if self._places is None or self.store is None or self._places[0] != self.store.dir:
+            return []
+        return self._places[1]
+
+    @_one_edit_at_a_time
+    def add_sensor(self, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Put a sensor on any robot (sensors/edit.py); remove("robot/sensor") takes it off."""
+        return sensor_edit.add(self, robot, fields)
+
+    def read_sensors(
+        self, robot: str, names: list[str] | None = None, image: bool = False, full: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.read(self.sensors.resolve_robot(robot, robots), names, image, full)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+
+    def show_sensors(self, names: list[str]) -> list[str]:
+        """Draw these sensors in the viewer (open_viewer(show=...)); returns their full names."""
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.show(names, robots)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
 
     # ---- robots built from parts ------------------------------------------------------
 
     @_one_edit_at_a_time
     def add_part(self, robot: str, part: dict[str, Any]) -> dict[str, Any]:
-        return self._edit_build(robot, lambda b: build_edit.add_part(b, part))
+        return self._edit_build(robot, lambda b: build_edit.add_part(b, part), adding=part)
 
     @_one_edit_at_a_time
     def update_part(self, robot: str, part: str, changes: dict[str, Any]) -> dict[str, Any]:
-        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes))
+        def follow(entry: RobotEntry, before: dict[str, Any]) -> None:  # sensors on a renamed part go with it
+            old = set(build_edit.part_names(before)) - set(build_edit.part_names(entry.build))
+            new = set(build_edit.part_names(entry.build)) - set(build_edit.part_names(before))
+            if len(old) == 1 and len(new) == 1:
+                sensor_edit.follow_rename(entry, old.pop(), new.pop())
+
+        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes), follow)
 
     @_one_edit_at_a_time
     def remove_part(self, robot: str, part: str) -> dict[str, Any]:
         removed: list[str] = []
+        dropped: list[str] = []
 
         def change(b: dict[str, Any]) -> dict[str, Any]:
             new, gone = build_edit.remove_part(b, part)
             removed.extend(gone)
             return new
 
-        result = self._edit_build(robot, change)
+        def take_off(entry: RobotEntry, _before: dict[str, Any]) -> None:  # what sat on a removed part goes too
+            dropped.extend(sensor_edit.drop_on(entry, removed))
+
+        result = self._edit_build(robot, change, take_off)
         result["removed_parts"] = removed
+        if dropped:
+            result["removed_sensors"] = dropped
         return result
 
-    def _edit_build(self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    def _edit_build(
+        self,
+        robot: str,
+        change_build: Callable[[dict[str, Any]], dict[str, Any]],
+        then: Callable[[RobotEntry, dict[str, Any]], None] | None = None,
+        adding: dict | None = None,
+    ) -> dict[str, Any]:
+        entry = _find(self._require_store().load().robots, robot, "robot")
+        if entry.build is None and isinstance(adding, dict):  # a part for a template or library robot: on a plate
+            name = adding.get("name", "the part")
+            whole, note = self._carry(entry, {}, change_build, f"with {name} on the plate")
+
+            def carry_it(w: World) -> None:
+                found = _find(w.robots, robot, "robot")
+                found.template = found.file = found.library = None
+                found.params, found.build = {}, whole
+
+            return _noted(self._edit(carry_it), note)
+
         def change(w: World) -> None:
             entry = _built(_find(w.robots, robot, "robot"))
+            before = entry.build
             entry.build = change_build(entry.build)
+            if then is not None:
+                then(entry, before)
 
         return self._edit(change)
 
@@ -427,6 +737,11 @@ class Playground:
 
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
+        world = self.current_world()
+        sensor = sensor_edit.find(world, name) if world is not None else None
+        if sensor is not None:  # "go2/lidar": a sensor added to a robot
+            return sensor_edit.remove(self, *sensor)
+
         def change(w: World) -> None:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
             found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
@@ -457,6 +772,7 @@ class Playground:
             w.terrain = []
             w.objects = []
 
+        self._places = None  # the scene's places went with it
         return self._edit(change)
 
     @_one_edit_at_a_time
@@ -473,28 +789,43 @@ class Playground:
         return self._load_world(store.compile())
 
     def show_world(self) -> dict[str, Any]:
-        store = self._require_store()
+        """The open world's world.yaml. With none open it says so and lists the saved worlds, not an error: agents
+        call it first to see where things stand (both go2_arm_kitchen sessions on the branch began with it, and it
+        counted as a failed call)."""
+        if self.store is None:
+            home = worlds_home()
+            saved = sorted(p.parent.name for p in home.glob("*/world.yaml")) if home.is_dir() else []
+            return {
+                "world": None,
+                "saved_worlds": _limit(saved),
+                "notes": ["no world is open: new_world makes one, load_scene a ready-made one, open_world a saved one"],
+            }
+        store = self.store
         return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
 
-    def _edit(self, change) -> dict[str, Any]:
+    def _edit(self, change, snapshot: bool = True) -> dict[str, Any]:
+        """Apply `change` to the open world and load it; snapshot=False finishes the edit before it (one undo)."""
         store = self._require_store()
         before = store.load()
         with self.session.lock:
             live = carry.take(self.session.model, self.session.data)
             hands_off = self.behaviors.hands_off()
         try:
-            after, compiled = store.apply(change)
+            after, compiled = store.apply(change, snapshot=snapshot)
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         result = self._load_world(compiled)
         # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
         # New ground under them (terrain, a scene) starts everything fresh: their heights would no longer fit.
         if before.terrain == after.terrain:
-            unchanged = [r.name for r in after.robots if r in before.robots]
+            kept = [without_sensors(r) for r in before.robots]  # a sensor added or removed moves no robot
+            unchanged = [r.name for r in after.robots if without_sensors(r) in kept]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
                 carried = carry.restore(self.session.model, self.session.data, live, unchanged)
                 self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
+                # First samples from where the robots now are; their sensors' estimates carry on (odometry).
+                self.sensors.rebuild(kept=carried)
         return result
 
     def _unchanged(self, note: str) -> dict[str, Any]:
@@ -576,6 +907,7 @@ class Playground:
             w.objects = [ObjectEntry(**{**o, "name": _unused(o["name"], taken)}) for o in content.objects]
 
         result = self._edit(change)
+        self._places = (self.store.dir, list(content.ground_slots))
         result["scene"] = {
             "preset": preset,
             "seed": seed,
@@ -692,16 +1024,27 @@ class Playground:
                     notes.append(note)
         return applied, notes
 
-    def simulate(self, seconds: float, controls: dict[str, float] | None = None) -> dict[str, Any]:
+    def simulate(
+        self, seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None
+    ) -> dict[str, Any]:
         if not 0 < seconds <= MAX_SIM_SECONDS:
             raise PlaygroundError(wording.seconds_range("seconds", seconds, MAX_SIM_SECONDS))
         notes: list[str] = []
+        blown: dict[str, Any] | None = None
         with self.session.lock:
             if controls:
                 _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))
             before = self._free_body_positions()
-            self.session.step(steps)
+            if wind is not None:
+                from robotforge.behaviors import air
+
+                try:
+                    blown = air.blow(self.session, wind, seconds, steps)
+                except air.WindError as exc:
+                    raise PlaygroundError(str(exc)) from exc
+            else:
+                self.session.step(steps)
             after = self._free_body_positions()
             unstable = not np.isfinite(self.session.data.qpos).all()
         moved = {
@@ -716,6 +1059,8 @@ class Playground:
         }
         if notes:
             result["notes"] = notes
+        if blown is not None:
+            result["wind"] = blown
         if unstable:
             result["warning"] = "simulation became unstable (NaN state); reset and check the model"
         return result
@@ -754,20 +1099,37 @@ class Playground:
                         float(d.qpos[m.jnt_qposadr[j]]), 4
                     )
             ctrl = {self._actuator_info(a)["name"]: round(float(d.ctrl[a]), 4) for a in range(m.nu)}
-            sensors = {}
-            for s in range(m.nsensor):
-                adr, dim = m.sensor_adr[s], m.sensor_dim[s]
-                values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+            # add_sensor's own MuJoCo sensors: read_sensors and observe's sensor_summary report those
+            sensors = {k: v for k, v in self.sensor_readings().items() if not _added_sensor(k)}
+            lidars = lidar.readings(m, d)
+            listed = _limit_dict(sensors)
+            if lidars and "..." in listed:  # a 64-ray lidar alone is 64 sensors: say where all its rays are
+                listed["..."] += "; lidars has every ray of each lidar"
             return {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
                 "joints": _limit_dict(joints),
                 "controls": _limit_dict(ctrl),
                 "free_bodies": _limit_dict(self._free_body_positions()),
-                "sensors": _limit_dict(sensors),
+                "sensors": listed,
+                **({"lidars": lidars} if lidars else {}),
                 "contacts": int(d.ncon),
             }
+
+    def sensor_readings(self) -> dict[str, Any]:
+        """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones).
+        A rangefinder on a robot reads past the robot's own parts, as its lidar does (sim/lidar.seen)."""
+        m, d = self.session.model, self.session.data
+        with self.session.lock:
+            out: dict[str, Any] = {}
+            for s in range(m.nsensor):
+                adr, dim = m.sensor_adr[s], m.sensor_dim[s]
+                if dim == 1 and int(m.sensor_type[s]) == mujoco.mjtSensor.mjSENS_RANGEFINDER:
+                    values = [round(lidar.seen(m, d, s), 4)]
+                else:
+                    values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
+                out[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+            return out
 
     def snapshot(self, view: str = "default", width: int = 640, height: int = 480) -> bytes:
         try:
@@ -848,19 +1210,29 @@ def design_build(design: str, **others: Any) -> dict[str, Any]:
         raise PlaygroundError(str(exc)) from None
 
 
+def _source(robot: RobotEntry) -> str:
+    if robot.template:
+        return f"the {robot.template} template"
+    return f"the robot library ({robot.library})" if robot.library else "a file"
+
+
+def _whole(build: dict[str, Any]) -> bool:
+    """A build that describes a whole robot (a base or parts), not a few fields to change on one."""
+    return isinstance(build, dict) and ("base" in build or "parts" in build)
+
+
+def _sensors_only(build: dict[str, Any]) -> bool:
+    """A build that is nothing but sensors for the base: {"base": {"sensors": [...]}}."""
+    base = build.get("base")
+    return set(build) == {"base"} and isinstance(base, dict) and set(base) == {"sensors"} and bool(base["sensors"])
+
+
 def _built(robot: RobotEntry) -> RobotEntry:
     if robot.build is None:
-        source = (
-            f"the {robot.template} template"
-            if robot.template
-            else f"the robot library ({robot.library})"
-            if robot.library
-            else "a file"
-        )
         raise PlaygroundError(
-            f"{robot.name} comes from {source}; parts can only be edited on robots built from parts "
-            "(add_robot with build=...). To build on a template, mount it as a part: "
-            '{"name": "arm", "robot": {"template": "arm"}}'
+            f"{robot.name} comes from {_source(robot)}; parts and sensors (a lidar, a camera) are edited only on "
+            "robots built from parts. add_part on it carries it on a plate and adds the part there; to build on a "
+            'template, mount it as a part: {"name": "arm", "robot": {"template": "arm"}}'
         )
     return robot
 
@@ -900,6 +1272,36 @@ def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _moving_joints(model: mujoco.MjModel, robot: str) -> int:
+    """How many hinges and slides robot `robot` has in a compiled world."""
+    moving = (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+    return sum(
+        int(model.jnt_type[j]) in moving
+        and (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or "").startswith(f"{robot}/")
+        for j in range(model.njnt)
+    )
+
+
+def _a(kind: str) -> str:
+    """A robot kind with its article: an arm, a quadruped, a robot of kind other."""
+    if kind == "other":
+        return "a robot of kind other"
+    return f"an {kind}" if kind[0] in "aeiou" else f"a {kind}"
+
+
+def _joints(count: int) -> str:
+    return f"{count} joint" if count == 1 else f"{count} joints"
+
+
+def _xy(pos: list[float] | tuple[float, ...]) -> str:
+    return f"[{pos[0]:g}, {pos[1]:g}]"
+
+
+def _names(found: dict[str, float]) -> str:
+    """The first three names of what a robot stands in or by, most first."""
+    return ", ".join(list(found)[:3]) + (" and more" if len(found) > 3 else "")
+
+
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
     """Add the notes that are not None to the result's "notes"."""
     added = [n for n in notes if n]
@@ -922,12 +1324,45 @@ def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
     return result
 
 
+class _Mounts(BaseModel):
+    mounts: list[MountEntry]
+
+
+def _mounts(mounts: list[Any]) -> list[MountEntry]:
+    """A mounts list checked as add_robot checks it, so that errors say where: "mounts[0]: ..."."""
+    try:
+        return _Mounts.model_validate({"mounts": mounts}).mounts
+    except ValidationError as exc:
+        raise PlaygroundError(_validation_message(exc)) from exc
+
+
 def _validation_message(exc: ValidationError) -> str:
     return wording.validation_message(exc)
 
 
+def _added_sensor(name: str) -> bool:
+    """A MuJoCo sensor that add_sensor made (rf_<sensor>_...): its readings come through read_sensors."""
+    return name.startswith("rf_") or "/rf_" in name
+
+
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(m, obj, idx) or ""
+
+
+def _aircraft(m: mujoco.MjModel, behaviors) -> list[dict[str, Any]]:
+    """The robots that fly: their rotors (thrust actuators), what flies them now and what they are doing."""
+    from robotforge.behaviors import Kind
+
+    out = []
+    for robot in behaviors.robot_names():
+        if behaviors.kind(robot) != Kind.AIRCRAFT:
+            continue
+        root = airframe.root_of(m, robot)
+        names = [_name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in airframe.thrust_actuators(m, robot, root)]
+        info = behaviors.flight_info(robot)
+        keep = ("controller", "state", "altitude_m", "cannot_fly")
+        out.append({"robot": robot, "rotors": names, **{k: info[k] for k in keep if k in info}})
+    return out
 
 
 def _free_bodies(m: mujoco.MjModel) -> list[int]:

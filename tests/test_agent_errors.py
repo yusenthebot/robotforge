@@ -16,7 +16,6 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import tool_input, wording
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import _tool_errors, build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -40,7 +39,7 @@ class Lab:
 
     def __init__(self, playground: Playground):
         self.playground = playground
-        self.server = build_server(playground, find_free_port(8790))
+        self.server = build_server(playground, 0)
         self.baseline = playground.store.file.read_text(encoding="utf-8")
 
     async def call(self, tool: str, **args) -> tuple[bool, str]:
@@ -378,7 +377,8 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
         ("train_policy", {"task": "walk", "robot": "cat"}, ["no robot named 'cat'"]),
         ("training_status", {"name": "nope"}, ["no policy named 'nope'", "train_policy"]),
         ("lessons", {"number": "three"}, ["number must be a whole number", "'three'"]),
-        ("add_part", {"robot": "dog", "part": {"name": "tail"}}, ["dog comes from the quadruped template", "build"]),
+        # A template robot is carried on a plate for its parts, and a wrong part says what is wrong with it.
+        ("add_part", {"robot": "dog", "part": {"name": "tail"}}, ["part 'tail'", "size is required"]),
         ("write_script", {"name": "../evil", "code": "print(1)"}, ["script name '../evil'", "pick_cube"]),
         (
             "write_script",
@@ -660,6 +660,12 @@ def test_unknown_lists_choices_and_closest_names():
     assert text == "no robot named 'dog1'. Did you mean dog? Robots in this world: dog, arm, rover"
     assert wording.unknown("terrain patch", "x", []).endswith("There are no terrain patches in this world.")
     assert "and 3 more" in wording.choices([str(i) for i in range(15)])
+
+
+def test_equally_close_names_that_start_like_the_given_one_come_first():
+    """difflib alone ranks ties by the name itself: "go3" suggested op3 before go2."""
+    assert wording.near("go3", ["go2", "op3", "go1"]) == ["go2", "go1", "op3"]
+    assert wording.near("x", []) == []
 
 
 def test_unit_hint_only_for_values_far_over_the_maximum():

@@ -14,8 +14,9 @@ fighting it, standing or walking; see PUSH_DRIFT.
 
 from __future__ import annotations
 
+import dataclasses
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mujoco
 import numpy as np
@@ -47,6 +48,11 @@ PLAN_HZ = 100.0  # foot targets and IK; torque-motor PD runs every physics step
 # is not solved again: the IK would return the same joints. Standing still, the targets do not move, and solving
 # them anyway halved the speed of a world with one dog in it (real-time factor 173 -> 90, six dogs 38 -> 15).
 IK_TOL = 1e-4
+# The plan's bookkeeping (trunk velocity, push watch, velocity correction, foot targets) is float arithmetic on two
+# and three numbers. On small numpy arrays it took longer than the physics: a dog standing idle on its gait spent a
+# quarter of its headless time in the gait (a plan took 35 us, 70 once it had walked and stopped). As plain floats,
+# computed the same way in the same order, a plan takes 6 us, the share is a tenth and the robots move as before,
+# bit for bit (scripts/bench.py --ab measures it).
 TEMPLATE_PERIOD = 0.36  # s per gait cycle for our template dog
 # Bigger robots step slower: about 0.36 s per cycle for a Go2-sized leg (hip to foot 0.28 m),
 # scaled with leg length. Measured: Go2 walks best at 0.30-0.36 s, Spot (0.44 m legs) at 0.45-0.55 s.
@@ -121,6 +127,12 @@ WALK_RECOVER_REST = 3.0  # ...then this long on the plain gait before another ca
 STAND_RECOVER_MAX = 6.0  # s
 STAND_RECOVER_REST = 3.0  # s
 
+# A leg joint whose range is a full turn or more (ANYmal C's knees: +-540 degrees) does not keep the knee bending one
+# way: reaching for a foot target near full stretch, the IK swung a knee through straight to bend the other way and the
+# robot spun round and fell (5 s into a 0.2 m/s walk). Such joints may turn this far either side of home while walking.
+UNLIMITED = 2 * math.pi  # rad
+BRANCH = math.pi / 2  # rad
+
 # (name, [hip, thigh, knee] joint ids, foot body id, foot point in that body's frame, phase offset)
 LegSpec = tuple[str, list[int], int, np.ndarray, float]
 
@@ -134,8 +146,14 @@ class Leg:
     hip: np.ndarray  # hip position in the trunk frame
     home_foot: np.ndarray  # foot position in the trunk frame at the home pose
     q: np.ndarray  # last IK solution (warm start)
-    solved_for: np.ndarray  # the foot target q was solved for...
+    solved_for: tuple[float, float, float]  # the foot target q was solved for...
     error: float = math.inf  # ...and how far q's foot is from it (inf: unknown, solve again)
+    hip_xy: tuple[float, float] = field(init=False, repr=False)  # hip and home_foot as floats, for the plan
+    home: tuple[float, float, float] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.hip_xy = (float(self.hip[0]), float(self.hip[1]))
+        self.home = (float(self.home_foot[0]), float(self.home_foot[1]), float(self.home_foot[2]))
 
 
 @dataclass(frozen=True)
@@ -185,14 +203,15 @@ class QuadrupedGait:
             missing = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in joints if j not in joint_to_act]
             if missing:
                 raise ValueError(f"robot {robot!r} has no actuator on {', '.join(missing)}, so it cannot walk")
-            chain = Chain.from_joints(model, joints, body, point)
-            q0 = base[chain.qpos_adr].copy()
+            q0 = base[model.jnt_qposadr[joints]].copy()
+            chain = _keep_branch(Chain.from_joints(model, joints, body, point), q0)
             foot = self.ik.point(chain, q0)
             hip = self.ik.data.xpos[model.jnt_bodyid[joints[0]]].copy()
             acts = np.array([joint_to_act[j] for j in joints])
-            self.legs.append(Leg(name, chain, acts, offset, hip, foot, q0, foot.copy()))
+            self.legs.append(Leg(name, chain, acts, offset, hip, foot, q0, tuple(foot.tolist())))
         self._actuators = np.concatenate([leg.actuators for leg in self.legs])
         self._targets = np.concatenate([leg.q for leg in self.legs])
+        self._targets_from = [leg.q for leg in self.legs]  # the solutions _targets holds (rebuilt when one changes)
         self.motors = _motor_drive(model, self._actuators)
         if self.motors is not None:
             # Torque motors need their PD loop at physics rate; IK still runs at PLAN_HZ.
@@ -216,20 +235,20 @@ class QuadrupedGait:
         self._phase = 0.0
         self._amplitude = 0.0  # 0 = standing still, 1 = full stepping
         # Trunk velocity (forward, left) in its heading frame and yaw rate, averaged; and the
-        # integrated error of the same. Updated by rebinding, never in place, so a shallow copy of
-        # the gait (the control layer's preview) cannot disturb the live one.
-        self._v_meas = np.zeros(3)
-        self._v_int = np.zeros(3)
+        # integrated error of the same. Tuples of floats, rebound and never changed in place, so a shallow copy
+        # of the gait (the control layer's preview) cannot disturb the live one.
+        self._v_meas = _ZERO3
+        self._v_int = _ZERO3
         self._saturated = False  # the last plan had to shorten a stride
         # Push recovery (see PUSH_DRIFT), also updated by rebinding only.
         self._own_pattern = [leg.phase_offset for leg in self.legs]  # recovery is tuned for this pattern
-        self._v_fast = np.zeros(3)  # the trunk velocity again, smoothed over a quarter cycle
+        self._v_fast = _ZERO3  # the trunk velocity again, smoothed over a quarter cycle
         self._rest_roll = 0.0  # the roll the trunk usually holds here
         self._started_at = -math.inf  # sim time of the start, or of the last reset under it
         self._calm_since = -math.inf  # while settling: since when the trunk has been calm
         self._settled_at = -math.inf  # pushes count from this time on (inf: not settled yet)
-        self._drift = np.zeros(2)  # how far the trunk moved while standing still, lately (forward, left)
-        self._creep = np.zeros(2)  # how it usually moves standing here: a slow creep down a slope, say
+        self._drift = _ZERO2  # how far the trunk moved while standing still, lately (forward, left)
+        self._creep = _ZERO2  # how it usually moves standing here: a slow creep down a slope, say
         self._recover_until = -math.inf
         self._walk_recover_since: float | None = None  # when the current recovery while walking started
         self._walk_rest_until = -math.inf  # no recovery while walking before this
@@ -304,7 +323,7 @@ class QuadrupedGait:
             self._recover_until = self._walk_rest_until = self._stand_rest_until = -math.inf
             self._walk_recover_since = self._stand_recover_since = None
             self._recovery = 0.0
-            self._drift = np.zeros(2)
+            self._drift = _ZERO2
         dt = 0.0 if self._last_t is None else max(0.0, t - self._last_t)
         self._last_t = t
         # Smooth command changes so the robot does not stumble on a sudden key press.
@@ -314,12 +333,13 @@ class QuadrupedGait:
         moving = abs(self.command_speed) > 1e-3 or abs(self.command_turn) > 1e-3
 
         quat = data.xquat[self.trunk]
-        roll, pitch = _roll_pitch(quat)
+        qw, qx, qy, qz = quat.tolist()
+        roll, pitch = _roll_pitch((qw, qx, qy, qz))
         measured = self._measure(data)
-        self._v_meas = self._v_meas + (1.0 - math.exp(-dt / self.period)) * (measured - self._v_meas)
-        self._v_fast = self._v_fast + (1.0 - math.exp(-dt / (FOLLOW_TAU * self.period))) * (measured - self._v_fast)
-        fallen = 1.0 - 2.0 * (quat[1] ** 2 + quat[2] ** 2) < math.cos(FALLEN_TILT)  # its z axis that far from up
-        held = bool(np.any(data.qfrc_applied[self.root_dof : self.root_dof + 6]))  # a hand pulls it (a viewer drag)
+        self._v_meas = _toward(self._v_meas, measured, 1.0 - math.exp(-dt / self.period))
+        self._v_fast = _toward(self._v_fast, measured, 1.0 - math.exp(-dt / (FOLLOW_TAU * self.period)))
+        fallen = 1.0 - 2.0 * (qx**2 + qy**2) < math.cos(FALLEN_TILT)  # its z axis that far from up
+        held = any(data.qfrc_applied[self.root_dof : self.root_dof + 6].tolist())  # a hand pulls it (a viewer drag)
         recovering = self._recovering(t, dt, measured, roll, moving, fallen, held)
         if recovering and not moving:  # pushed while standing: start stepping right away
             self._amplitude += (1.0 - math.exp(-dt / RECOVER_RISE)) * (1.0 - self._amplitude)
@@ -327,7 +347,7 @@ class QuadrupedGait:
             self._amplitude += alpha * ((1.0 if moving else 0.0) - self._amplitude)
         self._phase = (self._phase + dt / self.period) % 1.0
 
-        v_body, turn = self._corrected_velocity(dt)
+        (vx, vy), turn = self._corrected_velocity(dt)
         w = self._recovery
         # The trunk is leveled while the robot walks. Standing, a gait without level_standing levels it only as much
         # as it steps (recovering, or stopping) and otherwise holds the stance its servos would: leveled standing on
@@ -340,51 +360,65 @@ class QuadrupedGait:
             return  # it has not stepped since it started: every foot target is still its home (see IK_TOL)
         level = None
         if w > 1e-3:
+            vi0, vi1, vi2 = self._v_int
             if moving or not held:
                 # Sideways strides follow the trunk, and the velocity correction lets go of that axis.
-                v_body = np.array([v_body[0], (1.0 - w) * v_body[1] + w * LATERAL_FOLLOW * self._v_fast[1]])
-                self._v_int = np.array([self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
+                vy = (1.0 - w) * vy + w * LATERAL_FOLLOW * self._v_fast[1]
+                self._v_int = (vi0, (1.0 - w) * vi1, vi2)
             else:
                 # A hand pulling a standing robot: its strides follow forwards too. Braking against a forward
                 # pull by the back pitched a never-moved dog to 61 degrees and onto its back.
-                v_body = (1.0 - w) * v_body + w * LATERAL_FOLLOW * self._v_fast[:2]
-                self._v_int = np.array([(1.0 - w) * self._v_int[0], (1.0 - w) * self._v_int[1], self._v_int[2]])
+                follow = w * LATERAL_FOLLOW
+                vx, vy = (1.0 - w) * vx + follow * self._v_fast[0], (1.0 - w) * vy + follow * self._v_fast[1]
+                self._v_int = ((1.0 - w) * vi0, (1.0 - w) * vi1, vi2)
             level = _tilt(quat)
         half_cycle = self.period * self.duty
         saturated = False
         for leg in self.legs:
             # Each foot sweeps backwards during stance at the body's commanded velocity.
-            v = np.array([v_body[0] - turn * leg.hip[1], v_body[1] + turn * leg.hip[0]])
-            stride = v * half_cycle
-            norm = np.linalg.norm(stride)
+            hx, hy = leg.hip_xy
+            sx, sy = (vx - turn * hy) * half_cycle, (vy + turn * hx) * half_cycle  # the stride
+            norm = math.sqrt(sx * sx + sy * sy)
             if norm > self.max_stride:
-                stride *= self.max_stride / norm
+                shorten = self.max_stride / norm
+                sx, sy = sx * shorten, sy * shorten
                 saturated = True
             phase = (self._phase + leg.phase_offset) % 1.0
-            target = leg.home_foot.copy()
+            fx, fy, fz = leg.home
             if phase < self.duty:
                 u = phase / self.duty
-                target[:2] += stride * (0.5 - u)
+                fx, fy = fx + sx * (0.5 - u), fy + sy * (0.5 - u)
             else:
                 u = (phase - self.duty) / (1.0 - self.duty)
                 s = 0.5 - 0.5 * math.cos(math.pi * u)  # ease in and out
-                target[:2] += stride * (s - 0.5)
-                target[2] += self._amplitude * self.lift * math.sin(math.pi * u)
+                fx, fy = fx + sx * (s - 0.5), fy + sy * (s - 0.5)
+                fz += self._amplitude * self.lift * math.sin(math.pi * u)
             # Level the trunk: extend legs on the low side.
-            target[2] += leveling * (-pitch * leg.hip[0] + roll * leg.hip[1])
+            fz += leveling * (-pitch * hx + roll * hy)
             if level is not None and phase >= self.duty:
                 # A swinging foot aims where it would if the trunk were level (see PUSH_DRIFT).
-                target = (1.0 - w) * target + w * (level.T @ target)
+                aim = np.array([fx, fy, fz])
+                fx, fy, fz = ((1.0 - w) * aim + w * (level.T @ aim)).tolist()
             # Solved again unless the IK would return the same joints at once (see IK_TOL).
-            if leg.error + float(np.linalg.norm(target - leg.solved_for)) >= IK_TOL:
-                leg.q, error = self.ik.solve(leg.chain, target, leg.q, iterations=4, tol=IK_TOL)
+            ox, oy, oz = leg.solved_for
+            if leg.error + math.sqrt((fx - ox) * (fx - ox) + (fy - oy) * (fy - oy) + (fz - oz) * (fz - oz)) >= IK_TOL:
+                leg.q, error = self.ik.solve(leg.chain, np.array([fx, fy, fz]), leg.q, iterations=4, tol=IK_TOL)
                 # The error is q's own only when the IK stopped on it; after its last iteration it is the step before.
-                leg.solved_for, leg.error = target, error if error < IK_TOL else math.inf
-        self._targets = np.concatenate([leg.q for leg in self.legs])
+                leg.solved_for, leg.error = (fx, fy, fz), error if error < IK_TOL else math.inf
+        if any(leg.q is not q for leg, q in zip(self.legs, self._targets_from, strict=True)):
+            self._targets_from = [leg.q for leg in self.legs]
+            self._targets = np.concatenate(self._targets_from)
         self._saturated = saturated
 
     def _recovering(
-        self, t: float, dt: float, measured: np.ndarray, roll: float, moving: bool, fallen: bool, held: bool
+        self,
+        t: float,
+        dt: float,
+        measured: tuple[float, float, float],
+        roll: float,
+        moving: bool,
+        fallen: bool,
+        held: bool,
     ) -> bool:
         """Whether the robot is recovering from a push; also eases the recovery in and out."""
         if fallen:  # down: nothing to step for, and once up again it settles anew (see FALLEN_TILT)
@@ -404,10 +438,14 @@ class QuadrupedGait:
         else:
             recovering = self._watch_for_pushes(t, roll - self._rest_roll, moving, held)
         if moving or recovering or self._amplitude >= 0.05 or t < self._settled_at:
-            self._drift, self._creep = np.zeros(2), np.zeros(2)
+            self._drift, self._creep = _ZERO2, _ZERO2
         else:  # how it moves off its usual slow creep (see DRIFT_TAU)
-            self._creep = self._creep + (1.0 - math.exp(-dt / REST_TAU)) * (measured[:2] - self._creep)
-            self._drift = math.exp(-dt / DRIFT_TAU) * self._drift + dt * (measured[:2] - self._creep)
+            (mx, my, _), (cx, cy), (dx, dy) = measured, self._creep, self._drift
+            k = 1.0 - math.exp(-dt / REST_TAU)
+            cx, cy = cx + k * (mx - cx), cy + k * (my - cy)
+            decay = math.exp(-dt / DRIFT_TAU)
+            self._creep = (cx, cy)
+            self._drift = (decay * dx + dt * (mx - cx), decay * dy + dt * (my - cy))
         if not recovering:
             self._rest_roll += (1.0 - math.exp(-dt / REST_TAU)) * (roll - self._rest_roll)
         rise = RECOVER_RISE_WALKING if moving else RECOVER_RISE
@@ -425,7 +463,8 @@ class QuadrupedGait:
         if t < self._recover_until:  # keep at it until the trunk is calm again
             pushed = not self._calm(moving)
         elif not moving and self._amplitude < 0.05:  # standing still
-            pushed = float(np.linalg.norm(self._drift)) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
+            dx, dy = self._drift
+            pushed = math.sqrt(dx * dx + dy * dy) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
         elif moving:
             pushed = abs(self._v_meas[1]) > sideways_push
             pushed = pushed or abs(lean) > PUSH_LEAN + TURN_LEAN * abs(self.turn)
@@ -485,28 +524,46 @@ class QuadrupedGait:
         self._stand_recovered_at = t
         return True
 
-    def _measure(self, data: mujoco.MjData) -> np.ndarray:
+    def _measure(self, data: mujoco.MjData) -> tuple[float, float, float]:
         """The trunk's velocity (forward, left) in its heading frame and its yaw rate, right now."""
-        rot = np.empty(9)
-        mujoco.mju_quat2Mat(rot, data.xquat[self.trunk])
-        rot = rot.reshape(3, 3)
-        yaw = math.atan2(rot[1, 0], rot[0, 0])
+        r = data.xmat[self.trunk].tolist()  # row by row; MuJoCo makes it from xquat, as mju_quat2Mat would
+        yaw = math.atan2(r[3], r[0])
         c, s = math.cos(yaw), math.sin(yaw)
-        lin = data.qvel[self.root_dof : self.root_dof + 3]  # world frame
-        yaw_rate = (rot @ data.qvel[self.root_dof + 3 : self.root_dof + 6])[2]  # angular part is in body frame
-        return np.array([c * lin[0] + s * lin[1], -s * lin[0] + c * lin[1], yaw_rate])
+        # Linear velocity in the world frame, angular in the body frame: its yaw rate is the rotation's last row
+        # times it.
+        vx, vy, _, wx, wy, wz = data.qvel[self.root_dof : self.root_dof + 6].tolist()
+        yaw_rate = r[6] * wx + r[7] * wy + r[8] * wz
+        return (c * vx + s * vy, -s * vx + c * vy, yaw_rate)
 
-    def _corrected_velocity(self, dt: float) -> tuple[np.ndarray, float]:
-        """The body velocity and turn rate to step for: the command plus a PI correction."""
-        want = np.array([self.speed, 0.0, self.turn])
-        limit = np.array([0.5 * self._stride_speed, 0.5 * self._stride_speed, 1.0])
+    def _corrected_velocity(self, dt: float) -> tuple[tuple[float, float], float]:
+        """The body velocity and turn rate to step for: the command plus a PI correction, each limited."""
+        (w0, w1, w2), (m0, m1, m2) = (self.speed, 0.0, self.turn), self._v_meas
+        top = 0.5 * self._stride_speed  # forward and sideways; the turn at 1 rad/s
         if self._amplitude < 0.05:  # standing: nothing to correct, and no windup for the next start
-            self._v_int = np.zeros(3)
+            self._v_int = _ZERO3
         elif not self._saturated:  # strides at their limit cannot go faster; integrating then only winds up
-            self._v_int = np.clip(self._v_int + VELOCITY_KI * dt * (want - self._v_meas), -limit, limit)
-        correction = self._amplitude * (VELOCITY_KP * (want - self._v_meas) + self._v_int)
-        corrected = want + np.clip(correction, -limit, limit)
-        return corrected[:2], float(corrected[2])
+            gain = VELOCITY_KI * dt
+            i0, i1, i2 = self._v_int
+            self._v_int = (
+                min(max(i0 + gain * (w0 - m0), -top), top),
+                min(max(i1 + gain * (w1 - m1), -top), top),
+                min(max(i2 + gain * (w2 - m2), -1.0), 1.0),
+            )
+        amp, (i0, i1, i2) = self._amplitude, self._v_int
+        vx = w0 + min(max(amp * (VELOCITY_KP * (w0 - m0) + i0), -top), top)
+        vy = w1 + min(max(amp * (VELOCITY_KP * (w1 - m1) + i1), -top), top)
+        turn = w2 + min(max(amp * (VELOCITY_KP * (w2 - m2) + i2), -1.0), 1.0)
+        return (vx, vy), turn
+
+
+_ZERO2 = (0.0, 0.0)
+_ZERO3 = (0.0, 0.0, 0.0)
+
+
+def _toward(average: tuple[float, float, float], now: tuple[float, float, float], share: float) -> tuple[float, ...]:
+    """An exponential average moved `share` of the way to `now`."""
+    (a0, a1, a2), (n0, n1, n2) = average, now
+    return (a0 + share * (n0 - a0), a1 + share * (n1 - a1), a2 + share * (n2 - a2))
 
 
 def _tilt(quat: np.ndarray) -> np.ndarray:
@@ -519,7 +576,7 @@ def _tilt(quat: np.ndarray) -> np.ndarray:
     return np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]) @ rot
 
 
-def _roll_pitch(quat: np.ndarray) -> tuple[float, float]:
+def _roll_pitch(quat: tuple[float, float, float, float] | np.ndarray) -> tuple[float, float]:
     w, x, y, z = quat
     roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
     pitch = math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x))))
@@ -548,6 +605,16 @@ def _motor_drive(model: mujoco.MjModel, actuators: np.ndarray) -> MotorDrive | N
     # Explicit damping is stable only while kd * dt stays well below the inertia it acts on.
     kd = np.minimum(2.0 * MOTOR_DAMPING_RATIO * np.sqrt(kp * inertia), 0.5 * inertia / model.opt.timestep)
     return MotorDrive(actuators, model.jnt_qposadr[joints], dof, kp, kd, gear, lower.copy(), upper.copy())
+
+
+def _keep_branch(chain: Chain, home: np.ndarray) -> Chain:
+    """The chain with each joint of a full turn or more of range kept within BRANCH of its home angle."""
+    wide = chain.upper - chain.lower >= UNLIMITED - 1e-9
+    if not wide.any():
+        return chain
+    lower = np.where(wide, np.maximum(chain.lower, home - BRANCH), chain.lower)
+    upper = np.where(wide, np.minimum(chain.upper, home + BRANCH), chain.upper)
+    return dataclasses.replace(chain, lower=lower, upper=upper)
 
 
 def _apply_pd(drive: MotorDrive, data: mujoco.MjData, targets: np.ndarray) -> None:

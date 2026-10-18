@@ -1,7 +1,9 @@
 <!--
   Offline stand-in for MuJoCo Menagerie's trs_so_arm100/so_arm100.xml, for tests only:
   a small fixed-base arm with position servos and a "home" keyframe, no meshes. Its base
-  reaches 2 cm below the body origin, so robotforge must lift it onto the floor.
+  reaches 2 cm below the body origin, so robotforge must lift it onto the floor. The wrist
+  and jaws carry the real model's names (Fixed_Jaw, Moving_Jaw, Jaw), with the jaws reaching
+  along Fixed_Jaw's -y as in the real one, so the library finds its tool point and gripper.
 -->
 <mujoco model="so_arm100">
   <compiler angle="radian" autolimits="true"/>
@@ -23,6 +25,18 @@
         <body name="Lower_Arm" pos="0 0 0.11">
           <joint name="Elbow" axis="0 1 0"/>
           <geom type="capsule" fromto="0 0 0 0.13 0 0" size="0.012" mass="0.15"/>
+          <body name="Wrist_Pitch_Roll" pos="0.13 0 0">
+            <joint name="Wrist_Pitch" axis="0 1 0"/>
+            <geom type="capsule" fromto="0 0 0 0.04 0 0" size="0.012" mass="0.05"/>
+            <body name="Fixed_Jaw" pos="0.04 0 0" quat="0.707107 0 0 0.707107">
+              <joint name="Wrist_Roll" axis="0 -1 0"/>
+              <geom type="box" size="0.004 0.03 0.008" pos="0.012 -0.07 0" mass="0.03"/>
+              <body name="Moving_Jaw" pos="-0.02 -0.024 0">
+                <joint name="Jaw" axis="0 0 -1" range="-0.174 1.75"/>
+                <geom type="box" size="0.004 0.03 0.008" pos="0.008 -0.046 0" mass="0.02"/>
+              </body>
+            </body>
+          </body>
         </body>
       </body>
     </body>
@@ -32,9 +46,12 @@
     <position class="so_arm100" name="Rotation" joint="Rotation"/>
     <position class="so_arm100" name="Pitch" joint="Pitch"/>
     <position class="so_arm100" name="Elbow" joint="Elbow"/>
+    <position class="so_arm100" name="Wrist_Pitch" joint="Wrist_Pitch"/>
+    <position class="so_arm100" name="Wrist_Roll" joint="Wrist_Roll"/>
+    <position class="so_arm100" name="Jaw" joint="Jaw"/>
   </actuator>
 
   <keyframe>
-    <key name="home" qpos="0 -0.3 0.6" ctrl="0 -0.3 0.6"/>
+    <key name="home" qpos="0 -0.3 0.6 0 0 0" ctrl="0 -0.3 0.6 0 0 0"/>
   </keyframe>
 </mujoco>

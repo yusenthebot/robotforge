@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import inspect
 import logging
 import os
@@ -29,7 +30,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
-from robotforge.behaviors import fetch
+from robotforge.behaviors import Kind, fetch
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -38,10 +39,13 @@ from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
+from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
+from robotforge.sensors import mcp_tools as sensor_tools
+from robotforge.sim import recording
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
@@ -58,10 +62,10 @@ INSTRUCTIONS = wording.unwrap(
 robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
-humanoid, rover, cartpole, gripper; list_templates), takes a real one from the library (list_library: Unitree Go2,
-Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the import doctor
-repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any robot from
-parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
+humanoid, rover, cartpole, gripper, drone; list_templates), takes a real one from the library (list_library:
+Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the
+import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
+robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
 Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
 bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers).
@@ -87,6 +91,23 @@ describe_model, prefixed "<robot>/"). observe reports state with an image so you
 observe(find="red") locates colored objects in a camera's picture and names them ("pick the red one"). open_viewer
 gives the user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out
 in real time.
+
+Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
+force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry on any body of any robot,
+ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
+nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
+them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
+The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
+a robot's own sensors and brings a camera's picture up.
+
+Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
+parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
+of points flies a path ("a 3 m square at 2 m": to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]); a last point with z 0 lands
+there; stop hovers. z is a height above the world's zero, not above the ground under it (over a hill or a table
+the result's clearance_m says how high it really is); a point under a tree's crown or a table hovers there, and it
+flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds
+its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
+and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -199,14 +220,14 @@ _SERVED_ONCE_PER_SOCKET = sys.platform == "win32"
 
 def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
     """The MCP server, with the viewer on `port`. `viewer_socket`, when given, is already listening there (run()
-    takes the port before anything else can). Port 0 takes a free port from the system and holds it as long as
-    the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
-    listens, and then the viewer exits (tests run side by side on one machine hit that)."""
+    takes the port before anything else can). Otherwise the port (0: any free one) is taken here and held as long
+    as the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
+    listens, and then the viewer exits. Tests side by side on one machine hit that: with many agents testing at
+    once, a test lost port 8791 between finding it free and its first session (2026-10-18)."""
     held: socket.socket | None = viewer_socket
-    if held is None and port == 0:
-        held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        held.bind((HOST, 0))
-        held.listen()  # Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+    if held is None:
+        # Listening at once: Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+        held = listen_on_free_port(port, HOST, attempts=1)
         port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
@@ -226,13 +247,20 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         resource_uri=VIEWER_UI_URI,
         description=(
             "Open the live 3D viewer (play/pause, actuator sliders, drag the robot). "
-            "Returns the viewer URL; hosts with MCP Apps show it inline."
+            "Returns the viewer URL; hosts with MCP Apps show it inline. "
+            "It draws the sensors added with add_sensor (lidar rays and points, camera pictures, IMU and force plots); "
+            'show=["go2/front_cam"] or ["go2"] draws others too (a robot\'s own) and brings a camera\'s picture up.'
         ),
     )
-    def open_viewer(launch_browser: bool = True) -> str:
+    def open_viewer(launch_browser: bool = True, show: list[str] | None = None) -> str:
+        with _tool_errors():
+            shown = playground.show_sensors(show) if show else []
         if launch_browser and not os.environ.get("ROBOTFORGE_NO_BROWSER"):
             open_in_browser(playground.viewer_url)
-        return _json({"viewer_url": playground.viewer_url, "model": playground.session.source})
+        out = {"viewer_url": playground.viewer_url, "model": playground.session.source}
+        if shown:
+            out["showing"] = shown
+        return _json(out)
 
     def serving() -> list[socket.socket] | None:
         """The sockets this session's viewer serves on. uvicorn closes them when it stops, so it gets a copy of
@@ -279,8 +307,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper) with parameters, defaults and
-        limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, drone) with parameters, defaults
+        and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
         linear actuators). For other robots build from parts (builder_guide)."""
         from robotforge.design import components, gallery, templates
 
@@ -299,10 +327,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_library() -> str:
-        """List real robots that add_robot(library=...) loads: Unitree Go2 and other robot dogs (move and the keyboard
-        walk them), arms like the Franka Panda and AgileX PiPER (move_arm and pick_and_place work) and the Unitree
-        G1 humanoid (walks with a learned policy). The first add_robot of each downloads it from MuJoCo Menagerie
-        (size in download_mb, usually 5-30 s) and caches it."""
+        """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
+        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work),
+        humanoids (G1, Robotis OP3, Booster T1) and a gripper to mount on an arm (Robotiq 2F-85). The first add_robot
+        of each downloads it from MuJoCo Menagerie (size in download_mb, usually 5-30 s) and caches it."""
         from robotforge.design import library
 
         with _tool_errors():
@@ -328,14 +356,21 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         file: str | None = None,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
-        yaw: float = 0.0,
+        yaw: float | None = None,
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
         list_templates), which is saved as its parts so add_part / update_part change it.
+
+        mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
+        pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
+        gripper. A walker carries what list_library's "carries" says. Each mount: library or template, optional name,
+        at ("top" by default, "tool" for an arm's flange, or a body name), shift [x, y, z] in meters and rotate [roll,
+        pitch, yaw] in degrees.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -351,33 +386,43 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         A library robot downloads on first use (4-55 MB, usually 5-30 s, with progress updates); if the call timed
         out, call again: the download continues and a repeated identical call reports the robot. For templates,
         params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}. pos is [x, y] in meters (height is
-        automatic); yaw is in degrees."""
+        automatic; left out: after load_scene the first free one of the scene's robot_places, else [0, 0] or the
+        nearest free place when furniture or a robot stands there); yaw is in degrees (left out: the place's
+        heading, else 0)."""
         with _tool_errors():
             parts = build
             if design is not None:  # the robots it mounts download first, like a build's
                 parts = design_build(design, template=template, file=file, library=library, build=build, params=params)
-            for wanted in [library, *build_edit.libraries_in(parts)]:
+            for wanted in [library, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
-            source = {"library": library, "build": build, "design": design}
+            source = {"library": library, "build": build, "design": design, "mounts": mounts}
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
     @server.tool()
-    def update_robot(
+    async def update_robot(
+        ctx: Context,
         name: str,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part)."""
+        keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
+        build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
+        mounted part or is a robot of the same kind; given only base sensors ({"base": {"sensors": ["lidar"]}}) it
+        is carried on a plate with them; any other is refused with the build that keeps it. mounts replaces the
+        robots it carries (see add_robot; [] takes them all off)."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw, build))
+            for wanted in _mounted_libraries(mounts):
+                await _download_with_progress(wanted, ctx)
+            return _json(await asyncio.to_thread(playground.update_robot, name, params, pos, yaw, build, mounts))
 
     @server.tool()
     def add_object(
@@ -419,7 +464,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def remove(name: str) -> str:
-        """Remove a robot, object or terrain patch from the world."""
+        """Remove a robot, object or terrain patch from the world, or a sensor added to a robot ("go2/lidar")."""
         with _tool_errors():
             return _json(playground.remove(name))
 
@@ -437,7 +482,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def show_world() -> str:
-        """Show the world.yaml of the open world (the editable description of everything in it)."""
+        """Show the world.yaml of the open world (the editable description of everything in it); with none open, the
+        saved worlds open_world can open."""
         with _tool_errors():
             return _json(playground.show_world())
 
@@ -494,7 +540,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
         # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
         run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
-        if not trip.done:  # the viewer's clock lagged behind the wall clock: end the trip here
+        # Standing now, not at its walker's next tick (and a trip the viewer's lagging clock left going ends here):
+        # an observe right after a trip showed the rover's wheels still driven at 3.4 rad/s, and the agent called
+        # stop. A trip sent since (a double-click in the viewer) is left to go on. An aircraft whose trip is over
+        # already hovers or has landed; stopping it then would only hold it, so it is stopped only when cut short.
+        flies = playground.behaviors.kind(robot) == Kind.AIRCRAFT
+        if playground.behaviors.trip(robot) in (None, trip) and not (flies and trip.done):
             playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
         if settled is not None:  # a humanoid finishes its step first; report where it really stops
@@ -502,8 +553,44 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         extra = {k: run[k] for k in ("shown_live", "stopped_early") if k in run}
         result = trip.result()
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
-            result["note"] += "; call move with the same to again to go on (seconds=null lets it walk on meanwhile)"
-        return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
+            goes = "fly" if "hovering" in result or "landed" in result else "walk"  # a trip through the air
+            result["note"] += f"; call move with the same to again to go on (seconds=null lets it {goes} on meanwhile)"
+        # Stopped, said at the top as a timed move says it: after a trip, agents in the eval called stop on a robot
+        # that already stood (2 of 6 sessions that sent one somewhere).
+        here = playground.behaviors.pose(robot)
+        return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
+
+    def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
+        """Where record=... saves its video (checked before anything moves; record=true names it after `called`),
+        or None for no recording."""
+        if record is None or record is False:
+            return None
+        if seconds is None:
+            raise PlaygroundError("record needs seconds: it saves a timed move or a trip once it is over")
+        store = playground.store
+        folder = (store.dir if store is not None else worlds_home().parent) / "videos"
+        return recording.target(record, folder, called)
+
+    @contextlib.contextmanager
+    def recorded(target: recording.Target | None) -> Iterator[recording.Recorder | None]:
+        """Keep the poses while the block runs, when there is somewhere to save them."""
+        rec = recording.Recorder(playground.session).start() if target is not None else None
+        try:
+            yield rec
+        finally:
+            if rec is not None:
+                rec.stop()
+
+    async def video(rec: recording.Recorder, target: recording.Target, robot: str | None) -> dict[str, Any]:
+        """Draw a recording into its file, off the event loop (the viewer stays live), or say why it could not."""
+        try:
+            draw = functools.partial(recording.save, note=target.note)
+            return await asyncio.to_thread(draw, rec, playground.renderer, target.path, robot)
+        except (RenderUnavailable, recording.RecordingError, OSError) as exc:
+            return {"error": f"no video: {exc}"}
+        except Exception as exc:  # the move itself is done: its result is not to be lost to the drawing
+            log.exception("drawing the video %s failed", target.path)
+            return {"error": f"no video: drawing it failed ({type(exc).__name__}: {exc})"}
 
     @server.tool()
     async def move(
@@ -512,11 +599,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         turn: float = 0.0,
         seconds: float | None = 3.0,
         walker: str | None = None,
-        to: str | list[float] | None = None,
+        to: str | list[float] | list[list[float]] | None = None,
+        record: bool | str | None = None,
     ) -> str:
-        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
-        a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
-        (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
+        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, fly an
+        aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards),
+        turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each
+        robot's max_speed is
         in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
         ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
         saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
@@ -526,72 +615,102 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why."""
+        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
+        where it ended ("stopped": true, no need to call stop). Aircraft (drones)
+        fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
+        its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
+        a table's height) lands there; a point under a crown or a table hovers there. A landing where something
+        stands (a ball, a crate, a robot), on top of what moves or a crown, or at an edge is refused, and the refusal
+        names a spot nearby on the same surface that has room. A landed aircraft takes off
+        first, a leg that would hit something goes over or round it, and the result adds touchdown_m_s, or hovering
+        and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
+        (taking off first). record=true (a GIF) or a file name ("walk.gif"; .gif or .webp) saves a video of the move
+        in real time, the camera following the robot, in the world's videos folder; "video" in the result says
+        where."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
-            if to is not None:
-                return _json(await go_to(robot, to, speed, turn, seconds, walker))
-            speed = MOVE_SPEED if speed is None else speed
-            if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
-                raise PlaygroundError(
-                    f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; "
-                    "seconds=null keeps moving until stop"
-                )
-            before = playground.behaviors.pose(robot)
-            status = playground.behaviors.move(robot, speed, turn, walker)
-            if seconds is None:
-                return _json({"started": status, "pose": before})
-            # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
-            # to the left read as -177.6 degrees, a turn to the right.
-            heading = {"last": before["heading_deg"], "turned": 0.0}
+            path = video_path(record, robot, seconds)
+            with recorded(path) as rec:
+                if to is not None:
+                    out = await go_to(robot, to, speed, turn, seconds, walker)
+                else:
+                    out = await timed_move(robot, speed, turn, seconds, walker)
+            if rec is not None and out.get("stopped"):  # it went (a trip that found no way did not)
+                out["video"] = await video(rec, path, robot)
+            return _json(out)
 
-            def track() -> bool:
-                now = playground.behaviors.pose(robot)["heading_deg"]
-                heading["turned"] += (now - heading["last"] + 180) % 360 - 180
-                heading["last"] = now
-                return False
-
-            run = await run_until(track, seconds)
-            why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
-            moving = playground.session.controllers.get(robot)
-            # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
-            # the clamp notes from the start kept.
-            status = {**status, **(moving.status() if moving is not None else {})}
-            playground.behaviors.stop(robot)
-            settled = playground.behaviors.settled(robot)
-            if settled is not None:  # a humanoid finishes its step first; measure where it really stops
-                extra = await run_until(lambda: track() or settled(), 3.0)
-                run["settle_seconds"] = extra["sim_seconds"]
-                run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
-            track()
-            after = playground.behaviors.pose(robot)
-            moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
-            turned = heading["turned"]
-            return _json(
-                {
-                    "from": before,
-                    "to": after,
-                    "distance_m": round(moved, 3),
-                    "turned_deg": round(turned, 1),
-                    # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going
-                    # and called stop after nearly every timed move.
-                    "stopped": True,
-                    **run,
-                    "behavior": status,
-                    **({"note": why} if why else {}),
-                }
+    async def timed_move(
+        robot: str, speed: float | None, turn: float, seconds: float | None, walker: str | None
+    ) -> dict[str, Any]:
+        """move without a destination: at a speed and turn for `seconds`, or on until stop when seconds is None."""
+        speed = MOVE_SPEED if speed is None else speed
+        if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
+            raise PlaygroundError(
+                f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; seconds=null keeps moving until stop"
             )
+        before = playground.behaviors.pose(robot)
+        status = playground.behaviors.move(robot, speed, turn, walker)
+        if seconds is None:
+            return {"started": status, "pose": before}
+        # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
+        # to the left read as -177.6 degrees, a turn to the right.
+        heading = {"last": before["heading_deg"], "turned": 0.0}
+
+        def track() -> bool:
+            now = playground.behaviors.pose(robot)["heading_deg"]
+            heading["turned"] += (now - heading["last"] + 180) % 360 - 180
+            heading["last"] = now
+            return False
+
+        run = await run_until(track, seconds)
+        why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
+        moving = playground.session.controllers.get(robot)
+        # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
+        # the clamp notes from the start kept.
+        status = {**status, **(moving.status() if moving is not None else {})}
+        playground.behaviors.stop(robot)
+        settled = playground.behaviors.settled(robot)
+        if settled is not None:  # a humanoid finishes its step first; measure where it really stops
+            extra = await run_until(lambda: track() or settled(), 3.0)
+            run["settle_seconds"] = extra["sim_seconds"]
+            run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
+        track()
+        after = playground.behaviors.pose(robot)
+        moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
+        turned = heading["turned"]
+        return {
+            "from": before,
+            "to": after,
+            "distance_m": round(moved, 3),
+            "turned_deg": round(turned, 1),
+            # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going and
+            # called stop after nearly every timed move.
+            "stopped": True,
+            **run,
+            "behavior": status,
+            **({"note": why} if why else {}),
+        }
 
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
+    sensor_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
+
+    async def carrier_stands(robot: str) -> dict[str, Any]:
+        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
+        stop = playground.behaviors.stop_carrier(robot)
+        if stop is None:
+            return {}
+        waited = await run_until(stop.still, stop.seconds)
+        return {"carrier_stopped": f"{stop.robot} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
 
     @server.tool()
     def stop(robot: str) -> str:
         """Stop a robot's current behavior (a walking robot settles into a stand; a quadruped or hexapod keeps its
-        walking controller at speed 0, so it still steps along with a push)."""
+        walking controller at speed 0, so it still steps along with a push; an aircraft hovers where it is: land it
+        with move(to=[x, y, 0]))."""
         with _tool_errors():
             return _json(playground.behaviors.stop(playground.behaviors.resolve(robot)))
 
@@ -611,12 +730,15 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
         """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or closing the
         gripper on the way. Fails with the distance and reach if the point cannot be reached. robot is an arm, or a
-        robot carrying one ("rover", or "rover/arm" for the mounted arm)."""
+        robot carrying one ("rover", or "rover/arm" for the mounted arm); a robot carrying it stops first."""
         with _tool_errors():
-            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot, arm=True), position, gripper)
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            # Planned off the event loop: going over a carrier it can take a second, and the viewer froze meanwhile.
+            arm = await asyncio.to_thread(playground.behaviors.move_arm, robot, position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
-            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
+            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
 
     @server.tool()
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
@@ -637,11 +759,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         result then says what it did ("went": path_m, distance_m, time_s each; "driven_m", "picked_up_at",
         "put_down_at", "hand_tilt_deg", "errand_s"). go=false keeps the robot where it stands and refuses instead. It
         refuses before moving when the object is too heavy or too big for the gripper, there is no way there, nowhere
-        it can stand reaches it, or the target is full."""
+        it can stand reaches it, or the target is full. A robot carrying the arm stops first."""
         with _tool_errors():
-            motion, info = playground.behaviors.pick_and_place(
-                playground.behaviors.resolve(robot, arm=True), object, target, go
-            )
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
+            # take seconds, and the viewer froze meanwhile.
+            motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
             if errand is None:
@@ -668,6 +792,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **(errand.result() if errand is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
                     "shown_live": run["shown_live"],
+                    **stopped,
                 }
             )
 
@@ -680,6 +805,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             sim.time; sim.step(seconds)  # time passes only when you step
             sim.position(name) -> [x, y, z]; sim.heading(robot) -> degrees
             sim.joints(robot) -> {joint: value}; sim.sensors(robot) -> {sensor: value}
+            sim.sensor(robot, name) -> reading  # add_sensor's sensors, e.g. sim.sensor("go2", "lidar")["ahead"]
             sim.set_controls({"arm/shoulder": 0.5})  # raw actuator targets
             sim.move(robot, speed, turn); sim.stop(robot)  # walk / drive (keeps going until stop)
             sim.pose(robot, "wave") -> bool  # humanoid poses; waits, True if upright
@@ -718,9 +844,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return path.read_text(encoding="utf-8")
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
-    async def run_script(name: str, max_sim_seconds: float = 60.0) -> str:
+    async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
-        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback."""
+        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
+        record=true (a GIF) or a file name ("show.gif"; .gif or .webp) saves a video of the run in real time, the
+        camera following the robots, in the world's videos folder; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
@@ -728,13 +856,19 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             if not 0 < max_sim_seconds <= 300:
                 raise PlaygroundError(wording.seconds_range("max_sim_seconds", max_sim_seconds, 300))
             runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
-            return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
+            target = video_path(record, path.stem, max_sim_seconds)
+            with recorded(target) as rec:
+                out = await runner.run(path, max_sim_seconds=max_sim_seconds)
+            if rec is not None:
+                out["video"] = await video(rec, target, None)
+            return _json(out)
 
     @server.tool()
     def robots() -> str:
-        """List robots with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake, other), the arms
-        they carry, position, heading, whether upright, and any running behavior. A quadruped or hexapod in a world
-        stands on its walking controller from the start: "walk" at speed 0 means standing (it steps along if pushed)."""
+        """List robots with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake, aircraft, other),
+        the arms they carry, position, heading, whether upright, and any running behavior. A quadruped or hexapod in
+        a world stands on its walking controller from the start: "walk" at speed 0 means standing (it steps along if
+        pushed). An aircraft's "flight" gives its rotors, thrust_to_weight, controller, state and altitude_m."""
         with _tool_errors():
             out = []
             for info in playground.behaviors.robots():
@@ -766,11 +900,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json(playground.set_controls(controls))
 
     @server.tool()
-    def simulate(seconds: float, controls: dict[str, float] | None = None) -> str:
+    def simulate(seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None) -> str:
         """Advance physics by `seconds` (max 60) as fast as possible, optionally setting controls first. Returns the
-        new time and which free bodies moved (from/to positions in meters)."""
+        new time and which free bodies moved (from/to positions in meters). wind=[x, y] (or [x, y, z]) in m/s blows
+        on every aircraft for those seconds (rising over 0.3 s, dying down over 0.3 s after); the same wind in the
+        next call keeps it blowing. "wind" in the result says how far each was pushed. Call simulate again without
+        wind to watch it come back."""
         with _tool_errors():
-            return _json(playground.simulate(seconds, controls))
+            return _json(playground.simulate(seconds, controls, wind))
 
     @server.tool()
     def sim_control(action: Literal["play", "pause", "reset"]) -> str:
@@ -786,14 +923,23 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         include_image: bool = True,
         find: str | None = None,
     ) -> list:
-        """Report the state (joint angles, controls, free body positions, sensors, contacts) and, by default, a
-        rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
-        front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
-        from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
-        with world positions estimated from the picture and the name of what those pixels show (for
+        """Report the state (joint angles, controls, free body positions, sensors, contacts; each lidar whole under
+        "lidars": its nearest hit, that hit's bearing from the robot's front (+ left) and side, every ray; one line
+        per sensor added with add_sensor in sensor_summary) and, by default, a rendered image (without OpenGL the
+        state comes back with a note instead). `view` is a preset (default, front, back, left, right, top, overview
+        for the whole scene with terrain and furniture), a robot's name (the default view framed on that robot) or a
+        camera name from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees
+        of it, with world positions estimated from the picture and the name of what those pixels show (for
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
+            try:
+                lines = playground.sensors.lines()
+            except Exception as exc:  # the sensors' lines are a bonus: the state comes back without them, and says so
+                log.exception("observe: the sensor summary failed")
+                lines = {"error": f"{type(exc).__name__}: {exc}"}
+            if lines:
+                state["sensor_summary"] = lines
             image = None
             if find:
                 try:
@@ -838,6 +984,11 @@ PROGRESS_INTERVAL = 1.0  # s between progress notifications during a download
 # Downloads in flight, by library robot: a call retried after a client timeout joins the running
 # download instead of starting a second one.
 _downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
+
+
+def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
+    """The library robots a mounts list names, to download before the world is compiled."""
+    return [m["library"] for m in mounts or [] if isinstance(m, dict) and isinstance(m.get("library"), str)]
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:

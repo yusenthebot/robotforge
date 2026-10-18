@@ -80,6 +80,9 @@ class SimSession:
     # Run with the actuator's id after set_ctrl sets it by hand (a viewer slider, set_controls), e.g. so a robot
     # standing on a gait it never asked for lets go of that joint.
     ctrl_hooks: list[Callable[[int], None]] = field(default_factory=list, repr=False)
+    # Run after every physics step, whoever steps (the viewer's clock, a tool, a script), e.g. so a recording keeps
+    # the poses at its frame rate.
+    step_hooks: list[Callable[[], None]] = field(default_factory=list, repr=False)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
@@ -90,12 +93,12 @@ class SimSession:
     @classmethod
     def from_path(cls, path: str | Path) -> SimSession:
         model = _compile_path(Path(path))
-        return cls(model=model, data=_fresh_data(model), source=str(path))
+        return cls(model=model, data=fresh_data(model), source=str(path))
 
     @classmethod
     def from_xml(cls, xml: str, assets: dict[str, bytes] | None = None) -> SimSession:
         model = _compile_xml(xml, assets)
-        return cls(model=model, data=_fresh_data(model))
+        return cls(model=model, data=fresh_data(model))
 
     def load_path(self, path: str | Path) -> None:
         self._swap(_compile_path(Path(path)), str(path))
@@ -107,7 +110,7 @@ class SimSession:
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
             self.model = model
-            self.data = _fresh_data(model)
+            self.data = fresh_data(model)
             self.source = source
             self.drag = None
             self._sim_debt = 0.0
@@ -168,8 +171,12 @@ class SimSession:
     # ---- stepping ---------------------------------------------------------------
 
     def set_controller(self, name: str, controller: Controller | None) -> None:
-        """Attach (or with None, remove) a controller; it runs on every future step at its rate."""
+        """Attach (or with None, remove) a controller; it runs on every future step at its rate. One that pushes
+        with outside forces (a flight controller's air) has a `release` that lets go of them when it is replaced."""
         with self.lock:
+            old = self.controllers.get(name)
+            if old is not None and old is not controller and hasattr(old, "release"):
+                old.release(self.model, self.data)
             if controller is None:
                 self.controllers.pop(name, None)
                 return
@@ -182,6 +189,8 @@ class SimSession:
                 self._run_controllers()
                 self._apply_drag()
                 mujoco.mj_step(self.model, self.data)
+                for hook in tuple(self.step_hooks):  # a hook may take itself off (a recording that ends)
+                    hook()
 
     def _run_controllers(self) -> None:
         t = self.data.time
@@ -252,7 +261,8 @@ class SimSession:
             )
 
 
-def _fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+def fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+    """`model`'s state at its start: its first keyframe if it has one, everything computed."""
     data = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)

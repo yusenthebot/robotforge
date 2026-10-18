@@ -316,6 +316,89 @@ def test_the_centaur_walks_and_picks_with_one_hand(pg):
     assert _pick(pg, "centaur/left_hand", "cube", "bin")["success"]
 
 
+def test_the_centaur_does_not_reach_down_between_its_front_legs(pg):
+    """Regression: only the reach was checked, and leaning over a cube between the centaur's front legs, its hand
+    came down into the legs and the pick missed. The way down is checked when the pick is planned, and refused."""
+    pg.add_robot("r", design="centaur")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.27, 0.06])
+    _run(pg, 1.0)
+    with pytest.raises(BehaviorError, match="cannot go straight down to the object .* put the object further from"):
+        pg.behaviors.pick_and_place("r/left_hand", "cube", [0.411, 0.155])
+
+
+def _carried(pg: Playground, arm: str, obj: str, target) -> tuple[dict, float]:
+    """A pick and place run to its end: where the object ended up, and how high the tool went on the carry (m)."""
+    motion, info = pg.behaviors.pick_and_place(arm, obj, target)
+    data, high = pg.session.data, 0.0
+    for _ in range(round(40 / 0.02)):
+        _run(pg, 0.02)
+        if motion.current_label == "carry":
+            high = max(high, float(data.site_xpos[motion.site][2]))
+        if motion.done:
+            break
+    _run(pg, 0.5)
+    return pg.behaviors.placed(info["object"], info["region"]), high
+
+
+def test_the_centaur_carries_low_over_its_own_shoulder(pg):
+    """Regression: the centaur's shoulder bracket, which its arm hangs from and turns about, counted as carrier to
+    clear: a cube went into the bin at its side carried at 41 cm, and after a walk at 61 cm, where the hand stalled."""
+    pg.add_robot("r", design="centaur")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.39, 0.12])
+    pg.add_object("bin", shape="bin", size=[0.16, 0.16, 0.06], pos=[0.31, 0.31], fixed=True)
+    _run(pg, 0.5)
+    arm = pg.behaviors._arm_motion("r/left_hand")
+    m = arm.ik.model
+    assert {m.body(b).name for b in arm._own_base} == {"r/left_shoulder"}
+    assert not {m.body(int(m.geom_bodyid[g])).name for g in arm._carrier_tops()} & {"r/left_shoulder"}
+    placed, high = _carried(pg, "r/left_hand", "cube", "bin")
+    assert placed["success"], placed
+    assert high < 0.2, high
+
+
+def test_the_mobile_panda_carries_low_round_the_front_of_its_chassis(pg):
+    """Regression: the load was held to clear all of the chassis in the sector the arm swept, which only the arm's
+    links pass over: the mobile Panda carried floor cubes round its front at 30 cm, and from that high, coming down
+    beside the chassis, its hand missed the cube. The load clears what lies under its own way round."""
+    pg.add_robot("r", design="mobile_panda")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.617, -0.017])
+    _run(pg, 0.5)
+    placed, high = _carried(pg, "r/arm", "cube", [-0.188, -0.53])
+    assert placed["success"], placed
+    assert high < 0.25, high
+
+
+def test_the_mobile_panda_squares_its_jaws_with_its_wrist_alone(pg):
+    """Regression: over this cube the Panda's wrist starts 3 mm from its forearm. Held to keep 5 mm there while its
+    jaws turned square to the cube, it changed pose instead, twisting its arm against its base joint's limit, and
+    dropped the cube 6 cm from the place. Links already that close may stay so, coming no closer."""
+    pg.add_robot("r", design="mobile_panda")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[-0.235, -0.359])
+    _run(pg, 0.5)
+    placed = _pick(pg, "r/arm", "cube", [0.477, -0.291])
+    assert placed["success"], placed
+
+
+def test_a_panda_keeps_its_hand_from_its_forearm_before_they_touch(pg):
+    """Regression: checked only for running into itself, a mobile Panda turning its jaws square bent its hand to 1 mm
+    from its forearm; lagging its servos the hand came into the forearm, stuck there and closed 4 cm beside the cube.
+    Its wrist bending toward the forearm is stopped while the two are still millimetres apart."""
+    pg.add_robot("r", design="mobile_panda")
+    _run(pg, 0.5)
+    arm = pg.behaviors._arm_motion("r/arm")
+    home = arm.q.copy()
+    start = arm._self_gaps(home)
+    assert arm._clear_of_itself(home, start)
+    bent = home.copy()
+    for bent[5] in np.arange(home[5], arm.chain.lower[5], -0.01):  # the wrist (joint 6) bending the hand in
+        if not arm._clear_of_itself(bent, start):
+            break
+    else:
+        pytest.fail("the hand bent all the way in")
+    assert not arm._collides(bent)
+    assert arm._self_gaps(bent).min() > 0.001
+
+
 def test_an_arm_built_from_parts_answers_to_the_parts_it_hangs_from(pg):
     pg.add_robot("centaur", design="centaur")
     assert pg.behaviors.resolve("centaur/left_arm", arm=True) == "centaur/left_hand"
@@ -542,6 +625,29 @@ def test_a_pick_goes_the_way_it_was_checked_and_lands(pg, case):
     placed = _pick(pg, arm, "cube", target)
     assert placed["success"], placed
     assert pg.behaviors.pose("r")["upright"]
+
+
+def test_a_carry_made_joint_by_joint_holds_on_to_the_cube_until_it_is_put_down(pg):
+    """Regression: across its back the scorpion's tail cannot follow the carry round, so it goes there joint by joint,
+    but to a pose of its own, not the one the way down to the place was checked from. Changing into that one over the
+    place, with the cube in its claw, the tail swung for 6 s and dropped the cube from 27 cm (it landed near the place
+    by luck)."""
+    pg.add_robot("r", design="scorpion")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.15, -0.35])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("r/claw", "cube", [-0.25, 0.0])
+    m, d = pg.session.model, pg.session.data
+    cube = m.body("cube").id
+    lowest = np.inf  # of the cube while the tool is up high, after the lift
+    for _ in range(round(40 / 0.02)):
+        _run(pg, 0.02)
+        if motion.current_label in ("carry", "lower") and d.site_xpos[motion.site][2] > 0.2:
+            lowest = min(lowest, float(d.xpos[cube][2]))
+        if motion.done:
+            break
+    _run(pg, 0.5)
+    assert lowest > 0.15, lowest
+    assert pg.behaviors.placed("cube", info["region"])["success"]
 
 
 def test_the_twin_arm_works_one_cube_with_each_hand_and_leaves_its_waist_alone(pg):

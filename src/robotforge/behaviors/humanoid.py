@@ -19,6 +19,7 @@ import numpy as np
 
 from robotforge.behaviors.biped import LEFT, RIGHT, Foot, GaitParams, GaitPlan, PreviewControl
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.sim.geometry import collides, lowest_point
 
 SIDES = ("left", "right")
 SIGN = (1.0, -1.0)
@@ -123,6 +124,20 @@ class BalanceGains:
     hip_roll_rate: float = 0.02
 
 
+@dataclass(frozen=True)
+class LegRoles:
+    """The joints of one leg that balance feedback works through: (index in the leg's chain, sign). The sign makes
+    a positive offset turn the body about the trunk's +x (rolls) or +y (pitch), whichever way the joint's axis
+    points. Our template's legs read (1, +-1), (4, -1), (5, +-1); a leg without an ankle roll (Unitree H1) has none."""
+
+    hip_roll: tuple[int, float]
+    ankle_pitch: tuple[int, float]
+    ankle_roll: tuple[int, float] | None
+
+
+TEMPLATE_ROLES = tuple(LegRoles((1, sign), (4, -1.0), (5, sign)) for sign in SIGN)
+
+
 class HumanoidController:
     """Keeps a two-legged robot balanced while it stands, walks or plays a pose."""
 
@@ -137,14 +152,21 @@ class HumanoidController:
         feet: list[tuple[int, np.ndarray]],
         upper: dict[str, int],
         root_joint: int,
-        imu: tuple[int, int],
+        imu: tuple[int, int] | None,
         gait: GaitParams | None = None,
         gains: BalanceGains | None = None,
+        roles: tuple[LegRoles, LegRoles] = TEMPLATE_ROLES,
+        foot_rotations: tuple[np.ndarray, np.ndarray] | None = None,
     ):
-        """legs: [left, right] joint ids in LEG order; feet: [(foot body, sole point in it)] per side;
-        upper: arm and head joint name -> id; imu: (orientation sensor adr, gyro sensor adr)."""
+        """legs: [left, right] joint ids from hip to ankle (LEG order on our template); feet: [(foot body, sole
+        point in it)] per side; upper: arm and head joint name -> id; imu: (orientation sensor adr, gyro sensor adr),
+        or None to read the torso body itself; roles: the balance joints of each leg; foot_rotations: each foot
+        body's orientation in the torso frame when it stands flat at home (identity on our template)."""
         self.robot = robot
         self.torso = int(model.jnt_bodyid[root_joint])
+        self.roles = roles
+        self.foot_rot = foot_rotations or (np.eye(3), np.eye(3))
+        self.root_dof = int(model.jnt_dofadr[root_joint])
         root_adr = model.jnt_qposadr[root_joint]
         base = home_qpos.copy()
         base[root_adr : root_adr + 7] = [0, 0, 0, 1, 0, 0, 0]  # torso frame == IK base frame
@@ -157,7 +179,7 @@ class HumanoidController:
         self.upper_act = {n: joint_to_act[j] for n, j in upper.items() if j in joint_to_act}
         self.upper_home = {n: float(base[a]) for n, a in self.upper_adr.items()}
         self.upper_range = {n: tuple(model.jnt_range[j]) for n, j in upper.items()}
-        self.imu_quat, self.imu_gyro = imu
+        self.imu = imu
 
         # Standing geometry from the home pose.
         soles = [self.ik.point(c, q) for c, q in zip(self.chains, self.leg_q, strict=True)]
@@ -221,6 +243,11 @@ class HumanoidController:
             self._pose_t = 0.0
             self._pending = None
 
+    def limit_speed(self, top: float) -> None:
+        """Lower the fastest accepted speed to what this robot is known to walk at (m/s)."""
+        self.max_speed = min(self.max_speed, top)
+        self.command(self.command_speed, self.command_turn)
+
     def play(self, name: str) -> None:
         """Strike a named pose (see POSES); walking stops first."""
         if name not in POSES:
@@ -270,7 +297,7 @@ class HumanoidController:
                 self._pose = self._pending = None
             self.fallen = True
             return  # keep the last targets; flailing on the floor helps nobody
-        ticks = 1 if self._last_t is None else int(np.clip(round((data.time - self._last_t) / DT), 1, 10))
+        ticks = 1 if self._last_t is None else min(max(round((data.time - self._last_t) / DT), 1), 10)
         self._last_t = data.time
         for _ in range(ticks):
             self._tick()
@@ -278,10 +305,11 @@ class HumanoidController:
 
     def _begin(self, data: mujoco.MjData) -> None:
         feet = []
-        for chain in self.chains:
+        for chain, flat in zip(self.chains, self.foot_rot, strict=True):
             rot = data.xmat[chain.body].reshape(3, 3)
             sole = data.xpos[chain.body] + rot @ chain.local_point
-            feet.append((sole, math.atan2(rot[1, 0], rot[0, 0])))
+            heading = rot @ flat.T  # the sole's own frame: forward is +x
+            feet.append((sole, math.atan2(heading[1, 0], heading[0, 0])))
         self.ground = float(np.mean([f[0][2] for f in feet]))
         self.plan = GaitPlan(DT, *(Foot(float(s[0]), float(s[1]), yaw) for s, yaw in feet), self.gait)
         self._com[:] = 0.0
@@ -333,7 +361,7 @@ class HumanoidController:
 
         left, right = self._feet
         yaw = left[3] + _wrap(right[3] - left[3]) / 2
-        roll_m, pitch_m = _roll_pitch(data.sensordata[self.imu_quat : self.imu_quat + 4])
+        roll_m, pitch_m = _roll_pitch(self._imu_quat(data))
         # Feet are placed relative to the torso as planned, not as measured: re-leveling the swing
         # foot from the IMU fed the torso's own wobble back into the step and made it worse.
         planned = _rz(yaw) @ _ry(lean)
@@ -345,23 +373,25 @@ class HumanoidController:
             foot = self._feet[s]
             sole = np.array([foot[0], foot[1], self.ground + foot[2]])
             target = planned.T @ (sole - torso)
-            rotation = planned.T @ _rz(foot[3])
+            rotation = planned.T @ _rz(foot[3]) @ self.foot_rot[s]
             self.leg_q[s], _ = self.ik.solve(
                 self.chains[s], target, self.leg_q[s], iterations=6, damping=1e-6, rotation=rotation, axis_weight=1.0
             )
         self.com_local = self._com_local()
 
         g = self.gains
-        gyro = data.sensordata[self.imu_gyro : self.imu_gyro + 3]
+        gyro = self._imu_gyro(data)
         pitch_fb = g.ankle_pitch * (pitch_m - lean) + g.ankle_pitch_rate * gyro[1]
         roll_fb = g.ankle_roll * roll_m + g.ankle_roll_rate * gyro[0]
         hip_fb = g.hip_roll * roll_m + g.hip_roll_rate * gyro[0]
         for s in (LEFT, RIGHT):
             q = self.leg_q[s].copy()
             if self._support != 2 - s:  # feet carrying weight push the body back over them
-                q[4] -= pitch_fb
-                q[5] += SIGN[s] * roll_fb
-                q[1] += SIGN[s] * hip_fb
+                roles = self.roles[s]
+                q[roles.ankle_pitch[0]] += roles.ankle_pitch[1] * pitch_fb
+                if roles.ankle_roll is not None:
+                    q[roles.ankle_roll[0]] += roles.ankle_roll[1] * roll_fb
+                q[roles.hip_roll[0]] += roles.hip_roll[1] * hip_fb
             data.ctrl[self.leg_acts[s]] = q
         for name, value in upper.items():
             act = self.upper_act.get(name)
@@ -389,7 +419,7 @@ class HumanoidController:
             start = self._upper_from[name] if a is frames[0] else a.joints.get(name, self.upper_home[name])
             end = b.joints.get(name, self.upper_home[name])
             lo, hi = self.upper_range[name]
-            out[name] = float(np.clip(start + u * (end - start), lo, hi))
+            out[name] = float(min(max(start + u * (end - start), lo), hi))
         return out
 
     def _swing_arms(self, upper: dict[str, float]) -> dict[str, float]:
@@ -419,6 +449,17 @@ class HumanoidController:
 
     def _up(self, data: mujoco.MjData) -> float:
         return float(data.xmat[self.torso][8])
+
+    def _imu_quat(self, data: mujoco.MjData) -> np.ndarray:
+        if self.imu is None:
+            return data.xquat[self.torso]
+        return data.sensordata[self.imu[0] : self.imu[0] + 4]
+
+    def _imu_gyro(self, data: mujoco.MjData) -> np.ndarray:
+        """Angular velocity in the torso frame: a free joint's rotational velocity is in its body's frame."""
+        if self.imu is None:
+            return data.qvel[self.root_dof + 3 : self.root_dof + 6]
+        return data.sensordata[self.imu[1] : self.imu[1] + 3]
 
 
 def _bracket(frames: list[Keyframe], t: float) -> tuple[Keyframe, Keyframe, float]:
@@ -476,3 +517,152 @@ def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Hu
     imu = (int(model.sensor_adr[quat]), int(model.sensor_adr[gyro]))
     root = find(mujoco.mjtObj.mjOBJ_JOINT, "root", "joint")
     return HumanoidController(model, robot, home_qpos, legs, feet, upper, root, imu)
+
+
+AXIS_ALIGNED = 0.7  # |cos| between a joint axis and a trunk axis for the joint to count as turning about it
+TEMPLATE_LEG = 0.2  # m, the leg length the balance gains and gait timing were tuned for
+LEG_REACH = 0.2  # m: feet are at least this far below the trunk at home
+
+
+def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> HumanoidController:
+    """The controller for any two-legged robot (a real humanoid from the library, an imported one), its legs found
+    in its kinematic tree: the two branches below the floating trunk that reach the floor, with 5 or 6 hinges each.
+    Its arms and head hold their home pose; poses that move them are for robots built from our template."""
+    prefix = f"{robot}/"
+    bodies = [b for b in range(1, model.nbody) if (model.body(b).name or "").startswith(prefix)]
+    roots = [b for b in bodies if model.body_parentid[b] == 0]
+    free = [
+        j
+        for b in roots
+        for j in range(model.body_jntadr[b], model.body_jntadr[b] + model.body_jntnum[b])
+        if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
+    ]
+    if len(roots) != 1 or len(free) != 1:
+        raise ValueError(f"robot {robot!r} has no floating trunk, so it is not a walking humanoid")
+    trunk, root_joint = roots[0], free[0]
+    data = _posed_at_home(model, home_qpos, root_joint)
+    feet = _two_feet(model, data, set(bodies), trunk)
+    if feet is None:
+        raise ValueError(f"robot {robot!r}: no two legs reaching the floor found, so it is not a walking humanoid")
+    legs, roles, soles, flats = [], [], [], []
+    hips = _common_ancestor(model, *feet)
+    for foot in feet:
+        joints = _hinges_between(model, hips, foot)
+        roles.append(_leg_roles(data, joints, robot))
+        legs.append(joints)
+        soles.append((foot, _sole(model, data, foot)))
+        flats.append(data.xmat[foot].reshape(3, 3).copy())  # the trunk frame is the world frame here
+    ctrl = HumanoidController(
+        model, robot, home_qpos, legs, soles, {}, root_joint, None, roles=tuple(roles), foot_rotations=tuple(flats)
+    )
+    # A taller robot topples slower but needs more ankle per degree of tilt: Booster T1 (0.55 m legs) leaned 7 degrees
+    # and wobbled on our template's gains, and stands within 2 degrees with them scaled like the gait's timing. Sideways
+    # it also sways slower, so its roll is damped for longer (rate gains scaled once more): with the pitch gains alone
+    # scaled, a T1 carrying an SO-100 on its head (1.2 kg) swayed further and further sideways after it stopped walking
+    # and fell over within 2 s, and with every gain scaled once it still fell after walking 6 or 10 s. Scaled so, it
+    # stops within 5 degrees, and a T1 on its own walks 1.26 m in 10 s at 0.12 m/s (was 1.13).
+    scale = math.sqrt(ctrl.leg_length / TEMPLATE_LEG)
+    base = BalanceGains()
+    ctrl.gains = BalanceGains(
+        ankle_pitch=base.ankle_pitch * scale,
+        ankle_pitch_rate=base.ankle_pitch_rate * scale,
+        ankle_roll=base.ankle_roll * scale,
+        ankle_roll_rate=base.ankle_roll_rate * scale**2,
+        hip_roll=base.hip_roll * scale,
+        hip_roll_rate=base.hip_roll_rate * scale**2,
+    )
+    return ctrl
+
+
+def _posed_at_home(model: mujoco.MjModel, home_qpos: np.ndarray, root_joint: int) -> mujoco.MjData:
+    """The robot in its home pose with its trunk at the origin and level: trunk axes are world axes."""
+    data = mujoco.MjData(model)
+    data.qpos[:] = home_qpos
+    adr = model.jnt_qposadr[root_joint]
+    data.qpos[adr : adr + 7] = [0, 0, 0, 1, 0, 0, 0]
+    mujoco.mj_kinematics(model, data)
+    return data
+
+
+def _two_feet(model: mujoco.MjModel, data: mujoco.MjData, bodies: set[int], trunk: int) -> tuple[int, int] | None:
+    """(left foot, right foot): the lowest body on each side of the trunk, if both reach well below it."""
+    lowest: dict[int, float] = {}
+    for g in range(model.ngeom):
+        b = int(model.geom_bodyid[g])
+        if b in bodies and b != trunk and collides(model, g):
+            lowest[b] = min(lowest.get(b, math.inf), float(lowest_point(model, data, g)[2]))
+    if not lowest:
+        return None
+    floor = min(lowest.values())
+    near = [b for b, z in lowest.items() if z < floor + 0.02]  # both soles touch the floor at home
+    left = [b for b in near if data.xpos[b][1] > 0]
+    right = [b for b in near if data.xpos[b][1] < 0]
+    if not left or not right or floor > -LEG_REACH:
+        return None
+
+    def foot(side: list[int]) -> int:
+        # The end of the leg: an ankle's shell can reach as low as the sole beside it.
+        return max(side, key=lambda b: (_depth(model, b), -lowest[b]))
+
+    return foot(left), foot(right)
+
+
+def _depth(model: mujoco.MjModel, body: int) -> int:
+    depth = 0
+    while body > 0:
+        body = int(model.body_parentid[body])
+        depth += 1
+    return depth
+
+
+def _common_ancestor(model: mujoco.MjModel, a: int, b: int) -> int:
+    above = set()
+    while a > 0:
+        above.add(a)
+        a = int(model.body_parentid[a])
+    while b > 0 and b not in above:
+        b = int(model.body_parentid[b])
+    return b
+
+
+def _hinges_between(model: mujoco.MjModel, top: int, body: int) -> list[int]:
+    """Hinge joints from just below `top` down to `body`, in that order."""
+    joints: list[int] = []
+    while body > 0 and body != top:
+        start, count = model.body_jntadr[body], model.body_jntnum[body]
+        joints = [j for j in range(start, start + count) if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE] + joints
+        body = int(model.body_parentid[body])
+    return joints
+
+
+def _leg_roles(data: mujoco.MjData, joints: list[int], robot: str) -> LegRoles:
+    """Which joints of a leg roll the body and which pitch it, by the way their axes point at home."""
+    if len(joints) not in (5, 6):
+        raise ValueError(f"robot {robot!r} has legs of {len(joints)} joints; the balance controller needs 5 or 6")
+    axes = [data.xaxis[j] for j in joints]
+    pitch = [i for i, a in enumerate(axes) if abs(a[1]) > AXIS_ALIGNED]
+    roll = [i for i, a in enumerate(axes) if abs(a[0]) > AXIS_ALIGNED]
+    if len(pitch) < 2 or not roll:
+        raise ValueError(f"robot {robot!r}: its legs have no hip roll and ankle pitch joints the controller knows")
+    hip_roll, ankle_pitch = roll[0], pitch[-1]
+    ankle_roll = next((i for i in roll if i > pitch[-2]), None)  # a roll joint below the knee
+    return LegRoles(
+        (hip_roll, float(np.sign(axes[hip_roll][0]))),
+        (ankle_pitch, float(np.sign(axes[ankle_pitch][1]))),
+        (ankle_roll, float(np.sign(axes[ankle_roll][0]))) if ankle_roll is not None else None,
+    )
+
+
+def _sole(model: mujoco.MjModel, data: mujoco.MjData, foot: int) -> np.ndarray:
+    """The middle of a foot's underside, in the foot body's frame."""
+    corners = []
+    for g in range(model.ngeom):
+        if int(model.geom_bodyid[g]) != foot or not collides(model, g):
+            continue
+        center, half = model.geom_aabb[g, :3], model.geom_aabb[g, 3:]
+        rot = data.geom_xmat[g].reshape(3, 3)
+        for signs in np.ndindex(2, 2, 2):
+            corners.append(data.geom_xpos[g] + rot @ (center + (np.array(signs) * 2 - 1) * half))
+    points = np.array(corners)
+    sole = np.array([*(points[:, :2].min(axis=0) + points[:, :2].max(axis=0)) / 2, points[:, 2].min()])
+    return data.xmat[foot].reshape(3, 3).T @ (sole - data.xpos[foot])

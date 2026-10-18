@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.control import (
     TASKS,
     Box,
@@ -98,6 +97,51 @@ def test_torque_map_inverts_position_servos_and_motors():
     cp_data.ctrl[balance.actuators] = TorqueMap(cp_model, balance.actuators).ctrl(cp_data, np.array([3.0]))
     mujoco.mj_forward(cp_model, cp_data)
     assert cp_data.qfrc_actuator[balance.xd_adr] == pytest.approx(3.0)
+
+
+_ACTUATED_CHAIN = """
+<mujoco>
+  <worldbody>
+    <body><joint name="a" axis="0 1 0" range="-2 2"/><geom size="0.05"/>
+      <body pos="0 0 -0.2"><joint name="b" axis="0 1 0"/><geom size="0.05"/>
+        <body pos="0 0 -0.2"><joint name="c" axis="1 0 0"/><geom size="0.05"/></body></body></body>
+  </worldbody>
+  <actuator>{}</actuator>
+</mujoco>
+"""
+
+
+@pytest.mark.parametrize(
+    "actuators",
+    [
+        # servos only (a library robot), motors only (raw Menagerie motors), and a mix of the two
+        '<position joint="a" kp="80" kv="2" ctrlrange="-2 2"/><position joint="b" kp="60" gear="2"/>'
+        '<position joint="c" kp="40" ctrlrange="-1 1"/>',
+        '<motor joint="a" gear="3" ctrlrange="-5 5"/><motor joint="b"/><motor joint="c" gear="0.5"/>',
+        '<position joint="a" kp="80"/><motor joint="b" gear="2" ctrlrange="-5 5"/><velocity joint="c" kv="3"/>',
+        # an affine gain: the general formula, no shortcut
+        '<general joint="a" gaintype="affine" gainprm="50 -10 0" biastype="affine" biasprm="0 -50 -1"/>'
+        '<position joint="b" kp="60"/><motor joint="c"/>',
+    ],
+)
+def test_torque_map_shortcut_gives_the_general_formulas_numbers(actuators):
+    """TorqueMap works the constant parts out once for fixed gains (learned walkers call it every physics step).
+    Its ctrl must stay bit for bit what the general formula gives, or robots driven through it would move
+    differently."""
+    model = mujoco.MjModel.from_xml_string(_ACTUATED_CHAIN.format(actuators))
+    data = mujoco.MjData(model)
+    tm = TorqueMap(model, np.arange(model.nu))
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        data.qpos[:] = rng.uniform(-1.5, 1.5, model.nq)
+        data.qvel[:] = rng.normal(0.0, 3.0, model.nv)
+        torque = rng.normal(0.0, 4.0, model.nu)
+        length, velocity = tm.gear * data.qpos[tm.qadr], tm.gear * data.qvel[tm.dadr]
+        gain = tm.gain[:, 0] + np.where(tm.affine_gain, tm.gain[:, 1] * length + tm.gain[:, 2] * velocity, 0)
+        bias = np.where(tm.has_bias, tm.bias[:, 0] + tm.bias[:, 1] * length + tm.bias[:, 2] * velocity, 0.0)
+        safe_gain = np.where(np.abs(gain) > 1e-9, gain, 1e-9)
+        want = np.clip((torque / tm.gear - bias) / safe_gain, tm.scale.low, tm.scale.high)
+        np.testing.assert_array_equal(tm.ctrl(data, torque), want)
 
 
 def test_dare_solution_satisfies_the_riccati_equation():
@@ -322,7 +366,7 @@ async def test_mcp_tools_run_and_compare_controllers(tmp_path, monkeypatch):
     pg.new_world("lab")
     pg.add_robot("pole", template="cartpole", pos=[0, 1.0])
     pg.add_robot("arm", template="arm")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         listed = json.loads((await client.call_tool("list_algorithms", {})).content[0].text)
         assert {t["name"] for t in listed["tasks"]} == set(TASKS) and "lqr" in listed["algorithms"]
@@ -555,7 +599,7 @@ async def test_mcp_run_controller_survives_resets_and_slow_machines(tmp_path, mo
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
     pg.new_world("lab")
     pg.add_robot("pole", template="cartpole")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         lqr = {"robot": "pole", "task": "balance", "method": "lqr"}
         bad = await client.call_tool("run_controller", {**lqr, "seconds": 2, "push_at": 3})

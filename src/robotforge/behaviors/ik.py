@@ -7,10 +7,43 @@ templates and imported robots.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import mujoco
 import numpy as np
+
+
+def _fast_solve() -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    """numpy.linalg.solve without its Python wrapping (array checks, an error-state context): the same LAPACK
+    routine, so the same numbers, in a third of the time on the 3 x 3 and 6 x 6 systems IK solves a thousand times
+    a second for a walking robot. Its private home in numpy may move; then IK uses the public function."""
+    try:
+        from numpy.linalg import _umath_linalg
+
+        def solve(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            x = _umath_linalg.solve1(a, b, signature="dd->d")
+            # A singular matrix comes back as NaN here, where numpy.linalg.solve raises: hand any result that is
+            # not finite to it, so a caller gets its LinAlgError instead of NaN joint targets. One sum of a few
+            # floats: far cheaper than numpy's error-state context on every call.
+            if not math.isfinite(sum(x.tolist())):
+                return np.linalg.solve(a, b)
+            return x
+
+        rng = np.random.default_rng(7)
+        for n in (3, 6):  # the sizes IK solves: a point, and a point with an axis or a rotation
+            j = rng.standard_normal((n, n))
+            a, b = j @ j.T + 1e-3 * np.eye(n), rng.standard_normal(n)
+            if not np.array_equal(solve(a, b), np.linalg.solve(a, b)):
+                return np.linalg.solve
+        return solve
+    except (ImportError, AttributeError, TypeError, ValueError):
+        pass
+    return np.linalg.solve
+
+
+_solve = _fast_solve()
 
 
 @dataclass(frozen=True)
@@ -40,6 +73,7 @@ class IKSolver:
         self.base_qpos = model.qpos0.copy() if base_qpos is None else base_qpos.copy()
         self._jacp = np.zeros((3, model.nv))
         self._jacr = np.zeros((3, model.nv))
+        self._damped: dict[tuple[int, float], np.ndarray] = {}  # damping * identity, by size and damping
 
     def point(self, chain: Chain, q: np.ndarray) -> np.ndarray:
         self._set(chain, q)
@@ -66,14 +100,20 @@ class IKSolver:
         """
         if axis is not None and rotation is not None:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
-        q = np.clip(np.asarray(q_init, float).copy(), chain.lower, chain.upper)
+        if not damping > 0:  # also NaN: undamped, J J^T is singular wherever the chain is stretched or folded
+            raise ValueError(f"IK damping must be positive, got {damping}")
+        # Walking robots solve this four times a plan, a hundred plans a second, so what is the same every
+        # iteration is done once and small vectors are measured with floats: the same numbers as before.
+        q = np.asarray(q_init, float).clip(chain.lower, chain.upper)  # np.clip's own ufunc, without its wrapper
+        target = np.asarray(target, float)
+        want_quat = None if rotation is None else _quat_of(rotation)
         err = np.inf
-        damped = {3: damping * np.eye(3), 6: damping * np.eye(6)}
         for _ in range(iterations):
             self._set(chain, q)
             p = self._point(chain)
-            e = np.asarray(target, float) - p
-            err = float(np.linalg.norm(e))
+            e = target - p
+            ex, ey, ez = e.tolist()
+            err = math.sqrt(ex * ex + ey * ey + ez * ez)
             mujoco.mj_jac(self.model, self.data, self._jacp, self._jacr, p, chain.body)
             J = self._jacp[:, chain.dof_adr]
             if axis is not None:
@@ -81,16 +121,20 @@ class IKSolver:
                 rot = self.data.xmat[chain.body].reshape(3, 3)
                 have = rot @ local_axis
                 e_rot = _cross(have, want) * axis_weight
-                J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
-                e = np.concatenate([e, e_rot])
-            elif rotation is not None:
-                e_rot = _rotation_error(self.data.xquat[chain.body], rotation) * axis_weight
-                J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
-                e = np.concatenate([e, e_rot])
-            if err < tol and (len(e) == 3 or np.linalg.norm(e[3:]) < tol * 10):
+                J = np.concatenate((J, self._jacr[:, chain.dof_adr] * axis_weight))
+                e = np.concatenate((e, e_rot))
+            elif want_quat is not None:
+                e_rot = _rotation_error(self.data.xquat[chain.body], want_quat) * axis_weight
+                J = np.concatenate((J, self._jacr[:, chain.dof_adr] * axis_weight))
+                e = np.concatenate((e, e_rot))
+            if err < tol and (len(e) == 3 or _norm3(e[3:]) < tol * 10):
                 break
-            JJt = J @ J.T + damped[J.shape[0]]
-            q = np.clip(q + J.T @ np.linalg.solve(JJt, e), chain.lower, chain.upper)
+            n = J.shape[0]
+            damped = self._damped.get((n, damping))
+            if damped is None:
+                damped = self._damped[n, damping] = damping * np.eye(n)
+            JJt = J @ J.T + damped  # damped, so never singular
+            q = (q + J.T @ _solve(JJt, e)).clip(chain.lower, chain.upper)
         return q, err
 
     def _set(self, chain: Chain, q: np.ndarray) -> None:
@@ -109,10 +153,21 @@ def _cross(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.array([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]])
 
 
-def _rotation_error(have_quat: np.ndarray, want: np.ndarray) -> np.ndarray:
-    """Rotation vector (world frame) that turns orientation `have_quat` into rotation matrix `want`."""
-    want_quat = np.zeros(4)
-    mujoco.mju_mat2Quat(want_quat, np.ascontiguousarray(want, float).ravel())
+def _quat_of(rotation: np.ndarray) -> np.ndarray:
+    """The quaternion of a rotation matrix."""
+    quat = np.zeros(4)
+    mujoco.mju_mat2Quat(quat, np.ascontiguousarray(rotation, float).ravel())
+    return quat
+
+
+def _norm3(v: np.ndarray) -> float:
+    """np.linalg.norm of three numbers, without its overhead (the same sum in the same order)."""
+    x, y, z = v.tolist()
+    return math.sqrt(x * x + y * y + z * z)
+
+
+def _rotation_error(have_quat: np.ndarray, want_quat: np.ndarray) -> np.ndarray:
+    """Rotation vector (world frame) that turns orientation `have_quat` into orientation `want_quat`."""
     local = np.zeros(3)
     mujoco.mju_subQuat(local, want_quat, have_quat)  # have * quat(local) = want
     rot = np.zeros(9)

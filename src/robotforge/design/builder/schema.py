@@ -11,7 +11,7 @@ import math
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from robotforge.design import components
 
@@ -38,7 +38,7 @@ AXIS_WORDS: dict[str, tuple[float, float, float]] = {
 # itself, or the tip of a link (see `direction`).
 FACE_ANCHORS = ("top", "bottom", "front", "back", "left", "right")
 ANCHORS = (*FACE_ANCHORS, "center", "start", "end")
-SHAPES = ("box", "sphere", "capsule", "cylinder", "wheel", "caster", "none")
+SHAPES = ("box", "sphere", "capsule", "cylinder", "wheel", "caster", "rotor", "none")
 SIZE_HINT = {
     "box": "[length, width, height] (along x, y, z)",
     "sphere": "[diameter]",
@@ -46,9 +46,10 @@ SIZE_HINT = {
     "cylinder": "[diameter, length]",
     "wheel": "[diameter, width]",
     "caster": "[diameter]",
+    "rotor": "[diameter] (of the propeller)",
     "none": "[] (no shape: a bare joint)",
 }
-SIZE_COUNT = {"box": 3, "sphere": 1, "capsule": 2, "cylinder": 2, "wheel": 2, "caster": 1, "none": 0}
+SIZE_COUNT = {"box": 3, "sphere": 1, "capsule": 2, "cylinder": 2, "wheel": 2, "caster": 1, "rotor": 1, "none": 0}
 MAX_PARTS = 120  # after mirror and repeat; bigger robots get slow to check and to simulate
 Material = Literal["pla", "aluminum", "carbon", "rubber"]
 Vec3 = list[float]
@@ -111,9 +112,17 @@ class SensorSpec(_Strict):
         "center", description="anchor (center, end, top, front...) or [x, y, z]; touch defaults to end"
     )
     direction: str | list[float] = Field("forward", description="where a camera or rangefinder looks")
-    fov: float = Field(70.0, gt=5, lt=170, description="camera field of view, degrees")
-    rays: int = Field(16, ge=3, le=64, description="lidar: rangefinders spread in a ring")
+    fov: float = Field(70.0, description="camera field of view, degrees (5 to 170); only cameras have one")
+    rays: int = Field(16, ge=3, le=64, description="lidar: rays spread evenly all the way round, level")
     range: float = Field(4.0, gt=0.05, le=30.0, description="rangefinder / lidar: farthest distance measured, m")
+    # Realism, ideal when left out: the same knobs and meanings as add_sensor's (sensors/spec.py).
+    rate_hz: float | None = Field(None, gt=0, le=2000)
+    latency_s: float | None = Field(None, ge=0, le=2)
+    noise: float | dict[str, float] | None = None
+    bias: float | list[float] | dict[str, float | list[float]] | None = None
+    drift: float | dict[str, float] | None = None
+    dropout: float | None = Field(None, ge=0, lt=1)
+    seed: int | None = None
 
     @field_validator("name")
     @classmethod
@@ -125,11 +134,31 @@ class SensorSpec(_Strict):
     def _at(cls, v: str | Vec3) -> str | Vec3:
         return v if isinstance(v, str) else _vec3(v, "sensor at")
 
+    @field_validator("fov")
+    @classmethod
+    def _fov(cls, v: float, info: ValidationInfo) -> float:
+        """Checked for cameras only. A lidar's rays always go all the way round: in the agent eval a lidar given
+        fov 360 was refused with a camera's limit (below 170), though no other sensor uses fov at all."""
+        if info.data.get("type") == "camera" and not 5 < v < 170:
+            raise ValueError(f"a camera's fov must be between 5 and 170 degrees, got {v:g}")
+        return v
+
     @field_validator("direction")
     @classmethod
     def _direction(cls, v: str | list[float]) -> str | list[float]:
         axis_vector(v, "sensor direction")
         return v
+
+    @model_validator(mode="after")
+    def _knobs(self) -> SensorSpec:
+        """The knobs a type takes, as add_sensor checks them (a camera has no dropout, an IMU no range noise)."""
+        from robotforge.sensors.spec import SensorEntry
+
+        knobs = {k: getattr(self, k) for k in ("rate_hz", "latency_s", "noise", "bias", "drift", "dropout", "seed")}
+        given = {k: v for k, v in knobs.items() if v is not None}
+        if given:
+            SensorEntry.model_validate({"type": self.type, **given})
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -309,7 +338,7 @@ class _Body(_Strict):
     def _check_size(self, shape: str) -> None:
         need = SIZE_COUNT[shape]
         if not self.size and need:
-            raise ValueError(f"size is required: a {shape} has size {SIZE_HINT[shape]} in meters")
+            raise ValueError(f"size is required: give one, a {shape} has size {SIZE_HINT[shape]} in meters")
         if len(self.size) != need or any(s <= 0 for s in self.size):
             raise ValueError(f"a {shape} has size {SIZE_HINT[shape]} in meters, got {self.size!r}")
         if any(s > 5.0 for s in self.size):
@@ -348,7 +377,7 @@ class PartSpec(_Body):
     )
     joint: JointSpec = Field(default_factory=JointSpec)
     actuator: ActuatorSpec | None = Field(None, description='default: the robot servo / motor; "none" = passive')
-    shape: Literal["box", "sphere", "capsule", "cylinder", "wheel", "caster", "none"] = "capsule"
+    shape: Literal["box", "sphere", "capsule", "cylinder", "wheel", "caster", "rotor", "none"] = "capsule"
     direction: str | list[float] | None = Field(
         None, description="the link grows from its joint this way (e.g. down for a leg); unset = centered on it"
     )
@@ -357,6 +386,12 @@ class PartSpec(_Body):
     mirror: bool = Field(False, description="add a mirror copy on the other side (left <-> right in its name)")
     repeat: RepeatSpec | None = None
     robot: RobotMount | None = Field(None, description="mount a template or library robot on this part")
+    spin: Literal["ccw", "cw"] = Field(
+        "ccw",
+        description="rotor: which way its propeller turns seen from above; copies in a ring or a row alternate and "
+        "a mirrored copy turns the other way, as multirotors need",
+    )
+    thrust: float | None = Field(None, gt=0, le=2000, description="rotor: the most it pushes, N (default from size)")
     passive: bool = Field(False, exclude=True)  # set from actuator: "none"
 
     @model_validator(mode="before")
@@ -371,7 +406,7 @@ class PartSpec(_Body):
         shape = data.get("shape")
         if shape in ("wheel",) and "joint" not in data:
             data["joint"] = {"type": "hinge", "axis": "y", "continuous": True}
-        if shape == "caster" and "joint" not in data:
+        if shape in ("caster", "rotor") and "joint" not in data:
             data["joint"] = "fixed"
         if data.get("robot") is not None:
             data.setdefault("shape", "none")
@@ -406,6 +441,14 @@ class PartSpec(_Body):
     @model_validator(mode="after")
     def _consistent(self) -> PartSpec:
         self._check_size(self.shape)
+        if self.shape == "rotor":
+            if self.joint.type != "fixed" or self.actuator is not None:
+                raise ValueError(
+                    "a rotor is bolted on (its joint is fixed) and drives itself: leave out joint and actuator, set "
+                    "thrust (N) for a stronger one; to tilt it, hang it on a part with a hinge"
+                )
+        elif self.thrust is not None:
+            raise ValueError('thrust is for rotor parts (shape: "rotor")')
         if self.joint.type == "fixed" and self.actuator is not None:
             raise ValueError("a fixed joint does not move, so it takes no actuator")
         if self.joint.continuous and self.actuator is not None:
