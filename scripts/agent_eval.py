@@ -1259,11 +1259,6 @@ NEAREST = re.compile(r"最近|最短|最靠近|nearest|closest", re.IGNORECASE)
 SENTENCE_END = re.compile(r"[。！？；\n]|[.!?;](?=\s|$)")
 
 
-def distances_said(text: str) -> list[float]:
-    """The distances a message names, in meters, in order."""
-    return [float(n) * UNIT_METERS.get(unit, 1.0) for n, unit in DISTANCE.findall(text)]
-
-
 def nearest_said(text: str) -> float | None:
     """The distance an answer gives for the nearest wall, in meters: the first distance after a word for nearest
     (最近, nearest, closest) in the same sentence, else the distance closest to such a word, else the only distance
@@ -1282,9 +1277,9 @@ def nearest_said(text: str) -> float | None:
     return min(found, key=lambda f: min(abs(f[0] - w) for w in words))[1]
 
 
-def said_near(said: list[float], truth: float) -> bool:
-    """Does one of the distances said match a measured one: within 6 cm, or 15% of it for far walls?"""
-    return any(abs(d - truth) <= max(0.06, 0.15 * truth) for d in said)
+def said_near(said: float, truth: float, slack: float = 0.0) -> bool:
+    """Does a distance said match the true one: within 6 cm, or 15% of it for far walls, and `slack` more?"""
+    return abs(said - truth) <= max(0.06, 0.15 * truth) + slack
 
 
 def _to_polygon(x: float, y: float, poly: Corners) -> float:
@@ -1390,9 +1385,7 @@ def check_lidar_maze(ev: Evidence) -> list[Criterion]:
                 min(truths, key=lambda t: abs(said - t[0])) if truths and said is not None else
                 truths[-1] if truths else None
             )  # fmt: skip
-            right = (
-                match is not None and said is not None and abs(said - match[0]) <= max(0.06, 0.15 * match[0]) + match[1]
-            )
+            right = match is not None and said is not None and said_near(said, match[0], match[1])
             crit = [
                 Criterion(
                     "a robot carrying a lidar, in a maze",

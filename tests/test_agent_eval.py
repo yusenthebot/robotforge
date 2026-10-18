@@ -850,10 +850,11 @@ def test_the_maze_starter_rover_carries_no_lidar(ev, tmp_path):
     assert verdict["a robot carrying a lidar, in a maze"] is False
 
 
-def test_distances_are_read_in_meters_from_an_answer(ev):
-    said = ev.distances_said("左边约 0.43 米，前方 1.2m，速度 0.2 m/s，另一面 43 厘米，then 50 cm and 0.5 meters")
-    assert said == [0.43, 1.2, 0.43, 0.5, 0.5]
-    assert ev.said_near([0.4], 0.43) and not ev.said_near([0.3], 0.43) and ev.said_near([2.2], 2.5)
+def test_a_distance_said_is_held_to_the_true_one(ev):
+    assert ev.said_near(0.4, 0.43) and not ev.said_near(0.3, 0.43) and ev.said_near(2.2, 2.5)
+    assert not ev.said_near(0.5, 0.43) and ev.said_near(0.5, 0.43, slack=0.02)  # where the robot faced is unknown
+    assert ev.nearest_said("最近的墙 43 厘米") == 0.43 and ev.nearest_said("nearest wall: 0.5 meters") == 0.5
+    assert ev.nearest_said("最近的墙 0.2 m/s 开过去，0.45 米") == 0.45  # a speed is not a distance
 
 
 def test_the_distance_called_nearest_is_the_one_after_the_word(ev):
