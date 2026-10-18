@@ -24,8 +24,8 @@ the load average above the cores, or the machine check (a MuJoCo model built her
 each world's process) under its floor in budget.json; then timings over budget say nothing about the code: rerun
 calm. A quick or partial run (--quick, --only, --worlds) is not saved unless --save, and then as
 <date>-<sha>-partial.json, which no later run compares with. Physics speeds are compared relative to that machine
-check, so a busier machine than last time reads less as a slower robotforge (less so for Python-heavy and large
-worlds, which a busy machine slows more than the check); --wait-calm waits for the load to drop first. Two runs an
+check, so a busier machine than last time reads less as a slower robotforge (a world moves a little more than the
+check, so the noise floor widens where the check moved a lot); --wait-calm waits for the load to drop first. Two runs an
 hour apart on a shared machine can still differ more than a change does, so --ab measures a change instead:
 imports, cold start and the physics worlds on this tree and on revision <rev>, alternately.
 The physics, viewer and MCP parts use the real Menagerie Go2 (downloaded once into the cache); the viewer part
@@ -76,9 +76,14 @@ NOISE = {
 }
 TIME_NOISE = (0.3, 0.0)
 MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
-# Speeds over the machine check timed with each world (MachineCheck): in two pairs of physics runs at load 11 to 16
-# they differed by -8 to +3 and -6 to +2 percent, where the raw speeds differed by up to 28 percent.
+# Speeds over the machine check timed with each world (MachineCheck), against 0d0b444 on unchanged physics code: 36
+# world runs at load 21 to 161 differed by -11 to +4 percent where that world's check moved less than a quarter
+# (raw speeds up to 47 percent), and by -16 to +7 percent where it moved more (a review saw arm_pick at -18): a
+# world slows or speeds 1.2 to 1.4 times as much as the small check, so the further the machine moved, the more a
+# relative change leans the way it moved, and the wider the floor.
 MACHINE_RELATIVE_NOISE = 0.15
+MACHINE_MOVED = 1.25  # the check this much faster or slower than in the run compared with
+MACHINE_MOVED_NOISE = 0.25
 # A process that compiles the Go2's OBJ meshes peaks 480 MB one run and 535 MB the next on the same build.
 MESH_MEMORY_NOISE = (0.15, 20.0)
 # Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code. The
@@ -172,8 +177,9 @@ def _noise(m: dict[str, Any]) -> tuple[float, float]:
 def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Per metric: the previous value, the change and a verdict (better, worse, same, new), from flattened results.
     A world's speed changes relative to the machine ("relative": True) when both runs timed the machine check in
-    that world's process: a world that slowed by as much as the machine did is the machine, not robotforge. Runs
-    from before the check compare as measured, with the wider noise of raw timings."""
+    that world's process: a world that slowed by as much as the machine did is the machine, not robotforge; when
+    the machine moved a lot, the world moved a little more, so the floor widens. Runs from before the check
+    compare as measured, with the wider noise of raw timings."""
     out = {}
     for name, m in now.items():
         old = before.get(name)
@@ -185,7 +191,8 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
         scale, (share, amount) = None, _noise(m)
         if m.get("unit") == "steps/s" and m.get("machine") and old.get("machine"):
             scale = m["machine"] / old["machine"]
-            share, amount = m.get("relative_noise") or MACHINE_RELATIVE_NOISE, 0.0
+            moved = not 1 / MACHINE_MOVED <= scale <= MACHINE_MOVED
+            share, amount = (MACHINE_MOVED_NOISE if moved else MACHINE_RELATIVE_NOISE), 0.0
         relative = scale is not None
         ref = prev * scale if relative else prev
         change = (value - ref) / abs(ref) if ref else (0.0 if value == ref else math.inf)
@@ -301,8 +308,12 @@ def _fmt(value: float | None, unit: str) -> str:
 
 
 def table(
-    now: dict[str, dict[str, Any]], compared: dict[str, dict[str, Any]], budgets: list[dict[str, Any]]
+    now: dict[str, dict[str, Any]],
+    compared: dict[str, dict[str, Any]],
+    budgets: list[dict[str, Any]],
+    busy: bool = False,
 ) -> list[str]:
+    """One row per metric. On a busy machine timings get no better or worse: the change is shown, not judged."""
     by_metric = {b["metric"]: b for b in budgets}
     lines = [f"{'metric':<40} {'now':>10} {'unit':<8} {'before':>10} {'change':>8}  {'budget':<14} status"]
     for name, m in now.items():
@@ -311,7 +322,7 @@ def table(
         change = "" if c.get("change") is None else f"{100 * c['change']:+.0f}%{'*' if c.get('relative') else ''}"
         limit = "" if b is None else f"{'<=' if b['kind'] == 'max' else '>='} {_fmt(b['limit'], m['unit'])}"
         status = "" if b is None else b["status"]
-        if c.get("verdict") in ("better", "worse"):
+        if c.get("verdict") in ("better", "worse") and not (busy and m["unit"] in LOAD_SENSITIVE):
             status = f"{status} ({c['verdict']})".strip()
         lines.append(
             f"{name:<40} {_fmt(m['value'], m['unit']):>10} {m['unit']:<8} "
@@ -1342,11 +1353,12 @@ def main(argv: list[str] | None = None) -> int:
     loads = [load[0] for load in (before_machine.get("load"), load_after) if load]
     busy = busy_reason(loads, cores, now, budget_spec)
     budgets = check_budgets(now, budget_spec, ran, busy is not None)
-    print("\n".join(table(now, compared, budgets)))
+    print("\n".join(table(now, compared, budgets, busy is not None)))
     if any(c.get("relative") for c in compared.values()):
         print(
             "\n* steps/s changes allow for the machine's speed, timed in each world's own process. A busier machine"
-            " than last time still slows Python-heavy and large worlds more than the check: there the change leans low"
+            " than last time slows a world about 1.2 to 1.4 times as much as the check (a faster one speeds it as"
+            " much), so where the check moved more than a quarter the change leans that way and needs 25 percent"
         )
     if busy:
         print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")

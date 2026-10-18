@@ -386,6 +386,23 @@ def test_speeds_compare_relative_to_the_machine_check_in_their_own_process(bench
     assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "same"
 
 
+def test_a_relative_change_needs_more_when_the_machine_moved_a_lot(bench):
+    """A world moves a little more than the small check: at load 161 the check ran 0.65 times as fast as at
+    0d0b444 and the standing dog -16 percent over it, on the same physics code. That is noise; -30 is not."""
+    m = bench.metric
+    before = {"physics.dog_idle.steps_per_s": m(69403, "steps/s", "higher", machine=225454)}
+
+    def verdict(speed: float, machine: float) -> tuple[str, float]:
+        now = {"physics.dog_idle.steps_per_s": m(speed, "steps/s", "higher", machine=machine)}
+        out = bench.compare(now, before)["physics.dog_idle.steps_per_s"]
+        return out["verdict"], out["change"]
+
+    assert verdict(37740, 146600) == ("same", pytest.approx(-0.164, abs=0.002))  # the run at load 161
+    assert verdict(31600, 146600)[0] == "worse"  # -30 percent
+    assert verdict(55500, 225454)[0] == "worse"  # -20 percent with the machine where it was: the code
+    assert verdict(80000, 225454 * 1.47)[0] == "same"  # -22 percent with a much faster check
+
+
 def test_the_machine_check_costs_the_same_every_time(bench):
     """Restarted from the same pose, the check's best time is steady on one machine (a busy one may move it some)."""
     rates = []
@@ -447,6 +464,13 @@ def test_the_table_shows_the_change_and_the_budget(bench):
     header, row = bench.table(now, compared, budgets)
     assert "budget" in header
     assert "300" in row and "600" in row and "-50%" in row and "<= 500" in row and "ok (better)" in row
+    # On a busy machine a timing's change is shown but not judged; a size is judged however busy the machine
+    now["install.installed_mb"] = m(200, "MB", "lower")
+    compared = bench.compare(
+        now, {**now, "imports.cli_ms": m(600, "ms", "lower"), "install.installed_mb": m(160, "MB", "lower")}
+    )
+    _, timing, size = bench.table(now, compared, budgets, busy=True)
+    assert "-50%" in timing and "better" not in timing and "(worse)" in size
 
 
 def test_the_budget_file_names_metrics_the_bench_measures(bench):
