@@ -1324,6 +1324,9 @@ input[type="range"]::-moz-range-thumb {
 #drawer:not([hidden]) ~ .sensor-views { right: calc(var(--gutter) + 300px + 10px); }
 
 .sensor-pip .plot-head { align-items: center; }
+/* A title and its buttons share a row where both fit; in the 320 px column the buttons wrap under the title
+   rather than cut it short ("Acceleration (m/s²)" lost its unit). */
+.sensor-views .plot-head { flex-wrap: wrap; row-gap: 4px; }
 .sensor-pip .plot-title,
 .sensor-plot .plot-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sensor-views .seg { flex-shrink: 0; }

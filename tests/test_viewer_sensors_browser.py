@@ -244,3 +244,47 @@ def test_a_switch_holds_for_its_sensor_in_its_world_only(playground, chrome):
     assert seen["hidden"] == []
     assert seen["next_world"] == ["dog/lidar"]
     assert seen["reloaded"] == ["dog/imu"]
+
+
+WORDS = "#sensor-views .plot-title, #sensor-views .plot-tabs button, #sensor-views .seg button"
+CUT = f"""[...document.querySelectorAll('{WORDS}')]
+  .filter((el) => el.offsetParent !== null && el.scrollWidth > el.clientWidth).map((el) => el.textContent)"""
+
+
+def test_the_sensor_views_cut_no_title_or_button(playground, chrome):
+    """At a laptop's 1280 x 800 the views are a 320 px column: "Acceleration (m/s²)" lost its unit to an ellipsis,
+    and on a phone the tabs read "Force-tor..." and "Joint enco...". In English and Chinese, nothing is cut."""
+    pg = playground
+    pg.new_world("titles")
+    pg.add_robot("panda", library="panda")
+    for fields in (
+        {"type": "imu", "on": "hand"},
+        {"type": "force_torque", "on": "hand"},
+        {"type": "encoders"},
+        {"type": "camera", "mode": "depth", "on": "hand", "direction": "down"},
+        {"type": "camera", "mode": "segmentation", "name": "seg", "on": "hand", "direction": "down"},
+    ):
+        pg.add_sensor("panda", fields)
+    server, thread, port = _serve(pg)
+    sizes = {"laptop": (1280, 800), "phone": (390, 844)}
+
+    async def run() -> dict:
+        out = {}
+        for lang in ("en", "zh"):
+            async with _page(chrome, f"http://127.0.0.1:{port}/?lang={lang}") as tab:
+                for label, (width, height) in sizes.items():
+                    size = {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False}
+                    await tab.call("Emulation.setDeviceMetricsOverride", **size)
+                    await tab.eval("document.querySelector('#world-toggle[aria-expanded=true]')?.click(), 1")
+                    await tab.eval("document.querySelector('#drawer-toggle[aria-expanded=true]')?.click(), 1")
+                    await _until(tab, "window.__robotforge.sensors().views.length === 4")
+                    await asyncio.sleep(0.5)
+                    out[f"{label} {lang}"] = await tab.eval(CUT)
+        return out
+
+    try:
+        seen = asyncio.run(run())
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+    assert seen == {key: [] for key in seen} and len(seen) == 4

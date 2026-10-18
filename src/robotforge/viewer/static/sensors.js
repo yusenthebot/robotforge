@@ -218,6 +218,10 @@ function typeLabel(e) {
   return t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`);
 }
 
+// A phone's strip of tabs has room for a word each: "Force", not "Force-torque".
+const TAB_KEYS = { force_torque: "sensor_tab_force_torque", encoders: "sensor_tab_encoders" };
+const tabLabel = (e) => (TAB_KEYS[e.type] ? t(TAB_KEYS[e.type]) : typeLabel(e));
+
 function summary(e) {
   if (e.status === "waiting") return t("sensor_waiting");
   const num = (v, d = 2) => Number(v).toFixed(d);
@@ -778,7 +782,7 @@ const views = {
     row.append(legend, note);
     const canvas = document.createElement("canvas");
     el.append(head, row, canvas);
-    return { el, kind: "plot", name: e.name, canvas, title, legend, note, right, label: typeLabel(e) };
+    return { el, kind: "plot", name: e.name, canvas, title, legend, note, right, label: tabLabel(e) };
   },
   // What a plot can show, one at a time: an IMU's acceleration, turn rate or tilt; a force-torque sensor's force
   // or torque; an encoder's joints, a leg (or a run of joints) at a time.
@@ -855,7 +859,8 @@ const views = {
     if (!s || s.kind !== "pip") return;
     if (e.mode === "depth" && pip.span) {
       const [low, high] = pip.span;
-      const key = `${low.toFixed(1)}|${high.toFixed(1)}`;
+      const digits = high - low < 1 ? 2 : 1; // a wrist camera over a table: 0.55 to 0.65 m, not 0.6 to 0.6
+      const key = `${low.toFixed(digits)}|${high.toFixed(digits)}`;
       if (s.legend.dataset.key === key) return;
       s.legend.dataset.key = key;
       const bar = document.createElement("canvas");
@@ -869,8 +874,8 @@ const views = {
         img.data.set([r * 255, gg * 255, b * 255, 255], 4 * i);
       }
       g.putImageData(img, 0, 0);
-      const near = Object.assign(document.createElement("span"), { textContent: t("sensor_near", { m: low.toFixed(1) }) });
-      const far = Object.assign(document.createElement("span"), { textContent: t("sensor_far", { m: high.toFixed(1) }) });
+      const near = Object.assign(document.createElement("span"), { textContent: t("sensor_near", { m: low.toFixed(digits) }) });
+      const far = Object.assign(document.createElement("span"), { textContent: t("sensor_far", { m: high.toFixed(digits) }) });
       s.legend.replaceChildren(near, bar, far);
     } else if (e.mode === "segmentation") {
       const key = pip.seen.map((x) => x.name).join(",");
