@@ -29,6 +29,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
+from robotforge.behaviors import mcp_tools as operate_tools
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -594,6 +595,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             )
 
     control_tools.register(server, playground, run_until)
+    operate_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     lessons.register(server)

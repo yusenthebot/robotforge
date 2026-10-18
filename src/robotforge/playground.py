@@ -21,11 +21,12 @@ from pydantic import ValidationError
 from robotforge import modes, wording
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
+from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
-from robotforge.sim import carry, finder, vision
+from robotforge.sim import carry, finder, mechanisms, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
@@ -81,6 +82,7 @@ class Playground:
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -88,6 +90,7 @@ class Playground:
         )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
+        mechanisms.attach(self.session)  # belts keep running and button presses are counted, through resets
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -754,7 +757,7 @@ class Playground:
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
                 values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
                 sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
-            return {
+            out = {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
                 "joints": _limit_dict(joints),
@@ -763,6 +766,22 @@ class Playground:
                 "sensors": _limit_dict(sensors),
                 "contacts": int(d.ncon),
             }
+            watcher = self.session.controllers.get(mechanisms.KEY)
+            moving = mechanisms.read(m, d, self._mechanism_shapes(), watcher)
+            if moving:  # drawers, doors, buttons, switches, levers, valves, belts, ropes, cloths
+                out["mechanisms"] = _limit_dict(moving)
+            return out
+
+    def _mechanism_shapes(self) -> dict[str, str]:
+        """The world's mechanisms and soft things by name, read once per compiled model: scripts poll state()
+        hundreds of times a second, and the world file only changes with the model."""
+        version, shapes = self._shapes
+        if version != self.session.version:
+            world = self._acting_world()
+            objects = world.objects if world is not None else []
+            shapes = {o.name: o.shape for o in objects if o.shape in mechanism_shapes.SHAPES}
+            self._shapes = (self.session.version, shapes)
+        return shapes
 
     def snapshot(self, view: str = "default", width: int = 640, height: int = 480) -> bytes:
         try:

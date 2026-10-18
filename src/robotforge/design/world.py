@@ -20,7 +20,17 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from robotforge import wording
-from robotforge.design import builder, components, end_effectors, importer, library, props, templates, terrain
+from robotforge.design import (
+    builder,
+    components,
+    end_effectors,
+    importer,
+    library,
+    mechanisms,
+    props,
+    templates,
+    terrain,
+)
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 
@@ -304,6 +314,8 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
 
     for obj in world.objects:
         _object(spec, obj, ground)
+        if obj.shape in mechanisms.MECHANISMS:  # a switch starts off, a conveyor running (the home keyframe)
+            homes.append((obj.name, *mechanisms.home(obj.shape, obj.name, obj.speed)))
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
@@ -481,6 +493,12 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     # Without an explicit z, objects rest on the ground (floor or terrain) under their footprint.
     ground_z = ground.under(x, y, *props.footprint(obj.shape, obj.size), obj.yaw)
     quat = _yaw_quat(obj.yaw)
+    if obj.shape in mechanisms.SHAPES:
+        # A rope with no height given hangs from a hook its length and 20 cm above the ground.
+        hang = obj.size[0] + 0.2 if obj.shape == "rope" and obj.fixed else 0.0
+        base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z + hang]
+        mechanisms.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed)
+        return
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
         props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
