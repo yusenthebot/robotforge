@@ -32,6 +32,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
   The browser pane may be hidden and throttle `requestAnimationFrame`, so drive pointer tests with `screenOf` coordinates (CSS px, not screenshot px).
 - Tests: `uv run pytest -q`; lint: `uv run ruff check . && uv run ruff format --check .`.
   Lesson playthroughs that train for a minute or more are marked `slow` and skipped by default: `uv run pytest -q -m slow` (CI runs them on Ubuntu).
+  The sensor views' headless Chrome checks (`tests/test_viewer_sensors_browser.py`, slow) run only on macOS or with `ROBOTFORGE_BROWSER_TESTS=1`: run `uv run pytest -q -m slow tests/test_viewer_sensors_browser.py` before merging a change to the sensor views.
   `uv run python scripts/playtest.py` plays every lesson headless and prints which step each one reaches.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.

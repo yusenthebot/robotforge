@@ -191,6 +191,58 @@ def test_a_switch_is_kept_for_its_world_and_its_sensor():
 # ---- the helpers agree with the server -----------------------------------------------------------------------
 
 
+def picture_js(body: str) -> object:
+    """Run `body` with sensorpicture.js's `picture` imported as the page imports it, "three" being the vendored
+    three.js (Node resolves the bare name through a loader hook, as the page's import map does)."""
+    three = (STATIC / "vendor" / "three" / "three.module.min.js").as_uri()
+    hook = (
+        "export async function resolve(specifier, context, next) {"
+        f" if (specifier === 'three') return {{ url: {json.dumps(three)}, shortCircuit: true }};"
+        " return next(specifier, context); }"
+    )
+    source = (
+        'import { register } from "node:module";\n'
+        f"register({json.dumps('data:text/javascript,' + hook)});\n"
+        f"const {{ picture }} = await import({json.dumps((STATIC / 'sensorpicture.js').as_uri())});\n"
+        f"const out = await (async () => {{ {body} }})();\n"
+        "process.stdout.write(JSON.stringify(out));\n"
+    )
+    run = subprocess.run(
+        [NODE, "--input-type=module"], input=source, capture_output=True, text=True, encoding="utf-8", timeout=60
+    )
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout)
+
+
+@needs_node
+def test_another_camera_s_picture_is_drawn_on_its_own_canvas():
+    """Picking another camera builds a new canvas the same size; drawing on with the old canvas's 2D context left
+    the panel blank. Each picture must reach the canvas it was developed for."""
+    drawn = picture_js(
+        """
+        const canvas = () => {
+          const c = { width: 0, height: 0, drawn: 0 };
+          const ctx = {
+            canvas: c,
+            createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(4 * w * h) }),
+            putImageData: () => c.drawn++,
+          };
+          c.getContext = () => ctx;
+          return c;
+        };
+        picture.size = [4, 3];
+        picture.bytes = new Uint8Array(4 * 4 * 3).fill(200);
+        const first = canvas();
+        const second = canvas();
+        picture.develop({ mode: "rgb" }, first);
+        picture.develop({ mode: "segmentation" }, second);
+        picture.develop({ mode: "segmentation" }, second);
+        return [first.drawn, second.drawn, second.width, second.height];
+        """
+    )
+    assert drawn == [1, 2, 4, 3]
+
+
 @needs_node
 def test_depth_colors_match_the_server_s_depth_picture():
     depth = np.array([[0.5, 1.0, 2.5, np.nan], [4.0, 6.0, 9.0, 10.0]])
