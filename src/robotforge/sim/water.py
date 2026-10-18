@@ -120,14 +120,15 @@ def encode(spec: mujoco.MjSpec, water: Water) -> None:
 
 def add_surface(spec: mujoco.MjSpec, water: Water, model: mujoco.MjModel) -> None:
     """A see-through sheet at the water level for MuJoCo's own renderer (observe's pictures); the browser viewer
-    draws its own. `model` is the world compiled without it: open water gets a sheet twice the scene's size round
-    its middle, and the model's statistics are pinned to that model's, so the sheet moves neither the cameras that
-    frame the scene nor the near clipping plane (a 120 m sheet had pushed it out of a boat's own camera)."""
+    draws its own. `model` is the world compiled without it: open water gets a sheet out to the far clipping plane
+    (one twice the scene's size showed the sea as a square with sand past its corners), and the model's statistics
+    are pinned to that model's, so the sheet moves neither the cameras that frame the scene nor the near clipping
+    plane (a 120 m sheet had pushed it out of a boat's own camera)."""
     if water.area is not None:
         x0, y0, x1, y1 = water.area
         center, half = [(x0 + x1) / 2, (y0 + y1) / 2], [(x1 - x0) / 2, (y1 - y0) / 2]
     else:
-        reach = max(20.0, 2.0 * float(model.stat.extent))
+        reach = max(20.0, 0.7 * float(model.vis.map.zfar) * float(model.stat.extent))  # its corners past the far plane
         center, half = [float(model.stat.center[0]), float(model.stat.center[1])], [reach, reach]
     spec.stat.extent = float(model.stat.extent)
     spec.stat.center = [float(v) for v in model.stat.center]

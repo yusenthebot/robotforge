@@ -18,6 +18,7 @@ const LOOKS = {
   sea: { color: 0x22607c, deep: 0x0c2c3f, clear: 0.3, fog: 0x245d76, see: 9 },
 };
 const SUN = [0.6, -0.8, 1.6]; // the way to the sun, as the viewer's own sun light
+const HORIZON_SKY = 0xdfe8ef; // the sky just over the horizon: open water's fog fades the far sea into it
 
 // What water mirrors: an open sky, pale at the horizon and deeper blue overhead, with the sun in it (its glints on
 // the waves). The studio light boxes that make robots look good made the water look like a bathroom floor.
@@ -28,7 +29,7 @@ function sky(renderer) {
   const dome = new THREE.SphereGeometry(50, 48, 24);
   const colors = [];
   const zenith = new THREE.Color(0x5d93c9);
-  const horizon = new THREE.Color(0xdfe8ef);
+  const horizon = new THREE.Color(HORIZON_SKY);
   const below = new THREE.Color(0x3a5260);
   const pos = dome.attributes.position;
   for (let i = 0; i < pos.count; i++) {
@@ -47,6 +48,7 @@ function sky(renderer) {
   env.add(sun);
   const pmrem = new THREE.PMREMGenerator(renderer);
   skyMap = pmrem.fromScene(env, 0.0).texture;
+  skyMap.userData.shared = true; // also the background over open water: whoever replaces it must not dispose it
   pmrem.dispose();
   env.traverse((o) => {
     o.geometry?.dispose();
@@ -200,13 +202,25 @@ export function makeWater(water, look, center, renderer) {
     o.userData.water = true;
   });
   const under = new THREE.Fog(style.fog, 0.05, style.see);
-  return { group, uniforms, water, style, under, above: null, isUnder: false, background: null };
+  // Open water runs to the horizon: under the sky it mirrors, not the studio's backdrop (the far sea, pale with the
+  // sky, ended in a hard line against the dark one). The sky map is the same the water reflects.
+  const sky = open && renderer ? skyMap : null;
+  return {
+    group, uniforms, water, style, under, sky,
+    above: null, isUnder: false, background: null, theme: null, fogs: new WeakMap(),
+  };
 }
 
-// Each frame: the waves at the simulation's time, and the look under water when the camera is below the surface.
+const ahead = new THREE.Vector3();
+
+// Each frame: the waves at the simulation's time, the sky over open water, and the look under water when the
+// camera is below the surface. Below is judged at the middle of the near clipping plane, not at the camera: what
+// is drawn starts there, and a camera a few centimeters over the surface looking down had drawn the bottom crisp
+// through no water at all.
 export function waterFrame(state, time, camera, scene) {
   state.uniforms.uTime.value = time;
-  const p = camera.position;
+  camera.getWorldDirection(ahead);
+  const p = ahead.multiplyScalar(camera.near).add(camera.position);
   const top = surfaceAt(state.water, p.x, p.y, time);
   const under = top !== null && p.z < top - 0.01;
   if (under) {
@@ -221,12 +235,31 @@ export function waterFrame(state, time, camera, scene) {
     if (state.background) scene.background = state.background;
   }
   state.isUnder = under;
+  if (!under && state.sky) openSky(state, scene);
 }
 
-// Put the scene's own fog and background back (a new scene arrives while the camera is under water).
+// The sky behind open water, and the scene's fog turned to its horizon (each frame: a theme change or a refit puts
+// the studio's back, and what they put is what leaveWater restores).
+function openSky(state, scene) {
+  if (scene.background !== state.sky) {
+    state.theme = scene.background;
+    scene.background = state.sky;
+  }
+  const fog = scene.fog;
+  if (fog && fog !== state.under) {
+    if (!state.fogs.has(fog) || fog.color.getHex() !== HORIZON_SKY) state.fogs.set(fog, fog.color.clone());
+    fog.color.setHex(HORIZON_SKY);
+  }
+}
+
+// Put the scene's own fog and background back (a new scene arrives, maybe while the camera is under water).
 export function leaveWater(state, scene) {
-  if (state?.isUnder) {
+  if (!state) return;
+  if (state.isUnder) {
     scene.fog = state.above;
     if (state.background) scene.background = state.background;
   }
+  if (state.sky && scene.background === state.sky && state.theme) scene.background = state.theme;
+  const own = scene.fog && state.fogs.get(scene.fog);
+  if (own) scene.fog.color.copy(own);
 }

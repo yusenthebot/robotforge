@@ -609,7 +609,7 @@ function readTheme() {
   const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   const old = scene3.background;
   scene3.background = makeGradientTexture(token("--scene-top", "#f4f6f8"), token("--scene-bottom", "#d6dde5"));
-  if (old) old.dispose();
+  if (old && !old.userData.shared) old.dispose(); // not the sky over open water (water.js): the water mirrors it
   theme.fog = token("--scene-fog", theme.fog);
   theme.amber = token("--amber", theme.amber);
   if (scene3.fog) scene3.fog.color.set(theme.fog);

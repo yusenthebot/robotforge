@@ -137,6 +137,7 @@ class SnapshotRenderer:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera)
+        _water_casts_no_shadow(model, self._renderer.scene)
         if isinstance(camera, str):
             see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
         return self._renderer.render().copy()
@@ -212,6 +213,7 @@ class SnapshotRenderer:
         """What the camera sees, without the model's marker sites, as _layers draws it (on the GL thread)."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
+        _water_casts_no_shadow(model, self._renderer.scene)
         if isinstance(camera, str):
             see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
         return self._renderer.render().copy()
@@ -220,6 +222,7 @@ class SnapshotRenderer:
         self._ready(model, key)
         r = self._renderer
         r.update_scene(data, camera=camera, scene_option=_CAMERA_ONLY)
+        _water_casts_no_shadow(model, r.scene)
         if isinstance(camera, str):
             see_out_of_own_part(model, data, r.scene, model.camera(camera).id)
         rgb = r.render().copy()
@@ -468,6 +471,19 @@ def _geom_box(model: mujoco.MjModel, data: mujoco.MjData, geoms: list[int]) -> t
     centers = data.geom_xpos[geoms] + np.einsum("nij,nj->ni", rot, aabb[:, :3])
     half = np.einsum("nij,nj->ni", np.abs(rot), aabb[:, 3:])
     return (centers - half).min(axis=0), (centers + half).max(axis=0)
+
+
+def _water_casts_no_shadow(model: mujoco.MjModel, scene: mujoco.MjvScene) -> None:
+    """The water's see-through sheet shaded the bottom under all of it inside the sun's shadow map (a dark
+    square on the sea in the overview): drawn as decoration, it casts no shadow."""
+    sheet = water_model.surface_geom(model)
+    if sheet < 0:
+        return
+    for i in range(scene.ngeom):
+        geom = scene.geoms[i]
+        if geom.objtype == mujoco.mjtObj.mjOBJ_GEOM and geom.objid == sheet:
+            geom.category = mujoco.mjtCatBit.mjCAT_DECOR
+            return
 
 
 def _scene_box(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.ndarray, np.ndarray] | None:

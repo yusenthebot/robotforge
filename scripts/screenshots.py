@@ -740,6 +740,12 @@ SHOTS = [
         page="window.__robotforge.select(null); window.__robotforge.lookAt([-5.5, -18.0, 6.6], [2.5, -1.5, 1.0]);",
         settle=3.0,
     ),
+    Shot(  # low over the harbor mouth, out to sea: the far water and the sky over it meet at the horizon
+        "water_harbor_horizon",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.0, 3.0, 2.6], [2.5, -12.0, 0.9]);",
+        settle=3.0,
+    ),
     Shot(
         "water_boat",
         _in_scene("harbor", {"boat": {"template": "boat"}}),
@@ -751,13 +757,17 @@ SHOTS = [
         "water_rov",
         _in_scene("pool", {"rov": {"template": "rov"}}),
         viewer=[_go("rov", [0.0, 0.0, 0.75]), {"wait": 2.0}],
-        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.15, -0.85, 0.55], [0.0, 0.0, 0.82]);",
+        page=(  # from a little below and to the side of where it holds, the surface a ceiling over it
+            "const rf = window.__robotforge; rf.select(null);"
+            "const p = rf.bodyPosition(rf.scene.bodies.find((b) => b.name.startsWith('rov/') && b.dynamic).id);"
+            "rf.lookAt([p[0] + 1.1, p[1] + 0.35, p[2] - 0.22], [p[0], p[1], p[2] + 0.06]);"
+        ),
         settle=1.0,
     ),
     Shot(
         "water_lake",
         _in_scene("lake", {"boat": {"template": "boat"}}),
-        page="window.__robotforge.select(null); window.__robotforge.lookAt([7.5, -11.0, 13.5], [-0.8, 0.4, 0.8]);",
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([8.0, -13.0, 15.5], [-0.6, -0.9, 0.8]);",
         settle=3.0,
     ),
 ]
