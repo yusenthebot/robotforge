@@ -285,11 +285,13 @@ def _segment(t: np.ndarray) -> np.ndarray:
 
 
 def _segment_sum(u: np.ndarray) -> np.ndarray:
-    """The integral of _segment from -1 to u (u clipped to the reals: 0 below -1, u above 1)."""
+    """The integral of _segment from -1 to u: 0 below -1, u above 1 (where _segment is 0 or 1)."""
     v = np.clip(u, -1.0, 1.0)
-    root = np.sqrt(np.maximum(1 - v * v, 0.0))
-    inner = (math.pi * v - (v * np.arccos(v) - root) - root**3 / 3) / math.pi
-    return np.where(u > 1.0, u, np.where(u < -1.0, 0.0, inner))
+    root = np.sqrt(1.0 - v * v)
+    return (v * (math.pi - np.arccos(v)) + root * (1.0 - root * root / 3.0)) / math.pi + np.maximum(u - 1.0, 0.0)
+
+
+SLIVER = 5e-5  # radii: the least spread averaged over, so a lying slab (no spread) needs no case of its own
 
 
 def _slab_share(above: np.ndarray, r: np.ndarray, half: np.ndarray, axis_z: np.ndarray) -> np.ndarray:
@@ -297,12 +299,12 @@ def _slab_share(above: np.ndarray, r: np.ndarray, half: np.ndarray, axis_z: np.n
     `above` m over its center, exact at any tilt: every slice across the axis is a disc cut by a line, its share
     _segment of where the line crosses it, averaged over the thickness in closed form (_segment_sum). Upright it is
     the share of a box; lying, of a circle (a blend of the two was 4 to 30 percent off near the ends)."""
-    lean = np.maximum(r * np.sqrt(np.maximum(1 - axis_z * axis_z, 0.0)), 1e-9)  # half the face's height
-    spread = half * np.abs(axis_z)  # how far the slices' centers spread up and down
-    lo, hi = (above - spread) / lean, (above + spread) / lean
-    width = hi - lo
-    averaged = (_segment_sum(hi) - _segment_sum(lo)) / np.maximum(width, 1e-9)
-    return np.where(width > 1e-6, averaged, _segment(np.clip(above / lean, -1.0, 1.0)))
+    lean = np.maximum(r * np.sqrt(np.maximum(1.0 - axis_z * axis_z, 0.0)), 1e-9)  # half the face's height
+    spread = np.maximum(half * np.abs(axis_z) / lean, SLIVER)  # how far the slices' waterlines spread, in radii
+    middle = above / lean
+    sums = _segment_sum(np.concatenate([middle + spread, middle - spread]))  # one pass for both ends
+    n = len(middle)
+    return (sums[:n] - sums[n:]) / (2.0 * spread)
 
 
 # ---- the model in a running simulation -----------------------------------------------------------------------
