@@ -37,22 +37,37 @@ export function nearColor(d, low, high) {
   return turbo(0.12 + 0.83 * near);
 }
 
-// A depth camera's picture: `depth` holds meters row by row from the top (NaN where nothing is in range), `out`
-// gets RGBA bytes. The same colors as read_sensors(image=true) gives an agent (camera.py's depth_picture), with
-// the span given rather than taken from this one frame, so a live view does not flicker as things come and go.
-export function depthPicture(depth, low, high, out) {
-  for (let i = 0; i < depth.length; i++) {
-    const d = depth[i];
-    const o = 4 * i;
-    if (!Number.isFinite(d)) {
-      out[o] = out[o + 1] = out[o + 2] = 0;
-    } else {
-      const [r, g, b] = nearColor(d, low, high);
-      out[o] = Math.trunc(r * 255);
-      out[o + 1] = Math.trunc(g * 255);
-      out[o + 2] = Math.trunc(b * 255);
+// A depth camera's picture: `depth` holds meters row by row (NaN where nothing is in range), `out` gets RGBA bytes,
+// top row first; `flip` reads `depth` bottom row first, as a GPU gives it back, `width` pixels a row. The same colors
+// as read_sensors(image=true) gives an agent (camera.py's depth_picture), with the span given rather than taken
+// from this one frame, so a live view does not flicker as things come and go. Colors come from a table of 1024
+// steps: Turbo per pixel cost 28 ms a second at ten pictures a second.
+const STEPS = 1024;
+export function depthPicture(depth, low, high, out, { width = depth.length, flip = false } = {}) {
+  const table = new Uint8Array(3 * STEPS);
+  for (let k = 0; k < STEPS; k++) {
+    const [r, g, b] = turbo(0.12 + 0.83 * (1 - k / (STEPS - 1)));
+    table[3 * k] = Math.trunc(r * 255);
+    table[3 * k + 1] = Math.trunc(g * 255);
+    table[3 * k + 2] = Math.trunc(b * 255);
+  }
+  const scale = (STEPS - 1) / Math.max(high - low, 1e-6);
+  const rows = depth.length / width;
+  for (let y = 0; y < rows; y++) {
+    const from = (flip ? rows - 1 - y : y) * width;
+    for (let x = 0; x < width; x++) {
+      const d = depth[from + x];
+      const o = 4 * (y * width + x);
+      if (d === d) {
+        const k = Math.round(Math.min(STEPS - 1, Math.max(0, (d - low) * scale)));
+        out[o] = table[3 * k];
+        out[o + 1] = table[3 * k + 1];
+        out[o + 2] = table[3 * k + 2];
+      } else {
+        out[o] = out[o + 1] = out[o + 2] = 0; // NaN: nothing within range
+      }
+      out[o + 3] = 255;
     }
-    out[o + 3] = 255;
   }
   return out;
 }
@@ -61,9 +76,9 @@ export function depthPicture(depth, low, high, out) {
 export function spanOf(values) {
   let low = Infinity;
   let high = -Infinity;
-  for (const v of values) {
-    if (!Number.isFinite(v)) continue;
-    if (v < low) low = v;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v < low) low = v; // NaN compares false both ways: skipped
     if (v > high) high = v;
   }
   return Number.isFinite(low) ? [low, high] : null;

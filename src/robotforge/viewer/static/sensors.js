@@ -31,9 +31,10 @@ const $ = (id) => document.getElementById(id);
 
 const MAX_POINTS = 1200; // hit points the server sends per lidar at most (sensors/lidar.py VIEW_POINTS)
 const MAX_RAYS = { lidar: 360, lidar3d: 150 }; // rays drawn: a 3D scan's every ray would be a solid fog
+const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.45, 0.04] }; // opacity of a ray at the sensor and at its hit
 const POINT_PX = 3.2; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
-const FRUSTUM_M = 0.16; // m: how far out a camera's frustum is drawn
+const FRUSTUM_M = 0.12; // m: how far out a camera's frustum is drawn
 const ARROW_REACH = 0.22; // m: the arrow of the largest force seen lately
 const ARROW_FLOOR = { touch: 5, force_torque: 2 }; // N: a scale never finer than this, so a whisper stays short
 const PEAK_DECAY = 0.985; // per message: the largest force seen fades with a half-life of about five seconds
@@ -322,10 +323,10 @@ function lidarDrawing(first) {
   const rays = new THREE.BufferGeometry();
   const most = MAX_RAYS[first.type];
   rays.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6 * most), 3));
-  rays.setAttribute("color", new THREE.BufferAttribute(new Float32Array(6 * most), 3));
+  rays.setAttribute("color", new THREE.BufferAttribute(new Float32Array(8 * most), 4)); // with alpha: rays fade out
   const lines = new THREE.LineSegments(
     rays,
-    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: first.type === "lidar3d" ? 0.22 : 0.35, depthWrite: false, toneMapped: false })
+    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, toneMapped: false })
   );
   lines.frustumCulled = false;
   dots.renderOrder = 6;
@@ -356,11 +357,16 @@ function lidarDrawing(first) {
       const picks = rayPicks(n, most);
       const rpos = rays.attributes.position.array;
       const rcol = rays.attributes.color.array;
+      // Each ray strong at the sensor and faint at its far end, where its point shows the hit: a hall's worth of
+      // lines drawn evenly crossed the whole view.
+      const [near, far] = RAY_ALPHA[first.type];
       picks.forEach((i, k) => {
         rpos.set(o, 6 * k);
         rpos.set(pos.subarray(3 * i, 3 * i + 3), 6 * k + 3);
-        rcol.set(col.subarray(3 * i, 3 * i + 3), 6 * k);
-        rcol.set(col.subarray(3 * i, 3 * i + 3), 6 * k + 3);
+        rcol.set(col.subarray(3 * i, 3 * i + 3), 8 * k);
+        rcol[8 * k + 3] = near;
+        rcol.set(col.subarray(3 * i, 3 * i + 3), 8 * k + 4);
+        rcol[8 * k + 7] = far;
       });
       rays.setDrawRange(0, 2 * picks.length);
       rays.attributes.position.needsUpdate = rays.attributes.color.needsUpdate = true;
@@ -753,9 +759,7 @@ const pip = {
     if (e.mode === "depth") {
       unpackDepth(src, e.range_m, this.depth);
       this.span = steadySpan(this.span, spanOf(this.depth));
-      const flipped = new Float32Array(W * H);
-      for (let y = 0; y < H; y++) flipped.set(this.depth.subarray((H - 1 - y) * W, (H - y) * W), y * W);
-      depthPicture(flipped, ...(this.span ?? [0, e.range_m]), rows);
+      depthPicture(this.depth, ...(this.span ?? [0, e.range_m]), rows, { width: W, flip: true });
     } else {
       for (let y = 0; y < H; y++) rows.set(src.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
       if (e.mode === "segmentation") {
@@ -837,7 +841,9 @@ const views = {
           b.type = "button";
           b.setAttribute("role", "tab");
           b.setAttribute("aria-selected", String(k === this.tab));
-          b.textContent = s.label;
+          // A tab names the sensor's type (IMU, 关节编码器); two of a type are told apart by their names.
+          const twin = this.sections.some((o) => o !== s && o.label === s.label);
+          b.textContent = twin ? s.name.slice(s.name.indexOf("/") + 1) : s.label;
           b.addEventListener("click", () => {
             this.tab = k;
             this.layout();
@@ -918,9 +924,14 @@ const views = {
       }
       right.append(seg);
     }
+    const note = document.createElement("span");
+    note.className = "sensor-note";
+    const row = document.createElement("div");
+    row.className = "sensor-plot-row";
+    row.append(legend, note);
     const canvas = document.createElement("canvas");
-    el.append(head, legend, canvas);
-    return { el, kind: "plot", name: e.name, canvas, title, legend, right, label: e.name.slice(e.robot.length + 1) };
+    el.append(head, row, canvas);
+    return { el, kind: "plot", name: e.name, canvas, title, legend, note, right, label: typeLabel(e) };
   },
   // What a plot can show, one at a time: an IMU's acceleration, turn rate or tilt; a force-torque sensor's force
   // or torque; an encoder's joints, a leg (or a run of joints) at a time.
@@ -956,6 +967,9 @@ const views = {
       colors = JOINT_COLORS;
     }
     s.title.textContent = `${c.title} (${c.unit})`;
+    // What it holds, beside the force it measures (the weight of everything below the wrist taken off).
+    const holds = e.type === "force_torque" && e.payload_kg !== undefined ? t("sensor_holds", { kg: Math.max(0, e.payload_kg).toFixed(2) }) : "";
+    if (s.note.textContent !== holds) s.note.textContent = holds;
     const key = `${c.key}|${names.join(",")}`;
     if (s.legend.dataset.key !== key) {
       s.legend.dataset.key = key;

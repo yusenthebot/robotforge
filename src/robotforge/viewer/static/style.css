@@ -1330,7 +1330,9 @@ input[type="range"]::-moz-range-thumb {
 .sensor-views .seg button { height: 22px; padding: 0 8px; font-size: 11.5px; }
 
 .sensor-plot .plot-head { align-items: center; }
-.sensor-plot > .plot-legend { justify-content: flex-start; margin: 0 0 2px; }
+.sensor-plot-row { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; }
+.sensor-plot-row .plot-legend { justify-content: flex-start; }
+.sensor-note { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sensor-plot-tools { display: flex; flex-shrink: 0; }
 
 .sensor-legend {
