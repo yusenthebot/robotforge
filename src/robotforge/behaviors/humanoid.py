@@ -297,7 +297,7 @@ class HumanoidController:
                 self._pose = self._pending = None
             self.fallen = True
             return  # keep the last targets; flailing on the floor helps nobody
-        ticks = 1 if self._last_t is None else int(np.clip(round((data.time - self._last_t) / DT), 1, 10))
+        ticks = 1 if self._last_t is None else min(max(round((data.time - self._last_t) / DT), 1), 10)
         self._last_t = data.time
         for _ in range(ticks):
             self._tick()
@@ -419,7 +419,7 @@ class HumanoidController:
             start = self._upper_from[name] if a is frames[0] else a.joints.get(name, self.upper_home[name])
             end = b.joints.get(name, self.upper_home[name])
             lo, hi = self.upper_range[name]
-            out[name] = float(np.clip(start + u * (end - start), lo, hi))
+            out[name] = float(min(max(start + u * (end - start), lo), hi))
         return out
 
     def _swing_arms(self, upper: dict[str, float]) -> dict[str, float]:

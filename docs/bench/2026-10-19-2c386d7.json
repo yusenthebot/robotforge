@@ -1,0 +1,671 @@
+{
+ "started": "2026-10-19T00:13:08+08:00",
+ "sha": "2c386d7",
+ "quick": false,
+ "partial": false,
+ "covers": [
+  "imports",
+  "install",
+  "mcp",
+  "physics.arm_pick",
+  "physics.dog_idle",
+  "physics.dog_walk",
+  "physics.go2_idle",
+  "physics.go2_rl_idle",
+  "physics.go2_walk",
+  "physics.humanoid_idle",
+  "physics.machine",
+  "physics.objects_20",
+  "physics.warehouse_nav",
+  "viewer"
+ ],
+ "machine": {
+  "system": "Darwin",
+  "release": "26.3.2",
+  "machine": "arm64",
+  "cpus": 18,
+  "python": "3.12.13",
+  "mujoco": "3.15.0",
+  "numpy": "2.5.4",
+  "load": [
+   17.4,
+   53.3,
+   67.0
+  ]
+ },
+ "load_after": [
+  19.2,
+  46.7,
+  63.5
+ ],
+ "results": {
+  "install": {
+   "wheel_kb": {
+    "value": 2547.6055,
+    "unit": "KB",
+    "better": "lower"
+   },
+   "installed_mb": {
+    "value": 159.8953,
+    "unit": "MB",
+    "better": "lower",
+    "top": [
+     [
+      "mujoco==3.15.0",
+      71.4
+     ],
+     [
+      "numpy==2.5.4",
+      19.6
+     ],
+     [
+      "coacd==1.0.14",
+      14.2
+     ],
+     [
+      "pillow==12.3.0",
+      12.7
+     ],
+     [
+      "cryptography==50.0.2",
+      10.5
+     ],
+     [
+      "pyopengl==3.1.10",
+      7.5
+     ],
+     [
+      "robotforge==0.1.0",
+      4.8
+     ],
+     [
+      "pydantic-core==2.50.1",
+      4.5
+     ]
+    ]
+   },
+   "packages": {
+    "value": 42.0,
+    "unit": "",
+    "better": "lower",
+    "versions": [
+     "absl-py==2.5.1",
+     "annotated-types==0.8.0",
+     "anyio==4.15.1",
+     "attrs==26.1.0",
+     "cffi==2.1.1",
+     "click==8.5.0",
+     "coacd==1.0.14",
+     "cryptography==50.0.2",
+     "etils==1.14.0",
+     "fsspec==2026.9.0",
+     "glfw==2.10.2",
+     "h11==0.16.0",
+     "httpcore2==2.13.1",
+     "httpx2==2.13.1",
+     "idna==3.20",
+     "jsonschema-specifications==2025.9.1",
+     "jsonschema==4.26.0",
+     "mcp-types==2.3.0",
+     "mcp==2.3.0",
+     "mujoco==3.15.0",
+     "numpy==2.5.4",
+     "opentelemetry-api==1.45.1",
+     "pillow==12.3.0",
+     "pycparser==3.11",
+     "pydantic-core==2.50.1",
+     "pydantic==2.14.1",
+     "pyjwt==2.15.1",
+     "pyopengl==3.1.10",
+     "python-multipart==0.0.32",
+     "pyyaml==6.0.3",
+     "referencing==0.37.0",
+     "robotforge==0.1.0",
+     "rpds-py==2026.9.1",
+     "sse-starlette==3.5.0",
+     "starlette==1.8.0",
+     "trimesh==5.1.1",
+     "truststore==0.10.5",
+     "typing-extensions==4.16.0",
+     "typing-inspection==0.4.4",
+     "uvicorn==0.54.0",
+     "websockets==17.2",
+     "zipp==4.1.1"
+    ]
+   },
+   "download_mb": {
+    "value": 52.5149,
+    "unit": "MB",
+    "better": "lower"
+   }
+  },
+  "imports": {
+   "robotforge_ms": {
+    "value": 0.1698,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 59,
+    "offenders": [
+     [
+      "json",
+      23.5
+     ],
+     [
+      "encodings",
+      0.9
+     ],
+     [
+      "re",
+      0.8
+     ],
+     [
+      "time",
+      0.6
+     ],
+     [
+      "enum",
+      0.6
+     ],
+     [
+      "site",
+      0.5
+     ],
+     [
+      "sitecustomize",
+      0.4
+     ],
+     [
+      "_virtualenv",
+      0.3
+     ]
+    ]
+   },
+   "robotforge_cpu_ms": {
+    "value": 0.17,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "robotforge_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   },
+   "cli_ms": {
+    "value": 335.5472,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 640,
+    "offenders": [
+     [
+      "robotforge",
+      123.1
+     ],
+     [
+      "mujoco",
+      57.9
+     ],
+     [
+      "numpy",
+      43.6
+     ],
+     [
+      "json",
+      18.8
+     ],
+     [
+      "pydantic",
+      18.5
+     ],
+     [
+      "yaml",
+      7.3
+     ],
+     [
+      "pydantic_core",
+      6.6
+     ],
+     [
+      "asyncio",
+      5.6
+     ]
+    ]
+   },
+   "cli_cpu_ms": {
+    "value": 324.531,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "cli_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   },
+   "mcp_server_ms": {
+    "value": 698.4991,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 883,
+    "offenders": [
+     [
+      "mcp_types",
+      162.5
+     ],
+     [
+      "robotforge",
+      117.3
+     ],
+     [
+      "mujoco",
+      106.4
+     ],
+     [
+      "mcp",
+      86.6
+     ],
+     [
+      "numpy",
+      40.4
+     ],
+     [
+      "anyio",
+      30.4
+     ],
+     [
+      "httpx2",
+      28.3
+     ],
+     [
+      "pkgutil",
+      23.2
+     ]
+    ]
+   },
+   "mcp_server_cpu_ms": {
+    "value": 669.713,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "mcp_server_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   }
+  },
+  "physics": {
+   "dog_idle.steps_per_s": {
+    "value": 67428.61,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 221582,
+    "build_s": 0.15028341597644612,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "dog_idle.controllers_share": {
+    "value": 0.1318,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_idle.peak_mb": {
+    "value": 158.5312,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "dog_walk.steps_per_s": {
+    "value": 21319.6887,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 207189,
+    "build_s": 0.1688907920033671,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "moved_m": 1.39,
+    "upright": true
+   },
+   "dog_walk.controllers_share": {
+    "value": 0.6751,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_walk.peak_mb": {
+    "value": 155.0156,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "go2_idle.steps_per_s": {
+    "value": 61502.5062,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 205804,
+    "build_s": 0.3210967910126783,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "go2_idle.controllers_share": {
+    "value": 0.1136,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_idle.peak_mb": {
+    "value": 503.9062,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.15,
+     20.0
+    ]
+   },
+   "go2_walk.steps_per_s": {
+    "value": 14732.748,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 208855,
+    "build_s": 0.30431849998421967,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 1.277,
+    "upright": true
+   },
+   "go2_walk.controllers_share": {
+    "value": 0.4055,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_walk.peak_mb": {
+    "value": 529.625,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.15,
+     20.0
+    ]
+   },
+   "go2_rl_idle.steps_per_s": {
+    "value": 21699.7407,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 226989,
+    "build_s": 0.2784531670040451,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 0.048,
+    "upright": true
+   },
+   "go2_rl_idle.controllers_share": {
+    "value": 0.389,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_rl_idle.peak_mb": {
+    "value": 511.5469,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.15,
+     20.0
+    ]
+   },
+   "humanoid_idle.steps_per_s": {
+    "value": 28214.714,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 224165,
+    "build_s": 0.1531151250237599,
+    "bodies": 12,
+    "geoms": 83,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "humanoid_idle.controllers_share": {
+    "value": 0.4634,
+    "unit": "share",
+    "better": "lower"
+   },
+   "humanoid_idle.peak_mb": {
+    "value": 160.1719,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "arm_pick.steps_per_s": {
+    "value": 19262.5339,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 228990,
+    "build_s": 0.22700608399463817,
+    "bodies": 11,
+    "geoms": 49,
+    "timestep": 0.002,
+    "placed": true
+   },
+   "arm_pick.controllers_share": {
+    "value": 0.5238,
+    "unit": "share",
+    "better": "lower"
+   },
+   "arm_pick.peak_mb": {
+    "value": 157.4219,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "warehouse_nav.steps_per_s": {
+    "value": 3763.9974,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 246488,
+    "build_s": 0.5785525410319678,
+    "bodies": 59,
+    "geoms": 294,
+    "timestep": 0.002,
+    "moved_m": 1.765,
+    "upright": true
+   },
+   "warehouse_nav.controllers_share": {
+    "value": 0.1361,
+    "unit": "share",
+    "better": "lower"
+   },
+   "warehouse_nav.peak_mb": {
+    "value": 765.2969,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.15,
+     20.0
+    ]
+   },
+   "objects_20.steps_per_s": {
+    "value": 12346.1871,
+    "unit": "steps/s",
+    "better": "higher",
+    "machine": 200267,
+    "build_s": 1.5306414170190692,
+    "bodies": 21,
+    "geoms": 49,
+    "timestep": 0.002,
+    "on_table": 20,
+    "objects": 20
+   },
+   "objects_20.controllers_share": {
+    "value": 0.015,
+    "unit": "share",
+    "better": "lower"
+   },
+   "objects_20.peak_mb": {
+    "value": 352.5625,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "machine.steps_per_s": {
+    "value": 200267.0,
+    "unit": "steps/s",
+    "better": "higher",
+    "slowest": "objects_20"
+   }
+  },
+  "viewer": {
+   "cold_start_s": {
+    "value": 0.6787,
+    "unit": "s",
+    "better": "lower",
+    "served_s": 0.516
+   },
+   "fps": {
+    "value": 60.0989,
+    "unit": "fps",
+    "better": "higher",
+    "world": "warehouse + go2",
+    "size": [
+     1280,
+     800,
+     2
+    ]
+   },
+   "frame_ms": {
+    "value": 4.6,
+    "unit": "ms",
+    "better": "lower",
+    "median": 4.600000023841858,
+    "drawing_buffer": [
+     2560,
+     1600
+    ],
+    "calls": 148,
+    "triangles": 482502
+   },
+   "server_peak_mb": {
+    "value": 121.1,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ],
+    "warehouse": 546.8
+   },
+   "idle_cpu_pct": {
+    "value": 2.6,
+    "unit": "%",
+    "better": "lower",
+    "seconds": 5.0
+   }
+  },
+  "mcp": {
+   "start_s": {
+    "value": 0.8152,
+    "unit": "s",
+    "better": "lower",
+    "tools": 50
+   },
+   "new_world_ms": {
+    "value": 46.398,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "add_robot_ms": {
+    "value": 87.078,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "move_ms": {
+    "value": 30.9985,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "observe_ms": {
+    "value": 2.2749,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "server_rss_mb": {
+    "value": 176.4531,
+    "unit": "MB",
+    "better": "lower",
+    "noise": [
+     0.05,
+     5.0
+    ]
+   },
+   "idle_cpu_pct": {
+    "value": 0.4,
+    "unit": "%",
+    "better": "lower",
+    "seconds": 5.0
+   }
+  }
+ },
+ "budgets": {
+  "install.wheel_kb": "ok",
+  "install.installed_mb": "ok",
+  "install.download_mb": "ok",
+  "install.packages": "ok",
+  "imports.robotforge_cpu_ms": "ok",
+  "imports.cli_cpu_ms": "ok",
+  "imports.mcp_server_cpu_ms": "ok",
+  "imports.robotforge_heavy": "ok",
+  "imports.cli_heavy": "ok",
+  "imports.mcp_server_heavy": "ok",
+  "physics.dog_idle.steps_per_s": "ok",
+  "physics.dog_idle.controllers_share": "ok",
+  "physics.dog_walk.steps_per_s": "ok",
+  "physics.go2_idle.steps_per_s": "ok",
+  "physics.go2_idle.controllers_share": "ok",
+  "physics.go2_walk.steps_per_s": "ok",
+  "physics.go2_rl_idle.steps_per_s": "ok",
+  "physics.go2_rl_idle.controllers_share": "ok",
+  "physics.humanoid_idle.steps_per_s": "ok",
+  "physics.humanoid_idle.controllers_share": "ok",
+  "physics.arm_pick.steps_per_s": "ok",
+  "physics.warehouse_nav.steps_per_s": "ok",
+  "physics.objects_20.steps_per_s": "ok",
+  "physics.machine.steps_per_s": "ok",
+  "physics.dog_idle.peak_mb": "ok",
+  "physics.go2_walk.peak_mb": "ok",
+  "physics.warehouse_nav.peak_mb": "ok",
+  "viewer.cold_start_s": "ok",
+  "viewer.fps": "ok",
+  "viewer.frame_ms": "ok",
+  "viewer.server_peak_mb": "ok",
+  "viewer.idle_cpu_pct": "ok",
+  "mcp.start_s": "ok",
+  "mcp.new_world_ms": "ok",
+  "mcp.add_robot_ms": "ok",
+  "mcp.move_ms": "ok",
+  "mcp.observe_ms": "ok",
+  "mcp.server_rss_mb": "ok",
+  "mcp.idle_cpu_pct": "ok"
+ }
+}

@@ -6,6 +6,11 @@ import { LANG, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 const pick = (text) => (text ? (text[LANG] ?? text.en ?? "") : "");
+// A title as shown: a hyphenated word stays on one line ("six-joint" broke as "six- / joint arms").
+const titleText = (text) => pick(text).replace(/(\p{L})-(?=\p{L})/gu, "$1\u2011");
+// A value and its unit with a space between, as lessons write " m" ("2.00cm" and "0.10m/s" sat beside "0.25 m");
+// degrees and percent stay on the number.
+const withUnit = (value, unit) => (!unit || /^[\s°%]/.test(unit) ? `${value}${unit}` : `${value}\u00a0${unit}`);
 
 let api = null; // hooks into the main viewer, see initLessons
 let catalog = []; // lessons the server offers
@@ -36,6 +41,8 @@ export const lessonDriveSpec = () => lesson?.drive ?? null;
 let followWanted = null; // the body the lesson last asked the camera to follow
 let viewWanted = null; // the framing the lesson last asked for, as JSON
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
+// Each live plot's y axis as last drawn, for scripted checks: [lo, hi] in the plot's unit (null before its first draw).
+export const lessonPlotAxes = () => plots.specs.map((s, k) => ({ id: s.id, unit: s.unit, range: plots.ranges[k] }));
 
 // ---------------------------------------------------------------- picker
 
@@ -94,7 +101,7 @@ function courseCard(c, done) {
   chapter.textContent = pick(c.chapter);
   const title = document.createElement("span");
   title.className = "course-title";
-  title.textContent = pick(c.title);
+  title.textContent = titleText(c.title);
   const summary = document.createElement("span");
   summary.className = "course-summary";
   summary.textContent = pick(c.summary);
@@ -144,8 +151,12 @@ async function exitLesson() {
 function finishLesson() {
   const stars = state?.results?.stars ?? state?.results?.test?.stars ?? 0;
   saveProgress(lesson.id, { done: true, stars: Math.max(stars, progress()[lesson.id]?.stars ?? 0) });
-  $("lesson-finished").hidden = false;
+  const box = $("lesson-finished");
+  box.hidden = false;
   $("lesson-finished-body").textContent = t("lesson_done_body", { title: pick(lesson.title) });
+  // It sits at the foot of the panel, under the live numbers: below the fold the Finish button seemed to do nothing.
+  const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  box.scrollIntoView({ block: "nearest", behavior: smooth ? "smooth" : "auto" });
 }
 
 // ---------------------------------------------------------------- running a lesson
@@ -159,6 +170,7 @@ function openLesson(desc) {
   bench.setup(desc.bench, desc.bench_state);
   plotTabs.pick = 0; // a new lesson starts on its first plot
   plotTabs.sync();
+  stepShown = -1;
   renderTable(null);
   overlays.build(desc.rig);
   setPicker(false);
@@ -167,7 +179,7 @@ function openLesson(desc) {
   $("lesson-plots").hidden = desc.plots.length === 0;
   $("lesson-finished").hidden = true;
   $("lesson-chapter").textContent = pick(desc.chapter);
-  $("lesson-title").textContent = pick(desc.title);
+  $("lesson-title").textContent = titleText(desc.title);
   $("lesson-drive").hidden = !desc.drive;
   // A lesson may say what its keys move ("Move the gripper"); otherwise they drive its robot.
   $("lesson-drive").querySelector("[data-i18n]").textContent = desc.drive?.label ? pick(desc.drive.label) : t("lesson_drive");
@@ -184,6 +196,7 @@ function openLesson(desc) {
 function closeLesson() {
   lesson = null;
   state = null;
+  early = null;
   followWanted = viewWanted = null;
   api.followBody(null);
   overlays.clear();
@@ -214,20 +227,36 @@ export function lessonScene(desc) {
   }
 }
 
+// What a lesson sends only when it changes (its drawing, its camera's pictures), from updates that came before the
+// lesson's scene had loaded here: the motion planning lesson's first drawing was lost, so its target never showed.
+let early = null; // { lesson, drawing, pictures }
+
 export function lessonUpdate(msg) {
   if (msg.ended) {
     closeLesson();
     return;
   }
-  if (!lesson || msg.lesson !== lesson.id) return;
+  if (!lesson || msg.lesson !== lesson.id) {
+    if (msg.lesson) {
+      const kept = early?.lesson === msg.lesson ? early : null;
+      early = {
+        lesson: msg.lesson,
+        drawing: msg.live?.drawing ?? kept?.drawing ?? null,
+        pictures: msg.live?.vision?.pictures ?? kept?.pictures ?? null,
+      };
+    }
+    return;
+  }
+  const before = early?.lesson === msg.lesson ? early : null;
+  early = null;
   const stepChanged = !state || state.step !== msg.step || state.passed.length !== msg.passed.length;
   const unlockChanged = !state || state.unlocked.join() !== msg.unlocked.join();
   if (msg.bench) bench.update(msg.bench);
   const quizChanged = JSON.stringify(state?.quiz) !== JSON.stringify(msg.quiz);
   const resultChanged = JSON.stringify(state?.results) !== JSON.stringify(msg.results);
   // A drawing comes with one update only (when it changes): keep it, or a slow frame may miss it.
-  const drawing = msg.live?.drawing ?? state?.drawing ?? null;
-  const pictures = msg.live?.vision?.pictures ?? state?.pictures ?? null; // a lesson camera's, likewise
+  const drawing = msg.live?.drawing ?? state?.drawing ?? before?.drawing ?? null;
+  const pictures = msg.live?.vision?.pictures ?? state?.pictures ?? before?.pictures ?? null; // a lesson camera's, likewise
   state = msg;
   state.drawing = drawing;
   state.pictures = pictures;
@@ -338,9 +367,16 @@ function readout(live) {
   return "";
 }
 
+let stepShown = -1; // the step the panel shows, so a new one can start at its top
 function renderStep() {
   const i = state ? state.step : 0;
   const step = lesson.steps[i];
+  if (i !== stepShown) {
+    // A new step (or lesson) starts at the top of the panel: it kept the last one's place, so a lesson opened after
+    // another's Finish showed its title half scrolled away, and a step after a long one began at its foot.
+    stepShown = i;
+    $("lesson-panel").scrollTop = 0;
+  }
   const passed = state ? state.passed.includes(step.id) : false;
   $("lesson-step-count").textContent = t("step_of", { i: i + 1, n: lesson.steps.length });
   const dots = $("lesson-dots");
@@ -357,7 +393,7 @@ function renderStep() {
       return b;
     })
   );
-  $("lesson-step-title").textContent = pick(step.title);
+  $("lesson-step-title").textContent = titleText(step.title);
   const body = $("lesson-step-body");
   body.replaceChildren(...pick(step.body).split("\n").map((line) => paragraph(line)));
   renderQuiz(step);
@@ -375,7 +411,7 @@ function renderStep() {
 
 function paragraph(line) {
   const p = document.createElement("p");
-  p.textContent = line;
+  p.textContent = line.replaceAll("W A S D", "W A S D"); // the four keys never split over two lines
   return p;
 }
 
@@ -465,13 +501,23 @@ const ROOMY_HEIGHT = 640;
 const plotTabs = {
   strip: null,
   pick: 0,
-  sync() {
-    const box = $("lesson-plots");
-    // Live plots first: they are short, so the robots keep the view; the table and the record are a tap away.
+  // The sections shown, in tab order. Live plots first: they are short, so the robots keep the view; the table and
+  // the record are a tap away.
+  sections() {
     const order = (el) => (el.classList.contains("plot") ? 0 : el.classList.contains("faceoff-table") ? 1 : 2);
-    const sections = [...box.children]
+    return [...$("lesson-plots").children]
       .filter((el) => el.tagName === "SECTION" && !el.hidden)
       .sort((a, b) => order(a) - order(b));
+  },
+  // Bring one section's tab to the front: a picture the step has just switched on.
+  show(section) {
+    const k = this.sections().indexOf(section);
+    if (k >= 0) this.pick = k;
+    this.sync();
+  },
+  sync() {
+    const box = $("lesson-plots");
+    const sections = this.sections();
     const tabbed = sections.length > 1 && (window.innerWidth <= ROOMY || window.innerHeight <= ROOMY_HEIGHT);
     box.classList.toggle("tabbed", tabbed);
     if (!tabbed) {
@@ -515,7 +561,8 @@ function tabLabel(section) {
   if (section.classList.contains("faceoff-table")) return section.dataset.tab || t("plots_table"); // a table may name its tab
   if (section.classList.contains("bench")) return t("plots_record", { n: bench.state?.runs?.length ?? 0 });
   const title = section.querySelector(".plot-title")?.textContent ?? "";
-  return title.replace(/\s*\([^)]*\)$/, ""); // the unit stays on the plot itself
+  // The unit and any aside in brackets stay on the plot itself; Chinese titles use full-width brackets.
+  return title.replace(/(\s*[(（][^()（）]*[)）])+$/, "");
 }
 window.addEventListener("resize", () => plotTabs.sync());
 
@@ -572,7 +619,9 @@ const bench = {
     const title = document.createElement("span");
     title.className = "plot-title";
     title.textContent = pick(spec.title);
-    head.append(title);
+    const actions = document.createElement("span"); // Zoom and Clear, kept together at the right
+    actions.className = "plot-actions";
+    head.append(title, actions);
     if (runs.length && spec.zoom && spec.reference !== null) {
       const zoom = document.createElement("button");
       zoom.type = "button";
@@ -583,7 +632,7 @@ const bench = {
         this.zoom = !this.zoom;
         this.render();
       });
-      head.append(zoom);
+      actions.append(zoom);
     }
     if (runs.length || this.state?.sweep) {
       const clear = document.createElement("button");
@@ -591,7 +640,7 @@ const bench = {
       clear.className = "link-button";
       clear.textContent = t("bench_clear");
       clear.addEventListener("click", () => api.send({ type: "lesson", action: "clear_runs" }));
-      head.append(clear);
+      actions.append(clear);
     }
     const parts = [head];
     if (!runs.length) {
@@ -993,7 +1042,7 @@ function controlRow(c) {
   input.value = value;
   input.dataset.control = c.id;
   const show = () => {
-    shown.textContent = `${Number(input.value).toFixed(c.step < 1 ? 2 : 0)}${c.unit}`;
+    shown.textContent = withUnit(Number(input.value).toFixed(c.step < 1 ? 2 : 0), c.unit);
     const p = ((Number(input.value) - c.min) / (c.max - c.min)) * 100;
     input.style.setProperty("--p", `${p}%`);
   };
@@ -1110,14 +1159,20 @@ const plots = {
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
     }
+    // A quantity that cannot go below its floor (a distance, a share of the floor, a tilt: the lesson says so) has its
+    // axis stop there, or at what is shown if a rover's settling dips under it. Widened evenly around the data, a
+    // converged distance drew ticks at 2, 0 and -2 mm. A signed one (a body's sway) is widened evenly, even at rest.
+    const floor = spec.floor ?? null;
+    const base = floor === null ? null : Number.isFinite(lo) ? Math.min(lo, floor) : floor;
     if (!Number.isFinite(lo)) [lo, hi] = [-1, 1];
     if (hi - lo < 1e-6) [lo, hi] = [lo - 1, hi + 1];
-    const short = (spec.span ?? 0) - (hi - lo); // widen around the data up to the plot's smallest span
+    const short = smallestSpan(spec) - (hi - lo); // widen around the data up to the plot's smallest span
     if (short > 0) [lo, hi] = [lo - short / 2, hi + short / 2];
+    if (base !== null && lo < base) [lo, hi] = [base, hi + base - lo]; // past the floor: widen upward instead
     const pad = (hi - lo) * 0.12;
     // Grow at once, shrink slowly, so the axes do not jump around while you watch.
     const prev = this.ranges[k];
-    const target = [lo - pad, hi + pad];
+    const target = [base === null ? lo - pad : Math.max(base, lo - pad), hi + pad];
     const range = prev ? [Math.min(target[0], prev[0] + (target[0] - prev[0]) * 0.05), Math.max(target[1], prev[1] + (target[1] - prev[1]) * 0.05)] : target;
     this.ranges[k] = range;
     const x = (t) => 36 + ((t - start) / spec.window) * (w - 44);
@@ -1154,10 +1209,11 @@ const plots = {
   // One row per foot, filled while it is on the ground: the classic gait diagram, newest on the right.
   drawFootfall(spec, g, w, h, shown, start, token) {
     const rows = spec.series.length;
-    const left = 44;
+    g.font = `10px ${token("--font") || "sans-serif"}`;
+    // The bars start after the longest name: a fixed 44 px cut "front right" to "front righ" under its bar.
+    const left = Math.ceil(Math.max(36, ...spec.series.map((s) => g.measureText(pick(s.label)).width)) + 8);
     const rowH = (h - 10) / rows;
     const x = (t) => left + ((t - start) / spec.window) * (w - left - 8);
-    g.font = `10px ${token("--font") || "sans-serif"}`;
     spec.series.forEach((series, r) => {
       const top = 4 + r * rowH;
       g.fillStyle = token("--muted");
@@ -1178,6 +1234,15 @@ const plots = {
     });
   },
 };
+
+// The smallest value range a plot draws, so a robot standing still does not fill it with its wobble: the lesson's own
+// `span`, else one for the plot's unit. Without it the sensors lesson drew its odometry's last 0.4 mm across the whole
+// plot, between two ticks that both read 0. Never so small that three decimals cannot tell the ticks apart.
+const UNIT_SPAN = { "°": 4, "°/s": 10, "N·m": 1, cm: 2, mm: 4, m: 0.2, "m/s": 0.2, "%": 10 };
+const LABELLED_SPAN = 0.004;
+function smallestSpan(spec) {
+  return Math.max(spec.span || UNIT_SPAN[spec.unit] || 0, LABELLED_SPAN);
+}
 
 function niceTicks(lo, hi, count) {
   const span = hi - lo;
@@ -1606,7 +1671,13 @@ const pip = {
     const rigCam = overlays.current?.camera;
     if (!this.cam || !rigCam || !state) return;
     const show = state.shown.includes("camera");
-    this.wrap.hidden = !show;
+    if (this.wrap.hidden === show) {
+      // In a small window the picture is a tab of its own, brought up when the step switches it on: under the tabs,
+      // it and the lesson sheet covered the whole phone, the rover too.
+      this.wrap.hidden = !show;
+      if (show) plotTabs.show(this.wrap);
+      else plotTabs.sync();
+    }
     if (!show) return;
     const now = performance.now();
     if (now - this.last < 80) return;
@@ -1791,7 +1862,8 @@ function faceoffRig(rig) {
     const color = api.color(COLORS[e.color]);
     const sub = e.sub === null ? "" : e.sub ? pick(e.sub) : t(e.real ? "real_robot" : "our_template");
     const tag = nameTag(pick(e.label), sub, color);
-    tag.position.set(e.base[0], e.base[1], e.top + 0.12);
+    tag.position.set(e.base[0], e.base[1], e.top + TAG_RISE);
+    tag.userData.foot = new THREE.Vector3(e.base[0], e.base[1], 0); // where its robot stands
     labels.add(tag);
     tags.push([tag, e]);
     if (e.cloud.length) {
@@ -1823,12 +1895,19 @@ function faceoffRig(rig) {
   return {
     group,
     parts,
-    frame() {
+    // `topOf(entrant)`: how high its robot reaches now, when that changes (an arm), else the rig's fixed top;
+    // `avoid`: what else the tags must not hide, as { at, r } (a point and a radius in m).
+    frame(topOf = (e) => e.top, avoid = []) {
       for (const [tag, e] of tags) {
         const node = e.body !== undefined ? api.bodyNode(e.body) : null;
-        if (node) tag.position.set(node.position.x, node.position.y, e.top + 0.12); // walking robots take theirs along
+        if (node) {
+          tag.position.set(node.position.x, node.position.y, 0); // walking robots take theirs along
+          tag.userData.foot.set(node.position.x, node.position.y, 0);
+        }
+        tag.position.z = topOf(e) + TAG_RISE;
+        tag.userData.meshes = api.robotMeshes(e.name); // what the other robots' tags must leave in sight
       }
-      if (labels.visible) declutter(tags.map(([tag]) => tag));
+      if (labels.visible) declutter(tags.map(([tag]) => tag), avoid);
       workspace.visible = (state.values.workspace ?? 0) >= 1;
       const active = state.live?.active ?? [];
       balls.forEach((row, i) =>
@@ -1842,30 +1921,157 @@ function faceoffRig(rig) {
   };
 }
 
+// A tag stands on its point, a little above it, rather than being centred on it: seen from overhead (the robot
+// vacuums' camera) a tag centred over a robot hid the robot it names. TAG_RISE (m) is the point above the robot's top.
+const TAG_LIFT = 0.6; // the tag's middle above its point, in tag heights
+const TAG_RISE = 0.06;
+
 // Name tags of robots standing in a row, seen down the row, land on top of each other. Keep the nearest
-// where it is and lift any farther tag that would cover one already placed, just clear of it.
+// where it is and move any farther tag that would cover one already placed: above it, beside it or below it.
+// A tag whose robot stands in the free part of the view is kept inside it: seen from above, the PiPER's tag in the
+// motion planning lesson stood so high over the arm that only its bottom edge showed, at the top of the window.
+// Wherever it goes, it leaves in sight the lower half of its own robot, what the rig marks (`avoid`: the IK lesson's
+// target ball) and the other robots: seen down the row in the gait lesson, the template dog's tag stood on the front
+// legs of the Go2 behind it. Where it would hide one of them over its robot, it hangs under its robot instead, or else
+// stands beside what it would hide.
 const tagPoint = new THREE.Vector3();
-function declutter(sprites) {
+const footPoint = new THREE.Vector3();
+const topPoint = new THREE.Vector3();
+const TAG_EDGE = 6; // px a kept tag stays clear of the free view's edge, and of a tag beside it
+const TAG_STAY = 6; // px a tag must clear the other robots by to change place: a walking robot's legs swing in and out
+const SPINE_BASE = 0.05; // m, the lowest point of a robot a tag must not hide (its base, not the floor)
+
+// Each part of a robot as the camera sees it: the screen box round the corners of the part's own box, in the view's
+// -1 to 1 units. A part with a corner behind the camera is left out.
+const corner = new THREE.Vector3();
+function screenParts(meshes, cam) {
+  const parts = [];
+  for (const mesh of meshes ?? []) {
+    const g = mesh.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    const [lo, hi] = [g.boundingBox.min, g.boundingBox.max];
+    const r = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
+    let behind = false;
+    for (let k = 0; k < 8 && !behind; k++) {
+      corner.set(k & 1 ? hi.x : lo.x, k & 2 ? hi.y : lo.y, k & 4 ? hi.z : lo.z).applyMatrix4(mesh.matrixWorld).project(cam);
+      behind = corner.z > 1;
+      [r.left, r.right] = [Math.min(r.left, corner.x), Math.max(r.right, corner.x)];
+      [r.bottom, r.top] = [Math.min(r.bottom, corner.y), Math.max(r.top, corner.y)];
+    }
+    if (!behind) parts.push(r);
+  }
+  return parts;
+}
+
+export function declutter(sprites, avoid = []) { // exported for scripted checks
   const cam = api.camera;
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
+  const r = api.freeRect();
+  const [W, H] = [window.innerWidth, window.innerHeight];
+  const free = { left: (2 * r.left) / W - 1, right: (2 * r.right) / W - 1, top: 1 - (2 * r.top) / H, bottom: 1 - (2 * r.bottom) / H };
+  const inside = (p) => p.z < 1 && p.x > free.left && p.x < free.right && p.y < free.top && p.y > free.bottom;
+  const [padX, padY] = [(2 * TAG_EDGE) / W, (2 * TAG_EDGE) / H]; // in the view's -1 to 1 units
+  // What the rig marks, as circles on the screen: the middle (-1 to 1) and the radius in px.
+  const across = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+  const marks = avoid.map(({ at, r: radius }) => {
+    const c = at.clone().project(cam);
+    const edge = at.clone().addScaledVector(across, radius).project(cam);
+    return { x: c.x, y: c.y, r: (Math.abs(edge.x - c.x) * W) / 2 };
+  });
+  // Does a tag with its middle at (x, y) hide the circle m? Measured in px, the nearest point of the tag to its middle.
+  const hides = (x, y, w, h, m) => {
+    const dx = (Math.max(Math.abs(m.x - x) - w / 2, 0) * W) / 2;
+    const dy = (Math.max(Math.abs(m.y - y) - h / 2, 0) * H) / 2;
+    return dx * dx + dy * dy < m.r * m.r;
+  };
+  // How much of the screen box b, grown by `grow` px, does it cover? In the view's units, 0 when it is clear.
+  const covers = (x, y, w, h, b, grow) => {
+    const [gx, gy] = [(2 * grow) / W, (2 * grow) / H];
+    const across = Math.min(x + w / 2, b.right + gx) - Math.max(x - w / 2, b.left - gx);
+    const down = Math.min(y + h / 2, b.top + gy) - Math.max(y - h / 2, b.bottom - gy);
+    return Math.max(across, 0) * Math.max(down, 0);
+  };
+  // Each tag's robot as the camera sees it: the lower half of its middle as points, its parts and the box round them.
+  const robots = sprites.map((s) => {
+    const [low, high] = [Math.min(SPINE_BASE, s.position.z - TAG_RISE), s.position.z - TAG_RISE];
+    const spine = [0, 0.25, 0.5]
+      .map((f) => topPoint.copy(s.position).setZ(low + f * (high - low)).project(cam).clone())
+      .filter((q) => q.z < 1)
+      .map((q) => ({ x: q.x, y: q.y, r: 2 }));
+    const parts = screenParts(s.userData.meshes, cam);
+    const box = parts.length
+      ? parts.reduce((a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), bottom: Math.min(a.bottom, b.bottom), top: Math.max(a.top, b.top) }))
+      : null;
+    return { spine, parts, box };
+  });
   const items = sprites
-    .map((s) => {
-      s.center.set(0.5, 0.5);
+    .map((s, i) => {
+      s.center.set(0.5, 0.5 - TAG_LIFT);
       const p = tagPoint.copy(s.position).project(cam); // screen position, -1 to 1 across the view
-      return { s, x: p.x, y: p.y, z: p.z, w: s.scale.x * sx, h: s.scale.y * sy };
+      const [w, h] = [s.scale.x * sx, s.scale.y * sy];
+      const y0 = p.y + TAG_LIFT * h; // the tag's middle
+      const it = { s, px: p.x, x: p.x, y: y0, y0, z: p.z, w, h, fits: null };
+      if (!s.userData.foot || !inside(footPoint.copy(s.userData.foot).project(cam))) return it;
+      const room = { left: free.left + w / 2 + padX, right: free.right - w / 2 - padX, top: free.top - h / 2 - padY, bottom: free.bottom + h / 2 + padY };
+      // A tag held down over a tall robot's head still names it; one held down onto its base (the planning arm on a
+      // phone) does not, and one on another robot names the wrong one.
+      const others = robots.filter((_, k) => k !== i);
+      const keep = [...robots[i].spine, ...marks, ...others.filter((o) => !o.parts.length).flatMap((o) => o.spine)];
+      const boxes = others.flatMap((o) => o.parts);
+      it.inRoom = ([cx, cy]) => cx >= room.left && cx <= room.right && cy >= room.bottom && cy <= room.top;
+      const clear = (c) => it.inRoom(c) && !keep.some((m) => hides(c[0], c[1], w, h, m));
+      const hidden = (c, grow = 0) => boxes.reduce((sum, b) => sum + covers(c[0], c[1], w, h, b, grow), 0);
+      it.fits = (c, grow = 0) => clear(c) && hidden(c, grow) === 0;
+      const own = robots[i].box;
+      const high = Math.min(y0, room.top);
+      // Over the whole of its robot as the camera sees it: from overhead (the robot vacuums) the point over a robot's
+      // middle is inside its outline, and the tag stood on the far half of it.
+      const over = Math.min(own ? Math.max(y0, own.top + TAG_LIFT * h) : y0, room.top);
+      const held = Math.min(Math.max(p.x, room.left), room.right);
+      const under = Math.min(footPoint.y, own?.bottom ?? Infinity) - padY - h / 2; // under its feet
+      const beside = [
+        ...keep.flatMap((m) => [-1, 1].map((k) => m.x + k * (w / 2 + (2 * m.r) / W + padX))),
+        ...boxes.flatMap((b) => [b.left - w / 2 - padX, b.right + w / 2 + padX]),
+      ]
+        .map((bx) => ["beside", [bx, high]])
+        .sort((a, b) => Math.abs(a[1][0] - held) - Math.abs(b[1][0] - held));
+      // Over its robot's outline, or else over its point, held in the free view; else under its robot; else beside what
+      // it would hide. A place other than last frame's must clear the other robots by TAG_STAY, so the tag does not hop
+      // to and fro as they walk.
+      const places = [["over", [held, over]], ["above", [held, high]], ["under", [held, under]], ...beside];
+      // Where nothing fits (four robots in lanes on a phone), the place in the free view that hides the least of them.
+      const [kind, at] =
+        places.find(([k, c]) => it.fits(c, k === s.userData.place ? 0 : TAG_STAY)) ??
+        places.filter(([, c]) => clear(c)).sort((a, b) => hidden(a[1]) - hidden(b[1]))[0] ??
+        places[0];
+      s.userData.place = kind;
+      [it.x, it.y] = at;
+      return it;
     })
     .filter((it) => it.z < 1)
     .sort((a, b) => a.z - b.z);
   const placed = [];
+  const meets = (it, x, y) => placed.some((p) => Math.abs(p.x - x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
   for (const it of items) {
-    let y = it.y;
-    for (let tries = 0; tries <= placed.length; tries++) {
-      const hit = placed.find((p) => Math.abs(p.x - it.x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
-      if (!hit) break;
-      y = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
+    let [x, y] = [it.x, it.y];
+    if (meets(it, x, y)) {
+      const gap = it.h * 0.08;
+      const column = placed.filter((p) => Math.abs(p.x - x) < (p.w + it.w) / 2);
+      const row = placed.filter((p) => Math.abs(p.y - y) < (p.h + it.h) / 2);
+      const lifts = column.map((p) => [x, p.y + (p.h + it.h) / 2 + gap]).filter((c) => c[1] > y).sort((a, b) => a[1] - b[1]);
+      const sides = row
+        .flatMap((p) => [-1, 1].map((k) => [p.x + k * ((p.w + it.w) / 2 + padX), y]))
+        .sort((a, b) => Math.abs(a[0] - it.x) - Math.abs(b[0] - it.x));
+      const drops = column.map((p) => [x, p.y - (p.h + it.h) / 2 - gap]).filter((c) => c[1] < y).sort((a, b) => b[1] - a[1]);
+      const open = (c) => !meets(it, c[0], c[1]);
+      const all = [...lifts, ...sides, ...drops];
+      // Clear of the other tags and of all a tag leaves in sight; else clear of the tags in the free view; else lifted
+      // over the others, as a tag whose robot is out of the free view always is.
+      [x, y] = (it.fits && (all.find((c) => open(c) && it.fits(c)) ?? all.find((c) => open(c) && it.inRoom(c)))) ?? lifts.find(open) ?? [x, y];
     }
-    it.s.center.y = 0.5 - (y - it.y) / it.h; // a lower anchor draws the sprite higher
-    placed.push({ ...it, y });
+    it.s.center.x = 0.5 - (x - it.px) / it.w; // a smaller anchor draws the sprite further right
+    it.s.center.y = 0.5 - TAG_LIFT - (y - it.y0) / it.h; // a lower anchor draws the sprite higher
+    placed.push({ ...it, x, y });
   }
 }
 
@@ -1931,12 +2137,13 @@ function dotTexture() {
 
 // Six-joint arms in 3D: the draggable target, the line from hand to target, and the manipulability
 // ellipsoid at the hand (its axes are the directions the hand moves easily, its radii how easily).
+const TARGET_HALO = 0.05; // m, the glow round the target ball
 function arm3dRig(rig) {
   const tags = faceoffRig(rig); // the name tags over the arms
   const amber = api.color("--amber");
   const blue = api.color("--plot-blue");
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.03, 24, 12), basic(amber, 0.95));
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.05, 24, 12), basic(amber, 0.18));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(TARGET_HALO, 24, 12), basic(amber, 0.18));
   const target = new THREE.Group();
   target.add(ball, halo);
   const error = dashedLine(amber, 0.9);
@@ -1960,8 +2167,12 @@ function arm3dRig(rig) {
       },
     },
     frame() {
-      tags.frame();
       const live = state.live;
+      // Each tag over its arm as it stands now, and the working arm's over its target as well: the target goes up to
+      // 0.75 m and tags draw over everything, so a tag at a fixed 0.5 m hid the ball step 1 asks you to drag.
+      const above = (e) => (e.name === live?.arm && live?.target ? live.target[2] + TARGET_HALO : -Infinity);
+      const ball = live?.target ? [{ at: new THREE.Vector3().fromArray(live.target), r: TARGET_HALO }] : [];
+      tags.frame((e) => Math.max(api.robotTop(e.name) ?? e.top, above(e)), ball);
       if (!live?.target) return;
       const goal = new THREE.Vector3().fromArray(live.target);
       const hand = new THREE.Vector3().fromArray(live.hand);
@@ -2043,7 +2254,8 @@ function gaitRig(rig) {
     group: tags.group,
     parts,
     frame() {
-      tags.frame();
+      // Over each dog as it stands: at the rig's fixed 0.5 m the template dog's tag sat on the Go2 behind it.
+      tags.frame((e) => api.robotTop(e.name) ?? e.top);
       const pts = (state.live?.support ?? []).map(([px, py]) => new THREE.Vector3(px, py, z));
       feet.children.forEach((disc, k) => {
         disc.visible = k < pts.length;
@@ -2095,6 +2307,7 @@ function planRig(rig) {
   const clash = new THREE.Mesh(new THREE.SphereGeometry(0.018, 16, 10), Object.assign(basic(red, 0.95), { depthTest: false }));
   clash.renderOrder = 6; // seen through the fence it is inside of
   const goal = new THREE.Mesh(new THREE.SphereGeometry(0.018, 20, 12), basic(amber, 0.9));
+  clash.visible = goal.visible = false; // until a drawing places them (not as two dots at the world's origin)
   straight.add(sweep, sweepDots, clash, goal);
   const branches = [blue, violet].map((c) => new THREE.LineSegments(new THREE.BufferGeometry(), lineMat(c, 0.75)));
   // The nodes as dots too: one-pixel lines alone vanish at this distance.
@@ -2113,6 +2326,7 @@ function planRig(rig) {
     shown = d;
     grownAt = performance.now();
     goal.position.fromArray(d.goal);
+    goal.visible = true;
     const pts = (d.straight ?? []).map((p) => new THREE.Vector3().fromArray(p));
     sweep.visible = sweepDots.visible = pts.length > 1;
     if (sweep.visible) {
@@ -2142,7 +2356,7 @@ function planRig(rig) {
     group: tags.group,
     parts,
     frame() {
-      tags.frame();
+      tags.frame((e) => api.robotTop(e.name) ?? e.top); // over each arm as it stands, not where it might reach
       const d = state.drawing;
       if (d && d !== shown) draw(d);
       if (!shown) return;

@@ -332,6 +332,7 @@ class ArmPlanLesson(Lesson):
             "m",
             (Series("distance", _text("距离", "distance"), "ink"),),
             window=6.0,
+            floor=0.0,
         ),
     )
     steps = STEPS

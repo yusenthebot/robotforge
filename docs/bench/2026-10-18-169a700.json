@@ -1,0 +1,476 @@
+{
+ "started": "2026-10-18T20:58:56+08:00",
+ "sha": "169a700",
+ "quick": false,
+ "machine": {
+  "system": "Darwin",
+  "release": "26.3.2",
+  "machine": "arm64",
+  "cpus": 18,
+  "python": "3.12.13",
+  "mujoco": "3.15.0",
+  "numpy": "2.5.4",
+  "load": [
+   30.7,
+   46.6,
+   90.9
+  ]
+ },
+ "load_after": [
+  154.5,
+  79.6,
+  95.2
+ ],
+ "results": {
+  "install": {
+   "wheel_kb": {
+    "value": 2544.457,
+    "unit": "KB",
+    "better": "lower"
+   },
+   "installed_mb": {
+    "value": 159.9174,
+    "unit": "MB",
+    "better": "lower",
+    "top": [
+     [
+      "mujoco",
+      72.7
+     ],
+     [
+      "numpy",
+      19.6
+     ],
+     [
+      "coacd",
+      14.2
+     ],
+     [
+      "pillow",
+      11.4
+     ],
+     [
+      "cryptography",
+      10.5
+     ],
+     [
+      "pyopengl",
+      7.5
+     ],
+     [
+      "robotforge",
+      4.8
+     ],
+     [
+      "pydantic-core",
+      4.5
+     ]
+    ]
+   },
+   "packages": {
+    "value": 42.0,
+    "unit": "",
+    "better": "lower"
+   },
+   "download_mb": {
+    "value": 52.5149,
+    "unit": "MB",
+    "better": "lower"
+   }
+  },
+  "imports": {
+   "robotforge_ms": {
+    "value": 1705.3987,
+    "unit": "ms",
+    "better": "lower",
+    "cpu_ms": 1540.1,
+    "modules": 764,
+    "offenders": [
+     [
+      "robotforge",
+      633.3
+     ],
+     [
+      "numpy",
+      310.3
+     ],
+     [
+      "trimesh",
+      301.3
+     ],
+     [
+      "pydantic",
+      129.9
+     ],
+     [
+      "mujoco",
+      115.4
+     ],
+     [
+      "PIL",
+      66.8
+     ],
+     [
+      "starlette",
+      54.1
+     ],
+     [
+      "yaml",
+      49.1
+     ]
+    ]
+   },
+   "robotforge_heavy": {
+    "value": 2.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": [
+     "trimesh",
+     "PIL"
+    ]
+   },
+   "cli_ms": {
+    "value": 1661.6913,
+    "unit": "ms",
+    "better": "lower",
+    "cpu_ms": 1567.4,
+    "modules": 764,
+    "offenders": [
+     [
+      "robotforge",
+      508.5
+     ],
+     [
+      "trimesh",
+      264.8
+     ],
+     [
+      "numpy",
+      257.1
+     ],
+     [
+      "pydantic",
+      111.0
+     ],
+     [
+      "mujoco",
+      96.4
+     ],
+     [
+      "PIL",
+      62.2
+     ],
+     [
+      "click",
+      45.0
+     ],
+     [
+      "yaml",
+      42.2
+     ]
+    ]
+   },
+   "cli_heavy": {
+    "value": 2.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": [
+     "trimesh",
+     "PIL"
+    ]
+   },
+   "mcp_server_ms": {
+    "value": 2293.7995,
+    "unit": "ms",
+    "better": "lower",
+    "cpu_ms": 2141.0,
+    "modules": 1007,
+    "offenders": [
+     [
+      "robotforge",
+      723.3
+     ],
+     [
+      "mcp",
+      330.0
+     ],
+     [
+      "trimesh",
+      319.8
+     ],
+     [
+      "mcp_types",
+      312.6
+     ],
+     [
+      "numpy",
+      278.5
+     ],
+     [
+      "pydantic",
+      144.2
+     ],
+     [
+      "httpx2",
+      136.8
+     ],
+     [
+      "mujoco",
+      100.0
+     ]
+    ]
+   },
+   "mcp_server_heavy": {
+    "value": 2.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": [
+     "trimesh",
+     "PIL"
+    ]
+   }
+  },
+  "physics": {
+   "dog_idle.steps_per_s": {
+    "value": 40074.5386,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.2128703750204295,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "dog_idle.controllers_share": {
+    "value": 0.2829,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_idle.peak_mb": {
+    "value": 175.9375,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "dog_walk.steps_per_s": {
+    "value": 11778.9099,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.23184058303013444,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "moved_m": 1.39,
+    "upright": true
+   },
+   "dog_walk.controllers_share": {
+    "value": 0.804,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_walk.peak_mb": {
+    "value": 176.9844,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_idle.steps_per_s": {
+    "value": 39148.9029,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.5104534580023028,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "go2_idle.controllers_share": {
+    "value": 0.3137,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_idle.peak_mb": {
+    "value": 539.1406,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_walk.steps_per_s": {
+    "value": 9484.9663,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.5176758749876171,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 1.277,
+    "upright": true
+   },
+   "go2_walk.controllers_share": {
+    "value": 0.4214,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_walk.peak_mb": {
+    "value": 550.5,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_rl_idle.steps_per_s": {
+    "value": 14359.5635,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.5202525420463644,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 0.048,
+    "upright": true
+   },
+   "go2_rl_idle.controllers_share": {
+    "value": 0.4916,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_rl_idle.peak_mb": {
+    "value": 537.0625,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "arm_pick.steps_per_s": {
+    "value": 12303.8686,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.45737962500425056,
+    "bodies": 11,
+    "geoms": 49,
+    "timestep": 0.002,
+    "placed": true
+   },
+   "arm_pick.controllers_share": {
+    "value": 0.644,
+    "unit": "share",
+    "better": "lower"
+   },
+   "arm_pick.peak_mb": {
+    "value": 179.5,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "warehouse_nav.steps_per_s": {
+    "value": 2214.1496,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 1.213180624996312,
+    "bodies": 59,
+    "geoms": 294,
+    "timestep": 0.002,
+    "moved_m": 1.765,
+    "upright": true
+   },
+   "warehouse_nav.controllers_share": {
+    "value": 0.2189,
+    "unit": "share",
+    "better": "lower"
+   },
+   "warehouse_nav.peak_mb": {
+    "value": 755.6875,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "objects_20.steps_per_s": {
+    "value": 9643.0776,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 2.6028043330297805,
+    "bodies": 21,
+    "geoms": 49,
+    "timestep": 0.002,
+    "on_table": 20,
+    "objects": 20
+   },
+   "objects_20.controllers_share": {
+    "value": 0.0105,
+    "unit": "share",
+    "better": "lower"
+   },
+   "objects_20.peak_mb": {
+    "value": 362.6562,
+    "unit": "MB",
+    "better": "lower"
+   }
+  },
+  "viewer": {
+   "cold_start_s": {
+    "value": 2.3407,
+    "unit": "s",
+    "better": "lower",
+    "served_s": 1.994
+   },
+   "fps": {
+    "value": 60.2109,
+    "unit": "fps",
+    "better": "higher",
+    "world": "warehouse + go2",
+    "size": [
+     1280,
+     800,
+     2
+    ]
+   },
+   "frame_ms": {
+    "value": 13.0,
+    "unit": "ms",
+    "better": "lower",
+    "median": 13,
+    "drawing_buffer": [
+     2560,
+     1600
+    ],
+    "calls": 148,
+    "triangles": 482502
+   },
+   "server_peak_mb": {
+    "value": 139.1,
+    "unit": "MB",
+    "better": "lower",
+    "warehouse": 564.7
+   }
+  },
+  "mcp": {
+   "start_s": {
+    "value": 7.4158,
+    "unit": "s",
+    "better": "lower",
+    "tools": 50
+   },
+   "new_world_ms": {
+    "value": 114.6459,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "add_robot_ms": {
+    "value": 202.5456,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "move_ms": {
+    "value": 112.3322,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "observe_ms": {
+    "value": 4.8922,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "server_rss_mb": {
+    "value": 192.4375,
+    "unit": "MB",
+    "better": "lower"
+   }
+  }
+ },
+ "budgets": {}
+}

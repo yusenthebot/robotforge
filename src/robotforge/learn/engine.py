@@ -29,6 +29,12 @@ class LessonError(ValueError):
     pass
 
 
+def signed(value: float, digits: int) -> str:
+    """`value` with its sign, as a lesson's live formula shows it; one that rounds to zero reads +0.00, not -0.00."""
+    text = f"{value:+.{digits}f}"
+    return text.replace("-", "+") if float(text) == 0 else text
+
+
 @dataclass(frozen=True)
 class Control:
     id: str
@@ -77,6 +83,9 @@ class Plot:
     window: float = 6.0  # seconds shown
     kind: Literal["lines", "footfall"] = "lines"  # footfall: one row per series, filled while its value is 1
     span: float = 0.0  # the smallest value range drawn, so a robot standing still does not plot its wobble
+    # The value the axis starts at when nothing shown is below it: 0 for what cannot be negative (a distance, a share,
+    # a tilt), so a converged distance is not drawn between -2 and 2 mm. None for a signed quantity, widened evenly.
+    floor: float | None = None
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -86,6 +95,7 @@ class Plot:
             "window": self.window,
             "kind": self.kind,
             "span": self.span,
+            "floor": self.floor,
             "series": [{"key": s.key, "label": s.label, "color": s.color, "dashed": s.dashed} for s in self.series],
         }
 

@@ -13,7 +13,6 @@ import re
 from pathlib import Path
 
 import numpy as np
-import trimesh
 
 from robotforge.design.importing.meshio import TOOL_VERSION, MeshAsset
 
@@ -46,6 +45,7 @@ def decompose(asset: MeshAsset, out_dir: Path) -> list[Path]:
         import coacd
     except ImportError as exc:  # coacd is an approved dependency but may be absent in slim installs
         raise DecomposeError("the 'coacd' package is not installed") from exc
+    import trimesh  # like coacd, only once a mesh is split: both are slow to import
 
     mesh = asset.mesh
     coacd.set_log_level("error")

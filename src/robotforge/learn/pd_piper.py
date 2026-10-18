@@ -240,7 +240,7 @@ STEPS = (
             "（1 秒内稳定在 ±1° 以内，超调不超过 5%）。\n"
             "提示：重力和盒子都得靠积分去抵，Kp、Kd 也可以更大，用 ζ 管住超调。目标角度也解锁了。",
             "Suppose there is no accurate model at hand: switch gravity compensation off, keep the box full, and "
-            "earn three stars with PID alone (within +-1 degree in 1 s, overshooting by at most 5%).\n"
+            "earn three stars with PID alone (within ±1 degree in 1 s, overshooting by at most 5%).\n"
             "Hint: the integral now has to carry gravity and the box; Kp and Kd can go higher too, with zeta "
             "keeping the overshoot in check. The target slider is unlocked.",
         ),
