@@ -6,6 +6,8 @@ import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, se
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
+import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 
 const $ = (id) => document.getElementById(id);
@@ -115,6 +117,7 @@ let worldRoot = null;
 let firstScene = true;
 let pendingFit = null; // "camera" | "lights" | null
 let showCollision = false;
+let water = null; // the scene's water (water.js), or null
 
 function rgbaColor(rgba) {
   return new THREE.Color().setRGB(rgba[0], rgba[1], rgba[2], THREE.SRGBColorSpace);
@@ -425,6 +428,8 @@ async function applyScene(desc) {
   const meshGeometries = buildMeshGeometries(desc, buffer);
   const floats = new Float32Array(buffer);
   const grounds = desc.grounds || {};
+  leaveWater(water, scene3);
+  water = null;
   disposeWorld();
   sceneDesc = desc;
   worldRoot = new THREE.Group();
@@ -443,6 +448,7 @@ async function applyScene(desc) {
     floorFrame = { x: floorGeom.pos[0], y: floorGeom.pos[1], half, halfY, material: floorGeom.material };
   }
   for (const geom of desc.geoms) {
+    if (desc.water && geom.name === SURFACE_GEOM) continue; // drawn below, with its waves
     let obj;
     const look = grounds[geom.material];
     if (geom.type === "plane") {
@@ -477,6 +483,15 @@ async function applyScene(desc) {
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
   }
+  if (desc.water) {
+    water = makeWater(desc.water, waterLook(desc.water, floorGeom?.material), desc.stat.center, renderer);
+    water.group.traverse((o) => {
+      o.userData.body = 0;
+    });
+    bodyNodes[0].add(water.group);
+  }
+  flexMeshes = (desc.flexes || []).map(flexMesh);
+  for (const flex of flexMeshes) worldRoot.add(flex.mesh);
   buildRotors(desc.rotors, bodyNodes); // aircraft: propellers the page turns (rotors.js)
   scene3.add(worldRoot);
 
@@ -488,6 +503,72 @@ async function applyScene(desc) {
   tween = null;
   fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
+}
+
+// A cloth (a MuJoCo flex) is a triangle mesh whose corners ride on bodies: one per vertex, or a point on one for a
+// pinned edge. Its vertices follow those bodies' poses, which already stream every frame (see scene.py _flexes).
+let flexMeshes = []; // { mesh, shape, points, bodies, local: Float32Array }
+const CLOTH_THICKNESS = 0.006; // m, the radius of a cloth's points where they touch things (mechanisms.CLOTH_BALL)
+const flexPoint = new THREE.Vector3();
+
+function flexMesh(f) {
+  const shape = clothGeometry(f.faces, f.bodies.length); // a smooth surface through its points (cloth.js)
+  const material = new THREE.MeshStandardMaterial({
+    color: rgbaColor(f.rgba),
+    roughness: 0.95,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  pullNearer(material, CLOTH_THICKNESS);
+  const mesh = new THREE.Mesh(shape.geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // its bounds change every frame
+  mesh.userData.flex = true;
+  const points = new Float32Array(f.bodies.length * 3);
+  return { mesh, shape, points, bodies: f.bodies, local: new Float32Array(f.local) };
+}
+
+// Draw a material's surfaces `by` metres nearer the camera than they are, in depth only: each vertex moves along its
+// own line of sight, so it stays where it is on screen. A cloth is drawn through the middle of its points, which lie
+// its thickness (6 mm) over what it rests on, and where it bends over a table's edge the table's rounded edge still
+// showed through it in streaks; nearer by its thickness, it wins against what lies within it.
+function pullNearer(material, by) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      gl_Position = projectionMatrix * vec4(mvPosition.xyz * max(0.0, 1.0 - ${by.toFixed(4)} / length(mvPosition.xyz)), 1.0);`,
+    );
+  };
+}
+
+function updateFlexes() {
+  for (const flex of flexMeshes) {
+    for (let i = 0; i < flex.bodies.length; i++) {
+      const node = bodyNodes[flex.bodies[i]];
+      flexPoint.fromArray(flex.local, 3 * i).applyQuaternion(node.quaternion).add(node.position);
+      flexPoint.toArray(flex.points, 3 * i);
+    }
+    shapeCloth(flex.shape, flex.points);
+  }
+}
+
+// The body of the cloth's vertex nearest to where it was hit: grabbing a cloth drags that corner of its mesh.
+function flexBodyAt(mesh, point) {
+  const flex = flexMeshes.find((f) => f.mesh === mesh);
+  if (!flex) return -1;
+  const pos = mesh.geometry.attributes.position;
+  let best = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < flex.bodies.length; i++) {
+    const d = flexPoint.fromBufferAttribute(pos, i).distanceToSquared(point);
+    if (d < bestDist && flex.bodies[i] > 0) {
+      bestDist = d;
+      best = flex.bodies[i];
+    }
+  }
+  return best;
 }
 
 // The boxes of everything the scene shows but its floor, each in world space.
@@ -650,6 +731,7 @@ function applyPoses(buffer) {
     node.position.set(f[1 + 3 * b], f[2 + 3 * b], f[3 + 3 * b]);
     node.quaternion.set(f[qOff + 4 * b + 1], f[qOff + 4 * b + 2], f[qOff + 4 * b + 3], f[qOff + 4 * b]);
   }
+  if (flexMeshes.length) updateFlexes();
   if (pendingFit) {
     const sphere = contentSphere();
     fitLights(sphere);
@@ -710,7 +792,7 @@ function readTheme() {
   const token = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   const old = scene3.background;
   scene3.background = makeGradientTexture(token("--scene-top", "#f4f6f8"), token("--scene-bottom", "#d6dde5"));
-  if (old) old.dispose();
+  if (old && !old.userData.shared) old.dispose(); // not the sky over open water (water.js): the water mirrors it
   theme.fog = token("--scene-fog", theme.fog);
   theme.amber = token("--amber", theme.amber);
   if (scene3.fog) scene3.fog.color.set(theme.fog);
@@ -756,7 +838,9 @@ const DOWN = new THREE.Vector3(0, 0, -1);
 function groundHeight(x, y, top, fallback) {
   groundRay.set(new THREE.Vector3(x, y, top), DOWN);
   const hit = groundRay.intersectObjects(groundMeshes, false).find((h) => h.object.visible);
-  return hit ? hit.point.z : fallback;
+  const ground = hit ? hit.point.z : fallback;
+  const level = water ? stillLevel(water, x, y) : null; // the water takes no rays (water.js): on it, its level
+  return level !== null && level > ground && level <= top ? level : ground;
 }
 
 const hasMesh = (id) => bodyNodes[id]?.children.some((o) => o.isMesh && o.visible);
@@ -859,7 +943,7 @@ function pickBody(e) {
   const hits = raycaster.intersectObjects(worldRoot.children, true);
   for (const h of hits) {
     if (!h.object.visible || h.object.userData.isPlane) continue;
-    const body = h.object.userData.body;
+    const body = h.object.userData.flex ? flexBodyAt(h.object, h.point) : h.object.userData.body;
     if (body > 0 && sceneDesc.bodies[body]?.dynamic) return { body, point: h.point };
     return null; // first visible hit is static: don't reach through it
   }
@@ -987,6 +1071,7 @@ function connect() {
   ws.onmessage = (ev) => {
     if (typeof ev.data !== "string") {
       applyPoses(ev.data);
+      send({ type: "seen" }); // the server keeps only a few frames ahead of this (MAX_POSES_AHEAD in server.py)
       return;
     }
     const msg = JSON.parse(ev.data);
@@ -1282,12 +1367,16 @@ function applyState(s) {
 
 const DRIVE_KEYS = {
   w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
+  e: "up", q: "down", // an underwater robot or an aircraft only: up and down
 };
 // Aircraft: A and D fly sideways (a rover can only turn), the arrow keys turn, E climbs and Q descends (and lands).
 const FLY_KEYS = { ...DRIVE_KEYS, a: "slide_left", d: "slide_right", e: "up", q: "down" };
 const isAircraft = (robot) => robot?.kind === "aircraft";
-const TURN_RATE = { rover: 2.0, balancer: 1.5, aircraft: 1.2 }; // rad/s at full key; walkers turn at 1.0
-const FLY_CLIMB = 1.0; // m/s up or down at full key
+const RISES = new Set(["rov", "aircraft"]); // kinds that E and Q take up and down
+// rad/s at full key; walkers turn at 1.0
+const TURN_RATE = { rover: 2.0, balancer: 1.5, boat: 0.8, rov: 0.8, aircraft: 1.2 };
+const HEAVE = 0.3; // m/s up or down for an underwater robot at full key
+const FLY_CLIMB = 1.0; // m/s up or down for an aircraft at full key
 const pressed = new Set();
 let lastDrive = "";
 
@@ -1299,8 +1388,10 @@ function driveTarget() {
 function renderDrive() {
   const robot = driveTarget();
   $("drive").hidden = !robot;
+  $("drive-heave").hidden = robot?.kind !== "rov";
   $("fly-keys").hidden = !isAircraft(robot);
-  if (robot) $("drive-text").innerHTML = t(isAircraft(robot) ? "fly" : "drive", { name: escapeHtml(robot.name) });
+  const say = isAircraft(robot) ? "fly" : robot?.kind === "rov" ? "drive_rov" : "drive";
+  if (robot) $("drive-text").innerHTML = t(say, { name: escapeHtml(robot.name) });
   lastDrive = "";
 }
 
@@ -1310,6 +1401,7 @@ function driveCommand(robot) {
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
   const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  if (robot.kind === "rov") cmd.heave = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * HEAVE;
   if (isAircraft(robot)) {
     cmd.speed = fwd * top * 0.5;
     cmd.side = ((pressed.has("slide_left") ? 1 : 0) - (pressed.has("slide_right") ? 1 : 0)) * top * 0.5;
@@ -1336,7 +1428,7 @@ function sendDrive() {
   }
   if (!robot) return;
   const cmd = driveCommand(robot);
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.side ?? 0}:${cmd.climb ?? 0}`;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.heave ?? ""}:${cmd.side ?? 0}:${cmd.climb ?? 0}`;
   if (key === lastDrive) return;
   lastDrive = key;
   send(cmd);
@@ -1413,6 +1505,7 @@ function driveKey(e, down) {
   if (!driveTarget() && !lessonDrive) return false;
   const dir = (isAircraft(driveTarget()) && !lessonDrive ? FLY_KEYS : DRIVE_KEYS)[e.key.toLowerCase()];
   if (!dir) return false;
+  if ((dir === "up" || dir === "down") && !RISES.has(driveTarget()?.kind)) return false;
   e.preventDefault();
   if (down) {
     if (!lessonDrive) startFollow();
@@ -2110,6 +2203,7 @@ function loop() {
   spinRotors();
   refreshDragVisual();
   lessonFrame();
+  if (water) waterFrame(water, latestTime, camera, scene3);
   sensorsFrame();
   renderer.render(scene3, camera);
   frames++;

@@ -136,6 +136,33 @@ class Rough(_Patch):
         return self.size[0], self.size[1]
 
 
+class Basin(_Patch):
+    """A hollow for a lake or a pond: land `height` high all round, sloping down a beach to the floor in the middle
+    (the lake bed). With water a little below `height` (set_floor water=...) it is a lake with a natural shore; the
+    load_scene("lake") scene is one. The outer rim slopes back down to the floor."""
+
+    type: Literal["basin"]
+    size: list[float] = Field(default_factory=lambda: [26.0, 20.0])
+    lake: list[float] = Field(default_factory=lambda: [14.0, 9.0], description="[x, y] across the hollow, m")
+    height: float = Field(0.8, gt=0, le=5, description="land above the floor (the lake bed), m")
+    beach: float = Field(2.0, ge=0.2, le=20, description="width of the slope from the bed to the land, m")
+    seed: int = 0
+
+    @model_validator(mode="after")
+    def _fits(self) -> Basin:
+        if len(self.lake) != 2 or any(v <= 0 for v in self.lake):
+            raise ValueError("basin lake is [x, y] in meters, both positive")
+        if any(lk + 2 * self.beach > sz for lk, sz in zip(self.lake, self.size, strict=True)):
+            raise ValueError(f"basin: a lake {self.lake} with a {self.beach} m beach does not fit in size {self.size}")
+        return self
+
+    def default_style(self, floor_style: str) -> str:
+        return floor_style if floor_style in NATURAL else "grass"
+
+    def footprint(self) -> tuple[float, float]:
+        return self.size[0], self.size[1]
+
+
 class Stairs(_Patch):
     """A flight of stairs: `steps` risers up to a landing (and down again for up_down)."""
 
@@ -229,7 +256,7 @@ class Platform(_Patch):
         return self.size[0], self.size[1]
 
 
-TerrainPatch = Annotated[Hills | Rough | Stairs | Ramp | Stones | Curb | Platform, Field(discriminator="type")]
+TerrainPatch = Annotated[Hills | Rough | Stairs | Ramp | Stones | Curb | Platform | Basin, Field(discriminator="type")]
 TYPES: dict[str, type[_Patch]] = {
     "hills": Hills,
     "rough": Rough,
@@ -238,6 +265,7 @@ TYPES: dict[str, type[_Patch]] = {
     "stones": Stones,
     "curb": Curb,
     "platform": Platform,
+    "basin": Basin,
 }
 
 
@@ -364,7 +392,7 @@ def add_terrain(spec: mujoco.MjSpec, patches: list[_Patch], floor_style: str) ->
         style = patch.style or patch.default_style(floor_style)
         material = _ensure_material(spec, style)
         friction = patch.friction if patch.friction is not None else STYLES[style].friction
-        if isinstance(patch, Hills | Rough):
+        if isinstance(patch, Hills | Rough | Basin):
             notes.append(_add_heightfield(spec, patch, material, friction))
         else:
             boxes = _boxes(patch)
@@ -516,8 +544,10 @@ def _world_bounds(patch: _Patch) -> tuple[float, float, float, float]:
 # ---- heightfields ---------------------------------------------------------------------------
 
 
-def heights(patch: Hills | Rough) -> tuple[np.ndarray, float]:
+def heights(patch: Hills | Rough | Basin) -> tuple[np.ndarray, float]:
     """Elevation grid in meters (rows along y from -y to +y, columns along x) and its cell size."""
+    if isinstance(patch, Basin):
+        return _basin(patch)
     lx, ly = patch.size
     if isinstance(patch, Hills):
         cell = min(0.1, patch.scale / 12)
@@ -566,7 +596,32 @@ def _fade(t: np.ndarray) -> np.ndarray:
     return t * t * t * (t * (t * 6 - 15) + 10)  # smooth in value and slope
 
 
-def _add_heightfield(spec: mujoco.MjSpec, patch: Hills | Rough, material: str, friction: float) -> str:
+def _basin(patch: Basin) -> tuple[np.ndarray, float]:
+    """Land all round a hollow: an oval whose shore wanders by a seeded few percent, a smooth beach down to the bed,
+    gentle swells on the land and a rim that slopes back to the floor at the patch's edge (no cliff)."""
+    lx, ly = patch.size
+    cell = max(0.08, max(lx, ly) / (MAX_GRID - 1))
+    ncol, nrow = max(3, round(lx / cell) + 1), max(3, round(ly / cell) + 1)
+    x = np.linspace(-lx / 2, lx / 2, ncol)[None, :]
+    y = np.linspace(-ly / 2, ly / 2, nrow)[:, None]
+    rng = np.random.default_rng(patch.seed)
+    a, b = patch.lake[0] / 2, patch.lake[1] / 2
+    angle = np.arctan2(y / b, x / a)
+    wobble = sum(rng.uniform(0.02, 0.06) * np.cos(k * angle + rng.uniform(0, 2 * math.pi)) for k in (2, 3, 5))
+    # How far outside the shore oval a point is, in meters (about): 0 on the shore line, negative in the lake.
+    beyond = (np.hypot(x / a, y / b) - (1 + wobble)) * math.sqrt(a * b)
+    rise = _smoothstep(beyond / patch.beach + 0.5)
+    swell = sum(amp * _value_noise(nrow, ncol, lx, ly, scale, rng) for amp, scale in ((0.12, 5.0), (0.05, 2.0)))
+    land = patch.height * (1 + swell * rise)
+    rim = min(4.0, lx / 6, ly / 6)
+    edge = _smoothstep(np.minimum(lx / 2 - np.abs(x), ly / 2 - np.abs(y)) / rim)
+    h = land * rise * edge
+    h[0, :] = h[-1, :] = 0.0
+    h[:, 0] = h[:, -1] = 0.0
+    return h, lx / (ncol - 1)
+
+
+def _add_heightfield(spec: mujoco.MjSpec, patch: Hills | Rough | Basin, material: str, friction: float) -> str:
     h, cell = heights(patch)
     top = float(h.max())
     nrow, ncol = h.shape

@@ -1,12 +1,14 @@
 """RL II: any body learns to walk in the viewer, trained on a background thread."""
 
 import time
+from pathlib import Path
 
 import pytest
-from importer_fixtures import critter_urdf, write
+from importer_fixtures import critter_mjcf, critter_urdf, write
 
 from robotforge.behaviors import rhythm_walk
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.control.cpg import HEADING_WEIGHT, Body, Reward
 from robotforge.learn import walk_rl
 from robotforge.playground import Playground
 
@@ -95,6 +97,9 @@ def test_your_robot_keeps_what_it_learned_and_walks_that_way_at_home(pg, monkeyp
 
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 20)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
+    monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 10)
+    monkeypatch.setattr(rhythm_walk, "STEER_ROUNDS", 10)
+    monkeypatch.setattr(rhythm_walk, "WALK_CHECKS", rhythm_walk.WALK_CHECKS[::5])  # a tenth of a second apart
     pg.new_world("mine")
     pg.add_robot("crab", build=walk_rl.STAR)
     with pytest.raises(BehaviorError, match="RL II"):  # no gait code knows a starfish
@@ -139,13 +144,19 @@ def test_the_robot_no_gait_code_knows_is_the_one_offered(pg):
     assert robots[-1]["en"] == "Your robot: crab"
 
 
-def test_a_robot_imported_from_a_urdf_learns_keeps_its_walk_and_walks_at_home(pg, monkeypatch):
+@pytest.mark.parametrize("file", ["critter.urdf", "critter.xml"])
+def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg, monkeypatch, file):
+    """A URDF, or an MJCF written by hand. Regression (MJCF): its unnamed motors belonged to no robot, so the lesson
+    never offered it, and its home keyframe was dropped."""
     # How well turns are learned is the starfish's test; this one is about the imported file finding its way.
     monkeypatch.setattr(rhythm_walk, "TURN_ROUNDS", 8)
     monkeypatch.setattr(rhythm_walk, "TURN_STARTS", 1)
+    monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 4)
+    monkeypatch.setattr(rhythm_walk, "WALK_CHECKS", rhythm_walk.WALK_CHECKS[::5])
+    monkeypatch.setattr(rhythm_walk, "STEER_ROUNDS", 4)
     pg.new_world("mine")
-    write(pg.store.dir / "critter.urdf", critter_urdf())
-    pg.add_robot("critter", file="critter.urdf")  # a path relative to the world folder, as world.yaml keeps it
+    write(pg.store.dir / file, critter_urdf() if file.endswith(".urdf") else critter_mjcf())
+    pg.add_robot("critter", file=file)  # a path relative to the world folder, as world.yaml keeps it
     assert pg.behaviors.kind("critter").value == "other"  # two-joint legs: no gait code knows it
     with pytest.raises(BehaviorError, match="RL II"):
         pg.behaviors.move("critter", 0.2, 0.0)
@@ -161,6 +172,11 @@ def test_a_robot_imported_from_a_urdf_learns_keeps_its_walk_and_walks_at_home(pg
     assert pg.lessons.ctx.results["kept"]["robot"] == "critter"
     lesson.turning.join(timeout=120)
     assert pg.lessons.ctx.results["kept"]["turns"], pg.lessons.ctx.results["summary"]["en"]
+    kept = rhythm_walk.load_walk(lesson.own[1], "critter")  # the learner's world folder
+    solo = lesson.solo["yours"]
+    body = Body.find(solo, "yours")
+    learned_around = dict(zip(rhythm_walk.joint_names(solo, body), solo.key("home").qpos[body.qadr], strict=True))
+    assert kept.home == pytest.approx(learned_around)  # it says what it learned around
     pg.lessons.exit()
 
     start = pg.behaviors.pose("critter")
@@ -172,3 +188,51 @@ def test_a_robot_imported_from_a_urdf_learns_keeps_its_walk_and_walks_at_home(pg
     assert pg.behaviors.move("critter", 0.0, 0.8)["turning"] == "left"
     pg.run_fast(lambda: False, 2.0)
     assert (pg.behaviors.pose("critter")["heading_deg"] - end["heading_deg"] + 540) % 360 - 180 > 10
+
+
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"
+# Which of the Menagerie stand-ins, added by file, RL II offers, and what the others are told instead.
+OFFERED = {
+    "unitree_g1": None,  # 29 position servos
+    "unitree_go2": "torque motors",  # the file's legs; the library turns them into servos, a file is kept as it is
+    "agilex_piper": "fixed to the world",
+    "franka_emika_panda": "fixed to the world",
+    "trs_so_arm100": "fixed to the world",
+    "bitcraze_crazyflie_2": "no built-in way to move",  # drones: no joint but the free one
+    "skydio_x2": "0 servo joints",
+}
+
+
+@pytest.mark.parametrize("path", sorted(MENAGERIE.glob("*/*.xml")), ids=lambda p: p.parent.name)
+def test_rl_ii_offers_a_robot_from_an_mjcf_file_only_if_it_can_learn_and_says_why_not(pg, path):
+    """Regression: the Go2's file drives its legs with torque motors, which a rhythm cannot aim, yet move told the
+    learner to teach it in RL II, which never listed it."""
+    why = OFFERED[path.parent.name]
+    pg.new_world("mine")
+    pg.add_robot("it", file=str(path))
+    if why != "fixed to the world":  # an arm on the floor is told it cannot move around at all
+        with pytest.raises(BehaviorError) as exc:
+            pg.behaviors.move("it", 0.2, 0.0, "rhythm")
+        assert ("Learn, pick 'RL II" in str(exc.value)) == (why is None)
+        assert why is None or why in str(exc.value)
+    described = pg.lessons.start("learn_to_walk")
+    robots = next(c for c in described["controls"] if c["id"] == "robot")["options"]
+    assert (robots[-1]["en"] == "Your robot: it") == (why is None)
+    pg.lessons.exit()
+
+
+def test_shoved_trainings_do_not_count_the_heading_and_the_panel_says_so(pg):
+    """A shove turns the robot whatever its rhythm does: counting the heading then made the humanoid's reflex
+    trainings worse (a steady walk in 1 of 12 instead of 5). Shoved, the reward leaves the heading out."""
+    assert walk_rl.lesson_reward(0.0, shove=False).heading == HEADING_WEIGHT
+    assert walk_rl.lesson_reward(0.1, shove=True) == Reward(energy=0.1, survive=True, heading=0.0)
+    pg.lessons.start("learn_to_walk")
+    lesson, ctx = pg.lessons.lesson, pg.lessons.ctx
+    model, data = pg.session.model, pg.session.data
+
+    def reward_shown() -> str:
+        return next(f for f in lesson.live(model, data, ctx)["formula"] if f["show"] == "f_reward")["expr"]["en"]
+
+    assert reward_shown().startswith(f"distance * (1 - {HEADING_WEIGHT:g} * turn)")
+    ctx.values["shove"] = 1.0
+    assert reward_shown().startswith("distance - ")

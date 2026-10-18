@@ -9,15 +9,31 @@ from pydantic import ValidationError
 from robotforge import wording
 from robotforge.design.templates.arm import Arm
 from robotforge.design.templates.base import BuiltRobot, Template
+from robotforge.design.templates.boat import Boat
 from robotforge.design.templates.cartpole import Cartpole
 from robotforge.design.templates.drone import Drone
 from robotforge.design.templates.gripper import Gripper
 from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
+from robotforge.design.templates.rov import Rov
 from robotforge.design.templates.rover import Rover
+from robotforge.design.templates.tools import Magnet, SuctionCup
 
 TEMPLATES: dict[str, Template] = {
-    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Drone())
+    t.name: t
+    for t in (
+        Arm(),
+        Quadruped(),
+        Humanoid(),
+        Rover(),
+        Cartpole(),
+        Gripper(),
+        SuctionCup(),
+        Magnet(),
+        Boat(),
+        Rov(),
+        Drone(),
+    )
 }
 
 
@@ -35,6 +51,15 @@ NICKNAMES = {
     "pendulum": "cartpole",
     "cart_pole": "cartpole",
     "claw": "gripper",
+    "ship": "boat",
+    "usv": "boat",
+    "vessel": "boat",
+    "submarine": "rov",
+    "underwater": "rov",
+    "auv": "rov",
+    "suction": "suction_cup",
+    "vacuum": "suction_cup",
+    "electromagnet": "magnet",
     "quadrotor": "drone",
     "quadcopter": "drone",
     "multirotor": "drone",

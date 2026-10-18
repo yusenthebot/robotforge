@@ -3,32 +3,44 @@
 Every servo joint swings around its home angle, target = home + offset + amplitude * sin(2 pi f t + phase),
 so the rhythm is built in and only 3 numbers per joint are learned. Augmented Random Search (the same
 recipe as control/ars.py: try nudges both ways, step toward the best) tunes them for a reward: how far the
-robot gets in a few seconds, minus drifting sideways and, if asked, the energy it spends. No model of the
-robot and no neural network: it works on a dog, a three-legged starfish built from parts, or whatever a
-learner made, in seconds on a laptop.
+robot gets in a few seconds, counted for less the more its heading turned, minus drifting sideways and, if
+asked, the energy it spends. No model of the robot and no neural network: it works on a dog, a three-legged
+starfish built from parts, or whatever a learner made, in seconds on a laptop.
 
 The rhythm alone is open loop: it never reads a sensor. Reflexes add feedback, 4 more numbers per joint
 that turn the trunk's roll, pitch and their rates into joint corrections, learned by the same search.
 Training can also shove the robot at random and count surviving as reward, so the search has a reason to
 learn them.
+
+A rhythm can also be learned to start mid-stride of another (a turn right out of a walk): its tries then begin
+from moments of that one, the new rhythm fading in from the targets the joints had, as RhythmWalker plays it.
+
+A walk can also learn to hold its heading (Steering): the heading error moves its offsets, amplitudes and phases
+by 3 more numbers per joint, learned by the same search with the walk itself fixed, aiming a little to either side.
 """
 
 from __future__ import annotations
 
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 import mujoco
 import numpy as np
 
-from robotforge.sim.actuators import drives_joint, is_position_servo
+from robotforge.sim.actuators import drives_joint, is_position_servo, is_torque_motor
 
 CONTROL_HZ = 50.0
 FELL = 0.5  # cosine of the trunk's tilt below which the robot is down
 FALL_PENALTY = 1.0  # m of progress a fall costs
 DRIFT_WEIGHT = 0.5  # m of progress per m of sideways drift
+# Share of a forward walk's distance lost per rad its heading turned by the end. Over 20 trainings each (30 rounds,
+# scripts/rhythm_bench.py forward), 0.15 cut the mean heading change in 4 s from 40 to 23 degrees (template dog), 20
+# to 12 (starfish) and 29 to 21 (humanoid), for 3 to 9 percent less distance. It never straightened the imported A1
+# (46 degrees at 0, 45 at 0.15, 46 at 0.25), and 0.25 cost it and the humanoid a sixth of their distance: a kept walk
+# that still curves learns to steer instead (Steering).
+HEADING_WEIGHT = 0.15
 WANDER_WEIGHT = 3.0  # rad of turning per m the trunk wanders (at its farthest) while learning to turn on the spot
 
 
@@ -69,7 +81,22 @@ class Body:
         bounded = {a: span for a in hinges if (span := _servo_range(model, a)) is not None}
         servos = list(bounded)
         if len(servos) < 2:
-            raise CPGError(f"{robot} has {len(servos)} servo joints; walking by rhythm needs at least 2")
+            motors = [
+                a
+                for a in range(model.nu)
+                if (model.actuator(a).name or "").startswith(prefix)
+                and drives_joint(model, a)
+                and is_torque_motor(model, a)
+                and model.jnt_type[model.actuator_trnid[a, 0]] == mujoco.mjtJoint.mjJNT_HINGE
+            ]
+            # A Menagerie quadruped's file drives its legs with torque motors (the library turns them into servos).
+            why = (
+                f" (its {len(motors)} joint motors are torque motors; a rhythm sets joint angles through position "
+                "servos)"
+                if motors
+                else ""
+            )
+            raise CPGError(f"{robot} has {len(servos)} servo joints; walking by rhythm needs at least 2{why}")
         driven = [int(model.actuator_trnid[a, 0]) for a in servos]
         ranges = np.array(list(bounded.values()))
         qpos, qvel = [], []
@@ -113,7 +140,8 @@ def _servo_range(model: mujoco.MjModel, actuator: int) -> tuple[float, float] | 
 SENSES = 4  # what reflexes read: trunk roll, pitch, roll rate, pitch rate
 
 
-def _yaw(data: mujoco.MjData, body: Body) -> float:
+def trunk_yaw(data: mujoco.MjData, body: Body) -> float:
+    """Which way the trunk faces (rad, counter-clockwise from +x)."""
     rot = data.xmat[body.trunk]
     return math.atan2(float(rot[3]), float(rot[0]))
 
@@ -141,8 +169,14 @@ class Rhythm:
         return cls(np.zeros((3 + (SENSES if reflexes else 0)) * joints), freq, reflexes)
 
     def targets(
-        self, home: np.ndarray, t: float, theta: np.ndarray | None = None, senses: np.ndarray | None = None
+        self,
+        home: np.ndarray,
+        t: float,
+        theta: np.ndarray | None = None,
+        senses: np.ndarray | None = None,
+        error: float = 0.0,
     ) -> np.ndarray:
+        """The joint targets `t` seconds in. `error` (the heading's, for a Steering) does not change a rhythm."""
         th = self.theta if theta is None else theta
         n = len(home)
         out = home + th[:n] + th[n : 2 * n] * np.sin(2 * math.pi * self.freq * t + th[2 * n : 3 * n])
@@ -151,11 +185,84 @@ class Rhythm:
         return out
 
 
+# Heading error (rad, 14 degrees) at which a Steering corrects fully; it corrects in proportion below that. The 6
+# walks the lesson's first trainings give the imported A1 turned 44 degrees in 4 s open loop on average; steering
+# with 0.25 (not tuned further), 7.
+STEER_SPAN = 0.25
+
+
+def steer_input(error: float) -> float:
+    """How hard a Steering corrects for a heading `error` (rad, aim minus heading): -1 to 1."""
+    return max(-1.0, min(1.0, error / STEER_SPAN))
+
+
+@dataclass
+class Steering:
+    """How a walk holds its heading. Its offsets, amplitudes and phases move by steer_input(error) times `theta`
+    (3 numbers per joint), so a heading error turns the walk back toward its aim. The walk stays as it was learned;
+    the search tunes only `theta`, the way it tunes a rhythm (Trainer.train), so it plays wherever a rhythm does."""
+
+    walk: Rhythm
+    theta: np.ndarray  # added to the walk's [offsets, amplitudes, phases] when correcting fully to the left
+
+    @classmethod
+    def still(cls, walk: Rhythm, joints: int) -> Steering:
+        return cls(walk, np.zeros(3 * joints))
+
+    @property
+    def freq(self) -> float:
+        return self.walk.freq
+
+    @property
+    def reflexes(self) -> bool:
+        return self.walk.reflexes
+
+    def targets(
+        self,
+        home: np.ndarray,
+        t: float,
+        theta: np.ndarray | None = None,
+        senses: np.ndarray | None = None,
+        error: float = 0.0,
+    ) -> np.ndarray:
+        gains = self.theta if theta is None else theta
+        walk = self.walk.theta.copy()
+        walk[: len(gains)] += steer_input(error) * gains
+        return self.walk.targets(home, t, walk, senses)
+
+
+FADE = 0.25  # s: a rhythm started mid-stride fades in from the joint targets of the moment, over this long
+
+
+def fade_in(source: np.ndarray, target: np.ndarray, elapsed: float) -> np.ndarray:
+    """`target`, faded in from `source` over FADE seconds (eased at both ends), `elapsed` seconds after the switch."""
+    x = min(1.0, max(0.0, elapsed / FADE))
+    w = x * x * (3.0 - 2.0 * x)
+    return target if w >= 1.0 else (1.0 - w) * source + w * target
+
+
+@dataclass(frozen=True)
+class Start:
+    """A moment to begin a rollout from instead of standing still at home: the whole model's positions, velocities
+    and joint targets, say mid-stride of a walk. The rhythm tried from it fades in from those targets."""
+
+    qpos: np.ndarray
+    qvel: np.ndarray
+    ctrl: np.ndarray
+
+
 @dataclass(frozen=True)
 class Reward:
     energy: float = 0.0  # weight on energy spent, per (m g): 0 ignores it
     survive: bool = False  # a fall also costs the seconds it did not stay up
     turn: float = 0.0  # 0: walk forward; +1 or -1: turn on the spot to the left or right (rad turned, less wander)
+    forfeit: bool = False  # turning: a fall forfeits the turn from standing too (begun mid-stride, it always does)
+    early: float = 0.0  # turning: count the angle turned in only the first this many seconds (0: all); falls count all
+    heading: float = HEADING_WEIGHT  # walking forward: share of the distance lost per rad turned; 0 ignores it
+    # Learning to hold a heading (a Steering): every try walks toward each of `aims` (rad from the heading it starts
+    # at) and loses `hold` of its progress that way per rad it strayed from it on average, instead of `heading`.
+    hold: float = 0.0
+    aims: tuple[float, ...] = (0.0,)
 
 
 @dataclass(frozen=True)
@@ -182,27 +289,53 @@ class TrainingLog:
 class Trainer:
     """Rollouts of one robot alone in its own model (never the live world) and the search over the rhythm."""
 
-    def __init__(self, model: mujoco.MjModel, robot: str, reward: Reward, seconds: float = 4.0, freq: float = 2.0):
+    def __init__(
+        self,
+        model: mujoco.MjModel,
+        robot: str,
+        reward: Reward,
+        seconds: float = 4.0,
+        freq: float = 2.0,
+        home: np.ndarray | None = None,
+    ):
         self.model = model
         self.body = Body.find(model, robot)
         self.reward = reward
         self.seconds = seconds
         self.freq = freq
-        self.home = model.key("home").qpos[self.body.qadr].copy() if model.nkey else model.qpos0[self.body.qadr].copy()
+        # The joint angles rhythms swing around (the driven joints'): the model's home pose unless told otherwise.
+        if home is not None:
+            self.home = np.asarray(home, dtype=float).copy()
+        elif model.nkey:
+            self.home = model.key("home").qpos[self.body.qadr].copy()
+        else:
+            self.home = model.qpos0[self.body.qadr].copy()
         self.mass = float(sum(model.body_mass))
         self.substeps = max(1, round(1.0 / (CONTROL_HZ * model.opt.timestep)))
 
-    def rollout(self, rhythm: Rhythm, theta: np.ndarray | None = None, push: Push | None = None) -> dict[str, float]:
-        """Walk for `seconds` from the home pose (shoved once if `push`): distance, sideways drift, energy,
-        how long it stayed up, fell, and the reward."""
+    def rollout(
+        self,
+        rhythm: Rhythm | Steering,
+        theta: np.ndarray | None = None,
+        push: Push | None = None,
+        start: Start | None = None,
+        aim: float = 0.0,
+    ) -> dict[str, float]:
+        """Walk for `seconds` from the home pose, or from `start` (shoved once if `push`): distance, sideways drift,
+        energy, how long it stayed up, fell, the most it leaned (`tilt`) and the reward. A Steering aims `aim` rad
+        from the starting heading, and distance and drift are then measured that way."""
         m, b = self.model, self.body
         d = mujoco.MjData(m)
-        if m.nkey:
+        if start is not None:
+            d.qpos[:], d.qvel[:], d.ctrl[:] = start.qpos, start.qvel, start.ctrl
+        elif m.nkey:
             mujoco.mj_resetDataKeyframe(m, d, 0)
         mujoco.mj_forward(m, d)
-        start = d.xpos[b.trunk][:2].copy()
+        before = d.ctrl[b.actuators].copy()  # what a rhythm started mid-stride fades in from
+        origin = d.xpos[b.trunk][:2].copy()
         energy, fell, up = 0.0, False, self.seconds
-        heading, turned, wander = _yaw(d, b), 0.0, 0.0
+        heading, turned, wander, stray = trunk_yaw(d, b), 0.0, 0.0, 0.0
+        early, upright = 0.0, 1.0  # upright: the least cosine of the trunk's tilt so far
         steps = round(self.seconds * CONTROL_HZ)
         for k in range(steps):
             t = k / CONTROL_HZ
@@ -210,42 +343,64 @@ class Trainer:
                 d.qvel[b.qvel[0]] += push.velocity[0]
                 d.qvel[b.qvel[1]] += push.velocity[1]
             senses = trunk_senses(d, b) if rhythm.reflexes else None
-            d.ctrl[b.actuators] = np.clip(rhythm.targets(self.home, t, theta, senses), b.lower, b.upper)
+            target = rhythm.targets(self.home, t, theta, senses, error=aim - turned)
+            if start is not None:
+                target = fade_in(before, target, t)
+            d.ctrl[b.actuators] = np.clip(target, b.lower, b.upper)
             for _ in range(self.substeps):
                 mujoco.mj_step(m, d)
                 energy += float(np.abs(d.actuator_force[b.actuators] * d.qvel[b.dadr]).sum()) * m.opt.timestep
-            now = _yaw(d, b)
+            now = trunk_yaw(d, b)
             turned += math.atan2(math.sin(now - heading), math.cos(now - heading))  # unwrapped: whole turns count
             heading = now
+            if k + 1 == round(self.reward.early * CONTROL_HZ):
+                early = turned
+            stray += abs(aim - turned) / steps
             # The farthest it got, not where it ended: circling round a point comes back to the start.
-            wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - start)))
+            wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - origin)))
+            upright = min(upright, float(d.xmat[b.trunk][8]))
             if float(d.xmat[b.trunk][8]) < FELL:
                 fell, up = True, t
                 break
-        moved = d.xpos[b.trunk][:2] - start
+        moved = d.xpos[b.trunk][:2] - origin
+        if aim:  # measured along the aim and across it
+            moved = np.array([[math.cos(aim), math.sin(aim)], [-math.sin(aim), math.cos(aim)]]) @ moved
         distance, drift = float(moved[0]), abs(float(moved[1]))
         cost = self.reward.energy * energy / (self.mass * 9.81)
         if self.reward.turn:
-            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off.
-            reward = self.reward.turn * turned - WANDER_WEIGHT * wander - cost
+            # Turning on the spot: the angle turned the asked way, less how far the trunk wandered off. Begun
+            # mid-stride, a fall forfeits the turn: a fast spin that ended on its back out of the walk scored more
+            # than a slower one that stays up. From standing only if asked: forfeiting there always turned an
+            # imported A1's 1 s turns 165 degrees into 61 on one of 6 walks, and 132 into 109 on average, after
+            # the robot had stood still.
+            forfeit = fell and (start is not None or self.reward.forfeit)
+            turn = 0.0 if forfeit else self.reward.turn * (early if self.reward.early else turned)
+            reward = turn - WANDER_WEIGHT * wander - cost
         else:
-            reward = distance - DRIFT_WEIGHT * drift - cost
+            # Forward: the distance counts for less the more the heading turned, so a walk that curves round
+            # (an imported A1 went 1.46 m but turned 42 degrees in 4 s) loses to one that goes straight. Never less
+            # than nothing: past 1 / HEADING_WEIGHT rad, walking further would score worse. Holding a heading counts
+            # how far it strayed on average instead: the end alone may come back after a swing.
+            straying = self.reward.hold * stray if self.reward.hold else self.reward.heading * abs(turned)
+            reward = distance - min(straying, 1.0) * max(distance, 0.0) - DRIFT_WEIGHT * drift - cost
         if fell:
             reward -= FALL_PENALTY + (self.seconds - up if self.reward.survive else 0.0)
         return {
             "distance": distance,
             "drift": drift,
             "turned": turned,
+            "stray": stray,
             "wander": wander,
             "energy": energy,
             "up": up,
             "fell": float(fell),
+            "tilt": math.acos(max(-1.0, min(1.0, upright))),  # rad: the most the trunk leaned, up to a fall
             "reward": reward,
         }
 
     def train(
         self,
-        rhythm: Rhythm,
+        rhythm: Rhythm | Steering,
         iterations: int = 30,
         directions: int = 8,
         top: int = 4,
@@ -255,10 +410,12 @@ class Trainer:
         pushes: float = 0.0,
         callback: Callable[[int, dict[str, float]], None] | None = None,
         stop: Callable[[], bool] | None = None,
+        starts: Sequence[Start | None] | None = None,
     ) -> TrainingLog:
         """ARS on the rhythm, in place (a live controller may be playing it). With `pushes` (m/s) every try is
-        shoved once at random, the same shove for both sides of a direction. After each iteration the current
-        rhythm walks once more, unshoved, for the log and the callback."""
+        shoved once at random, the same shove for both sides of a direction; with `starts`, it begins from one of
+        them picked at random (None: standing still at home), the same for both sides. After each iteration the
+        current rhythm walks once more, from home and unshoved, for the log and the callback."""
         if not 1 <= top <= directions:
             raise CPGError("top must be between 1 and the number of directions")
         rng = np.random.default_rng(seed)
@@ -269,10 +426,11 @@ class Trainer:
                 break
             deltas = rng.standard_normal((directions, len(rhythm.theta)))
             shoves = [random_push(rng, pushes, self.seconds) if pushes > 0 else None for _ in deltas]
+            begins = [starts[int(rng.integers(len(starts)))] for _ in deltas] if starts else [None] * len(deltas)
             base = rhythm.theta.copy()
-            pairs = list(zip(deltas, shoves, strict=True))
-            plus = np.array([self.rollout(rhythm, base + noise * dl, p)["reward"] for dl, p in pairs])
-            minus = np.array([self.rollout(rhythm, base - noise * dl, p)["reward"] for dl, p in pairs])
+            tries = list(zip(deltas, shoves, begins, strict=True))
+            plus = np.array([self._score(rhythm, base + noise * dl, p, s) for dl, p, s in tries])
+            minus = np.array([self._score(rhythm, base - noise * dl, p, s) for dl, p, s in tries])
             best = np.argsort(-np.maximum(plus, minus))[:top]
             spread = np.concatenate([plus[best], minus[best]]).std() + 1e-8
             rhythm.theta = base + step_size / (top * spread) * np.tensordot(
@@ -286,6 +444,11 @@ class Trainer:
                 callback(it + 1, walk)
         log.seconds = time.perf_counter() - started
         return log
+
+    def _score(self, rhythm: Rhythm | Steering, theta: np.ndarray, push: Push | None, start: Start | None) -> float:
+        """A try's reward: its mean over the reward's aims (one, straight ahead, unless learning to steer)."""
+        aims = self.reward.aims
+        return sum(self.rollout(rhythm, theta, push, start, aim)["reward"] for aim in aims) / len(aims)
 
     def push_test(self, rhythm: Rhythm, strength: float, trials: int = 12, seed: int = 99) -> dict[str, float]:
         """Walk `trials` times, each shoved once at random: how many stayed up, and how far they got."""

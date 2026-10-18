@@ -171,3 +171,52 @@ def test_a_failing_tick_does_not_end_the_stream():
     with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
         frames = [_next_frame(ws) for _ in range(5)]  # frames keep coming after the failure
     assert calls["n"] > 3 and len(frames) == 5
+
+
+def test_a_viewer_that_says_what_it_took_in_is_sent_only_a_few_frames_ahead():
+    """A page drawing a heavy scene on a busy machine took in 25 of the 60 pose frames sent each second, and its
+    picture fell 15 s behind the simulation. A page that says "seen" gets at most MAX_POSES_AHEAD frames ahead;
+    one that never says gets every frame, as before."""
+    import asyncio
+
+    from robotforge.viewer import server
+
+    class Page:
+        def __init__(self):
+            self.frames = 0
+
+        async def send_bytes(self, data):
+            self.frames += 1
+
+    hub = ViewerHub(SimSession.from_path(DEMO))
+    pacing, old = Page(), Page()
+    hub.clients.update({pacing, old})
+
+    async def send(n):
+        for _ in range(n):
+            await hub._send_poses(b"pose")
+
+    asyncio.run(send(5))  # before it first says "seen", a page is sent every frame
+    hub.seen(pacing)  # it took in the first of them: 4 are unread, more than MAX_POSES_AHEAD
+    asyncio.run(send(10))
+    assert pacing.frames == 5 and old.frames == 15
+    for _ in range(4):
+        hub.seen(pacing)  # it caught up
+    asyncio.run(send(10))
+    assert pacing.frames == 5 + server.MAX_POSES_AHEAD and old.frames == 25
+    for _ in range(20):  # a page taking in a frame for each frame sent keeps getting them all
+        hub.seen(pacing)
+        asyncio.run(send(1))
+    assert pacing.frames == 5 + server.MAX_POSES_AHEAD + 20
+
+
+def test_seen_messages_are_taken_without_an_error():
+    _, client = _client()
+    with client, client.websocket_connect("/ws", headers={"host": "127.0.0.1:8737"}) as ws:
+        _next_text(ws, "scene")
+        for _ in range(5):
+            ws.send_text(json.dumps({"type": "seen"}))
+            _next_frame(ws)
+        ws.send_text(json.dumps({"type": "speed", "value": 1.0}))
+        frame = _next_frame(ws)
+        assert frame.size > 0
