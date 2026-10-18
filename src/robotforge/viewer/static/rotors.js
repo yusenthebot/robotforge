@@ -4,7 +4,8 @@
 // second, and each frame eases every propeller toward its speed and turns it.
 import * as THREE from "three";
 
-const FULL_SPEED = 26; // rad/s drawn at full throttle: fast, yet a two-bladed propeller still reads as turning
+const FULL_SPEED = 18; // rad/s drawn at full throttle: fast, yet a two-bladed propeller still reads as turning (at 26 a
+// 30 fps recording showed it a quarter turn apart from frame to frame, and the eye lost which way it went)
 const SPIN_UP = 0.18; // s, how quickly a propeller's drawn speed follows its command
 const BLUR_OPACITY = 0.16; // a faint disc where the blades sweep, at full speed
 
