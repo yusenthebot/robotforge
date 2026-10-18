@@ -27,6 +27,8 @@ MIN_LIFT = 1.1  # the rotors must lift at least this many times the aircraft's w
 MIN_ROTORS = 3
 MEANT_TO_LIFT = 0.5
 UPRIGHT = 0.7  # a rotor whose axis is this close to straight up pushes up
+FOOT_BAND = 0.02  # m above its lowest point a part still counts as what it stands on
+MIN_FOOT = 0.03  # m
 
 
 class AirframeError(ValueError):
@@ -139,6 +141,7 @@ class Airframe:
     radius: float  # m from the center to the furthest rotor tip seen from above
     descendants: frozenset[int]  # every body of the aircraft
     height: float = 0.0  # m from the root body's origin up to the top of the aircraft (a GPS dome, a camera)
+    foot: float = 0.05  # m from its center out to the furthest point it stands on (a skid's end, a foot), from above
 
     @property
     def actuators(self) -> list[int]:
@@ -327,6 +330,7 @@ def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = N
         radius=_radius(model, data, bodies, origin),
         descendants=bodies,
         height=_height(model, data, bodies, origin),
+        foot=_foot(model, data, bodies, origin),
     )
     _check_flies(frame)
     return frame
@@ -395,6 +399,28 @@ def _rest_height(model: mujoco.MjModel, data: mujoco.MjData, bodies, root: int) 
         lowest_point(model, data, g)[2] for g in range(model.ngeom) if g_in(model, g, bodies) and collides(model, g)
     ]
     return float(data.xpos[root][2] - min(lows)) if lows else 0.0
+
+
+def _foot(model: mujoco.MjModel, data: mujoco.MjData, bodies, origin: np.ndarray) -> float:
+    """How far from its center (seen from above) the parts it stands on reach: the solid parts that come within
+    FOOT_BAND of its lowest point, in the pose measured. A spot to land on must carry it out to there, whichever
+    way it faces (a skid off a table's edge tips it over). At least MIN_FOOT: nothing stands on a point."""
+    from robotforge.behaviors.nav_map import world_extent
+    from robotforge.sim.geometry import collides, lowest_point
+
+    solid = [g for g in range(model.ngeom) if g_in(model, g, bodies) and collides(model, g)]
+    if not solid:
+        return MIN_FOOT
+    bottom = min(float(lowest_point(model, data, g)[2]) for g in solid)
+    reach = MIN_FOOT
+    for g in solid:
+        lo, hi = world_extent(model, data, g)
+        if lo[2] > bottom + FOOT_BAND:
+            continue
+        for x in (lo[0], hi[0]):
+            for y in (lo[1], hi[1]):
+                reach = max(reach, float(np.hypot(x - origin[0], y - origin[1])))
+    return reach
 
 
 def _radius(model: mujoco.MjModel, data: mujoco.MjData, bodies, origin: np.ndarray) -> float:

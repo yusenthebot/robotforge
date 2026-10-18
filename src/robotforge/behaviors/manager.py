@@ -874,8 +874,9 @@ class BehaviorManager:
             elif isinstance(to, str):
                 to = [float(w) for w in re.split(r"[^\d.+-]+", to.strip(" []()")) if w]
             try:
-                goals, land, described = airways.goals_for(model, data, fc, to, named)
-                plan = airways.plan_flight(model, data, fc, goals, land)
+                grounds = airways.Grounds.of(self._world())  # which shapes are the ground, which are trees
+                goals, land, described = airways.goals_for(model, data, fc, to, named, grounds)
+                plan = airways.plan_flight(model, data, fc, goals, land, grounds)
             except flight.FlightError as exc:
                 raise BehaviorError(str(exc)) from exc
             except navigation.NoWay as exc:

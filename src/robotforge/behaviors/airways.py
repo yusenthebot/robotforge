@@ -2,9 +2,16 @@
 
 Heights are world heights: z 0 is the ground at the world's zero, not the ground under the aircraft, and a point
 [x, y, z] is where its center goes. A point at or just above the first surface under it is a landing on that
-surface (z 0 on the grass, z 0.75 on a 0.75 m table), and so is a point inside something a little below its top
-(z 0 on a hill or a half-buried rock). A point under a tree's crown or a table is a place to hover there, not a
-landing on top of what is over it. Only the last point can be a landing.
+surface (z 0 on the grass, z 0.75 on a 0.75 m table). The ground is the floor and the terrain: z 0 on a hill, a
+ramp or a step lands on top of it, and so does a point a little under the top of one. Anything else standing on
+the ground is not ground: z 0 where a crate, a ball or a robot stands leaves no room to land, and the refusal says
+where there is. A point under a tree's crown or a table is a place to hover there, not a landing on top of what is
+over it. Only the last point can be a landing.
+
+A landing needs something under its skids that carries it: still (not a ball, which rolls away under it, or a
+robot), not a tree (its crown is leaves), level enough, and under all of its skids (5 cm from a table's edge one
+hangs off). A refused spot comes with the nearest one that passes every check, the way there included, on the same
+surface (the ground for the ground, the tabletop for a tabletop).
 
 The way there is straight legs. A leg that would run into something goes over it or round it at the same height,
 whichever is shorter and clear all the way. Every leg is checked, the climb at the start and the way down at the
@@ -49,10 +56,18 @@ SIDE_CLEARANCE = 0.4  # m kept beside what it flies round, past the reach of its
 ROOM = 0.05  # m kept round its shape when a leg is swept against the boxes of things
 LAND_MARGIN = 0.05  # m over a surface (plus its own rest height) that still counts as on it
 BURIED = 0.5  # m: a point no deeper than this inside something is a landing on its top (a rock, a hill)
+SURFACE = 0.02  # m: a point this little under the top of something is on its top (a table's height, rounded down)
 UNDER = 0.15  # m kept between its top and an overhang (a crown, a table) it flies under
 COLUMN_STOP = 0.15  # m above the touchdown the way down is checked to (a slope beside the spot is not in the way)
-TOUCHDOWN_TOL = 0.15  # m: a landing further than this from where it was planned did not land there
+# A landing further than TOUCHDOWN_TOL across or TOUCHDOWN_DROP up or down from where it was planned did not land
+# there: sent to the grass, it came down on a ball 0.12 m higher, tipped over, and was reported as arrived.
+TOUCHDOWN_TOL = 0.15  # m
+TOUCHDOWN_DROP = 0.05  # m
 MAX_SLOPE = 25.0  # degrees of ground it lands on (its skids tip over at about 38)
+FOOT_STEP = 0.03  # m: a skid this far above or below the plane through the others does not rest where they do
+FOOT_PROBES = 8  # around the ring it stands on, and its middle
+ROOM_RINGS = (0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 1.0, 1.25, 1.5)  # m round a refused spot
+ROOM_DIRECTIONS = 16
 TOO_WIDE = 15.0  # m: something wider than this is flown over, never round (and seen by rays, not its box)
 SWEEP_STEP = 0.05  # m between the places along a leg its shape is checked at
 
@@ -73,13 +88,39 @@ def parse_points(text: str) -> list[Any] | None:
 
 
 @dataclass(frozen=True)
+class Grounds:
+    """What a world says about its shapes that its model does not: which of those fixed to the world are the ground
+    (the floor and the terrain patches, where z 0 is) rather than furniture fixed in place (a fixed crate is a shape
+    on the world body too), and which things cannot carry an aircraft (a tree: its crown is leaves). Without a
+    world (a model opened from a file) everything fixed to the world is ground."""
+
+    terrain: frozenset[str] | None = None  # names of the terrain patches; None: every shape on the world body
+    trees: frozenset[str] = frozenset()
+
+    @classmethod
+    def of(cls, world: Any) -> Grounds:
+        if world is None:
+            return cls()
+        trees = frozenset(o.name for o in world.objects if o.shape == "tree")
+        return cls(frozenset(p.name for p in world.terrain), trees)
+
+
+@dataclass(frozen=True)
 class Thing:
-    """Something an aircraft can run into: its name (an object, a robot, a terrain patch), its top (m) and its
-    shapes."""
+    """Something an aircraft can run into: its name (an object, a robot, a terrain patch), its top (m), its shapes,
+    and what it is to land on: the ground, something that moves (a loose object, a robot) or a tree."""
 
     name: str
     top: float
     geoms: tuple[int, ...]
+    ground: bool = False
+    moves: bool = False
+    tree: bool = False
+
+    @property
+    def carries(self) -> bool:
+        """Whether it could land on it: a ball rolls away under it, a robot walks off, leaves give."""
+        return not (self.moves or self.tree)
 
 
 @dataclass(frozen=True)
@@ -98,14 +139,19 @@ class Airspace:
     """The world as one aircraft flies through it, as it is now: what is at a point, and what a straight leg runs
     into. The boxes of the solid things are measured once, for every leg of a plan."""
 
-    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, fc: FlightController) -> None:
+    def __init__(
+        self, model: mujoco.MjModel, data: mujoco.MjData, fc: FlightController, grounds: Grounds | None = None
+    ) -> None:
         from robotforge.behaviors.nav_map import world_extent
 
         self.model, self.data, self.fc = model, data, fc
+        self.grounds = grounds or Grounds()
         frame = fc.frame
         self.own, self.root = frame.descendants, frame.root
-        self.radius, self.rest, self.height = frame.radius, frame.rest_height, frame.height
+        self.radius, self.rest, self.height, self.foot = frame.radius, frame.rest_height, frame.height, frame.foot
         flat = (mujoco.mjtGeom.mjGEOM_PLANE, mujoco.mjtGeom.mjGEOM_HFIELD)
+        self._ground = self._ground_geoms(flat)
+        self._moving = {int(model.body_rootid[b]) for b in range(model.nbody) if model.body_jntnum[b] > 0}
         geoms, lows, highs = [], [], []
         for g in range(model.ngeom):
             group = int(model.geom_group[g])
@@ -113,8 +159,9 @@ class Airspace:
                 continue
             if not (model.geom_contype[g] or model.geom_conaffinity[g]) or group >= len(SOLID) or not SOLID[group]:
                 continue
-            if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_BOX and np.abs(data.geom_xmat[g][6:]).max() < 0.999:
-                continue  # a tilted slab (a ramp): its box would fill the air over the slope; rays see it
+            tilted = np.abs(data.geom_xmat[g][6:]).max() < 0.999
+            if g in self._ground and int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_BOX and tilted:
+                continue  # a ramp's slab: its box would fill the air over the slope; rays see it
             lo, hi = world_extent(model, data, g)
             if np.any(hi - lo > TOO_WIDE):
                 continue
@@ -124,6 +171,17 @@ class Airspace:
         self._geoms = np.array(geoms, dtype=int)
         self._low = np.array(lows, float).reshape(-1, 3)
         self._high = np.array(highs, float).reshape(-1, 3)
+
+    def _ground_geoms(self, flat: tuple[int, ...]) -> frozenset[int]:
+        m, terrain = self.model, self.grounds.terrain
+        out = set()
+        for g in range(m.ngeom):
+            if int(m.geom_bodyid[g]) != 0:
+                continue
+            name = (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or "").split("/", 1)[0]
+            if terrain is None or int(m.geom_type[g]) in flat or name in terrain:
+                out.add(g)
+        return frozenset(out)
 
     # ---- what is at a point ----
 
@@ -146,6 +204,23 @@ class Airspace:
             under = cast(m, d, sky, DOWN, own, root)
             return Spot(None, self.thing(under.geom) if under else None, top, top)
         return Spot(ground_height(m, d, p + UP * 1e-3, own, root))
+
+    def ground_at(self, x: float, y: float) -> float:
+        """The height of the ground (the floor or terrain) at (x, y), under whatever stands on it there."""
+        at = np.array([x, y, GROUND_PROBE])
+        for _ in range(24):  # through a crown, a table, a crate: a ray in one leaves it through its bottom
+            hit = cast(self.model, self.data, at, DOWN, self.own, self.root)
+            if hit is None:
+                return 0.0
+            if hit.geom in self._ground:
+                return float(at[2] - hit.distance)
+            at = at + DOWN * (hit.distance + 1e-4)
+        return 0.0
+
+    def under(self, point: np.ndarray) -> tuple[float, Thing] | None:
+        """The first surface straight under `point` (its height, m) and what it belongs to, or None."""
+        hit = cast(self.model, self.data, np.asarray(point, float), DOWN, self.own, self.root)
+        return None if hit is None else (float(point[2]) - hit.distance, self.thing(hit.geom))
 
     def crowding(self, point: np.ndarray) -> Thing | None:
         """What the aircraft would touch with its center at `point` (resting on a surface is not touching)."""
@@ -171,7 +246,10 @@ class Airspace:
                 if int(m.geom_bodyid[g]) == 0 and _stem(mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or "") == stem
             ] or [geom]
         top = max(float(world_extent(m, self.data, g)[1][2]) for g in geoms)
-        return Thing(name.split("/", 1)[0], top, tuple(geoms))
+        name = name.split("/", 1)[0]
+        ground = all(g in self._ground for g in geoms)
+        moves = body > 0 and int(m.body_rootid[body]) in self._moving
+        return Thing(name, top, tuple(geoms), ground, moves, body > 0 and name in self.grounds.trees)
 
     # ---- what a straight leg runs into ----
 
@@ -245,11 +323,12 @@ def goals_for(
     fc: FlightController,
     to: list[Any],
     named: Destination | None = None,
+    grounds: Grounds | None = None,
 ) -> tuple[list[np.ndarray], bool, dict[str, Any]]:
     """The points a move(to=...) asks an aircraft to fly to, whether it lands at the last one, and how to describe
     the destination. `to` is [x, y] (at the height it flies at, or TAKEOFF_HEIGHT from the ground), [x, y, z], a
     list of such points, or a named thing (`named`, found by the caller), which it flies to 1 m above. See the
-    module notes for which points are landings."""
+    module notes for which points are landings; `grounds` says which shapes are the ground."""
     frame = fc.frame
     here = data.xpos[frame.root]
     ground_here = fc.ground_below(model, data, here)
@@ -265,7 +344,7 @@ def goals_for(
     raw = list(to) if many else [to]
     if not raw or len(raw) > MAX_POINTS:
         raise FlightError(f"to is a point [x, y] or [x, y, z], or a list of 1 to {MAX_POINTS} of them")
-    space = Airspace(model, data, fc)
+    space = Airspace(model, data, fc, grounds)
     goals: list[np.ndarray] = []
     land = False
     for k, p in enumerate(raw):
@@ -293,26 +372,32 @@ def goals_for(
 
 
 def _landing_at(space: Airspace, point: np.ndarray, k: int, asked: list[Any], has_z: bool) -> tuple[bool, float]:
-    """Whether a point is a landing, and the height its center goes to there."""
+    """Whether a point is a landing, and the height its center goes to there (see the module notes). A spot taken
+    by something that is not ground is still a landing on the ground there: plan_flight finds no room for it, and
+    says where there is."""
     spot = space.spot(point)
+    x, y, z = (float(v) for v in point)
     if spot.exit is None:  # out in the air: a landing only at the surface under it
         floor = (spot.surface if spot.surface is not None else 0.0) + space.rest
-        if not has_z or point[2] > floor + LAND_MARGIN:
-            return False, float(point[2])
-        down = np.array([point[0], point[1], floor])
-        if point[2] <= 0.0 and space.first_hit(down, down + UP * (space.height + UNDER)) is not None:
-            # "On the ground" where it does not fit under what is over the spot (a ramp's slab, a low step): on top
-            sky = np.array([point[0], point[1], GROUND_PROBE])
-            top = ground_height(space.model, space.data, sky, space.own, space.root)
-            if top is not None and top + space.rest > floor + 1e-3:
-                return True, top + space.rest
-        return True, floor
-    what = spot.inside.name if spot.inside is not None else "the ground"
-    top = spot.top if spot.top is not None else spot.exit
-    if has_z and top - float(point[2]) <= BURIED:  # a little under the top of a rock, a hill, a crown: on it
-        return True, top + space.rest
-    if has_z and point[2] <= 0.0:  # z 0 or below: on the ground, whatever is there (a hill)
+        if not has_z or z > floor + LAND_MARGIN:
+            return False, z
+        if z <= 0.0:
+            down = np.array([x, y, floor])
+            over = space.first_hit(down, down + UP * (space.height + UNDER))
+            if over is not None and over[1].ground:  # the ground's own shapes over the spot (a ramp's slab): on top
+                return True, max(space.ground_at(x, y) + space.rest, floor)
+        return True, floor  # a ball or a robot over the spot (it once landed on top of them) leaves no room
+    inside = spot.inside
+    if inside is None or inside.ground:  # z 0 on a hill, or a little under the top of a step or a hill: on top
+        top = space.ground_at(x, y)
+        if has_z and (z <= 0.0 or top - z <= BURIED):
+            return True, top + space.rest
+    elif has_z and spot.exit - z <= SURFACE:  # on top of a thing, give or take a rounding of its height
         return True, spot.exit + space.rest
+    elif has_z and z <= 0.0:  # in something standing on the ground (a locker settled 0.07 mm into the floor)
+        return True, space.ground_at(x, y) + space.rest
+    what = inside.name if inside is not None else "the ground"
+    top = spot.top if spot.top is not None else spot.exit
     if not has_z:
         raise FlightError(
             f"point {k + 1} {asked} is inside {what} at the height it flies at ({point[2]:.2f} m): give a height "
@@ -342,11 +427,13 @@ def plan_flight(
     fc: FlightController,
     goals: list[np.ndarray],
     land: bool,
+    grounds: Grounds | None = None,
 ) -> FlightPlan:
     """Points a mission flies through for `goals` (world points; with `land`, it lands at the last one): straight
     up first when it stands on the ground, then over or round anything a straight leg would fly into, and
-    straight down at the end of a landing. Raises NoWay saying what is in the way when no way is clear."""
-    space = Airspace(model, data, fc)
+    straight down at the end of a landing. Raises NoWay saying what is in the way when no way is clear, and
+    where there is room when the spot itself has none."""
+    space = Airspace(model, data, fc, grounds)
     here = data.xpos[fc.frame.root].copy()
     notes: list[str] = []
     points: list[np.ndarray] = []
@@ -362,16 +449,14 @@ def plan_flight(
     touchdown = None
     for k, goal in enumerate(goals):
         landing = land and k == len(goals) - 1
-        crowded = space.crowding(goal)
-        if crowded is not None:
-            where = [round(float(v), 2) for v in goal]
-            doing = "land" if landing else "hover"
-            near = _room_near(space, goal, landing)
-            instead = f"; {[round(float(v), 2) for v in near]} has room" if near is not None else ""
-            raise NoWay("blocked", f"there is no room to {doing} at {where}: it would touch {crowded.name}{instead}")
+        refused = _no_room(space, goal, landing)
+        if refused is not None:
+            raise _with_room(space, start, goal, landing, refused)
         if landing:
-            _check_slope(space, goal)
-            legs, touchdown = _landing(space, start, goal, notes)
+            try:
+                legs, touchdown = _landing(space, start, goal, notes)
+            except NoWay as exc:  # no way down to the spot (a bench over it, too low to fly in under)
+                raise _with_room(space, start, goal, landing, exc) from None
         else:
             legs = _route(space, start, goal, notes)
         points.extend(q for q in legs if not points or not np.allclose(q, points[-1], atol=1e-3))
@@ -382,38 +467,102 @@ def plan_flight(
     return FlightPlan(points, land, length, notes, touchdown)
 
 
-def _room_near(space: Airspace, goal: np.ndarray, landing: bool) -> np.ndarray | None:
-    """The nearest point round `goal` (out to a metre) where it fits, at the same height or on the ground there."""
-    for r in (0.25, 0.5, 0.75, 1.0):
-        for k in range(12):
-            a = 2 * math.pi * k / 12
-            p = goal + np.array([r * math.cos(a), r * math.sin(a), 0.0])
-            if landing:
-                surface = ground_height(space.model, space.data, p + UP * 0.5, space.own, space.root)
-                p[2] = (surface if surface is not None else 0.0) + space.rest
-            if space.crowding(p) is None and space.spot(p).exit is None:
-                return p
+def _with_room(space: Airspace, start: np.ndarray, goal: np.ndarray, landing: bool, refused: NoWay) -> NoWay:
+    """The refusal, saying where nearby there is room, when somewhere is."""
+    near = _room_near(space, start, goal, landing)
+    if near is None:
+        return refused
+    return NoWay(refused.cause, f"{refused}; {[round(float(v), 2) for v in near]} has room")
+
+
+def _no_room(space: Airspace, goal: np.ndarray, landing: bool) -> NoWay | None:
+    """Why it cannot hover or land at `goal` itself (it would touch something, or what is under it would not
+    carry it), or None."""
+    crowded = space.crowding(goal)
+    if crowded is not None:
+        where = [round(float(v), 2) for v in goal]
+        doing = "land" if landing else "hover"
+        return NoWay("blocked", f"there is no room to {doing} at {where}: it would touch {crowded.name}")
+    return _footing(space, goal) if landing else None
+
+
+def _footing(space: Airspace, touchdown: np.ndarray) -> NoWay | None:
+    """Why what is under its skids at `touchdown` would not carry it, or None: the heights under its middle and
+    round the ring it stands on (out to its feet, whichever way it faces) lie on one plane, not too steep, of
+    things that stay put."""
+    where = [round(float(v), 2) for v in touchdown[:2]]
+    surface = float(touchdown[2]) - space.rest
+    above = surface + space.foot + 0.05  # over ground as steep as 45 degrees, under what it would touch
+    rings = [(0.0, 0.0)] + [
+        (space.foot * math.cos(a), space.foot * math.sin(a))
+        for a in (2 * math.pi * k / FOOT_PROBES for k in range(FOOT_PROBES))
+    ]
+    heights, things = [], []
+    for dx, dy in rings:
+        found = space.under(np.array([touchdown[0] + dx, touchdown[1] + dy, above]))
+        if found is None:
+            return NoWay("blocked", f"the spot at {where} is at an edge with nothing under one of its skids")
+        heights.append(found[0])
+        things.append(found[1])
+    for thing in things:
+        if not thing.carries:
+            why = "its crown is leaves" if thing.tree else "it moves, and would roll or walk away under it"
+            return NoWay("blocked", f"it cannot land on {thing.name} at {where}: {why}; land beside it")
+    offsets = np.array(rings)
+    fit = np.column_stack([np.ones(len(rings)), offsets])
+    plane, *_ = np.linalg.lstsq(fit, np.array(heights), rcond=None)
+    off = np.abs(fit @ plane - np.array(heights))
+    if float(off.max()) > FOOT_STEP:  # a step or an edge, not a slope: one skid would hang off or stand on it
+        name = things[int(off.argmax())].name
+        return NoWay(
+            "blocked",
+            f"the spot at {where} is at an edge or a step of {name}: its skids would not all rest on it; move it "
+            f"{space.foot:.2f} m or more in from the edge",
+        )
+    slope = math.degrees(math.atan(math.hypot(plane[1], plane[2])))
+    if slope > MAX_SLOPE:
+        return NoWay(
+            "too_steep", f"the ground at {where} slopes {slope:.0f} degrees, too steep to land on; pick a flatter spot"
+        )
     return None
 
 
-def _check_slope(space: Airspace, touchdown: np.ndarray) -> None:
-    """Refuse ground too steep to land on: the heights under the ends of its skids, as far apart as it is wide."""
-    reach = 0.6 * space.radius
-    above = touchdown[2] - space.rest + reach + 0.02  # over ground as steep as 45 degrees, under a ramp's slab
-    heights = {}
-    for dx, dy in ((reach, 0.0), (-reach, 0.0), (0.0, reach), (0.0, -reach)):
-        probe = np.array([touchdown[0] + dx, touchdown[1] + dy, above])
-        heights[dx, dy] = ground_height(space.model, space.data, probe, space.own, space.root)
-    if any(h is None for h in heights.values()):
-        return
-    gx = (heights[reach, 0.0] - heights[-reach, 0.0]) / (2 * reach)
-    gy = (heights[0.0, reach] - heights[0.0, -reach]) / (2 * reach)
-    slope = math.degrees(math.atan(math.hypot(gx, gy)))
-    if slope > MAX_SLOPE:
-        where = [round(float(v), 2) for v in touchdown[:2]]
-        raise NoWay(
-            "too_steep", f"the ground at {where} slopes {slope:.0f} degrees, too steep to land on; pick a flatter spot"
-        )
+def _room_near(space: Airspace, start: np.ndarray, goal: np.ndarray, landing: bool) -> np.ndarray | None:
+    """The nearest point round `goal` that passes every check `goal` failed, the way there included: at the same
+    height for a hover; for a landing on the same surface (the ground for the ground, that tabletop for a
+    tabletop). None when nothing within ROOM_RINGS does."""
+    surface = float(goal[2]) - space.rest
+    x0, y0 = float(goal[0]), float(goal[1])
+    on_ground = abs(space.ground_at(x0, y0) - surface) <= FOOT_STEP
+    asked = None if on_ground else space.under(np.array([x0, y0, surface + FOOT_STEP]))
+    for r in ROOM_RINGS:
+        for k in range(ROOM_DIRECTIONS):
+            a = 2 * math.pi * k / ROOM_DIRECTIONS
+            x, y = x0 + r * math.cos(a), y0 + r * math.sin(a)
+            if not landing:
+                p = np.array([x, y, float(goal[2])])
+                if space.spot(p).exit is not None:
+                    continue
+            elif on_ground:
+                p = np.array([x, y, space.ground_at(x, y) + space.rest])
+            else:
+                found = space.under(np.array([x, y, surface + FOOT_STEP]))
+                if found is None or asked is None or found[1].name != asked[1].name:
+                    continue
+                if abs(found[0] - surface) > FOOT_STEP:
+                    continue
+                p = np.array([x, y, found[0] + space.rest])
+            if _no_room(space, p, landing) is not None:
+                continue
+            try:
+                if landing:
+                    _landing(space, start, p, [])
+                else:
+                    _route(space, start, p, [])
+            except NoWay:
+                continue
+            return p
+    return None
 
 
 def _take_off(space: Airspace, here: np.ndarray, lift: float, floor: float, notes: list[str]) -> np.ndarray:
@@ -649,7 +798,7 @@ class FlightTrip:
         """Down: on the spot planned, or somewhere else (on top of something it came down on)."""
         planned = self.touchdown
         if planned is None or (
-            float(np.hypot(*(p[:2] - planned[:2]))) <= TOUCHDOWN_TOL and abs(float(p[2] - planned[2])) <= TOUCHDOWN_TOL
+            float(np.hypot(*(p[:2] - planned[:2]))) <= TOUCHDOWN_TOL and abs(float(p[2] - planned[2])) <= TOUCHDOWN_DROP
         ):
             self._finish(t, "arrived")
             return

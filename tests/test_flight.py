@@ -336,6 +336,86 @@ def test_a_landing_that_comes_down_somewhere_else_did_not_arrive(pg):
     assert isinstance(trip, airways.FlightTrip)
 
 
+def test_a_landing_that_settles_a_little_higher_than_planned_did_not_arrive(pg):
+    _trip(pg, [0.0, 0.0, 1.5])
+    trip = pg.behaviors.navigate("drone", [1.0, 0.0, 0.0], None, None, 30)
+    trip.touchdown = trip.touchdown + np.array([0.0, 0.0, 0.1])  # on a ball 0.12 m up it once said it arrived
+    pg.run_fast(lambda: trip.done, 31)
+    assert trip.result()["why"] == "landed_elsewhere"
+
+
+def _settled_upright(pg, seconds: float = 4.0) -> dict:
+    pg.run_fast(lambda: False, seconds)
+    return pg.behaviors.pose("drone")
+
+
+def _room_from(refusal) -> list[float]:
+    import re
+
+    return json.loads(re.search(r"(\[[^\]]+\]) has room", str(refusal)).group(1))
+
+
+@pytest.mark.parametrize(
+    "what",
+    [
+        ("ball", {"shape": "sphere", "size": [0.2], "mass": 0.3}),  # it landed on it and tipped over
+        ("locker", {"shape": "box", "size": [0.3, 0.3, 1.4]}),  # settled 0.07 mm into the floor: inside it
+        ("stone", {"shape": "rock", "size": [0.8, 0.45], "fixed": True}),
+        ("dog", None),  # it landed on the dog's back
+    ],
+    ids=lambda w: w[0],
+)
+def test_z_0_where_something_stands_is_refused_and_the_spot_offered_is_on_the_ground(pg, what):
+    from robotforge.behaviors.navigate import NoWay
+
+    name, obj = what
+    if obj is None:
+        pg.add_robot(name, template="quadruped", pos=[2.0, 0.0])
+    else:
+        pg.add_object(name, pos=[2.0, 0.0], **obj)
+    pg.run_fast(lambda: False, 1.0)
+    with pytest.raises(NoWay, match=f"no room to land at .*it would touch {name}") as refused:
+        pg.behaviors.navigate("drone", [2.0, 0.0, 0.0], None, None, 30)
+    near = _room_from(refused.value)
+    assert near[2] < 0.2  # on the ground, not on top of it
+    result, touched = _clean_trip(pg, near)
+    assert result["arrived"] and result["landed"] and not touched
+    pose = _settled_upright(pg)
+    assert pose["upright"] and pose["position"][2] < 0.2
+
+
+def test_it_will_not_land_on_top_of_what_moves_or_on_a_crown(pg):
+    from robotforge.behaviors.navigate import NoWay
+
+    pg.add_object("ball", shape="sphere", size=[0.2], mass=0.3, pos=[2.0, 0.0])
+    pg.add_object("crate", shape="box", size=[0.6, 0.6, 0.5], pos=[0.0, 2.0])  # loose
+    pg.add_object("tree", shape="tree", size=[1.2, 4.0], pos=[-3.0, 0.0])
+    pg.run_fast(lambda: False, 1.0)
+    rest = pg.session.controllers["drone"].frame.rest_height
+    for to, why in (
+        ([2.0, 0.0, 0.2 + rest], "cannot land on ball.*roll"),
+        ([0.0, 2.0, 0.5], "cannot land on crate.*moves"),
+        ([-3.0, 0.0, 4.2 + rest], "cannot land on tree.*leaves"),
+    ):
+        with pytest.raises(NoWay, match=why):
+            pg.behaviors.navigate("drone", to, None, None, 30)
+    with pytest.raises(ValueError, match="inside tree"):  # 0.3 m under the crown's top: not a landing on it
+        pg.behaviors.navigate("drone", [-3.0, 0.0, 3.9], None, None, 30)
+    assert pg.behaviors.robots()[0]["flight"]["state"] == "landed"  # it never left
+
+
+def test_a_spot_at_a_tables_edge_is_refused_and_the_one_offered_is_on_the_table(pg):
+    from robotforge.behaviors.navigate import NoWay
+
+    pg.add_object("table", shape="table", size=[1.2, 0.8, 0.75], pos=[-2.0, 0.0], fixed=True)
+    with pytest.raises(NoWay, match="edge") as refused:
+        pg.behaviors.navigate("drone", [-2.55, 0.0, 0.75], None, None, 30)  # 5 cm from its end
+    near = _room_from(refused.value)
+    result, _ = _clean_trip(pg, near)
+    assert result["arrived"] and result["landed"] and result["position"][2] > 0.75
+    assert _settled_upright(pg)["upright"]
+
+
 def _drag(pg, body: int, by, seconds: float = 1.2) -> np.ndarray:
     """Drag a body in the viewer's way (SimSession's spring on the cursor) by `by` metres, and let it go."""
     session = pg.session

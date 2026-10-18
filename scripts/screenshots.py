@@ -803,6 +803,15 @@ SHOTS = [
         page=_hover_look("drone", (1.3, -1.38, -0.12), -0.42),  # from a little below: the crown over it in view
         settle=0.5,
     ),
+    # Landed on the grass beside the park's loose red ball: sent to z 0 at the ball it once landed on top of it and
+    # tipped over; now that is refused, and this is the spot the refusal offers ([2.0, -0.6] has room).
+    Shot(
+        "drone_beside_ball",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [2.0, -0.6, 0.0]), {"wait": 8.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.72, -1.95, 0.52], [1.72, -0.6, 0.1]);",
+        settle=0.5,
+    ),
     # Every aircraft side by side, each hovering a metre up: the template with 4, 6 and 8 rotors, the hexacopter
     # built from parts, the Skydio X2 and the palm-sized Crazyflie.
     Shot(
