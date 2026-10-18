@@ -53,6 +53,7 @@ SETTLE = 2.5  # s for a page to draw, frame its camera and ease its view into th
 EXIT_TIMEOUT = 240.0  # s for a lesson to end and the world to come back
 OPEN_TIMEOUT = 60.0  # s for a Chrome started on a busy machine to take the DevTools connection
 RETURNING = {"robotforge.coached": "1", "robotforge.world": "0"}  # a returning visitor: no hint, no open panel
+SMALL_ROBOT = 30  # CSS px: a robot drawn less tall than this is reported as too small to make out
 
 # ---- the layout report, run in the page ----------------------------------------------------------------------
 
@@ -204,7 +205,10 @@ LINT = r"""
         else if (panels.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) covered++;
       }
       const share = (n) => Math.round((100 * n) / list.length);
-      out.robots[robot] = { covered: share(covered), off: share(off) };
+      // How tall it is on the screen, in CSS px: on a phone a whole warehouse fitted leaves its robots a few px high.
+      const ys = list.map(([, y]) => y);
+      const tall = Math.round(Math.max(...ys) - Math.min(...ys));
+      out.robots[robot] = { covered: share(covered), off: share(off), tall };
     }
   }
   out.tiny = [...new Set(out.tiny)].slice(0, 12);
@@ -677,6 +681,10 @@ def summarize(reports: dict[str, Any]) -> None:
         if hidden:
             under = (f"{k} {v['covered']}% under a panel, {v['off']}% off screen" for k, v in hidden.items())
             lines.append("robots hidden: " + ", ".join(under))
+        robots = r.get("robots", {}).items()
+        small = {robot: v["tall"] for robot, v in robots if v.get("tall", SMALL_ROBOT) < SMALL_ROBOT}
+        if small:
+            lines.append("robots small: " + ", ".join(f"{k} {tall} px tall" for k, tall in small.items()))
         if lines:
             print(f"{name}\n    " + "\n    ".join(lines))
 
