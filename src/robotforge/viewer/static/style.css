@@ -1098,10 +1098,10 @@ input[type="range"]::-moz-range-thumb {
 .lesson-title,
 .lesson-step-title { text-wrap: balance; }
 /* Chinese titles break only between phrases (balanced, "六轴机械臂" came apart as "六轴机 / 械臂"); one with no such
-   place still wraps rather than run out of its panel. Short Chinese descriptions even out their lines: pretty
-   wrapping still left two characters on the last ("……或它自己学会的 / 走法。", "……的神经 / 网络。"). */
+   place still wraps rather than run out of its panel. The world panel's two-line Chinese descriptions even out their
+   lines: pretty wrapping still left two characters on the last ("……或它自己学会的 / 走法。"). */
 :lang(zh) :is(.learn-heading, .course-title, .lesson-title, .lesson-step-title) { word-break: keep-all; overflow-wrap: break-word; }
-:lang(zh) :is(.choice-desc, .course-summary) { text-wrap: balance; }
+:lang(zh) .choice-desc { text-wrap: balance; }
 
 .lesson-plots {
   position: fixed;
