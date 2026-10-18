@@ -36,11 +36,14 @@ GRAVITY = 9.81
 NUMERIC = "robotforge_water"  # the custom numeric field that carries a model's water (see encode / decode)
 SURFACE_GEOM = "water:surface"  # the visual surface for MuJoCo's renderer (the browser viewer draws its own)
 ENCODING = 1  # version of the numeric layout below
-CELLS_PER_GEOM = 48  # aim for about this many box cells per shape (see _box_cells)
+CELLS_PER_GEOM = 32  # aim for about this many box cells per shape (see _box_cells)
 MAX_CELLS_ALONG = 6
-# Drag: linear coefficient in m/s (damps heave and roll of floating things in a few periods, as radiated waves do:
-# a 40 cm crate settles with a damping ratio of about 0.2), quadratic drag coefficients by shape.
+# Drag: linear coefficient in m/s. Floating things lose their heave, roll and pitch to the waves they make, so a
+# 40 cm crate settles in a few bobs (damping ratio about 0.2); going along or turning flat on the water makes far
+# fewer waves, so moving horizontally (and turning about the vertical) gets HORIZONTAL_SHARE of it. Quadratic drag
+# coefficients by shape.
 LINEAR_DRAG = 0.5
+HORIZONTAL_SHARE = 0.2
 DRAG_COEFFICIENT = {
     int(G.mjGEOM_BOX): 1.05,
     int(G.mjGEOM_MESH): 1.05,
@@ -171,11 +174,12 @@ class _Cells:
 
 def _box_cells(cells: _Cells, g: int, center: np.ndarray, half: np.ndarray) -> None:
     """A grid of small boxes, roughly cubes, about CELLS_PER_GEOM of them: level boxes float exactly (each layer is
-    a slab), and four or more cells across a hull give its righting moment within a few percent."""
+    a slab, so a thin plate needs only one), and five cells across a hull give its righting moment within a few
+    percent."""
     dims = 2 * half
     volume = float(np.prod(dims))
     side = (volume / CELLS_PER_GEOM) ** (1 / 3)
-    counts = np.clip(np.ceil(dims / max(side, 1e-9)), 2, MAX_CELLS_ALONG).astype(int)
+    counts = np.clip(np.round(dims / max(side, 1e-9)), 1, MAX_CELLS_ALONG).astype(int)
     step = dims / counts
     axes = [np.linspace(-h + s / 2, h - s / 2, n) for h, s, n in zip(half, step, counts, strict=True)]
     for x in axes[0]:
@@ -472,11 +476,14 @@ class Hydro:
         rel = v - self.flow(where, float(data.time))
         local = np.einsum("nji,nj->ni", rot, rel)  # in the shape's own axes
         speed = np.sqrt((rel * rel).sum(axis=1))[:, None]
-        coef = (self.rho * share) * self.area * (LINEAR_DRAG + 0.5 * self.drag * speed)
+        up = np.abs(rot[:, 2, :])  # how vertical each of the shape's axes is
+        linear = LINEAR_DRAG * (HORIZONTAL_SHARE + (1 - HORIZONTAL_SHARE) * up)
+        coef = (self.rho * share) * self.area * (linear + 0.5 * self.drag * speed)
         f_local = -np.minimum(coef, self._force_cap) * local
         w_local = np.einsum("nji,nj->ni", rot, spin)
+        turning = LINEAR_DRAG * (1 - (1 - HORIZONTAL_SHARE) * up)  # rolling and pitching make waves, yawing few
         turn = (self.rho * share) * (
-            LINEAR_DRAG * self.turn_linear + 0.5 * self.drag * self.turn_quadratic * np.abs(w_local)
+            turning * self.turn_linear + 0.5 * self.drag * self.turn_quadratic * np.abs(w_local)
         )
         t_local = -np.minimum(turn, self._turn_cap) * w_local
         return np.einsum("nij,nj->ni", rot, f_local), np.einsum("nij,nj->ni", rot, t_local)
@@ -522,6 +529,39 @@ class Hydro:
                 int(model.site_bodyid[site]),
                 data.qfrc_applied,
             )
+
+    # ---- for pilots -----------------------------------------------------------------------------------------
+
+    def resistance(
+        self, data: mujoco.MjData, root: int, along: np.ndarray | None = None, about: np.ndarray | None = None
+    ) -> tuple[float, float]:
+        """How the water holds back the robot whose root body is `root` as it is now (its wet share), moving along
+        the world direction `along` (force c1 v + c2 v |v|, N) or turning about the world axis `about` (torque,
+        N m): what a pilot needs to know its top speed and to feed forward the thrust that drag takes."""
+        mine = self.model.body_rootid[self._geom_bodyid] == root
+        if not mine.any():
+            return 0.0, 0.0
+        wet, _ = self.cells(data)
+        share = (self._cells_to_geoms @ wet) / np.maximum(self.geom_volume, 1e-12)
+        rot = data.geom_xmat[self.geoms].reshape(-1, 3, 3)[mine]
+        up = np.abs(rot[:, 2, :])
+        weight = (self.rho * share[mine])[:, None]
+        drag = self.drag[mine]
+        if along is not None:
+            l2 = np.einsum("nji,j->ni", rot, np.asarray(along, float)) ** 2
+            linear = LINEAR_DRAG * (HORIZONTAL_SHARE + (1 - HORIZONTAL_SHARE) * up)
+            area = self.area[mine]
+            return float((weight * area * linear * l2).sum()), float((weight * 0.5 * drag * area * l2).sum())
+        axis = np.einsum("nji,j->ni", rot, np.asarray(about, float))  # the turning axis in each shape's own frame
+        turning = LINEAR_DRAG * (1 - (1 - HORIZONTAL_SHARE) * up)
+        c1 = (weight * turning * self.turn_linear[mine] * axis * axis).sum()
+        c2 = (weight * 0.5 * drag * self.turn_quadratic[mine] * np.abs(axis) ** 3).sum()
+        return float(c1), float(c2)
+
+    def buoyancy(self, root: int) -> float:
+        """N of lift the robot with root body `root` gets fully under water."""
+        mine = self.model.body_rootid[self.bodies] == root
+        return float(self.body_volume[mine].sum()) * self.rho * GRAVITY
 
     # ---- for agents -----------------------------------------------------------------------------------------
 

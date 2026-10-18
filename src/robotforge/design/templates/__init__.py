@@ -9,13 +9,17 @@ from pydantic import ValidationError
 from robotforge import wording
 from robotforge.design.templates.arm import Arm
 from robotforge.design.templates.base import BuiltRobot, Template
+from robotforge.design.templates.boat import Boat
 from robotforge.design.templates.cartpole import Cartpole
 from robotforge.design.templates.gripper import Gripper
 from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
+from robotforge.design.templates.rov import Rov
 from robotforge.design.templates.rover import Rover
 
-TEMPLATES: dict[str, Template] = {t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper())}
+TEMPLATES: dict[str, Template] = {
+    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Boat(), Rov())
+}
 
 
 # What agents call a template that has another name here; offered as "did you mean", never taken for the template:
@@ -32,6 +36,12 @@ NICKNAMES = {
     "pendulum": "cartpole",
     "cart_pole": "cartpole",
     "claw": "gripper",
+    "ship": "boat",
+    "usv": "boat",
+    "vessel": "boat",
+    "submarine": "rov",
+    "underwater": "rov",
+    "auv": "rov",
 }
 
 

@@ -23,6 +23,7 @@ from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
+from robotforge.design.water import WaterEntry
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry, finder, vision
@@ -96,6 +97,8 @@ class Playground:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
+            if msg.get("heave") is not None:  # an underwater robot going up or down (keys R and F)
+                self.behaviors.heave(str(msg["robot"]), float(msg["heave"]))
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -445,14 +448,29 @@ class Playground:
         def change(w: World) -> None:
             w.floor = Floor()
             w.terrain = []
+            w.water = None
             w.objects = []
 
         return self._edit(change)
 
     @_one_edit_at_a_time
-    def set_floor(self, style: str) -> dict[str, Any]:
+    def set_floor(self, style: str | None = None, water: Any = None) -> dict[str, Any]:
+        """The floor's look and grip, and the water over it: water=1.2 (or {"level": 1.2, "waves": 0.03}) fills
+        the world with water up to 1.2 m, the floor becoming its bottom; water=0 or false takes it away."""
+        if style is None and water is None:
+            raise PlaygroundError("give style (the floor's look) or water (a level in meters, 0 for none)")
+        entry: WaterEntry | None = None
+        if water is not None and water is not False and water != 0:
+            try:
+                entry = WaterEntry.model_validate(water)
+            except ValidationError as exc:
+                raise PlaygroundError(f"water: {_validation_message(exc)}") from exc
+
         def change(w: World) -> None:
-            w.floor.style = style
+            if style is not None:
+                w.floor.style = style
+            if water is not None:
+                w.water = entry
 
         return self._edit(change)
 
@@ -478,8 +496,8 @@ class Playground:
             raise PlaygroundError(_validation_message(exc)) from exc
         result = self._load_world(compiled)
         # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
-        # New ground under them (terrain, a scene) starts everything fresh: their heights would no longer fit.
-        if before.terrain == after.terrain:
+        # New ground under them (terrain, a scene, water) starts everything fresh: their heights would no longer fit.
+        if before.terrain == after.terrain and before.water == after.water:
             unchanged = [r.name for r in after.robots if r in before.robots]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
@@ -563,6 +581,7 @@ class Playground:
             w.robots = robots
             w.floor = Floor.model_validate(content.floor)
             w.terrain = [terrain.parse(t) for t in content.terrain]
+            w.water = WaterEntry.model_validate(content.water) if content.water else None
             w.objects = [ObjectEntry(**{**o, "name": _unused(o["name"], taken)}) for o in content.objects]
 
         result = self._edit(change)

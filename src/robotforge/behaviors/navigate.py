@@ -252,7 +252,7 @@ class Planner:
         names = list(layer.names)  # moving things add their names for this plan only
         skip = {self.destination.root} if self.destination.root > 0 else set()
         moving = nav_map.dynamic_columns(self.model, data, self.robot, self.body, grid, names, skip)
-        nav = nav_map.build(layer, self.body, moving, _disks(grid, blockers), names)
+        nav = self._map(layer, moving, _disks(grid, blockers), names)
         self.last_map = nav
         nav.free_from(grid.cell(*start_xy))
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
@@ -307,6 +307,10 @@ class Planner:
         if self.arm is not None and d.loose and not on_point:
             plan.within_reach = self._reaches(pts[-1])
         return plan
+
+    def _map(self, layer: StaticLayer, moving: list, blocked: np.ndarray | None, names: list[str]) -> NavMap:
+        """The map to search; a planner for another way of getting about (on the water) draws its own."""
+        return nav_map.build(layer, self.body, moving, blocked, names)
 
     @staticmethod
     def _search(nav: NavMap, penalty: np.ndarray, first: tuple[int, int], goal: np.ndarray, ways: np.ndarray | None):

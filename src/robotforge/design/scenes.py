@@ -57,6 +57,8 @@ class Content:
     arm_slots: list[Slot] = field(default_factory=list)
     starter: list[dict[str, Any]] = field(default_factory=list)  # robots for an empty world
     tips: list[str] = field(default_factory=list)
+    water: dict[str, Any] | None = None  # world.yaml's water: a lake, a harbor, a pool (design/water.py)
+    water_slots: list[Slot] = field(default_factory=list)  # places on the water, for boats and underwater robots
 
     def add(self, name: str, shape: str, pos: list[float], **fields: Any) -> None:
         self.objects.append({"name": name, "shape": shape, "pos": [round(v, 4) for v in pos], **fields})
@@ -556,10 +558,14 @@ def build(name: str, seed: int = 0, options: dict[str, float] | None = None) -> 
 # ---- putting a scene into a world -----------------------------------------------------------------
 
 
+WATER_TEMPLATES = ("boat", "rov")
+
+
 def robot_kind(entry: Any) -> str:
-    """'arm' for robots that stand on a surface (fixed base), else 'ground'."""
+    """'arm' for robots that stand on a surface (fixed base), 'water' for boats and underwater robots, else
+    'ground'."""
     if entry.template is not None:
-        return "arm" if entry.template == "arm" else "ground"
+        return "arm" if entry.template == "arm" else "water" if entry.template in WATER_TEMPLATES else "ground"
     if entry.library is not None:
         return "arm" if library.get(entry.library).kind == "arm" else "ground"
     return "ground"
@@ -572,11 +578,11 @@ def place(robots: list[Any], content: Content, spawn_height: Callable[[Any], flo
     arm on a table needs added to the table height.
     """
     notes = []
-    ground, arms = list(content.ground_slots), list(content.arm_slots)
+    ground, arms, water = list(content.ground_slots), list(content.arm_slots), list(content.water_slots)
     extra = 0
     for entry in robots:
         kind = robot_kind(entry)
-        slots = arms if kind == "arm" and arms else ground
+        slots = arms if kind == "arm" and arms else water if kind == "water" and water else ground
         if slots:
             slot = slots.pop(0)
         else:  # more robots than places: line them up next to the first ground place
