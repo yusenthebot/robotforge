@@ -274,17 +274,20 @@ class Hand:
         load: tuple[float, float] | None,
         label: str,
         max_tilt: float | None = None,
+        skip: int | None = None,
     ) -> list[Waypoint] | None:
         """Joint moves from `q0` to `q1` that hit nothing (sweeps_clear): straight; or after rising RISE from `q0`
         with the hand turned as it is; or by way of the arm's home pose, its base turned halfway (an arm folded
-        down behind its base hits its own robot going straight out to a counter); None if none works."""
+        down behind its base hits its own robot going straight out to a counter); None if none works. `skip`: the
+        body the arm may touch (by default what it picks up or carries)."""
         arm = self.arm
         half = None if load is None else load[0]
+        skip = self.load if skip is None else skip
 
         def move(a: np.ndarray, b: np.ndarray) -> Waypoint:
             return Waypoint(None, None, _joint_time(a, b), label, b.copy(), load=half)
 
-        if sweeps_clear(arm, q0, q1, self.load, load, max_tilt):
+        if sweeps_clear(arm, q0, q1, skip, load, max_tilt):
             return [move(q0, q1)]
         first: list[Waypoint] = []
         p0 = arm.ik.point(arm.chain, q0)
@@ -294,13 +297,11 @@ class Hand:
         except OutOfReach:
             up = None
         if up is not None:
-            if sweeps_clear(arm, up[-1], q1, self.load, load, max_tilt):
+            if sweeps_clear(arm, up[-1], q1, skip, load, max_tilt):
                 return [self._follow_move(up, p0, p0 + [0.0, 0.0, RISE], 0.0, "rise", half), move(up[-1], q1)]
             first, q0 = [self._follow_move(up, p0, p0 + [0.0, 0.0, RISE], 0.0, "rise", half)], up[-1]
         for via in self._vias(q0, q1):
-            if sweeps_clear(arm, q0, via, self.load, load, max_tilt) and sweeps_clear(
-                arm, via, q1, self.load, load, max_tilt
-            ):
+            if sweeps_clear(arm, q0, via, skip, load, max_tilt) and sweeps_clear(arm, via, q1, skip, load, max_tilt):
                 return [*first, move(q0, via), move(via, q1)]
         return None
 

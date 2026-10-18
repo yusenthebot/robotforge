@@ -27,9 +27,9 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors import nav_map
-from robotforge.behaviors.arm import JOINT_SPEED, REACH_TOL, ArmMotion, OutOfReach, Waypoint
+from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, Waypoint
 from robotforge.behaviors.navigate import NoWay
-from robotforge.behaviors.reach_in import LOADED_TILT, Hand, sweeps_clear
+from robotforge.behaviors.reach_in import LOADED_TILT, Hand
 from robotforge.sim.geometry import collides
 
 if TYPE_CHECKING:
@@ -1121,16 +1121,19 @@ class Errand:
 
     def _stow(self, data: mujoco.MjData, loaded: bool = False) -> bool:
         """Fold the arm into its pose for the way (hold_q) joint by joint, from the pose it is in, if on the way it
-        hits nothing (nor does the load in its gripper); True if it does. The same tool point in another pose (an
+        hits nothing (nor does the load in its gripper), straight or by way of another pose (Hand._joint_way); True
+        if it does. The same tool point in another pose (an
         elbow out to the side) made the robot too wide for the gaps its trips were planned through."""
         arm = self.arm
         if float(np.max(np.abs(arm.q - self.hold_q))) <= STOW_SAME:
             return False
         load = (self.half, self.radius) if loaded else None
-        if not sweeps_clear(arm, arm.q, self.hold_q, self.body, load, LOADED_TILT):
+        # Put down, the load is one more thing not to hit: folding back over it, a Panda knocked the apple it had
+        # just put on the table onto the floor.
+        moves = self.hand._joint_way(arm.q, self.hold_q, load, "stow", LOADED_TILT, self.body if loaded else -1)
+        if moves is None:
             return False
-        travel = float(np.max(np.abs(self.hold_q - arm.q)))
-        arm.queue.append(Waypoint(None, None, max(0.5, travel / JOINT_SPEED), "stow", self.hold_q.copy()))
+        arm.queue.extend(moves)
         return True
 
     def _tuck(self, data: mujoco.MjData, hold: np.ndarray) -> None:
