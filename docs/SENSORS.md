@@ -23,7 +23,7 @@ remove("go2/lidar")
 | `lidar3d` | several rings over a vertical field | `channels` 16, `rays` 180 per ring, `vfov` [-15, 15], `hfov` 360, `range` 30 m | `points`, `ground_points`, `box_m`, `nearest` and `ahead` with `height_m` and `point_m`, `sectors_m` |
 | `imu` | proper acceleration, turn rate, orientation | | `accel_m_s2`, `gyro_rad_s`, `orientation_deg` (roll, pitch, yaw) |
 | `encoders` | joint angles | `joints` (all), `resolution` in rad | `rad` (and `m` for sliding joints) by joint |
-| `force_torque` | force and torque between a body and the one it hangs from | `between` [parent, child] instead of `on` | `force_n`, `torque_nm` (sensor frame), `force_world_n`, `payload_kg` |
+| `force_torque` | force and torque between a body and the one it hangs from | `between` [parent, child] instead of `on` | `force_n`, `torque_nm` (sensor frame), `force_world_n`, `payload_kg` or `supported_kg` |
 | `touch` | normal contact force on a pad | `rows`, `cols` (1 x 1), `size` [length, width] | `force_n`, `contact`, and for an array `cells_n` and `center` |
 | `rangefinder` | distance along one beam | `range` 4 m | `distance_m` |
 | `gps` | position in the world | | `position_m` |
@@ -41,6 +41,7 @@ Its `nearest` is a distance: straight from the lens to the closest obstacle in t
 Off to the side depth is shorter than distance by the cosine of the angle, so a pole 26 degrees off the axis is 10 percent nearer in depth than it is.
 The camera's own robot is not an obstacle either (a lidar puck beside the lens, its own legs); `own_share` is how much of the picture shows it.
 `payload_kg` is what a force-torque sensor carries beyond the weight of everything hanging below it, so a wrist sensor reads the weight of what the gripper holds.
+Something holding it up from below (a leg on the ground) would make that negative, so then it reports `supported_kg` instead: the weight the ground takes through it beyond its own.
 
 ## Where a sensor goes
 
@@ -58,7 +59,7 @@ The modules drawn round a sensor (a lidar puck, a board camera) weigh nothing an
 
 | knob | meaning |
 |---|---|
-| `rate_hz` | samples per second; between samples the last one is held |
+| `rate_hz` | samples per second; between samples the last one is held (a lidar: at most 50, and 200,000 rays a second) |
 | `latency_s` | a reading is the newest sample at least this old; none until the first has waited it out |
 | `noise` | standard deviation in the reading's own unit; one number for every channel, or a mapping |
 | `bias` | a constant offset (IMU: accel and gyro; odometry: turn) |
@@ -72,6 +73,7 @@ A gyro bias makes the IMU's yaw drift as a real one's heading does.
 An ideal sensor is measured when it is read.
 Any other is sampled while time passes, at its rate, or a lidar at 10 Hz and a camera at 30 Hz when it was given none, and the others on every step.
 Its first sample is taken when the world is built, reset or edited, and samples are due by the moment they show, so a run reads the same numbers however often it is read; a reset starts the noise again from its seed.
+An edit that leaves a robot where it stands (a box added, another sensor) leaves its sensors going: an odometry's estimate and distance, an IMU's drift and the noise carry on.
 A camera keeps the state of the world when its frame is due and draws it when read, so a delayed camera shows the world as it was without rendering frames nobody looks at.
 
 ## What lidars see
@@ -94,7 +96,9 @@ full = sim.sensor("go2", "lidar", full=True)  # plus every range, ring by ring, 
 
 The builder's part sensors (imu, touch, camera, rangefinder, lidar) and the templates' IMU, cameras and foot touch sensors are declared the same way, so `read_sensors` reads them too; part sensors take the same realism knobs.
 A sensor is declared in the model itself, as a MuJoCo custom text `rf_sensor:<name>` holding its definition, so a model saved as MJCF keeps its sensors.
-A library robot's own MuJoCo sensors (a G1's IMU) come back raw under `other_sensors`.
+A library robot's own MuJoCo sensors (a G1's IMU) come back raw under `other_sensors`, also when it carries no other sensor.
+A definition that does not load (a world.yaml edited by hand) is listed in `observe`'s `sensor_summary` and in `read_sensors` as `not_set_up`, with the reason.
+A built robot's added sensors follow its parts: renamed with the part they sit on (update_part), and taken off with it (remove_part says which in `removed_sensors`).
 add_sensor's own MuJoCo sensors are named `rf_...` and are left out of `observe`'s raw `sensors`; `observe` lists every sensor in one line in `sensor_summary`.
 
 ## The viewer
@@ -109,14 +113,17 @@ Side by side with the server's pictures of the same moment, the depth and segmen
 
 The robots drawer lists the selected robot's sensors with a switch each, and one for the arrows.
 Sensors put on with add_sensor show from the start; a robot's own (a template's IMU, camera and foot pads, a part's sensors) are listed and stay off until switched on, so a world without added sensors looks as it did.
+A switch holds for that sensor in that world while the tab is open: another world's sensor of the same name, or the same sensor added again, starts from its default.
 `open_viewer(show=["go2/front_cam"])` (or a robot's name for all of its sensors) lets an agent switch sensors on and bring a camera's picture up.
+A tab applies each such request once (a reload does not apply it again), and a request ends when the sensors it names are removed or their world is closed.
 In a lesson nothing is drawn.
 Pads and arrows are drawn through the robot's own legs, but not through a rack or a wall standing between them and the eye.
 On a phone the views are a strip at the top, one at a time in tabs; with the drawer or the world panel open beside a narrow window they step aside.
 
 While the world has sensors the viewer's WebSocket carries a `sensors` message ten times a second; viewer/server.py documents its fields and `src/robotforge/viewer/static/sensorkit.js` lists the ones the page reads (a test checks the server sends them).
-Each entry has the sensor's `name`, `robot`, `type`, whether it was `added`, world `pos` and `quat`, the `body` it rides on with its place there (`local_pos`, `local_quat`), and what drawing it needs: a lidar's hit points (at most 1200), a camera's field of view, mode and range, a force-torque sensor's force and torque as world vectors and payload, an IMU's values, each touch zone's force and place on its body.
+Each entry has the sensor's `name`, `robot`, `type`, whether it was `added`, its `uid` (the same while it stays on its robot), world `pos` and `quat`, the `body` it rides on with its place there (`local_pos`, `local_quat`), and what drawing it needs: a lidar's hit points (at most 1200 a lidar and 2400 a message, shared out), a camera's field of view, mode and range, a force-torque sensor's force and torque as world vectors and payload, an IMU's values, each touch zone's force and place on its body.
 What sits on a robot follows its body in every frame drawn; a scan's points stay where they were measured.
+A message is cheap to build: ideal lidars are scanned for it within 6000 rays, the stalest first, so with several big lidars each is redrawn a few times a second, and while time stands still the last message is sent again without measuring.
 
 Measured in headless Chrome (`--use-angle=metal`, 1280 x 800 at 2x) with the Go2 in the warehouse carrying a 10 Hz 3D lidar (1200 points drawn, 150 rays), the depth camera's picture beside the view and four touch pads, on the development Mac while other jobs shared it:
 

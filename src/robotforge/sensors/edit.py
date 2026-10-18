@@ -2,7 +2,8 @@
 
 A sensor edit changes what a robot measures, not where it is, so the robot carries on from where it stands
 (Playground._edit compares robots without their sensors). The name is fixed when the sensor is added, so a
-later edit that adds another sensor of the same type never renames this one.
+later edit that adds another sensor of the same type never renames this one. A built robot's sensors follow its
+parts: renamed with the part they sit on, and taken off with it when it is removed.
 """
 
 from __future__ import annotations
@@ -128,3 +129,31 @@ def remove(pg: Any, robot: str, sensor: str) -> dict[str, Any]:
 
     result = pg._edit(change)
     return {"removed": f"{entry.name}/{found}", "world": result.get("world"), "robots": result.get("robots")}
+
+
+def _names_part(name: str, parts: list[str]) -> bool:
+    """Whether a sensor's `on` (or one of its `between`) names one of `parts`, as mount would find it."""
+    return wording.match(name.rsplit("/", 1)[-1], parts, plurals=False) is not None
+
+
+def follow_rename(robot: Any, old: str, new: str) -> None:
+    """A part renamed (update_part): the sensors on it, or measuring between it and a neighbor, follow it."""
+    out = []
+    for sensor in robot.sensors:
+        update: dict[str, Any] = {}
+        if sensor.on is not None and _names_part(sensor.on, [old]):
+            update["on"] = new
+        if sensor.between and any(_names_part(b, [old]) for b in sensor.between):
+            update["between"] = [new if _names_part(b, [old]) else b for b in sensor.between]
+        out.append(sensor.model_copy(update=update) if update else sensor)
+    robot.sensors = out
+
+
+def drop_on(robot: Any, gone: list[str]) -> list[str]:
+    """Take off the sensors that sat on removed parts (or measured between one and a neighbor); their names."""
+    kept, dropped = [], []
+    for sensor in robot.sensors:
+        names = [*([sensor.on] if sensor.on else []), *(sensor.between or [])]
+        (dropped if any(_names_part(n, gone) for n in names) else kept).append(sensor)
+    robot.sensors = kept
+    return [f"{robot.name}/{s.name}" for s in dropped]

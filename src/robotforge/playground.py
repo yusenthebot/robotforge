@@ -389,25 +389,45 @@ class Playground:
 
     @_one_edit_at_a_time
     def update_part(self, robot: str, part: str, changes: dict[str, Any]) -> dict[str, Any]:
-        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes))
+        def follow(entry: RobotEntry, before: dict[str, Any]) -> None:  # sensors on a renamed part go with it
+            old = set(build_edit.part_names(before)) - set(build_edit.part_names(entry.build))
+            new = set(build_edit.part_names(entry.build)) - set(build_edit.part_names(before))
+            if len(old) == 1 and len(new) == 1:
+                sensor_edit.follow_rename(entry, old.pop(), new.pop())
+
+        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes), follow)
 
     @_one_edit_at_a_time
     def remove_part(self, robot: str, part: str) -> dict[str, Any]:
         removed: list[str] = []
+        dropped: list[str] = []
 
         def change(b: dict[str, Any]) -> dict[str, Any]:
             new, gone = build_edit.remove_part(b, part)
             removed.extend(gone)
             return new
 
-        result = self._edit_build(robot, change)
+        def take_off(entry: RobotEntry, _before: dict[str, Any]) -> None:  # what sat on a removed part goes too
+            dropped.extend(sensor_edit.drop_on(entry, removed))
+
+        result = self._edit_build(robot, change, take_off)
         result["removed_parts"] = removed
+        if dropped:
+            result["removed_sensors"] = dropped
         return result
 
-    def _edit_build(self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    def _edit_build(
+        self,
+        robot: str,
+        change_build: Callable[[dict[str, Any]], dict[str, Any]],
+        then: Callable[[RobotEntry, dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
         def change(w: World) -> None:
             entry = _built(_find(w.robots, robot, "robot"))
+            before = entry.build
             entry.build = change_build(entry.build)
+            if then is not None:
+                then(entry, before)
 
         return self._edit(change)
 

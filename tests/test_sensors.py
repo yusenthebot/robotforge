@@ -242,6 +242,17 @@ def test_force_torque_weighs_what_a_tray_holds(pg):
     assert loaded["force_world_n"][2] > 0  # the parent holds the plate up
 
 
+def test_force_torque_on_a_standing_leg_says_what_holds_it_up(pg):
+    """A leg on the ground is pushed up by more than its own weight: no negative "what it holds" (it read -3.58 kg
+    on a Go2's calf), but the weight the ground takes through it."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_sensor("dog", {"type": "force_torque", "on": "front_left_shin"})
+    pg.simulate(1.0)
+    leg = _read(pg, "dog", "front_left_shin_ft")
+    assert "payload_kg" not in leg and leg["supported_kg"] > 0.1  # a light dog: about a quarter of its weight
+    assert "held up from below" in pg.sensors.lines()["dog/front_left_shin_ft"]
+
+
 def test_force_torque_between_two_bodies_must_name_neighbors(pg):
     pg.add_robot("arm", template="arm")
     with pytest.raises(ValueError, match="not neighbors"):
@@ -276,6 +287,25 @@ def test_gps_and_odometry_follow_a_driving_rover(pg):
     assert np.allclose(good["position_m"], gps[:2], atol=0.02)
     assert good["traveled_m"] > 0.8
     assert np.linalg.norm(np.subtract(cheap["position_m"], good["position_m"])) > 0.005  # it drifts
+
+
+def test_odometry_carries_on_across_an_edit_and_its_delay(pg):
+    """An edit that leaves the rover where it is (a box added) keeps its odometry's estimate: it started again at
+    0.08 m traveled after an unrelated add_sensor. A delayed odometry reports what it had traveled back then."""
+    pg.add_robot("rover", template="rover")
+    pg.add_sensor("rover", {"type": "odometry"})
+    pg.add_sensor("rover", {"type": "odometry", "name": "late", "latency_s": 0.5})
+    pg.behaviors.move("rover", 0.3, 0.0)
+    pg.simulate(3.0)
+    now, late = _read(pg, "rover", "odometry"), _read(pg, "rover", "late")
+    assert now["traveled_m"] > 0.6
+    assert now["traveled_m"] - late["traveled_m"] == pytest.approx(0.15, abs=0.05)  # half a second at 0.3 m/s
+    pg.add_object("box", shape="box", pos=[-2, 2], size=[0.3])
+    pg.add_sensor("rover", {"type": "gps"})
+    after = _read(pg, "rover", "odometry")
+    assert after["traveled_m"] == pytest.approx(now["traveled_m"], abs=0.02)
+    assert np.allclose(after["position_m"], now["position_m"], atol=0.02)
+    assert np.allclose(after["position_m"], _read(pg, "rover", "gps")["position_m"][:2], atol=0.03)
 
 
 # ---- realism knobs -----------------------------------------------------------------------------------------
@@ -339,6 +369,19 @@ def test_lidar_dropout_loses_that_share_of_rays(post):
     assert dusty / clean == pytest.approx(0.7, abs=0.1)
 
 
+def test_a_lidar_cannot_be_asked_to_scan_faster_than_time_can_run(pg):
+    with pytest.raises(ValueError, match="at most 50"):
+        SensorEntry.model_validate({"type": "lidar3d", "rate_hz": 2000})
+    with pytest.raises(ValueError, match="at most 24 Hz"):
+        SensorEntry.model_validate({"type": "lidar3d", "channels": 64, "rays": 128, "rate_hz": 40})
+    assert SensorEntry.model_validate({"type": "lidar3d", "rate_hz": 20}).rate_hz == 20
+    # A latency keeps a sample a step at most, however high the rate: 2 s at 2000 Hz held 4003 snapshots.
+    pg.add_robot("post", build=POST)
+    pg.add_sensor("post", {"type": "gps", "rate_hz": 2000, "latency_s": 2})
+    held = pg.sensors.suite.sensors["post/gps"].samples.maxlen
+    assert held <= 2 / pg.session.model.opt.timestep + 3
+
+
 def test_noise_is_repeatable_after_a_reset(pg):
     pg.add_robot("box", build=BOX)
     pg.add_sensor("box", {"type": "imu", "noise": 0.1, "drift": {"gyro": 0.01}})
@@ -381,6 +424,26 @@ def test_sensors_survive_reopening_the_world(pg):
     reopened = Playground.with_demo()
     reopened.open_world("sensing")
     assert "body_imu" in reopened.sensors.names("box")
+
+
+def test_a_wrong_body_lists_the_robot_s_bodies(pg):
+    pg.add_robot("tray", build=TRAY)
+    with pytest.raises(ValueError) as caught:
+        pg.add_sensor("tray", {"type": "imu", "on": "mast"})
+    assert "Bodies on tray: base, plate" in str(caught.value) and "world" not in str(caught.value)
+
+
+def test_a_built_robot_s_sensors_follow_its_parts(pg):
+    """Renaming a part takes its sensors along; removing it takes them off too, and says so (it failed inside the
+    world compiler with no way out named)."""
+    pg.add_robot("tray", build=TRAY)
+    pg.add_sensor("tray", {"type": "imu", "on": "plate"})
+    pg.update_part("tray", "plate", {"name": "lid"})
+    assert pg.current_world().robots[0].sensors[0].on == "lid"
+    assert "accel_m_s2" in _read(pg, "tray", "plate_imu")
+    result = pg.remove_part("tray", "lid")
+    assert result["removed_sensors"] == ["tray/plate_imu"]
+    assert not pg.current_world().robots[0].sensors
 
 
 def test_mistakes_say_what_to_do(pg):
@@ -443,6 +506,34 @@ def test_imported_urdf_and_mjcf_robots_carry_sensors(pg, tmp_path):
     assert _read(pg, "cart", "touch")["force_n"] == pytest.approx(2 * 9.81, rel=0.02)
 
 
+MJCF_OWN_IMU = """<mujoco><worldbody><body name="torso" pos="0 0 0.1"><freejoint/>
+<geom type="box" size="0.1 0.1 0.05" mass="1"/><site name="imu"/></body></worldbody>
+<sensor><accelerometer name="torso_accel" site="imu"/><gyro name="torso_gyro" site="imu"/></sensor></mujoco>"""
+MJCF_BROKEN = """<mujoco><custom><text name="rf_sensor:warp" data='{"v": 1, "type": "warp", "name": "warp"}'/>
+</custom><worldbody><body name="torso" pos="0 0 0.1"><freejoint/><geom type="box" size="0.1 0.1 0.05"/>
+</body></worldbody></mujoco>"""
+
+
+def test_a_robot_with_only_its_own_mujoco_sensors_reads_them(pg, tmp_path):
+    """A G1 comes with its own IMU: read_sensors returns those raw instead of saying it has no sensors."""
+    from importer_fixtures import write
+
+    pg.add_robot("bot", file=str(write(tmp_path / "bot.xml", MJCF_OWN_IMU)))
+    pg.simulate(0.5)
+    reading, _ = pg.read_sensors("bot")
+    assert reading["sensors"] == {}
+    assert reading["other_sensors"]["torso_accel"][2] == pytest.approx(9.81, abs=0.2)
+
+
+def test_a_definition_that_does_not_load_is_said_not_dropped(pg, tmp_path):
+    from importer_fixtures import write
+
+    pg.add_robot("bot", file=str(write(tmp_path / "bot.xml", MJCF_BROKEN)))
+    assert "unknown sensor type 'warp'" in pg.sensors.lines()["bot/warp"]
+    with pytest.raises(PlaygroundError, match="could not be set up: bot/warp"):
+        pg.read_sensors("bot")
+
+
 def test_definitions_travel_with_the_model(pg):
     """Sensors are declared in the model itself, so whatever loads it (an MJCF saved from the world) has them."""
     pg.add_robot("box", build=BOX)
@@ -469,6 +560,31 @@ def test_viewer_message_carries_poses_and_bounded_points(post):
     assert by_type["camera"]["fov_deg"] == 60 and by_type["camera"]["mode"] == "depth"
     assert len(by_type["touch"]["cells_m"]) == 1
     assert len(json.dumps(msg)) < 60_000
+
+
+def test_viewer_messages_share_their_points_and_rest_while_time_does(post, monkeypatch):
+    """Three big lidars: their points share one total, each message scans within a budget of rays, and while time
+    stands still the last message is sent again without a scan (15 to 21 ms a message, paused or not)."""
+    from robotforge.sensors import hub as sensor_hub
+    from robotforge.sensors.lidar import Lidar
+
+    post.add_sensor("post", {"type": "lidar3d", "name": "dense", "channels": 32, "rays": 256})
+    post.add_sensor("post", {"type": "lidar3d", "name": "tall", "channels": 64, "rays": 128})
+    post.add_sensor("post", {"type": "lidar3d"})
+    scans = []
+    measure = Lidar.measure
+    monkeypatch.setattr(Lidar, "measure", lambda self, m, d: scans.append(self.rays) or measure(self, m, d))
+    first = post.sensors.viewer_message()
+    assert sum(len(e.get("points", [])) // 3 for e in first["sensors"]) <= sensor_hub.VIEW_POINTS_TOTAL
+    assert sorted(scans) == [2880, 8192, 8192]  # never scanned: all of them, once
+    for _ in range(6):
+        scans.clear()
+        post.session.step(50)
+        post.sensors.viewer_message()
+        assert len(scans) == 1 or sum(scans) <= sensor_hub.VIEW_RAYS  # the stalest, and more while they fit
+    scans.clear()
+    again = post.sensors.viewer_message()
+    assert again is post.sensors.viewer_message() and not scans  # paused: nothing measured again
 
 
 def test_the_viewer_stream_sends_sensors_only_when_there_are_some(post):
@@ -511,6 +627,22 @@ async def test_tools_add_read_list_and_remove_a_sensor(post, gl_reason):
         assert not any("rf_" in name for name in json.loads(observed.content[0].text)["sensors"])
         removed = await client.call_tool("remove", {"name": "post/lidar"})
         assert json.loads(removed.content[0].text)["removed"] == "post/lidar"
+
+
+@pytest.mark.anyio
+async def test_observe_says_when_the_sensor_summary_fails(post, monkeypatch, caplog):
+    post.add_sensor("post", {"type": "lidar"})
+
+    def broken() -> dict:
+        raise RuntimeError("no lines today")
+
+    monkeypatch.setattr(post.sensors, "lines", broken)
+    server = build_server(post, 0)
+    async with Client(server) as client:
+        observed = await client.call_tool("observe", {"include_image": False})
+    state = json.loads(observed.content[0].text)
+    assert state["sensor_summary"] == {"error": "RuntimeError: no lines today"}
+    assert "sensor summary failed" in caplog.text
 
 
 @pytest.fixture

@@ -192,14 +192,18 @@ def _target(model: mujoco.MjModel, entry: SensorEntry, robot: str) -> Target:
             return Target(body, _surface_geoms(model, body), np.array(model.site_pos[i], float))
         body = int(model.jnt_bodyid[i])
         return Target(body, _surface_geoms(model, body), np.array(model.jnt_pos[i], float))
-    bodies = _names(model, OBJ.mjOBJ_BODY, model.nbody)
-    text = wording.unknown("body", on, bodies, where=f"on {robot}")
+    text = wording.unknown("body", on, _bodies(model), where=f"on {robot}")
     raise ValueError(f"{text} (a part, geom, site or joint name works too)")
+
+
+def _bodies(model: mujoco.MjModel) -> list[str]:
+    """The robot's own bodies, not the world they are compiled into."""
+    return [n for i in range(1, model.nbody) if (n := mujoco.mj_id2name(model, OBJ.mjOBJ_BODY, i))]
 
 
 def _between(model: mujoco.MjModel, pair: list[str], robot: str) -> Target:
     """The child of two neighboring bodies: MuJoCo measures the force between a body and the one it hangs from."""
-    bodies = _names(model, OBJ.mjOBJ_BODY, model.nbody)
+    bodies = _bodies(model)
     ids = []
     for name in pair:
         found = name if name in bodies else wording.match(name, bodies)

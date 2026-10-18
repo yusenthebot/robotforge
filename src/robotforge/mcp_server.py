@@ -789,10 +789,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
-            with contextlib.suppress(Exception):  # the sensors' lines are a bonus; never lose the state to them
+            try:
                 lines = playground.sensors.lines()
-                if lines:
-                    state["sensor_summary"] = lines
+            except Exception as exc:  # the sensors' lines are a bonus: the state comes back without them, and says so
+                log.exception("observe: the sensor summary failed")
+                lines = {"error": f"{type(exc).__name__}: {exc}"}
+            if lines:
+                state["sensor_summary"] = lines
             image = None
             if find:
                 try:
