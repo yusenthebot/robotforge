@@ -666,6 +666,53 @@ def _barkour_so100(pg: Any) -> None:
     pg.add_robot("barkour", library="barkour", mounts=[{"library": "so_arm100"}])
 
 
+def _go2_two_arms(pg: Any) -> None:
+    """A Go2 carrying an AgileX PiPER and an SO-100 side by side (the second moved back clear of the first)."""
+    pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}])
+
+
+def _spot_z1(pg: Any) -> None:
+    """A Spot carrying a Unitree Z1 beside the bump on its back."""
+    pg.add_robot("spot", library="spot", mounts=[{"library": "z1"}])
+
+
+def _anymal_ur5e(pg: Any) -> None:
+    """An ANYmal C carrying a UR5e that wears a Robotiq 2F-85 on its flange: three robots in one."""
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+
+
+# The library's newer robots for a line-up, standing: (name, library, mounts, [x, y]). The tall ones stand behind,
+# in the gaps between the short ones.
+LINE_UP = [
+    ("barkour", "barkour", [], [0.55, 1.4]),
+    ("op3", "op3", [], [0.55, 0.0]),
+    ("anymal", "anymal_c", [], [0.55, -1.4]),
+    ("z1", "z1", [], [0.55, -2.8]),
+    ("t1", "t1", [], [-0.7, 2.1]),
+    ("ur5e", "ur5e", [{"library": "robotiq_2f85"}], [-0.7, 0.7]),
+    ("xarm7", "xarm7", [], [-0.7, -0.7]),
+    ("aloha", "aloha", [], [-0.7, -2.1]),
+]
+
+
+def _line_up(pg: Any) -> None:
+    """The library's newer robots standing in two rows: walkers in front, arms behind."""
+    for name, model, mounts, pos in LINE_UP:
+        pg.add_robot(name, library=model, pos=pos, mounts=mounts)
+
+
+def _framed(robot: str, offset: tuple[float, float, float], lift: float) -> str:
+    """Page script: nothing selected, the camera `offset` metres from a point `lift` metres above `robot`'s body."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const body = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic);
+        const at = rf.bodyPosition(body.id);
+        const target = [at[0], at[1], at[2] + {lift}];
+        rf.lookAt(target.map((v, i) => v + {json.dumps(list(offset))}[i]), target);
+    """
+
+
 def _complex_splices(pg: Any) -> None:
     """Three robots spliced from three or more: an ANYmal C carrying a UR5e that wears a Robotiq gripper, a Go2 with a
     PiPER and an SO-100 side by side, and a Spot with a Z1 and a PiPER."""
@@ -799,7 +846,16 @@ SHOTS = [
     ),
     Shot("splice_more_carriers", _more_carriers, page=_look((3.6, -1.2, 1.5), (0.0, 0.0, 0.45)), settle=3.0),
     Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
-    Shot("splice_barkour_so100", _barkour_so100, page=_look_at(["barkour"], (0.75, -0.6, 0.35)), settle=3.0),
+    Shot("splice_barkour_so100", _barkour_so100, page=_framed("barkour", (1.1, -0.9, 0.5), 0.02), settle=3.0),
+    Shot("splice_go2_piper_so100", _go2_two_arms, page=_framed("go2", (-0.55, -1.3, 0.55), 0.08), settle=3.0),
+    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (1.6, -1.3, 0.75), -0.02), settle=3.0),
+    Shot("splice_anymal_ur5e_robotiq", _anymal_ur5e, page=_framed("anymal", (2.0, -1.55, 0.85), 0.0), settle=3.0),
+    Shot(
+        "library_line_up",
+        _line_up,
+        page="window.__robotforge.select(null); " + _look((4.8, -0.35, 2.7), (-0.1, -0.35, 0.25)),
+        settle=3.0,
+    ),
 ]
 
 
