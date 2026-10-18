@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from robotforge.design import library, props
+from robotforge.design import library, props, water_scenes
 
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
@@ -57,6 +57,8 @@ class Content:
     arm_slots: list[Slot] = field(default_factory=list)
     starter: list[dict[str, Any]] = field(default_factory=list)  # robots for an empty world
     tips: list[str] = field(default_factory=list)
+    water: dict[str, Any] | None = None  # world.yaml's water: a lake, a harbor, a pool (design/water.py)
+    water_slots: list[Slot] = field(default_factory=list)  # places on the water, for boats and underwater robots
 
     def add(self, name: str, shape: str, pos: list[float], **fields: Any) -> None:
         self.objects.append({"name": name, "shape": shape, "pos": [round(v, 4) for v in pos], **fields})
@@ -625,6 +627,29 @@ SCENES: dict[str, Scene] = {
             "stepping stones and bumps. Starter robot: a robot dog.",
             _obstacle_course,
         ),
+        Scene(
+            "harbor",
+            "Harbor",
+            "A harbor on the sea: a concrete quay with bollards and cargo, a wooden dock, a breakwater with a "
+            "lighthouse, channel buoys, floating crates and a steel block on the bottom. Starter robot: a boat.",
+            water_scenes.harbor,
+            {"depth": Option(1.4, 0.5, 4.0, "water depth, m")},
+        ),
+        Scene(
+            "lake",
+            "Lake",
+            "A lake in a grassy hollow with a beach all round, a dock on the west shore, a slalom of buoys, crates "
+            "adrift, trees and rocks. Starter robot: a boat.",
+            water_scenes.lake,
+        ),
+        Scene(
+            "pool",
+            "Pool",
+            "An indoor pool, 12 x 7 m, with a tiled deck, lane lines on the bottom, a steel block to dive to and a "
+            "floating crate and balls. Starter robot: an underwater ROV.",
+            water_scenes.pool,
+            {"depth": Option(1.6, 0.6, 4.0, "water depth, m")},
+        ),
     ]
 }
 
@@ -666,10 +691,14 @@ def build(name: str, seed: int = 0, options: dict[str, float] | None = None) -> 
 # ---- putting a scene into a world -----------------------------------------------------------------
 
 
+WATER_TEMPLATES = ("boat", "rov")
+
+
 def robot_kind(entry: Any) -> str:
-    """'arm' for robots that stand on a surface (fixed base), else 'ground'."""
+    """'arm' for robots that stand on a surface (fixed base), 'water' for boats and underwater robots, else
+    'ground'."""
     if entry.template is not None:
-        return "arm" if entry.template == "arm" else "ground"
+        return "arm" if entry.template == "arm" else "water" if entry.template in WATER_TEMPLATES else "ground"
     if entry.library is not None:
         return "arm" if library.get(entry.library).kind == "arm" else "ground"
     return "ground"
@@ -682,11 +711,11 @@ def place(robots: list[Any], content: Content, spawn_height: Callable[[Any], flo
     arm on a table needs added to the table height.
     """
     notes = []
-    ground, arms = list(content.ground_slots), list(content.arm_slots)
+    ground, arms, water = list(content.ground_slots), list(content.arm_slots), list(content.water_slots)
     extra = 0
     for entry in robots:
         kind = robot_kind(entry)
-        slots = arms if kind == "arm" and arms else ground
+        slots = arms if kind == "arm" and arms else water if kind == "water" and water else ground
         if slots:
             slot = slots.pop(0)
         else:  # more robots than places: line them up next to the first ground place

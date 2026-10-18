@@ -12,6 +12,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design.terrain import STYLES, material_name
+from robotforge.sim import water as water_model
 
 # MuJoCo's default geom rgba; when a geom keeps it and has a material, the material color wins.
 _DEFAULT_RGBA = np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32)
@@ -187,6 +188,7 @@ def describe(
         "meshes": mesh_entries,
         "hfields": hfield_entries or [],
         "grounds": _ground_looks(model),
+        "water": water.describe() if (water := water_model.decode(model)) is not None else None,
         "actuators": actuators,
         "visibleGroupLimit": VISIBLE_GROUP_LIMIT,
         "stat": {"center": [float(c) for c in model.stat.center], "extent": float(model.stat.extent)},

@@ -63,7 +63,7 @@ INSTRUCTIONS = wording.unwrap(
 robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
-humanoid, rover, cartpole, gripper, drone; list_templates), takes a real one from the library (list_library:
+humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
 Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the
 import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
@@ -80,10 +80,20 @@ saved as red_cube, "the dog" finds dog). Units: meters, kilograms, radians for j
 builder takes degrees for joints too).
 
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
-park, maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground (hills,
-rough ground, stairs, ramps, stepping stones, curbs, platforms); robots and objects stand on the ground
-under them. To build a scene from a sentence, combine load_scene, add_terrain and add_object, then check it
-with observe(view="overview").
+park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
+add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
+and objects stand on the ground under them. To build a scene from a sentence, combine load_scene, add_terrain
+and add_object, then check it with observe(view="overview").
+
+Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
+dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
+shape (a wooden crate floats, a steel block sinks); add_object(shape="buoy") is a moored buoy, shape="dock" a
+wooden dock. Templates boat (two thrusters, turns on the spot) and rov (an underwater robot, six thrusters) are
+driven with move and the keyboard; a boat's move(to=...) plans round the shore, buoys and docks ("to the
+dock"), an ROV's move(to=[x, y, z]) dives to that point and holds its depth and heading (z is the height above
+the floor like every z, depth = water level - z: 0.5 m under a surface at 1.2 m is z = 0.7; the result gives
+depth_m, and a point on land or under the bottom gets why). observe reports what floats and how deep things are
+under "water"; an ROV's depth sensor reads meters under the surface.
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
 snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
@@ -126,15 +136,21 @@ sensors, control, scripts, training, importing a URDF). When the user asks for o
 learning, face-offs against the real PiPER, Franka Panda and Unitree G1, star challenges): suggest them to beginners
 who want to understand robots (open_viewer, then press Learn).
 
-Learned walkers: list_walkers shows neural-network walking policies (a Go2 walk ships with robotforge);
-move(..., walker="rl") uses one instead of the built-in gait. Any robot that walks on jointed legs (built
-from parts, imported from a URDF, even one with a built-in gait) can learn a walk of its own in the viewer's
-RL II lesson ("Your robot: <name>", then "Keep this walk for my robot"); robots then lists its learned_walk
-and walker="rhythm" uses it (forward at its own pace; turning on the spot once its turns are learned). If
-the user wants such a robot to walk and robots or add_robot show a walk_hint, say first that it can learn a
-walk by itself in about ten seconds and keep it, which teaches more and walks better than a hand-written
-gait; offer to open the viewer, and write a gait script only if they would rather not. UniLab, an external
-RL framework, trains new ones: unilab_check, unilab_train, unilab_job.
+Learned walkers: list_walkers shows neural-network walking policies (a Go2 walk ships with robotforge); move(...,
+walker="rl") uses one instead of the built-in gait. Any robot that walks on jointed legs moved by position servos
+(built from parts, imported from a URDF or an MJCF file with position actuators, even one with a built-in gait) can
+learn a walk of its own in the viewer's RL II lesson ("Your robot: <name>", then "Keep this walk for my robot");
+robots then lists its learned_walk and walker="rhythm" uses it (forward at its own pace, holding its heading and the
+line it started on if learned_walk says holds_heading; turning on the spot once its turns are learned, which follows
+keeping the walk). Its turn_deg_s is the slower side's rate from standing; turn_deg_s_from_walk gives each side's
+average in a turn's first second when the turn follows 1.5 s or more of walking with no pause (viewer closed, or
+walking with seconds=null and then the turn) that did not start right out of a turn. Single turns vary (most within
+a quarter of it, a few far off): read move's turned_deg and correct. An MJCF file whose legs have torque motors
+(most Menagerie quadrupeds) cannot; move says so, and the same robot from the library (add_robot(library=...)) walks
+with its gait. If the user wants such a robot to walk and robots or add_robot show a walk_hint, say first that it
+can learn a walk by itself in about ten seconds and keep it, which teaches more and walks better than a hand-written
+gait; offer to open the viewer, and write a gait script only if they would rather not. UniLab, an external RL
+framework, trains new ones: unilab_check, unilab_train, unilab_job.
 
 Explain what you are doing in plain language and briefly teach the idea behind it (joints, actuators,
 control): the user may be new to robotics. Check results (numbers, observe) before saying something worked.
@@ -311,9 +327,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, drone) with parameters, defaults
-        and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
-        linear actuators). For other robots build from parts (builder_guide)."""
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov, drone) with
+        parameters, defaults and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts
+        catalog (servos, motors, linear actuators). For other robots build from parts (builder_guide)."""
         from robotforge.design import components, gallery, templates
 
         parts = {
@@ -437,8 +453,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
         door_frame [width, depth, height]; pallet [length, width, height]; tree [crown diameter, height]; marker
-        [diameter] or [length, width]. Every shape has a default size and color; color is a name, a hex code like
-        "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
+        [diameter] or [length, width]; buoy [diameter, height] (floats upright, moored where it is put); dock [length,
+        width, deck height] (posts reach the bottom). In water a light object floats (set mass: a wooden crate about 450
+        kg/m^3 of its size, steel 7850 sinks). Every shape has a default size and color; color is a name, a hex code
+        like "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
         degrees. fixed objects never move (walls, shelves, counters, trees, benches and rocks are fixed unless
         fixed=false). A bin is an open-top container; a marker is a flat mark nothing collides with (goals, lanes).
         Ramps and stairs are terrain: see add_terrain. material (box, sphere, cylinder): plastic, wood or steel (heavy;
@@ -477,10 +495,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json(playground.remove(name))
 
     @server.tool()
-    def set_floor(style: StyleName) -> str:
-        """Change the floor look and feel."""
+    def set_floor(style: StyleName | None = None, water: float | dict[str, Any] | None = None) -> str:
+        """Change the floor's look and grip, and the water over it. water=1.2 fills the world with water 1.2 m deep:
+        the floor becomes the bottom, and terrain or furniture higher than that is dry land (a quay, a pool deck).
+        water={"level": 1.2, "waves": 0.03, "current": [0.2, 0], "area": [x0, y0, x1, y1]} adds waves (crest
+        height, m), a current (m/s) or keeps the water inside a rectangle; water=0 takes it away. What floats starts
+        afloat; load_scene("harbor"), "lake" or "pool" are ready-made water."""
         with _tool_errors():
-            return _json(playground.set_floor(style))
+            return _json(playground.set_floor(style, water))
 
     @server.tool()
     def undo() -> str:
@@ -610,21 +632,22 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         to: str | list[float] | list[list[float]] | None = None,
         record: bool | str | None = None,
     ) -> str:
-        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, fly an
-        aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards),
-        turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each
-        robot's max_speed is
-        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
-        ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
-        saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
-        the viewer is open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned
-        policy (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
-        `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
-        driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
-        round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
-        reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
-        where it ended ("stopped": true, no need to call stop). Aircraft (drones)
+        """Walk a quadruped, hexapod or humanoid, drive a rover, a two-wheeled balancer, a boat or an underwater ROV,
+        make a snake slither, fly an aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in
+        m/s (negative = backwards), turn in rad/s (positive = left); more than the robot can do is clamped, and the
+        result says so. Each robot's max_speed is in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With
+        seconds it moves that long, stops ("stopped": true, no need to call stop; "behavior" is how it moved) and
+        reports the distance, with a note saying why when it fell far short; seconds=null keeps moving until `stop`.
+        The user watches in real time if the viewer is open. walker (legged robots): "gait" = the built-in controller,
+        "rl" = this robot's learned policy (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a
+        robot with learned_walk in `robots`) = the walk it learned in the viewer, forward at its own pace, turning on
+        the spot. Keyboard driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it
+        plans a path round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing
+        it, within reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time
+        limit (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot
+        stands where it ended ("stopped": true, no need to call stop). A boat's path keeps to water deep enough for it,
+        round buoys and docks; an ROV takes to=[x, y, z] (z: height above the floor like every z, depth = water level
+        - z) and goes straight there, over the bottom where it rises, holding depth and heading. Aircraft (drones)
         fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
         its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
         a table's height) lands there; a point under a crown or a table hovers there. A landing where something

@@ -367,3 +367,34 @@ def test_lidar_color_span_and_rays():
     assert out["picks"][0] == [0, 1, 2, 3, 4] and out["picks"][1] == 150 and out["picks"][2] < 1200
     assert out["back"] == pytest.approx([2.7, 3.6, 0])
     assert out["arrow"] == pytest.approx([0.1, 0.2, 0])
+
+
+@needs_node
+def test_a_3d_lidar_draws_one_level_fan_of_rays():
+    """Regression: 150 rays picked evenly over a 16-ring scan were mostly short rays into the floor round the dog,
+    drawn at a third of full strength and fading to nothing, so in the aisle demo the rays could hardly be seen.
+    A 3D lidar now draws its most level ray in each slice of bearing, also on a sensor that is tipped over."""
+    out = js(
+        # three rings (-15, 0 and +15 degrees) of 36 rays on a sensor pitched 20 degrees nose down and turned 90
+        "const pitch = (20 * Math.PI) / 180, yaw = Math.PI / 2;"
+        "const qy = [Math.cos(pitch / 2), 0, Math.sin(pitch / 2), 0];"
+        "const qz = [Math.cos(yaw / 2), 0, 0, Math.sin(yaw / 2)];"
+        "const mul = (a, b) => [a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],"
+        "  a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],"
+        "  a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],"
+        "  a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]];"
+        "const q = mul(qz, qy), conj = [q[0], -q[1], -q[2], -q[3]];"
+        "const turn = (v) => mul(mul(q, [0, ...v]), conj).slice(1);"
+        "const origin = [1, 2, 0.4], flat = [], ring = [];"
+        "for (const el of [-15, 15, 0]) for (let k = 0; k < 36; k++) {"
+        "  const a = ((k * 10 + 5) * Math.PI) / 180, e = (el * Math.PI) / 180, r = 2 + (k % 5);"
+        "  const p = turn([r * Math.cos(e) * Math.cos(a), r * Math.cos(e) * Math.sin(a), r * Math.sin(e)]);"
+        "  flat.push(origin[0] + p[0], origin[1] + p[1], origin[2] + p[2]); ring.push(el); }"
+        "const picks = kit.fanPicks(flat, origin, q, 36);"
+        "const fewer = kit.fanPicks(flat, origin, q, 12);"
+        "return { rings: picks.map((i) => ring[i]), count: picks.length, fewer: fewer.length,"
+        "  partial: kit.fanPicks(flat, origin, q, 36, 36).length };"
+    )
+    assert out["count"] == 36 and set(out["rings"]) == {0}  # one ray per 10 degrees, all from the level ring
+    assert out["fewer"] == 12  # no more than one a slice
+    assert out["partial"] == 36  # only the first `count` points are looked at (the -15 ring here)

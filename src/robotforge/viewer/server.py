@@ -33,6 +33,10 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 FRAME_HZ = 60.0
+# Pose frames a viewer that says which it has taken in ("seen") may have unread before it is sent no more. A page
+# drawing a heavy scene on a busy machine took in one pose frame per drawn frame (25 a second of the 60 sent), and
+# its picture fell 15 s behind the simulation; viewers that never say (older pages) get every frame as before.
+MAX_POSES_AHEAD = 3
 STATE_HZ = 4.0
 LESSON_HZ = 20.0
 SENSOR_HZ = 10.0
@@ -130,6 +134,9 @@ class ViewerHub:
         # and a test checks they are sent). See docs/SENSORS.md.
         self.sensor_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
+        # Pose frames sent to each viewer, and how many it said it took in (only viewers that say so are paced).
+        self._sent: dict[WebSocket, int] = {}
+        self._seen: dict[WebSocket, int] = {}
 
     # ---- scene description (cached per model version) -------------------------------
 
@@ -254,6 +261,30 @@ class ViewerHub:
         for ws in dead:
             self.clients.discard(ws)
 
+    def seen(self, ws: WebSocket) -> None:
+        """The viewer took in one more pose frame."""
+        self._seen[ws] = self._seen.get(ws, 0) + 1
+
+    def forget(self, ws: WebSocket) -> None:
+        self.clients.discard(ws)
+        self._sent.pop(ws, None)
+        self._seen.pop(ws, None)
+
+    async def _send_poses(self, data: bytes) -> None:
+        dead = []
+        for ws in list(self.clients):
+            sent, seen = self._sent.get(ws, 0), self._seen.get(ws)
+            if seen is not None and sent - seen >= MAX_POSES_AHEAD:
+                continue  # it has not taken in what it has: a newer frame goes once it has
+            try:
+                await ws.send_bytes(data)
+            except (WebSocketDisconnect, RuntimeError):
+                dead.append(ws)
+                continue
+            self._sent[ws] = sent + 1
+        for ws in dead:
+            self.forget(ws)
+
     async def run(self) -> None:
         """Step physics in real time and stream poses until cancelled.
 
@@ -279,7 +310,7 @@ class ViewerHub:
                         message = self.scene_message()  # built first: announced only once it was
                         self._announced_version = version
                         await self._send_all(text=json.dumps(message))
-                    await self._send_all(data=self.session.body_poses().tobytes())
+                    await self._send_poses(self.session.body_poses().tobytes())
                     if tick_start - last_state > 1.0 / STATE_HZ:
                         last_state = tick_start
                         await self._send_all(text=json.dumps(self.state_message()))
@@ -325,14 +356,16 @@ def create_app(hub: ViewerHub) -> Starlette:
                 raw = await ws.receive_text()
                 try:
                     msg = json.loads(raw)
-                    if not hub.start_slow(ws, msg):
+                    if isinstance(msg, dict) and msg.get("type") == "seen":
+                        hub.seen(ws)
+                    elif not hub.start_slow(ws, msg):
                         hub.handle(msg)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
         except WebSocketDisconnect:
             pass
         finally:
-            hub.clients.discard(ws)
+            hub.forget(ws)
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):

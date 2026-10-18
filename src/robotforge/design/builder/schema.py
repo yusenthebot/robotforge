@@ -170,6 +170,38 @@ class SensorSpec(_Strict):
         return data
 
 
+class ThrusterSpec(_Strict):
+    """A marine thruster on the base or a part (builder/thrusters.py): pushes along `direction` with up to `force`
+    newtons while it is in water. Shorthand: just the direction, e.g. "forward" or "up"."""
+
+    name: str | None = Field(None, description="defaults to <part>_thruster")
+    at: str | Vec3 = Field("center", description="anchor (center, back, bottom...) or [x, y, z]")
+    direction: str | list[float] = Field("forward", description="the way it pushes the robot at control +1")
+    force: float = Field(20.0, gt=0, le=2000, description="newtons at full control")
+    size: float = Field(0.06, gt=0.01, le=1.0, description="propeller diameter, m")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _shorthand(cls, data: Any) -> Any:
+        return {"direction": data} if isinstance(data, str) else data
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return None if v is None else check_name(v, "thruster names")
+
+    @field_validator("at")
+    @classmethod
+    def _at(cls, v: str | Vec3) -> str | Vec3:
+        return v if isinstance(v, str) else _vec3(v, "thruster at")
+
+    @field_validator("direction")
+    @classmethod
+    def _direction(cls, v: str | list[float]) -> str | list[float]:
+        axis_vector(v, "thruster direction")
+        return v
+
+
 class JointSpec(_Strict):
     """How a part moves relative to its parent. Shorthand: "hinge", "slide" or "fixed"."""
 
@@ -314,6 +346,7 @@ class _Body(_Strict):
     offset: Vec3 = Field(default_factory=lambda: [0.0, 0.0, 0.0], description="shift the shape, meters")
     mounts: dict[str, Vec3] = Field(default_factory=dict, description="named points other parts can attach at")
     sensors: list[SensorSpec] = Field(default_factory=list)
+    thrusters: list[ThrusterSpec] = Field(default_factory=list, description="marine thrusters: boats and ROVs")
 
     @field_validator("color")
     @classmethod

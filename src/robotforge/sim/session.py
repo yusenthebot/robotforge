@@ -15,6 +15,8 @@ from typing import Protocol
 import mujoco
 import numpy as np
 
+from robotforge.sim import water as water_model
+
 # Spring used when the user drags a body: natural frequency (rad/s) and damping ratio.
 _DRAG_OMEGA = 12.0
 _DRAG_ZETA = 1.0
@@ -87,6 +89,12 @@ class SimSession:
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
+    # Buoyancy and drag for a model that has water (sim/water.py); it comes with the model, so None for the rest.
+    water: water_model.Hydro | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.water is None:
+            self.water = water_model.hydro_for(self.model)
 
     # ---- construction / loading -------------------------------------------------
 
@@ -113,6 +121,7 @@ class SimSession:
             self.data = fresh_data(model)
             self.source = source
             self.drag = None
+            self.water = water_model.hydro_for(model)
             self._sim_debt = 0.0
             self.controllers.clear()  # controllers hold ids from the old model
             self.version += 1
@@ -188,9 +197,31 @@ class SimSession:
             for _ in range(n):
                 self._run_controllers()
                 self._apply_drag()
-                mujoco.mj_step(self.model, self.data)
+                if self.water is None:
+                    mujoco.mj_step(self.model, self.data)
+                else:
+                    self._step_in_water()
                 for hook in tuple(self.step_hooks):  # a hook may take itself off (a recording that ends)
                     hook()
+
+    def _step_in_water(self) -> None:
+        """One step with the water's forces worked out from this step's pose (sim/water.py), added to xfrc_applied
+        for this step only: what was there before (pushes from other code) is put back after it."""
+        m, d = self.model, self.data
+        split = m.opt.integrator != mujoco.mjtIntegrator.mjINT_RK4  # RK4 cannot run in two halves
+        if split:
+            mujoco.mj_step1(m, d)
+        else:  # pose it for the water, then a whole step
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_comPos(m, d)
+            mujoco.mj_comVel(m, d)
+        pushes = d.xfrc_applied.copy()
+        self.water.apply(m, d)
+        if split:
+            mujoco.mj_step2(m, d)
+        else:
+            mujoco.mj_step(m, d)
+        d.xfrc_applied[:] = pushes
 
     def _run_controllers(self) -> None:
         t = self.data.time

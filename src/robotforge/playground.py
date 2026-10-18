@@ -28,6 +28,7 @@ from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import plate
 from robotforge.design.store import WorldStore, worlds_home
+from robotforge.design.water import WaterEntry
 from robotforge.design.world import (
     CompiledWorld,
     Floor,
@@ -123,6 +124,8 @@ class Playground:
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             air = {k: float(msg[k]) for k in ("side", "climb") if msg.get(k)}  # aircraft: sideways, up and down
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
+            if msg.get("heave") is not None:  # an underwater robot going up or down (keys E and Q)
+                self.behaviors.heave(str(msg["robot"]), float(msg["heave"]))
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -763,15 +766,30 @@ class Playground:
         def change(w: World) -> None:
             w.floor = Floor()
             w.terrain = []
+            w.water = None
             w.objects = []
 
         self._places = None  # the scene's places went with it
         return self._edit(change)
 
     @_one_edit_at_a_time
-    def set_floor(self, style: str) -> dict[str, Any]:
+    def set_floor(self, style: str | None = None, water: Any = None) -> dict[str, Any]:
+        """The floor's look and grip, and the water over it: water=1.2 (or {"level": 1.2, "waves": 0.03}) fills
+        the world with water up to 1.2 m, the floor becoming its bottom; water=0 or false takes it away."""
+        if style is None and water is None:
+            raise PlaygroundError("give style (the floor's look) or water (a level in meters, 0 for none)")
+        entry: WaterEntry | None = None
+        if water is not None and water is not False and water != 0:
+            try:
+                entry = WaterEntry.model_validate(water)
+            except ValidationError as exc:
+                raise PlaygroundError(f"water: {_validation_message(exc)}") from exc
+
         def change(w: World) -> None:
-            w.floor.style = style
+            if style is not None:
+                w.floor.style = style
+            if water is not None:
+                w.water = entry
 
         return self._edit(change)
 
@@ -809,8 +827,8 @@ class Playground:
             raise PlaygroundError(_validation_message(exc)) from exc
         result = self._load_world(compiled)
         # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
-        # New ground under them (terrain, a scene) starts everything fresh: their heights would no longer fit.
-        if before.terrain == after.terrain:
+        # New ground under them (terrain, a scene, water) starts everything fresh: their heights would no longer fit.
+        if before.terrain == after.terrain and before.water == after.water:
             kept = [without_sensors(r) for r in before.robots]  # a sensor added or removed moves no robot
             unchanged = [r.name for r in after.robots if without_sensors(r) in kept]
             unchanged += [o.name for o in after.objects if o in before.objects]
@@ -897,6 +915,7 @@ class Playground:
             w.robots = robots
             w.floor = Floor.model_validate(content.floor)
             w.terrain = [terrain.parse(t) for t in content.terrain]
+            w.water = WaterEntry.model_validate(content.water) if content.water else None
             w.objects = [ObjectEntry(**{**o, "name": _unused(o["name"], taken)}) for o in content.objects]
 
         result = self._edit(change)
@@ -1110,6 +1129,7 @@ class Playground:
                 "sensors": listed,
                 **({"lidars": lidars} if lidars else {}),
                 "contacts": int(d.ncon),
+                **self._water_state(),
             }
             watcher = self.session.controllers.get(mechanisms.KEY)
             moving = mechanisms.read(m, d, self._mechanism_shapes(), watcher)
@@ -1141,19 +1161,29 @@ class Playground:
             self._shapes = (self.session.version, shapes)
         return shapes
 
+    def _water_state(self) -> dict[str, Any]:
+        """For a world with water: its level, and how deep in it the things it has touched are (share under the
+        surface, depth of their middle), so an agent can tell what floats and what sank."""
+        hydro = self.session.water
+        if hydro is None:
+            return {}
+        return {"water": {"level": hydro.water.level, "afloat": hydro.report(self.session.data)}}
+
     def sensor_readings(self) -> dict[str, Any]:
         """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones).
         A rangefinder on a robot reads past the robot's own parts, as its lidar does (sim/lidar.seen)."""
         m, d = self.session.model, self.session.data
         with self.session.lock:
             out: dict[str, Any] = {}
+            depths = self.session.water.depth_sensors(d) if self.session.water is not None else {}
             for s in range(m.nsensor):
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
                 if dim == 1 and int(m.sensor_type[s]) == mujoco.mjtSensor.mjSENS_RANGEFINDER:
                     values = [round(lidar.seen(m, d, s), 4)]
                 else:
                     values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                out[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+                reading = depths.get(s, values[0] if dim == 1 else values)  # a depth sensor reads m under the water
+                out[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = reading
             return out
 
     def snapshot(self, view: str = "default", width: int = 640, height: int = 480) -> bytes:
@@ -1399,7 +1429,7 @@ def viewer_catalog() -> dict[str, Any]:
     return {
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
-        "terrains": ["flat", *terrain.TYPES],
+        "terrains": ["flat", *(t for t in terrain.TYPES if t != "basin")],  # a hollow needs water: the lake scene
     }
 
 

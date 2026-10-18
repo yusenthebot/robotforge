@@ -17,6 +17,7 @@ import { picture as pip } from "./sensorpicture.js";
 import {
   arrowLength,
   choiceKey,
+  fanPicks,
   frustumCorners,
   jointGroups,
   nearColor,
@@ -29,8 +30,10 @@ import {
 const $ = (id) => document.getElementById(id);
 
 const MAX_POINTS = 1200; // hit points the server sends per lidar at most (sensors/lidar.py VIEW_POINTS)
-const MAX_RAYS = { lidar: 360, lidar3d: 150 }; // rays drawn: a 3D scan's every ray would be a solid fog
-const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.32, 0.03] }; // opacity of a ray at the sensor and at its hit
+// Rays drawn: a 2D ring's every ray; a 3D scan's every ray would be a solid fog, so one fan of its most level rays,
+// one every 5 degrees round (sensorkit.js fanPicks).
+const MAX_RAYS = { lidar: 360, lidar3d: 72 };
+const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.75, 0.22] }; // opacity of a ray at the sensor and at its hit
 const POINT_PX = 4.5; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
 const FRUSTUM_HALF = 0.045; // m: half the height of a camera's frustum where it ends, whatever its field of view
@@ -411,10 +414,10 @@ function lidarDrawing(first) {
       }
       points.setDrawRange(0, n);
       points.attributes.position.needsUpdate = points.attributes.color.needsUpdate = true;
-      const picks = rayPicks(n, most);
+      const picks = first.type === "lidar3d" ? fanPicks(flat, o, e.quat, most, n) : rayPicks(n, most);
       const rpos = rays.attributes.position.array;
       const rcol = rays.attributes.color.array;
-      // Each ray strong at the sensor and faint at its far end, where its point shows the hit: a hall's worth of
+      // Each ray strong at the sensor and fainter at its far end, where its point shows the hit: a hall's worth of
       // lines drawn evenly crossed the whole view.
       const [near, far] = RAY_ALPHA[first.type];
       picks.forEach((i, k) => {

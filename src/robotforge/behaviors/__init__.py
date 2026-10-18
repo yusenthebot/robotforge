@@ -19,6 +19,8 @@ class Kind(StrEnum):
     ROVER = "rover"
     BALANCER = "balancer"  # two wheels on one axle, balances like a Segway
     SNAKE = "snake"  # a chain of side-to-side joints that slithers
+    BOAT = "boat"  # floats and drives with thrusters that push along the water
+    ROV = "rov"  # an underwater robot: thrusters that push up and down too
     AIRCRAFT = "aircraft"  # rotors (thrust actuators) on a free-moving airframe: flies
     OTHER = "other"
 
@@ -38,6 +40,11 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
 
     if has(mujoco.mjtObj.mjOBJ_SITE, "tcp") or (_has_mounted_tool(model, robot) and not _floating(model, robot)):
         return Kind.ARM  # an arm, or a fixed robot built from parts with a gripper mounted on it
+    from robotforge.behaviors.marine import marine_kind  # lazy: it imports this package
+
+    marine = marine_kind(model, robot) if _floating(model, robot) else None
+    if marine is not None:
+        return Kind(marine)  # thrusters: a boat, or an ROV when some push up and down
     from robotforge.behaviors.balance import find_balancer  # lazy: it imports this package
 
     if find_balancer(model, robot, home_pose(model)) is not None:

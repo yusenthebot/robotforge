@@ -31,9 +31,12 @@ from robotforge.design import (
     templates,
     terrain,
 )
+from robotforge.design import water as waters
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
+from robotforge.design.water import WaterEntry
 from robotforge.sensors.spec import SensorEntry
+from robotforge.sim import water as water_physics
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
@@ -132,6 +135,11 @@ class RobotEntry(_Strict):
             raise ValueError(f"robot {self.name!r}: pos is [x, y] or [x, y, z]")
         return self
 
+    @property
+    def mjcf_file(self) -> bool:
+        """Whether it comes from an MJCF file of its own (URDF and mesh files go through the import doctor)."""
+        return self.file is not None and not importer.is_importable(self.file)
+
 
 class ObjectEntry(_Strict):
     name: str
@@ -186,6 +194,7 @@ class World(_Strict):
     name: str = "my_world"
     floor: Floor = Field(default_factory=Floor)
     terrain: list[TerrainPatch] = Field(default_factory=list)
+    water: WaterEntry | None = None  # a lake, a harbor, a pool: see design/water.py
     robots: list[RobotEntry] = Field(default_factory=list)
     objects: list[ObjectEntry] = Field(default_factory=list)
 
@@ -230,6 +239,8 @@ class World(_Strict):
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
+        if data.get("water") is None:
+            data.pop("water", None)  # a world without water saves as it always did
         for robot in data["robots"]:  # a robot without added sensors is saved as it always was
             if not robot.get("sensors"):
                 robot.pop("sensors", None)
@@ -346,10 +357,21 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         _object(spec, obj, ground)
         if obj.shape in mechanisms.MECHANISMS:  # a switch starts off, a conveyor running (the home keyframe)
             homes.append((obj.name, *mechanisms.home(obj.shape, obj.name, obj.speed)))
+    if world.water is not None:
+        water_physics.encode(spec, world.water.physics())
+        notes.append(waters.describe(world.water))
+        _moor_buoys(spec, world, ground)
+        notes += _docks_under_water(world, ground)
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
         model = _compile(spec)
+    if world.water is not None and _float_on_water(spec, model, world, homes, frames, ground):
+        model = _compile(spec)
+    if world.water is not None:
+        notes += waters.stranded(model, world.water, [r.name for r in world.robots], ground.height)
+    if world.water is not None:
+        water_physics.add_surface(spec, world.water.physics(), model)
     _add_home_key(spec, model, homes)
     return CompiledWorld(spec, _compile(spec), notes, doctor)
 
@@ -375,6 +397,64 @@ def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Grou
             frame.pos = [frame.pos[0], frame.pos[1], frame.pos[2] + lift]
             moved = True
     return moved
+
+
+def _moor_buoys(spec: mujoco.MjSpec, world: World, ground: terrain.Ground) -> None:
+    """A buoy over water is tied to the bottom under it (see props.moor), with a little slack in its rope."""
+    for obj in world.objects:
+        if obj.shape != "buoy" or obj.fixed:
+            continue
+        x, y = obj.pos[0], obj.pos[1]
+        bottom = ground.height(x, y)
+        depth = world.water.level - bottom
+        if depth > 0.2 and world.water.covers(x, y):
+            props.moor(spec, obj.name, [x, y, bottom + 0.02], max(depth - 0.2 * obj.size[1], 0.15))
+
+
+def _docks_under_water(world: World, ground: terrain.Ground) -> list[str]:
+    """A dock's third size is its deck's height above the ground or bottom under it: an agent that read it as the
+    deck's thickness put a deck under water, and only found out by looking. Say so at once, with a height that works."""
+    notes = []
+    for obj in world.objects:
+        if obj.shape != "dock" or not world.water.covers(obj.pos[0], obj.pos[1]):
+            continue
+        base = (
+            obj.pos[2]
+            if len(obj.pos) == 3
+            else ground.under(obj.pos[0], obj.pos[1], *props.footprint("dock", obj.size), obj.yaw)
+        )
+        deck = base + obj.size[2]
+        if deck < world.water.level + 0.05:
+            better = round(world.water.level - base + 0.35, 2)
+            notes.append(
+                f"{obj.name}: its deck is {world.water.level - deck:.2f} m under the water (deck height "
+                f"{obj.size[2]:g} m above the bottom, water {world.water.level - base:.2f} m deep there); give it size "
+                f"[{obj.size[0]:g}, {obj.size[1]:g}, {better:g}] for a deck 35 cm over the water"
+            )
+    return notes
+
+
+def _float_on_water(spec: mujoco.MjSpec, model: mujoco.MjModel, world: World, homes, frames, ground) -> bool:
+    """Robots and loose objects placed without a height over water start where they float (see design/water.py).
+    Returns True if anything moved."""
+
+    def lift(handle):
+        def place(dz: float) -> None:
+            handle.pos = [handle.pos[0], handle.pos[1], handle.pos[2] + dz]
+
+        return place
+
+    candidates = []
+    for robot, frame in frames:
+        root = waters.robot_root(model, robot)
+        if root is not None:
+            candidates.append((root, lift(frame)))
+    free = {o.name for o in world.objects if len(o.pos) == 2 and not o.fixed and o.shape != "marker"}
+    for body in spec.worldbody.bodies:  # not spec.body(): after an attach it can miss names
+        if body.name in free:
+            candidates.append((body.name, lift(body)))
+    qpos = _home_qpos(model, homes)
+    return bool(waters.float_up(spec, model, qpos, world.water, candidates, ground.height))
 
 
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
@@ -443,12 +523,76 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
         raise ValueError(f"robot {entry.name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
     if path.suffix.lower() not in (".xml", ".mjcf"):
         raise ValueError(f"robot {entry.name!r}: {path.name}: expected {importer.formats_hint()}")
+    return _mjcf_robot(entry.name, path)
+
+
+def _mjcf_robot(name: str, path: Path) -> templates.BuiltRobot:
+    """An MJCF file, ready to stand in a world as a library robot does: parts it left unnamed get names, and its
+    home keyframe becomes its home pose (the world brings its own keyframe, so the file's is dropped)."""
     try:
         child = mujoco.MjSpec.from_file(str(path))
     except ValueError as exc:
-        raise ValueError(f"robot {entry.name!r}: MuJoCo could not read {path.name}: {exc}") from exc
+        raise ValueError(f"robot {name!r}: MuJoCo could not read {path.name}: {exc}") from exc
+    notes = [f"imported from {path.name}"]
+    motors = _name_unnamed(child)
+    if motors:
+        notes.append(f"named the {motors} motors the file left unnamed after their joints, so they can be driven")
+    key = _home_key(child)
+    key_qpos, key_ctrl = library.read_key(child, key)
     _strip_world_extras(child)
-    return templates.BuiltRobot(spec=child, notes=[f"imported from {path.name}"])
+    if child.worldbody.first_body() is None:
+        return templates.BuiltRobot(spec=child, notes=notes)
+    home_qpos, home_ctrl, spawn, floating = library.stand_at_home(child, key_qpos, key_ctrl)
+    if key is not None:
+        notes.append(f"starts in its {key!r} keyframe")
+    return templates.BuiltRobot(
+        spec=child,
+        home_qpos=home_qpos,
+        home_ctrl=home_ctrl,
+        # A floating robot stands on its lowest point; one fixed to the world stays where its file puts it.
+        spawn_height=spawn if floating else 0.0,
+        floating=floating,
+        notes=notes,
+    )
+
+
+def _home_key(spec: mujoco.MjSpec) -> str | None:
+    """The keyframe a file starts in: the one named home (Menagerie's convention), else its first (named home
+    here if the file left it unnamed, so it can be read)."""
+    keys = list(spec.keys)
+    if not keys:
+        return None
+    if any(k.name == "home" for k in keys):
+        return "home"
+    if not keys[0].name:
+        keys[0].name = "home"
+    return keys[0].name
+
+
+def _name_unnamed(spec: mujoco.MjSpec) -> int:
+    """Name the bodies, joints and actuators a file left unnamed; returns how many actuators. A world finds each
+    robot's parts by their names ("<robot>/..."), and attaching only prefixes names a file gave: a hand-written MJCF's
+    unnamed motors belonged to no robot, so nothing could drive them. A motor is named after the joint it moves. Free
+    joints stay as they are: nothing drives them, and a world finds a robot's base by its body."""
+
+    def unique(base: str, taken: set[str]) -> str:
+        name, k = base, 1
+        while name in taken:
+            k += 1
+            name = f"{base}_{k}"
+        taken.add(name)
+        return name
+
+    motors = 0
+    for elements, kind in ((spec.bodies, "body"), (spec.joints, "joint"), (spec.actuators, "actuator")):
+        taken = {e.name for e in elements if e.name}
+        for i, element in enumerate(elements):
+            if element.name or (kind == "joint" and element.type == mujoco.mjtJoint.mjJNT_FREE):
+                continue
+            on_joint = kind == "actuator" and element.trntype == mujoco.mjtTrn.mjTRN_JOINT and element.target
+            element.name = unique(element.target if on_joint else f"{kind}{i}", taken)
+            motors += kind == "actuator"
+    return motors
 
 
 def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:

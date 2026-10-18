@@ -944,6 +944,29 @@ SHOTS = [
             _wait(22.0),
         ),
     ),
+    Shot(  # after Keep the A1 learns its steering and turns, and checks its switches: a few minutes on a laptop
+        "lesson_your_robot_kept",
+        _a1,
+        page=_lesson(
+            "learn_to_walk",
+            "document.querySelector('[data-choice=\"robot\"] button:last-child').click();",
+            _wait(1.0),
+            _press("train"),
+            # until the training's result shows (12 s on an idle laptop, 28 s with other benches running)
+            """for (let k = 0; k < 120 && !/学了 \\d+ 轮|\\d+ rounds \\(/.test(
+                document.getElementById("lesson-result").textContent); k++) {
+                await new Promise((r) => setTimeout(r, 500));
+            }""",
+            _press("keep"),
+            # until the panel says the turns are learned too (the second sentence of the result), then show it
+            """for (let k = 0; k < 600 && !/原地转弯：|turn on the spot:/.test(
+                document.getElementById("lesson-result").textContent); k++) {
+                await new Promise((r) => setTimeout(r, 1000));
+            }
+            document.getElementById("lesson-result").scrollIntoView({block: "end"});""",
+            _wait(1.0),
+        ),
+    ),
     Shot("lesson_learn_to_walk", _nothing, page=_lesson("learn_to_walk", _press("train"), _wait(25.0))),
     Shot(  # the plots show 6 s: capture while the step response is still in them
         "bench_pid_twins",
@@ -1013,6 +1036,43 @@ SHOTS = [
         "gallery",
         _gallery_line_up,
         page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
+        settle=3.0,
+    ),
+    # Water: the harbor with its boat, crates afloat and the dock; an ROV under water with the surface above it.
+    Shot(
+        "water_harbor",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([-5.5, -18.0, 6.6], [2.5, -1.5, 1.0]);",
+        settle=3.0,
+    ),
+    Shot(  # low over the harbor mouth, out to sea: the far water and the sky over it meet at the horizon
+        "water_harbor_horizon",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.0, 3.0, 2.6], [2.5, -12.0, 0.9]);",
+        settle=3.0,
+    ),
+    Shot(
+        "water_boat",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        viewer=[_walk("boat", 0.5), {"wait": 3.0}],
+        page=_look_at(["boat"], (-2.2, -2.6, 1.2)),
+        settle=0.5,
+    ),
+    Shot(
+        "water_rov",
+        _in_scene("pool", {"rov": {"template": "rov"}}),
+        viewer=[_go("rov", [0.0, 0.0, 0.75]), {"wait": 2.0}],
+        page=(  # from a little below and to the side of where it holds, the surface a ceiling over it
+            "const rf = window.__robotforge; rf.select(null);"
+            "const p = rf.bodyPosition(rf.scene.bodies.find((b) => b.name.startsWith('rov/') && b.dynamic).id);"
+            "rf.lookAt([p[0] + 1.1, p[1] + 0.35, p[2] - 0.22], [p[0], p[1], p[2] + 0.06]);"
+        ),
+        settle=1.0,
+    ),
+    Shot(
+        "water_lake",
+        _in_scene("lake", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([8.0, -13.0, 15.5], [-0.6, -0.9, 0.8]);",
         settle=3.0,
     ),
     # Aircraft hovering a metre over the park's path, their shadows on the grass below: the drone template, a

@@ -252,7 +252,7 @@ class Planner:
         names = list(layer.names)  # moving things add their names for this plan only
         skip = {self.destination.root} if self.destination.root > 0 else set()
         moving = nav_map.dynamic_columns(self.model, data, self.robot, self.body, grid, names, skip)
-        nav = nav_map.build(layer, self.body, moving, _disks(grid, blockers), names)
+        nav = self._map(layer, moving, _disks(grid, blockers), names)
         self.last_map = nav
         nav.free_from(grid.cell(*start_xy))
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
@@ -307,6 +307,10 @@ class Planner:
         if self.arm is not None and d.loose and not on_point:
             plan.within_reach = self._reaches(pts[-1])
         return plan
+
+    def _map(self, layer: StaticLayer, moving: list, blocked: np.ndarray | None, names: list[str]) -> NavMap:
+        """The map to search; a planner for another way of getting about (on the water) draws its own."""
+        return nav_map.build(layer, self.body, moving, blocked, names)
 
     @staticmethod
     def _search(nav: NavMap, penalty: np.ndarray, first: tuple[int, int], goal: np.ndarray, ways: np.ndarray | None):
@@ -642,6 +646,10 @@ class Navigator:
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
     backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
+    # Its walker turns as it walks. A learned walk turns only on the spot (any turn asked stops the walk) and keeps to
+    # its line as it walks, so it is only sent straight ahead, and turns on the spot past TURN_ON_SPOT: steered as the
+    # others, a template dog walk sent 3.2 m spent 30 s turning left and right and steadying, never walking forward.
+    turns_walking: bool = True
     rate_hz: float = RATE_HZ
     state: str = "following"  # following, facing, arrived, stopped
     note: str | None = None
@@ -807,7 +815,8 @@ class Navigator:
         self._spin_since = None
         speed = self.cruise * max(0.0, math.cos(alpha))
         slow = max(MIN_SPEED_SHARE * self.cruise, SLOW_GAIN * min(left, corner_left))
-        self.walker.command(min(speed, slow), float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)))
+        turn = float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)) if self.turns_walking else 0.0
+        self.walker.command(min(speed, slow), turn)
 
     def _make_way(self, t: float, xy: np.ndarray, s: float, data: mujoco.MjData) -> bool:
         """Another robot on the path just ahead (it moved there after the plan): stop, and after a moment plan

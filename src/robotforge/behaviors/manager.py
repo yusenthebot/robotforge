@@ -17,7 +17,18 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, air, airways, flight, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import (
+    Kind,
+    air,
+    airways,
+    flight,
+    humanoid,
+    marine,
+    nav_map,
+    quadruped,
+    robot_kind,
+    water_nav,
+)
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
@@ -29,18 +40,31 @@ from robotforge.design import end_effectors, library, mechanisms
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
-MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE, Kind.AIRCRAFT)
+MOBILE = (
+    Kind.QUADRUPED,
+    Kind.HEXAPOD,
+    Kind.ROVER,
+    Kind.HUMANOID,
+    Kind.BALANCER,
+    Kind.SNAKE,
+    Kind.BOAT,
+    Kind.ROV,
+    Kind.AIRCRAFT,
+)
 WALKERS = (
     quadruped.QuadrupedGait,
     DiffDrive,
     humanoid.HumanoidController,
     WheelBalancer,
     SnakeGait,
+    marine.BoatPilot,
+    marine.RovPilot,
     flight.FlightController,
 )
 # They fall over without a controller; an aircraft also keeps its motors idle on the ground and hovers in the air.
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER, Kind.AIRCRAFT)
-TRIPS = (navigation.Navigator, airways.FlightTrip)  # a trip to a destination over the ground or through the air
+# A trip to a destination over the ground, under water or through the air.
+TRIPS = (navigation.Navigator, marine.DiveTrip, airways.FlightTrip)
 # Legged walkers stand on their servos alone, but dragged in the viewer before their first move they rolled onto
 # their backs (dog, Go2 and a dog built from parts: 180 degrees; scripts/push_bench.py --states fresh). Their gait
 # steps along with a push (quadruped.PUSH_DRIFT) and stands exactly as the servos do, so in an open world they
@@ -534,13 +558,17 @@ class BehaviorManager:
         return out
 
     def _can_learn_walk(self, robot: str) -> bool:
+        return self._cannot_learn_walk(robot) is None
+
+    def _cannot_learn_walk(self, robot: str) -> str | None:
+        """Why `robot` cannot learn a walk of its own in RL II, None if it can."""
         from robotforge.control.cpg import Body, CPGError
 
         try:
             Body.find(self.session.model, robot)
-        except CPGError:
-            return False
-        return True
+        except CPGError as exc:
+            return str(exc)
+        return None
 
     def kept_walk(self, robot: str) -> SavedWalk | None:
         """The walk `robot` learned in the RL II lesson and kept in this world's folder, if any."""
@@ -561,16 +589,28 @@ class BehaviorManager:
     def _rhythm_walker(self, robot: str, existing: Any, create: bool) -> RhythmWalker:
         walk = self.kept_walk(robot)
         if walk is None:
-            raise BehaviorError(f"{robot} has not learned a walk of its own; {LEARN_A_WALK}")
+            why = self._cannot_learn_walk(robot)
+            how = LEARN_A_WALK if why is None else f"and it cannot learn one in the RL II lesson: {why}"
+            raise BehaviorError(f"{robot} has not learned a walk of its own; {how}")
         if isinstance(existing, RhythmWalker) and existing.walk == walk:
             return existing
         try:
-            ctrl = RhythmWalker(self.session.model, robot, walk, self.home_qpos())
+            ctrl = RhythmWalker(self.session.model, robot, walk, self._walk_home(robot, walk))
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _walk_home(self, robot: str, walk: SavedWalk) -> np.ndarray:
+        """The pose a kept walk swings around when its file does not say (one kept before files said). An MJCF
+        robot's home was then the file's zero pose, its keyframe dropped as the world was built: played around the
+        crouched keyframe instead, a critter's walk went 0.88 m in 4 s instead of 1.25."""
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        if walk.home is None and entry is not None and entry.mjcf_file:
+            return self.session.model.qpos0.copy()
+        return self.home_qpos()
 
     def _mobile_controller(self, robot: str, kind: Kind, create: bool, walker: str | None = None):
         existing = self.session.controllers.get(robot)
@@ -595,6 +635,8 @@ class BehaviorManager:
                 ctrl = WheelBalancer(m, robot, self.home_qpos())
             elif kind == Kind.SNAKE:
                 ctrl = SnakeGait(m, robot, self.home_qpos())
+            elif kind in (Kind.BOAT, Kind.ROV):  # thrusters; the pilot measures its own drag in the water now
+                ctrl = marine.pilot_for(kind.value, m, robot, self.session.water, self.session.data)
             elif kind == Kind.AIRCRAFT:
                 ctrl = flight.FlightController(m, robot, self.home_qpos())
             else:
@@ -808,20 +850,29 @@ class BehaviorManager:
                 f"{robot} walks only straight ahead (its learned walk has no turns yet), so it cannot follow a path; "
                 "teach it turns in the RL II lesson, or drive it with move and turn"
             )
+        if isinstance(ctrl, marine.RovPilot):  # under water it goes straight to a point in 3D
+            return self._dive(robot, to, ctrl, speed, seconds, model, data)
         destination = self._destination(robot, to, model, data)
-        try:
-            body = nav_map.measure_body(model, data, robot, kind, ctrl)
-        except ValueError as exc:
-            raise BehaviorError(str(exc)) from exc
-        arm = self._carried_arm(robot, data)
-        planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version))
+        if isinstance(ctrl, marine.BoatPilot):  # on the water: a map of where it floats clear of the shore
+            try:
+                planner = water_nav.planner(model, data, robot, ctrl, destination, self._layers(version))
+            except ValueError as exc:
+                raise BehaviorError(str(exc)) from exc
+        else:
+            try:
+                body = nav_map.measure_body(model, data, robot, kind, ctrl)
+            except ValueError as exc:
+                raise BehaviorError(str(exc)) from exc
+            arm = self._carried_arm(robot, data)
+            planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version))
         try:
             plan = planner.plan(data)
         except navigation.NoWay as exc:
             exc.destination = destination.describe()
             raise
         top = float(ctrl.max_speed)
-        cruise = navigation.default_cruise(top) if speed is None else min(abs(speed), top)
+        own = getattr(ctrl, "cruise", None)  # a boat's own pace: it carries way and slows for the corners
+        cruise = (own or navigation.default_cruise(top)) if speed is None else min(abs(speed), top)
         key = TRIP + robot
 
         def finished(trip: navigation.Navigator) -> None:  # runs inside a sim step, with the session lock held
@@ -840,6 +891,7 @@ class BehaviorManager:
             turn_rate=navigation.turn_rate_for(kind.value, ctrl),
             turns_in_place=not isinstance(ctrl, SnakeGait),
             backs_up=not isinstance(ctrl, (SnakeGait, RhythmWalker)) and getattr(ctrl, "max_reverse", 1.0) > 0,
+            turns_walking=not isinstance(ctrl, RhythmWalker),
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
@@ -860,6 +912,57 @@ class BehaviorManager:
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip
         return trip
+
+    def _dive(self, robot: str, to, pilot: marine.RovPilot, speed, seconds, model, data) -> marine.DiveTrip:
+        """move(to=...) for an ROV: straight to a point under water, [x, y, z] ([x, y] keeps the depth it holds), or
+        next to an object or another robot at its height (marine.dive_target)."""
+        named = None if isinstance(to, (list, tuple)) or NUMBER_LIST.fullmatch(str(to)) else to
+        destination = self._destination(robot, to, model, data) if named is not None else None
+        try:
+            target, note = marine.dive_target(pilot, to, destination, model, data)
+            via, way = marine.dive_route(pilot, model, data, target) if pilot.water is not None else ([], None)
+        except navigation.NoWay:
+            raise  # no water to dive in there: an answer (move says why), not a mistake in the call
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        key = TRIP + robot
+
+        def finished(trip: marine.DiveTrip) -> None:  # runs inside a sim step, with the session lock held
+            if self.session.controllers.get(key) is trip:
+                self.session.set_controller(key, None)
+                self._last_trips[robot] = trip.result()
+            if self._live_trips.get(robot) is trip:
+                del self._live_trips[robot]
+
+        with self.session.lock:
+            if self.session.controllers.get(robot) is not pilot:
+                raise BehaviorError(f"{robot} was changed while its dive was planned; send it again")
+            if speed is not None:
+                pilot.cruise = min(abs(float(speed)), pilot.max_speed)
+            now = float(self.session.data.time)
+            trip = marine.DiveTrip(
+                robot,
+                pilot,
+                target,
+                self.session.data.subtree_com[pilot.root].copy(),
+                start_time=now,
+                deadline=now + seconds if seconds is not None else None,
+                still_mine=lambda: self.session.controllers.get(robot) is pilot,
+                on_finish=finished,
+                name=destination.name if destination is not None else None,
+                note="; ".join(n for n in (note, way) if n) or None,
+                via=via,
+            )
+            self.session.set_controller(key, trip)
+            self._live_trips[robot] = trip
+        return trip
+
+    def heave(self, robot: str, rate: float) -> None:
+        """Up (+) or down (-) in m/s for an ROV driven from the keyboard; it holds the depth it reaches."""
+        with self.session.lock:
+            pilot = self.session.controllers.get(self.resolve(robot))
+            if isinstance(pilot, marine.RovPilot):
+                pilot.command(pilot.speed, pilot.turn, heave=rate)
 
     def _fly(self, robot: str, to: str | list[Any], speed: float | None, seconds: float | None) -> airways.FlightTrip:
         """navigate for an aircraft: through the air, straight to the point or through the points, up over what is
@@ -901,7 +1004,7 @@ class BehaviorManager:
             self._live_trips[robot] = trip
         return trip
 
-    def trip(self, robot: str) -> navigation.Navigator | airways.FlightTrip | None:
+    def trip(self, robot: str) -> navigation.Navigator | marine.DiveTrip | airways.FlightTrip | None:
         """The robot's trip to a destination, while it is on one."""
         found = self.session.controllers.get(TRIP + robot)
         return found if isinstance(found, TRIPS) else None
@@ -914,7 +1017,7 @@ class BehaviorManager:
             self.session.set_controller(TRIP + robot, None)
             trip.interrupt("it was flown another way (keys, move or stop) on the way")
             self._last_trips[robot] = trip.result()
-        elif isinstance(trip, navigation.Navigator):
+        elif isinstance(trip, (navigation.Navigator, marine.DiveTrip)):
             self.session.set_controller(TRIP + robot, None)
             if not trip.done:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
