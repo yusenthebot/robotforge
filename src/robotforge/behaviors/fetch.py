@@ -270,13 +270,21 @@ class Stand:
         # reached a toy on the floor and 7 cm over it, and not 45 cm over it from 7 cm aside.
         travel = target.copy()
         travel[2] = max(float(target[2]), float(self.hold_at(xy, heading)[2])) + APPROACH_UP
-        with self.arm.carried_to(self.qpos_at(xy, heading)):
-            for tilt in tilts:
-                if tilt == 0.0:
-                    if all(self.arm.quick_error(p) <= REACH_TOL for p in (target, target + [0.0, 0.0, lift], travel)):
+        # From the arm tucked in, as it arrives there: from the pose a pick that did not work out left it in, a lift
+        # picker looking for another spot found its hand reached an apple only level, not at the 60 degrees it had
+        # planned with, and no spot at all.
+        arm = self.arm
+        now, arm.q = arm.q, self.hold_q.copy()
+        try:
+            with arm.carried_to(self.qpos_at(xy, heading)):
+                for tilt in tilts:
+                    if tilt == 0.0:
+                        if all(arm.quick_error(p) <= REACH_TOL for p in (target, target + [0.0, 0.0, lift], travel)):
+                            return tilt
+                    elif self.hand.reaches(target, tilt, lift):
                         return tilt
-                elif self.hand.reaches(target, tilt, lift):
-                    return tilt
+        finally:
+            arm.q = now
         return None
 
 
@@ -321,13 +329,16 @@ def spots_for(
                 continue
             checks += 1
             tilt = stand.grip(xy, heading, target, lift, tilts)
+            # The whole pick or put planned with the first tilt that passes the quick check, else with the next: a
+            # lift picker reached an apple on an island level and at 60 degrees, and only the 60 degree pick worked.
+            while tilt is not None and rehearse is not None and not rehearse(xy, heading, target, tilt):
+                rest = tilts[tilts.index(tilt) + 1 :]
+                tilt = stand.grip(xy, heading, target, lift, rest) if rest else None
             if tilt is None:
                 continue
             spot = Spot((float(xy[0]), float(xy[1])), float(heading), tuple(float(v) for v in target), tilt)
             # Navigation stops within 8 cm and 12 degrees, and creeping in gets within 2.5 cm and 3 degrees: a spot
             # on the edge of where the arm reaches is reached in the plan and missed from where it really stops.
-            if rehearse is not None and not rehearse(xy, heading, target, tilt):
-                continue
             if _robust(stand, xy, heading, target, lift, tilts):
                 return spot, checked + checks
             fallback = fallback or spot
@@ -1192,6 +1203,7 @@ class Errand:
     started: float = 0.0
     ended: float | None = None
     picked_at: list[float] | None = None
+    _grasp_at: list[float] | None = None  # where the load lay as the pick under way began
     placed_at: list[float] | None = None
     _leg: Leg | None = None
     _until: float = 0.0
@@ -1326,6 +1338,7 @@ class Errand:
             self._fail(data, "missed", f"its gripper closed but did not hold the {self.obj}")
             return
         self.held = True
+        self.picked_at = self._grasp_at  # where it lay: told only once it holds it
         self._fold(data)
 
     def _fold(self, data: mujoco.MjData) -> None:
@@ -1626,7 +1639,6 @@ class Errand:
             _pick(self.hand, center, self.half, hold, tilt, self.hold_q, self.radius)
 
         failed = self._first_tilt(self.pick, queue, "pick")
-        self.picked_at = [round(float(v), 3) for v in center]
         if failed is not None:
             if self._again(t, data, self.pick, "to_object"):
                 return
@@ -1635,6 +1647,7 @@ class Errand:
             )
             return
         self._stance = self._pose(data)
+        self._grasp_at = [round(float(v), 3) for v in center]
         self.step = "picking"
 
     def _start_place(self, t: float, data: mujoco.MjData) -> None:
