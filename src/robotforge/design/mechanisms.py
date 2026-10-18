@@ -73,6 +73,9 @@ SHAPES = (*MECHANISMS, *SOFT)
 CONTAINERS = ("drawer",)  # pick_and_place can put things in these
 DEFAULT_SPEED = 0.1  # m/s a conveyor runs at unless told otherwise
 VALVE_TURNS = 2.0  # turns from closed to fully open
+CLOTH_SPACING = 0.04  # m between a cloth's points, at least (see _cloth)
+CLOTH_POINTS = 16  # points along a side, at most: 256 points simulate twice as fast as real time
+CLOTH_BALL = 0.006  # m, the radius of a cloth's points where they touch things
 SWITCH_RANGE = math.radians(25)
 LEVER_RANGE = math.radians(40)
 
@@ -532,8 +535,8 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
     """A square-meshed cloth (a flex of triangles whose edges keep their length): it lies flat at `base` and drapes
     over what is under it. Fixed, its back edge (+y) is pinned where it starts, like a curtain."""
     length, width = size
-    spacing = 0.035
-    nx, ny = max(3, round(length / spacing) + 1), max(3, round(width / spacing) + 1)
+    nx = max(4, min(CLOTH_POINTS, round(length / CLOTH_SPACING) + 1))
+    ny = max(4, min(CLOTH_POINTS, round(width / CLOTH_SPACING) + 1))
     color = " ".join(f"{c:.3f}" for c in rgba)
     pin = ""
     if fixed:
@@ -543,21 +546,29 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
     mass = 0.15 * length * width / 0.09  # kg: 150 g a 30 cm square, a tea towel
     # In a body of its own (a rail for a curtain): MuJoCo 3.15 drops a flex from an attached spec when pinned
     # vertices hang on its world body, and a curtain came out as 90 loose points and no cloth.
+    # The flex keeps the edges' lengths; its points touch things as small balls. MuJoCo keeps at most 50 contacts
+    # between two things, so as one flex on one table top a cloth got 50 in all and sank through the top round
+    # them; as balls, every point has its own.
     xml = f"""
     <mujoco>
       <worldbody>
         <body name="rail">
           <flexcomp name="{name}" type="grid" count="{nx} {ny} 1" spacing="{spacing}"
-                    radius="0.003" dim="2" mass="{mass:.4f}" rgba="{color}">
+                    radius="{CLOTH_BALL}" dim="2" mass="{mass:.4f}" rgba="{color}">
             <edge equality="true" damping="0.002"/>
-            <contact condim="3" selfcollide="none" solref="0.01 1"/>
+            <contact contype="0" conaffinity="0" selfcollide="none"/>
             {pin}
           </flexcomp>
         </body>
       </worldbody>
     </mujoco>"""
     child = mujoco.MjSpec.from_string(xml)
-    frame = spec.worldbody.add_frame(pos=[base[0], base[1], base[2] + 0.004], quat=quat)
+    for point in child.bodies:
+        if point.name.startswith(f"{name}_"):
+            point.add_geom(
+                type=G.mjGEOM_SPHERE, size=[CLOTH_BALL, 0, 0], mass=0.0, group=3, friction=[0.8, 0.01, 0.001]
+            )
+    frame = spec.worldbody.add_frame(pos=[base[0], base[1], base[2] + CLOTH_BALL], quat=quat)
     spec.attach(child, prefix=f"{name}/", frame=frame)
 
 

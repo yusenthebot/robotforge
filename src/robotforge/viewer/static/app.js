@@ -490,11 +490,16 @@ function flexMesh(f) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(f.bodies.length * 3), 3));
   geometry.setIndex(f.faces);
+  // Drawn through its middle, a cloth lies a few millimetres over what it rests on (its thickness), where a table
+  // top's dressed edge showed through it in patches: pulled toward the camera in depth, it wins.
   const material = new THREE.MeshStandardMaterial({
     color: rgbaColor(f.rgba),
     roughness: 0.95,
     metalness: 0,
     side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -8,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;

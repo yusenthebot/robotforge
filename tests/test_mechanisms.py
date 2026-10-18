@@ -200,8 +200,13 @@ def test_a_rope_hangs_and_swings_and_a_cloth_drapes(pg):
     pg.run_fast(lambda: False, 4.0)
     cloth = pg.state()["mechanisms"]["cloth"]
     low, high = cloth["height_m"]
-    assert high == pytest.approx(0.3, abs=0.03)  # lying on the table top
+    assert high == pytest.approx(0.3, abs=0.03)
     assert low < 0.25  # with its edges hanging down over the sides
+    # and its middle on the top, not sunk through it: MuJoCo keeps 50 contacts a pair, and a finer cloth went
+    # through the top held by its edges only
+    points = pg.session.data.flexvert_xpos
+    over = (np.abs(points[:, 0] - 1.0) < 0.15) & (np.abs(points[:, 1]) < 0.15)
+    assert np.median(points[over, 2]) == pytest.approx(0.3, abs=0.01)
 
 
 @pytest.fixture

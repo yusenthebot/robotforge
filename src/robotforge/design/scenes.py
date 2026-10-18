@@ -162,7 +162,7 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.add("bowl", "bin", [-0.29, 0.1, COUNTER_TOP], size=[0.16, 0.16, 0.06], color="white")
     # A chest of drawers beside the arm, its drawer pulling out toward the arm (operate opens it; the plate fits in it),
     # and a bread cabinet on the counter by the fridge for a robot that comes to it.
-    c.add("drawer", "drawer", [0.5, -0.05, COUNTER_TOP], size=[0.3, 0.3, 0.14], yaw=-90, color=LIGHT_WOOD)
+    c.add("drawer", "drawer", [0.5, -0.05, COUNTER_TOP], size=[0.3, 0.3, 0.14], yaw=-90, color=WHITE)
     c.add("cabinet", "cabinet", [1.0, 1.75, COUNTER_TOP], size=[0.3, 0.24, 0.3], color=WHITE)
     c.add("dining_table", "table", [-1.9, -0.9], size=[1.2, 0.8, 0.75], color=WOOD)
     c.add("fruit", "sphere", [-1.9, -0.9, resting_z(0.75, "sphere", [0.08])], size=[0.08], color="orange")
