@@ -114,9 +114,13 @@ async def test_servers_built_together_each_hold_their_own_viewer_port():
             assert "robotforge" in page
 
 
-async def test_a_port_0_server_serves_the_viewer_to_each_session_in_turn():
+@pytest.mark.parametrize("once_per_socket", [False, True], ids=["copies", "windows"])
+async def test_a_port_0_server_serves_the_viewer_to_each_session_in_turn(monkeypatch, once_per_socket):
     """The first session's viewer closed the held port when it shut down: the next session on the same server
-    object had no viewer (connection refused) on the URL open_viewer still gave it."""
+    object had no viewer (connection refused) on the URL open_viewer still gave it. On Windows a copy of the held
+    socket could not be served a second time (WinError 87), so there each session serves the socket itself and
+    the next one takes the port again."""
+    monkeypatch.setattr(mcp_server, "_SERVED_ONCE_PER_SOCKET", once_per_socket)
     playground = Playground.with_demo()
     server = build_server(playground, 0)
     for _ in range(2):

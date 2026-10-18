@@ -981,7 +981,7 @@ def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, 
         for path, short in ((run_dir, "RUN"), (Path.home(), "~")):
             # as written, and as JSON writes it inside arguments (Windows backslashes doubled)
             text = text.replace(str(path), short).replace(json.dumps(str(path))[1:-1], short)
-        return _short(text)
+        return _short(_forward_slashes(text))
 
     return Outcome(
         task=task.name,
@@ -1302,6 +1302,11 @@ def _trim_args(args: Any) -> Any:
             for k, v in args.items()
         }
     return args
+
+
+def _forward_slashes(text: str) -> str:
+    """The rest of a path after RUN or ~ with forward slashes, so a summary reads the same from Windows."""
+    return re.sub(r"(RUN|~)((?:\\{1,2}[\w.\-]+)+)", lambda m: m[1] + re.sub(r"\\+", "/", m[2]), text)
 
 
 def trim(task_dir: Path, dest: Path) -> int:
