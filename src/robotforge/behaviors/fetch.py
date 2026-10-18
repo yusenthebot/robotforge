@@ -623,7 +623,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
         def queue(hold: np.ndarray) -> None:
             if tilt == 0.0:
-                arm.pick_up(target, half, hold)
+                _pick_down(stand.hand, target, half, hold)
             else:
                 stand.hand.pick(target, half, hold, tilt, stand.hold_q, radius)
 
@@ -654,7 +654,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
         def queue(hold: np.ndarray) -> None:
             spot = tool - [0.0, 0.0, half + 0.01]
             if tilt == 0.0:
-                arm.put_down(spot, half, place.top)
+                _put_down(stand.hand, spot, half, place.top)
             else:
                 stand.hand.put(spot, half, place.top, tilt)
 
@@ -678,6 +678,30 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
             _check_weight(model, arm, q, friction, obj, mass)
     arm.sync(data)
     return Errand(manager, robot, arm, obj, body, half, radius, hold_local, hold_q, pick, drop, place, held=holds)
+
+
+def _pick_down(hand: Hand, center: np.ndarray, half: float, hold: np.ndarray) -> None:
+    """ArmMotion.pick_up, refused (OutOfReach) when the arm, over the load or at it with its gripper pointing down,
+    would touch anything but the load: on a rack a lift picker's elbow struck the board above a parcel and the arm
+    thrashed there. Reaching in tilted (reach_in.py) is tried then."""
+    hand.arm.pick_up(center, half, hold)
+    _clear_down(hand, [center, center + [0.0, 0.0, APPROACH_UP]])
+
+
+def _put_down(hand: Hand, spot: np.ndarray, half: float, top: float | None) -> None:
+    """ArmMotion.put_down, refused as _pick_down is when the arm putting the load down would touch something."""
+    hand.arm.put_down(spot, half, top)
+    drop = np.asarray(spot, float) + [0.0, 0.0, half + 0.01]
+    _clear_down(hand, [drop, drop + [0.0, 0.0, APPROACH_UP]])
+
+
+def _clear_down(hand: Hand, points: list[np.ndarray]) -> None:
+    arm = hand.arm
+    for p in points:
+        q, err = arm.pose_for(p)
+        if err <= REACH_TOL and not hand._clear(q):
+            arm.queue.clear()
+            raise OutOfReach(arm.robot, ["object without touching what is round it"], {"object": p})
 
 
 def _check_weight(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, friction: float, obj: str, mass: float) -> None:
@@ -1244,7 +1268,7 @@ class Errand:
 
         def queue(tilt: float) -> None:
             if tilt == 0.0:
-                self.arm.pick_up(center, self.half, hold)
+                _pick_down(self.hand, center, self.half, hold)
             else:
                 self.hand.pick(center, self.half, hold, tilt, self.hold_q, self.radius)
 
@@ -1267,7 +1291,7 @@ class Errand:
 
         def queue(tilt: float) -> None:
             if tilt == 0.0:
-                self.arm.put_down(target, self.half, self.place.top)
+                _put_down(self.hand, target, self.half, self.place.top)
             else:
                 self.hand.put(target, self.half, self.place.top, tilt)
 

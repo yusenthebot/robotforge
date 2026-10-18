@@ -443,7 +443,7 @@ class Hand:
             if root == arm._robot_root or root == self.load:
                 continue
             return False
-        return True
+        return not _links_pass_through(arm, (arm._robot_root, self.load))
 
     def _off(self, q: np.ndarray, turn: np.ndarray) -> float:
         """How far (rad) the tool body at `q` is turned from `turn`."""
@@ -504,6 +504,36 @@ def sweeps_clear(
         if carried:
             arm.ik.base_qpos[adr : adr + 3] = saved
     return True
+
+
+def _links_pass_through(arm: ArmMotion, ignore: tuple[int, ...]) -> bool:
+    """Whether the axis of one of the arm's capsule links, as posed in the IK's copy, passes through something solid
+    whose root is not in `ignore`. MuJoCo's capsule-box test misses a capsule that goes right through a thin box: a lift
+    picker's upper arm through the 2 cm back panel of a rack read as 3 cm clear, and the real arm pushed on the panel
+    instead of reaching the parcel behind it."""
+    m, d = arm.ik.model, arm.ik.data
+    hit = np.zeros(1, np.int32)
+    for g in range(m.ngeom):
+        if int(m.geom_type[g]) != mujoco.mjtGeom.mjGEOM_CAPSULE or int(m.geom_bodyid[g]) not in arm._moving:
+            continue
+        if not (m.geom_contype[g] or m.geom_conaffinity[g]):
+            continue
+        axis = d.geom_xmat[g].reshape(3, 3)[:, 2] * float(m.geom_size[g][1])
+        start, end = d.geom_xpos[g] - axis, d.geom_xpos[g] + axis
+        length = float(np.linalg.norm(end - start))
+        way = (end - start) / length
+        gone = 0.0
+        while gone < length:
+            dist = mujoco.mj_ray(m, d, start + way * gone, way, None, 1, -1, hit)
+            if dist < 0 or gone + dist > length:
+                break
+            other = int(hit[0])
+            body = int(m.geom_bodyid[other])
+            solid = bool(m.geom_contype[other] or m.geom_conaffinity[other])
+            if solid and body not in arm._moving and int(m.body_rootid[body]) not in ignore:
+                return True
+            gone += dist + 1e-4
+    return False
 
 
 def _descends(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
