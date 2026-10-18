@@ -1372,6 +1372,13 @@ class ArmMotion:
         # A carry the arm cannot follow round from any pose here goes joint by joint, as it did before it had a
         # planned path: following the path anyway, a scorpion's tail lost it halfway and dropped the cube.
         if wp.load is not None and reached:
+            # Into the pose the way down to the place was checked from, where that has the tool over the place: ended
+            # in another, a scorpion's tail changed pose there with the cube in its claw, swung for 6 s and dropped it
+            # from 27 cm.
+            then = self.queue[0].pose if self.queue else None
+            off = np.inf if then is None else float(np.linalg.norm(self.ik.point(self.chain, then) - wp.position))
+            if off <= REACH_TOL and self._joints_clear(self.q, then):
+                return self._joint_move(wp, then)
             return self._joint_way(wp, goal)
         return self._short_of_carrier(wp, start, steps, aim, **keep) if self._rides else wp
 

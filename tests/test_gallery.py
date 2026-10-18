@@ -626,6 +626,29 @@ def test_a_pick_goes_the_way_it_was_checked_and_lands(pg, case):
     assert pg.behaviors.pose("r")["upright"]
 
 
+def test_a_carry_made_joint_by_joint_holds_on_to_the_cube_until_it_is_put_down(pg):
+    """Regression: across its back the scorpion's tail cannot follow the carry round, so it goes there joint by joint,
+    but to a pose of its own, not the one the way down to the place was checked from. Changing into that one over the
+    place, with the cube in its claw, the tail swung for 6 s and dropped the cube from 27 cm (it landed near the place
+    by luck)."""
+    pg.add_robot("r", design="scorpion")
+    pg.add_object("cube", shape="box", size=CUBE, pos=[0.15, -0.35])
+    _run(pg, 0.5)
+    motion, info = pg.behaviors.pick_and_place("r/claw", "cube", [-0.25, 0.0])
+    m, d = pg.session.model, pg.session.data
+    cube = m.body("cube").id
+    lowest = np.inf  # of the cube while the tool is up high, after the lift
+    for _ in range(round(40 / 0.02)):
+        _run(pg, 0.02)
+        if motion.current_label in ("carry", "lower") and d.site_xpos[motion.site][2] > 0.2:
+            lowest = min(lowest, float(d.xpos[cube][2]))
+        if motion.done:
+            break
+    _run(pg, 0.5)
+    assert lowest > 0.15, lowest
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
 def test_the_twin_arm_works_one_cube_with_each_hand_and_leaves_its_waist_alone(pg):
     pg.add_robot("twin", design="twin_arm")
     pg.add_object("table", shape="table", size=[0.3, 0.7, 0.35], pos=[0.42, 0.0], fixed=True)
