@@ -21,8 +21,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from robotforge import wording
 from robotforge.design import builder, components, importer, library, props, templates, terrain
+from robotforge.design import water as waters
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
+from robotforge.design.water import WaterEntry
+from robotforge.sim import water as water_physics
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
@@ -138,6 +141,7 @@ class World(_Strict):
     name: str = "my_world"
     floor: Floor = Field(default_factory=Floor)
     terrain: list[TerrainPatch] = Field(default_factory=list)
+    water: WaterEntry | None = None  # a lake, a harbor, a pool: see design/water.py
     robots: list[RobotEntry] = Field(default_factory=list)
     objects: list[ObjectEntry] = Field(default_factory=list)
 
@@ -182,6 +186,8 @@ class World(_Strict):
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
+        if data.get("water") is None:
+            data.pop("water", None)  # a world without water saves as it always did
         return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
@@ -289,9 +295,14 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
 
     for obj in world.objects:
         _object(spec, obj, ground)
+    if world.water is not None:
+        water_physics.encode(spec, world.water.physics())
+        notes.append(waters.describe(world.water))
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
+        model = _compile(spec)
+    if world.water is not None and _float_on_water(spec, model, world, homes, frames, ground):
         model = _compile(spec)
     _add_home_key(spec, model, homes)
     return CompiledWorld(spec, _compile(spec), notes, doctor)
@@ -318,6 +329,29 @@ def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Grou
             frame.pos = [frame.pos[0], frame.pos[1], frame.pos[2] + lift]
             moved = True
     return moved
+
+
+def _float_on_water(spec: mujoco.MjSpec, model: mujoco.MjModel, world: World, homes, frames, ground) -> bool:
+    """Robots and loose objects placed without a height over water start where they float (see design/water.py).
+    Returns True if anything moved."""
+
+    def lift(handle):
+        def place(dz: float) -> None:
+            handle.pos = [handle.pos[0], handle.pos[1], handle.pos[2] + dz]
+
+        return place
+
+    candidates = []
+    for robot, frame in frames:
+        root = waters.robot_root(model, robot)
+        if root is not None:
+            candidates.append((root, lift(frame)))
+    free = {o.name for o in world.objects if len(o.pos) == 2 and not o.fixed and o.shape != "marker"}
+    for body in spec.worldbody.bodies:  # not spec.body(): after an attach it can miss names
+        if body.name in free:
+            candidates.append((body.name, lift(body)))
+    qpos = _home_qpos(model, homes)
+    return bool(waters.float_up(spec, model, qpos, world.water, candidates, ground.height))
 
 
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
