@@ -167,8 +167,10 @@ def _where_it_works(
     radii = np.arange(DOWN_BAND_STEP, reach + 1e-9, DOWN_BAND_STEP)
 
     def down(xy: np.ndarray) -> bool:
-        # the highest point first: it fails most often, and a failure there settles it
-        ordered = sorted(heights.items(), key=lambda point: -point[1])
+        # The points the gripper must point down at first, as checking a point where it may lean costs up to seven
+        # times as much (see arm.TILTS): a refused pick on a Go2's PiPER took 31 s to advise, leaning first. Then the
+        # highest first: it fails most often, and a failure there settles it.
+        ordered = sorted(heights.items(), key=lambda point: (point[0].startswith("above"), -point[1]))
         return all(arm.key_point_error(name, np.array([*xy, z])) <= REACH_TOL for name, z in ordered)
 
     pointing = [float(r) for r in radii if down(base[:2] + r * own)]

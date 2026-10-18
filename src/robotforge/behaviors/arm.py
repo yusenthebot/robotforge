@@ -280,13 +280,18 @@ class ArmMotion:
         return self._solve(target)[1]
 
     def _lean_error(self, target: np.ndarray) -> float:
-        """How far the tool stays from `target` where it may lean there (see TILTS)."""
-        return self._solve_tilting(target)[1]
+        """How far the tool stays from `target` where it may lean there (see TILTS). Every way it may point is tried
+        first without _solve's restarts: a short arm that cannot point down high up ran through all of them before
+        leaning, at every point of the way across, 3.7 s of the 3.9 s a Go2's PiPER took to plan a pick."""
+        quick = self._solve_tilting(target, restarts=0)[1]
+        return quick if quick <= REACH_TOL else self._solve_tilting(target)[1]
 
-    def _solve_tilting(self, target: np.ndarray) -> tuple[np.ndarray, float, bool, np.ndarray]:
+    def _solve_tilting(
+        self, target: np.ndarray, restarts: int = RESTARTS
+    ) -> tuple[np.ndarray, float, bool, np.ndarray]:
         """As _solve, but where the tool cannot point down there it may lean (see TILTS): (q, position error, needed a
         restart, the way the tool points)."""
-        q, err, restarted = self._solve(target)
+        q, err, restarted = self._solve(target, restarts=restarts)
         if err <= REACH_TOL:
             return q, err, restarted, DOWN
         out = np.asarray(target, float)[:2] - self.base_xy
@@ -296,18 +301,20 @@ class ArmMotion:
         for angle in TILTS:
             for side in (1.0, -1.0):  # leaning out, as an arm reaching high does, then in
                 axis = np.cos(angle) * DOWN + side * np.sin(angle) * out
-                q2, err2, restarted2 = self._solve(target, axis)
+                q2, err2, restarted2 = self._solve(target, axis, restarts)
                 if err2 <= REACH_TOL:
                     return q2, err2, restarted2, axis
         return q, err, restarted, DOWN
 
-    def _solve(self, target: np.ndarray, down: np.ndarray = DOWN) -> tuple[np.ndarray, float, bool]:
+    def _solve(
+        self, target: np.ndarray, down: np.ndarray = DOWN, restarts: int = RESTARTS
+    ) -> tuple[np.ndarray, float, bool]:
         """Joint values for the tool at `target` pointing down (or along `down`): (q, position error, needed a
         restart).
 
         Damped least squares from the current pose can stall on a joint limit or in the wrong elbow
         branch for points the arm reaches easily some other way, so a stuck solve tries again from
-        fixed random starts (the base still turned toward the target) and keeps the best answer.
+        `restarts` fixed random starts (the base still turned toward the target) and keeps the best answer.
         """
         seed = self._seed(target)
         q, err = self.q, np.inf
@@ -326,7 +333,7 @@ class ArmMotion:
                 q, err = q2, err2
         best: tuple[np.ndarray, float, float] | None = None  # (q, error, largest joint move from now)
         rng = np.random.default_rng(0)
-        for _ in range(RESTARTS):
+        for _ in range(restarts):
             start = rng.uniform(self.chain.lower, self.chain.upper)
             if self.yaw is not None:
                 start[self.yaw] = seed[self.yaw]
@@ -569,6 +576,12 @@ class ArmMotion:
                 f"{CARRY_RAISES * CARRY_RAISE:.1f} m higher; {fix}"
             )
         above[2] = above_drop[2] = travel_z = across.z
+        for name, top, bottom in (("object", above, grasp), ("place", above_drop, drop)):
+            if not self._goes_down_clear(top, bottom):
+                raise ValueError(
+                    f"{self.robot} cannot go straight down to the {name} from {travel_z:.2f} m, where it carries "
+                    f"things, without running into the robot carrying it; put the {name} further from that robot"
+                )
         start = self.tool_target_end()
         # Starting low (an arm folded over the robot that carries it), go up first and across at the carrying height:
         # swinging around at the folded height ran a picker's hand into the table beside it.
@@ -823,6 +836,30 @@ class ArmMotion:
         under = self._carrier_boxes()
         clear = all(self._load_clears(p, load_half_height, under) for p in self._way_around(a, b, turn))
         return clear and self._reaches_around(a, b, ends, turn) and self._follows_clear(a, b, turn)
+
+    def _goes_down_clear(self, top: np.ndarray, bottom: np.ndarray) -> bool:
+        """Whether an arm riding on a robot gets from `top` straight down to `bottom` (and back up the same way)
+        without running into that robot or itself, as _plan_move moves it: from the pose it gets to `top` in, or from
+        one it changes into up there, backing up from `bottom`. Always for an arm that rides on nothing. Leaning over
+        a cube between a centaur's front legs, its hand came down into the legs and the pick missed."""
+        if not self._rides:
+            return True
+        steps = max(1, round(self._time(top, bottom) * self.rate_hz))
+        planned, self._turn = self._turn, 0.0
+        try:
+            high, err, _, tilt = self._solve_tilting(top)
+            if err > REACH_TOL:
+                return False
+            down = lambda s: {"axis": (self.tool_axis, _turn_toward(tilt, DOWN, s))}  # noqa: E731
+            if self._follow(high, top, bottom, steps, down, clear=True)[1] <= REACH_TOL:
+                return True
+            low, err, _ = self._solve(bottom)
+            if err > REACH_TOL:
+                return False
+            up = lambda s: {"axis": (self.tool_axis, _turn_toward(DOWN, tilt, s))}  # noqa: E731
+            return self._follow(low, bottom, top, steps, up, clear=True)[1] <= REACH_TOL
+        finally:
+            self._turn = planned
 
     def _follows_clear(self, a: np.ndarray, b: np.ndarray, turn: float) -> bool:
         """Whether an arm riding on a robot keeps off that robot and itself (see _collides) following the way round
