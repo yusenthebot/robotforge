@@ -289,6 +289,20 @@ def test_the_lake_shore_slopes_gently_into_the_water():
     assert np.median(slope[at_water]) < 20.0 and slope[at_water].max() < 25.0
 
 
+def test_a_boat_put_on_the_bank_is_told_so(tmp_path, monkeypatch):
+    """A Codex agent put the boat on the lake's bank first and heard nothing about it."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("bank")
+    pg.load_scene("lake")
+    stranded = pg.add_robot("skiff", template="boat", pos=[-11, 0])
+    assert any(n.startswith("skiff: it is on land") for n in stranded["notes"])
+    afloat = pg.update_robot("skiff", pos=[6, 0])
+    assert not any(n.startswith("skiff: it is") for n in afloat["notes"])
+    walker = pg.add_robot("dog", template="quadruped", pos=[-11, 2])
+    assert not any(n.startswith("dog: it is") for n in walker["notes"])
+
+
 def test_load_scene_puts_a_kept_boat_on_the_water(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     pg = Playground.with_demo()

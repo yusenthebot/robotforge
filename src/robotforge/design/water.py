@@ -122,6 +122,30 @@ def float_up(
     return moved
 
 
+def stranded(
+    model: mujoco.MjModel, entry: WaterEntry, robots: list[str], ground_height: Callable[[float, float], float]
+) -> list[str]:
+    """Notes for the boats and ROVs (robots with marine thrusters) put down where there is no water under them: an
+    agent put a boat on the lake's bank and heard nothing about it."""
+    notes = []
+    for robot in robots:
+        sites = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, k) or "" for k in range(model.nsite)]
+        if not any(n.startswith(f"{robot}/") and "thruster" in n.lower() for n in sites):
+            continue
+        root = robot_root(model, robot)
+        if root is None:
+            continue
+        x, y = (float(v) for v in model.body(root).pos[:2])
+        depth = entry.level - ground_height(x, y)
+        if entry.covers(x, y) and depth > 0.05:
+            continue
+        where = "outside the water" if not entry.covers(x, y) else f"on land ({-depth:.2f} m over the water)"
+        if entry.covers(x, y) and depth > 0:
+            where = f"in water {depth:.2f} m deep"
+        notes.append(f"{robot}: it is {where} at [{x:.2f}, {y:.2f}]; boats and ROVs need open water under them")
+    return notes
+
+
 def robot_root(model: mujoco.MjModel, robot: str) -> str | None:
     """The name of a robot's root body (the one on the world body), as attached with its prefix."""
     for b in range(1, model.nbody):
