@@ -62,7 +62,9 @@ walking on). Each starts from standing in a reset world, nudged by --nudge (m/s 
 each switching), and is played three ways on exactly the same case: as kept, switched as 7a4aa92 switched every walk
 but with its steering (steered), and as 7a4aa92 plays the file (base). It reports the falls after the first call
 per robot, path and switching, and the share of the rate a turn straight out of a walk of 1.5 s or more got in its
-first second.
+first second. Then, per walk, each switching against base on the same cases: those only it fell in, those only base
+fell in, and a two-sided sign test; it exits with 1 if any walk is worse than base at p < 0.05 or a robot's pooled
+falls are more than base's. Bench walks kept end to end by the code under test, on bench seeds never tuned on.
 
 straight: lateral drift per metre. Walks each robot forward from standing for --long seconds (20) as move plays it:
 a walk kept with switch --keep (--walks), else one trained as the lesson trains it, with what the code under test
@@ -724,10 +726,11 @@ def _oos_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
     return run_oos(*args)
 
 
-def _print_oos(results: list[dict], rates: dict[tuple[str, int], float]) -> None:
+def _print_oos(results: list[dict], rates: dict[tuple[str, int], float]) -> bool:
     """Per robot, path and switching: the sequences that fell after the walk they start with (and during it), which
     walks they were, and the measured turns' first second as a share of the rate from standing (median, over turns
-    asked after WALKED_MIN or more of walking)."""
+    asked after WALKED_MIN or more of walking); then each walk against base (_print_paired), whose verdict it
+    returns."""
     from robotforge.behaviors.rhythm_walk import WALKED_MIN
 
     for robot in dict.fromkeys(r["robot"] for r in results):
@@ -755,6 +758,57 @@ def _print_oos(results: list[dict], rates: dict[tuple[str, int], float]) -> None
                 )
                 totals[switching] = totals.get(switching, 0) + len(after)
         print(f"{robot:9} all: " + ", ".join(f"{s} {n} falls" for s, n in totals.items()))
+    return _print_paired(results)
+
+
+# A walk is worse than base when the cases only it fell in outnumber those only base fell in at this two-sided sign
+# test p-value: pooled totals hid a template dog walk that fell 17 times against 0 over four bench seeds.
+WORSE_P = 0.05
+
+
+def _sign_p(a: int, b: int) -> float:
+    """Two-sided sign test: the chance of a split at least as uneven as `a` against `b` if either side were as
+    likely."""
+    n = a + b
+    if n == 0:
+        return 1.0
+    tail = sum(math.comb(n, k) for k in range(min(a, b) + 1)) / 2.0**n
+    return min(1.0, 2.0 * tail)
+
+
+def _print_paired(results: list[dict]) -> bool:
+    """Per robot and walk, each switching against base on exactly the same cases: those only it fell in after the
+    walk, those only base fell in, and the sign test's p-value. True (accepted) if no walk is worse than base at WORSE_P
+    and no robot's pooled falls are more than base's."""
+    fell = {(r["robot"], r["seed"], r["path"], r["case"], r["switching"]): r["fell"] not in (None, 0) for r in results}
+    ok = True
+    for robot in dict.fromkeys(r["robot"] for r in results):
+        mine = [r for r in results if r["robot"] == robot]
+        for switching in [s for s in dict.fromkeys(r["switching"] for r in mine) if s != "base"]:
+            pooled = [0, 0]
+            for seed in sorted({r["seed"] for r in mine}):
+                cases = {(r["path"], r["case"]) for r in mine if r["seed"] == seed and r["switching"] == switching}
+                pairs = [
+                    (fell[(robot, seed, *c, switching)], fell[(robot, seed, *c, "base")])
+                    for c in sorted(cases)
+                    if (robot, seed, *c, "base") in fell
+                ]
+                if not pairs:
+                    continue
+                only = sum(a and not b for a, b in pairs), sum(b and not a for a, b in pairs)
+                pooled = [pooled[0] + sum(a for a, _ in pairs), pooled[1] + sum(b for _, b in pairs)]
+                p = _sign_p(*only)
+                worse = only[0] > only[1] and p < WORSE_P
+                ok = ok and not worse
+                print(
+                    f"{robot:9} s{seed:<4} {switching:7} against base: only it fell {only[0]:3}, only base {only[1]:3}"
+                    f" of {len(pairs)} cases, p {p:.2g}" + (" WORSE" if worse else "")
+                )
+            if pooled[0] > pooled[1]:
+                ok = False
+            print(f"{robot:9} {switching:7} against base: {pooled[0]} falls against {pooled[1]}")
+    print("accepted" if ok else "not accepted: a walk falls more than base, or the falls pooled do")
+    return ok
 
 
 def _print_leads(results: list[dict], min_share: float) -> None:
@@ -889,8 +943,7 @@ def main(argv: list[str] | None = None) -> int:
         for r, s, _ in jobs:
             walk = SavedWalk.model_validate_json(Path(args.walks, f"{r}_{s}.json").read_text(encoding="utf-8"))
             rates[(r, s)] = math.degrees(walk.turn_rate or 0.0)
-        _print_oos(flat, rates)
-        return 0
+        return 0 if _print_oos(flat, rates) else 1
     if args.what == "leads":
         flat = [r for batch in results for r in batch]
         if args.json:
