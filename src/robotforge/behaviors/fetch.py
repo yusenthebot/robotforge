@@ -29,7 +29,7 @@ import numpy as np
 from robotforge.behaviors import nav_map
 from robotforge.behaviors.arm import JOINT_SPEED, REACH_TOL, ArmMotion, OutOfReach, Waypoint
 from robotforge.behaviors.navigate import NoWay
-from robotforge.behaviors.reach_in import Hand
+from robotforge.behaviors.reach_in import Hand, sweeps_clear
 from robotforge.sim.geometry import collides
 
 if TYPE_CHECKING:
@@ -66,7 +66,6 @@ FREE_GAP = 0.015  # m kept between a load put down and what already stands there
 WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, with the arm's own weight
 GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of what its friction can hold
 STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
-SWEEP_STEP = 0.08  # rad of the furthest joint between the poses a joint move is checked at
 LOADED_TILT = math.radians(45.0)  # how far off pointing down a gripper with a load may turn on a joint move
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 
@@ -615,7 +614,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
             if tilt == 0.0:
                 arm.pick_up(target, half, hold)
             else:
-                stand.hand.pick(target, half, hold, tilt)
+                stand.hand.pick(target, half, hold, tilt, stand.hold_q, radius)
 
         return stand.rehearse(xy, heading, tilt, queue)
 
@@ -646,7 +645,7 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
             if tilt == 0.0:
                 arm.put_down(spot, half, place.top)
             else:
-                stand.hand.put(spot, half, place.top, tilt)
+                stand.hand.put(spot, half, place.top, tilt, radius)
 
         return stand.rehearse(xy, heading, tilt, queue)
 
@@ -892,37 +891,6 @@ def _heights(arm: ArmMotion) -> str:
     return f"{found[0]:.2f} and {found[-1]:.2f}" if found else "no heights at all"
 
 
-def _sweeps_clear(arm: ArmMotion, q0: np.ndarray, q1: np.ndarray, load: tuple[int, float] | None = None) -> bool:
-    """Whether the arm moving joint by joint from `q0` to `q1` hits nothing on the way (in the IK's copy of the world:
-    the robot it rides on, the floor, furniture), and a load (body, half height) in its gripper clears the robot and
-    hangs from a gripper within LOADED_TILT of pointing down. Swung round with the hand 23 degrees off down and its
-    wrist spinning, a mobile Panda let an apple slip out of its fingers."""
-    m, d = arm.ik.model, arm.ik.data
-    n = max(4, math.ceil(float(np.max(np.abs(q1 - q0))) / SWEEP_STEP))
-    arm.ik.point(arm.chain, q0)
-    under = arm._carrier_boxes()
-    for s in np.linspace(0.0, 1.0, n + 1)[1:]:
-        q = q0 + (q1 - q0) * s
-        p = arm.ik.point(arm.chain, q)
-        if load is not None:
-            axis = d.xmat[arm.chain.body].reshape(3, 3) @ arm.tool_axis
-            if not arm._load_clears(p, load[1], under) or float(axis[2]) > -math.cos(LOADED_TILT):
-                return False
-        mujoco.mj_collision(m, d)
-        for con in d.contact[: d.ncon]:
-            if con.dist > -PENETRATE:
-                continue
-            g1, g2 = int(con.geom1), int(con.geom2)
-            b1, b2 = int(m.geom_bodyid[g1]), int(m.geom_bodyid[g2])
-            if (b1 in arm._moving) == (b2 in arm._moving) or (min(g1, g2), max(g1, g2)) in arm._touching_at_home:
-                continue
-            other = b2 if b1 in arm._moving else b1
-            if load is not None and int(m.body_rootid[other]) == load[0]:
-                continue  # what it holds
-            return False
-    return True
-
-
 # ---- the errand ---------------------------------------------------------------------------------------------
 
 
@@ -1128,8 +1096,8 @@ class Errand:
         arm = self.arm
         if float(np.max(np.abs(arm.q - self.hold_q))) <= STOW_SAME:
             return False
-        load = (self.body, self.half) if loaded else None
-        if not _sweeps_clear(arm, arm.q, self.hold_q, load):
+        load = (self.half, self.radius) if loaded else None
+        if not sweeps_clear(arm, arm.q, self.hold_q, self.body, load, LOADED_TILT):
             return False
         travel = float(np.max(np.abs(self.hold_q - arm.q)))
         arm.queue.append(Waypoint(None, None, max(0.5, travel / JOINT_SPEED), "stow", self.hold_q.copy()))
@@ -1213,7 +1181,7 @@ class Errand:
             if tilt == 0.0:
                 self.arm.pick_up(center, self.half, hold)
             else:
-                self.hand.pick(center, self.half, hold, tilt)
+                self.hand.pick(center, self.half, hold, tilt, self.hold_q, self.radius)
 
         failed = self._first_tilt(self.pick, queue)
         self.picked_at = [round(float(v), 3) for v in center]
@@ -1234,7 +1202,7 @@ class Errand:
             if tilt == 0.0:
                 self.arm.put_down(target, self.half, self.place.top)
             else:
-                self.hand.put(target, self.half, self.place.top, tilt)
+                self.hand.put(target, self.half, self.place.top, tilt, self.radius)
 
         failed = self._first_tilt(self.drop, queue)
         if failed is not None:
