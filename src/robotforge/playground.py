@@ -39,6 +39,9 @@ from robotforge.design.world import (
     tidy_name,
 )
 from robotforge.learn import LESSONS, LessonRunner
+from robotforge.sensors import edit as sensor_edit
+from robotforge.sensors import without_sensors
+from robotforge.sensors.hub import SensorHub
 from robotforge.sim import carry, finder, lidar, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
@@ -94,6 +97,7 @@ class Playground:
     behaviors: BehaviorManager = field(init=False)
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
+    sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     # The ground places of the scene last loaded, and the world it went into: a robot added there without pos
     # starts on the first free one. Not saved: a world opened later starts robots round [0, 0].
@@ -105,6 +109,7 @@ class Playground:
         )
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
+        self.sensors = SensorHub(self.session)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -179,6 +184,7 @@ class Playground:
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
         hub.state_extras = lambda: {"mode": modes.current(self)}
+        hub.sensor_stream = self.sensors.viewer_message
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
@@ -232,7 +238,7 @@ class Playground:
                 for j in range(m.njnt)
             ]
             actuators = [self._actuator_info(a) for a in range(m.nu)]
-            sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
+            sensors = [n for s in range(m.nsensor) if not _added_sensor(n := _name(m, mujoco.mjtObj.mjOBJ_SENSOR, s))]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
             flying = _aircraft(m, self.behaviors)
@@ -594,6 +600,30 @@ class Playground:
             return []
         return self._places[1]
 
+    @_one_edit_at_a_time
+    def add_sensor(self, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Put a sensor on any robot (sensors/edit.py); remove("robot/sensor") takes it off."""
+        return sensor_edit.add(self, robot, fields)
+
+    def read_sensors(
+        self, robot: str, names: list[str] | None = None, image: bool = False, full: bool = False
+    ) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.read(self.sensors.resolve_robot(robot, robots), names, image, full)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+
+    def show_sensors(self, names: list[str]) -> list[str]:
+        """Draw these sensors in the viewer (open_viewer(show=...)); returns their full names."""
+        world = self.current_world()
+        robots = [r.name for r in world.robots] if world is not None else []
+        try:
+            return self.sensors.show(names, robots)
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+
     # ---- robots built from parts ------------------------------------------------------
 
     @_one_edit_at_a_time
@@ -602,23 +632,39 @@ class Playground:
 
     @_one_edit_at_a_time
     def update_part(self, robot: str, part: str, changes: dict[str, Any]) -> dict[str, Any]:
-        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes))
+        def follow(entry: RobotEntry, before: dict[str, Any]) -> None:  # sensors on a renamed part go with it
+            old = set(build_edit.part_names(before)) - set(build_edit.part_names(entry.build))
+            new = set(build_edit.part_names(entry.build)) - set(build_edit.part_names(before))
+            if len(old) == 1 and len(new) == 1:
+                sensor_edit.follow_rename(entry, old.pop(), new.pop())
+
+        return self._edit_build(robot, lambda b: build_edit.update_part(b, part, changes), follow)
 
     @_one_edit_at_a_time
     def remove_part(self, robot: str, part: str) -> dict[str, Any]:
         removed: list[str] = []
+        dropped: list[str] = []
 
         def change(b: dict[str, Any]) -> dict[str, Any]:
             new, gone = build_edit.remove_part(b, part)
             removed.extend(gone)
             return new
 
-        result = self._edit_build(robot, change)
+        def take_off(entry: RobotEntry, _before: dict[str, Any]) -> None:  # what sat on a removed part goes too
+            dropped.extend(sensor_edit.drop_on(entry, removed))
+
+        result = self._edit_build(robot, change, take_off)
         result["removed_parts"] = removed
+        if dropped:
+            result["removed_sensors"] = dropped
         return result
 
     def _edit_build(
-        self, robot: str, change_build: Callable[[dict[str, Any]], dict[str, Any]], adding: dict | None = None
+        self,
+        robot: str,
+        change_build: Callable[[dict[str, Any]], dict[str, Any]],
+        then: Callable[[RobotEntry, dict[str, Any]], None] | None = None,
+        adding: dict | None = None,
     ) -> dict[str, Any]:
         entry = _find(self._require_store().load().robots, robot, "robot")
         if entry.build is None and isinstance(adding, dict):  # a part for a template or library robot: on a plate
@@ -634,7 +680,10 @@ class Playground:
 
         def change(w: World) -> None:
             entry = _built(_find(w.robots, robot, "robot"))
+            before = entry.build
             entry.build = change_build(entry.build)
+            if then is not None:
+                then(entry, before)
 
         return self._edit(change)
 
@@ -674,6 +723,11 @@ class Playground:
 
     @_one_edit_at_a_time
     def remove(self, name: str) -> dict[str, Any]:
+        world = self.current_world()
+        sensor = sensor_edit.find(world, name) if world is not None else None
+        if sensor is not None:  # "go2/lidar": a sensor added to a robot
+            return sensor_edit.remove(self, *sensor)
+
         def change(w: World) -> None:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
             found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
@@ -765,11 +819,14 @@ class Playground:
         # What the edit did not touch stays where it is (a box added does not send the dog back to its start).
         # New ground under them (terrain, a scene, water) starts everything fresh: their heights would no longer fit.
         if before.terrain == after.terrain and before.water == after.water:
-            unchanged = [r.name for r in after.robots if r in before.robots]
+            kept = [without_sensors(r) for r in before.robots]  # a sensor added or removed moves no robot
+            unchanged = [r.name for r in after.robots if without_sensors(r) in kept]
             unchanged += [o.name for o in after.objects if o in before.objects]
             with self.session.lock:
                 carried = carry.restore(self.session.model, self.session.data, live, unchanged)
                 self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
+                # First samples from where the robots now are; their sensors' estimates carry on (odometry).
+                self.sensors.rebuild(kept=carried)
         return result
 
     def _unchanged(self, note: str) -> dict[str, Any]:
@@ -1044,7 +1101,8 @@ class Playground:
                         float(d.qpos[m.jnt_qposadr[j]]), 4
                     )
             ctrl = {self._actuator_info(a)["name"]: round(float(d.ctrl[a]), 4) for a in range(m.nu)}
-            sensors = self.sensor_readings()
+            # add_sensor's own MuJoCo sensors: read_sensors and observe's sensor_summary report those
+            sensors = {k: v for k, v in self.sensor_readings().items() if not _added_sensor(k)}
             lidars = lidar.readings(m, d)
             listed = _limit_dict(sensors)
             if lidars and "..." in listed:  # a 64-ray lidar alone is 64 sensors: say where all its rays are
@@ -1281,6 +1339,11 @@ def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
 
 def _validation_message(exc: ValidationError) -> str:
     return wording.validation_message(exc)
+
+
+def _added_sensor(name: str) -> bool:
+    """A MuJoCo sensor that add_sensor made (rf_<sensor>_...): its readings come through read_sensors."""
+    return name.startswith("rf_") or "/rf_" in name
 
 
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:

@@ -22,6 +22,8 @@ from robotforge.design.templates.base import (
     BuiltRobot,
     Template,
     TemplateParams,
+    declare_camera,
+    declare_touch,
     dress_servo,
     imu,
     new_spec,
@@ -225,6 +227,7 @@ class Humanoid(Template):
             objtype=mujoco.mjtObj.mjOBJ_SITE,
             objname=f"{side}_foot",
         )
+        declare_touch(spec, foot, f"{side}_foot_touch", f"{side}_foot")
         return {
             f"{side}_hip_pitch": HOME_BEND,
             f"{side}_knee": 2 * HOME_BEND,
@@ -327,6 +330,7 @@ class Humanoid(Template):
             vis.hide(geom)
         _dress_head(vis, torso, head, d, center)
         head.add_camera(name="head_cam", pos=[center[0] + rx * 1.02, 0, center[2]], xyaxes=[0, -1, 0, 0, 0, 1], fovy=70)
+        declare_camera(spec, head, "head_cam", 70)
 
 
 def _strength_warnings(model: mujoco.MjModel, part: components.Actuator, mass: float, d: Dims) -> list[str]:

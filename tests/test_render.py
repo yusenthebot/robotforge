@@ -9,7 +9,6 @@ import pytest
 from mcp import Client
 from PIL import Image
 
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim import render
@@ -123,7 +122,7 @@ def test_bad_arguments_are_reported_the_same_without_gl(no_gl, session):
 
 @pytest.mark.anyio
 async def test_observe_without_gl_returns_the_state_and_a_note(no_gl):
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         obs = await client.call_tool("observe", {"view": "front"})
         assert not obs.is_error

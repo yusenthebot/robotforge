@@ -52,6 +52,9 @@ class Shot:
     storage: dict[str, str] = field(default_factory=lambda: {"robotforge.coached": "1", "robotforge.world": "0"})
     settle: float = 2.0  # s after the page is ready
     size: tuple[int, int] = (WIDTH, HEIGHT)  # CSS px
+    # Python calls on the robots while the page watches (a lift, so a plot has it in its history), run before the
+    # page script; a shot with one serves its world in this process instead of with `robotforge open`.
+    act: Callable[[Any], None] | None = None
 
 
 def _free_port() -> int:
@@ -127,7 +130,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                         break
 
 
-async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str) -> None:
+async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str, pg: Any = None) -> None:
     """Open the viewer in a tab, wait until it has drawn, put the world in the shot's state while the page
     watches (so plots have their history), and capture it."""
     import websockets
@@ -162,6 +165,8 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str
             await asyncio.sleep(0.25)
         if shot.viewer:
             await _drive_viewer(port, shot.viewer)
+        if shot.act is not None:
+            await asyncio.to_thread(shot.act, pg)
         await asyncio.sleep(shot.settle)
         if shot.page:
             await page.eval(f"(async () => {{ {shot.page} }})()")
@@ -186,6 +191,16 @@ def _save(png: bytes, out: Path) -> None:
     image.resize((SAVED_WIDTH, height), Image.Resampling.LANCZOS).save(out, "JPEG", quality=JPEG_QUALITY, optimize=True)
 
 
+def _serve_here(pg: Any, port: int) -> None:
+    """Serve the playground's world from this process, for a shot that acts on its robots."""
+    import threading
+
+    from robotforge import cli
+
+    threading.Thread(target=lambda: asyncio.run(cli.serve(pg, "127.0.0.1", port, False)), daemon=True).start()
+    _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
+
+
 def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     home = Path(tempfile.mkdtemp(prefix="rf-shot-"))
     os.environ["ROBOTFORGE_HOME"] = str(home)  # the real Menagerie models (downloaded once), not the test stand-ins
@@ -197,12 +212,16 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     shot.world(pg)
     world_dir = home / "worlds" / shot.name
     port, chrome_port = _free_port(), _free_port()
-    server = subprocess.Popen(
-        [sys.executable, "-m", "robotforge", "open", str(world_dir), "--no-browser", "--port", str(port)],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-    )
+    server = None
+    if shot.act is not None:
+        _serve_here(pg, port)
+    else:
+        server = subprocess.Popen(
+            [sys.executable, "-m", "robotforge", "open", str(world_dir), "--no-browser", "--port", str(port)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
     chrome = subprocess.Popen(
         [
             _chrome(),
@@ -220,9 +239,11 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     out = out_dir / f"{shot.name}.jpg"
     try:
         _wait_http(f"http://127.0.0.1:{port}/", READY_TIMEOUT)
-        asyncio.run(_capture(chrome_port, port, shot, out, lang))
+        asyncio.run(_capture(chrome_port, port, shot, out, lang, pg))
     finally:
         for proc in (chrome, server):
+            if proc is None:
+                continue
             proc.terminate()
             with contextlib.suppress(subprocess.TimeoutExpired):
                 proc.wait(timeout=10)
@@ -634,6 +655,45 @@ def _rocks(pg: Any) -> None:
     pg.set_terrain("rough", params={"size": [6, 6], "height": 0.04})
 
 
+def _sensing_go2(pos: tuple[float, float] = (-3.2, 2.6)) -> Callable[[Any], None]:
+    """A Go2 in the warehouse with a 3D lidar on its back, a depth camera on its nose and touch pads under its
+    feet, each added in one call as an agent would (add_sensor)."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene("warehouse", keep_robots=False, starter=False)
+        pg.add_robot("go2", library="go2", pos=list(pos))
+        pg.add_sensor("go2", {"type": "lidar3d", "rate_hz": 10})
+        pg.add_sensor("go2", {"type": "camera", "mode": "depth"})
+        for foot in ("FL", "FR", "RL", "RR"):
+            pg.add_sensor("go2", {"type": "touch", "on": foot, "rows": 2, "cols": 2})
+
+    return build
+
+
+def _panda_wrist(pg: Any) -> None:
+    """A Panda with a force-torque sensor at its wrist and a 100 g cube on the floor in front of it."""
+    pg.add_robot("panda", library="panda")
+    pg.add_object("cube", shape="box", size=[0.05, 0.05, 0.05], mass=0.1, pos=[0.5, 0.0], color="red")
+    pg.add_sensor("panda", {"type": "force_torque", "on": "hand", "name": "wrist"})
+
+
+def _lift_cube(pg: Any) -> None:
+    """The Panda takes the cube off the floor and holds it up, in real time while the page watches: the wrist's
+    force plot has the 100 g coming on in its history."""
+    b = pg.behaviors
+
+    def finish(motion: Any, seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while not motion.done and time.monotonic() < end:
+            time.sleep(0.05)
+
+    finish(b.move_arm("panda", [0.5, 0.0, 0.25], "open"), 15)
+    finish(b.move_arm("panda", [0.5, 0.0, 0.03], None), 15)
+    finish(b.set_gripper("panda", "close"), 5)
+    finish(b.move_arm("panda", [0.5, 0.0, 0.3], None), 15)
+    time.sleep(1.5)
+
+
 LIDAR_PUCK = {"name": "lidar", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
 
 
@@ -670,6 +730,13 @@ def _gallery_line_up(pg: Any) -> None:
     ):
         pg.add_robot(name, design=name, pos=pos)
 
+
+SENSOR_WRIST_VIEW = _look_at(["panda"], (1.05, -0.95, 0.35))
+SENSOR_CLOUD_VIEW = "window.__robotforge.lookAt([-5.0, 2.5, 1.5], [-2.5, 2.6, 0.25]);"  # down the aisle, from behind
+SENSOR_DRAWER_VIEW = (
+    'document.getElementById("drawer-toggle").click();'
+    "await new Promise((r) => setTimeout(r, 400));" + _look_at(["go2"], (1.25, -0.95, 0.7))
+)
 
 # One picture per gallery design: (design, extra world, camera offset from the robot in metres).
 GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float, float]]] = [
@@ -801,6 +868,12 @@ SHOTS = [
         Shot(f"gallery_{name}", _design(name, extras), page=_look_at([name], offset), settle=3.0)
         for name, extras, offset in GALLERY_SHOTS
     ),
+    Shot("sensors_go2", _sensing_go2(), page=_look_at(["go2"], (0.85, 0.7, 0.42)), settle=1.0),
+    # What the sensors sense, drawn by the viewer: the 3D lidar's points down the aisle and what the depth camera
+    # sees beside the view; the robots drawer's sensor list; a Panda's wrist force while it lifts a cube.
+    Shot("sensors_go2_cloud", _sensing_go2(), page=SENSOR_CLOUD_VIEW, settle=2.5),
+    Shot("sensors_go2_drawer", _sensing_go2(), page=SENSOR_DRAWER_VIEW, settle=2.5),
+    Shot("sensors_panda_wrist", _panda_wrist, act=_lift_cube, page=SENSOR_WRIST_VIEW, settle=0.5),
     Shot(
         "gallery",
         _gallery_line_up,

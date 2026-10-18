@@ -448,6 +448,20 @@ DEMOS = [
         until=_trip_over("rov", 1.0),  # and the tail: 2.5 s holding at the goal
         tail=1.5,
     ),
+    Demo(  # the lidar on its back and the depth camera on its nose ride along without a wobble or a gap
+        "sensors_go2_walk",
+        S._sensing_go2((-4.6, 0.0)),  # the open floor between the racks and the pallets
+        13.0,
+        timeline=[(0.8, _move("go2", 0.45))],
+        page=_follow("go2", (0.84, 0.72, 0.5), ease=0.05),
+    ),
+    Demo(  # what the sensors sense: the 3D lidar's points stream down the aisle, the depth picture rides beside it
+        "sensors_go2_aisle",
+        S._sensing_go2((-4.8, 2.6)),
+        16.0,
+        timeline=[(0.8, _go("go2", [1.6, 2.6]))],
+        page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
+    ),
     Demo(  # take off from the path, fly a square round a tree, come back and land where it started
         "drone_park_square",
         S._in_scene("park", {"drone": {"template": "drone"}}),

@@ -19,6 +19,8 @@ sim.position(name)  # [x, y, z] in meters: an object, a robot (its base) or a bo
 sim.heading(robot)  # degrees, counter-clockwise from +x
 sim.joints(robot)  # {joint: angle in radians or slide in meters}
 sim.sensors(robot)  # {sensor: value}, e.g. IMU, foot touch, tool position
+sim.sensor(robot, name)  # one sensor's reading, as read_sensors gives it, e.g. sim.sensor("go2", "lidar")["ahead"]
+sim.sensor(robot, "lidar", full=True)  # plus every range ("ranges_m", ring by ring) and a 3D lidar's points
 
 sim.set_controls({"arm/shoulder": 0.5})  # raw actuator targets (names from describe_model)
 sim.move(robot, speed=0.2, turn=0.0)  # start walking or driving; keeps going until stop()
