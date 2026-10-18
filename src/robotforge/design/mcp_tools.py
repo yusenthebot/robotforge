@@ -103,3 +103,18 @@ def register(server: MCPServer, playground: Playground) -> None:
         update_terrain("ramp1", params={"angle": 15}). Remove it with remove(name)."""
         with _tool_errors():
             return _json(playground.update_terrain(name, pos, yaw, style, params))
+
+    @server.tool()
+    def add_task(sentence: str, robot: str | None = None, name: str | None = None, seed: int = 0) -> str:
+        """Turn one sentence (English or Chinese) into a task saved with the open world, with a success check that
+        judges it from where things are: "go to the bedroom", "bring the red cup from the kitchen to the bedroom
+        desk", "put the apple in the bowl", "pick up the blue book", "push the ball onto the goal", "open the drawer
+        in the kitchen", "press the button", "switch on the switch", "把苹果放到客厅的茶几上". It finds the thing and
+        the place by name, kind, color and room, and adds what the world lacks: the thing named (on a top the robot
+        reaches), a bin, or a robot that can do it (a lift_picker for bring, a template arm beside a drawer or a
+        button). robot picks the robot; name names the task (default from what it does). The result's task gives the
+        goal and its status now; observe reports every task under "tasks" (done, distance_m still to go, reward,
+        why), so check it after acting. Each task also has a reward and randomized starts for learning (world_env in
+        Python). remove(name) deletes a task."""
+        with _tool_errors():
+            return _json(playground.add_task(sentence, robot, name, seed))
