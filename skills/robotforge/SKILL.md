@@ -25,6 +25,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - file: `add_robot(file=...)` imports URDF, xacro, MJCF or a mesh and returns the import doctor's report;
    - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, rotors, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover, a hexacopter);
    - design (`list_templates` lists them): a ready-made unusual robot from the gallery, `add_robot(name, design="centaur")` (wheel-legged biped, Mars rover, centaur, scorpion, a Go2 carrying a PiPER arm, tentacle...), saved as parts so `update_part` changes it;
+   - a sentence: `add_robot(name, describe="a six-legged robot with two arms")` generates a new robot from parts (4 or 6 legs, 2/4/6 wheels, a snake, a standing arm, a self-balancer or a humanoid; 0-2 arms with gripper, suction or magnet; sizes, colors, materials, head, camera, lidar, cargo box) that walks, drives or reaches at once (the result's `generated.how` says with which tools); `params={"seed": 3}` is another variation, `update_robot(name, describe="make it longer")` changes it ("six legs instead of four", "add an arm", "another one");
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin; `material="steel"` for what a magnet holds).
    Things that move on a joint of their own are objects too: drawer, cabinet (a door), button, switch, lever, valve, conveyor (`speed` in m/s), and soft ones: rope, cloth.

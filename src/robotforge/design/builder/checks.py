@@ -36,6 +36,9 @@ class Report:
     spawn_height: float
     mass: float
     notes: list[str] = field(default_factory=list)
+    # Each force-limited position servo's share of its force limit used to hold the robot still at home (the
+    # numbers behind the "too weak" and "little headroom" notes), by actuator name.
+    strain: dict[str, float] = field(default_factory=dict)
 
 
 def check(assembly: Assembly) -> Report:
@@ -63,8 +66,9 @@ def check(assembly: Assembly) -> Report:
     _home(model, data, assembly)
     mujoco.mj_forward(model, data)
     _overlaps(model, data)
-    notes = _settle(model, data, assembly)
-    return Report(spawn_height=spawn, mass=mass, notes=notes)
+    strain: dict[str, float] = {}
+    notes = _settle(model, data, assembly, strain)
+    return Report(spawn_height=spawn, mass=mass, notes=notes, strain=strain)
 
 
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
@@ -140,7 +144,9 @@ def _overlaps(model: mujoco.MjModel, data: mujoco.MjData) -> None:
         )
 
 
-def _settle(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> list[str]:
+def _settle(
+    model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly, strain: dict[str, float] | None = None
+) -> list[str]:
     base = model.body("base").id
     steps = int(SETTLE_SECONDS / model.opt.timestep)
     servos = [a for a in range(model.nu) if is_position_servo(model, a) and model.actuator_forcelimited[a]]
@@ -162,6 +168,8 @@ def _settle(model: mujoco.MjModel, data: mujoco.MjData, assembly: Assembly) -> l
         limit = float(model.actuator_forcerange[a][1])
         share = peak[a] / limit if limit > 0 else 0.0
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
+        if strain is not None and name:
+            strain[name] = float(share)
         if share >= WEAK:
             weak.append((name, share, limit))
         elif share >= (WALK_STRAINED if walker else STRAINED):

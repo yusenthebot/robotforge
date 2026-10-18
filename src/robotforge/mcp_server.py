@@ -68,11 +68,14 @@ Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh 
 import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
-Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
-bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers),
-things with a moving part (drawer, cabinet with a door, button, switch, lever, valve, conveyor belt) and soft things
-(rope, cloth). Any arm can hold with end_effector="suction" (a suction cup: flat things fingers cannot get round) or
-"magnet" (steel things only), in add_robot or later in update_robot.
+Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
+arms") makes a new robot from one sentence (legs, wheels, a snake, an arm, a humanoid; arms, sizes, colors,
+sensors) that moves at once; update_robot(describe="make it longer") changes it, "another one" is a variation.
+add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
+pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
+button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
+end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
+add_robot or later in update_robot.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
@@ -383,10 +386,20 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         design: str | None = None,
         mounts: list[dict[str, Any]] | None = None,
         end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        describe: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
-        list_templates), which is saved as its parts so add_part / update_part change it. end_effector (any arm):
+        list_templates), which is saved as its parts so add_part / update_part change it.
+
+        describe makes a new robot from one sentence, in English or Chinese: legs (4 or 6), wheels (2, 4, 6), a
+        snake, a standing arm, a self-balancing robot or a humanoid, with arms (0-2, gripper, suction or magnet),
+        sizes (tall, long, small, "1 m long"), colors, materials, a head, camera, lidar, a courier's cargo box: "a
+        six-legged robot with two arms", "a tall wheeled courier with a lidar", "a snake with a gripper head". It is
+        built from parts with the gallery's proven layouts and moves at once (the result's "generated" says how);
+        params={"seed": n} picks another variation of the same sentence. update_robot(describe=...) changes it.
+
+        end_effector (any arm):
         "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
         steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
@@ -424,6 +437,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
             source = {"library": library, "build": build, "design": design, "mounts": mounts}
             source["end_effector"] = end_effector
+            source["describe"] = describe
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
@@ -437,20 +451,31 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         build: dict[str, Any] | None = None,
         mounts: list[dict[str, Any]] | None = None,
         end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        describe: str | None = None,
     ) -> str:
-        """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
-        "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
-        build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
-        mounted part or is a robot of the same kind; given only base sensors ({"base": {"sensors": ["lidar"]}}) it
-        is carried on a plate with them; any other is refused with the build that keeps it. mounts replaces the
-        robots it carries (see add_robot; [] takes them all off). end_effector changes the tool on its arm: "suction"
-        cup, "magnet" or back to its "gripper"."""
+        """Change a robot's template params (merged), position or heading. describe changes a robot made from a
+        sentence by another one: "make it longer", "six legs instead of four", "add an arm", "add a lidar", "make it
+        red", "wheels instead of legs", "another one" (a new variation); it is made again from its plan. For a robot
+        built from parts, a build with "parts" replaces its whole description, one without changes only the fields
+        it gives (servo, base, ...) and keeps the parts (add_part / update_part change one part). A template,
+        library or file robot given a whole build (a base or parts) becomes that robot built from parts where it
+        stands, if the build carries it as a mounted part or is a robot of the same kind; given only base sensors
+        ({"base": {"sensors": ["lidar"]}}) it is carried on a plate with them; any other is refused with the build
+        that keeps it. mounts replaces the robots it carries (see add_robot; [] takes them all off). end_effector
+        changes the tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
         with _tool_errors():
             for wanted in _mounted_libraries(mounts):
                 await _download_with_progress(wanted, ctx)
             changed = await asyncio.to_thread(
-                playground.update_robot, name, params, pos, yaw, build, mounts=mounts, end_effector=end_effector
+                playground.update_robot,
+                name,
+                params,
+                pos,
+                yaw,
+                build,
+                mounts=mounts,
+                end_effector=end_effector,
+                describe=describe,
             )
             return _json(changed)
 
