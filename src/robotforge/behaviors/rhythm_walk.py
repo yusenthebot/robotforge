@@ -172,6 +172,10 @@ WALKING_ROUNDS = 40
 # tips it over either way, 21 against 10, 8 of the 11 more in or after a turn begun out of a walk 1.0 to 1.47 s old.
 # Gated at 1.5 s, 75 (13 leaving that walk out), none of them in or after a turn begun out of the walk.
 WALKED_MIN = 1.5  # s
+# Nor out of a walk that began more than COURSE_GATE (rad) off its course: one asked for out of a turn, the robot
+# spinning on while it steadied, then steering hard back to where it was asked to go. The walking turns are checked
+# from walks begun facing their course.
+COURSE_GATE = 0.1
 # A turn's walking version is checked from more moments of the walk as move plays it, from WALKED_MIN to 5 s at every
 # update (at 2 Hz, each of 25 points of the stride 7 times), each for TURN_CHECK seconds. Of the tuned turn and the one
 # from standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the
@@ -828,6 +832,7 @@ class RhythmWalker:
         self.steady_from: float | None = None  # steadying on home since then, before the asked rhythm starts
         self.turn_at: float | None = None  # sim time the asked turn begins out of the walk, which plays on until then
         self.stop_at: float | None = None  # sim time an asked stop comes (STOP_GRACE), the walk playing on until then
+        self.began_off = 0.0  # rad: how far off its course the robot faced when the walk playing began
         self.fade_from: np.ndarray | None = None  # the joint targets of the last switch, fading out
         self.fade_t0 = 0.0
         self.clock = -math.inf  # sim time of the last update
@@ -944,8 +949,9 @@ class RhythmWalker:
             self._settle(data, now)
 
     def _walked(self, now: float) -> bool:
-        """Whether the walk has played long enough for a turn to begin straight out of it (WALKED_MIN)."""
-        return self.t0 is not None and now - self.t0 >= WALKED_MIN - 0.5 / CONTROL_HZ
+        """Whether the walk is one a turn may begin straight out of: played long enough (WALKED_MIN), and begun facing
+        its course (COURSE_GATE)."""
+        return self.t0 is not None and now - self.t0 >= WALKED_MIN - 0.5 / CONTROL_HZ and self.began_off <= COURSE_GATE
 
     def _wait_for_stride(self, now: float) -> float:
         """How long (s) the walk plays on before the asked turn may begin out of it: until the next point of the
@@ -973,6 +979,8 @@ class RhythmWalker:
 
     def _start(self, data: mujoco.MjData, now: float, rhythm: str, fade: bool) -> None:
         self.rhythm, self.t0 = rhythm, now
+        if rhythm == "forward":
+            self.began_off = abs(_wrapped(self.course - trunk_yaw(data, self.body)))
         if fade:
             self._fade(data, now)
         else:

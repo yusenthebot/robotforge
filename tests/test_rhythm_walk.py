@@ -286,6 +286,27 @@ def test_a_turn_asked_early_in_the_walk_steadies_first(pg, walked, steadies):
         assert walker.rhythm == "left walking"
 
 
+def test_a_turn_out_of_a_walk_begun_off_its_course_steadies_first(pg):
+    """Regression: asked out of a turn, a walk began after the robot had spun on while it steadied, and steered hard
+    back to where it was asked to go; a turn begun straight out of that walk met a stride it was never checked from.
+    In 1800 random turn, walk, turn sequences 12 template dog walks fell 15 times against 5 switched as 7a4aa92 did; a
+    turn out of a walk that began more than COURSE_GATE off its course now steadies first: 7 (scripts/rhythm_bench.py
+    oos --paths after --bench-seed 3)."""
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.control.cpg import trunk_yaw
+
+    walker = _swinging(pg, walking=True)
+    assert walker.began_off < rhythm_walk.COURSE_GATE  # asked standing still, facing its course
+    data = pg.session.data
+    walker.course = trunk_yaw(data, walker.body) + 2 * rhythm_walk.COURSE_GATE  # as if asked before it spun on
+    walker._start(data, data.time, "forward", fade=False)
+    assert walker.began_off == pytest.approx(2 * rhythm_walk.COURSE_GATE)
+    pg.run_fast(lambda: False, 1.7)  # past WALKED_MIN
+    pg.behaviors.move("crab", 0.0, 0.8)
+    pg.run_fast(lambda: False, 1.0 / walker.rate_hz)
+    assert walker.playing == "left" and walker.rhythm in (None, "left")  # steadying, or still and turning as learned
+
+
 def test_a_turn_checked_safe_from_every_point_of_the_stride_begins_at_once(pg):
     walker = _swinging(pg, walking=True, turn_left_walking_at=[0.3])
     pg.behaviors.move("crab", 0.0, -0.8)  # the right turn may begin anywhere
