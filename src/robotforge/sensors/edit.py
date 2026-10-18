@@ -30,6 +30,8 @@ def add(pg: Any, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
     if entry.name is None:
         on = entry.between[1] if entry.between else entry.on
         label = on.rsplit("/", 1)[-1] if on else None
+        if label is not None and wording.squash(label) == wording.squash(_base_body(pg, name)):
+            label = None  # on the base: "imu", not "chassis_imu"
         entry = entry.model_copy(update={"name": unique_name(base_name(entry.type, entry.mode, label), taken)})
     elif entry.name in taken:
         raise PlaygroundError(
@@ -54,6 +56,18 @@ def add(pg: Any, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
             out["reading"] = {"note": f"no first reading: {type(exc).__name__}: {exc}"}
     out["world"] = result.get("world")
     return out
+
+
+def _base_body(pg: Any, robot: str) -> str:
+    """The local name of the robot's first body, the one hung on the world (its base)."""
+    import mujoco
+
+    model = pg.session.model
+    for b in range(1, model.nbody):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or ""
+        if name.startswith(f"{robot}/") and int(model.body_parentid[b]) == 0:
+            return name[len(robot) + 1 :]
+    return ""
 
 
 def _cameras(pg: Any, robot: str) -> set[str]:

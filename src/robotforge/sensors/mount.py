@@ -108,7 +108,8 @@ def mount(
             target = _target(model, entry, robot)
             if entry.type == "touch":  # contacts happen on the shapes that collide, not on the ones drawn over them
                 target = Target(target.body, _colliding(model, target), target.point)
-            name = entry.name or unique_name(base_name(entry.type, opts.get("mode"), _label(model, entry)), taken)
+            label = None if target.body == 1 else _label(entry)  # on the base: "imu", not "chassis_imu"
+            name = entry.name or unique_name(base_name(entry.type, opts.get("mode"), label), taken)
             if name in taken:
                 raise ValueError(f"it already has a sensor or camera named {name!r}; give another name")
             taken.add(name)
@@ -143,7 +144,7 @@ def _spec_body(spec: mujoco.MjSpec, model: mujoco.MjModel, body: int) -> mujoco.
     return found
 
 
-def _label(model: mujoco.MjModel, entry: SensorEntry) -> str | None:
+def _label(entry: SensorEntry) -> str | None:
     """What a default name says the sensor is on ("fl" for a touch on Go2's FL foot); nothing for the base."""
     on = entry.between[1] if entry.between else entry.on
     if on is None:

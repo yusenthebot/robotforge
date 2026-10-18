@@ -380,6 +380,26 @@ def test_builder_parts_and_templates_declare_their_sensors(pg):
     assert all(feet[f"{leg}_touch"]["contact"] for leg in ("front_left", "front_right", "rear_left", "rear_right"))
 
 
+MJCF_CART = """<mujoco><worldbody><body name="cart" pos="0 0 0.1"><freejoint/>
+<geom type="box" size="0.15 0.1 0.05" mass="2"/></body></worldbody></mujoco>"""
+
+
+def test_imported_urdf_and_mjcf_robots_carry_sensors(pg, tmp_path):
+    from importer_fixtures import rover_urdf, write
+
+    urdf = write(tmp_path / "rover.urdf", rover_urdf())
+    mjcf = write(tmp_path / "cart.xml", MJCF_CART)
+    pg.add_robot("urdf_rover", file=str(urdf))
+    pg.add_robot("cart", file=str(mjcf), pos=[1.0, 1.0])
+    pg.add_sensor("urdf_rover", {"type": "lidar"})
+    pg.add_sensor("urdf_rover", {"type": "imu", "on": "chassis"})
+    pg.add_sensor("cart", {"type": "touch", "rows": 2, "cols": 2})
+    pg.simulate(1.0)
+    assert _read(pg, "urdf_rover", "imu")["accel_m_s2"][2] == pytest.approx(9.81, abs=0.1)
+    assert _read(pg, "urdf_rover", "lidar")["hits"] > 0  # it sees the cart
+    assert _read(pg, "cart", "touch")["force_n"] == pytest.approx(2 * 9.81, rel=0.02)
+
+
 def test_definitions_travel_with_the_model(pg):
     """Sensors are declared in the model itself, so whatever loads it (an MJCF saved from the world) has them."""
     pg.add_robot("box", build=BOX)
