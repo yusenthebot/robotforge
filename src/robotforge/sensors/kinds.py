@@ -50,9 +50,16 @@ class Imu(Sensor):
         self.slices = {role: native_slice(model, decl, native[role]) for role in ("accel", "gyro", "quat")}
         self.walk = {c: np.zeros(3) for c in ("accel", "gyro")}  # bias random walks
         self.yaw_error = 0.0  # deg: heading drifts with the gyro's bias, as an IMU's own estimate does
+        # MuJoCo 3.15 leaves the accelerometer of a body welded to the world at zero; a real one bolted down feels
+        # the floor holding it up against gravity, so it reads 9.81 up like any IMU at rest.
+        self.static = int(model.body_weldid[self.body]) == 0 and self.site >= 0
+        self.up_g = -np.array(model.opt.gravity, float)
 
     def measure(self, model, data):
-        return {role: np.array(data.sensordata[s]) for role, s in self.slices.items()}
+        value = {role: np.array(data.sensordata[s]) for role, s in self.slices.items()}
+        if self.static:
+            value["accel"] = data.site_xmat[self.site].reshape(3, 3).T @ self.up_g
+        return value
 
     def corrupt(self, value, dt):
         k = self.knobs

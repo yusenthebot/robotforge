@@ -155,28 +155,35 @@ class Sensor:
         self.last_time = when
         return when, self.corrupt(self.measure(model, data), dt)
 
+    def take(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """Keep a sample of the moment the data shows, and say when the next one is due (by sample time)."""
+        sample = self.sample(model, data)
+        self.samples.append(sample)
+        self.next_due = sample[0] + (self.period or 0.0)
+
     def tick(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        """Called after every step: take a sample when one is due."""
-        t = float(data.time)
-        if self.period is not None and t < self.next_due - 2 * self.period:
-            self.next_due = t  # the clock was turned back under it (data reset by hand): sample again from now
-        if t + EPS < self.next_due:
+        """Called after every step: take a sample when one is due. Due is judged by the moment a sample would
+        show, so a run reads the same samples (and draws the same noise) however often it is read."""
+        when = self.stamp(model, data)
+        if self.samples:
+            last = self.samples[-1][0]
+            if when < last - EPS:  # the clock was turned back under it (data reset by hand): start again
+                self.samples.clear()
+                self.next_due = when
+            elif when <= last + EPS:  # this moment is sampled already (the suite's first sample)
+                return
+        if when + EPS < self.next_due:
             return
-        self.samples.append(self.sample(model, data))
-        if self.period is None:
-            self.next_due = t
-            return
-        self.next_due = max(self.next_due + self.period, t + self.period * 0.5) if self.next_due else t + self.period
+        self.take(model, data)
 
     def current(self, model: mujoco.MjModel, data: mujoco.MjData) -> tuple[float, Any] | None:
         """The (stamp, value) the sensor reports now: measured now when lazy, else its newest sample at least
         `latency_s` old, or None when it has none yet (right after a reset, with a latency)."""
         if self.lazy:
             return self.sample(model, data)
-        now = float(data.time)
-        if not self.samples and not self.knobs.latency_s:
-            self.samples.append(self.sample(model, data))  # read before the first step: sampled at once
-        cutoff = now - self.knobs.latency_s + 1e-6
+        if not self.samples:  # not primed (a suite used on its own): the moment now is its first sample
+            self.take(model, data)
+        cutoff = float(data.time) - self.knobs.latency_s + 1e-6
         for when, value in reversed(self.samples):
             if when <= cutoff:
                 return when, value
@@ -224,6 +231,14 @@ class Suite:
             data = s.decl.data
             names = [*native.values(), *data.get("touch", data.get("cells", [])), *data.get("rays_native", [])]
             self.covered.update(s.decl.full(n) for n in names)
+
+    def prime(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """Take every sampled sensor's first sample from the state as it is (after a load, a reset or an edit
+        that put robots back where they were): a run then draws the same noise whether or not anything reads
+        before time first passes."""
+        for sensor in self.stepped:
+            sensor.samples.clear()
+            sensor.take(model, data)
 
     def after_step(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         for sensor in self.stepped:

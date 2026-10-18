@@ -188,12 +188,24 @@ def thing_name(model: mujoco.MjModel, geom: int) -> str:
     return name.split("/")[0]
 
 
+# Google's Turbo colormap as polynomials in t (0 dark blue, 1 dark red): even steps of distance look even.
+TURBO = (
+    (0.13572138, 4.61539260, -42.66032258, 132.13108234, -152.94239396, 59.28637943),
+    (0.09140261, 2.19418839, 4.84296658, -14.18503333, 4.27729857, 2.82956604),
+    (0.10667330, 12.64194608, -60.58204836, 110.36276771, -89.90310912, 27.34824973),
+)
+
+
 def depth_picture(depth: np.ndarray, far: float) -> np.ndarray:
-    """Near is bright and warm, far is dark and blue, nothing within range is black."""
-    t = np.clip(np.nan_to_num(depth, nan=far) / max(far, 1e-6), 0.0, 1.0)
-    near = 1.0 - t
-    rgb = np.stack([near**0.8, near**1.6 * 0.85, 0.25 + 0.55 * t * (1 - t) * 4 * 0.5 + 0.1 * near], axis=-1)
-    rgb[~np.isfinite(depth)] = 0.0
+    """Near is red, far is blue across the distances in view (Turbo); nothing within range is black."""
+    valid = np.isfinite(depth)
+    if not valid.any():
+        return np.zeros((*depth.shape, 3), np.uint8)
+    low, high = float(np.nanmin(depth)), float(np.nanmax(depth))
+    near = 1.0 - np.clip((np.nan_to_num(depth, nan=high) - low) / max(high - low, 1e-6), 0.0, 1.0)
+    t = 0.12 + 0.83 * near  # Turbo's two ends are nearly black; the far end stays blue, apart from "nothing"
+    rgb = np.stack([sum(c * t**i for i, c in enumerate(channel)) for channel in TURBO], axis=-1)
+    rgb[~valid] = 0.0
     return (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
 
 

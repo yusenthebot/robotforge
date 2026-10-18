@@ -30,15 +30,16 @@ class SensorError(ValueError):
 class SensorHub:
     def __init__(self, session: Any) -> None:
         self.session = session
-        self.suite = Suite(session.model)
         self._renderer = None
         self._render_lock = threading.Lock()
         session.reset_hooks.append(self.rebuild)
-        self._install()
+        self.rebuild()
 
     def rebuild(self) -> None:
-        """A new model or a reset: sensors bound to the model as it is now, their noise from its seed again."""
+        """A new model or a reset: sensors bound to the model as it is now, their noise from its seed again, and
+        their first samples taken from the state as it is now."""
         self.suite = Suite(self.session.model)
+        self.suite.prime(self.session.model, self.session.data)
         self._install()
 
     def _install(self) -> None:
