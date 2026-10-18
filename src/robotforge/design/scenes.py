@@ -182,6 +182,7 @@ def _warehouse(rng: random.Random, opts: dict[str, float]) -> Content:
     unit = [2.0, 0.6, 2.0]
     levels = props.shelf_levels(unit)
     n = 0
+    stacked: dict[tuple[float, float, float], list[tuple[float, float]]] = {}  # (rack x, y, board): crates (x, half)
     # Two rows of shelving face each other across an aisle at y = 2.6.
     for row_y, yaw in ((3.9, 0.0), (1.3, 180.0)):
         for x in (-4.0, -2.0, 0.0, 2.0):
@@ -200,6 +201,8 @@ def _warehouse(rng: random.Random, opts: dict[str, float]) -> Content:
                         color=CRATE,
                         mass=4.0,
                     )
+                    stacked.setdefault((x, row_y, level), []).append((px, s / 2))
+    _parcels(c, stacked, levels)
     for i, (x, y) in enumerate(((-4.5, -1.6), (-2.6, -1.9), (-0.8, -1.5))):
         c.add(f"pallet_{i + 1}", "pallet", [x, y], yaw=rng.uniform(-8, 8))
         top = 0.144
@@ -231,8 +234,41 @@ def _warehouse(rng: random.Random, opts: dict[str, float]) -> Content:
     c.tips = [
         "drive down the aisle between the racks (move('rover', 0.4)) or up the ramp onto the dock",
         "crates are loose: a robot can push them off the pallets",
+        "the small parcels on the racks' front edges fit a gripper: add a lift_picker and pick_and_place("
+        "'picker', 'parcel_1', 'dock') fetches one",
     ]
     return c
+
+
+PARCEL = [0.05, 0.05, 0.08]  # m: a small carton, narrow enough for a gripper's 7 cm (the crates are 40 cm and more)
+PARCEL_RACKS = ((2.0, 1.3), (0.0, 3.9), (-2.0, 1.3))  # racks a parcel goes on, at hand height (the third board)
+PARCEL_COLORS = ("orange", "teal", "purple")
+
+
+def _parcels(
+    c: Content, stacked: dict[tuple[float, float, float], list[tuple[float, float]]], levels: list[float]
+) -> None:
+    """A parcel on the aisle edge of the third board of some racks, where no crate stands: something a robot with an
+    arm can fetch from a rack."""
+    board = levels[2]
+    for i, ((x, y), color) in enumerate(zip(PARCEL_RACKS, PARCEL_COLORS, strict=True)):
+        crates = stacked.get((x, y, board), [])
+        free = [
+            px
+            for px in (x - 0.2, x + 0.2, x, x - 0.6, x + 0.6)
+            if all(abs(px - cx) > half + 0.1 for cx, half in crates)
+        ]
+        if not free:
+            continue
+        edge = y + (0.18 if y < 2.6 else -0.18)  # toward the aisle
+        c.add(
+            f"parcel_{i + 1}",
+            "box",
+            [free[0], edge, resting_z(board, "box", PARCEL)],
+            size=PARCEL,
+            color=color,
+            mass=0.3,
+        )
 
 
 # ---- park --------------------------------------------------------------------------------------
@@ -485,7 +521,7 @@ SCENES: dict[str, Scene] = {
         Scene(
             "warehouse",
             "Warehouse",
-            "Two rows of steel racks with crates, pallets with loose crates, columns, "
+            "Two rows of steel racks with crates and small parcels, pallets with loose crates, columns, "
             "lane markings and a loading dock up a ramp. Starter robot: a rover.",
             _warehouse,
         ),
