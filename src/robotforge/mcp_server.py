@@ -31,6 +31,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
 from robotforge.behaviors import Kind
+from robotforge.behaviors import mcp_tools as operate_tools
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -68,15 +69,18 @@ import doctor repairs URDFs and meshes and reports in the result's "doctor" fiel
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
 Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
-bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers).
+bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers),
+things with a moving part (drawer, cabinet with a door, button, switch, lever, valve, conveyor belt) and soft things
+(rope, cloth). Any arm can hold with end_effector="suction" (a suction cup: flat things fingers cannot get round) or
+"magnet" (steel things only), in add_robot or later in update_robot.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
 saved as red_cube, "the dog" finds dog). Units: meters, kilograms, radians for joints, degrees for yaw (the
 builder takes degrees for joints too).
 
-Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse, park,
-maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground (hills,
+Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
+park, maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground (hills,
 rough ground, stairs, ramps, stepping stones, curbs, platforms); robots and objects stand on the ground
 under them. To build a scene from a sentence, combine load_scene, add_terrain and add_object, then check it
 with observe(view="overview").
@@ -84,12 +88,13 @@ with observe(view="overview").
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
 snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
 the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
-arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); robots lists robots with kind, arms and
-positions. For anything custom, set_controls / simulate drive actuators directly (names from describe_model,
-prefixed "<robot>/"). observe reports state with an image so you can check your work; observe(find="red") locates
-colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
-user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
-real time.
+arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"); operate has an arm open or close a drawer or a
+door, press a button, flip a switch or turn a valve, holding its handle along the joint's own path; robots lists
+robots with kind, arms and positions. For anything custom, set_controls / simulate drive actuators directly (names
+from describe_model, prefixed "<robot>/"). observe reports state with an image so you can check your work;
+observe(find="red") locates colored objects in a camera's picture and names them ("pick the red one").
+open_viewer gives the user a live 3D view (they can also drive with WASD): offer it early; while it is open,
+actions play out in real time.
 
 Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
 force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry on any body of any robot,
@@ -365,10 +370,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
-        list_templates), which is saved as its parts so add_part / update_part change it.
+        list_templates), which is saved as its parts so add_part / update_part change it. end_effector (any arm):
+        "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
+        steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -396,7 +404,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
-            source = {"library": library, "build": build, "design": design}
+            source = {"library": library, "build": build, "design": design, "end_effector": end_effector}
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
@@ -407,15 +415,17 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
         keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
         build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
         mounted part or is a robot of the same kind; given only base sensors ({"base": {"sensors": ["lidar"]}}) it
-        is carried on a plate with them; any other is refused with the build that keeps it."""
+        is carried on a plate with them; any other is refused with the build that keeps it. end_effector changes the
+        tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw, build))
+            return _json(playground.update_robot(name, params, pos, yaw, build, end_effector))
 
     @server.tool()
     def add_object(
@@ -427,6 +437,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         mass: float | None = None,
         fixed: bool | None = None,
         yaw: float = 0.0,
+        material: Literal["plastic", "wood", "steel"] | None = None,
+        speed: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -435,9 +447,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
         degrees. fixed objects never move (walls, shelves, counters, trees, benches and rocks are fixed unless
         fixed=false). A bin is an open-top container; a marker is a flat mark nothing collides with (goals, lanes).
-        Ramps and stairs are terrain: see add_terrain."""
+        Ramps and stairs are terrain: see add_terrain. material (box, sphere, cylinder): plastic, wood or steel (heavy;
+        what an electromagnet holds). With a moving part (operate works them; front toward -y): drawer, cabinet
+        [length, depth, height]; button [diameter, height]; switch [length, width, height]; lever [length]; valve
+        [wheel diameter, height]; conveyor [length, width, height], belt along +x at speed m/s (default 0.1). Soft:
+        rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes)."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
+            fields |= {"material": material, "speed": speed}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -449,10 +466,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         mass: float | None = None,
         fixed: bool | None = None,
         yaw: float | None = None,
+        material: Literal["plastic", "wood", "steel"] | None = None,
+        speed: float | None = None,
     ) -> str:
-        """Change an object's size, position, heading (yaw, degrees), color, mass or fixed flag."""
+        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material or a
+        conveyor's belt speed (m/s, 0 stops it)."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
+            fields |= {"material": material, "speed": speed}
             return _json(playground.update_object(name, **fields))
 
     @server.tool()
@@ -685,6 +706,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         }
 
     control_tools.register(server, playground, run_until)
+    operate_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
@@ -724,7 +746,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
-        """Open or close an arm's gripper."""
+        """Open or close an arm's gripper; on an arm with a suction cup or an electromagnet, close turns it on (it
+        holds what its face touches) and open turns it off."""
         with _tool_errors():
             arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot, arm=True), state)
             run = await run_until(lambda: arm.done, 5.0)

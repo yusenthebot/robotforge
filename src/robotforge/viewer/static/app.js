@@ -6,6 +6,7 @@ import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, se
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 
 const $ = (id) => document.getElementById(id);
@@ -477,6 +478,8 @@ async function applyScene(desc) {
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
   }
+  flexMeshes = (desc.flexes || []).map(flexMesh);
+  for (const flex of flexMeshes) worldRoot.add(flex.mesh);
   buildRotors(desc.rotors, bodyNodes); // aircraft: propellers the page turns (rotors.js)
   scene3.add(worldRoot);
 
@@ -488,6 +491,72 @@ async function applyScene(desc) {
   tween = null;
   fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
+}
+
+// A cloth (a MuJoCo flex) is a triangle mesh whose corners ride on bodies: one per vertex, or a point on one for a
+// pinned edge. Its vertices follow those bodies' poses, which already stream every frame (see scene.py _flexes).
+let flexMeshes = []; // { mesh, shape, points, bodies, local: Float32Array }
+const CLOTH_THICKNESS = 0.006; // m, the radius of a cloth's points where they touch things (mechanisms.CLOTH_BALL)
+const flexPoint = new THREE.Vector3();
+
+function flexMesh(f) {
+  const shape = clothGeometry(f.faces, f.bodies.length); // a smooth surface through its points (cloth.js)
+  const material = new THREE.MeshStandardMaterial({
+    color: rgbaColor(f.rgba),
+    roughness: 0.95,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  pullNearer(material, CLOTH_THICKNESS);
+  const mesh = new THREE.Mesh(shape.geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // its bounds change every frame
+  mesh.userData.flex = true;
+  const points = new Float32Array(f.bodies.length * 3);
+  return { mesh, shape, points, bodies: f.bodies, local: new Float32Array(f.local) };
+}
+
+// Draw a material's surfaces `by` metres nearer the camera than they are, in depth only: each vertex moves along its
+// own line of sight, so it stays where it is on screen. A cloth is drawn through the middle of its points, which lie
+// its thickness (6 mm) over what it rests on, and where it bends over a table's edge the table's rounded edge still
+// showed through it in streaks; nearer by its thickness, it wins against what lies within it.
+function pullNearer(material, by) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      gl_Position = projectionMatrix * vec4(mvPosition.xyz * max(0.0, 1.0 - ${by.toFixed(4)} / length(mvPosition.xyz)), 1.0);`,
+    );
+  };
+}
+
+function updateFlexes() {
+  for (const flex of flexMeshes) {
+    for (let i = 0; i < flex.bodies.length; i++) {
+      const node = bodyNodes[flex.bodies[i]];
+      flexPoint.fromArray(flex.local, 3 * i).applyQuaternion(node.quaternion).add(node.position);
+      flexPoint.toArray(flex.points, 3 * i);
+    }
+    shapeCloth(flex.shape, flex.points);
+  }
+}
+
+// The body of the cloth's vertex nearest to where it was hit: grabbing a cloth drags that corner of its mesh.
+function flexBodyAt(mesh, point) {
+  const flex = flexMeshes.find((f) => f.mesh === mesh);
+  if (!flex) return -1;
+  const pos = mesh.geometry.attributes.position;
+  let best = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < flex.bodies.length; i++) {
+    const d = flexPoint.fromBufferAttribute(pos, i).distanceToSquared(point);
+    if (d < bestDist && flex.bodies[i] > 0) {
+      bestDist = d;
+      best = flex.bodies[i];
+    }
+  }
+  return best;
 }
 
 // The boxes of everything the scene shows but its floor, each in world space.
@@ -650,6 +719,7 @@ function applyPoses(buffer) {
     node.position.set(f[1 + 3 * b], f[2 + 3 * b], f[3 + 3 * b]);
     node.quaternion.set(f[qOff + 4 * b + 1], f[qOff + 4 * b + 2], f[qOff + 4 * b + 3], f[qOff + 4 * b]);
   }
+  if (flexMeshes.length) updateFlexes();
   if (pendingFit) {
     const sphere = contentSphere();
     fitLights(sphere);
@@ -859,7 +929,7 @@ function pickBody(e) {
   const hits = raycaster.intersectObjects(worldRoot.children, true);
   for (const h of hits) {
     if (!h.object.visible || h.object.userData.isPlane) continue;
-    const body = h.object.userData.body;
+    const body = h.object.userData.flex ? flexBodyAt(h.object, h.point) : h.object.userData.body;
     if (body > 0 && sceneDesc.bodies[body]?.dynamic) return { body, point: h.point };
     return null; // first visible hit is static: don't reach through it
   }

@@ -25,7 +25,7 @@ from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
-from robotforge.design import library
+from robotforge.design import end_effectors, library, mechanisms
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
@@ -106,6 +106,8 @@ def _how_to_move(kind: Kind) -> str:
 DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
+FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
 
 @dataclass(frozen=True)
@@ -1133,11 +1135,19 @@ class BehaviorManager:
             arm = self._arm(robot)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
+            if arm.tool == "magnet":
+                self._check_steel(arm.robot, obj)
             place, place_top, region = self._place_target(target)
             try:
                 arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
             except OutOfReach as exc:
-                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)) from exc
+                text = self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
+                if "object" in exc.bad and arm.tool is None and 2 * pick["half_height"] < FLAT:
+                    text += (
+                        f". {obj} is only {2000 * pick['half_height']:.0f} mm thick: fingers cannot close round "
+                        "something that flat, a suction cup can (update_robot with end_effector='suction')"
+                    )
+                raise BehaviorError(text) from exc
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}
@@ -1224,8 +1234,30 @@ class BehaviorManager:
             return None
         return next((o for o in world.objects if o.name == name), None)
 
+    def _check_steel(self, robot: str, obj: str) -> None:
+        """An electromagnet holds steel only: say so before the arm goes for something it cannot hold (it went all
+        the way there and back for a plastic plate, and came back with nothing)."""
+        m = self.session.model
+        body = self._body(obj)
+        if end_effectors.magnetic(m, [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == body]):
+            return
+        entry = self._object_entry(obj)
+        made = f"is {entry.material or 'plastic'}" if entry is not None else "is not steel"
+        raise BehaviorError(
+            f"{robot}'s electromagnet holds steel only, and {obj} {made}: make it steel (update_object with "
+            f"material='steel'), or change the tool (update_robot with end_effector='suction')"
+        )
+
     def _object_geometry(self, name: str) -> dict[str, Any]:
         entry = self._object_entry(name)
+        if entry is not None and entry.shape in mechanisms.MECHANISMS:
+            actions = " or ".join(mechanisms.MECHANISMS[entry.shape].actions) or "set its speed"
+            raise BehaviorError(f"{name} is a {entry.shape}, built in place: operate can {actions} it")
+        if entry is not None and entry.shape in mechanisms.SOFT:
+            raise BehaviorError(
+                f"{name} is a {entry.shape}, soft: pick_and_place carries solid things; move_arm and gripper can take "
+                "hold of it by hand"
+            )
         body = self._body(name)
         if entry is not None and entry.fixed:
             raise BehaviorError(f"{name} is fixed in place and cannot be picked up")
@@ -1256,6 +1288,8 @@ class BehaviorManager:
             raise BehaviorError(wording.unknown("object", target, names) + " (or give a position [x, y])")
         target = found
         m, d = self.session.model, self.session.data
+        if entry.shape in mechanisms.CONTAINERS:
+            return self._into(target)
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
         if b >= 0:
             base = d.xpos[b].copy()
@@ -1274,6 +1308,32 @@ class BehaviorManager:
         region = {"center": [base[0], base[1], top], "half_xy": [length / 2, width / 2], "min_z": top - 0.01}
         return np.array([base[0], base[1], top]), top, region
 
+    def _into(self, name: str) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """Place point, rim and success region for putting something in drawer `name`, as far open as it is now:
+        only the part pulled out of the chest can take it."""
+        m, d = self.session.model, self.session.data
+        site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{name}/inside")
+        joint = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f"{name}/drawer")
+        if site < 0 or joint < 0:
+            raise BehaviorError(f"{name} has nothing to put things in")
+        opened = float(d.qpos[m.jnt_qposadr[joint]])
+        if opened < OPEN_ENOUGH:
+            raise BehaviorError(
+                f"{name} is closed ({opened:.2f} m open): open it first with operate on {name}, then put things in it"
+            )
+        # In the drawer's own frame its front panel is at y = 0 and the chest's front at y = opened: things go on
+        # the floor between the two, the part pulled out, coming down over the drawer's front, its highest edge.
+        # Clearing the chest's top instead, the kitchen's arm could not carry the plate that high.
+        drawer = int(m.site_bodyid[site])
+        rot = d.xmat[drawer].reshape(3, 3)
+        center = d.xpos[drawer] + rot @ np.array([0.0, opened / 2, float(m.site_pos[site][2])])
+        half_out = max(opened - mechanisms.PANEL, 0.0) / 2
+        across = np.abs(rot[:2, :2]) @ np.array([float(m.site_size[site][0]), half_out])
+        front = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"{name}/drawer_front")
+        top = float(d.geom_xpos[front][2] + m.geom_size[front][2]) if front >= 0 else float(center[2])
+        region = {"center": center.tolist(), "half_xy": across.tolist(), "min_z": float(center[2]) - 0.01}
+        return center, top, region
+
     # ---- status --------------------------------------------------------------------------
 
     def status(self) -> list[dict[str, Any]]:
@@ -1281,7 +1341,8 @@ class BehaviorManager:
             {"behavior": "navigate", "navigating": robot, "state": "done", "last_trip": result}
             for robot, result in self._last_trips.items()
         ]
-        return [c.status() for c in self.session.controllers.values()] + done
+        shown = [c for c in self.session.controllers.values() if not getattr(c, "hidden", False)]
+        return [c.status() for c in shown] + done
 
 
 def _told_kind(entry: Any) -> str | None:

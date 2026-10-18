@@ -183,6 +183,7 @@ def describe(
         "nbody": model.nbody,
         "bodies": bodies,
         "geoms": geoms,
+        "flexes": _flexes(model),
         "meshes": mesh_entries,
         "hfields": hfield_entries or [],
         "grounds": _ground_looks(model),
@@ -190,6 +191,29 @@ def describe(
         "visibleGroupLimit": VISIBLE_GROUP_LIMIT,
         "stat": {"center": [float(c) for c in model.stat.center], "extent": float(model.stat.extent)},
     }
+
+
+def _flexes(model: mujoco.MjModel) -> list[dict]:
+    """Cloths (two-dimensional flexes) as triangle meshes whose corners ride on bodies: each vertex is a body (or a
+    point on one, for a pinned edge), so the per-frame body poses already move them and no new traffic is needed.
+    Each vertex is `local` in its body's frame; `faces` index the vertices three by three."""
+    out = []
+    for f in range(model.nflex):
+        if int(model.flex_dim[f]) != 2:
+            continue  # ropes are capsules on bodies; volumes are not drawn yet
+        v0, nv = int(model.flex_vertadr[f]), int(model.flex_vertnum[f])
+        e0, ne = int(model.flex_elemdataadr[f]), int(model.flex_elemnum[f])
+        faces = model.flex_elem[e0 : e0 + 3 * ne]
+        out.append(
+            {
+                "id": f,
+                "bodies": [int(b) for b in model.flex_vertbodyid[v0 : v0 + nv]],
+                "local": [round(float(c), 6) for c in model.flex_vert[v0 : v0 + nv].ravel()],
+                "faces": [int(i) for i in faces],
+                "rgba": [round(float(c), 4) for c in model.flex_rgba[f]],
+            }
+        )
+    return out
 
 
 def _ground_looks(model: mujoco.MjModel) -> dict[str, dict]:

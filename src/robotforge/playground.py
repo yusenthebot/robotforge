@@ -24,6 +24,7 @@ from robotforge import modes, wording
 from robotforge.behaviors import airframe, robot_kind
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
+from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import plate
 from robotforge.design.store import WorldStore, worlds_home
@@ -41,7 +42,7 @@ from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sensors import edit as sensor_edit
 from robotforge.sensors import without_sensors
 from robotforge.sensors.hub import SensorHub
-from robotforge.sim import carry, finder, lidar, placement, vision
+from robotforge.sim import carry, finder, lidar, mechanisms, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession, fresh_data
@@ -98,6 +99,8 @@ class Playground:
     lessons: LessonRunner = field(init=False)
     sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
+    _soft: tuple[int, set[int]] = field(default=(-1, set()), init=False, repr=False)  # see _soft_bodies
     # The ground places of the scene last loaded, and the world it went into: a robot added there without pos
     # starts on the first free one. Not saved: a world opened later starts robots round [0, 0].
     _places: tuple[Path, list[scenes.Slot]] | None = field(default=None, init=False, repr=False)
@@ -109,6 +112,8 @@ class Playground:
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
         self.sensors = SensorHub(self.session)
+        # belts keep running and button presses are counted, through resets
+        mechanisms.attach(self.session, self._mechanism_shapes)
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -302,6 +307,7 @@ class Playground:
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        end_effector: str | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
@@ -317,6 +323,7 @@ class Playground:
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw or 0.0,
+                end_effector=end_effector,
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
@@ -361,6 +368,7 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        end_effector: str | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
@@ -373,14 +381,16 @@ class Playground:
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
             found.append(robot.name)
-            if not params and pos is None and yaw is None and build is None:
-                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
+            if not params and pos is None and yaw is None and build is None and end_effector is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw, build or end_effector")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
                 robot.pos = pos
             if yaw is not None:
                 robot.yaw = yaw
+            if end_effector is not None:  # a tool change, checked by the world's own validation
+                robot.end_effector = end_effector
             if build is not None:
                 if robot.build is None and _whole(build):
                     # A whole robot from parts in place of a template, library robot or file, where it stands: both
@@ -1075,8 +1085,11 @@ class Playground:
         m, d = self.session.model, self.session.data
         with self.session.lock:
             joints = {}
+            soft = self._soft_bodies()
             for j in range(m.njnt):
                 jtype = int(m.jnt_type[j])
+                if int(m.jnt_bodyid[j]) in soft:  # a rope's or cloth's hundreds: its summary is in "mechanisms"
+                    continue
                 if jtype in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)):
                     joints[_name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or f"joint{j}"] = round(
                         float(d.qpos[m.jnt_qposadr[j]]), 4
@@ -1088,7 +1101,7 @@ class Playground:
             listed = _limit_dict(sensors)
             if lidars and "..." in listed:  # a 64-ray lidar alone is 64 sensors: say where all its rays are
                 listed["..."] += "; lidars has every ray of each lidar"
-            return {
+            out = {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
                 "joints": _limit_dict(joints),
@@ -1098,6 +1111,35 @@ class Playground:
                 **({"lidars": lidars} if lidars else {}),
                 "contacts": int(d.ncon),
             }
+            watcher = self.session.controllers.get(mechanisms.KEY)
+            moving = mechanisms.read(m, d, self._mechanism_shapes(), watcher)
+            if moving:  # drawers, doors, buttons, switches, levers, valves, belts, ropes, cloths
+                out["mechanisms"] = _limit_dict(moving)
+            return out
+
+    def _soft_bodies(self) -> set[int]:
+        """The bodies of the world's ropes and cloths, whose unnamed joints observe leaves out: one 0.6 m cloth and
+        a rope filled its 40 joints with "joint8" to "joint40" and pushed out the joints of anything added later."""
+        version, bodies = self._soft
+        if version != self.session.version:
+            m = self.session.model
+            shapes = self._mechanism_shapes().items()
+            prefixes = tuple(f"{name}/" for name, shape in shapes if shape in ("rope", "cloth"))
+            named = (_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in range(m.nbody))
+            bodies = {b for b, name in enumerate(named) if prefixes and name.startswith(prefixes)}
+            self._soft = (self.session.version, bodies)
+        return bodies
+
+    def _mechanism_shapes(self) -> dict[str, str]:
+        """The world's mechanisms and soft things by name, read once per compiled model: scripts poll state()
+        hundreds of times a second, and the world file only changes with the model."""
+        version, shapes = self._shapes
+        if version != self.session.version:
+            world = self._acting_world()
+            objects = world.objects if world is not None else []
+            shapes = {o.name: o.shape for o in objects if o.shape in mechanism_shapes.SHAPES}
+            self._shapes = (self.session.version, shapes)
+        return shapes
 
     def sensor_readings(self) -> dict[str, Any]:
         """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones).

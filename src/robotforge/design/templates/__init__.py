@@ -15,9 +15,10 @@ from robotforge.design.templates.gripper import Gripper
 from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
 from robotforge.design.templates.rover import Rover
+from robotforge.design.templates.tools import Magnet, SuctionCup
 
 TEMPLATES: dict[str, Template] = {
-    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Drone())
+    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), SuctionCup(), Magnet(), Drone())
 }
 
 
@@ -35,6 +36,9 @@ NICKNAMES = {
     "pendulum": "cartpole",
     "cart_pole": "cartpole",
     "claw": "gripper",
+    "suction": "suction_cup",
+    "vacuum": "suction_cup",
+    "electromagnet": "magnet",
     "quadrotor": "drone",
     "quadcopter": "drone",
     "multirotor": "drone",
