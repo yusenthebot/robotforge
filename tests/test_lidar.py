@@ -11,7 +11,7 @@ from mcp import Client
 from robotforge.cli import find_free_port
 from robotforge.design.builder.schema import SensorSpec
 from robotforge.mcp_server import build_server
-from robotforge.playground import Playground
+from robotforge.playground import Playground, PlaygroundError
 from robotforge.script_runner import ScriptRunner
 from robotforge.sim import lidar
 from robotforge.sim.session import SimSession
@@ -115,3 +115,22 @@ async def test_observe_reports_the_lidar(pg):
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+
+def test_the_mazes_starter_rover_can_be_rebuilt_with_a_lidar_where_it_stands(tmp_path, monkeypatch):
+    """Both lidar sessions in the eval sent the maze's starter rover (a template) a build with a lidar, through
+    update_robot and then add_part, were refused, and removed it to add the same robot again at the start mark."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.load_scene("maze")
+    with pytest.raises(PlaygroundError, match=r'update_robot\("rover", build='):
+        pg.add_part("rover", {"name": "puck", "at": "top", "sensors": ["lidar"]})
+    done = pg.update_robot("rover", build=_car(16))
+    assert any("rover: now built from parts (it was the rover template)" in n for n in done["notes"])
+    rover = pg.current_world().robots[0]
+    assert rover.build is not None and rover.template is None and rover.pos == [-2.0, -3.0] and rover.yaw == 90
+    assert pg.state()["lidars"]["rover/base_lidar"]["rays"] == 16
+    pg.undo()  # one edit: back to the template
+    assert pg.current_world().robots[0].template == "rover"
+    with pytest.raises(PlaygroundError, match="parts and sensors"):  # a few fields are no whole robot
+        pg.update_robot("rover", build={"servo": "sts3215"})

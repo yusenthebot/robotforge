@@ -328,6 +328,7 @@ class Playground:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
         found: list[str] = []
+        replaced: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
@@ -341,6 +342,15 @@ class Playground:
             if yaw is not None:
                 robot.yaw = yaw
             if build is not None:
+                if robot.build is None and _whole(build):
+                    # A whole robot from parts in place of a template, library robot or file, where it stands: both
+                    # lidar sessions in the eval sent the maze's starter rover a build with a lidar (update_robot,
+                    # then add_part), were refused, and removed it to add the same robot again.
+                    replaced.append(f"{robot.name}: now built from parts (it was {_source(robot)})")
+                    robot.template = robot.file = robot.library = None
+                    robot.params = {}
+                    robot.build = build
+                    return
                 entry = _built(robot)
                 if not (entry.build or {}).get("parts") or "parts" in build:
                     entry.build = build
@@ -361,7 +371,7 @@ class Playground:
 
         result = self._edit(change)
         placed = self._clear_start(found[0], pos, asked=True)[1] if pos is not None else None
-        return _noted(result, _yaw_note(yaw), *kept, placed)
+        return _noted(result, _yaw_note(yaw), *replaced, *kept, placed)
 
     def _clear_start(self, robot: str, pos: list[float], asked: bool) -> tuple[list[float] | None, str | None]:
         """Whether `robot`, just put at `pos`, stands inside something: furniture, a wall, a ramp, another robot.
@@ -886,18 +896,23 @@ def design_build(design: str, **others: Any) -> dict[str, Any]:
         raise PlaygroundError(str(exc)) from None
 
 
+def _source(robot: RobotEntry) -> str:
+    if robot.template:
+        return f"the {robot.template} template"
+    return f"the robot library ({robot.library})" if robot.library else "a file"
+
+
+def _whole(build: dict[str, Any]) -> bool:
+    """A build that describes a whole robot (a base or parts), not a few fields to change on one."""
+    return isinstance(build, dict) and ("base" in build or "parts" in build)
+
+
 def _built(robot: RobotEntry) -> RobotEntry:
     if robot.build is None:
-        source = (
-            f"the {robot.template} template"
-            if robot.template
-            else f"the robot library ({robot.library})"
-            if robot.library
-            else "a file"
-        )
         raise PlaygroundError(
-            f"{robot.name} comes from {source}; parts can only be edited on robots built from parts "
-            "(add_robot with build=...). To build on a template, mount it as a part: "
+            f"{robot.name} comes from {_source(robot)}; parts and sensors (a lidar, a camera) are edited only on "
+            f'robots built from parts. update_robot("{robot.name}", build={{"base": ..., "parts": [...]}}) makes it '
+            "one where it stands (builder_guide). To build on a template, mount it as a part: "
             '{"name": "arm", "robot": {"template": "arm"}}'
         )
     return robot
