@@ -221,7 +221,8 @@ class Suite:
         self.covered: set[str] = set()
         for s in self.sensors.values():
             native = s.decl.data.get("native", {})
-            names = [*native.values(), *s.decl.data.get("cells", []), *s.decl.data.get("rays_native", [])]
+            data = s.decl.data
+            names = [*native.values(), *data.get("touch", data.get("cells", [])), *data.get("rays_native", [])]
             self.covered.update(s.decl.full(n) for n in names)
 
     def after_step(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:

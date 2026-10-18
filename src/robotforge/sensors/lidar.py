@@ -21,7 +21,7 @@ import mujoco
 import numpy as np
 
 from robotforge.sensors import declare
-from robotforge.sensors.runtime import Sensor
+from robotforge.sensors.runtime import Sensor, native_slice
 
 SECTORS = 36  # numbers a ring is reduced to in a reading
 AHEAD_DEG = 15.0  # "ahead" is within this many degrees of the sensor's forward
@@ -62,11 +62,38 @@ class Lidar(Sensor):
         self.three_d = self.channels > 1
         self._geom = np.zeros(self.rays, np.int32)
         self._dist = np.zeros(self.rays)
+        self.native: list[slice] = []
+        if d.get("rays_native"):
+            self._ring_of_rangefinders(model, decl, d["rays_native"])
+
+    def _ring_of_rangefinders(self, model: mujoco.MjModel, decl: declare.Declared, rays: list[str]) -> None:
+        """A built robot's lidar: a ring of MuJoCo rangefinders, each on its own site looking along its +z. They
+        are read where MuJoCo put them (it casts them on every step), in the frame of the body they are on."""
+        sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, decl.full(r)) for r in rays]
+        if min(sites) < 0:
+            raise ValueError(f"the lidar's rays {rays[0]}... are missing from the model")
+        self.native = [native_slice(model, decl, r) for r in rays]
+        self.site = sites[0]
+        directions = []
+        for site in sites:
+            rot = np.zeros(9)
+            mujoco.mju_quat2Mat(rot, model.site_quat[site])
+            directions.append(rot.reshape(3, 3)[:, 2])
+        self.directions = np.array(directions)
+        self.azimuth = np.arctan2(self.directions[:, 1], self.directions[:, 0]) % (2 * math.pi)
+        self.channels, self.per_ring, self.rays = 1, len(rays), len(rays)
+        self.elevations = np.zeros(1)
+        self.three_d = False
 
     # ---- measuring ---------------------------------------------------------------------------------------
 
     def measure(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
         origin = np.array(data.site_xpos[self.site])
+        if self.native:  # MuJoCo has cast them already; it does not say what they hit, so none count as ground
+            dist = np.array([float(data.sensordata[s][0]) for s in self.native])
+            dist[dist < 0] = np.nan
+            rot = data.xmat[self.body].reshape(3, 3).copy()
+            return {"origin": origin, "rot": rot, "dist": dist, "ground": np.zeros(self.rays, bool)}
         rot = data.site_xmat[self.site].reshape(3, 3).copy()
         vec = np.ascontiguousarray(self.directions @ rot.T)
         mujoco.mj_multiRay(

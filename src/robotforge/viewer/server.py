@@ -35,6 +35,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 FRAME_HZ = 60.0
 STATE_HZ = 4.0
 LESSON_HZ = 20.0
+SENSOR_HZ = 10.0
 REPORT_EVERY = 5.0  # s between log reports of a failing tick
 
 
@@ -111,6 +112,16 @@ class ViewerHub:
         self.state_extras: Callable[[], dict[str, Any]] | None = None
         # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
         self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
+        # What the robots' sensors measure, sent SENSOR_HZ times a second while the world has any (None when it
+        # has none): {"type": "sensors", "time", "sensors": [...]}, one entry per sensor with its "name", "robot",
+        # "type", world "pos" and "quat" (w, x, y, z) and what drawing it needs. lidar and lidar3d: "origin",
+        # "points" (hit points, flat x, y, z list, at most 1200), "rays", "hits", "range_m", "channels"; camera:
+        # "mode", "fov_deg", "size", "forward", "up"; force_torque: "force_n", "torque_nm" (world vectors at the
+        # pos); imu: "accel_m_s2", "gyro_rad_s", "orientation_deg" (roll, pitch, yaw); touch: "cells_m" (world
+        # positions), "force_n" per cell, "total_n"; rangefinder: "direction", "distance_m", "range_m"; gps and
+        # odometry: "position_m" (odometry also "heading_deg"); encoders: "rad" (and "m") by joint. "t" is when the
+        # value was sampled; "status": "waiting" while a delayed sensor has none yet. See docs/SENSORS.md.
+        self.sensor_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
 
     # ---- scene description (cached per model version) -------------------------------
@@ -240,6 +251,7 @@ class ViewerHub:
         last = time.perf_counter()
         last_state = 0.0
         last_lesson = 0.0
+        last_sensors = 0.0
         last_report = -math.inf
         while True:
             tick_start = time.perf_counter()
@@ -262,6 +274,11 @@ class ViewerHub:
                     if self.lesson_stream is not None and tick_start - last_lesson > 1.0 / LESSON_HZ:
                         last_lesson = tick_start
                         update = self.lesson_stream()
+                        if update is not None:
+                            await self._send_all(text=json.dumps(update))
+                    if self.sensor_stream is not None and tick_start - last_sensors > 1.0 / SENSOR_HZ:
+                        last_sensors = tick_start
+                        update = self.sensor_stream()
                         if update is not None:
                             await self._send_all(text=json.dumps(update))
             except Exception:

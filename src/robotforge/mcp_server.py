@@ -41,6 +41,7 @@ from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
+from robotforge.sensors import mcp_tools as sensor_tools
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
@@ -85,6 +86,12 @@ prefixed "<robot>/"). observe reports state with an image so you can check your 
 colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
 user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
 real time.
+
+Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
+force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry on any body of any robot,
+ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
+nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
+them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -417,7 +424,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def remove(name: str) -> str:
-        """Remove a robot, object or terrain patch from the world."""
+        """Remove a robot, object or terrain patch from the world, or a sensor added to a robot ("go2/lidar")."""
         with _tool_errors():
             return _json(playground.remove(name))
 
@@ -583,6 +590,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
+    sensor_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
 
@@ -656,6 +664,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             sim.time; sim.step(seconds)  # time passes only when you step
             sim.position(name) -> [x, y, z]; sim.heading(robot) -> degrees
             sim.joints(robot) -> {joint: value}; sim.sensors(robot) -> {sensor: value}
+            sim.sensor(robot, name) -> reading  # add_sensor's sensors, e.g. sim.sensor("go2", "lidar")["ahead"]
             sim.set_controls({"arm/shoulder": 0.5})  # raw actuator targets
             sim.move(robot, speed, turn); sim.stop(robot)  # walk / drive (keeps going until stop)
             sim.pose(robot, "wave") -> bool  # humanoid poses; waits, True if upright
@@ -762,14 +771,19 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         include_image: bool = True,
         find: str | None = None,
     ) -> list:
-        """Report the state (joint angles, controls, free body positions, sensors, contacts) and, by default, a
-        rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
+        """Report the state (joint angles, controls, free body positions, sensors, contacts, and one line per sensor
+        added with add_sensor in sensor_summary) and, by default, a rendered image (without OpenGL the state comes
+        back with a note instead). `view` is a preset (default,
         front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
         from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
         with world positions estimated from the picture and the name of what those pixels show (for
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
+            with contextlib.suppress(Exception):  # the sensors' lines are a bonus; never lose the state to them
+                lines = playground.sensors.lines()
+                if lines:
+                    state["sensor_summary"] = lines
             image = None
             if find:
                 try:

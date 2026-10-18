@@ -207,7 +207,8 @@ class Touch(Sensor):
     def __init__(self, model, decl):
         super().__init__(model, decl)
         self.cells = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, decl.full(c)) for c in decl.data["cells"]]
-        self.slices = [native_slice(model, decl, c) for c in decl.data["cells"]]
+        # The MuJoCo touch sensor of each zone: named after its site, unless the definition names them ("touch").
+        self.slices = [native_slice(model, decl, c) for c in decl.data.get("touch", decl.data["cells"])]
         self.rows, self.cols = int(decl.data["rows"]), int(decl.data["cols"])
 
     def measure(self, model, data):

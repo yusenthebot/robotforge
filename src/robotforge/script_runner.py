@@ -189,6 +189,11 @@ class ScriptRunner:
         sensors = self.pg.state()["sensors"]
         return {k[len(prefix) :]: v for k, v in sensors.items() if k.startswith(prefix)}
 
+    def _op_sensor(self, req) -> dict[str, Any]:
+        """One sensor's reading by name, the way read_sensors gives it (no pictures: a script reads numbers)."""
+        reading, _ = self.pg.read_sensors(str(req["robot"]), [str(req["name"])], full=bool(req.get("full")))
+        return next(iter(reading["sensors"].values()))
+
     def _op_set_controls(self, req) -> None:
         self.pg.set_controls({str(k): float(v) for k, v in req["controls"].items()})
 
