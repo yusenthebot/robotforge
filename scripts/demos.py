@@ -91,6 +91,7 @@ class Demo:
     timeline: list[tuple[float, Action]] = field(default_factory=list)  # (s after recording starts, action)
     page: str = ""  # a page script run before recording (the camera, a lesson opened)
     settle: float = 1.5  # s between the page drawing and recording
+    until: Callable[[Any], bool] | None = None  # ends the recording early once true (seconds is then the most)
 
 
 def _follow(robot: str, offset: tuple[float, float, float], ease: float = 0.06) -> str:
@@ -209,6 +210,48 @@ def _go(robot: str, to: Any) -> Callable[[Any], None]:
     return act
 
 
+def _after_trip(robot: str, hold: float, longest: float = 40.0) -> Callable[[Any], None]:
+    """An action that waits (the timeline with it) until `robot` is at the end of its trip, then `hold` s more: the
+    viewer's clock runs behind the wall clock on a busy machine, and a cut timed in seconds came before the boat
+    was at the dock."""
+
+    def act(pg: Any) -> None:
+        end = time.monotonic() + longest
+        while pg.behaviors.trip(robot) is not None and time.monotonic() < end:
+            time.sleep(0.1)
+        time.sleep(hold)
+
+    return act
+
+
+def _dive_then_go(robot: str, z: float, to: list[float]) -> Callable[[Any], None]:
+    """An action: the ROV dives straight down where it floats to `z`, then goes on to `to` (the camera crosses the
+    surface quickly instead of lingering at it while the ROV glides down a long slope)."""
+
+    def act(pg: Any) -> None:
+        x, y = pg.behaviors.pose(robot)["position"][:2]
+        pg.behaviors.navigate(robot, [x, y, z])
+        _after_trip(robot, 0.3, 12.0)(pg)
+        pg.behaviors.navigate(robot, to)
+
+    return act
+
+
+def _trip_over(robot: str, hold: float) -> Callable[[Any], bool]:
+    """For Demo.until: `robot` ended its trip `hold` s ago."""
+    since: list[float] = []
+
+    def over(pg: Any) -> bool:
+        if pg.behaviors.trip(robot) is not None:
+            since.clear()
+            return False
+        if not since:
+            since.append(time.monotonic())
+        return time.monotonic() - since[0] >= hold
+
+    return over
+
+
 def _water_lake(pg: Any) -> None:
     """The lake with its boat at the east end, and an ROV floating near it."""
     S._in_scene("lake", {"boat": {"template": "boat"}, "rov": {"template": "rov"}})(pg)
@@ -242,7 +285,7 @@ def _dive_camera(
                 const turn = Math.max(0, Math.min(1, (t - {seconds}) / {orbit_seconds})) * {orbit_deg} * Math.PI / 180;
                 const c = Math.cos(turn), n = Math.sin(turn);
                 off = [off[0] * c - off[1] * n, off[0] * n + off[1] * c, off[2]];
-                rf.lookAt(at.map((v, i) => v + off[i]), at);
+                rf.lookAt(at.map((v, i) => v + off[i]), p);  // the camera eases after it; the aim stays on it
                 await new Promise((r) => requestAnimationFrame(r));
             }}
         }})();
@@ -339,14 +382,17 @@ DEMOS = [
     Demo(  # across the lake, between the buoys, to the dock while the crates bob; then the ROV dives
         "water_lake",
         _water_lake,
-        26.0,
+        45.0,
         timeline=[
             (0.3, _go("boat", "dock")),
-            (17.8, _dive_camera("rov", (-1.3, 1.7, 0.9), (-1.0, 0.75, -0.02), 3.0, 40.0, 5.0)),
-            (18.3, _go("rov", [3.0, 2.6, 0.35])),
+            (12.0, _after_trip("boat", 1.2)),  # then the cut, however long the crossing took
+            # From the side it goes, south-east: it heads south-west, and the buoys are north of its way.
+            (12.01, _dive_camera("rov", (1.2, -1.6, 0.9), (0.9, -0.9, -0.02), 2.5, -25.0, 7.0)),
+            (12.02, _dive_then_go("rov", 0.45, [3.0, -0.2, 0.4])),  # clear of the buoys on its way
         ],
         page=_follow_level("boat", (3.0, -3.0, 1.9), ease=0.12),
         settle=1.0,
+        until=_trip_over("rov", 2.5),
     ),
     Demo(
         "lesson_learn_to_walk",
@@ -410,6 +456,8 @@ async def _record(demo: Demo, pg: Any, port: int, chrome_port: int) -> list[tupl
         t0 = time.monotonic()
         pending = sorted(demo.timeline, key=lambda e: e[0])
         while time.monotonic() - t0 < demo.seconds:
+            if not pending and demo.until is not None and demo.until(pg):
+                break
             while pending and time.monotonic() - t0 >= pending[0][0]:
                 _, action = pending.pop(0)
                 if isinstance(action, str):

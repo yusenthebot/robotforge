@@ -873,6 +873,7 @@ function connect() {
   ws.onmessage = (ev) => {
     if (typeof ev.data !== "string") {
       applyPoses(ev.data);
+      send({ type: "seen" }); // the server keeps only a few frames ahead of this (MAX_POSES_AHEAD in server.py)
       return;
     }
     const msg = JSON.parse(ev.data);

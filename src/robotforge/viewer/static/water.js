@@ -202,9 +202,10 @@ export function makeWater(water, look, center, renderer) {
     o.userData.water = true;
   });
   const under = new THREE.Fog(style.fog, 0.05, style.see);
-  // Open water runs to the horizon: under the sky it mirrors, not the studio's backdrop (the far sea, pale with the
-  // sky, ended in a hard line against the dark one). The sky map is the same the water reflects.
-  const sky = open && renderer ? skyMap : null;
+  // Water outdoors (the sea, a lake in a park; not a pool) lies under the sky it mirrors, not the studio's backdrop:
+  // the far sea, pale with the sky, ended in a hard line against the dark one, and a camera low over a lake saw a
+  // charcoal sky over the trees. The sky map is the same the water reflects.
+  const sky = look !== "pool" && renderer ? skyMap : null;
   return {
     group, uniforms, water, style, under, sky,
     above: null, isUnder: false, background: null, theme: null, fogs: new WeakMap(),

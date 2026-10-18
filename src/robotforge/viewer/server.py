@@ -33,6 +33,10 @@ log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
 FRAME_HZ = 60.0
+# Pose frames a viewer that says which it has taken in ("seen") may have unread before it is sent no more. A page
+# drawing a heavy scene on a busy machine took in one pose frame per drawn frame (25 a second of the 60 sent), and
+# its picture fell 15 s behind the simulation; viewers that never say (older pages) get every frame as before.
+MAX_POSES_AHEAD = 3
 STATE_HZ = 4.0
 LESSON_HZ = 20.0
 REPORT_EVERY = 5.0  # s between log reports of a failing tick
@@ -112,6 +116,7 @@ class ViewerHub:
         # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
         self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
+        self._ahead: dict[WebSocket, int] = {}  # pose frames sent since each pacing viewer last said "seen"
 
     # ---- scene description (cached per model version) -------------------------------
 
@@ -231,6 +236,27 @@ class ViewerHub:
         for ws in dead:
             self.clients.discard(ws)
 
+    def seen(self, ws: WebSocket) -> None:
+        """The viewer took in the pose frames sent to it: it may be sent MAX_POSES_AHEAD more."""
+        self._ahead[ws] = 0
+
+    async def _send_poses(self, data: bytes) -> None:
+        dead = []
+        for ws in list(self.clients):
+            ahead = self._ahead.get(ws)
+            if ahead is not None and ahead >= MAX_POSES_AHEAD:
+                continue  # it is still drawing: a newer frame goes once it has
+            try:
+                await ws.send_bytes(data)
+            except (WebSocketDisconnect, RuntimeError):
+                dead.append(ws)
+                continue
+            if ahead is not None:
+                self._ahead[ws] = ahead + 1
+        for ws in dead:
+            self.clients.discard(ws)
+            self._ahead.pop(ws, None)
+
     async def run(self) -> None:
         """Step physics in real time and stream poses until cancelled.
 
@@ -255,7 +281,7 @@ class ViewerHub:
                         message = self.scene_message()  # built first: announced only once it was
                         self._announced_version = version
                         await self._send_all(text=json.dumps(message))
-                    await self._send_all(data=self.session.body_poses().tobytes())
+                    await self._send_poses(self.session.body_poses().tobytes())
                     if tick_start - last_state > 1.0 / STATE_HZ:
                         last_state = tick_start
                         await self._send_all(text=json.dumps(self.state_message()))
@@ -296,7 +322,9 @@ def create_app(hub: ViewerHub) -> Starlette:
                 raw = await ws.receive_text()
                 try:
                     msg = json.loads(raw)
-                    if not hub.start_slow(ws, msg):
+                    if isinstance(msg, dict) and msg.get("type") == "seen":
+                        hub.seen(ws)
+                    elif not hub.start_slow(ws, msg):
                         hub.handle(msg)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     await ws.send_text(json.dumps({"type": "error", "message": str(exc)}))
@@ -304,6 +332,7 @@ def create_app(hub: ViewerHub) -> Starlette:
             pass
         finally:
             hub.clients.discard(ws)
+            hub._ahead.pop(ws, None)
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):
