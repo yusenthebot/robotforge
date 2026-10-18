@@ -81,7 +81,7 @@ Cameras and rangefinders see what is drawn, which can stand a few millimetres pr
 from robotforge.script import connect
 
 sim = connect()
-scan = sim.sensor("go2", "lidar")             # the reading read_sensors gives
+scan = sim.sensor("go2", "lidar")  # the reading read_sensors gives
 print(scan["ahead"]["distance_m"])
 full = sim.sensor("go2", "lidar", full=True)  # plus every range, ring by ring, and a 3D lidar's points
 ```
