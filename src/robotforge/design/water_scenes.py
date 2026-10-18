@@ -77,7 +77,7 @@ def harbor(rng: random.Random, opts: dict[str, float]) -> Content:
         _crate(c, f"cargo_{i + 1}", [x, y], [0.8, 0.8, 0.7], density=300.0)
     _crate(c, "cargo_top", [-9.0, 7.1, quay + 0.7 + 0.35], [0.8, 0.8, 0.7], density=300.0)
     for i, (x, y) in enumerate(((2.5, -1.0), (5.0, 1.5), (-6.5, -2.5))):
-        _crate(c, f"crate_{i + 1}", [x + rng.uniform(-0.3, 0.3), y + rng.uniform(-0.3, 0.3)], [0.5, 0.4, 0.35])
+        _crate(c, f"crate_{i + 1}", [x + rng.uniform(-0.3, 0.3), y + rng.uniform(-0.3, 0.3)], [0.6, 0.5, 0.3])
     _steel(c, "steel_block", [-1.6, -1.5])
     # The way in: green to the east, red to the west, as you come in from the sea.
     for i, (x, y, color) in enumerate(((5.5, -6.0, GREEN), (5.5, -2.5, GREEN), (-0.5, -6.0, RED), (-0.5, -2.5, RED))):
@@ -96,8 +96,8 @@ def harbor(rng: random.Random, opts: dict[str, float]) -> Content:
 # ---- lake -------------------------------------------------------------------------------------------------
 
 LAKE = (16.0, 11.0)  # m across the hollow
-LAKE_LEVEL = 0.6
-LAND = 0.9
+LAKE_LEVEL = 1.0  # m: deep enough for an ROV to dive in
+LAND = 1.3
 
 
 def lake(rng: random.Random, opts: dict[str, float]) -> Content:
@@ -113,7 +113,7 @@ def lake(rng: random.Random, opts: dict[str, float]) -> Content:
             "size": [32.0, 25.0],
             "lake": list(LAKE),
             "height": LAND,
-            "beach": 2.5,
+            "beach": 3.0,
             "seed": rng.randrange(1000),
             "style": "grass",
         }
@@ -139,7 +139,7 @@ def lake(rng: random.Random, opts: dict[str, float]) -> Content:
         angle = rng.uniform(0, 2 * math.pi)
         x, y = 0.55 * a * math.cos(angle), 0.55 * b * math.sin(angle)
         if all(math.hypot(x - bx, y) > 1.5 for bx in xs):
-            _crate(c, f"crate_{i + 1}", [round(x, 2), round(y, 2)], [0.45, 0.35, 0.3])
+            _crate(c, f"crate_{i + 1}", [round(x, 2), round(y, 2)], [0.6, 0.45, 0.25])
     _steel(c, "steel_block", [-a + 2.0, 1.2])
     # Trees and rocks on the land round the lake, clear of the shore and the dock.
     spots: list[tuple[float, float]] = []
@@ -170,7 +170,8 @@ def lake(rng: random.Random, opts: dict[str, float]) -> Content:
     c.starter = [{"name": "boat", "template": "boat"}]
     c.tips = [
         "the boat starts at the east end: move('boat', to='dock') takes it across, round the buoys, to the dock",
-        "the buoys are moored; the crates drift; set_floor(water={'level': 0.6, 'waves': 0.04}) makes it rough",
+        "the buoys are moored and the crates drift; set_floor(water={'level': 1.0, 'waves': 0.04}) makes it rough",
+        "the lake is 1 m deep: add_robot('rov', template='rov') puts an ROV on it, and move(to=[x, y, z]) dives it",
     ]
     return c
 
@@ -215,7 +216,7 @@ def pool(rng: random.Random, opts: dict[str, float]) -> Content:
     ):
         c.add(name, "wall", pos, size=size, yaw=yaw, color=[0.88, 0.9, 0.92, 1])
     _steel(c, "steel_block", [2.5, -1.0], side=0.3)
-    _crate(c, "crate", [-2.0, 1.6], [0.4, 0.4, 0.3])
+    _crate(c, "crate", [-2.0, 1.6], [0.6, 0.45, 0.25])
     for i, (x, y, color) in enumerate(((3.5, 2.0, "orange"), (-3.5, -2.2, "yellow"))):
         c.add(f"ball_{i + 1}", "sphere", [x, y], size=[0.3], color=color, mass=0.4)
     c.water_slots = [Slot((-3.0, 0.0), 0.0), Slot((0.0, -1.5), 0.0), Slot((0.0, 1.5), 0.0)]

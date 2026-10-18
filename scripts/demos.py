@@ -209,6 +209,67 @@ def _go(robot: str, to: Any) -> Callable[[Any], None]:
     return act
 
 
+def _water_lake(pg: Any) -> None:
+    """The lake with its boat at the east end, and an ROV floating near it."""
+    S._in_scene("lake", {"boat": {"template": "boat"}, "rov": {"template": "rov"}})(pg)
+
+
+def _dive_camera(
+    robot: str,
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    seconds: float,
+    orbit_deg: float,
+    orbit_seconds: float,
+) -> str:
+    """Page script: follow `robot` from `start` metres away, easing to `end` over `seconds` (above the water down
+    through the surface with a diving ROV), then circle it by `orbit_deg` over `orbit_seconds`."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge, t0 = performance.now();
+        rf.select(null);
+        const id = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic).id;
+        const a = {json.dumps(list(start))}, b = {json.dumps(list(end))};
+        const smooth = (s) => s * s * (3 - 2 * s);
+        (async () => {{
+            let at = rf.bodyPosition(id);
+            while (window.__cam === me) {{
+                const t = (performance.now() - t0) / 1000;
+                const p = rf.bodyPosition(id);
+                at = at.map((v, i) => v + 0.15 * (p[i] - v));
+                const s = smooth(Math.min(1, t / {seconds}));
+                let off = a.map((v, i) => v + s * (b[i] - v));
+                const turn = Math.max(0, Math.min(1, (t - {seconds}) / {orbit_seconds})) * {orbit_deg} * Math.PI / 180;
+                const c = Math.cos(turn), n = Math.sin(turn);
+                off = [off[0] * c - off[1] * n, off[0] * n + off[1] * c, off[2]];
+                rf.lookAt(at.map((v, i) => v + off[i]), at);
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
+def _follow_level(robot: str, offset: tuple[float, float, float], ease: float = 0.05) -> str:
+    """Page script: keep the camera on `robot` from `offset` metres away, aimed at the robot's own height (a boat on
+    the water, an ROV under it: _follow aims lower, at the ground under a walker)."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge;
+        rf.select(null);
+        const id = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic).id;
+        const off = {json.dumps(list(offset))};
+        (async () => {{
+            let at = rf.bodyPosition(id);
+            while (window.__cam === me) {{
+                const p = rf.bodyPosition(id);
+                at = at.map((v, i) => v + {ease} * (p[i] - v));
+                rf.lookAt(at.map((v, i) => v + off[i]), at);
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
 DEMOS = [
     Demo(
         "gallery_tour",
@@ -274,6 +335,18 @@ DEMOS = [
         16.0,
         timeline=[(1.0, _move("centaur", 0.22)), (9.0, _move("centaur", 0.15, 0.6))],
         page=_follow("centaur", (1.2, -1.4, 0.75), ease=0.04),
+    ),
+    Demo(  # across the lake, between the buoys, to the dock while the crates bob; then the ROV dives
+        "water_lake",
+        _water_lake,
+        26.0,
+        timeline=[
+            (0.3, _go("boat", "dock")),
+            (17.8, _dive_camera("rov", (1.7, -1.7, 0.9), (0.95, -0.85, -0.02), 3.0, 50.0, 5.0)),
+            (18.3, _go("rov", [3.0, 2.6, 0.35])),
+        ],
+        page=_follow_level("boat", (3.0, -3.0, 1.9), ease=0.12),
+        settle=1.0,
     ),
     Demo(
         "lesson_learn_to_walk",

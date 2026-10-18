@@ -125,6 +125,22 @@ def test_steel_sinks_and_wood_floats_in_a_world():
     assert found["steel_block"]["depth_m"] == pytest.approx(0.9, abs=0.01)
 
 
+def _tilt(session: SimSession) -> float:
+    return math.degrees(math.acos(float(np.clip(session.data.xmat[1].reshape(3, 3)[2, 2], -1, 1))))
+
+
+def test_a_flat_crate_floats_flat_and_a_cube_rolls_onto_its_edge():
+    """Metacentric stability from the wet volume's shift: a crate wider than tall stays flat (GM +7 cm), a cube of
+    half the water's density is unstable flat (GM -2.5 cm) and settles turned, as a real one does."""
+    tipped = (math.cos(math.radians(1.5)), math.sin(math.radians(1.5)), 0.0, 0.0)  # 3 degrees of heel to start
+    flat = _pool(G.mjGEOM_BOX, [0.3, 0.25, 0.15], 450, quat=tipped, z=LEVEL)
+    cube = _pool(G.mjGEOM_BOX, [0.15, 0.15, 0.15], 500, quat=tipped, z=LEVEL)
+    flat.step(5000)
+    cube.step(5000)
+    assert _tilt(flat) < 1.0
+    assert _tilt(cube) > 20.0
+
+
 def test_steel_dropped_in_the_water_sinks_to_the_bottom():
     session = _pool(G.mjGEOM_BOX, [0.1, 0.1, 0.1], 7800, z=1.5)
     session.step(2000)
