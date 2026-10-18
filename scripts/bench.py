@@ -92,8 +92,8 @@ MESH_MEMORY_NOISE = (0.15, 20.0)
 LOAD_SENSITIVE = ("steps/s", "ms", "s", "fps", "%", "share")
 # How fast this machine ran during the run: the slowest of the machine checks timed in each world's process
 # (MachineCheck, a model built in this script and stepped by MuJoCo alone). No world can serve: even objects_20,
-# which has no controllers, steps through Session.step (7 percent of its time) on robotforge's solver settings, so a
-# slowdown in that shared code would read as a busy machine.
+# which has no controllers, is built by robotforge (its solver settings set most of its cost) and steps through
+# Session.step (1.1 us of its 134 us per step), so a slowdown in that shared code would read as a busy machine.
 MACHINE = "physics.machine.steps_per_s"
 
 # Every metric each part can produce, so budget.json cannot name one that does not exist (a typo would turn a
