@@ -1961,7 +1961,7 @@ function screenParts(meshes, cam) {
   return parts;
 }
 
-function declutter(sprites, avoid = []) {
+export function declutter(sprites, avoid = []) { // exported for scripted checks
   const cam = api.camera;
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
   const r = api.freeRect();

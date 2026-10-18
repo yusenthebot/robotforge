@@ -724,3 +724,64 @@ def test_a_name_tag_does_not_hide_another_robot(viewer, lesson, size):
 
     hidden = viewer(size, "en", scenario)
     assert len(hidden) == 2 and max(hidden.values()) < 0.05, hidden
+
+
+# Two tags seen one behind the other, and a mark (as the IK lesson's target ball) just where the farther one would be
+# lifted to clear the nearer. Returns the free view, the mark and each tag, in CSS px, after declutter has placed them.
+LIFTED_ONTO_A_MARK = """(async () => {
+    const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
+    const { declutter } = await import(new URL("static/lesson.js", location).href);
+    const rf = window.__robotforge;
+    const { camera } = rf.three();
+    camera.updateMatrixWorld();
+    const [W, H] = [innerWidth, innerHeight];
+    const [sx, sy] = [camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]];
+    const px = (p) => [((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H];
+    const tag = (at) => {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial());
+        s.scale.set(0.12, 0.034, 1);
+        s.position.copy(at);
+        s.userData.foot = new THREE.Vector3(at.x, at.y, 0);
+        return s;
+    };
+    const rect = (s) => {
+        const p = s.position.clone().project(camera);
+        const [w, h] = [s.scale.x * sx, s.scale.y * sy];
+        const [left, top] = px({ x: p.x - s.center.x * w, y: p.y + (1 - s.center.y) * h });
+        const [right, bottom] = px({ x: p.x + (1 - s.center.x) * w, y: p.y - s.center.y * h });
+        return { left, top, right, bottom };
+    };
+    // The nearer a little under the middle of the view, at the depth of the point the camera looks at; the farther
+    // half a metre behind it on the same line of sight.
+    const depth = new THREE.Vector3(...rf.cameraTarget()).project(camera).z;
+    const near = new THREE.Vector3(0, -0.2, depth).unproject(camera);
+    const far = near.clone().addScaledVector(near.clone().sub(camera.position).normalize(), 0.5);
+    const tags = [tag(near), tag(far)];
+    declutter(tags);  // the farther tag is lifted over the nearer
+    const lifted = rect(tags[1]);
+    const [cx, cy] = [(lifted.left + lifted.right) / W - 1, 1 - (lifted.top + lifted.bottom) / H];
+    const middle = new THREE.Vector3(cx, cy, far.clone().project(camera).z).unproject(camera);
+    const r = 0.02;
+    const edge = middle.clone().addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), r);
+    const [mx, my] = px(middle.clone().project(camera)), [ex] = px(edge.project(camera));
+    declutter(tags, [{ at: middle, r }]);
+    return { free: rf.freeRect(), mark: { x: mx, y: my, r: Math.abs(ex - mx) }, tags: tags.map(rect), lifted };
+})()"""
+
+
+def test_a_tag_moved_off_another_tag_does_not_land_on_what_the_lesson_marks(viewer):
+    """Lifted, set beside or dropped below the tag it covered, a tag was placed without the check its first place
+    gets: it could land on the IK lesson's target ball, on its own robot, or under the lesson sheet."""
+
+    async def scenario(tab, _server):
+        await tab.until("!window.__robotforge.tweening()")
+        return await tab.eval(LIFTED_ONTO_A_MARK)
+
+    seen = viewer("laptop", "en", scenario)
+    mark, (near, far), free = seen["mark"], seen["tags"], seen["free"]
+    assert _clear_of(near, mark["x"], mark["y"], mark["r"]), seen
+    assert _clear_of(far, mark["x"], mark["y"], mark["r"]), seen  # it was lifted onto the mark
+    apart = far["right"] <= near["left"] or far["left"] >= near["right"]
+    assert apart or far["bottom"] <= near["top"] or far["top"] >= near["bottom"], seen
+    assert free["left"] <= far["left"] and far["right"] <= free["right"], seen
+    assert free["top"] <= far["top"] and far["bottom"] <= free["bottom"], seen
