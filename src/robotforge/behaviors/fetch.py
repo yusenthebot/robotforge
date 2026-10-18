@@ -55,12 +55,15 @@ PENETRATE = 0.002  # m: deeper overlaps of the robot with something, posed at a 
 POS_TOL, YAW_TOL = 0.015, math.radians(2.0)  # where creeping into a spot stops
 ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm reaches from SHIFT off)
 LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on, creeping the rest
+LEG_RETRIES = 2  # trips planned again from where the robot got stuck, in one errand
 CREEP_SPEED, CREEP_TURN = 0.08, 0.5  # m/s and rad/s at most, creeping
 CREEP_SECONDS = 12.0
 STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm did not reach
 HELD = 0.03  # m: a load whose middle is within its half height and this of the tool point is in the gripper
 SETTLE = 0.6  # s it stands still after it arrives, before the arm moves (a gait's sway dies down)
-EDGE_INSET = 0.02  # m kept between a load put down and the edge of what it goes on
+# m kept between a load put down and the edge of what it goes on: at 2 cm a lift picker let a can go 3 cm short of its
+# spot and it tipped off the table's edge
+EDGE_INSET = 0.05
 SPOT_STEP = 0.04  # m between the spots tried on a table or in a bin
 FREE_GAP = 0.015  # m kept between a load put down and what already stands there
 WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, with the arm's own weight
@@ -1041,6 +1044,7 @@ class Errand:
     tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
+    _retries: int = 0  # trips planned again after getting stuck
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
     _resume: tuple | None = None  # (step, what to do) after that
     hand: Hand = field(init=False)
@@ -1116,8 +1120,15 @@ class Errand:
         root = self.manager.root(self.robot)
         short = math.dist(leg.spot.xy, data.xpos[root][:2])
         if not leg.trip.arrived and short > LEG_SLACK:
+            why = leg.result.get("why") or "stuck"
+            if why == "stuck" and self._retries < LEG_RETRIES:
+                # Planned again from where it got stuck: a mobile Panda in the aisle behind a kitchen island found
+                # no room to turn there, and backs out the second time.
+                self._retries += 1
+                self._go(data, "to_object" if then == "creep_object" else "to_place")
+                return
             note = leg.result.get("note") or "it did not get there"
-            self._fail(data, leg.result.get("why") or "stuck", f"on its way to the {leg.to}: {note}")
+            self._fail(data, why, f"on its way to the {leg.to}: {note}")
             return
         # Stopped a little short (its map gave it no room right there): it creeps the rest if the arm needs it to.
         # It works from where it stopped if its arm reaches from there; it creeps in only if it does not (_again).
