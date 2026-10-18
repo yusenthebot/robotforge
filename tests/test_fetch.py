@@ -333,3 +333,21 @@ def test_a_box_is_come_at_square_to_a_face_its_fingers_fit_across(pg):
     long_axis = data.geom_xmat[next(g for g in range(model.ngeom) if model.geom_bodyid[g] == body)].reshape(3, 3)[:2, 1]
     # The box is 6 cm thick and 14 cm wide: the fingers close across the 6 cm, so the hand comes along the 14.
     assert abs(float(way @ long_axis)) == pytest.approx(1.0, abs=1e-6)
+
+
+def test_a_pick_that_fails_from_where_it_stopped_says_why_and_not_where_it_picked_up(pg, monkeypatch):
+    """The result named where it picked the apple up when the pick had not worked out (picked_up_at is told only
+    once the gripper holds the load)."""
+    _wall_world(pg)
+    errand, _ = _start(pg, "cube", "goal")
+    assert isinstance(errand, fetch.Errand)
+
+    def no_pick(self, spot, queue, which):
+        return reach_in.OutOfReach(self.arm.robot, ["object"]) if which == "pick" else None
+
+    monkeypatch.setattr(fetch.Errand, "_first_tilt", no_pick)
+    monkeypatch.setattr(fetch, "_spot_from_here", lambda errand, data, picking: None)
+    pg.run_fast(lambda: errand.done, fetch.TIME_LIMIT)
+    result = errand.result()
+    assert errand.state == "failed" and result["why"] == "out_of_reach", result
+    assert "picked_up_at" not in result and "could not pick up the cube" in result["note"]

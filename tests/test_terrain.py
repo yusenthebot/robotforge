@@ -258,6 +258,28 @@ def test_scenes_are_seeded():
         scenes.build("maze", options={"size": 3})
 
 
+@pytest.mark.parametrize("seed", range(6))
+def test_warehouse_racks_hold_parcels_a_gripper_fits_round_clear_of_the_crates(seed):
+    """The crates are 40 cm and more across: nothing on the racks fitted a gripper until the parcels. Each stands on
+    a board, at its aisle edge, and the crates of the seed stay where they were without them."""
+    content = scenes.build("warehouse", seed=seed)
+    parcels = [o for o in content.objects if o["name"].startswith("parcel_")]
+    assert len(parcels) >= 2
+    boards = props.shelf_levels([2.0, 0.6, 2.0])
+    crates = [o for o in content.objects if o["name"].startswith("crate_")]
+    for p in parcels:
+        assert max(p["size"][:2]) <= 0.05
+        assert p["pos"][2] - p["size"][2] / 2 == pytest.approx(boards[2], abs=1e-3)
+        assert abs(p["pos"][1] - 2.6) == pytest.approx(1.12)  # 18 cm in from the rack's aisle side
+        for c in crates:
+            same_board = (
+                abs((c["pos"][2] - c["size"][2] / 2) - boards[2]) < 1e-3 and abs(c["pos"][1] - p["pos"][1]) < 0.4
+            )
+            assert not same_board or abs(c["pos"][0] - p["pos"][0]) > c["size"][0] / 2 + 0.05
+    if seed == 0:  # as before there were parcels
+        assert next(c for c in crates if c["name"] == "crate_24")["pos"] == [0.2834, 1.3, 0.927]
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_maze_is_perfect(seed):
     rows, cols = 6, 5
