@@ -406,3 +406,46 @@ def test_a_mobile_manipulator_set_on_a_scene_s_robot_places_starts_clear_of_the_
         ]
         assert not clash, f"{scene} place {k} at {slot.pos}: {clash}"
         pg.remove(name)
+
+
+def test_an_errand_holds_the_arms_weight_without_leading_its_servos(pg):
+    """Led by their damping on the way, a mobile Panda's servos jostled an apple along its fingers until it fell out
+    on the drive to the dining table; an arm made to hold itself up keeps doing so after an errand."""
+    pg.add_robot("picker", design="mobile_panda")
+    pg.run_fast(lambda: False, 0.2)
+    name = pg.behaviors._arm_name(pg.behaviors.resolve("picker", arm=True))
+    model, qpos = pg.session.model, pg.session.data.qpos.copy()
+    arm = ArmMotion(model, name, qpos)
+    q, fast = arm.q.copy(), np.full(len(arm.q), 0.5)
+    assert not arm.carry_weight
+    assert np.allclose(arm._hold(q, fast), q)
+    arm.carry_weight = True
+    assert arm.carry_weight
+    held = arm._hold(q, np.zeros(len(q)))
+    assert not np.allclose(held, q)  # its weight held up
+    assert np.allclose(arm._hold(q, fast), held)  # however fast it moves
+    arm.carry_weight = False
+    assert np.allclose(arm._hold(q, fast), q)
+    industrial = ArmMotion(model, name, qpos, gravity=True)
+    led = industrial._hold(q, fast)
+    industrial.carry_weight = False
+    assert industrial.carry_weight and np.allclose(industrial._hold(q, fast), led)
+
+
+def test_a_fetch_picks_up_only_with_its_gripper_pointing_down_high_above_the_load(pg):
+    """Leaning high over a parcel 0.5 m out on a rack, a lift picker came down turning its jaws square on the way, its
+    fingers landed on the parcel's corners and it closed on nothing; refused, the robot stands nearer instead."""
+    pg.add_robot("picker", design="lift_picker")
+    pg.run_fast(lambda: False, 0.2)
+    name = pg.behaviors._arm_name(pg.behaviors.resolve("picker", arm=True))
+    arm = ArmMotion(pg.session.model, name, pg.session.data.qpos.copy())
+    arm.sync(pg.session.data)
+    grasp = arm.ik.point(arm.chain, arm.q) + [0.1, 0.0, -0.1]
+    reach = arm.reach_error
+    assert reach(grasp) <= 0.008
+    arm.reach_error = lambda p: 1.0 if p[2] > grasp[2] + 0.01 else reach(p)  # pointing down, not up there
+    arm._lean_error = lambda p: 0.0  # leaning, everywhere
+    with pytest.raises(reach_in.OutOfReach) as refused:
+        arm.pick_up(grasp, 0.02, grasp + [-0.1, 0.0, 0.1])
+    assert "above object" in refused.value.bad
+    assert not arm.queue

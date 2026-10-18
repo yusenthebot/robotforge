@@ -278,13 +278,17 @@ class ArmMotion:
     def carry_weight(self) -> bool:
         """Whether the servos hold the arm up against its weight (see _hold): always for an arm made with `gravity`,
         and while fetch.Errand sets it. Unhelped, a mobile Panda reaching in tilted sagged 9 mm and closed its fingers
-        on an apple below its middle, and the apple rolled off the pads."""
+        on an apple below its middle, and the apple rolled off the pads. An errand holds the weight only, without
+        leading the servos by their damping: led on its way, a mobile Panda's hand jostled an apple 1.3 cm along its
+        fingers while folding it in, and the apple fell out as the robot slowed by the dining table."""
         return self._per_torque is not None
 
     @carry_weight.setter
     def carry_weight(self, on: bool) -> None:
-        if on or self._holds_itself:
+        if self._holds_itself:
             self._per_torque, self._lead = self._holding
+        elif on:
+            self._per_torque, self._lead = self._holding[0], np.zeros(len(self.actuators))
         else:
             self._per_torque, self._lead = None, np.zeros(len(self.actuators))
 
@@ -913,15 +917,19 @@ class ArmMotion:
     ) -> None:
         """Queue picking an object up and carrying it round to over `hold`: a tool point over the robot that carries
         the arm, where the load clears it and sticks out nowhere, so that the robot can drive or walk with it (the
-        errand lowers it there: fetch.Errand). Raises OutOfReach for key points the gripper cannot get to, and
-        ValueError when the load cannot be carried round to `hold`, as pick_and_place does."""
+        errand lowers it there: fetch.Errand). Raises OutOfReach for key points the gripper cannot point down at, and
+        ValueError when the load cannot be carried round to `hold`, as pick_and_place does.
+
+        Unlike pick_and_place, the gripper points down high above the object too, not leaning there (see TILTS): a
+        robot that goes can stand nearer instead. Leaning over a parcel on a rack 0.5 m out, a lift picker came down
+        turning its jaws square on the way, and their fingers landed on the parcel's corners."""
         grasp = np.asarray(obj_pos, float).copy()
         hold = np.asarray(hold, float)
         travel_z = max(grasp[2], hold[2]) + APPROACH
         above = np.array([grasp[0], grasp[1], travel_z])
         over = np.array([hold[0], hold[1], travel_z])
         points = {"object": grasp, "above object": above, "above hold": over, "hold": hold}
-        bad = self._out_of_reach(points)
+        bad = self.unreachable(points)
         if bad:
             raise OutOfReach(self.robot, bad, points)
         across = self._across(grasp, hold, travel_z, obj_half_height, points, "from the object to over its robot")

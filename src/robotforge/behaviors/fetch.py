@@ -879,7 +879,11 @@ def _pick_down(hand: Hand, center: np.ndarray, half: float, hold: np.ndarray) ->
     thrashed there. Reaching in tilted (reach_in.py) is tried then."""
     arm = hand.arm
     start = arm.tool_target_end()
-    arm.pick_up(center, half, hold)
+    faces = None  # a box's two side normals: the jaws come down square to them (ArmMotion.pick_up)
+    if hand.faces is not None:
+        ax = hand.faces[0]
+        faces = np.array([[ax[0], ax[1], 0.0], [-ax[1], ax[0], 0.0]])
+    arm.pick_up(center, half, hold, faces)
     above = center + [0.0, 0.0, max(APPROACH_UP, hold[2] + APPROACH_UP - center[2])]
     _clear_down(hand, [*_way_in(arm, start, above), center])
 
