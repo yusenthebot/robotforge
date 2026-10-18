@@ -3,12 +3,20 @@
 The hub hangs on the SimSession: a reset hook builds a fresh suite whenever the model changes or the world is
 reset (so noise restarts from its seed), and the session's step hook samples the sensors that need it. A world
 whose sensors are all ideal has no step hook at all.
+
+The viewer's message is bounded in time and size: ideal lidars are scanned for it within a budget of rays (the
+stalest first, so with many big lidars each is redrawn a few times a second), their points share one total, and
+while time stands still the last message is sent again without measuring anything.
 """
 
 from __future__ import annotations
 
+import itertools
 import logging
+import secrets
 import threading
+import zlib
+from collections.abc import Collection
 from typing import Any
 
 import mujoco
@@ -16,11 +24,22 @@ import numpy as np
 
 from robotforge import wording
 from robotforge.sensors import kinds
+from robotforge.sensors.lidar import VIEW_POINTS
 from robotforge.sensors.runtime import Sensor, Suite
 
 log = logging.getLogger(__name__)
 
 OTHER_LIMIT = 20  # a robot's own MuJoCo sensors listed beside its declared ones
+VIEW_RAYS = 6000  # rays of ideal lidars scanned for one viewer message (two default 3D lidars), the stalest first
+VIEW_POINTS_TOTAL = 2400  # lidar hit points in one viewer message, shared between its lidars
+# Names this process gives sensors and requests: the page keeps a sensor's show/hide switch under its uid, so a
+# sensor added again (or a new world's of the same name) starts afresh rather than as an older one was left.
+_PROCESS = secrets.token_hex(3)
+_SERIAL = itertools.count(1)
+
+
+def _new_uid() -> str:
+    return f"{_PROCESS}.{next(_SERIAL)}"
 
 
 class SensorError(ValueError):
@@ -32,16 +51,35 @@ class SensorHub:
         self.session = session
         self._renderer = None
         self._render_lock = threading.Lock()
-        # Sensors an agent asked the viewer to draw (open_viewer(show=...)): the page applies each request once.
+        # Sensors an agent asked the viewer to draw (open_viewer(show=...)), {"id", "names", "uids"}: the page applies
+        # each request once, and it lasts while those sensors do (a new world drops it).
         self.viewer_show: dict[str, Any] | None = None
+        self.uids: dict[str, str] = {}  # sensor name -> its uid while it stays on its robot
+        self._retired: Suite | None = None  # the suite a new model replaced: an edit carries sensors on from it
+        self._suite_version = -1
+        self._scans: dict[str, tuple[tuple, float, Any]] = {}  # ideal lidars' last scans: (moment, time, sample)
+        self._message: tuple[tuple, dict[str, Any]] | None = None  # the last viewer message and the state it shows
         session.reset_hooks.append(self.rebuild)
         self.rebuild()
 
-    def rebuild(self) -> None:
+    def rebuild(self, kept: Collection[str] = ()) -> None:
         """A new model or a reset: sensors bound to the model as it is now, their noise from its seed again, and
-        their first samples taken from the state as it is now."""
-        self.suite = Suite(self.session.model)
-        self.suite.prime(self.session.model, self.session.data)
+        their first samples taken from the state as it is now. `kept`: robots an edit left where they stood; their
+        sensors carry on from the suite before the edit (an odometry's estimate, an IMU's drift, the noise)."""
+        session = self.session
+        if session.version != self._suite_version and hasattr(self, "suite"):
+            self._retired = self.suite
+        self.suite = Suite(session.model)
+        self._suite_version = session.version
+        before = self._retired.sensors if kept and self._retired is not None else {}
+        for name, sensor in self.suite.sensors.items():
+            if sensor.robot in kept and name in before and type(before[name]) is type(sensor):
+                sensor.resume(before[name].carry())
+        self.suite.prime(session.model, session.data)
+        self.uids = {name: self.uids.get(name) or _new_uid() for name in self.suite.sensors}
+        self._show_request()  # ends a request whose sensors went (a new world)
+        self._scans.clear()
+        self._message = None
         self._install()
 
     def _install(self) -> None:
@@ -77,7 +115,12 @@ class SensorHub:
 
     def chosen(self, robot: str, names: list[str] | None) -> list[Sensor]:
         own = self.suite.of(robot)
+        if not own and not names and self._has_other(robot):
+            return []  # only MuJoCo sensors of its own (a G1's IMU): read raw, as other_sensors
         if not own:
+            broken = self._broken(robot)
+            if broken:
+                raise SensorError(f"{robot}'s sensors could not be set up: {'; '.join(broken)}")
             raise SensorError(
                 f"{robot} has no sensors yet; add one with add_sensor, e.g. add_sensor(robot={robot!r}, type='lidar3d')"
             )
@@ -108,9 +151,21 @@ class SensorHub:
             robot = self.resolve_robot(robot, robots)
             out += [s.name for s in self.chosen(robot, [local] if local else None)]
         shown = list(dict.fromkeys(out))
-        seq = (self.viewer_show or {}).get("seq", 0) + 1
-        self.viewer_show = {"seq": seq, "names": shown}
+        self.viewer_show = {"id": _new_uid(), "names": shown, "uids": {n: self.uids.get(n) for n in shown}}
+        self._message = None
         return shown
+
+    def _show_request(self) -> dict[str, Any] | None:
+        """The show request for the page, while the sensors it names are still the ones it was made for: removed,
+        added again or gone with their world, they are not, and the request ends."""
+        show = self.viewer_show
+        if show is None:
+            return None
+        names = [n for n in show["names"] if self.uids.get(n) == show["uids"].get(n)]
+        if not names:
+            self.viewer_show = None
+            return None
+        return {"id": show["id"], "names": names}
 
     # ---- reading ---------------------------------------------------------------------------------------------
 
@@ -136,6 +191,7 @@ class SensorHub:
                     continue
                 out[sensor.local] = {"type": sensor.type, **sensor.reading(value, full), **_age(sensor, stamp, now)}
             other = self._other(model, data, robot) if not names else {}
+            broken = self._broken(robot) if not names else []
         pictures: list[tuple[str, bytes]] = []
         for sensor, stamp, moment in later:  # drawn with the session unlocked: the simulation keeps running
             value = self._develop(sensor, model, moment)
@@ -145,7 +201,23 @@ class SensorHub:
         result: dict[str, Any] = {"robot": robot, "time": round(now, 4), "sensors": out}
         if other:
             result["other_sensors"] = other
+        if broken:
+            result["not_set_up"] = broken
         return result, pictures
+
+    def _broken(self, robot: str) -> list[str]:
+        """Definitions on the robot that did not load (a world.yaml edited by hand), said so rather than dropped."""
+        return [f"{name}: {why}" for name, why in self.suite.broken.items() if name.split("/", 1)[0] == robot]
+
+    def _has_other(self, robot: str) -> bool:
+        with self.session.lock:
+            model = self.session.model
+            prefix = f"{robot}/"
+            for s in range(model.nsensor):
+                name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SENSOR, s) or ""
+                if name.startswith(prefix) and name not in self.suite.covered and "/rf_" not in name:
+                    return True
+        return False
 
     def _develop(self, sensor: Any, model: mujoco.MjModel, moment: dict[str, Any]) -> dict[str, Any]:
         from robotforge.sim.render import RenderUnavailable
@@ -177,8 +249,8 @@ class SensorHub:
         return out
 
     def lines(self) -> dict[str, str]:
-        """One line per sensor in the world, for observe."""
-        out: dict[str, str] = {}
+        """One line per sensor in the world, for observe (and one per definition that did not load)."""
+        out: dict[str, str] = {name: f"not set up: {why}" for name, why in self.suite.broken.items()}
         session = self.session
         with session.lock:
             model, data = session.model, session.data
@@ -192,19 +264,39 @@ class SensorHub:
 
     def viewer_message(self) -> dict[str, Any] | None:
         """The "sensors" message for the viewer (see viewer/server.py): each sensor's pose in the world and what
-        drawing it needs, None when the world has no sensors."""
+        drawing it needs, None when the world has no sensors. Bounded as the module notes say."""
         if not self.suite.sensors:
             return None
         session = self.session
-        entries = []
         with session.lock:
             model, data = session.model, session.data
+            show = self._show_request()
+            moment = (
+                id(self.suite),
+                session.version,
+                float(data.time),
+                zlib.crc32(data.qpos.tobytes()),
+                zlib.crc32(data.mocap_pos.tobytes()),
+                zlib.crc32(data.mocap_quat.tobytes()),
+                show["id"] if show else None,
+            )
+            if self._message is not None and self._message[0] == moment:
+                return self._message[1]  # time stands still: nothing has moved, nothing to measure again
+            samples = self._samples(model, data, moment[:-1])
+            hits = {
+                n: int(np.isfinite(got[1]["dist"]).sum())
+                for n, got in samples.items()
+                if got and _is_lidar(self.suite, n)
+            }
+            shares = _point_shares(hits)
+            entries = []
             for sensor in self.suite.sensors.values():
                 entry: dict[str, Any] = {
                     "name": sensor.name,
                     "robot": sensor.robot,
                     "type": sensor.type,
                     "added": bool(sensor.decl.data.get("added")),
+                    "uid": self.uids.get(sensor.name, ""),
                 }
                 try:
                     entry.update(_mount(sensor, model))
@@ -212,19 +304,64 @@ class SensorHub:
                         entries.append({**entry, **sensor.pose(data), **sensor.viewer({}, model, data)})
                         continue
                     entry.update(_pose(sensor, data))
-                    got = sensor.current(model, data)
+                    got = samples.get(sensor.name)
                     if got is None:
                         entries.append({**entry, "status": "waiting"})
                         continue
-                    entries.append({**entry, "t": round(got[0], 4), **sensor.viewer(got[1], model, data)})
+                    extra = {"points": shares[sensor.name]} if sensor.name in shares else {}
+                    entries.append({**entry, "t": round(got[0], 4), **sensor.viewer(got[1], model, data, **extra)})
                 except Exception:  # one sensor that cannot be drawn must not stop the others'
                     log.exception("sensor %s could not be described for the viewer", sensor.name)
             # The model's version: body ids mean that model's bodies, and the page draws on the one it has loaded.
-            version = session.version
-            msg = {"type": "sensors", "version": version, "time": round(float(data.time), 4), "sensors": entries}
-            if self.viewer_show is not None:
-                msg["show"] = self.viewer_show
+            now = round(float(data.time), 4)
+            msg = {"type": "sensors", "version": session.version, "time": now, "sensors": entries}
+            if show is not None:
+                msg["show"] = show
+            self._message = (moment, msg)
             return msg
+
+    def _samples(
+        self, model: mujoco.MjModel, data: mujoco.MjData, moment: tuple
+    ) -> dict[str, tuple[float, Any] | None]:
+        """Each drawn sensor's (stamp, value) for the viewer. Ideal lidars are scanned within VIEW_RAYS rays, the
+        stalest first (one never scanned always is); the others show their last scan until their turn comes."""
+        out: dict[str, tuple[float, Any] | None] = {}
+        lidars = [s for s in self.suite.sensors.values() if s.lazy and _is_lidar(self.suite, s.name)]
+        budget, scanned = VIEW_RAYS, 0
+        for sensor in sorted(lidars, key=lambda s: self._scans[s.name][1] if s.name in self._scans else -np.inf):
+            last = self._scans.get(sensor.name)
+            if last is not None and (last[0] == moment or (scanned and sensor.rays > budget)):
+                continue  # this moment's scan already, or its turn comes in a later message
+            budget -= sensor.rays
+            scanned += 1
+            self._scans[sensor.name] = (moment, float(data.time), sensor.current(model, data))
+        for sensor in self.suite.sensors.values():
+            if sensor.renders:
+                continue
+            if sensor.name in self._scans and sensor.lazy:
+                out[sensor.name] = self._scans[sensor.name][2]
+                continue
+            try:
+                out[sensor.name] = sensor.current(model, data)
+            except Exception:
+                log.exception("sensor %s could not be read for the viewer", sensor.name)
+        return out
+
+
+def _is_lidar(suite: Suite, name: str) -> bool:
+    return suite.sensors[name].type in ("lidar", "lidar3d") if name in suite.sensors else False
+
+
+def _point_shares(hits: dict[str, int]) -> dict[str, int]:
+    """How many hit points each lidar sends: VIEW_POINTS_TOTAL shared out, none more than VIEW_POINTS or than it
+    has, what a small scan leaves over going to the bigger ones."""
+    shares: dict[str, int] = {}
+    left, waiting = VIEW_POINTS_TOTAL, len(hits)
+    for name, count in sorted(hits.items(), key=lambda kv: kv[1]):
+        shares[name] = min(count, VIEW_POINTS, left // waiting)
+        left -= shares[name]
+        waiting -= 1
+    return shares
 
 
 def _mount(sensor: Sensor, model: mujoco.MjModel) -> dict[str, Any]:

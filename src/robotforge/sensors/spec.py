@@ -125,6 +125,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
 }
 ANCHORS = ("center", "origin", "top", "bottom", "front", "back", "left", "right")
 MAX_RAYS = 8192  # rays in one scan: more slows every step a lidar samples at (multiRay is about 1 us a ray)
+LIDAR_MAX_HZ = 50.0  # scans a second: real spinning lidars turn at 5 to 20 Hz
+LIDAR_MAX_RAYS_S = 200_000  # rays a second (rate_hz x rays a scan): about a fifth of a second of work a second
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 BASE_NAMES = {"lidar3d": "lidar", "rangefinder": "range", "force_torque": "ft", "touch": "touch"}
 
@@ -273,6 +275,19 @@ class SensorEntry(BaseModel):
                 f"{rings} channels x {per_ring} rays is {rings * per_ring} rays a scan; at most {MAX_RAYS} keep "
                 "time running at speed"
             )
+        if self.type.startswith("lidar") and self.rate_hz is not None:
+            if self.rate_hz > LIDAR_MAX_HZ:
+                raise ValueError(
+                    f"a lidar's rate_hz is at most {LIDAR_MAX_HZ:g} (real ones spin at 5 to 20 Hz), "
+                    f"got {self.rate_hz:g}"
+                )
+            if self.rate_hz * rings * per_ring > LIDAR_MAX_RAYS_S:
+                most = LIDAR_MAX_RAYS_S / (rings * per_ring)
+                raise ValueError(
+                    f"{rings * per_ring} rays a scan at {self.rate_hz:g} Hz is {self.rate_hz * rings * per_ring:,.0f} "
+                    f"rays a second; at most {LIDAR_MAX_RAYS_S:,} keep time running at speed: a rate of at most "
+                    f"{most:.0f} Hz, or fewer rays"
+                )
         return self
 
     @model_serializer(mode="wrap")

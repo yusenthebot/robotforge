@@ -16,6 +16,7 @@ from robotforge.sensors import declare
 from robotforge.sensors.runtime import Sensor, native_slice
 
 LIST_LIMIT = 40  # joints an encoder reading lists; a humanoid has 29, a pair of arms a few more
+SUPPORTED_KG = 0.05  # kg: a force-torque sensor pushed up by more than this is held from below, not holding
 
 
 def _r(values: Any, digits: int) -> Any:
@@ -54,6 +55,14 @@ class Imu(Sensor):
         # the floor holding it up against gravity, so it reads 9.81 up like any IMU at rest.
         self.static = int(model.body_weldid[self.body]) == 0 and self.site >= 0
         self.up_g = -np.array(model.opt.gravity, float)
+
+    def carry(self):
+        return {**super().carry(), "walk": {c: v.copy() for c, v in self.walk.items()}, "yaw_error": self.yaw_error}
+
+    def resume(self, state):
+        super().resume(state)
+        self.walk = {c: v.copy() for c, v in state["walk"].items()}
+        self.yaw_error = state["yaw_error"]
 
     def measure(self, model, data):
         value = {role: np.array(data.sensordata[s]) for role, s in self.slices.items()}
@@ -148,7 +157,9 @@ class Encoders(Sensor):
 
 class ForceTorque(Sensor):
     """The force and torque between a body and the one it hangs from (a wrist, an ankle), as the parent pushes
-    on the child, in the sensor's frame. payload_kg is what it carries beyond the weight hanging below it."""
+    on the child, in the sensor's frame. payload_kg is what it carries beyond the weight hanging below it (what a
+    wrist holds). Something holding it up from below (a leg on the ground) makes that negative: then it reports
+    supported_kg instead, the weight the ground takes through it beyond its own."""
 
     kind = "force_torque"
 
@@ -182,6 +193,15 @@ class ForceTorque(Sensor):
         up = -self.gravity / g
         return float((value["rot"] @ value["force"]) @ up / g - self.below)
 
+    def _weights(self, value) -> dict[str, float]:
+        """payload_kg, or supported_kg when it is held up from below by more than its noise could make up."""
+        payload = self._payload(value)
+        if payload is None:
+            return {}
+        g = float(np.linalg.norm(self.gravity))
+        floor = SUPPORTED_KG + 4 * self.knobs.noise.get("force", 0.0) / g
+        return {"supported_kg": round(-payload, 3)} if payload < -floor else {"payload_kg": round(payload, 3)}
+
     def reading(self, value, full=False):
         world = value["rot"] @ value["force"]
         out = {
@@ -189,14 +209,16 @@ class ForceTorque(Sensor):
             "torque_nm": _r(value["torque"], 4),
             "force_world_n": _r(world, 3),
         }
-        payload = self._payload(value)
-        if payload is not None:
-            out["payload_kg"] = round(payload, 3)
-        return out
+        return {**out, **self._weights(value)}
 
     def line(self, value):
-        payload = self._payload(value)
-        weight = f", carries {payload:.3f} kg beyond its own" if payload is not None else ""
+        weights = self._weights(value)
+        if "payload_kg" in weights:
+            weight = f", carries {weights['payload_kg']:.3f} kg beyond its own"
+        elif "supported_kg" in weights:
+            weight = f", held up from below, {weights['supported_kg']:.3f} kg beyond its own"
+        else:
+            weight = ""
         return (
             f"force_torque: {np.linalg.norm(value['force']):.2f} N, {np.linalg.norm(value['torque']):.3f} N m{weight}"
         )
@@ -204,10 +226,7 @@ class ForceTorque(Sensor):
     def viewer(self, value, model, data):
         rot = value["rot"]
         out = {"force_n": _r(rot @ value["force"], 3), "torque_nm": _r(rot @ value["torque"], 4)}
-        payload = self._payload(value)
-        if payload is not None:
-            out["payload_kg"] = round(payload, 3)
-        return out
+        return {**out, **self._weights(value)}
 
 
 class Touch(Sensor):
@@ -362,6 +381,16 @@ class Odometry(Sensor):
         self.estimate: np.ndarray | None = None  # x, y, heading (rad)
         self.traveled = 0.0
         self.turn_walk = 0.0
+        self.last: tuple[np.ndarray, float] | None = None  # the last sample's speed and turn rate
+
+    def carry(self):
+        estimate = None if self.estimate is None else self.estimate.copy()
+        return {**super().carry(), "estimate": estimate, "traveled": self.traveled, "turn_walk": self.turn_walk}
+
+    def resume(self, state):
+        """After an edit that left the robot where it stood, the estimate carries on from where it had wandered."""
+        super().resume(state)
+        self.estimate, self.traveled, self.turn_walk = state["estimate"], state["traveled"], state["turn_walk"]
 
     def measure(self, model, data):
         vel = np.zeros(6)
@@ -375,11 +404,13 @@ class Odometry(Sensor):
         }
 
     def corrupt(self, value, dt):
+        """The estimate as a sample: x, y, heading (rad) and the distance traveled, as they were at that moment."""
         k = self.knobs
         if self.estimate is None:
             self.estimate = np.array([*value["pos"], value["heading"]])
+        if self.last is None:  # the first sample (or the first after an edit): nothing to add up yet
             self.last = (value["speed"], value["turn"])
-            return self.estimate.copy()
+            return np.array([*self.estimate, self.traveled])
         if "turn" in k.drift and dt > 0:
             self.turn_walk += float(self.rng.normal(0.0, k.drift["turn"] * math.sqrt(dt)))
         speed = value["speed"] + self.noise("speed", 2)
@@ -394,11 +425,15 @@ class Odometry(Sensor):
             [self.estimate[0] + c * step[0] - s * step[1], self.estimate[1] + s * step[0] + c * step[1], heading]
         )
         self.traveled += float(np.linalg.norm(step))
-        return self.estimate.copy()
+        return np.array([*self.estimate, self.traveled])
 
     def reading(self, value, full=False):
         heading = (math.degrees(value[2]) + 180.0) % 360.0 - 180.0
-        return {"position_m": _r(value[:2], 3), "heading_deg": round(heading, 2), "traveled_m": round(self.traveled, 3)}
+        return {
+            "position_m": _r(value[:2], 3),
+            "heading_deg": round(heading, 2),
+            "traveled_m": round(float(value[3]), 3),
+        }
 
     def line(self, value):
         heading = (math.degrees(value[2]) + 180.0) % 360.0 - 180.0

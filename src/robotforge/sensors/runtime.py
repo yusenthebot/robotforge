@@ -107,7 +107,8 @@ class Sensor:
         if rate is None and not self.lazy:
             rate = self.default_rate if self.integrates else LATENCY_RATES.get(self.type)
         self.period = 1.0 / rate if rate else None
-        keep = math.ceil(self.knobs.latency_s / (self.period or model.opt.timestep)) + 3
+        # Samples within the latency: one a step at most, however high the rate (a sample is taken after a step).
+        keep = math.ceil(self.knobs.latency_s / max(self.period or 0.0, model.opt.timestep)) + 3
         self.samples: deque[tuple[float, Any]] = deque(maxlen=max(keep, 2))
         self.rng = np.random.default_rng(self.knobs.seed)
         self.next_due = 0.0
@@ -136,6 +137,14 @@ class Sensor:
     def viewer(self, value: Any, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
         """What the viewer needs to draw it (besides its pose)."""
         return {}
+
+    def carry(self) -> dict[str, Any]:
+        """What it has built up while time passed, for the same sensor after an edit that left its robot where it
+        stood: its noise carries on rather than starting again, and subclasses add their estimates."""
+        return {"rng": self.rng.bit_generator.state}
+
+    def resume(self, state: dict[str, Any]) -> None:
+        self.rng.bit_generator.state = state["rng"]
 
     # ---- sampling -------------------------------------------------------------------------------------
 

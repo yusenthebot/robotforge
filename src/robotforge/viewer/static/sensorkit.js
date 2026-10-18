@@ -4,16 +4,24 @@
 // The fields of the server's "sensors" message (viewer/server.py) that sensors.js reads, for every sensor and by
 // type. A test checks the server sends each of them, so the two cannot drift apart unnoticed.
 export const READS = {
-  all: ["name", "robot", "type", "added", "body", "local_pos", "local_quat"],
+  all: ["name", "robot", "type", "added", "uid", "body", "local_pos", "local_quat"],
   lidar: ["origin", "points", "range_m"],
   lidar3d: ["origin", "points", "range_m", "channels"],
   camera: ["mode", "fov_deg", "size", "range_m"],
   imu: ["accel_m_s2", "gyro_rad_s", "orientation_deg"],
-  force_torque: ["force_n", "torque_nm", "payload_kg"],
+  force_torque: ["force_n", "torque_nm"],
   encoders: ["rad"],
   touch: ["force_n", "total_n", "cells_local", "cell_half", "cell_shape", "pad_quat"],
   rangefinder: ["direction", "distance_m", "range_m"],
 };
+// Fields read when they are there: a wrist's payload_kg, or a standing leg's supported_kg instead.
+export const READS_WHEN_SENT = { force_torque: ["payload_kg", "supported_kg"] };
+
+// Where the page keeps a viewer's switch for one sensor: the world, the sensor's name and its uid (the same while
+// the sensor stays on its robot, new when it is added again), so an earlier world's choice never hides it.
+export function choiceKey(world, entry) {
+  return `robotforge.sensor.${world ?? ""}|${entry.name}|${entry.uid ?? ""}`;
+}
 
 // Google's Turbo colormap as polynomials in t, the same as sensors/camera.py: 0 dark blue, 1 dark red.
 const TURBO = [

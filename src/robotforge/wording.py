@@ -68,6 +68,8 @@ def choices(names: Sequence[str], limit: int = LIST_LIMIT) -> str:
 
 
 def plural(kind: str) -> str:
+    if kind.endswith("y") and kind[-2:-1] not in ("a", "e", "i", "o", "u", ""):
+        return kind[:-1] + "ies"  # bodies, not bodys
     return kind + ("es" if kind.endswith(("ch", "sh", "s", "x")) else "s")
 
 

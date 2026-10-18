@@ -53,7 +53,7 @@ def pg(tmp_path, monkeypatch):
 
 @needs_node
 def test_every_field_the_viewer_reads_is_sent(pg):
-    reads = js("return kit.READS;")
+    reads, when_sent = js("return [kit.READS, kit.READS_WHEN_SENT];")
     pg.add_robot("post", build={"base": {"shape": "box", "size": [0.2, 0.2, 0.2], "fixed": True}})
     pg.add_robot("panda", library="panda")
     pg.add_object("wall", shape="wall", pos=[2.05, 0], yaw=90, size=[3, 0.1, 1.0])
@@ -68,6 +68,7 @@ def test_every_field_the_viewer_reads_is_sent(pg):
         pg.add_sensor("post", fields)
     pg.add_sensor("panda", {"type": "force_torque", "on": "hand"})
     pg.add_sensor("panda", {"type": "encoders"})
+    pg.run_fast(lambda: False, 0.3)  # the arm holds its pose: the wrist carries nothing beyond the hand
     msg = pg.sensors.viewer_message()
     assert msg["version"] == pg.session.version  # the page draws on the model it has loaded, and only that
     seen = set()
@@ -78,6 +79,10 @@ def test_every_field_the_viewer_reads_is_sent(pg):
     assert seen >= set(reads) - {"all"}
     by_name = {e["name"]: e for e in msg["sensors"]}
     assert by_name["post/lidar"]["added"] is True
+    # Fields read when sent: a wrist sends what it holds (a standing leg would send supported_kg instead).
+    wrist = by_name["panda/hand_ft"]
+    assert set(when_sent["force_torque"]) >= {"payload_kg", "supported_kg"}
+    assert wrist["payload_kg"] == pytest.approx(0.0, abs=0.01) and "supported_kg" not in wrist
     # The body and the place on it put a drawing where the sensor is: a world pose from them matches the sensor's.
     lidar = by_name["post/lidar"]
     body = pg.session.data.xpos[lidar["body"]]
@@ -132,7 +137,7 @@ async def test_open_viewer_shows_a_robot_s_own_camera(pg, monkeypatch):
         assert first["names"] == ["dog/front_cam"]
         everything = await client.call_tool("open_viewer", {"show": ["dog"]})
         assert set(json.loads(everything.content[0].text)["showing"]) >= {"dog/front_cam", "dog/imu"}
-        assert pg.sensors.viewer_message()["show"]["seq"] == first["seq"] + 1  # each request applied once by the page
+        assert pg.sensors.viewer_message()["show"]["id"] != first["id"]  # each request applied once by the page
         # describe_model lists the MuJoCo sensors behind the IMU: a Codex session asked to show "dog/accel".
         native = await client.call_tool("open_viewer", {"show": ["dog/accel", "dog/gyro"]})
         assert json.loads(native.content[0].text)["showing"] == ["dog/imu"]
@@ -140,6 +145,47 @@ async def test_open_viewer_shows_a_robot_s_own_camera(pg, monkeypatch):
         assert wrong.is_error and "front_cam" in wrong.content[0].text
         plain = await client.call_tool("open_viewer", {})
         assert "showing" not in json.loads(plain.content[0].text)
+
+
+def test_a_show_request_lasts_while_its_sensors_do(pg):
+    """A request to show sensors is sent until they are removed, added again or gone with their world: a page
+    opened later in another world must not apply an old request (it switched sensors on and picked a robot)."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_sensor("dog", {"type": "lidar"})
+    pg.show_sensors(["dog/front_cam", "dog/lidar"])
+    pg.add_object("box", shape="box", pos=[2, 0], size=[0.3])  # an edit that keeps the sensors
+    assert pg.sensors.viewer_message()["show"]["names"] == ["dog/front_cam", "dog/lidar"]
+    pg.remove("dog/lidar")
+    pg.add_sensor("dog", {"type": "lidar"})  # the same name, but another sensor: its page switch starts afresh
+    assert pg.sensors.viewer_message()["show"]["names"] == ["dog/front_cam"]
+    pg.new_world("another")
+    pg.add_robot("dog", template="quadruped")
+    assert "show" not in pg.sensors.viewer_message()
+
+
+def test_a_sensor_s_uid_holds_while_it_stays_and_changes_when_added_again(pg):
+    pg.add_robot("dog", template="quadruped")
+    pg.add_sensor("dog", {"type": "lidar"})
+    uid = {e["name"]: e["uid"] for e in pg.sensors.viewer_message()["sensors"]}
+    pg.add_object("box", shape="box", pos=[2, 0], size=[0.3])
+    pg.session.reset()
+    again = {e["name"]: e["uid"] for e in pg.sensors.viewer_message()["sensors"]}
+    assert again == uid  # an edit and a reset keep every sensor's uid
+    pg.remove("dog/lidar")
+    pg.add_sensor("dog", {"type": "lidar"})
+    after = {e["name"]: e["uid"] for e in pg.sensors.viewer_message()["sensors"]}
+    assert after["dog/lidar"] != uid["dog/lidar"] and after["dog/imu"] == uid["dog/imu"]
+
+
+@needs_node
+def test_a_switch_is_kept_for_its_world_and_its_sensor():
+    keys = js(
+        """
+        const a = { name: "go2/lidar", uid: "x.1" };
+        return [kit.choiceKey("first", a), kit.choiceKey("second", a), kit.choiceKey("first", { ...a, uid: "x.2" })];
+        """
+    )
+    assert len(set(keys)) == 3  # another world, or the sensor added again, never shares an earlier switch
 
 
 # ---- the helpers agree with the server -----------------------------------------------------------------------

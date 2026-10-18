@@ -521,7 +521,8 @@ class Playground:
             with self.session.lock:
                 carried = carry.restore(self.session.model, self.session.data, live, unchanged)
                 self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
-                self.sensors.rebuild()  # first samples from where the robots now are, not where they started
+                # First samples from where the robots now are; their sensors' estimates carry on (odometry).
+                self.sensors.rebuild(kept=carried)
         return result
 
     def _unchanged(self, note: str) -> dict[str, Any]:

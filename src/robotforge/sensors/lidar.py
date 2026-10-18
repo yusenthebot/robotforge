@@ -230,10 +230,13 @@ class Lidar(Sensor):
         nearest = f", nearest {near['distance_m']:.2f} m at {near['bearing_deg']:.0f} deg" if near else ", no obstacle"
         return f"{what}: {hits} of {self.rays} rays hit{nearest}"
 
-    def viewer(self, value: dict[str, Any], model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
+    def viewer(
+        self, value: dict[str, Any], model: mujoco.MjModel, data: mujoco.MjData, points: int = VIEW_POINTS
+    ) -> dict[str, Any]:
+        """`points`: the most hit points sent, spread evenly over the scan (the hub shares a total between lidars)."""
         pts = self.points(value)
-        if len(pts) > VIEW_POINTS:
-            pts = pts[np.linspace(0, len(pts) - 1, VIEW_POINTS).astype(int)]
+        if len(pts) > points:
+            pts = pts[np.linspace(0, len(pts) - 1, points).astype(int)]
         return {
             "origin": [round(float(v), 4) for v in value["origin"]],
             "points": [round(float(v), 3) for v in pts.ravel()],

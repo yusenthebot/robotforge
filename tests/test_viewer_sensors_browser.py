@@ -1,8 +1,10 @@
-"""The real viewer in headless Chrome draws what a robot's cameras see, for every camera picked.
+"""The real viewer in headless Chrome: it draws what a robot's cameras see, for every camera picked, and a viewer's
+show/hide switch holds for that sensor in that world only.
 
 Picking another camera in the picture's head once left the panel blank (the new canvas was drawn with the old
-one's context); only a page that renders can show that. Marked slow, and run where Chrome renders WebGL for sure
-(macOS, or anywhere with ROBOTFORGE_BROWSER_TESTS=1), since a CI runner's software GL is not this test's subject.
+one's context); only a page that renders can show that (tests/test_viewer_sensors.py checks the canvas choice in
+Node too). Marked slow, and run where Chrome renders WebGL for sure (macOS, or anywhere with
+ROBOTFORGE_BROWSER_TESTS=1), since a CI runner's software GL is not this test's subject.
 """
 
 from __future__ import annotations
@@ -84,16 +86,11 @@ class Tab:
         return out.get("result", {}).get("value")
 
 
-@pytest.fixture
-def served(tmp_path, monkeypatch):
-    """A post looking at a wall 2 m away with a depth, a segmentation and an rgb camera, served on a free port."""
-    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
-    pg = Playground.with_demo()
-    pg.new_world("cameras")
-    pg.add_robot("post", build={"base": {"shape": "box", "size": [0.2, 0.2, 0.2], "fixed": True}})
-    pg.add_object("wall", shape="wall", pos=[2.05, 0], yaw=90, size=[3, 0.1, 1.0], color="red")
-    for mode in ("depth", "segmentation", "rgb"):
-        pg.add_sensor("post", {"type": "camera", "mode": mode, "name": mode})
+POST = {"base": {"shape": "box", "size": [0.2, 0.2, 0.2], "fixed": True}}
+READY = "!!(window.__robotforge?.scene && window.__robotforge.sensors().sensors.length)"
+
+
+def _serve(pg: Playground):
     hub = ViewerHub(pg.session)
     pg.attach_viewer(hub)
     port = _port()
@@ -101,17 +98,35 @@ def served(tmp_path, monkeypatch):
     thread = threading.Thread(target=lambda: asyncio.run(server.serve()), daemon=True)
     thread.start()
     _wait(f"http://127.0.0.1:{port}/")
+    return server, thread, port
+
+
+@pytest.fixture
+def playground(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    return Playground.with_demo()
+
+
+@pytest.fixture
+def served(playground):
+    """A post looking at a wall 2 m away with a depth, a segmentation and an rgb camera, served on a free port."""
+    pg = playground
+    pg.new_world("cameras")
+    pg.add_robot("post", build=POST)
+    pg.add_object("wall", shape="wall", pos=[2.05, 0], yaw=90, size=[3, 0.1, 1.0], color="red")
+    for mode in ("depth", "segmentation", "rgb"):
+        pg.add_sensor("post", {"type": "camera", "mode": mode, "name": mode})
+    server, thread, port = _serve(pg)
     yield pg, port
     server.should_exit = True
     thread.join(timeout=10)
 
 
-def test_every_camera_picked_draws_its_picture(served, tmp_path):
-    import websockets
-
-    _, port = served
+@pytest.fixture
+def chrome(tmp_path):
+    """Headless Chrome's DevTools port."""
     chrome_port = _port()
-    chrome = subprocess.Popen(
+    proc = subprocess.Popen(
         [
             CHROME,
             "--headless=new",
@@ -123,21 +138,41 @@ def test_every_camera_picked_draws_its_picture(served, tmp_path):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    yield chrome_port
+    proc.terminate()
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.wait(timeout=10)
+
+
+@contextlib.asynccontextmanager
+async def _page(chrome_port: int, url: str):
+    import websockets
+
+    version = json.loads(_wait(f"http://127.0.0.1:{chrome_port}/json/version"))
+    async with websockets.connect(version["webSocketDebuggerUrl"], max_size=None) as ws:
+        browser = Tab(ws)
+        target = (await browser.call("Target.createTarget", url="about:blank"))["targetId"]
+        tab = Tab(ws, (await browser.call("Target.attachToTarget", targetId=target, flatten=True))["sessionId"])
+        size = {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False}
+        await tab.call("Emulation.setDeviceMetricsOverride", **size)
+        await tab.call("Page.bringToFront")
+        await tab.call("Page.navigate", url=url)
+        await _until(tab, READY)
+        yield tab
+
+
+async def _until(tab: Tab, expression: str, timeout: float = 60.0) -> None:
+    end = time.monotonic() + timeout
+    while not await tab.eval(expression):
+        assert time.monotonic() < end, f"the viewer never showed {expression}"
+        await asyncio.sleep(0.25)
+
+
+def test_every_camera_picked_draws_its_picture(served, chrome):
+    _, port = served
 
     async def run() -> dict:
-        version = json.loads(_wait(f"http://127.0.0.1:{chrome_port}/json/version"))
-        async with websockets.connect(version["webSocketDebuggerUrl"], max_size=None) as ws:
-            browser = Tab(ws)
-            target = (await browser.call("Target.createTarget", url="about:blank"))["targetId"]
-            tab = Tab(ws, (await browser.call("Target.attachToTarget", targetId=target, flatten=True))["sessionId"])
-            size = {"width": 1280, "height": 800, "deviceScaleFactor": 1, "mobile": False}
-            await tab.call("Emulation.setDeviceMetricsOverride", **size)
-            await tab.call("Page.bringToFront")
-            await tab.call("Page.navigate", url=f"http://127.0.0.1:{port}/?lang=en")
-            end = time.monotonic() + 60
-            while not await tab.eval("!!(window.__robotforge?.scene && window.__robotforge.sensors().sensors.length)"):
-                assert time.monotonic() < end, "the viewer never drew the cameras"
-                await asyncio.sleep(0.25)
+        async with _page(chrome, f"http://127.0.0.1:{port}/?lang=en") as tab:
             # Each camera picked in turn: the picture's middle (the wall, 1.65 m from the camera) and how much of it
             # is drawn at all (a blank canvas reads all zeros).
             return await tab.eval(
@@ -160,15 +195,52 @@ def test_every_camera_picked_draws_its_picture(served, tmp_path):
                 })()"""
             )
 
-    try:
-        seen = asyncio.run(run())
-    finally:
-        chrome.terminate()
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            chrome.wait(timeout=10)
+    seen = asyncio.run(run())
     for mode, got in seen.items():
         assert got["picture"] == f"post/{mode}"
         assert got["drawn"] > 0.4, f"the {mode} picture is blank: {got}"
     assert seen["segmentation"]["middle"] != seen["depth"]["middle"]  # each canvas shows its own camera
     red, green, _ = seen["rgb"]["middle"]
     assert red > green + 40  # the red wall
+
+
+def test_a_switch_holds_for_its_sensor_in_its_world_only(playground, chrome):
+    """A lidar switched off in one world stays shown in the next world's lidar of the same name (it was hidden in
+    every later world when the switch was kept by name alone), and a show request is applied once: a reload
+    after the user switched the sensor off again keeps it off."""
+    pg = playground
+    pg.new_world("first")
+    pg.add_robot("dog", build=POST)
+    pg.add_sensor("dog", {"type": "lidar3d"})
+    server, thread, port = _serve(pg)
+    state = "window.__robotforge.sensors()"
+
+    async def run() -> dict:
+        out = {}
+        async with _page(chrome, f"http://127.0.0.1:{port}/?lang=en") as tab:
+            await tab.eval("window.__robotforge.showSensor('dog/lidar', false)")
+            out["hidden"] = (await tab.eval(state))["shown"]
+            pg.new_world("second")
+            pg.add_robot("dog", build=POST)
+            pg.add_sensor("dog", {"type": "lidar3d"})
+            await _until(tab, f"{state}.points > 0")
+            out["next_world"] = (await tab.eval(state))["shown"]
+            pg.add_sensor("dog", {"type": "imu"})
+            pg.show_sensors(["dog/lidar"])
+            await _until(tab, f"{state}.shown.length === 2")
+            await tab.eval("window.__robotforge.showSensor('dog/lidar', false)")
+            await tab.call("Page.reload")
+            await asyncio.sleep(0.5)
+            await _until(tab, READY)
+            await asyncio.sleep(1.0)  # a few sensors messages, each with the show request
+            out["reloaded"] = (await tab.eval(state))["shown"]
+        return out
+
+    try:
+        seen = asyncio.run(run())
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+    assert seen["hidden"] == []
+    assert seen["next_world"] == ["dog/lidar"]
+    assert seen["reloaded"] == ["dog/imu"]

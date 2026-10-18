@@ -7,6 +7,8 @@
 // fields, sensorkit.js the ones read here). What sits on a robot follows its body in every frame drawn; what a
 // sensor measured (a scan's points) stays where it was measured. Sensors put on with add_sensor show from the
 // start; a robot's own (a template's IMU and foot pads) are listed in the robots drawer, off until switched on.
+// A switch in the drawer holds for that sensor in that world while this tab is open (sessionStorage): a sensor
+// added again, or another world's of the same name, starts from its default.
 
 import * as THREE from "three";
 import { t } from "./i18n.js";
@@ -14,6 +16,7 @@ import { drawLines, plotRange } from "./plot.js";
 import { picture as pip } from "./sensorpicture.js";
 import {
   arrowLength,
+  choiceKey,
   frustumCorners,
   jointGroups,
   nearColor,
@@ -64,13 +67,32 @@ let simTime = 0;
 const drawings = new Map(); // sensor name -> { group, update(entry), frame() }
 const histories = new Map(); // sensor name -> [[t, entry]], oldest first
 const peaks = new Map(); // sensor name -> the largest force seen lately (N)
-const chosen = {}; // sensor name -> shown or not, as switched in the drawer; otherwise it shows if it was added
+const chosen = {}; // choiceKey -> shown or not, as switched in the drawer; otherwise it shows if it was added
 let arrowsOn = true;
 let listKey = ""; // what the drawer's list shows, to rebuild it only when that changes
-let shownSeq = 0; // the last request to show sensors that was applied (open_viewer(show=...))
+let shownRequest = null; // the last request to show sensors this tab applied (open_viewer(show=...))
+const SHOWN_KEY = "robotforge.sensor-show"; // ... kept with the tab, so a reload does not apply it again
+
+// The tab's own storage: a choice made here is not another tab's, nor a later session's.
+function sessionGet(key) {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null; // storage may be unavailable (private mode, sandboxed iframe); the page still works
+  }
+}
+
+function sessionSet(key, value) {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // see sessionGet
+  }
+}
 
 export function initSensors(context) {
   api = context;
+  shownRequest = sessionGet(SHOWN_KEY);
   api.scene.add(root);
   pip.api = api;
   pip.onPicture = (e) => views.legend(e);
@@ -89,19 +111,28 @@ export function initSensors(context) {
 const robotKey = () => api.selected() ?? "";
 const mine = () => [...entries.values()].filter((e) => e.robot === robotKey());
 
+const keyOf = (entry) => choiceKey(api.desc()?.world, entry);
+
 function shown(entry) {
-  if (!(entry.name in chosen)) {
-    const saved = api.storageGet(`robotforge.sensor.${entry.name}`);
-    chosen[entry.name] = saved === null ? !!entry.added : saved === "1";
+  const key = keyOf(entry);
+  if (!(key in chosen)) {
+    const saved = sessionGet(key);
+    chosen[key] = saved === null ? !!entry.added : saved === "1";
   }
-  return chosen[entry.name];
+  return chosen[key];
+}
+
+function choose(entry, on) {
+  const key = keyOf(entry);
+  chosen[key] = on;
+  sessionSet(key, on ? "1" : "0");
 }
 
 function setShown(name, on) {
-  chosen[name] = on;
-  api.storageSet(`robotforge.sensor.${name}`, on ? "1" : "0");
   const entry = entries.get(name);
-  if (entry?.type === "camera" && on) pip.name = name; // the camera just switched on is the one you want to see
+  if (!entry) return;
+  choose(entry, on);
+  if (entry.type === "camera" && on) pip.name = name; // the camera just switched on is the one you want to see
   sensorsSelect();
 }
 
@@ -146,22 +177,23 @@ export function sensorsUpdate(msg) {
       drawings.delete(name);
     }
   }
-  if (msg.show && msg.show.seq !== shownSeq) applyShow(msg.show);
+  if (msg.show && msg.show.id !== shownRequest) applyShow(msg.show);
   else if (changed) sensorsSelect();
   else renderSummaries();
   views.plot();
 }
 
 // An agent asked for these sensors to be drawn (open_viewer(show=...)): switch them on, select their robot and
-// bring a camera's picture up. Each request is applied once, so the drawer's switches stay the user's afterwards.
+// bring a camera's picture up. Each request is applied once a tab, a reload included, so the drawer's switches
+// stay the user's afterwards.
 function applyShow(show) {
-  shownSeq = show.seq;
+  shownRequest = show.id;
+  sessionSet(SHOWN_KEY, show.id);
   let robot = null;
   for (const name of show.names) {
     const e = entries.get(name);
     if (!e) continue;
-    chosen[name] = true;
-    api.storageSet(`robotforge.sensor.${name}`, "1");
+    choose(e, true);
     robot ??= e.robot;
     if (e.type === "camera") pip.name = name;
   }
