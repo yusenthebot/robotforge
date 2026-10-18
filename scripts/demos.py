@@ -188,6 +188,19 @@ def _dogs(pg: Any) -> None:
     pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0])
 
 
+def _kitchen_fetch(pg: Any) -> None:
+    """A mobile Panda in the kitchen, planning to bring the apple from the island to the dining table; the world is
+    paused until the recording plays it (the plan takes seconds, and the errand would start while the page loads)."""
+    S._kitchen_panda(pg)
+    pg.run_fast(lambda: False, 1.0)  # settled on its wheels
+    pg.control("pause")
+    pg.behaviors.pick_and_place(pg.behaviors.resolve("mm", arm=True), "apple", "dining_table")
+
+
+def _play(pg: Any) -> None:
+    pg.control("play")
+
+
 def _pick(robot: str, obj: str, target: str) -> Callable[[Any], None]:
     def act(pg: Any) -> None:
         pg.behaviors.pick_and_place(robot, obj, target)
@@ -242,6 +255,14 @@ DEMOS = [
         20.0,
         timeline=[(1.0, _pick("mobile_panda", "cube", "bin"))],
         page=_orbit((0.4, 0.0, 0.35), 2.3, 1.2, -60.0, 50.0, 20.0),
+    ),
+    Demo(
+        "fetch_kitchen_apple",
+        _kitchen_fetch,
+        58.0,
+        timeline=[(0.3, _play)],
+        page=_follow("mm", (1.4, -1.9, 2.1), ease=0.04),
+        settle=1.0,
     ),
     Demo(
         "nav_warehouse",

@@ -115,7 +115,7 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                 await asyncio.sleep(msg["wait"])
                 continue
             await ws.send(json.dumps({"id": f"shot{k}", **msg}))
-            if msg.get("type") in ("lesson_open", "go_to"):  # a slow request: wait for its reply
+            if msg.get("type") in ("lesson_open", "go_to", "pick_and_place"):  # a slow request: wait for its reply
                 while True:
                     raw = await ws.recv()
                     if isinstance(raw, bytes):  # body poses stream as binary frames
@@ -297,6 +297,17 @@ def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> C
 def _go(robot: str, to: list[float] | str) -> dict[str, Any]:
     """Send a robot somewhere along a planned path (move with to=...)."""
     return {"type": "go_to", "robot": robot, "to": to}
+
+
+def _fetch(robot: str, obj: str, target: list[float] | str) -> dict[str, Any]:
+    """Have a robot with an arm fetch something: it goes over, picks it up, carries it and puts it down."""
+    return {"type": "pick_and_place", "robot": robot, "object": obj, "target": target}
+
+
+def _kitchen_panda(pg: Any) -> None:
+    """The kitchen with a mobile Panda where its starter arm would stand on the floor (the first ground place)."""
+    pg.load_scene("kitchen", starter=False)
+    pg.add_robot("mm", design="mobile_panda", pos=[1.3, -1.0], yaw=90)
 
 
 def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
@@ -654,6 +665,29 @@ SHOTS = [
         _in_scene("kitchen", {"mm": {"build": MOBILE_ARM}, "dog": {"template": "quadruped"}}),
         viewer=[_go("mm", "fruit"), _go("dog", [1.4, 1.0]), {"wait": 0.2}],
         page="window.__robotforge.lookAt([0.6, -4.2, 3.4], [0.0, 0.3, 0.2]);",
+        settle=0.2,
+    ),
+    # Fetching: a mobile Panda brings the apple from the kitchen island to the dining table (behaviors/fetch.py):
+    # reaching in tilted from the aisle behind the island, then carrying it folded over its deck on the way.
+    Shot(
+        "fetch_reach_in",
+        _kitchen_panda,
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 21.0}],
+        page=_look_at(["mm"], (1.3, -1.1, 1.5)),
+        settle=0.2,
+    ),
+    Shot(
+        "fetch_carry",
+        _kitchen_panda,
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 38.0}],
+        page=_look_at(["mm"], (1.6, -1.6, 1.6)),
+        settle=0.2,
+    ),
+    Shot(
+        "fetch_put_down",
+        _kitchen_panda,
+        viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 47.0}],
+        page=_look_at(["mm"], (1.5, -1.5, 1.4)),
         settle=0.2,
     ),
     Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them

@@ -147,6 +147,16 @@ class Playground:
         hub.slow_handlers["lesson_open"] = lesson_open
         hub.slow_handlers["go_to"] = go_to
 
+        def pick_and_place(msg: dict[str, Any]) -> dict[str, Any]:
+            """Pick an object up and put it on or in a target, as the pick_and_place tool does, without waiting for
+            it to finish: a robot that goes fetches it (scripts/screenshots.py pictures one on its way)."""
+            arm = self.behaviors.resolve(str(msg["robot"]), arm=True)
+            target = msg["target"] if isinstance(msg["target"], str) else [float(v) for v in msg["target"]]
+            _, info = self.behaviors.pick_and_place(arm, str(msg["object"]), target)
+            return {"object": info["object"], "target": info["target"]}
+
+        hub.slow_handlers["pick_and_place"] = pick_and_place
+
         def lesson_bench(msg: dict[str, Any]) -> dict[str, Any]:
             """Sweeps run many tests on copies of the rig: off the hub thread, answered when done."""
             self.lessons.handle(msg)
