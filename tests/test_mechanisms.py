@@ -242,6 +242,17 @@ async def test_operate_is_an_mcp_tool(pg):
         assert state["mechanisms"]["chest"]["open_m"] == pytest.approx(0.15, abs=0.01)
 
 
+@pytest.mark.anyio
+async def test_the_shapes_go_by_the_words_people_use(pg):
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        for name, shape in (("line", "Conveyor Belt"), ("towel", "towel"), ("chest", "chest"), ("tap", "handwheel")):
+            reply = await client.call_tool("add_object", {"name": name, "shape": shape, "pos": [len(name), 2.0]})
+            assert not reply.is_error, reply.content[0].text
+    shapes = {o.name: o.shape for o in pg.store.load().objects}
+    assert shapes == {"line": "conveyor", "towel": "cloth", "chest": "drawer", "tap": "valve"}
+
+
 def test_a_drawers_inside_moves_with_it():
     model = compile_world(World(objects=[ObjectEntry(name="chest", **DRAWER)])).model
     data = mujoco.MjData(model)
