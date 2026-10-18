@@ -37,10 +37,12 @@ from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
+from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
+from robotforge.sim import recording
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
@@ -510,6 +512,36 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         here = playground.behaviors.pose(robot)
         return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
+    def video_path(record: bool | str | None, called: str, seconds: float | None) -> Path | None:
+        """Where record=... saves its video (checked before anything moves; record=true names it after `called`),
+        or None for no recording."""
+        if record is None or record is False:
+            return None
+        if seconds is None:
+            raise PlaygroundError("record needs seconds: it saves a timed move or a trip once it is over")
+        store = playground.store
+        folder = (store.dir if store is not None else worlds_home().parent) / "videos"
+        return recording.target(record, folder, called)
+
+    @contextlib.contextmanager
+    def recorded(path: Path | None) -> Iterator[recording.Recorder | None]:
+        """Keep the poses while the block runs, when there is somewhere to save them."""
+        rec = recording.Recorder(playground.session).start() if path is not None else None
+        try:
+            yield rec
+        finally:
+            if rec is not None:
+                rec.stop()
+
+    async def video(rec: recording.Recorder, path: Path, robot: str | None) -> dict[str, Any]:
+        """Draw a recording into its file, off the event loop (the viewer stays live), or say why it could not."""
+        try:
+            return await asyncio.to_thread(recording.save, rec, playground.renderer, path, robot)
+        except RenderUnavailable as exc:
+            return {"error": f"no video: {exc}"}
+        except (recording.RecordingError, OSError) as exc:
+            return {"error": f"no video: {exc}"}
+
     @server.tool()
     async def move(
         robot: str,
@@ -518,6 +550,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         seconds: float | None = 3.0,
         walker: str | None = None,
         to: str | list[float] | None = None,
+        record: bool | str | None = None,
     ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
         a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
@@ -532,61 +565,72 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
-        where it ended ("stopped": true, no need to call stop)."""
+        where it ended ("stopped": true, no need to call stop). record=true or a file name ("walk.gif"; .gif,
+        .webp, or .mp4 when ffmpeg is installed) saves a video of the move, the camera following the robot, in the
+        world's videos folder unless the name is a full path; "video" in the result says where."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
-            if to is not None:
-                return _json(await go_to(robot, to, speed, turn, seconds, walker))
-            speed = MOVE_SPEED if speed is None else speed
-            if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
-                raise PlaygroundError(
-                    f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; "
-                    "seconds=null keeps moving until stop"
-                )
-            before = playground.behaviors.pose(robot)
-            status = playground.behaviors.move(robot, speed, turn, walker)
-            if seconds is None:
-                return _json({"started": status, "pose": before})
-            # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
-            # to the left read as -177.6 degrees, a turn to the right.
-            heading = {"last": before["heading_deg"], "turned": 0.0}
+            path = video_path(record, robot, seconds)
+            with recorded(path) as rec:
+                if to is not None:
+                    out = await go_to(robot, to, speed, turn, seconds, walker)
+                else:
+                    out = await timed_move(robot, speed, turn, seconds, walker)
+            if rec is not None and out.get("stopped"):  # it went (a trip that found no way did not)
+                out["video"] = await video(rec, path, robot)
+            return _json(out)
 
-            def track() -> bool:
-                now = playground.behaviors.pose(robot)["heading_deg"]
-                heading["turned"] += (now - heading["last"] + 180) % 360 - 180
-                heading["last"] = now
-                return False
-
-            run = await run_until(track, seconds)
-            why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
-            moving = playground.session.controllers.get(robot)
-            # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
-            # the clamp notes from the start kept.
-            status = {**status, **(moving.status() if moving is not None else {})}
-            playground.behaviors.stop(robot)
-            settled = playground.behaviors.settled(robot)
-            if settled is not None:  # a humanoid finishes its step first; measure where it really stops
-                extra = await run_until(lambda: track() or settled(), 3.0)
-                run["settle_seconds"] = extra["sim_seconds"]
-                run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
-            track()
-            after = playground.behaviors.pose(robot)
-            moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
-            turned = heading["turned"]
-            return _json(
-                {
-                    "from": before,
-                    "to": after,
-                    "distance_m": round(moved, 3),
-                    "turned_deg": round(turned, 1),
-                    # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going
-                    # and called stop after nearly every timed move.
-                    "stopped": True,
-                    **run,
-                    "behavior": status,
-                    **({"note": why} if why else {}),
-                }
+    async def timed_move(
+        robot: str, speed: float | None, turn: float, seconds: float | None, walker: str | None
+    ) -> dict[str, Any]:
+        """move without a destination: at a speed and turn for `seconds`, or on until stop when seconds is None."""
+        speed = MOVE_SPEED if speed is None else speed
+        if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
+            raise PlaygroundError(
+                f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; seconds=null keeps moving until stop"
             )
+        before = playground.behaviors.pose(robot)
+        status = playground.behaviors.move(robot, speed, turn, walker)
+        if seconds is None:
+            return {"started": status, "pose": before}
+        # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
+        # to the left read as -177.6 degrees, a turn to the right.
+        heading = {"last": before["heading_deg"], "turned": 0.0}
+
+        def track() -> bool:
+            now = playground.behaviors.pose(robot)["heading_deg"]
+            heading["turned"] += (now - heading["last"] + 180) % 360 - 180
+            heading["last"] = now
+            return False
+
+        run = await run_until(track, seconds)
+        why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
+        moving = playground.session.controllers.get(robot)
+        # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
+        # the clamp notes from the start kept.
+        status = {**status, **(moving.status() if moving is not None else {})}
+        playground.behaviors.stop(robot)
+        settled = playground.behaviors.settled(robot)
+        if settled is not None:  # a humanoid finishes its step first; measure where it really stops
+            extra = await run_until(lambda: track() or settled(), 3.0)
+            run["settle_seconds"] = extra["sim_seconds"]
+            run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
+        track()
+        after = playground.behaviors.pose(robot)
+        moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
+        turned = heading["turned"]
+        return {
+            "from": before,
+            "to": after,
+            "distance_m": round(moved, 3),
+            "turned_deg": round(turned, 1),
+            # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going and
+            # called stop after nearly every timed move.
+            "stopped": True,
+            **run,
+            "behavior": status,
+            **({"note": why} if why else {}),
+        }
 
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
@@ -702,9 +746,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return path.read_text(encoding="utf-8")
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
-    async def run_script(name: str, max_sim_seconds: float = 60.0) -> str:
+    async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
-        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback."""
+        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
+        record=true or a file name ("show.gif"; .gif, .webp, or .mp4 when ffmpeg is installed) saves a video of the
+        run, the camera following everything that moves, in the world's videos folder unless the name is a full
+        path; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
@@ -712,7 +759,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             if not 0 < max_sim_seconds <= 300:
                 raise PlaygroundError(wording.seconds_range("max_sim_seconds", max_sim_seconds, 300))
             runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
-            return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
+            target = video_path(record, path.stem, max_sim_seconds)
+            with recorded(target) as rec:
+                out = await runner.run(path, max_sim_seconds=max_sim_seconds)
+            if rec is not None:
+                out["video"] = await video(rec, target, None)
+            return _json(out)
 
     @server.tool()
     def robots() -> str:

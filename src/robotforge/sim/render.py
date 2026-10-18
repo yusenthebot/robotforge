@@ -132,6 +132,19 @@ class SnapshotRenderer:
             camera = _camera_for(model, view, data, width / height)  # bad views fail the same with or without GL
             return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
 
+    def rgb_of(
+        self, model: mujoco.MjModel, data: mujoco.MjData, camera: Any, width: int, height: int, version: int
+    ) -> np.ndarray:
+        """A picture of a model and data no session holds (a recording's frame, posed in a scratch MjData), from a
+        camera already made (an MjvCamera, or a view or camera name)."""
+        _check_size(width, height)
+        with self._lock:
+            width = min(width, model.vis.global_.offwidth)
+            height = min(height, model.vis.global_.offheight)
+            if isinstance(camera, str):
+                camera = _camera_for(model, camera, data, width / height)
+            return _on_gl_thread(self._render, model, data, camera, (version, width, height))
+
     def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
         self._ready(model, key)
