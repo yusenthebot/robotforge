@@ -5,7 +5,9 @@ installed Playwright with npm to press the viewer's Record button in headless Ch
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -70,18 +72,43 @@ def test_an_edit_ends_the_recording_and_says_so(pg):
 
 def test_where_a_recording_goes(tmp_path, monkeypatch):
     folder = tmp_path / "videos"
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/ffmpeg")  # installed, and still not used unasked
     made = recording.target(True, folder, "pip")
-    assert made.parent == folder and made.name.startswith("pip-")
-    assert made.suffix == (".mp4" if shutil.which("ffmpeg") else ".gif")
+    assert made.parent == folder and made.name.startswith("pip-") and made.suffix == ".gif"
     assert recording.target("lap", folder, "pip") == folder / "lap.gif"
     assert recording.target("lap.webp", folder, "pip") == folder / "lap.webp"
     assert recording.target(str(tmp_path / "share" / "lap.gif"), folder, "pip") == tmp_path / "share" / "lap.gif"
     with pytest.raises(recording.RecordingError, match="not .avi"):
         recording.target("lap.avi", folder, "pip")
+
+
+def test_an_mp4_calls_ffmpeg_only_where_the_user_turned_it_on(tmp_path, monkeypatch):
+    """ffmpeg is not one of robotforge's approved dependencies: record=true always makes a GIF, and a name ending in
+    .mp4 is refused unless ROBOTFORGE_FFMPEG=1 is set and ffmpeg is installed."""
+    folder = tmp_path / "videos"
+    monkeypatch.delenv(recording.FFMPEG_SWITCH, raising=False)
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/ffmpeg")
+    with pytest.raises(recording.RecordingError, match="ROBOTFORGE_FFMPEG=1"):
+        recording.target("lap.mp4", folder, "pip")
+    monkeypatch.setenv(recording.FFMPEG_SWITCH, "1")
+    assert recording.target("lap.mp4", folder, "pip") == folder / "lap.mp4"
+    assert recording.target(True, folder, "pip").suffix == ".gif"
     monkeypatch.setattr(shutil, "which", lambda _: None)
     with pytest.raises(recording.RecordingError, match="needs ffmpeg"):
         recording.target("lap.mp4", folder, "pip")
-    assert recording.target(True, folder, "pip").suffix == ".gif"  # without ffmpeg, true makes a GIF
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in ffmpeg is a shell script")
+def test_ffmpeg_that_stops_reading_says_why(tmp_path, monkeypatch):
+    """A broken pipe used to be reported as "Broken pipe": what ffmpeg said on stderr was never read."""
+    fake = tmp_path / "bin" / "ffmpeg"
+    fake.parent.mkdir()
+    fake.write_text("#!/bin/sh\necho 'Unknown encoder libx264' >&2\nexit 1\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake.parent}{os.pathsep}{os.environ['PATH']}")
+    frame = np.zeros((recording.HEIGHT, recording.WIDTH, 3), np.uint8)  # 0.7 MB: more than a pipe holds
+    with pytest.raises(recording.RecordingError, match="Unknown encoder libx264"):
+        recording._write(tmp_path / "lap.mp4", lambda k: frame, 40, 50.0)
 
 
 def test_a_gif_shows_the_robot_moving(needs_gl, pg, tmp_path):
@@ -124,6 +151,21 @@ async def test_move_and_run_script_save_videos(needs_gl, pg):
         assert refused.is_error and "record needs seconds" in refused.content[0].text
         guessed = await client.call_tool("move", {"robot": "pip", "video": True})
         assert guessed.is_error and "did you mean record" in guessed.content[0].text
+
+
+@pytest.mark.anyio
+async def test_a_video_that_fails_to_draw_keeps_the_move_result(pg, monkeypatch):
+    """Only some errors were caught while drawing: any other turned a finished move into a tool error."""
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("the renderer fell over")
+
+    monkeypatch.setattr(recording, "save", broken)
+    async with Client(build_server(pg, find_free_port(8790))) as client:
+        moved = await client.call_tool("move", {"robot": "pip", "speed": 0.3, "seconds": 1, "record": True})
+    assert not moved.is_error
+    out = json.loads(moved.content[0].text)
+    assert out["stopped"] and "RuntimeError: the renderer fell over" in out["video"]["error"]
 
 
 def test_what_stands_between_the_camera_and_the_robot_is_drawn_see_through(pg):

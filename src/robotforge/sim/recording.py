@@ -1,5 +1,6 @@
-"""Videos of what robots do, for an agent: move(record=...) and run_script(record=...) save a GIF, an animated WebP
-or, with ffmpeg on PATH, an MP4.
+"""Videos of what robots do, for an agent: move(record=...) and run_script(record=...) save a GIF or an animated WebP
+(Pillow), or an MP4 where the user has turned that on (ffmpeg on PATH and ROBOTFORGE_FFMPEG=1: ffmpeg is not one of
+robotforge's approved dependencies, so nothing calls it unless asked to).
 
 The viewer's Record button records the browser's canvas, and an agent has no browser: asked for a video of a robot
 from parts, one installed Playwright with npm, drove the viewer in headless Chromium and pressed the button for it
@@ -10,9 +11,11 @@ robot smoothly from the viewer's opening direction.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import itertools
 import math
+import os
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -36,10 +39,11 @@ MIN_SPAN = np.array([0.7, 0.7, 0.25])  # m the picture keeps round a small robot
 VIEW = "default"  # the direction the camera looks from: the viewer's opening one
 DRAWN = np.array([1, 1, 1, 0, 0, 0], np.uint8)  # geom groups a picture shows (3 and up are collision shapes)
 MAX_LAYERS = 6  # geoms one ray goes through on its way to the robot
+FFMPEG_SWITCH = "ROBOTFORGE_FFMPEG"  # set to 1 to let a name ending in .mp4 call ffmpeg
 
 
 class RecordingError(ValueError):
-    """A record argument that cannot be used (an unknown format, an MP4 without ffmpeg)."""
+    """A record argument that cannot be used (an unknown format, an MP4 without ffmpeg), or a video not written."""
 
 
 @dataclass
@@ -93,14 +97,19 @@ class Recorder:
         return self.times[-1] - self.times[0] if len(self.times) > 1 else 0.0
 
 
+def mp4_allowed() -> bool:
+    """Whether a name ending in .mp4 may call ffmpeg: the user turned it on and ffmpeg is installed. An MP4 is far
+    smaller (0.4 MB where a GIF of 6 s on the park's grass took 5.6), but ffmpeg is a program robotforge would run
+    that is not among its approved dependencies."""
+    return os.environ.get(FFMPEG_SWITCH) == "1" and shutil.which("ffmpeg") is not None
+
+
 def target(record: bool | str, folder: Path, robot: str | None) -> Path:
-    """Where a recording goes: record=true names it after the robot and the time, in `folder`, an MP4 when ffmpeg
-    is installed (0.4 MB where a GIF of 6 s on the park's grass took 5.6) and a GIF otherwise; a name without a folder
-    goes in `folder` too; a path ending in .gif, .webp or .mp4 is used as given (~ is the home folder)."""
+    """Where a recording goes: record=true names it after the robot and the time, a GIF in `folder`; a name without
+    a folder goes in `folder` too; a path ending in .gif, .webp or .mp4 is used as given (~ is the home folder)."""
     if record is True:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        kind = ".mp4" if shutil.which("ffmpeg") else ".gif"
-        return folder / f"{(robot or 'world').replace('/', '_')}-{stamp}{kind}"
+        return folder / f"{(robot or 'world').replace('/', '_')}-{stamp}.gif"
     name = str(record).strip()
     if not name:
         raise RecordingError('record is true or a file name such as "dog_walk.gif"')
@@ -109,8 +118,11 @@ def target(record: bool | str, folder: Path, robot: str | None) -> Path:
         path = path.with_suffix(".gif")
     if path.suffix.lower() not in FORMATS:
         raise RecordingError(f'record saves {", ".join(FORMATS)} files, not {path.suffix}; e.g. record="walk.gif"')
-    if path.suffix.lower() == ".mp4" and shutil.which("ffmpeg") is None:
-        raise RecordingError("an .mp4 needs ffmpeg on PATH, which this computer does not have; .gif and .webp work")
+    if path.suffix.lower() == ".mp4" and not mp4_allowed():
+        raise RecordingError(
+            f"an .mp4 needs ffmpeg, which robotforge runs only where the user set {FFMPEG_SWITCH}=1 and ffmpeg is "
+            'installed; .gif and .webp always work, e.g. record="walk.webp"'
+        )
     return path if path.is_absolute() else folder / path
 
 
@@ -246,15 +258,19 @@ def _write(path: Path, draw: Callable[[int], np.ndarray], count: int, frame_ms: 
         cmd += ["-r", f"{1000.0 / frame_ms:g}", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
         cmd += ["-movflags", "+faststart", str(path)]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        broken = False
         try:
             for k in range(count):
                 proc.stdin.write((first if k == 0 else draw(k)).tobytes())
+        except BrokenPipeError:  # ffmpeg stopped reading; what it wrote to stderr says why
+            broken = True
         finally:
-            proc.stdin.close()
-            err = proc.stderr.read().decode(errors="replace")
+            with contextlib.suppress(BrokenPipeError):
+                proc.stdin.close()
+            err = proc.stderr.read().decode(errors="replace").strip()
             proc.wait()
-        if proc.returncode != 0:
-            raise RecordingError(f"ffmpeg could not write {path.name}: {err[-300:]}")
+        if broken or proc.returncode != 0:
+            raise RecordingError(f"ffmpeg could not write {path.name}: {err[-300:] or 'it stopped reading the frames'}")
         return
     if kind == ".webp":
         images = [Image.fromarray(draw(k)) for k in range(count)]

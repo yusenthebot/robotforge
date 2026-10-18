@@ -38,7 +38,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - a robot that no gait code knows, built from parts or imported from a URDF (`move` says so), can learn a walk of its own in the viewer's RL II lesson ("Keep this walk for my robot"); `robots` then lists its `learned_walk` and `move` uses it: forward at its own pace, and once its turns are learned (they follow keeping the walk) turning on the spot;
    - when the user asks such a robot (it has a `walk_hint`) to walk, say so before anything else and offer that lesson: about ten seconds of learning, and the walk is kept; a hand-written gait script is the fallback if they decline;
    - `train_policy` when the tool list has it: reinforcement learning (optional `rl` extra); `unilab_check` / `unilab_train` for the UniLab backend.
-   - a video to keep or share: `move(..., record=true)` or `run_script(name, record="show.gif")` saves the motion (record=true: an MP4 when ffmpeg is installed, else a GIF; a name picks `.gif`, `.webp` or `.mp4`) in the world's `videos` folder; the result's `video.path` says where. No browser is needed.
+   - a video to keep or share: `move(..., record=true)` or `run_script(name, record="show.gif")` saves the motion (record=true: a GIF; a name picks `.gif` or `.webp`) in the world's `videos` folder; the result's `video.path` says where. No browser is needed.
 6. **Check, then explain.** Verify with numbers and an image (next section), explain what happened and why, offer a next step.
 
 ## Conventions

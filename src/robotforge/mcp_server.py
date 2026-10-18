@@ -539,10 +539,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         """Draw a recording into its file, off the event loop (the viewer stays live), or say why it could not."""
         try:
             return await asyncio.to_thread(recording.save, rec, playground.renderer, path, robot)
-        except RenderUnavailable as exc:
+        except (RenderUnavailable, recording.RecordingError, OSError) as exc:
             return {"error": f"no video: {exc}"}
-        except (recording.RecordingError, OSError) as exc:
-            return {"error": f"no video: {exc}"}
+        except Exception as exc:  # the move itself is done: its result is not to be lost to the drawing
+            log.exception("drawing the video %s failed", path)
+            return {"error": f"no video: drawing it failed ({type(exc).__name__}: {exc})"}
 
     @server.tool()
     async def move(
@@ -567,8 +568,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
-        where it ended ("stopped": true, no need to call stop). record=true or a file name ("walk.gif"; .gif,
-        .webp, or .mp4 when ffmpeg is installed, which true picks then) saves a video of the move, the camera
+        where it ended ("stopped": true, no need to call stop). record=true (a GIF) or a file name ("walk.gif";
+        .gif or .webp) saves a video of the move, the camera
         following the robot, in the world's videos folder unless the name is a full path; "video" in the result
         says where."""
         with _tool_errors():
@@ -752,9 +753,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
         the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
-        record=true or a file name ("show.gif"; .gif, .webp, or .mp4 when ffmpeg is installed, which true picks
-        then) saves a video of the run, the camera following the robots, in the world's videos folder unless the
-        name is a full path; "video" in the result says where."""
+        record=true (a GIF) or a file name ("show.gif"; .gif or .webp) saves a video of the run, the camera following
+        the robots, in the world's videos folder unless the name is a full path; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
