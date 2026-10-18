@@ -480,14 +480,20 @@ async function applyScene(desc) {
   onScene(desc);
 }
 
-function contentSphere() {
-  const box = new THREE.Box3();
+// The boxes of everything the scene shows but its floor, each in world space.
+function contentBoxes() {
+  const boxes = [];
   if (worldRoot) {
     worldRoot.updateMatrixWorld(true);
     worldRoot.traverse((o) => {
-      if (o.isMesh && o.visible && !o.userData.isPlane) box.expandByObject(o);
+      if (o.isMesh && o.visible && !o.userData.isPlane) boxes.push(new THREE.Box3().setFromObject(o));
     });
   }
+  return boxes;
+}
+
+function contentSphere() {
+  const box = contentBoxes().reduce((all, b) => all.union(b), new THREE.Box3());
   if (box.isEmpty() && sceneDesc) {
     return new THREE.Sphere(new THREE.Vector3().fromArray(sceneDesc.stat.center), sceneDesc.stat.extent);
   }
@@ -529,7 +535,68 @@ function frameCamera({ animate = false } = {}) {
   camera.far = d * 40;
   camera.updateProjectionMatrix();
   const eye = sphere.center.clone().add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
-  moveCamera(eye, sphere.center, animate);
+  const fit = fitContent(eye, sphere.center, fitDistance(0.08) / d);
+  moveCamera(fit.eye, fit.target, animate);
+}
+
+// Come in from the distance where the scene's bounding sphere fills the view until the scene itself does (every
+// part's box), centred in the free part of the window: seen from above a scene is flat, its corners are often empty
+// and its near side reaches further down the screen than its far side up, and the sphere left the park's robots
+// 16 px tall on a laptop, with empty grass all round. The look-at point moves over the ground, keeping its height.
+const CONTENT_MARGIN = 0.85; // share of the free half-width and half-height the scene may fill (room for a ring, a path)
+const CONTENT_CLOSEST = 0.3; // never nearer than this share of the sphere's distance
+function fitContent(eye, target, least) {
+  const corners = [];
+  const boxes = contentBoxes();
+  if (ring.visible) boxes.push(new THREE.Box3().setFromObject(ring)); // the selected robot's ring is part of the picture
+  for (const box of boxes) {
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  }
+  if (!corners.length || !hasSize()) return { eye, target };
+  const r = freeRect();
+  const halfW = (CONTENT_MARGIN * Math.max(80, r.right - r.left)) / 2; // px
+  const halfH = (CONTENT_MARGIN * Math.max(80, r.bottom - r.top)) / 2;
+  const probe = camera.clone();
+  probe.clearViewOffset(); // the view offset only moves the picture's center into the free part
+  probe.updateProjectionMatrix();
+  const back = eye.clone().sub(target).normalize(); // from the look-at point to the eye
+  const across = new THREE.Vector3(-back.y, back.x, 0).normalize(); // the screen's right, over the ground
+  const ahead = new THREE.Vector3(-back.x, -back.y, 0).normalize(); // the screen's up, over the ground
+  const rise = Math.max(0.2, back.z); // how much a step over the ground moves a point up the screen
+  const tanV = Math.tan(THREE.MathUtils.degToRad(probe.fov) / 2);
+  const [W, H] = [window.innerWidth, window.innerHeight];
+  const far = eye.distanceTo(target);
+  const near = Math.max(CONTENT_CLOSEST, least) * far; // and no nearer than a small robot's own framing
+  const center = target.clone();
+  let dist = far;
+  const p = new THREE.Vector3();
+  // The scene's extent on the screen from (center, dist), -1 to 1 across the view; null when a part is behind.
+  const extent = () => {
+    probe.position.copy(center).addScaledVector(back, dist);
+    probe.lookAt(center);
+    probe.updateMatrixWorld(true);
+    const e = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const c of corners) {
+      p.copy(c).project(probe);
+      if (p.z > 1 || p.z < -1) return null;
+      [e[0], e[1], e[2], e[3]] = [Math.min(e[0], p.x), Math.max(e[1], p.x), Math.min(e[2], p.y), Math.max(e[3], p.y)];
+    }
+    return e;
+  };
+  const fill = ([x0, x1, y0, y1]) => Math.max(((x1 - x0) / 2) * (W / 2 / halfW), ((y1 - y0) / 2) * (H / 2 / halfH));
+  for (let i = 0; i < 8; i++) {
+    const e = extent();
+    if (!e) {
+      dist = Math.min(far, dist * 1.25);
+      continue;
+    }
+    // Over the ground until the scene's middle on the screen is the picture's middle, then nearer or further.
+    center.addScaledVector(across, ((e[0] + e[1]) / 2) * tanV * probe.aspect * dist);
+    center.addScaledVector(ahead, (((e[2] + e[3]) / 2) * tanV * dist) / rise);
+    dist = Math.min(far, Math.max(near, dist * fill(e)));
+  }
+  for (let e = extent(); dist < far && (!e || fill(e) > 1); e = extent()) dist = Math.min(far, dist * 1.04);
+  return { eye: center.clone().addScaledVector(back, dist), target: center };
 }
 
 // A lesson's camera, framed for the free part of the window and, if it asks, stepped back until its rig fits there.

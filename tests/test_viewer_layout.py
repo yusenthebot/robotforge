@@ -321,6 +321,52 @@ def test_a_robot_picked_on_a_phone_is_framed_with_nothing_in_between(viewer, wor
     assert viewer("phone", "en", scenario, world=world) == []
 
 
+CONTENT_EXTENT = """(async () => {
+    const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
+    const rf = window.__robotforge;
+    const { scene, camera } = rf.three();
+    camera.updateMatrixWorld();
+    const [W, H] = [innerWidth, innerHeight];
+    const e = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    scene.traverse((o) => {
+        if (!o.isMesh || !o.visible || o.userData.body === undefined || o.userData.isPlane) return;
+        const b = new THREE.Box3().setFromObject(o);
+        for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) {
+            const p = new THREE.Vector3(x, y, z).project(camera);
+            const [px, py] = [((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H];
+            Object.assign(e, { left: Math.min(e.left, px), right: Math.max(e.right, px),
+                               top: Math.min(e.top, py), bottom: Math.max(e.bottom, py) });
+        }
+    });
+    return { content: e, free: rf.freeRect() };
+})()"""
+
+
+def _dog_in_a_yard(pg: Any) -> None:
+    """A robot dog with a few posts spread round it: flat, with empty corners, as the park is."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0])
+    for i, (x, y) in enumerate([(-3.0, 2.0), (4.0, -1.0), (1.0, 4.0), (-2.0, -3.0)]):
+        pg.add_object(f"post_{i}", shape="box", size=[0.2, 0.2, 1.0], pos=[x, y], fixed=True)
+
+
+@pytest.mark.parametrize("size", ["laptop", "wide"])
+def test_fit_view_fills_the_free_view_with_the_scene(viewer, size):
+    """Fit view framed the scene's bounding sphere: seen from above a scene is flat and its corners empty, so the
+    park filled 45% of a laptop's height and its robots were 16 px tall."""
+
+    async def scenario(tab, _server):
+        await tab.run("document.getElementById('btn-frame').click();")
+        await tab.until("!window.__robotforge.tweening()")
+        await asyncio.sleep(0.5)
+        return await tab.eval(CONTENT_EXTENT)
+
+    seen = viewer(size, "en", scenario, world=_dog_in_a_yard)
+    c, f = seen["content"], seen["free"]
+    assert f["left"] <= c["left"] and c["right"] <= f["right"] and f["top"] <= c["top"] and c["bottom"] <= f["bottom"]
+    fill = max((c["right"] - c["left"]) / (f["right"] - f["left"]), (c["bottom"] - c["top"]) / (f["bottom"] - f["top"]))
+    assert fill >= 0.75, seen
+
+
 TITLE_LINES = """(() => {
     const lines = (el) => {  // the text of each line the title takes
         const node = el.firstChild, range = document.createRange(), rows = [];
