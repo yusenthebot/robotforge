@@ -15,6 +15,8 @@ from typing import Protocol
 import mujoco
 import numpy as np
 
+from robotforge.sim import water as water_model
+
 # Spring used when the user drags a body: natural frequency (rad/s) and damping ratio.
 _DRAG_OMEGA = 12.0
 _DRAG_ZETA = 1.0
@@ -84,6 +86,12 @@ class SimSession:
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
+    # Buoyancy and drag for a model that has water (sim/water.py); it comes with the model, so None for the rest.
+    water: water_model.Hydro | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.water is None:
+            self.water = water_model.hydro_for(self.model)
 
     # ---- construction / loading -------------------------------------------------
 
@@ -110,6 +118,7 @@ class SimSession:
             self.data = _fresh_data(model)
             self.source = source
             self.drag = None
+            self.water = water_model.hydro_for(model)
             self._sim_debt = 0.0
             self.controllers.clear()  # controllers hold ids from the old model
             self.version += 1
@@ -181,6 +190,8 @@ class SimSession:
             for _ in range(n):
                 self._run_controllers()
                 self._apply_drag()
+                if self.water is not None:
+                    self.water.apply(self.model, self.data)
                 mujoco.mj_step(self.model, self.data)
 
     def _run_controllers(self) -> None:
