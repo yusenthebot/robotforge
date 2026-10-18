@@ -29,6 +29,12 @@ class LessonError(ValueError):
     pass
 
 
+def signed(value: float, digits: int) -> str:
+    """`value` with its sign, as a lesson's live formula shows it; one that rounds to zero reads +0.00, not -0.00."""
+    text = f"{value:+.{digits}f}"
+    return text.replace("-", "+") if float(text) == 0 else text
+
+
 @dataclass(frozen=True)
 class Control:
     id: str

@@ -5,15 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
-from robotforge.learn import balance, pd
+from robotforge.learn import pd
+from robotforge.learn.engine import signed
 
 LEARN = Path(pd.__file__).parent
 
 
-@pytest.mark.parametrize("signed", [pd._signed, balance._signed], ids=["pd", "balance"])
-def test_a_signed_value_that_rounds_to_zero_reads_plus_zero(signed):
+def test_a_signed_value_that_rounds_to_zero_reads_plus_zero():
     """The PID formula of an arm at rest read "Kp × e = 80 × -0.000 rad" and "-0.00 N·m"."""
     assert signed(-0.0004, 2) == "+0.00"
     assert signed(-0.00004, 3) == "+0.000"
