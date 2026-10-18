@@ -267,6 +267,7 @@ def _robot_mount(
     result["mounted"] = f"{robot}/{mounting.default_name(new)}"
     if swapped is not None:
         result["swapped"] = f"{robot}/{mounting.default_name(swapped)}"
+        result["took_off"] = mounting.what(swapped)
     result["checks"] = checks
     result["notes"] = [*notes, *result.get("notes", [])]
     return result
@@ -306,8 +307,8 @@ def _native_fingers(entry: Any, part: str | None) -> bool:
     PiPER): a cup or a magnet goes in front of them (end_effector) instead of on a flange."""
     source = next((m for m in entry.mounts if mounting.default_name(m) == part), None) if part else entry
     lib = getattr(source, "library", None)
-    if lib is None:
-        return part is None and entry.template == "arm"
+    if lib is None:  # our arm template has fingers of its own
+        return getattr(source, "template", None) == "arm"
     robot = library.get(lib)
     return robot.kind == "arm" and any(t.gripper is not None for t in robot.tools)
 

@@ -89,6 +89,9 @@ TOOL_TEMPLATES = ("gripper", "suction_cup", "magnet")
 # as the mount's base and at least an ISO 9409-1-50 flange (a UR's, 63 mm across), and at most PLATE_RADIUS[1].
 PLATE_THICK = 0.01
 PLATE_RADIUS = (0.0315, 0.12)
+# On an arm's flange the plate is a tool flange adapter, at most this wide (m): a LEAP hand lying palm down has its
+# fingers in the slab its base is measured in, and its plate came out a 24 cm disk under a 7 cm wrist.
+FLANGE_PLATE_RADIUS = 0.045
 PLATE_RIM = 0.004  # m the plate reaches past the mount's base all round
 PLATE_DENSITY = 2700.0  # kg/m^3, aluminium
 PLATE_RGBA = [0.62, 0.64, 0.68, 1.0]
@@ -142,9 +145,10 @@ def build_child(mount: Mount) -> BuiltRobot:
     return templates.build(str(mount.template), mount.params)
 
 
-def with_adapter(child: BuiltRobot, on_top: bool) -> BuiltRobot:
+def with_adapter(child: BuiltRobot, on_top: bool, on_flange: bool = False) -> BuiltRobot:
     """`child` standing on an adapter plate (an aluminium disk with a ring of bolts) that becomes its base: as wide as
-    its base (see _base_radius) and an ISO flange at least, PLATE_THICK thick. The plate's bottom is the child's
+    its base (see _base_radius) and an ISO flange at least (on an arm's flange, at most FLANGE_PLATE_RADIUS),
+    PLATE_THICK thick. The plate's bottom is the child's
     origin now, so it goes where the child would have: on top of a carrier, or on an arm's flange. Call it after
     ride_on (the child has no free joint left)."""
     from robotforge.design.templates.base import new_spec
@@ -152,7 +156,8 @@ def with_adapter(child: BuiltRobot, on_top: bool) -> BuiltRobot:
     from robotforge.design.visuals import mesh as M
     from robotforge.design.visuals import parts as P
 
-    radius = float(np.clip(_base_radius(child) + PLATE_RIM, *PLATE_RADIUS))
+    largest = FLANGE_PLATE_RADIUS if on_flange else PLATE_RADIUS[1]
+    radius = float(np.clip(_base_radius(child) + PLATE_RIM, PLATE_RADIUS[0], largest))
     spec = new_spec()
     for name in (*OPTIONS, "gravity"):
         setattr(spec.option, name, getattr(child.spec.option, name))
@@ -270,7 +275,7 @@ def attach(
         ride_on(child.spec, spec)
         at = mount.at or _default_at(spec, mount, robot, name, [p.name for p in placed])
         if getattr(mount, "adapter", None):
-            child = with_adapter(child, on_top=at == "top")
+            child = with_adapter(child, on_top=at == "top", on_flange=at == "tool" or at.endswith("/tool"))
         if known is not None:
             radius, mass, body_name, kept_pos, kept_quat, where = known.spots[i]
             body, pos, quat = spec.body(body_name), np.array(kept_pos), np.array(kept_quat)

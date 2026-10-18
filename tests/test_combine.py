@@ -13,7 +13,7 @@ import pytest
 from mcp import Client
 
 from robotforge.cli import find_free_port
-from robotforge.design import combine, mount_checks
+from robotforge.design import combine, mount_checks, mounting
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim.session import SimSession
@@ -110,6 +110,7 @@ def test_an_end_effector_goes_on_the_arms_flange_and_a_second_one_swaps_it(cart)
     assert grip >= 0 and model.actuator_trntype[grip] != mujoco.mjtTrn.mjTRN_BODY  # the fingers
     swapped = cart.mount("suction", "cart/arm")
     assert swapped["swapped"] == "cart/gripper" and swapped["mounted"] == "cart/suction_cup"
+    assert swapped["took_off"] == "Robotiq 2F-85"
     assert [m.template or m.library for m in _entry(cart, "cart").mounts] == ["ur5e", "suction_cup"]
     model = cart.session.model
     grip = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "cart/arm/gripper")
@@ -125,6 +126,26 @@ def test_a_cup_on_a_mounted_arm_with_fingers_goes_in_front_of_them(cart):
     grip = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "cart/arm/gripper")
     assert model.actuator_trntype[grip] == mujoco.mjtTrn.mjTRN_BODY
     assert out["checks"]["arms"][0]["arm"] == "cart/arm"
+
+
+def test_a_magnet_on_a_template_arm_riding_a_template_dog_goes_in_front_of_its_fingers(pg):
+    pg.add_robot("dog", template="quadruped")
+    pg.mount("arm", "dog")
+    pg.mount("magnet", "dog/arm")
+    assert _entry(pg, "dog").end_effector == "magnet"
+    model = pg.session.model
+    grip = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "dog/arm/gripper")
+    assert model.actuator_trntype[grip] == mujoco.mjtTrn.mjTRN_BODY
+
+
+def test_a_plate_on_a_flange_is_a_flange_adapter_not_a_dinner_plate(cart):
+    cart.mount("ur5e", "cart")
+    cart.mount("robotiq_2f85", "cart/arm")
+    model = cart.session.model
+    plate = _body(cart, "cart/gripper/adapter_plate")
+    plates = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == plate]
+    radius = max(float(model.geom_size[g][0]) for g in plates if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_CYLINDER)
+    assert radius <= mounting.FLANGE_PLATE_RADIUS + 1e-9
 
 
 def test_a_cup_given_to_a_robot_whose_arm_is_mounted_works_through_update_robot(cart):
