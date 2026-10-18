@@ -20,6 +20,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - Trunk-based (user request, 2026-10-15): work on `main`. No long-lived feature branches; parallel branches made merging painful.
   If a task truly needs isolation, use one short-lived branch, merge it the same day and delete it. Never run two branches that touch the same shared files.
 - Push in real time: push main after every commit. Never force-push.
+- Parallel lanes (user request, 2026-10-19: no piles of branches to merge by hand): each lane works in a worktree and lands on main after every verified step with `uv run python <main checkout>/scripts/land.py` from its worktree.
+  It merges main in, runs ruff, the suite and the smoke test under a lock (one lane at a time), fast-forwards main and pushes; exit 2 means conflicts to resolve, 3 a failed check.
+  A landed lane's branch and worktree are removed when the lane ends.
 - Docs: one sentence per line in long Markdown; no em dashes; no emojis.
 
 ## Dev notes
@@ -37,6 +40,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
   Read a failed run with `gh run view <id> --log-failed`.
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
+- `uv run python scripts/bench.py` measures install size, import time, headless physics, the viewer in headless Chrome, MCP latency, memory and idle processor use (one to three minutes), writes `docs/bench/<date>-<sha>.json`, compares with the last complete run and exits 1 over a budget in `docs/bench/budget.json`, even when another part failed (else 2: a part failed or a budget went unchecked; 3: only timings over while the load was above the cores or the MuJoCo-only machine check under its floor, rerun calm).
+  On a busy machine compare commits with `--ab <rev> --worlds ...` (both timed alternately) rather than runs an hour apart; `--only physics --worlds dog_idle` measures one part and is not saved (`--save` keeps it as `-partial.json`, never a baseline).
+- `uv run python scripts/same_behavior.py <rev>` hashes the physics state every 0.25 s through 17 scenarios on this tree and on `<rev>`: a speed-up meant to change no behavior must leave every one identical.
 - Offscreen rendering needs OpenGL. Without it (Windows CI, VMs, servers) `observe` returns the state plus a note instead of an image, and rendering tests skip with the reason.
   `ROBOTFORGE_REQUIRE_GL=1` turns those skips into failures; the Ubuntu job sets it and uses Mesa EGL (`MUJOCO_GL=egl`).
 - Portability rules: pass `encoding="utf-8"` to every text read and write, compare paths with `Path` (never `endswith("a/b")`), and do not bind or probe ports with `SO_REUSEADDR` on Windows.
