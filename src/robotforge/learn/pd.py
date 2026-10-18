@@ -826,4 +826,5 @@ class PDLesson(JointLesson):
         }
 
     def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.3, -2.3, 0.95], "target": [0.12, 0.0, 0.6]}
+        # A little right of the pivot, where the arm swings up, but not so far that the dial's -90° ran off a phone.
+        return {"eye": [0.3, -2.3, 0.95], "target": [0.06, 0.0, 0.6]}

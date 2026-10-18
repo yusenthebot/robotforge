@@ -6,6 +6,11 @@ import { LANG, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 const pick = (text) => (text ? (text[LANG] ?? text.en ?? "") : "");
+// A title as shown: a hyphenated word stays on one line ("six-joint" broke as "six- / joint arms").
+const titleText = (text) => pick(text).replace(/(\p{L})-(?=\p{L})/gu, "$1\u2011");
+// A value and its unit with a space between, as lessons write " m" ("2.00cm" and "0.10m/s" sat beside "0.25 m");
+// degrees and percent stay on the number.
+const withUnit = (value, unit) => (!unit || /^[\s°%]/.test(unit) ? `${value}${unit}` : `${value}\u00a0${unit}`);
 
 let api = null; // hooks into the main viewer, see initLessons
 let catalog = []; // lessons the server offers
@@ -96,7 +101,7 @@ function courseCard(c, done) {
   chapter.textContent = pick(c.chapter);
   const title = document.createElement("span");
   title.className = "course-title";
-  title.textContent = pick(c.title);
+  title.textContent = titleText(c.title);
   const summary = document.createElement("span");
   summary.className = "course-summary";
   summary.textContent = pick(c.summary);
@@ -165,6 +170,7 @@ function openLesson(desc) {
   bench.setup(desc.bench, desc.bench_state);
   plotTabs.pick = 0; // a new lesson starts on its first plot
   plotTabs.sync();
+  stepShown = -1;
   renderTable(null);
   overlays.build(desc.rig);
   setPicker(false);
@@ -173,7 +179,7 @@ function openLesson(desc) {
   $("lesson-plots").hidden = desc.plots.length === 0;
   $("lesson-finished").hidden = true;
   $("lesson-chapter").textContent = pick(desc.chapter);
-  $("lesson-title").textContent = pick(desc.title);
+  $("lesson-title").textContent = titleText(desc.title);
   $("lesson-drive").hidden = !desc.drive;
   // A lesson may say what its keys move ("Move the gripper"); otherwise they drive its robot.
   $("lesson-drive").querySelector("[data-i18n]").textContent = desc.drive?.label ? pick(desc.drive.label) : t("lesson_drive");
@@ -344,9 +350,16 @@ function readout(live) {
   return "";
 }
 
+let stepShown = -1; // the step the panel shows, so a new one can start at its top
 function renderStep() {
   const i = state ? state.step : 0;
   const step = lesson.steps[i];
+  if (i !== stepShown) {
+    // A new step (or lesson) starts at the top of the panel: it kept the last one's place, so a lesson opened after
+    // another's Finish showed its title half scrolled away, and a step after a long one began at its foot.
+    stepShown = i;
+    $("lesson-panel").scrollTop = 0;
+  }
   const passed = state ? state.passed.includes(step.id) : false;
   $("lesson-step-count").textContent = t("step_of", { i: i + 1, n: lesson.steps.length });
   const dots = $("lesson-dots");
@@ -363,7 +376,7 @@ function renderStep() {
       return b;
     })
   );
-  $("lesson-step-title").textContent = pick(step.title);
+  $("lesson-step-title").textContent = titleText(step.title);
   const body = $("lesson-step-body");
   body.replaceChildren(...pick(step.body).split("\n").map((line) => paragraph(line)));
   renderQuiz(step);
@@ -471,13 +484,23 @@ const ROOMY_HEIGHT = 640;
 const plotTabs = {
   strip: null,
   pick: 0,
-  sync() {
-    const box = $("lesson-plots");
-    // Live plots first: they are short, so the robots keep the view; the table and the record are a tap away.
+  // The sections shown, in tab order. Live plots first: they are short, so the robots keep the view; the table and
+  // the record are a tap away.
+  sections() {
     const order = (el) => (el.classList.contains("plot") ? 0 : el.classList.contains("faceoff-table") ? 1 : 2);
-    const sections = [...box.children]
+    return [...$("lesson-plots").children]
       .filter((el) => el.tagName === "SECTION" && !el.hidden)
       .sort((a, b) => order(a) - order(b));
+  },
+  // Bring one section's tab to the front: a picture the step has just switched on.
+  show(section) {
+    const k = this.sections().indexOf(section);
+    if (k >= 0) this.pick = k;
+    this.sync();
+  },
+  sync() {
+    const box = $("lesson-plots");
+    const sections = this.sections();
     const tabbed = sections.length > 1 && (window.innerWidth <= ROOMY || window.innerHeight <= ROOMY_HEIGHT);
     box.classList.toggle("tabbed", tabbed);
     if (!tabbed) {
@@ -1002,7 +1025,7 @@ function controlRow(c) {
   input.value = value;
   input.dataset.control = c.id;
   const show = () => {
-    shown.textContent = `${Number(input.value).toFixed(c.step < 1 ? 2 : 0)}${c.unit}`;
+    shown.textContent = withUnit(Number(input.value).toFixed(c.step < 1 ? 2 : 0), c.unit);
     const p = ((Number(input.value) - c.min) / (c.max - c.min)) * 100;
     input.style.setProperty("--p", `${p}%`);
   };
@@ -1625,7 +1648,13 @@ const pip = {
     const rigCam = overlays.current?.camera;
     if (!this.cam || !rigCam || !state) return;
     const show = state.shown.includes("camera");
-    this.wrap.hidden = !show;
+    if (this.wrap.hidden === show) {
+      // In a small window the picture is a tab of its own, brought up when the step switches it on: under the tabs,
+      // it and the lesson sheet covered the whole phone, the rover too.
+      this.wrap.hidden = !show;
+      if (show) plotTabs.show(this.wrap);
+      else plotTabs.sync();
+    }
     if (!show) return;
     const now = performance.now();
     if (now - this.last < 80) return;
@@ -1810,7 +1839,7 @@ function faceoffRig(rig) {
     const color = api.color(COLORS[e.color]);
     const sub = e.sub === null ? "" : e.sub ? pick(e.sub) : t(e.real ? "real_robot" : "our_template");
     const tag = nameTag(pick(e.label), sub, color);
-    tag.position.set(e.base[0], e.base[1], e.top + 0.12);
+    tag.position.set(e.base[0], e.base[1], e.top + TAG_RISE);
     labels.add(tag);
     tags.push([tag, e]);
     if (e.cloud.length) {
@@ -1845,7 +1874,7 @@ function faceoffRig(rig) {
     frame() {
       for (const [tag, e] of tags) {
         const node = e.body !== undefined ? api.bodyNode(e.body) : null;
-        if (node) tag.position.set(node.position.x, node.position.y, e.top + 0.12); // walking robots take theirs along
+        if (node) tag.position.set(node.position.x, node.position.y, e.top + TAG_RISE); // walking robots take theirs along
       }
       if (labels.visible) declutter(tags.map(([tag]) => tag));
       workspace.visible = (state.values.workspace ?? 0) >= 1;
@@ -1861,6 +1890,11 @@ function faceoffRig(rig) {
   };
 }
 
+// A tag stands on its point, a little above it, rather than being centred on it: seen from overhead (the robot
+// vacuums' camera) a tag centred over a robot hid the robot it names. TAG_RISE (m) is the point above the robot's top.
+const TAG_LIFT = 0.6; // the tag's middle above its point, in tag heights
+const TAG_RISE = 0.06;
+
 // Name tags of robots standing in a row, seen down the row, land on top of each other. Keep the nearest
 // where it is and lift any farther tag that would cover one already placed, just clear of it.
 const tagPoint = new THREE.Vector3();
@@ -1869,9 +1903,10 @@ function declutter(sprites) {
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
   const items = sprites
     .map((s) => {
-      s.center.set(0.5, 0.5);
+      s.center.set(0.5, 0.5 - TAG_LIFT);
       const p = tagPoint.copy(s.position).project(cam); // screen position, -1 to 1 across the view
-      return { s, x: p.x, y: p.y, z: p.z, w: s.scale.x * sx, h: s.scale.y * sy };
+      const h = s.scale.y * sy;
+      return { s, x: p.x, y: p.y + TAG_LIFT * h, z: p.z, w: s.scale.x * sx, h }; // y: the tag's middle
     })
     .filter((it) => it.z < 1)
     .sort((a, b) => a.z - b.z);
@@ -1883,7 +1918,7 @@ function declutter(sprites) {
       if (!hit) break;
       y = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
     }
-    it.s.center.y = 0.5 - (y - it.y) / it.h; // a lower anchor draws the sprite higher
+    it.s.center.y = 0.5 - TAG_LIFT - (y - it.y) / it.h; // a lower anchor draws the sprite higher
     placed.push({ ...it, y });
   }
 }
