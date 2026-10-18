@@ -78,7 +78,7 @@ def test_sensors_round_trip_world_yaml_and_old_worlds_stay_as_they_were():
 def test_types_are_read_the_way_agents_word_them_and_wrong_options_are_refused():
     assert SensorEntry.model_validate({"type": "depth camera"}).mode == "depth"
     assert SensorEntry.model_validate({"type": "3D-lidar"}).type == "lidar3d"
-    with pytest.raises(ValueError, match="an imu sensor takes no 'rays'|a imu sensor takes no 'rays'"):
+    with pytest.raises(ValueError, match="an imu sensor takes no 'rays'"):
         SensorEntry.model_validate({"type": "imu", "rays": 16})
     with pytest.raises(ValueError, match="channels"):
         SensorEntry.model_validate({"type": "camera", "noise": {"accel": 0.1}})

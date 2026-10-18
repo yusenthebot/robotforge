@@ -249,7 +249,8 @@ class SensorEntry(BaseModel):
         if wrong:
             own = sorted(OPTIONS[self.type] - {"name"})
             raise ValueError(
-                f"a {self.type} sensor takes no {', '.join(map(repr, wrong))}; its options are {', '.join(own)}"
+                f"{_a(self.type)} {self.type} sensor takes no {', '.join(map(repr, wrong))}; its options are "
+                f"{', '.join(own)}"
             )
         channels = CHANNELS[self.type]
         if isinstance(self.noise, dict):
@@ -280,11 +281,15 @@ class SensorEntry(BaseModel):
         return {k: v for k, v in handler(self).items() if v is not None}
 
 
+def _a(word: str) -> str:
+    return "an" if word[0] in "aeiou" else "a"
+
+
 def _channels(value: dict[str, Any], channels: tuple[str, ...], kind: str, knob: str) -> None:
     wrong = [k for k in value if k not in channels]
     if wrong:
         raise ValueError(
-            f"{knob} of a {kind} names its channels {', '.join(channels)} (or is one number for all), got "
+            f"{knob} of {_a(kind)} {kind} names its channels {', '.join(channels)} (or is one number for all), got "
             f"{', '.join(map(repr, wrong))}"
         )
 
