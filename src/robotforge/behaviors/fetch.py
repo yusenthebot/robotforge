@@ -67,6 +67,8 @@ WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, wi
 GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of what its friction can hold
 STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
+RUB = 0.001  # m: an arm overlapping itself or its robot deeper than this in the simulation rubs on it
+RISE = 0.1  # m the hand is lifted off such a rub before the arm moves on (Errand._unstick)
 
 
 class FetchError(ValueError):
@@ -129,17 +131,26 @@ class Stand:
         self.hand = Hand(arm, load)
         self._out: dict[tuple[float, bool], float] = {}
         self.robot_bodies = {b for b in range(model.nbody) if int(model.body_rootid[b]) == self.root}
+        self.ground: nav_map.NavMap | None = None  # the map whose ground heights the robot is posed on (spots_for)
         self.skip: set[int] = set()  # roots of what may overlap the robot (a load it carries)
 
     def qpos_at(self, xy, heading: float) -> np.ndarray:
         """The world's qpos with the robot moved to `xy`, turned to `heading`, the arm tucked."""
         q = self.qpos.copy()
         q[self.adr : self.adr + 2] = xy
+        q[self.adr + 2] += self.rise(xy)
         turn = np.array([math.cos((heading - self.heading) / 2), 0.0, 0.0, math.sin((heading - self.heading) / 2)])
         quat = np.zeros(4)
         mujoco.mju_mulQuat(quat, turn, self.qpos[self.adr + 3 : self.adr + 7])
         q[self.adr + 3 : self.adr + 7] = quat
         return q
+
+    def rise(self, xy) -> float:
+        """How much higher the ground is at `xy` than where the robot stands (a loading dock up a ramp), by the map
+        it plans on; 0 without one."""
+        if self.ground is None:
+            return 0.0
+        return self.ground.ground_at(float(xy[0]), float(xy[1])) - self.ground.ground_at(*self.xy)
 
     def arm_base_at(self, xy, heading: float) -> np.ndarray:
         c, s = math.cos(heading), math.sin(heading)
@@ -207,7 +218,7 @@ class Stand:
         """The tool point the arm holds a load at, with the robot at `xy` and `heading`."""
         c, s = math.cos(heading), math.sin(heading)
         x, y, z = self.hold_local
-        return np.array([xy[0] + c * x - s * y, xy[1] + s * x + c * y, self.root_z + z])
+        return np.array([xy[0] + c * x - s * y, xy[1] + s * x + c * y, self.root_z + self.rise(xy) + z])
 
     def grip(self, xy, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]) -> float | None:
         """The first of `tilts` (0: straight down) with which the arm, the robot at `xy` and `heading`, reaches
@@ -242,6 +253,7 @@ def spots_for(
     plans the whole pick or put from a spot that passes the quick checks: a spot whose plan does not work out is
     passed over."""
     penalties = penalties or [0.0] * len(targets)
+    stand.ground = nav
     checked = 0
     fallback: Spot | None = None
     for tilts in [(0.0,), *([(0.0, *stand.hand.tilts)] if stand.hand.tilts else [])]:
@@ -677,11 +689,15 @@ def _check_weight(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, friction
 
 
 def _spread(spots: list[np.ndarray], most: int) -> list[np.ndarray]:
-    """Up to `most` of a place's spots (best first), each at least SPREAD_GAP from those taken before it, so that
-    a search over them covers the whole place rather than its middle."""
+    """Up to `most` of a place's spots (best first), spaced out over all of it (SPREAD_GAP apart at least, more on
+    a big place), so that a search over them covers the whole place rather than its middle: on a 2 by 2.4 m loading
+    dock the 16 spots nearest its middle were all beyond the reach of a robot that cannot drive up onto it."""
+    xy = np.array([p[:2] for p in spots])
+    area = float(np.prod(np.ptp(xy, axis=0) + SPOT_STEP)) if len(spots) > 1 else 0.0
+    gap = max(SPREAD_GAP, 0.9 * math.sqrt(area / most))
     taken: list[np.ndarray] = []
     for p in spots:
-        if all(float(np.linalg.norm(p[:2] - q[:2])) >= SPREAD_GAP for q in taken):
+        if all(float(np.linalg.norm(p[:2] - q[:2])) >= gap for q in taken):
             taken.append(p)
             if len(taken) >= most:
                 break
@@ -893,6 +909,18 @@ def _heights(arm: ArmMotion) -> str:
     return f"{found[0]:.2f} and {found[-1]:.2f}" if found else "no heights at all"
 
 
+def _rubbing(arm: ArmMotion, data: mujoco.MjData) -> bool:
+    """Whether the arm presses on itself or on the robot it rides on, in the simulation as it is."""
+    m = arm.ik.model
+    for con in data.contact[: data.ncon]:
+        if con.dist > -RUB:
+            continue
+        b1, b2 = int(m.geom_bodyid[con.geom1]), int(m.geom_bodyid[con.geom2])
+        if (b1 in arm._moving or b2 in arm._moving) and int(m.body_rootid[b1]) == int(m.body_rootid[b2]):
+            return True
+    return False
+
+
 # ---- the errand ---------------------------------------------------------------------------------------------
 
 
@@ -940,6 +968,8 @@ class Errand:
     _creep: tuple[float, Spot] | None = None  # (since when, into which spot)
     tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
+    _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
+    _resume: tuple | None = None  # (step, what to do) after that
     hand: Hand = field(init=False)
 
     def __post_init__(self) -> None:
@@ -976,8 +1006,7 @@ class Errand:
                 self.held = True
                 self._go(data, "to_place")
             else:
-                self._tuck(data, self.hold_world(data))
-                self.step = "tucking"
+                self._begin_tuck(t, data, "tucking")
             return
         if not self.manager.pose(self.robot)["upright"]:
             self._fail(data, "fell", "it fell over")
@@ -1067,8 +1096,7 @@ class Errand:
             return
         self.held = False
         self.placed_at = [round(float(v), 3) for v in data.xpos[self.body]]
-        self._tuck(data, self.hold_world(data))
-        self.step = "tucking_after"
+        self._begin_tuck(t, data, "tucking_after")
 
     def _on_tucking_after(self, t: float, data: mujoco.MjData) -> None:
         if self.arm.done:
@@ -1174,7 +1202,39 @@ class Errand:
         walker.command(0.0, 0.0)
         return True
 
+    def _begin_tuck(self, t: float, data: mujoco.MjData, step: str) -> None:
+        if self._unstick(data, lambda t, d: self._begin_tuck(t, d, step)):
+            return
+        self._tuck(data, self.hold_world(data))
+        self.step = step
+
+    def _unstick(self, data: mujoco.MjData, then: Callable[[float, mujoco.MjData], None]) -> bool:
+        """If the arm rubs on itself or on its robot where it is (a lift picker folded over its base), lift the hand
+        RISE straight up first, and `then` go on; True if it does. Turning its base against that rub, a lift
+        picker's arm stayed where it was for the whole pick while its servo pushed with all it had."""
+        if self._unstuck or not _rubbing(self.arm, data):
+            self._unstuck = False
+            return False
+        self.arm.sync(data)
+        start = self.arm.tool_target_end()
+        up = start + [0.0, 0.0, RISE]
+        if self.arm.reach_error(up) > REACH_TOL:
+            return False
+        load = self.half if self.held else None
+        self.arm.queue.append(Waypoint(up, None, self.arm._time(start, up), "rise", load=load))
+        self._unstuck, self._resume = True, (self.step, then)
+        self.step = "unsticking"
+        return True
+
+    def _on_unsticking(self, t: float, data: mujoco.MjData) -> None:
+        if self.arm.done:
+            step, then = self._resume
+            self.step = step
+            then(t, data)
+
     def _start_pick(self, t: float, data: mujoco.MjData) -> None:
+        if self._unstick(data, self._start_pick):
+            return
         self.arm.sync(data)
         center = np.array(data.xpos[self.body], float)
         hold = self.hold_world(data)
@@ -1197,6 +1257,8 @@ class Errand:
         self.step = "picking"
 
     def _start_place(self, t: float, data: mujoco.MjData) -> None:
+        if self._unstick(data, self._start_place):
+            return
         self.arm.sync(data)
         target = np.array(self.drop.target, float)
 

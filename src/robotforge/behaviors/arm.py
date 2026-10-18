@@ -48,6 +48,7 @@ HOLD_TRIES = 400  # IK checks hold_pose makes at most
 HOLD_MARGIN = 0.03  # m the arm may reach past the robot's outline, holding a load
 HOLD_BELOW = 0.1  # m below the arm's first hinge that it holds a load at most
 HOLD_LIMIT = math.radians(12.0)  # rad a hinge keeps from its limits holding a load (hold_pose)
+HOLD_TRAVEL = 0.05  # m of height a pose for the way counts as worth, per rad its joints move from now to get there
 TUCK_STARTS = 6  # other IK starts tried for a tucked pose that stays inside the robot's outline
 HOLD_RISE = 0.6  # m above the robot's lowest top that a load is held at most
 
@@ -592,7 +593,8 @@ class ArmMotion:
         joint values there: over the robot, the load and the arm inside its outline seen from above, so nothing
         sticks out to catch on furniture, and the load clear of it by LOAD_CLEARANCE; low (a load held high swings)
         and near the middle between the arm's base and the robot's, HOLD_SPREAD m of height counting as much as a
-        meter off that middle ahead or behind, or half a meter to a side (where it tips the robot and sticks out).
+        meter off that middle ahead or behind, or half a meter to a side (where it tips the robot and sticks out), and
+        HOLD_TRAVEL per rad the arm's joints move to get there.
         None for an arm that cannot fold over its robot that way. A world point, for the robot as it stands now.
 
         Every spot over the robot is tried, nearest that middle first: a Panda cannot hold anything low next to its
@@ -657,7 +659,9 @@ class ArmMotion:
                     q = self._tucked(p, load_half_height, load_radius, outline, restarts)
                     if q is None:
                         continue
-                    best = (float(z) + spread, p, q)
+                    travel = HOLD_TRAVEL * float(np.max(np.abs(q - self.q)))  # a lift picker swung 340 degrees
+                    if best is None or z + spread + travel < best[0]:
+                        best = (float(z) + spread + travel, p, q)
                     break
             if best is not None:
                 return best[1], best[2]

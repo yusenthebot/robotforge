@@ -136,6 +136,10 @@ class Arm(Template):
         _dress_wrist_camera(vis, tool, p.gripper)
         vis.finish()
         tool.add_site(name="tcp", pos=[0, 0, tcp_z], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
+        # The shoulder's drum sits in the pedestal it turns on (6 mm deep, folded down): their contact held the base
+        # joint still against the servo's full torque under MuJoCo's no-slip pass (behaviors/fetch.py).
+        exclude = spec.add_exclude()
+        exclude.bodyname1, exclude.bodyname2 = "base", "link1"
         spec.add_sensor(
             name="tcp_pos", type=mujoco.mjtSensor.mjSENS_FRAMEPOS, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="tcp"
         )
