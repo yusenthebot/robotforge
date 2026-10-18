@@ -41,6 +41,10 @@ WAY_SHARES = (0.5, 1.0)  # of the move, the mechanism's poses checked against th
 REPLANS = 2  # spots looked for again from where the robot stopped
 STAND_TRIES = 1  # times a rover creeps into its spot again before it looks for another
 FULL = 0.97  # share of the move the arm must be planned to follow from a spot for the spot to count
+# Spots checked by IK in one search: a quick check of the handle's whole way passes over most, and the spots beside
+# a drawer from which a Go2 works it came after 40 nearer the robot's start that do not.
+MAX_CHECKS = 160
+LIFT = operate.CLEAR_ABOVE  # m above the handle the arm must reach pointing down too, in the quick check of a spot
 
 
 @dataclass(frozen=True)
@@ -73,24 +77,28 @@ def plan(manager: BehaviorManager, arm: ArmMotion, target: str, shape: str, acti
         )
     _, hold_q = tuck
     try:
-        stand = fetch.Stand(model, data, robot, arm, hold_q)
+        stand = _ClearStand(model, data, robot, arm, hold_q)
     except fetch.FetchError as exc:
         raise operate.OperateError(str(exc)) from exc
     stand.hand.across = None  # operate works with the tool pointing down: no tilted reaching in
+    stand.job = job
     stand.walks = manager.kind(robot).value in fetch.WALKERS
     start = np.array(data.xpos[manager.root(robot)][:2], float)
     nav = manager.floor_map(robot, fetch._posed(model, data, arm, hold_q))
     reach = fetch._reachable_cells(nav, start)
-    middle = _way_middle(model, data, job)
+    way = _way_points(model, data, job)
+    middle = way[1]
+    stand.way = (way[0], way[2])
     spot, _ = fetch.spots_for(
         stand,
         nav,
         [middle],
-        operate.COME_DOWN,
+        operate.ABOVE + 0.03 if action == "press" else LIFT,  # a press comes down from over the cap
         start,
         reach,
         _under(model, data, target),
         rehearse=_rehearsal(stand, job),
+        max_checks=MAX_CHECKS,
     )
     if spot is None:
         raise operate.OperateError(
@@ -116,14 +124,18 @@ def _job(model: mujoco.MjModel, data: mujoco.MjData, target: str, shape: str, ac
     return Job(target, shape, action, amount, adr, q, q + delta)
 
 
-def _way_middle(model: mujoco.MjModel, data: mujoco.MjData, job: Job) -> np.ndarray:
-    """The handle halfway along its way: where the robot stands round, so the arm has both ends within reach."""
+def _way_points(model: mujoco.MjModel, data: mujoco.MjData, job: Job) -> list[np.ndarray]:
+    """The handle at the start, halfway and at the end of its way: the robot stands round the middle, so the arm has
+    both ends within reach."""
     site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{job.target}/handle")
     probe = mujoco.MjData(model)
     probe.qpos[:] = data.qpos
-    probe.qpos[job.adr] = (job.start + job.goal) / 2
-    mujoco.mj_kinematics(model, probe)
-    return np.array(probe.site_xpos[site], float)
+    out = []
+    for share in (0.0, 0.5, 1.0):
+        probe.qpos[job.adr] = job.start + share * (job.goal - job.start)
+        mujoco.mj_kinematics(model, probe)
+        out.append(np.array(probe.site_xpos[site], float))
+    return out
 
 
 def _under(model: mujoco.MjModel, data: mujoco.MjData, target: str) -> list[tuple[np.ndarray, np.ndarray, float]]:
@@ -137,12 +149,39 @@ def _under(model: mujoco.MjModel, data: mujoco.MjData, target: str) -> list[tupl
     return out + fetch._supports(model, data, body)
 
 
+class _ClearStand(fetch.Stand):
+    """A stand that fits only where the robot also keeps clear of what moves (_clear_of_way), checked before the
+    arm's reach: of a Go2's first 17 spots in front of a chest the arm reached from, the drawer pulled out ran into
+    the dog at every one, and the search gave up at its 40 reach checks before it got to the spots beside it."""
+
+    job: Job | None = None
+    way: tuple[np.ndarray, ...] = ()  # the handle at the start, the middle and the end of its way
+
+    def fits(self, xy, heading: float) -> bool:
+        return super().fits(xy, heading) and (self.job is None or _clear_of_way(self, xy, heading, self.job))
+
+    def grip(self, xy, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]) -> float | None:
+        """Straight down only, at `target` and `lift` above it: an operation comes down onto the handle from as high
+        as the arm reaches pointing down (operate.COME_DOWN at most), and carries nothing over the robot, so the
+        point over the robot a pick checks (fetch.Stand.grip) does not apply. With it, a Go2's PiPER reached no
+        chest of drawers 0.36 m high from anywhere."""
+        if 0.0 not in tilts:
+            return None
+        arm = self.arm
+        now, arm.q = arm.q, self.hold_q.copy()
+        points = (target, target + [0.0, 0.0, lift], *self.way)  # and both ends of the handle's way
+        try:
+            with arm.carried_to(self.qpos_at(xy, heading)):
+                ok = all(arm.quick_error(p) <= fetch.REACH_TOL for p in points)
+        finally:
+            arm.q = now
+        return 0.0 if ok else None
+
+
 def _rehearsal(stand: fetch.Stand, job: Job):
     """For spots_for: whether, from (xy, heading), the robot keeps clear of what moves and the arm does it all."""
 
     def works(xy: np.ndarray, heading: float, point: np.ndarray, tilt: float) -> bool:
-        if not _clear_of_way(stand, xy, heading, job):
-            return False
         return _full(_plan_from(stand, xy, heading, job))
 
     return works

@@ -14,7 +14,7 @@ import datetime as dt
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import mujoco
@@ -114,7 +114,10 @@ def target(record: bool | str, folder: Path, robot: str | None) -> Target:
         raise RecordingError('record is true or a file name such as "dog_walk.gif"')
     given = Path(name)
     inside = folder / given
-    if given.is_absolute() or given.drive or name.startswith("~") or ".." in given.parts:
+    # The name read both ways, whatever this system is: on Windows /tmp/x.gif is rooted though not absolute and
+    # ..\x.gif climbs out. Refused alike everywhere, a name means the same on every system.
+    ways = (PurePosixPath(name), PureWindowsPath(name))
+    if name.startswith("~") or any(way.anchor or ".." in way.parts for way in ways):
         raise RecordingError(
             f'record {wording.short(name)} is a file name, e.g. "walk.gif": videos are saved in the world\'s videos '
             "folder, and the result's video.path says where (copy it from there)"
