@@ -439,7 +439,7 @@ DESIGNS = [
     Design(
         "lift_picker",
         "driving base with a lifting column and an arm with a gripper: move drives it; pick_and_place raises the "
-        "column to reach tables 0.15 to 0.75 m high within 0.4 m (not the floor)",
+        "column to reach tables and counters 0.15 to 0.9 m high (not the floor), driving over if need be",
         lift_picker,
     ),
     Design(
