@@ -434,9 +434,31 @@ Rounds 1-3 done, 2026-10-14.
   - Two branches implementing the same feature differently (pick-and-place reach messages, carry planning) cannot be merged mechanically.
   - A workflow agent's API connection dropped (ECONNRESET) on its last fix; the branch was left as it was.
 
+## Rounds 35 to 37 (2026-10-18/19): G1 to G3 and G7 landed, live landing, new priorities
+
+- Round 35 was cut off by API connection drops; round 36 (G1 finish) and the G2/G3/G7 workflow both stopped on a session limit with ten lanes reviewed but none merged.
+- The user said (2026-10-19) they do not want branches piling up for a manual merge, parked drones, and put first legged robots, mobile manipulation, mounting anything on anything, and generating robots, environments and tasks (docs/ROADMAP.md, "2026-10-19 调整", G8 to G11).
+- New: `scripts/land.py` lands a lane on main after every verified step: a lock in the git dir (one lane at a time), merge main in, ruff, the whole suite and smoke (optionally playtest), fast-forward main, push. All ten lanes landed through it within about four hours, with conflicts resolved by each lane's agent in context.
+- Landed:
+  - Real-robot library merged with the gallery: ANYmal C, H1, Z1, UR5e, Kinova Gen3, xArm 7, T1, Barkour, ALOHA, OP3, Robotiq; arms on dogs (Go2 + PiPER + SO-100, Spot + Z1, ANYmal + UR5e + Robotiq, Barkour + SO-100). ANYmal + UR5e floor picks on 60 fixed samples: 42 placed, 18 refused, 0 missed, 0 touches (library branch alone: 35 placed, 11 missed, 14 touches).
+  - Mobile picking (F3): `pick_and_place` sends a robot with an arm over when the object or place is out of reach (behaviors/fetch.py on the merged planner). 29 of 29 feasible runs (kitchen apple with mobile_panda and lift_picker, warehouse parcel to the dock, desk_lab), 3 correct refusals (go2_arm cannot reach over a 0.93 m island).
+  - Sensor suite (G2): cameras (rgb, depth, segmentation), 2D/3D lidar, IMU, encoders, force-torque, touch, rangefinder, GPS, odometry on any robot, with rate, noise, latency and dropout; `add_sensor`, `read_sensors`, `open_viewer(show=...)`; the viewer draws rays, points, frustums, pictures and plots. Go2 3D lidar in the warehouse: 99.4% of 2789 rays within 1 mm of an analytic truth; depth camera nearest within 0.1 mm.
+  - Water (G3): harbor, lake and pool scenes, boats and ROVs with pilots; forces from the current step (thin plates no longer fly off).
+  - Mechanisms and end effectors (G3): drawers, doors, valves, buttons, conveyors, cloth, suction and magnets; `operate`. Gravity was compensated twice for arms that already had it (fixed); the real Panda opens a drawer 0.2 m at x 0.55 and 0.7; the PiPER reaches 0.12 to 0.14 m by its geometry and says so.
+  - Drones (parked): quad, hex, octo, Skydio X2, Crazyflie; landings refuse anything that is not ground.
+  - Straight walks: a kept walk steers back to its line; steering is dropped per walk when it makes turns fall more (out-of-sample bench seed 91: kept 72 falls, base 111, in 7200 sequences).
+  - Agent evals round 2 (codex exec), robot placement on free spots, videos only in the world's folder; a pixel pass at phone, laptop and wide sizes; `scripts/bench.py` with 39 budgets (lazy Pillow and trimesh keep startup light).
+- Verified: every landing passed ruff, the suite (1446 passed / 29 skipped at the water landing) and smoke; playtest for lesson lanes; CI green on Windows and Ubuntu at b3e4be2 before the landings.
+- What did NOT work:
+  - Two workflows ended on a session limit, losing fix and integration agents; the cure was landing per step, so a cut-off lane loses minutes, not a night.
+  - A semantic clash git could not see: main's lightweight test failed on a lane that imported Pillow at module level (land.py's suite caught it).
+  - A built sub with strong up thrusters was taken for a drone after the drones merge (fixed in the water lane).
+  - iCloud left "name 2.py" conflict copies in every worktree and "main 2" refs in .git; now ignored, and the broken refs moved out.
+  - The library line-up still shows a grey arm lying down (the Z1 and xArm 7 library homes are Menagerie keyframes folded back); go2_arm cannot fetch from counter height.
+
 ## Next-round seed
 
-Round 35 is running (wf_260edd7c-1bf): integrate the real-robot library with the gallery, safe straight walks, F3 mobile picking ("bring the apple to the table"), agent evals round 2 on tonight's main, and a pixel-level UI pass at three sizes. Then: README with the gallery, splicing and phase F pictures; a review round.
+Round 37 phase 2 is running (wf_ccf0a9ac-491): five lanes from the new main that land after every verified step: G8 legged (every library legged robot walks, stairs and gravel with terrain sensing, payloads), G9 mobile manipulation (base and arm plan together, drawers, doors, buttons, conveyors, two rooms), G10 mount anything on anything (checks, quick-change end effectors with dexterous hands, saved combinations), G11a environments and tasks from a sentence (success checks, rewards, task suites), G11b robots from a sentence. Then: library home poses for the Z1 and xArm 7, README pictures, a review round.
 
 ## Frontier
 
@@ -445,6 +467,7 @@ Round 35 is running (wf_260edd7c-1bf): integrate the real-robot library with the
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Done in round 30: edits and lesson round trips keep robots and objects where they are.
+- Done in rounds 35 to 37: real-robot splicing on one merged planner, mobile pick and place, the sensor suite, water, mechanisms and end effectors, drones, straighter learned walks, a 39-budget bench, and lanes that land live.
 - Done in rounds 33 and 34: a gallery of ten unique robots, dressed parts, navigation, imitation and seeing lessons, agent evals, video recording.
 - Done in round 32: agent errors that say how to fix them, quadrupeds that stand on their gait from load, README pictures from the real viewer.
 - Done in round 31: a playtester that plays every lesson (20 of 20 finish), quadrupeds that take a push on their gait, URDF imports that learn to walk, the public repo installed and driven by Codex end to end.

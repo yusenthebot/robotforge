@@ -85,8 +85,14 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. To build a scene from a sentence, combine load_scene, add_terrain
-and add_object, then check it with observe(view="overview").
+and objects stand on the ground under them. load_scene(description="a flat with a kitchen and a bedroom, three
+apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
+with terrain, things placed on tops within reach and steady; edit it like any world and check it with
+observe(view="overview").
+add_task("bring the red cup from the kitchen to the bedroom desk") turns a sentence into a task saved with the world:
+a goal with a success check, a reward and randomized starts (go to, bring, put, pick up, push, open, close, press,
+switch on); it adds the thing or the robot the task needs. observe lists each task under "tasks" with done and
+distance_m: check it after acting, and say the task is done only when observe says so.
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
@@ -104,7 +110,8 @@ the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, m
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
 pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table");
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
-handle along the joint's own path; robots lists robots with kind, arms and positions. For anything custom,
+handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
+drawer"); robots lists robots with kind, arms and positions. For anything custom,
 set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/"). observe reports
 state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture
 and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):
@@ -1008,6 +1015,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
+            tasks = playground.task_status()
+            if tasks:  # the open world's tasks (add_task): done or not, and how far still to go
+                state["tasks"] = tasks
             try:
                 lines = playground.sensors.lines()
             except Exception as exc:  # the sensors' lines are a bonus: the state comes back without them, and says so

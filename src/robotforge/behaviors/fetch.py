@@ -1180,8 +1180,94 @@ class Leg:
     result: dict[str, Any] | None = None
 
 
+class Footing:
+    """Where a robot carrying an arm stands while the arm works: creeping into a spot, kept there on its wheels, let
+    go. Needs `manager`, `robot`, `_creep` and `_stance` (Errand, visit.Visit)."""
+
+    manager: BehaviorManager
+    robot: str
+    _creep: tuple[float, Spot] | None
+    _stance: tuple[np.ndarray, float] | None
+
+    def _pose(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
+        root = self.manager.root(self.robot)
+        rot = data.xmat[root].reshape(3, 3)
+        return data.xpos[root][:2].copy(), math.atan2(rot[1, 0], rot[0, 0])
+
+    def _hold_still(self, data: mujoco.MjData) -> None:
+        """Keep a robot on wheels where it stood while its arm works, as brakes would: drive back toward its heading
+        and along it (it cannot go sideways). Wheels whose servos only hold their speed at zero let the arm's swing
+        turn a mobile Panda 1.1 degrees under it on the way to an apple, and its fingers closed 1.3 cm off the middle:
+        turning down, the apple squeezed out of them."""
+        walker = self.manager.session.controllers.get(self.robot)
+        if self._stance is None or walker is None or not hasattr(walker, "command"):
+            return
+        if self.manager.kind(self.robot).value in WALKERS:
+            return
+        xy, heading = self._pose(data)
+        along = float((self._stance[0] - xy) @ np.array([math.cos(heading), math.sin(heading)]))
+        twist = math.remainder(self._stance[1] - heading, math.tau)
+        walker.command(
+            float(np.clip(HOLD_GAIN * along, -HOLD_SPEED, HOLD_SPEED)),
+            float(np.clip(HOLD_GAIN * twist, -HOLD_TURN, HOLD_TURN)),
+        )
+
+    def _stand_free(self) -> None:
+        """Stop holding the robot where it stood (_hold_still): its arm is done there."""
+        walker = self.manager.session.controllers.get(self.robot)
+        if self._stance is not None and walker is not None and hasattr(walker, "command"):
+            walker.command(0.0, 0.0)
+        self._stance = None
+
+    def _creep_in(self, t: float, data: mujoco.MjData) -> bool:
+        """Creep the last few cm and degrees into the spot (navigation stops within 8 cm and 12 degrees); True when
+        it is there or has tried long enough. Off to one side it turns toward the spot, goes and turns back; else it
+        turns to the spot's heading on the spot and goes straight ahead or back. Turning toward a spot 3.5 cm
+        behind it to get there, a mobile Panda swung 60 degrees past its heading and rocked there for 12 s."""
+        since, spot = self._creep
+        walker = self.manager.session.controllers.get(self.robot)
+        if walker is None or not hasattr(walker, "command"):
+            return True
+        root = self.manager.root(self.robot)
+        xy = np.array(data.xpos[root][:2])
+        rot = data.xmat[root].reshape(3, 3)
+        yaw = math.atan2(rot[1, 0], rot[0, 0])
+        off = np.array(spot.xy) - xy
+        ahead = np.array([math.cos(yaw), math.sin(yaw)])
+        along, aside = float(off @ ahead), float(ahead[0] * off[1] - ahead[1] * off[0])
+        twist = _wrap(spot.heading - yaw)
+        if t - since > CREEP_SECONDS:
+            walker.command(0.0, 0.0)
+            return True
+        backs = getattr(walker, "max_reverse", 1.0) > 0 and type(walker).__name__ != "RhythmWalker"
+        walks = self.manager.kind(self.robot).value in WALKERS
+        aside_tol, yaw_tol, pos_tol = (
+            (WALK_SHIFT, WALK_TWIST / 2, WALK_SHIFT / 2) if walks else (ASIDE_TOL, YAW_TOL, POS_TOL)
+        )
+        if abs(aside) > aside_tol:
+            alpha = _wrap(math.atan2(off[1], off[0]) - yaw)
+            way = 1.0
+            if backs and abs(alpha) > math.pi / 2:
+                way, alpha = -1.0, _wrap(alpha - math.pi)
+            if abs(alpha) > math.radians(30.0):
+                walker.command(0.0, _turn(alpha))
+            else:
+                dist = float(np.linalg.norm(off))
+                walker.command(way * min(CREEP_SPEED, max(0.03, 1.5 * dist)), float(np.clip(1.5 * alpha, -0.3, 0.3)))
+            return False
+        if abs(twist) > yaw_tol:
+            walker.command(0.0, _turn(twist))
+            return False
+        if abs(along) > pos_tol and (along > 0 or backs):
+            speed = math.copysign(min(CREEP_SPEED, max(0.03, 1.5 * abs(along))), along)
+            walker.command(speed, float(np.clip(1.5 * twist, -0.3, 0.3)))
+            return False
+        walker.command(0.0, 0.0)
+        return True
+
+
 @dataclass
-class Errand:
+class Errand(Footing):
     """A controller that fetches: go to the object, pick it up, carry it to the place, put it down. Runs at RATE_HZ
     on top of the robot's walker, the trips (navigate.Navigator) and the arm (ArmMotion), which do the moving."""
 
@@ -1395,11 +1481,6 @@ class Errand:
 
     # -- helpers --
 
-    def _pose(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
-        root = self.manager.root(self.robot)
-        rot = data.xmat[root].reshape(3, 3)
-        return data.xpos[root][:2].copy(), math.atan2(rot[1, 0], rot[0, 0])
-
     def _knocked(self, t: float, data: mujoco.MjData, settle: str) -> bool:
         """If the robot was pushed off where it stood while its arm works, further than its spot was chosen to allow
         (SHIFT and TWIST), stop the arm and plan the pick or the put again from where it is once it stands still
@@ -1438,31 +1519,6 @@ class Errand:
         self._knocks += 1
         self.step, self._until = settle, t + SETTLE
         return True
-
-    def _hold_still(self, data: mujoco.MjData) -> None:
-        """Keep a robot on wheels where it stood while its arm works, as brakes would: drive back toward its heading
-        and along it (it cannot go sideways). Wheels whose servos only hold their speed at zero let the arm's swing
-        turn a mobile Panda 1.1 degrees under it on the way to an apple, and its fingers closed 1.3 cm off the middle:
-        turning down, the apple squeezed out of them."""
-        walker = self.manager.session.controllers.get(self.robot)
-        if self._stance is None or walker is None or not hasattr(walker, "command"):
-            return
-        if self.manager.kind(self.robot).value in WALKERS:
-            return
-        xy, heading = self._pose(data)
-        along = float((self._stance[0] - xy) @ np.array([math.cos(heading), math.sin(heading)]))
-        twist = math.remainder(self._stance[1] - heading, math.tau)
-        walker.command(
-            float(np.clip(HOLD_GAIN * along, -HOLD_SPEED, HOLD_SPEED)),
-            float(np.clip(HOLD_GAIN * twist, -HOLD_TURN, HOLD_TURN)),
-        )
-
-    def _stand_free(self) -> None:
-        """Stop holding the robot where it stood (_hold_still): its arm is done there."""
-        walker = self.manager.session.controllers.get(self.robot)
-        if self._stance is not None and walker is not None and hasattr(walker, "command"):
-            walker.command(0.0, 0.0)
-        self._stance = None
 
     def _struck(self, data: mujoco.MjData) -> str | None:
         """The name of something the robot's arm touches now, other than the load and the floor."""
@@ -1534,52 +1590,6 @@ class Errand:
         self._leg = Leg(to, spot, trip)
         self.legs.append(self._leg)
         self.step = step
-
-    def _creep_in(self, t: float, data: mujoco.MjData) -> bool:
-        """Creep the last few cm and degrees into the spot (navigation stops within 8 cm and 12 degrees); True when
-        it is there or has tried long enough. Off to one side it turns toward the spot, goes and turns back; else it
-        turns to the spot's heading on the spot and goes straight ahead or back. Turning toward a spot 3.5 cm
-        behind it to get there, a mobile Panda swung 60 degrees past its heading and rocked there for 12 s."""
-        since, spot = self._creep
-        walker = self.manager.session.controllers.get(self.robot)
-        if walker is None or not hasattr(walker, "command"):
-            return True
-        root = self.manager.root(self.robot)
-        xy = np.array(data.xpos[root][:2])
-        rot = data.xmat[root].reshape(3, 3)
-        yaw = math.atan2(rot[1, 0], rot[0, 0])
-        off = np.array(spot.xy) - xy
-        ahead = np.array([math.cos(yaw), math.sin(yaw)])
-        along, aside = float(off @ ahead), float(ahead[0] * off[1] - ahead[1] * off[0])
-        twist = _wrap(spot.heading - yaw)
-        if t - since > CREEP_SECONDS:
-            walker.command(0.0, 0.0)
-            return True
-        backs = getattr(walker, "max_reverse", 1.0) > 0 and type(walker).__name__ != "RhythmWalker"
-        walks = self.manager.kind(self.robot).value in WALKERS
-        aside_tol, yaw_tol, pos_tol = (
-            (WALK_SHIFT, WALK_TWIST / 2, WALK_SHIFT / 2) if walks else (ASIDE_TOL, YAW_TOL, POS_TOL)
-        )
-        if abs(aside) > aside_tol:
-            alpha = _wrap(math.atan2(off[1], off[0]) - yaw)
-            way = 1.0
-            if backs and abs(alpha) > math.pi / 2:
-                way, alpha = -1.0, _wrap(alpha - math.pi)
-            if abs(alpha) > math.radians(30.0):
-                walker.command(0.0, _turn(alpha))
-            else:
-                dist = float(np.linalg.norm(off))
-                walker.command(way * min(CREEP_SPEED, max(0.03, 1.5 * dist)), float(np.clip(1.5 * alpha, -0.3, 0.3)))
-            return False
-        if abs(twist) > yaw_tol:
-            walker.command(0.0, _turn(twist))
-            return False
-        if abs(along) > pos_tol and (along > 0 or backs):
-            speed = math.copysign(min(CREEP_SPEED, max(0.03, 1.5 * abs(along))), along)
-            walker.command(speed, float(np.clip(1.5 * twist, -0.3, 0.3)))
-            return False
-        walker.command(0.0, 0.0)
-        return True
 
     def _leaves(self, data: mujoco.MjData) -> bool:
         """Whether the robot, where it stands, would find a way to the place with the load folded over it."""
