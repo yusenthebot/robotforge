@@ -397,3 +397,14 @@ def test_the_docks_focus_ring_on_a_phone_stays_off_its_neighbour(viewer):
 
     seen = viewer("phone", "en", scenario)
     assert seen["shown"] and seen["ring"] <= seen["next"], seen
+
+
+def test_a_face_off_tables_words_stay_inside_their_columns(viewer):
+    """Three columns of "gravity compensation" ran into each other as "compensationcompensationcompensation"."""
+
+    async def scenario(tab, _server):
+        await _start(tab, "arm_faceoff")
+        return await tab.eval("""[...document.querySelectorAll(".faceoff-table td")]
+            .filter((td) => td.scrollWidth > td.clientWidth + 1).map((td) => td.textContent)""")
+
+    assert viewer("laptop", "en", scenario) == []

@@ -1135,8 +1135,10 @@ input[type="range"]::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+/* A word wider than its column is hyphenated, else broken: three columns of "gravity compensation" ran into each
+   other as "compensationcompensationcompensation" in a laptop's table. */
 .faceoff-table th,
-.faceoff-table td { padding: 3px 4px; text-align: right; vertical-align: top; line-height: 1.35; }
+.faceoff-table td { padding: 3px 4px; text-align: right; vertical-align: top; line-height: 1.35; hyphens: auto; overflow-wrap: break-word; }
 .faceoff-table tbody th { width: 31%; padding-left: 0; text-align: left; font-weight: 500; color: var(--muted); }
 .faceoff-table thead th { padding-bottom: 6px; font-weight: 650; }
 .faceoff-table .who { display: block; }
