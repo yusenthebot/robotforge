@@ -50,8 +50,8 @@ MAX_TILT = math.radians(35.0)
 MAX_TURN = 1.5  # rad/s of yaw
 SPOOL_DOWN = 0.5  # s from touchdown to motors off
 TOUCHDOWN = 0.02  # m of clearance at which it is down
-ARRIVE_TOL = 0.08  # m from the target, with the speed below ARRIVE_SPEED, counts as there
-ARRIVE_SPEED = 0.2
+ARRIVE_TOL = 0.04  # m from the target, with the speed below ARRIVE_SPEED, counts as there
+ARRIVE_SPEED = 0.1
 UPSIDE_DOWN = 0.0  # the body's up axis below the horizon: crashed
 CLEARANCE = 0.6  # m kept above anything a straight leg would hit, when it climbs over it
 MAX_ALTITUDE = 30.0
@@ -97,22 +97,25 @@ def _vee(m: np.ndarray) -> np.ndarray:
 
 @dataclass
 class Gust:
-    """Wind that rises, blows and dies down (world frame, m/s)."""
+    """Wind (world frame, m/s) that turns from `before` to `wind` over `ramp` s from `start`, blows until `end`,
+    then dies down over `ramp` s."""
 
     wind: np.ndarray
     start: float
-    seconds: float
+    end: float
+    before: np.ndarray = field(default_factory=lambda: np.zeros(3))
     ramp: float = 0.3
 
     def at(self, t: float) -> np.ndarray:
-        s = t - self.start
-        if s <= 0 or s >= self.seconds + 2 * self.ramp:
+        if t >= self.end + self.ramp:
             return np.zeros(3)
-        k = min(1.0, s / self.ramp, (self.seconds + 2 * self.ramp - s) / self.ramp)
-        return self.wind * k
+        if t > self.end:
+            return self.wind * ((self.end + self.ramp - t) / self.ramp)
+        k = float(np.clip((t - self.start) / self.ramp, 0.0, 1.0))
+        return self.before + (self.wind - self.before) * k
 
     def over(self, t: float) -> bool:
-        return t - self.start >= self.seconds + 2 * self.ramp
+        return t >= self.end + self.ramp
 
 
 @dataclass
@@ -283,9 +286,17 @@ class FlightController:
             self.target = None  # set from where it brakes to, at the next tick
 
     def gusts(self, wind: list[float] | np.ndarray, seconds: float, now: float) -> None:
+        """Wind that blows for `seconds` from `now` and dies down after. The same wind again while it still blows
+        keeps it blowing: an agent stepped a gust 0.05 s at a time to watch it, and each call started it afresh
+        from still air, so it never blew at all. Other wind turns from what blows now."""
         w = np.zeros(3)
         w[: len(wind)] = np.asarray(wind, float)[:3]
-        self.gust = Gust(w, now, seconds)
+        g = self.gust
+        if g is not None and now <= g.end and np.allclose(g.wind, w):
+            g.end = max(g.end, now + seconds)
+            return
+        before = g.at(now) if g is not None else np.zeros(3)
+        self.gust = Gust(w, now, now + seconds, before)
 
     def _take_off(self) -> None:
         self.phase = "flying"
@@ -571,7 +582,7 @@ def blow(session: Any, wind: list[float], seconds: float, steps: int) -> dict[st
     now = float(session.data.time)
     start = {n: session.data.xpos[c.frame.root].copy() for n, c in flying.items()}
     for c in flying.values():
-        c.gusts(wind, max(0.0, seconds - 0.6), now)
+        c.gusts(wind, seconds, now)
     worst = dict.fromkeys(flying, 0.0)
     done = 0
     while done < steps:

@@ -345,6 +345,21 @@ async def test_an_agent_flies_a_square_and_lands_through_the_mcp_tools(tmp_path,
         assert described["aircraft"][0]["rotors"] == [f"drone/rotor_{k}" for k in range(1, 5)]
 
 
+def test_wind_stepped_a_little_at_a_time_keeps_blowing(pg):
+    """An agent watched a gust by calling simulate(0.05, wind) a hundred times: each call started the gust afresh
+    from still air, so the drone was never pushed at all."""
+    _trip(pg, [0.0, 0.0, 1.5])
+    pg.run_fast(lambda: False, 2.0)
+    start = np.array(pg.behaviors.pose("drone")["position"])
+    furthest = 0.0
+    for _ in range(40):
+        pg.simulate(0.05, wind=[8.0, 0.0])
+        furthest = max(furthest, float(np.linalg.norm(np.array(pg.behaviors.pose("drone")["position"]) - start)))
+    assert furthest > 0.03
+    pg.simulate(6.0)  # the wind dies down and it comes back
+    assert np.linalg.norm(np.array(pg.behaviors.pose("drone")["position"]) - start) < 0.03
+
+
 def test_wind_needs_an_aircraft_and_meters_per_second(pg):
     pg.remove("drone")
     pg.add_robot("rover", template="rover")

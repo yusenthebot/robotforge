@@ -758,8 +758,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     def simulate(seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None) -> str:
         """Advance physics by `seconds` (max 60) as fast as possible, optionally setting controls first. Returns the
         new time and which free bodies moved (from/to positions in meters). wind=[x, y] (or [x, y, z]) in m/s blows
-        a gust on every flying aircraft for those seconds (rising and dying down over 0.3 s); "wind" in the result
-        says how far each was pushed. Call simulate again without wind to watch it come back."""
+        on every aircraft for those seconds (rising over 0.3 s, dying down over 0.3 s after); the same wind in the
+        next call keeps it blowing. "wind" in the result says how far each was pushed. Call simulate again without
+        wind to watch it come back."""
         with _tool_errors():
             return _json(playground.simulate(seconds, controls, wind))
 
