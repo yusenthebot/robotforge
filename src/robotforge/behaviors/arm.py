@@ -835,6 +835,9 @@ class ArmMotion:
         self.ik.point(self.chain, q)
         d.qvel[:] = 0.0
         mujoco.mj_rne(m, d, 0, self._bias)
+        if m.ngravcomp:  # weight the model holds up itself (Menagerie's PiPER): added again, the arm reached 3 cm high
+            mujoco.mj_passive(m, d)
+            self._bias -= d.qfrc_gravcomp
         out = np.array(q, float)
         for i, (j, a) in enumerate(zip(self.joints, self.actuators, strict=True)):
             kp = -float(m.actuator_biasprm[a, 1]) * abs(float(m.actuator_gear[a, 0]))
