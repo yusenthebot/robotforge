@@ -21,6 +21,12 @@ import numpy as np
 EPS = 1e-9
 RANK_TOL = 1e-6  # singular values below this share of the largest: the rotors cannot make that motion
 MIN_LIFT = 1.1  # the rotors must lift at least this many times the aircraft's weight to fly
+# An aircraft has at least this many rotors pushing up, lifting at least this share of its weight together: one
+# fan on a car or a boat pushes it along, and the car is still a car. Short of its weight (but not of half) it is
+# still meant to fly, and is told to get stronger rotors.
+MIN_ROTORS = 3
+MEANT_TO_LIFT = 0.5
+UPRIGHT = 0.7  # a rotor whose axis is this close to straight up pushes up
 
 
 class AirframeError(ValueError):
@@ -185,10 +191,43 @@ def root_of(model: mujoco.MjModel, robot: str) -> int | None:
 
 
 def is_aircraft(model: mujoco.MjModel, robot: str) -> bool:
-    """A robot that moves freely and has rotors on its airframe (whether they can lift it is find_airframe's
-    business: a builder who left a rotor out is told why it cannot fly, not that it is no aircraft)."""
+    """A robot that moves freely with rotors that could carry it (see MIN_ROTORS). Whether they can also steer it
+    is find_airframe's business: a builder who gave every rotor the same spin is told why it cannot fly, not that
+    it is no aircraft."""
     root = root_of(model, robot)
-    return root is not None and bool(thrust_actuators(model, robot, root))
+    if root is None:
+        return False
+    actuators = thrust_actuators(model, robot, root)
+    if len(actuators) < MIN_ROTORS:
+        return False
+    data = mujoco.MjData(model)
+    key = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    data.qpos[:] = model.key_qpos[key] if key >= 0 else model.qpos0
+    mujoco.mj_kinematics(model, data)
+    rot = data.xmat[root].reshape(3, 3)
+    mass = float(model.body_subtreemass[root])
+    up, lift = 0, 0.0
+    for a in actuators:
+        gain = float(model.actuator_gainprm[a, 0])
+        site = data.site_xmat[int(model.actuator_trnid[a, 0])].reshape(3, 3)
+        force = gain * (rot.T @ site @ model.actuator_gear[a, :3])
+        norm = float(np.linalg.norm(force))
+        if norm > EPS and force[2] >= UPRIGHT * norm:
+            up += 1
+            lift += float(force[2]) * _control_range(model, a, gain, mass, norm)[1]
+    gravity = float(np.linalg.norm(model.opt.gravity)) or 9.81
+    return up >= MIN_ROTORS and lift >= MEANT_TO_LIFT * mass * gravity
+
+
+def _control_range(model: mujoco.MjModel, a: int, gain: float, mass: float, norm: float) -> tuple[float, float]:
+    """The range of a rotor's control: its own, from its force limit, or (unlimited) enough to lift anything."""
+    if model.actuator_ctrllimited[a]:
+        low, high = (float(v) for v in model.actuator_ctrlrange[a])
+        return low, high
+    if model.actuator_forcelimited[a]:
+        low, high = (float(v) / max(abs(gain), EPS) for v in model.actuator_forcerange[a])
+        return low, high
+    return (0.0, 4 * mass * 9.81) if norm > EPS else (-1.0, 1.0)
 
 
 def viewer_rotors(model: mujoco.MjModel, robots: list[str]) -> list[dict]:
@@ -267,12 +306,7 @@ def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = N
         norm = float(np.linalg.norm(force))
         axis = force / norm if norm > EPS else np.zeros(3)
         reaction = float((srot @ gear[3:6]) @ axis) if norm > EPS else 0.0
-        if model.actuator_ctrllimited[a]:
-            low, high = (float(v) for v in model.actuator_ctrlrange[a])
-        elif model.actuator_forcelimited[a]:
-            low, high = (float(v) / max(abs(gain), EPS) for v in model.actuator_forcerange[a])
-        else:
-            low, high = (0.0, 4 * mass * 9.81) if norm > EPS else (-1.0, 1.0)
+        low, high = _control_range(model, a, gain, mass, norm)
         name = (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or "").split("/", 1)[-1]
         spin = 0 if abs(reaction) < EPS else (-1 if reaction > 0 else 1)  # the body turns against the propeller
         push = srot @ gear[:3]
@@ -322,6 +356,12 @@ def _missing_motion(b: np.ndarray) -> str:
 
 
 def _layout_hint(frame: Airframe, missing: str) -> str:
+    lifting = [r for r in frame.rotors if np.linalg.norm(r.axis) > 0]
+    if len(lifting) < 4:
+        return (
+            f"{len(lifting)} rotors are too few to give thrust and all three turns at once (a tricopter tilts its "
+            "tail rotor to turn, which is not built in): use 4, 6 or 8 rotors"
+        )
     if "yaw" in missing:
         spins = [r.spin for r in frame.rotors]
         if all(s == spins[0] for s in spins):

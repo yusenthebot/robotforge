@@ -374,6 +374,49 @@ def test_a_mirrored_rotor_turns_the_other_way():
     assert spins == {"left_front": 1, "right_front": -1, "left_back": -1, "right_back": 1}
 
 
+FAN_CAR = {
+    "base": {"size": [0.4, 0.22, 0.06], "mass": 1.5},
+    "parts": [
+        {"name": "front_left_wheel", "at": [0.14, 0.13, -0.02], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "back_left_wheel", "at": [-0.14, 0.13, -0.02], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "fan", "at": [-0.18, 0, 0.1], "rotate": [0, -90, 0], "shape": "rotor", "size": [0.18]},
+    ],
+}
+
+
+def test_a_car_with_one_fan_is_still_a_car_that_drives(pg):
+    pg.remove("drone")
+    pg.add_robot("car", build=FAN_CAR)
+    (car,) = pg.behaviors.robots()
+    assert car["kind"] == "rover" and "flight" not in car  # it was an aircraft that could not fly, and stuck
+    assert "aircraft" not in pg.describe()
+    pg.behaviors.move("car", 0.3, 0.0)
+    pg.run_fast(lambda: False, 2.0)
+    assert pg.behaviors.pose("car")["position"][0] > 0.3
+
+
+def test_three_rotors_are_an_aircraft_told_to_use_four_or_more(pg):
+    build = {
+        "base": {"shape": "cylinder", "size": [0.12, 0.05], "mass": 0.8},
+        "parts": [
+            {
+                "name": "arm",
+                "shape": "capsule",
+                "size": [0.02, 0.2],
+                "direction": "forward",
+                "joint": "fixed",
+                "mass": 0.04,
+                "repeat": {"count": 3, "around": "z"},
+            },
+            {"name": "rotor", "parent": "arm", "at": "end", "shift": [0, 0, 0.012], "shape": "rotor", "size": [0.22]},
+        ],
+    }
+    pg.remove("drone")
+    pg.add_robot("tri", build=build)
+    (tri,) = pg.behaviors.robots()
+    assert tri["kind"] == "aircraft" and "use 4, 6 or 8 rotors" in tri["flight"]["cannot_fly"]
+
+
 def test_rotor_parts_are_bolted_on_and_thrust_is_for_rotors():
     from robotforge.design import builder
 
