@@ -288,7 +288,7 @@ def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = N
         com=com,
         gravity=gravity,
         mixer=mixer,
-        rest_height=_rest_height(model, data, bodies, root, rot),
+        rest_height=_rest_height(model, data, bodies, root),
         radius=_radius(model, data, bodies, origin),
         descendants=bodies,
     )
@@ -344,19 +344,15 @@ def _inertia(model: mujoco.MjModel, data: mujoco.MjData, bodies, com: np.ndarray
     return rot.T @ total @ rot
 
 
-def _rest_height(model: mujoco.MjModel, data: mujoco.MjData, bodies, root: int, rot: np.ndarray) -> float:
-    """How high the root body's origin is above the lowest point of the aircraft, level (standing on its gear)."""
+def _rest_height(model: mujoco.MjModel, data: mujoco.MjData, bodies, root: int) -> float:
+    """How high the root body's origin is above the lowest point of the aircraft in the pose measured (its home
+    pose: level, standing on its gear), so its height above the ground is known from where its origin is."""
     from robotforge.sim.geometry import collides, lowest_point
 
-    level = data.xmat[root].reshape(3, 3)
-    tilt_ok = level[2, 2] > 0.999
     lows = [
         lowest_point(model, data, g)[2] for g in range(model.ngeom) if g_in(model, g, bodies) and collides(model, g)
     ]
-    if not lows:
-        return 0.0
-    height = float(data.xpos[root][2] - min(lows))
-    return height if tilt_ok else height * float(rot[2, 2])
+    return float(data.xpos[root][2] - min(lows)) if lows else 0.0
 
 
 def _radius(model: mujoco.MjModel, data: mujoco.MjData, bodies, origin: np.ndarray) -> float:
