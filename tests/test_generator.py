@@ -65,6 +65,16 @@ def test_sizes_are_factors_and_lengths_in_meters_set_them():
     assert huge.plan.length == 1.8 and any("length" in n for n in huge.notes)
 
 
+def test_bodies_said_in_other_words():
+    """'two-legged' made a quadruped, a 'mobile manipulator' a standing arm without a base, and wheels on a dog were
+    dropped without a word."""
+    assert generator.generate("a two-legged walker").kind == "humanoid"
+    mobile = generator.generate("a mobile manipulator with a suction cup")
+    assert mobile.kind == "rover" and mobile.plan.arms == 1 and mobile.plan.hand == "suction"
+    dog = generator.generate("a dog with wheels")
+    assert dog.kind == "quadruped" and any("wheel_dog" in n for n in dog.notes)
+
+
 def test_the_same_sentence_makes_the_same_robot_and_a_seed_another():
     a, b = generator.generate("a robot dog"), generator.generate("a robot dog")
     assert a.source == b.source

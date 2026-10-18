@@ -55,6 +55,10 @@ NOT_BUILT = (
     (r"\b(boat|ship|swim|swims|swimming|submarine|underwater|fish)\b|船|水下|游泳|鱼",
      'robots for water are the boat and rov templates: add_robot(name, template="boat") or template="rov"'),
 )  # fmt: skip
+WHEELED = (
+    r"\b(wheels?|wheeled|rover|car|cart|truck|buggy|vehicle|courier|delivery|drives?|driving|tank|forklift|"
+    r"mobile (manipulator|base|robot))\b|轮|车|快递|送货|配送|移动"
+)
 BODY_WORDS: tuple[tuple[str, str], ...] = (
     ("snake", r"\b(snake|serpent|worm|eel|slither\w*)\b|蛇"),
     ("balancer", r"\b(segway|self balancing|balancing|balances|balancer|unicycle)\b|平衡"),
@@ -62,8 +66,7 @@ BODY_WORDS: tuple[tuple[str, str], ...] = (
     ("legged", r"\b(legs?|legged|walk\w*|dog|puppy|cat|horse|pony|cow|goat|lizard|quadruped|hexapod|spider|insect|"
      r"ant|beetle|bug|crab|mantis|centaur|scorpion|cockroach|critter|animal)\b|腿|足|狗|猫|马|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|"
      r"半人马|蝎子|甲虫"),
-    ("wheeled", r"\b(wheels?|wheeled|rover|car|cart|truck|buggy|vehicle|courier|delivery|drives?|driving|tank|"
-     r"forklift)\b|轮|车|快递|送货|配送"),
+    ("wheeled", WHEELED),
     ("arm", r"\b(arms?|manipulator|tentacle|gripper|claw)\b|机械臂|手臂|触手|夹爪"),
 )  # fmt: skip
 SIX_LEGS = (
@@ -158,6 +161,11 @@ def read(sentence: str, plan: Plan | None = None, seed: int | None = None) -> tu
         changes.setdefault("cargo", True)
     if fresh and re.search(r"\b(spider|round|disc|disk|circular)\b|蜘蛛|圆", text):
         changes["round"] = True
+    if target == "legged" and re.search(WHEELED, text):
+        notes.append(
+            "it walks on legs; for legs that end in driven wheels add the wheel_dog design (add_robot(name, "
+            'design="wheel_dog")), or say "wheels instead of legs" for a rover'
+        )
     if not fresh and not changes:
         raise SentenceError(
             f'I could not tell what to change from {sentence.strip()!r}: say e.g. "make it longer", "six legs '
@@ -192,7 +200,7 @@ def _body(text: str) -> str | None:
         and "legged" not in found
     ):
         return "balancer"
-    if "legged" in found and re.search(r"\b(two|2) legs?\b|两条腿|两腿", text) and "wheeled" not in found:
+    if "legged" in found and re.search(r"\b(two|2) (legs?|legged)\b|两条腿|两腿", text) and "wheeled" not in found:
         return "humanoid"
     return found[0]
 
@@ -265,7 +273,9 @@ def _arms(text: str, plan: Plan, body: str, fresh: bool) -> int | None:
         return count
     if re.search(r"\bdual arm|\btwo armed|\bdouble arm|双臂", text):
         return 2
-    if re.search(r"\b(arm|hand|gripper|claw|pincer|jaws?|grabber)\b|机械臂|夹爪|爪|手", text):
+    if re.search(
+        r"\b(arm|hand|gripper|claw|pincer|jaws?|grabber|manipulator|suction|magnet)\b|机械臂|夹爪|爪|手|吸盘", text
+    ):
         return max(1, plan.arms if not fresh else 1)
     if fresh and body == "arm":
         return 1
