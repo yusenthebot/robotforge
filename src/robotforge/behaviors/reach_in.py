@@ -42,6 +42,7 @@ VIA_UP = (0.1, 0.25)  # m higher than both ends that a joint move may raise the 
 QUICK_RESTARTS = 4  # random IK starts in the quick check of a tilted reach (reaches)
 SWEEP_STEP = 0.08  # rad of the furthest joint between the poses a joint move is checked at
 LOAD_GAP = 0.01  # m a load moved joint by joint keeps above what is under it
+WAY_POINTS = 6  # poses checked for touching things on a hand's way round the base to a stage (Hand._way_clear)
 
 
 class Hand:
@@ -154,6 +155,10 @@ class Hand:
             raise ValueError(f"{arm.robot} cannot swing the load round from the object to over its robot")
         carry_z, carry_turn, carry_joints = across
         over = np.array([hold[0], hold[1], carry_z])
+        start = arm.tool_target_end()
+        risen = np.array([start[0], start[1], stage[2]])
+        if not self._way_clear(risen, stage) or (carry_joints is None and not self._way_clear(back, over, carry_turn)):
+            raise OutOfReach(arm.robot, ["object without touching what is round it"], {"object": grasp})
         arm._go_over(stage, stage[2])
         self._follow(*paths[0], "reach in")
         self._follow(*paths[1], "descend")
@@ -184,6 +189,8 @@ class Hand:
         carry_z, carry_turn, carry_joints = across
         up[2] = carry_z
         over_stage = np.array([stage[0], stage[1], carry_z])
+        if carry_joints is None and not self._way_clear(up, over_stage, carry_turn):
+            raise OutOfReach(arm.robot, ["place without touching what is round it"], {"place": drop})
         arm.queue.append(Waypoint(up, None, arm._time(start, up) + 0.3, "lift", turn=0.0, load=half))
         arm._carry(up, over_stage, carry_turn, carry_joints, half)
         if carry_z > stage[2] + 1e-6:
@@ -435,6 +442,18 @@ class Hand:
         travel = float(np.sum(np.max(np.abs(np.diff(knots, axis=0)), axis=1)))
         duration = max(0.5, float(np.linalg.norm(b - a)) / SPEED, angle / TURN_SPEED, travel / JOINT_SPEED)
         return Waypoint(None, None, duration, label, knots[-1], load=load, path=knots)
+
+    def _way_clear(self, start: np.ndarray, end: np.ndarray, turn: float | None = None) -> bool:
+        """Whether the arm touches nothing (_clear) with its tool pointing down at WAY_POINTS points along the way a
+        move takes from `start` to `end`, round the base turning `turn` (ArmMotion._arc_point), as _pick_down checks
+        its way in (fetch.py). Unchecked, a lift picker's hand swung round at shelf height from its tuck behind it to
+        over a parcel, struck a crate beside it, and the knock turned the robot 120 degrees: it closed 1 m off."""
+        arm = self.arm
+        for s in np.linspace(0.0, 1.0, WAY_POINTS)[1:]:
+            q, err = arm.pose_for(arm._arc_point(start, end, float(s), turn))
+            if err <= REACH_TOL and not self._clear(q):
+                return False
+        return True
 
     def _clear(self, q: np.ndarray) -> bool:
         """Whether the arm at `q` touches nothing: itself, the robot, the floor (ArmMotion._collides), and here also

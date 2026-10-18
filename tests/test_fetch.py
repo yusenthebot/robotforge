@@ -197,6 +197,44 @@ def test_the_template_arm_turns_its_base_under_the_no_slip_pass(pg):
     assert abs(math.degrees(data.qpos[yaw.qposadr[0]])) < 10
 
 
+def test_a_crate_beside_the_robot_blocks_the_hands_way_round_that_side(pg):
+    """The empty hand's way round the base to over a load is checked pose by pose (Hand._way_clear): unchecked, a lift
+    picker's hand swung round at shelf height into a crate beside it."""
+    pg.add_robot("picker", design="lift_picker")
+    pg.add_object("crate", shape="box", size=[0.3, 0.3, 0.6], pos=[0.1, -0.55, 0.3], fixed=True)
+    pg.run_fast(lambda: False, 0.5)
+    arm = pg.behaviors._arm(pg.behaviors.resolve("picker", arm=True))
+    arm.sync(pg.session.data)
+    base = arm.base_xy
+    behind, ahead = np.array([base[0] - 0.45, base[1], 0.5]), np.array([base[0] + 0.45, base[1], 0.5])
+    hand = reach_in.Hand(arm)
+    assert not hand._way_clear(behind, ahead, math.pi)  # round its right, where the crate is
+    assert hand._way_clear(behind, ahead, -math.pi)  # round its left
+
+
+def test_a_robot_pushed_off_its_spot_while_its_arm_reaches_plans_the_pick_again(pg):
+    """The arm's moves are planned for where the robot stands. A lift picker's hand struck a crate on its way over a
+    parcel, the knock turned the robot 120 degrees, and its hand went on to close on nothing 1 m off. Here the robot
+    is moved 12 cm while its arm is on the way; it stops, plans the pick again from there and takes the cube."""
+    pg.add_robot("picker", design="lift_picker")
+    pg.add_object("stand", shape="table", size=[0.4, 0.4, 0.45], pos=[1.6, 0.0], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.45, 0.0, 0.47])
+    pg.add_object("goal", shape="table", size=[0.4, 0.4, 0.45], pos=[-1.6, 0.0], fixed=True)
+    pg.run_fast(lambda: False, 0.5)
+    errand, _ = _start(pg, "cube", "goal")
+    assert isinstance(errand, fetch.Errand)
+    pg.run_fast(lambda: errand.step == "picking" or errand.done, fetch.TIME_LIMIT)
+    assert errand.step == "picking", errand.result()
+    pg.run_fast(lambda: False, 0.5)  # the arm is on its way
+    model, data = pg.session.model, pg.session.data
+    free = model.body_jntadr[pg.behaviors.root("picker")]
+    data.qpos[model.jnt_qposadr[free] + 1] += 0.12  # sideways, as a knock would
+    mujoco.mj_forward(model, data)
+    pg.run_fast(lambda: errand.step == "to_place" or errand.done, fetch.TIME_LIMIT)
+    assert errand.step == "to_place" and errand.held, errand.result()
+    assert errand._knocks == 1
+
+
 def test_a_ball_held_on_an_errand_does_not_spin_between_the_fingers(pg):
     """The finger pads are made firm for an errand without taking the contact over: a load keeps its own torsional
     friction against them. Given priority, the Panda's pads (condim 3) let an apple held tilted, a point of contact a

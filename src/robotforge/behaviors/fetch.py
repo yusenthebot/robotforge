@@ -76,6 +76,7 @@ CREEP_SECONDS = 12.0
 STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm did not reach
 HELD = 0.03  # m: a load whose middle is within its half height and this of the tool point is in the gripper
 SETTLE = 0.6  # s it stands still after it arrives, before the arm moves (a gait's sway dies down)
+KNOCKS = 2  # times in one errand it plans a pick or a put again after being pushed off where it stood (_knocked)
 # m kept between a load put down and the edge of what it goes on: at 2 cm a lift picker let a can go 3 cm short of its
 # spot and it tipped off the table's edge
 EDGE_INSET = 0.05
@@ -1202,6 +1203,8 @@ class Errand:
     _retries: int = 0  # trips planned again after getting stuck
     _replans: int = 0  # spots looked for again from where the robot stopped (_again)
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
+    _stance: tuple[np.ndarray, float] | None = None  # where the robot stood when its arm set to work (_knocked)
+    _knocks: int = 0  # picks and puts planned again after that
     _resume: tuple | None = None  # (step, what to do) after that
     hand: Hand = field(init=False)
 
@@ -1310,6 +1313,9 @@ class Errand:
             self._start_place(t, data)
 
     def _on_picking(self, t: float, data: mujoco.MjData) -> None:
+        # Once it holds the load, the moves left bring it round over the robot wherever the robot is.
+        if not self._holds(data) and self._knocked(t, data, "settle_object"):
+            return
         if not self.arm.done:
             return
         if not self._holds(data):
@@ -1333,6 +1339,8 @@ class Errand:
         self._go(data, "to_place")
 
     def _on_placing(self, t: float, data: mujoco.MjData) -> None:
+        if self._holds(data) and self._knocked(t, data, "settle_place"):
+            return
         if not self.arm.done:
             return
         self.held = False
@@ -1357,6 +1365,62 @@ class Errand:
             self._finish(data)
 
     # -- helpers --
+
+    def _pose(self, data: mujoco.MjData) -> tuple[np.ndarray, float]:
+        root = self.manager.root(self.robot)
+        rot = data.xmat[root].reshape(3, 3)
+        return data.xpos[root][:2].copy(), math.atan2(rot[1, 0], rot[0, 0])
+
+    def _knocked(self, t: float, data: mujoco.MjData, settle: str) -> bool:
+        """If the robot was pushed off where it stood while its arm works, further than its spot was chosen to allow
+        (SHIFT and TWIST), stop the arm and plan the pick or the put again from where it is once it stands still
+        (`settle`), or fail saying so after KNOCKS times; True if it was. The arm's moves are joint angles worked out
+        for where it stood: a lift picker's hand struck a crate on its way over a parcel, the knock turned the robot
+        120 degrees, and the hand went on to close on nothing 1 m from the parcel."""
+        if self._stance is None:
+            return False
+        xy, heading = self._pose(data)
+        moved = math.dist(xy, self._stance[0])
+        turned = abs(math.remainder(heading - self._stance[1], math.tau))
+        walks = self.manager.kind(self.robot).value in WALKERS
+        shift, twist = (WALK_SHIFT, WALK_TWIST) if walks else (SHIFT, TWIST)
+        if moved <= shift and turned <= twist:
+            return False
+        self.arm.queue.clear()
+        self.arm.sync(data)
+        self._stance = None
+        struck = self._struck(data)
+        log.info(
+            "%s was pushed %.2f m and %.0f degrees off its spot (struck %s)",
+            self.robot,
+            moved,
+            math.degrees(turned),
+            struck,
+        )
+        if self._knocks >= KNOCKS:
+            what = f"its arm struck the {struck} and " if struck else ""
+            self._fail(
+                data,
+                "knocked",
+                f"{what}{self.robot} was pushed {moved:.2f} m and {math.degrees(turned):.0f} degrees off where it "
+                f"stood while its arm worked, {KNOCKS + 1} times",
+            )
+            return True
+        self._knocks += 1
+        self.step, self._until = settle, t + SETTLE
+        return True
+
+    def _struck(self, data: mujoco.MjData) -> str | None:
+        """The name of something the robot's arm touches now, other than the load and the floor."""
+        m = self.manager.session.model
+        robot = int(m.body_rootid[self.manager.root(self.robot)])
+        for con in data.contact[: data.ncon]:
+            b1, b2 = int(m.geom_bodyid[con.geom1]), int(m.geom_bodyid[con.geom2])
+            for mine, other in ((b1, b2), (b2, b1)):
+                root = int(m.body_rootid[other])
+                if mine in self.arm._moving and root not in (robot, 0, int(m.body_rootid[self.body])):
+                    return mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, root)
+        return None
 
     def hold_world(self, data: mujoco.MjData) -> np.ndarray:
         """The tool point it holds the load at, for the robot as it stands now."""
@@ -1534,6 +1598,7 @@ class Errand:
                 data, "out_of_reach", f"from where it stopped its arm could not pick up the {self.obj}: {failed}"
             )
             return
+        self._stance = self._pose(data)
         self.step = "picking"
 
     def _start_place(self, t: float, data: mujoco.MjData) -> None:
@@ -1558,6 +1623,7 @@ class Errand:
                 f"from where it stopped its arm could not put it on the {self.place.name}: {failed}",
             )
             return
+        self._stance = self._pose(data)
         self.step = "placing"
 
     def _first_tilt(self, spot: Spot | None, queue: Callable[[float], None], which: str) -> Exception | None:
