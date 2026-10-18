@@ -268,7 +268,7 @@ class FlightController:
             "behavior": "fly",
             "robot": self.robot,
             "state": "crashed" if self.fallen else self.phase,
-            "altitude_m": round(self.altitude, 2),
+            "altitude_m": round(max(self.altitude, 0.0), 2),
             "speed": round(float(np.hypot(self._v[0], self._v[1])), 2),
             "max_speed": MAX_SPEED,
         }
@@ -478,6 +478,18 @@ class FlightController:
     def ground_below(self, model: mujoco.MjModel, data: mujoco.MjData, point: np.ndarray) -> float | None:
         """Height of whatever is under `point` (not the aircraft itself), or None over nothing."""
         return ground_height(model, data, point, self.frame.descendants, self.frame.root)
+
+
+def seen_from_outside(model: mujoco.MjModel, data: mujoco.MjData, frame: Airframe) -> tuple[str, float]:
+    """What an aircraft that something else flies (LQR, MPC, a policy, a script) is doing, from its pose alone:
+    crashed upside down, flying clear of the ground, or landed; and its height above the ground under it."""
+    root = frame.root
+    p = data.xpos[root]
+    ground = ground_height(model, data, p, frame.descendants, root)
+    altitude = float(p[2] - ground - frame.rest_height) if ground is not None else float(p[2])
+    if float(data.xmat[root][8]) < UPSIDE_DOWN:
+        return "crashed", altitude
+    return ("flying" if altitude > 0.05 else "landed"), altitude
 
 
 def ground_height(

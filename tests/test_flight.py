@@ -538,6 +538,28 @@ def test_after_lqr_flew_it_stop_hands_it_back_to_the_flight_controller(pg):
     assert pg.behaviors.robots()[0]["flight"]["state"] == "flying"
 
 
+def test_robots_and_describe_report_what_really_flies_it_and_where(pg):
+    from robotforge.control.methods import make_controller
+    from robotforge.control.tasks import make_task
+
+    _trip(pg, [0.5, 0.0, 2.0])
+    session = pg.session
+    task = make_task("hover", session.model, "drone")
+    task.begin(session.data)
+    session.set_controller("drone", make_controller("lqr", task, session.model, session.data))
+    pg.run_fast(lambda: False, 2.0)
+    info = pg.behaviors.robots()[0]["flight"]  # it said landed at 0 m, flown by the flight controller
+    assert info["state"] == "flying" and info["controller"] == "lqr"
+    assert info["altitude_m"] == pytest.approx(2.0 - 0.14, abs=0.05)
+    assert "stop('drone')" in info["note"]
+    (entry,) = pg.describe()["aircraft"]
+    assert entry["controller"] == "lqr" and entry["state"] == "flying"
+    session.set_controller("drone", make_controller("none", task, session.model, session.data))
+    pg.run_fast(lambda: False, 3.0)
+    info = pg.behaviors.robots()[0]["flight"]
+    assert info["state"] == "landed" and info["controller"] == "none" and info["altitude_m"] == 0.0
+
+
 def test_the_hover_task_refuses_a_robot_that_does_not_fly(pg):
     from robotforge.control.tasks import TaskError, make_task
 

@@ -217,7 +217,7 @@ class Playground:
             sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
-            flying = _aircraft(m, self.behaviors.robot_names())
+            flying = _aircraft(m, self.behaviors)
         return {
             **({"aircraft": flying} if flying else {}),
             "model": self.session.source,
@@ -938,17 +938,19 @@ def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(m, obj, idx) or ""
 
 
-def _aircraft(m: mujoco.MjModel, robots: list[str]) -> list[dict[str, Any]]:
-    """The robots that fly: their rotors (thrust actuators) and the controller that flies them."""
-    from robotforge.behaviors import flight
+def _aircraft(m: mujoco.MjModel, behaviors) -> list[dict[str, Any]]:
+    """The robots that fly: their rotors (thrust actuators), what flies them now and what they are doing."""
+    from robotforge.behaviors import Kind
 
     out = []
-    for robot in robots:
+    for robot in behaviors.robot_names():
+        if behaviors.kind(robot) != Kind.AIRCRAFT:
+            continue
         root = airframe.root_of(m, robot)
-        rotors = airframe.thrust_actuators(m, robot, root) if root is not None else []
-        if rotors:
-            names = [_name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in rotors]
-            out.append({"robot": robot, "rotors": names, "controller": flight.CONTROLLER})
+        names = [_name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in airframe.thrust_actuators(m, robot, root)]
+        info = behaviors.flight_info(robot)
+        keep = ("controller", "state", "altitude_m", "cannot_fly")
+        out.append({"robot": robot, "rotors": names, **{k: info[k] for k in keep if k in info}})
     return out
 
 

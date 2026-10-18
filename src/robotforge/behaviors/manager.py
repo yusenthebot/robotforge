@@ -19,6 +19,7 @@ import numpy as np
 from robotforge import wording
 from robotforge.behaviors import Kind, air, airways, flight, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
+from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
@@ -337,7 +338,7 @@ class BehaviorManager:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
             if kind == Kind.AIRCRAFT:
-                info["flight"] = self._flight_info(name)
+                info["flight"] = self.flight_info(name)
             walk = self._kept_walk_or_none(name)
             if walk is not None:
                 info["learned_walk"] = walk.describe()
@@ -347,21 +348,33 @@ class BehaviorManager:
             out.append(info)
         return out
 
-    def _flight_info(self, robot: str) -> dict[str, Any]:
-        """An aircraft's rotors, how hard they lift, its controller and what it is doing (or why it cannot fly)."""
+    def flight_info(self, robot: str) -> dict[str, Any]:
+        """An aircraft's rotors, how hard they lift, what flies it and what it is doing (or why it cannot fly).
+        Flown by LQR or MPC it was reported landed at 0 m with the flight controller in charge, from a fresh one."""
+        m, d = self.session.model, self.session.data
         ctrl = self.session.controllers.get(robot)
-        if not isinstance(ctrl, flight.FlightController):
-            try:
-                ctrl = flight.FlightController(self.session.model, robot, self.home_qpos())
-            except ValueError as exc:
-                return {"cannot_fly": str(exc)}
-        state = ctrl.status()
-        return {
-            **ctrl.frame.describe(),
-            "controller": flight.CONTROLLER,
-            "state": state["state"],
-            "altitude_m": state["altitude_m"],
+        if isinstance(ctrl, flight.FlightController):
+            state = ctrl.status()
+            return {
+                **ctrl.frame.describe(),
+                "controller": flight.CONTROLLER,
+                "state": state["state"],
+                "altitude_m": state["altitude_m"],
+            }
+        try:
+            frame = find_airframe(m, robot, self.home_qpos())
+        except ValueError as exc:
+            return {"cannot_fly": str(exc)}
+        state, altitude = flight.seen_from_outside(m, d, frame)
+        out = {
+            **frame.describe(),
+            "controller": _flown_by(ctrl),
+            "state": state,
+            "altitude_m": round(max(altitude, 0.0), 2),
         }
+        if ctrl is not None:
+            out["note"] = f"stop({robot!r}) hands it back to its flight controller, where it is"
+        return out
 
     def _prefixes(self) -> set[str]:
         m = self.session.model
@@ -1277,3 +1290,12 @@ def _check_standing(ctrl) -> None:
         raise BehaviorError(
             f"{ctrl.robot} has fallen over and cannot get up by itself; reset the simulation (sim_control reset)"
         )
+
+
+def _flown_by(ctrl: Any) -> str:
+    """The name of what flies an aircraft other than its flight controller: lqr, mpc, a policy, a script."""
+    if ctrl is None:
+        return "nothing yet (move, the keys or stop start its flight controller)"
+    status = ctrl.status() if callable(getattr(ctrl, "status", None)) else {}
+    name = status.get("controller") if isinstance(status, dict) else None
+    return name if isinstance(name, str) else type(ctrl).__name__
