@@ -456,6 +456,10 @@ TAG_RECTS = """(async () => {
 })()"""
 
 
+def _inside(rect: dict[str, float], x: float, y: float) -> bool:
+    return rect["left"] < x < rect["right"] and rect["top"] < y < rect["bottom"]
+
+
 def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer):
     """On a phone the PiPER's tag stood under the plots strip, and seen from above in the planning lesson only the
     bottom edge of its tag showed, at the top of the window."""
@@ -466,8 +470,7 @@ def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer):
 
     seen = viewer("phone", "en", scenario)
     free, tags = seen["free"], seen["tags"]
-    shown = [t for t in tags if free["left"] < t["foot"][0] < free["right"] and free["top"] < t["foot"][1] < 1e9]
-    shown = [t for t in shown if t["foot"][1] < free["bottom"]]
+    shown = [t for t in tags if _inside(free, *t["foot"])]
     assert len(shown) == 2, seen
     for t in shown:
         assert t["top"] >= free["top"] and t["left"] >= free["left"] - 1 and t["right"] <= free["right"] + 1, seen
