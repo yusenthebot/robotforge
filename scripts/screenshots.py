@@ -1067,6 +1067,17 @@ SHOTS = [
         settle=1.0,
     ),
     Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
+    # The two rooms from the open south side, the door between them, the dog with its arm in the living room.
+    Shot(
+        "scene_home",
+        lambda pg: pg.load_scene("home"),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.0, -6.2, 5.6], [0.0, 0.35, 0.2]);",
+    ),
+    Shot(
+        "scene_home_door",
+        lambda pg: pg.load_scene("home"),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([2.2, -3.4, 1.7], [0.0, -0.9, 0.8]);",
+    ),
     Shot(
         "kitchen_starts",
         _kitchen_starts,

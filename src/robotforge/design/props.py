@@ -150,6 +150,15 @@ SHAPES: dict[str, ShapeInfo] = {
         True,
         summary="a conveyor belt running along +x at `speed` m/s (default 0.1); things on it ride along",
     ),
+    "door": ShapeInfo(
+        "[width, thickness, height]",
+        (3,),
+        (0.83, 0.035, 1.95),
+        (0.78, 0.64, 0.46, 1),
+        True,
+        summary="a room door hinged on its -x edge that swings both ways and closes by itself; robots push it open "
+        "going through (put it in a door_frame 1 m wide at the same place and yaw)",
+    ),
     "rope": ShapeInfo(
         "[length, diameter]",
         (2,),

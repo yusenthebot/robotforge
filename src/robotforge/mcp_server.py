@@ -79,7 +79,7 @@ starts them fresh). Names are lowercase with underscores; other capitals and spa
 saved as red_cube, "the dog" finds dog). Units: meters, kilograms, radians for joints, degrees for yaw (the
 builder takes degrees for joints too).
 
-Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
+Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, home, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
 and objects stand on the ground under them. load_scene(description="a flat with a kitchen and a bedroom, three
