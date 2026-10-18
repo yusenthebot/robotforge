@@ -81,7 +81,7 @@ class TorqueMap:
                 length = self.gear * data.qpos[self.qadr]
                 velocity = self.gear * data.qvel[self.dadr]
                 force = force - (self._b0 + self._b1 * length + self._b2 * velocity)
-            return np.minimum(np.maximum(force / self._safe_gain, self.scale.low), self.scale.high)
+            return (force / self._safe_gain).clip(self.scale.low, self.scale.high)  # np.clip's ufunc, minus a wrapper
         length = self.gear * data.qpos[self.qadr]
         velocity = self.gear * data.qvel[self.dadr]
         gain = self.gain[:, 0] + np.where(self.affine_gain, self.gain[:, 1] * length + self.gain[:, 2] * velocity, 0)

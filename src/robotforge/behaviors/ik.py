@@ -93,7 +93,7 @@ class IKSolver:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
         # Walking robots solve this four times a plan, a hundred plans a second, so what is the same every
         # iteration is done once and small vectors are measured with floats: the same numbers as before.
-        q = np.minimum(np.maximum(np.asarray(q_init, float), chain.lower), chain.upper)
+        q = np.asarray(q_init, float).clip(chain.lower, chain.upper)  # np.clip's own ufunc, without its wrapper
         target = np.asarray(target, float)
         want_quat = None if rotation is None else _quat_of(rotation)
         err = np.inf
@@ -123,7 +123,7 @@ class IKSolver:
             if damped is None:
                 damped = self._damped[n, damping] = damping * np.eye(n)
             JJt = J @ J.T + damped  # damped, so never singular
-            q = np.minimum(np.maximum(q + J.T @ _solve(JJt, e), chain.lower), chain.upper)
+            q = (q + J.T @ _solve(JJt, e)).clip(chain.lower, chain.upper)
         return q, err
 
     def _set(self, chain: Chain, q: np.ndarray) -> None:

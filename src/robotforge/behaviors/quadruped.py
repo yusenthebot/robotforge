@@ -48,10 +48,10 @@ PLAN_HZ = 100.0  # foot targets and IK; torque-motor PD runs every physics step
 # them anyway halved the speed of a world with one dog in it (real-time factor 173 -> 90, six dogs 38 -> 15).
 IK_TOL = 1e-4
 # The plan's bookkeeping (trunk velocity, push watch, velocity correction, foot targets) is float arithmetic on two
-# and three numbers. On small numpy arrays it took longer than the physics: a dog standing idle on its gait spent 27
-# percent of its headless time in the gait (a plan took 35 us, 70 once it had walked and stopped). As plain floats,
-# computed the same way in the same order, a plan takes 11 us and the robots move as before, bit for bit
-# (scripts/bench.py --ab measures it).
+# and three numbers. On small numpy arrays it took longer than the physics: a dog standing idle on its gait spent a
+# quarter of its headless time in the gait (a plan took 35 us, 70 once it had walked and stopped). As plain floats,
+# computed the same way in the same order, a plan takes 6 us, the share is a tenth and the robots move as before,
+# bit for bit (scripts/bench.py --ab measures it).
 TEMPLATE_PERIOD = 0.36  # s per gait cycle for our template dog
 # Bigger robots step slower: about 0.36 s per cycle for a Go2-sized leg (hip to foot 0.28 m),
 # scaled with leg length. Measured: Go2 walks best at 0.30-0.36 s, Spot (0.44 m legs) at 0.45-0.55 s.
@@ -569,7 +569,7 @@ def _tilt(quat: np.ndarray) -> np.ndarray:
     return np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]) @ rot
 
 
-def _roll_pitch(quat: tuple[float, float, float, float]) -> tuple[float, float]:
+def _roll_pitch(quat: tuple[float, float, float, float] | np.ndarray) -> tuple[float, float]:
     w, x, y, z = quat
     roll = math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
     pitch = math.asin(max(-1.0, min(1.0, 2 * (w * y - z * x))))

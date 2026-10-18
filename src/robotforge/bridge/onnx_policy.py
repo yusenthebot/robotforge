@@ -309,7 +309,7 @@ class PolicyWalker:
         qd = data.qvel[self.binding.dof_adr]
         tau = self.kp * (self.targets - q) - self.kd * qd
         if self.torque_limit is not None:  # the training motors saturate here, before the passive damping
-            tau = np.minimum(np.maximum(tau, -self.torque_limit), self.torque_limit)
+            tau = tau.clip(-self.torque_limit, self.torque_limit)
         if self._extra:
             tau = tau - self.extra_damping * qd
         data.ctrl[self.binding.actuators] = self.torque.ctrl(data, tau)
