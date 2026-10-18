@@ -338,7 +338,7 @@ async def test_a_script_picks_from_a_walking_dog_after_it_stops(pg):
 def test_an_arm_on_a_dog_carries_things_over_the_dogs_back(pg):
     """Regression: the carry height came from the bin's rim alone, and swinging round its base from one side of a Go2
     to the other, a PiPER swept the cube through the dog's head at 15 cm and lost it. Here the carry passes over the
-    stand-in's hips."""
+    stand-in's front hips, and the cube stays clear of the dog all the way across."""
     pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
     pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.0, 0.3])
     pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[0.0, -0.35])
@@ -347,20 +347,26 @@ def test_an_arm_on_a_dog_carries_things_over_the_dogs_back(pg):
     hips = max(highest_point(m, d, g)[2] for g in range(m.ngeom) if m.body(m.geom_bodyid[g]).name.endswith("_hip"))
     arm, placed = pg.behaviors.pick_and_place("go2/arm", "cube", "bin")
     carry = next(wp for wp in arm.queue if wp.label == "carry")
-    assert carry.position[2] >= hips + 0.04 + 0.03 - 1e-3  # the cube's bottom clears the dog by 3 cm
+    assert carry.position[2] - 0.02 > hips  # over the hips: under the bin's rim alone it went through them
     cube = m.body("cube").id
     dog = {b for b in range(m.nbody) if m.body(b).name.startswith("go2/") and "/arm/" not in m.body(b).name}
-    touched = set()
+    dog_geoms = [g for g in range(m.ngeom) if m.geom_bodyid[g] in dog and m.geom_contype[g] | m.geom_conaffinity[g]]
+    cube_geom = next(g for g in range(m.ngeom) if m.geom_bodyid[g] == cube)
+    touched, nearest = set(), np.inf
     for _ in range(160):
         _run(pg, 0.1)
         for c in d.contact[: d.ncon]:
             bodies = {int(m.geom_bodyid[g]) for g in c.geom}
             if cube in bodies and bodies & dog:
                 touched |= bodies & dog
+        if arm.current_label == "carry":
+            gaps = [mujoco.mj_geomDistance(m, d, cube_geom, g, 0.1, np.zeros(6)) for g in dog_geoms]
+            nearest = min(nearest, *gaps)
         if arm.done:
             break
     _run(pg, 0.5)
     assert not touched
+    assert nearest > 0.02, nearest  # the cube's bottom clears the dog by LOAD_CLEARANCE, less a swing in the jaws
     assert pg.behaviors.placed("cube", placed["region"])["success"]
 
 

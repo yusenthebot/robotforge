@@ -636,19 +636,21 @@ def _cart_with_a_head(head_height: float) -> dict:
 def test_an_arm_carries_a_load_over_the_robot_it_rides_on_or_says_it_cannot(pg):
     """Moving a floor cube from the cart's left to its right swings it round in front, at 10 cm: the cube struck the
     block in the way, was dropped short and the pick still ran to the end. The load now goes over the block, and
-    where nothing gets over it the pick is refused with the reason."""
+    where nothing gets over it the pick is refused naming the block. Leaning its gripper out where it only passes by
+    (see arm.TILTS), the arm gets a cube over a 22 cm block too."""
     pg.add_robot("cart", build=_cart_with_a_head(0.08))
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
     _run(pg, 0.5)
     motion, info = pg.behaviors.pick_and_place("cart/arm", "cube", [-0.12, -0.28])
-    assert [round(float(w.position[2]), 2) for w in motion.queue if w.label == "carry"] == [0.25]
+    # The block's top (0.17 m), the cube's height and LOAD_CLEARANCE: no higher than it needs to.
+    assert [round(float(w.position[2]), 2) for w in motion.queue if w.label == "carry"] == [0.24]
     pg.run_fast(lambda: motion.done, 40)
     _run(pg, 0.5)
     assert pg.behaviors.placed(info["object"], info["region"])["success"]
-    pg.update_part("cart", "head", {"size": [0.08, 0.16, 0.16]})  # too tall for the arm to get a cube over it
+    pg.update_part("cart", "head", {"size": [0.08, 0.16, 0.28]})  # too tall for the arm to get a cube over it
     pg.add_object("another", shape="box", size=[0.04, 0.04, 0.04], pos=[-0.12, 0.28])
     _run(pg, 0.5)
-    with pytest.raises(BehaviorError, match="cannot carry it across: .*put both on the same side of the robot"):
+    with pytest.raises(BehaviorError, match=r"over cart's head, whose top is 0\.37 m high, .*same side of cart"):
         pg.behaviors.pick_and_place("cart/arm", "another", [-0.12, -0.28])
 
 

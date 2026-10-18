@@ -139,19 +139,21 @@ def test_unreachable_pick_is_refused_with_advice(pg):
 
 def test_a_bin_within_reach_but_too_far_to_point_down_into_is_moved_nearer_not_further(pg):
     """A session moved the workshop's bin to 0.36 m, was told "within its reach ... move it a little further from
-    the base", and failed three more times moving it further: the template arm points down into a bin only within
-    about 0.3 m of its base. The error now says where along that line it works, and that spot works."""
+    the base", and failed three more times moving it further: the template arm got over a bin only within about 0.3 m
+    of its base. Leaning out above it (see arm.TILTS) it gets over one at 0.36 m now, so here the bin is at 0.44 m.
+    The error says where along that line it works, as far as the arm really gets, and that spot works."""
     import re
 
     pg.add_robot("arm", template="arm")
     pg.add_object("green_cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, 0.1], color="green")
-    pg.add_object("bin", shape="bin", pos=[0.3, -0.2])
+    pg.add_object("bin", shape="bin", pos=[0.37, -0.24])
     with pytest.raises(BehaviorError) as refused:
         pg.behaviors.pick_and_place("arm", "green_cube", "bin")
     said = str(refused.value)
     assert "move the bin nearer" in said and "further" not in said, said
+    assert "only 0.08 to 0.36 m from the base" in said, said  # where the pick really works, leaning above the bin
     spot = [float(v) for v in re.search(r"to about \[([^\]]+)\]", said)[1].split(",")]
-    assert 0.2 < math.hypot(*spot) < 0.32
+    assert 0.2 < math.hypot(*spot) < 0.37
     pg.update_object("bin", pos=spot)
     arm, info = pg.behaviors.pick_and_place("arm", "green_cube", "bin")
     pg.run_fast(lambda: arm.done, 40.0)

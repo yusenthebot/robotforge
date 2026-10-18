@@ -149,13 +149,14 @@ def _turned(direction: np.ndarray, degrees: float) -> np.ndarray:
 
 
 def _where_it_works(
-    arm: ArmMotion, base: np.ndarray, reach: float, what: str, at: np.ndarray, heights: list[float], room: Room
+    arm: ArmMotion, base: np.ndarray, reach: float, what: str, at: np.ndarray, heights: dict[str, float], room: Room
 ) -> str:
     """Advice for a pick-and-place point the gripper cannot point down at: the distances from the base, along the
-    same line and at the same heights, where it can and the thing fits, and a position there; another side of the
-    base when nothing fits on that line. "Within reach, so move it further" sent an agent the wrong way three times:
-    the template arm points down only within about 0.3 m of its base at a bin's carrying height, though it reaches
-    0.52 m. A bin sent onto the arm's stand was pushed off beside the cube and caught nothing."""
+    same line and at the same heights (`heights`: the key points that move with the thing and their z, see
+    ArmMotion.key_point_error), where it can and the thing fits, and a position there; another side of the base when
+    nothing fits on that line. "Within reach, so move it further" sent an agent the wrong way three times: the
+    template arm gets over a bin only within about 0.36 m of its base, though it reaches 0.52 m. A bin sent onto the
+    arm's stand was pushed off beside the cube and caught nothing."""
     toward = np.asarray(at[:2], float) - base[:2]
     now = float(np.linalg.norm(toward))
     if now > 1e-6:
@@ -167,7 +168,8 @@ def _where_it_works(
 
     def down(xy: np.ndarray) -> bool:
         # the highest point first: it fails most often, and a failure there settles it
-        return all(arm.reach_error(np.array([*xy, z])) <= REACH_TOL for z in sorted(heights)[::-1])
+        ordered = sorted(heights.items(), key=lambda point: -point[1])
+        return all(arm.key_point_error(name, np.array([*xy, z])) <= REACH_TOL for name, z in ordered)
 
     pointing = [float(r) for r in radii if down(base[:2] + r * own)]
     if not pointing:
@@ -1199,7 +1201,8 @@ class BehaviorManager:
         for what, at in far.items():
             # Both heights the tool works at over it (on it and above it) move with the thing.
             suffix = "place" if what == "target" else "object"
-            heights = [float(p[2]) for name, p in exc.points.items() if name.split()[-1] == suffix] or [float(at[2])]
+            heights = {name: float(p[2]) for name, p in exc.points.items() if name.split()[-1] == suffix}
+            heights = heights or {suffix: float(at[2])}
             # Clear of the arm's base and, when both are things on the floor, of the other one.
             other = "target" if what == "object" else "object"
             keep = [({"object": object_at, "target": target_at}[other][:2], widths[other])] if named else []
