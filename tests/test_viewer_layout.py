@@ -498,8 +498,17 @@ TAG_RECTS = """(async () => {
         const [left, top] = px({ x: p.x - s.center.x * w, y: p.y + (1 - s.center.y) * h });
         const [right, bottom] = px({ x: p.x + (1 - s.center.x) * w, y: p.y - s.center.y * h });
         const foot = px(new THREE.Vector3(s.position.x, s.position.y, 0).project(camera));
-        return { left, top, right, bottom, foot };
-    }) };
+        const base = px(new THREE.Vector3(s.position.x, s.position.y, 0.05).project(camera));  // the robot's base
+        return { left, top, right, bottom, foot, base };
+    }), target: (() => {  // the IK lesson's target ball, its middle and its radius on the screen
+        const at = rf.lesson()?.live?.target;
+        if (!at) return null;
+        const ball = new THREE.Vector3().fromArray(at);
+        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(0.03);
+        const [x, y] = px(ball.clone().project(camera));
+        const [x2] = px(ball.clone().add(right).project(camera));
+        return { x, y, r: Math.abs(x2 - x) };
+    })() };
 })()"""
 
 
@@ -507,17 +516,54 @@ def _inside(rect: dict[str, float], x: float, y: float) -> bool:
     return rect["left"] < x < rect["right"] and rect["top"] < y < rect["bottom"]
 
 
-def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer):
+@pytest.mark.parametrize(
+    "lesson, lang, robots", [("ik_arm", "en", 2), ("arm_planning", "en", 1), ("arm_faceoff", "zh-CN", 3)]
+)
+def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer, lesson, lang, robots):
     """On a phone the PiPER's tag stood under the plots strip, and seen from above in the planning lesson only the
-    bottom edge of its tag showed, at the top of the window."""
+    bottom edge of its tag showed, at the top of the window. Held down below the plots, the planning lesson's tag
+    then sat on its arm's base, and the Panda's tag, lifted clear of the PiPER's, went 7 px under the plots again."""
 
     async def scenario(tab, _server):
-        await _start(tab, "ik_arm")
+        await _start(tab, lesson)
+        await tab.until("!window.__robotforge.tweening()")
+        await asyncio.sleep(1.0)
         return await tab.eval(TAG_RECTS)
 
-    seen = viewer("phone", "en", scenario)
+    seen = viewer("phone", lang, scenario)
     free, tags = seen["free"], seen["tags"]
     shown = [t for t in tags if _inside(free, *t["foot"])]
-    assert len(shown) == 2, seen
+    assert len(shown) == robots, seen  # the planning lesson looks at our arm; the PiPER is out of the picture
     for t in shown:
         assert t["top"] >= free["top"] and t["left"] >= free["left"] - 1 and t["right"] <= free["right"] + 1, seen
+        assert t["bottom"] <= free["bottom"] and not _inside(t, *t["base"]), seen
+
+
+def _clear_of(tag: dict[str, float], x: float, y: float, r: float) -> bool:
+    """Is a circle at (x, y) of radius r wholly outside the tag's rectangle?"""
+    nearest_x = min(max(x, tag["left"]), tag["right"])
+    nearest_y = min(max(y, tag["top"]), tag["bottom"])
+    return (x - nearest_x) ** 2 + (y - nearest_y) ** 2 >= r**2
+
+
+@pytest.mark.parametrize("size", ["phone", "laptop"])
+def test_the_ik_target_raised_to_its_highest_is_not_under_a_name_tag(viewer, size):
+    """The arms' tags stood at 0.5 and 0.6 m and draw over everything; the target goes up to 0.75 m, so on a phone
+    the ball step 1 asks you to drag was hidden under "Our arm" (on a laptop its lower half)."""
+
+    async def scenario(tab, server):
+        await _start(tab, "ik_arm")
+        runner = server.pg.lessons
+        runner.handle({"action": "set", "control": "tx", "value": 0.15})
+        seen = []
+        for height in (0.7, 0.75):
+            runner.handle({"action": "set", "control": "tz", "value": height})
+            await asyncio.sleep(4.0)  # the arm reaches up as far as it can
+            seen.append(await tab.eval(TAG_RECTS))
+        return seen
+
+    for seen in viewer(size, "en", scenario):
+        ball = seen["target"]
+        assert ball is not None and seen["tags"], seen
+        for tag in seen["tags"]:
+            assert _clear_of(tag, ball["x"], ball["y"], ball["r"]), seen

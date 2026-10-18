@@ -1893,14 +1893,18 @@ function faceoffRig(rig) {
   return {
     group,
     parts,
-    frame() {
+    // `topOf(entrant)`: how high its robot reaches now, when that changes (an arm), else the rig's fixed top;
+    // `avoid`: what else the tags must not hide, as { at, r } (a point and a radius in m).
+    frame(topOf = (e) => e.top, avoid = []) {
       for (const [tag, e] of tags) {
         const node = e.body !== undefined ? api.bodyNode(e.body) : null;
-        if (!node) continue;
-        tag.position.set(node.position.x, node.position.y, e.top + TAG_RISE); // walking robots take theirs along
-        tag.userData.foot.set(node.position.x, node.position.y, 0);
+        if (node) {
+          tag.position.set(node.position.x, node.position.y, 0); // walking robots take theirs along
+          tag.userData.foot.set(node.position.x, node.position.y, 0);
+        }
+        tag.position.z = topOf(e) + TAG_RISE;
       }
-      if (labels.visible) declutter(tags.map(([tag]) => tag));
+      if (labels.visible) declutter(tags.map(([tag]) => tag), avoid);
       workspace.visible = (state.values.workspace ?? 0) >= 1;
       const active = state.live?.active ?? [];
       balls.forEach((row, i) =>
@@ -1923,15 +1927,35 @@ const TAG_RISE = 0.06;
 // where it is and lift any farther tag that would cover one already placed, just clear of it.
 // A tag whose robot stands in the free part of the view is kept inside it: seen from above, the PiPER's tag in the
 // motion planning lesson stood so high over the arm that only its bottom edge showed, at the top of the window.
+// Where that pushes the tag down onto its robot or onto what the rig marks (`avoid`: the IK lesson's target ball),
+// it hangs under the robot instead, or else stands beside what it would hide; and where lifting it clear of another
+// tag would take it out of the free view, it goes beside that tag, or below it.
 const tagPoint = new THREE.Vector3();
 const footPoint = new THREE.Vector3();
-function declutter(sprites) {
+const topPoint = new THREE.Vector3();
+const TAG_EDGE = 6; // px a kept tag stays clear of the free view's edge, and of a tag beside it
+const SPINE_BASE = 0.05; // m, the lowest point of a robot a tag must not hide (its base, not the floor)
+function declutter(sprites, avoid = []) {
   const cam = api.camera;
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
   const r = api.freeRect();
   const [W, H] = [window.innerWidth, window.innerHeight];
   const free = { left: (2 * r.left) / W - 1, right: (2 * r.right) / W - 1, top: 1 - (2 * r.top) / H, bottom: 1 - (2 * r.bottom) / H };
   const inside = (p) => p.z < 1 && p.x > free.left && p.x < free.right && p.y < free.top && p.y > free.bottom;
+  const [padX, padY] = [(2 * TAG_EDGE) / W, (2 * TAG_EDGE) / H]; // in the view's -1 to 1 units
+  // What the rig marks, as circles on the screen: the middle (-1 to 1) and the radius in px.
+  const across = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+  const marks = avoid.map(({ at, r: radius }) => {
+    const c = at.clone().project(cam);
+    const edge = at.clone().addScaledVector(across, radius).project(cam);
+    return { x: c.x, y: c.y, r: (Math.abs(edge.x - c.x) * W) / 2 };
+  });
+  // Does a tag with its middle at (x, y) hide the circle m? Measured in px, the nearest point of the tag to its middle.
+  const hides = (x, y, w, h, m) => {
+    const dx = (Math.max(Math.abs(m.x - x) - w / 2, 0) * W) / 2;
+    const dy = (Math.max(Math.abs(m.y - y) - h / 2, 0) * H) / 2;
+    return dx * dx + dy * dy < m.r * m.r;
+  };
   const items = sprites
     .map((s) => {
       s.center.set(0.5, 0.5 - TAG_LIFT);
@@ -1939,26 +1963,56 @@ function declutter(sprites) {
       const [w, h] = [s.scale.x * sx, s.scale.y * sy];
       const y0 = p.y + TAG_LIFT * h; // the tag's middle
       let [x, y] = [p.x, y0];
+      let room = null; // where the tag's middle may go, for a tag kept in the free view
       if (s.userData.foot && inside(footPoint.copy(s.userData.foot).project(cam))) {
-        const pad = (2 * 6) / H; // 6 px clear of the edge
-        y = Math.min(y, free.top - h / 2 - pad);
-        x = Math.min(Math.max(x, free.left + w / 2 + pad), free.right - w / 2 - pad);
+        room = { left: free.left + w / 2 + padX, right: free.right - w / 2 - padX, top: free.top - h / 2 - padY, bottom: free.bottom + h / 2 + padY };
+        // The lower half of the robot, as points up its middle, and what the rig marks: left in sight. A tag held down
+        // over a tall robot's head still names it; one held down onto its base (the planning arm on a phone) does not.
+        const [low, high0] = [Math.min(SPINE_BASE, s.position.z - TAG_RISE), s.position.z - TAG_RISE];
+        const spine = [0, 0.25, 0.5].map((f) => {
+          const q = topPoint.copy(s.position).setZ(low + f * (high0 - low)).project(cam);
+          return { x: q.x, y: q.y, r: 2 };
+        });
+        const keep = [...spine, ...marks];
+        const fits = ([cx, cy]) =>
+          cx >= room.left && cx <= room.right && cy >= room.bottom && cy <= room.top && !keep.some((m) => hides(cx, cy, w, h, m));
+        const high = Math.min(y0, room.top);
+        const held = Math.min(Math.max(x, room.left), room.right);
+        const beside = keep
+          .flatMap((m) => [-1, 1].map((k) => [m.x + k * (w / 2 + (2 * m.r) / W + padX), high]))
+          .sort((a, b) => Math.abs(a[0] - held) - Math.abs(b[0] - held));
+        // Above its point, held in the free view; else under where its robot stands; else beside what it would hide.
+        [x, y] = [[held, high], [held, footPoint.y - padY - h / 2], ...beside].find(fits) ?? [held, high];
       }
-      s.center.x = 0.5 - (x - p.x) / w; // a smaller anchor draws the sprite further right
-      return { s, x, y, y0, z: p.z, w, h };
+      return { s, px: p.x, x, y, y0, z: p.z, w, h, room };
     })
     .filter((it) => it.z < 1)
     .sort((a, b) => a.z - b.z);
   const placed = [];
+  const meets = (it, x, y) => placed.find((p) => Math.abs(p.x - x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
   for (const it of items) {
-    let y = it.y;
+    let [x, y] = [it.x, it.y];
     for (let tries = 0; tries <= placed.length; tries++) {
-      const hit = placed.find((p) => Math.abs(p.x - it.x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
+      const hit = meets(it, x, y);
       if (!hit) break;
-      y = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
+      const lifted = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
+      if (!it.room || lifted <= it.room.top) {
+        y = lifted;
+        continue;
+      }
+      const reach = (hit.w + it.w) / 2 + padX;
+      const beside = [hit.x + reach, hit.x - reach]
+        .filter((bx) => bx >= it.room.left && bx <= it.room.right && !meets(it, bx, y))
+        .sort((a, b) => Math.abs(a - it.x) - Math.abs(b - it.x))[0];
+      if (beside !== undefined) {
+        x = beside;
+        break;
+      }
+      y = hit.y - (hit.h + it.h) / 2 - it.h * 0.08;
     }
+    it.s.center.x = 0.5 - (x - it.px) / it.w; // a smaller anchor draws the sprite further right
     it.s.center.y = 0.5 - TAG_LIFT - (y - it.y0) / it.h; // a lower anchor draws the sprite higher
-    placed.push({ ...it, y });
+    placed.push({ ...it, x, y });
   }
 }
 
@@ -2024,12 +2078,13 @@ function dotTexture() {
 
 // Six-joint arms in 3D: the draggable target, the line from hand to target, and the manipulability
 // ellipsoid at the hand (its axes are the directions the hand moves easily, its radii how easily).
+const TARGET_HALO = 0.05; // m, the glow round the target ball
 function arm3dRig(rig) {
   const tags = faceoffRig(rig); // the name tags over the arms
   const amber = api.color("--amber");
   const blue = api.color("--plot-blue");
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.03, 24, 12), basic(amber, 0.95));
-  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.05, 24, 12), basic(amber, 0.18));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(TARGET_HALO, 24, 12), basic(amber, 0.18));
   const target = new THREE.Group();
   target.add(ball, halo);
   const error = dashedLine(amber, 0.9);
@@ -2053,8 +2108,12 @@ function arm3dRig(rig) {
       },
     },
     frame() {
-      tags.frame();
       const live = state.live;
+      // Each tag over its arm as it stands now, and the working arm's over its target as well: the target goes up to
+      // 0.75 m and tags draw over everything, so a tag at a fixed 0.5 m hid the ball step 1 asks you to drag.
+      const above = (e) => (e.name === live?.arm && live?.target ? live.target[2] + TARGET_HALO : -Infinity);
+      const ball = live?.target ? [{ at: new THREE.Vector3().fromArray(live.target), r: TARGET_HALO }] : [];
+      tags.frame((e) => Math.max(api.robotTop(e.name) ?? e.top, above(e)), ball);
       if (!live?.target) return;
       const goal = new THREE.Vector3().fromArray(live.target);
       const hand = new THREE.Vector3().fromArray(live.hand);
@@ -2136,7 +2195,8 @@ function gaitRig(rig) {
     group: tags.group,
     parts,
     frame() {
-      tags.frame();
+      // Over each dog as it stands: at the rig's fixed 0.5 m the template dog's tag sat on the Go2 behind it.
+      tags.frame((e) => api.robotTop(e.name) ?? e.top);
       const pts = (state.live?.support ?? []).map(([px, py]) => new THREE.Vector3(px, py, z));
       feet.children.forEach((disc, k) => {
         disc.visible = k < pts.length;
@@ -2237,7 +2297,7 @@ function planRig(rig) {
     group: tags.group,
     parts,
     frame() {
-      tags.frame();
+      tags.frame((e) => api.robotTop(e.name) ?? e.top); // over each arm as it stands, not where it might reach
       const d = state.drawing;
       if (d && d !== shown) draw(d);
       if (!shown) return;

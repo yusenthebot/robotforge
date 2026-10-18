@@ -1993,6 +1993,7 @@ initLessons({
   send,
   toast,
   bodyNode: (id) => bodyNodes[id],
+  robotTop: (name) => robotBox(name)?.max.z ?? null, // the highest point of a robot as it stands now (m)
   freeRect: () => freeRect(), // the part of the window no panel covers, in CSS px
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {
