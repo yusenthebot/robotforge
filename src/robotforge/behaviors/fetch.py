@@ -68,6 +68,7 @@ GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of 
 STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 RUB = 0.001  # m: an arm overlapping itself or its robot deeper than this in the simulation rubs on it
+SQUEEZE = 10.0  # N a gripper pushes with a cm short of closed during an errand, at most its force limit (_hold_fast)
 RISE = 0.1  # m the hand is lifted off such a rub before the arm moves on (Errand._unstick)
 
 
@@ -128,7 +129,7 @@ class Stand:
         frame = np.array([[c, s], [-s, c]])
         self.arm_base = frame @ (arm.base_xy - self.xy)  # the arm's base in the robot's heading frame
         self.probe = mujoco.MjData(model)
-        self.hand = Hand(arm, load)
+        self.hand = Hand(arm, load, _box_faces(model, data, load, gripper_opening(model, arm)))
         self._out: dict[tuple[float, bool], float] = {}
         self.robot_bodies = {b for b in range(model.nbody) if int(model.body_rootid[b]) == self.root}
         self.ground: nav_map.NavMap | None = None  # the map whose ground heights the robot is posed on (spots_for)
@@ -680,19 +681,65 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     return Errand(manager, robot, arm, obj, body, half, radius, hold_local, hold_q, pick, drop, place, held=holds)
 
 
+def _pick(
+    hand: Hand, center: np.ndarray, half: float, hold: np.ndarray, tilt: float, hold_q: np.ndarray, radius: float
+) -> None:
+    """Queue picking a load up with the hand tilted `tilt` (reach_in.py), or straight down: for a box the hand's
+    way too, square to a face (Hand.faces), else ArmMotion.pick_up's (_pick_down)."""
+    if tilt == 0.0 and hand.faces is None:
+        _pick_down(hand, center, half, hold)
+        return
+    try:
+        hand.pick(center, half, hold, tilt, hold_q, radius)
+    except (OutOfReach, ValueError):
+        hand.arm.queue.clear()
+        if tilt != 0.0:
+            raise
+        _pick_down(hand, center, half, hold)
+
+
+def _box_faces(model: mujoco.MjModel, data: mujoco.MjData, body: int, opening: float | None) -> tuple | None:
+    """For a load that is one upright box: (its x axis across the floor, its half sizes along x and y, the gripper's
+    opening less a margin), for Hand.faces; None for anything else."""
+    if body < 0 or opening is None:
+        return None
+    geoms = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == body and collides(model, g)]
+    if len(geoms) != 1 or int(model.geom_type[geoms[0]]) != mujoco.mjtGeom.mjGEOM_BOX:
+        return None
+    rot = data.geom_xmat[geoms[0]].reshape(3, 3)
+    if abs(float(rot[2, 2])) < 0.95:  # lying on a side or tipped: not square to the floor
+        return None
+    ax = rot[:2, 0] / max(float(np.linalg.norm(rot[:2, 0])), 1e-9)
+    half = model.geom_size[geoms[0]]
+    return ax, float(half[0]), float(half[1]), opening - 0.006
+
+
 def _pick_down(hand: Hand, center: np.ndarray, half: float, hold: np.ndarray) -> None:
     """ArmMotion.pick_up, refused (OutOfReach) when the arm, over the load or at it with its gripper pointing down,
     would touch anything but the load: on a rack a lift picker's elbow struck the board above a parcel and the arm
     thrashed there. Reaching in tilted (reach_in.py) is tried then."""
-    hand.arm.pick_up(center, half, hold)
-    _clear_down(hand, [center, center + [0.0, 0.0, APPROACH_UP]])
+    arm = hand.arm
+    start = arm.tool_target_end()
+    arm.pick_up(center, half, hold)
+    above = center + [0.0, 0.0, max(APPROACH_UP, hold[2] + APPROACH_UP - center[2])]
+    _clear_down(hand, [*_way_in(arm, start, above), center])
 
 
 def _put_down(hand: Hand, spot: np.ndarray, half: float, top: float | None) -> None:
     """ArmMotion.put_down, refused as _pick_down is when the arm putting the load down would touch something."""
-    hand.arm.put_down(spot, half, top)
+    arm = hand.arm
+    start = arm.tool_target_end()
+    arm.put_down(spot, half, top)
     drop = np.asarray(spot, float) + [0.0, 0.0, half + 0.01]
-    _clear_down(hand, [drop, drop + [0.0, 0.0, APPROACH_UP]])
+    above = drop + [0.0, 0.0, max(APPROACH_UP, start[2] + APPROACH_UP - drop[2])]
+    _clear_down(hand, [*_way_in(arm, start, above), drop])
+
+
+def _way_in(arm: ArmMotion, start: np.ndarray, above: np.ndarray) -> list[np.ndarray]:
+    """Points along the way the gripper goes from `start` (over the robot) round to `above` the load or the place,
+    at the height of `above`: reaching into a rack at that height, a lift picker's elbow struck the board above."""
+    risen = np.array([start[0], start[1], above[2]])
+    return [arm._arc_point(risen, above, s) for s in np.linspace(0.0, 1.0, WAY_CHECKS)[1:]]
 
 
 def _clear_down(hand: Hand, points: list[np.ndarray]) -> None:
@@ -730,6 +777,7 @@ def _spread(spots: list[np.ndarray], most: int) -> list[np.ndarray]:
 
 APPROACH_UP = 0.07  # m: the arm comes down onto a load from this high (arm.APPROACH)
 PLACE_SPOTS = 16  # spots on a place tried (_spread)
+WAY_CHECKS = 5  # points on the way in to a load or a place where the arm is checked for touching things (_way_in)
 SPREAD_GAP = 0.12  # m between them
 PLACE_SPREAD = 0.5  # how much nearer the robot a spot is worth taking, per m it is further from the place's middle
 
@@ -992,12 +1040,14 @@ class Errand:
     _creep: tuple[float, Spot] | None = None  # (since when, into which spot)
     tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
+    _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
     _resume: tuple | None = None  # (step, what to do) after that
     hand: Hand = field(init=False)
 
     def __post_init__(self) -> None:
-        self.hand = Hand(self.arm, self.body)
+        model, data = self.manager.session.model, self.manager.session.data
+        self.hand = Hand(self.arm, self.body, _box_faces(model, data, self.body, gripper_opening(model, self.arm)))
 
     @property
     def done(self) -> bool:
@@ -1267,10 +1317,7 @@ class Errand:
         hold = self.hold_world(data)
 
         def queue(tilt: float) -> None:
-            if tilt == 0.0:
-                _pick_down(self.hand, center, self.half, hold)
-            else:
-                self.hand.pick(center, self.half, hold, tilt, self.hold_q, self.radius)
+            _pick(self.hand, center, self.half, hold, tilt, self.hold_q, self.radius)
 
         failed = self._first_tilt(self.pick, queue)
         self.picked_at = [round(float(v), 3) for v in center]
@@ -1347,28 +1394,46 @@ class Errand:
 
     def _leave(self) -> None:
         self.arm._warm = None  # the arm plans and moves as it did before the errand
-        self.arm.carry_weight = False
-        if self._noslip is not None:
-            self.manager.session.model.opt.noslip_iterations = self._noslip
-            self._noslip = None
+        self._let_go()
         self.manager.errand_ended(self)
 
     def _hold_fast(self, model: mujoco.MjModel) -> None:
-        """Run MuJoCo's no-slip pass while the errand goes on: its soft contacts let a load creep out between the
-        fingers (an apple held tilted slid 5 mm a second through a Panda's pads and fell out on the way round;
-        learn/cloning.py found the same with a cube). It costs about a third more time a step, for the errand only."""
+        """While the errand goes on: run MuJoCo's no-slip pass (its soft contacts let a load creep out between the
+        fingers: an apple held tilted slid 5 mm a second through a Panda's pads and fell out on the way round, as
+        learn/cloning.py found with a cube; it costs about a third more time a step), hold the arm up against its
+        weight (ArmMotion.carry_weight), and have the gripper squeeze SQUEEZE newtons a cm short of closed, up to its
+        force limit. Menagerie's Panda and PiPER grippers are servos as soft as springs (1 N and 0.4 N a cm short)
+        and ours 2 N: a cup slid out of the Panda's hand, and a lift picker driving to a loading dock lost a parcel
+        squeezed with 4 N. At 100 N an apple squeezed off-centre shot out of the Panda's pads."""
         if self._noslip is None and model.opt.noslip_iterations < NOSLIP:
             self._noslip = int(model.opt.noslip_iterations)
             model.opt.noslip_iterations = NOSLIP
         self.arm.carry_weight = True
+        g = self.arm.gripper
+        if self._squeezed is None and g >= 0 and int(model.actuator_biastype[g]) == mujoco.mjtBias.mjBIAS_AFFINE:
+            kp = -float(model.actuator_biasprm[g, 1])
+            if 0 < kp < SQUEEZE / 0.01:
+                self._squeezed = (model.actuator_gainprm[g].copy(), model.actuator_biasprm[g].copy())
+                scale = SQUEEZE / 0.01 / kp
+                model.actuator_gainprm[g, 0] *= scale
+                model.actuator_biasprm[g, 1] *= scale
+                model.actuator_biasprm[g, 2] *= math.sqrt(scale)
+
+    def _let_go(self) -> None:
+        """Put the simulation back as the errand found it (_hold_fast)."""
+        model = self.manager.session.model
+        if self._noslip is not None:
+            model.opt.noslip_iterations = self._noslip
+            self._noslip = None
+        if self._squeezed is not None:
+            model.actuator_gainprm[self.arm.gripper], model.actuator_biasprm[self.arm.gripper] = self._squeezed
+            self._squeezed = None
+        self.arm.carry_weight = False
 
     def interrupt(self, note: str, time: float) -> None:
         if not self.done:
             self.state, self.why, self.note, self.ended = "failed", "interrupted", note, time
-        self.arm.carry_weight = False
-        if self._noslip is not None:
-            self.manager.session.model.opt.noslip_iterations = self._noslip
-            self._noslip = None
+        self._let_go()
 
     def result(self) -> dict[str, Any]:
         """What it did: the trips (path_m, distance_m, time_s each), where it picked the load up and put it down."""

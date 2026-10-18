@@ -8,7 +8,6 @@ floor and, for torque-motor robots, position servos.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -49,7 +48,7 @@ class LibraryRobot:
     tool: tuple[str, float] | None = None
     gripper: str | None = None  # actuator that opens the gripper, renamed "gripper" like ours
     # Bodies of the gripper's fingers whose contacts are made firm (see FINGER_SOLIMP), for a gripper that lets what it
-    # holds creep out in MuJoCo's soft default contacts; such a gripper also squeezes as firmly as SQUEEZE.
+    # holds creep out in MuJoCo's soft default contacts.
     fingers: tuple[str, ...] = ()
 
 
@@ -58,11 +57,6 @@ class LibraryRobot:
 # rigid as our gripper's, its twelve small pads let the ball go at 57 mm/s.
 FIRM_SOLIMP = [0.99, 0.999, 0.001, 0.5, 2.0]
 FIRM_SOLREF = [0.01, 1.0]
-# The Panda's and the PiPER's grippers in Menagerie are position servos as soft as springs (1 N and 0.4 N a cm short
-# of where they are told to close), so a 6 cm cup was held with 1.5 N a finger: turned from reaching in tilted to
-# pointing down it slid out of a Panda's hand. Stiffened to SQUEEZE newtons a cm short, up to their own force limit,
-# the Panda carried the cup to the table (10 N; at 100 N an apple squeezed off-centre shot out of its pads).
-SQUEEZE = 10.0  # N
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -144,7 +138,6 @@ CATALOG: dict[str, LibraryRobot] = {
             "piper.xml",
             tool=("link6", 0.12),  # centre of the fingertip pads (the pads span 0.075-0.135 m past the flange)
             gripper="gripper",
-            fingers=("link7", "link8"),
         ),
         LibraryRobot(
             "g1",
@@ -264,8 +257,6 @@ def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
         if actuator is None:
             raise LibraryError(f"{robot.title}: the model has no gripper actuator {robot.gripper!r}")
         actuator.name = "gripper"
-    if robot.fingers and robot.gripper:
-        _squeeze(next(a for a in spec.actuators if a.name == "gripper"))
     for name in robot.fingers:
         finger = spec.body(name)
         if finger is None:
@@ -275,23 +266,6 @@ def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
                 geom.priority = 1
                 geom.solimp = FIRM_SOLIMP
                 geom.solref = FIRM_SOLREF
-
-
-def _squeeze(actuator: mujoco.MjsActuator) -> None:
-    """Stiffen a position-servo gripper to push SQUEEZE newtons 1 cm short of where it is told to close, keeping how
-    its control maps to finger travel and how damped it is."""
-    if actuator.biastype != mujoco.mjtBias.mjBIAS_AFFINE:
-        return
-    kp = -float(actuator.biasprm[1])
-    want = SQUEEZE / 0.01
-    if kp <= 0 or want <= kp:
-        return
-    scale = want / kp
-    gain, bias = list(actuator.gainprm), list(actuator.biasprm)
-    gain[0] *= scale
-    bias[1] *= scale
-    bias[2] *= math.sqrt(scale)
-    actuator.gainprm, actuator.biasprm = gain, bias
 
 
 def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:

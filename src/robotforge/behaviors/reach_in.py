@@ -47,22 +47,32 @@ LOAD_GAP = 0.01  # m a load moved joint by joint keeps above what is under it
 class Hand:
     """The tilted hand of an arm: how it turns, what it reaches that way, and the moves of a pick or a put."""
 
-    def __init__(self, arm: ArmMotion, load: int = -1):
+    def __init__(self, arm: ArmMotion, load: int = -1, faces: tuple | None = None):
         self.arm = arm
         self.across = _closing_line(arm)  # in the tool body's frame; None: not known, and it does not tilt
         self.load = load  # the body of what it picks up or carries: the hand may touch that
+        # For a box: (its x axis across the floor, its half sizes along x and y, how wide the gripper opens). The
+        # hand comes at it square to a face, its fingers closing across a width they fit round: turned freely, a
+        # lift picker's fingers met a 5 cm parcel corner to corner (7.1 cm across, the gripper opens 7.2) and stopped
+        # on its top.
+        self.faces = faces
 
     @property
     def tilts(self) -> tuple[float, ...]:
         return TILTS if self.across is not None else ()
 
     def toward(self, point: np.ndarray) -> np.ndarray:
-        """The way from the arm's base to `point`, across the floor (a unit vector)."""
+        """The way the hand comes at `point` across the floor (a unit vector): from the arm's base, or for a box
+        (`faces`) square to the face of it nearest that way across which the fingers fit."""
         d = np.asarray(point, float)[:2] - self.arm.base_xy
         n = float(np.linalg.norm(d))
-        if n < 1e-6:
-            return np.array([math.cos(self.arm.base_yaw), math.sin(self.arm.base_yaw)])
-        return d / n
+        d = d / n if n > 1e-6 else np.array([math.cos(self.arm.base_yaw), math.sin(self.arm.base_yaw)])
+        if self.faces is None:
+            return d
+        ax, half_x, half_y, opening = self.faces
+        ay = np.array([-ax[1], ax[0]])
+        ways = [v for v, across in ((ax, half_y), (-ax, half_y), (ay, half_x), (-ay, half_x)) if 2 * across < opening]
+        return max(ways, key=lambda v: float(v @ d)) if ways else d
 
     def axis(self, tilt: float, toward: np.ndarray) -> np.ndarray:
         """Where the tool points, tilted `tilt` from straight down out along `toward`."""
@@ -372,6 +382,8 @@ class Hand:
         to the stage and returned the right way round: (the stage, the knots from it to `first`)."""
         arm = self.arm
         out = float(np.linalg.norm(np.asarray(first, float)[:2] - arm.base_xy))
+        if out > 1e-6:  # on the line from the arm's base to where it goes in (a box is come at square to a face)
+            toward = (np.asarray(first, float)[:2] - arm.base_xy) / out
         failed: OutOfReach | None = None
         for dz in np.arange(0.0, STAGE_RISE + 1e-9, 0.05):
             for r in np.arange(out, 0.05, -STAGE_STEP):
