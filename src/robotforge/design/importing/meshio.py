@@ -13,11 +13,14 @@ import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-import trimesh
 
 from robotforge.design.importing.dae import DaeError, read_dae
+
+if TYPE_CHECKING:  # trimesh takes a good part of a second to import: loaded where a mesh is read or written
+    import trimesh
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +73,8 @@ class SolidProperties:
 
 def prepare_mesh(source: Path, out_dir: Path) -> MeshAsset:
     """Load `source`, repair it and return files MuJoCo can read."""
+    import trimesh
+
     suffix = source.suffix.lower()
     loaded = _load_pieces(source)
     notes: list[str] = []
@@ -158,6 +163,8 @@ def _box_inertia(extents: np.ndarray, mass: float) -> np.ndarray:
 
 
 def _load_pieces(source: Path) -> list[tuple[trimesh.Trimesh, tuple[float, ...] | None]]:
+    import trimesh
+
     suffix = source.suffix.lower()
     if suffix == ".dae":
         try:
@@ -169,6 +176,8 @@ def _load_pieces(source: Path) -> list[tuple[trimesh.Trimesh, tuple[float, ...] 
 
 
 def _load_with_trimesh(source: Path, prefix: str) -> list[tuple[trimesh.Trimesh, tuple[float, ...] | None]]:
+    import trimesh
+
     try:
         loaded = trimesh.load(source, force="mesh", allow_remote=False)
     except ImportError as exc:
@@ -208,6 +217,8 @@ def _mean_color(mesh: trimesh.Trimesh) -> tuple[float, ...] | None:
 
 
 def _clean(mesh: trimesh.Trimesh) -> tuple[trimesh.Trimesh, list[str]]:
+    import trimesh
+
     notes = []
     verts = np.asarray(mesh.vertices, dtype=np.float64)
     bad = ~np.isfinite(verts).all(axis=1)
@@ -244,6 +255,8 @@ def _is_flat(mesh: trimesh.Trimesh) -> bool:
 
 
 def _thicken(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
+    import trimesh
+
     verts = np.asarray(mesh.vertices, dtype=np.float64)
     faces = np.asarray(mesh.faces)
     centered = verts - verts.mean(axis=0)
@@ -267,6 +280,8 @@ def _thicken(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
 
 def decimate_clusters(mesh: trimesh.Trimesh, target_faces: int) -> trimesh.Trimesh:
     """Cheap simplification by snapping vertices to a grid and merging those that share a cell."""
+    import trimesh
+
     verts = np.asarray(mesh.vertices, dtype=np.float64)
     faces = np.asarray(mesh.faces)
     lo, hi = verts.min(axis=0), verts.max(axis=0)
@@ -343,6 +358,8 @@ def _native_problem(path: Path) -> str:
 
 
 def _write_stl(mesh: trimesh.Trimesh, path: Path) -> None:
+    import trimesh
+
     if path.exists():
         return
     tmp = path.with_suffix(".tmp")
