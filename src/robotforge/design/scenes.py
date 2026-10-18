@@ -341,10 +341,14 @@ def _maze(rng: random.Random, opts: dict[str, float]) -> Content:
     c.add("start", "marker", [x0 + 0.5 * cell, y0 - 0.5 * cell], size=[cell * 0.6], color=[0.95, 0.78, 0.2, 1])
     c.ground_slots = [Slot((x0 + 0.5 * cell, y0 - 0.5 * cell), 90), Slot((x0 + 1.6 * cell, y0 - 0.6 * cell), 90)]
     c.starter = [{"name": "rover", "template": "rover"}]
+    middle = (x0 + (cols // 2 + 0.5) * cell, y0 + (rows // 2 + 0.5) * cell)  # a cell's middle, never on a wall
     c.tips = [
         f"the entrance is at the south-west corner, the goal (green mark) beyond the north-east corner at "
         f"[{goal[0]:.2f}, {goal[1]:.2f}]",
-        "move('rover', to='goal') finds its own way through to the green mark",
+        # The tip said to='goal' went "through": the planned trip was 11.1 m, all of it outside the hedges.
+        f"move('rover', to='goal') takes the shortest way, round the outside of the hedges; to drive through the "
+        f"maze, send it to the middle first, move('rover', to=[{middle[0]:.2f}, {middle[1]:.2f}]), and to='goal' "
+        "from there takes it on out of the north-east exit",
         "load_scene('maze', seed=7) makes a different maze; options rows, cols and cell change its size",
     ]
     return c

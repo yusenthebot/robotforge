@@ -342,6 +342,23 @@ def test_a_rover_finds_its_way_through_the_maze_without_touching_a_wall(pg):
     assert TRIP + "rover" not in pg.session.controllers  # done: the path is gone from the viewer
 
 
+def test_the_maze_tip_says_where_the_planner_goes(pg):
+    """Regression: the maze's tip said move(to='goal') "finds its own way through" the maze, and the trip went round
+    the outside of the hedges, so an agent asked to drive into the maze never did. The tip now says so, and its way
+    through (the middle first) is planned inside the hedges."""
+    pg.add_robot("rover", template="rover")
+    tip = next(t for t in pg.load_scene("maze")["scene"]["tips"] if "to='goal'" in t)
+    assert "round the outside of the hedges" in tip
+    middle = [float(v) for v in re.search(r"to=\[([-\d.]+), ([-\d.]+)\]", tip).groups()]
+
+    def inside(to) -> float:
+        trip = pg.behaviors.navigate("rover", to)
+        pg.behaviors.stop("rover")
+        return sum(abs(x) < 2.5 and abs(y) < 2.5 for x, y in trip.plan.points) / len(trip.plan.points)
+
+    assert inside("goal") == 0.0 and inside(middle) > 0.8
+
+
 def test_a_dog_walks_to_the_fridge_and_stops_facing_it(pg):
     pg.add_robot("dog", template="quadruped")
     pg.load_scene("kitchen")
