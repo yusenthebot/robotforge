@@ -463,6 +463,105 @@ def _leads_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
     return run_leads(*args)
 
 
+def run_straight(robot: str, seed: int, opts: dict[str, Any]) -> dict:
+    """One walk forward for --long seconds from standing, as move plays it, in a world of its own: a walk kept with
+    switch --keep (--walks), else one trained as the lesson trains it and kept with what the code under test learns
+    after keeping (its heading hold, if it has one). How far it got along the heading it started with, how far it
+    ended to the side of that line and the most it was, the heading change, and whether it fell."""
+    import numpy as np
+
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.behaviors.rhythm_walk import SavedWalk, joint_names, save_walk
+    from robotforge.playground import Playground
+
+    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_rhythm_")
+    entry = _entry(robot, opts)
+    if opts["walks"]:
+        walk = SavedWalk.model_validate_json(Path(opts["walks"], f"{robot}_{seed}.json").read_text(encoding="utf-8"))
+    else:
+        model, trainer, rhythm, _ = _learn(robot, entry, seed, opts)
+        learned = trainer.rollout(rhythm)["distance"]
+        joints = joint_names(model, trainer.body)
+        kept = {"home": dict(zip(joints, map(float, trainer.home), strict=True)), "switching": "fade"}
+        walk = SavedWalk(
+            robot=robot,
+            joints=joints,
+            **{k: v for k, v in kept.items() if k in SavedWalk.model_fields},
+            freq=rhythm.freq,
+            reflexes=rhythm.reflexes,
+            theta=[float(v) for v in rhythm.theta],
+            speed=max(0.0, learned) / SECONDS,
+            distance=learned,
+            seconds=SECONDS,
+        )
+        if hasattr(rhythm_walk, "learn_steering"):  # absent before the heading hold
+            walk = rhythm_walk.learn_steering(model, robot, walk, seed=seed)
+    pg = Playground.with_demo()
+    pg.new_world(f"straight_{robot}")
+    pg.add_robot(robot, **entry)
+    save_walk(pg.store.dir, walk)
+    root = pg.behaviors._root_body(robot)
+    data = pg.session.data
+    start = data.xpos[root][:2].copy()
+    rot = data.xmat[root]
+    yaw0 = math.atan2(float(rot[3]), float(rot[0]))
+    ahead, left = np.array([math.cos(yaw0), math.sin(yaw0)]), np.array([-math.sin(yaw0), math.cos(yaw0)])
+    state = {"last": yaw0, "turned": 0.0, "side": 0.0, "fell": False}
+
+    def watch() -> bool:
+        rot = data.xmat[root]
+        now = math.atan2(float(rot[3]), float(rot[0]))
+        state["turned"] += math.atan2(math.sin(now - state["last"]), math.cos(now - state["last"]))
+        state["last"] = now
+        state["side"] = max(state["side"], abs(float((data.xpos[root][:2] - start) @ left)))
+        state["fell"] = float(rot[8]) < FELL_COS
+        return state["fell"]
+
+    pg.behaviors.move(robot, 0.2, 0.0, "rhythm")
+    pg.run_fast(watch, opts["long"])
+    watch()
+    moved = data.xpos[root][:2] - start
+    along, side = float(moved @ ahead), float(moved @ left)
+    return {
+        "robot": robot,
+        "seed": seed,
+        "steers": walk.model_dump().get("steer") is not None,
+        "along": round(along, 3),
+        "side": round(side, 3),
+        "most_side": round(state["side"], 3),
+        "per_metre": round(abs(side) / along, 3) if along > 0.05 else None,
+        "heading": round(math.degrees(state["turned"]), 1),
+        "fell": state["fell"],
+    }
+
+
+def _straight_job(args: tuple[str, int, dict[str, Any]]) -> dict:
+    return run_straight(*args)
+
+
+def _print_straight(results: list[dict]) -> None:
+    """Per walk and per robot: lateral drift per metre (how far it ended to the side of the line it started on, per
+    metre along it), the most it was to the side, and the heading change."""
+    for r in results:
+        per = "-" if r["per_metre"] is None else f"{r['per_metre']:.3f}"
+        print(
+            f"{r['robot']:9} seed {r['seed']}: {r['along']:6.2f} m along, {r['side']:+6.2f} m to the side (most "
+            f"{r['most_side']:.2f}), {per} m/m, heading {r['heading']:+6.1f} deg"
+            + (", steers" if r["steers"] else "")
+            + (" FELL" if r["fell"] else "")
+        )
+    for robot in dict.fromkeys(r["robot"] for r in results):
+        mine = [r for r in results if r["robot"] == robot]
+        per = sorted(r["per_metre"] for r in mine if r["per_metre"] is not None)
+        mean = sum(per) / len(per) if per else float("nan")
+        head = sum(abs(r["heading"]) for r in mine) / len(mine)
+        print(
+            f"{robot:9} all: lateral drift per metre mean {mean:.3f}, median {per[len(per) // 2] if per else 0:.3f}, "
+            f"worst {per[-1] if per else 0:.3f}; mean |heading| {head:.0f} deg; {sum(r['fell'] for r in mine)} fell "
+            f"of {len(mine)}"
+        )
+
+
 # oos: sequences drawn at random, none on a grid the switch checks or leads play, each played by the walk as kept, by
 # the same walk switched as 7a4aa92 switched every kept walk but holding its heading (steered), and as 7a4aa92 plays
 # the file (base: switched so, its heading not held, around the world's home pose).
@@ -650,7 +749,7 @@ def _switch_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("what", choices=("forward", "switch", "leads", "oos"))
+    parser.add_argument("what", choices=("forward", "switch", "leads", "oos", "straight"))
     parser.add_argument("--robots", default="dog,star,humanoid")
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--import", dest="imports", action="append", default=[], metavar="NAME=FILE")
@@ -661,11 +760,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--heading", type=float, default=None, help="override the reward's heading weight")
     parser.add_argument("--stress", type=int, default=0, help="switch: random-command runs to count falls in")
     parser.add_argument("--idle", type=float, default=3.0, help="switch: s of sim time after each call (idle path)")
-    parser.add_argument("--long", type=float, default=20.0, help="switch: s of the long forward walk (0: none)")
+    parser.add_argument(
+        "--long", type=float, default=20.0, help="switch, straight: s of the long forward walk (0: none)"
+    )
     parser.add_argument("--min-share", type=float, default=0.6, help="switch: least share of the turn rate in 1 s")
     parser.add_argument("--trials", type=int, default=0, help="switch: tries of each switch on its own")
     parser.add_argument("--keep", help="switch: save the trained walks here")
-    parser.add_argument("--walks", help="switch: play the walks saved here instead of training")
+    parser.add_argument("--walks", help="switch, straight: play the walks saved here instead of training")
     parser.add_argument(
         "--paths", help=f"leads: which of {', '.join(PATHS)} (all); oos: which of {', '.join(OOS_PATHS)} (all)"
     )
@@ -712,9 +813,21 @@ def main(argv: list[str] | None = None) -> int:
         if missing:  # robots kept with different seeds share a folder
             print(f"no walk kept for {', '.join(missing)}: left out", file=sys.stderr)
         jobs = [(r, s, o) for r, s, o in jobs if f"{r}_{s}" not in missing]
-    worker = {"forward": _forward_job, "switch": _switch_job, "leads": _leads_job, "oos": _oos_job}[args.what]
+    if args.what == "straight" and args.walks:
+        missing = [f"{r}_{s}" for r, s, _ in jobs if not Path(args.walks, f"{r}_{s}.json").is_file()]
+        if missing:
+            print(f"no walk kept for {', '.join(missing)}: left out", file=sys.stderr)
+        jobs = [(r, s, o) for r, s, o in jobs if f"{r}_{s}" not in missing]
+    workers = {"forward": _forward_job, "switch": _switch_job, "leads": _leads_job, "oos": _oos_job}
+    worker = {**workers, "straight": _straight_job}[args.what]
     with ProcessPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         results = list(pool.map(worker, jobs))
+    if args.what == "straight":
+        if args.json:
+            for r in results:
+                print(json.dumps(r))
+        _print_straight(results)
+        return 0
     if args.what == "oos":
         from robotforge.behaviors.rhythm_walk import SavedWalk
 
