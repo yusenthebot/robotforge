@@ -149,22 +149,35 @@ class Hand:
                 arm.queue.extend(moves)
                 return
         stage, paths = self._way(tilt, toward, max(grasp[2] + half + CLEAR, come_in[2]), come_in, [grasp, lifted])
-        back = paths[-1][2]
-        across = arm._carry_height(back, hold, back[2], half)
-        if across is None:
-            raise ValueError(f"{arm.robot} cannot swing the load round from the object to over its robot")
-        carry_z, carry_turn, carry_joints = across
-        over = np.array([hold[0], hold[1], carry_z])
-        start = arm.tool_target_end()
-        risen = np.array([start[0], start[1], stage[2]])
-        if not self._way_clear(risen, stage) or (carry_joints is None and not self._way_clear(back, over, carry_turn)):
+        # Over to the stage joint by joint, the way checked as the arm will take it (sweeps_clear). Swung round the
+        # base the way the tool goes (ArmMotion._go_over), a lift picker's hand struck a crate beside it and its upper
+        # arm the board above a parcel on a rack: checked pose by pose, the IK there had the elbow lower than the arm
+        # following the swing did.
+        going = self._joint_way(arm.q, paths[0][0][0], None, "approach")
+        if going is None:
             raise OutOfReach(arm.robot, ["object without touching what is round it"], {"object": grasp})
-        arm._go_over(stage, stage[2])
+        back = paths[-1][2]
+        coming = None
+        if hold_q is not None:
+            coming = self._joint_way(paths[-1][0][-1], hold_q, (half, radius), "carry", LOADED_TILT)
+        if coming is None:
+            across = arm._carry_height(back, hold, back[2], half)
+            if across is None:
+                raise ValueError(f"{arm.robot} cannot swing the load round from the object to over its robot")
+            carry_z, carry_turn, carry_joints = across
+            over = np.array([hold[0], hold[1], carry_z])
+            if carry_joints is None and not self._way_clear(back, over, carry_turn):
+                raise OutOfReach(arm.robot, ["object without touching what is round it"], {"object": grasp})
+        arm.queue.append(Waypoint(None, arm._grip("open"), 0.3, "approach"))
+        arm.queue.extend(going)
         self._follow(*paths[0], "reach in")
         self._follow(*paths[1], "descend")
         arm.queue.append(Waypoint(None, arm._grip("close"), 0.6, "grasp"))
         self._follow(*paths[2], "lift", half)
         self._follow(*paths[3], "draw back", half)
+        if coming is not None:
+            arm.queue.extend(coming)
+            return
         start = back
         if carry_z > back[2] + 1e-6:
             start = np.array([back[0], back[1], carry_z])

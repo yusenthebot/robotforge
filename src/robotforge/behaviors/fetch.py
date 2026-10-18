@@ -1326,13 +1326,18 @@ class Errand:
             self._fail(data, "missed", f"its gripper closed but did not hold the {self.obj}")
             return
         self.held = True
+        self._fold(data)
+
+    def _fold(self, data: mujoco.MjData) -> None:
+        """Fold the arm with the load into its pose for the way, then go on to the place (step "folding")."""
         self.arm.sync(data)
         if not self._stow(data, loaded=True):  # down onto the robot the way the tool points
             hold = self.hold_world(data)
             start = self.arm.tool_target_end()
-            self.arm.queue.append(
-                Waypoint(hold, None, self.arm._time(start, hold) + 0.3, "tuck", turn=0.0, load=self.half)
-            )
+            if float(np.linalg.norm(start - hold)) > 0.02:
+                self.arm.queue.append(
+                    Waypoint(hold, None, self.arm._time(start, hold) + 0.3, "tuck", turn=0.0, load=self.half)
+                )
         self.step = "folding"
 
     def _on_folding(self, t: float, data: mujoco.MjData) -> None:
@@ -1702,7 +1707,13 @@ class Errand:
             self.pick = found
         else:
             self.drop = Spot(found.xy, found.heading, self.drop.target, found.tilt)
-        self._go(data, leg)  # on its way, or failed saying why there is no way there
+        # Folded first, then on its way (or failed saying why there is no way there): held out from a pick that did
+        # not work, a lift picker's arm made it 1 m wide in a warehouse aisle (0.37 m folded), and the trip to the new
+        # spot was refused as one where it does not fit.
+        if self.held:
+            self._fold(data)
+        else:
+            self._begin_tuck(t, data, "tucking")
         return True
 
     def _fail(self, data: mujoco.MjData, why: str, note: str) -> None:
