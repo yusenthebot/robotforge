@@ -466,8 +466,8 @@ def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer):
 
     seen = viewer("phone", "en", scenario)
     free, tags = seen["free"], seen["tags"]
-    in_sight = lambda x, y: free["left"] < x < free["right"] and free["top"] < y < free["bottom"]  # noqa: E731
-    shown = [t for t in tags if in_sight(*t["foot"])]
+    shown = [t for t in tags if free["left"] < t["foot"][0] < free["right"] and free["top"] < t["foot"][1] < 1e9]
+    shown = [t for t in shown if t["foot"][1] < free["bottom"]]
     assert len(shown) == 2, seen
     for t in shown:
         assert t["top"] >= free["top"] and t["left"] >= free["left"] - 1 and t["right"] <= free["right"] + 1, seen
