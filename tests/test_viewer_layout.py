@@ -1,7 +1,9 @@
 """The viewer's layout in a real browser, at the sizes where the pixel pass (scripts/viewer_qa.py) found faults.
 
 Each test serves a viewer in this process, opens it in headless Google Chrome over the DevTools protocol at one
-window size, and measures the page. Skipped without Chrome; slow, since lessons are played in real time."""
+window size, and measures the page. A step later in a lesson is reached on the server (`_reach`), not played in real
+time, so a busy machine cannot run a step out of its clock. Skipped without Chrome, and kept out of the default run
+and CI's slow job: `uv run pytest -m browser tests/test_viewer_layout.py`."""
 
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ def _chrome() -> str | None:
         return None
 
 
-pytestmark = [pytest.mark.slow, pytest.mark.skipif(_chrome() is None, reason="Google Chrome is not installed")]
+pytestmark = [pytest.mark.browser, pytest.mark.skipif(_chrome() is None, reason="Google Chrome is not installed")]
 
 Scenario = Callable[[Any, Any], Awaitable[Any]]
 
@@ -82,6 +84,20 @@ async def _start(tab: Any, lesson: str) -> None:
     await tab.run(qa.START % lesson)
     await tab.until(f"window.__robotforge.lesson()?.id === {lesson!r}")
     await asyncio.sleep(2.0)
+
+
+async def _reach(tab: Any, server: Any, step: int | None = None, passed: bool = False) -> None:
+    """Open the running lesson at `step` (the last by default) as if every step before it had been passed, and with
+    `passed` that one too; then wait for the page to show it. Playing the steps in real time made these tests depend
+    on the machine's load: on a busy one the sensors lesson's IMU step ran out of its clock."""
+    runner = server.pg.lessons
+    steps = runner.lesson.steps
+    index = len(steps) - 1 if step is None else step
+    with runner._lock:  # the viewer's loop reads the passed steps 20 times a second
+        runner.passed.update(s.id for s in steps[: index + 1 if passed else index])
+    runner.handle({"action": "goto", "step": index})
+    await tab.until(f"window.__robotforge.lesson()?.step === {index}")
+    await asyncio.sleep(1.0)  # the page draws the step and eases its view
 
 
 def test_the_lesson_plots_end_on_the_lesson_panels_line_above_the_dock(viewer):
@@ -139,9 +155,7 @@ def test_finishing_a_lesson_brings_the_lesson_complete_box_into_view(viewer):
 
     async def scenario(tab, server):
         await _start(tab, "pid_twins")
-        steps = await asyncio.to_thread(qa.play_lesson, server, "pid_twins")
-        assert all(s.passed for s in steps), [(s.id, s.failed) for s in steps]
-        await asyncio.sleep(1.0)
+        await _reach(tab, server, passed=True)
         await tab.run("document.getElementById('lesson-next').click();")
         await asyncio.sleep(1.5)
         return await tab.eval("""(() => {
@@ -313,9 +327,7 @@ def test_a_new_step_starts_at_the_top_of_the_lesson_panel(viewer):
         await _start(tab, "pid_twins")
         await tab.run("document.getElementById('lesson-panel').scrollTop = 1e6;")
         scrolled = await tab.eval("document.getElementById('lesson-panel').scrollTop")
-        steps = await asyncio.to_thread(qa.play_lesson, server, "pid_twins")
-        assert all(s.passed for s in steps), [(s.id, s.failed) for s in steps]
-        await asyncio.sleep(1.0)
+        await _reach(tab, server, 1)
         return scrolled, await tab.eval("document.getElementById('lesson-panel').scrollTop")
 
     scrolled, top = viewer("phone", "en", scenario)  # the lesson sheet is 40% of a phone: it scrolls
@@ -356,9 +368,7 @@ def test_the_sensors_camera_on_a_phone_is_a_tab_and_leaves_the_rover_room(viewer
 
     async def scenario(tab, server):
         await _start(tab, "sensors")
-        steps = await asyncio.to_thread(qa.play_lesson, server, "sensors")
-        assert all(s.passed for s in steps), [(s.id, s.failed) for s in steps]
-        await asyncio.sleep(1.0)
+        await _reach(tab, server)
         return await tab.eval("""(() => ({
             tabs: [...document.querySelectorAll("#lesson-plots .plot-tabs button")].map((b) => b.textContent),
             selected: document.querySelector("#lesson-plots .plot-tabs [aria-selected=true]")?.textContent,
