@@ -29,6 +29,7 @@ import numpy as np
 
 from robotforge.behaviors import Kind
 from robotforge.behaviors.nav_grid import Grid, clearance, reachable
+from robotforge.design import mechanisms
 from robotforge.sim.geometry import collides
 
 G = mujoco.mjtGeom
@@ -516,6 +517,8 @@ def dynamic_columns(
         b = int(model.geom_bodyid[g])
         if int(model.body_weldid[b]) == 0 or int(model.body_rootid[b]) in skip:
             continue
+        if mechanisms.is_door_leaf(model, b):
+            continue  # a door that swings both ways: pushed open going through, not gone round
         root = int(model.body_rootid[b])
         light = float(model.body_subtreemass[root]) <= PUSHABLE * body.mass
         if body.pushes and light and "/" not in _body_name(model, root):

@@ -32,11 +32,13 @@ from robotforge.behaviors import (
     visit,
     water_nav,
 )
+from robotforge.behaviors import catch as catching
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.reach_in import LOADED_TILT, Hand
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
 from robotforge.design import end_effectors, library, mechanisms, mounting
@@ -87,6 +89,10 @@ LEARN_A_WALK = (
 # 0.9 s; the tools wait up to CARRIER_WAIT s for it. A robot that balances sways for longer (a T1 with an SO-100 on its
 # head, stopped after walking 0.1 to 0.12 m/s, stood still after 2.5 to 4.1 s): for those, CARRIER_WAIT_SWAYING s.
 CARRIER_STILL, CARRIER_STILL_TURN = 0.03, 0.05
+# A robot sent somewhere folds an idle arm over itself first when that makes it this much narrower (m of footprint
+# radius: navigation plans for the folded robot), unless something lies within HOLDING_NEAR (m) of its tool point.
+FOLD_GAIN = 0.03
+HOLDING_NEAR = 0.08
 CARRIER_CALM = 0.2
 CARRIER_WAIT = 3.0
 CARRIER_WAIT_SWAYING = 6.0
@@ -895,6 +901,9 @@ class BehaviorManager:
             model, version = self.session.model, self.session.version
             data = copy.copy(self.session.data)
             ctrl = self.session.controllers[robot]
+            folding = self._fold_for_trip(robot, kind, ctrl, data) if carrying is None else None
+        if folding is not None:
+            data = folding[0]  # planned for as it will be, its arm folded
         if isinstance(ctrl, RhythmWalker) and not {"left", "right"} <= set(ctrl.rhythms):
             raise BehaviorError(
                 f"{robot} walks only straight ahead (its learned walk has no turns yet), so it cannot follow a path; "
@@ -951,6 +960,7 @@ class BehaviorManager:
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
+            ready=folding[1] if folding is not None else (lambda: True),
             on_finish=finished,
             others=[
                 navigation.Other(name, nav_map.root_body(model, name), nav_map.footprint_radius(model, data, name))
@@ -1133,6 +1143,51 @@ class BehaviorManager:
             top = navigation.landing(model, data, destination.geoms)
             destination = dataclasses.replace(destination, point=top) if top else destination
         return destination
+
+    def _fold_for_trip(
+        self, robot: str, kind: Kind, walker: Any, data: mujoco.MjData
+    ) -> tuple[mujoco.MjData, Callable[[], bool]] | None:
+        """For a trip of a robot carrying an idle arm that sticks out (FOLD_GAIN wider than folded): fold the arm over
+        the robot first (ArmMotion.hold_pose, as an errand does), and (the world as it will be with the arm folded, when
+        the trip may set off). None to go as it is: no arm, a busy one, one holding something, or one already in.
+        ANYmal with a UR5e as it was built was 1.25 m wide and went through no door; folded, 0.67 m. Session lock
+        held."""
+        if self.errand(robot) is not None:
+            return None  # an errand folds the arm itself, and holds what it carries
+        arms = [a for a in self.arms(robot) if a != robot]
+        if not arms:
+            return None
+        name = arms[0]
+        busy = self.session.controllers.get(name)
+        if busy is not None and not getattr(busy, "done", True):
+            return None
+        model = self.session.model
+        tcp = data.site_xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{name}/tcp")]
+        for obj in self._movable():
+            if float(np.linalg.norm(data.xpos[self._body(obj)] - tcp)) < HOLDING_NEAR:
+                return None  # it holds something, or is right at it: left as it is
+        try:
+            arm = self._arm_motion(name)
+        except BehaviorError:
+            return None
+        arm.sync(data)
+        tuck = arm.hold_pose(0.0, 0.0)
+        if tuck is None:
+            return None
+        folded = fetch._posed(model, data, arm, tuck[1])
+        try:
+            now = nav_map.measure_body(model, data, robot, kind, walker).radius
+            then = nav_map.measure_body(model, folded, robot, kind, walker).radius
+        except ValueError:
+            return None
+        if then > now - FOLD_GAIN:
+            return None
+        moves = Hand(arm)._joint_way(arm.q, tuck[1], None, "stow", LOADED_TILT, -1)
+        if moves is not None:
+            arm.queue.extend(moves)
+        else:
+            arm.move_to(tuck[0])
+        return folded, lambda: arm.done
 
     def _carried_arm(self, robot: str, data: mujoco.MjData) -> navigation.Arm | None:
         """The arm a moving robot carries (the first, if it has several), for stopping within its reach."""
@@ -1389,6 +1444,10 @@ class BehaviorManager:
             pick = self._object_geometry(obj)
             # A suction cup or a magnet picks from where it stands: an errand's grasp and carry are for fingers.
             goes = go and self._goes(arm.robot) and arm.tool is None
+            riding = catching.velocity(self.session.model, self.session.data, self._body(obj))
+            if riding is not None and not fetch.holding(self.session.data, arm, self._body(obj)):
+                caught = self._catch(arm, obj, target, pick["half_height"], riding, goes)
+                return caught, {"object": obj, "target": target, "region": caught.region}
             if arm.tool == "magnet":
                 self._check_steel(arm.robot, obj)
             try:
@@ -1418,6 +1477,97 @@ class BehaviorManager:
                     return arm, {"object": obj, "target": target, "region": region}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def _catch(
+        self, arm: ArmMotion, obj: str, target: str | list[float], half: float, riding: np.ndarray, goes: bool
+    ) -> catching.Catch:
+        """Catch `obj` as it rides by on a conveyor (catching.Catch), from where the robot stands, then put it on
+        `target`: from there if the arm reaches it, else (an arm on a robot that goes) the robot carries it there
+        (fetch.Errand). Raises BehaviorError before anything moves when the arm cannot meet it or put it down.
+        Session lock held."""
+        model, data = self.session.model, self.session.data
+        body = self._body(obj)
+        try:
+            meet = catching.meeting(model, data, arm, body, half, riding)
+        except catching.CatchError as exc:
+            hint = "; or move the robot next to the conveyor first (move with to=...)" if goes else ""
+            raise BehaviorError(f"{obj} is riding on at {np.linalg.norm(riding):.2f} m/s: {exc}{hint}") from exc
+        below = 2 * half if arm.tool is not None else half  # what the load hangs below the tool point
+        try:
+            place, place_top, region = self._place_target(target)
+        except BehaviorError:
+            if not goes:
+                raise
+            place, place_top, region = None, None, None
+        puts = place is not None and self._puts_from(arm, meet, place, below, place_top)
+        if not puts and not goes:
+            raise BehaviorError(
+                f"{arm.robot} can catch {obj} but not put it on {target} from where it stands; move the arm or the "
+                f"{target} nearer each other"
+            )
+        name = arm.robot
+        caught: catching.Catch
+
+        def then(data: mujoco.MjData, ok: bool) -> None:  # inside a sim step, the session lock held
+            arm.sync(data)
+            arm.q = data.qpos[arm.chain.qpos_adr].copy()
+            arm.queue.clear()
+            self.session.set_controller(name, arm)
+            if not ok:
+                return
+            if puts:
+                try:
+                    arm.put_down(place, below, place_top)
+                except (OutOfReach, ValueError) as exc:
+                    caught.note = f"it caught {obj} but could not put it down from where it lifted it: {exc}"
+                    arm.queue.clear()
+                caught.after = arm
+                return
+            # Folded over the robot first, then off to the place: an errand that starts holding its load goes at
+            # once, and from the arm stretched out over the belt the fold was not found (hold_pose seeds its search
+            # from the pose the arm is in), so it is looked for from the arm's home pose.
+            now, arm.q = arm.q, arm.home.copy()
+            tuck = arm.hold_pose(half, catching.load_radius(model, body))
+            arm.q = now
+            if tuck is None:
+                caught.note = f"it caught {obj} but cannot fold it over {arm.robot.split('/')[0]} to carry it"
+                return
+            moves = Hand(arm, body)._joint_way(arm.q, tuck[1], (half, half), "stow", LOADED_TILT, body)
+            if moves is not None:
+                arm.queue.extend(moves)
+            else:
+                arm.move_to(tuck[0])
+
+            def carry() -> fetch.Errand | str:
+                try:
+                    errand = self._fetch(arm, obj, target)
+                except BehaviorError as exc:
+                    return f"it caught {obj} but cannot carry it to {target}: {exc}"
+                caught.region = errand.place.region
+                return errand
+
+            caught.after = catching.Then(arm, carry)
+            self.session.set_controller(catching.KEY + arm.robot, caught.after)
+
+        caught = catching.Catch(arm, body, half, meet, then=then)
+        caught.region = region
+        self.session.set_controller(name, caught)
+        return caught
+
+    def _puts_from(
+        self, arm: ArmMotion, meet: catching.Meeting, place: np.ndarray, below: float, top: float | None
+    ) -> bool:
+        """Whether the arm, having caught the load and lifted it off the belt, puts it down on `place` from there."""
+        now = arm.q
+        arm.q = meet.q_lifted
+        try:
+            arm.put_down(place, below, top)
+            return True
+        except (OutOfReach, ValueError):
+            return False
+        finally:
+            arm.queue.clear()
+            arm.q = now
 
     def _goes(self, arm: str) -> bool:
         """Whether the arm rides on a robot that drives or walks itself somewhere."""

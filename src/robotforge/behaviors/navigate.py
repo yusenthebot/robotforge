@@ -666,6 +666,7 @@ class Navigator:
     start_time: float
     deadline: float | None  # sim time it must be done by
     still_mine: Callable[[], bool] = lambda: True  # False once something else drives the robot
+    ready: Callable[[], bool] = lambda: True  # False while it waits to set off (its arm folding over it)
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
     backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
@@ -760,6 +761,10 @@ class Navigator:
             s, _ = self._project(xy)
             left = float(self._after[self._seg] - s)
             self._finish(t, "stopped", "out_of_time", f"it ran out of time with {left:.2f} m of its path to go")
+            return
+        if not self.ready():
+            self.walker.command(0.0, 0.0)
+            self._since = t  # waiting is not being stuck
             return
         if self.state == "facing":
             self._face(t, xy, yaw)

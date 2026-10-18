@@ -117,6 +117,8 @@ def _reading(model, data, shape: str, name: str, joint: int, q: float, presses: 
         return {"open_m": round(q, 3), "of_m": round(travel, 3), "open": q > 0.01}
     if shape == "cabinet":
         return {"angle_deg": deg, "open": deg > 5.0}
+    if shape == "door":
+        return {"angle_deg": deg, "open": abs(q) > design.DOOR_OPEN_AT}
     if shape == "button":
         state: dict[str, Any] = {"pressed": q < -design.PRESSED_AT * design.BUTTON_TRAVEL}
         if presses is not None:

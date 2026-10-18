@@ -1,4 +1,4 @@
-"""Ready-made scenes: a desk lab, a kitchen, a warehouse, a park, a maze and an obstacle course.
+"""Ready-made scenes: a desk lab, a kitchen, a home of two rooms, a warehouse, a park, a maze and an obstacle course.
 
 A scene is only world.yaml content (floor, terrain, objects) plus places for robots,
 so after loading one an agent can still move, add or remove anything in it. Scenes
@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from robotforge.design import library, props, water_scenes
+from robotforge.design import home_scenes, library, props, water_scenes
 
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
@@ -663,6 +663,14 @@ SCENES: dict[str, Scene] = {
             "A straight course along +x: ramp, stairs, rough ground, curbs, "
             "stepping stones and bumps. Starter robot: a robot dog.",
             _obstacle_course,
+        ),
+        Scene(
+            "home",
+            "Home",
+            "Two rooms with a swing door between them: a kitchen with a counter, a fridge, a low table with an apple "
+            "and a cup and a chest of drawers with a block in it, and a living room with a sofa, a low table and a "
+            "button on a side table. Rugs name the rooms. Starter robot: a robot dog with an arm.",
+            home_scenes.home,
         ),
         Scene(
             "harbor",

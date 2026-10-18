@@ -233,7 +233,7 @@ def test_every_scene_builds_compiles_and_holds_still(name):
             "terrain": content.terrain,
             "objects": content.objects,
             "robots": [
-                {**r, "pos": list(content.ground_slots[0].pos)} for r in content.starter if r["template"] == "rover"
+                {**r, "pos": list(content.ground_slots[0].pos)} for r in content.starter if r.get("template") == "rover"
             ],
         }
     )

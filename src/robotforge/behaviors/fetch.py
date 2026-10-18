@@ -298,6 +298,7 @@ def spots_for(
     below: list[tuple[np.ndarray, np.ndarray, float]] = (),
     penalties: list[float] | None = None,
     rehearse: Callable[[np.ndarray, float, np.ndarray, float], bool] | None = None,
+    max_checks: int = MAX_CHECKS,
 ) -> tuple[Spot | None, int]:
     """The best spot from which the arm works on one of `targets` and on each `lift` m above it: near the robot's
     start, the point at a comfortable distance from the arm's base and ahead of it rather than behind, with room
@@ -306,7 +307,7 @@ def spots_for(
     when no spot works that way. `grid_reach`: the cells the robot can get to. `below`: boxes (low xy, high xy, top
     z) of what the targets stand on, which the arm's base must not be under. `rehearse(xy, heading, target, tilt)`
     plans the whole pick or put from a spot that passes the quick checks: a spot whose plan does not work out is
-    passed over."""
+    passed over. At most `max_checks` spots are checked by IK each way (straight down, then tilted)."""
     penalties = penalties or [0.0] * len(targets)
     stand.ground = nav
     checked = 0
@@ -323,7 +324,7 @@ def spots_for(
         )
         checks = 0
         for _, xy, heading, target in candidates:
-            if checks >= MAX_CHECKS:
+            if checks >= max_checks:
                 break
             if not stand.fits(xy, heading):
                 continue
