@@ -235,3 +235,23 @@ def test_a_drawers_inside_moves_with_it():
     data.joint("chest/drawer").qpos[0] = 0.1
     mujoco.mj_forward(model, data)
     assert np.allclose(data.site("chest/inside").xpos - before, [-0.1, 0.0, 0.0], atol=1e-6)  # out toward -x (yaw -90)
+
+
+def test_the_kitchen_arm_opens_its_drawer_and_puts_the_plate_in_it_by_suction(tmp_path, monkeypatch):
+    """What the agent session was asked: 打开厨房的抽屉，再用吸盘把桌上的薄板放进抽屉. The plate tipped off the cup
+    and hung 7 cm below it until the pad resisted peeling (end_effectors.PAD_FRICTION), and the template arm sagged
+    5.6 cm carrying it until its servo targets held its weight (arm.servo_targets)."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.load_scene("kitchen")
+    assert pg.state()["mechanisms"]["drawer"]["open_m"] == 0.0 and "cabinet" in pg.state()["mechanisms"]
+    assert _operate(pg, "drawer", "open", 0.2)["success"]
+    pg.update_robot("arm", end_effector="suction")
+    assert pg.state()["mechanisms"]["drawer"]["open_m"] == pytest.approx(0.2, abs=0.01)  # the tool change kept it
+    arm, info = pg.behaviors.pick_and_place("arm", "plate", "drawer")
+    pg.run_fast(lambda: arm.done, 40.0)
+    pg.run_fast(lambda: False, 0.5)
+    placed = pg.behaviors.placed("plate", info["region"])
+    assert placed["success"]
+    floor = pg.session.data.site("drawer/inside").xpos[2]
+    assert placed["object_position"][2] == pytest.approx(floor + 0.0075, abs=0.003)  # flat on the drawer's floor

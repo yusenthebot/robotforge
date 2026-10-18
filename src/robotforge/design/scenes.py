@@ -153,13 +153,17 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     island = [
         ("red_cup", "cylinder", [0.15, 0.25], [0.06, 0.08], "red"),
         ("blue_cup", "cylinder", [-0.13, 0.27], [0.06, 0.08], "blue"),
-        ("plate", "cylinder", [0.3, 0.1], [0.14, 0.015], "white"),
+        ("plate", "cylinder", [0.22, 0.17], [0.14, 0.015], "white"),
         ("apple", "sphere", [0.02, 0.33], [0.06], "green"),
         ("cereal", "box", [0.45, 0.45], [0.06, 0.14, 0.2], "yellow"),
     ]
     for name, shape, (x, y), size, color in island:
         c.add(name, shape, [x, y, resting_z(COUNTER_TOP, shape, size)], size=size, color=color)
     c.add("bowl", "bin", [-0.29, 0.1, COUNTER_TOP], size=[0.16, 0.16, 0.06], color="white")
+    # A chest of drawers beside the arm, its drawer pulling out toward the arm (operate opens it; the plate fits in it),
+    # and a bread cabinet on the counter by the fridge for a robot that comes to it.
+    c.add("drawer", "drawer", [0.5, -0.05, COUNTER_TOP], size=[0.3, 0.3, 0.14], yaw=-90, color=LIGHT_WOOD)
+    c.add("cabinet", "cabinet", [1.0, 1.75, COUNTER_TOP], size=[0.3, 0.24, 0.3], color=WHITE)
     c.add("dining_table", "table", [-1.9, -0.9], size=[1.2, 0.8, 0.75], color=WOOD)
     c.add("fruit", "sphere", [-1.9, -0.9, resting_z(0.75, "sphere", [0.08])], size=[0.08], color="orange")
     c.arm_slots = [Slot((0.0, -0.02), 90, COUNTER_TOP)]
@@ -167,6 +171,8 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.starter = [{"name": "arm", "template": "arm"}]
     c.tips = [
         "pick_and_place('arm', 'red_cup', 'bowl') clears the island",
+        "operate('arm', 'drawer', 'open') pulls the drawer out; with a suction cup (update_robot end_effector="
+        "'suction') the arm can put the plate in it: pick_and_place('arm', 'plate', 'drawer')",
         "the jars on the wall shelf and the sink are out of the arm's reach: try a taller arm",
     ]
     return c
@@ -478,8 +484,8 @@ SCENES: dict[str, Scene] = {
         Scene(
             "kitchen",
             "Kitchen",
-            "Counter with a sink and burners, a fridge, a wall shelf with jars and an island "
-            "with cups, a plate, a bowl and an apple. Starter robot: an arm on the island.",
+            "Counter with a sink, burners and a bread cabinet, a fridge, a wall shelf with jars and an island "
+            "with cups, a plate, a bowl, an apple and a chest of drawers. Starter robot: an arm on the island.",
             _kitchen,
         ),
         Scene(

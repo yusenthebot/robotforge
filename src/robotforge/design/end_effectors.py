@@ -44,6 +44,10 @@ PAD_MARGIN = 0.001  # m
 # (through it, to the floor). The pad's contacts are nearly hard instead, and its settings win the mix with
 # whatever it touches: the same tile now gives way by less than a tenth of a millimetre.
 PAD_CONTACT = {"solref": [0.004, 1.0], "solimp": [0.99, 0.999, 0.001, 0.5, 2.0], "solmix": 1000.0}
+# A cup sealed on a face resists being peeled off it all round its rim; a handful of point contacts do not, and a
+# 14 cm plate held at its middle tipped over and hung 7 cm below the cup. Rolling friction (condim 6) resists the
+# turn, sliding friction the slip, as a seal does.
+PAD_FRICTION = {"friction": [1.2, 0.02, 0.01], "condim": 6}
 # How far a tool in front of fingers sticks out past the old tool point: past the fingertips of our gripper (12 mm),
 # a Panda's (about 10 mm) and a PiPER's (15 mm), with room to spare so they never touch what the pad holds.
 AHEAD_OF_FINGERS = 0.04  # m
@@ -148,8 +152,7 @@ def _suction(holder: mujoco.MjsBody, tool: ToolSpec, vis: Visuals) -> float:
         pos=[0, 0, face - pad_h / 2],
         rgba=CUP_RUBBER,
         mass=0.01,
-        friction=[1.2, 0.02, 0.002],
-        condim=4,
+        **PAD_FRICTION,
         margin=PAD_MARGIN,
         gap=PAD_MARGIN,
         **PAD_CONTACT,
@@ -189,8 +192,7 @@ def _magnet(holder: mujoco.MjsBody, tool: ToolSpec, vis: Visuals, name: str) -> 
         mass=0.02,
         contype=MAGNET_BIT,
         conaffinity=0,
-        friction=[0.8, 0.02, 0.002],
-        condim=4,
+        **PAD_FRICTION,
         margin=PAD_MARGIN,
         gap=PAD_MARGIN,
         **PAD_CONTACT,

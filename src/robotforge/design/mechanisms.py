@@ -541,15 +541,19 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
         pin = f'<pin id="{ids}"/>'
     spacing = f"{length / (nx - 1):.5f} {width / (ny - 1):.5f} 1"
     mass = 0.15 * length * width / 0.09  # kg: 150 g a 30 cm square, a tea towel
+    # In a body of its own (a rail for a curtain): MuJoCo 3.15 drops a flex from an attached spec when pinned
+    # vertices hang on its world body, and a curtain came out as 90 loose points and no cloth.
     xml = f"""
     <mujoco>
       <worldbody>
-        <flexcomp name="cloth" type="grid" count="{nx} {ny} 1" spacing="{spacing}"
-                  radius="0.003" dim="2" mass="{mass:.4f}" rgba="{color}">
-          <edge equality="true" damping="0.002"/>
-          <contact condim="3" selfcollide="none" solref="0.01 1"/>
-          {pin}
-        </flexcomp>
+        <body name="rail">
+          <flexcomp name="{name}" type="grid" count="{nx} {ny} 1" spacing="{spacing}"
+                    radius="0.003" dim="2" mass="{mass:.4f}" rgba="{color}">
+            <edge equality="true" damping="0.002"/>
+            <contact condim="3" selfcollide="none" solref="0.01 1"/>
+            {pin}
+          </flexcomp>
+        </body>
       </worldbody>
     </mujoco>"""
     child = mujoco.MjSpec.from_string(xml)

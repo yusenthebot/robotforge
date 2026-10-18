@@ -90,9 +90,10 @@ def read(model: mujoco.MjModel, data: mujoco.MjData, shapes: dict[str, str], wat
             if ends:
                 out[name] = {"type": "rope", "end": _rounded(data.xpos[ends[-1]])}
         elif shape == "cloth":
-            verts = _bodies(model, f"{name}/")
-            if verts:
-                points = data.xpos[verts]
+            flex = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_FLEX, f"{name}/{name}")
+            if flex >= 0:
+                start, count = int(model.flex_vertadr[flex]), int(model.flex_vertnum[flex])
+                points = data.flexvert_xpos[start : start + count]
                 out[name] = {
                     "type": "cloth",
                     "center": _rounded(points.mean(axis=0)),

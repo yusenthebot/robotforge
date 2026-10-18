@@ -1165,15 +1165,15 @@ class BehaviorManager:
                 f"{name} is closed ({opened:.2f} m open): open it first with operate on {name}, then put things in it"
             )
         # In the drawer's own frame its front panel is at y = 0 and the chest's front at y = opened: things go on
-        # the floor between the two, the part pulled out. The chest's top is what a load must clear on its way in.
+        # the floor between the two, the part pulled out, coming down over the drawer's front, its highest edge.
+        # Clearing the chest's top instead, the kitchen's arm could not carry the plate that high.
         drawer = int(m.site_bodyid[site])
         rot = d.xmat[drawer].reshape(3, 3)
         center = d.xpos[drawer] + rot @ np.array([0.0, opened / 2, float(m.site_pos[site][2])])
         half_out = max(opened - mechanisms.PANEL, 0.0) / 2
         across = np.abs(rot[:2, :2]) @ np.array([float(m.site_size[site][0]), half_out])
-        chest = d.xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)]
-        entry = self._object_entry(name)
-        top = float(chest[2]) + (entry.size[2] if entry is not None else float(m.site_size[site][2]))
+        front = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"{name}/drawer_front")
+        top = float(d.geom_xpos[front][2] + m.geom_size[front][2]) if front >= 0 else float(center[2])
         region = {"center": center.tolist(), "half_xy": across.tolist(), "min_z": float(center[2]) - 0.01}
         return center, top, region
 

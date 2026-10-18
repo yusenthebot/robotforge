@@ -468,6 +468,8 @@ async function applyScene(desc) {
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
   }
+  flexMeshes = (desc.flexes || []).map(flexMesh);
+  for (const flex of flexMeshes) worldRoot.add(flex.mesh);
   scene3.add(worldRoot);
 
   // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
@@ -477,6 +479,59 @@ async function applyScene(desc) {
   follow = null;
   tween = null;
   onScene(desc);
+}
+
+// A cloth (a MuJoCo flex) is a triangle mesh whose corners ride on bodies: one per vertex, or a point on one for a
+// pinned edge. Its vertices follow those bodies' poses, which already stream every frame (see scene.py _flexes).
+let flexMeshes = []; // { mesh, bodies, local: Float32Array }
+const flexPoint = new THREE.Vector3();
+
+function flexMesh(f) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(f.bodies.length * 3), 3));
+  geometry.setIndex(f.faces);
+  const material = new THREE.MeshStandardMaterial({
+    color: rgbaColor(f.rgba),
+    roughness: 0.95,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false; // its bounds change every frame
+  mesh.userData.flex = true;
+  return { mesh, bodies: f.bodies, local: new Float32Array(f.local) };
+}
+
+function updateFlexes() {
+  for (const flex of flexMeshes) {
+    const pos = flex.mesh.geometry.attributes.position;
+    for (let i = 0; i < flex.bodies.length; i++) {
+      const node = bodyNodes[flex.bodies[i]];
+      flexPoint.fromArray(flex.local, 3 * i).applyQuaternion(node.quaternion).add(node.position);
+      pos.setXYZ(i, flexPoint.x, flexPoint.y, flexPoint.z);
+    }
+    pos.needsUpdate = true;
+    flex.mesh.geometry.computeVertexNormals();
+  }
+}
+
+// The body of the cloth's vertex nearest to where it was hit: grabbing a cloth drags that corner of its mesh.
+function flexBodyAt(mesh, point) {
+  const flex = flexMeshes.find((f) => f.mesh === mesh);
+  if (!flex) return -1;
+  const pos = mesh.geometry.attributes.position;
+  let best = -1;
+  let bestDist = Infinity;
+  for (let i = 0; i < flex.bodies.length; i++) {
+    const d = flexPoint.fromBufferAttribute(pos, i).distanceToSquared(point);
+    if (d < bestDist && flex.bodies[i] > 0) {
+      bestDist = d;
+      best = flex.bodies[i];
+    }
+  }
+  return best;
 }
 
 function contentSphere() {
@@ -543,6 +598,7 @@ function applyPoses(buffer) {
     node.position.set(f[1 + 3 * b], f[2 + 3 * b], f[3 + 3 * b]);
     node.quaternion.set(f[qOff + 4 * b + 1], f[qOff + 4 * b + 2], f[qOff + 4 * b + 3], f[qOff + 4 * b]);
   }
+  if (flexMeshes.length) updateFlexes();
   if (pendingFit) {
     const sphere = contentSphere();
     fitLights(sphere);
@@ -733,7 +789,7 @@ function pickBody(e) {
   const hits = raycaster.intersectObjects(worldRoot.children, true);
   for (const h of hits) {
     if (!h.object.visible || h.object.userData.isPlane) continue;
-    const body = h.object.userData.body;
+    const body = h.object.userData.flex ? flexBodyAt(h.object, h.point) : h.object.userData.body;
     if (body > 0 && sceneDesc.bodies[body]?.dynamic) return { body, point: h.point };
     return null; // first visible hit is static: don't reach through it
   }

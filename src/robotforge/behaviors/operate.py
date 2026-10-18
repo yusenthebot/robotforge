@@ -18,9 +18,16 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.behaviors.arm import DOWN, JOINT_SPEED, PAD_PRESS, REACH_TOL, ArmMotion
+from robotforge.behaviors.arm import (
+    DOWN,
+    JOINT_SPEED,
+    PAD_PRESS,
+    REACH_TOL,
+    ArmMotion,
+    servo_stiffness,
+    servo_targets,
+)
 from robotforge.design import mechanisms
-from robotforge.sim.actuators import is_position_servo
 
 UP = -DOWN
 HANDLE_SPEED = 0.05  # m/s the handle moves at: a drawer opens 20 cm in 4 s
@@ -97,21 +104,12 @@ class Operation:
         self._leg: tuple[Leg, float, np.ndarray] | None = None  # (leg, start time, q at its start)
         self.extreme: float | None = None  # lowest joint value seen (a button's press)
         self.current_label = "start"
-        model = arm.ik.model
-        # Servo stiffness of each arm joint (0 for anything that is not a position servo), for gravity's share of the
-        # targets (see _targets).
-        self._kp = np.array(
-            [float(model.actuator_gainprm[a, 0]) if is_position_servo(model, a) else 0.0 for a in arm.actuators]
-        )
+        # Fingers or not, the arm holds its weight up with its servo targets: aimed at the joint values themselves, the
+        # template arm hung 1.6 cm low over a switch, closed under the knob and missed it (see arm.servo_targets).
+        self._kp = servo_stiffness(arm.ik.model, arm.actuators)
 
     def _targets(self, data: mujoco.MjData) -> np.ndarray:
-        """The servo targets that hold the arm at its joint values: each aimed past them by what holds its weight up.
-        A position servo pushes only in proportion to how far it is kept from its target, so aimed at the values
-        themselves the template arm hung 1.6 cm low over a switch, closed under the knob and missed it; a real
-        servo's controller adds that push itself (its integral term)."""
-        bias = data.qfrc_bias[self.arm.chain.dof_adr]
-        lift = np.divide(bias, self._kp, out=np.zeros_like(bias), where=self._kp > 0)
-        return self.arm.q + lift
+        return servo_targets(data, self.arm.chain.dof_adr, self._kp, self.arm.q)
 
     @property
     def done(self) -> bool:

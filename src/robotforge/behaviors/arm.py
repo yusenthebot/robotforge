@@ -102,6 +102,9 @@ class ArmMotion:
         self.tool = end_effectors.tool_of(model, self.gripper)
         if self.tool is not None:
             self.gripper_open = 0.0
+        # An arm with a tool holds its weight up with its servo targets (servo_targets): it carries what it picks by a
+        # face at the end of a long reach. Arms with fingers keep the targets, and the moves, they always had.
+        self._kp = servo_stiffness(model, self.actuators) if self.tool is not None else None
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -525,7 +528,7 @@ class ArmMotion:
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
-            data.ctrl[self.actuators] = self.q
+            data.ctrl[self.actuators] = self._targets(data)
             return
         start, wp, t0 = self._segment
         u = min(1.0, (t - t0) / wp.duration)
@@ -538,9 +541,16 @@ class ArmMotion:
                 target = self._arc_point(start, wp.position, s)
                 axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
                 self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
-        data.ctrl[self.actuators] = self.q
+        data.ctrl[self.actuators] = self._targets(data)
         if u >= 1.0:
             self._segment = None
+
+    def _targets(self, data: mujoco.MjData) -> np.ndarray:
+        """The servo targets for the joints at self.q: the values themselves for fingers, with gravity's share for a
+        cup or a magnet (see __init__)."""
+        if self._kp is None:
+            return self.q
+        return servo_targets(data, self.chain.dof_adr, self._kp, self.q)
 
     def _plan_move(self, wp: Waypoint, start: np.ndarray) -> Waypoint:
         """Work out how a move to a tool position goes, as it starts with the tool at `start`: which way round the
@@ -695,6 +705,20 @@ class ArmMotion:
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
+
+
+def servo_stiffness(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each actuator's position-servo stiffness (0 for one that is not a position servo), for servo_targets."""
+    return np.array([float(model.actuator_gainprm[a, 0]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_targets(data: mujoco.MjData, dofs: np.ndarray, kp: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """Servo targets that hold joints at `q`: each aimed past its value by what holds the arm's weight up (gravity's
+    share of the bias force over the stiffness). A position servo pushes only in proportion to how far it is kept from
+    its target, and these have no integral term the way a real servo's controller has: aimed at the values
+    themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch."""
+    bias = data.qfrc_bias[dofs]
+    return q + np.divide(bias, kp, out=np.zeros_like(bias), where=kp > 0)
 
 
 def _whole_turns_from(step: float) -> list[float]:
