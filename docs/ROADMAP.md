@@ -108,7 +108,8 @@
 - 空转减速的原因：步态、学出来的走法、人形和平衡车的控制器每步都在两三个数的小 numpy 数组上做运算，调用开销比物理还贵。改成同样顺序的浮点运算后行为逐位不变（`scripts/same_behavior.py c1a1658`：17 个场景每 0.25 秒的状态哈希全部一致），站着的狗控制器占比从 25% 降到 10%。
 - 按需导入：trimesh 和 Pillow 只在读写网格、出图时才加载；`import robotforge` 不再带上命令行。命令行导入少 43%，冷启动少 25%。
 - 跑一部分（`--only`、`--worlds`、`--quick`）不存档，`--save` 时存成 `<日期>-<sha>-partial.json`，不当比较基准；安装体积按 uv.lock 锁定的版本装，每个包记下版本号。
-- 物理速度和上一轮比较时按对照世界 objects_20（循环里只有 MuJoCo）折算机器快慢；负载超过核数或对照世界低于下限时，超出的耗时预算记为无法判断，退出码 3，换个安静的时候重跑。
+- 物理速度和上一轮比较时按机器当时的快慢折算：每个计时片之后在同一进程里跑一段只有 MuJoCo 的固定计算（20 节互不碰撞的链）。两对连续运行折算后只差 -8% 到 +3%，原始速度差到 28%。
+- 负载超过核数，或对照世界 objects_20（循环里只有 MuJoCo）低于下限时，超出的耗时预算记为无法判断，退出码 3，换个安静的时候重跑。
 - 还没做：导入时间剩下的大头是 MCP SDK，`robotforge.mcp_server` 约 690 ms 的自身时间里 mcp 和 mcp_types 合计约 250 ms，robotforge 自己的模块约 130 ms（分散在几十个模块里，最大的是 builder 的 pydantic 模式，约 9 ms），mujoco 约 50 ms，numpy 约 35 ms，pydantic 约 25 ms。
 - 课程包 `robotforge.learn` 只占约 20 ms，是命令行导入的 4% 到 5%（`-X importtime` 量了三次），不值得按需加载。
 - Go2 的 OBJ 网格让 MuJoCo 编译时多占约 260 MB 内存；coacd、trimesh、Pillow 是否改成可选依赖要用户定。

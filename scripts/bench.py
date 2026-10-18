@@ -75,6 +75,9 @@ NOISE = {
 }
 TIME_NOISE = (0.3, 0.0)
 MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
+# Speeds over the machine check timed with each world (MachineCheck): in two pairs of physics runs at load 11 to 16
+# they differed by -8 to +3 and -6 to +2 percent, where the raw speeds differed by up to 28 percent.
+MACHINE_RELATIVE_NOISE = (0.15, 0.0)
 # A process that compiles the Go2's OBJ meshes peaks 480 MB one run and 535 MB the next on the same build.
 MESH_MEMORY_NOISE = (0.15, 20.0)
 # Units whose numbers a busy machine changes: over budget on a busy machine says nothing about the code.
@@ -180,15 +183,15 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             out[name] = {"before": None, "change": None, "verdict": "new"}
             continue
         prev = float(old["value"])
-        scale = None
+        scale, share, amount = None, *_noise(m)
         if m.get("unit") == "steps/s":
-            scale = m["machine"] / old["machine"] if m.get("machine") and old.get("machine") else None
-            if scale is None and name != CONTROL:
-                scale = control
+            if m.get("machine") and old.get("machine"):
+                scale, (share, amount) = m["machine"] / old["machine"], MACHINE_RELATIVE_NOISE
+            elif name != CONTROL:
+                scale = control  # older runs: the control world, timed at another moment, so the wider noise
         relative = scale is not None
         ref = prev * scale if relative else prev
         change = (value - ref) / abs(ref) if ref else (0.0 if value == ref else math.inf)
-        share, amount = _noise(m)
         if abs(change) <= share or abs(value - ref) <= amount:
             verdict = "same"
         else:

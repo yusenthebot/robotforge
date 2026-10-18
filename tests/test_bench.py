@@ -350,6 +350,11 @@ def test_speeds_compare_relative_to_the_machine_check_in_their_own_process(bench
     assert out["physics.objects_20.steps_per_s"]["verdict"] == "same"
     now["physics.dog_idle.steps_per_s"] = m(52000, "steps/s", "higher", machine=280000)  # same machine: the code
     assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
+    # Over the machine check, speeds wobble less, so a 20 percent change shows; 10 percent is still noise
+    now["physics.dog_idle.steps_per_s"] = m(80000, "steps/s", "higher", machine=280000)
+    assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
+    now["physics.dog_idle.steps_per_s"] = m(90000, "steps/s", "higher", machine=280000)
+    assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "same"
 
 
 def test_the_machine_check_costs_the_same_every_time(bench):
