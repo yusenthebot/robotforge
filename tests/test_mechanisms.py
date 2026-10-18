@@ -255,3 +255,27 @@ def test_the_kitchen_arm_opens_its_drawer_and_puts_the_plate_in_it_by_suction(tm
     assert placed["success"]
     floor = pg.session.data.site("drawer/inside").xpos[2]
     assert placed["object_position"][2] == pytest.approx(floor + 0.0075, abs=0.003)  # flat on the drawer's floor
+
+
+def test_the_factory_belt_brings_a_box_to_the_stop_and_the_arm_sorts_it(tmp_path, monkeypatch):
+    """The camera's part is in scripts/factory_bench.py (it needs OpenGL); here the belt, the stop and the reach."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    from robotforge.design import scenes
+
+    pg = Playground.with_demo()
+    result = pg.load_scene("factory", options={"boxes": 4})
+    assert result["robots"] == ["arm"] and "factory" in {s["name"] for s in scenes.catalog()}
+    world = pg.store.load()
+    assert world.robots[0].end_effector == "suction"
+    data = pg.session.data
+    pg.run_fast(lambda: data.body("box_1").xpos[0] > scenes.PICK_X - 0.003, 10.0)
+    pg.run_fast(lambda: False, 0.4)  # the belt slides on under it
+    pg.set_controls({"conveyor/speed": 0.0})
+    pg.run_fast(lambda: False, 1.0)
+    assert data.body("box_1").xpos[0] == pytest.approx(scenes.PICK_X, abs=0.003)  # waiting against the stop
+    assert data.body("box_2").xpos[0] < scenes.PICK_X - 0.05  # the next one still on its way, not pushed up to it
+    color = next(o.color for o in world.objects if o.name == "box_1")
+    arm, info = pg.behaviors.pick_and_place("arm", "box_1", f"{color}_bin")
+    pg.run_fast(lambda: arm.done, 40.0)
+    pg.run_fast(lambda: False, 0.5)
+    assert pg.behaviors.placed("box_1", info["region"])["success"]

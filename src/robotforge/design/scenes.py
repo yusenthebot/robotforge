@@ -178,6 +178,89 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     return c
 
 
+# ---- factory -----------------------------------------------------------------------------------
+
+BELT_TOP = 0.6  # m, the conveyor's belt
+BELT_WIDTH = 0.12  # m: one box wide
+STAND_TOP = 0.55  # m, the arm's stand: boxes on the belt come up to 10 cm above its base
+BIN_STAND = 0.5  # m, the bins' stands
+FACTORY_BOX = 0.05  # m, the boxes' edge
+FACTORY_COLORS = ("red", "green", "blue")
+# Where the parts are: the conveyor runs along +x to a stop at its end, where the arm on its stand picks.
+CONVEYOR_X, CONVEYOR_LENGTH = -0.6, 2.0
+STOP_X = CONVEYOR_X + CONVEYOR_LENGTH / 2 - 0.03  # middle of the stop across the belt's end
+PICK_X = STOP_X - 0.015 - FACTORY_BOX / 2  # where a box against the stop has its middle
+ARM_AT = (PICK_X, -0.24)  # a box anywhere across the belt at the stop is 0.2 to 0.28 m from the arm
+
+
+def _factory(rng: random.Random, opts: dict[str, float]) -> Content:
+    c = Content(floor={"style": "concrete"})
+    c.add("back_wall", "wall", [0.0, 2.0], size=[6.0, 0.15, 2.4], color=[0.72, 0.74, 0.76, 1])
+    c.add("lane", "marker", [0.0, -1.0], size=[5.0, 0.08], color=YELLOW_LINE)
+    speed = float(opts["speed"])
+    # A belt one box wide, so boxes come in single file: on a 30 cm belt the ones that came up while the arm was
+    # busy waited side by side at the stop, and the arm could not reach the far one.
+    c.add(
+        "conveyor",
+        "conveyor",
+        [CONVEYOR_X, 0.0],
+        size=[CONVEYOR_LENGTH, BELT_WIDTH, BELT_TOP],
+        speed=speed,
+        color=STEEL,
+    )
+    # A stop across the end of the belt: the belt slides on under what waits against it, ready to be picked.
+    c.add(
+        "stop",
+        "box",
+        [STOP_X, 0.0, BELT_TOP + 0.03],
+        size=[0.03, BELT_WIDTH + 0.02, 0.06],
+        color=YELLOW_LINE,
+        fixed=True,
+    )
+    n = int(opts["boxes"])
+    gap = (CONVEYOR_LENGTH - 0.2) / max(n, 1)
+    for i in range(n):
+        x = PICK_X - 0.12 - i * gap
+        size = [FACTORY_BOX] * 3
+        c.add(
+            f"box_{i + 1}",
+            "box",
+            [x, rng.uniform(-0.01, 0.01), resting_z(BELT_TOP, "box", size)],
+            size=size,
+            color=rng.choice(FACTORY_COLORS),
+        )
+    c.add("stand", "pillar", [ARM_AT[0], ARM_AT[1] - 0.005], size=[0.15, STAND_TOP], color=[0.3, 0.32, 0.35, 1])
+    # One bin per color round the arm, each on a stand of its own, where the arm puts things down pointing down.
+    for color, (dx, dy) in zip(FACTORY_COLORS, ((0.26, 0.0), (0.0, -0.26), (-0.26, 0.0)), strict=True):
+        x, y = ARM_AT[0] + dx, ARM_AT[1] + dy
+        c.add(f"{color}_stand", "table", [x, y], size=[0.2, 0.2, BIN_STAND], color=[0.45, 0.47, 0.5, 1])
+        c.add(f"{color}_bin", "bin", [x, y, BIN_STAND], size=[0.17, 0.17, 0.08], color=color, fixed=True)
+    # A workbench with a drawer of parts.
+    c.add("workbench", "table", [1.4, 0.9], size=[1.0, 0.6, 0.75], color=LIGHT_WOOD)
+    c.add("parts_drawer", "drawer", [1.4, 0.95, 0.75], size=[0.4, 0.34, 0.14], color=STEEL)
+    for i, color in enumerate(("gray", "orange", "gray")):
+        size = [0.03, 0.03]
+        c.add(
+            f"part_{i + 1}",
+            "cylinder",
+            [1.3 + 0.1 * i, 0.98, resting_z(0.75 + 0.021, "cylinder", size)],
+            size=size,
+            color=color,
+        )
+    # Facing its red bin: at rest its hand is over the bin, not over the stop, where it hid the boxes from the camera.
+    c.arm_slots = [Slot(ARM_AT, 0, STAND_TOP)]
+    c.ground_slots = [Slot((1.4, -0.4), 90), Slot((-1.6, -0.8), 0)]
+    c.starter = [{"name": "arm", "template": "arm", "end_effector": "suction"}]
+    c.tips = [
+        "the conveyor brings colored boxes to the stop at its end; observe(find='all', view='top') says each box's "
+        "color and where it is",
+        f"pick_and_place('arm', 'box_1', 'red_bin') sorts one (the arm has a suction cup); stop the belt while "
+        f"picking with set_controls({{'conveyor/speed': 0}}) and start it again with {speed:g}",
+        "the workbench's drawer holds parts: operate opens it",
+    ]
+    return c
+
+
 # ---- warehouse ---------------------------------------------------------------------------------
 
 
@@ -487,6 +570,17 @@ SCENES: dict[str, Scene] = {
             "Counter with a sink, burners and a bread cabinet, a fridge, a wall shelf with jars and an island "
             "with cups, a plate, a bowl, an apple and a chest of drawers. Starter robot: an arm on the island.",
             _kitchen,
+        ),
+        Scene(
+            "factory",
+            "Factory",
+            "A conveyor bringing colored boxes to a stop, an arm with a suction cup on a stand to sort them into a "
+            "red, a green and a blue bin, and a workbench with a drawer of parts. Starter robot: the arm.",
+            _factory,
+            {
+                "boxes": Option(12, 1, 16, "boxes on the belt", integer=True),
+                "speed": Option(0.1, 0.0, 0.3, "belt speed, m/s"),
+            },
         ),
         Scene(
             "warehouse",
