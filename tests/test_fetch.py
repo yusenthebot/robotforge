@@ -371,3 +371,34 @@ def test_the_pose_for_the_way_is_the_same_whichever_way_the_robot_faces(tmp_path
         assert found is not None
         poses.append(found[1])
     assert poses[1] == pytest.approx(poses[0], abs=0.02)
+
+
+@pytest.mark.parametrize("scene", ["kitchen", "desk_lab", "warehouse"])
+def test_a_mobile_manipulator_set_on_a_scene_s_robot_places_starts_clear_of_the_furniture(pg, scene):
+    """The kitchen's third place faced the island 0.6 m off, and a mobile Panda set there had its arm in it: it
+    pushed against the island and fell over as its arm tucked in."""
+    from robotforge.design import scenes
+
+    pg.load_scene(scene, starter=False)
+    for k, slot in enumerate(scenes.build(scene, seed=0).ground_slots):
+        name = f"mm{k}"
+        pg.add_robot(name, design="mobile_panda", pos=list(slot.pos), yaw=slot.yaw)
+        model, data = pg.session.model, pg.session.data
+        mujoco.mj_forward(model, data)
+        mine = {
+            b
+            for b in range(model.nbody)
+            if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith(name + "/")
+        }
+        clash = [
+            mujoco.mj_id2name(
+                model, mujoco.mjtObj.mjOBJ_GEOM, c.geom2 if int(model.geom_bodyid[c.geom1]) in mine else c.geom1
+            )
+            for c in data.contact[: data.ncon]
+            if c.dist < -0.005
+            and (int(model.geom_bodyid[c.geom1]) in mine) != (int(model.geom_bodyid[c.geom2]) in mine)
+            and model.geom_type[c.geom1] != mujoco.mjtGeom.mjGEOM_PLANE
+            and model.geom_type[c.geom2] != mujoco.mjtGeom.mjGEOM_PLANE
+        ]
+        assert not clash, f"{scene} place {k} at {slot.pos}: {clash}"
+        pg.remove(name)

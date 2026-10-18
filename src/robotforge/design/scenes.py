@@ -163,7 +163,8 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.add("dining_table", "table", [-1.9, -0.9], size=[1.2, 0.8, 0.75], color=WOOD)
     c.add("fruit", "sphere", [-1.9, -0.9, resting_z(0.75, "sphere", [0.08])], size=[0.08], color="orange")
     c.arm_slots = [Slot((0.0, -0.02), 90, COUNTER_TOP)]
-    c.ground_slots = [Slot((1.3, -1.0), 90), Slot((-0.4, -1.4), 0), Slot((1.3, 0.3), 180)]
+    # The third faces along the island, not at it: a mobile Panda set there facing it had its arm in the island.
+    c.ground_slots = [Slot((1.3, -1.0), 90), Slot((-0.4, -1.4), 0), Slot((1.3, 0.3), 90)]
     c.starter = [{"name": "arm", "template": "arm"}]
     c.tips = [
         "pick_and_place('arm', 'red_cup', 'bowl') clears the island",
