@@ -770,10 +770,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         include_image: bool = True,
         find: str | None = None,
     ) -> list:
-        """Report the state (joint angles, controls, free body positions, sensors, contacts) and, by default, a
-        rendered image (without OpenGL the state comes back with a note instead). `view` is a preset (default,
-        front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
-        from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
+        """Report the state (joint angles, controls, free body positions, sensors, contacts; each lidar whole under
+        "lidars": its nearest hit, that hit's bearing from the robot's front (+ left) and side, every ray) and, by
+        default, a rendered image (without OpenGL the state comes back with a note instead). `view` is a preset
+        (default, front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera
+        name from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
         with world positions estimated from the picture and the name of what those pixels show (for
         pick_and_place)."""
         with _tool_errors():

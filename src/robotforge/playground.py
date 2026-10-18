@@ -26,7 +26,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
-from robotforge.sim import carry, finder, placement, vision
+from robotforge.sim import carry, finder, lidar, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
@@ -780,20 +780,32 @@ class Playground:
                         float(d.qpos[m.jnt_qposadr[j]]), 4
                     )
             ctrl = {self._actuator_info(a)["name"]: round(float(d.ctrl[a]), 4) for a in range(m.nu)}
-            sensors = {}
-            for s in range(m.nsensor):
-                adr, dim = m.sensor_adr[s], m.sensor_dim[s]
-                values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+            sensors = self.sensor_readings()
+            lidars = lidar.readings(m, d)
+            listed = _limit_dict(sensors)
+            if lidars and "..." in listed:  # a 64-ray lidar alone is 64 sensors: say where all its rays are
+                listed["..."] += "; lidars has every ray of each lidar"
             return {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,
                 "joints": _limit_dict(joints),
                 "controls": _limit_dict(ctrl),
                 "free_bodies": _limit_dict(self._free_body_positions()),
-                "sensors": _limit_dict(sensors),
+                "sensors": listed,
+                **({"lidars": lidars} if lidars else {}),
                 "contacts": int(d.ncon),
             }
+
+    def sensor_readings(self) -> dict[str, Any]:
+        """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones)."""
+        m, d = self.session.model, self.session.data
+        with self.session.lock:
+            out: dict[str, Any] = {}
+            for s in range(m.nsensor):
+                adr, dim = m.sensor_adr[s], m.sensor_dim[s]
+                values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
+                out[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+            return out
 
     def snapshot(self, view: str = "default", width: int = 640, height: int = 480) -> bytes:
         try:
