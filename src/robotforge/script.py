@@ -73,6 +73,12 @@ class Sim:
         own parts (-1, or their full range: nothing within it)."""
         return self._call("sensors", robot=robot)
 
+    def sensor(self, robot: str, name: str, full: bool = False) -> dict[str, Any]:
+        """One sensor's reading by name (sensors added with add_sensor, the builder's and the templates'), the
+        same as read_sensors gives, e.g. sim.sensor("go2", "lidar")["ahead"]["distance_m"]. full=True adds a
+        lidar's every range ("ranges_m", ring by ring) and a 3D lidar's points."""
+        return self._call("sensor", robot=robot, name=name, full=full)
+
     # ---- acting ----
     def set_controls(self, controls: dict[str, float]) -> None:
         """Set actuator targets, e.g. {"arm/shoulder": 0.5}. Names come from describe_model."""

@@ -134,6 +134,11 @@
       <h2 class="section-title"><span data-i18n="robots">Robots</span></h2>
       <div class="robot-list" id="robot-list"></div>
     </section>
+    <section id="sensor-section" hidden>
+      <h2 class="section-title"><span data-i18n="sensors">Sensors</span><span class="count" id="sensor-count"></span></h2>
+      <div class="robot-list" id="sensor-list"></div>
+      <label class="check sensor-arrows" id="sensor-arrows"><input type="checkbox" id="show-forces" checked><span data-i18n="sensor_arrows">Force and contact arrows</span></label>
+    </section>
     <section id="detail-section">
       <h2 class="section-title"><span id="detail-title" data-i18n="joints">Joints</span><span class="count" id="joint-count"></span></h2>
       <div class="joints" id="joints"></div>
@@ -144,6 +149,8 @@
       <label class="check"><input type="checkbox" id="show-shadows" checked><span data-i18n="shadows">Shadows</span></label>
     </section>
   </aside>
+
+  <aside class="sensor-views" id="sensor-views" hidden></aside>
 
   <div class="help" id="help" hidden>
     <p class="help-lead" data-i18n="help_lead">This page shows your robot world live. Build robots and change the world by chatting with Claude or ChatGPT.</p>

@@ -33,6 +33,7 @@ from robotforge.design import (
 )
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
+from robotforge.sensors.spec import SensorEntry
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
@@ -83,6 +84,7 @@ class RobotEntry(_Strict):
     # What its arm holds with, whatever the arm came with: "suction" (a suction cup), "magnet" (an electromagnet),
     # or "gripper" (the arm's own fingers); None keeps it as built. See end_effectors.py.
     end_effector: str | None = Field(None, exclude_if=_unset)
+    sensors: list[SensorEntry] = Field(default_factory=list)  # added to any robot (add_sensor), see sensors/
 
     @field_validator("name")
     @classmethod
@@ -93,6 +95,15 @@ class RobotEntry(_Strict):
     @classmethod
     def _end_effector(cls, v: str | None) -> str | None:
         return end_effectors.check(v) if v is not None else None
+
+    @field_validator("sensors")
+    @classmethod
+    def _sensor_names(cls, v: list[SensorEntry]) -> list[SensorEntry]:
+        names = [s.name for s in v if s.name]
+        dupes = sorted({n for n in names if names.count(n) > 1})
+        if dupes:
+            raise ValueError(f"sensor names must be unique on a robot: {', '.join(map(repr, dupes))} is used twice")
+        return v
 
     @field_validator("template")
     @classmethod
@@ -219,6 +230,9 @@ class World(_Strict):
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
+        for robot in data["robots"]:  # a robot without added sensors is saved as it always was
+            if not robot.get("sensors"):
+                robot.pop("sensors", None)
         return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
@@ -313,6 +327,10 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
     frames: list[tuple[str, mujoco.MjsFrame]] = []  # robots that rest on the ground (no explicit z)
     for entry in world.robots:
         built = _robot_spec(entry, base_dir)
+        if entry.sensors:  # any robot can carry them: placed on its own spec, before it is attached
+            from robotforge.sensors.mount import mount
+
+            mount(built.spec, entry.sensors, entry.name, built.home_qpos)
         z = entry.pos[2] if len(entry.pos) == 3 else ground.height(entry.pos[0], entry.pos[1]) + built.spawn_height
         frame = spec.worldbody.add_frame(pos=[entry.pos[0], entry.pos[1], z], quat=_yaw_quat(entry.yaw))
         _share_options(spec, built.spec)

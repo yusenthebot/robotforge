@@ -16,6 +16,7 @@ from robotforge.design.templates.base import (
     BuiltRobot,
     Template,
     TemplateParams,
+    declare_camera,
     new_spec,
     servo_case,
     servo_joint,
@@ -131,6 +132,7 @@ class Arm(Template):
         # Just in front of its lens (_dress_wrist_camera puts the lens 7.5 mm out, 1 mm deep): from the palm it
         # looked out through its own bezel, a black ring round the middle of every picture.
         tool.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0095], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
+        declare_camera(spec, tool, "wrist_cam", 70)
         tcp_z = 0.0
         if holder == "gripper":
             tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis)

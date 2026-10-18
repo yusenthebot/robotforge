@@ -7,7 +7,7 @@ from pydantic import Field
 
 from robotforge.design import components
 from robotforge.design.templates.arm import add_gripper
-from robotforge.design.templates.base import DARK, GEOM, BuiltRobot, Template, TemplateParams, new_spec
+from robotforge.design.templates.base import DARK, GEOM, BuiltRobot, Template, TemplateParams, declare_camera, new_spec
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
@@ -42,6 +42,7 @@ class Gripper(Template):
         vis.finish()
         palm.add_site(name="tcp", pos=[0, 0, tcp_z], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
         palm.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
+        declare_camera(spec, palm, "wrist_cam", 70)
         spec.add_sensor(
             name="tcp_pos", type=mujoco.mjtSensor.mjSENS_FRAMEPOS, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="tcp"
         )

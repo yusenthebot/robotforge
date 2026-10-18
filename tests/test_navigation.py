@@ -19,7 +19,6 @@ from robotforge.behaviors.manager import TRIP, BehaviorError
 from robotforge.behaviors.nav_grid import Grid
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge.onnx_policy import PolicyWalker, onnxruntime_available
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -838,7 +837,7 @@ def test_driving_by_hand_ends_a_trip(pg):
 async def test_move_to_a_place_reports_the_trip(pg):
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = json.loads((await client.call_tool("move", {"robot": "dog", "to": [2.0, 0.0]})).content[0].text)
         # Without seconds a trip is not cut off after a plain move's 3 s: this one takes about 10.
@@ -854,7 +853,7 @@ async def test_a_trip_says_the_robot_stopped_where_it_ended(pg):
     """In the agent eval (main at c2e37cd) two of six sessions that sent a robot somewhere called stop right after
     the trip, on a robot that already stood: a timed move says "stopped" at the top, a trip did not."""
     pg.add_robot("rover", template="rover")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = json.loads((await client.call_tool("move", {"robot": "rover", "to": [1.0, 0.5]})).content[0].text)
         assert result["arrived"] is True and result["stopped"] is True, result
@@ -871,7 +870,7 @@ async def test_a_trip_out_of_time_goes_on_when_sent_again(pg):
     note says to call again; the next call goes on from where it stopped."""
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         call = {"robot": "dog", "to": [2.0, 0.0], "seconds": 3}
         first = json.loads((await client.call_tool("move", call)).content[0].text)
@@ -890,7 +889,7 @@ async def test_a_reset_or_an_edit_on_the_way_ends_the_trip_and_says_so(pg, how):
     ended."""
     pg.add_robot("dog", template="quadruped")
     pg.add_object("wall", shape="wall", pos=[1.0, 0.0], size=[1.5, 0.1, 0.6], yaw=90)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
 
     async def disrupt():
         for _ in range(200_000):
@@ -917,7 +916,7 @@ async def test_a_reset_or_an_edit_on_the_way_ends_the_trip_and_says_so(pg, how):
 async def test_move_without_a_destination_is_unchanged(pg):
     """speed left out is 0.2 m/s and seconds left out 3 s, exactly as before move took a destination."""
     pg.add_robot("dog", template="quadruped")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         given = json.loads((await client.call_tool("move", {"robot": "dog", "speed": 0.2})).content[0].text)
         pg.session.reset()

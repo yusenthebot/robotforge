@@ -115,6 +115,14 @@ class SensorSpec(_Strict):
     fov: float = Field(70.0, description="camera field of view, degrees (5 to 170); only cameras have one")
     rays: int = Field(16, ge=3, le=64, description="lidar: rays spread evenly all the way round, level")
     range: float = Field(4.0, gt=0.05, le=30.0, description="rangefinder / lidar: farthest distance measured, m")
+    # Realism, ideal when left out: the same knobs and meanings as add_sensor's (sensors/spec.py).
+    rate_hz: float | None = Field(None, gt=0, le=2000)
+    latency_s: float | None = Field(None, ge=0, le=2)
+    noise: float | dict[str, float] | None = None
+    bias: float | list[float] | dict[str, float | list[float]] | None = None
+    drift: float | dict[str, float] | None = None
+    dropout: float | None = Field(None, ge=0, lt=1)
+    seed: int | None = None
 
     @field_validator("name")
     @classmethod
@@ -140,6 +148,17 @@ class SensorSpec(_Strict):
     def _direction(cls, v: str | list[float]) -> str | list[float]:
         axis_vector(v, "sensor direction")
         return v
+
+    @model_validator(mode="after")
+    def _knobs(self) -> SensorSpec:
+        """The knobs a type takes, as add_sensor checks them (a camera has no dropout, an IMU no range noise)."""
+        from robotforge.sensors.spec import SensorEntry
+
+        knobs = {k: getattr(self, k) for k in ("rate_hz", "latency_s", "noise", "bias", "drift", "dropout", "seed")}
+        given = {k: v for k, v in knobs.items() if v is not None}
+        if given:
+            SensorEntry.model_validate({"type": self.type, **given})
+        return self
 
     @model_validator(mode="before")
     @classmethod

@@ -2,6 +2,7 @@
 // this page draws the bodies it streams and sends user input back.
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
+import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
@@ -473,6 +474,7 @@ async function applyScene(desc) {
     obj.userData.body = geom.body;
     obj.userData.group = geom.group;
     obj.userData.isPlane = geom.type === "plane";
+    obj.userData.geom = geom.id; // a segmentation camera names what it sees by its geoms (sensors.js)
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
   }
@@ -1062,6 +1064,7 @@ function connect() {
     else if (msg.type === "state") applyState(msg);
     else if (msg.type === "reply") onReply(msg);
     else if (msg.type === "lesson") lessonUpdate(msg);
+    else if (msg.type === "sensors") sensorsUpdate(msg);
     else if (msg.type === "error") toast(msg.message);
   };
 }
@@ -1116,6 +1119,7 @@ function onScene(desc) {
   renderSelection();
   renderWorldPanel();
   lessonScene(desc);
+  sensorsScene(desc);
   $("empty").hidden = !(desc.world && robots.length === 0);
 }
 
@@ -1216,6 +1220,7 @@ function renderSelection() {
   renderJoints();
   renderModes();
   renderDrive();
+  sensorsSelect();
 }
 
 // ---------------------------------------------------------------- joint sliders
@@ -1558,7 +1563,7 @@ function freeRect() {
     if (r.width > W * 0.7) across(r);
     else left = Math.max(left, r.right);
   }
-  for (const id of ["drawer", "lesson-plots"]) {
+  for (const id of ["drawer", "lesson-plots", "sensor-views"]) {
     const r = box($(id));
     if (!r) continue;
     if (r.width < W * 0.7 && r.left > left + 160) right = Math.min(right, r.left); // a column beside the view
@@ -1634,7 +1639,7 @@ function shiftForDrawers() {
 window.addEventListener("resize", shiftForDrawers);
 // Panels change size with what they show (a quiz answered, the record unfolded): follow them.
 const panelWatch = new ResizeObserver(() => shiftForDrawers());
-for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots"]) panelWatch.observe($(id));
+for (const id of ["drawer", "world-panel", "lesson-panel", "lesson-plots", "sensor-views"]) panelWatch.observe($(id));
 
 function setHelp(open) {
   setOpen("help-toggle", "help", open);
@@ -2175,6 +2180,7 @@ function loop() {
   spinRotors();
   refreshDragVisual();
   lessonFrame();
+  sensorsFrame();
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();
@@ -2242,6 +2248,22 @@ initLessons({
     setPointer({ clientX, clientY });
     return raycaster;
   },
+});
+
+initSensors({
+  scene: scene3,
+  renderer,
+  camera,
+  bodyNode: (id) => bodyNodes[id],
+  world: () => worldRoot,
+  desc: () => sceneDesc,
+  selected: () => selected,
+  select: (robot) => select(robot),
+  inLesson: () => lessonActive(),
+  color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
+  shift: () => shiftForDrawers(),
+  storageGet,
+  storageSet,
 });
 
 connect();
@@ -2320,4 +2342,7 @@ window.__robotforge = {
     const rect = canvas.getBoundingClientRect();
     return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
   },
+  fps: () => fps, // frames drawn a second, counted over the last half second
+  sensors: () => sensorsState(), // what the sensor drawings and views show (sensors.js)
+  showSensor: (name, on = true) => sensorsShow(name, on), // as switching it in the robots drawer
 };

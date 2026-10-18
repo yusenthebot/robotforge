@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.lessons import LESSONS
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
@@ -55,7 +54,7 @@ def test_the_index_links_every_lesson():
 
 @pytest.mark.anyio
 async def test_lesson_plans_only_call_tools_the_server_has():
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         tools = {t.name for t in (await client.list_tools()).tools}
     for lesson in LESSONS:
@@ -67,7 +66,7 @@ async def test_lesson_plans_only_call_tools_the_server_has():
 
 @pytest.mark.anyio
 async def test_lessons_tool_lists_and_explains_lessons():
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         listed = json.loads(_text(await client.call_tool("lessons", {})))
         assert [entry["number"] for entry in listed["lessons"]] == [lesson.number for lesson in LESSONS]
@@ -85,7 +84,7 @@ async def test_lessons_tool_lists_and_explains_lessons():
 
 @pytest.mark.anyio
 async def test_every_lesson_is_an_mcp_prompt():
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         prompts = {p.name: p for p in (await client.list_prompts()).prompts}
         assert {"start", *(lesson.prompt_name for lesson in LESSONS)} <= set(prompts)
