@@ -95,6 +95,9 @@ class LibraryRobot:
     # leaves out: arm motions do the same for them (see ArmMotion._hold). Not for the PiPER, whose model cancels
     # gravity on its links itself.
     holds_against_gravity: bool = False
+    # Colors the model's own are drawn in instead, (model rgb, ours) by part: a model painted to tell its parts apart
+    # (Barkour's lilac body, yellow hips, green and orange covers) reads as a toy beside the other real robots.
+    recolor: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...] = ()
     rotors: RotorLayout | None = None  # aircraft: real rotors in place of the model's own actuators (rotors.py)
 
 
@@ -264,6 +267,15 @@ CATALOG: dict[str, LibraryRobot] = {
                 (f"{joint}_{leg}", angle)
                 for leg in ("front_left", "hind_left", "front_right", "hind_right")
                 for joint, angle in (("hip", 0.7), ("knee", 1.4))
+            ),
+            # Menagerie paints each part its own bright color; the real robot is a light shell on dark legs.
+            recolor=(
+                ((0.8, 0.749, 0.914), (0.86, 0.87, 0.88)),  # body: an off-white shell
+                ((0.98, 0.714, 0.004), (0.22, 0.23, 0.25)),  # hip drives: graphite
+                ((0.616, 0.812, 0.929), (0.55, 0.57, 0.6)),  # legs: brushed grey
+                ((0.973, 0.529, 0.004), (0.32, 0.33, 0.35)),  # thigh covers, left
+                ((0.514, 0.737, 0.408), (0.32, 0.33, 0.35)),  # thigh covers, right
+                ((0.231, 0.38, 0.706), (0.09, 0.09, 0.1)),  # feet: black rubber
             ),
         ),
         LibraryRobot(
@@ -516,6 +528,7 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         key_ctrl = _add_tools(spec, robot, key_ctrl)
     if robot.rotors is not None:
         notes.append(rotors.fit(spec, robot.rotors))
+    _recolor(spec, robot.recolor)
     for geom in list(spec.worldbody.geoms):  # the world brings its own floor and lights
         spec.delete(geom)
     for light in list(spec.worldbody.lights):
@@ -561,6 +574,17 @@ def stand_at_home(
             root.quat = key_qpos[3:7].tolist()
     home_qpos, home_ctrl, spawn = home_pose(spec, key_qpos, key_ctrl, floating)
     return home_qpos, home_ctrl, spawn, floating
+
+
+def _recolor(
+    spec: mujoco.MjSpec, recolor: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...]
+) -> None:
+    """Draw the geoms of each of the model's colors in the one given for it (see LibraryRobot.recolor)."""
+    for geom in spec.geoms if recolor else ():
+        for was, now in recolor:
+            if np.allclose(np.asarray(geom.rgba[:3], float), was, atol=0.01):
+                geom.rgba = [*now, float(geom.rgba[3])]
+                break
 
 
 def _home_from_joints(spec: mujoco.MjSpec, robot: LibraryRobot) -> np.ndarray:

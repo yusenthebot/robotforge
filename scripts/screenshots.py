@@ -117,10 +117,18 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
     import websockets
 
     async with websockets.connect(f"ws://127.0.0.1:{port}/ws", max_size=None) as ws:
+        actuators: dict[str, int] = {}
+        if any("actuator" in msg for msg in messages):  # by name (see _pose): the scene says each one's id
+            while not actuators:
+                raw = await ws.recv()
+                if isinstance(raw, str) and json.loads(raw).get("type") == "scene":
+                    actuators = {a["name"]: a["id"] for a in json.loads(raw)["actuators"]}
         for k, msg in enumerate(messages):
             if "wait" in msg:
                 await asyncio.sleep(msg["wait"])
                 continue
+            if "actuator" in msg:
+                msg = {"type": "ctrl", "id": actuators[msg["actuator"]], "value": msg["value"]}
             await ws.send(json.dumps({"id": f"shot{k}", **msg}))
             if msg.get("type") in ("lesson_open", "go_to"):  # a slow request: wait for its reply
                 while True:
@@ -828,15 +836,29 @@ def _anymal_ur5e(pg: Any) -> None:
 # The library's newer robots for a line-up, standing: (name, library, mounts, [x, y]). The tall ones stand behind,
 # in the gaps between the short ones.
 LINE_UP = [
-    ("barkour", "barkour", [], [0.55, 1.4]),
-    ("op3", "op3", [], [0.55, 0.0]),
-    ("anymal", "anymal_c", [], [0.55, -1.4]),
-    ("z1", "z1", [], [0.55, -2.8]),
-    ("t1", "t1", [], [-0.7, 2.1]),
-    ("ur5e", "ur5e", [{"library": "robotiq_2f85"}], [-0.7, 0.7]),
-    ("xarm7", "xarm7", [], [-0.7, -0.7]),
-    ("aloha", "aloha", [], [-0.7, -2.1]),
+    ("barkour", "barkour", [], [0.55, 1.75]),
+    ("op3", "op3", [], [0.55, 0.6]),
+    ("z1", "z1", [], [0.55, -0.4]),
+    ("anymal", "anymal_c", [], [0.55, -1.75]),
+    ("t1", "t1", [], [-0.75, 2.85]),
+    ("ur5e", "ur5e", [{"library": "robotiq_2f85"}], [-0.75, 1.15]),
+    ("xarm7", "xarm7", [], [-0.75, 0.1]),
+    ("aloha", "aloha", [], [-0.75, -1.05]),
 ]
+
+
+# Arms in the line-up stand up straight, as their makers show them: their Menagerie home poses are working poses,
+# and beside the walkers a Z1 folded back over its base and an xArm 7 leaning back read as fallen over. Joint servo
+# targets (rad) by actuator; the joints not named keep their home.
+LINE_UP_POSES = {
+    "z1": {"motor2": 1.57, "motor3": 0.0, "motor4": 0.0},  # standing straight up, as a Z1 is shown
+    "xarm7": {"act2": 0.0, "act4": 1.3, "act6": 1.3},  # upper arm up, the hand pointing down in front
+}
+
+
+def _pose(robot: str, targets: dict[str, float]) -> list[dict[str, Any]]:
+    """Viewer messages that set the servo targets of `robot`'s actuators by name."""
+    return [{"actuator": f"{robot}/{name}", "value": value} for name, value in targets.items()]
 
 
 def _line_up(pg: Any) -> None:
@@ -1158,7 +1180,8 @@ SHOTS = [
     Shot(
         "library_line_up",
         _line_up,
-        page="window.__robotforge.select(null); " + _look((4.8, -0.35, 2.7), (-0.1, -0.35, 0.25)),
+        viewer=[msg for robot, targets in LINE_UP_POSES.items() for msg in _pose(robot, targets)] + [{"wait": 2.0}],
+        page="window.__robotforge.select(null); " + _look((4.9, 0.3, 1.75), (-0.1, 0.3, 0.42)),
         settle=3.0,
     ),
     # Water: the harbor with its boat, crates afloat and the dock; an ROV under water with the surface above it.
