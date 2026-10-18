@@ -277,6 +277,20 @@ def test_a_turn_out_of_a_walk_begun_off_its_course_steadies_first(pg):
     assert walker.playing == "left" and walker.rhythm in (None, "left")  # steadying, or still and turning as learned
 
 
+def test_a_trip_sends_a_kept_walk_straight_ahead_and_turns_it_only_on_the_spot(pg):
+    """Regression: the navigator steered a kept walk as it steers a gait, forward with a little turn, which a learned
+    walk plays as a turn on the spot: a template dog walk sent 3.2 m spent its 30 s turning left and right and
+    steadying, and never walked forward. It is sent straight ahead (it keeps to its line), and turns on the spot."""
+    walker = _swinging(pg)
+    sent: list[tuple[float, float]] = []
+    command = walker.command
+    walker.command = lambda speed, turn: (sent.append((speed, turn)), command(speed, turn))[1]
+    pg.behaviors.navigate("crab", [1.5, 0.6], walker="rhythm", seconds=6.0)
+    pg.run_fast(lambda: False, 6.0)
+    assert any(speed > 0 for speed, _ in sent) and any(turn != 0 for _, turn in sent)
+    assert all(turn == 0.0 for speed, turn in sent if speed > 0)
+
+
 def test_other_switches_while_moving_steady_on_home_until_calm(pg):
     """Out of a turn, or into one learned only from standing (files kept before turns learned out of the walk), the
     robot steadies on its home pose first, but only until it is calm: CALM_MAX at most, not until it stands still."""
@@ -414,6 +428,78 @@ def test_a_walking_turn_that_falls_twice_is_dropped_unless_steadying_falls_more(
     walk = _walk("crab", names, turn_left=still, turn_right=still, turn_rate=1.0, turn_left_walking=still)
     kept = rhythm_walk.learn_switches(solo, "crab", walk)
     assert (kept.turn_left_walking is not None) == kept_walking
+
+
+def _steering_falls(held: int, loose: int):
+    """A play_alone that falls in the walk after a turn (steering_checks' sequences): the first `held` times with the
+    walk's steering, the first `loose` without; nothing else falls."""
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.behaviors.rhythm_walk import Played
+
+    seen = {True: 0, False: 0}
+
+    def play(model, robot, walk, commands):
+        out = [Played(0.0, False)] * len(commands)
+        if commands[-1] != (1.0, 0.0, rhythm_walk.STEER_ON) or not any(c[1] for c in commands):
+            return out
+        steered = walk.steer is not None
+        seen[steered] += 1
+        return [*out[:-1], Played(0.0, seen[steered] <= (held if steered else loose))]
+
+    return play
+
+
+@pytest.mark.parametrize(
+    ("held", "loose", "kept"), [(1, 0, True), (2, 0, False), (2, 1, True), (4, 0, False), (4, 2, False), (4, 3, True)]
+)
+def test_a_steering_that_topples_the_robot_after_a_turn_is_dropped(monkeypatch, held, loose, kept):
+    """Regression: the steering was kept on how it walked from standing alone, so a template dog walk whose steering
+    fell in 5 of 9 walks after a left turn from standing, 2.6 to 4.4 s into the walk and never without it, kept it, and
+    in random walk, turn and walk sequences fell 94 times against 44. A walk's steering is checked again once its
+    turns are learned, on walks begun out of a turn and walked on past STEER_RAMP, and goes if it falls DROP_MARGIN
+    times more than the walk without it."""
+    from robotforge.behaviors import rhythm_walk
+
+    monkeypatch.setattr(rhythm_walk, "play_alone", _steering_falls(held, loose))
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    names = joint_names(solo, Body.find(solo, "crab"))
+    still = [0.0] * 3 * len(names)
+    walk = _walk("crab", names, turn_left=still, turn_right=still, turn_rate=1.0, steer=still)
+    assert rhythm_walk.keeps_steering(solo, "crab", walk) == kept
+    assert rhythm_walk.keeps_steering(solo, "crab", walk.model_copy(update={"turn_left": None}))  # no turns yet
+    checks = rhythm_walk.steering_checks(2.0)
+    assert len(checks) == 2 * (len(rhythm_walk.STEER_TURNS) + rhythm_walk.STEER_LEADS)
+    assert all(c[-1] == (1.0, 0.0, rhythm_walk.STEER_ON) and c[-2][1] != 0.0 for c in checks)  # a turn, then a walk
+    assert rhythm_walk.STEER_ON > 2 * rhythm_walk.STEER_RAMP  # walked on long past the steering coming in
+
+
+@pytest.mark.parametrize("topples", [False, True])
+def test_learning_turns_drops_a_steering_that_topples_the_robot_after_them(monkeypatch, topples):
+    """The steering is checked once the switches are, and a walk that drops it has its switches checked again
+    without it; the rest is as learned."""
+    from robotforge.behaviors import rhythm_walk
+
+    switched: list[bool] = []
+    learn_switches = rhythm_walk.learn_switches
+
+    def checked(model, robot, walk):
+        switched.append(walk.steer is not None)
+        return learn_switches(model, robot, walk)
+
+    def learned(model, robot, joints, reward, seed):
+        return Rhythm.still(joints.body.joints), {"fell": 0.0, "turned": reward.turn * 4.0}
+
+    monkeypatch.setattr(rhythm_walk, "play_alone", _steering_falls(4 if topples else 0, 0))
+    monkeypatch.setattr(rhythm_walk, "_standing_turn", learned)
+    monkeypatch.setattr(rhythm_walk, "learn_walking_turns", lambda model, robot, walk, seed=0: walk)
+    monkeypatch.setattr(rhythm_walk, "learn_switches", checked)
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "crab", "build": STAR}]})).model
+    names = joint_names(solo, Body.find(solo, "crab"))
+    walk = _walk("crab", names, steer=[0.0] * 3 * len(names))
+    turned = rhythm_walk.learn_turns(solo, "crab", walk)
+    assert turned.turns and turned.switching == "hold"
+    assert (turned.steer is None) == topples and ("holds_heading" in turned.describe()) != topples
+    assert switched == ([True, False] if topples else [True])
 
 
 @pytest.mark.parametrize("kept", ["before", "to hold"])

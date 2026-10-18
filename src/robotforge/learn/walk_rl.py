@@ -26,6 +26,7 @@ from robotforge.behaviors.rhythm_walk import (
     heading_drift,
     joint_names,
     learn_steering,
+    learn_switches,
     learn_turns,
     save_walk,
 )
@@ -116,22 +117,25 @@ def _tops(model: mujoco.MjModel, robots: list[str]) -> dict[str, float]:
 
 def _turn_seconds(trained: dict[str, Any], freq: float) -> int:
     """About how long learning what follows a kept walk takes at most, from the robot's own training pace (a round of
-    ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns
-    as many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk and the two
-    tunings and the turn from standing are each begun from every moment of rhythm_walk.WALK_CHECKS, and the switches
-    are checked (rhythm_walk.learn_switches) every way they can be: the walk's checks SWITCH_PASSES times, each turn's
-    TURN_PASSES times. With the sim running at real time, as in the viewer, an MJCF critter that trained
-    15 rounds in 4.4 s learned all but the switch checks in 109 s (this said 120 without them), and an imported A1
-    that trained 30 rounds in 11.2 s in 139 s (150); with them, an A1 that trained in 12.8 s in about 205 s in the
-    viewer driven headless (scripts/screenshots.py lesson_your_robot_kept; counting one way per turn, this said 190).
-    When the sim runs as fast as it can while the robot trains, as the tests drive it, a round takes longer and this
-    says too much."""
+    ATTEMPT-second tries): its steering searches its rounds with tries STEER_SECONDS long toward each aim, the turns as
+    many rounds as two sides times their starts, then each side is tuned twice to begin out of the walk and the two
+    tunings and the turn from standing are each begun from every moment of rhythm_walk.WALK_CHECKS, and the switches are
+    checked (rhythm_walk.learn_switches) every way they can be: the walk's checks SWITCH_PASSES times before the
+    steering is learned and again with the turns, each turn's TURN_PASSES times; then the steering is checked out of the
+    turns, with and without it (rhythm_walk.keeps_steering). A walk whose steering is dropped there has its switches
+    checked once more, which this leaves out: few are. With the sim running at real time, as in the viewer, an MJCF
+    critter that trained 15 rounds in 4.4 s learned all but the switch checks in 109 s (this said 120 without them), and
+    an imported A1 that trained 30 rounds in 11.2 s in 139 s (150); with them, an A1 that trained in 12.8 s in about 205
+    s in the viewer driven headless (scripts/screenshots.py lesson_your_robot_kept; counting one way per turn, this said
+    190). When the sim runs as fast as it can while the robot trains, as the tests drive it, a round takes longer and
+    this says too much."""
     steer = rhythm_walk.STEER_ROUNDS * len(rhythm_walk.STEER_AIMS) * rhythm_walk.STEER_SECONDS / ATTEMPT
     turns = 2 * rhythm_walk.TURN_STARTS * rhythm_walk.TURN_ROUNDS + 2 * 2 * rhythm_walk.WALKING_ROUNDS
-    walks = SWITCH_PASSES * _played(rhythm_walk.walk_checks(freq))
+    walks = 2 * SWITCH_PASSES * _played(rhythm_walk.walk_checks(freq))  # before the steering and with the turns
     turns_checked = TURN_PASSES * sum(_played(rhythm_walk.switch_checks(freq, sign)) for sign in (1.0, -1.0))
     begun = 2 * 3 * len(rhythm_walk.WALK_CHECKS) * (rhythm_walk.TURN_CHECK + rhythm_walk.FIRST_SECOND)
-    checks = (walks + turns_checked + begun) / (ROUND_TRIES * ATTEMPT)
+    steering = 2 * _played(rhythm_walk.steering_checks(freq))
+    checks = (walks + turns_checked + begun + steering) / (ROUND_TRIES * ATTEMPT)
     per_round = trained["seconds"] / max(1, trained["rounds"])
     return max(10, int(round(per_round * (steer + turns + checks) / 10.0)) * 10)
 
@@ -785,8 +789,12 @@ class LearnToWalkLesson(Lesson):
 
     def _learn_turns(self, walk: SavedWalk, folder: Path, ctx: LessonContext) -> None:
         """After the walk is kept: it learns to hold its heading, then the robot learns to turn on the spot each way,
-        on the robot alone, each kept as soon as it is learned."""
+        on the robot alone, each kept as soon as it is learned. First of all it is checked how it steadies leaving
+        the walk (learn_switches with no turns), a few seconds: Keep saves it to fade, which every template dog walk
+        measured was then checked not to."""
         try:
+            walk = learn_switches(self._solo("yours"), "yours", walk)
+            save_walk(folder, walk)
             walk = learn_steering(self._solo("yours"), "yours", walk, seed=self.trainings)
             save_walk(folder, walk)
             if walk.steer is not None:
@@ -798,6 +806,8 @@ class LearnToWalkLesson(Lesson):
             return
         rate = math.degrees(turned.turn_rate or 0.0)
         kept = {**ctx.results.get("kept", {}), "turns": True, "turn_deg_s": round(rate)}
+        if turned.steer is None:  # its steering tipped it over after a turn, and was dropped (keeps_steering)
+            kept.pop("holds_heading", None)
         walking = _text("", "")
         from_walk = turned.turn_rates_from_walk
         if from_walk is not None:  # what a turn right after walking gives differs, and each way: say it too

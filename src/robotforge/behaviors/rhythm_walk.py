@@ -272,6 +272,17 @@ EXITS = ("fade", "hold")  # leaving a turn, the same two ways
 # steadying first in none; those of 3 other dog walks, dropped on 2 to 4 falls more, fell 22 times in the bench when
 # put back.
 DROP_MARGIN = 2  # falls
+# A walk's steering is checked again once its switches are (keeps_steering), on what holds_heading never plays: a walk
+# started out of a turn and walked on long past STEER_RAMP. The robot turns either way from standing for each of
+# STEER_TURNS seconds, or out of STEER_LEADS of the walk's moments for FIRST_SECOND and some, then walks on for
+# STEER_ON; played with its steering and without, the steering goes if it falls DROP_MARGIN times more than the walk
+# without it. holds_heading only walks from standing, and switch_checks walk on for SWITCH_ON, so a template dog walk
+# whose steering fell in 5 of 9 walks after a left turn from standing (none without it, each 2.6 to 4.4 s into the walk)
+# kept it, and in random walk, turn and walk sequences 8 dog walks kept so fell 124 times against 72 for the same walks
+# switched as 7a4aa92 switched, 94 against 44 for that walk alone.
+STEER_TURNS = tuple(round(0.3 + 0.2 * k, 2) for k in range(12))  # s: 0.3 to 2.5, at different points of the stride
+STEER_LEADS = 8  # of the SWITCH_TRIES moments of the walk switch_checks turn out of
+STEER_ON = 5.0  # s
 
 
 class _Joints:
@@ -428,7 +439,39 @@ def learn_turns(model: mujoco.MjModel, robot: str, walk: SavedWalk, seed: int = 
         learned[side] = joints.to_saved(rhythm.theta)
         rates.append(max(0.0, sign * result["turned"]) / walk.seconds)
     turned = learn_walking_turns(model, robot, walk.model_copy(update={**learned, "turn_rate": min(rates)}), seed)
-    return learn_switches(model, robot, turned)
+    switched = learn_switches(model, robot, turned)
+    if keeps_steering(model, robot, switched):
+        return switched
+    return learn_switches(model, robot, turned.model_copy(update={"steer": None}))
+
+
+def keeps_steering(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> bool:
+    """Whether the walk (its turns and switches learned) keeps its steering: played as move plays it on its
+    steering_checks, the robot alone in `model`, it falls fewer than DROP_MARGIN times more with its steering than
+    without. True for a walk without steering or turns: nothing to check. Dropped on any fall more, 2 of 14 imported
+    A1 walks would have lost their steering on 2 falls against 1, and over all 14 the A1 fell less with it than without
+    after a turn (18 against 28 in 42 turn and walk sequences each)."""
+    if walk.steer is None or not walk.turns:
+        return True
+    checks = steering_checks(walk.freq)
+    held = _falls(model, robot, walk, checks, None)
+    if held < DROP_MARGIN:
+        return True
+    least = held - DROP_MARGIN + 1  # falls without steering that keep it
+    return _falls(model, robot, walk.model_copy(update={"steer": None}), checks, least) >= least
+
+
+def steering_checks(freq: float) -> list[list[tuple[float, float, float]]]:
+    """The sequences a walk's steering is checked on once its turns are learned (speed, turn, seconds): a turn each
+    way from standing for each of STEER_TURNS, and out of STEER_LEADS moments of the walk (at different points of a
+    stride of `freq` Hz) for FIRST_SECOND and up to a stride more, each followed by STEER_ON seconds of walking."""
+    out = []
+    for sign in (1.0, -1.0):
+        out += [[(0.0, sign, seconds), (1.0, 0.0, STEER_ON)] for seconds in STEER_TURNS]
+        for k, lead in enumerate(_leads(freq)[:: SWITCH_TRIES // STEER_LEADS][:STEER_LEADS]):
+            turn = FIRST_SECOND + (k % SWITCH_ENDS) / (SWITCH_ENDS * freq)
+            out.append([(1.0, 0.0, lead), (0.0, sign, turn), (1.0, 0.0, STEER_ON)])
+    return out
 
 
 def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedWalk:
@@ -445,15 +488,16 @@ def learn_switches(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> SavedW
     whose right turn was kept to fade then fell in 2 of 25 walk, 1 s turn, walk sequences (asked at every point of the
     stride), one kept to hold in 10 of 25. Fading everywhere, 6 dog walks still fell 12 times in 2100 sequences of
     move, gap and idle; holding (and beginning the turns that do not fall out of the walk), in none, but 6 imported A1
-    walks fell 520 times (fading, 71)."""
-    if not walk.turns:
-        return walk
+    walks fell 520 times (fading, 71).
+
+    A walk with no turns yet gets its style from the walk's checks alone, so that it is not played the way its checks
+    reject while it learns the rest: every template dog walk measured, kept to fade, was then checked to hold."""
     best: tuple[int, dict[str, Any]] | None = None
     for style in STYLES:
         styled = walk.model_copy(update={"switching": style})
         falls = _falls(model, robot, styled, walk_checks(walk.freq), None if best is None else best[0])
         kept: dict[str, Any] = {"switching": style}
-        for side, sign in (("left", 1.0), ("right", -1.0)):
+        for side, sign in (("left", 1.0), ("right", -1.0)) if walk.turns else ():
             if best is not None and falls >= best[0]:
                 break
             left_over = None if best is None else best[0] - falls
