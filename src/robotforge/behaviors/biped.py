@@ -129,7 +129,7 @@ class GaitPlan:
 
     def idle(self) -> bool:
         """True when nothing but standing still is planned."""
-        return self.standing and bool(np.all(self._support[self._i :] == 0)) and self._still()
+        return self.standing and not self._support[self._i :].any() and self._still()
 
     def rewind(self, lead: int, notice: int, moving: bool) -> None:
         """Forget the pieces of the plan that start at least `lead` ticks from now, so a new command
@@ -161,7 +161,12 @@ class GaitPlan:
 
     def _still(self) -> bool:
         rest = self._feet[self._i :]
-        return len(rest) == 0 or bool(np.allclose(rest, rest[-1], atol=1e-9))
+        if len(rest) == 0:
+            return True
+        # np.allclose(rest, rest[-1], atol=1e-9) for finite numbers, without its overhead: called every control
+        # tick, it took a quarter of a standing humanoid's controller time
+        last = rest[-1]
+        return bool((np.abs(rest - last) <= 1e-9 + 1e-5 * np.abs(last)).all())
 
     # ---- planning ---------------------------------------------------------------------
 
