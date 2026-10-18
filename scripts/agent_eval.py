@@ -230,6 +230,29 @@ class World:
         return {r["name"]: r["kind"] for r in self.compiled.behaviors.robots()}
 
     @functools.cached_property
+    def lidars(self) -> dict[str, dict[str, tuple[int, float]]]:
+        """The lidars each robot carries, from the world compiled as saved: each one's sensor name without its ray
+        number ("scout/base_lidar"), with how many rays it has and how far they reach (m). robotforge builds a
+        lidar as a ring of rangefinders named <lidar>_0, <lidar>_1, ...; {} when the world does not compile."""
+        import mujoco
+
+        if isinstance(self.compiled, str):
+            return {}
+        m = self.compiled.session.model
+        rays: dict[str, dict[int, float]] = {}
+        for s in range(m.nsensor):
+            if int(m.sensor_type[s]) != mujoco.mjtSensor.mjSENS_RANGEFINDER:
+                continue
+            ray = re.fullmatch(r"(.+)_(\d+)", mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or "")
+            if ray:
+                rays.setdefault(ray[1], {})[int(ray[2])] = float(m.sensor_cutoff[s])
+        out: dict[str, dict[str, tuple[int, float]]] = {}
+        for stem, found in rays.items():
+            if len(found) >= 3 and set(found) == set(range(len(found))):  # a ring, not rangefinders numbered 2, 3
+                out.setdefault(stem.split("/", 1)[0], {})[stem] = (len(found), max(found.values()))
+        return out
+
+    @functools.cached_property
     def arms(self) -> dict[str, list[str]]:
         """The arms each robot carries as robotforge's `robots` tool lists them (a centaur's two hands, the arm on
         a Go2's back), from the world compiled as saved; {} when it does not compile."""
@@ -297,6 +320,8 @@ class Evidence:
     session: Session
     worlds: list[World]
     work: Path  # the agent's working folder, where a task's own files are
+    home: Path | None = None  # the session's ROBOTFORGE_HOME (its worlds folder is in it)
+    started: float | None = None  # when the session started (time.time()), for files it left outside its folders
 
     def kind(self, world: World, robot: dict[str, Any]) -> str:
         """A template or library robot is the kind it was declared as (no need to compile it); any other is
@@ -1180,6 +1205,218 @@ def check_find_red(ev: Evidence) -> list[Criterion]:
     ]
 
 
+# ---- sensing and making things: tasks that are not lessons ---------------------------------------------------
+
+
+def maze_edge(world: World) -> tuple[float, float, float, float] | None:
+    """The maze's outer edge seen from above, (x_min, x_max, y_min, y_max): the box round all its walls, as the maze
+    scene lays them out; None for a world without a maze (fewer than four walls, or no goal mark)."""
+    walls = [c for o in world.objects if o.get("shape") == "wall" and (c := _footprint(o))]
+    if len(walls) < 4 or world.object("goal") is None:
+        return None
+    xs, ys = [x for w in walls for x, _ in w], [y for w in walls for _, y in w]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def _within(x: float, y: float, edge: tuple[float, float, float, float]) -> bool:
+    return edge[0] <= x <= edge[1] and edge[2] <= y <= edge[3]
+
+
+# A distance and its unit as an answer writes it: "0.43 m", "43 cm", "0.43 米", "43 厘米"; not a speed ("0.2 m/s").
+DISTANCE = re.compile(r"(\d+(?:\.\d+)?)\s*(厘米|公分|毫米|米|cm|mm|meters?|metres?|m)(?![a-zA-Z/²])")
+UNIT_METERS = {"厘米": 0.01, "公分": 0.01, "cm": 0.01, "毫米": 0.001, "mm": 0.001}
+
+
+def distances_said(text: str) -> list[float]:
+    """The distances a message names, in meters, in order."""
+    return [float(n) * UNIT_METERS.get(unit, 1.0) for n, unit in DISTANCE.findall(text)]
+
+
+def said_near(said: list[float], truth: float) -> bool:
+    """Does one of the distances said match a measured one: within 6 cm, or 15% of it for far walls?"""
+    return any(abs(d - truth) <= max(0.06, 0.15 * truth) for d in said)
+
+
+def _at(call: Call, robot: str) -> tuple[float, float] | None:
+    """Where an observe saw `robot`: its first free body ("<robot>/<body>"), the root."""
+    bodies = call.data.get("free_bodies") if isinstance(call.data, dict) else None
+    pos = next((p for n, p in (bodies or {}).items() if n.startswith(f"{robot}/") and isinstance(p, list)), None)
+    return (float(pos[0]), float(pos[1])) if pos and len(pos) >= 2 else None
+
+
+def lidar_hits(call: Call, stem: str, rays: int, reach: float) -> list[float] | None:
+    """The readings of lidar `stem` in an observe that reported at least three of its rays, keeping the rays that
+    hit something (a rangefinder reads -1, or as far as it reaches, when nothing is there); None when it did not
+    report the lidar."""
+    sensors = call.data.get("sensors") if isinstance(call.data, dict) else None
+    if not isinstance(sensors, dict):
+        return None
+    read = [v for i in range(rays) if isinstance(v := sensors.get(f"{stem}_{i}"), (int, float))]
+    if len(read) < 3:
+        return None
+    return [float(v) for v in read if 0 < v < (reach - 1e-3 if reach > 0 else math.inf)]
+
+
+def check_lidar_maze(ev: Evidence) -> list[Criterion]:
+    """A robot carrying a lidar started outside the maze (at its entrance), drove in, read its lidar there, and the
+    answer says how far the nearest wall is, as that reading measured it. The only check that reads what the agent
+    said: the answer is what the user asked for, and it is held to robotforge's own reading."""
+    rows = []
+    answer = ev.session.messages[-1] if ev.session.messages else ""
+    said = distances_said(answer)
+    for world in ev.worlds:
+        edge = maze_edge(world)
+        if edge is None:
+            continue
+        there = ev.seen(world)
+        for robot in world.robots:
+            name = robot.get("name", "")
+            lidars = world.lidars.get(name, {})
+            seen = poses(there, name)
+            x, y, _ = _start(robot, seen or [Pose(0.0, 0.0, 0.0, None)])  # world.yaml saves [0, 0] when unplaced
+            inside = []  # (lidar, its hits) of each observe that read a lidar with the robot inside the maze
+            for call in there.ours:
+                where = _at(call, name) if call.tool == "observe" and call.ok else None
+                for stem, (rays, reach) in lidars.items():
+                    hits = lidar_hits(call, stem, rays, reach) if where else None
+                    if hits is not None and _within(*where, edge):
+                        inside.append((stem, hits, where))
+            last = inside[-1] if inside else None
+            nearest = min(last[1]) if last and last[1] else None
+            crit = [
+                Criterion(
+                    "a robot carrying a lidar, in a maze",
+                    bool(lidars),
+                    f"{_named(world, robot)}, lidars {sorted(lidars) or 'none'}",
+                ),
+                Criterion(
+                    "started outside the maze (at its entrance)",
+                    not _within(x, y, edge),
+                    f"saved at [{x:.2f}, {y:.2f}], the maze spans x {edge[0]:.2f} to {edge[1]:.2f}, "
+                    f"y {edge[2]:.2f} to {edge[3]:.2f}",
+                ),
+                Criterion(
+                    "read its lidar inside the maze, a wall in sight",
+                    nearest is not None,
+                    f"{len(inside)} observe with the lidar inside"
+                    + (f", the last at [{last[2][0]:.2f}, {last[2][1]:.2f}]" if last else ""),
+                ),
+                Criterion(
+                    "the answer says how far the nearest wall is",
+                    nearest is not None and said_near(said, nearest),
+                    f"nearest {nearest:.2f} m; the answer names {[round(d, 3) for d in said] or 'no distance'}"
+                    if nearest is not None
+                    else f"no reading to hold it to; the answer names {[round(d, 3) for d in said] or 'no distance'}",
+                ),
+            ]
+            rows.append((robot, crit))
+    return _best(rows, [Criterion("a robot carrying a lidar, in a maze", False, "no robot in a maze world")])
+
+
+VIDEO_TYPES = (".mp4", ".webm", ".mov", ".mkv", ".avi", ".gif", ".webp")
+VIDEO_SECONDS = 1.0  # "a short video": at least this long
+VIDEO_FRAMES = 10
+VIDEO_CHANGE = 0.004  # mean change of a pixel between the first and last frames (0 to 1): something moved
+VIDEO_MOVED = 0.2  # m the robot went in the session: "of it moving"
+VIDEO_PATH = re.compile(r"((?:/|~/)[^\s\"'`<>()\[\]]+?\.(?:mp4|webm|mov|mkv|avi|gif|webp))(?![\w.])", re.IGNORECASE)
+
+
+def video_files(ev: Evidence) -> list[Path]:
+    """The videos a session left: in its working folder and robotforge home, and at any path its last message or a
+    robotforge result names, written since the session started."""
+    found = [
+        p
+        for root in (ev.work, ev.home)
+        if root is not None and root.is_dir()
+        for p in sorted(root.rglob("*"))
+        if p.suffix.lower() in VIDEO_TYPES and p.is_file()
+    ]
+    texts = [ev.session.messages[-1] if ev.session.messages else "", *(c.text for c in ev.session.ours if c.ok)]
+    for text in texts:
+        for named in VIDEO_PATH.findall(text):
+            path = Path(named).expanduser()
+            if path.is_file() and (ev.started is None or path.stat().st_mtime >= ev.started - 1):
+                found.append(path)
+    return list(dict.fromkeys(p.resolve() for p in found))
+
+
+def _frames_apart(first: Any, last: Any) -> float:
+    """How much two frames differ: the mean change of a pixel, 0 to 1, on small grey copies."""
+    import numpy as np
+
+    a, b = (np.asarray(f.convert("L").resize((96, 72)), dtype=float) / 255 for f in (first, last))
+    return float(np.abs(a - b).mean())
+
+
+def video_info(path: Path) -> tuple[int, float, float] | str:
+    """(frames, seconds, how much the last frame differs from the first) of a video, or why it cannot be read. GIF
+    and WebP are read with Pillow; other formats with ffprobe and ffmpeg, when they are on PATH."""
+    import io
+
+    from PIL import Image, ImageSequence
+
+    if path.suffix.lower() in (".gif", ".webp"):
+        try:
+            with Image.open(path) as im:
+                frames = [f.copy() for f in ImageSequence.Iterator(im)]
+                seconds = sum(float(f.info.get("duration") or 0) for f in frames) / 1000
+        except (OSError, ValueError) as exc:
+            return f"unreadable: {exc}"[:SHORT]
+        return len(frames), seconds, _frames_apart(frames[0], frames[-1]) if frames else 0.0
+    if shutil.which("ffprobe") is None or shutil.which("ffmpeg") is None:
+        return "ffprobe and ffmpeg are not on PATH to read it"
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
+         "stream=nb_read_frames:format=duration", "-of", "json", str(path)],
+        capture_output=True, text=True, encoding="utf-8",
+    )  # fmt: skip
+    try:
+        info = json.loads(probe.stdout)
+        frames = int((info.get("streams") or [{}])[0].get("nb_read_frames") or 0)
+        seconds = float((info.get("format") or {}).get("duration") or 0)
+    except (ValueError, TypeError, IndexError):
+        return f"unreadable: {probe.stderr.strip()[:200]}"
+    shots = []
+    for where in (["-ss", "0"], ["-sseof", "-0.1"]):
+        grab = ["-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-"]
+        shot = subprocess.run(["ffmpeg", "-v", "error", *where, "-i", str(path), *grab], capture_output=True)
+        if not shot.stdout:
+            return f"no frame at {' '.join(where)}: {shot.stderr.decode(errors='replace').strip()[:200]}"
+        shots.append(Image.open(io.BytesIO(shot.stdout)))
+    return frames, seconds, _frames_apart(*shots)
+
+
+def check_parts_video(ev: Evidence) -> list[Criterion]:
+    """A robot built from parts moved, and the session left a video of at least VIDEO_SECONDS in which something
+    moves (its first and last frames differ)."""
+    rows = []
+    for world, robot in ev.robots():
+        if not robot.get("build"):
+            continue
+        went = travelled(ev.seen(world), robot["name"])
+        moved = Criterion(f"it moved >= {VIDEO_MOVED} m", went >= VIDEO_MOVED, f"{went:.2f} m")
+        rows.append((robot, [Criterion("a robot built from parts", True, _named(world, robot)), moved]))
+    crit = _best(rows, [Criterion("a robot built from parts", False, "none in any world")])
+    seen = []
+    for path in video_files(ev):
+        info = video_info(path)
+        if isinstance(info, str):
+            seen.append((False, f"{path.name}: {info}"))
+            continue
+        frames, seconds, change = info
+        ok = frames >= VIDEO_FRAMES and seconds >= VIDEO_SECONDS and change >= VIDEO_CHANGE
+        seen.append((ok, f"{path.name}: {frames} frames, {seconds:.1f} s, frames change {change:.3f}"))
+    seen.sort(key=lambda s: not s[0])
+    crit.append(
+        Criterion(
+            f"a video >= {VIDEO_SECONDS:g} s in which something moves",
+            bool(seen) and seen[0][0],
+            "; ".join(s for _, s in seen) or "no video file",
+        )
+    )
+    return crit
+
+
 TASKS: dict[str, Task] = {
     t.name: t
     for t in (
@@ -1280,6 +1517,21 @@ TASKS: dict[str, Task] = {
             "Put a Go2 robot dog with an arm on its back in the kitchen, and have it walk over to the island.",
             check_go2_arm_kitchen,
         ),
+        Task(
+            "lidar_maze",
+            "zh",
+            ("scene", "parts", "lidar", "drive"),
+            "把一台带激光雷达的小车放到迷宫入口，让它开进迷宫里，然后告诉我激光雷达看到了什么：离它最近的墙有多远？",
+            check_lidar_maze,
+        ),
+        Task(
+            "parts_video",
+            "en",
+            ("parts", "drive or walk", "record a video"),
+            "Build me a small robot out of parts, any design you like, get it moving, and record a short video of it "
+            "that I can share.",
+            check_parts_video,
+        ),
     )
 }
 
@@ -1312,7 +1564,7 @@ class Outcome:
 
 
 def judge(task: Task, session: Session, home: Path, work: Path, meta: dict[str, Any]) -> Outcome:
-    evidence = Evidence(session, load_worlds(home), work)
+    evidence = Evidence(session, load_worlds(home), work, home, meta.get("started"))
     try:
         criteria = task.check(evidence)
     except Exception as exc:  # a check that crashes on an odd world is a bug in the check: show it, do not pass
@@ -1436,6 +1688,7 @@ def _wait_to_start() -> None:
 def run_session(task: Task, task_dir: Path, home: Path, timeout: float) -> dict[str, Any]:
     """One `codex exec` session; the event stream goes to events.jsonl, its stderr to stderr.txt."""
     _wait_to_start()
+    started = time.time()
     work, rf_home = task_dir / "work", task_dir / "rf_home"
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     env.update(CODEX_HOME=str(home), ROBOTFORGE_HOME=str(rf_home), ROBOTFORGE_NO_BROWSER="1")
@@ -1460,6 +1713,7 @@ def run_session(task: Task, task_dir: Path, home: Path, timeout: float) -> dict[
         "exit_code": proc.returncode,
         "timed_out": timed_out,
         "prompt": task.prompt,
+        "started": round(started, 1),
     }
     (task_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return meta
