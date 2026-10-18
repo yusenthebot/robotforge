@@ -18,7 +18,19 @@ import numpy as np
 
 from robotforge.behaviors import humanoid
 from robotforge.design.world import World, compile_world
-from robotforge.learn.engine import Bench, Control, Lesson, LessonContext, Metric, Plot, Quiz, Series, Step, Text
+from robotforge.learn.engine import (
+    Bench,
+    Control,
+    Lesson,
+    LessonContext,
+    Metric,
+    Plot,
+    Quiz,
+    Series,
+    Step,
+    Text,
+    signed,
+)
 from robotforge.learn.gait import _hull, _trunk
 
 ROBOTS = ("ours", "g1")
@@ -296,7 +308,14 @@ class BalanceLesson(Lesson):
             (Series("margin", _text("余量", "margin"), "violet"),),
             window=5.0,
         ),
-        Plot("tilt", _text("身体倾斜", "Body tilt"), "°", (Series("tilt", _text("倾斜", "tilt"), "ink"),), window=5.0),
+        Plot(
+            "tilt",
+            _text("身体倾斜", "Body tilt"),
+            "°",
+            (Series("tilt", _text("倾斜", "tilt"), "ink"),),
+            window=5.0,
+            floor=0.0,
+        ),
     )
     steps = STEPS
     bench = Bench(
@@ -515,7 +534,7 @@ class BalanceLesson(Lesson):
             "show": "f_edge",
             "label": _text("还剩多少", "Margin"),
             "expr": _text("脚边 − 捕获点", "foot edge - capture point"),
-            "value": f"{100 * inside:+.1f} cm",
+            "value": f"{signed(100 * inside, 1)} cm",
             "color": "violet",
         }
         if inside < 0:
@@ -524,8 +543,8 @@ class BalanceLesson(Lesson):
             {
                 "show": "f_cp",
                 "label": _text("捕获点", "Capture point"),
-                "expr": f"v × √(z ÷ g) = {speed:+.2f} × √({z:.3f} ÷ 9.81)",
-                "value": f"{100 * cp:+.1f} cm",
+                "expr": f"v × √(z ÷ g) = {signed(speed, 2)} × √({z:.3f} ÷ 9.81)",
+                "value": f"{signed(100 * cp, 1)} cm",
                 "color": "amber",
             },
             {

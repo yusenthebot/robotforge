@@ -3,9 +3,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
+import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -391,6 +392,11 @@ function buildMeshGeometries(desc, buffer) {
     for (let i = 0; i < Math.min(nor.length, 30); i++) if (nor[i] !== 0) hasNormals = true;
     if (hasNormals) g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
     else g.computeVertexNormals();
+    if (entry.colors !== undefined) {
+      // A textured mesh: its texture's colors per vertex (the page draws no textures; see scene.py)
+      g.setAttribute("color", new THREE.BufferAttribute(floats.subarray(entry.colors, entry.colors + 3 * n), 3));
+      g.userData.vertexColors = true;
+    }
     out.set(entry.id, g);
   }
   return out;
@@ -450,6 +456,7 @@ async function applyScene(desc) {
       const mat = look
         ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3]);
+      if (g.userData.vertexColors) mat.vertexColors = true;
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
         // one repeat for the whole box squeezed the pattern on thin faces (risers, sides) into shimmer.
@@ -471,6 +478,7 @@ async function applyScene(desc) {
   }
   flexMeshes = (desc.flexes || []).map(flexMesh);
   for (const flex of flexMeshes) worldRoot.add(flex.mesh);
+  buildRotors(desc.rotors, bodyNodes); // aircraft: propellers the page turns (rotors.js)
   scene3.add(worldRoot);
 
   // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
@@ -479,6 +487,7 @@ async function applyScene(desc) {
   wantFrame = false;
   follow = null;
   tween = null;
+  fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
 }
 
@@ -548,14 +557,20 @@ function flexBodyAt(mesh, point) {
   return best;
 }
 
-function contentSphere() {
-  const box = new THREE.Box3();
+// The boxes of everything the scene shows but its floor, each in world space.
+function contentBoxes() {
+  const boxes = [];
   if (worldRoot) {
     worldRoot.updateMatrixWorld(true);
     worldRoot.traverse((o) => {
-      if (o.isMesh && o.visible && !o.userData.isPlane) box.expandByObject(o);
+      if (o.isMesh && o.visible && !o.userData.isPlane) boxes.push(new THREE.Box3().setFromObject(o));
     });
   }
+  return boxes;
+}
+
+function contentSphere() {
+  const box = contentBoxes().reduce((all, b) => all.union(b), new THREE.Box3());
   if (box.isEmpty() && sceneDesc) {
     return new THREE.Sphere(new THREE.Vector3().fromArray(sceneDesc.stat.center), sceneDesc.stat.extent);
   }
@@ -585,19 +600,109 @@ function fitDistance(r) {
 }
 
 function frameCamera({ animate = false } = {}) {
+  refitRig = null; // a view asked for now is not undone by a lesson's rig settling
   if (!hasSize()) {
     fitWhenSized = true;
     return;
   }
   const sphere = contentSphere();
   const d = fitDistance(Math.max(sphere.radius, 0.08));
-  // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
-  // surfaces that nearly touch flicker); fog hides everything well before the far plane.
-  camera.near = Math.min(Math.max(d / 400, 0.004), 0.05);
-  camera.far = d * 40;
-  camera.updateProjectionMatrix();
   const eye = sphere.center.clone().add(new THREE.Vector3(1.0, -1.3, 0.8).normalize().multiplyScalar(d));
-  moveCamera(eye, sphere.center, animate);
+  const fit = fitContent(eye, sphere.center, fitDistance(0.08) / d);
+  // A tight depth range keeps the depth buffer precise across the scene (wide ranges make distant
+  // surfaces that nearly touch flicker); fog hides everything well before the far plane. Set for the
+  // distance the camera ends at, which in a narrow free view is further than the sphere's.
+  const reach = Math.max(d, fit.eye.distanceTo(fit.target));
+  camera.near = Math.min(Math.max(reach / 400, 0.004), 0.05);
+  camera.far = reach * 40;
+  camera.updateProjectionMatrix();
+  moveCamera(fit.eye, fit.target, animate);
+}
+
+// Come in from the distance where the scene's bounding sphere fills the view until the scene itself does (every
+// part's box), centred in the free part of the window: seen from above a scene is flat, its corners are often empty
+// and its near side reaches further down the screen than its far side up, and the sphere left the park's robots
+// 16 px tall on a laptop, with empty grass all round. The look-at point moves over the ground, keeping its height.
+// Where a panel leaves the free part narrower than the sphere (a tablet with the robots drawer open), go further out.
+const CONTENT_MARGIN = 0.85; // share of the free half-width and half-height the scene may fill (room for a ring, a path)
+const CONTENT_CLOSEST = 0.3; // never nearer than this share of the sphere's distance
+const CONTENT_FURTHEST = 3; // never further than this many times the sphere's distance
+function fitContent(eye, target, least) {
+  const corners = [];
+  const boxes = contentBoxes();
+  if (ring.visible) boxes.push(new THREE.Box3().setFromObject(ring)); // the selected robot's ring is part of the picture
+  for (const box of boxes) {
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  }
+  if (!corners.length || !hasSize()) return { eye, target };
+  const r = freeRect();
+  const halfW = (CONTENT_MARGIN * Math.max(80, r.right - r.left)) / 2; // px
+  const halfH = (CONTENT_MARGIN * Math.max(80, r.bottom - r.top)) / 2;
+  const probe = camera.clone();
+  probe.clearViewOffset(); // the view offset only moves the picture's center into the free part
+  probe.updateProjectionMatrix();
+  const back = eye.clone().sub(target).normalize(); // from the look-at point to the eye
+  const across = new THREE.Vector3(-back.y, back.x, 0).normalize(); // the screen's right, over the ground
+  const ahead = new THREE.Vector3(-back.x, -back.y, 0).normalize(); // the screen's up, over the ground
+  const rise = Math.max(0.2, back.z); // how much a step over the ground moves a point up the screen
+  const tanV = Math.tan(THREE.MathUtils.degToRad(probe.fov) / 2);
+  const [W, H] = [window.innerWidth, window.innerHeight];
+  const start = eye.distanceTo(target);
+  const closest = Math.max(CONTENT_CLOSEST, least) * start; // and no nearer than a small robot's own framing
+  const furthest = CONTENT_FURTHEST * start;
+  const center = target.clone();
+  let dist = start;
+  const p = new THREE.Vector3();
+  // The scene's extent on the screen from (center, dist), -1 to 1 across the view; null when a part is behind.
+  const extent = () => {
+    probe.position.copy(center).addScaledVector(back, dist);
+    probe.lookAt(center);
+    probe.updateMatrixWorld(true);
+    const e = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const c of corners) {
+      p.copy(c).project(probe);
+      if (p.z > 1 || p.z < -1) return null;
+      [e[0], e[1], e[2], e[3]] = [Math.min(e[0], p.x), Math.max(e[1], p.x), Math.min(e[2], p.y), Math.max(e[3], p.y)];
+    }
+    return e;
+  };
+  const fill = ([x0, x1, y0, y1]) => Math.max(((x1 - x0) / 2) * (W / 2 / halfW), ((y1 - y0) / 2) * (H / 2 / halfH));
+  for (let i = 0; i < 8; i++) {
+    const e = extent();
+    if (!e) {
+      dist = Math.min(furthest, dist * 1.25);
+      continue;
+    }
+    // Over the ground until the scene's middle on the screen is the picture's middle, then nearer or further.
+    center.addScaledVector(across, ((e[0] + e[1]) / 2) * tanV * probe.aspect * dist);
+    center.addScaledVector(ahead, (((e[2] + e[3]) / 2) * tanV * dist) / rise);
+    dist = Math.min(furthest, Math.max(closest, dist * fill(e)));
+  }
+  for (let e = extent(); dist < furthest && (!e || fill(e) > 1); e = extent()) dist = Math.min(furthest, dist * 1.04);
+  return { eye: center.clone().addScaledVector(back, dist), target: center };
+}
+
+// A lesson's camera, framed for the free part of the window and, if it asks, stepped back until its rig fits there.
+let fitWhenPosed = null; // { eye, target } of a lesson camera that asked to fit before its scene's first poses
+function aimLessonCamera(eye, target, fit) {
+  const goal = new THREE.Vector3().fromArray(target);
+  const away = fitToFree(new THREE.Vector3().fromArray(eye), goal);
+  moveCamera(fit ? fitRig(away, goal) : away, goal, true);
+}
+
+// A rig fitted at its scene's first poses is fitted once more when it has settled, unless the view was moved by hand
+// meanwhile: the PID triplets' arms hang at first and rise level within half a second, and the third then reached
+// off a phone's screen (a reload, which fits the settled rig, kept it in).
+const RIG_SETTLE_MS = 800;
+let refitRig = null; // { eye, target, at } of the lesson camera to fit again
+function refitSettledRig() {
+  if (!refitRig || performance.now() < refitRig.at) return;
+  const { eye, target } = refitRig;
+  refitRig = null;
+  if (lessonCamera()?.fit !== true) return; // the lesson has gone, or asks for no fit
+  const kept = follow?.body; // a camera move drops the follow the lesson asked for; keep it
+  aimLessonCamera(eye, target, true);
+  if (kept !== undefined) startFollowBody(kept, { keepTween: true });
 }
 
 function applyPoses(buffer) {
@@ -623,8 +728,14 @@ function applyPoses(buffer) {
       const goal = new THREE.Vector3().fromArray(own.target);
       const eye = fitToFree(new THREE.Vector3().fromArray(own.eye), goal);
       moveCamera(own.fit ? fitRig(eye, goal) : eye, goal, false);
+      if (own.fit) refitRig = { eye: own.eye, target: own.target, at: performance.now() + RIG_SETTLE_MS };
     }
     else if (pendingFit === "camera") frameCamera();
+    else if (fitWhenPosed) {
+      aimLessonCamera(fitWhenPosed.eye, fitWhenPosed.target, true);
+      refitRig = { ...fitWhenPosed, at: performance.now() + RIG_SETTLE_MS };
+    }
+    fitWhenPosed = null;
     pendingFit = null;
     $("loading").hidden = true;
   }
@@ -731,6 +842,19 @@ function robotBox(name, { baseOnly = false } = {}) {
     });
   }
   return box.isEmpty() ? null : box;
+}
+
+// The parts of a robot you can see, as meshes placed where it stands now; empty for a name that is not a robot.
+function robotMeshes(name) {
+  const meshes = [];
+  if (!worldRoot) return meshes;
+  worldRoot.updateMatrixWorld();
+  for (const id of robotBodies.get(name) ?? []) {
+    bodyNodes[id]?.traverse((o) => {
+      if (o.isMesh && o.visible) meshes.push(o);
+    });
+  }
+  return meshes;
 }
 
 function updateRing() {
@@ -1040,12 +1164,52 @@ function select(name, { focus = false } = {}) {
 }
 
 function focusRobot(name) {
+  refitRig = null;
   const box = robotBox(name);
   if (!box || !hasSize()) return;
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const dir = camera.position.clone().sub(controls.target).normalize();
   const d = fitDistance(Math.max(sphere.radius, 0.15)) * 2.2; // room around it to see where it goes
-  moveCamera(sphere.center.clone().add(dir.multiplyScalar(d)), sphere.center, true);
+  moveCamera(sphere.center.clone().add(clearSight(name, box, dir, d).multiplyScalar(d)), sphere.center, true);
+}
+
+// The way from a robot to the camera, turned around the vertical as little as it takes for nothing to stand in
+// between: on a phone, whose narrow view puts the camera twice as far back, the park's tree hid the Go2 just picked.
+// The view is clear when the robot's middle and the corners of its box (drawn in a little, to the robot's own
+// outline) all see the camera: a ray from the middle alone passed the warehouse shelf hiding half the Go2.
+const sightRay = new THREE.Raycaster();
+const UP = new THREE.Vector3(0, 0, 1);
+const SIGHT_TURNS = [0, 20, -20, 40, -40, 60, -60, 90, -90, 120, -120, 150, -150, 180]; // degrees
+const SIGHT_INSET = 0.15; // share of the box each corner is drawn in by
+function clearSight(name, box, dir, d) {
+  const others = [];
+  worldRoot.traverse((o) => {
+    const body = o.userData.body;
+    if (!o.isMesh || !o.visible || body === undefined || o.userData.isPlane) return;
+    if (robotOfBody.get(body) !== name) others.push(o);
+  });
+  const center = box.getCenter(new THREE.Vector3());
+  const inner = box.clone().expandByVector(box.getSize(new THREE.Vector3()).multiplyScalar(-SIGHT_INSET));
+  const points = [center];
+  for (const x of [inner.min.x, inner.max.x]) for (const y of [inner.min.y, inner.max.y]) for (const z of [inner.min.z, inner.max.z]) points.push(new THREE.Vector3(x, y, z));
+  const eye = new THREE.Vector3();
+  const toward = new THREE.Vector3();
+  let best = dir; // walled in on every side: keep the view the learner had, or the least hidden one
+  let fewest = points.length;
+  for (const turn of SIGHT_TURNS) {
+    const way = dir.clone().applyAxisAngle(UP, THREE.MathUtils.degToRad(turn));
+    eye.copy(center).addScaledVector(way, d);
+    let blocked = 0;
+    for (const p of points) {
+      toward.copy(eye).sub(p);
+      sightRay.set(p, toward.clone().normalize());
+      sightRay.far = toward.length();
+      if (sightRay.intersectObjects(others, false).length && ++blocked >= fewest) break;
+    }
+    if (blocked === 0) return way;
+    if (blocked < fewest) [best, fewest] = [way, blocked];
+  }
+  return best;
 }
 
 function renderSelection() {
@@ -1147,6 +1311,7 @@ let rtf = 1;
 function applyState(s) {
   paused = s.paused;
   rtf = s.rtf;
+  rotorCommands(s.ctrl, paused);
   behaviors = s.behaviors || [];
   updatePaths(behaviors);
   const play = $("btn-play");
@@ -1183,7 +1348,11 @@ function applyState(s) {
 const DRIVE_KEYS = {
   w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
 };
-const TURN_RATE = { rover: 2.0, balancer: 1.5 }; // rad/s at full key; walkers turn at 1.0
+// Aircraft: A and D fly sideways (a rover can only turn), the arrow keys turn, E climbs and Q descends (and lands).
+const FLY_KEYS = { ...DRIVE_KEYS, a: "slide_left", d: "slide_right", e: "up", q: "down" };
+const isAircraft = (robot) => robot?.kind === "aircraft";
+const TURN_RATE = { rover: 2.0, balancer: 1.5, aircraft: 1.2 }; // rad/s at full key; walkers turn at 1.0
+const FLY_CLIMB = 1.0; // m/s up or down at full key
 const pressed = new Set();
 let lastDrive = "";
 
@@ -1195,7 +1364,8 @@ function driveTarget() {
 function renderDrive() {
   const robot = driveTarget();
   $("drive").hidden = !robot;
-  if (robot) $("drive-text").innerHTML = t("drive", { name: escapeHtml(robot.name) });
+  $("fly-keys").hidden = !isAircraft(robot);
+  if (robot) $("drive-text").innerHTML = t(isAircraft(robot) ? "fly" : "drive", { name: escapeHtml(robot.name) });
   lastDrive = "";
 }
 
@@ -1204,12 +1374,18 @@ function driveCommand(robot) {
   const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
-  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  if (isAircraft(robot)) {
+    cmd.speed = fwd * top * 0.5;
+    cmd.side = ((pressed.has("slide_left") ? 1 : 0) - (pressed.has("slide_right") ? 1 : 0)) * top * 0.5;
+    cmd.climb = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * FLY_CLIMB;
+  }
+  return cmd;
 }
 
 function sendDrive() {
   const robot = driveTarget();
-  for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has(k.dataset.key));
+  for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has((isAircraft(robot) && k.dataset.fly) || k.dataset.key));
   const lessonDrive = lessonDriveSpec();
   if (lessonDrive) {
     // A lesson with a robot to drive takes the keys; the lesson's own controller turns them into wheel speeds.
@@ -1225,7 +1401,7 @@ function sendDrive() {
   }
   if (!robot) return;
   const cmd = driveCommand(robot);
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.side ?? 0}:${cmd.climb ?? 0}`;
   if (key === lastDrive) return;
   lastDrive = key;
   send(cmd);
@@ -1294,12 +1470,13 @@ function updateFollow() {
 controls.addEventListener("start", () => {
   follow = null;
   tween = null;
+  refitRig = null; // the learner's own view stays
 });
 
 function driveKey(e, down) {
   const lessonDrive = lessonDriveSpec();
   if (!driveTarget() && !lessonDrive) return false;
-  const dir = DRIVE_KEYS[e.key.toLowerCase()];
+  const dir = (isAircraft(driveTarget()) && !lessonDrive ? FLY_KEYS : DRIVE_KEYS)[e.key.toLowerCase()];
   if (!dir) return false;
   e.preventDefault();
   if (down) {
@@ -1989,11 +2166,13 @@ function loop() {
   requestAnimationFrame(loop);
   healCamera();
   updateViewShift();
+  refitSettledRig();
   updateTween();
   updateFollow();
   controls.update();
   updateRing();
   updatePathWidths();
+  spinRotors();
   refreshDragVisual();
   lessonFrame();
   renderer.render(scene3, camera);
@@ -2013,11 +2192,16 @@ initLessons({
   send,
   toast,
   bodyNode: (id) => bodyNodes[id],
+  robotTop: (name) => robotBox(name)?.max.z ?? null, // the highest point of a robot as it stands now (m)
+  robotMeshes: (name) => robotMeshes(name), // the parts of a robot you can see, where it stands now
+  freeRect: () => freeRect(), // the part of the window no panel covers, in CSS px
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {
-    const goal = new THREE.Vector3().fromArray(target);
-    const away = fitToFree(new THREE.Vector3().fromArray(eye), goal);
-    moveCamera(fit ? fitRig(away, goal) : away, goal, true);
+    refitRig = null; // the lesson's new camera replaces the one still to be fitted again
+    // A rig is measured where its robots stand: a scene whose first poses have not come yet has every body at the
+    // origin, and the fit framed that instead (on a phone the third PID twin and the Panda ended off the screen).
+    if (fit && pendingFit) fitWhenPosed = { eye, target };
+    else aimLessonCamera(eye, target, fit);
   },
   closePanels: () => {
     setHelp(false);
@@ -2114,6 +2298,7 @@ window.__robotforge = {
   freeRect: () => freeRect(), // the part of the window no panel covers; the view centres there
   selected: () => selected,
   lesson: () => lessonState(),
+  plotAxes: () => lessonPlotAxes(), // each live plot's y range, to check a still robot's wobble is not magnified
   busy: () => ({ busy, pending: pending.size }),
   ring: () => (ring.visible ? { center: ring.position.toArray(), radius: ringState?.radius ?? null } : null),
   marker: () => (markerDot.visible ? markerDot.position.toArray() : markerPad.visible ? markerPad.position.toArray() : null),

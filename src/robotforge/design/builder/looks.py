@@ -171,6 +171,8 @@ class Layout:
         elif spec.shape == "wheel":
             axis = local @ np.array([0.0, spec.size[1] / 2, 0.0])
             self.solids[body] = ("cylinder", mid - axis, mid + axis, spec.size[0] / 2)
+        elif spec.shape == "rotor":
+            return  # a propeller hides nothing (builder/rotor.py draws it)
         else:
             start, end = segment(spec)
             self.solids[body] = (spec.shape, local @ start, local @ end, spec.size[0] / 2)

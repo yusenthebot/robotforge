@@ -1,0 +1,550 @@
+{
+ "started": "2026-10-18T22:05:22+08:00",
+ "sha": "09d9f0b",
+ "quick": false,
+ "machine": {
+  "system": "Darwin",
+  "release": "26.3.2",
+  "machine": "arm64",
+  "cpus": 18,
+  "python": "3.12.13",
+  "mujoco": "3.15.0",
+  "numpy": "2.5.4",
+  "load": [
+   10.8,
+   30.9,
+   104.0
+  ]
+ },
+ "load_after": [
+  9.0,
+  27.0,
+  98.0
+ ],
+ "results": {
+  "install": {
+   "wheel_kb": {
+    "value": 2547.3203,
+    "unit": "KB",
+    "better": "lower"
+   },
+   "installed_mb": {
+    "value": 159.9247,
+    "unit": "MB",
+    "better": "lower",
+    "top": [
+     [
+      "mujoco",
+      72.7
+     ],
+     [
+      "numpy",
+      19.6
+     ],
+     [
+      "coacd",
+      14.2
+     ],
+     [
+      "pillow",
+      11.4
+     ],
+     [
+      "cryptography",
+      10.5
+     ],
+     [
+      "pyopengl",
+      7.5
+     ],
+     [
+      "robotforge",
+      4.8
+     ],
+     [
+      "pydantic-core",
+      4.5
+     ]
+    ]
+   },
+   "packages": {
+    "value": 42.0,
+    "unit": "",
+    "better": "lower"
+   },
+   "download_mb": {
+    "value": 52.5149,
+    "unit": "MB",
+    "better": "lower"
+   }
+  },
+  "imports": {
+   "robotforge_ms": {
+    "value": 0.1222,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 59,
+    "offenders": [
+     [
+      "json",
+      20.1
+     ],
+     [
+      "_virtualenv",
+      1.0
+     ],
+     [
+      "encodings",
+      0.7
+     ],
+     [
+      "re",
+      0.7
+     ],
+     [
+      "enum",
+      0.5
+     ],
+     [
+      "site",
+      0.5
+     ],
+     [
+      "time",
+      0.3
+     ],
+     [
+      "sitecustomize",
+      0.3
+     ]
+    ]
+   },
+   "robotforge_cpu_ms": {
+    "value": 0.122,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "robotforge_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   },
+   "cli_ms": {
+    "value": 398.1272,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 628,
+    "offenders": [
+     [
+      "robotforge",
+      84.2
+     ],
+     [
+      "numpy",
+      75.5
+     ],
+     [
+      "pydantic",
+      50.6
+     ],
+     [
+      "mujoco",
+      40.3
+     ],
+     [
+      "click",
+      18.8
+     ],
+     [
+      "yaml",
+      16.6
+     ],
+     [
+      "starlette",
+      14.9
+     ],
+     [
+      "json",
+      13.1
+     ]
+    ]
+   },
+   "cli_cpu_ms": {
+    "value": 396.672,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "cli_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   },
+   "mcp_server_ms": {
+    "value": 644.9135,
+    "unit": "ms",
+    "better": "lower",
+    "modules": 871,
+    "offenders": [
+     [
+      "mcp_types",
+      117.0
+     ],
+     [
+      "mcp",
+      91.9
+     ],
+     [
+      "numpy",
+      73.7
+     ],
+     [
+      "robotforge",
+      66.2
+     ],
+     [
+      "pydantic",
+      51.4
+     ],
+     [
+      "mujoco",
+      47.0
+     ],
+     [
+      "httpx2",
+      34.5
+     ],
+     [
+      "json",
+      21.9
+     ]
+    ]
+   },
+   "mcp_server_cpu_ms": {
+    "value": 643.129,
+    "unit": "ms",
+    "better": "lower"
+   },
+   "mcp_server_heavy": {
+    "value": 0.0,
+    "unit": "",
+    "better": "lower",
+    "loaded": []
+   }
+  },
+  "physics": {
+   "dog_idle.steps_per_s": {
+    "value": 102976.0066,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.08185158402193338,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "dog_idle.controllers_share": {
+    "value": 0.1017,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_idle.peak_mb": {
+    "value": 154.75,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "dog_walk.steps_per_s": {
+    "value": 37944.904,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.08199254202190787,
+    "bodies": 13,
+    "geoms": 65,
+    "timestep": 0.002,
+    "moved_m": 1.39,
+    "upright": true
+   },
+   "dog_walk.controllers_share": {
+    "value": 0.65,
+    "unit": "share",
+    "better": "lower"
+   },
+   "dog_walk.peak_mb": {
+    "value": 154.8125,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_idle.steps_per_s": {
+    "value": 99497.5374,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.19967520801583305,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "go2_idle.controllers_share": {
+    "value": 0.0966,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_idle.peak_mb": {
+    "value": 480.5,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_walk.steps_per_s": {
+    "value": 23312.4687,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.2024972919607535,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 1.277,
+    "upright": true
+   },
+   "go2_walk.controllers_share": {
+    "value": 0.3445,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_walk.peak_mb": {
+    "value": 479.0,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "go2_rl_idle.steps_per_s": {
+    "value": 33046.3806,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.19676612498005852,
+    "bodies": 13,
+    "geoms": 57,
+    "timestep": 0.002,
+    "moved_m": 0.048,
+    "upright": true
+   },
+   "go2_rl_idle.controllers_share": {
+    "value": 0.3563,
+    "unit": "share",
+    "better": "lower"
+   },
+   "go2_rl_idle.peak_mb": {
+    "value": 488.2188,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "humanoid_idle.steps_per_s": {
+    "value": 42518.8146,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.09671358304331079,
+    "bodies": 12,
+    "geoms": 83,
+    "timestep": 0.002,
+    "upright": true
+   },
+   "humanoid_idle.controllers_share": {
+    "value": 0.4459,
+    "unit": "share",
+    "better": "lower"
+   },
+   "humanoid_idle.peak_mb": {
+    "value": 160.0469,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "arm_pick.steps_per_s": {
+    "value": 28305.3582,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.14764441695297137,
+    "bodies": 11,
+    "geoms": 49,
+    "timestep": 0.002,
+    "placed": true
+   },
+   "arm_pick.controllers_share": {
+    "value": 0.5155,
+    "unit": "share",
+    "better": "lower"
+   },
+   "arm_pick.peak_mb": {
+    "value": 158.9219,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "warehouse_nav.steps_per_s": {
+    "value": 4895.4096,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.4400878340238705,
+    "bodies": 59,
+    "geoms": 294,
+    "timestep": 0.002,
+    "moved_m": 1.765,
+    "upright": true
+   },
+   "warehouse_nav.controllers_share": {
+    "value": 0.1099,
+    "unit": "share",
+    "better": "lower"
+   },
+   "warehouse_nav.peak_mb": {
+    "value": 716.1406,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "objects_20.steps_per_s": {
+    "value": 20120.1846,
+    "unit": "steps/s",
+    "better": "higher",
+    "build_s": 0.9401436250191182,
+    "bodies": 21,
+    "geoms": 49,
+    "timestep": 0.002,
+    "on_table": 20,
+    "objects": 20
+   },
+   "objects_20.controllers_share": {
+    "value": 0.0046,
+    "unit": "share",
+    "better": "lower"
+   },
+   "objects_20.peak_mb": {
+    "value": 346.0781,
+    "unit": "MB",
+    "better": "lower"
+   }
+  },
+  "viewer": {
+   "cold_start_s": {
+    "value": 0.6694,
+    "unit": "s",
+    "better": "lower",
+    "served_s": 0.5
+   },
+   "fps": {
+    "value": 60.1129,
+    "unit": "fps",
+    "better": "higher",
+    "world": "warehouse + go2",
+    "size": [
+     1280,
+     800,
+     2
+    ]
+   },
+   "frame_ms": {
+    "value": 3.6,
+    "unit": "ms",
+    "better": "lower",
+    "median": 3.599999964237213,
+    "drawing_buffer": [
+     2560,
+     1600
+    ],
+    "calls": 148,
+    "triangles": 482502
+   },
+   "server_peak_mb": {
+    "value": 127.5,
+    "unit": "MB",
+    "better": "lower",
+    "warehouse": 554.2
+   },
+   "idle_cpu_pct": {
+    "value": 1.6,
+    "unit": "%",
+    "better": "lower",
+    "seconds": 5.0
+   }
+  },
+  "mcp": {
+   "start_s": {
+    "value": 0.7645,
+    "unit": "s",
+    "better": "lower",
+    "tools": 50
+   },
+   "new_world_ms": {
+    "value": 26.158,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "add_robot_ms": {
+    "value": 54.3865,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "move_ms": {
+    "value": 16.4945,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "observe_ms": {
+    "value": 0.9805,
+    "unit": "ms",
+    "better": "lower",
+    "calls": 5
+   },
+   "server_rss_mb": {
+    "value": 176.4531,
+    "unit": "MB",
+    "better": "lower"
+   },
+   "idle_cpu_pct": {
+    "value": 0.2,
+    "unit": "%",
+    "better": "lower",
+    "seconds": 5.0
+   }
+  }
+ },
+ "budgets": {
+  "install.wheel_kb": "ok",
+  "install.installed_mb": "ok",
+  "install.download_mb": "ok",
+  "install.packages": "ok",
+  "imports.robotforge_cpu_ms": "ok",
+  "imports.cli_cpu_ms": "ok",
+  "imports.mcp_server_cpu_ms": "ok",
+  "imports.robotforge_heavy": "ok",
+  "imports.cli_heavy": "ok",
+  "imports.mcp_server_heavy": "ok",
+  "physics.dog_idle.steps_per_s": "ok",
+  "physics.dog_idle.controllers_share": "ok",
+  "physics.dog_walk.steps_per_s": "ok",
+  "physics.go2_idle.steps_per_s": "ok",
+  "physics.go2_idle.controllers_share": "ok",
+  "physics.go2_walk.steps_per_s": "ok",
+  "physics.go2_rl_idle.steps_per_s": "ok",
+  "physics.go2_rl_idle.controllers_share": "ok",
+  "physics.humanoid_idle.steps_per_s": "ok",
+  "physics.humanoid_idle.controllers_share": "ok",
+  "physics.arm_pick.steps_per_s": "ok",
+  "physics.warehouse_nav.steps_per_s": "ok",
+  "physics.objects_20.steps_per_s": "ok",
+  "physics.dog_idle.peak_mb": "ok",
+  "physics.go2_walk.peak_mb": "ok",
+  "physics.warehouse_nav.peak_mb": "ok",
+  "viewer.cold_start_s": "ok",
+  "viewer.fps": "ok",
+  "viewer.frame_ms": "ok",
+  "viewer.server_peak_mb": "ok",
+  "viewer.idle_cpu_pct": "ok",
+  "mcp.start_s": "ok",
+  "mcp.new_world_ms": "ok",
+  "mcp.add_robot_ms": "ok",
+  "mcp.move_ms": "ok",
+  "mcp.observe_ms": "ok",
+  "mcp.server_rss_mb": "ok",
+  "mcp.idle_cpu_pct": "ok"
+ }
+}

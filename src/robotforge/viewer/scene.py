@@ -52,11 +52,43 @@ def _geom_rgba(model: mujoco.MjModel, g: int) -> list[float]:
     return [round(float(c), 4) for c in rgba]
 
 
+def _mesh_textures(model: mujoco.MjModel) -> dict[int, int]:
+    """mesh id -> the 2D color texture of the first geom that draws it with a textured material."""
+    role = int(mujoco.mjtTextureRole.mjTEXROLE_RGB)
+    found: dict[int, int] = {}
+    for g in range(model.ngeom):
+        mat = int(model.geom_matid[g])
+        if int(model.geom_type[g]) != mujoco.mjtGeom.mjGEOM_MESH or mat < 0:
+            continue
+        tex = int(model.mat_texid[mat, role])
+        if tex >= 0 and int(model.tex_type[tex]) == mujoco.mjtTexture.mjTEXTURE_2D:
+            found.setdefault(int(model.geom_dataid[g]), tex)
+    return found
+
+
+def _texture_colors(model: mujoco.MjModel, mesh_id: int, tex: int) -> np.ndarray | None:
+    """Linear RGB per expanded vertex, read from the texture at each vertex's texture coordinate, or None when the
+    mesh has none. The browser draws no textures, so a textured model (Skydio X2) showed as one flat white shape."""
+    count = int(model.mesh_texcoordnum[mesh_id])
+    if count == 0:
+        return None
+    f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
+    uv = model.mesh_texcoord[model.mesh_texcoordadr[mesh_id] + model.mesh_facetexcoord[f0 : f0 + nf].ravel()]
+    w, h, ch = int(model.tex_width[tex]), int(model.tex_height[tex]), int(model.tex_nchannel[tex])
+    image = model.tex_data[model.tex_adr[tex] : model.tex_adr[tex] + w * h * ch].reshape(h, w, ch)
+    cols = np.clip(np.rint(np.mod(uv[:, 0], 1.0) * (w - 1)), 0, w - 1).astype(int)
+    rows = np.clip(np.rint(np.mod(uv[:, 1], 1.0) * (h - 1)), 0, h - 1).astype(int)
+    srgb = image[rows, cols, :3].astype(np.float32) / 255.0
+    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4).astype(np.float32)
+
+
 def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
-    """Expand each mesh into non-indexed triangles with MuJoCo's own normals."""
+    """Expand each mesh into non-indexed triangles with MuJoCo's own normals (and its texture's colors per vertex
+    when a geom draws it textured: "colors" is then where they start in the blob)."""
     chunks: list[np.ndarray] = []
     entries: list[dict] = []
     offset = 0
+    textures = _mesh_textures(model)
     for mesh_id in range(model.nmesh):
         v0, nv = model.mesh_vertadr[mesh_id], model.mesh_vertnum[mesh_id]
         f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
@@ -73,6 +105,11 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
         entries.append({"id": mesh_id, "offset": offset, "count": int(positions.shape[0])})
         chunks.append(block)
         offset += block.size
+        colors = _texture_colors(model, mesh_id, textures[mesh_id]) if mesh_id in textures else None
+        if colors is not None and len(colors) == positions.shape[0]:
+            entries[-1]["colors"] = offset
+            chunks.append(colors.ravel())
+            offset += colors.size
     hfields = []
     for h in range(model.nhfield):
         nrow, ncol = int(model.hfield_nrow[h]), int(model.hfield_ncol[h])

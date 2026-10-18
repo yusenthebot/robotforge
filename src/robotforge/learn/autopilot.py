@@ -251,6 +251,7 @@ class AutopilotLesson(TwinsLesson):
             "%",
             tuple(Series(f"covered_{t.name}", t.label, t.color) for t in ROVERS),
             window=float(RUN_SECONDS),
+            floor=0.0,
         ),
         Plot(
             "front",
@@ -258,6 +259,7 @@ class AutopilotLesson(TwinsLesson):
             "m",
             tuple(Series(f"front_{t.name}", t.label, t.color) for t in ROVERS),
             window=8.0,
+            floor=0.0,
         ),
     )
     steps = STEPS
@@ -443,5 +445,6 @@ class AutopilotLesson(TwinsLesson):
             "targets": [],
         }
 
-    def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.0, -2.1, 9.4], "target": [0.0, -0.2, 0.0]}  # from above: A in front, B behind
+    def camera(self) -> dict[str, Any]:
+        # From above: A in front, B behind. On a phone the lesson sheet covered A: step back until both show.
+        return {"eye": [0.0, -2.1, 9.4], "target": [0.0, -0.2, 0.0], "fit": True}
