@@ -8,14 +8,14 @@ knows its body.
 
 A rhythm is learned going forward, at its own pace, from standing still. After keeping it the robot learns more on
 its own, each saved in the same file once learned: to hold its heading and keep to the line it was asked to walk
-along (`learn_steering`), and to turn on the spot,
-one rhythm each way from standing still, then each tuned again to begin straight out of its walk (`learn_turns`).
-Standing still, a rhythm starts exactly as it was learned; a turn asked for mid-stride, once the walk has played
-WALKED_MIN, starts faded in from the stride as its walking version learned to, at once or at the next point of the
-stride it was checked to start from safely (a stop asked just before is let go of); any other switch while moving
-first steadies the robot on its home pose, the way checked to tip it over least (`learn_switches`): holding home until
-it stands still and starting the new rhythm as learned, or fading to home until it is calm and fading the new rhythm
-in. It cannot back up or change speed, and the status says so.
+along (`learn_steering`), and to turn on the spot, one rhythm each way from standing still, then each tuned again to
+begin straight out of its walk (`learn_turns`). Standing still, a rhythm starts exactly as it was learned; a turn
+asked for mid-stride, once the walk has played WALKED_MIN, starts faded in from the stride as its walking version
+learned to, at once or at the next point of the stride it was checked to start from safely (a stop asked just before
+is let go of), if its checks left room to spare (ROOM_TILT); any other switch while moving first steadies the robot
+on its home pose, the way checked to tip it over least (`learn_switches`): holding home until it stands still and
+starting the new rhythm as learned, or fading to home until it is calm and fading the new rhythm in. It cannot back
+up or change speed, and the status says so.
 """
 
 from __future__ import annotations
@@ -176,7 +176,8 @@ WALKED_MIN = 1.5  # s
 # update (at 2 Hz, each of 25 points of the stride 7 times), each for TURN_CHECK seconds. Of the tuned turn and the one
 # from standing (faded in from the stride too), the one expected to turn the most in FIRST_SECOND begins out of the
 # walk, at any point of the stride if it fell from none of the moments, else only at the points it never fell from (at
-# least MIN_SAFE of them), the robot walking on until the next one. If neither, the robot steadies first. Checked on
+# least MIN_SAFE of them), the robot walking on until the next one, and only if it leaned less than ROOM_TILT from
+# every moment at those points. If none, the robot steadies first. Checked on
 # 21 moments of the walk as the trainer played it, an A1 left turn kept for 1 of the 5 points fell in 4 of 15 tries
 # straight out of the walk; checked like this, the left turns of 6 A1 walks fell in 1 of 90. Checked a tenth of a
 # second apart (5 points of the stride), a template dog walk's left turn was kept for any point and fell in 3 of its
