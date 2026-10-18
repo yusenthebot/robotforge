@@ -16,7 +16,6 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import tool_input, wording
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import _tool_errors, build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -40,7 +39,7 @@ class Lab:
 
     def __init__(self, playground: Playground):
         self.playground = playground
-        self.server = build_server(playground, find_free_port(8790))
+        self.server = build_server(playground, 0)
         self.baseline = playground.store.file.read_text(encoding="utf-8")
 
     async def call(self, tool: str, **args) -> tuple[bool, str]:

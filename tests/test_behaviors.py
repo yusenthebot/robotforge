@@ -5,7 +5,6 @@ import pytest
 from mcp import Client
 
 from robotforge.behaviors.manager import BehaviorError, ideal_reach
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -198,7 +197,7 @@ async def test_move_and_pick_tools_report_results(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.25, -0.12], color="red")
     pg.add_object("tray", shape="bin", size=[0.14, 0.14, 0.05], pos=[0.05, 0.28], color="blue")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("move", {"robot": "dog", "speed": 0.25, "seconds": 4})
         moved = json.loads(result.content[0].text)
@@ -215,7 +214,7 @@ async def test_a_timed_move_says_the_robot_stopped_and_leaves_its_wheels_at_rest
     0.15 m/s), then saw the wheels still commanded in observe and zeroed them with set_controls and simulate."""
     pg.add_robot("rover", template="rover")
     pg.add_robot("dog", template="quadruped", pos=[0, 1.5])
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         driven = json.loads(
             (await client.call_tool("move", {"robot": "rover", "speed": 0.15, "seconds": 2})).content[0].text
@@ -239,7 +238,7 @@ async def test_stop_after_run_controller_stops_a_rovers_wheels(pg):
     """run_controller leaves its controller attached; stop removed it but left the wheel speeds it last set, and
     the rover in the eval went on spinning (0.11 m and a quarter turn in 2 s) until the agent zeroed them."""
     pg.add_robot("rover", template="rover")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         ran = await client.call_tool(
             "run_controller",
@@ -263,7 +262,7 @@ async def test_a_rover_too_heavy_for_its_motors_is_told_why_it_stood_still(pg):
     on the smallest motors, pushes with 1.3 N for 54 kg and cannot.)"""
     params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("mars_rover", template="rover", params=params)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("move", {"robot": "mars_rover", "speed": 0.3, "seconds": 3})
         moved = json.loads(result.content[0].text)
@@ -280,7 +279,7 @@ async def test_a_full_circle_back_to_the_start_is_not_told_it_was_stuck(pg):
     params = {"length": 0.6, "width": 0.42, "wheel_radius": 0.12, "motor": "tt_motor", "material": "aluminum"}
     pg.add_robot("heavy", template="rover", params=params, pos=[0, 2])
     pg.add_robot("dog", template="quadruped", pos=[0, -2])
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         circle = {"robot": "rover", "speed": 0.3, "turn": 1.0, "seconds": 6.3}
         looped = json.loads((await client.call_tool("move", circle)).content[0].text)
@@ -301,7 +300,7 @@ async def test_a_short_move_on_flat_ground_is_not_told_it_was_held_back(pg):
     import test_builder
 
     pg.add_robot("snake", build=test_builder.SNAKE)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         nudged = json.loads(
             (await client.call_tool("move", {"robot": "snake", "speed": 0.2, "seconds": 1})).content[0].text
@@ -316,7 +315,7 @@ async def test_a_robot_that_went_backwards_is_told_so(pg):
     import test_builder
 
     pg.add_robot("spider", build=test_builder.SPIDER)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         moved = json.loads(
             (await client.call_tool("move", {"robot": "spider", "speed": 0.12, "seconds": 5})).content[0].text

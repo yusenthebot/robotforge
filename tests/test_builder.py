@@ -470,7 +470,7 @@ def test_the_arm_on_a_rover_is_an_arm_to_move_and_pose_and_says_who_carries_it(p
 def test_the_tools_name_the_arms_a_rover_carries_and_say_what_fits_them(pg):
     """The move tool read the robot's pose before anything else, so "mm/claw" was answered with "no robot named"."""
     pg.add_robot("mm", build=MOBILE_ARM)
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
 
     def refused(tool, **args) -> str:
         async def call():
@@ -784,7 +784,6 @@ async def test_agents_build_and_edit_robots_through_mcp(tmp_path, monkeypatch):
 
     from mcp import Client
 
-    from robotforge.cli import find_free_port
     from robotforge.mcp_server import build_server
 
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))

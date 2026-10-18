@@ -16,6 +16,7 @@ from robotforge.design.templates.base import (
     BuiltRobot,
     Template,
     TemplateParams,
+    declare_camera,
     imu,
     new_spec,
 )
@@ -91,6 +92,7 @@ class Rover(Template):
             vis.hide(geom)
         _dress_chassis(vis, chassis, p.length, p.width, deck_h, r, caster_r, accent)
         chassis.add_camera(name="front_cam", pos=[p.length / 2, 0, deck_h], xyaxes=[0, -1, 0, 0, 0, 1], fovy=75)
+        declare_camera(spec, chassis, "front_cam", 75)
         imu(spec, chassis)
 
         for side, sign in (("left", 1), ("right", -1)):

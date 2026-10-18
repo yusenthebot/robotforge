@@ -21,7 +21,6 @@ from mcp import Client
 
 from robotforge import mcp_server
 from robotforge.behaviors import Kind, humanoid, quadruped, robot_kind
-from robotforge.cli import find_free_port
 from robotforge.design import library, menagerie
 from robotforge.design.world import RobotEntry, World, compile_world
 from robotforge.mcp_server import build_server
@@ -241,7 +240,7 @@ def test_arms_are_not_mistaken_for_quadrupeds(pg):
 
 @pytest.mark.anyio
 async def test_mcp_tools_list_the_library_and_add_a_go2(pg):
-    server = build_server(pg, find_free_port(8791))
+    server = build_server(pg, 0)
     async with Client(server) as client:
 
         async def call(tool: str, args: dict) -> dict:
@@ -298,7 +297,7 @@ async def test_mcp_reports_download_progress(pg, monkeypatch):
     async def on_progress(progress, total, message):
         updates.append((progress, total, message))
 
-    server = build_server(pg, find_free_port(8792))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("add_robot", {"name": "go2", "library": "go2"}, progress_callback=on_progress)
     assert not result.is_error
@@ -319,7 +318,7 @@ async def test_a_retried_call_joins_the_running_download(pg, monkeypatch):
 
     monkeypatch.setattr(library, "is_downloaded", lambda _name: False)
     monkeypatch.setattr(menagerie, "fetch", slow_fetch)
-    server = build_server(pg, find_free_port(8794))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         first, retry = await asyncio.gather(
             client.call_tool("add_robot", {"name": "go2", "library": "go2"}),
@@ -337,7 +336,7 @@ async def test_a_failed_download_reaches_the_agent_as_a_tool_error(pg, monkeypat
 
     monkeypatch.setattr(library, "is_downloaded", lambda _name: False)
     monkeypatch.setattr(menagerie, "fetch", broken)
-    server = build_server(pg, find_free_port(8793))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result = await client.call_tool("add_robot", {"name": "go2", "library": "go2"})
     assert result.is_error

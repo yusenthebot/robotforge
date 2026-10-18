@@ -17,6 +17,7 @@ from robotforge.design import components
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
+from robotforge.sensors import declare
 
 GEOM = mujoco.mjtGeom
 # Joint modules run a velocity loop in their driver; model it as damping of at least this fraction of the
@@ -122,6 +123,43 @@ def imu(spec: mujoco.MjSpec, body: mujoco.MjsBody, prefix: str = "") -> None:
         objtype=mujoco.mjtObj.mjOBJ_SITE,
         objname=f"{prefix}imu",
     )
+    # Declared like add_sensor's (sensors/declare.py), so read_sensors and scripts read it by name.
+    native = {"accel": f"{prefix}accel", "gyro": f"{prefix}gyro", "quat": f"{prefix}orientation"}
+    declare.declare(
+        spec, {"name": f"{prefix}imu", "type": "imu", "body": body.name, "site": f"{prefix}imu", "native": native}
+    )
+
+
+def declare_camera(spec: mujoco.MjSpec, body: mujoco.MjsBody, name: str, fovy: float) -> None:
+    """A template's camera, declared like add_sensor's so read_sensors reads it (sensors/declare.py)."""
+    declare.declare(
+        spec,
+        {
+            "name": name,
+            "type": "camera",
+            "body": body.name,
+            "camera": name,
+            "mode": "rgb",
+            "width": 320,
+            "height": 240,
+            "fov": fovy,
+            "range": 10.0,
+        },
+    )
+
+
+def declare_touch(spec: mujoco.MjSpec, body: mujoco.MjsBody, name: str, site: str) -> None:
+    """A template's touch sensor (a foot's), declared like add_sensor's."""
+    definition = {
+        "name": name,
+        "type": "touch",
+        "body": body.name,
+        "cells": [site],
+        "touch": [name],
+        "rows": 1,
+        "cols": 1,
+    }
+    declare.declare(spec, definition)
 
 
 def dress_servo(

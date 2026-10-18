@@ -168,6 +168,8 @@ def test_a_lidar_does_not_see_its_own_robot(tmp_path, monkeypatch, robot):
     assert set(ring["ranges_m"]) == {None}
     rays = ScriptRunner(pg, watched=lambda: False)._op_sensors({"robot": "r"})  # a script's rays agree
     assert all(v < 0 or v >= ring["range_m"] for k, v in rays.items() if k.startswith("base_lidar_"))
+    lidar_reading = pg.read_sensors("r", ["base_lidar"])[0]["sensors"]["base_lidar"]  # and read_sensors
+    assert lidar_reading["hits"] == 0 and lidar_reading["nearest"] is None, lidar_reading
 
 
 def test_a_lidar_still_sees_past_its_robot_to_the_wall(tmp_path, monkeypatch):

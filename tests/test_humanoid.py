@@ -373,7 +373,7 @@ def test_humanoids_balance_from_the_start_and_after_a_fall_and_reset(pg, tmp_pat
 @pytest.mark.anyio
 async def test_pose_and_move_tools_work_for_humanoids(pg):
     pg.add_robot("bot", template="humanoid")
-    server = build_server(pg, find_free_port(8795))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
         assert set(tools["pose"].input_schema["properties"]["name"]["enum"]) == set(humanoid.POSES)
