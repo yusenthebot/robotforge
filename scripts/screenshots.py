@@ -310,6 +310,12 @@ def _kitchen_panda(pg: Any) -> None:
     pg.add_robot("mm", design="mobile_panda", pos=[1.3, -1.0], yaw=90)
 
 
+def _warehouse_picker(pg: Any) -> None:
+    """The warehouse (seed 0) with a lift picker at its third ground place, south of the racks."""
+    pg.load_scene("warehouse", starter=False)
+    pg.add_robot("picker", design="lift_picker", pos=[2.0, -0.4], yaw=0)
+
+
 def _when(body: str, condition: str, timeout: float = 150.0) -> str:
     """Page script: wait until `condition` (JavaScript on p, the body's position) holds, as the world goes on."""
     return f"""
@@ -333,6 +339,20 @@ def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
             rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
         const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
         rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+    """
+
+
+def _look_between(robot: str, body: str, offset: tuple[float, float, float]) -> str:
+    """Page script: aim the camera at the middle of a robot's base and a body (at the body's height), from `offset`
+    metres away."""
+    return f"""
+        {{
+            const rf = window.__robotforge, mine = (b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic;
+            const r = rf.bodyPosition(rf.scene.bodies.find(mine).id);
+            const o = rf.bodyPosition(rf.scene.bodies.findIndex((b) => b.name === {json.dumps(body)}));
+            const mid = [(r[0] + o[0]) / 2, (r[1] + o[1]) / 2, o[2] * 0.85];
+            rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+        }}
     """
 
 
@@ -707,6 +727,22 @@ SHOTS = [
         + _when("apple", "p[0] < -1.25 && p[2] < 0.79")
         + _wait(1.2)
         + _look_at(["mm"], (1.6, -2.0, 1.8)),
+        settle=0.2,
+    ),
+    # A lift picker fetches a parcel from a rack's third board and takes it up the ramp onto the loading dock.
+    Shot(
+        "fetch_warehouse_rack",
+        _warehouse_picker,
+        viewer=[_fetch("picker", "parcel_1", "dock"), {"wait": 1.0}],
+        # just lifted off the board, seen from along the aisle, between the robot and the rack
+        page=_when("parcel_1", "p[2] > 0.9") + _look_between("picker", "parcel_1", (2.3, 1.5, 0.75)),
+        settle=0.2,
+    ),
+    Shot(
+        "fetch_warehouse_dock",
+        _warehouse_picker,
+        viewer=[_fetch("picker", "parcel_1", "dock"), {"wait": 1.0}],
+        page=_when("parcel_1", "p[0] > 5.0 && p[2] < 0.36") + _wait(1.5) + _look_at(["picker"], (1.7, 1.5, 1.4)),
         settle=0.2,
     ),
     Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them
