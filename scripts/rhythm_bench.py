@@ -564,8 +564,10 @@ def _print_straight(results: list[dict]) -> None:
 
 # oos: sequences drawn at random, none on a grid the switch checks or leads play, each played by the walk as kept, by
 # the same walk switched as 7a4aa92 switched every kept walk but holding its heading (steered), and as 7a4aa92 plays
-# the file (base: switched so, its heading not held, around the world's home pose).
-OOS_PATHS = ("move", "idle", "held", "keys", "chain")
+# the file (base: switched so, its heading not held, around the world's home pose). Each sequence starts from standing
+# in a reset world, nudged (the trunk's speeds set off by --nudge at random, the same for each switching), so that no
+# two replay the same walk.
+OOS_PATHS = ("move", "idle", "held", "keys", "chain", "after")
 SWITCHINGS = ("kept", "steered", "base")
 OOS_LEAD = (0.2, 6.0)  # s of walking before the turn
 OOS_TURN = (0.3, 2.5)  # s of turning
@@ -574,6 +576,8 @@ OOS_IDLE = (0.05, 3.0)  # s the sim runs on after a move call ends, the viewer o
 OOS_GAP = (0.0, 0.4)  # s between letting go of one key and pressing the next (0: the next update)
 OOS_CHAIN = (6, 10)  # key changes in a chain
 OOS_HOLD = (0.2, 3.0)  # s each key of a chain is held
+OOS_BEFORE = (0.3, 2.0)  # s of the turn the walk starts out of (after)
+OOS_AFTER = (1.4, 4.0)  # s of that walk before the turn out of it: about when turns begin out of the walk
 
 
 def as_base(walk):
@@ -621,6 +625,16 @@ def _oos_cases(path: str, count: int, rng) -> list[tuple[list[tuple[str, float, 
                 ("move", 0.0, 0.0, STAND_SECONDS),
             ]
             out.append((calls, 2))
+        elif path == "after":  # move calls: a turn either way, the walk out of it, the turn out of the walk, on
+            before = (1.0 if rng.random() < 0.5 else -1.0) * u((0.2, 2.0))
+            calls = [
+                ("move", 0.0, before, u(OOS_BEFORE)),
+                ("move", speed, 0.0, u(OOS_AFTER)),
+                ("move", 0.0, turn, turning),
+                ("move", speed, 0.0, on),
+                ("move", 0.0, 0.0, STAND_SECONDS),
+            ]
+            out.append((calls, 2))
         else:  # chain: random key changes, each held a while
             calls, last = [], "S"
             for _ in range(int(rng.integers(OOS_CHAIN[0], OOS_CHAIN[1] + 1))):
@@ -646,13 +660,19 @@ def run_oos(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
     pg = Playground.with_demo()
     pg.new_world(f"oos_{robot}")
     pg.add_robot(robot, **_entry(robot, opts))
+    model = pg.session.model
+    dof = int(model.jnt_dofadr[model.body_jntadr[pg.behaviors._root_body(robot)]])
     out = []
-    for p, path in enumerate(opts["paths"]):
+    for path in opts["paths"]:
+        p = OOS_PATHS.index(path)  # each path draws its own sequences, whichever others are played
         rng = np.random.default_rng([opts["bench_seed"], seed, p, sum(map(ord, robot))])
+        kicks = np.random.default_rng([opts["bench_seed"], seed, p, sum(map(ord, robot)), 1])
         for k, (calls, measure) in enumerate(_oos_cases(path, opts["cases"], rng)):
+            nudge = kicks.normal(0.0, opts["nudge"], 6)
             for switching in opts["switchings"]:
                 save_walk(pg.store.dir, walks[switching])
                 pg.session.reset()
+                pg.session.data.qvel[dof : dof + 6] += nudge
                 fell, turned = _play(pg, robot, calls, measure)
                 out.append(
                     {
@@ -664,12 +684,20 @@ def run_oos(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
                         "fell": fell,
                         "calls": len(calls),
                         "turned": turned,
-                        "lead": calls[0][3],
+                        "lead": _walked_before(calls, measure),
                         "side": None if measure is None else ("L" if calls[measure][2] > 0 else "R"),
                         "measured": None if measure is None else min(TURN_SECONDS, calls[measure][3]),
                     }
                 )
     return out
+
+
+def _walked_before(calls: list[tuple[str, float, float, float]], measure: int | None) -> float | None:
+    """Seconds of the last walk asked before call `measure` (the walk the measured turn comes out of)."""
+    if measure is None:
+        return None
+    walks = [c[3] for c in calls[:measure] if c[0] == "move" and c[1] > 0 and c[2] == 0]
+    return walks[-1] if walks else None
 
 
 def _oos_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
@@ -696,7 +724,7 @@ def _print_oos(results: list[dict], rates: dict[tuple[str, int], float]) -> None
                 shares = sorted(
                     r["turned"] * (1 if r["side"] == "L" else -1) / (rates[(robot, r["seed"])] * r["measured"])
                     for r in runs
-                    if r["turned"] is not None and r["lead"] >= WALKED_MIN and rates[(robot, r["seed"])] > 0
+                    if r["turned"] is not None and (r["lead"] or 0.0) >= WALKED_MIN and rates[(robot, r["seed"])] > 0
                 )
                 share = f"; turn after the walk {shares[len(shares) // 2]:.0%} of the rate" if shares else ""
                 print(
@@ -772,6 +800,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--cases", type=int, default=40, help="oos: sequences per path and walk")
     parser.add_argument("--bench-seed", type=int, default=0, help="oos: draws other sequences")
+    parser.add_argument("--nudge", type=float, default=0.02, help="oos: m/s and rad/s the trunk starts off by (sd)")
     parser.add_argument("--switchings", default=",".join(SWITCHINGS), help="oos: which of " + ", ".join(SWITCHINGS))
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--json", action="store_true", help="print one JSON line per run")
@@ -798,6 +827,7 @@ def main(argv: list[str] | None = None) -> int:
         "paths": [p for p in (args.paths or ",".join(OOS_PATHS if args.what == "oos" else PATHS)).split(",") if p],
         "cases": args.cases,
         "bench_seed": args.bench_seed,
+        "nudge": args.nudge,
         "switchings": [s for s in args.switchings.split(",") if s],
     }
     names = [r for r in args.robots.split(",") if r]
