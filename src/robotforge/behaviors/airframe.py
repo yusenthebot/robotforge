@@ -175,7 +175,10 @@ def thrust_actuators(model: mujoco.MjModel, robot: str, root: int | None = None)
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""
         if not name.startswith(prefix) or not np.any(model.actuator_gear[a]):
             continue
-        site_body = int(model.site_bodyid[int(model.actuator_trnid[a, 0])])
+        site = int(model.actuator_trnid[a, 0])
+        if "thruster" in (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, site) or "").lower():
+            continue  # a marine thruster (builder/thrusters.py names them so): it pushes in water, it does not fly
+        site_body = int(model.site_bodyid[site])
         if root is not None and int(model.body_weldid[site_body]) != int(model.body_weldid[root]):
             continue  # on a part that moves (a tilting arm): not part of the rigid airframe
         found.append(a)

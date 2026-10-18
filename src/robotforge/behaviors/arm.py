@@ -18,6 +18,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.design import end_effectors
 from robotforge.sim.actuators import drives_joint, is_position_servo
 from robotforge.sim.geometry import collides, highest_point, ray
 
@@ -92,6 +93,7 @@ SETTLE = 0.004
 SETTLE_MAX = 1.0
 SETTLE_EVERY = 0.05  # s between looks at whether the tool still closes in (by at least SETTLE_GAIN, m)
 SETTLE_GAIN = 0.0005
+PAD_PRESS = 0.001  # m a suction cup or magnet is pressed into the top of what it picks, so the whole face meets it
 
 
 class OutOfReach(ValueError):
@@ -184,6 +186,14 @@ class ArmMotion:
         # Z1's is -1.52 rad).
         grip_range = model.actuator_ctrlrange[self.gripper] if self.gripper >= 0 else np.zeros(2)
         self.gripper_open, self.gripper_closed = float(grip_range[1]), float(grip_range[0])
+        # A suction cup or an electromagnet (end_effectors.py) holds by adhesion: on (at full power) when closed, off
+        # when open, and it holds what it picks by the top, under its face, where fingers hold it around the middle.
+        self.tool = end_effectors.tool_of(model, self.gripper)
+        if self.tool is not None:
+            self.gripper_open, self.gripper_closed = 0.0, float(grip_range[1])
+        # An arm with a tool holds its weight up with its servo targets (servo_targets): it carries what it picks by a
+        # face at the end of a long reach. Arms with fingers keep the targets, and the moves, they always had.
+        self._kp = servo_stiffness(model, self.actuators) if self.tool is not None else None
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -677,8 +687,12 @@ class ArmMotion:
         side normals, to grasp it square to them (see SQUARE_TOL).
         """
         grasp = obj_pos.copy()
-        drop = place + [0, 0, obj_half_height + 0.01]
-        rim = max(place_top if place_top is not None else place[2], grasp[2] - obj_half_height)
+        below = obj_half_height  # how far the load reaches below the tool point: fingers hold it by the middle
+        if self.tool is not None:  # a suction cup or a magnet holds it by its top, pressed on a little
+            grasp[2] += obj_half_height - PAD_PRESS
+            below = 2 * obj_half_height
+        drop = place + [0, 0, below + 0.01]
+        rim = max(place_top if place_top is not None else place[2], grasp[2] - below)
         travel_z = max(grasp[2], drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
@@ -687,11 +701,11 @@ class ArmMotion:
         bad = self._out_of_reach(points)
         if bad:
             raise OutOfReach(self.robot, bad, points)
-        across = self._carry_height(grasp, drop, travel_z, obj_half_height)
+        across = self._carry_height(grasp, drop, travel_z, below)
         if across.z is None and across.over is not None:
             # Every way across passes over a part of the robot carrying the arm, higher than the gripper gets above
             # the object or the place: name it rather than the object and the target.
-            high = across.over[1] + 2 * obj_half_height + LOAD_CLEARANCE
+            high = across.over[1] + 2 * below + LOAD_CLEARANCE
             raised = {"above object": [*grasp[:2], high], "above place": [*drop[:2], high]}
             raised = {name: np.array(p, float) for name, p in raised.items()}
             raise OutOfReach(self.robot, self._out_of_reach(raised) or list(raised), {**points, **raised}, across.over)
@@ -778,7 +792,7 @@ class ArmMotion:
                 "carry",
                 across.joints,
                 turn=across.turn,
-                load=obj_half_height,
+                load=below,
                 tilt=True,
             )
         )
@@ -1250,6 +1264,9 @@ class ArmMotion:
         if self._last is not None and t > self._last[0]:
             qdot = (self.q - self._last[1]) / (t - self._last[0])
         self._last = (t, self.q.copy())
+        if self._kp is not None and self._per_torque is None:  # a cup or a magnet: gravity's share (see __init__)
+            data.ctrl[self.actuators] = servo_targets(data, self.chain.dof_adr, self._kp, self.q)
+            return
         data.ctrl[self.actuators] = self._hold(self.q, qdot)
 
     def _hold(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
@@ -1664,6 +1681,42 @@ def _distance_to_track(points: np.ndarray, track: np.ndarray) -> np.ndarray:
     t = np.einsum("nsk,sk->ns", points[:, None, :] - a[None], ab) / np.maximum(np.einsum("sk,sk->s", ab, ab), 1e-12)
     closest = a[None] + np.clip(t, 0.0, 1.0)[..., None] * ab[None]
     return np.linalg.norm(points[:, None, :] - closest, axis=2).min(axis=1)
+
+
+def servo_stiffness(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each actuator's position-servo stiffness (0 for one that is not a position servo), for servo_targets."""
+    return np.array([float(model.actuator_gainprm[a, 0]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_damping(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each position servo's damping (its kv, force per joint speed; 0 for one that is not a position servo)."""
+    return np.array([-float(model.actuator_biasprm[a, 2]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_targets(
+    data: mujoco.MjData,
+    dofs: np.ndarray,
+    kp: np.ndarray,
+    q: np.ndarray,
+    kv: np.ndarray | None = None,
+    qdot: np.ndarray | None = None,
+) -> np.ndarray:
+    """Servo targets that hold joints at `q`: each aimed past its value by what holds the arm's weight up (gravity's
+    share of the bias force over the stiffness). A position servo pushes only in proportion to how far it is kept from
+    its target, and these have no integral term the way a real servo's controller has: aimed at the values
+    themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch.
+
+    Less what MuJoCo's own gravity compensation already gives (bodies with gravcomp, as a PiPER's): counted twice,
+    a PiPER held still stood 3.7 cm too high and pressed no button.
+
+    Given the servos' damping `kv` and the speed `qdot` the targets move at, also aimed past by what that damping takes
+    from a joint moving at that speed: a servo damps against the joint's speed, not the error's, so a moving target is
+    otherwise followed behind. A PiPER (kv 5 to kp 80, its wrist 1.5 to 10) swinging in to a drawer ran 3 cm behind
+    its plan and put a finger on the drawer's top; with it, 6 mm."""
+    bias = data.qfrc_bias[dofs] - data.qfrc_gravcomp[dofs]
+    if kv is not None and qdot is not None:
+        bias = bias + kv * qdot
+    return q + np.divide(bias, kp, out=np.zeros_like(bias), where=kp > 0)
 
 
 def _whole_turns_from(step: float) -> list[float]:

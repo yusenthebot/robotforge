@@ -497,7 +497,7 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     if params:
         raise LibraryError(f"library robots are used as built and take no params (got {', '.join(params)})")
     spec = _read(model_dir(robot) / robot.mjcf)
-    key_qpos, key_ctrl = _read_key(spec, robot.home_key)
+    key_qpos, key_ctrl = read_key(spec, robot.home_key)
     if key_qpos is None and robot.home:
         key_qpos = _home_from_joints(spec, robot)
     notes = [f"{robot.title} from MuJoCo Menagerie ({robot.license}, {robot.maker})"]
@@ -525,20 +525,17 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     root = spec.worldbody.first_body()
     if root is None:
         raise LibraryError(f"{robot.title}: the model has no bodies")
-    floating = any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints)
-    if robot.facing and not floating:
+    if any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints):
+        if key_qpos is None:  # it faces +x like every robot here: a file's own placement is its scene's (ANYmal C's -x)
+            root.quat = [1.0, 0.0, 0.0, 0.0]
+    elif robot.facing:
         turn, quat = np.zeros(4), np.zeros(4)
         mujoco.mju_axisAngle2Quat(turn, [0.0, 0.0, 1.0], np.radians(robot.facing))
         mujoco.mju_mulQuat(quat, turn, np.asarray(root.quat, float))
         pos = np.zeros(3)
         mujoco.mju_rotVecQuat(pos, np.asarray(root.pos, float), turn)
         root.quat, root.pos = quat.tolist(), pos.tolist()
-    if floating:
-        # Place the base by its keyframe orientation; height comes from the lowest point below. Without a keyframe
-        # it faces +x like every robot here: a file's own placement is its scene's (ANYmal C's faces -x).
-        root.pos = [0.0, 0.0, 0.0]
-        root.quat = key_qpos[3:7].tolist() if key_qpos is not None else [1.0, 0.0, 0.0, 0.0]
-    home_qpos, home_ctrl, spawn = _home_pose(spec, key_qpos, key_ctrl, floating)
+    home_qpos, home_ctrl, spawn, floating = stand_at_home(spec, key_qpos, key_ctrl)
     for tool in robot.tools:  # a gripper with no keyframe to say otherwise starts open, as the arms' keyframes have it
         gripper = f"{tool.arm}gripper"
         actuator = next((a for a in spec.actuators if a.name == gripper), None)
@@ -547,6 +544,23 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
     return BuiltRobot(
         spec=spec, home_qpos=home_qpos, home_ctrl=home_ctrl, spawn_height=spawn, floating=floating, notes=notes
     )
+
+
+def stand_at_home(
+    spec: mujoco.MjSpec, key_qpos: np.ndarray | None, key_ctrl: np.ndarray | None
+) -> tuple[dict[str, float], dict[str, float], float, bool]:
+    """Ready a robot's spec (with at least one body) to stand in a world in its home pose: a floating base moves to
+    the origin, turned the way its keyframe has it. Returns the home joint values, the actuator values, the height
+    that puts it on the floor and whether its base floats."""
+    root = spec.worldbody.first_body()
+    floating = any(j.type == mujoco.mjtJoint.mjJNT_FREE for j in root.joints)
+    if floating:
+        # Place the base by its keyframe orientation; height comes from the lowest point below.
+        root.pos = [0.0, 0.0, 0.0]
+        if key_qpos is not None:
+            root.quat = key_qpos[3:7].tolist()
+    home_qpos, home_ctrl, spawn = home_pose(spec, key_qpos, key_ctrl, floating)
+    return home_qpos, home_ctrl, spawn, floating
 
 
 def _home_from_joints(spec: mujoco.MjSpec, robot: LibraryRobot) -> np.ndarray:
@@ -632,7 +646,7 @@ def _turn_around(actuator: mujoco.MjsActuator, robot: LibraryRobot) -> tuple[flo
     return low, high
 
 
-def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:
+def read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:
     if name is None:
         return None, None
     key = next((k for k in spec.keys if k.name == name), None)
@@ -699,7 +713,7 @@ def _stiffen_servos(spec: mujoco.MjSpec, kp: float, kv: float) -> int:
     return count
 
 
-def _home_pose(
+def home_pose(
     spec: mujoco.MjSpec, key_qpos: np.ndarray | None, key_ctrl: np.ndarray | None, floating: bool
 ) -> tuple[dict[str, float], dict[str, float], float]:
     """Joint and actuator values of the home pose, and the base height that puts it on the floor."""
