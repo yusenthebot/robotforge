@@ -48,6 +48,18 @@ def main_checkout(cwd: Path) -> Path:
     raise SystemExit("land: no worktree has main checked out")
 
 
+def set_aside_icloud_refs(git_dir: Path) -> None:
+    """iCloud copies ref files ("main 3"); git then fails on the bad name, so move them out of refs."""
+    aside = git_dir / "icloud-copies"
+    for top in ("refs", "logs"):
+        for path in (git_dir / top).rglob("*") if (git_dir / top).exists() else ():
+            if path.is_file() and re.search(r" [0-9]+$", path.name):
+                target = aside / path.relative_to(git_dir)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                path.replace(target)
+                print(f"land: set aside the iCloud copy {path.relative_to(git_dir)}", flush=True)
+
+
 class Lock:
     def __init__(self, git_dir: Path, owner: str, wait_s: float) -> None:
         self.path = git_dir / "land.lock"
@@ -129,6 +141,7 @@ def main() -> None:
     git_dir = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=here).stdout.strip())
 
     with Lock(git_dir, branch, args.wait_min * 60):
+        set_aside_icloud_refs(git_dir)
         merged = git("merge", "main", "--no-edit", cwd=here, check=False)
         if merged.returncode != 0:
             conflicts = git("diff", "--name-only", "--diff-filter=U", cwd=here).stdout.split()
