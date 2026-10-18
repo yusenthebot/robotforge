@@ -141,7 +141,7 @@ class Camera(Sensor):
 
     def line(self, value: dict[str, Any]) -> str:
         what = {"rgb": "camera", "depth": "depth camera", "segmentation": "segmentation camera"}[self.mode]
-        return f"{what}: {self.width}x{self.height}, {self.fov:.0f} deg; read_sensors(image=true) shows its picture"
+        return f"{what}: {self.width}x{self.height}, {self.fov:.0f} deg (its picture: read_sensors with image=true)"
 
     def viewer(self, value: dict[str, Any], model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
         rot = data.cam_xmat[self.camera].reshape(3, 3)

@@ -101,4 +101,28 @@ The viewer does not draw them yet.
 
 ## Measured
 
-`uv run python scripts/sensor_bench.py` measures every claim against the truth.
+`uv run python scripts/sensor_bench.py` measures every claim against the truth (2026-10-18, Apple M-series, a machine shared with other work).
+
+| what | set up | measured |
+|---|---|---|
+| 3D lidar against a wall | Go2 in the warehouse, 1.72 m from the side wall, lidar noise 2 cm, 30 scans | `ahead` 2.3 mm long on average, 6.4 mm spread; a clean scan: 99.6 % of the 739 rays toward the wall within 1 mm of its plane |
+| depth camera against the wall | same, noise 1 cm | `center_m` 1.5 mm long on average, 11.2 mm spread |
+| IMU on a dropped block | 2 kg block from 1 m, 200 Hz | 0.00 m/s2 while it falls, 9.81 at rest; lands at 0.46 s (free fall predicts 0.44) |
+| force-torque at a Panda's wrist | a 100 g cube picked up and held 25 cm up | `payload_kg` 0.000 empty, 0.100 holding it |
+| touch arrays under a trotting Go2's feet | 2 x 2 pads, 0.4 m/s, 3 s at 100 Hz | agree with the true foot contacts 98.3 to 98.7 % of the time; diagonal feet correlate 0.96 to 0.97, side by side -0.51 to -0.52; stances FR+RL 34 %, FL+RR 32 %, all four 31 %; the pressure moves from the back row to the front row in each stance |
+| noise | IMU accel 0.05, gyro 0.002, GPS 0.03, 1000 samples | 0.0485 to 0.0501, 0.00203 to 0.00204, 0.0287 to 0.0302 |
+| latency | GPS 0.1 s on a falling block | 0.100 s |
+
+Cost, as headless physics steps per second of CPU time for a Go2 standing in the warehouse (median of 7 shuffled trials):
+
+| sensors | steps/s | change |
+|---|---|---|
+| none | 3666 | |
+| an ideal 3D lidar (read only when asked) | 3665 | -0.1 % |
+| a 10 Hz 2D lidar, 360 rays | 3574 | -2.5 % |
+| a 10 Hz 3D lidar, 16 x 180 rays (the default) | 3396 | -7.4 % |
+| a 10 Hz 3D lidar, 16 x 360 rays | 3059 | -16.6 % |
+| the default 10 Hz 3D lidar, a 100 Hz noisy IMU and four touch pads | 3180 | -13.3 % |
+
+One 16 x 180 scan takes 1.07 ms against 0.23 ms for a physics step: ten scans a second add about 9 % to the 500 steps of each simulated second.
+A scan's cost grows with its rays and with the shapes in the world (the warehouse has 152 that rays can hit).

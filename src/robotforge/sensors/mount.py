@@ -82,13 +82,13 @@ class Place:
 
 def mount(
     spec: mujoco.MjSpec, entries: Sequence[SensorEntry], robot: str, home: dict[str, float] | None = None
-) -> list[str]:
+) -> None:
     """Add `entries` to the robot's spec. Words for places and directions (top, bottom, forward, down) mean the
     robot's own as it stands in its `home` pose (joint values by name), whatever the body's own axes are: the
     bottom of a Go2's foot is the side that meets the floor, though its calf's frame is tilted, and "down" from
     a Panda's hand is down. Raises ValueError naming the sensor when one cannot be placed."""
     if not entries:
-        return []
+        return
     try:
         model = spec.compile()
     except ValueError as exc:
@@ -102,7 +102,6 @@ def mount(
             data.qpos[model.jnt_qposadr[j]] = value
     mujoco.mj_kinematics(model, data)
     taken = declare.declared_names(spec) | {c.name for c in spec.cameras if c.name}
-    notes: list[str] = []
     for entry in entries:
         opts = resolved(entry)
         try:
@@ -134,7 +133,6 @@ def mount(
                 **{k: v for k, v in knobs.items() if v is not None},
             },
         )
-    return notes
 
 
 def _spec_body(spec: mujoco.MjSpec, model: mujoco.MjModel, body: int) -> mujoco.MjsBody:

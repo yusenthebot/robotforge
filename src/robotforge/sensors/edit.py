@@ -52,9 +52,6 @@ def add(pg: Any, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
             out["reading"] = reading["sensors"].get(entry.name)
         except Exception as exc:  # the sensor is added either way; say why there is no first reading
             out["reading"] = {"note": f"no first reading: {type(exc).__name__}: {exc}"}
-    notes = [n for n in result.get("notes", []) if n.startswith(f"{name}:") and "sensor" in n]
-    if notes:
-        out["notes"] = notes
     out["world"] = result.get("world")
     return out
 

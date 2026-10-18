@@ -293,7 +293,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         if entry.sensors:  # any robot can carry them: placed on its own spec, before it is attached
             from robotforge.sensors.mount import mount
 
-            notes += mount(built.spec, entry.sensors, entry.name, built.home_qpos)
+            mount(built.spec, entry.sensors, entry.name, built.home_qpos)
         z = entry.pos[2] if len(entry.pos) == 3 else ground.height(entry.pos[0], entry.pos[1]) + built.spawn_height
         frame = spec.worldbody.add_frame(pos=[entry.pos[0], entry.pos[1], z], quat=_yaw_quat(entry.yaw))
         _share_options(spec, built.spec)

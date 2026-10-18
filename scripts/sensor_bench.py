@@ -262,6 +262,7 @@ def speed(seconds: float = 2.0, trials: int = 7) -> dict[str, Any]:
     setups = {
         "no sensors": [],
         "ideal 3D lidar (read only on demand)": [{"type": "lidar3d"}],
+        "10 Hz 2D lidar, 360 rays": [{"type": "lidar", "rate_hz": 10}],
         "10 Hz 3D lidar, 16 x 180 rays": [{"type": "lidar3d", "rate_hz": 10}],
         "10 Hz 3D lidar, 16 x 360 rays": [{"type": "lidar3d", "rate_hz": 10, "rays": 360}],
         "10 Hz 3D lidar + 100 Hz noisy IMU + 4 touch pads": [
@@ -287,7 +288,7 @@ def speed(seconds: float = 2.0, trials: int = 7) -> dict[str, Any]:
             pg.session.step(steps)
             rates[str(label)].append(steps / (time.thread_time() - start))
     base = statistics.median(rates["no sensors"])
-    out: dict[str, Any] = {}
+    out: dict[str, Any] = {"cost_of_one_scan": scan_cost(worlds["10 Hz 3D lidar, 16 x 180 rays"])}
     for label, r in rates.items():
         out[label] = {
             "steps_per_s": round(statistics.median(r)),
@@ -295,6 +296,34 @@ def speed(seconds: float = 2.0, trials: int = 7) -> dict[str, Any]:
             "vs_no_sensors": f"{100 * (statistics.median(r) / base - 1):+.1f}%",
         }
     return out | {"machine_load": round(os.getloadavg()[0], 1), "cores": os.cpu_count()}
+
+
+def scan_cost(pg: Playground, repeats: int = 15) -> dict[str, Any]:
+    """A 3D scan's CPU time against a physics step's, best of several, and what a scan ten times a second adds."""
+    sensor = pg.sensors.suite.sensors["go2/lidar"]
+    m, d = pg.session.model, pg.session.data
+    scans, steps = [], []
+    for _ in range(repeats):
+        start = time.thread_time()
+        sensor.measure(m, d)
+        scans.append(time.thread_time() - start)
+        start = time.thread_time()
+        for _ in range(20):
+            mujoco_step(m, d)
+        steps.append((time.thread_time() - start) / 20)
+    scan, step = min(scans), min(steps)
+    per_second = 10 * scan / (step / m.opt.timestep)  # 10 scans against 500 steps of simulated time
+    return {
+        "scan_ms": round(scan * 1e3, 3),
+        "step_ms": round(step * 1e3, 3),
+        "added_at_10_hz": f"{100 * per_second:.1f}%",
+    }
+
+
+def mujoco_step(m: Any, d: Any) -> None:
+    import mujoco
+
+    mujoco.mj_step(m, d)
 
 
 TESTS = {"truth": truth, "drop": drop, "wrist": wrist, "trot": trot, "knobs": knobs, "speed": speed}
