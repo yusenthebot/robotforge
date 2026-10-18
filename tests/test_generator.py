@@ -134,7 +134,7 @@ def test_bigger_walkers_get_stronger_leg_joints_by_what_the_builder_measures():
     leg = next(p for p in small["parts"] if p["name"] == "left_shin")
     assert "actuator" not in leg  # the robot's own hobby servo holds a small dog
     leg = next(p for p in big["parts"] if p["name"] == "left_shin")
-    assert leg["actuator"] in fit.LADDER[2:]  # a joint module, maybe geared
+    assert leg["actuator"] in fit.LADDER[1:]  # a joint module, maybe geared
     assert fit.strain(big) <= fit.WALK_STRAIN
 
 

@@ -17,10 +17,11 @@ from robotforge.design.builder.checks import check
 from robotforge.design.builder.expand import expand
 
 # Lightest first. Measured on generated dogs (2026-10-19): a dog 1.4 times the size with legs 1.4 times as long used
-# 50 % standing on plain joint modules and walked backwards; geared 2:1 it walked 1.27 m in 4 s.
+# 50 % standing on plain joint modules and walked backwards; geared 2:1 it walked 1.27 m in 4 s. No geared hobby
+# servo: it holds a big dog up but swings its legs at half speed, and big short-legged dogs on it walked 40 to 68 % of
+# the way (0 of 3 at 1.6 times the size); on joint modules every one walked the whole way.
 LADDER: tuple[Any, ...] = (
     None,  # the robot's own servo (sts3215)
-    {"model": "sts3215", "gear": 2},
     "bldc_joint",
     {"model": "bldc_joint", "gear": 2},
     {"model": "bldc_joint", "gear": 3},

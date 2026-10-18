@@ -30,6 +30,8 @@ SCHEMES: tuple[tuple[str, str], ...] = (
     ("#ef6f5e", "#23395d"),  # coral and navy
 )
 DARK = "#1d2026"
+HIP_SPACING = 2.0  # a quadruped's front and back hips at least this many leg (thigh) lengths apart
+HIP_WIDTH = 0.58  # and its left and right hips this many
 
 
 def r3(v: float) -> float:
@@ -168,12 +170,29 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     leg = r3(0.12 * plan.height * s)
     notes: list[str] = []
     spacing = r3(length - 0.06 * s)
-    if plan.height > 1.15 and spacing < 2 * leg:
-        # Measured: a dog 1.35 times as big with legs 1.4 times as long pitched over in 4 of 5 variations at
-        # 0.25 m/s; with its hips as far apart as a leg is long it walked every time.
-        spacing = r3(2 * leg)
+    if spacing < HIP_SPACING * leg:
+        # Hips closer than two leg lengths, the front and back feet step into each other: 2026-10-19 sweep
+        # (scripts/gen_bench.py sweep, 4 seeds, 0.25 m/s): body x0.6 and x0.7 walked 1 in 8, x0.8 4 in 8, x0.9 7 in
+        # 8, while every one with its hips two legs apart walked; a dog 1.35 times as big with legs 1.4 times as
+        # long pitched over in 4 of 5 variations until its body was lengthened.
+        asked = length
+        spacing = r3(HIP_SPACING * leg)
         length = r3(spacing + 0.06 * s)
-        notes.append(f"its body is {length:.2f} m long, so its long legs do not tip it over")
+        if length > asked * 1.03:
+            why = "its front and back feet would step into each other"
+            notes.append(
+                f"its body is {length:.2f} m long, not shorter: with its hips closer than two leg lengths {why}; "
+                "shorter legs make a shorter dog"
+                if plan.length < 1
+                else f"its body is {length:.2f} m long for its long legs: shorter, {why}"
+            )
+    if width < HIP_WIDTH * leg:
+        # Narrow and long-legged, it tips over sideways: legs x1.8 on a body x0.6 or x0.8 wide walked 1 in 6, x0.9
+        # wide 3 in 3; x1.6 legs walked from x0.7 wide (2026-10-19 sweep).
+        asked = width
+        width = r3(HIP_WIDTH * leg)
+        if width > asked * 1.03:
+            notes.append(f"its body is {width:.2f} m wide, not narrower: on its long legs a narrower one tips over")
     hip_y = r3(width / 2)
     parts: list[dict[str, Any]] = [
         {
@@ -211,7 +230,8 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     base = {
         "shape": "box",
         "size": [length, width, thick],
-        "mass": r3(1.0 * s**3 * plan.length * plan.width),  # a shell over the battery, not a solid print
+        # a shell over the battery, not a solid print, as heavy as it is long and wide
+        "mass": r3(1.0 * s * length / 0.3 * width / 0.14),
         "sensors": base_sensors(plan),
         "material": look.material,
     }
@@ -643,9 +663,13 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     notes = ["a snake has one head: it got jaws (a gripper)"] if plan.arms > 1 else []
     base = {"shape": "box", "size": [r3(0.09 * s), r3(0.06 * s), r3(0.045 * s)], "sensors": sensors}
     # Measured: on hobby servos a snake 1.6 times the size did not move at all (1.3 times: 0.43 m in 6 s on sts3215);
-    # on joint modules it slithered 0.85 m in 6 s.
+    # on joint modules it slithered 0.85 m in 6 s. On mg996r servos twelve segments went 15 to 44 % of the way when
+    # carbon or aluminum, and 0.6-size snakes with jaws 30 %; on sts3215 all but a long aluminum one (53 %) went the
+    # whole way (2026-10-19, scripts/gen_bench.py sweep --body snake).
     k = plan.size * plan.width
-    servo = "mg996r" if k <= 1.15 else "sts3215" if k <= 1.4 else "bldc_joint"
+    chain = plan.segments * plan.length / 8  # times the 8-segment snake's length
+    heavy = chain > 1.5
+    servo = "bldc_joint" if k > 1.2 or heavy else "sts3215"
     return {"color": look.main, "servo": servo, "base": base, "parts": parts}, notes
 
 

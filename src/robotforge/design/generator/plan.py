@@ -8,6 +8,7 @@ the same sentence and the same seed is the same robot again.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field, fields, replace
 from typing import Any, Literal
 
@@ -27,6 +28,10 @@ SIZE = (0.6, 1.6)  # the whole robot, times its default
 # A walker's legs (size times height) at least this long: shorter, a hexapod's feet are not 5 cm under its body, which
 # the gait needs to tell legs from the rest (a 0.6 size robot with 0.6 legs was not seen as a walker at all).
 MIN_LEG = 0.6
+# A snake's spine (first joint to last) at most this long: 1.7 to 2.5 m snakes did under half the way in 5 s at 0.1 m/s
+# and 0.03 m/s after 20 s; up to 1.6 m every one without jaws did (2026-10-19 sweep).
+SNAKE_SPINE = 1.6  # m
+SNAKE_SEGMENT = 0.08  # m, one segment at factor 1
 HUMANOID_HEIGHT = 0.45  # m, the humanoid template's height at factor 1
 HUMANOID_RANGE = (0.3, 0.65)  # m: at 0.7 m some variations fell over walking at 0.15 m/s (2026-10-19 sweep)
 
@@ -126,6 +131,16 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
     if plan.body == "legged" and size * height < MIN_LEG:
         changes["height"] = round(MIN_LEG / size, 3)
         notes.append(f"legs x{height:.2f} became x{changes['height']:.2f}: shorter legs do not lift its feet to walk")
+    if plan.body == "snake":
+        segments, length = changes.get("segments", plan.segments), changes.get("length", plan.length)
+        per_length = (segments - 1) * SNAKE_SEGMENT * size * changes.get("width", plan.width)
+        if per_length * length > SNAKE_SPINE:
+            best = max(FACTOR[0], math.floor(SNAKE_SPINE / per_length * 1000) / 1000)  # stays under on a clamp again
+            changes["length"] = best
+            notes.append(
+                f"length x{length:.2f} became x{best:.2f}: a snake longer than {SNAKE_SPINE} m crawls (fewer "
+                "segments or a smaller snake can be longer)"
+            )
     tall = HUMANOID_HEIGHT * size * height
     if plan.body == "humanoid" and not HUMANOID_RANGE[0] <= tall <= HUMANOID_RANGE[1]:
         meters = min(max(tall, HUMANOID_RANGE[0]), HUMANOID_RANGE[1])
