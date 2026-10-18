@@ -91,6 +91,10 @@ class Demo:
     timeline: list[tuple[float, Action]] = field(default_factory=list)  # (s after recording starts, action)
     page: str = ""  # a page script run before recording (the camera, a lesson opened)
     settle: float = 1.5  # s between the page drawing and recording
+    # Ends the recording `tail` s after this says the story is over (a flight landed), within `seconds`: on a busy
+    # machine the simulation runs slower than the wall clock, and a fixed length cut the landing off.
+    until: Callable[[Any], bool] | None = None
+    tail: float = 1.5
 
 
 def _follow(robot: str, offset: tuple[float, float, float], ease: float = 0.06) -> str:
@@ -149,6 +153,56 @@ def _drag(robot_body: str, by: tuple[float, float, float], seconds: float, lift:
         }}
         view.dispatchEvent(new PointerEvent("pointerup", at(x, y)));
     """
+
+
+def _chase(robot: str, heading: tuple[float, float], back: float, side: float, up: float) -> str:
+    """Page script: a camera behind an aircraft and `side` metres to its left, `up` above, swinging round as it
+    turns (its heading is read from how it moves, eased so a corner is a smooth turn of the camera)."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge;
+        const id = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic).id;
+        let at = rf.bodyPosition(id), last = at.slice(), dir = {json.dumps(list(heading))}, eye = null;
+        (async () => {{
+            while (window.__cam === me) {{
+                const p = rf.bodyPosition(id);
+                const vx = p[0] - last[0], vy = p[1] - last[1];
+                last = p;
+                const step = Math.hypot(vx, vy);
+                if (step > 0.004) {{
+                    dir = [dir[0] * 0.97 + (0.03 * vx) / step, dir[1] * 0.97 + (0.03 * vy) / step];
+                    const n = Math.hypot(dir[0], dir[1]);
+                    dir = [dir[0] / n, dir[1] / n];
+                }}
+                at = at.map((v, i) => v + 0.12 * (p[i] - v));
+                const want = [
+                    at[0] - {back} * dir[0] - {side} * dir[1],
+                    at[1] - {back} * dir[1] + {side} * dir[0],
+                    at[2] + {up},
+                ];
+                eye = eye ? eye.map((v, i) => v + 0.08 * (want[i] - v)) : want;
+                rf.lookAt(eye, [at[0], at[1], at[2] - 0.25]);
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
+# Round the park's small tree (tree_6 at 2.43, -4.02 with seed 0) at 2.2 m, from the start spot on the path and back.
+SQUARE = [[0.63, -2.22, 2.2], [4.23, -2.22, 2.2], [4.23, -5.82, 2.2], [0.63, -5.82, 2.2], [0.63, -2.22, 2.2]]
+
+
+# Behind the park's tree_4 (at -3.90, -4.12, its crown 2.1 m up over the spot) and in under its crown, round its
+# trunk, to land beside it: one move with four points; the way round the trunk is the planner's.
+UNDER_TREE = [[-5.6, -3.0, 1.3], [-5.6, -4.12, 1.3], [-3.3, -4.12, 1.3], [-3.3, -4.12, 0.0]]
+
+
+def _fly(robot: str, points: list[list[float]], speed: float) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        trip = pg.behaviors.navigate(robot, points, speed)
+        print(f"{robot}: flight planned, {trip.plan.length:.1f} m", flush=True)
+
+    return act
 
 
 def _gallery_moving(pg: Any) -> None:
@@ -275,6 +329,26 @@ DEMOS = [
         timeline=[(1.0, _move("centaur", 0.22)), (9.0, _move("centaur", 0.15, 0.6))],
         page=_follow("centaur", (1.2, -1.4, 0.75), ease=0.04),
     ),
+    Demo(  # take off from the path, fly a square round a tree, come back and land where it started
+        "drone_park_square",
+        S._in_scene("park", {"drone": {"template": "drone"}}),
+        40.0,
+        timeline=[(0.3, _fly("drone", [*SQUARE, [0.0, -1.0, 0.0]], 2.0))],
+        page=_chase("drone", (0.45, -0.89), 1.5, 0.8, 0.5),
+        settle=0.8,
+        until=lambda pg: pg.behaviors.trip("drone") is None,  # landed (or stopped)
+        tail=1.2,
+    ),
+    Demo(  # from the path, behind a tree, round its trunk and in under its crown to land beside it
+        "drone_round_trunk",
+        S._in_scene("park", {"drone": {"template": "drone"}}),
+        40.0,
+        timeline=[(0.3, _fly("drone", UNDER_TREE, 1.5))],
+        page=_chase("drone", (-0.94, -0.34), 1.8, 0.7, 0.1),  # nearly level: the trees and the crown in view
+        settle=0.8,
+        until=lambda pg: pg.behaviors.trip("drone") is None,
+        tail=1.2,
+    ),
     Demo(
         "lesson_learn_to_walk",
         lambda pg: None,
@@ -336,7 +410,10 @@ async def _record(demo: Demo, pg: Any, port: int, chrome_port: int) -> list[tupl
         cdp.recording = True
         t0 = time.monotonic()
         pending = sorted(demo.timeline, key=lambda e: e[0])
-        while time.monotonic() - t0 < demo.seconds:
+        end = t0 + demo.seconds
+        while time.monotonic() < end:
+            if demo.until is not None and not pending and end - time.monotonic() > demo.tail and demo.until(pg):
+                end = time.monotonic() + demo.tail
             while pending and time.monotonic() - t0 >= pending[0][0]:
                 _, action = pending.pop(0)
                 if isinstance(action, str):

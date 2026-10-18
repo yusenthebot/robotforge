@@ -1,6 +1,6 @@
 ---
 name: robotforge
-description: Use for robots and embodied AI with the robotforge MCP tools (a MuJoCo playground for beginners) to build, load or import (URDF) robots, make them walk, drive or grasp, compare controllers, write robot scripts and teach lessons. 机器人仿真，具身智能入门。
+description: Use for robots and embodied AI with the robotforge MCP tools (a MuJoCo playground for beginners) to build, load or import (URDF) robots, make them walk, drive, fly or grasp, compare controllers, write robot scripts and teach lessons. 机器人仿真，具身智能入门。
 ---
 
 # robotforge
@@ -18,10 +18,10 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, warehouse, park, maze, obstacle_course. Robots already in the world move to the scene's places.
    - Ground and terrain: `set_floor(style)` (checker, grass, wood, concrete, dirt, sand, rock, snow, tile); `set_terrain(type)` for the whole ground or `add_terrain(type, pos)` for one feature (hills, rough, stairs, ramp, stones, curb, platform).
 3. **Robot.** Pick the source that fits:
-   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, tuned with `params` (sizes, servo, color);
-   - library (`list_library`): real robots such as `go2` or `panda`, downloaded on first use (4-55 MB); `mounts` puts one on another, an arm on a dog's back (`add_robot(name="go2", library="go2", mounts=[{"library": "piper"}])`, then the arm is `go2/arm`, and a walking dog stops before it works) or a gripper on an arm's flange (`ur5e` with `robotiq_2f85`, also on a dog: `anymal_c` with both); each walker carries only what `list_library` says (`carries`);
+   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, drone (4, 6 or 8 rotors), tuned with `params` (sizes, servo, color);
+   - library (`list_library`): real robots such as `go2`, `panda` or the `skydio_x2` and `crazyflie` drones, downloaded on first use (4-55 MB); `mounts` puts one on another, an arm on a dog's back (`add_robot(name="go2", library="go2", mounts=[{"library": "piper"}])`, then the arm is `go2/arm`, and a walking dog stops before it works) or a gripper on an arm's flange (`ur5e` with `robotiq_2f85`, also on a dog: `anymal_c` with both); each walker carries only what `list_library` says (`carries`);
    - file: `add_robot(file=...)` imports URDF, xacro, MJCF or a mesh and returns the import doctor's report;
-   - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover);
+   - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, rotors, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover, a hexacopter);
    - design (`list_templates` lists them): a ready-made unusual robot from the gallery, `add_robot(name, design="centaur")` (wheel-legged biped, Mars rover, centaur, scorpion, a Go2 carrying a PiPER arm, tentacle...), saved as parts so `update_part` changes it;
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin).
@@ -30,6 +30,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
+   - aircraft (kind `aircraft` in `robots`): `move(robot, to=[x, y, z])` takes off and flies there, then hovers; a list of points flies a path, e.g. a 3 m square at 2 m: `to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]`; a last point with z 0 lands there (one call can take off, fly the path and land); z is a height above the world's zero, not above the ground under it, so over a hill or a table check `clearance_m` in the result; a point under a tree's crown or a table hovers there (z at the table's height lands on it); a landing where something stands (a ball, a crate, a robot), on top of what moves or a crown, or at an edge is refused with a spot nearby on the same surface that has room; legs go over or round what is in the way; `stop` hovers in place; `simulate(seconds, wind=[x, y])` blows a gust to show how it holds its place; the viewer flies it with W and S (forward, back), A and D (sideways), the arrow keys (turn), E (up) and Q (down); dragged with the mouse it holds where it is let go; `compare_controllers(drone, task="hover", push_at=3)` compares its own flight controller (`cascade`: position, attitude, body rates) with `lqr` and `mpc`, and `run_controller` flies it with one of them until `stop`, which hands it back to the flight controller;
    - `move_arm` / `gripper` / `pick_and_place`: arms;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;
@@ -56,6 +57,7 @@ Never say something worked because the call returned. Read the numbers, and look
 |---|---|
 | `add_robot`, `add_object` | it is listed; `observe()` shows it where expected; for imports read `doctor` (fixed, unfixed, notes) |
 | `move` | `distance_m`, `turned_deg`, `to.upright`, any `note` (why it fell short); with `seconds` it has stopped already (`stopped: true`, no `stop` needed) |
+| `move` with `to`, an aircraft | `arrived`, `to.position` against the target, `max_tracking_error_m`; landing: `landed` and `touchdown_m_s` (below about 0.4 is gentle); `robots` shows its `flight.state` and `altitude_m` |
 | `pose` | `upright` |
 | `move_arm` | `tool_position` against the target (within about 3 cm) |
 | `pick_and_place` | `success`, `object_position` |

@@ -16,7 +16,8 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.design import menagerie
+from robotforge.design import menagerie, rotors
+from robotforge.design.rotors import RotorLayout
 from robotforge.design.templates.base import BuiltRobot
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.geometry import collides, lowest_point
@@ -68,7 +69,8 @@ class Payload:
 class LibraryRobot:
     name: str
     title: str
-    kind: Literal["quadruped", "arm", "humanoid", "gripper"]  # gripper: a hand to mount on an arm (mounting.py)
+    # gripper: a hand to mount on an arm (mounting.py)
+    kind: Literal["quadruped", "arm", "humanoid", "gripper", "aircraft"]
     summary: str
     maker: str
     license: str  # of the Menagerie model folder (see its LICENSE file)
@@ -93,6 +95,7 @@ class LibraryRobot:
     # leaves out: arm motions do the same for them (see ArmMotion._hold). Not for the PiPER, whose model cancels
     # gravity on its links itself.
     holds_against_gravity: bool = False
+    rotors: RotorLayout | None = None  # aircraft: real rotors in place of the model's own actuators (rotors.py)
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -399,6 +402,33 @@ CATALOG: dict[str, LibraryRobot] = {
             home_key=None,
             tools=(Tool("pinch", gripper="fingers_actuator", closes_high=True),),
         ),
+        # Aircraft fly with robotforge's flight controller, from the rotors the model has (behaviors/airframe.py).
+        # They start on the ground with their motors idle, so no hover keyframe.
+        LibraryRobot(
+            "skydio_x2",
+            "Skydio X2",
+            "aircraft",
+            "1.3 kg quadrotor, four thrust rotors; flies with move(to=[x, y, z]) and the keyboard.",
+            "Skydio",
+            "Apache-2.0",
+            "skydio_x2",
+            "x2.xml",
+            mass=1.33,
+            home_key=None,
+        ),
+        LibraryRobot(
+            "crazyflie",
+            "Bitcraze Crazyflie 2",
+            "aircraft",
+            "27 g palm-sized quadrotor for research (thrust and three body moments); flies with move and the keyboard.",
+            "Bitcraze (model by whoenig)",
+            "MIT",
+            "bitcraze_crazyflie_2",
+            "cf2.xml",
+            mass=0.027,
+            home_key=None,
+            rotors=rotors.CRAZYFLIE,
+        ),
     ]
 }
 
@@ -484,6 +514,8 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
             notes.append(f"{stiffened} joint servos stiffened to kp {kp:g}, kv {kv:g} (force limits kept)")
     if robot.tools:
         key_ctrl = _add_tools(spec, robot, key_ctrl)
+    if robot.rotors is not None:
+        notes.append(rotors.fit(spec, robot.rotors))
     for geom in list(spec.worldbody.geoms):  # the world brings its own floor and lights
         spec.delete(geom)
     for light in list(spec.worldbody.lights):

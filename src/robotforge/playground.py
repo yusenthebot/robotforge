@@ -19,6 +19,7 @@ import numpy as np
 from pydantic import BaseModel, ValidationError
 
 from robotforge import modes, wording
+from robotforge.behaviors import airframe
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
@@ -104,7 +105,8 @@ class Playground:
         def teleop(msg: dict[str, Any]) -> None:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
-            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
+            air = {k: float(msg[k]) for k in ("side", "climb") if msg.get(k)}  # aircraft: sideways, up and down
+            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -130,6 +132,7 @@ class Playground:
                 "catalog": viewer_catalog(),
                 "lessons": self.lessons.catalog(),
                 "lesson": self.lessons.describe_active(),
+                "rotors": airframe.viewer_rotors(self.session.model, [r["name"] for r in robots]),
             }
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
@@ -223,7 +226,9 @@ class Playground:
             sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
+            flying = _aircraft(m, self.behaviors)
         return {
+            **({"aircraft": flying} if flying else {}),
             "model": self.session.source,
             "counts": {"bodies": m.nbody - 1, "joints": m.njnt, "actuators": m.nu, "sensors": m.nsensor},
             "actuators": actuators,
@@ -697,16 +702,27 @@ class Playground:
                     notes.append(note)
         return applied, notes
 
-    def simulate(self, seconds: float, controls: dict[str, float] | None = None) -> dict[str, Any]:
+    def simulate(
+        self, seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None
+    ) -> dict[str, Any]:
         if not 0 < seconds <= MAX_SIM_SECONDS:
             raise PlaygroundError(wording.seconds_range("seconds", seconds, MAX_SIM_SECONDS))
         notes: list[str] = []
+        blown: dict[str, Any] | None = None
         with self.session.lock:
             if controls:
                 _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))
             before = self._free_body_positions()
-            self.session.step(steps)
+            if wind is not None:
+                from robotforge.behaviors import air
+
+                try:
+                    blown = air.blow(self.session, wind, seconds, steps)
+                except air.WindError as exc:
+                    raise PlaygroundError(str(exc)) from exc
+            else:
+                self.session.step(steps)
             after = self._free_body_positions()
             unstable = not np.isfinite(self.session.data.qpos).all()
         moved = {
@@ -721,6 +737,8 @@ class Playground:
         }
         if notes:
             result["notes"] = notes
+        if blown is not None:
+            result["wind"] = blown
         if unstable:
             result["warning"] = "simulation became unstable (NaN state); reset and check the model"
         return result
@@ -945,6 +963,22 @@ def _validation_message(exc: ValidationError) -> str:
 
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(m, obj, idx) or ""
+
+
+def _aircraft(m: mujoco.MjModel, behaviors) -> list[dict[str, Any]]:
+    """The robots that fly: their rotors (thrust actuators), what flies them now and what they are doing."""
+    from robotforge.behaviors import Kind
+
+    out = []
+    for robot in behaviors.robot_names():
+        if behaviors.kind(robot) != Kind.AIRCRAFT:
+            continue
+        root = airframe.root_of(m, robot)
+        names = [_name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in airframe.thrust_actuators(m, robot, root)]
+        info = behaviors.flight_info(robot)
+        keep = ("controller", "state", "altitude_m", "cannot_fly")
+        out.append({"robot": robot, "rotors": names, **{k: info[k] for k in keep if k in info}})
+    return out
 
 
 def _free_bodies(m: mujoco.MjModel) -> list[int]:

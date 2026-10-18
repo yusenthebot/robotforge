@@ -47,19 +47,22 @@ def _name(model: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(model, obj, idx) or ""
 
 
-def _geom_rgba(model: mujoco.MjModel, g: int, textured: dict[int, np.ndarray]) -> list[float]:
+def _geom_rgba(model: mujoco.MjModel, g: int, textured: dict[int, np.ndarray], painted: set[int]) -> list[float]:
+    """A geom's color: its own, or its material's, times the mean of the material's picture where the viewer does not
+    color it vertex by vertex (`painted`: meshes that get their texture's colors, see build_mesh_payload)."""
     rgba = model.geom_rgba[g]
     mat = model.geom_matid[g]
     if mat >= 0 and np.allclose(rgba, _DEFAULT_RGBA):
         rgba = model.mat_rgba[mat]
-        if mat in textured and model.geom_bodyid[g] != 0:  # the ground draws its own textures
+        mesh = int(model.geom_dataid[g]) if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_MESH else -1
+        if mat in textured and model.geom_bodyid[g] != 0 and mesh not in painted:  # the ground draws its own
             rgba = np.concatenate([rgba[:3] * textured[mat], rgba[3:]])
     return [round(float(c), 4) for c in rgba]
 
 
-def _texture_colors(model: mujoco.MjModel) -> dict[int, np.ndarray]:
-    """The mean color of each material's own picture (2D texture), by material. The viewer draws no textures yet, so a
-    textured shell showed plain white: ANYmal C's red covers and black legs, A1's carbon fibre."""
+def _material_colors(model: mujoco.MjModel) -> dict[int, np.ndarray]:
+    """The mean color of each material's own picture (2D texture), by material, for geoms the viewer cannot color per
+    vertex (see _texture_colors): drawn plain white, a textured shell hid ANYmal C's red covers and black legs."""
     rgb = int(mujoco.mjtTextureRole.mjTEXROLE_RGB)
     colors: dict[int, np.ndarray] = {}
     for mat in range(model.nmat):
@@ -73,11 +76,43 @@ def _texture_colors(model: mujoco.MjModel) -> dict[int, np.ndarray]:
     return colors
 
 
+def _mesh_textures(model: mujoco.MjModel) -> dict[int, int]:
+    """mesh id -> the 2D color texture of the first geom that draws it with a textured material."""
+    role = int(mujoco.mjtTextureRole.mjTEXROLE_RGB)
+    found: dict[int, int] = {}
+    for g in range(model.ngeom):
+        mat = int(model.geom_matid[g])
+        if int(model.geom_type[g]) != mujoco.mjtGeom.mjGEOM_MESH or mat < 0:
+            continue
+        tex = int(model.mat_texid[mat, role])
+        if tex >= 0 and int(model.tex_type[tex]) == mujoco.mjtTexture.mjTEXTURE_2D:
+            found.setdefault(int(model.geom_dataid[g]), tex)
+    return found
+
+
+def _texture_colors(model: mujoco.MjModel, mesh_id: int, tex: int) -> np.ndarray | None:
+    """Linear RGB per expanded vertex, read from the texture at each vertex's texture coordinate, or None when the
+    mesh has none. The browser draws no textures, so a textured model (Skydio X2) showed as one flat white shape."""
+    count = int(model.mesh_texcoordnum[mesh_id])
+    if count == 0:
+        return None
+    f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
+    uv = model.mesh_texcoord[model.mesh_texcoordadr[mesh_id] + model.mesh_facetexcoord[f0 : f0 + nf].ravel()]
+    w, h, ch = int(model.tex_width[tex]), int(model.tex_height[tex]), int(model.tex_nchannel[tex])
+    image = model.tex_data[model.tex_adr[tex] : model.tex_adr[tex] + w * h * ch].reshape(h, w, ch)
+    cols = np.clip(np.rint(np.mod(uv[:, 0], 1.0) * (w - 1)), 0, w - 1).astype(int)
+    rows = np.clip(np.rint(np.mod(uv[:, 1], 1.0) * (h - 1)), 0, h - 1).astype(int)
+    srgb = image[rows, cols, :3].astype(np.float32) / 255.0
+    return np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4).astype(np.float32)
+
+
 def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
-    """Expand each mesh into non-indexed triangles with MuJoCo's own normals."""
+    """Expand each mesh into non-indexed triangles with MuJoCo's own normals (and its texture's colors per vertex
+    when a geom draws it textured: "colors" is then where they start in the blob)."""
     chunks: list[np.ndarray] = []
     entries: list[dict] = []
     offset = 0
+    textures = _mesh_textures(model)
     for mesh_id in range(model.nmesh):
         v0, nv = model.mesh_vertadr[mesh_id], model.mesh_vertnum[mesh_id]
         f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
@@ -94,6 +129,11 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
         entries.append({"id": mesh_id, "offset": offset, "count": int(positions.shape[0])})
         chunks.append(block)
         offset += block.size
+        colors = _texture_colors(model, mesh_id, textures[mesh_id]) if mesh_id in textures else None
+        if colors is not None and len(colors) == positions.shape[0]:
+            entries[-1]["colors"] = offset
+            chunks.append(colors.ravel())
+            offset += colors.size
     hfields = []
     for h in range(model.nhfield):
         nrow, ncol = int(model.hfield_nrow[h]), int(model.hfield_ncol[h])
@@ -111,7 +151,8 @@ def describe(
     model: mujoco.MjModel, version: int, mesh_entries: list[dict], hfield_entries: list[dict] | None = None
 ) -> dict:
     """JSON-ready scene description for the viewer."""
-    textured = _texture_colors(model)
+    textured = _material_colors(model)
+    painted = {int(entry["id"]) for entry in mesh_entries if "colors" in entry}  # colored per vertex already
     geoms = []
     for g in range(model.ngeom):
         gtype = _GEOM_TYPE_NAMES.get(int(model.geom_type[g]))
@@ -126,7 +167,7 @@ def describe(
                 "size": [round(float(s), 6) for s in model.geom_size[g]],
                 "pos": [float(p) for p in model.geom_pos[g]],
                 "quat": [float(q) for q in model.geom_quat[g]],
-                "rgba": _geom_rgba(model, g, textured),
+                "rgba": _geom_rgba(model, g, textured, painted),
                 "mesh": int(model.geom_dataid[g]) if gtype == "mesh" else -1,
                 "hfield": int(model.geom_dataid[g]) if gtype == "hfield" else -1,
                 # Ground materials ("ground_grass", ...) tell the viewer which surface texture to draw.

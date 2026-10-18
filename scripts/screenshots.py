@@ -283,6 +283,32 @@ MOBILE_ARM = {
 }
 
 
+def _hexacopter() -> dict[str, Any]:
+    from robotforge.design.builder.guide import EXAMPLE_HEXACOPTER  # the builder guide's own example
+
+    return EXAMPLE_HEXACOPTER
+
+
+HEXACOPTER = _hexacopter()
+
+
+DRONE_ROW = [("quad", -1.6), ("hexa_t", -0.7), ("octo", 0.3), ("hexa", 1.35), ("x2", 2.4), ("cf", 3.15)]
+
+
+def _drone_family(pg: Any) -> None:
+    sources = {
+        "quad": {"template": "drone"},
+        "hexa_t": {"template": "drone", "params": {"rotors": 6, "color": "orange", "arm_length": 0.24}},
+        "octo": {"template": "drone", "params": {"rotors": 8, "color": "black", "arm_length": 0.3, "size": 0.2}},
+        "hexa": {"build": HEXACOPTER},
+        "x2": {"library": "skydio_x2"},
+        "cf": {"library": "crazyflie"},
+    }
+    for name, x in DRONE_ROW:
+        pg.add_robot(name, pos=[x, 0.0], **sources[name])
+    pg.set_floor("grass")
+
+
 def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> Callable[[Any], None]:
     """A world builder: these robots, then the scene, which puts them on its free spots."""
 
@@ -307,6 +333,19 @@ def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
             rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
         const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
         rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+    """
+
+
+def _hover_look(robot: str, offset: tuple[float, float, float], drop: float) -> str:
+    """Page script: look at a hovering aircraft from `offset` metres away, aiming `drop` metres below it, so its
+    shadow on the ground shows how high it flies. Nothing is selected: the selection ring lies on the ground right
+    under the aircraft, far below it in the picture."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const p = rf.bodyPosition(rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")})).id);
+        const off = {json.dumps(list(offset))};
+        rf.lookAt(p.map((v, i) => v + off[i]), [p[0], p[1], p[2] - {drop}]);
     """
 
 
@@ -855,6 +894,55 @@ SHOTS = [
         _line_up,
         page="window.__robotforge.select(null); " + _look((4.8, -0.35, 2.7), (-0.1, -0.35, 0.25)),
         settle=3.0,
+    ),
+    # Aircraft hovering a metre over the park's path, their shadows on the grass below: the drone template, a
+    # hexacopter built from parts (the builder guide's example), the Skydio X2.
+    Shot(
+        "drone_park",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("drone", (0.8, -1.0, 0.26), 0.16),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_hexacopter",
+        _in_scene("park", {"hexa": {"build": HEXACOPTER}}),
+        viewer=[_go("hexa", [0.0, -1.0, 0.9]), {"wait": 5.0}],
+        page=_hover_look("hexa", (0.95, -1.2, 0.32), 0.2),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_x2",
+        _in_scene("park", {"x2": {"library": "skydio_x2"}}),
+        viewer=[_go("x2", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("x2", (0.82, -1.02, 0.28), 0.12),
+        settle=0.5,
+    ),
+    # Hovering under a tree's crown beside its trunk (tree_4, its crown 2.1 m up), where it once landed on the crown.
+    Shot(
+        "drone_under_crown",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [-3.3, -4.12, 1.2]), {"wait": 14.0}],  # a 6 s flight, on a busy machine
+        page=_hover_look("drone", (1.3, -1.38, -0.12), -0.42),  # from a little below: the crown over it in view
+        settle=0.5,
+    ),
+    # Landed on the grass beside the park's loose red ball: sent to z 0 at the ball it once landed on top of it and
+    # tipped over; now that is refused, and this is the spot the refusal offers ([2.0, -0.6] has room).
+    Shot(
+        "drone_beside_ball",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [2.0, -0.6, 0.0]), {"wait": 8.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.72, -1.95, 0.52], [1.72, -0.6, 0.1]);",
+        settle=0.5,
+    ),
+    # Every aircraft side by side, each hovering a metre up: the template with 4, 6 and 8 rotors, the hexacopter
+    # built from parts, the Skydio X2 and the palm-sized Crazyflie.
+    Shot(
+        "drone_family",
+        _drone_family,
+        viewer=[_go(name, [x, 0.0, 1.0]) for name, x in DRONE_ROW] + [{"wait": 6.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -4.3, 1.85], [0.8, 0.0, 0.85]);",
+        settle=0.5,
     ),
 ]
 

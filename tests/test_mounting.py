@@ -514,12 +514,13 @@ def test_at_tool_needs_an_arm_with_a_bare_flange(pg):
 def test_an_arm_on_a_dog_moved_to_its_other_side_goes_over_the_dog(pg):
     """Regression: move_arm swung a carried arm low round the dog in a line from one side to the other, into the dog:
     a UR5e on ANYmal struck the dog's body with its wrist and stopped 71 cm from the target (a Z1 on Spot caught its
-    gripper on the front leg, 67 cm). It now rises, goes over and comes down, touching nothing of the dog."""
+    gripper on the front leg, 67 cm). It now rises, goes over and comes down, touching nothing of the dog. (From
+    35 cm up it gets round by changing pose on the way, without going over.)"""
     pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
     _run(pg, 1.5)
-    pg.behaviors.move_arm("anymal/arm", [0.35, 0.45, 0.35])
+    pg.behaviors.move_arm("anymal/arm", [0.2, 0.5, 0.2])
     _arm_done(pg, "anymal/arm")
-    target = np.array([0.35, -0.45, 0.35])
+    target = np.array([0.2, -0.5, 0.2])
     arm = pg.behaviors.move_arm("anymal/arm", target)
     assert [wp.label for wp in arm.queue] == ["rise", "move over", "move"]
     m, d = pg.session.model, pg.session.data

@@ -38,6 +38,8 @@ class Placed:
     pos: np.ndarray  # attachment point in the parent body frame
     rot: np.ndarray  # 3x3: the part frame in the parent body frame
     local: np.ndarray  # 3x3 orthogonal: maps the part's own numbers into its body frame (I or a reflection)
+    # -1 on every other copy of a ring or a row (and on what hangs on it), so rotors on them turn the other way
+    flip: int = 1
 
     def vec(self, v) -> np.ndarray:
         """A direction or point the author wrote for this part, in its body frame."""
@@ -87,6 +89,11 @@ def shape_box(spec: BaseSpec | PartSpec) -> tuple[np.ndarray, np.ndarray]:
         r, w = size[0] / 2, size[1] / 2
         half = np.array([r, w, r])
         return offset - half, offset + half
+    if shape == "rotor":  # a motor standing on z = 0 with its propeller on top (builder/rotor.py)
+        from robotforge.design.builder.rotor import height
+
+        r = size[0] / 2
+        return offset + np.array([-r, -r, 0.0]), offset + np.array([r, r, height(size[0])])
     # capsule and cylinder: a segment with a radius
     r, length = size[0] / 2, size[1]
     u = d if d is not None else np.asarray(axis_vector(getattr(spec, "axis", "z")), float)
@@ -165,6 +172,7 @@ class _Copy:
     reflect: np.ndarray  # I or MIRROR_Y: applied to the copy's own numbers on top of the parent's
     rename: Callable[[str], str]
     chained: bool  # a chain link after the first: it hangs on the previous link of the same side
+    flip: int = 1  # -1 on every other copy of a ring or a row
 
 
 def expand(build: BuildSpec) -> list[Placed]:
@@ -178,8 +186,9 @@ def expand(build: BuildSpec) -> list[Placed]:
     placed: list[Placed] = []
     specs: dict[str, BaseSpec | PartSpec] = {"base": build.base}
     locals_: dict[str, np.ndarray] = {"base": np.eye(3)}
+    flips: dict[str, int] = {"base": 1}
 
-    def place(part: PartSpec, parent_final: str, parent_spec: BaseSpec | PartSpec, rename) -> None:
+    def place(part: PartSpec, parent_final: str, parent_spec: BaseSpec | PartSpec, rename, flip: int = 1) -> None:
         previous = parent_final
         for copy in _copies(part, parent_spec, rename):
             parent_name = previous if copy.chained else parent_final
@@ -190,13 +199,13 @@ def expand(build: BuildSpec) -> list[Placed]:
                 raise ValueError(f"two parts end up named {name!r} after mirror/repeat; rename one of them")
             # Conjugating by the reflection keeps the frame a proper rotation; `local` reflects the contents.
             rot = parent_local @ copy.rot @ copy.reflect @ parent_local.T
-            placed.append(Placed(name, part, parent_name, parent_local @ copy.pos, rot, local))
-            specs[name], locals_[name] = part, local
+            placed.append(Placed(name, part, parent_name, parent_local @ copy.pos, rot, local, flip * copy.flip))
+            specs[name], locals_[name], flips[name] = part, local, flip * copy.flip
             previous = name
             if len(placed) > MAX_PARTS:
                 raise ValueError(f"the robot has more than {MAX_PARTS} parts after mirror and repeat; make it smaller")
             for child in children.get(part.name, []):
-                place(child, name, part, copy.rename)
+                place(child, name, part, copy.rename, flip * copy.flip)
 
     for part in children.get("base", []):
         place(part, "base", build.base, lambda n: n)
@@ -212,7 +221,7 @@ def expand(build: BuildSpec) -> list[Placed]:
             hint = f" Did you mean {', '.join(close)}?" if close else ""
             raise ValueError(f"part {part.name!r}: no parent named {part.parent!r}.{hint} Parents: {', '.join(known)}")
         for part in ready:
-            place(part, part.parent, specs[part.parent], lambda n: n)
+            place(part, part.parent, specs[part.parent], lambda n: n, flips[part.parent])
             pending.remove(part)
     return placed
 
@@ -227,29 +236,29 @@ def _copies(part: PartSpec, parent_spec: BaseSpec | PartSpec, rename) -> list[_C
         raise ValueError(f"part {part.name!r}: {exc}") from None
     rot = euler(part.rotate)
     rep = part.repeat
-    # (position, rotation, name suffix, chained) in the parent's author coordinates
-    placements: list[tuple[np.ndarray, np.ndarray, str, bool]] = []
+    # (position, rotation, name suffix, chained, flip) in the parent's author coordinates
+    placements: list[tuple[np.ndarray, np.ndarray, str, bool, int]] = []
     if rep is None:
-        placements.append((at, rot, "", False))
+        placements.append((at, rot, "", False, 1))
     elif rep.chain:
         # Later links use the same anchor, measured on the previous link (which has this part's shape).
-        placements += [(at if i == 0 else on_self, rot, f"_{i + 1}", i > 0) for i in range(rep.count)]
+        placements += [(at if i == 0 else on_self, rot, f"_{i + 1}", i > 0, 1) for i in range(rep.count)]
     elif rep.around is not None:
         axis = np.asarray(axis_vector(rep.around), float)
         step = math.radians(rep.step if rep.step is not None else 360.0 / rep.count)
         for i in range(rep.count):
             turn = axis_rotation(axis, i * step)
-            placements.append((turn @ at, turn @ rot, f"_{i + 1}", False))
+            placements.append((turn @ at, turn @ rot, f"_{i + 1}", False, (-1) ** i))
     else:
         along = np.asarray(axis_vector(rep.along), float)
-        placements += [(at + along * rep.spacing * i, rot, f"_{i + 1}", False) for i in range(rep.count)]
+        placements += [(at + along * rep.spacing * i, rot, f"_{i + 1}", False, (-1) ** i) for i in range(rep.count)]
 
     variants: list[tuple[np.ndarray, Callable[[str], str]]] = [(np.eye(3), lambda n: n)]
     if part.mirror:
         variants.append((MIRROR_Y, mirror_name))
     out = []
     for reflect, side in variants:
-        for pos, r, suffix, chained in placements:
+        for pos, r, suffix, chained, flip in placements:
 
             def named(n: str, side=side, suffix=suffix) -> str:
                 return rename(side(n) + suffix)
@@ -257,7 +266,7 @@ def _copies(part: PartSpec, parent_spec: BaseSpec | PartSpec, rename) -> list[_C
             if chained:  # the previous link already carries the reflection
                 out.append(_Copy(pos, r, np.eye(3), named, True))
             else:
-                out.append(_Copy(reflect @ pos, reflect @ r, reflect, named, False))
+                out.append(_Copy(reflect @ pos, reflect @ r, reflect, named, False, flip))
     return out
 
 
