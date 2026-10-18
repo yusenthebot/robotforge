@@ -191,8 +191,6 @@ def test_a_plate_goes_into_an_open_drawer_and_not_a_closed_one(pg):
 
 def test_a_rope_hangs_and_swings_and_a_cloth_drapes(pg):
     pg.add_object("rope", shape="rope", size=[0.5, 0.012], pos=[0.0, 0.0, 1.0])
-    pg.add_object("table", shape="table", size=[0.4, 0.4, 0.3], pos=[1.0, 0.0], color="brown")
-    pg.add_object("cloth", shape="cloth", size=[0.6, 0.6], pos=[1.0, 0.0, 0.45])
     ends = []
     for _ in range(40):
         pg.run_fast(lambda: False, 0.05)
@@ -200,6 +198,16 @@ def test_a_rope_hangs_and_swings_and_a_cloth_drapes(pg):
     xs = [e[0] for e in ends]
     assert max(xs) - min(xs) > 0.3  # it swings down from straight out, through below the hook
     assert min(e[2] for e in ends) < 1.0 - 0.4  # and hangs nearly its length below it
+    # and keeps swinging, ever less, without blowing up: lightly damped, its end cracked like a whip and the world
+    # went to NaN after 12.6 s
+    later = []
+    for _ in range(40):
+        pg.run_fast(lambda: False, 0.5)
+        later.append(pg.state()["mechanisms"]["rope"]["end"][0])
+    assert np.isfinite(pg.session.data.qpos).all()
+    assert 0.02 < max(later[-8:]) - min(later[-8:]) < max(xs) - min(xs)
+    pg.add_object("table", shape="table", size=[0.4, 0.4, 0.3], pos=[1.0, 0.0], color="brown")
+    pg.add_object("cloth", shape="cloth", size=[0.6, 0.6], pos=[1.0, 0.0, 0.45])
     pg.run_fast(lambda: False, 4.0)
     cloth = pg.state()["mechanisms"]["cloth"]
     low, high = cloth["height_m"]

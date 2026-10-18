@@ -73,6 +73,9 @@ SHAPES = (*MECHANISMS, *SOFT)
 CONTAINERS = ("drawer",)  # pick_and_place can put things in these
 DEFAULT_SPEED = 0.1  # m/s a conveyor runs at unless told otherwise
 VALVE_TURNS = 2.0  # turns from closed to fully open
+ROPE_SEGMENT = 0.04  # m, a rope's pieces
+ROPE_DAMPING = 0.002  # N*m*s/rad at each joint of a rope
+ROPE_ARMATURE = 3e-5  # kg*m^2 at each joint of a rope
 CLOTH_SPACING = 0.04  # m between a cloth's points, at least (see _cloth)
 CLOTH_POINTS = 16  # points along a side, at most: 256 points simulate twice as fast as real time
 CLOTH_BALL = 0.006  # m, the radius of a cloth's points where they touch things
@@ -499,12 +502,16 @@ def _rope(spec, name, size, rgba, base, quat, fixed) -> None:
     """A cable composite of capsules on ball joints. Fixed, it hangs from a hook at `base` (start: straight out
     along its own x, so it swings down); loose, it lies on the ground along x."""
     length, diameter = size
-    count = max(8, min(60, round(length / (2.5 * diameter))))
+    count = max(6, min(40, round(length / ROPE_SEGMENT)))
     color = " ".join(f"{c:.3f}" for c in rgba)
     initial = "none" if fixed else "free"
+    # Damped and given some inertia at its joints: with 3 cm pieces of 4 g, 0.00012 N*m*s of damping and almost no
+    # inertia, a hung rope's free end cracked like a whip, its joints spun at 2000 rad/s and the world blew up
+    # after 12.6 s. Now it swings with a period of 1.3 s (a hanging chain's is 1.27 s at small swings) and dies away
+    # over half a minute.
     cable = f"""
           <composite prefix="seg" type="cable" curve="s" count="{count + 1} 1 1" size="{length}" initial="{initial}">
-            <joint kind="main" damping="{2e-4 * length:.6f}" armature="1e-6"/>
+            <joint kind="main" damping="{ROPE_DAMPING}" armature="{ROPE_ARMATURE}"/>
             <geom type="capsule" size="{diameter / 2}" rgba="{color}" density="900" friction="1 0.01 0.001"
                   condim="3"/>
           </composite>"""
