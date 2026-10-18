@@ -31,7 +31,9 @@ def register(server: MCPServer, playground: Playground) -> None:
     @server.tool()
     async def add_part(robot: str, part: dict[str, Any]) -> str:
         """Add a part to a robot built from parts. The robot is rebuilt and checked; a part that overlaps another or
-        would make it fail is refused with an explanation and nothing changes.
+        would make it fail is refused with an explanation and nothing changes. A template or library robot is first
+        carried on a thin plate (its base, as the go2_arm design carries a Go2) and the part goes on the plate; it
+        stays the same kind of robot and walks or drives as before, its joints renamed <robot>/<template>/...
 
         Example (a head with a camera on top of the base):
         add_part(robot="dog", part={"name": "head", "at": "front", "joint": {"axis": "z", "range": [-60, 60]},

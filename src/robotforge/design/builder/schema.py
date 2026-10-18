@@ -11,7 +11,7 @@ import math
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from robotforge.design import components
 
@@ -112,8 +112,8 @@ class SensorSpec(_Strict):
         "center", description="anchor (center, end, top, front...) or [x, y, z]; touch defaults to end"
     )
     direction: str | list[float] = Field("forward", description="where a camera or rangefinder looks")
-    fov: float = Field(70.0, gt=5, lt=170, description="camera field of view, degrees")
-    rays: int = Field(16, ge=3, le=64, description="lidar: rangefinders spread in a ring")
+    fov: float = Field(70.0, description="camera field of view, degrees (5 to 170); only cameras have one")
+    rays: int = Field(16, ge=3, le=64, description="lidar: rays spread evenly all the way round, level")
     range: float = Field(4.0, gt=0.05, le=30.0, description="rangefinder / lidar: farthest distance measured, m")
 
     @field_validator("name")
@@ -125,6 +125,15 @@ class SensorSpec(_Strict):
     @classmethod
     def _at(cls, v: str | Vec3) -> str | Vec3:
         return v if isinstance(v, str) else _vec3(v, "sensor at")
+
+    @field_validator("fov")
+    @classmethod
+    def _fov(cls, v: float, info: ValidationInfo) -> float:
+        """Checked for cameras only. A lidar's rays always go all the way round: in the agent eval a lidar given
+        fov 360 was refused with a camera's limit (below 170), though no other sensor uses fov at all."""
+        if info.data.get("type") == "camera" and not 5 < v < 170:
+            raise ValueError(f"a camera's fov must be between 5 and 170 degrees, got {v:g}")
+        return v
 
     @field_validator("direction")
     @classmethod
@@ -310,7 +319,7 @@ class _Body(_Strict):
     def _check_size(self, shape: str) -> None:
         need = SIZE_COUNT[shape]
         if not self.size and need:
-            raise ValueError(f"size is required: a {shape} has size {SIZE_HINT[shape]} in meters")
+            raise ValueError(f"size is required: give one, a {shape} has size {SIZE_HINT[shape]} in meters")
         if len(self.size) != need or any(s <= 0 for s in self.size):
             raise ValueError(f"a {shape} has size {SIZE_HINT[shape]} in meters, got {self.size!r}")
         if any(s > 5.0 for s in self.size):

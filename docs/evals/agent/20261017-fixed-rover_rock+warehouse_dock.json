@@ -1,0 +1,136 @@
+{
+ "label": "fixed",
+ "commit": "c9b1579",
+ "started": "20261017-100021",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 2,
+  "tasks": 2,
+  "tool_calls": 13,
+  "failed_calls": 0,
+  "shell_commands": 2,
+  "sessions_with_problems": 0,
+  "input_tokens": 487015,
+  "uncached_input_tokens": 129639,
+  "output_tokens": 1197,
+  "mean_wall_seconds": 63.6
+ },
+ "tasks": [
+  {
+   "task": "rover_rock",
+   "lang": "zh",
+   "covers": [
+    "template or parts",
+    "objects",
+    "drive to a place"
+   ],
+   "prompt": "造一台火星车，再放一块大石头，把车开到石头旁边停下。",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a rover and a rock",
+     "ok": true,
+     "observed": "mars_rock_mission/mars_rover (rover), big_rock"
+    },
+    {
+     "name": "rock >= 1.0 m away at the start",
+     "ok": true,
+     "observed": "2.14 m"
+    },
+    {
+     "name": "ended within 0.5 m of it",
+     "ok": true,
+     "observed": "0.21 m from its outline (0.48 m from its center)"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 8,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 267182,
+   "cached_input_tokens": 204928,
+   "output_tokens": 664,
+   "reasoning_tokens": 9,
+   "wall_seconds": 60.6,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "new_world",
+    "list_templates",
+    "add_robot",
+    "open_viewer",
+    "add_object",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "已造好六轮火星车，并放置了一块大石头。车已前进约 1.9 米，在石头旁停下，车身保持直立。 [打开 3D 查看器](http://127.0.0.1:8738/)"
+  },
+  {
+   "task": "warehouse_dock",
+   "lang": "en",
+   "covers": [
+    "scene",
+    "go to a place",
+    "ramp"
+   ],
+   "prompt": "Load the warehouse scene and send a robot all the way across the warehouse to the loading dock.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot that drives or walks, and a dock",
+     "ok": true,
+     "observed": "rover (rover), dock"
+    },
+    {
+     "name": "started >= 3.0 m from the dock's top",
+     "ok": true,
+     "observed": "10.92 m"
+    },
+    {
+     "name": "ended on the dock's top",
+     "ok": true,
+     "observed": "at [5.97, -1.39], 0.00 m off"
+    },
+    {
+     "name": "upright at the end",
+     "ok": true,
+     "observed": "True"
+    }
+   ],
+   "tool_calls": 5,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 1,
+   "input_tokens": 219833,
+   "cached_input_tokens": 152448,
+   "output_tokens": 533,
+   "reasoning_tokens": 9,
+   "wall_seconds": 66.6,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "load_scene",
+    "open_viewer",
+    "observe",
+    "move",
+    "observe"
+   ],
+   "failures": [],
+   "problems": [
+    "codex_models_manager::manager: failed to refresh available models: request timed out"
+   ],
+   "final_message": "Loaded the warehouse and drove the rover 13.26 meters around the racks and up to the loading dock. It arrived upright and stopped within 8 cm of the target. [Open the viewer](http://127.0.0.1:8739/)"
+  }
+ ]
+}
