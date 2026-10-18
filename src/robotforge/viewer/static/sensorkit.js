@@ -6,7 +6,7 @@
 export const READS = {
   all: ["name", "robot", "type", "added", "uid", "body", "local_pos", "local_quat"],
   lidar: ["origin", "points", "range_m"],
-  lidar3d: ["origin", "points", "range_m", "channels"],
+  lidar3d: ["origin", "points", "range_m", "channels", "quat"],
   camera: ["mode", "fov_deg", "size", "range_m"],
   imu: ["accel_m_s2", "gyro_rad_s", "orientation_deg"],
   force_torque: ["force_n", "torque_nm"],
@@ -177,6 +177,37 @@ export function frustumCorners(fovDeg, aspect, length) {
 export function rayPicks(count, most) {
   if (count <= most) return Array.from({ length: count }, (_, i) => i);
   return Array.from({ length: most }, (_, i) => Math.floor((i * count) / most));
+}
+
+// Which of a 3D scan's hit points get a ray drawn: in each of `bins` slices of bearing round the sensor, the point
+// whose ray is nearest the sensor's own horizontal, so the rays read as one fan sweeping out to what it hits. An
+// even pick across a 16-ring scan was mostly short rays into the floor, faint and crossing each other. `flat` is the
+// points as [x, y, z, ...] (the first `count`), `origin` the sensor's place and `quat` its world orientation
+// [w, x, y, z].
+export function fanPicks(flat, origin, quat, bins, count = flat.length / 3) {
+  const [w, qx, qy, qz] = quat;
+  const best = new Array(bins).fill(-1);
+  const lowest = new Array(bins).fill(Infinity);
+  for (let i = 0; i < count; i++) {
+    const dx = flat[3 * i] - origin[0];
+    const dy = flat[3 * i + 1] - origin[1];
+    const dz = flat[3 * i + 2] - origin[2];
+    // into the sensor's frame: rotate by the inverse quaternion, v' = v + 2 q' x (q' x v + w v), with q' = -q
+    const tx = -qy * dz + qz * dy + w * dx;
+    const ty = -qz * dx + qx * dz + w * dy;
+    const tz = -qx * dy + qy * dx + w * dz;
+    const x = dx + 2 * (-qy * tz + qz * ty);
+    const y = dy + 2 * (-qz * tx + qx * tz);
+    const z = dz + 2 * (-qx * ty + qy * tx);
+    const slope = Math.abs(z) / Math.max(Math.hypot(x, y), 1e-9);
+    const turn = (Math.atan2(y, x) / (2 * Math.PI) + 1) % 1;
+    const k = Math.min(bins - 1, Math.floor(turn * bins));
+    if (slope < lowest[k]) {
+      lowest[k] = slope;
+      best[k] = i;
+    }
+  }
+  return best.filter((i) => i >= 0);
 }
 
 // A point pulled `back` meters toward the sensor, so its dot sits in front of the surface it lies on instead of
