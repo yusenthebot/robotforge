@@ -14,6 +14,7 @@ fighting it, standing or walking; see PUSH_DRIFT.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import dataclass
 
@@ -121,6 +122,12 @@ WALK_RECOVER_REST = 3.0  # ...then this long on the plain gait before another ca
 STAND_RECOVER_MAX = 6.0  # s
 STAND_RECOVER_REST = 3.0  # s
 
+# A leg joint whose range is a full turn or more (ANYmal C's knees: +-540 degrees) does not keep the knee bending one
+# way: reaching for a foot target near full stretch, the IK swung a knee through straight to bend the other way and the
+# robot spun round and fell (5 s into a 0.2 m/s walk). Such joints may turn this far either side of home while walking.
+UNLIMITED = 2 * math.pi  # rad
+BRANCH = math.pi / 2  # rad
+
 # (name, [hip, thigh, knee] joint ids, foot body id, foot point in that body's frame, phase offset)
 LegSpec = tuple[str, list[int], int, np.ndarray, float]
 
@@ -185,8 +192,8 @@ class QuadrupedGait:
             missing = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in joints if j not in joint_to_act]
             if missing:
                 raise ValueError(f"robot {robot!r} has no actuator on {', '.join(missing)}, so it cannot walk")
-            chain = Chain.from_joints(model, joints, body, point)
-            q0 = base[chain.qpos_adr].copy()
+            q0 = base[model.jnt_qposadr[joints]].copy()
+            chain = _keep_branch(Chain.from_joints(model, joints, body, point), q0)
             foot = self.ik.point(chain, q0)
             hip = self.ik.data.xpos[model.jnt_bodyid[joints[0]]].copy()
             acts = np.array([joint_to_act[j] for j in joints])
@@ -548,6 +555,16 @@ def _motor_drive(model: mujoco.MjModel, actuators: np.ndarray) -> MotorDrive | N
     # Explicit damping is stable only while kd * dt stays well below the inertia it acts on.
     kd = np.minimum(2.0 * MOTOR_DAMPING_RATIO * np.sqrt(kp * inertia), 0.5 * inertia / model.opt.timestep)
     return MotorDrive(actuators, model.jnt_qposadr[joints], dof, kp, kd, gear, lower.copy(), upper.copy())
+
+
+def _keep_branch(chain: Chain, home: np.ndarray) -> Chain:
+    """The chain with each joint of a full turn or more of range kept within BRANCH of its home angle."""
+    wide = chain.upper - chain.lower >= UNLIMITED - 1e-9
+    if not wide.any():
+        return chain
+    lower = np.where(wide, np.maximum(chain.lower, home - BRANCH), chain.lower)
+    upper = np.where(wide, np.minimum(chain.upper, home + BRANCH), chain.upper)
+    return dataclasses.replace(chain, lower=lower, upper=upper)
 
 
 def _apply_pd(drive: MotorDrive, data: mujoco.MjData, targets: np.ndarray) -> None:

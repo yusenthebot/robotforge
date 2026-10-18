@@ -278,10 +278,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_library() -> str:
-        """List real robots that add_robot(library=...) loads: Unitree Go2 and other robot dogs (move and the keyboard
-        walk them), arms like the Franka Panda and AgileX PiPER (move_arm and pick_and_place work) and the Unitree
-        G1 humanoid (walks with a learned policy). The first add_robot of each downloads it from MuJoCo Menagerie
-        (size in download_mb, usually 5-30 s) and caches it."""
+        """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
+        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work),
+        humanoids (G1, Robotis OP3, Booster T1) and a gripper to mount on an arm (Robotiq 2F-85). The first add_robot
+        of each downloads it from MuJoCo Menagerie (size in download_mb, usually 5-30 s) and caches it."""
         from robotforge.design import library
 
         with _tool_errors():
@@ -311,10 +311,17 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
         list_templates), which is saved as its parts so add_part / update_part change it.
+
+        mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
+        pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
+        gripper. A walker carries what list_library's "carries" says. Each mount: library or template, optional name,
+        at ("top" by default, "tool" for an arm's flange, or a body name), shift [x, y, z] in meters and rotate [roll,
+        pitch, yaw] in degrees.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -335,28 +342,33 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             parts = build
             if design is not None:  # the robots it mounts download first, like a build's
                 parts = design_build(design, template=template, file=file, library=library, build=build, params=params)
-            for wanted in [library, *build_edit.libraries_in(parts)]:
+            for wanted in [library, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
-            source = {"library": library, "build": build, "design": design}
+            source = {"library": library, "build": build, "design": design, "mounts": mounts}
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
     @server.tool()
-    def update_robot(
+    async def update_robot(
+        ctx: Context,
         name: str,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part)."""
+        keeps the parts (add_part / update_part change one part). mounts replaces the robots it carries (see
+        add_robot; [] takes them all off)."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw, build))
+            for wanted in _mounted_libraries(mounts):
+                await _download_with_progress(wanted, ctx)
+            return _json(await asyncio.to_thread(playground.update_robot, name, params, pos, yaw, build, mounts))
 
     @server.tool()
     def add_object(
@@ -567,6 +579,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     lessons.register(server)
     policy_tools.register(server)
 
+    async def carrier_stands(robot: str) -> dict[str, Any]:
+        """An arm riding on a moving robot works from it standing still: stop the robot and wait until it stands."""
+        stop = playground.behaviors.stop_carrier(robot)
+        if stop is None:
+            return {}
+        waited = await run_until(stop.still, stop.seconds)
+        return {"carrier_stopped": f"{stop.robot} stopped first and stood still after {waited['sim_seconds']:.1f} s"}
+
     @server.tool()
     def stop(robot: str) -> str:
         """Stop a robot's current behavior (a walking robot settles into a stand; a quadruped or hexapod keeps its
@@ -590,12 +610,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
         """Move an arm's gripper to [x, y, z] (meters, world frame) pointing down, optionally opening or closing the
         gripper on the way. Fails with the distance and reach if the point cannot be reached. robot is an arm, or a
-        robot carrying one ("rover", or "rover/arm" for the mounted arm)."""
+        robot carrying one ("rover", or "rover/arm" for the mounted arm); a robot carrying it stops first."""
         with _tool_errors():
-            arm = playground.behaviors.move_arm(playground.behaviors.resolve(robot, arm=True), position, gripper)
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            arm = playground.behaviors.move_arm(robot, position, gripper)
             run = await run_until(lambda: arm.done, 20.0)
             tcp = playground.session.data.site_xpos[arm.site]
-            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run})
+            return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
 
     @server.tool()
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
@@ -609,11 +631,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def pick_and_place(robot: str, object: str, target: str | list[float]) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box) or a
         floor position [x, y]. Plans the motion, checks reach first, runs it and reports whether the object ended up
-        there."""
+        there. A robot carrying the arm (a dog walking to the object) stops first."""
         with _tool_errors():
-            arm, info = playground.behaviors.pick_and_place(
-                playground.behaviors.resolve(robot, arm=True), object, target
-            )
+            robot = playground.behaviors.resolve(robot, arm=True)
+            stopped = await carrier_stands(robot)
+            arm, info = playground.behaviors.pick_and_place(robot, object, target)
             object = info["object"]  # as the world spells it
             run = await run_until(lambda: arm.done, 40.0)
             settle = await run_until(lambda: False, 0.5)
@@ -625,6 +647,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     "target": target,
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
                     "shown_live": run["shown_live"],
+                    **stopped,
                 }
             )
 
@@ -795,6 +818,11 @@ PROGRESS_INTERVAL = 1.0  # s between progress notifications during a download
 # Downloads in flight, by library robot: a call retried after a client timeout joins the running
 # download instead of starting a second one.
 _downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
+
+
+def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
+    """The library robots a mounts list names, to download before the world is compiled."""
+    return [m["library"] for m in mounts or [] if isinstance(m, dict) and isinstance(m.get("library"), str)]
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:

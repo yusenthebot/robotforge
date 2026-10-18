@@ -372,6 +372,62 @@ def test_an_arm_whose_shapes_overlap_at_home_still_plans():
     assert not arm._collides(arm.home)  # ...which is the model, not a collision
 
 
+ENDLESS_ARM = """
+<mujoco>
+  <compiler angle="radian"/>
+  <worldbody>
+    <body name="arm/base">
+      <geom type="cylinder" size="0.04 0.05"/>
+      <body name="arm/link1" pos="0 0 0.06">
+        <joint name="arm/j1" axis="0 0 1"/>
+        <geom type="capsule" fromto="0 0 0 0 0 0.2" size="0.02"/>
+        <body name="arm/link2" pos="0 0 0.2">
+          <joint name="arm/j2" axis="0 1 0" range="-2 2"/>
+          <geom type="capsule" fromto="0 0 0 0.25 0 0" size="0.015"/>
+          <body name="arm/finger" pos="0.25 0 0">
+            <joint name="arm/finger" type="slide" axis="0 0 1" range="-0.03 0"/>
+            <geom type="box" size="0.01 0.01 0.01"/>
+            <site name="arm/tcp" pos="0 0 -0.05"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="arm/a1" joint="arm/j1" kp="20"/>
+    <position name="arm/a2" joint="arm/j2" kp="20"/>
+    <position name="arm/gripper" joint="arm/finger" kp="20" ctrlrange="-0.03 0"/>
+  </actuator>
+</mujoco>
+"""
+
+
+def test_an_endless_joint_turns_half_a_turn_either_way_from_home():
+    """Regression: the IK kept a joint without end stops in -180..180 degrees. A Kinova Gen3 starts with one at 180,
+    pinned at that edge, and move_arm left its gripper 34 cm from the target, jammed against its own base."""
+    import mujoco
+
+    from robotforge.behaviors.arm import ArmMotion
+
+    model = mujoco.MjModel.from_xml_string(ENDLESS_ARM)
+    home = model.qpos0.copy()
+    home[0] = math.pi
+    arm = ArmMotion(model, "arm", home)
+    assert arm.chain.lower[0] == pytest.approx(0.0) and arm.chain.upper[0] == pytest.approx(2 * math.pi)
+    assert (arm.chain.lower[1], arm.chain.upper[1]) == pytest.approx((-2, 2))  # end stops stay where they are
+
+
+def test_a_gripper_closes_at_the_bottom_of_its_range_even_below_zero():
+    """Regression: grippers closed at 0, which is wide open for a range of -0.03..0 (a Unitree Z1's is -1.52..0)."""
+    import mujoco
+
+    from robotforge.behaviors.arm import ArmMotion
+
+    model = mujoco.MjModel.from_xml_string(ENDLESS_ARM)
+    arm = ArmMotion(model, "arm", model.qpos0.copy())
+    assert (arm._grip("open"), arm._grip("close")) == (0.0, -0.03)
+
+
 def test_robots_can_be_listed_while_the_policy_module_is_still_importing(pg, monkeypatch):
     """Regression: a lesson starting the G1 imports the policy module on a worker thread; mid-import the module
     is in sys.modules without PolicyWalker, and listing robots then raised and killed the viewer's stream."""
@@ -400,3 +456,23 @@ def test_a_robot_named_exactly_is_found_without_reading_world_yaml(pg, monkeypat
     assert pg.behaviors.stop("dog")["robot"] == "dog"
     with pytest.raises(AssertionError, match="world.yaml was read"):
         pg.behaviors.pose("Dog")
+
+
+def test_a_leg_joint_without_end_stops_keeps_its_knee_bending_one_way():
+    """Regression: ANYmal C's knees turn +-540 degrees; reaching for a foot target near full stretch, the IK
+    swung one through straight to bend the other way and the robot spun round and fell."""
+    import numpy as np
+
+    from robotforge.behaviors import quadruped
+
+    chain = quadruped.Chain(
+        qpos_adr=np.arange(3),
+        dof_adr=np.arange(3),
+        lower=np.array([-0.7, -9.4, -9.4]),
+        upper=np.array([0.5, 9.4, 9.4]),
+        body=1,
+        local_point=np.zeros(3),
+    )
+    kept = quadruped._keep_branch(chain, np.array([0.0, 0.8, -1.4]))
+    np.testing.assert_allclose(kept.lower, [-0.7, 0.8 - math.pi / 2, -1.4 - math.pi / 2])
+    np.testing.assert_allclose(kept.upper, [0.5, 0.8 + math.pi / 2, -1.4 + math.pi / 2])

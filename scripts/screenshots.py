@@ -625,6 +625,61 @@ GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float,
 ]
 
 
+def _look(eye: tuple[float, float, float], target: tuple[float, float, float]) -> str:
+    """Page script: a fixed camera, eye and target in world meters (for robots bolted to the floor too)."""
+    return f"window.__robotforge.lookAt({json.dumps(list(eye))}, {json.dumps(list(target))});"
+
+
+def _new_walkers(pg: Any) -> None:
+    """The library's newer dogs and humanoids side by side."""
+    for i, name in enumerate(["anymal_c", "barkour", "op3", "t1"]):
+        pg.add_robot(name, library=name, pos=[0.0, 1.95 - 1.3 * i])
+
+
+def _new_arms(pg: Any) -> None:
+    """The library's newer arms, the UR5e with a Robotiq gripper on its flange."""
+    pg.add_robot("z1", library="z1", pos=[0.0, 1.6])
+    pg.add_robot("ur5e", library="ur5e", pos=[0.0, 0.55], mounts=[{"library": "robotiq_2f85"}])
+    pg.add_robot("xarm7", library="xarm7", pos=[0.0, -0.45])
+    pg.add_robot("aloha", library="aloha", pos=[0.0, -1.6])
+
+
+def _dogs_with_arms(pg: Any) -> None:
+    """A Go2 carrying an AgileX PiPER and a Spot carrying a Unitree Z1, by a cube and a bin."""
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.5], mounts=[{"library": "piper"}])
+    pg.add_robot("spot", library="spot", pos=[0.0, -0.7], mounts=[{"library": "z1"}])
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.6, 0.8], color="red")
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[1.6, 0.15], color="blue")
+
+
+def _more_carriers(pg: Any) -> None:
+    """Robots carrying robots beyond the Go2: an ANYmal C and a Barkour with PiPERs, a Booster T1 with an SO-100 on its
+    head, and a UR5e wearing a Robotiq gripper."""
+    pg.add_robot("anymal", library="anymal_c", pos=[0.0, 1.5], mounts=[{"library": "piper"}])
+    pg.add_robot("barkour", library="barkour", pos=[0.0, 0.35], mounts=[{"library": "piper"}])
+    pg.add_robot("t1", library="t1", pos=[0.0, -0.6], mounts=[{"library": "so_arm100"}])
+    pg.add_robot("ur5e", library="ur5e", pos=[0.0, -1.6], mounts=[{"library": "robotiq_2f85"}])
+
+
+def _barkour_so100(pg: Any) -> None:
+    """A Barkour carrying an SO-100: with no flat spot on its back, the arm's base rests on the handle."""
+    pg.add_robot("barkour", library="barkour", mounts=[{"library": "so_arm100"}])
+
+
+def _complex_splices(pg: Any) -> None:
+    """Three robots spliced from three or more: an ANYmal C carrying a UR5e that wears a Robotiq gripper, a Go2 with a
+    PiPER and an SO-100 side by side, and a Spot with a Z1 and a PiPER."""
+    pg.add_robot(
+        "anymal", library="anymal_c", pos=[0.0, 1.6], mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}]
+    )
+    pg.add_robot(
+        "go2", library="go2", pos=[0.0, 0.2], mounts=[{"library": "piper"}, {"name": "arm2", "library": "so_arm100"}]
+    )
+    pg.add_robot(
+        "spot", library="spot", pos=[0.0, -1.2], mounts=[{"library": "z1"}, {"name": "arm2", "library": "piper"}]
+    )
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -733,6 +788,18 @@ SHOTS = [
         page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
         settle=3.0,
     ),
+    Shot("library_new_walkers", _new_walkers, page=_look((4.2, -1.3, 1.5), (0.0, 0.0, 0.4)), settle=3.0),
+    Shot("library_new_arms", _new_arms, page=_look((3.4, -1.0, 1.6), (0.0, 0.0, 0.25)), settle=3.0),
+    Shot(
+        "splice_dogs_with_arms",
+        _dogs_with_arms,
+        viewer=[_walk("go2", 0.3), _walk("spot", 0.3), {"wait": 3.0}, _walk("go2", 0.0), _walk("spot", 0.0)],
+        page=_look((2.6, -2.3, 1.3), (1.0, 0.0, 0.35)),
+        settle=2.0,
+    ),
+    Shot("splice_more_carriers", _more_carriers, page=_look((3.6, -1.2, 1.5), (0.0, 0.0, 0.45)), settle=3.0),
+    Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
+    Shot("splice_barkour_so100", _barkour_so100, page=_look_at(["barkour"], (0.75, -0.6, 0.35)), settle=3.0),
 ]
 
 

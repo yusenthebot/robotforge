@@ -16,14 +16,23 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from robotforge import modes, wording
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
-from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
+from robotforge.design.world import (
+    CompiledWorld,
+    Floor,
+    MountEntry,
+    ObjectEntry,
+    RobotEntry,
+    World,
+    spawn_height,
+    tidy_name,
+)
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry, finder, vision
 from robotforge.sim.actuators import is_position_servo
@@ -276,6 +285,7 @@ class Playground:
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
@@ -291,6 +301,7 @@ class Playground:
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw,
+                mounts=mounts or [],
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
@@ -316,20 +327,24 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        mounts: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
+        mounted = None if mounts is None else _mounts(mounts)
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
-            if not params and pos is None and yaw is None and build is None:
-                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
+            if not params and pos is None and yaw is None and build is None and mounts is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw, build or mounts")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
                 robot.pos = pos
             if yaw is not None:
                 robot.yaw = yaw
+            if mounted is not None:  # the whole list: [] takes every mounted robot off
+                robot.mounts = mounted
             if build is not None:
                 entry = _built(robot)
                 if not (entry.build or {}).get("parts") or "parts" in build:
@@ -910,6 +925,18 @@ def _renamed(result: dict[str, Any], given: str, name: str) -> dict[str, Any]:
     if given != name:
         result["notes"] = [*result.get("notes", []), f"{given!r} is saved as {name!r}: names are lowercase with _"]
     return result
+
+
+class _Mounts(BaseModel):
+    mounts: list[MountEntry]
+
+
+def _mounts(mounts: list[Any]) -> list[MountEntry]:
+    """A mounts list checked as add_robot checks it, so that errors say where: "mounts[0]: ..."."""
+    try:
+        return _Mounts.model_validate({"mounts": mounts}).mounts
+    except ValidationError as exc:
+        raise PlaygroundError(_validation_message(exc)) from exc
 
 
 def _validation_message(exc: ValidationError) -> str:

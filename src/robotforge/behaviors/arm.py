@@ -1,22 +1,25 @@
 """Arm motions: move the gripper to points in space and pick-and-place objects.
 
 A motion is a queue of Cartesian waypoints. Each control tick interpolates the
-tool point along a smooth path and solves IK with the gripper pointing down.
+tool point along a smooth path and solves IK with the gripper pointing down
+(leaning a little, high above a grasp or a place, where a short arm cannot point down; see TILTS).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.sim.actuators import drives_joint, is_position_servo
-from robotforge.sim.geometry import collides
+from robotforge.sim.geometry import collides, highest_point, ray
 
 DOWN = np.array([0.0, 0.0, -1.0])
 SPEED = 0.18  # m/s tool speed
@@ -28,7 +31,7 @@ JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wr
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 UPRIGHT = 0.9  # an arm's first hinge turns it toward a target when its axis is this close to vertical (cosine)
-FAR_FROM_DOWN = 0.7  # cosine: a tool pointing more than 45 degrees off down moves joint by joint to a goal
+FAR_FROM_DOWN = 0.7  # cosine: a tool pointing more than 45 degrees off where it should moves joint by joint to a goal
 CARRY_CHECKS = 7  # points checked along the way across with a load, between the two points above pick and place
 CARRY_RAISE = 0.05  # m: each try carries the load this much higher
 CARRY_RAISES = 8  # tries before giving up and carrying at the first height (up to 0.4 m higher)
@@ -37,15 +40,55 @@ LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying th
 # behind its base, where its first joint cannot point (14 degrees each side on a Panda), twists the rest of the way
 JOINT_SLACK = 0.35
 PATH_SAMPLES = 33  # points a path around the base is measured at: 32 chords of at most 11 degrees in a full turn
+FOLLOW_CHECKS = 10  # poses along a move that turns the jaws checked for the arm running into itself or its carrier
+REPOSE_STRAY = 0.05  # m the tool may wander while the arm changes pose, joint by joint, with a load in the gripper
+# Short arms cannot point the gripper straight down everywhere: a PiPER's wrist (joint 5, +-70 degrees) cannot above
+# about 13 cm at 30 cm out, nor an SO-100's above about 9 cm, so neither could lift a cube over an 8 cm bin's rim.
+# Where the gripper only passes by, high above a grasp or a place and on the way across between them, it may lean
+# this far (rad: 20, 35, 50 degrees) away from the base or toward it. Grasping and placing still point down.
+TILTS = (0.35, 0.6, 0.9)
+# An arm riding on a robot carries things over that robot's body: a PiPER on a Go2 swept a cube into the dog's head.
+# So the carry clears the robot's shapes under its way: the sector the arm sweeps about its base (its links too, from
+# the base out to the tool) from above the grasp to above the place, the way round the carry goes, widened by the
+# object, the jaws around it (CARRY_MARGIN, m) and ARC_MARGIN (rad) at either end, looked at with rays every
+# CARRY_STEP (m). Only what lies under it counts: the highest shape anywhere on the carrier made a rover with a 25 cm
+# mast behind its arm refuse picks in front of it; the tool's ring alone let a UR5e on ANYmal sweep its forearm
+# through the dog's legs. The load also clears the shapes under the tool all the way (LOAD_CLEARANCE), the arm's own
+# base among them, and every robot's: a template arm bolted to the floor carries over its own stand.
+CARRY_MARGIN = 0.04
+ARC_MARGIN = 0.25
+CARRY_STEP = 0.01
+# Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
+# its jaws came down 35 degrees across a cube, the fixed jaw on the cube's edge, and pushed it away. A box is grasped
+# with the jaws closing square to its faces (on the face nearest to where they close now), where the arm can: within
+# SQUARE_TOL (rad) of that.
+SQUARE_TOL = 0.05
+# m the arm keeps between its own links where its jaws turn square to a box: the wrist turns the jaws by bending
+# toward the forearm, and lagging its servos a mobile Panda's hand came 1 mm into its forearm, stuck there and closed
+# 4 cm beside the cube, from a pose its IK took to be 1 mm clear.
+SELF_CLEARANCE = 0.005
+# cosine: an arm squares its jaws only with a last joint this close to turning about the tool's axis (a wrist roll,
+# as every library arm has). Bending the whole arm to turn them instead, an eight-joint tentacle could not keep up with
+# the turn on its way down and its hand came down 5 cm beside the cube.
+ROLL = 0.99
 
 
 class OutOfReach(ValueError):
     """Key points of a pick-and-place the tool cannot reach: `bad` names them ("object", "above place", ...);
-    `points` has every key point by name, reached or not, for advice on where to move things."""
+    `points` has every key point by name, reached or not, for advice on where to move things. `over` is (the body, its
+    top in m) of the robot carrying the arm that the carry has to clear, when only the points high above the object
+    and the place are out of reach, at the height that clears it: that height is then why."""
 
-    def __init__(self, robot: str, bad: list[str], points: dict[str, np.ndarray] | None = None):
+    def __init__(
+        self,
+        robot: str,
+        bad: list[str],
+        points: dict[str, np.ndarray] | None = None,
+        over: tuple[str, float] | None = None,
+    ):
         self.bad = bad
         self.points = points or {}
+        self.over = over
         super().__init__(f"{robot} cannot reach the {' and the '.join(bad)} with its gripper pointing down")
 
 
@@ -56,6 +99,18 @@ class DownReach(NamedTuple):
     out: float  # m from the base to the point, across the floor
     reach: float  # m the arm reaches out at the point's height; 0 at a height it cannot get to
     longest: float  # m it reaches out at the height of its base
+
+
+class _Carry(NamedTuple):
+    """How a pick-and-place carries its load across (see ArmMotion._carry_height): the height (None when no way
+    works), the way round the base (rad; None for an arm that moves in straight lines or a carry made joint by
+    joint), the joint angles a carry made joint by joint goes to, and (the body, its top in m) of the robot carrying
+    the arm that every way had to be lifted over, out of the gripper's reach, when that is why none works."""
+
+    z: float | None
+    turn: float | None = None
+    joints: np.ndarray | None = None
+    over: tuple[str, float] | None = None
 
 
 @dataclass
@@ -69,6 +124,8 @@ class Waypoint:
     # the base joint can go when the move starts
     turn: float | None = None
     load: float | None = None  # m, half the height of the load a carry takes across, kept clear of the robot under it
+    tilt: bool = False  # the gripper may lean there (see TILTS)
+    rotation: np.ndarray | None = None  # the tool body's whole orientation there, jaws turned too (see SQUARE_TOL)
 
 
 class ArmMotion:
@@ -86,7 +143,8 @@ class ArmMotion:
         joints = arm_joints(model, site)
         if not joints:
             raise ValueError(f"{robot!r} has a tool point but no powered joints that move it")
-        self.chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
+        chain = Chain.from_joints(model, joints, tool_body, model.site_pos[site].copy())
+        self.chain = _around_home(model, chain, joints, home_qpos)
         self.joints = joints
         self.actuators = np.array([joint_to_act[j] for j in joints])
         # The tool points along the tcp site's +z (for the templates that is the hand's +z).
@@ -94,7 +152,10 @@ class ArmMotion:
         mujoco.mju_quat2Mat(rot, model.site_quat[site])
         self.tool_axis = rot.reshape(3, 3)[:, 2].copy()
         self.gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
-        self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
+        # A gripper opens at the top of its control range and closes at the bottom, which is not always 0 (a Unitree
+        # Z1's is -1.52 rad).
+        grip_range = model.actuator_ctrlrange[self.gripper] if self.gripper >= 0 else np.zeros(2)
+        self.gripper_open, self.gripper_closed = float(grip_range[1]), float(grip_range[0])
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -112,6 +173,12 @@ class ArmMotion:
         first = int(model.jnt_bodyid[joints[0]])
         self._moving = {b for b in range(model.nbody) if _descends_from(model, b, first)}
         self._robot_root = int(model.body_rootid[first])
+        # An arm riding on a robot that moves freely (a dog, a rover) carries things over that robot (see CARRY_MARGIN).
+        root_joints = range(
+            model.body_jntadr[self._robot_root],
+            model.body_jntadr[self._robot_root] + model.body_jntnum[self._robot_root],
+        )
+        self._rides = any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for j in root_joints)
         # Shapes that already overlap in the home pose (coarse collision shapes around a joint, common in
         # imported models) are part of the model, not a collision to steer around. Worked out once the
         # moving bodies are known: before that it crashed on any overlap and was then thrown away.
@@ -120,10 +187,21 @@ class ArmMotion:
         self._base_parent = int(model.body_parentid[self.base_body])
         self.ik.point(self.chain, self.q)
         self._read_base(self.ik.data)
+        self.closing = _closing(model, self.ik.data, self.gripper, self.chain.body, self.tool_axis)
+        # Whether the arm's last joint turns the jaws about the tool's axis (a wrist roll), so that squaring them to a
+        # box turns that joint rather than bending the arm (see SQUARE_TOL).
+        last = self.joints[-1]
+        tool = self.ik.data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
+        self._rolls = bool(
+            model.jnt_type[last] == mujoco.mjtJoint.mjJNT_HINGE and abs(float(self.ik.data.xaxis[last] @ tool)) > ROLL
+        )
+        self._self_pairs: list[tuple[int, int]] | None = None  # see _clear_of_itself, worked out when first needed
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._axis0 = DOWN  # where the tool pointed when the current move began
+        self._axis1 = DOWN  # where it points at the end of the current move
+        self._rot0 = np.eye(3)  # the tool body's orientation when the current move began (see Waypoint.rotation)
         self._turn: float | None = None  # how far the current move turns about the base, rad
         self._reposed: Waypoint | None = None  # the move the arm last changed its pose for (once is enough)
         self.current_label = "idle"
@@ -193,8 +271,33 @@ class ArmMotion:
     def reach_error(self, target: np.ndarray) -> float:
         return self._solve(target)[1]
 
-    def _solve(self, target: np.ndarray) -> tuple[np.ndarray, float, bool]:
-        """Joint values for the tool at `target` pointing down: (q, position error, needed a restart).
+    def _lean_error(self, target: np.ndarray) -> float:
+        """How far the tool stays from `target` where it may lean there (see TILTS)."""
+        return self._solve_tilting(target)[1]
+
+    def _solve_tilting(self, target: np.ndarray) -> tuple[np.ndarray, float, bool, np.ndarray]:
+        """As _solve, but where the tool cannot point down there it may lean (see TILTS): (q, position error, needed a
+        restart, the way the tool points)."""
+        q, err, restarted = self._solve(target)
+        if err <= REACH_TOL:
+            return q, err, restarted, DOWN
+        out = np.asarray(target, float)[:2] - self.base_xy
+        if np.linalg.norm(out) < 1e-3:
+            out = np.array([np.cos(self.base_yaw), np.sin(self.base_yaw)])
+        out = np.array([*(out / np.linalg.norm(out)), 0.0])
+        for angle in TILTS:
+            for side in (1.0, -1.0):  # leaning out, as an arm reaching high does, then in
+                axis = np.cos(angle) * DOWN + side * np.sin(angle) * out
+                q2, err2, restarted2 = self._solve(target, axis)
+                if err2 <= REACH_TOL:
+                    return q2, err2, restarted2, axis
+        return q, err, restarted, DOWN
+
+    def _solve(
+        self, target: np.ndarray, down: np.ndarray = DOWN, rotation: np.ndarray | None = None
+    ) -> tuple[np.ndarray, float, bool]:
+        """Joint values for the tool at `target` pointing down (or along `down`, or with the tool body turned to
+        `rotation`): (q, position error, needed a restart; an orientation not reached counts as out of reach).
 
         Damped least squares from the current pose can stall on a joint limit or in the wrong elbow
         branch for points the arm reaches easily some other way, so a stuck solve tries again from
@@ -202,10 +305,19 @@ class ArmMotion:
         """
         seed = self._seed(target)
         q, err = self.q, np.inf
+        aim = {"rotation": rotation} if rotation is not None else {"axis": (self.tool_axis, down)}
+
+        def solve(start: np.ndarray) -> tuple[np.ndarray, float]:
+            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, **aim)
+            q2 = self._unwound(q2)
+            if rotation is not None and (self._turned_from(q2, rotation) > SQUARE_TOL or not self._clear_of_itself(q2)):
+                err2 = max(err2, REACH_TOL * 1.01)
+            return q2, err2
+
         # From the pose the arm is in, then with its base turned toward the target: the first keeps an arm
         # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
         for start in (self.q, seed):
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            q2, err2 = solve(start)
             if err2 <= REACH_TOL and not self._collides(q2):
                 return q2, err2, False
             if err2 < err:
@@ -216,7 +328,7 @@ class ArmMotion:
             start = rng.uniform(self.chain.lower, self.chain.upper)
             if self.yaw is not None:
                 start[self.yaw] = seed[self.yaw]
-            q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
+            q2, err2 = solve(start)
             if err2 <= REACH_TOL and not self._collides(q2):
                 travel = float(np.max(np.abs(q2 - self.q)))
                 if best is None or travel < best[2]:  # of the answers that work, the one nearest to now
@@ -226,6 +338,90 @@ class ArmMotion:
         if best is not None:
             return best[0], best[1], True
         return q, max(err, REACH_TOL * 1.01), True  # nothing collision-free: as good as out of reach
+
+    def _clear_of_itself(self, q: np.ndarray) -> bool:
+        """Whether the arm at `q` keeps SELF_CLEARANCE between links that a joint of it moves apart (see
+        SELF_CLEARANCE), leaving out pairs already that close at home."""
+        if self._self_pairs is None:
+            self._self_pairs = self._link_pairs()
+        if not self._self_pairs:
+            return True
+        m, d = self.ik.model, self.ik.data
+        self.ik.point(self.chain, q)
+        fromto = np.zeros(6)
+        return all(
+            mujoco.mj_geomDistance(m, d, a, b, SELF_CLEARANCE, fromto) >= SELF_CLEARANCE for a, b in self._self_pairs
+        )
+
+    def _link_pairs(self) -> list[tuple[int, int]]:
+        """Pairs of the arm's solid shapes that its own joints move toward each other: on bodies neither the same nor
+        parent and child nor moved by the same last joint of the arm (a hand and its fingers), that can touch, and that
+        are farther than SELF_CLEARANCE apart at home."""
+        m = self.ik.model
+        moved_by = {}  # body -> how many of the arm's joints lie above it
+        joint_bodies = [int(m.jnt_bodyid[j]) for j in self.joints]
+        for b in self._moving:
+            moved_by[b] = sum(_descends_from(m, b, jb) for jb in joint_bodies)
+        excluded = {int(sig) for sig in m.exclude_signature}
+        geoms = [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) in self._moving and collides(m, g)]
+        pairs = []
+        for a, b in itertools.combinations(geoms, 2):
+            ba, bb = int(m.geom_bodyid[a]), int(m.geom_bodyid[b])
+            if (
+                ba == bb
+                or int(m.body_parentid[ba]) == bb
+                or int(m.body_parentid[bb]) == ba
+                or moved_by[ba] == moved_by[bb]
+            ):
+                continue
+            if not (m.geom_contype[a] & m.geom_conaffinity[b] or m.geom_contype[b] & m.geom_conaffinity[a]):
+                continue
+            if (ba << 16) + bb in excluded or (bb << 16) + ba in excluded:  # an <exclude> in the model
+                continue
+            pairs.append((a, b))
+        self.ik.point(self.chain, self.home)
+        fromto = np.zeros(6)
+        d = self.ik.data
+        return [
+            (a, b) for a, b in pairs if mujoco.mj_geomDistance(m, d, a, b, SELF_CLEARANCE, fromto) >= SELF_CLEARANCE
+        ]
+
+    def _turned_from(self, q: np.ndarray, rotation: np.ndarray) -> float:
+        """How far (rad) the tool body at `q` is turned from `rotation`."""
+        self.ik.point(self.chain, q)
+        have = self.ik.data.xmat[self.chain.body].reshape(3, 3)
+        return float(np.arccos(np.clip((np.trace(have.T @ rotation) - 1) / 2, -1.0, 1.0)))
+
+    def _square(self, faces: np.ndarray | None, at: np.ndarray) -> np.ndarray | None:
+        """The tool body's orientation for grasping a box at `at` with its jaws closing square to its faces
+        (`faces`: two horizontal unit normals of its sides; see SQUARE_TOL), on the face nearest to where they close
+        now; None for an arm whose jaws' closing is not known, that has no wrist roll to turn them (see ROLL), or that
+        cannot grasp so there."""
+        if faces is None or self.closing is None or not self._rolls:
+            return None
+        self.ik.point(self.chain, self.q)
+        now = self.ik.data.xmat[self.chain.body].reshape(3, 3) @ self.closing
+        local = np.column_stack([self.tool_axis, self.closing, np.cross(self.tool_axis, self.closing)])
+        options = [sign * f for f in faces for sign in (1.0, -1.0)]  # the nearest turn first; the wrist may not go so
+        for want in sorted(options, key=lambda f: -float(f[:2] @ now[:2])):
+            side = np.array([want[0], want[1], 0.0]) / np.linalg.norm(want[:2])
+            rotation = np.column_stack([DOWN, side, np.cross(DOWN, side)]) @ local.T
+            if self._solve(at, rotation=rotation)[1] <= REACH_TOL:
+                return rotation
+        return None
+
+    def _unwound(self, q: np.ndarray) -> np.ndarray:
+        """The same pose with each joint that turns a whole turn or more within its limits (a UR5e's, +-360 degrees)
+        set the way round nearest to where it is now. On a dog's back, an IK answer one turn away swung a UR5e's base
+        through 376 degrees, and the carry about it one and a half turns, until the joint hit its limit and flung the
+        cube."""
+        out = q.copy()
+        for i in np.flatnonzero(self.chain.upper - self.chain.lower >= 2 * np.pi):
+            turns = out[i] + 2 * np.pi * np.arange(-2, 3)
+            inside = turns[(turns >= self.chain.lower[i] - 1e-9) & (turns <= self.chain.upper[i] + 1e-9)]
+            if inside.size:
+                out[i] = inside[np.argmin(np.abs(inside - self.q[i]))]
+        return out
 
     def _collides(self, q: np.ndarray) -> bool:
         """True when the arm at `q` runs into itself, its carrier or the floor (in the IK's own copy)."""
@@ -285,12 +481,18 @@ class ArmMotion:
         return self.q
 
     def pick_and_place(
-        self, obj_pos: np.ndarray, obj_half_height: float, place: np.ndarray, place_top: float | None = None
+        self,
+        obj_pos: np.ndarray,
+        obj_half_height: float,
+        place: np.ndarray,
+        place_top: float | None = None,
+        faces: np.ndarray | None = None,
     ) -> None:
         """Queue a full pick-and-place. Raises OutOfReach if any key point is out of reach.
 
         `place` is where the object's bottom should end up; `place_top` is the highest point
-        around it (e.g. a bin's rim), which the carried object must clear.
+        around it (e.g. a bin's rim), which the carried object must clear. `faces` are a box's two horizontal
+        side normals, to grasp it square to them (see SQUARE_TOL).
         """
         grasp = obj_pos.copy()
         drop = place + [0, 0, obj_half_height + 0.01]
@@ -300,11 +502,18 @@ class ArmMotion:
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])
         points = {"object": grasp, "above object": above, "place": drop, "above place": above_drop}
-        bad = self.unreachable(points)
+        bad = self._out_of_reach(points)
         if bad:
             raise OutOfReach(self.robot, bad, points)
         across = self._carry_height(grasp, drop, travel_z, obj_half_height)
-        if across is None:
+        if across.z is None and across.over is not None:
+            # Every way across passes over a part of the robot carrying the arm, higher than the gripper gets above
+            # the object or the place: name it rather than the object and the target.
+            high = across.over[1] + 2 * obj_half_height + LOAD_CLEARANCE
+            raised = {"above object": [*grasp[:2], high], "above place": [*drop[:2], high]}
+            raised = {name: np.array(p, float) for name, p in raised.items()}
+            raise OutOfReach(self.robot, self._out_of_reach(raised) or list(raised), {**points, **raised}, across.over)
+        if across.z is None:
             under, fix = "the robot carrying the arm", "put both on the same side of the robot, or turn it"
             if int(self.ik.model.body_jntnum[self._robot_root]) == 0:  # bolted to the floor: no robot to turn
                 under, fix = "its own base", "move the object or the place"
@@ -313,14 +522,14 @@ class ArmMotion:
                 f"load would hit {under}, or the gripper cannot point down there, even carried "
                 f"{CARRY_RAISES * CARRY_RAISE:.1f} m higher; {fix}"
             )
-        carry_z, carry_turn, carry_joints = across
-        above[2] = above_drop[2] = travel_z = carry_z
+        above[2] = above_drop[2] = travel_z = across.z
+        square = self._square(faces, grasp)  # the jaws turn square to the box on the way down to it
         start = self.tool_target_end()
         # Starting low (an arm folded over the robot that carries it), go up first and across at the carrying height:
         # swinging around at the folded height ran a picker's hand into the table beside it.
         risen = np.array([start[0], start[1], travel_z])
-        if start[2] < travel_z - RISE_MIN and self.reach_error(risen) <= REACH_TOL:
-            self.queue.append(Waypoint(risen, self._grip("open"), self._time(start, risen), "rise"))
+        if start[2] < travel_z - RISE_MIN and self._lean_error(risen) <= REACH_TOL:
+            self.queue.append(Waypoint(risen, self._grip("open"), self._time(start, risen), "rise", tilt=True))
             start = risen
         elif start[2] > travel_z + RISE_MIN and not self._reaches_around(start, above):
             # Starting high (an arm held up at home) where the tool cannot reach all the way down on a slant, go across
@@ -331,29 +540,48 @@ class ArmMotion:
             for z in np.arange(start[2], travel_z + RISE_MIN, -CARRY_RAISE):
                 over = np.array([above[0], above[1], z])
                 if self._reaches_around(start, over):
-                    self.queue.append(Waypoint(over, self._grip("open"), self._time(start, over), "approach"))
+                    self.queue.append(
+                        Waypoint(over, self._grip("open"), self._time(start, over), "approach", tilt=True)
+                    )
                     start = over
                     break
-        self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach"))
+        self.queue.append(Waypoint(above, self._grip("open"), self._time(start, above), "approach", tilt=True))
         # With the object in or under the gripper the arm keeps to the paths checked here: straight up and down, and
         # across the way _carry_height went round. Choosing the way across when it started, from where the IK put the
         # base joint, a scorpion's tail went round the other side, right over its body, and flung the cube.
-        self.queue.append(Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend", turn=0.0))
+        descend = Waypoint(grasp, None, self._time(above, grasp) + 0.3, "descend", turn=0.0, rotation=square)
+        self.queue.append(descend)
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
-        self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", turn=0.0))
+        self.queue.append(Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", turn=0.0, tilt=True))
         carry_time = self._time(above, above_drop)
-        if carry_joints is not None:
-            carry_time = max(carry_time, float(np.max(np.abs(carry_joints - self._solve(above)[0]))) / JOINT_SPEED)
+        if across.joints is not None:
+            carry_time = max(carry_time, float(np.max(np.abs(across.joints - self._solve(above)[0]))) / JOINT_SPEED)
         self.queue.append(
-            Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=obj_half_height)
+            Waypoint(
+                above_drop,
+                None,
+                carry_time,
+                "carry",
+                across.joints,
+                turn=across.turn,
+                load=obj_half_height,
+                tilt=True,
+            )
         )
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
-        self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0))
+        self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0, tilt=True))
 
-    def _carry_height(
-        self, grasp: np.ndarray, drop: np.ndarray, low: float, load_half_height: float
-    ) -> tuple[float, float | None, np.ndarray | None] | None:
+    def _out_of_reach(self, points: dict[str, np.ndarray]) -> list[str]:
+        """Names of the key points of a pick-and-place the tool cannot reach: pointing down at the object and the
+        place, and pointing down or leaning (see TILTS) high above them."""
+        return [
+            name
+            for name, p in points.items()
+            if (self._lean_error(p) if name.startswith("above") else self.reach_error(p)) > REACH_TOL
+        ]
+
+    def _carry_height(self, grasp: np.ndarray, drop: np.ndarray, low: float, load_half_height: float) -> _Carry:
         """The lowest height from `low` up at which the tool reaches every point of the way across, around the base
         from above the object to above the place, and the load it carries clears the robot the arm rides on; and the
         way round (rad, None for an arm that moves in straight lines), or the joint angles to carry it to joint by
@@ -363,49 +591,143 @@ class ArmMotion:
         over the top, went round the side it could not turn to. A Go2's PiPER moving a floor cube from its left to
         its right swung it round in front at 10 cm, where its gripper cannot point down without hitting the dog's
         head: the arm stalled, then jumped and flung the cube. At 30 cm the gripper got past, but the cube under it
-        struck the head and was knocked out of its fingers. None when no height up to CARRY_RAISES tries works."""
+        struck the head and was knocked out of its fingers. On a robot that moves freely each way starts no lower
+        than the part of that robot under the sector it sweeps (see CARRY_MARGIN). No height when no height up to
+        CARRY_RAISES tries works."""
+        blocked: tuple[str, float] | None = None
         if self.yaw is None:
-            return low, None, None
+            z, over = self._clearing(self._straight(grasp, drop, low), low, load_half_height)
+            a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
+            if z <= low + 1e-9 or (self._lean_error(a) <= REACH_TOL and self._lean_error(b) <= REACH_TOL):
+                return _Carry(z)
+            return _Carry(None, over=over)
         da, db = grasp[:2] - self.base_xy, drop[:2] - self.base_xy
         step = float(np.arctan2(da[0] * db[1] - da[1] * db[0], da @ db))  # signed, -pi..pi
         joint = float(self._solve(np.array([grasp[0], grasp[1], low]))[0][self.yaw])
         planned = self._inside_limits(step, joint)
         other = planned - np.copysign(2 * np.pi, planned)
-        for turn in (planned, *([other] if self._overrun(other, joint) <= JOINT_SLACK else [])):
+        ways = (planned, *([other] if self._overrun(other, joint) <= JOINT_SLACK else []))
+        lifted = []  # for each way round: whether lifting the load over the carrier put it out of the gripper's reach
+        for turn in ways:
+            a, b = np.array([grasp[0], grasp[1], low]), np.array([drop[0], drop[1], low])
+            start, over = self._clearing([a, *self._way_around(a, b, turn), b], low, load_half_height)
             for k in range(CARRY_RAISES + 1):
-                z = low + k * CARRY_RAISE
+                z = start + k * CARRY_RAISE
                 a, b = np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z])
                 # The first height's ends are checked with the other key points.
-                if self._carries_across(a, b, turn, load_half_height, ends=k > 0):
-                    return z, turn, None
+                if self._carries_across(a, b, turn, load_half_height, ends=z > low + 1e-9):
+                    return _Carry(z, turn)
+            ends = (np.array([*grasp[:2], start]), np.array([*drop[:2], start]))
+            lifted.append(over is not None and any(self._lean_error(p) > REACH_TOL for p in ends))
+            blocked = over if lifted[-1] else blocked
         for k in range(CARRY_RAISES + 1):
             z = low + k * CARRY_RAISE
             joints = self._joint_carry(
                 np.array([grasp[0], grasp[1], z]), np.array([drop[0], drop[1], z]), load_half_height
             )
             if joints is not None:
-                return z, None, joints
-        return None
+                return _Carry(z, None, joints)
+        return _Carry(None, over=blocked if all(lifted) else None)
+
+    def _clearing(
+        self, path: list[np.ndarray], low: float, load_half_height: float
+    ) -> tuple[float, tuple[str, float] | None]:
+        """The lowest height from `low` up at which a load of this half height carried along `path` (tool points in
+        order) clears the robot the arm rides on, under all of the sector the arm sweeps (see CARRY_MARGIN), and (the
+        body, its top in m) of that robot it had to clear, if any. An arm that rides on nothing starts at `low`."""
+        if not self._rides:
+            return low, None
+        found = self._carrier_under(path, load_half_height, low - 2 * load_half_height - LOAD_CLEARANCE)
+        if found is None:
+            return low, None
+        top, geom = found
+        body = self.ik.model.body(int(self.ik.model.geom_bodyid[geom])).name
+        return top + 2 * load_half_height + LOAD_CLEARANCE, (body, top)
+
+    def _straight(self, a: np.ndarray, b: np.ndarray, z: float) -> list[np.ndarray]:
+        """Points along the straight way from above `a` to above `b` at height `z`, ends included."""
+        a, b = np.array([a[0], a[1], z]), np.array([b[0], b[1], z])
+        return [a + (b - a) * s for s in np.linspace(0, 1, CARRY_CHECKS + 2)]
+
+    def _carrier_under(self, path: list[np.ndarray], half: float, floor: float) -> tuple[float, int] | None:
+        """The highest point (m) of the robot carrying the arm (the arm left out) under the sector about the arm's
+        base that an object `half` high carried along `path` sweeps (see CARRY_MARGIN), and the geom there; None when
+        nothing of the robot there rises above `floor` (m)."""
+        m, d = self.ik.model, self.ik.data
+        self.ik.point(self.chain, self.q)  # poses every body, the carrier where it is now (see sync)
+        mine = f"{self.robot}/"
+        margin = half + CARRY_MARGIN
+        offsets = [np.asarray(p, float)[:2] - self.base_xy for p in path]
+        r_hi = max(float(np.linalg.norm(o)) for o in offsets) + margin
+        # The angles the path sweeps about the base, unwound along it: a turn of more than half a turn stays one.
+        angles: list[float] = []
+        for o in offsets:
+            if np.linalg.norm(o) < 1e-3:
+                continue
+            t = float(np.arctan2(o[1], o[0]))
+            if angles:
+                t = angles[-1] + (t - angles[-1] + np.pi) % (2 * np.pi) - np.pi
+            angles.append(t)
+        lo, hi = (min(angles), max(angles)) if angles else (0.0, 2 * np.pi)
+        whole = not angles or hi - lo >= 2 * np.pi - 2 * ARC_MARGIN
+        tops = {}
+        for g in range(m.ngeom):
+            body = int(m.geom_bodyid[g])
+            if int(m.body_rootid[body]) != self._robot_root or (m.body(body).name or "").startswith(mine):
+                continue
+            if body in self._moving:  # the arm's own, also a gripper mounted on its flange ("dog/gripper/...")
+                continue
+            if not collides(m, g):
+                continue
+            top = float(highest_point(m, d, g)[2])
+            reach = float(np.linalg.norm(d.geom_xpos[g][:2] - self.base_xy))
+            if top > floor and reach <= r_hi + m.geom_rbound[g]:
+                tops[g] = top
+        if not tops:
+            return None
+        start_z = max(tops.values()) + 0.01
+        rings = []
+        for r in np.arange(0.0, r_hi + CARRY_STEP / 2, CARRY_STEP):
+            if whole:
+                thetas = np.arange(0.0, 2 * np.pi, CARRY_STEP / max(r, CARRY_STEP))
+            else:
+                spread = ARC_MARGIN + margin / max(r, margin)
+                thetas = np.arange(lo - spread, hi + spread, CARRY_STEP / max(r, CARRY_STEP))
+            rings.append(r * np.column_stack([np.cos(thetas), np.sin(thetas)]))
+        points = self.base_xy + np.concatenate(rings)
+        best: tuple[float, int] | None = None
+        for g, top in sorted(tops.items(), key=lambda item: -item[1]):  # highest first: a lower one cannot beat a hit
+            if best is not None and top <= best[0]:
+                break
+            near = points[np.linalg.norm(points - d.geom_xpos[g][:2], axis=1) <= m.geom_rbound[g]]  # rays it can meet
+            for xy in near:
+                dist = ray(m, d, g, np.array([xy[0], xy[1], start_z]), DOWN)
+                if dist >= 0 and start_z - dist > floor and (best is None or start_z - dist > best[0]):
+                    best = (start_z - dist, g)
+                    if best[0] >= top - 1e-9:  # its highest point: nothing of it is higher
+                        break
+        return best
 
     def _joint_carry(self, a: np.ndarray, b: np.ndarray, load_half_height: float) -> np.ndarray | None:
         """The joint angles over the place for a carry from `a` to `b` made joint by joint, when no way round the base
         keeps the gripper pointing down: the pose nearest the one over the object, if on the way there the arm clears
         itself and the robot it rides on, and the load clears that robot and the floor (checked at twice as many
-        points as a way round, as a joint move swings wider); None otherwise. A scorpion's tail, which reaches behind
-        it by bending back over the top, cannot keep its claw pointing down while it turns from one side to the other
-        behind it, but gets there joint by joint."""
-        start, err, _ = self._solve(a)
+        points as a way round, as a joint move swings wider, and under the sector it sweeps on a robot that moves
+        freely); None otherwise. A scorpion's tail, which reaches behind it by bending back over the top, cannot keep
+        its claw pointing down while it turns from one side to the other behind it, but gets there joint by joint."""
+        start, err, _, _ = self._solve_tilting(a)
         if err > REACH_TOL:
             return None
         now, self.q = self.q, start  # solved from the pose over the object, to change as little as it can
         try:
-            end, err, _ = self._solve(b)
+            end, err, _, _ = self._solve_tilting(b)
         finally:
             self.q = now
         if err > REACH_TOL:
             return None
         self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
         under = self._carrier_boxes()
+        way = []
         for s in np.linspace(0, 1, 2 * CARRY_CHECKS + 2)[1:-1]:
             q = start + (end - start) * s
             if self._collides(q):
@@ -413,13 +735,17 @@ class ArmMotion:
             p = self.ik.point(self.chain, q)
             if p[2] - load_half_height < LOAD_CLEARANCE or not self._load_clears(p, load_half_height, under):
                 return None
+            way.append(p.copy())
+        if self._clearing([a, *way, b], min(p[2] for p in [a, *way, b]), load_half_height)[1] is not None:
+            return None
         return end
 
     def _carries_across(
         self, a: np.ndarray, b: np.ndarray, turn: float, load_half_height: float, ends: bool = True
     ) -> bool:
         """Whether the tool reaches every point of the way from `a` to `b` round the base, turning `turn`, with its
-        gripper pointing down, and a load of this half height under it clears the robot the arm rides on."""
+        gripper pointing down (or leaning, see TILTS), and a load of this half height under it clears the robot the
+        arm rides on."""
         self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
         under = self._carrier_boxes()
         clear = all(self._load_clears(p, load_half_height, under) for p in self._way_around(a, b, turn))
@@ -450,9 +776,10 @@ class ArmMotion:
         return [self._arc_point(a, b, s, turn) for s in steps]
 
     def _reaches_around(self, a: np.ndarray, b: np.ndarray, ends: bool = True, turn: float | None = None) -> bool:
-        """Whether the tool reaches every point of the way from `a` to `b` around the base, pointing down."""
+        """Whether the tool reaches every point of the way from `a` to `b` around the base, pointing down where it
+        can and leaning where it cannot (see TILTS): these are moves high above a grasp or a place."""
         points = [*([a, b] if ends else []), *self._way_around(a, b, turn)]
-        return all(self.reach_error(p) <= REACH_TOL for p in points)
+        return all(self._lean_error(p) <= REACH_TOL for p in points)
 
     def _carrier_boxes(self) -> list[tuple[np.ndarray, np.ndarray, float]]:
         """The robot under the arm as boxes seen from above: (center xy, half size xy, top z) of each solid shape
@@ -502,10 +829,13 @@ class ArmMotion:
             start = data.site_xpos[self.site].copy()
             self._branch = None
             self._turn = None
-            # Where the tool points now. On a robot that drives or walks too: an arm carried folded, gripper forward,
-            # that was told it pointed down already snapped its wrist over on the first tick and the kick shoved the
-            # robot 0.25 m.
-            self._axis0 = data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
+            # Where the tool points now, in the world, also on a robot that drives or walks (whose pose the IK follows,
+            # see sync): an arm carried folded, gripper forward, that was told it pointed down already snapped its
+            # wrist over on the first tick and the kick shoved the robot 0.25 m; a Z1 on a Go2, snapped to pointing
+            # down on the first ticks, jolted the dog 25 mm back and it stepped off half a metre.
+            self._rot0 = data.xmat[self.chain.body].reshape(3, 3).copy()
+            self._axis0 = self._rot0 @ self.tool_axis
+            self._axis1 = DOWN
             if wp.position is not None and wp.joints is None:
                 wp = self._plan_move(wp, start)
             if wp.joints is not None:
@@ -527,17 +857,40 @@ class ArmMotion:
                 self.q = q0 + (q1 - q0) * s
             else:
                 target = self._arc_point(start, wp.position, s)
-                axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
-                self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
+                self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, **self._aim(wp)(s))
         data.ctrl[self.actuators] = self.q
         if u >= 1.0:
             self._segment = None
+            if self._branch is not None and wp.position is not None:
+                self._catch_up(wp)
+
+    def _catch_up(self, wp: Waypoint) -> None:
+        """After a joint-by-joint move to a tool position: if the robot carrying the arm moved meanwhile, so that the
+        tool is not there, go the rest of the way in a straight line. A Go2 settling under its PiPER sank 2.5 cm while
+        the arm unfolded joint by joint to where the IK had put it, and move_arm stopped 2.8 cm short."""
+        here = self.ik.point(self.chain, self.q)  # with the carrier where it is now (see sync)
+        if float(np.linalg.norm(here - wp.position)) > REACH_TOL:
+            rest = Waypoint(wp.position, None, self._time(here, wp.position), wp.label, turn=0.0, tilt=wp.tilt)
+            self.queue.appendleft(rest)
+
+    def _aim(self, wp: Waypoint) -> Callable[[float], dict[str, Any]]:
+        """How the tool is turned a fraction s of the way along the current move, as IK arguments: the jaws turning
+        square to a box on the way down to it, or the tool turning from where it pointed when the move began toward
+        where it points at the end (down, or leaning out over a bin; e.g. out of a home pose, gradually)."""
+        if wp.rotation is not None:
+            rot0, rotation = self._rot0, wp.rotation
+            return lambda s: {"rotation": _blend(rot0, rotation, s)}
+        axis0, axis1 = self._axis0, self._axis1
+        return lambda s: {"axis": (self.tool_axis, _turn_toward(axis0, axis1, s))}
 
     def _plan_move(self, wp: Waypoint, start: np.ndarray) -> Waypoint:
         """Work out how a move to a tool position goes, as it starts with the tool at `start`: which way round the
-        base (self._turn), how long it takes, and whether the arm moves joint by joint or changes its pose first.
-        Returns the move to make now."""
-        goal, err, restarted = self._solve(wp.position)
+        base (self._turn), where the tool points at the end (self._axis1), how long it takes, and whether the arm
+        moves joint by joint or changes its pose first. Returns the move to make now."""
+        if wp.tilt:
+            goal, err, restarted, self._axis1 = self._solve_tilting(wp.position)
+        else:
+            goal, err, restarted = self._solve(wp.position, rotation=wp.rotation)
         if self.yaw is not None:
             self._turn = self._path_turn(start, wp.position, wp.turn)
             if wp.load is not None:
@@ -548,13 +901,14 @@ class ArmMotion:
         if err > REACH_TOL:
             return wp  # as near as it gets
         steps = max(1, round(wp.duration * self.rate_hz))
+        aim = self._aim(wp)
         if wp.turn is None:
-            free = not restarted and float(self._axis0 @ DOWN) >= FAR_FROM_DOWN
-            if not free or self._follow(self.q, start, wp.position, steps, self._axis0)[1] > REACH_TOL:
+            free = not restarted and float(self._axis0 @ self._axis1) >= FAR_FROM_DOWN
+            if not free or self._follow(self.q, start, wp.position, steps, aim)[1] > REACH_TOL:
                 # The goal lies in another elbow or wrist branch, which no straight tool path reaches, the tool
-                # starts far from pointing down (an arm folded for driving), or the arm cannot follow the path from
-                # here (a scorpion's tail reaching behind it flips over its back, and going round with the tail ran
-                # into the limit of its base joint and stopped 30 cm short): move joint by joint instead, as
+                # starts far from pointing where it should (an arm folded for driving), or the arm cannot follow the
+                # path from here (a scorpion's tail reaching behind it flips over its back, and going round with the
+                # tail ran into the limit of its base joint and stopped 30 cm short): move joint by joint instead, as
                 # industrial arms do, slowly enough not to fling a load. Turning the wrist over along a straight
                 # path, a folded PiPER still had it sideways on the way down and swept the cube away.
                 return self._joint_move(wp, goal)
@@ -564,35 +918,75 @@ class ArmMotion:
         # by joint instead, a tentacle's hand swung in sideways on the way down and pushed the cube 4 cm, and a Panda
         # base swung its load 250 degrees on the way down and threw it.
         rises = float(wp.position[2]) > float(start[2]) + APPROACH / 2  # off the object or the place
-        if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps)[1] <= REACH_TOL:
+        if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps, aim)[1] <= REACH_TOL:
             return wp
-        reposed = self._repose(wp, start, goal, steps)
+        if wp.load is not None:
+            other = self._other_way_across(start, wp, aim)
+            if other is not None:
+                return other
+        reposed = self._repose(wp, start, goal, steps, aim)
         if reposed is not None:
             return reposed
+        if wp.rotation is not None:
+            # The jaws cannot turn square to the box on the way down from here without the arm running into itself
+            # or straying (a mobile Panda's wrist swung its hand into its forearm and closed 4 cm beside the cube):
+            # go down pointing down with the jaws as they are.
+            return self._plan_move(replace(wp, rotation=None), start)
         # A carry the arm cannot follow round from any pose here goes joint by joint, as it did before it had a
         # planned path: following the path anyway, a scorpion's tail lost it halfway and dropped the cube.
         return self._joint_move(wp, goal) if wp.load is not None else wp
+
+    def _other_way_across(
+        self, start: np.ndarray, wp: Waypoint, aim: Callable[[float], dict[str, Any]]
+    ) -> Waypoint | None:
+        """A carry the arm cannot follow round the way it was planned, from the pose it is in, goes round the other
+        way if it can follow that from here and that way passes the plan's checks too (see _carry_height): changing
+        pose with the load in the gripper instead, a mobile Panda that had grasped with its jaws turned square swung
+        the cube off 60 cm away. None when it cannot."""
+        if self.yaw is None or self._turn is None:
+            return None
+        planned = self._turn
+        other = planned - np.copysign(2 * np.pi, planned)
+        if self._overrun(other) > JOINT_SLACK:
+            return None
+        path = [start, *self._way_around(start, wp.position, other), wp.position]
+        low = min(float(start[2]), float(wp.position[2]))
+        if self._clearing(path, low, wp.load)[1] is not None or not self._carries_across(
+            start, wp.position, other, wp.load
+        ):
+            return None
+        self._turn = other
+        duration = max(wp.duration, self._path_length(start, wp.position) / SPEED)
+        if self._follow(self.q, start, wp.position, max(1, round(duration * self.rate_hz)), aim)[1] > REACH_TOL:
+            self._turn = planned
+            return None
+        return replace(wp, duration=duration, turn=other)
 
     def _joint_move(self, wp: Waypoint, goal: np.ndarray) -> Waypoint:
         travel = float(np.max(np.abs(goal - self.q)))
         return replace(wp, duration=max(wp.duration, travel / JOINT_SPEED), joints=goal)
 
     def _follow(
-        self, q: np.ndarray, a: np.ndarray, b: np.ndarray, steps: int, axis0: np.ndarray = DOWN
+        self, q: np.ndarray, a: np.ndarray, b: np.ndarray, steps: int, aim: Callable[[float], dict[str, Any]]
     ) -> tuple[np.ndarray, float]:
         """The pose the arm ends in when it follows the current move's path from `a` to `b` (turning self._turn)
-        from pose `q`, with the tool turning from `axis0` to pointing down, tick by tick as update() does, and how far
+        from pose `q`, with the tool turned as `aim` says along the way, tick by tick as update() does, and how far
         the tool strays from the path on the way (m)."""
         worst = 0.0
+        turning = "rotation" in aim(0.0)  # the jaws turn too: the wrist may swing into the arm (see _plan_move)
+        every = max(1, steps // FOLLOW_CHECKS)
         for k in range(1, steps + 1):
             u = k / steps
             s = u * u * (3 - 2 * u)
-            axis = (self.tool_axis, _turn_toward(axis0, DOWN, s))
-            q, err = self.ik.solve(self.chain, self._arc_point(a, b, s), q, iterations=6, axis=axis)
+            q, err = self.ik.solve(self.chain, self._arc_point(a, b, s), q, iterations=6, **aim(s))
             worst = max(worst, err)
+            if turning and (k % every == 0 or k == steps) and (self._collides(q) or not self._clear_of_itself(q)):
+                return q, np.inf
         return q, max(worst, float(np.linalg.norm(self.ik.point(self.chain, q) - b)))
 
-    def _repose(self, wp: Waypoint, start: np.ndarray, goal: np.ndarray, steps: int) -> Waypoint | None:
+    def _repose(
+        self, wp: Waypoint, start: np.ndarray, goal: np.ndarray, steps: int, aim: Callable[[float], dict[str, Any]]
+    ) -> Waypoint | None:
         """A change of pose, joint by joint with the tool where it is, into the pose the arm reaches by backing along
         the path from `goal`, so that it follows the path from there (`wp` is put back in the queue to follow it);
         None when that pose does not work. Straying from the way down, a tentacle whose IK found the grasp 74
@@ -600,14 +994,24 @@ class ArmMotion:
         limit slid 8 cm aside."""
         forward = self._turn
         self._turn = None if forward is None else -forward
-        here, off = self._follow(goal, wp.position, start, steps)
+        here, off = self._follow(goal, wp.position, start, steps, lambda s: aim(1.0 - s))
         self._turn = forward
-        if off > REACH_TOL or self._collides(here) or self._follow(here, start, wp.position, steps)[1] > REACH_TOL:
+        if off > REACH_TOL or self._collides(here) or self._follow(here, start, wp.position, steps, aim)[1] > REACH_TOL:
+            return None
+        if wp.load is not None and self._wanders(self.q, here, start):
             return None
         self._reposed = wp
         self.queue.appendleft(wp)
         travel = float(np.max(np.abs(here - self.q)))
         return Waypoint(None, None, max(0.5, travel / JOINT_SPEED), wp.label, joints=here)
+
+    def _wanders(self, q0: np.ndarray, q1: np.ndarray, at: np.ndarray) -> bool:
+        """Whether the tool leaves `at` by more than REPOSE_STRAY on the way, joint by joint, from pose `q0` to `q1`:
+        two poses with the tool in the same place can lie far apart, and the hand swings out between them."""
+        return any(
+            float(np.linalg.norm(self.ik.point(self.chain, q0 + (q1 - q0) * s) - at)) > REPOSE_STRAY
+            for s in np.linspace(0, 1, FOLLOW_CHECKS + 1)[1:-1]
+        )
 
     def _arc_point(self, a: np.ndarray, b: np.ndarray, s: float, turn: float | None = None) -> np.ndarray:
         """Interpolate in cylindrical coordinates (radius, angle, height) about the base axis, turning `turn`
@@ -652,6 +1056,10 @@ class ArmMotion:
         own = self._path_turn(start, wp.position)
         if abs(own - planned) < 1e-6 or self._overrun(planned) <= JOINT_SLACK:
             return planned
+        path = [start, *self._way_around(start, wp.position, own), wp.position]
+        low = min(float(start[2]), float(wp.position[2]))
+        if self._clearing(path, low, wp.load)[1] is not None:  # that way passes over a part of the carrier
+            return planned
         return own if self._carries_across(start, wp.position, own, wp.load) else planned
 
     def _overrun(self, turn: float, joint: float | None = None) -> float:
@@ -679,7 +1087,7 @@ class ArmMotion:
     def _grip(self, state: str | None) -> float | None:
         if state is None or self.gripper < 0:
             return None
-        return self.gripper_open if state == "open" else 0.0
+        return self.gripper_open if state == "open" else self.gripper_closed
 
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
@@ -767,6 +1175,63 @@ def _yaw_index(model: mujoco.MjModel, joints: list[int], home_qpos: np.ndarray) 
     mujoco.mj_kinematics(model, data)
     first = hinges[0]
     return first if abs(float(data.xaxis[joints[first]][2])) > UPRIGHT else None
+
+
+def _around_home(model: mujoco.MjModel, chain: Chain, joints: list[int], home_qpos: np.ndarray) -> Chain:
+    """The chain with each joint that turns without end allowed half a turn either way from its home angle. The IK
+    otherwise keeps such joints in -180..180 degrees: a Kinova Gen3 starts with joint 3 at 180, pinned at that edge, and
+    its gripper ended 34 cm from where move_arm sent it, the arm jammed against its own base."""
+    endless = np.array([not model.jnt_limited[j] for j in joints])
+    if not endless.any():
+        return chain
+    home = home_qpos[chain.qpos_adr]
+    lower = np.where(endless, home - np.pi, chain.lower)
+    upper = np.where(endless, home + np.pi, chain.upper)
+    return dataclasses.replace(chain, lower=lower, upper=upper)
+
+
+def _closing(
+    model: mujoco.MjModel, data: mujoco.MjData, gripper: int, body: int, tool_axis: np.ndarray
+) -> np.ndarray | None:
+    """The way an arm's jaws close, in the tool body's frame and across its tool axis: along the fingers' slide, or
+    across a hinged jaw's axis; from the joint the gripper drives, or the first its tendon pulls (a Panda's, a
+    Robotiq's). None when there is no such joint (`data` is posed)."""
+    if gripper < 0:
+        return None
+    target = int(model.actuator_trnid[gripper, 0])
+    kind = int(model.actuator_trntype[gripper])
+    if kind == int(mujoco.mjtTrn.mjTRN_TENDON):
+        start, count = model.tendon_adr[target], model.tendon_num[target]
+        wraps = [int(model.wrap_objid[w]) for w in range(start, start + count) if model.wrap_type[w] == 1]
+        if not wraps:  # mjWRAP_JOINT is 1: a fixed tendon over joints
+            return None
+        joint = wraps[0]
+    elif kind == int(mujoco.mjtTrn.mjTRN_JOINT):
+        joint = target
+    else:
+        return None
+    axis = data.xmat[body].reshape(3, 3).T @ data.xaxis[joint]
+    if model.jnt_type[joint] == mujoco.mjtJoint.mjJNT_HINGE:
+        axis = np.cross(axis, tool_axis)
+    elif model.jnt_type[joint] != mujoco.mjtJoint.mjJNT_SLIDE:
+        return None
+    across = axis - tool_axis * (axis @ tool_axis)
+    norm = float(np.linalg.norm(across))
+    return across / norm if norm > 0.3 else None
+
+
+def _blend(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:
+    """The orientation a fraction `s` of the way from rotation matrix `a` to `b`."""
+    qa, qb = np.zeros(4), np.zeros(4)
+    mujoco.mju_mat2Quat(qa, np.ascontiguousarray(a).ravel())
+    mujoco.mju_mat2Quat(qb, np.ascontiguousarray(b).ravel())
+    turn = np.zeros(3)
+    mujoco.mju_subQuat(turn, qb, qa)  # qa * quat(turn) = qb
+    q = qa.copy()
+    mujoco.mju_quatIntegrate(q, turn, s)
+    out = np.zeros(9)
+    mujoco.mju_quat2Mat(out, q)
+    return out.reshape(3, 3)
 
 
 def _turn_toward(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:

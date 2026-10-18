@@ -50,6 +50,26 @@ def test_describe_lists_drawable_geoms_with_colors():
     assert by_name["hidden"]["group"] == 3
 
 
+def test_a_textured_material_shows_the_mean_color_of_its_picture():
+    """The viewer draws no textures: ANYmal C's red shell (a texture on a white material) showed plain white."""
+    xml = """
+    <mujoco>
+      <asset>
+        <texture name="half" type="2d" builtin="checker" rgb1="1 0 0" rgb2="0 0 1" width="64" height="64"/>
+        <material name="shell" texture="half" rgba="1 1 1 1"/>
+      </asset>
+      <worldbody>
+        <geom name="ground" type="plane" size="1 1 0.1" material="shell"/>
+        <body name="b"><freejoint/><geom name="shell" type="box" size="0.1 0.1 0.1" material="shell"/></body>
+      </worldbody>
+    </mujoco>
+    """
+    model = mujoco.MjModel.from_xml_string(xml)
+    geoms = {g["name"]: g for g in scene.describe(model, 1, [])["geoms"]}
+    np.testing.assert_allclose(geoms["shell"]["rgba"], [0.5, 0, 0.5, 1], atol=0.02)  # half red, half blue
+    assert geoms["ground"]["rgba"] == [1, 1, 1, 1]  # the ground draws its own textures
+
+
 def test_describe_marks_moving_bodies():
     desc = scene.describe(_model(), version=1, mesh_entries=[])
     bodies = {b["name"]: b for b in desc["bodies"]}

@@ -110,6 +110,28 @@ def test_humanoid_stands_ten_seconds_and_shrugs_off_pushes(pg):
     assert not pg.behaviors.status()[0].get("fallen")
 
 
+def test_legs_found_by_their_shape_balance_like_the_templates_own(pg):
+    """The controller for real humanoids (OP3, T1) knows nothing of our names: it finds the legs below the trunk
+    that reach the floor and which joints roll and pitch the body by their axes. On our template it must find the
+    same joints, signs, feet and soles as the template's own wiring, and stand as well."""
+    pg.add_robot("bot", template="humanoid")
+    m, home = pg.session.model, pg.behaviors.home_qpos()
+    ours, found = humanoid.for_template(m, "bot", home), humanoid.for_robot(m, "bot", home)
+    assert found.roles == humanoid.TEMPLATE_ROLES
+    for a, b in zip(ours.chains, found.chains, strict=True):
+        np.testing.assert_array_equal(a.qpos_adr, b.qpos_adr)
+        assert a.body == b.body
+        np.testing.assert_allclose(a.local_point[2], b.local_point[2], atol=1e-3)  # on the sole
+    pg.session.set_controller("bot", found)
+    assert _run(pg, 5.0) > 0.95
+
+
+def test_a_robot_without_two_legs_is_not_taken_for_a_humanoid(pg):
+    pg.add_robot("dog", template="quadruped")
+    with pytest.raises(ValueError, match="not a walking humanoid|legs of"):
+        humanoid.for_robot(pg.session.model, "dog", pg.behaviors.home_qpos())
+
+
 # ---- walking -----------------------------------------------------------------------------
 
 

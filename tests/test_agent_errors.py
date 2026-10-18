@@ -662,6 +662,12 @@ def test_unknown_lists_choices_and_closest_names():
     assert "and 3 more" in wording.choices([str(i) for i in range(15)])
 
 
+def test_equally_close_names_that_start_like_the_given_one_come_first():
+    """difflib alone ranks ties by the name itself: "go3" suggested op3 before go2."""
+    assert wording.near("go3", ["go2", "op3", "go1"]) == ["go2", "go1", "op3"]
+    assert wording.near("x", []) == []
+
+
 def test_unit_hint_only_for_values_far_over_the_maximum():
     assert wording.unit_hint(30, 0.8) == " (meters, so 30 cm is 0.3)"
     assert wording.unit_hint(2, 0.8) == ""  # two meters is simply too long
