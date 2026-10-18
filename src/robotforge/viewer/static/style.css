@@ -1370,3 +1370,6 @@ input[type="range"]::-moz-range-thumb {
   .sensor-views { left: var(--gutter); right: var(--gutter); width: auto; padding: 8px 12px; }
   .sensor-pip canvas { width: auto; max-width: 100%; max-height: 22vh; margin: 0 auto; }
 }
+
+/* A lesson draws its own rig: the sensor views step aside with the robots drawer. */
+.in-lesson #sensor-views { display: none !important; }
