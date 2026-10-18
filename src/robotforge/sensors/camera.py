@@ -149,6 +149,7 @@ class Camera(Sensor):
             "mode": self.mode,
             "fov_deg": round(self.fov, 1),
             "size": [self.width, self.height],
+            "range_m": self.range,
             "forward": [round(float(v), 4) for v in -rot[:, 2]],
             "up": [round(float(v), 4) for v in rot[:, 1]],
         }

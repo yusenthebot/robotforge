@@ -130,6 +130,7 @@ def mount(
                 "type": entry.type,
                 "body": body_name,
                 "at": [round(float(v), 4) for v in place.point],
+                "added": True,  # put on with add_sensor: the viewer draws it from the start (a robot's own wait)
                 **definition,
                 **{k: v for k, v in knobs.items() if v is not None},
             },

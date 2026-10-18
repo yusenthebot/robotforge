@@ -203,7 +203,11 @@ class ForceTorque(Sensor):
 
     def viewer(self, value, model, data):
         rot = value["rot"]
-        return {"force_n": _r(rot @ value["force"], 3), "torque_nm": _r(rot @ value["torque"], 4)}
+        out = {"force_n": _r(rot @ value["force"], 3), "torque_nm": _r(rot @ value["torque"], 4)}
+        payload = self._payload(value)
+        if payload is not None:
+            out["payload_kg"] = round(payload, 3)
+        return out
 
 
 class Touch(Sensor):
@@ -217,6 +221,7 @@ class Touch(Sensor):
         # The MuJoCo touch sensor of each zone: named after its site, unless the definition names them ("touch").
         self.slices = [native_slice(model, decl, c) for c in decl.data.get("touch", decl.data["cells"])]
         self.rows, self.cols = int(decl.data["rows"]), int(decl.data["cols"])
+        self.pad = pad_shape(model, self.cells)
 
     def measure(self, model, data):
         return np.array([float(data.sensordata[s][0]) for s in self.slices])
@@ -254,7 +259,35 @@ class Touch(Sensor):
             "cells_m": [_r(data.site_xpos[c], 4) for c in self.cells],
             "force_n": _r(value, 2),
             "total_n": round(float(value.sum()), 2),
+            **self.pad,
         }
+
+
+def pad_shape(model: mujoco.MjModel, cells: list[int]) -> dict[str, Any]:
+    """Where a touch pad's zones lie on their body, for the viewer to light them up on the foot where it is now
+    rather than where it was at the last message. A box zone (add_sensor's) reaches a little out of the surface:
+    its zone is drawn on the surface itself, in the pad's plane (pad_quat's z is the pad's outward normal). A
+    template's zone is a ball round the foot's tip and is drawn as one."""
+    from robotforge.sensors.mount import TOUCH_OUTSIDE  # here: mount brings the builder's looks, readings do not
+
+    first = cells[0]
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, model.site_quat[first])
+    normal = rot.reshape(3, 3)[:, 2]
+    size = model.site_size[first]
+    if int(model.site_type[first]) == int(mujoco.mjtGeom.mjGEOM_BOX):
+        lift = float(size[2]) - TOUCH_OUTSIDE
+        points = [model.site_pos[c] + normal * lift for c in cells]
+        shape, half = "box", [float(size[0]), float(size[1])]
+    else:
+        points = [model.site_pos[c] for c in cells]
+        shape, half = "sphere", [float(size[0]), float(size[0])]
+    return {
+        "cells_local": [_r(p, 4) for p in points],
+        "cell_half": _r(half, 4),
+        "cell_shape": shape,
+        "pad_quat": _r(model.site_quat[first], 4),
+    }
 
 
 class Rangefinder(Sensor):

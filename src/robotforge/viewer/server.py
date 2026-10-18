@@ -113,14 +113,18 @@ class ViewerHub:
         # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
         self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
         # What the robots' sensors measure, sent SENSOR_HZ times a second while the world has any (None when it
-        # has none): {"type": "sensors", "time", "sensors": [...]}, one entry per sensor with its "name", "robot",
-        # "type", world "pos" and "quat" (w, x, y, z) and what drawing it needs. lidar and lidar3d: "origin",
-        # "points" (hit points, flat x, y, z list, at most 1200), "rays", "hits", "range_m", "channels"; camera:
-        # "mode", "fov_deg", "size", "forward", "up"; force_torque: "force_n", "torque_nm" (world vectors at the
-        # pos); imu: "accel_m_s2", "gyro_rad_s", "orientation_deg" (roll, pitch, yaw); touch: "cells_m" (world
-        # positions), "force_n" per cell, "total_n"; rangefinder: "direction", "distance_m", "range_m"; gps and
-        # odometry: "position_m" (odometry also "heading_deg"); encoders: "rad" (and "m") by joint. "t" is when the
-        # value was sampled; "status": "waiting" while a delayed sensor has none yet. See docs/SENSORS.md.
+        # has none): {"type": "sensors", "version" (the model's), "time", "sensors": [...]}, one entry per sensor
+        # with its "name", "robot", "type", "added" (put on with add_sensor rather than one the robot came with),
+        # world "pos" and "quat" (w, x, y, z), the "body" it rides on with its "local_pos" and "local_quat" there,
+        # and what drawing it needs. lidar and lidar3d: "origin", "points" (hit points, flat x, y, z list, at most
+        # 1200), "rays", "hits", "range_m", "channels"; camera: "mode", "fov_deg", "size", "range_m", "forward",
+        # "up"; force_torque: "force_n", "torque_nm" (world vectors at the pos), "payload_kg"; imu: "accel_m_s2",
+        # "gyro_rad_s", "orientation_deg" (roll, pitch, yaw); touch: "cells_m" (world positions), "force_n" per
+        # cell, "total_n", and the pad on its body: "cells_local", "cell_half", "cell_shape" (box or sphere),
+        # "pad_quat"; rangefinder: "direction", "distance_m", "range_m"; gps and odometry: "position_m" (odometry
+        # also "heading_deg"); encoders: "rad" (and "m") by joint. "t" is when the value was sampled; "status":
+        # "waiting" while a delayed sensor has none yet. The viewer's sensors.js draws them (sensorkit.js lists
+        # the fields it reads, and a test checks they are sent). See docs/SENSORS.md.
         self.sensor_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
 

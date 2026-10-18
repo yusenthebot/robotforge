@@ -181,8 +181,14 @@ class SensorHub:
         with session.lock:
             model, data = session.model, session.data
             for sensor in self.suite.sensors.values():
-                entry: dict[str, Any] = {"name": sensor.name, "robot": sensor.robot, "type": sensor.type}
+                entry: dict[str, Any] = {
+                    "name": sensor.name,
+                    "robot": sensor.robot,
+                    "type": sensor.type,
+                    "added": bool(sensor.decl.data.get("added")),
+                }
                 try:
+                    entry.update(_mount(sensor, model))
                     if sensor.renders:
                         entries.append({**entry, **sensor.pose(data), **sensor.viewer({}, model, data)})
                         continue
@@ -194,7 +200,27 @@ class SensorHub:
                     entries.append({**entry, "t": round(got[0], 4), **sensor.viewer(got[1], model, data)})
                 except Exception:  # one sensor that cannot be drawn must not stop the others'
                     log.exception("sensor %s could not be described for the viewer", sensor.name)
-            return {"type": "sensors", "time": round(float(data.time), 4), "sensors": entries}
+            # The model's version: body ids mean that model's bodies, and the page draws on the one it has loaded.
+            version = session.version
+            return {"type": "sensors", "version": version, "time": round(float(data.time), 4), "sensors": entries}
+
+
+def _mount(sensor: Sensor, model: mujoco.MjModel) -> dict[str, Any]:
+    """The body a sensor rides on and where it sits there (local_pos, local_quat in the body's frame): the viewer
+    draws a camera's frustum, its picture and a force arrow from the body's pose in every frame it draws, so they
+    stay on a walking robot instead of jumping to it ten times a second."""
+    camera = getattr(sensor, "camera", -1) if sensor.renders else -1
+    if camera >= 0:
+        body, pos, quat = model.cam_bodyid[camera], model.cam_pos[camera], model.cam_quat[camera]
+    elif sensor.site >= 0:
+        body, pos, quat = model.site_bodyid[sensor.site], model.site_pos[sensor.site], model.site_quat[sensor.site]
+    else:
+        body, pos, quat = sensor.body, np.zeros(3), np.array([1.0, 0.0, 0.0, 0.0])
+    return {
+        "body": int(body),
+        "local_pos": [round(float(v), 4) for v in pos],
+        "local_quat": [round(float(v), 4) for v in quat],
+    }
 
 
 def _pose(sensor: Sensor, data: mujoco.MjData) -> dict[str, list[float]]:
