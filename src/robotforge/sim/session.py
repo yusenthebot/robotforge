@@ -185,7 +185,7 @@ class SimSession:
                 self._run_controllers()
                 self._apply_drag()
                 mujoco.mj_step(self.model, self.data)
-                for hook in self.step_hooks:
+                for hook in tuple(self.step_hooks):  # a hook may take itself off (a recording that ends)
                     hook()
 
     def _run_controllers(self) -> None:
