@@ -64,9 +64,24 @@ class TorqueMap:
         self.scale = ActionScale(model, self.actuators)
         self.force_limited = model.actuator_forcelimited[self.actuators].astype(bool)
         self.force_range = model.actuator_forcerange[self.actuators].copy()
+        # Learned walkers solve this every physics step (2 ms), where each small numpy call counts. With fixed gains
+        # and every actuator biased or none (servos, motors), the parts that never change are worked out once; the
+        # numbers are the same, computed in the same order.
+        self._fixed = not self.affine_gain.any() and (self.has_bias.all() or not self.has_bias.any())
+        gain = self.gain[:, 0] + 0.0
+        self._safe_gain = np.where(np.abs(gain) > 1e-9, gain, 1e-9)
+        self._biased = bool(self.has_bias.any())
+        self._b0, self._b1, self._b2 = (self.bias[:, k].copy() for k in range(3))
 
     def ctrl(self, data: mujoco.MjData, torque: np.ndarray) -> np.ndarray:
         """The ctrl values that make each actuator apply `torque` to its joint right now (clipped)."""
+        if self._fixed:
+            force = np.asarray(torque, float) / self.gear
+            if self._biased:
+                length = self.gear * data.qpos[self.qadr]
+                velocity = self.gear * data.qvel[self.dadr]
+                force = force - (self._b0 + self._b1 * length + self._b2 * velocity)
+            return np.minimum(np.maximum(force / self._safe_gain, self.scale.low), self.scale.high)
         length = self.gear * data.qpos[self.qadr]
         velocity = self.gear * data.qvel[self.dadr]
         gain = self.gain[:, 0] + np.where(self.affine_gain, self.gain[:, 1] * length + self.gain[:, 2] * velocity, 0)

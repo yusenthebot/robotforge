@@ -422,13 +422,10 @@ def bench_imports(quick: bool) -> dict[str, Any]:
         _, log = _import_once(target, importtime=True)
         key = target.replace("robotforge.", "") if target != "robotforge" else "robotforge"
         out[f"{key}_ms"] = metric(
-            1000 * best["wall"],
-            "ms",
-            "lower",
-            cpu_ms=round(1000 * min(s["cpu"] for s in samples), 1),
-            modules=best["modules"],
-            offenders=import_offenders(log),
+            1000 * best["wall"], "ms", "lower", modules=best["modules"], offenders=import_offenders(log)
         )
+        # Process time: what the import costs this machine, less disturbed by other work on it than the wall clock
+        out[f"{key}_cpu_ms"] = metric(1000 * min(s["cpu"] for s in samples), "ms", "lower")
         out[f"{key}_heavy"] = metric(len(best["heavy"]), "", "lower", loaded=best["heavy"])
     return out
 
@@ -611,21 +608,73 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
     }
 
 
+def _physics_worker(name: str, repeats: int, src: Path | None = None) -> dict[str, Any]:
+    """One world timed in a fresh process; `src`: robotforge's source from another commit instead of this one."""
+    with tempfile.TemporaryDirectory(prefix="rf-bench-phys-") as home:
+        env = _child_env(Path(home))
+        if src is not None:
+            env["PYTHONPATH"] = os.pathsep.join([str(src), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+        args = [sys.executable, str(Path(__file__).resolve()), "--worker", name, "--repeats", str(repeats)]
+        done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", env=env)
+    if done.returncode != 0:
+        raise RuntimeError(done.stderr.strip()[-600:])
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
 def bench_physics(quick: bool, worlds: list[str] | None = None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name in worlds or list(WORLDS):
-        with tempfile.TemporaryDirectory(prefix="rf-bench-phys-") as home:
-            args = [sys.executable, str(Path(__file__).resolve()), "--worker", name, "--repeats", "2" if quick else "4"]
-            done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", env=_child_env(Path(home)))
-        if done.returncode != 0:
-            out[f"{name}_error"] = done.stderr.strip()[-600:]
+        try:
+            r = _physics_worker(name, 2 if quick else 4)
+        except RuntimeError as exc:
+            out[f"{name}_error"] = str(exc)
             continue
-        r = json.loads(done.stdout.strip().splitlines()[-1])
         info = {k: r[k] for k in r if k not in ("steps_per_s", "rtf", "controllers_share", "peak_mb")}
         out[f"{name}.steps_per_s"] = metric(r["steps_per_s"], "steps/s", "higher", **info)
         out[f"{name}.controllers_share"] = metric(r["controllers_share"], "share", "lower")
         out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower")
     return out
+
+
+@contextlib.contextmanager
+def _source_at(rev: str) -> Iterator[Path]:
+    """robotforge's source as it was at revision `rev`, unpacked in a temp folder."""
+    import io
+    import tarfile
+
+    archive = subprocess.run(["git", "archive", "--format=tar", rev, "src"], cwd=ROOT, capture_output=True, check=False)
+    if archive.returncode != 0:
+        raise SystemExit(f"cannot read {rev}: {archive.stderr.decode(errors='replace').strip()}")
+    with tempfile.TemporaryDirectory(prefix="rf-bench-ab-") as tmp:
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+            tar.extractall(tmp, filter="data")
+        yield Path(tmp) / "src"
+
+
+def ab_physics(rev: str, worlds: list[str], rounds: int) -> list[dict[str, Any]]:
+    """The physics worlds timed on this tree and on `rev`, alternately, so both see the same machine load:
+    on a shared machine two runs an hour apart differ more than a change does. Steps per second: the best round
+    of each (each round is already the best of four per 50 ms slice); controllers' share: the median round."""
+    rows = []
+    with _source_at(rev) as old:
+        for name in worlds:
+            now: list[dict[str, Any]] = []
+            then: list[dict[str, Any]] = []
+            for _ in range(rounds):
+                now.append(_physics_worker(name, 4))
+                then.append(_physics_worker(name, 4, old))
+            row = {
+                "world": name,
+                "steps_per_s": [max(r["steps_per_s"] for r in then), max(r["steps_per_s"] for r in now)],
+                "controllers_share": [
+                    statistics.median(r["controllers_share"] for r in then),
+                    statistics.median(r["controllers_share"] for r in now),
+                ],
+            }
+            rows.append(row)
+            (a, b), (ca, cb) = row["steps_per_s"], row["controllers_share"]
+            print(f"{name:<16} {a:>9,.0f} -> {b:>9,.0f} steps/s ({b / a - 1:+.0%})   controllers {ca:.0%} -> {cb:.0%}")
+    return rows
 
 
 # ---- viewer (headless Chrome) -------------------------------------------------------------------------------
@@ -872,11 +921,13 @@ def bench_mcp(quick: bool) -> dict[str, Any]:
 # ---- main ---------------------------------------------------------------------------------------------------
 
 
-def run(sections: list[str], quick: bool, shots: Path | None) -> tuple[dict[str, Any], list[str]]:
+def run(
+    sections: list[str], quick: bool, shots: Path | None, worlds: list[str] | None = None
+) -> tuple[dict[str, Any], list[str]]:
     benches: dict[str, Callable[[], dict[str, Any]]] = {
         "install": lambda: bench_install(quick),
         "imports": lambda: bench_imports(quick),
-        "physics": lambda: bench_physics(quick),
+        "physics": lambda: bench_physics(quick, worlds),
         "viewer": lambda: bench_viewer(quick, shots),
         "mcp": lambda: bench_mcp(quick),
     }
@@ -906,6 +957,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--budget", type=Path, default=BUDGET_FILE)
     parser.add_argument("--against", type=Path, help="compare with this run (default: the newest in --out)")
     parser.add_argument("--shots", type=Path, help="save a picture of the viewer frame measured here")
+    parser.add_argument("--worlds", nargs="*", choices=list(WORLDS), help="physics: only these worlds")
+    parser.add_argument("--ab", metavar="REV", help="physics only: time this tree and revision REV alternately")
+    parser.add_argument("--rounds", type=int, default=3, help="--ab: rounds per world")
     parser.add_argument("--worker", help=argparse.SUPPRESS)  # internal: time one physics world in this process
     parser.add_argument("--repeats", type=int, default=4, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -914,12 +968,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
+    if args.ab:
+        print(f"{args.ab} -> this tree ({git_sha()}), load {machine().get('load')}", flush=True)
+        ab_physics(args.ab, args.worlds or list(WORLDS), args.rounds)
+        return 0
     if args.shots:
         args.shots.mkdir(parents=True, exist_ok=True)
     started = dt.datetime.now().astimezone()
     sha = git_sha()
     before_machine = machine()
-    results, errors = run(args.only or list(SECTIONS), args.quick, args.shots)
+    results, errors = run(args.only or list(SECTIONS), args.quick, args.shots, args.worlds)
     record = {
         "started": started.isoformat(timespec="seconds"),
         "sha": sha,

@@ -158,6 +158,7 @@ class PolicyWalker:
         trained = model_damping if spec.pd.joint_damping is None else np.asarray(spec.pd.joint_damping, float)
         self.extra_damping = trained - model_damping
         self.torque_limit = None if spec.pd.torque_limit is None else np.asarray(spec.pd.torque_limit, float)
+        self._extra = bool(self.extra_damping.any())  # none to add: the PD loop skips that step (it runs every 2 ms)
         self.rate_hz = 1.0 / model.opt.timestep  # the PD loop runs every physics step
         ranges = spec.commands
         self.max_speed = float(ranges.lin_vel_x[1])
@@ -308,8 +309,10 @@ class PolicyWalker:
         qd = data.qvel[self.binding.dof_adr]
         tau = self.kp * (self.targets - q) - self.kd * qd
         if self.torque_limit is not None:  # the training motors saturate here, before the passive damping
-            tau = np.clip(tau, -self.torque_limit, self.torque_limit)
-        data.ctrl[self.binding.actuators] = self.torque.ctrl(data, tau - self.extra_damping * qd)
+            tau = np.minimum(np.maximum(tau, -self.torque_limit), self.torque_limit)
+        if self._extra:
+            tau = tau - self.extra_damping * qd
+        data.ctrl[self.binding.actuators] = self.torque.ctrl(data, tau)
 
 
 def walker_for(
