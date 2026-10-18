@@ -184,6 +184,35 @@ def test_a_lesson_rig_that_settles_after_its_first_poses_is_framed_as_it_stands(
     assert all(left >= 0 and right <= seen["width"] for left, right in seen["robots"].values()), seen
 
 
+# Start a lesson that fits its rig and press Fit view as soon as its first poses start the lesson camera's glide, inside
+# the time the rig is given to settle before it is fitted again. Returns where Fit view looked once its glide ended,
+# and where the camera looks two seconds later.
+FIT_VIEW_AS_THE_RIG_SETTLES = """(async () => {
+    const rf = window.__robotforge;
+    const before = rf.scene;
+    %s
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const gliding = () => rf.scene !== before && rf.lesson()?.id === "%s" && rf.tweening();
+    for (let i = 0; i < 1000 && !gliding(); i++) await wait(10);
+    document.getElementById("btn-frame").click();
+    for (let i = 0; i < 200 && rf.tweening(); i++) await wait(10);
+    const framed = rf.cameraTarget();
+    await wait(2000);
+    return { framed, kept: rf.cameraTarget() };
+})()"""
+
+
+def test_fit_view_pressed_while_a_lesson_rig_settles_is_kept(viewer):
+    """The rig fitted at its first poses is fitted again once it has settled, unless the view was moved by hand: a
+    drag cancelled that, but Fit view pressed in those 800 ms was undone by the lesson camera."""
+
+    async def scenario(tab, _server):
+        return await tab.eval(FIT_VIEW_AS_THE_RIG_SETTLES % (qa.START % "pid_twins", "pid_twins"))
+
+    seen = viewer("laptop", "en", scenario)
+    assert seen["kept"] == pytest.approx(seen["framed"], abs=0.01), seen
+
+
 def test_finishing_a_lesson_brings_the_lesson_complete_box_into_view(viewer):
     """The box sits at the foot of the lesson panel: below the fold, Finish looked as if it did nothing."""
 

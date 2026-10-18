@@ -523,6 +523,7 @@ function fitDistance(r) {
 }
 
 function frameCamera({ animate = false } = {}) {
+  refitRig = null; // a view asked for now is not undone by a lesson's rig settling
   if (!hasSize()) {
     fitWhenSized = true;
     return;
@@ -1085,6 +1086,7 @@ function select(name, { focus = false } = {}) {
 }
 
 function focusRobot(name) {
+  refitRig = null;
   const box = robotBox(name);
   if (!box || !hasSize()) return;
   const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -2104,6 +2106,7 @@ initLessons({
   freeRect: () => freeRect(), // the part of the window no panel covers, in CSS px
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {
+    refitRig = null; // the lesson's new camera replaces the one still to be fitted again
     // A rig is measured where its robots stand: a scene whose first poses have not come yet has every body at the
     // origin, and the fit framed that instead (on a phone the third PID twin and the Panda ended off the screen).
     if (fit && pendingFit) fitWhenPosed = { eye, target };
