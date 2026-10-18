@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, flight, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import Kind, air, flight, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
@@ -280,6 +280,8 @@ class BehaviorManager:
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
                         self._mobile_controller(name, kind, create=True)
+                    if kind == Kind.AIRCRAFT:
+                        air.attach_air(self.session, name)  # drag and wind, whatever flies it (behaviors/air.py)
                 elif kind in STEPPING and in_world:
                     with contextlib.suppress(BehaviorError):
                         gait = self._mobile_controller(name, kind, create=True, walker="gait")

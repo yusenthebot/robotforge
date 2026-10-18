@@ -700,11 +700,11 @@ class Playground:
             steps = max(1, round(seconds / self.session.model.opt.timestep))
             before = self._free_body_positions()
             if wind is not None:
-                from robotforge.behaviors import flight
+                from robotforge.behaviors import air
 
                 try:
-                    blown = flight.blow(self.session, wind, seconds, steps)
-                except flight.FlightError as exc:
+                    blown = air.blow(self.session, wind, seconds, steps)
+                except air.WindError as exc:
                     raise PlaygroundError(str(exc)) from exc
             else:
                 self.session.step(steps)

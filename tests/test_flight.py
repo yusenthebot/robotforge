@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from robotforge.behaviors import Kind, robot_kind
+from robotforge.behaviors.air import AIR, attach_air
 from robotforge.behaviors.airframe import AirframeError, Mixer, find_airframe
 from robotforge.behaviors.flight import FlightController, Mission
 from robotforge.design.world import World, compile_world
@@ -81,6 +82,7 @@ def _session(model: mujoco.MjModel) -> tuple[SimSession, FlightController]:
     session.reset()
     fc = FlightController(model, "drone")
     session.set_controller("drone", fc)
+    attach_air(session, "drone")
     return session, fc
 
 
@@ -102,7 +104,8 @@ def test_a_gust_pushes_it_away_and_it_comes_back():
     session, fc = _session(_drone_world())
     fc.fly(Mission([np.array([0.0, 0.0, 2.0])], False, 1.5))
     session.step(int(6 / 0.002))
-    fc.gusts([8.0, 0.0], 1.5, session.data.time)
+    wind = session.controllers[AIR + "drone"]
+    wind.gusts([8.0, 0.0], 1.5, session.data.time)
     worst = 0.0
     for _ in range(int(2.5 / 0.002)):
         session.step(1)
@@ -110,16 +113,19 @@ def test_a_gust_pushes_it_away_and_it_comes_back():
     assert 0.05 < worst < 0.5  # it felt the gust, and held against it
     session.step(int(4 / 0.002))
     assert np.linalg.norm(session.data.xpos[fc.frame.root] - [0, 0, 2]) < 0.05
-    assert fc.gust is None  # blown over: only the drag of its own (tiny) motion is left
+    assert wind.gust is None  # blown over: only the drag of its own (tiny) motion is left
     assert np.linalg.norm(session.data.xfrc_applied[fc.frame.root, :3]) < 0.01
 
 
-def test_taking_the_controller_off_lets_go_of_the_air_it_pushed_with():
+def test_the_air_stays_whatever_flies_it_and_lets_go_when_taken_away():
     session, fc = _session(_drone_world())
     fc.fly(Mission([np.array([0.0, 0.0, 2.0])], False, 1.5))
     session.step(int(1.5 / 0.002))
     assert np.any(session.data.xfrc_applied[fc.frame.root, :3] != 0.0)  # drag while climbing
-    session.set_controller("drone", None)
+    session.set_controller("drone", None)  # another controller (LQR, MPC, a script) flies through the same air
+    session.step(1)
+    assert np.any(session.data.xfrc_applied[fc.frame.root, :3] != 0.0)
+    session.set_controller(AIR + "drone", None)
     assert np.all(session.data.xfrc_applied[fc.frame.root, :3] == 0.0)
 
 

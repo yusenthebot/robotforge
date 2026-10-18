@@ -15,9 +15,8 @@ acceleration is measured (an IMU would), and what is left over is pushing from o
 heavier than expected). Subtracting it at once beats an integral, which only notices a push after it has moved
 the aircraft away, then overshoots on the way back. A small integral, used only near the target, takes the rest.
 
-The air is still unless a gust blows: drag (a linear rotor-drag term and quadratic body drag) and the wind act on
-the airframe as an external force each control tick. MuJoCo's own fluid model is world-wide and would slow every
-robot and ball in the world, so it is left off.
+Drag and wind are the air's business (behaviors/air.py): to the controller they are outside forces like any
+other, and the observer takes them out.
 """
 
 from __future__ import annotations
@@ -66,11 +65,6 @@ OBSERVER_TAU = 0.04  # s, how quickly the disturbance estimate follows a push
 SMOOTHING = 5.0  # rad/s: the reference's acceleration is low-passed this fast (see Reference)
 K_ATT = np.array([7.0, 7.0, 2.5])
 K_RATE = np.array([20.0, 20.0, 6.0])
-# Air: rotor drag per kg of aircraft (N s/m per kg), and body drag as the drag coefficient times frontal area per
-# square meter of span (a 0.65 m camera drone: CdA 0.025 m^2).
-ROTOR_DRAG = 0.12
-BODY_CD = 0.06
-AIR_DENSITY = 1.225
 
 
 CONTROLLER = (
@@ -93,29 +87,6 @@ def _wrap(angle: float) -> float:
 
 def _vee(m: np.ndarray) -> np.ndarray:
     return np.array([m[2, 1], m[0, 2], m[1, 0]])
-
-
-@dataclass
-class Gust:
-    """Wind (world frame, m/s) that turns from `before` to `wind` over `ramp` s from `start`, blows until `end`,
-    then dies down over `ramp` s."""
-
-    wind: np.ndarray
-    start: float
-    end: float
-    before: np.ndarray = field(default_factory=lambda: np.zeros(3))
-    ramp: float = 0.3
-
-    def at(self, t: float) -> np.ndarray:
-        if t >= self.end + self.ramp:
-            return np.zeros(3)
-        if t > self.end:
-            return self.wind * ((self.end + self.ramp - t) / self.ramp)
-        k = float(np.clip((t - self.start) / self.ramp, 0.0, 1.0))
-        return self.before + (self.wind - self.before) * k
-
-    def over(self, t: float) -> bool:
-        return t >= self.end + self.ramp
 
 
 @dataclass
@@ -214,9 +185,6 @@ class FlightController:
         self._com_v: np.ndarray | None = None
         self._first = True
         self.resting = np.clip(0.0, self.frame.mixer.low, self.frame.mixer.high)  # motors off
-        span = self.frame.radius * 2
-        self.drag_quad = 0.5 * AIR_DENSITY * BODY_CD * span * span
-        self.drag_lin = ROTOR_DRAG * self.frame.mass
         self.phase = "landed"  # landed, flying, landing, spooling, crashed
         self.mode = "hold"  # hold, keys, mission
         self.mission: Mission | None = None
@@ -226,7 +194,6 @@ class FlightController:
         self.side = 0.0
         self.climb = 0.0
         self.turn = 0.0
-        self.gust: Gust | None = None
         self.fallen = False
         self.touchdown_speed: float | None = None
         self.saturated = False
@@ -236,7 +203,6 @@ class FlightController:
         self._spool_from = 0.0
         self._started = False
         self._land_ground: float | None = None
-        self._last_force = np.zeros(3)
         self._p = np.zeros(3)
         self._v = np.zeros(3)
 
@@ -285,19 +251,6 @@ class FlightController:
             self.mode = "hold"
             self.target = None  # set from where it brakes to, at the next tick
 
-    def gusts(self, wind: list[float] | np.ndarray, seconds: float, now: float) -> None:
-        """Wind that blows for `seconds` from `now` and dies down after. The same wind again while it still blows
-        keeps it blowing: an agent stepped a gust 0.05 s at a time to watch it, and each call started it afresh
-        from still air, so it never blew at all. Other wind turns from what blows now."""
-        w = np.zeros(3)
-        w[: len(wind)] = np.asarray(wind, float)[:3]
-        g = self.gust
-        if g is not None and now <= g.end and np.allclose(g.wind, w):
-            g.end = max(g.end, now + seconds)
-            return
-        before = g.at(now) if g is not None else np.zeros(3)
-        self.gust = Gust(w, now, now + seconds, before)
-
     def _take_off(self) -> None:
         self.phase = "flying"
         self._integral[:] = 0.0
@@ -320,16 +273,9 @@ class FlightController:
         }
         if self.mode == "keys" and self.airborne:
             out["keys"] = {"forward": self.speed, "left": self.side, "up": self.climb, "turn": self.turn}
-        if self.gust is not None and not self.gust.over(self._t or 0.0):
-            out["gust_m_s"] = [round(float(v), 2) for v in self.gust.wind]
         if self.touchdown_speed is not None and self.phase in ("landed", "spooling"):
             out["touchdown_m_s"] = round(self.touchdown_speed, 3)
         return out
-
-    def release(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        """Taken off the robot: the air it applied lets go too (see SimSession.set_controller)."""
-        if self.model is model:
-            data.xfrc_applied[self.frame.root, :3] = 0.0
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         t = float(data.time)
@@ -346,7 +292,6 @@ class FlightController:
             self._first = False
             if self.altitude > 0.15 and self.phase == "landed" and rot[2, 2] > 0.5:
                 self.phase, self.mode, self.target, self._started = "flying", "hold", None, False
-        self._air(data, t)
         if rot[2, 2] < UPSIDE_DOWN and not self.fallen:
             self.fallen = True
             self.phase = "crashed"
@@ -528,21 +473,6 @@ class FlightController:
         torque = inertia @ (K_RATE * (rate_want - omega)) + np.cross(omega, inertia @ omega)
         return thrust, torque
 
-    # ---- the air --------------------------------------------------------------------------------
-
-    def _air(self, data: mujoco.MjData, t: float) -> None:
-        """Drag and wind on the airframe, as an external force at its root body (see the module notes)."""
-        wind = self.gust.at(t) if self.gust is not None else np.zeros(3)
-        if self.gust is not None and self.gust.over(t):
-            self.gust = None
-        rel = self._v - wind
-        speed = float(np.linalg.norm(rel))
-        force = -(self.drag_lin + self.drag_quad * speed) * rel
-        if self.phase == "landed" and self.gust is None:
-            force[:] = 0.0  # on the ground in still air: nothing to push
-        data.xfrc_applied[self.frame.root, :3] = force
-        self._last_force = force
-
     def ground_below(self, model: mujoco.MjModel, data: mujoco.MjData, point: np.ndarray) -> float | None:
         """Height of whatever is under `point` (not the aircraft itself), or None over nothing."""
         return ground_height(model, data, point, self.frame.descendants, self.frame.root)
@@ -564,40 +494,6 @@ def ground_height(
             return float(hit[2])
         start = hit + down * 1e-4
     return None
-
-
-MAX_WIND = 30.0  # m/s; more is a storm no drone flies in (and a number in km/h by mistake)
-
-
-def blow(session: Any, wind: list[float], seconds: float, steps: int) -> dict[str, Any]:
-    """simulate(wind=...): a gust on every aircraft the session flies, for `seconds` (`steps` physics steps, taken
-    here), and how far it pushed each one. Called with the session lock held."""
-    if len(wind) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in wind):
-        raise FlightError(f"wind is [x, y] or [x, y, z] in m/s, got {wind}")
-    if float(np.linalg.norm(wind)) > MAX_WIND:
-        raise FlightError(f"wind {list(wind)} is over {MAX_WIND:g} m/s: it is in m/s (36 km/h is 10 m/s)")
-    flying = {n: c for n, c in session.controllers.items() if isinstance(c, FlightController)}
-    if not flying:
-        raise FlightError("wind only pushes aircraft, and none is flying here (add_robot template='drone')")
-    now = float(session.data.time)
-    start = {n: session.data.xpos[c.frame.root].copy() for n, c in flying.items()}
-    for c in flying.values():
-        c.gusts(wind, seconds, now)
-    worst = dict.fromkeys(flying, 0.0)
-    done = 0
-    while done < steps:
-        chunk = min(10, steps - done)
-        session.step(chunk)
-        done += chunk
-        for n, c in flying.items():
-            worst[n] = max(worst[n], float(np.linalg.norm(session.data.xpos[c.frame.root] - start[n])))
-    return {
-        "m_s": [float(v) for v in wind],
-        "pushed_m": {n: round(v, 3) for n, v in worst.items()},
-        "off_by_m": {
-            n: round(float(np.linalg.norm(session.data.xpos[c.frame.root] - start[n])), 3) for n, c in flying.items()
-        },
-    }
 
 
 def parse_points(text: str) -> list[Any] | None:

@@ -107,13 +107,13 @@ def land(pg: Any, robot: str) -> dict[str, float]:
 
 def gust(pg: Any, robot: str, wind: float = 8.0, seconds: float = 1.5) -> dict[str, float]:
     """A gust from the side while hovering: the furthest it is pushed, and when it is back within 5 cm."""
-    from robotforge.behaviors import flight
+    from robotforge.behaviors import air
 
     _fly(pg, robot, [0.0, 0.0, 2.0])
     pg.run_fast(lambda: False, 2.0)
     root = _root(pg, robot)
     hold = pg.session.data.xpos[root].copy()
-    flight.blow(pg.session, [wind, 0.0], seconds, 1)
+    air.blow(pg.session, [wind, 0.0], seconds, 1)
     p = _sample(pg, robot, 8.0, every=1)
     d = np.linalg.norm(p - hold, axis=1)
     out = np.where(d > 0.05)[0]
