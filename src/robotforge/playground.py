@@ -906,18 +906,38 @@ class Playground:
     @_one_edit_at_a_time
     def load_scene(
         self,
-        preset: str,
+        preset: str | None = None,
         seed: int = 0,
         keep_robots: bool = True,
         starter: bool = True,
         options: dict[str, float] | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        """Replace the floor, terrain and objects with a ready-made scene (opening a world named after it if
-        none is open). Kept robots move to the scene's places; an empty world gets the scene's starter robot."""
+        """Replace the floor, terrain and objects with a ready-made scene, or one generated from `description` (a
+        sentence: design/generate), opening a world named after it if none is open. Kept robots move to the scene's
+        places; an empty world gets the scene's starter robot."""
+        generated = None
         try:
-            content = scenes.build(preset, seed, options)
+            if description is not None:
+                from robotforge.design import generate  # only when asked: it is not needed to start
+                if preset is not None:
+                    raise ValueError(
+                        "give preset (a ready-made scene) or description (a sentence to generate one from), not both"
+                    )
+                if options:
+                    raise ValueError("options size the ready-made scenes; a description says the size in words")
+                generated = generate.generate(description, seed)
+                content = generated.content
+            elif preset is None:
+                raise ValueError(f"give preset (one of {', '.join(scenes.SCENES)}) or description (a sentence)")
+            else:
+                content = scenes.build(preset, seed, options)
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
+        if preset is None:
+            from robotforge.design import generate
+
+            preset = generate.world_name(description)
         if self.store is None:
             self.store = WorldStore.create(preset, content.floor.get("style", "checker"))
         base_dir = self.store.dir
@@ -938,7 +958,7 @@ class Playground:
         result = self._edit(change)
         self._places = (self.store.dir, list(content.ground_slots))
         result["scene"] = {
-            "preset": preset,
+            **({"generated": generated.summary()} if generated is not None else {"preset": preset}),
             "seed": seed,
             "placed": placed,
             "robot_places": [list(s.pos) for s in content.ground_slots],
