@@ -55,6 +55,7 @@ def truth() -> dict[str, Any]:
     m, d = pg.session.model, pg.session.data
     lidar, depth = [], []
     lidar_truth, depth_truth = [], []
+    nearest, nearest_truth = [], []  # the depth camera's nearest obstacle: a distance, the wall's from the lens
     for _ in range(30):
         run(pg, 0.1)
         reading, _ = pg.read_sensors("go2", ["lidar", "depth_camera"])
@@ -67,6 +68,9 @@ def truth() -> dict[str, Any]:
         if "center_m" in cam and cam["center_m"] is not None:
             depth.append(cam["center_m"])
             depth_truth.append(float((eye[0] - WALL_FACE_X) / -forward[0]))
+        if cam.get("nearest"):
+            nearest.append(cam["nearest"]["distance_m"])
+            nearest_truth.append(float(eye[0] - WALL_FACE_X))
     out: dict[str, Any] = {
         "lidar_ahead_m": round(statistics.mean(lidar), 4),
         "lidar_truth_m": round(statistics.mean(lidar_truth), 4),
@@ -82,6 +86,14 @@ def truth() -> dict[str, Any]:
             depth_error_mean_m=round(float(err.mean()), 4),
             depth_error_std_m=round(float(err.std()), 4),
             depth_noise_set_m=0.01,
+        )
+    if nearest:
+        err = np.subtract(nearest, nearest_truth)
+        out.update(
+            depth_nearest_m=round(statistics.mean(nearest), 4),
+            depth_nearest_truth_m=round(statistics.mean(nearest_truth), 4),
+            depth_nearest_error_mean_m=round(float(err.mean()), 4),
+            depth_nearest_error_std_m=round(float(err.std()), 4),
         )
     else:
         out["depth"] = f"no picture: {render_unavailable_reason()}"
@@ -136,7 +148,8 @@ def wrist() -> dict[str, Any]:
         out = []
         for _ in range(25):
             run(pg, 0.02)
-            out.append(pg.read_sensors("panda", ["wrist"])[0]["sensors"]["wrist"]["payload_kg"])
+            wrist = pg.read_sensors("panda", ["wrist"])[0]["sensors"]["wrist"]
+            out.append(wrist["payload_kg"] if "payload_kg" in wrist else -wrist["supported_kg"])
         return out
 
     do(pg.behaviors.move_arm("panda", [0.5, 0.0, 0.25], "open"))

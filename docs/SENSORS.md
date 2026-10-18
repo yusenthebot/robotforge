@@ -145,9 +145,11 @@ The depth picture is drawn ten times a second and reaches the panel 7 ms after i
 | what | set up | measured |
 |---|---|---|
 | 3D lidar against a wall | Go2 in the warehouse, 1.72 m from the side wall, lidar noise 2 cm, 30 scans | `ahead` 2.3 mm long on average, 6.4 mm spread; a clean scan: 99.6 % of the 739 rays toward the wall within 1 mm of its plane |
-| depth camera against the wall | same, noise 1 cm | `center_m` 1.5 mm long on average, 11.2 mm spread |
+| depth camera against the wall | same, noise 1 cm | `center_m` 1.5 mm long on average, 11.2 mm spread; `nearest` 1.3 mm long, 0.7 mm spread (2026-10-19) |
+| depth camera, an obstacle off its axis | a pole 26 degrees to the side, 1.82 m from the lens, a lidar puck beside the lens | `nearest` 1.821 m at 25.8 degrees, the lidar beside it 1.809 m (1.808 from its own origin); before 2026-10-19 the depth along the axis (1.66 m), or the puck at 0.025 m |
 | IMU on a dropped block | 2 kg block from 1 m, 200 Hz | 0.00 m/s2 while it falls, 9.81 at rest; lands at 0.46 s (free fall predicts 0.44) |
 | force-torque at a Panda's wrist | a 100 g cube picked up and held 25 cm up | `payload_kg` 0.000 empty, 0.100 holding it |
+| force-torque on a standing Go2's front-left calf | standing still, 1 s | `supported_kg` 3.576 (a quarter of the 15 kg dog, less the leg below the sensor); no negative `payload_kg` |
 | touch arrays under a trotting Go2's feet | 2 x 2 pads, 0.4 m/s, 3 s at 100 Hz | agree with the true foot contacts 98.3 to 98.7 % of the time; diagonal feet correlate 0.96 to 0.97, side by side -0.51 to -0.52; stances FR+RL 34 %, FL+RR 32 %, all four 31 %; the pressure moves from the back row to the front row in each stance |
 | noise | IMU accel 0.05, gyro 0.002, GPS 0.03, 1000 samples | 0.0485 to 0.0501, 0.00203 to 0.00204, 0.0287 to 0.0302 |
 | latency | GPS 0.1 s on a falling block | 0.100 s |
