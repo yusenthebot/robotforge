@@ -31,10 +31,11 @@ def register(server: MCPServer, playground: Playground, run_until: Callable[...,
         drawer: open / close, amount in m (default: all the way). cabinet: open / close the door, amount in degrees
         (default 90 open, all the way closed). button: press (it springs back). switch, lever: press flips it to the
         other side; turn tips it by amount degrees (+ toward -y). valve: open (counter-clockwise) / close / turn by
-        amount degrees (default 90; past 90 it lets go and takes hold again). Works with fingers, a suction cup or a
-        magnet. The result: moved (m or degrees), the state now, success, and notes when the arm could not follow
-        the whole way; a handle out of reach is refused with its distance. Put things in an open drawer with
-        pick_and_place(robot, object, drawer)."""
+        amount degrees (default 90; past 90 it lets go and takes hold again until the wheel is there). Works with
+        fingers or a suction cup; a magnet holds only the steel bars of drawers and doors (and pushes buttons). The
+        result: moved (m or degrees), the state now, success (judged against how far the thing can go), and notes
+        when the arm could not follow the whole way or did not take hold; a handle out of reach is refused with its
+        distance. Put things in an open drawer with pick_and_place(robot, object, drawer)."""
         with _tool_errors():
             op, found, shape = operating.start(playground.behaviors, robot, target, action, amount)
             run = await run_until(lambda: op.done, OPERATE_SECONDS)

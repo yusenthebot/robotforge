@@ -12,6 +12,7 @@ turned a quarter at a time, the hand letting go and taking hold again.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,11 +28,16 @@ from robotforge.behaviors.arm import (
     servo_stiffness,
     servo_targets,
 )
-from robotforge.design import mechanisms
+from robotforge.design import end_effectors, mechanisms
+from robotforge.sim.geometry import collides
 
 UP = -DOWN
 HANDLE_SPEED = 0.05  # m/s the handle moves at: a drawer opens 20 cm in 4 s
-ABOVE = 0.06  # m above the handle the hand comes down from and goes back up to
+ABOVE = 0.06  # m above the handle the hand goes back up to when it lets go
+# m above the handle the hand comes straight down from, or as near that as the arm reaches pointing down: swung in
+# from afar to 6 cm above a cabinet's door bar, the template arm's hand went through the bar and the door.
+COME_DOWN = 0.12
+REACH_SPEED = 0.1  # m/s coming down to the handle
 PATH_STEP = 0.01  # m between the points of a way that are solved before moving
 TURN_PER_HOLD = math.radians(90)  # a wheel turned further is let go and taken hold of again
 # m a press aims past the button's bottom stop. A servo pushes only as hard as it is kept from its target: aimed at
@@ -43,9 +49,23 @@ RELEASE_SECONDS = 0.5
 HOLD_PRESS_SECONDS = 0.3
 SUCCESS_FRACTION = 0.8  # of the way asked: less than this, the result says it fell short
 MAX_JOINT_STEP = 0.35  # rad a joint may move between two points of a way 1 cm apart: more is a jump to another pose
-THERE_M, THERE_RAD = 0.002, math.radians(1.0)  # closer than this to the asked place is there already
+# This close to where it is going, it is there already: a drawer stopped 3 mm short of its end is open all the way.
+THERE_M, THERE_RAD = 0.004, math.radians(1.5)
 HOLD_STARTS = 12  # random starts tried for a hold, besides the arm's pose now and its own solver's answer
-PRE_OPEN = 0.5  # of their full opening the fingers open to take a bar: 3.5 cm for our 7 cm gripper, 4 cm on a Panda
+# Of their full opening the fingers open to take a bar: 3.5 cm for our 7 cm gripper, 4 cm on a Panda, or less where
+# that runs a finger into what the bar is on (a Panda's fingers are 1.7 cm thick at the root: open 4 cm round a drawer
+# bar, the one behind it stood 6 mm into the drawer's front).
+PRE_OPENS = (0.5, 0.4, 0.3, 0.25)
+# m the hand may overlap the mechanism in a planned pose: hardly at all, and a little more on the handle itself (a
+# cup is pressed 1 mm onto a bar). A Panda's hold on a drawer put a finger 2.8 cm into the chest's top; for real, the
+# finger came down on the top, the hand closed on nothing and the drawer did not move.
+TOUCH_OK, HANDLE_TOUCH_OK = 0.001, 0.003
+CLEAR_ABOVE = 0.03  # m above the hold the hand must come down from in a straight line, clear of the mechanism
+APPROACH_SAMPLES = 8  # poses checked along the joint move to above the handle
+LIFT = 0.06  # m the hand rises before it swings over to the handle, when swinging straight there runs into it
+HELD_WITHIN = 0.002  # m: a contact this close counts as holding (an adhesive pad holds from 1 mm off)
+EXTRA_HOLDS = 2  # a wheel that slipped in the hand is taken hold of again for what is left, at most this often more
+RIM_OFFSETS = (0.0, 15.0, -15.0, 30.0, -30.0)  # degrees round a wheel's rim tried for a hold (see _rim_hold)
 
 
 class OperateError(ValueError):
@@ -61,6 +81,10 @@ class Leg:
     q: np.ndarray | None = None  # end of a joint move
     path: list[np.ndarray] = field(default_factory=list)  # joint values along a tool path, solved beforehand
     grip: float | None = None  # gripper control set when the leg starts
+    # Run as the leg ends: a note saying what went wrong (the hand did not take hold), or None. On a note the
+    # operation does `abort` instead of the rest (let go and back off from there).
+    check: Callable[[mujoco.MjModel, mujoco.MjData], str | None] | None = None
+    abort: list[Leg] = field(default_factory=list)
 
 
 @dataclass
@@ -90,19 +114,51 @@ class Way:
         return float(radius * abs(delta))
 
 
+@dataclass(frozen=True)
+class Parts:
+    """The mechanism's collision shapes, to keep the hand off them: all of them, and the handle's own (held)."""
+
+    name: str
+    geoms: frozenset[int]
+    handle: frozenset[int]
+
+
+def _parts(model: mujoco.MjModel, target: str) -> Parts:
+    carcass = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, target)
+    geoms = {
+        g
+        for g in range(model.ngeom)
+        if carcass >= 0 and _below(model, int(model.geom_bodyid[g]), carcass) and collides(model, g)
+    }
+    held = tuple(f"{target}/{part}" for part in ("handle", "knob", "rim"))
+    handle = {g for g in geoms if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g) or "").startswith(held)}
+    return Parts(target, frozenset(geoms), frozenset(handle))
+
+
 class Operation:
     """The controller that works one mechanism with one arm (it takes the arm's place among the controllers)."""
 
     rate_hz = 100.0
 
-    def __init__(self, arm: ArmMotion, legs: list[Leg], report: dict[str, Any], watch: tuple[int, str]):
+    def __init__(
+        self,
+        arm: ArmMotion,
+        legs: list[Leg],
+        report: dict[str, Any],
+        watch: tuple[int, str],
+        more: Callable[[mujoco.MjModel, mujoco.MjData], list[Leg]] | None = None,
+    ):
         self.arm = arm
         self.robot = arm.robot
         self.legs = legs
+        # Asked for more legs when these run out, from what the mechanism did (a wheel that slipped in the hand is
+        # taken hold of again for what is left); [] when there is no more to do.
+        self.more = more
         self.report = report  # what was planned; the result adds what happened
         self._joint_adr, self._shape = watch
         self._leg: tuple[Leg, float, np.ndarray] | None = None  # (leg, start time, q at its start)
         self.extreme: float | None = None  # lowest joint value seen (a button's press)
+        self.aborted = False  # set when the hand did not take hold and the operation stopped (a note says why)
         self.current_label = "start"
         # Fingers or not, the arm holds its weight up with its servo targets: aimed at the joint values themselves, the
         # template arm hung 1.6 cm low over a switch, closed under the knob and missed it (see arm.servo_targets).
@@ -113,7 +169,7 @@ class Operation:
 
     @property
     def done(self) -> bool:
-        return not self.legs and self._leg is None
+        return not self.legs and self._leg is None and (self.more is None or self.aborted)
 
     def status(self) -> dict[str, Any]:
         return {"behavior": "operate", "robot": self.robot, "step": self.current_label, "done": self.done}
@@ -147,6 +203,21 @@ class Operation:
         data.ctrl[arm.actuators] = self._targets(data)
         if u >= 1.0:
             self._leg = None
+            self._after(leg, model, data)
+
+    def _after(self, leg: Leg, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """At the end of a leg: check what it was to do, and plan more once the legs run out."""
+        note = leg.check(model, data) if leg.check is not None else None
+        if note is not None:
+            self.aborted = True
+            self.report["notes"].append(note)
+            self.legs = list(leg.abort)
+            self.more = None
+            return
+        if not self.legs and self.more is not None:
+            self.legs = self.more(model, data)
+            if not self.legs:
+                self.more = None
 
 
 # ---- planning ---------------------------------------------------------------------------------------
@@ -172,6 +243,13 @@ def plan(
         raise OperateError(f"{target} has no handle to take hold of; reload the world (open_world)")
     if arm.gripper < 0 and action != "press":
         raise OperateError(f"{arm.robot} has no gripper or tool to take hold of {target}'s handle with")
+    pushed = shape == "button"  # a button is pushed with whatever the hand has; everything else is held
+    if arm.tool == "magnet" and not pushed and not end_effectors.magnetic(model, sorted(_parts(model, target).handle)):
+        held = {"knob": "knob", "bar": "rim" if shape == "valve" else "handle"}.get(info.grip, "handle")
+        raise OperateError(
+            f"{arm.robot}'s electromagnet holds steel only, and {target}'s {held} is not steel: work it with fingers "
+            f"or a suction cup (update_robot with end_effector='gripper' or 'suction')"
+        )
     q_now = float(data.qpos[model.jnt_qposadr[joint]])
     lo, hi = (float(v) for v in model.jnt_range[joint])
     delta, asked = _delta(shape, action, amount, q_now, lo, hi, info.unit)
@@ -199,12 +277,23 @@ def plan(
     if action == "press" and shape == "button":
         legs = _press_legs(model, data, arm, target, way, delta)
         return Operation(arm, legs, report, watch)
-    if abs(delta) < (THERE_M if info.unit == "m" else THERE_RAD):  # within 2 mm or 1 degree: nothing to do
-        report["notes"].append(f"{target} is already there: {_said(q_now, info.unit)}")
+    report["can"] = delta  # what its joint's range lets it go: success is judged against this, not what was asked
+    # Asked further than it goes? (Not asked at all, it goes as far as it goes.)
+    asked_joint = _asked_joint(action, asked, info.unit, delta) if amount is not None else delta
+    if abs(delta) <= (THERE_M if info.unit == "m" else THERE_RAD):  # nothing to do
+        end = " at its end that way" if abs(asked_joint) > abs(delta) + 1e-9 else ""
+        report["notes"].append(f"{target} is already{end or ' there'}: {_said(q_now, info.unit)}")
         return Operation(arm, [], report, watch)
+    if abs(asked_joint) > abs(delta) + 1e-9:  # asked further than it goes
+        report["notes"].append(
+            f"{target} goes only {_said(abs(delta), info.unit)} that way from {_said(q_now, info.unit)}: "
+            f"{_said(q_now + delta, info.unit)} is its end"
+        )
     if shape == "valve":
         way = _nearest_hold(way, arm)
-    legs, done = _hold_and_move(model, data, arm, target, info.grip, way, delta)
+    parts = _parts(model, target)
+    _open_fingers(model, arm)
+    holds, done = _hold_and_move(model, data, arm, parts, info.grip, way, delta)
     if abs(done) < abs(delta) - 1e-6:
         went, asked = _said(abs(done), info.unit), _said(abs(delta), info.unit)
         report["notes"].append(
@@ -212,7 +301,52 @@ def plan(
             f"gripper pointing down; move the arm or the {shape} nearer each other to go further"
         )
     report["planned"] = _shown(abs(done), info.unit)
-    return Operation(arm, legs, report, watch)
+    if not (way.hinge and _is_wheel(target, model)):
+        return Operation(arm, holds[0], report, watch)
+    # A wheel: the first hold as planned, and each one after it planned from where the wheel really is then.
+    more = _again(arm, parts, info.grip, way, watch[0], q_now + done, len(holds) - 1 + EXTRA_HOLDS)
+    return Operation(arm, holds[0], report, watch, more)
+
+
+def _again(
+    arm: ArmMotion, parts: Parts, grip: str, way: Way, adr: int, goal: float, budget: int
+) -> Callable[[mujoco.MjModel, mujoco.MjData], list[Leg]]:
+    """The holds of a wheel after its first, each planned once the one before is done, until the wheel is where it
+    was to go (at most `budget` more): it slips in a hand that grips only as hard as its servo is kept from closing,
+    and turned open loop, a quarter turn came out at 71 degrees. Planned from the wheel as it is, its spokes are
+    where they are."""
+    left_holds = [budget]
+
+    def again(model: mujoco.MjModel, data: mujoco.MjData) -> list[Leg]:
+        left = goal - float(data.qpos[adr])
+        if abs(left) <= THERE_RAD or left_holds[0] <= 0:
+            return []
+        left_holds[0] -= 1
+        step = float(np.clip(left, -TURN_PER_HOLD, TURN_PER_HOLD))
+        arm.sync(data)
+        _open_fingers(model, arm)
+        legs, _, _ = _rim_hold(model, data, arm, parts, grip, way, step, arm.q.copy(), first=True)
+        return legs
+
+    return again
+
+
+def _rim_hold(
+    model, data, arm: ArmMotion, parts: Parts, grip: str, way: Way, step: float, q: np.ndarray, first: bool, why=None
+) -> tuple[list[Leg], float, np.ndarray]:
+    """A hold on a wheel's rim that turns it by `step`: taken half the step before the rim's nearest point to the
+    arm, so the hand turns it through there, where the arm reaches best; or a little either side of that where a
+    spoke is in the way of the finger inside the rim."""
+    best: tuple[list[Leg], float, np.ndarray] = ([], 0.0, q)
+    for offset in RIM_OFFSETS:
+        turn = _rotation(way.axis, math.radians(offset) - step / 2)
+        here = Way(way.joint, True, way.axis, way.anchor, way.anchor + turn @ (way.handle - way.anchor), turn @ way.rot)
+        found = _one_hold(model, data, arm, parts, grip, here, 0.0, step, q, first=first, why=why)
+        if found[0] and abs(found[1]) > abs(best[1]):
+            best = found
+        if abs(best[1]) >= abs(step) - 1e-6:  # all the way: no need to look further
+            break
+    return best
 
 
 def _delta(
@@ -245,6 +379,17 @@ def _delta(
     return delta, (amount if amount is not None else abs(_shown(delta, unit)))
 
 
+def _asked_joint(action: str, asked: float, unit: str, delta: float) -> float:
+    """What was asked in the joint's own units and direction (open is the joint's + way, close its - way; a turn
+    is signed already)."""
+    size = asked if unit == "m" else math.radians(asked)
+    if action == "turn":
+        return size
+    if action == "press":
+        return delta
+    return size if action == "open" else -size
+
+
 def _shown(q: float, unit: str) -> float:
     return round(q, 3) if unit == "m" else round(math.degrees(q), 1)
 
@@ -270,31 +415,48 @@ def _nearest_hold(way: Way, arm: ArmMotion) -> Way:
 
 
 def _hold_and_move(
-    model: mujoco.MjModel, data: mujoco.MjData, arm: ArmMotion, target: str, grip: str, way: Way, delta: float
-) -> tuple[list[Leg], float]:
-    """Legs that take hold of the handle and move it by `delta` (in holds of at most TURN_PER_HOLD for a wheel),
-    and how far of `delta` the arm can follow."""
-    legs: list[Leg] = []
+    model: mujoco.MjModel, data: mujoco.MjData, arm: ArmMotion, parts: Parts, grip: str, way: Way, delta: float
+) -> tuple[list[list[Leg]], float]:
+    """The legs of each hold that takes hold of the handle and moves it by `delta` (holds of at most TURN_PER_HOLD
+    for a wheel, one for anything else), and how far of `delta` the arm can follow."""
+    target = parts.name
+    holds: list[list[Leg]] = []
     done = 0.0
     q = arm.q.copy()
     wheel = way.hinge and _is_wheel(target, model)
-    holds = max(1, math.ceil(abs(delta) / TURN_PER_HOLD - 1e-9)) if wheel else 1
-    step = delta / holds
-    for k in range(holds):
+    count = max(1, math.ceil(abs(delta) / TURN_PER_HOLD - 1e-9)) if wheel else 1
+    step = delta / count
+    why: list[str] = []
+    adr = int(model.jnt_qposadr[way.joint])
+    start = float(arm.ik.base_qpos[adr])
+    for k in range(count):
         # A wheel is taken hold of again at the same place on its rim's way round (any point of a rim is one to
-        # hold); anything else is held once.
-        segment, reached, q = _one_hold(model, data, arm, target, grip, way, 0.0, step, q, first=k == 0)
-        legs += segment
+        # hold), with its spokes where they will be by then; anything else is held once.
+        arm.ik.base_qpos[adr] = start + done
+        if wheel:
+            segment, reached, q = _rim_hold(model, data, arm, parts, grip, way, step, q, first=k == 0, why=why)
+        else:
+            segment, reached, q = _one_hold(model, data, arm, parts, grip, way, 0.0, step, q, first=True, why=why)
+        if not segment:
+            break
+        holds.append(segment)
         done += reached
         if abs(reached) < abs(step) - 1e-6:
             break
-    if not legs:
+    arm.ik.base_qpos[adr] = start
+    if not holds:
+        if why:  # it reaches, but every hold it has runs the hand into the thing
+            raise OperateError(
+                f"{arm.robot} cannot take hold of {target}'s handle with its gripper pointing down without running "
+                f"into it: the holds it reaches put its {why[0]}; move the arm or the {target} (e.g. 10 cm nearer "
+                "or further) and try again"
+            )
         raise OperateError(
             f"{arm.robot} cannot take hold of {target}'s handle with its gripper pointing down: it is "
             f"{_distance(arm, way.handle):.2f} m from the arm's base, at height {way.handle[2]:.2f} m; move the arm "
             f"or the {target} so the handle is within reach"
         )
-    return legs, done
+    return holds, done
 
 
 def _is_wheel(target: str, model: mujoco.MjModel) -> bool:
@@ -306,15 +468,26 @@ def _distance(arm: ArmMotion, point: np.ndarray) -> float:
 
 
 def _one_hold(
-    model, data, arm: ArmMotion, target: str, grip: str, way: Way, start: float, step: float, q: np.ndarray, first: bool
+    model,
+    data,
+    arm: ArmMotion,
+    parts: Parts,
+    grip: str,
+    way: Way,
+    start: float,
+    step: float,
+    q: np.ndarray,
+    first: bool,
+    why: list[str] | None = None,
 ) -> tuple[list[Leg], float, np.ndarray]:
     """Take hold at the handle as it is once the joint has moved by `start`, move it on by `step`, let go and back
-    off: (legs, how far of `step` it gets, the arm's joints at the end)."""
+    off: (legs, how far of `step` it gets, the arm's joints at the end). Holds that run the hand into the mechanism
+    are passed over; `why` collects what they ran into."""
     point, frame = way.at(start)
     tip = _hold_point(arm, grip, point, way.knob)
     rot0 = _hand_rotation(model, data, arm, grip, frame, q, way.axis if way.hinge else None)
     turning = way.hinge and grip == "bar" and rot0 is not None  # a bar on a door or a wheel: the hand turns with it
-    above = tip + UP * ABOVE
+    above = tip + UP * COME_DOWN
 
     def follow(q_hold: np.ndarray) -> tuple[list[np.ndarray], float]:
         """The joint values along the handle's way from a hold, and how far of `step` they go."""
@@ -334,27 +507,40 @@ def _one_hold(
     # The hold decides the arm's pose for the whole way (elbow up or down, wrist over or under): of the holds the
     # arm can take, the one whose way goes furthest, then the nearest to how the arm is now. Solving the hold from
     # a pose above it first, the template arm took the drawer's bar elbow down and ran into the floor 1 cm later.
-    best: tuple[float, float, np.ndarray, list[np.ndarray]] | None = None
+    # A hold must also be clear of the mechanism, with the fingers opened as they will be, and come down to it
+    # from a few centimetres straight above: a Panda's best hold on a drawer had its wrist at a joint limit, could
+    # rise 1 cm from there, swung in from afar and landed a finger on the chest's top.
+    best: tuple[float, float, np.ndarray, list[np.ndarray], list[np.ndarray], float, list[np.ndarray]] | None = None
+    clear_points = math.ceil(CLEAR_ABOVE / PATH_STEP - 1e-9) + 1
     for q_hold in _holds(arm, tip, rot0, q, fresh=first):
+        opening, hit = _opening(model, arm, q_hold, parts)
+        down = [] if hit else _line(arm, tip, above, rot0, q_hold)[::-1]  # up from the hold: it ends exactly there
+        if not hit and len(down) < clear_points:
+            continue
+        hit = hit or next((h for h in (_hits(arm, qd, parts) for qd in down) if h), None)
+        route: list[np.ndarray] | str = hit or _route(arm, q, down[0], parts)
+        if isinstance(route, str):
+            if why is not None:
+                why.append(route)
+            continue
         path, reached = follow(q_hold)
         rank = (abs(reached), -float(np.max(np.abs(q_hold - q))))
         if best is None or rank > (abs(best[0]), best[1]):
-            best = (reached, rank[1], q_hold, path)
+            best = (reached, rank[1], q_hold, path, down, opening, route)
     if best is None:
         return [], 0.0, q
-    reached, _, q_hold, path = best
-    down = _line(arm, tip, above, rot0, q_hold)[::-1]  # solved up from the hold, so it ends exactly there
-    if len(down) < 2:
-        return [], 0.0, q
+    reached, _, q_hold, path, down, opening, route = best
     open_grip, close_grip = arm._grip("open"), arm._grip("close")
     if arm.tool is None and open_grip is not None:
         # Opened all the way, the finger behind the bar landed on the drawer's front: open only as far as the bar
-        # needs, as a hand does reaching for a handle.
-        open_grip *= PRE_OPEN
-    legs = [
-        Leg("approach", _joint_time(q, down[0]), q=down[0], grip=open_grip),
-        Leg("reach", 1.2, path=down),
-        Leg("take hold", GRASP_SECONDS, path=[q_hold], grip=close_grip),
+        # needs, as a hand does reaching for a handle (the control scales the opening: a servo's target, a Panda's
+        # tendon).
+        open_grip *= opening
+    let_go = [Leg("let go", RELEASE_SECONDS, path=[q_hold], grip=open_grip), Leg("back off", 1.0, path=down[::-1])]
+    legs = [Leg("approach", _joint_time(a, b), q=b, grip=open_grip) for a, b in zip([q, *route], route, strict=False)]
+    legs += [
+        Leg("reach", max(1.2, (len(down) - 1) * PATH_STEP / REACH_SPEED), path=down),
+        Leg("take hold", GRASP_SECONDS, path=[q_hold], grip=close_grip, check=_held(arm, parts), abort=let_go),
     ]
     qs = path[-1]
     if len(path) > 1:
@@ -364,6 +550,129 @@ def _one_hold(
     retreat = _line(arm, end_tip, end_tip + UP * ABOVE, end_rot, qs)
     legs += [Leg("let go", RELEASE_SECONDS, path=[qs], grip=open_grip), Leg("back off", 1.0, path=retreat)]
     return legs, reached, retreat[-1]
+
+
+def _finger_joints(model: mujoco.MjModel, arm: ArmMotion) -> list[int]:
+    """The joints of the hand's fingers: those on the hand, past the arm's own."""
+    hand = arm.chain.body
+    return [
+        j
+        for j in range(model.njnt)
+        if j not in arm.joints
+        and int(model.jnt_type[j]) in (mujoco.mjtJoint.mjJNT_SLIDE, mujoco.mjtJoint.mjJNT_HINGE)
+        and _below(model, int(model.jnt_bodyid[j]), hand)
+    ]
+
+
+def _open_fingers(model: mujoco.MjModel, arm: ArmMotion, fraction: float | None = None) -> None:
+    """Pose the fingers in IK's copy of the world as they will be coming for the handle: `fraction` of the way open
+    (fingers close toward 0 and open toward the far end of their range), or all the way beside a cup or a magnet."""
+    if fraction is None or arm.tool is not None:
+        fraction = PRE_OPENS[0] if arm.tool is None else 1.0
+    for j in _finger_joints(model, arm):
+        lo, hi = (float(v) for v in model.jnt_range[j])
+        arm.ik.base_qpos[model.jnt_qposadr[j]] = fraction * (hi if abs(hi) >= abs(lo) else lo)
+
+
+def _opening(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, parts: Parts) -> tuple[float, str | None]:
+    """How far to open the fingers for a hold at `q`: the widest of PRE_OPENS that keeps them off the mechanism
+    (IK's copy is left posed so), and what they run into when none does."""
+    hit = None
+    for fraction in PRE_OPENS if arm.tool is None else (1.0,):
+        _open_fingers(model, arm, fraction)
+        hit = _hits(arm, q, parts)
+        if hit is None:
+            return fraction, None
+    return PRE_OPENS[-1], hit
+
+
+def _hits(arm: ArmMotion, q: np.ndarray, parts: Parts) -> str | None:
+    """What of the mechanism the arm at `q` runs into, as "<part of the arm> on <part of it>", or None."""
+    m, d = arm.ik.model, arm.ik.data
+    arm.ik.point(arm.chain, q)
+    mujoco.mj_collision(m, d)
+    for con in d.contact[: d.ncon]:
+        mine, theirs = _arm_and(arm, parts, int(con.geom1), int(con.geom2))
+        if mine is None:
+            continue
+        if con.dist < -(HANDLE_TOUCH_OK if theirs in parts.handle else TOUCH_OK):
+            return f"{_body_name(m, mine)} on {_geom_name(m, theirs)}"
+    return None
+
+
+def _held(arm: ArmMotion, parts: Parts) -> Callable[[mujoco.MjModel, mujoco.MjData], str | None]:
+    """The check at the end of taking hold: the hand on the handle, or a note saying what it came down on instead.
+    Without it a hand that closed on nothing went on to move along the way, and the result put the drawer that did
+    not move down to slipping. (One finger is enough to see: a Panda's two are coupled, and the one that meets the
+    bar first stops both, the other a tenth of a millimetre off it.)"""
+
+    def check(model: mujoco.MjModel, data: mujoco.MjData) -> str | None:
+        holding: set[int] = set()
+        other: tuple[int, int] | None = None
+        for con in data.contact[: data.ncon]:
+            mine, theirs = _arm_and(arm, parts, int(con.geom1), int(con.geom2))
+            if mine is None or con.dist > HELD_WITHIN:
+                continue
+            if theirs in parts.handle:
+                holding.add(int(model.geom_bodyid[mine]))
+            elif other is None:
+                other = (mine, theirs)
+        if holding:
+            return None
+        if other is not None:
+            what = f"its {_body_name(model, other[0])} came down on {_geom_name(model, other[1])}"
+        else:
+            what = "the handle was not in its grip" if arm.tool is None else "its face did not meet the handle"
+        return (
+            f"{arm.robot} did not take hold of {parts.name}'s handle: {what}; move the arm or the {parts.name} a "
+            "little and try again"
+        )
+
+    return check
+
+
+def _arm_and(arm: ArmMotion, parts: Parts, g1: int, g2: int) -> tuple[int | None, int]:
+    """(the arm's geom, the mechanism's) of a contact between the two, or (None, -1)."""
+    bodies = arm.ik.model.geom_bodyid
+    if g2 in parts.geoms and int(bodies[g1]) in arm._moving:
+        return g1, g2
+    if g1 in parts.geoms and int(bodies[g2]) in arm._moving:
+        return g2, g1
+    return None, -1
+
+
+def _body_name(model: mujoco.MjModel, geom: int) -> str:
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.geom_bodyid[geom])) or "hand"
+    return name.split("/", 1)[-1]
+
+
+def _geom_name(model: mujoco.MjModel, geom: int) -> str:
+    name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom)
+    return name or mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.geom_bodyid[geom])) or "it"
+
+
+def _route(arm: ArmMotion, q: np.ndarray, goal: np.ndarray, parts: Parts) -> list[np.ndarray] | str:
+    """Joint moves from `q` to `goal` that keep the arm off the mechanism: straight there, or up from where the tool
+    is first (the template arm's home pose has its hand by a cabinet's door, and swung straight from there it went
+    through the door's bar). What it runs into when neither does."""
+    hit = next((h for h in (_hits(arm, qa, parts) for qa in _between(q, goal)) if h), None)
+    if hit is None:
+        return [goal]
+    now, there = arm.ik.point(arm.chain, q).copy(), arm.ik.point(arm.chain, goal).copy()
+    for z in (max(now[2], there[2]) + LIFT, now[2] + LIFT):
+        # Any way the hand points on the way up (a home pose need not point down), clear of the arm itself.
+        q_lift, err = arm.ik.solve(arm.chain, np.array([now[0], now[1], z]), q, iterations=60)
+        if err > REACH_TOL or arm._collides(q_lift):
+            continue
+        clear = all(_hits(arm, qa, parts) is None for a, b in ((q, q_lift), (q_lift, goal)) for qa in _between(a, b))
+        if clear and _hits(arm, q_lift, parts) is None:
+            return [q_lift, goal]
+    return hit
+
+
+def _between(a: np.ndarray, b: np.ndarray) -> list[np.ndarray]:
+    """Poses along a joint move from `a` to `b` (the ends left out)."""
+    return [a + (b - a) * (i / APPROACH_SAMPLES) for i in range(1, APPROACH_SAMPLES)]
 
 
 def _press_legs(model, data, arm: ArmMotion, target: str, way: Way, delta: float) -> list[Leg]:
@@ -623,16 +932,25 @@ def result(op: Operation, model: mujoco.MjModel, data: mujoco.MjData, state: dic
     elif report["action"] == "press":  # a switch or a lever flipped: it is on the other side now
         report["success"] = bool(np.sign(now) != np.sign(start) and abs(now) > math.radians(2))
     else:
-        asked = report["asked"]
-        asked_joint = asked if unit == "m" else math.radians(asked)
-        report["success"] = bool(abs(moved) >= SUCCESS_FRACTION * abs(asked_joint) - 1e-6) if asked else True
-        if not report["success"] and "planned" in report and abs(report["planned"]) >= SUCCESS_FRACTION * abs(asked):
+        # Judged against how far it can go (asked "open 0.5 m" of a drawer with 0.24 m in it, all of it is a
+        # success), in the right direction; already there is a success too.
+        can = float(report.get("can", 0.0))
+        there = THERE_M if unit == "m" else THERE_RAD
+        report["success"] = bool(abs(can) <= there or moved * np.sign(can) >= SUCCESS_FRACTION * abs(can) - 1e-6)
+        planned = report.get("planned")
+        planned_joint = planned if unit == "m" else math.radians(planned or 0.0)
+        if (
+            not report["success"]
+            and not op.aborted
+            and planned is not None
+            and planned_joint >= SUCCESS_FRACTION * abs(can)
+        ):
             report["notes"].append(
                 "the hand could not keep hold of the handle on the way (it slipped); try again, or with the other "
                 "end effector"
             )
     if not report["notes"]:
         report.pop("notes")
-    report.pop("start")
-    report.pop("planned", None)
+    for internal in ("start", "planned", "can"):
+        report.pop(internal, None)
     return report

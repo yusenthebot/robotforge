@@ -185,6 +185,76 @@ def test_a_piper_presses_a_button(pg):
     assert pressed["success"] and pressed["state"]["presses"] == 1
 
 
+def test_success_is_judged_against_how_far_it_can_go(pg):
+    """A drawer opened fully when asked for more than it has, and anything already where it was asked to go, are
+    successes: both read success false, and agents told to read success would have tried again."""
+    pg.add_robot("arm", template="arm")
+    pg.add_object("chest", **DRAWER)
+    pg.add_object("tap", shape="valve", size=[0.16, 0.12], pos=[0.05, -0.27])
+    full = _operate(pg, "chest", "open", 0.5)
+    assert full["success"] and full["moved"] == pytest.approx(0.238, abs=0.008)
+    assert "chest goes only 0.24 m that way" in full["notes"][0]
+    again = _operate(pg, "chest", "open")  # within millimetres of its end already
+    assert again["success"] and again["moved"] == 0.0 and "already there" in again["notes"][0]
+    closed = _operate(pg, "tap", "close", 90)
+    assert closed["success"] and closed["notes"] == ["tap is already at its end that way: 0 degrees"]
+
+
+def test_a_valve_turns_as_far_as_it_was_asked(pg):
+    """The wheel slips in the template's fingers, about 20 degrees a quarter turn: it is taken hold of again for what
+    is left, planned from where it really is (a hold planned for where it would have been put a finger on a spoke)."""
+    pg.add_robot("arm", template="arm")
+    pg.add_object("tap", shape="valve", size=[0.16, 0.12], pos=[0.05, -0.27])
+    turned = _operate(pg, "tap", "open")
+    assert turned["success"] and turned["moved"] == pytest.approx(90, abs=5)
+
+
+def test_a_panda_opens_a_drawer_and_a_door(pg):
+    """Hold poses are checked against the mechanism: a Panda's best hold put a finger 2.8 cm into the chest's top,
+    and for real the finger came down on it, the hand closed on nothing and the drawer moved 1 mm."""
+    pg.add_robot("panda", library="panda")
+    pg.add_object("chest", shape="drawer", pos=[0.7, 0.0], yaw=-90)
+    opened = _operate(pg, "chest", "open", 0.2, robot="panda")
+    assert opened["success"] and opened["moved"] == pytest.approx(0.2, abs=0.01)
+    pg.update_object("chest", pos=[0.6, 0.0])  # where it had slipped: now as far as its plan says, not slipping
+    pg.control("reset")
+    part = _operate(pg, "chest", "open", 0.2, robot="panda")
+    assert "follow the handle only" in part["notes"][0] and len(part["notes"]) == 1
+    assert part["moved"] == pytest.approx(float(part["notes"][0].split("only ")[1].split(" m")[0]), abs=0.01)
+    pg.remove("chest")
+    pg.add_object("cupboard", shape="cabinet", size=[0.3, 0.24, 0.3], pos=[0.65, 0.0], yaw=-90)
+    door = _operate(pg, "cupboard", "open", 60, robot="panda")
+    assert door["success"] and door["moved"] == pytest.approx(60, abs=4)
+    shut = _operate(pg, "cupboard", "close", robot="panda")
+    assert shut["success"] and abs(shut["state"]["angle_deg"]) < 3
+
+
+def test_a_hand_that_does_not_take_hold_stops_and_says_so(pg):
+    pg.add_robot("arm", template="arm")
+    pg.add_object("chest", **DRAWER)
+    op, found, shape = operate.start(pg.behaviors, "arm", "chest", "open", 0.2)
+    pg.run_fast(lambda: op.current_label == "reach", 20.0)
+    pg.session.data.joint("chest/drawer").qpos[0] = 0.08  # pulled out from under the hand coming down for it
+    pg.run_fast(lambda: op.done, 30.0)
+    s = pg.session
+    result = operate.result(op, s.model, s.data, mechanisms.read(s.model, s.data, {found: shape})[found])
+    assert not result["success"] and op.aborted
+    assert result["notes"] == [
+        "arm did not take hold of chest's handle: the handle was not in its grip; move the arm or the chest a little "
+        "and try again"
+    ]  # not put down to slipping
+
+
+def test_a_magnet_works_the_steel_bars_and_says_what_it_cannot_hold(pg):
+    pg.add_robot("arm", template="arm", end_effector="magnet")
+    pg.add_object("chest", **DRAWER)
+    pg.add_object("light", shape="switch", pos=[0.0, -0.3])  # out of the drawer's way
+    opened = _operate(pg, "chest", "open", 0.2)
+    assert opened["success"] and opened["moved"] == pytest.approx(0.2, abs=0.01)
+    with pytest.raises(operate.OperateError, match="electromagnet holds steel only, and light's knob is not steel"):
+        operate.start(pg.behaviors, "arm", "light", "press", None)
+
+
 def test_operate_says_what_it_cannot_do(pg):
     pg.add_robot("arm", template="arm")
     pg.add_object("chest", shape="drawer", pos=[1.2, 0.0], yaw=-90)

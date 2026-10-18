@@ -26,14 +26,14 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin; `material="steel"` for what a magnet holds).
    Things that move on a joint of their own are objects too: drawer, cabinet (a door), button, switch, lever, valve, conveyor (`speed` in m/s), and soft ones: rope, cloth.
-   - End effectors: any arm takes `end_effector="suction"` (a suction cup: flat things fingers cannot get round, a tile, a plate) or `"magnet"` (steel only) in `add_robot`, or later in `update_robot` (a tool change; `"gripper"` goes back to its fingers). `gripper(robot, "close")` turns a cup or magnet on, `"open"` off; `pick_and_place` uses them as it uses fingers.
+   - End effectors: any arm takes `end_effector="suction"` (a suction cup: flat things fingers cannot get round, a tile, a plate) or `"magnet"` (steel only: `material="steel"` things, and the steel bars of drawers and doors) in `add_robot`, or later in `update_robot` (a tool change; `"gripper"` goes back to its fingers). `gripper(robot, "close")` turns a cup or magnet on, `"open"` off; `pick_and_place` uses them as it uses fingers.
 4. **Viewer early.** Call `open_viewer()` as soon as a robot exists and tell the user what they can do: drag the robot, drive with W A S D, and use the panels.
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
    - `move_arm` / `gripper` / `pick_and_place`: arms; `pick_and_place(robot, object, "drawer")` puts things in an open drawer;
-   - `operate(robot, target, action, amount)`: an arm opens or closes a drawer (amount in m) or a cabinet door (degrees), presses a button, flips a switch or a lever, turns a valve (open, close or turn, degrees); it holds the handle and follows the joint's own line or arc;
+   - `operate(robot, target, action, amount)`: an arm opens or closes a drawer (amount in m) or a cabinet door (degrees), presses a button, flips a switch or a lever, turns a valve (open, close or turn, degrees); it holds the handle and follows the joint's own line or arc. Read `success` and `notes`: a note says when the arm could follow only part of the way (move the thing nearer) or did not take hold (move it a little and try again);
    - a conveyor runs by itself: `set_controls({"<conveyor>/speed": 0})` stops it, any other value (m/s) runs it;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;

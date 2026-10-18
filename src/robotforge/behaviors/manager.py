@@ -24,7 +24,7 @@ from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
-from robotforge.design import library, mechanisms
+from robotforge.design import end_effectors, library, mechanisms
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
@@ -999,6 +999,8 @@ class BehaviorManager:
             arm = self._arm(robot)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
+            if arm.tool == "magnet":
+                self._check_steel(arm.robot, obj)
             place, place_top, region = self._place_target(target)
             try:
                 arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
@@ -1095,6 +1097,20 @@ class BehaviorManager:
         if world is None:
             return None
         return next((o for o in world.objects if o.name == name), None)
+
+    def _check_steel(self, robot: str, obj: str) -> None:
+        """An electromagnet holds steel only: say so before the arm goes for something it cannot hold (it went all
+        the way there and back for a plastic plate, and came back with nothing)."""
+        m = self.session.model
+        body = self._body(obj)
+        if end_effectors.magnetic(m, [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == body]):
+            return
+        entry = self._object_entry(obj)
+        made = f"is {entry.material or 'plastic'}" if entry is not None else "is not steel"
+        raise BehaviorError(
+            f"{robot}'s electromagnet holds steel only, and {obj} {made}: make it steel (update_object with "
+            f"material='steel'), or change the tool (update_robot with end_effector='suction')"
+        )
 
     def _object_geometry(self, name: str) -> dict[str, Any]:
         entry = self._object_entry(name)

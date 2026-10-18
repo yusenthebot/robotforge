@@ -20,6 +20,8 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
+from robotforge.design.end_effectors import steel_affinity
+
 G = mujoco.mjtGeom
 J = mujoco.mjtJoint
 PANEL = 0.012  # m, carcass board thickness
@@ -153,8 +155,16 @@ def _carcass(body: mujoco.MjsBody, name: str, length: float, depth: float, heigh
 
 def _handle(body: mujoco.MjsBody, name: str, center: list[float], length: float, face_y: float) -> None:
     """A bar handle along x at `center` on a face at `face_y` (the bar stands STANDOFF in front of it, toward -y),
-    with two posts, and the handle site on the bar."""
-    _box(body, f"{name}/handle", [length / 2, BAR / 2, BAR / 2], center, METAL, friction=[1.2, 0.02, 0.002])
+    with two posts, and the handle site on the bar. The bar is steel: an electromagnet takes hold of it too."""
+    _box(
+        body,
+        f"{name}/handle",
+        [length / 2, BAR / 2, BAR / 2],
+        center,
+        METAL,
+        friction=[1.2, 0.02, 0.002],
+        conaffinity=steel_affinity(),
+    )
     for sx in (1, -1):
         post_y = (face_y + center[1] + BAR / 2) / 2
         half = [0.004, abs(face_y - (center[1] + BAR / 2)) / 2 + 0.001, 0.004]

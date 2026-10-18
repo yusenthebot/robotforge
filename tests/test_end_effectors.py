@@ -47,7 +47,7 @@ def test_a_suction_cup_picks_a_tile_that_fingers_cannot_get_round(pg):
         pg.behaviors.pick_and_place("arm", "tile", "tray")
 
 
-def test_an_electromagnet_holds_steel_and_leaves_plastic(pg):
+def test_an_electromagnet_holds_steel_and_leaves_plastic(pg, monkeypatch):
     pg.add_robot("arm", template="arm", end_effector="magnet")
     pg.add_object("steel_plate", shape="box", size=[0.05, 0.05, 0.004], pos=[0.25, -0.12], material="steel")
     pg.add_object("tray", shape="bin", size=[0.14, 0.14, 0.05], pos=[0.05, 0.28], color="blue")
@@ -56,6 +56,10 @@ def test_an_electromagnet_holds_steel_and_leaves_plastic(pg):
 
     pg.remove("steel_plate")
     pg.add_object("plastic_plate", shape="box", size=[0.05, 0.05, 0.004], pos=[0.25, -0.12])
+    # Said before the arm goes for it: it went there and back for 8 s and came back with nothing, no reason given.
+    with pytest.raises(BehaviorError, match="electromagnet holds steel only, and plastic_plate is plastic.*suction"):
+        pg.behaviors.pick_and_place("arm", "plastic_plate", "tray")
+    monkeypatch.setattr(pg.behaviors, "_check_steel", lambda robot, obj: None)  # and if it went anyway
     placed = _pick(pg, "arm", "plastic_plate", "tray")
     assert not placed["success"]
     assert np.allclose(placed["object_position"][:2], [0.25, -0.12], atol=0.01)  # the magnet let it lie

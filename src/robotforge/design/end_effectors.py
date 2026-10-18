@@ -268,6 +268,11 @@ def steel_affinity() -> int:
     return 1 | MAGNET_BIT
 
 
+def magnetic(model: mujoco.MjModel, geoms: Sequence[int]) -> bool:
+    """Whether any of `geoms` is steel to a magnet: it answers to the magnet core's contact bit."""
+    return any(int(model.geom_conaffinity[g]) & MAGNET_BIT for g in geoms)
+
+
 def tool_of(model: mujoco.MjModel, actuator: int) -> str | None:
     """ "suction" or "magnet" for a tool's adhesion actuator, None for fingers (or anything else)."""
     if actuator < 0 or int(model.actuator_trntype[actuator]) != mujoco.mjtTrn.mjTRN_BODY:
