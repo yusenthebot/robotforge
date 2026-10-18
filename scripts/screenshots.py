@@ -695,7 +695,7 @@ SHOTS = [
         "fetch_carry",
         _kitchen_panda,
         viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 1.0}],
-        page=_when("apple", "p[2] < 0.8 && p[0] < -0.9") + _look_at(["mm"], (1.3, -1.7, 1.7)),  # on its way
+        page=_when("apple", "p[2] < 0.8 && p[1] < 0.3") + _look_at(["mm"], (-1.1, -1.5, 1.9)),  # out of the aisle
         settle=0.2,
     ),
     Shot(
