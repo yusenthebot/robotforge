@@ -733,6 +733,33 @@ SHOTS = [
         page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
         settle=3.0,
     ),
+    # Water: the harbor with its boat, crates afloat and the dock; an ROV under water with the surface above it.
+    Shot(
+        "water_harbor",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([-5.5, -18.0, 6.6], [2.5, -1.5, 1.0]);",
+        settle=3.0,
+    ),
+    Shot(
+        "water_boat",
+        _in_scene("harbor", {"boat": {"template": "boat"}}),
+        viewer=[_walk("boat", 0.5), {"wait": 3.0}],
+        page=_look_at(["boat"], (-2.2, -2.6, 1.2)),
+        settle=0.5,
+    ),
+    Shot(
+        "water_rov",
+        _in_scene("pool", {"rov": {"template": "rov"}}),
+        viewer=[_go("rov", [0.0, 0.0, 0.75]), {"wait": 2.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.15, -0.85, 0.55], [0.0, 0.0, 0.82]);",
+        settle=1.0,
+    ),
+    Shot(
+        "water_lake",
+        _in_scene("lake", {"boat": {"template": "boat"}}),
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([13.0, -11.5, 8.0], [-0.5, 0.3, 0.6]);",
+        settle=3.0,
+    ),
 ]
 
 

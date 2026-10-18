@@ -104,7 +104,7 @@ def lake(rng: random.Random, opts: dict[str, float]) -> Content:
     from robotforge.design.scenes import Content, Slot
 
     level = LAKE_LEVEL
-    c = Content(floor={"style": "sand"})
+    c = Content(floor={"style": "grass"})  # the meadow round the hollow; under the water it is the dark lake bed
     c.terrain.append(
         {
             "type": "basin",

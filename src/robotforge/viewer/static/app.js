@@ -5,6 +5,7 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { SURFACE_GEOM, leaveWater, makeWater, waterFrame, waterLook } from "./water.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -113,6 +114,7 @@ let worldRoot = null;
 let firstScene = true;
 let pendingFit = null; // "camera" | "lights" | null
 let showCollision = false;
+let water = null; // the scene's water (water.js), or null
 
 function rgbaColor(rgba) {
   return new THREE.Color().setRGB(rgba[0], rgba[1], rgba[2], THREE.SRGBColorSpace);
@@ -418,6 +420,8 @@ async function applyScene(desc) {
   const meshGeometries = buildMeshGeometries(desc, buffer);
   const floats = new Float32Array(buffer);
   const grounds = desc.grounds || {};
+  leaveWater(water, scene3);
+  water = null;
   disposeWorld();
   sceneDesc = desc;
   worldRoot = new THREE.Group();
@@ -436,6 +440,7 @@ async function applyScene(desc) {
     floorFrame = { x: floorGeom.pos[0], y: floorGeom.pos[1], half, halfY, material: floorGeom.material };
   }
   for (const geom of desc.geoms) {
+    if (desc.water && geom.name === SURFACE_GEOM) continue; // drawn below, with its waves
     let obj;
     const look = grounds[geom.material];
     if (geom.type === "plane") {
@@ -467,6 +472,13 @@ async function applyScene(desc) {
     obj.userData.isPlane = geom.type === "plane";
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
+  }
+  if (desc.water) {
+    water = makeWater(desc.water, waterLook(desc.water, floorGeom?.material), desc.stat.center, renderer);
+    water.group.traverse((o) => {
+      o.userData.body = 0;
+    });
+    bodyNodes[0].add(water.group);
   }
   scene3.add(worldRoot);
 
@@ -1112,8 +1124,10 @@ function applyState(s) {
 
 const DRIVE_KEYS = {
   w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
+  e: "up", q: "down", // an underwater robot only: up and down
 };
-const TURN_RATE = { rover: 2.0, balancer: 1.5 }; // rad/s at full key; walkers turn at 1.0
+const TURN_RATE = { rover: 2.0, balancer: 1.5, boat: 0.8, rov: 0.8 }; // rad/s at full key; walkers turn at 1.0
+const HEAVE = 0.3; // m/s up or down for an underwater robot at full key
 const pressed = new Set();
 let lastDrive = "";
 
@@ -1125,7 +1139,8 @@ function driveTarget() {
 function renderDrive() {
   const robot = driveTarget();
   $("drive").hidden = !robot;
-  if (robot) $("drive-text").innerHTML = t("drive", { name: escapeHtml(robot.name) });
+  $("drive-heave").hidden = robot?.kind !== "rov";
+  if (robot) $("drive-text").innerHTML = t(robot.kind === "rov" ? "drive_rov" : "drive", { name: escapeHtml(robot.name) });
   lastDrive = "";
 }
 
@@ -1134,7 +1149,9 @@ function driveCommand(robot) {
   const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
-  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  if (robot.kind === "rov") cmd.heave = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * HEAVE;
+  return cmd;
 }
 
 function sendDrive() {
@@ -1155,7 +1172,7 @@ function sendDrive() {
   }
   if (!robot) return;
   const cmd = driveCommand(robot);
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.heave ?? ""}`;
   if (key === lastDrive) return;
   lastDrive = key;
   send(cmd);
@@ -1231,6 +1248,7 @@ function driveKey(e, down) {
   if (!driveTarget() && !lessonDrive) return false;
   const dir = DRIVE_KEYS[e.key.toLowerCase()];
   if (!dir) return false;
+  if ((dir === "up" || dir === "down") && driveTarget()?.kind !== "rov") return false;
   e.preventDefault();
   if (down) {
     if (!lessonDrive) startFollow();
@@ -1926,6 +1944,7 @@ function loop() {
   updatePathWidths();
   refreshDragVisual();
   lessonFrame();
+  if (water) waterFrame(water, latestTime, camera, scene3);
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();

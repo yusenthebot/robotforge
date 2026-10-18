@@ -208,22 +208,20 @@ def _dress(vis: Visuals, hull, L, B, H, accent, console_x, console, pod_r, pod_y
     # Navigation lights at the bow: red to port (left), green to starboard.
     for sign, led in ((1, P.LED_RED), (-1, P.LED_GREEN)):
         vis.add(hull, "led", led, M.sphere(0.009 * L, rings=6, segments=12), (0.3 * L, sign * 0.3 * B, H * 1.04))
-    # Thruster pods under the stern: a torpedo motor in a duct, on a fin.
+    # Thruster pods under the stern: a slim torpedo motor on a fin, and a bronze three-blade propeller behind it.
     for sign in (1, -1):
         y = sign * pod_y
         x = -0.5 * L + 2.2 * pod_r
         body = M.lathe(
-            [(0.0, -2.0), (0.5, -1.8), (0.95, -1.0), (1.0, 0.0), (0.9, 1.2), (0.4, 2.0), (0.0, 2.2)], segments=24
+            [(0.0, -1.7), (0.45, -1.55), (0.62, -1.0), (0.66, 0.0), (0.6, 1.2), (0.3, 2.0), (0.0, 2.2)], segments=24
         ).moved(scale=pod_r)
-        vis.add(hull, "dark", DARK, body, (x, y, pod_z), M.Z_TO_X)
-        duct = M.torus(1.25 * pod_r, 0.18 * pod_r, segments=28, sides=8)
-        vis.add(hull, "dark", DARK, duct, (x - 1.7 * pod_r, y, pod_z), M.Z_TO_X)
-        fin = M.rounded_box(1.2 * pod_r, 0.12 * pod_r, (0 - pod_z) / 2 + 0.01, 0.1 * pod_r, segments=2)
-        vis.add(hull, "dark", DARK, fin, (x, y, pod_z / 2 + 0.005))
+        vis.add(hull, "aluminum", [0.62, 0.65, 0.68, 1.0], body, (x, y, pod_z), M.Z_TO_X)
+        fin = M.rounded_box(1.1 * pod_r, 0.1 * pod_r, (0 - pod_z) / 2 + 0.01, 0.08 * pod_r, segments=2)
+        vis.add(hull, "dark", DARK, fin, (x + 0.2 * pod_r, y, pod_z / 2 + 0.005))
         blades = M.merge(
-            M.rounded_box(0.08 * pod_r, 1.05 * pod_r, 0.22 * pod_r, 0.04 * pod_r, segments=1).moved(
-                (0, 0, 0), M.rot_x(k * math.pi / 3)
-            )
+            M.rounded_box(0.05 * pod_r, 0.95 * pod_r, 0.3 * pod_r, 0.04 * pod_r, segments=1)
+            .moved((0, 0.5 * pod_r, 0), M.rot_y(0.5))
+            .moved((0, 0, 0), M.rot_x(k * 2 * math.pi / 3))
             for k in range(3)
         )
-        vis.add(hull, "metal", P.METAL, blades, (x - 1.7 * pod_r, y, pod_z))
+        vis.add(hull, "metal", [0.78, 0.6, 0.32, 1.0], blades, (x - 1.85 * pod_r, y, pod_z))

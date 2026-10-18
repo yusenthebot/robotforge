@@ -141,19 +141,22 @@ def test_a_light_ball_pushed_under_comes_back_up():
 # ---- drag ---------------------------------------------------------------------------------------------------
 
 
-def test_drag_slows_a_floating_crate_and_never_reverses_it():
+def test_drag_slows_a_floating_crate_as_the_drag_law_says():
+    """A 24 kg crate, half under, pushed to 1 m/s: m dv/dt = -(c1 v + c2 v^2) on its wet front, solved exactly."""
     session = _pool(G.mjGEOM_BOX, [0.3, 0.2, 0.1], 500, z=LEVEL)
     session.data.qvel[0] = 1.0
     speeds = []
     for _ in range(60):
         session.step(25)  # 0.05 s
         speeds.append(float(session.data.qvel[0]))
-    assert speeds[0] < 1.0
     assert all(b <= a + 1e-6 for a, b in zip(speeds, speeds[1:], strict=False)), "the crate sped up"
     assert min(speeds) > -1e-3, "drag pushed it backwards"
-    half = next(i for i, v in enumerate(speeds) if v < 0.5) * 0.05
-    assert 0.2 < half < 2.0, f"took {half:.2f} s to halve its speed"
-    assert speeds[-1] < 0.12
+    mass, front = 24.0, 0.4 * 0.1  # kg; m^2 of its front under water
+    c1 = 1000 * front * water.LINEAR_DRAG * water.HORIZONTAL_SHARE
+    c2 = 0.5 * 1000 * water.DRAG_COEFFICIENT[int(G.mjGEOM_BOX)] * front
+    for t, v in ((1.0, speeds[19]), (3.0, speeds[59])):
+        exact = c1 / ((c1 + c2) * math.exp(c1 * t / mass) - c2)
+        assert v == pytest.approx(exact, rel=0.05), f"at {t} s: {v:.3f} m/s, the drag law says {exact:.3f}"
 
 
 def test_heave_settles_a_dropped_crate_within_seconds():

@@ -149,12 +149,22 @@ def _thruster(spec: mujoco.MjSpec, site: str, thrust: float, along: list[float])
 
 
 def _dress(vis: Visuals, body, L, W, Hh, accent, r_main, r_batt, prop, corners) -> None:
-    # Side plates with a lightening hole, in black plastic.
+    # Side frames in black plastic, cut out to a ring with a cross brace (the collision plate under them is whole,
+    # but what shows is a frame you can see the tubes and thrusters through).
+    bar = 0.055 * L
+    hx, hz = 0.5 * L, 0.48 * Hh
     for sign in (1, -1):
-        plate = M.rounded_box(0.5 * L, 0.012 * L, 0.48 * Hh, 0.01 * L, segments=2, corner=0.08 * L)
-        vis.add(body, "dark", FRAME, plate, (0, sign * 0.5 * W, 0))
+        y = sign * 0.5 * W
+        parts = [
+            M.rounded_box(hx, 0.012 * L, bar / 2, 0.008 * L, segments=2).moved((0, y, hz - bar / 2)),
+            M.rounded_box(hx, 0.012 * L, bar / 2, 0.008 * L, segments=2).moved((0, y, -hz + bar / 2)),
+            M.rounded_box(bar / 2, 0.012 * L, hz, 0.008 * L, segments=2).moved((hx - bar / 2, y, 0)),
+            M.rounded_box(bar / 2, 0.012 * L, hz, 0.008 * L, segments=2).moved((-hx + bar / 2, y, 0)),
+            M.rounded_box(bar / 2, 0.012 * L, hz, 0.008 * L, segments=2).moved((0.05 * L, y, 0)),
+        ]
+        vis.add(body, "dark", FRAME, M.merge(parts))
         handle = M.rounded_box(0.12 * L, 0.014 * L, 0.03 * L, 0.01 * L, segments=2)
-        vis.add(body, "dark", DARK, handle, (-0.05 * L, sign * 0.5 * W, 0.5 * Hh))
+        vis.add(body, "dark", DARK, handle, (-0.05 * L, y, hz + 0.02 * L))
     # Buoyancy foam on top, in the robot's color, with rounded edges.
     foam = M.rounded_box(0.42 * L, 0.42 * W, 0.11 * Hh, 0.04 * L, segments=3, corner=0.06 * L)
     vis.add(body, "shell", accent, foam, (-0.04 * L, 0, 0.36 * Hh))
