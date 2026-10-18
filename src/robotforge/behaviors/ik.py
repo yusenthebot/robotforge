@@ -7,10 +7,34 @@ templates and imported robots.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import mujoco
 import numpy as np
+
+
+def _fast_solve() -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    """numpy.linalg.solve without its Python wrapping (array checks, an error-state context): the same LAPACK
+    routine, so the same numbers, in a quarter of the time on the 3 x 3 systems IK solves a thousand times a second
+    for a walking robot. Its private home in numpy may move; then IK uses the public function."""
+    try:
+        from numpy.linalg import _umath_linalg
+
+        def solve(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            # numpy.linalg.solve raises only when LAPACK finds the matrix singular; IK's are damped, so never.
+            return _umath_linalg.solve1(a, b, signature="dd->d")
+
+        a, b = np.array([[2.0, 0.5, 0.0], [0.5, 3.0, 0.1], [0.0, 0.1, 1.0]]), np.array([1.0, -2.0, 0.5])
+        if np.array_equal(solve(a, b), np.linalg.solve(a, b)):
+            return solve
+    except (ImportError, AttributeError, TypeError, ValueError):
+        pass
+    return np.linalg.solve
+
+
+_solve = _fast_solve()
 
 
 @dataclass(frozen=True)
@@ -40,6 +64,7 @@ class IKSolver:
         self.base_qpos = model.qpos0.copy() if base_qpos is None else base_qpos.copy()
         self._jacp = np.zeros((3, model.nv))
         self._jacr = np.zeros((3, model.nv))
+        self._damped: dict[tuple[int, float], np.ndarray] = {}  # damping * identity, by size and damping
 
     def point(self, chain: Chain, q: np.ndarray) -> np.ndarray:
         self._set(chain, q)
@@ -66,13 +91,17 @@ class IKSolver:
         """
         if axis is not None and rotation is not None:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
-        q = np.clip(np.asarray(q_init, float).copy(), chain.lower, chain.upper)
+        # Walking robots solve this four times a plan, a hundred plans a second, so what is the same every
+        # iteration is done once and small vectors are measured with floats: the same numbers as before.
+        q = np.clip(np.asarray(q_init, float), chain.lower, chain.upper)
+        target = np.asarray(target, float)
         err = np.inf
         for _ in range(iterations):
             self._set(chain, q)
             p = self._point(chain)
-            e = np.asarray(target, float) - p
-            err = float(np.linalg.norm(e))
+            e = target - p
+            ex, ey, ez = e.tolist()
+            err = math.sqrt(ex * ex + ey * ey + ez * ez)
             mujoco.mj_jac(self.model, self.data, self._jacp, self._jacr, p, chain.body)
             J = self._jacp[:, chain.dof_adr]
             if axis is not None:
@@ -88,8 +117,12 @@ class IKSolver:
                 e = np.concatenate([e, e_rot])
             if err < tol and (len(e) == 3 or np.linalg.norm(e[3:]) < tol * 10):
                 break
-            JJt = J @ J.T + damping * np.eye(J.shape[0])
-            q = np.clip(q + J.T @ np.linalg.solve(JJt, e), chain.lower, chain.upper)
+            n = J.shape[0]
+            damped = self._damped.get((n, damping))
+            if damped is None:
+                damped = self._damped[n, damping] = damping * np.eye(n)
+            JJt = J @ J.T + damped  # damped, so never singular
+            q = np.minimum(np.maximum(q + J.T @ _solve(JJt, e), chain.lower), chain.upper)
         return q, err
 
     def _set(self, chain: Chain, q: np.ndarray) -> None:

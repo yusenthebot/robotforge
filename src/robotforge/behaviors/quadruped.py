@@ -205,7 +205,6 @@ class QuadrupedGait:
         self._actuators = np.concatenate([leg.actuators for leg in self.legs])
         self._targets = np.concatenate([leg.q for leg in self.legs])
         self._targets_from = [leg.q for leg in self.legs]  # the solutions _targets holds (rebuilt when one changes)
-        self._rot = np.empty(9)  # scratch for the trunk's rotation matrix
         self.motors = _motor_drive(model, self._actuators)
         if self.motors is not None:
             # Torque motors need their PD loop at physics rate; IK still runs at PLAN_HZ.
@@ -333,7 +332,7 @@ class QuadrupedGait:
         self._v_meas = _toward(self._v_meas, measured, 1.0 - math.exp(-dt / self.period))
         self._v_fast = _toward(self._v_fast, measured, 1.0 - math.exp(-dt / (FOLLOW_TAU * self.period)))
         fallen = 1.0 - 2.0 * (qx**2 + qy**2) < math.cos(FALLEN_TILT)  # its z axis that far from up
-        held = bool(data.qfrc_applied[self.root_dof : self.root_dof + 6].any())  # a hand pulls it (a viewer drag)
+        held = any(data.qfrc_applied[self.root_dof : self.root_dof + 6].tolist())  # a hand pulls it (a viewer drag)
         recovering = self._recovering(t, dt, measured, roll, moving, fallen, held)
         if recovering and not moving:  # pushed while standing: start stepping right away
             self._amplitude += (1.0 - math.exp(-dt / RECOVER_RISE)) * (1.0 - self._amplitude)
@@ -520,8 +519,7 @@ class QuadrupedGait:
 
     def _measure(self, data: mujoco.MjData) -> tuple[float, float, float]:
         """The trunk's velocity (forward, left) in its heading frame and its yaw rate, right now."""
-        mujoco.mju_quat2Mat(self._rot, data.xquat[self.trunk])
-        r = self._rot.tolist()  # row by row
+        r = data.xmat[self.trunk].tolist()  # row by row; MuJoCo makes it from xquat, as mju_quat2Mat would
         yaw = math.atan2(r[3], r[0])
         c, s = math.cos(yaw), math.sin(yaw)
         # Linear velocity in the world frame, angular in the body frame: its yaw rate is the rotation's last row
@@ -531,37 +529,34 @@ class QuadrupedGait:
         return (c * vx + s * vy, -s * vx + c * vy, yaw_rate)
 
     def _corrected_velocity(self, dt: float) -> tuple[tuple[float, float], float]:
-        """The body velocity and turn rate to step for: the command plus a PI correction."""
-        want = (self.speed, 0.0, self.turn)
-        half = 0.5 * self._stride_speed
-        limit = (half, half, 1.0)
+        """The body velocity and turn rate to step for: the command plus a PI correction, each limited."""
+        (w0, w1, w2), (m0, m1, m2) = (self.speed, 0.0, self.turn), self._v_meas
+        top = 0.5 * self._stride_speed  # forward and sideways; the turn at 1 rad/s
         if self._amplitude < 0.05:  # standing: nothing to correct, and no windup for the next start
             self._v_int = _ZERO3
         elif not self._saturated:  # strides at their limit cannot go faster; integrating then only winds up
             gain = VELOCITY_KI * dt
-            self._v_int = tuple(
-                _clip(i + gain * (a - m), -top, top)
-                for i, a, m, top in zip(self._v_int, want, self._v_meas, limit, strict=True)
+            i0, i1, i2 = self._v_int
+            self._v_int = (
+                min(max(i0 + gain * (w0 - m0), -top), top),
+                min(max(i1 + gain * (w1 - m1), -top), top),
+                min(max(i2 + gain * (w2 - m2), -1.0), 1.0),
             )
-        amp = self._amplitude
-        sx, sy, turn = (
-            a + _clip(amp * (VELOCITY_KP * (a - m) + i), -top, top)
-            for a, m, i, top in zip(want, self._v_meas, self._v_int, limit, strict=True)
-        )
-        return (sx, sy), turn
+        amp, (i0, i1, i2) = self._amplitude, self._v_int
+        vx = w0 + min(max(amp * (VELOCITY_KP * (w0 - m0) + i0), -top), top)
+        vy = w1 + min(max(amp * (VELOCITY_KP * (w1 - m1) + i1), -top), top)
+        turn = w2 + min(max(amp * (VELOCITY_KP * (w2 - m2) + i2), -1.0), 1.0)
+        return (vx, vy), turn
 
 
 _ZERO2 = (0.0, 0.0)
 _ZERO3 = (0.0, 0.0, 0.0)
 
 
-def _toward(average: tuple[float, ...], now: tuple[float, ...], share: float) -> tuple[float, ...]:
+def _toward(average: tuple[float, float, float], now: tuple[float, float, float], share: float) -> tuple[float, ...]:
     """An exponential average moved `share` of the way to `now`."""
-    return tuple(a + share * (n - a) for a, n in zip(average, now, strict=True))
-
-
-def _clip(value: float, low: float, high: float) -> float:
-    return min(max(value, low), high)
+    (a0, a1, a2), (n0, n1, n2) = average, now
+    return (a0 + share * (n0 - a0), a1 + share * (n1 - a1), a2 + share * (n2 - a2))
 
 
 def _tilt(quat: np.ndarray) -> np.ndarray:
