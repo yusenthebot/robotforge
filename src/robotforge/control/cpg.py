@@ -322,8 +322,8 @@ class Trainer:
         aim: float = 0.0,
     ) -> dict[str, float]:
         """Walk for `seconds` from the home pose, or from `start` (shoved once if `push`): distance, sideways drift,
-        energy, how long it stayed up, fell, and the reward. A Steering aims `aim` rad from the starting heading,
-        and distance and drift are then measured that way."""
+        energy, how long it stayed up, fell, the most it leaned (`tilt`) and the reward. A Steering aims `aim` rad
+        from the starting heading, and distance and drift are then measured that way."""
         m, b = self.model, self.body
         d = mujoco.MjData(m)
         if start is not None:
@@ -335,7 +335,7 @@ class Trainer:
         origin = d.xpos[b.trunk][:2].copy()
         energy, fell, up = 0.0, False, self.seconds
         heading, turned, wander, stray = trunk_yaw(d, b), 0.0, 0.0, 0.0
-        early = 0.0
+        early, upright = 0.0, 1.0  # upright: the least cosine of the trunk's tilt so far
         steps = round(self.seconds * CONTROL_HZ)
         for k in range(steps):
             t = k / CONTROL_HZ
@@ -358,6 +358,7 @@ class Trainer:
             stray += abs(aim - turned) / steps
             # The farthest it got, not where it ended: circling round a point comes back to the start.
             wander = max(wander, float(np.linalg.norm(d.xpos[b.trunk][:2] - origin)))
+            upright = min(upright, float(d.xmat[b.trunk][8]))
             if float(d.xmat[b.trunk][8]) < FELL:
                 fell, up = True, t
                 break
@@ -393,6 +394,7 @@ class Trainer:
             "energy": energy,
             "up": up,
             "fell": float(fell),
+            "tilt": math.acos(max(-1.0, min(1.0, upright))),  # rad: the most the trunk leaned, up to a fall
             "reward": reward,
         }
 

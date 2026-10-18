@@ -562,6 +562,34 @@ def test_a_walking_turn_begins_only_at_points_of_the_stride_it_fell_from_at_no_m
     assert _mean_wait([0.0, 0.5]) == pytest.approx(0.25)
 
 
+def test_a_walking_turn_that_comes_near_falling_is_left_out(monkeypatch):
+    """Regression: begun out of the walk only at points of the stride it never fell from, a turn could still come
+    near to falling there, and in random walk-turn-walk sequences the turns of template dog and imported A1 walks fell
+    more often than the robots steadied first (11 in 2880 against 6 for the dog, 162 in 1440 against 147 for the A1).
+    Each that fell had leaned more than 30 degrees from some moment of its checks. A turn that leans the trunk
+    ROOM_TILT or more from a moment at its points is not begun out of the walk."""
+    from robotforge.behaviors import rhythm_walk
+    from robotforge.behaviors.rhythm_walk import _walking_turn
+    from robotforge.control.cpg import Start
+
+    solo = compile_world(World.model_validate({"name": "solo", "robots": [{"name": "dog", "template": "quadruped"}]}))
+    model = solo.model
+    check = Trainer(model, "dog", Reward(turn=1.0), 2.0)
+    first = Trainer(model, "dog", Reward(turn=1.0), 1.0)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, 0)
+    standing = Start(data.qpos.copy(), data.qvel.copy(), data.ctrl.copy())
+    n = check.body.joints
+    swing = Rhythm(np.concatenate([np.zeros(n), np.full(n, 0.3), np.zeros(n)]))
+    lean = check.rollout(swing, start=standing)["tilt"]
+    assert 0.0 < lean < math.radians(60.0)  # it sways, and stays up
+    times = (0.5, 0.6, 0.7, 0.8)
+    monkeypatch.setattr(rhythm_walk, "ROOM_TILT", lean + 1e-3)
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times) is not None
+    monkeypatch.setattr(rhythm_walk, "ROOM_TILT", lean - 1e-3)
+    assert _walking_turn((swing,), 1.0, check, first, [standing] * 4, times) is None
+
+
 def test_a_walk_that_falls_before_its_first_moment_keeps_no_walking_turns(monkeypatch):
     """Regression: the file said its turns were learned out of the walk even when the walk gave no moment to begin
     from (it fell first), so they would have started mid-stride untrained."""

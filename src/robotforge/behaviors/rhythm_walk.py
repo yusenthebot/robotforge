@@ -183,6 +183,15 @@ WALKED_MIN = 1.5  # s
 # 100 bench sequences, begun at 0.28 of its stride; every update, it fell from 4 of 176 moments, at 0.28 to 0.36.
 WALK_CHECKS = tuple(round(WALKED_MIN + k / CONTROL_HZ, 2) for k in range(round((5.0 - WALKED_MIN) * CONTROL_HZ) + 1))
 MIN_SAFE = 0.5  # share of the points of the stride checked
+# A turn begins straight out of the walk only if, from every moment checked at the points of the stride it may begin
+# at, the trunk leans less than ROOM_TILT, half the way to a fall; else the robot steadies first. Begun out of the walk
+# only where it never fell, the turns of 8 template dog walks and 6 imported A1 walks still fell more often than the
+# robots steadied first in random walk-turn-walk sequences, each started with a small random push (scripts/
+# rhythm_bench.py oos --bench-seed 1): 11 in 2880 sequences against 6 for the dog (4 switched as 7a4aa92 switched,
+# the robot holding home until still before any rhythm), 162 in 1440 against 147 for the A1 (498). Every turn that
+# fell there had leaned 31 to 37 degrees from some moment of its checks; of those that leaned 30 or less (one or both
+# sides of 5 dog walks, all of the starfish's), none fell.
+ROOM_TILT = math.radians(30.0)
 TURN_CHECK = 2.0  # s
 FIRST_SECOND = 1.0  # s: what a short turn command gets
 # After keeping, the walk learns to hold its heading: STEER_ROUNDS rounds aiming STEER_AIMS (rad, 17 degrees to either
@@ -678,15 +687,19 @@ def _walking_turn(
 ) -> tuple[Rhythm, list[float] | None] | None:
     """Of `turns`, the one to begin out of the walk, and the points of the stride it may begin at (None: any). Each is
     started from `moments` (`times` s into the walk) for `check`'s seconds; a point of the stride it fell from at any
-    of them is left out. Of the turns with at least MIN_SAFE of the points left, the one that turns the most in
-    `first`'s seconds wins, counting the wait for its next point. None if each falls from more."""
+    of them is left out. Of the turns with at least MIN_SAFE of the points left that never leaned the trunk ROOM_TILT
+    from a moment at those points, the one that turns the most in `first`'s seconds wins, counting the wait for its
+    next point. None if each falls from more or comes nearer to falling."""
     freq = check.freq
     phases = [stride_phase(t, freq) for t in times[: len(moments)]]
     best: tuple[float, Rhythm, list[float] | None] | None = None
     for turn in turns:
-        unsafe = {p for p, m in zip(phases, moments, strict=True) if check.rollout(turn, start=m)["fell"]}
+        tried = [(p, check.rollout(turn, start=m)) for p, m in zip(phases, moments, strict=True)]
+        unsafe = {p for p, r in tried if r["fell"]}
         safe = sorted(set(phases) - unsafe)
         if not safe or len(safe) < MIN_SAFE * len(set(phases)):  # fell from most: too close to falling anywhere
+            continue
+        if max(r["tilt"] for p, r in tried if p not in unsafe) >= ROOM_TILT:  # no room to spare where it stayed up
             continue
         angles = [sign * first.rollout(turn, start=m)["turned"] for p, m in zip(phases, moments, strict=True)]
         angle = float(np.mean([a for a, p in zip(angles, phases, strict=True) if p not in unsafe]))
