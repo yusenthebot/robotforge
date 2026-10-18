@@ -559,7 +559,7 @@ def place_for(
     region = {"center": [float(center[0]), float(center[1]), top], "half_xy": extent.tolist(), "min_z": top - 0.01}
     if not spots:
         raise FetchError(f"the {target} is too small to put it on: {2 * half[0]:.2f} by {2 * half[1]:.2f} m")
-    standing = _standing_on(model, data, center[:2], extent, top, load)
+    standing = _standing_on(model, data, center[:2], extent, top, load, target)
     free = [p for p in spots if all(math.dist(p[:2], xy) >= radius + r + FREE_GAP for _, xy, r in standing)]
     if not free:
         names = sorted({name for name, _, _ in standing})
@@ -609,15 +609,22 @@ def _named_geoms(model: mujoco.MjModel, name: str) -> list[int]:
 
 
 def _standing_on(
-    model: mujoco.MjModel, data: mujoco.MjData, center: np.ndarray, extent: np.ndarray, top: float, load: int
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    center: np.ndarray,
+    extent: np.ndarray,
+    top: float,
+    load: int,
+    surface: str | None = None,
 ) -> list[tuple[str, np.ndarray, float]]:
-    """Loose things that stand on a surface (its middle, half extents and height): (name, x y, radius)."""
+    """Loose things that stand on a surface (its middle, half extents and height): (name, x y, radius). A loose
+    surface (a bowl, a tote: `surface`) does not stand on its own floor: a bowl said it was full of itself."""
     out = []
     for b in range(1, model.nbody):
         if int(model.body_rootid[b]) != b or b == load or not model.body_dofnum[b]:
             continue
         name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or ""
-        if "/" in name:  # a robot
+        if "/" in name or name == surface:  # a robot, or the bowl itself
             continue
         geoms = [
             g for g in range(model.ngeom) if int(model.body_rootid[model.geom_bodyid[g]]) == b and collides(model, g)

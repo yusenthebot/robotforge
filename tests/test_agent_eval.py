@@ -899,6 +899,21 @@ def test_a_video_of_the_robot_from_parts_must_be_there_and_move(ev, tmp_path):
     assert _verdict(ev.score(task, short))["a video >= 1 s in which something moves"] is False
 
 
+def test_a_video_is_named_by_its_full_path_on_any_system(ev):
+    """Regression: only /... and ~/... were read as paths, so on Windows the video an answer named at
+    C:\\Users\\...\\Desktop\\pip.gif did not count."""
+    said = {
+        "Here is the video: [pip.gif](/Users/me/Desktop/pip.gif)": "/Users/me/Desktop/pip.gif",
+        "Saved to ~/Desktop/pip.gif.": "~/Desktop/pip.gif",
+        "Here is the video: [pip.gif](C:\\Users\\me\\Desktop\\pip.gif)": "C:\\Users\\me\\Desktop\\pip.gif",
+        "Saved to c:/Users/me/Desktop/pip.webp, 2 s": "c:/Users/me/Desktop/pip.webp",
+        "Saved to ~\\Desktop\\pip.gif": "~\\Desktop\\pip.gif",
+    }
+    for text, path in said.items():
+        assert ev.VIDEO_PATH.findall(text) == [path], text
+    assert ev.VIDEO_PATH.findall("see /tmp/pip.gifs, /tmp/pip.gif.bak or pip.gif") == []
+
+
 def test_a_video_saved_elsewhere_counts_when_the_answer_names_it_and_it_is_new(ev, tmp_path):
     import os
 

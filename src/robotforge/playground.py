@@ -982,10 +982,38 @@ class Playground:
         result = self._edit(save)
         self._task_starts.pop(task.name, None)
         status = self.task_status().get(task.name, {})
+        if status.get("done") and task.kind == "go_to":  # "go to the kitchen" from the kitchen: start it elsewhere
+            moved = self._start_elsewhere(task)
+            if moved is not None:
+                notes.append(moved)
+                status = self.task_status().get(task.name, {})
+        if status.get("done"):
+            notes.append(f"{task.describe()} is so already: the task is done before it starts")
         result["task"] = {**task.model_dump(mode="json", exclude={"start", "randomize"}), "goal": task.describe(),
                           "status": status}  # fmt: skip
         result["notes"] = notes + [n for n in result.get("notes", []) if "task" in n]
         return result
+
+    def _start_elsewhere(self, task: Any) -> str | None:
+        """Move a go_to task's robot (and the task's start) to the first of the scene's places from which it still
+        has to go; a note saying so, or None when there is none."""
+        from robotforge.design.tasks.check import State, judge
+
+        world = self.current_world()
+        for slot in self._scene_places():
+            if judge(task, world, State(robot=(slot.pos[0], slot.pos[1], 0.0))).done:
+                continue
+
+            def move(w: World, slot: scenes.Slot = slot) -> None:
+                robot = _find(w.robots, task.robot, "robot")
+                robot.pos, robot.yaw = [slot.pos[0], slot.pos[1]], slot.yaw
+                saved = next(t for t in w.tasks if t.name == task.name)
+                saved.start.robot = [slot.pos[0], slot.pos[1], slot.yaw]
+
+            self._edit(move, snapshot=False)
+            self._task_starts.pop(task.name, None)
+            return f"{task.robot} starts at {_xy(slot.pos)}, away from {task.target}, so it has somewhere to go"
+        return None
 
     def task_status(self) -> dict[str, dict[str, Any]]:
         """Each task of the open world: its goal and the check's verdict now (done, distance still to go, reward,

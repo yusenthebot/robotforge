@@ -1132,6 +1132,64 @@ GENERATED_SHOTS = [
 ]
 
 
+# ---- worlds and tasks generated from one sentence (G11a) ----------------------------------------------------------
+
+# Twenty sentences, each a world and a task: load_scene(description=...) lays the world out, add_task turns the same
+# sentence into its task. Their pictures are world_01 ... world_20.
+GENERATED_WORLDS = [
+    "In a small flat with a kitchen and a bedroom, bring the red cup from the kitchen to the bedroom desk.",
+    "把厨房里的苹果拿到客厅的茶几上",
+    "Open the drawer in the kitchen of a house with a kitchen and a dining room.",
+    "In a warehouse with three rows of racks, bring the blue parcel to the packing table.",
+    "Drive the robot onto the loading dock of a large warehouse with pallets.",
+    "Walk the robot dog across the park to the goal past the stairs and the ramp.",
+    "去公园里的长椅旁边，路上有台阶和坡道",
+    "Put the green apple in the bowl in the kitchen.",
+    "Pick up the red cube with the robot arm in the kitchen.",
+    "Press the button on the kitchen counter.",
+    "打开厨房台面上的柜子",
+    "Go to the dining room of a house with a kitchen, a dining room and a living room.",
+    "Bring the blue ball from the living room to the kitchen table.",
+    "In a rocky hillside with stepping stones and boulders, walk to the goal.",
+    "把蓝色的方块放进厨房的碗里",
+    "Switch on the switch in the kitchen.",
+    "Bring the purple can to the desk in the bedroom of a flat with a bedroom and a living room.",
+    "Take the orange toy from the bedroom to the living room.",
+    "In a large warehouse with pallets and a conveyor, bring the green parcel to the packing table.",
+    "Go to the kitchen in a three-room apartment.",
+]
+
+
+def _generated_world(sentence: str) -> Callable[[Any], None]:
+    """A world builder: the world the sentence describes, and its task."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene(description=sentence, seed=0)
+        pg.add_task(sentence, name="task")
+
+    return build
+
+
+def _world_overview(sentence: str) -> str:
+    """Page script: the whole generated place from above and to the south, a little to the east."""
+    from robotforge.design.generate import generate
+
+    objects = generate(sentence, seed=0, check=False).content.objects
+    xs = [o["pos"][0] for o in objects if o["shape"] != "marker"] or [0.0]
+    ys = [o["pos"][1] for o in objects if o["shape"] != "marker"] or [0.0]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.4, 4.0)
+    eye = (round(cx + 0.18 * span, 2), round(cy - 0.78 * span, 2), round(0.72 * span, 2))
+    return "window.__robotforge.select(null); " + _look(eye, (round(cx, 2), round(cy + 0.04 * span, 2), 0.0))
+
+
+def _world_shots() -> list[Shot]:
+    return [
+        Shot(f"world_{k + 1:02d}", _generated_world(s), page=_world_overview(s), settle=3.0)
+        for k, s in enumerate(GENERATED_WORLDS)
+    ]
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -1446,6 +1504,7 @@ SHOTS = [
     ),
     *G3_SHOTS,
     *GENERATED_SHOTS,
+    *_world_shots(),
 ]
 
 

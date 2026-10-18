@@ -109,6 +109,17 @@ def _patch(world: Any, name: str) -> dict[str, Any] | None:
     return None
 
 
+def _patch_area(patch: dict[str, Any]) -> Footprint:
+    """What a terrain patch covers seen from above (a ramp with its landing, a flight of stairs, hills)."""
+    from robotforge.design import terrain
+
+    try:
+        x0, x1, y0, y1 = terrain._world_bounds(terrain.parse(dict(patch)))
+    except (ValueError, KeyError):
+        return Footprint(patch["pos"][0], patch["pos"][1], PATCH, PATCH)
+    return Footprint((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2)
+
+
 def _base(o: dict[str, Any]) -> float:
     """The height of what an object stands on: its z when given (props and tables are placed by their base), else
     the floor."""
@@ -122,9 +133,8 @@ def region(world: Any, name: str, state: State | None = None) -> Region | None:
         patch = _patch(world, name)
         if patch is None:
             return None
-        # a terrain patch (a loading dock, a ramp): within a metre of its middle
-        area = Footprint(patch["pos"][0], patch["pos"][1], PATCH, PATCH, float(patch.get("yaw") or 0.0))
-        return Region(area, -math.inf, math.inf, "mark")
+        # a terrain patch (a loading dock, a ramp): over it
+        return Region(_patch_area(patch), -math.inf, math.inf, "mark")
     shape, size = o["shape"], o["size"]
     pos = list(o["pos"])
     if state is not None and name in state.things:  # it moves (a bowl, a tote): where it is now

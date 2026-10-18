@@ -106,6 +106,15 @@ def test_furniture_stands_apart_and_things_stand_on_tops_in_reach(sentence, seed
         assert not any(w.contains(x, y) for w in walls), name
         if len(o["pos"]) == 3:  # on a top: low enough for an arm, and resting on it (not floating, not sunk)
             assert drafting.LOW - 0.01 <= o["pos"][2] <= drafting.HIGH + 0.15, name
+    # a robot gets to the front of every table and counter on the floor (one against a wall faces the room): a desk
+    # put in a corner behind a bed could not be reached
+    for o in objects:
+        if o["shape"] not in ("table", "counter") or len(o["pos"]) == 3:
+            continue
+        fp = _floor_print(o)
+        fronts = [fp.world(0.0, -fp.hy - 0.35), fp.world(0.0, fp.hy + 0.35), fp.world(fp.hx + 0.35, 0.0),
+                  fp.world(-fp.hx - 0.35, 0.0)]  # fmt: skip
+        assert any(floor.reachable_within(x, y, 0.15) for x, y in fronts), o["name"]
     # every room can be got to from the start
     for room, (x0, y0, x1, y1) in made.rooms.items():
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
