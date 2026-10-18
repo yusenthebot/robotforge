@@ -7,7 +7,7 @@ import copy
 
 import pytest
 
-from robotforge.playground import Playground
+from robotforge.playground import Playground, PlaygroundError
 from robotforge.sim import placement
 from robotforge.sim.session import SimSession
 
@@ -42,6 +42,18 @@ def test_a_robot_added_without_a_place_starts_clear_of_the_furniture(pg):
     assert trip.result()["arrived"], trip.result()
     pg.undo()  # one edit: undo takes the robot away, not back into the island
     assert pg.current_world().robots == []
+
+
+def test_the_same_add_robot_again_is_still_a_no_op_after_the_robot_was_moved_clear(pg):
+    """Regression: add_robot tells agents to send the same call again after a download timeout. Moved clear of the
+    island to [0, -0.5], the first dog no longer matched the retry's [0, 0], and the retry failed with "'dog'
+    already exists"."""
+    pg.add_robot("dog", template="quadruped")
+    again = pg.add_robot("dog", template="quadruped")
+    assert again.get("unchanged") is True and again["robots"] == ["dog"]
+    assert "already in the world exactly like this (at [0, -0.5])" in again["notes"][0]
+    with pytest.raises(PlaygroundError, match="already exists"):  # a place asked for is another robot
+        pg.add_robot("dog", template="quadruped", pos=[1.3, -1.0])
 
 
 def test_a_robot_put_inside_on_purpose_stays_and_is_told_where_is_free(pg):

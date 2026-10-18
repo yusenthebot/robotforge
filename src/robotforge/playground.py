@@ -297,9 +297,16 @@ class Playground:
             raise PlaygroundError(_validation_message(exc)) from exc
         world = self.current_world()
         existing = next((r for r in world.robots if r.name == name), None) if world else None
-        if existing is not None and existing == entry:
+        # Without a pos the call asked for no place, and the first one may have been moved clear of furniture (in
+        # the kitchen [0, 0] is inside the island): the same call again is still the same robot.
+        if (
+            existing is not None
+            and (existing.model_copy(update={"pos": entry.pos}) if pos is None else existing) == entry
+        ):
             # Typically a retry after the client timed out while the first call was still downloading.
-            return self._unchanged(f"{name} is already in the world exactly like this; nothing to do")
+            return self._unchanged(
+                f"{name} is already in the world exactly like this (at {_xy(existing.pos)}); nothing to do"
+            )
 
         def change(w: World) -> None:
             w.robots.append(entry)
