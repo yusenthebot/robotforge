@@ -92,6 +92,44 @@ def test_snapshots_frame_bodies_where_they_are_now():
     assert np.allclose(camera.lookat[:2], [5.0, -2.0], atol=0.01)
 
 
+def test_a_robots_name_is_a_view_framed_on_that_robot():
+    """An agent asked to show a Go2 with a lidar called observe(view="go2") first, and it was refused."""
+    from robotforge.sim.render import VIEWS, _camera_for
+
+    def robot(name: str, x: float) -> str:
+        return f'<body name="{name}/base" pos="{x} 0 0.1"><freejoint/><geom type="box" size="0.1 0.1 0.1"/></body>'
+
+    session = SimSession.from_xml(
+        '<mujoco><worldbody><geom type="plane" size="9 9 .1"/>'
+        f"{robot('rover', -3.0)}{robot('dog', 3.0)}"
+        '<body name="crate" pos="0 2 0.1"><freejoint/><geom type="box" size="0.1 0.1 0.1"/></body>'
+        "</worldbody></mujoco>"
+    )
+    whole = _camera_for(session.model, "default", session.data)
+    for name, x in (("dog", 3.0), ("Rover", -3.0)):  # any case, like the presets
+        cam = _camera_for(session.model, name, session.data)
+        assert np.allclose(cam.lookat[:2], [x, 0.0], atol=0.01), name
+        assert (cam.azimuth, cam.elevation) == VIEWS["default"][:2]
+        assert cam.distance < whole.distance / 3  # one robot, not the three things that move
+    # The crate stands between the default camera and nothing; a wall put between it and the dog is drawn faded.
+    from robotforge.sim.render import occluders, robot_geoms
+
+    assert not occluders(session.model, session.data, cam, robot_geoms(session.model, "rover"))
+    walled = SimSession.from_xml(
+        '<mujoco><worldbody><geom type="plane" size="9 9 .1"/>'
+        f"{robot('dog', 3.0)}"
+        '<body name="wall" pos="3.6 -0.45 0.3"><geom name="wall" type="box" size="0.6 0.03 0.3" euler="0 0 38"/>'
+        "</body></worldbody></mujoco>"
+    )
+    mujoco.mj_forward(walled.model, walled.data)
+    cam = _camera_for(walled.model, "dog", walled.data)
+    wall = mujoco.mj_name2id(walled.model, mujoco.mjtObj.mjOBJ_GEOM, "wall")
+    assert occluders(walled.model, walled.data, cam, robot_geoms(walled.model, "dog")) == {wall}
+    with pytest.raises(ValueError, match="Views: .*rover, dog") as refused:
+        _camera_for(session.model, "crate", session.data)  # a loose object is not a robot
+    assert "crate" not in str(refused.value).split("Views:")[1]
+
+
 def test_views_step_back_just_far_enough_for_what_they_show():
     """A fixed multiple of the scene size left a small arm and a cube a few pixels wide in a top view."""
     from robotforge.sim.render import VIEWS, _camera_for

@@ -65,7 +65,7 @@ Never say something worked because the call returned. Read the numbers, and look
 | `run_script` | `ok`, `output`, traceback |
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
-`observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.
+`observe(view=...)` takes default, front, back, left, right, top, a robot's name (`view="dog"`: the default view framed on that robot), or a robot camera such as `dog/front_cam`.
 `observe(view, find="red")` (a color name, a hex code, or "all") lists what that view sees of the color: each find's world `position`, the `object` name `pick_and_place` takes, and `about_cm`, how far off the position may be.
 A flag on a find (cut_off, hidden, side_on, raised, held_by) means it may be much further off; the result's `how` says what each one it carries means.
 A lidar (a sensor on a robot built from parts) comes whole in `observe()`'s `lidars`: `nearest_m`, `nearest_bearing_deg` from the robot's front (positive is left), `nearest_side`, the nearest hit on each side, and every ray in `ranges_m` (null: nothing within range).

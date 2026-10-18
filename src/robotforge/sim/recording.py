@@ -11,7 +11,6 @@ robot smoothly from the viewer's opening direction.
 from __future__ import annotations
 
 import datetime as dt
-import itertools
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -36,8 +35,6 @@ ELSEWHERE = (".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi")
 FOLLOW_SECONDS = 0.5  # s either side the camera averages the robot's place over, so it does not shake
 MIN_SPAN = np.array([0.7, 0.7, 0.25])  # m the picture keeps round a small robot: the floor sliding by shows it moving
 VIEW = "default"  # the direction the camera looks from: the viewer's opening one
-DRAWN = np.array([1, 1, 1, 0, 0, 0], np.uint8)  # geom groups a picture shows (3 and up are collision shapes)
-MAX_LAYERS = 6  # geoms one ray goes through on its way to the robot
 
 
 class RecordingError(ValueError):
@@ -140,14 +137,14 @@ def target(record: bool | str, folder: Path, robot: str | None) -> Target:
 def _followed(model: mujoco.MjModel, robot: str | None) -> list[int]:
     """The geoms the camera follows: the robot's drawn ones; with no robot every robot's (a robot's bodies are
     named <robot>/<body>; a warehouse's loose crates would pull the camera far back), else everything that moves."""
+    if robot is not None:
+        return render.robot_geoms(model, robot)
     moving = model.body_weldid[model.geom_bodyid] != 0
     drawn = [g for g in range(model.ngeom) if model.geom_group[g] < 3]
     roots = {
         g: mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.body_rootid[model.geom_bodyid[g]])) or ""
         for g in drawn
     }
-    if robot is not None:
-        return [g for g in drawn if roots[g].startswith(f"{robot}/")]
     robots = [g for g in drawn if "/" in roots[g]]
     return robots or [g for g in drawn if moving[g]]
 
@@ -184,41 +181,6 @@ def _cameras(model: mujoco.MjModel, boxes: list[Any], dt_s: float) -> list[Any]:
     return cams
 
 
-def occluders(model: mujoco.MjModel, data: mujoco.MjData, cam: Any, followed: list[int]) -> frozenset[int]:
-    """The geoms standing between the camera and the robot, to be drawn see-through: a Go2 walking in the park
-    went behind a bench, and a kitchen's counters would hide it as often. Rays from the camera to the middle and
-    the box corners of each of the robot's shapes find what is in the way (a few rays at the robot's outline
-    missed the bench's thin post; bounding spheres faded a rock beside the dog). The ground and terrain (on the
-    world body) and the robot itself never count."""
-    if not followed or isinstance(cam, str):
-        return frozenset()
-    az, el = np.radians(cam.azimuth), np.radians(cam.elevation)
-    eye = np.array(cam.lookat) - cam.distance * np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
-    corners = np.array(list(itertools.product((-1.0, 1.0), repeat=3)))
-    aims = []
-    for g in followed:
-        rot, aabb = data.geom_xmat[g].reshape(3, 3), model.geom_aabb[g]
-        aims.append(data.geom_xpos[g] + rot @ aabb[:3])
-        aims.extend(data.geom_xpos[g] + (aabb[:3] + corners * aabb[3:]) @ rot.T)
-    mine, found = set(followed), set()
-    hit = np.zeros(1, np.int32)
-    for aim in aims:
-        start, toward = eye.copy(), aim - eye
-        left = float(np.linalg.norm(toward))
-        if left < 1e-6:
-            continue
-        toward /= left
-        for _ in range(MAX_LAYERS):
-            far = mujoco.mj_ray(model, data, start, toward, DRAWN, 1, -1, hit)
-            g = int(hit[0])
-            if far < 0 or far >= left - 1e-4 or g in mine:
-                break
-            if model.geom_bodyid[g] != 0:  # not the ground or terrain
-                found.add(g)
-            start, left = start + toward * (far + 1e-4), left - far - 1e-4
-    return frozenset(found)
-
-
 def save(
     rec: Recorder,
     renderer: render.SnapshotRenderer,
@@ -243,7 +205,7 @@ def save(
 
     def draw(k: int) -> np.ndarray:
         posed = _pose(model, scratch, rec, picked[k])
-        faded = occluders(model, posed, cams[k], geoms)
+        faded = render.occluders(model, posed, cams[k], geoms)
         return renderer.rgb_of(model, posed, cams[k], width, height, rec._version, faded=faded)
 
     path.parent.mkdir(parents=True, exist_ok=True)

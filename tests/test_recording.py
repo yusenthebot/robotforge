@@ -191,9 +191,9 @@ def test_what_stands_between_the_camera_and_the_robot_is_drawn_see_through(pg):
     mujoco.mj_forward(model, data)
     geoms = recording._followed(model, "pip")
     cam = recording._cameras(model, [render._geom_box(model, data, geoms)], 0.05)[0]
-    faded = recording.occluders(model, data, cam, geoms)
+    faded = render.occluders(model, data, cam, geoms)
     assert {owner(model, g) for g in faded} == {"screen"}
     pg.update_object("screen", pos=[2.5, 2.5])  # out of the way: nothing to fade
     model, data = pg.session.model, pg.session.data
     mujoco.mj_forward(model, data)
-    assert not recording.occluders(model, data, cam, recording._followed(model, "pip"))
+    assert not render.occluders(model, data, cam, recording._followed(model, "pip"))
