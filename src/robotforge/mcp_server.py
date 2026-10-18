@@ -69,11 +69,14 @@ Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh 
 import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
-Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
-bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers),
-things with a moving part (drawer, cabinet with a door, button, switch, lever, valve, conveyor belt) and soft things
-(rope, cloth). Any arm can hold with end_effector="suction" (a suction cup: flat things fingers cannot get round) or
-"magnet" (steel things only), in add_robot or later in update_robot.
+Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
+arms") makes a new robot from one sentence (legs, wheels, a snake, an arm, a humanoid; arms, sizes, colors,
+sensors) that moves at once; update_robot(describe="make it longer") changes it, "another one" is a variation.
+add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
+pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
+button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
+end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
+add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
 end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
@@ -89,8 +92,14 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. To build a scene from a sentence, combine load_scene, add_terrain
-and add_object, then check it with observe(view="overview").
+and objects stand on the ground under them. load_scene(description="a flat with a kitchen and a bedroom, three
+apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
+with terrain, things placed on tops within reach and steady; edit it like any world and check it with
+observe(view="overview").
+add_task("bring the red cup from the kitchen to the bedroom desk") turns a sentence into a task saved with the world:
+a goal with a success check, a reward and randomized starts (go to, bring, put, pick up, push, open, close, press,
+switch on); it adds the thing or the robot the task needs. observe lists each task under "tasks" with done and
+distance_m: check it after acting, and say the task is done only when observe says so.
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
@@ -108,7 +117,8 @@ the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, m
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
 pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table");
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
-handle along the joint's own path; robots lists robots with kind, arms and positions. For anything custom,
+handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
+drawer"); robots lists robots with kind, arms and positions. For anything custom,
 set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/"). observe reports
 state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture
 and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):
@@ -391,10 +401,20 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         design: str | None = None,
         mounts: list[dict[str, Any]] | None = None,
         end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        describe: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
-        list_templates), which is saved as its parts so add_part / update_part change it. end_effector (any arm):
+        list_templates), which is saved as its parts so add_part / update_part change it.
+
+        describe makes a new robot from one sentence, in English or Chinese: legs (4 or 6), wheels (2, 4, 6), a
+        snake, a standing arm, a self-balancing robot or a humanoid, with arms (0-2, gripper, suction or magnet),
+        sizes (tall, long, small, "1 m long"), colors, materials, a head, camera, lidar, a courier's cargo box: "a
+        six-legged robot with two arms", "a tall wheeled courier with a lidar", "a snake with a gripper head". It is
+        built from parts with the gallery's proven layouts and moves at once (the result's "generated" says how);
+        params={"seed": n} picks another variation of the same sentence. update_robot(describe=...) changes it.
+
+        end_effector (any arm):
         "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
         steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
@@ -434,6 +454,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
             source = {"library": library, "build": build, "design": design, "mounts": mounts}
             source["end_effector"] = end_effector
+            source["describe"] = describe
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
@@ -447,20 +468,31 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         build: dict[str, Any] | None = None,
         mounts: list[dict[str, Any]] | None = None,
         end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        describe: str | None = None,
     ) -> str:
-        """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
-        "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
-        build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
-        mounted part or is a robot of the same kind; given only base sensors ({"base": {"sensors": ["lidar"]}}) it
-        is carried on a plate with them; any other is refused with the build that keeps it. mounts replaces the
-        robots it carries (see add_robot; [] takes them all off). end_effector changes the tool on its arm: "suction"
-        cup, "magnet" or back to its "gripper"."""
+        """Change a robot's template params (merged), position or heading. describe changes a robot made from a
+        sentence by another one: "make it longer", "six legs instead of four", "add an arm", "add a lidar", "make it
+        red", "wheels instead of legs", "another one" (a new variation); it is made again from its plan. For a robot
+        built from parts, a build with "parts" replaces its whole description, one without changes only the fields
+        it gives (servo, base, ...) and keeps the parts (add_part / update_part change one part). A template,
+        library or file robot given a whole build (a base or parts) becomes that robot built from parts where it
+        stands, if the build carries it as a mounted part or is a robot of the same kind; given only base sensors
+        ({"base": {"sensors": ["lidar"]}}) it is carried on a plate with them; any other is refused with the build
+        that keeps it. mounts replaces the robots it carries (see add_robot; [] takes them all off). end_effector
+        changes the tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
         with _tool_errors():
             for wanted in _mounted_libraries(mounts):
                 await _download_with_progress(wanted, ctx)
             changed = await asyncio.to_thread(
-                playground.update_robot, name, params, pos, yaw, build, mounts=mounts, end_effector=end_effector
+                playground.update_robot,
+                name,
+                params,
+                pos,
+                yaw,
+                build,
+                mounts=mounts,
+                end_effector=end_effector,
+                describe=describe,
             )
             return _json(changed)
 
@@ -994,6 +1026,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()
+            tasks = playground.task_status()
+            if tasks:  # the open world's tasks (add_task): done or not, and how far still to go
+                state["tasks"] = tasks
             try:
                 lines = playground.sensors.lines()
             except Exception as exc:  # the sensors' lines are a bonus: the state comes back without them, and says so
