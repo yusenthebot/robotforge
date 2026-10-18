@@ -19,6 +19,7 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge import modes, wording
+from robotforge.behaviors import airframe
 from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
@@ -122,6 +123,7 @@ class Playground:
                 "catalog": viewer_catalog(),
                 "lessons": self.lessons.catalog(),
                 "lesson": self.lessons.describe_active(),
+                "rotors": airframe.viewer_rotors(self.session.model, [r["name"] for r in robots]),
             }
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
@@ -938,7 +940,7 @@ def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
 
 def _aircraft(m: mujoco.MjModel, robots: list[str]) -> list[dict[str, Any]]:
     """The robots that fly: their rotors (thrust actuators) and the controller that flies them."""
-    from robotforge.behaviors import airframe, flight
+    from robotforge.behaviors import flight
 
     out = []
     for robot in robots:

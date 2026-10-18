@@ -65,12 +65,11 @@ class Drone(Template):
         g = 9.81
         thrust = THRUST_TO_WEIGHT * p.mass * g / n
         rotor_mass = min(0.045, 0.3 / n) * p.mass
-        motor_r = float(np.clip(0.11 * prop, 0.008, 0.05))
-        motor_h = motor_r * 1.05
+        motor_r, motor_h = aero.motor_size(prop)
         arm_r = max(0.004, 0.032 * s + 0.0025, 0.5 * motor_r)
         arm_z = 0.04 * s
         prop_z = arm_z + arm_r + motor_h
-        gear_drop = 0.5 * s + 0.15 * prop
+        gear_drop = 0.42 * s + 0.12 * prop
         skid_r = 0.03 * s + 0.002
         skid_y = max(0.62 * s, 0.38 * arm)
         skid_z = -hz - gear_drop

@@ -190,6 +190,45 @@ def is_aircraft(model: mujoco.MjModel, robot: str) -> bool:
     return root is not None and bool(thrust_actuators(model, robot, root))
 
 
+def viewer_rotors(model: mujoco.MjModel, robots: list[str]) -> list[dict]:
+    """What the viewer spins: each rotor that has a body of its own (the drone template's and the builder's
+    propellers; a model that draws its propellers into the airframe's mesh, like the Skydio X2, has none to spin).
+    Per rotor: its body, the actuator whose command sets its speed, the axis and point it turns about (body
+    frame), which way, the command at full throttle and the propeller's radius."""
+    out = []
+    for robot in robots:
+        root = root_of(model, robot)
+        if root is None:
+            continue
+        acts = thrust_actuators(model, robot, root)
+        sites = [int(model.actuator_trnid[a, 0]) for a in acts]
+        bodies = [int(model.site_bodyid[s]) for s in sites]
+        for a, site, body in zip(acts, sites, bodies, strict=True):
+            if body == root or bodies.count(body) > 1 or not np.any(model.actuator_gear[a, :3]):
+                continue
+            rot = np.zeros(9)
+            mujoco.mju_quat2Mat(rot, model.site_quat[site])
+            axis = rot.reshape(3, 3) @ (model.actuator_gear[a, :3] / np.linalg.norm(model.actuator_gear[a, :3]))
+            reaction = float(model.actuator_gear[a, 5])
+            discs = [
+                float(model.geom_size[g, 0])
+                for g in range(model.ngeom)
+                if int(model.geom_bodyid[g]) == body and int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_CYLINDER
+            ]
+            out.append(
+                {
+                    "body": body,
+                    "actuator": a,
+                    "center": [round(float(v), 5) for v in model.site_pos[site]],
+                    "axis": [round(float(v), 5) for v in axis],
+                    "spin": -1 if reaction > 0 else 1,  # the body turns against its propeller
+                    "max": round(float(model.actuator_ctrlrange[a, 1]), 5) if model.actuator_ctrllimited[a] else 1.0,
+                    "radius": round(max(discs, default=0.05), 4),
+                }
+            )
+    return out
+
+
 def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = None) -> Airframe:
     """Measure the aircraft in pose `qpos` (the home pose by default): its rotors, mass, inertia and mixer.
     Raises AirframeError saying why it cannot fly (too heavy, rotors that cannot turn it)."""

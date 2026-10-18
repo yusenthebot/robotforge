@@ -15,6 +15,13 @@ from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
 
+def motor_size(diameter: float) -> tuple[float, float]:
+    """(radius, height) of the brushless motor that turns a propeller this big (a 2212 for a 9 inch propeller:
+    about 28 mm across and 30 mm tall with its mount)."""
+    radius = float(np.clip(0.065 * diameter, 0.006, 0.045))
+    return radius, 1.25 * radius
+
+
 @M.cached
 def blade(radius: float, hub: float, spin: int, pitch_ratio: float = 0.45) -> M.Mesh:
     """One blade along +x from the hub to `radius`: a thin airfoil-like section whose chord swells near the root

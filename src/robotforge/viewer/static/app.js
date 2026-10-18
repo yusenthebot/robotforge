@@ -5,6 +5,7 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -390,6 +391,11 @@ function buildMeshGeometries(desc, buffer) {
     for (let i = 0; i < Math.min(nor.length, 30); i++) if (nor[i] !== 0) hasNormals = true;
     if (hasNormals) g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
     else g.computeVertexNormals();
+    if (entry.colors !== undefined) {
+      // A textured mesh: its texture's colors per vertex (the page draws no textures; see scene.py)
+      g.setAttribute("color", new THREE.BufferAttribute(floats.subarray(entry.colors, entry.colors + 3 * n), 3));
+      g.userData.vertexColors = true;
+    }
     out.set(entry.id, g);
   }
   return out;
@@ -449,6 +455,7 @@ async function applyScene(desc) {
       const mat = look
         ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3]);
+      if (g.userData.vertexColors) mat.vertexColors = true;
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
         // one repeat for the whole box squeezed the pattern on thin faces (risers, sides) into shimmer.
@@ -468,6 +475,7 @@ async function applyScene(desc) {
     obj.visible = geom.group < desc.visibleGroupLimit || showCollision;
     bodyNodes[geom.body].add(obj);
   }
+  buildRotors(desc.rotors, bodyNodes); // aircraft: propellers the page turns (rotors.js)
   scene3.add(worldRoot);
 
   // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
@@ -1077,6 +1085,7 @@ let rtf = 1;
 function applyState(s) {
   paused = s.paused;
   rtf = s.rtf;
+  rotorCommands(s.ctrl, paused);
   behaviors = s.behaviors || [];
   updatePaths(behaviors);
   const play = $("btn-play");
@@ -1113,7 +1122,11 @@ function applyState(s) {
 const DRIVE_KEYS = {
   w: "fwd", arrowup: "fwd", s: "back", arrowdown: "back", a: "left", arrowleft: "left", d: "right", arrowright: "right",
 };
-const TURN_RATE = { rover: 2.0, balancer: 1.5 }; // rad/s at full key; walkers turn at 1.0
+// Aircraft: A and D fly sideways (a rover can only turn), the arrow keys turn, E climbs and Q descends (and lands).
+const FLY_KEYS = { ...DRIVE_KEYS, a: "slide_left", d: "slide_right", e: "up", q: "down" };
+const isAircraft = (robot) => robot?.kind === "aircraft";
+const TURN_RATE = { rover: 2.0, balancer: 1.5, aircraft: 1.2 }; // rad/s at full key; walkers turn at 1.0
+const FLY_CLIMB = 1.0; // m/s up or down at full key
 const pressed = new Set();
 let lastDrive = "";
 
@@ -1125,7 +1138,8 @@ function driveTarget() {
 function renderDrive() {
   const robot = driveTarget();
   $("drive").hidden = !robot;
-  if (robot) $("drive-text").innerHTML = t("drive", { name: escapeHtml(robot.name) });
+  $("fly-keys").hidden = !isAircraft(robot);
+  if (robot) $("drive-text").innerHTML = t(isAircraft(robot) ? "fly" : "drive", { name: escapeHtml(robot.name) });
   lastDrive = "";
 }
 
@@ -1134,12 +1148,18 @@ function driveCommand(robot) {
   const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
-  return { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
+  if (isAircraft(robot)) {
+    cmd.speed = fwd * top * 0.5;
+    cmd.side = ((pressed.has("slide_left") ? 1 : 0) - (pressed.has("slide_right") ? 1 : 0)) * top * 0.5;
+    cmd.climb = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * FLY_CLIMB;
+  }
+  return cmd;
 }
 
 function sendDrive() {
   const robot = driveTarget();
-  for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has(k.dataset.key));
+  for (const k of document.querySelectorAll("#drive kbd, #lesson-drive kbd")) k.classList.toggle("on", pressed.has((isAircraft(robot) && k.dataset.fly) || k.dataset.key));
   const lessonDrive = lessonDriveSpec();
   if (lessonDrive) {
     // A lesson with a robot to drive takes the keys; the lesson's own controller turns them into wheel speeds.
@@ -1155,7 +1175,7 @@ function sendDrive() {
   }
   if (!robot) return;
   const cmd = driveCommand(robot);
-  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}`;
+  const key = `${cmd.robot}:${cmd.speed}:${cmd.turn}:${cmd.side ?? 0}:${cmd.climb ?? 0}`;
   if (key === lastDrive) return;
   lastDrive = key;
   send(cmd);
@@ -1229,7 +1249,7 @@ controls.addEventListener("start", () => {
 function driveKey(e, down) {
   const lessonDrive = lessonDriveSpec();
   if (!driveTarget() && !lessonDrive) return false;
-  const dir = DRIVE_KEYS[e.key.toLowerCase()];
+  const dir = (isAircraft(driveTarget()) && !lessonDrive ? FLY_KEYS : DRIVE_KEYS)[e.key.toLowerCase()];
   if (!dir) return false;
   e.preventDefault();
   if (down) {
@@ -1924,6 +1944,7 @@ function loop() {
   controls.update();
   updateRing();
   updatePathWidths();
+  spinRotors();
   refreshDragVisual();
   lessonFrame();
   renderer.render(scene3, camera);

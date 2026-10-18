@@ -283,6 +283,15 @@ MOBILE_ARM = {
 }
 
 
+def _hexacopter() -> dict[str, Any]:
+    from robotforge.design.builder.guide import EXAMPLE_HEXACOPTER  # the builder guide's own example
+
+    return EXAMPLE_HEXACOPTER
+
+
+HEXACOPTER = _hexacopter()
+
+
 def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> Callable[[Any], None]:
     """A world builder: these robots, then the scene, which puts them on its free spots."""
 
@@ -307,6 +316,19 @@ def _look_at(robots: list[str], offset: tuple[float, float, float]) -> str:
             rf.scene.bodies.find((b) => b.name.startsWith(r + "/") && b.dynamic).id));
         const mid = [0, 1, 2].map((i) => at.reduce((s, p) => s + p[i], 0) / at.length);
         rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
+    """
+
+
+def _hover_look(robot: str, offset: tuple[float, float, float], drop: float) -> str:
+    """Page script: look at a hovering aircraft from `offset` metres away, aiming `drop` metres below it, so its
+    shadow on the ground shows how high it flies. Nothing is selected: the selection ring lies on the ground right
+    under the aircraft, far below it in the picture."""
+    return f"""
+        const rf = window.__robotforge;
+        rf.select(null);
+        const p = rf.bodyPosition(rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")})).id);
+        const off = {json.dumps(list(offset))};
+        rf.lookAt(p.map((v, i) => v + off[i]), [p[0], p[1], p[2] - {drop}]);
     """
 
 
@@ -732,6 +754,29 @@ SHOTS = [
         _gallery_line_up,
         page=_look_at(["centaur", "twin_arm"], (2.4, -2.2, 1.5)),
         settle=3.0,
+    ),
+    # Aircraft hovering a metre over the park's path, their shadows on the grass below: the drone template, a
+    # hexacopter built from parts (the builder guide's example), the Skydio X2.
+    Shot(
+        "drone_park",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("drone", (0.8, -1.0, 0.26), 0.16),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_hexacopter",
+        _in_scene("park", {"hexa": {"build": HEXACOPTER}}),
+        viewer=[_go("hexa", [0.0, -1.0, 0.9]), {"wait": 5.0}],
+        page=_hover_look("hexa", (0.95, -1.2, 0.32), 0.2),
+        settle=0.5,
+    ),
+    Shot(
+        "drone_x2",
+        _in_scene("park", {"x2": {"library": "skydio_x2"}}),
+        viewer=[_go("x2", [0.0, -1.0, 0.8]), {"wait": 5.0}],
+        page=_hover_look("x2", (0.82, -1.02, 0.28), 0.12),
+        settle=0.5,
     ),
 ]
 

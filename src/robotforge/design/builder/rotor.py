@@ -32,15 +32,9 @@ BELL_COLOR = [0.5, 0.52, 0.56, 1.0]
 CLEARANCE = 0.006  # m between the top of the motor and the propeller's plane
 
 
-def motor_size(diameter: float) -> tuple[float, float]:
-    """(radius, height) of the motor that turns a propeller this big."""
-    radius = float(np.clip(0.11 * diameter, 0.008, 0.05))
-    return radius, 1.05 * radius
-
-
 def height(diameter: float) -> float:
     """From the part's frame (the motor's foot) up to just above the propeller."""
-    return motor_size(diameter)[1] + CLEARANCE + 0.004
+    return aero.motor_size(diameter)[1] + CLEARANCE + 0.004
 
 
 def default_thrust(diameter: float) -> float:
@@ -55,7 +49,7 @@ def build(spec: mujoco.MjSpec, body: mujoco.MjsBody, part: Placed, vis: Visuals)
     mass = p.mass if p.mass is not None else MASS_PER_NEWTON * thrust + PROP_MASS
     mirrored = np.linalg.det(part.local) < 0
     spin = (1 if p.spin == "ccw" else -1) * part.flip * (-1 if mirrored else 1)
-    radius, motor_h = motor_size(diameter)
+    radius, motor_h = aero.motor_size(diameter)
     foot = part.local @ np.asarray(p.offset, float)
     axis = part.local @ np.array([0.0, 0.0, 1.0])
     axis = axis / np.linalg.norm(axis)
