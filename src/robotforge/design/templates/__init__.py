@@ -14,8 +14,11 @@ from robotforge.design.templates.gripper import Gripper
 from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
 from robotforge.design.templates.rover import Rover
+from robotforge.design.templates.tools import Magnet, SuctionCup
 
-TEMPLATES: dict[str, Template] = {t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper())}
+TEMPLATES: dict[str, Template] = {
+    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), SuctionCup(), Magnet())
+}
 
 
 # What agents call a template that has another name here; offered as "did you mean", never taken for the template:
@@ -32,6 +35,9 @@ NICKNAMES = {
     "pendulum": "cartpole",
     "cart_pole": "cartpole",
     "claw": "gripper",
+    "suction": "suction_cup",
+    "vacuum": "suction_cup",
+    "electromagnet": "magnet",
 }
 
 

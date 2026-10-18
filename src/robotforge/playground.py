@@ -276,6 +276,7 @@ class Playground:
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        end_effector: str | None = None,
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
@@ -291,6 +292,7 @@ class Playground:
                 params=params or {},
                 pos=pos or [0.0, 0.0],
                 yaw=yaw,
+                end_effector=end_effector,
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
@@ -316,20 +318,23 @@ class Playground:
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        end_effector: str | None = None,
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
-            if not params and pos is None and yaw is None and build is None:
-                raise PlaygroundError("nothing to change: give params, pos, yaw or build")
+            if not params and pos is None and yaw is None and build is None and end_effector is None:
+                raise PlaygroundError("nothing to change: give params, pos, yaw, build or end_effector")
             if params:
                 robot.params = {**robot.params, **params}
             if pos is not None:
                 robot.pos = pos
             if yaw is not None:
                 robot.yaw = yaw
+            if end_effector is not None:  # a tool change, checked by the world's own validation
+                robot.end_effector = end_effector
             if build is not None:
                 entry = _built(robot)
                 if not (entry.build or {}).get("parts") or "parts" in build:

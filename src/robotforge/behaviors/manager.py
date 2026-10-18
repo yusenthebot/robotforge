@@ -96,6 +96,7 @@ def _how_to_move(kind: Kind) -> str:
 DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
+FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
 
 
 @dataclass(frozen=True)
@@ -1001,7 +1002,13 @@ class BehaviorManager:
             try:
                 arm.pick_and_place(pick["center"], pick["half_height"], place, place_top)
             except OutOfReach as exc:
-                raise BehaviorError(self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)) from exc
+                text = self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
+                if "object" in exc.bad and arm.tool is None and 2 * pick["half_height"] < FLAT:
+                    text += (
+                        f". {obj} is only {2000 * pick['half_height']:.0f} mm thick: fingers cannot close round "
+                        "something that flat, a suction cup can (update_robot with end_effector='suction')"
+                    )
+                raise BehaviorError(text) from exc
             except ValueError as exc:
                 raise BehaviorError(str(exc)) from exc
         return arm, {"object": obj, "target": target, "region": region}

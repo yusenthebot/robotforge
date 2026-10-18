@@ -15,6 +15,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.design import end_effectors
 from robotforge.sim.actuators import drives_joint, is_position_servo
 from robotforge.sim.geometry import collides
 
@@ -37,6 +38,7 @@ LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying th
 # behind its base, where its first joint cannot point (14 degrees each side on a Panda), twists the rest of the way
 JOINT_SLACK = 0.35
 PATH_SAMPLES = 33  # points a path around the base is measured at: 32 chords of at most 11 degrees in a full turn
+PAD_PRESS = 0.001  # m a suction cup or magnet is pressed into the top of what it picks, so the whole face meets it
 
 
 class OutOfReach(ValueError):
@@ -95,6 +97,11 @@ class ArmMotion:
         self.tool_axis = rot.reshape(3, 3)[:, 2].copy()
         self.gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
         self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
+        # A suction cup or an electromagnet (end_effectors.py) holds by adhesion: on when closed, off when open, and
+        # it holds what it picks by the top, under its face, where fingers hold it around the middle.
+        self.tool = end_effectors.tool_of(model, self.gripper)
+        if self.tool is not None:
+            self.gripper_open = 0.0
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -293,8 +300,12 @@ class ArmMotion:
         around it (e.g. a bin's rim), which the carried object must clear.
         """
         grasp = obj_pos.copy()
-        drop = place + [0, 0, obj_half_height + 0.01]
-        rim = max(place_top if place_top is not None else place[2], grasp[2] - obj_half_height)
+        below = obj_half_height  # how far the load reaches below the tool point: fingers hold it by the middle
+        if self.tool is not None:  # a suction cup or a magnet holds it by its top, pressed on a little
+            grasp[2] += obj_half_height - PAD_PRESS
+            below = 2 * obj_half_height
+        drop = place + [0, 0, below + 0.01]
+        rim = max(place_top if place_top is not None else place[2], grasp[2] - below)
         travel_z = max(grasp[2], drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
@@ -303,7 +314,7 @@ class ArmMotion:
         bad = self.unreachable(points)
         if bad:
             raise OutOfReach(self.robot, bad, points)
-        across = self._carry_height(grasp, drop, travel_z, obj_half_height)
+        across = self._carry_height(grasp, drop, travel_z, below)
         if across is None:
             under, fix = "the robot carrying the arm", "put both on the same side of the robot, or turn it"
             if int(self.ik.model.body_jntnum[self._robot_root]) == 0:  # bolted to the floor: no robot to turn
@@ -344,9 +355,7 @@ class ArmMotion:
         carry_time = self._time(above, above_drop)
         if carry_joints is not None:
             carry_time = max(carry_time, float(np.max(np.abs(carry_joints - self._solve(above)[0]))) / JOINT_SPEED)
-        self.queue.append(
-            Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=obj_half_height)
-        )
+        self.queue.append(Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=below))
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0))
@@ -679,6 +688,8 @@ class ArmMotion:
     def _grip(self, state: str | None) -> float | None:
         if state is None or self.gripper < 0:
             return None
+        if self.tool is not None:  # adhesion: closing turns it on, at full power
+            return 0.0 if state == "open" else float(self.ik.model.actuator_ctrlrange[self.gripper][1])
         return self.gripper_open if state == "open" else 0.0
 
     @staticmethod

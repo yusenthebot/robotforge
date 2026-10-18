@@ -330,10 +330,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
+        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
         built from parts (build, see builder_guide), or a ready-made design from the gallery (design="centaur",
-        list_templates), which is saved as its parts so add_part / update_part change it.
+        list_templates), which is saved as its parts so add_part / update_part change it. end_effector (any arm):
+        "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
+        steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
         build is a base plus parts, e.g. a two-wheeled balancer: {"base": {"size": [0.07, 0.14, 0.22]}, "motor":
         "jga25", "parts": [{"name": "left_wheel", "at": [0, 0.095, -0.11], "shape": "wheel", "size": [0.12, 0.025],
@@ -359,7 +362,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
             # minute: off the event loop, so the viewer and other requests keep running meanwhile.
-            source = {"library": library, "build": build, "design": design}
+            source = {"library": library, "build": build, "design": design, "end_effector": end_effector}
             added = await asyncio.to_thread(playground.add_robot, name, template, file, params, pos, yaw, **source)
             return _json(added)
 
@@ -370,12 +373,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         pos: list[float] | None = None,
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part)."""
+        keeps the parts (add_part / update_part change one part). end_effector changes the tool on its arm: "suction"
+        cup, "magnet" or back to its "gripper"."""
         with _tool_errors():
-            return _json(playground.update_robot(name, params, pos, yaw, build))
+            return _json(playground.update_robot(name, params, pos, yaw, build, end_effector))
 
     @server.tool()
     def add_object(
@@ -387,6 +392,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         mass: float | None = None,
         fixed: bool | None = None,
         yaw: float = 0.0,
+        material: Literal["plastic", "wood", "steel"] | None = None,
+        speed: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -395,9 +402,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
         degrees. fixed objects never move (walls, shelves, counters, trees, benches and rocks are fixed unless
         fixed=false). A bin is an open-top container; a marker is a flat mark nothing collides with (goals, lanes).
-        Ramps and stairs are terrain: see add_terrain."""
+        Ramps and stairs are terrain: see add_terrain. material (box, sphere, cylinder): plastic, wood or steel (heavy;
+        what an electromagnet holds)."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
+            fields |= {"material": material, "speed": speed}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -409,10 +418,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         mass: float | None = None,
         fixed: bool | None = None,
         yaw: float | None = None,
+        material: Literal["plastic", "wood", "steel"] | None = None,
+        speed: float | None = None,
     ) -> str:
-        """Change an object's size, position, heading (yaw, degrees), color, mass or fixed flag."""
+        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material or a
+        conveyor's belt speed (m/s, 0 stops it)."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
+            fields |= {"material": material, "speed": speed}
             return _json(playground.update_object(name, **fields))
 
     @server.tool()
@@ -618,7 +631,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
-        """Open or close an arm's gripper."""
+        """Open or close an arm's gripper; on an arm with a suction cup or an electromagnet, close turns it on (it
+        holds what its face touches) and open turns it off."""
         with _tool_errors():
             arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot, arm=True), state)
             run = await run_until(lambda: arm.done, 5.0)
