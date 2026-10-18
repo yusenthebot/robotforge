@@ -42,55 +42,91 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 | 说法 | 生成什么 |
 |---|---|
 | 身体 | `legs`、`dog`、`spider`、`insect`、`centaur`、`mantis`、四足、六足（4 或 6 条腿）；`wheels`、`rover`、`car`、`courier`、小车、快递（2、4 或 6 个轮子）；`snake`、蛇；`segway`、`self-balancing`、`two wheels`、平衡；`robot arm`、`tentacle`、机械臂、触手；`humanoid`、`biped`、人形 |
-| 数量 | “six legs”“6-legged”“六足”“两只手”“12 segments”“six joints”；八条腿生成六条，三只手臂生成两只，都在 notes 里说明（内置步态只走 4 条或 6 条腿） |
-| 手臂 | `arm`、`gripper`、`claw` 加一只，`two arms`、`dual arm`、双臂加两只；`suction` 吸盘，`magnet` 电磁铁；蛇的手臂是头上的夹爪 |
-| 尺寸 | `tall`、`long`、`wide`、`small`、`big`，前面加 `very` 更多；`long legs` 只加长腿；也可以写米：“0.5 m long”“高 60 厘米” |
+| 数量 | “six legs”“6-legged”“六足”“两只手”“带两个手臂的”“12 segments”“十二节”“six joints”“6轴”“一辆六轮”；八条腿生成六条，三只手臂生成两只，蛇 6 到 14 节，都在 notes 里说明（内置步态只走 4 条或 6 条腿） |
+| 手臂 | `arm`、`gripper`、`claw` 加一只，`two arms`、`dual arm`、双臂加两只；`suction` 吸盘，`magnet` 电磁铁，蛇头和触手的末端也换成吸盘或电磁铁；蛇的手臂是头上的夹爪 |
+| 尺寸 | `tall`、`long`、`wide`（`fat`、粗）、`small`、`big`，前面加 `very` 更多；`long legs`、`long-legged`、“make the legs longer” 只改腿；也可以写米：“0.5 m long”“高 60 厘米”，和 `small` 这类词一起说时以米为准 |
 | 外观 | 颜色名（两个时第二个是点缀色）、`carbon`、`aluminum`、`plastic`，风格词 `military`、`space`、`industrial` |
 | 装备 | `lidar`、`camera`、`head`、`cargo`；“no camera”“headless” 去掉 |
 
 同一句话总是生成同一个机器人（种子由句子决定）；`params={"seed": 3}` 换一个变体：颜色方案、材料和细节（天线、保险杠、头的形状）跟着种子变，比例也差几个百分点。
-之后用另一句话改它：`update_robot("bot", describe="make it longer")`，或者 “six legs instead of four”、“add an arm”、“remove the arm”、“add a lidar”、“make it red”、“wheels instead of legs”、“another one”（换一个变体）。
-计划存在 world.yaml 里这个机器人的 `generated` 字段，改的时候从计划重新生成整台机器人，所以之前用 `update_part` 手动改过的零件会被替换，notes 会提醒。
+之后用另一句话改它：`update_robot("bot", describe="make it longer")`，或者 “six legs instead of four”、“add an arm”、“remove an arm”（去掉一只）、“remove the arms”（全去掉）、“add a lidar”、“make it red”、“make it not so long”、“wheels instead of legs”、“another one”（换一个变体）。
+“make it longer again” 还是同一个变体，只是更长；只有 “another one” 这类说法才换种子。
+否定照字面读：“a dog that does not have an arm” 没有手臂，“don't make it red” 不会变红。
+计划存在 world.yaml 里这个机器人的 `generated` 字段（只记最近 20 句话），改的时候从计划重新生成整台机器人，所以之前用 `update_part` 手动改过的零件会被替换，notes 会提醒。
+计划里写的就是造出来的：身体带不了的装备（人形的激光雷达、平衡车的手臂、人形手上的吸盘）会从计划里去掉，并在 notes 里说明。
 生成的机器人就是普通的零件机器人，`add_part`、`update_part` 照常能用；人形机器人用的是人形模板。
 说不出机器人的句子会被拒绝，并说明该怎么说；会飞的和水里的会被指到 `drone`、`boat`、`rov` 模板。
-零件没通过搭建检查时，报错会建议换个说法或换一个种子。
+零件没通过搭建检查时，报错会建议换个说法或换一个种子；名字重复这类世界本身的报错原样返回，不会让人去换种子。
 
 ### 怎么保证生成了就能动
 
 - 每种身体沿用设计库和速查表里验证过的布局：狗腿、昆虫和蜘蛛的六足、小车、平衡车、蛇、机械臂模板、半人马的上身和双臂，只按计划拉伸。
-- 腿的关节不靠估算：每次生成都用搭建检查量出站着时每个腿部舵机用掉多少力（检查报告的 `strain`），从业余舵机一级级换到带减速的关节模组，选第一个不超过 40% 的。
+- 腿的关节不靠估算：每次生成都用搭建检查量出站着时每个腿部舵机用掉多少力（检查报告的 `strain`），从业余舵机换到关节模组再到带减速的关节模组，选第一个不超过 40% 的。
   按体重估算时，1.4 倍大、腿长 1.4 倍的狗站得住却往后退；按实测选上 2:1 减速的关节模组后，4 秒走了 1.27 米。
-- 腿比身体长时，身体拉长到两髋间距不小于一条腿的长度：1.35 倍大、腿长 1.4 倍的狗原来 5 个变体里 4 个往前栽，拉长后都能走。
+  不用带减速的业余舵机：它撑得住大狗，但腿摆得只有一半快，1.4 到 1.6 倍大的短腿狗只走了 40% 到 68% 的路，换成关节模组后都走完了。
+- 四足的前后髋至少隔两条腿长：短身子的狗前后脚会互相踩，0.6 和 0.7 倍长的 8 个变体只有 1 个能走（“a robot dog” 再说 “make it shorter” 原来 5 秒倒退 0.08 米）；所以身体不会再短，notes 会说明，想要更短的狗就把腿也说短。
+- 四足的左右髋至少隔 0.58 条腿长，宽度至少是长度倍数的 0.55：又窄又高的狗会侧翻，又长又窄的会在脚上来回滚。
 - 六足的双臂像螳螂一样举在胸前，装在随腿长加高的立柱上，避开往前伸的前腿；轮式的双臂装在立柱上，避开轮子；双臂工作台的底座有工作台那么高。
-- 腿太短（尺寸乘腿长小于 0.6）时，脚离身体不到 5 厘米，步态认不出腿，所以加长到 0.6 并说明；人形机器人生成 0.3 到 0.65 米高（0.7 米的有的变体走着会摔），0.5 米以上用关节模组。
-- 蛇的舵机按粗细选：1.6 倍粗的蛇用业余舵机一动不动，用关节模组 6 秒爬了 0.85 米。
+- 双臂四足和它的躯干一样宽（0.14 到 0.16 米乘尺寸），腿至少 0.7：更宽前腿会踢到手臂，更窄或腿更短会翻或走不动；带两只手臂的机器人至少 0.8 倍大，因为夹爪不会跟着变小。
+- 背一只臂的机器人头最大 8 厘米（臂在家姿势下夹爪悬在头上方）；小于 0.8 倍、背着臂的狗腿最长 1.4 倍，否则头重脚轻。
+- 腿太短（尺寸乘腿长小于 0.6）时，脚离身体不到 5 厘米，步态认不出腿，所以加长到 0.6 并说明；宽身子的六足腿更长一些，不然肚子拖地；人形机器人生成 0.3 到 0.65 米高（0.7 米的有的变体走着会摔），0.5 米以上用关节模组。
+- 带臂的快递车货箱最高是车长的 1.5 倍，太大的平衡车会缩小到轮子电机接得住。
+- 蛇：多于 8 节时每节摆得小一些，身体像 8 节的蛇那样弯，而不是绕成圈；蛇的步态按自己的身长换算速度（以前所有蛇都按 0.56 米长算，短蛇只走三分之一的路，长蛇走三倍）；舵机按大小和长度选，粗乘大超过 1.4 倍、脊柱长过 1.6 米的蛇会被收小。
 
-扫过的范围（2026-10-19，真实仿真，每个组合以 0.25 m/s 走或开 4 秒，蛇 0.1 m/s）：尺寸 0.6、1.0、1.4、1.6 倍，腿长 0.6、1.0、1.4、1.8 倍，0 到 2 只手臂。
-四足 48 个组合里 47 个走到指令距离的一半以上，剩下那个（0.6 倍小、腿长 1.8 倍、背一只臂）走了 0.49 米；六足 48 个里 47 个，剩下那个（1.6 倍大、短腿）走了 0.43 米；蜘蛛、轮式、平衡车各 48 个全部通过，没有一个倒下，站立的手臂 48 个都搭得起来、认得出是机械臂；蛇 48 个里 40 个，没通过的都是 0.6 倍细、带夹爪头的，4 秒爬 12 到 14 厘米；人形 0.3 到 0.65 米的 18 个全部能走。
+扫过的范围（2026-10-19，`uv run python scripts/gen_bench.py sweep --body <身体> --length 0.6,1.0,1.4,1.8 --width 0.6,1.0,1.4 --height 0.6,1.0,1.4,1.8 --size 0.6,1.0,1.6 --arms 0,1,2`，每个组合一个种子，加进空世界站 2 秒，再以 0.25 m/s 走或开 5 秒；通过是没倒、至少走了指令距离的一半）：
+
+| 身体 | 通过 | 没通过的 |
+|---|---|---|
+| 四足 | 430 / 432 | 1.6 倍大、0.6 倍长、短腿、背一只臂：36%；1.8 倍长、1.4 倍宽、短腿、背一只臂：44% |
+| 六足（长身子） | 432 / 432 | |
+| 蜘蛛 | 432 / 432 | |
+| 轮式 | 432 / 432 | |
+| 平衡车 | 432 / 432 | |
+| 站立的手臂 | 432 / 432 | 都搭得起来、认得出是机械臂 |
+| 蛇（0.1 m/s；6、8、12、14 节，0 或 1 个夹爪头，288 个） | 246 / 288 | 277 个至少走了 40%；最差的是 0.6 倍小、1.4 倍粗、14 节的蛇，几乎不动；中位数 67% |
+| 人形（0.15 m/s；高度 0.6 到 1.4 倍、尺寸 0.6 到 1.4 倍，各两个种子） | 22 / 30 | 都没倒；没通过的是被抬到最低 0.3 米的人形，5 秒走 0.37 米（49%） |
+
+`uv run python scripts/gen_bench.py changes` 跑一串改动的说法（“make it shorter”“make the legs shorter”“a short-legged robot dog”“a very short robot dog”“a long-legged insect”“a small robot dog 50 cm long” 等），每句两个种子，28 次全部通过。
 
 ### 实测：十五句话
 
-真实仿真，加进空世界站 2 秒，再以 0.25 m/s（人形 0.15，蛇 0.1）走或开 5 秒；有手臂的另外在臂的基座外 0.22 到 0.24 米放一个 4 厘米方块和一个盒子，`pick_and_place` 一次。
+`uv run python scripts/gen_bench.py fifteen --variations 3`：每句用自己的种子和后面两个种子，加进空世界站 2 秒，再以 0.25 m/s（人形 0.15，蛇 0.1）走或开 5 秒，量站好之后往前走了多远。
 
-| 说法 | 认成 | 5 秒走了 | 最大倾斜 | 手臂 |
-|---|---|---|---|---|
-| a six-legged robot with two arms | 六足 | 1.56 m | 1° | 左手把方块放进盒子 |
-| a tall wheeled courier with a lidar | 小车 | 1.50 m | 0° | |
-| a snake with a gripper head | 蛇 | 0.40 m | 0° | 夹爪头张开 25 mm、合上、再张开 |
-| a small orange robot dog | 四足 | 1.58 m | 4° | |
-| a big carbon fiber quadruped with long legs and a camera head | 四足 | 1.52 m | 3° | |
-| a spider robot in black and red | 六足 | 1.57 m | 0° | |
-| a six-wheeled mars rover with an arm | 小车 | 1.50 m | 0° | 放进盒子 |
-| a self-balancing robot on two wheels | 平衡车 | 1.54 m | 2° | |
-| a robot arm with six joints and a suction cup | 机械臂 | | | 吸盘把方块放进盒子 |
-| a long green snake with 12 segments | 蛇 | 0.31 m | 0° | |
-| a centaur in white and gold | 四足 | 0.92 m | 6° | 左手放进盒子 |
-| a tall humanoid | 人形 | 0.84 m | 4° | |
-| a wheeled robot with two arms | 小车 | 1.50 m | 0° | 左手放进盒子 |
-| 一只带激光雷达的蓝色四足机器狗 | 四足 | 1.44 m | 4° | |
-| a tentacle arm with a gripper | 机械臂 | | | 放进盒子 |
+| 说法 | 认成 | 5 秒走了（三个变体） | 最大倾斜 |
+|---|---|---|---|
+| a six-legged robot with two arms | 六足 | 1.26 m | 1° |
+| a tall wheeled courier with a lidar | 小车 | 1.25 m | 0° |
+| a snake with a gripper head | 蛇 | 0.28 到 0.32 m | 0° |
+| a small orange robot dog | 四足 | 1.28 m | 5° |
+| a big carbon fiber quadruped with long legs and a camera head | 四足 | 1.28 m | 3° |
+| a spider robot in black and red | 六足 | 1.27 m | 0° |
+| a six-wheeled mars rover with an arm | 小车 | 1.25 m | 0° |
+| a self-balancing robot on two wheels | 平衡车 | 1.09 m | 2° |
+| a robot arm with six joints and a suction cup | 机械臂 | 站着不动 | |
+| a long green snake with 12 segments | 蛇 | 0.45 到 0.48 m | 0° |
+| a centaur in white and gold | 四足 | 1.27 m | 2° |
+| a tall humanoid | 人形 | 0.60 m | 4° |
+| a wheeled robot with two arms | 小车 | 1.25 m | 0° |
+| 一只带激光雷达的蓝色四足机器狗 | 四足 | 1.12 到 1.26 m | 4° |
+| a tentacle arm with a gripper | 机械臂 | 站着不动 | |
 
-背一只臂的狗（“a dog with an arm”）从狗身旁的地上夹起方块放进另一侧的盒子；臂在狗背上，正前方和正后方够不到地面，拒绝时会给出够得到的位置。
+手臂：`uv run python scripts/gen_bench.py arms` 让每个带手臂的机器人站好后，用第一只手把地上的 4 厘米方块（放在手的工具点外 6 厘米，够不着就往回挪）`pick_and_place` 到旁边 15 厘米处；会走会开的机器人够不着时自己过去。
+
+| 说法 | 结果 |
+|---|---|
+| a six-legged robot with two arms | 左手放好（方块挪到手下方往回 6 厘米才够得着） |
+| a six-wheeled mars rover with an arm | 放好 |
+| a robot arm with six joints and a suction cup | 吸盘放好 |
+| a centaur in white and gold | 左手放好 |
+| a wheeled robot with two arms | 左手放好 |
+| a wheeled robot with two arms and suction cups | 左手吸盘放好 |
+| a tentacle arm with a gripper | 放好 |
+| a tentacle with a magnet | 电磁铁放好（方块是钢的） |
+| a robot dog with an arm | 放好 |
+| a snake with a gripper head、a snake with a suction head | 拒绝：蛇头只够得着 0.1 米，夹爪头能张合（`gripper`），不能抓放 |
+
+tests/test_generator.py 里有站立吸盘臂放进盒子、触手放到点上、六轮火星车开过去取 1.5 米外的方块这三项。
+背一只臂的狗的臂在狗背上，正前方和正后方够不到地面，拒绝时会给出够得到的位置。
 `uv run python scripts/screenshots.py --only gen_01 ... gen_15` 拍十五张单独的照片并拼成一张带句子的网格，`--only generated_robots` 拍上面那张合影；`uv run python scripts/demos.py --only generated_three` 录快递车、六足和长腿大四足一起走的视频。
 
 ## 基本概念

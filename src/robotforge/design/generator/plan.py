@@ -39,6 +39,7 @@ MIN_LEG_TWO_ARMS = 0.7  # a two-armed dog's: on x0.6 legs they walked 17 to 71 %
 # and 0.03 m/s after 20 s; up to 1.6 m every one without jaws did (2026-10-19 sweep).
 SNAKE_SPINE = 1.6  # m
 SNAKE_SEGMENT = 0.08  # m, one segment at factor 1
+SNAKE_GIRTH = 1.4  # a snake's size times its width at most this
 HUMANOID_HEIGHT = 0.45  # m, the humanoid template's height at factor 1
 HUMANOID_RANGE = (0.3, 0.65)  # m: at 0.7 m some variations fell over walking at 0.15 m/s (2026-10-19 sweep)
 
@@ -164,6 +165,17 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
     if plan.body == "legged" and plan.legs == 6 and not plan.round and changes.get("height", height) < wide:
         changes["height"] = round(wide, 3)
         notes.append(f"legs x{height:.2f} became x{wide:.2f}: on a body x{width:.2f} wide shorter legs drag its belly")
+    if plan.body == "snake" and changes.get("size", plan.size) * changes.get("width", plan.width) > SNAKE_GIRTH:
+        # A snake's segments grow with its size and its girth together: x1.6 by x1.4 slithered under half the way in
+        # 32 of 32 variations, x1.6 by x1.0 in 15 of 32, x1.4 in 4 of 32 (2026-10-19 sweep).
+        size_now, width_now = changes.get("size", plan.size), changes.get("width", plan.width)
+        width_new = max(FACTOR[0], math.floor(SNAKE_GIRTH / size_now * 1000) / 1000)
+        size_new = min(size_now, math.floor(SNAKE_GIRTH / width_new * 1000) / 1000)
+        changes |= {"width": width_new, "size": size_new}
+        notes.append(
+            f"a snake x{size_now:.2f} big and x{width_now:.2f} thick became x{size_new:.2f} and x{width_new:.2f}: "
+            f"thicker than x{SNAKE_GIRTH} in all, it is too heavy to slither"
+        )
     if plan.body == "snake":
         segments, length = changes.get("segments", plan.segments), changes.get("length", plan.length)
         per_length = (segments - 1) * SNAKE_SEGMENT * size * changes.get("width", plan.width)
@@ -188,9 +200,10 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
     if plan.body == "humanoid" and not HUMANOID_RANGE[0] <= tall <= HUMANOID_RANGE[1]:
         meters = min(max(tall, HUMANOID_RANGE[0]), HUMANOID_RANGE[1])
         changes["height"] = round(meters / (HUMANOID_HEIGHT * size), 3)
+        why = " (taller ones fell over walking)" if tall > meters else ""
         notes.append(
             f"a {tall:.2f} m humanoid became {meters:.2f} m: the humanoid walks from {HUMANOID_RANGE[0]} to "
-            f"{HUMANOID_RANGE[1]} m tall (taller ones fell over walking)"
+            f"{HUMANOID_RANGE[1]} m tall{why}"
         )
     return replace(plan, **changes), notes
 
