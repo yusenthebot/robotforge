@@ -30,7 +30,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
-   - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover or a boat, humanoid poses; a boat's `move(to="dock")` plans round buoys and the shore; an ROV's `move(to=[x, y, z])` dives to that point and holds depth and heading (z is height above the floor: 0.5 m under a surface at 1.2 m is z = 0.7; the result's `depth_m` is the depth reached);
+   - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover or a boat, humanoid poses; a boat's `move(to="dock")` plans round buoys and the shore; an ROV's `move(to=[x, y, z])` dives to that point and holds depth and heading (z is height above the floor like every z, depth = water level - z: 0.5 m under a surface at 1.2 m is z = 0.7; the result's `depth_m` is the depth reached; a point on land or under the bottom gets `why` with the z range that works; its `depth` sensor reads meters under the surface);
    - `move_arm` / `gripper` / `pick_and_place`: arms;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;

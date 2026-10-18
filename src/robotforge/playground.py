@@ -97,7 +97,7 @@ class Playground:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
-            if msg.get("heave") is not None:  # an underwater robot going up or down (keys R and F)
+            if msg.get("heave") is not None:  # an underwater robot going up or down (keys E and Q)
                 self.behaviors.heave(str(msg["robot"]), float(msg["heave"]))
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
@@ -764,10 +764,12 @@ class Playground:
                     )
             ctrl = {self._actuator_info(a)["name"]: round(float(d.ctrl[a]), 4) for a in range(m.nu)}
             sensors = {}
+            depths = self.session.water.depth_sensors(d) if self.session.water is not None else {}
             for s in range(m.nsensor):
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
                 values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
-                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
+                reading = depths.get(s, values[0] if dim == 1 else values)  # a depth sensor reads m under the water
+                sensors[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = reading
             return {
                 "time": round(float(d.time), 4),
                 "paused": self.session.paused,

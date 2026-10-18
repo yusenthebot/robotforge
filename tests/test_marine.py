@@ -350,6 +350,95 @@ def test_the_rov_is_there_only_within_a_few_centimeters(pg):
     assert result["depth_m"] == pytest.approx(LEVEL - 0.5, abs=0.05)
 
 
+# ---- where an ROV can dive -----------------------------------------------------------------------------------
+
+
+def _dive(pg: Playground, to, seconds: float = 30.0) -> dict:
+    trip = pg.behaviors.navigate("rov", to, None, None, seconds)
+    for _ in range(round(seconds / 0.5) + 2):
+        pg.session.step(250)
+        if trip.done:
+            break
+    return trip.result()
+
+
+def test_an_rov_sent_onto_the_pool_deck_is_told_it_is_outside_the_water(tmp_path, monkeypatch):
+    """It ran the full minute into the pool wall and was told to call move again, which never could work."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("baths")
+    pg.load_scene("pool")
+    with pytest.raises(NoWay) as found:
+        pg.behaviors.navigate("rov", [8.0, 0.0, 0.5])
+    assert found.value.cause == "on_land" and "outside the water" in str(found.value)
+    assert found.value.destination == {"point": [8.0, 0.0, 0.5]}
+
+
+def test_an_rov_sent_under_the_lake_shore_is_told_it_is_on_land(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("park")
+    pg.load_scene("lake")
+    pg.add_robot("rov", template="rov")
+    with pytest.raises(NoWay) as found:
+        pg.behaviors.navigate("rov", [11.0, 0.0, 0.5])  # inside the water's rectangle, under the bank
+    assert found.value.cause == "on_land" and "on land" in str(found.value)
+
+
+def test_an_rov_sent_below_the_bottom_is_told_how_low_it_can_go(pg):
+    pg.add_robot("rov", template="rov", pos=[0, 0])
+    with pytest.raises(NoWay) as found:
+        pg.behaviors.navigate("rov", [1.0, 0.0, 0.03])
+    lowest = float(str(found.value).split("lowest its middle can go is z ")[1][:4])
+    assert found.value.cause == "below_bottom" and 0.1 < lowest < 0.3
+    result = _dive(pg, [1.0, 0.0, lowest])
+    assert result["arrived"], result
+
+
+def test_an_rov_goes_over_a_reef_on_its_way_and_down_to_the_point(pg):
+    """The straight line runs into a reef standing on the bottom: it goes over it at a depth that clears it."""
+    pg.add_robot("rov", template="rov", pos=[-2.0, 0.0])
+    pg.add_object("reef", shape="box", size=[1.0, 2.5, 0.55], pos=[0.0, 0.0], fixed=True)
+    trip = pg.behaviors.navigate("rov", [2.0, 0.0, 0.35], None, None, 40.0)
+    assert len(trip.plan.points) > 2 and "goes over it" in trip.note
+    root, lowest_over_reef = _root(pg, "rov"), math.inf
+    for _ in range(162):
+        pg.session.step(125)
+        x, _, z = pg.session.data.subtree_com[root]
+        if abs(x) < 0.6:
+            lowest_over_reef = min(lowest_over_reef, float(z))
+        if trip.done:
+            break
+    assert trip.result()["arrived"], trip.result()
+    assert lowest_over_reef > 0.55 + 0.1  # its middle stayed well over the reef's top
+
+
+def test_an_rov_that_cannot_get_closer_is_told_it_is_stuck(pg):
+    """Something hangs in the water on its straight way (not on the bottom, so not on its map): it says so in
+    seconds instead of pushing at it until the time runs out."""
+    pg.add_robot("rov", template="rov", pos=[-1.5, 0.0])
+    pg.add_object("net", shape="box", size=[0.1, 3.0, 0.6], pos=[0.0, 0.0, 0.5], fixed=True)
+    result = _dive(pg, [1.5, 0.0, 0.5], seconds=40.0)
+    assert not result["arrived"] and result["why"] == "stuck", result
+    assert result["time_s"] < 25.0 and "in its way" in result["note"]
+
+
+def test_the_rov_depth_sensor_reads_meters_under_the_surface(pg):
+    """It was a position sensor: observe showed rov/depth as [x, y, z] with z above the floor, 0.168 for an ROV
+    1.435 m under the surface, the mix-up that had an agent report the depth it asked for."""
+    pg.add_robot("rov", template="rov", pos=[0, 0])
+    pg.session.step(50)
+    at_surface = pg.state()["sensors"]["rov/depth"]
+    assert isinstance(at_surface, float) and at_surface < 0.15
+    readings = []
+    for z in (0.7, 0.4):
+        assert _dive(pg, [0.0, 0.0, z])["arrived"]
+        readings.append(pg.state()["sensors"]["rov/depth"])
+    assert at_surface < readings[0] < readings[1]
+    site = pg.session.data.site("rov/depth").xpos[2]
+    assert readings[1] == pytest.approx(LEVEL - site, abs=1e-3)
+
+
 # ---- land robots in shallow water ---------------------------------------------------------------------------
 
 
@@ -411,3 +500,16 @@ def test_a_dog_in_shallow_water_costs_about_what_a_crate_does(wading):
     assert crate.water is not None
     assert dog < 3.0 * per_call(crate), f"{dog * 1e6:.0f} us"
     assert dog < 1e-3
+
+
+@pytest.mark.anyio
+async def test_move_over_mcp_says_a_point_on_the_pool_deck_is_outside_the_water(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground(session=SimSession.from_path(Playground.with_demo().session.source))
+    server = build_server(playground, find_free_port(8850))
+    async with Client(server) as client:
+        await client.call_tool("new_world", {"name": "baths"})
+        await client.call_tool("load_scene", {"preset": "pool"})
+        answer = json.loads((await client.call_tool("move", {"robot": "rov", "to": [8, 0, 0.5]})).content[0].text)
+        assert answer["arrived"] is False and answer["why"] == "on_land"
+        assert "outside the water" in answer["note"] and "call move" not in answer["note"]

@@ -356,6 +356,7 @@ class Hydro:
         self._thrusters()
         self.ever_wet = np.zeros(len(self.bodies), bool)
         self.last_wet: np.ndarray | None = None  # per water body, m^3 below the surface at the last step
+        self._depth_sensors: list[tuple[int, int]] | None = None  # (sensor, site), found on first use
 
     # ---- set up -------------------------------------------------------------------------------------------
 
@@ -567,6 +568,26 @@ class Hydro:
         return float(self.body_volume[mine].sum()) * self.rho * GRAVITY
 
     # ---- for agents -----------------------------------------------------------------------------------------
+
+    def depth_sensors(self, data: mujoco.MjData) -> dict[int, float]:
+        """Depth readings (m under the surface, waves included; negative above it) for the pressure sensors robots
+        carry: position sensors on a site, named "...depth" (the ROV's). MuJoCo has no sensor for depth under a
+        surface it does not know of, so the reading is the surface over the site less its height."""
+        if self._depth_sensors is None:
+            m = self.model
+            found = []
+            for k in range(m.nsensor):
+                name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_SENSOR, k) or ""
+                framepos = m.sensor_type[k] == mujoco.mjtSensor.mjSENS_FRAMEPOS
+                if framepos and m.sensor_objtype[k] == mujoco.mjtObj.mjOBJ_SITE and name.endswith("depth"):
+                    found.append((k, int(m.sensor_objid[k])))
+            self._depth_sensors = found
+        out = {}
+        for k, site in self._depth_sensors:
+            p = data.site_xpos[site]
+            top = float(self.surface(p[0], p[1], float(data.time)))
+            out[k] = round(top - float(p[2]), 4) if top > DRY / 2 else 0.0  # no water over it: nothing to press
+        return out
 
     def report(self, data: mujoco.MjData, limit: int = 12) -> list[dict]:
         """How things sit in the water, for the free bodies water has touched (at most `limit`): the share of

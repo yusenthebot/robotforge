@@ -82,8 +82,9 @@ shape (a wooden crate floats, a steel block sinks); add_object(shape="buoy") is 
 wooden dock. Templates boat (two thrusters, turns on the spot) and rov (an underwater robot, six thrusters) are
 driven with move and the keyboard; a boat's move(to=...) plans round the shore, buoys and docks ("to the
 dock"), an ROV's move(to=[x, y, z]) dives to that point and holds its depth and heading (z is the height above
-the floor like every z: 0.5 m under a surface at 1.2 m is z = 0.7; the result gives depth_m). observe reports what
-floats and how deep things are under "water".
+the floor like every z, depth = water level - z: 0.5 m under a surface at 1.2 m is z = 0.7; the result gives
+depth_m, and a point on land or under the bottom gets why). observe reports what floats and how deep things are
+under "water"; an ROV's depth sensor reads meters under the surface.
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
 snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
@@ -540,8 +541,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         furniture and steps it cannot climb and follows it (next to an object it stops facing it, within reach of an arm
         it carries); speed is then its top speed (left out: its own pace) and seconds a time limit (left out: 60). A
         boat's path keeps to water deep enough for it, round buoys and docks; an ROV takes to=[x, y, z] (z: height above
-        the bottom, under the surface) and goes straight there, holding depth and heading. The result says arrived,
-        path_m, time_s and, if it did not get there, why."""
+        the floor like every z, depth = water level - z) and goes straight there, over the bottom where it rises,
+        holding depth and heading. The result says arrived, path_m, time_s and, if it did not get there, why."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if to is not None:

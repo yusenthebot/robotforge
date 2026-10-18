@@ -20,7 +20,11 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from robotforge.behaviors import nav_map
+from robotforge.behaviors.nav_grid import Grid
+from robotforge.behaviors.navigate import NoWay
 from robotforge.sim import water as water_model
+from robotforge.sim.geometry import collides, lowest_point
 
 RATE_HZ = 50.0
 TOP_SHARE = 0.85  # of the thrusters' most forward push, spent at top speed: the rest is kept to steer with
@@ -266,6 +270,7 @@ class RovPilot(_Pilot):
         self.heave_drag = (0.0, 0.0)
         self.turn_drag = (0.0, 0.0)
         self.max_push = sum(t.push * abs(t.direction[0]) for t in found)
+        self.below = _below(model, data, self.root) if data is not None else 0.0
         if hydro is not None:
             self.lift = hydro.buoyancy(self.root) - self.mass * GRAVITY
         if hydro is not None and data is not None:
@@ -290,6 +295,7 @@ class RovPilot(_Pilot):
         self._ki_z = 0.0
         self._ki_v = 0.0
         self._ki_xy = np.zeros(2)
+        self._leg_from: np.ndarray | None = None  # where the leg to `goal` started (see go_to)
 
     def command(self, speed: float = 0.0, turn: float = 0.0, heave: float | None = None) -> None:
         self.goal = None
@@ -298,11 +304,24 @@ class RovPilot(_Pilot):
         if heave is not None:
             self.heave = float(np.clip(heave, -self.max_heave, self.max_heave))
 
-    def go_to(self, point: np.ndarray, cruise: float | None = None) -> None:
+    def go_to(self, point: np.ndarray, cruise: float | None = None, start: np.ndarray | None = None) -> None:
+        """Steer to `point`. From `start`, the depth it holds follows the straight line there as it closes in (it
+        used to dive at once, and near a sloping shore it dove into the bottom while it turned round)."""
         self.goal = np.asarray(point, float)
+        self._leg_from = None if start is None else np.asarray(start, float)
         self.speed = self.turn = self.heave = 0.0
         if cruise is not None:
             self.cruise = min(abs(cruise), self.max_speed)
+
+    def _leg_depth(self, dist: float) -> float:
+        """The depth to hold `dist` m (horizontally) from the goal: on the line from where the leg started."""
+        if self._leg_from is None:
+            return float(self.goal[2])
+        length = float(np.linalg.norm(self.goal[:2] - self._leg_from[:2]))
+        if length < 0.05:
+            return float(self.goal[2])
+        share = min(dist / length, 1.0)
+        return float(self.goal[2] + share * (self._leg_from[2] - self.goal[2]))
 
     def status(self) -> dict[str, Any]:
         out = {
@@ -337,9 +356,9 @@ class RovPilot(_Pilot):
         speed, turn = self.speed, self.turn
         hold_xy = None
         if self.goal is not None:
-            self.depth_target = float(self.goal[2])
             away = self.goal[:2] - pos[:2]
             dist = float(np.linalg.norm(away))
+            self.depth_target = self._leg_depth(dist)
             if dist > 0.4:
                 self.yaw_target = math.atan2(away[1], away[0])
                 off = abs(_wrap(self.yaw_target - yaw))
@@ -403,6 +422,16 @@ class RovPilot(_Pilot):
         data.ctrl[self.actuators] = _fit(_fit(hold, steer), drive)
 
 
+def _below(model: mujoco.MjModel, data: mujoco.MjData, root: int) -> float:
+    """How far the robot with root body `root` reaches below its center of mass (m), as it is posed now."""
+    lows = [
+        float(lowest_point(model, data, g)[2])
+        for g in range(model.ngeom)
+        if int(model.body_rootid[model.geom_bodyid[g]]) == root and collides(model, g)
+    ]
+    return max(float(data.subtree_com[root][2]) - min(lows), 0.0) if lows else 0.0
+
+
 def pilot_for(kind: str, model: mujoco.MjModel, robot: str, hydro, data) -> _Pilot:
     return RovPilot(model, robot, hydro, data) if kind == "rov" else BoatPilot(model, robot, hydro, data)
 
@@ -440,7 +469,139 @@ def dive_target(
             f"{SURFACE_MARGIN:g} m under it"
         )
         point[2] = pilot.water.level - SURFACE_MARGIN
+    if pilot.water is not None:
+        bottom = _bottom_under(pilot, model, data, point)
+        lowest = math.ceil((bottom + pilot.below + BOTTOM_MARGIN) * 100) / 100  # as said, so the z said works
+        if point[2] < lowest and destination is not None:  # next to something on the bottom: just over it
+            note = f"{destination.name} sits low on the bottom: it stops next to it at z {lowest:.2f}, clear of it"
+            point[2] = lowest
+        elif point[2] < lowest:
+            raise _no_way(
+                point,
+                "below_bottom",
+                f"z {point[2]:.2f} is under the bottom there or too close to it: the bottom is at z "
+                f"{max(bottom, 0.0):.2f}, so the lowest its middle can go is z {lowest:.2f}; give z from "
+                f"{lowest:.2f} to {pilot.water.level - SURFACE_MARGIN:.2f} (z is the height above the floor, "
+                f"depth = {pilot.water.level:g} - z)",
+            )
     return point, note
+
+
+BOTTOM_MARGIN = 0.05  # m an ROV keeps between its lowest point and the bottom
+
+
+def _no_way(point: np.ndarray, cause: str, why: str) -> NoWay:
+    exc = NoWay(cause, f"no way to [{point[0]:g}, {point[1]:g}, {point[2]:.2f}]: {why}")
+    exc.destination = {"point": [round(float(v), 3) for v in point]}
+    return exc
+
+
+def _bottom_under(pilot: RovPilot, model: mujoco.MjModel, data: mujoco.MjData, point: np.ndarray) -> float:
+    """The height of the bottom under the point. Raises NoWay when there is no water there for the ROV to dive in
+    (land, a quay, a pool deck, outside the water, too shallow)."""
+    water = pilot.water
+    x, y = float(point[0]), float(point[1])
+    if water.area is not None and not (water.area[0] <= x <= water.area[2] and water.area[1] <= y <= water.area[3]):
+        x0, y0, x1, y1 = water.area
+        raise _no_way(
+            point, "on_land", f"that is outside the water, which covers x {x0:g} to {x1:g} and y {y0:g} to {y1:g}"
+        )
+    bottom = bottom_at(model, data, pilot.robot, x, y)
+    top = water.level - SURFACE_MARGIN
+    if bottom >= water.level:
+        raise _no_way(
+            point, "on_land", f"that is on land (the ground there is {bottom - water.level:.2f} m over the water)"
+        )
+    if bottom + pilot.below + BOTTOM_MARGIN > top:
+        raise _no_way(
+            point,
+            "shallow",
+            f"the water there is {water.level - bottom:.2f} m deep, and the ROV needs "
+            f"{pilot.below + BOTTOM_MARGIN + SURFACE_MARGIN:.2f} m to dive in",
+        )
+    return bottom
+
+
+def bottom_at(model: mujoco.MjModel, data: mujoco.MjData, robot: str, x: float, y: float) -> float:
+    """Height of the bottom at (x, y): the floor and the terrain, raised by what is welded to the world and stands on
+    it there (a quay, a pool deck, a dock's post), as a boat's water map sees it (behaviors/water_nav.py)."""
+    heights, _, _ = _bottom_map(model, data, robot, Grid(x, y, 0.05, 1, 1))
+    return float(heights[0, 0])
+
+
+def _bottom_map(model: mujoco.MjModel, data: mujoco.MjData, robot: str, grid: Grid):
+    """The bottom's height on each cell of `grid`, what makes it (index into names, -1 for the floor), and names."""
+    layer = nav_map.static_layer(model, data, robot, grid)
+    bottom = layer.floor.copy()
+    owner = np.full(len(bottom), -1, np.int32)
+    for col in layer.columns:
+        rooted = col.low <= layer.floor[col.cells] + 0.05
+        cells, high = col.cells[rooted], col.high[rooted]
+        higher = high > bottom[cells]
+        bottom[cells[higher]] = high[higher]
+        owner[cells[higher]] = col.owner
+    return bottom.reshape(grid.shape), owner.reshape(grid.shape), layer.names
+
+
+ROUTE_RES = 0.2  # m, the cells of the bottom map along an ROV's way
+VIA_REACH = 0.15  # m from a point on the way that counts as passed
+
+
+def dive_route(
+    pilot: RovPilot, model: mujoco.MjModel, data: mujoco.MjData, target: np.ndarray
+) -> tuple[list[np.ndarray], str | None]:
+    """The points an ROV passes on its way to `target` before it, and a note: none when the straight line keeps
+    clear of the bottom (with room for the ROV's width), else over the bottom at a depth that clears it all the
+    way and down at the end. Raises NoWay when land, something standing in the water or shallows cut the way."""
+    start = data.subtree_com[pilot.root].copy()
+    a, b = start[:2], np.asarray(target[:2], float)
+    low, high = np.minimum(a, b) - 2 * ROUTE_RES, np.maximum(a, b) + 2 * ROUTE_RES
+    grid = Grid.around((float(low[0]), float(low[1])), (float(high[0]), float(high[1])), ROUTE_RES)
+    bottom, owner, names = _bottom_map(model, data, pilot.robot, grid)
+    widened = bottom.copy()  # the highest bottom within a cell of each cell: the ROV is about that wide
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            shifted = np.roll(np.roll(bottom, dr, axis=0), dc, axis=1)
+            widened = np.maximum(widened, shifted)
+    n = max(2, math.ceil(float(np.linalg.norm(b - a)) / (ROUTE_RES / 2)) + 1)
+    s = np.linspace(0.0, 1.0, n)[1:-1]  # the ends are where it is and the point it was sent to (checked there)
+    if not len(s):
+        return [], None
+    xy = a + s[:, None] * (b - a)
+    rows = np.clip(np.round((xy[:, 1] - grid.y0) / grid.res).astype(int), 0, grid.rows - 1)
+    cols = np.clip(np.round((xy[:, 0] - grid.x0) / grid.res).astype(int), 0, grid.cols - 1)
+    under = widened[rows, cols]
+    clear = under + pilot.below + BOTTOM_MARGIN
+    line = start[2] + s * (target[2] - start[2])
+    if (line >= clear).all():
+        return [], None
+    top = pilot.water.level - SURFACE_MARGIN
+    worst = int(np.argmax(clear))
+    if clear[worst] > top:
+        x, y = xy[worst]
+        k = int(owner[rows[worst], cols[worst]])
+        if under[worst] >= pilot.water.level:
+            what = f"{names[k]} stands" if k >= 0 else "land rises"
+            raise _no_way(
+                target,
+                "blocked",
+                f"{what} in the straight way at [{x:.1f}, {y:.1f}]; an ROV goes in straight lines under water, so "
+                "send it round with a point on the way first",
+            )
+        raise _no_way(
+            target,
+            "shallow",
+            f"the straight way crosses water {pilot.water.level - under[worst]:.2f} m deep at [{x:.1f}, {y:.1f}], "
+            "too shallow to dive through; send it round with a point on the way first",
+        )
+    travel = float(clear.max())
+    via = []
+    if start[2] < travel:  # up first, clear of the bottom it would run into
+        via.append(np.array([start[0], start[1], travel]))
+    if target[2] < travel:  # over the bottom, then down to the point
+        via.append(np.array([target[0], target[1], travel]))
+    note = f"the bottom rises on the straight way: it goes over it at z {travel:.2f}, then down to the point"
+    return via, note
 
 
 def _radius(model: mujoco.MjModel, data: mujoco.MjData, destination: Any, center: np.ndarray) -> float:
@@ -458,11 +619,13 @@ def _radius(model: mujoco.MjModel, data: mujoco.MjData, destination: Any, center
 # (0.44 m under) and reported 0.50 m
 ARRIVE = 0.04
 STILL = 0.05  # m/s
+PROGRESS, STUCK_NEAR, STUCK_AFTER = 0.05, 0.25, 8.0  # m closer that counts; m from the point; s without it
 
 
 @dataclass
 class _Line:
-    """The trip's plan, as move(to=...) reports it: a straight line (no planning under water yet)."""
+    """The trip's plan, as move(to=...) reports it: straight lines (over the bottom where it rises, see
+    dive_route; no planning round things under water yet)."""
 
     points: np.ndarray
     length: float
@@ -482,6 +645,7 @@ class DiveTrip:
     on_finish: Callable[[DiveTrip], None] = lambda trip: None
     name: str | None = None  # the object or robot it was sent to
     note: str | None = None
+    via: list[np.ndarray] = field(default_factory=list)  # points it passes on the way (dive_route)
     rate_hz: float = 20.0
     state: str = "diving"
     cause: str | None = None
@@ -490,10 +654,16 @@ class DiveTrip:
     plan: _Line = field(init=False)
     _last: np.ndarray | None = field(default=None, init=False)
     _last_t: float | None = field(default=None, init=False)
+    _legs: list[np.ndarray] = field(default_factory=list, init=False)
+    _best: float = field(default=math.inf, init=False)  # closest it came to the end of this leg
+    _best_t: float = field(default=0.0, init=False)
 
     def __post_init__(self) -> None:
-        self.plan = _Line(np.array([self.start, self.target]), float(np.linalg.norm(self.target - self.start)))
-        self.pilot.go_to(self.target)
+        points = np.array([self.start, *self.via, self.target])
+        self.plan = _Line(points, float(np.linalg.norm(np.diff(points, axis=0), axis=1).sum()))
+        self._legs = [*(np.asarray(p, float) for p in self.via), np.asarray(self.target, float)]
+        self._best_t = self.start_time
+        self.pilot.go_to(self._legs[0], start=self.start)
 
     @property
     def done(self) -> bool:
@@ -515,6 +685,10 @@ class DiveTrip:
         if not self.still_mine() or self.pilot.goal is None:
             self._finish(t, "stopped", "interrupted", "something else took over the robot (a key, a move or a reset)")
             return
+        if len(self._legs) > 1 and float(np.linalg.norm(self._legs[0] - pos)) <= VIA_REACH:
+            self._legs.pop(0)  # past a point on the way: on to the next
+            self._best, self._best_t = math.inf, t
+            self.pilot.go_to(self._legs[0], start=pos)
         error = float(np.linalg.norm(self.target - pos))
         speed = float(np.linalg.norm(data.cvel[self.pilot.root][3:]))
         if error <= ARRIVE and speed <= STILL:
@@ -522,6 +696,18 @@ class DiveTrip:
             return
         if self.deadline is not None and t >= self.deadline - 1e-9:
             self._finish(t, "stopped", "out_of_time", f"it ran out of time {error:.2f} m from the point")
+            return
+        leg = float(np.linalg.norm(self._legs[0] - pos))
+        if leg < self._best - PROGRESS:
+            self._best, self._best_t = leg, t
+        elif leg > STUCK_NEAR and t - self._best_t > STUCK_AFTER:
+            self._finish(
+                t,
+                "stopped",
+                "stuck",
+                f"it got no closer for {STUCK_AFTER:g} s, {error:.2f} m from the point: something is in its way (an "
+                "ROV goes in straight lines under water; send it round with a point on the way first)",
+            )
 
     def status(self) -> dict[str, Any]:
         out: dict[str, Any] = {"behavior": "dive", "navigating": self.robot, "state": self.state, "goal": self._goal()}

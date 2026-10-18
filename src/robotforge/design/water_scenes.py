@@ -224,6 +224,6 @@ def pool(rng: random.Random, opts: dict[str, float]) -> Content:
     c.starter = [{"name": "rov", "template": "rov"}]
     c.tips = [
         f"the pool is {depth:g} m deep; move('rov', to=[2.5, -1.0, 0.6]) dives to the steel block on the bottom",
-        "the ROV holds its depth and heading; R and F in the viewer take it up and down",
+        "the ROV holds its depth and heading; in the viewer E takes it up and Q down",
     ]
     return c

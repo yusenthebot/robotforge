@@ -815,6 +815,9 @@ class BehaviorManager:
         destination = self._destination(robot, to, model, data) if named is not None else None
         try:
             target, note = marine.dive_target(pilot, to, destination, model, data)
+            via, way = marine.dive_route(pilot, model, data, target) if pilot.water is not None else ([], None)
+        except navigation.NoWay:
+            raise  # no water to dive in there: an answer (move says why), not a mistake in the call
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         key = TRIP + robot
@@ -842,7 +845,8 @@ class BehaviorManager:
                 still_mine=lambda: self.session.controllers.get(robot) is pilot,
                 on_finish=finished,
                 name=destination.name if destination is not None else None,
-                note=note,
+                note="; ".join(n for n in (note, way) if n) or None,
+                via=via,
             )
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip

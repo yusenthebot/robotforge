@@ -36,8 +36,8 @@ class Rov(Template):
     name = "rov"
     summary = (
         "Underwater ROV: six thrusters (four vectored, two vertical), buoyancy foam, front camera, IMU and a "
-        "depth sensor; near neutral buoyancy. move drives it, move(to=[x, y, z]) dives to a point, holding depth "
-        "and heading."
+        "depth sensor (observe reads it in meters under the surface); near neutral buoyancy. move drives it, "
+        "move(to=[x, y, z]) dives to a point (z above the floor), holding depth and heading."
     )
     Params = RovParams
 
@@ -111,6 +111,8 @@ class Rov(Template):
         body.add_camera(
             name="front_cam", pos=[0.04 * L + 0.4 * L + 0.02 * L, 0, -0.02 * Hh], xyaxes=[0, -1, 0, 0, 0, 1], fovy=80
         )
+        # A pressure sensor: MuJoCo has no depth sensor, so this measures where the site is and observe turns that
+        # into meters under the surface (sim/water.py, Hydro.depth_sensors).
         body.add_site(name="depth", pos=[-0.3 * L, 0, -0.1 * Hh], size=[0.01, 0, 0])
         spec.add_sensor(
             name="depth", type=mujoco.mjtSensor.mjSENS_FRAMEPOS, objtype=mujoco.mjtObj.mjOBJ_SITE, objname="depth"
