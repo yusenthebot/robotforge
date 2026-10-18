@@ -21,7 +21,8 @@ import mujoco
 import numpy as np
 
 from robotforge.sensors import declare
-from robotforge.sensors.runtime import Sensor, native_slice
+from robotforge.sensors.runtime import Sensor
+from robotforge.sim import lidar as sim_lidar
 
 SECTORS = 36  # numbers a ring is reduced to in a reading
 AHEAD_DEG = 15.0  # "ahead" is within this many degrees of the sensor's forward
@@ -62,17 +63,20 @@ class Lidar(Sensor):
         self.three_d = self.channels > 1
         self._geom = np.zeros(self.rays, np.int32)
         self._dist = np.zeros(self.rays)
-        self.native: list[slice] = []
+        self.native: list[int] = []  # a built robot's lidar: the MuJoCo rangefinders that are its rays
         if d.get("rays_native"):
             self._ring_of_rangefinders(model, decl, d["rays_native"])
 
     def _ring_of_rangefinders(self, model: mujoco.MjModel, decl: declare.Declared, rays: list[str]) -> None:
         """A built robot's lidar: a ring of MuJoCo rangefinders, each on its own site looking along its +z. They
-        are read where MuJoCo put them (it casts them on every step), in the frame of the body they are on."""
+        are read where MuJoCo put them (it casts them on every step), past the robot's own parts, in the frame of the
+        body they are on."""
         sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, decl.full(r)) for r in rays]
         if min(sites) < 0:
             raise ValueError(f"the lidar's rays {rays[0]}... are missing from the model")
-        self.native = [native_slice(model, decl, r) for r in rays]
+        self.native = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SENSOR, decl.full(r)) for r in rays]
+        if min(self.native) < 0:
+            raise ValueError(f"the lidar's rangefinders {rays[0]}... are missing from the model")
         self.site = sites[0]
         directions = []
         for site in sites:
@@ -89,9 +93,10 @@ class Lidar(Sensor):
 
     def measure(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
         origin = np.array(data.site_xpos[self.site])
-        if self.native:  # MuJoCo has cast them already; it does not say what they hit, so none count as ground
-            dist = np.array([float(data.sensordata[s][0]) for s in self.native])
-            dist[dist < 0] = np.nan
+        if self.native:  # MuJoCo has cast them; read past the robot's own parts as observe's lidars are (sim/lidar)
+            dist = np.array([sim_lidar.seen(model, data, s) for s in self.native])
+            reach = model.sensor_cutoff[self.native]  # MuJoCo gives a hit beyond the cutoff as the cutoff: none
+            dist[(dist < 0) | ((reach > 0) & (dist >= reach))] = np.nan
             rot = data.xmat[self.body].reshape(3, 3).copy()
             return {"origin": origin, "rot": rot, "dist": dist, "ground": np.zeros(self.rays, bool)}
         rot = data.site_xmat[self.site].reshape(3, 3).copy()
