@@ -32,7 +32,7 @@ const $ = (id) => document.getElementById(id);
 const MAX_POINTS = 1200; // hit points the server sends per lidar at most (sensors/lidar.py VIEW_POINTS)
 const MAX_RAYS = { lidar: 360, lidar3d: 150 }; // rays drawn: a 3D scan's every ray would be a solid fog
 const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.45, 0.04] }; // opacity of a ray at the sensor and at its hit
-const POINT_PX = 3.2; // CSS px across a hit point
+const POINT_PX = 4.5; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
 const FRUSTUM_HALF = 0.045; // m: half the height of a camera's frustum where it ends, whatever its field of view
 const ARROW_REACH = 0.22; // m: the arrow of the largest force seen lately
@@ -54,6 +54,7 @@ const PLOTS = {
   force_torque: [
     { key: "force", field: "force_n", unit: "N", span: 2, axes: ["x", "y", "z"] },
     { key: "torque", field: "torque_nm", unit: "N·m", span: 0.2, axes: ["x", "y", "z"] },
+    { key: "payload", field: "payload_kg", unit: "kg", span: 0.2, axes: ["payload"] }, // what a wrist holds
   ],
   encoders: [{ key: "angles", field: "rad", unit: "rad", span: 0.2, axes: [] }], // its joints come from the sensor
 };
@@ -281,7 +282,8 @@ function onBody(e, localPos, localQuat, outPos, outQuat) {
   return true;
 }
 
-// A round, soft-edged dot for points (THREE.Points draws squares otherwise).
+// A round dot for points (THREE.Points draws squares otherwise) with a dark rim, so a point reads on a pale floor
+// and on a dark rack alike.
 let dotTex = null;
 function dotTexture() {
   if (dotTex) return dotTex;
@@ -290,8 +292,10 @@ function dotTexture() {
   const g = c.getContext("2d");
   const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.6, "rgba(255,255,255,1)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
+  grad.addColorStop(0.55, "rgba(255,255,255,1)");
+  grad.addColorStop(0.7, "rgba(60,60,60,1)");
+  grad.addColorStop(0.9, "rgba(40,40,40,1)");
+  grad.addColorStop(1, "rgba(40,40,40,0)");
   g.fillStyle = grad;
   g.fillRect(0, 0, 64, 64);
   dotTex = new THREE.CanvasTexture(c);
@@ -1005,7 +1009,7 @@ const views = {
     for (const b of s.right.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.channel === c.key));
     const history = histories.get(e.name) ?? [];
     let names = c.axes.map((a) => t(`axis_${a}`));
-    let pick = (entry) => entry[c.field] ?? [];
+    let pick = (entry) => [entry[c.field] ?? []].flat(); // a vector, or one number (payload_kg)
     let colors = AXIS_COLORS;
     if (c.joints) {
       names = c.joints.map((j) => j.short);
