@@ -367,6 +367,33 @@ def test_wind_needs_an_aircraft_and_meters_per_second(pg):
         pg.simulate(1.0, wind=[5, 0])
 
 
+def test_a_world_edit_while_it_hovers_leaves_it_hovering(pg):
+    _trip(pg, [1.0, 0.0, 1.8])
+    pg.add_object("ball", shape="sphere", size=[0.2], pos=[-1.0, 0.0])  # recompiles the world
+    pg.run_fast(lambda: False, 3.0)
+    pose = pg.behaviors.pose("drone")
+    assert np.linalg.norm(np.subtract(pose["position"], [1.0, 0.0, 1.8])) < 0.05
+    assert pg.behaviors.robots()[0]["flight"]["state"] == "flying"
+
+
+def test_a_reset_puts_it_back_on_the_ground_with_its_motors_idle(pg):
+    _trip(pg, [1.0, 0.0, 1.8])
+    pg.control("reset")
+    pg.run_fast(lambda: False, 1.0)
+    assert pg.behaviors.pose("drone")["position"][2] < 0.2
+    assert pg.behaviors.robots()[0]["flight"]["state"] == "landed"
+    assert np.all(pg.session.data.ctrl == 0.0)
+
+
+def test_flying_to_a_named_thing_hovers_over_it(pg):
+    pg.add_object("table", shape="table", size=[0.8, 0.6, 0.75], pos=[2.0, 1.0], fixed=True)
+    result = _trip(pg, "table")
+    assert result["arrived"] and result["destination"]["object"] == "table"
+    x, y, z = result["position"]
+    assert np.hypot(x - 2.0, y - 1.0) < 0.05
+    assert z > 0.75 + 0.9  # a metre over its top, not at the table's middle
+
+
 def test_side_and_climb_are_for_aircraft(pg):
     pg.add_robot("rover", template="rover", pos=[0.0, 1.0])
     with pytest.raises(ValueError, match="only aircraft"):
