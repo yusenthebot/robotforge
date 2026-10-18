@@ -920,6 +920,7 @@ class Playground:
         try:
             if description is not None:
                 from robotforge.design import generate  # only when asked: it is not needed to start
+
                 if preset is not None:
                     raise ValueError(
                         "give preset (a ready-made scene) or description (a sentence to generate one from), not both"
