@@ -55,10 +55,10 @@ def register(server: MCPServer, playground: Playground) -> None:
         ranges as the nearest per 10 degree sector (sectors_m); a 3D scan also its point count and bounding box. Depth
         camera: center_m, min_m and median_m are depths along its axis; nearest is the closest obstacle's straight
         distance from the lens with its bearing (its own robot and the floor left out); segmentation camera: what it
-        sees and how much.
-        imu, encoders, force_torque (payload_kg is what it holds), touch, rangefinder, gps, odometry: their values.
-        image=true adds each camera's picture. Readings follow each sensor's rate, noise and latency (age_s is how
-        old a sample is)."""
+        sees and how much. imu, encoders, force_torque (payload_kg is what it holds; a leg on the ground gives
+        supported_kg), touch, rangefinder, gps, odometry: their values. A robot's own MuJoCo sensors (a G1's IMU) come
+        as other_sensors. image=true adds each camera's picture. Readings follow each sensor's rate, noise and latency
+        (age_s is how old a sample is)."""
         with _tool_errors():
             reading, pictures = playground.read_sensors(robot, names, image)
             content: list = [_json(reading)]
