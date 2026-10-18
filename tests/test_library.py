@@ -825,3 +825,21 @@ def test_real_z1_refuses_pick_and_place_but_moves_its_arm(pg):
     motion = pg.behaviors.move_arm("z1", [0.4, 0.1, 0.1])
     pg.run_fast(lambda: motion.done, 10)
     assert np.linalg.norm(pg.session.data.site_xpos[motion.site] - [0.4, 0.1, 0.1]) < 0.02
+
+
+def test_a_library_robot_is_drawn_in_the_colors_given_for_its_parts():
+    """Barkour's model paints each part its own bright color (a lilac body, yellow hips, green and orange covers), and
+    beside the other real robots it read as a toy: its parts are drawn in the colors its catalog entry gives instead,
+    and parts in colors it does not name keep theirs."""
+    spec = mujoco.MjSpec.from_string(
+        """<mujoco><worldbody><body name="b">
+          <geom name="body" type="box" size=".1 .1 .1" rgba="0.8 0.749 0.914 1"/>
+          <geom name="foot" type="sphere" size=".02" rgba="0.231 0.38 0.706 0.5"/>
+          <geom name="other" type="sphere" size=".02" rgba="0.1 0.9 0.1 1"/>
+        </body></worldbody></mujoco>"""
+    )
+    library._recolor(spec, library.get("barkour").recolor)
+    model = spec.compile()
+    np.testing.assert_allclose(model.geom("body").rgba, [0.86, 0.87, 0.88, 1.0], atol=1e-6)
+    np.testing.assert_allclose(model.geom("foot").rgba, [0.09, 0.09, 0.1, 0.5], atol=1e-6)  # its own alpha kept
+    np.testing.assert_allclose(model.geom("other").rgba, [0.1, 0.9, 0.1, 1.0], atol=1e-6)
