@@ -18,7 +18,6 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from PIL import Image
 
 from robotforge.behaviors.arm import OutOfReach
 from robotforge.behaviors.manager import BehaviorError
@@ -228,12 +227,16 @@ def _under(blob: vision.Blob, geoms: np.ndarray | None, owner: np.ndarray) -> st
 
 
 def _jpeg(rgb: np.ndarray) -> str:
+    from PIL import Image  # the lesson's pictures only: Pillow is slow to import
+
     buf = io.BytesIO()
     Image.fromarray(rgb).save(buf, format="JPEG", quality=85)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def _png(mask: np.ndarray) -> str:
+    from PIL import Image
+
     buf = io.BytesIO()
     Image.fromarray(mask.astype(np.uint8) * 255).save(buf, format="PNG", optimize=True)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
@@ -518,6 +521,7 @@ class SeeingLesson(Lesson):
             (Series("err", _text("估计到真实位置", "estimate to the true position"), "amber"),),
             window=10.0,
             span=2.0,
+            floor=0.0,
         ),
     )
     steps = STEPS

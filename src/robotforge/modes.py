@@ -51,6 +51,8 @@ CONTROL: tuple[Mode, ...] = (
     Mode("reach_cartesian", "reach", "cartesian"),
     Mode("reach_mpc", "reach", "mpc"),
     Mode("goto_mpc", "drive_to", "mpc", follows=True),
+    Mode("hover_lqr", "hover", "lqr"),
+    Mode("hover_mpc", "hover", "mpc"),
 )
 MODES: dict[str, Mode] = {m.key: m for m in (DRIVE, LEARNED, RHYTHM, MANUAL, *CONTROL)}
 
@@ -62,6 +64,7 @@ TASK_KINDS: dict[str, frozenset[Kind]] = {
     "balance": frozenset({Kind.BALANCER, Kind.OTHER}),
     "reach": frozenset({Kind.ARM}),
     "drive_to": frozenset({Kind.ROVER}),
+    "hover": frozenset({Kind.AIRCRAFT}),
 }
 
 

@@ -17,7 +17,6 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from PIL import Image
 
 from robotforge import wording
 from robotforge.design.visuals import HIDDEN_GROUP, VISUAL_GROUP
@@ -122,6 +121,8 @@ class SnapshotRenderer:
                 self._key = None
 
     def png(self, session: SimSession, view: str = "default", width: int = 640, height: int = 480) -> bytes:
+        from PIL import Image  # only when a picture is asked for: Pillow is slow to import
+
         rgb = self.rgb(session, view, width, height)
         buf = io.BytesIO()
         Image.fromarray(rgb).save(buf, format="PNG", optimize=True)

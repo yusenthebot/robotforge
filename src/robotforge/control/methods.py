@@ -28,6 +28,8 @@ METHODS: dict[str, str] = {
     "ars": "Reinforcement learning (Augmented Random Search): learn a linear policy by trial and error, then run it.",
     "hold": "Hold the home pose with every servo (what the robot does when nobody controls it).",
     "gait": "The built-in trot gait: legs follow scripted foot paths, solved with leg IK.",
+    "cascade": "Cascaded flight control: position, then attitude, then body rates, and a mixer from the rotor layout "
+    "(how real drones fly).",
     "none": "No control at all, to see what physics does on its own.",
 }
 
@@ -81,6 +83,8 @@ def make_controller(
 
         return policy_controller(method.removeprefix(POLICY_PREFIX), task, model, data, params)
     try:
+        if method in getattr(task, "own_methods", ()):  # a task that brings the controller for it (hover: cascade)
+            return task.own_controller(method, model, data, **params)
         if method in ("mpc", "mppi"):
             cfg = {**task.mpc_defaults, **params, "method": "predictive" if method == "mpc" else "mppi"}
             base_name = cfg.pop("base", None)

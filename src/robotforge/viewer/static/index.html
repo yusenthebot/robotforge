@@ -153,6 +153,8 @@
       <dt data-i18n="mouse_right_drag">Right-drag</dt><dd data-i18n="mouse_pan">Slide the view</dd>
       <dt data-i18n="mouse_scroll">Scroll</dt><dd data-i18n="mouse_zoom">Zoom</dd>
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="key_drive">Drive the selected robot</dd>
+      <dt><kbd>E</kbd><kbd>Q</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dt><dd data-i18n="key_fly">Aircraft: up, down, turn</dd>
+      <dt><kbd>A</kbd><kbd>D</kbd></dt><dd data-i18n="key_side">Aircraft: sideways</dd>
       <dt data-i18n="mouse_double_ground">Double-click</dt><dd data-i18n="mouse_go">Send the robot there</dd>
       <dt><kbd data-i18n="key_space">Space</kbd></dt><dd data-i18n="key_play">Play or pause</dd>
       <dt><kbd>R</kbd></dt><dd data-i18n="reset">Reset</dd>
@@ -171,7 +173,8 @@
   <div class="coach" id="coach" hidden data-i18n="coach">Drag a robot to push it. Drag empty space to look around.</div>
 
   <div class="drive" id="drive" hidden>
-    <span class="keys" aria-hidden="true"><kbd data-key="fwd">W</kbd><kbd data-key="left">A</kbd><kbd data-key="back">S</kbd><kbd data-key="right">D</kbd></span>
+    <span class="keys" aria-hidden="true"><kbd data-key="fwd">W</kbd><kbd data-key="left" data-fly="slide_left">A</kbd><kbd data-key="back">S</kbd><kbd data-key="right" data-fly="slide_right">D</kbd></span>
+    <span class="keys" id="fly-keys" aria-hidden="true" hidden><kbd data-key="up">E</kbd><kbd data-key="down">Q</kbd><kbd data-key="left">&larr;</kbd><kbd data-key="right">&rarr;</kbd></span>
     <span class="drive-text" id="drive-text"></span>
     <span class="drive-speed" id="drive-speed"></span>
   </div>

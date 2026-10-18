@@ -14,14 +14,16 @@ from __future__ import annotations
 import functools
 import io
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mujoco
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
 
 from robotforge.sim import vision
 from robotforge.sim.render import Layers
+
+if TYPE_CHECKING:  # Pillow is slow to import: loaded when a picture is marked
+    from PIL import ImageFont
 
 EVERY = ("all", "any", "every", "colors")  # find= words that mean every named color
 MAX_FOUND = 12  # finds reported, loose objects first; the rest are counted
@@ -133,6 +135,8 @@ def marked_png(rgb: np.ndarray, found: list[Seen]) -> bytes:
     lower one's number on its box's top edge was hidden under the upper one's box. In a crowd a tag goes further
     out, with a line to its box; only when nothing is free does it go inside its own box.
     """
+    from PIL import Image, ImageDraw
+
     image = Image.fromarray(rgb)
     draw = ImageDraw.Draw(image)
     h, w = rgb.shape[:2]
@@ -222,6 +226,8 @@ def _area(box: tuple[int, int, int, int]) -> int:
 @functools.cache
 def _font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     """Pillow's own font at `size` px (it ships one since 10.1), or its small bitmap font where FreeType is missing."""
+    from PIL import ImageFont
+
     try:
         return ImageFont.load_default(size=size)
     except (ImportError, OSError, TypeError):
