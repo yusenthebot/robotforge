@@ -38,6 +38,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
 - `uv run python scripts/bench.py` measures install size, import time, headless physics, the viewer in headless Chrome, MCP latency, memory and idle processor use (one to three minutes), writes `docs/bench/<date>-<sha>.json`, compares with the last run and exits 1 over a budget in `docs/bench/budget.json`.
   On a busy machine compare commits with `--ab <rev> --worlds ...` (both timed alternately) rather than runs an hour apart; `--only physics --worlds dog_idle` measures one part.
+- `uv run python scripts/same_behavior.py <rev>` hashes the physics state every 0.25 s through 17 scenarios on this tree and on `<rev>`: a speed-up meant to change no behavior must leave every one identical.
 - Offscreen rendering needs OpenGL. Without it (Windows CI, VMs, servers) `observe` returns the state plus a note instead of an image, and rendering tests skip with the reason.
   `ROBOTFORGE_REQUIRE_GL=1` turns those skips into failures; the Ubuntu job sets it and uses Mesa EGL (`MUJOCO_GL=egl`).
 - Portability rules: pass `encoding="utf-8"` to every text read and write, compare paths with `Path` (never `endswith("a/b")`), and do not bind or probe ports with `SO_REUSEADDR` on Windows.
