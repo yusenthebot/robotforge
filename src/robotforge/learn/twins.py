@@ -820,6 +820,7 @@ class MPCTwins(DogTwins):
             _text("机身倾斜", "Body tilt"),
             "°",
             tuple(Series(f"tilt_{t.name}", t.label, t.color) for t in MPC_TWINS),
+            floor=0.0,
         ),
     )
     steps = (
@@ -1079,6 +1080,7 @@ class GaitTwins(DogTwins):
             _text("机身晃动", "Body sway"),
             "°/s",
             tuple(Series(f"sway_{t.name}", t.label, t.color) for t in GAIT_TWINS),
+            floor=0.0,
         ),
     )
     steps = (

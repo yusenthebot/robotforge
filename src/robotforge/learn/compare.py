@@ -149,6 +149,7 @@ class ArmFaceOff(FaceOff):
             "mm",
             tuple(Series(e.name, e.label, e.color) for e in entrants),
             window=20.0,
+            floor=0.0,
         ),
     )
     steps = (
@@ -594,6 +595,7 @@ class HumanoidFaceOff(FaceOff):
             "°",
             tuple(Series(f"{e.name}_tilt", e.label, e.color) for e in entrants),
             window=12.0,
+            floor=0.0,
         ),
     )
     steps = (

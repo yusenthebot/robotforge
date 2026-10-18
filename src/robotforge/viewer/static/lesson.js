@@ -1159,18 +1159,20 @@ const plots = {
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
     }
-    // Nothing shown below zero, or no more than a rover's settling (a distance, a share of the floor): the axis stops
-    // at zero too. Widened evenly around the data, a converged distance drew ticks at 2, 0 and -2 mm.
-    const floor = Number.isFinite(lo) && lo >= -0.02 * smallestSpan(spec) ? Math.min(lo, 0) : null;
+    // A quantity that cannot go below its floor (a distance, a share of the floor, a tilt: the lesson says so) has its
+    // axis stop there, or at what is shown if a rover's settling dips under it. Widened evenly around the data, a
+    // converged distance drew ticks at 2, 0 and -2 mm. A signed one (a body's sway) is widened evenly, even at rest.
+    const floor = spec.floor ?? null;
+    const base = floor === null ? null : Number.isFinite(lo) ? Math.min(lo, floor) : floor;
     if (!Number.isFinite(lo)) [lo, hi] = [-1, 1];
     if (hi - lo < 1e-6) [lo, hi] = [lo - 1, hi + 1];
     const short = smallestSpan(spec) - (hi - lo); // widen around the data up to the plot's smallest span
     if (short > 0) [lo, hi] = [lo - short / 2, hi + short / 2];
-    if (floor !== null && lo < floor) [lo, hi] = [floor, hi + floor - lo]; // past zero: widen upward instead
+    if (base !== null && lo < base) [lo, hi] = [base, hi + base - lo]; // past the floor: widen upward instead
     const pad = (hi - lo) * 0.12;
     // Grow at once, shrink slowly, so the axes do not jump around while you watch.
     const prev = this.ranges[k];
-    const target = [floor === null ? lo - pad : Math.max(floor, lo - pad), hi + pad];
+    const target = [base === null ? lo - pad : Math.max(base, lo - pad), hi + pad];
     const range = prev ? [Math.min(target[0], prev[0] + (target[0] - prev[0]) * 0.05), Math.max(target[1], prev[1] + (target[1] - prev[1]) * 0.05)] : target;
     this.ranges[k] = range;
     const x = (t) => 36 + ((t - start) / spec.window) * (w - 44);

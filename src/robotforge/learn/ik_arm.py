@@ -320,6 +320,7 @@ class IKArmLesson(Lesson):
             _text("离目标多远", "Distance to the target"),
             "mm",
             (Series("err", _text("误差", "error"), "amber"),),
+            floor=0.0,
         ),
         Plot(
             "w",
@@ -327,12 +328,14 @@ class IKArmLesson(Lesson):
             "",
             (Series("w", _text("可操作度", "manipulability"), "blue"),),
             span=20.0,  # on a scale where home is 100, holding still it drew 131 to 132 as a jump across the plot
+            floor=0.0,
         ),
         Plot(
             "step",
             _text("关节一步转多少", "Joint step per tick"),
             "°",
             (Series("step", _text("最大的那个关节", "largest joint"), "violet"),),
+            floor=0.0,
         ),
     )
     steps = STEPS

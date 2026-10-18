@@ -266,6 +266,19 @@ def test_a_quantity_that_cannot_go_negative_is_not_drawn_below_zero(viewer):
         assert lo >= -0.02 * (hi - lo), (plot, axes[plot])  # at most a settling's hair below zero: no tick there
 
 
+def test_a_signed_quantity_at_rest_is_drawn_round_zero(viewer):
+    """The axis stopped at zero for any plot whose data was not below it, so the gait lesson's body sway (roll and
+    pitch, signed) read 0, 2 and 4 with the trace on the floor, and jumped open once pitch dipped below zero."""
+
+    async def scenario(tab, _server):
+        await _start(tab, "gait")
+        await asyncio.sleep(2.0)  # the dogs stand still
+        return {a["id"]: a["range"] for a in await tab.eval("window.__robotforge.plotAxes()")}
+
+    lo, hi = viewer("laptop", "en", scenario)["sway"]
+    assert lo <= -0.25 * (hi - lo) and hi >= 0.25 * (hi - lo), (lo, hi)
+
+
 def test_a_joint_sliders_value_sits_on_its_names_baseline(viewer):
     """The small mono value sat 3 px above the joint's name."""
 

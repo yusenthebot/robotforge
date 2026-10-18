@@ -29,3 +29,18 @@ def test_every_line_plot_has_a_smallest_span():
         if isinstance(plot, Plot) and plot.kind == "lines" and not plot.span and plot.unit not in units
     ]
     assert not missing, missing
+
+
+def _plot(lesson_id: str, plot_id: str) -> Plot:
+    return next(p for p in LESSONS[lesson_id]().plots if p.id == plot_id)
+
+
+def test_only_a_quantity_that_cannot_go_negative_has_a_floor():
+    """The viewer stopped every plot's axis at zero while its data sat at or above it, so the gait lesson's signed
+    roll and pitch, at rest, read 0, 2 and 4 with the trace on the floor. The floor is now the lesson's to declare."""
+    for lesson_id, plot_id in (("sensors", "distance"), ("sensors", "range"), ("ik_arm", "err"), ("balance", "tilt")):
+        plot = _plot(lesson_id, plot_id)
+        assert plot.floor == 0.0 and plot.describe()["floor"] == 0.0, (lesson_id, plot_id)
+    for lesson_id, plot_id in (("gait", "sway"), ("sensors", "imu")):
+        plot = _plot(lesson_id, plot_id)
+        assert plot.floor is None and plot.describe()["floor"] is None, (lesson_id, plot_id)

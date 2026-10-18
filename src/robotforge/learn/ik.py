@@ -322,6 +322,7 @@ class IKLesson(Lesson):
             {"zh": "手到目标的距离", "en": "Hand to target"},
             "cm",
             (Series("err", {"zh": "误差", "en": "error"}, "blue"),),
+            floor=0.0,
         ),
         Plot(
             "angles",

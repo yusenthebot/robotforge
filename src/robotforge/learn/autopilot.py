@@ -251,6 +251,7 @@ class AutopilotLesson(TwinsLesson):
             "%",
             tuple(Series(f"covered_{t.name}", t.label, t.color) for t in ROVERS),
             window=float(RUN_SECONDS),
+            floor=0.0,
         ),
         Plot(
             "front",
@@ -258,6 +259,7 @@ class AutopilotLesson(TwinsLesson):
             "m",
             tuple(Series(f"front_{t.name}", t.label, t.color) for t in ROVERS),
             window=8.0,
+            floor=0.0,
         ),
     )
     steps = STEPS

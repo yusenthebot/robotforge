@@ -308,7 +308,14 @@ class BalanceLesson(Lesson):
             (Series("margin", _text("余量", "margin"), "violet"),),
             window=5.0,
         ),
-        Plot("tilt", _text("身体倾斜", "Body tilt"), "°", (Series("tilt", _text("倾斜", "tilt"), "ink"),), window=5.0),
+        Plot(
+            "tilt",
+            _text("身体倾斜", "Body tilt"),
+            "°",
+            (Series("tilt", _text("倾斜", "tilt"), "ink"),),
+            window=5.0,
+            floor=0.0,
+        ),
     )
     steps = STEPS
     bench = Bench(
