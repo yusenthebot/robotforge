@@ -508,6 +508,7 @@ class SensorsLesson(Lesson):
                 Series("ax", {"zh": "前后加速度 m/s²（滤波后）", "en": "forward accel m/s² (filtered)"}, "blue"),
                 Series("gz", {"zh": "转速 °/s ÷ 50", "en": "turn rate °/s ÷ 50"}, "violet"),
             ),
+            span=1.0,  # parked, it drew its 0.02 m/s² settling across the whole plot
         ),
         Plot(
             "range",

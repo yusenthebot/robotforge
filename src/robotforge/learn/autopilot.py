@@ -443,5 +443,6 @@ class AutopilotLesson(TwinsLesson):
             "targets": [],
         }
 
-    def camera(self) -> dict[str, list[float]]:
-        return {"eye": [0.0, -2.1, 9.4], "target": [0.0, -0.2, 0.0]}  # from above: A in front, B behind
+    def camera(self) -> dict[str, Any]:
+        # From above: A in front, B behind. On a phone the lesson sheet covered A: step back until both show.
+        return {"eye": [0.0, -2.1, 9.4], "target": [0.0, -0.2, 0.0], "fit": True}

@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
-import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
+import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
 
 const $ = (id) => document.getElementById(id);
@@ -476,6 +476,7 @@ async function applyScene(desc) {
   wantFrame = false;
   follow = null;
   tween = null;
+  fitWhenPosed = null; // asked for the scene this one replaces
   onScene(desc);
 }
 
@@ -531,6 +532,14 @@ function frameCamera({ animate = false } = {}) {
   moveCamera(eye, sphere.center, animate);
 }
 
+// A lesson's camera, framed for the free part of the window and, if it asks, stepped back until its rig fits there.
+let fitWhenPosed = null; // { eye, target } of a lesson camera that asked to fit before its scene's first poses
+function aimLessonCamera(eye, target, fit) {
+  const goal = new THREE.Vector3().fromArray(target);
+  const away = fitToFree(new THREE.Vector3().fromArray(eye), goal);
+  moveCamera(fit ? fitRig(away, goal) : away, goal, true);
+}
+
 function applyPoses(buffer) {
   if (!sceneDesc) return;
   const f = new Float32Array(buffer);
@@ -555,6 +564,8 @@ function applyPoses(buffer) {
       moveCamera(own.fit ? fitRig(eye, goal) : eye, goal, false);
     }
     else if (pendingFit === "camera") frameCamera();
+    else if (fitWhenPosed) aimLessonCamera(fitWhenPosed.eye, fitWhenPosed.target, true);
+    fitWhenPosed = null;
     pendingFit = null;
     $("loading").hidden = true;
   }
@@ -1945,9 +1956,10 @@ initLessons({
   bodyNode: (id) => bodyNodes[id],
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {
-    const goal = new THREE.Vector3().fromArray(target);
-    const away = fitToFree(new THREE.Vector3().fromArray(eye), goal);
-    moveCamera(fit ? fitRig(away, goal) : away, goal, true);
+    // A rig is measured where its robots stand: a scene whose first poses have not come yet has every body at the
+    // origin, and the fit framed that instead (on a phone the third PID twin and the Panda ended off the screen).
+    if (fit && pendingFit) fitWhenPosed = { eye, target };
+    else aimLessonCamera(eye, target, fit);
   },
   closePanels: () => {
     setHelp(false);
@@ -2044,6 +2056,7 @@ window.__robotforge = {
   freeRect: () => freeRect(), // the part of the window no panel covers; the view centres there
   selected: () => selected,
   lesson: () => lessonState(),
+  plotAxes: () => lessonPlotAxes(), // each live plot's y range, to check a still robot's wobble is not magnified
   busy: () => ({ busy, pending: pending.size }),
   ring: () => (ring.visible ? { center: ring.position.toArray(), radius: ringState?.radius ?? null } : null),
   marker: () => (markerDot.visible ? markerDot.position.toArray() : markerPad.visible ? markerPad.position.toArray() : null),

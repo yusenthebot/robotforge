@@ -420,6 +420,8 @@ class IKArmLesson(Lesson):
             "piper": (_text("AgileX PiPER", "AgileX PiPER"), "blue"),
         }
         lanes = {"ours": -LANE, "piper": LANE}
+        # Name tags just above each arm, as in the planning lesson (at 0.75 m both floated far over the arms).
+        tops = {"ours": 0.5, "piper": 0.6}
         return {
             "kind": "arm3d",
             "bases": {name: [0.0, lanes[name], 0.0] for name in ARMS},
@@ -430,7 +432,7 @@ class IKArmLesson(Lesson):
                     "color": tags[name][1],
                     "real": name == "piper",
                     "base": [0.0, lanes[name], 0.0],
-                    "top": 0.75,
+                    "top": tops[name],
                     "cloud": [],
                 }
                 for name in ARMS

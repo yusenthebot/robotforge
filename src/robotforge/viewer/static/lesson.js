@@ -36,6 +36,8 @@ export const lessonDriveSpec = () => lesson?.drive ?? null;
 let followWanted = null; // the body the lesson last asked the camera to follow
 let viewWanted = null; // the framing the lesson last asked for, as JSON
 export const lessonState = () => (lesson ? { id: lesson.id, ...state } : null); // for scripted checks
+// Each live plot's y axis as last drawn, for scripted checks: [lo, hi] in the plot's unit (null before its first draw).
+export const lessonPlotAxes = () => plots.specs.map((s, k) => ({ id: s.id, unit: s.unit, range: plots.ranges[k] }));
 
 // ---------------------------------------------------------------- picker
 
@@ -144,8 +146,12 @@ async function exitLesson() {
 function finishLesson() {
   const stars = state?.results?.stars ?? state?.results?.test?.stars ?? 0;
   saveProgress(lesson.id, { done: true, stars: Math.max(stars, progress()[lesson.id]?.stars ?? 0) });
-  $("lesson-finished").hidden = false;
+  const box = $("lesson-finished");
+  box.hidden = false;
   $("lesson-finished-body").textContent = t("lesson_done_body", { title: pick(lesson.title) });
+  // It sits at the foot of the panel, under the live numbers: below the fold the Finish button seemed to do nothing.
+  const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  box.scrollIntoView({ block: "nearest", behavior: smooth ? "smooth" : "auto" });
 }
 
 // ---------------------------------------------------------------- running a lesson
@@ -375,7 +381,7 @@ function renderStep() {
 
 function paragraph(line) {
   const p = document.createElement("p");
-  p.textContent = line;
+  p.textContent = line.replaceAll("W A S D", "W A S D"); // the four keys never split over two lines
   return p;
 }
 
@@ -515,7 +521,8 @@ function tabLabel(section) {
   if (section.classList.contains("faceoff-table")) return section.dataset.tab || t("plots_table"); // a table may name its tab
   if (section.classList.contains("bench")) return t("plots_record", { n: bench.state?.runs?.length ?? 0 });
   const title = section.querySelector(".plot-title")?.textContent ?? "";
-  return title.replace(/\s*\([^)]*\)$/, ""); // the unit stays on the plot itself
+  // The unit and any aside in brackets stay on the plot itself; Chinese titles use full-width brackets.
+  return title.replace(/(\s*[(（][^()（）]*[)）])+$/, "");
 }
 window.addEventListener("resize", () => plotTabs.sync());
 
@@ -572,7 +579,9 @@ const bench = {
     const title = document.createElement("span");
     title.className = "plot-title";
     title.textContent = pick(spec.title);
-    head.append(title);
+    const actions = document.createElement("span"); // Zoom and Clear, kept together at the right
+    actions.className = "plot-actions";
+    head.append(title, actions);
     if (runs.length && spec.zoom && spec.reference !== null) {
       const zoom = document.createElement("button");
       zoom.type = "button";
@@ -583,7 +592,7 @@ const bench = {
         this.zoom = !this.zoom;
         this.render();
       });
-      head.append(zoom);
+      actions.append(zoom);
     }
     if (runs.length || this.state?.sweep) {
       const clear = document.createElement("button");
@@ -591,7 +600,7 @@ const bench = {
       clear.className = "link-button";
       clear.textContent = t("bench_clear");
       clear.addEventListener("click", () => api.send({ type: "lesson", action: "clear_runs" }));
-      head.append(clear);
+      actions.append(clear);
     }
     const parts = [head];
     if (!runs.length) {
@@ -1112,7 +1121,7 @@ const plots = {
     }
     if (!Number.isFinite(lo)) [lo, hi] = [-1, 1];
     if (hi - lo < 1e-6) [lo, hi] = [lo - 1, hi + 1];
-    const short = (spec.span ?? 0) - (hi - lo); // widen around the data up to the plot's smallest span
+    const short = smallestSpan(spec) - (hi - lo); // widen around the data up to the plot's smallest span
     if (short > 0) [lo, hi] = [lo - short / 2, hi + short / 2];
     const pad = (hi - lo) * 0.12;
     // Grow at once, shrink slowly, so the axes do not jump around while you watch.
@@ -1154,10 +1163,11 @@ const plots = {
   // One row per foot, filled while it is on the ground: the classic gait diagram, newest on the right.
   drawFootfall(spec, g, w, h, shown, start, token) {
     const rows = spec.series.length;
-    const left = 44;
+    g.font = `10px ${token("--font") || "sans-serif"}`;
+    // The bars start after the longest name: a fixed 44 px cut "front right" to "front righ" under its bar.
+    const left = Math.ceil(Math.max(36, ...spec.series.map((s) => g.measureText(pick(s.label)).width)) + 8);
     const rowH = (h - 10) / rows;
     const x = (t) => left + ((t - start) / spec.window) * (w - left - 8);
-    g.font = `10px ${token("--font") || "sans-serif"}`;
     spec.series.forEach((series, r) => {
       const top = 4 + r * rowH;
       g.fillStyle = token("--muted");
@@ -1178,6 +1188,15 @@ const plots = {
     });
   },
 };
+
+// The smallest value range a plot draws, so a robot standing still does not fill it with its wobble: the lesson's own
+// `span`, else one for the plot's unit. Without it the sensors lesson drew its odometry's last 0.4 mm across the whole
+// plot, between two ticks that both read 0. Never so small that three decimals cannot tell the ticks apart.
+const UNIT_SPAN = { "°": 4, "°/s": 10, "N·m": 1, cm: 2, mm: 4, m: 0.2, "m/s": 0.2, "%": 10 };
+const LABELLED_SPAN = 0.004;
+function smallestSpan(spec) {
+  return Math.max(spec.span || UNIT_SPAN[spec.unit] || 0, LABELLED_SPAN);
+}
 
 function niceTicks(lo, hi, count) {
   const span = hi - lo;
