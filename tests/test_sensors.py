@@ -104,6 +104,18 @@ def test_2d_and_3d_lidars_measure_a_wall_at_a_known_distance(post):
     assert low[2] == pytest.approx(0, abs=0.01) and high[2] <= 1.0 + 0.01  # from the floor up to the wall's top
 
 
+def test_a_noisy_lidar_still_reads_the_wall_where_it_is(post):
+    """The nearest of hundreds of noisy rays is the one whose noise came out shortest: with 2 cm of noise the
+    nearest obstacle read 5 cm short of the wall. The reading now takes the median of the rays around it."""
+    post.add_sensor("post", {"type": "lidar3d", "noise": 0.02, "rate_hz": 10})
+    truth = WALL_X - _site_x(post, "post/rf_lidar")
+    ahead = []
+    for _ in range(10):
+        post.simulate(0.1)
+        ahead.append(_read(post, "post", "lidar")["ahead"]["distance_m"])
+    assert np.mean(ahead) == pytest.approx(truth, abs=0.01)
+
+
 def test_a_lidar_does_not_see_its_own_robot(pg):
     """A 3D lidar on a robot dog's back: its lower rings meet the dog's own head and legs, which real lidars
     mask out. Without the mask the nearest obstacle was the dog itself, 20 cm away."""
@@ -156,6 +168,24 @@ def test_a_touch_array_under_a_block_carries_its_weight_evenly(pg):
     cells = np.array(pad["cells_n"])
     assert cells.shape == (2, 2) and cells.min() > 0.2 * cells.max()
     assert np.allclose(pad["center"], 0, atol=0.1)
+
+
+def test_a_touch_pad_under_a_walking_foot_feels_what_the_foot_feels(pg):
+    """Places are the robot's own: the bottom of a shin is the side that meets the floor as the dog stands, though
+    the shin's frame is tilted. Pads laid on the shin's own -z missed most steps of a Go2's trot."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_sensor("dog", {"type": "touch", "on": "front_left_shin", "rows": 2, "cols": 2, "name": "pad"})
+    pg.behaviors.move("dog", 0.2, 0.0)
+    pg.simulate(1.0)
+    m = pg.session.model
+    shin = m.body("dog/front_left_shin").id
+    agree = []
+    for _ in range(150):
+        pg.simulate(0.01)
+        d = pg.session.data
+        touching = any(shin in (m.geom_bodyid[c.geom1], m.geom_bodyid[c.geom2]) for c in d.contact[: d.ncon])
+        agree.append(_read(pg, "dog", "pad")["contact"] == touching)
+    assert np.mean(agree) > 0.95
 
 
 def test_force_torque_weighs_what_a_tray_holds(pg):

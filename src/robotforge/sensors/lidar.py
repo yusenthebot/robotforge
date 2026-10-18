@@ -169,13 +169,27 @@ class Lidar(Sensor):
         if not pick.any():
             return None
         i = int(np.argmin(np.where(pick, horizontal, np.inf)))
-        out: dict[str, Any] = {"distance_m": round(float(horizontal[i]), 3), "bearing_deg": round(float(deg[i]), 1)}
+        out: dict[str, Any] = {"distance_m": round(self._settled(horizontal, deg, pick, i), 3)}
+        out["bearing_deg"] = round(float(deg[i]), 1)
         if self.three_d:
             ray = int(index[i])
             point = value["origin"] + value["rot"] @ self.directions[ray] * value["dist"][ray]
             out["height_m"] = round(float(point[2]), 3)
             out["point_m"] = [round(float(v), 3) for v in point]
         return out
+
+    def _settled(self, horizontal: np.ndarray, deg: np.ndarray, pick: np.ndarray, i: int) -> float:
+        """The distance to the nearest obstacle. With range noise the single nearest ray is the one whose noise
+        came out shortest (2 to 3 noise widths short against a wall of hundreds of rays), so a noisy lidar reports
+        the median of the rays around it: within a few degrees, where a surface is as far, and within four noise
+        widths of the nearest."""
+        sigma = self.knobs.noise.get("range", 0.0)
+        if not sigma:
+            return float(horizontal[i])
+        step = 360.0 / self.per_ring if self.hfov >= 360.0 else self.hfov / max(self.per_ring - 1, 1)
+        near = (np.abs((deg - deg[i] + 180.0) % 360.0 - 180.0) <= max(3.0, 1.5 * step)) & pick
+        near &= horizontal <= horizontal[i] + 4 * sigma
+        return float(np.median(horizontal[near]))
 
     def reading(self, value: dict[str, Any], full: bool = False) -> dict[str, Any]:
         horizontal, bearing, index = self._obstacles(value)

@@ -25,6 +25,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - design (`list_templates` lists them): a ready-made unusual robot from the gallery, `add_robot(name, design="centaur")` (wheel-legged biped, Mars rover, centaur, scorpion, a Go2 carrying a PiPER arm, tentacle...), saved as parts so `update_part` changes it;
    - nothing fits: write a small URDF and import it (see recipes).
    Add props with `add_object` (box, sphere, cylinder, table, bin).
+   Sensors go on any robot's body with `add_sensor` (camera rgb, depth or segmentation, 2D or 3D lidar, IMU, encoders, force_torque at a wrist, touch arrays on feet, rangefinder, GPS, odometry; rate, noise, latency in `options`); `read_sensors` reads them, `remove("robot/sensor")` takes one off.
 4. **Viewer early.** Call `open_viewer()` as soon as a robot exists and tell the user what they can do: drag the robot, drive with W A S D, and use the panels.
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
@@ -62,6 +63,7 @@ Never say something worked because the call returned. Read the numbers, and look
 | `run_controller` | `success`, `failed_at`, `reward`, `stopped_early`; `keeps_running` means call `stop(robot)` later |
 | `compare_controllers` | the `table` and `best`; explain with its numbers |
 | `run_script` | `ok`, `output`, traceback |
+| `add_sensor` | `sensor` name, `position_m`, the first `reading`; then `read_sensors` (lidar `ahead` and `nearest` with `bearing_deg`, depth `center_m`) |
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
 `observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.

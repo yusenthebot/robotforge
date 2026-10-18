@@ -62,12 +62,14 @@ class Target:
 
 @dataclass(frozen=True)
 class Place:
-    """Where a sensor is in its body's frame: the point, the face's outward normal (None inside or at numbers)
-    and its frame, whose columns are where it looks (x), its left (y) and its up (z)."""
+    """Where a sensor is in its body's frame: the point, the face's outward normal (None inside or at numbers),
+    its frame, whose columns are where it looks (x), its left (y) and its up (z), and the robot's own axes
+    (forward, left, up as it stands at home) in that body's frame."""
 
     point: np.ndarray
     normal: np.ndarray | None
     frame: np.ndarray
+    axes: np.ndarray
 
     @property
     def look(self) -> np.ndarray:
@@ -78,8 +80,13 @@ class Place:
         return self.frame[:, 2]
 
 
-def mount(spec: mujoco.MjSpec, entries: Sequence[SensorEntry], robot: str) -> list[str]:
-    """Add `entries` to the robot's spec. Raises ValueError naming the sensor when one cannot be placed."""
+def mount(
+    spec: mujoco.MjSpec, entries: Sequence[SensorEntry], robot: str, home: dict[str, float] | None = None
+) -> list[str]:
+    """Add `entries` to the robot's spec. Words for places and directions (top, bottom, forward, down) mean the
+    robot's own as it stands in its `home` pose (joint values by name), whatever the body's own axes are: the
+    bottom of a Go2's foot is the side that meets the floor, though its calf's frame is tilted, and "down" from
+    a Panda's hand is down. Raises ValueError naming the sensor when one cannot be placed."""
     if not entries:
         return []
     try:
@@ -89,6 +96,10 @@ def mount(spec: mujoco.MjSpec, entries: Sequence[SensorEntry], robot: str) -> li
             f"robot {robot!r}: cannot place sensors, the robot does not compile on its own: {exc}"
         ) from exc
     data = mujoco.MjData(model)
+    for joint, value in (home or {}).items():
+        j = mujoco.mj_name2id(model, OBJ.mjOBJ_JOINT, joint)
+        if j >= 0:
+            data.qpos[model.jnt_qposadr[j]] = value
     mujoco.mj_kinematics(model, data)
     taken = declare.declared_names(spec) | {c.name for c in spec.cameras if c.name}
     notes: list[str] = []
@@ -96,6 +107,8 @@ def mount(spec: mujoco.MjSpec, entries: Sequence[SensorEntry], robot: str) -> li
         opts = resolved(entry)
         try:
             target = _target(model, entry, robot)
+            if entry.type == "touch":  # contacts happen on the shapes that collide, not on the ones drawn over them
+                target = Target(target.body, _colliding(model, target), target.point)
             name = entry.name or unique_name(base_name(entry.type, opts.get("mode"), _label(model, entry)), taken)
             if name in taken:
                 raise ValueError(f"it already has a sensor or camera named {name!r}; give another name")
@@ -207,6 +220,15 @@ def _between(model: mujoco.MjModel, pair: list[str], robot: str) -> Target:
     return Target(child, _surface_geoms(model, child), np.zeros(3), child=True)
 
 
+def _colliding(model: mujoco.MjModel, target: Target) -> tuple[int, ...]:
+    """The target's shapes that collide (a foot geom named itself stays the target)."""
+    if len(target.geoms) == 1 and (model.geom_contype[target.geoms[0]] or model.geom_conaffinity[target.geoms[0]]):
+        return target.geoms
+    own = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == target.body]
+    hits = tuple(g for g in own if model.geom_contype[g] or model.geom_conaffinity[g])
+    return hits or target.geoms
+
+
 def _surface_geoms(model: mujoco.MjModel, body: int) -> tuple[int, ...]:
     """The shapes a body shows (its visual meshes where it has them), else whatever shapes it has."""
     own = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == body]
@@ -227,13 +249,17 @@ def _surface_geoms(model: mujoco.MjModel, body: int) -> tuple[int, ...]:
 def _place(
     model: mujoco.MjModel, data: mujoco.MjData, target: Target, entry: SensorEntry, opts: dict[str, Any]
 ) -> Place:
-    """`at` as given; left out, a site's or joint's own spot, else the type's default anchor."""
+    """`at` as given; left out, a site's or joint's own spot, else the type's default anchor. Numbers are meters
+    from the body's origin along the robot's axes."""
+    root = int(model.body_rootid[target.body]) if model.body_rootid[target.body] else 1
+    body_rot = data.xmat[target.body].reshape(3, 3)
+    axes = body_rot.T @ data.xmat[root].reshape(3, 3)  # columns: the robot's forward, left, up in the body frame
     at = entry.at if entry.at is not None or target.point is not None else opts.get("at")
     low, high = _box(model, target)
     center = (low + high) / 2
     normal = None
     if isinstance(at, list):
-        point = np.asarray(at, float)
+        point = axes @ np.asarray(at, float)
     elif at is None and target.point is not None:
         point = target.point
     elif at == "origin" or (at is None and target.point is None):
@@ -241,28 +267,27 @@ def _place(
     elif at == "center":
         point = center
     else:
-        normal = np.asarray(FACES[at], float)
+        normal = axes @ np.asarray(FACES[at], float)
         point = _surface(model, data, target, center, normal, low, high)
-    look = np.asarray(axis_vector(opts.get("direction") or "forward"), float)
-    return Place(point, normal, _frame(look, np.array([0.0, 0.0, 1.0])))
+    look = axes @ np.asarray(axis_vector(opts.get("direction") or "forward"), float)
+    return Place(point, normal, _frame(look, axes[:, 2], axes[:, 0]), axes)
 
 
 def _box(model: mujoco.MjModel, target: Target) -> tuple[np.ndarray, np.ndarray]:
     """The bounding box of the target's shapes, in its body's frame."""
-    corners = []
-    for g in target.geoms:
-        rot = np.zeros(9)
-        mujoco.mju_quat2Mat(rot, model.geom_quat[g])
-        rot = rot.reshape(3, 3)
-        middle, half = model.geom_aabb[g][:3], model.geom_aabb[g][3:]
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                for sz in (-1, 1):
-                    corners.append(model.geom_pos[g] + rot @ (middle + half * [sx, sy, sz]))
-    if not corners:
+    if not target.geoms:
         return np.zeros(3), np.zeros(3)
-    pts = np.array(corners)
+    pts = np.concatenate([_corners(model, g) for g in target.geoms])
     return pts.min(axis=0), pts.max(axis=0)
+
+
+def _corners(model: mujoco.MjModel, g: int) -> np.ndarray:
+    """The corners of a geom's bounding box in its body's frame (a ball's box is as wide as the ball)."""
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, model.geom_quat[g])
+    middle, half = model.geom_aabb[g][:3], model.geom_aabb[g][3:]
+    signs = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)])
+    return model.geom_pos[g] + (middle + half * signs) @ rot.reshape(3, 3).T
 
 
 def _surface(
@@ -274,37 +299,61 @@ def _surface(
     low: np.ndarray,
     high: np.ndarray,
 ) -> np.ndarray:
-    """Where a ray coming from outside along -normal through the box's middle first meets the target's shapes
-    (body frame); the box's face when it meets none (a ring or an open frame)."""
-    extent = float(np.linalg.norm(high - low)) + 0.1
-    rot = data.xmat[target.body].reshape(3, 3)
-    origin = data.xpos[target.body]
-    start = origin + rot @ (center + normal * extent)
-    toward = rot @ -normal
-    nearest = math.inf
-    for g in target.geoms:
-        kind = int(model.geom_type[g])
-        if kind == int(mujoco.mjtGeom.mjGEOM_MESH):
-            dist = mujoco.mj_rayMesh(model, data, g, start, toward)
-        elif kind in GEOM_PRIMITIVES:
-            dist = mujoco.mju_rayGeom(data.geom_xpos[g], data.geom_xmat[g], model.geom_size[g], start, toward, kind)
-        else:
-            continue
-        if dist >= 0:
-            nearest = min(nearest, dist)
-    if math.isfinite(nearest):
-        return center + normal * extent - normal * nearest
-    face = np.where(normal > 0, high, np.where(normal < 0, low, center))
-    return np.where(normal != 0, face, center)
+    """The middle of the target's outermost surface along `normal` (body frame): the points of its shapes that
+    reach furthest that way, and those within a few millimetres of them. The bottom of a block is the middle of
+    its bottom face, the bottom of a tilted shin is its foot, the top of a Go2 is the crown of its back. The box's
+    face when it has no shapes."""
+    points = np.concatenate([_extremes(model, g, normal) for g in target.geoms]) if target.geoms else np.zeros((0, 3))
+    if not len(points):
+        reach = float(np.abs(normal) @ ((high - low) / 2))
+        return center + normal * reach
+    reach = points @ normal
+    near = reach >= reach.max() - max(0.004, 0.02 * float(np.linalg.norm(high - low)))
+    return points[near].mean(axis=0)
 
 
-def _frame(look: np.ndarray, up: np.ndarray) -> np.ndarray:
-    """Columns: where it looks, its left and its up (the body's up made square to the look, or the body's front
-    when it looks straight up or down)."""
+def _extremes(model: mujoco.MjModel, g: int, normal: np.ndarray) -> np.ndarray:
+    """Points of a geom's surface (body frame) among which are the furthest along `normal`: a mesh's vertices, a
+    box's corners, the rims of a cylinder's ends, the point of a ball or a capsule's end that leads."""
+    rot = np.zeros(9)
+    mujoco.mju_quat2Mat(rot, model.geom_quat[g])
+    rot = rot.reshape(3, 3)
+    pos = np.array(model.geom_pos[g], float)
+    size = model.geom_size[g]
+    local = rot.T @ normal  # the direction in the geom's own frame
+    kind = int(model.geom_type[g])
+    G = mujoco.mjtGeom
+    if kind == int(G.mjGEOM_MESH):
+        mesh = int(model.geom_dataid[g])
+        start, count = int(model.mesh_vertadr[mesh]), int(model.mesh_vertnum[mesh])
+        return pos + model.mesh_vert[start : start + count].astype(float) @ rot.T
+    if kind == int(G.mjGEOM_BOX):
+        corners = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]) * size
+        return pos + corners @ rot.T
+    if kind == int(G.mjGEOM_SPHERE):
+        return (pos + normal * size[0])[None]
+    if kind == int(G.mjGEOM_CAPSULE):
+        ends = np.array([[0, 0, size[1]], [0, 0, -size[1]]]) @ rot.T
+        return pos + ends + normal * size[0]
+    if kind == int(G.mjGEOM_CYLINDER):
+        angles = np.linspace(0, 2 * math.pi, 16, endpoint=False)
+        rim = np.stack([np.cos(angles) * size[0], np.sin(angles) * size[0], np.zeros(16)], axis=-1)
+        sides = [rim + [0, 0, size[1]], rim - [0, 0, size[1]]]
+        return pos + np.concatenate(sides) @ rot.T
+    if kind == int(G.mjGEOM_ELLIPSOID):
+        lead = size**2 * local / max(float(np.sqrt(np.sum(size**2 * local**2))), 1e-9)
+        return (pos + rot @ lead)[None]
+    return np.zeros((0, 3))  # planes and height fields: no surface of a robot's own
+
+
+def _frame(look: np.ndarray, up: np.ndarray, front: np.ndarray | None = None) -> np.ndarray:
+    """Columns: where it looks, its left and its up (the robot's up made square to the look; looking straight
+    down or up, the robot's front is the top of its picture)."""
     x = look / np.linalg.norm(look)
     z = up - x * float(up @ x)
     if np.linalg.norm(z) < 1e-6:
-        z = np.array([1.0, 0.0, 0.0]) if x[2] < 0 else np.array([-1.0, 0.0, 0.0])
+        ahead = front if front is not None else np.cross(up, [0.0, 1.0, 0.0])
+        z = ahead if float(x @ up) < 0 else -ahead
     z = z / np.linalg.norm(z)
     return np.column_stack([x, np.cross(z, x), z])
 
@@ -430,20 +479,41 @@ def _touch(spec, body, name, opts, place: Place, vis: Visuals, model, target) ->
     """A pad of rows x cols zones on a face (the bottom of a foot by default). A zone counts the contacts of its
     body whose points fall inside it, so each zone is a box reaching a little out of the surface and some way
     into the shape: a ball foot rolling on the floor touches it off its lowest point too."""
-    normal = place.normal if place.normal is not None else np.array([0.0, 0.0, -1.0])
+    axes = place.axes
+    normal = place.normal if place.normal is not None else -axes[:, 2]
     low, high = _box(model, target)
-    t1 = np.array([1.0, 0.0, 0.0]) if abs(normal[0]) < 0.9 else np.array([0.0, 0.0, 1.0])
+
+    def across(v: np.ndarray) -> np.ndarray:
+        v = v - normal * float(v @ normal)
+        return v / np.linalg.norm(v) if np.linalg.norm(v) > 1e-6 else v
+
+    t1 = across(axes[:, 0])  # the robot's forward along the pad, or its up on a front or back face
+    if np.linalg.norm(t1) < 1e-6:
+        t1 = across(axes[:, 2])
     t2 = np.cross(normal, t1)
-    extent = high - low
-    size = opts.get("size") or [max(float(abs(extent @ t1)), 0.01), max(float(abs(extent @ t2)), 0.01)]
-    depth = max(0.6 * float(abs(extent @ normal)) / 2, 0.01)
+
+    # The pad is as big as the shapes it lies on: those that reach the face (a foot, not the whole shin).
+    tips = [g for g in target.geoms if len(_extremes(model, g, normal))]
+    reach = {g: float((_extremes(model, g, normal) @ normal).max()) for g in tips}
+    top = max(reach.values(), default=0.0)
+    leading = [g for g in tips if reach[g] >= top - 0.004] or list(target.geoms)
+    corners = np.concatenate([_corners(model, g) for g in leading]) if leading else np.zeros((1, 3))
+
+    def width(t: np.ndarray) -> float:
+        along = corners @ t
+        return float(along.max() - along.min())
+
+    # A little wider than the shape, so a contact at its very edge (a block's corner) is on the pad.
+    size = opts.get("size") or [width(t1) + 2 * TOUCH_OUTSIDE, width(t2) + 2 * TOUCH_OUTSIDE]
+    depth = max(0.6 * width(normal) / 2, 0.01)
     rows, cols = int(opts["rows"]), int(opts["cols"])
     cell = [size[0] / rows / 2, size[1] / cols / 2, (TOUCH_OUTSIDE + depth) / 2]
     frame = np.column_stack([t1, t2, normal])
     middle = place.point + normal * (TOUCH_OUTSIDE - depth) / 2
     # Rows run from the pad's front edge (its top edge on a front or back face), columns from its left edge.
-    left = np.array([0.0, 1.0, 0.0]) - normal * normal[1]
-    left = left / np.linalg.norm(left) if np.linalg.norm(left) > 1e-6 else -t2
+    left = across(axes[:, 1])
+    if np.linalg.norm(left) < 1e-6:
+        left = -t2
     cells = []
     for r in range(rows):
         for c in range(cols):
