@@ -661,9 +661,11 @@ class MachineCheck:
     """How fast this machine runs MuJoCo at the moments a world is timed: a chain of 20 links that touch nothing,
     restarted from the same pose every time (so on the same machine it always costs the same), stepped right after
     each timed slice in the world's own process and kept, like the world's slices, as each slice's best over the
-    repeats. A world's speed over it moves less with how busy the machine was than its speed alone, and the load
-    drifts within one run, so the first worlds and the last can see different machines. On a very busy machine both
-    still wobble, so a small change needs --ab to be sure of."""
+    repeats. It runs no robotforge code, so it says how busy the machine was and nothing about robotforge (the
+    slowest check of a run is physics.machine, whose floor marks a busy machine). A world's speed over it moves
+    less with how busy the machine was than its speed alone, and the load drifts within one run, so the first
+    worlds and the last can see different machines. On a very busy machine both still wobble, so a small change
+    needs --ab to be sure of."""
 
     def __init__(self, slices: int, links: int = 20) -> None:
         import mujoco
