@@ -213,6 +213,53 @@ def test_a_tree_in_the_way_is_flown_over(pg):
     assert "over tree" in result["note"]
 
 
+# ---- aircraft built from parts ------------------------------------------------------------------------
+
+
+def test_a_hexacopter_built_from_parts_flies_with_its_own_rotor_layout(pg):
+    from robotforge.design.builder.guide import EXAMPLE_HEXACOPTER
+
+    pg.remove("drone")
+    pg.add_robot("hexa", build=EXAMPLE_HEXACOPTER)
+    robots = {r["name"]: r for r in pg.behaviors.robots()}
+    assert robots["hexa"]["kind"] == "aircraft" and robots["hexa"]["flight"]["rotors"] == 6
+    trip = pg.behaviors.navigate("hexa", [1.0, 1.0, 2.0], None, None, 30)
+    pg.run_fast(lambda: trip.done, 31)
+    assert trip.result()["arrived"]
+    fc = pg.session.controllers["hexa"]
+    assert [r.spin for r in fc.frame.rotors] == [1, -1, 1, -1, 1, -1]  # alternating round the ring by itself
+    angles = sorted(round(math.degrees(math.atan2(r.position[1], r.position[0]))) % 360 for r in fc.frame.rotors)
+    assert angles == [0, 60, 120, 180, 240, 300]  # where its builder put them
+    errors = []
+    for _ in range(50):
+        pg.run_fast(lambda: False, 0.1)
+        errors.append(np.linalg.norm(np.subtract(pg.behaviors.pose("hexa")["position"], [1.0, 1.0, 2.0])))
+    assert max(errors) < 0.05
+
+
+def test_a_mirrored_rotor_turns_the_other_way():
+    build = {
+        "base": {"size": [0.2, 0.2, 0.05], "mass": 0.6},
+        "parts": [
+            {"name": "left_front", "at": [0.15, 0.15, 0.03], "shape": "rotor", "size": [0.2], "mirror": True},
+            {"name": "left_back", "at": [-0.15, 0.15, 0.03], "shape": "rotor", "size": [0.2], "spin": "cw"},
+            {"name": "right_back", "at": [-0.15, -0.15, 0.03], "shape": "rotor", "size": [0.2]},
+        ],
+    }
+    model = compile_world(World.model_validate({"robots": [{"name": "quad", "build": build}]})).model
+    spins = {r.name: r.spin for r in find_airframe(model, "quad").rotors}
+    assert spins == {"left_front": 1, "right_front": -1, "left_back": -1, "right_back": 1}
+
+
+def test_rotor_parts_are_bolted_on_and_thrust_is_for_rotors():
+    from robotforge.design import builder
+
+    with pytest.raises(ValueError, match="a rotor is bolted on"):
+        builder.parse({"parts": [{"name": "r", "shape": "rotor", "size": [0.2], "joint": "hinge"}]})
+    with pytest.raises(ValueError, match="thrust is for rotor parts"):
+        builder.parse({"parts": [{"name": "w", "shape": "wheel", "size": [0.1, 0.02], "thrust": 5}]})
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
