@@ -34,6 +34,7 @@ TURN_SPEED = 0.8  # rad/s the hand turns at most along a path
 STAGE_STEP = 0.03  # m between the stages tried, from the point in toward the arm's base
 STAGE_RISE = 0.2  # m higher than asked that a stage may be, for the arm to clear the counter
 CONTACT = 0.001  # m: an arm overlapping something else deeper than this touches it
+RESTARTS = 16  # random IK starts for the pose a tilted pick or put goes in from, when the arm's own do not do
 
 
 class Hand:
@@ -68,11 +69,24 @@ class Hand:
         local = np.column_stack([t, self.across, np.cross(t, self.across)])
         return [np.column_stack([a, s * level, np.cross(a, s * level)]) @ local.T for s in (1.0, -1.0)]
 
-    def solve(self, point: np.ndarray, turns: list[np.ndarray], starts: list[np.ndarray]) -> tuple | None:
-        """(joint values, rotation) with the tool at `point` turned one of the ways in `turns`, or None."""
+    def solve(
+        self, point: np.ndarray, turns: list[np.ndarray], starts: list[np.ndarray], restarts: int = 0
+    ) -> tuple | None:
+        """(joint values, rotation) with the tool at `point` turned one of the ways in `turns`, or None: from
+        `starts`, then from `restarts` random settings (the base turned toward the point). Reaching over a counter
+        whose top is level with its shoulder, a Panda's IK from its own pose put its elbow into the counter; the
+        elbow-up pose that clears it came from a restart."""
         arm = self.arm
+        rng = np.random.default_rng(0)
+        seed = arm._seed(point)
         for turn in turns:
-            for start in starts:
+            for k in range(len(starts) + restarts):
+                if k < len(starts):
+                    start = starts[k]
+                else:
+                    start = rng.uniform(arm.chain.lower, arm.chain.upper)
+                    if arm.yaw is not None:
+                        start[arm.yaw] = seed[arm.yaw]
                 q, err = arm.ik.solve(arm.chain, point, start, iterations=60, rotation=turn)
                 if err <= REACH_TOL and self._off(q, turn) <= ROT_TOL and self._clear(q):
                     return q, turn
@@ -96,38 +110,30 @@ class Hand:
 
     def pick(self, grasp: np.ndarray, half: float, hold: np.ndarray, tilt: float) -> None:
         """Queue picking up a load at `grasp` (its middle, `half` its half height) with the hand tilted and carrying
-        it round to `hold` over the robot, as ArmMotion.pick_up does pointing down."""
+        it round to over `hold` over the robot, as ArmMotion.pick_up does pointing down."""
         arm = self.arm
         grasp = np.asarray(grasp, float)
         toward = self.toward(grasp)
         come_in = grasp - self.axis(tilt, toward) * IN
         lifted = grasp + [0.0, 0.0, APPROACH]
-        stage, q_stage, down = self._stage(toward, max(grasp[2] + half + CLEAR, come_in[2]), come_in)
-        back = np.array([stage[0], stage[1], max(stage[2], lifted[2])])
-        paths = self._first_way(
-            q_stage,
-            tilt,
-            toward,
-            [(stage, down, come_in, None), (come_in, None, grasp, None), (grasp, None, lifted, None)],
-            [(lifted, None, back, down)],
-        )
+        stage, paths = self._way(tilt, toward, max(grasp[2] + half + CLEAR, come_in[2]), come_in, [grasp, lifted])
+        back = paths[-1][2]
         across = arm._carry_height(back, hold, back[2], half)
         if across is None:
             raise ValueError(f"{arm.robot} cannot swing the load round from the object to over its robot")
         carry_z, carry_turn, carry_joints = across
         over = np.array([hold[0], hold[1], carry_z])
         arm._go_over(stage, stage[2])
-        for (knots, a, b, angle), label in zip(paths[:3], ("reach in", "descend", "lift"), strict=True):
-            if label == "lift":
-                arm.queue.append(Waypoint(None, arm._grip("close"), 0.6, "grasp"))
-            self._follow(knots, a, b, angle, label, half if label == "lift" else None)
+        self._follow(*paths[0], "reach in")
+        self._follow(*paths[1], "descend")
+        arm.queue.append(Waypoint(None, arm._grip("close"), 0.6, "grasp"))
+        self._follow(*paths[2], "lift", half)
         self._follow(*paths[3], "draw back", half)
         start = back
         if carry_z > back[2] + 1e-6:
             start = np.array([back[0], back[1], carry_z])
             arm.queue.append(Waypoint(start, None, arm._time(back, start), "lift", turn=0.0, load=half))
-        arm._carry(start, over, carry_turn, carry_joints, half)
-        arm.queue.append(Waypoint(hold, None, arm._time(over, hold) + 0.3, "tuck", turn=0.0, load=half))
+        arm._carry(start, over, carry_turn, carry_joints, half)  # the errand lowers it to `hold` from there
 
     def put(self, place: np.ndarray, half: float, place_top: float | None, tilt: float) -> None:
         """Queue putting the load the gripper holds over the robot (picked up with pick_up or pick) down at `place`
@@ -139,15 +145,7 @@ class Hand:
         above = np.array([drop[0], drop[1], max(drop[2] + APPROACH, rim + 2 * half + 0.03)])
         toward = self.toward(drop)
         backed = drop - self.axis(tilt, toward) * IN
-        stage, q_stage, down = self._stage(toward, above[2], above)
-        back = np.array([stage[0], stage[1], max(stage[2], backed[2])])
-        paths = self._first_way(
-            q_stage,
-            tilt,
-            toward,
-            [(stage, down, above, None), (above, None, drop, None), (drop, None, backed, None)],
-            [(backed, None, back, down)],
-        )
+        stage, paths = self._way(tilt, toward, above[2], above, [drop, backed])
         up = np.array([start[0], start[1], max(start[2] + APPROACH, stage[2])])
         across = arm._carry_height(up, stage, up[2], half)
         if across is None:
@@ -165,45 +163,66 @@ class Hand:
         self._follow(*paths[2], "back out")
         self._follow(*paths[3], "draw back")
 
-    def _first_way(
-        self, q0: np.ndarray, tilt: float, toward: np.ndarray, moves: list[tuple], back: list[tuple]
-    ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray, float]]:
-        """The paths of `moves` and then `back` (each (from, its turn, to, its turn), a turn of None being the
-        hand's tilted one), one after the other from joint values `q0`, with the fingers closing one way or, if that
-        does not work out, the other: [(knots, from, to, how far the hand turns)]. Raises OutOfReach."""
+    def _way(
+        self, tilt: float, toward: np.ndarray, z: float, first: np.ndarray, then: list[np.ndarray]
+    ) -> tuple[np.ndarray, list[tuple[np.ndarray, np.ndarray, np.ndarray, float]]]:
+        """The stage and the paths of a tilted pick or put: from the stage to `first` (where the hand comes in from,
+        tilted), on through `then`, and back to over the stage pointing down again. [(knots, from, to, how far the
+        hand turns)]. The fingers close one way round or, if that does not work out, the other. The stage is found
+        from the pose at `first`, and the way in worked out backward from there: from a stage pose found by
+        itself, a Panda could not turn its hand in to an apple it reached tilted (the pose was another branch).
+        Raises OutOfReach."""
+        arm = self.arm
         failed: OutOfReach | None = None
-        for turn in self.turns(tilt, toward):
-            q, out = q0, []
+        level = self.turns(0.0, toward)  # pointing down, the fingers closing the same way
+        for turn, down in zip(self.turns(tilt, toward), level, strict=True):
+            starts = [arm.q, arm._seed(first), *(() if arm._warm is None else (arm._seed(first, arm._warm),))]
+            found = self.solve(first, [turn], starts, RESTARTS)
+            if found is None:
+                failed = OutOfReach(arm.robot, ["tilted"], {"from": first})
+                continue
+            q_first = found[0]
             try:
-                for a, turn_a, b, turn_b in [*moves, *back]:
-                    ta = turn if turn_a is None else turn_a
-                    tb = turn if turn_b is None else turn_b
-                    knots = self._path(q, a, ta, b, tb)
-                    out.append((knots, a, b, _angle(ta, tb)))
-                    q = knots[-1]
+                stage, inward = self._stage(toward, z, first, q_first, turn, down)
+                out = [(inward, stage, first, _angle(down, turn))]
+                q, a = q_first, first
+                for b in then:
+                    knots = self._path(q, a, turn, b, turn)
+                    out.append((knots, a, b, 0.0))
+                    q, a = knots[-1], b
+                back = np.array([stage[0], stage[1], max(stage[2], a[2])])
+                out.append((self._path(q, a, turn, back, down), a, back, _angle(turn, down)))
             except OutOfReach as exc:
                 failed = exc
                 continue
-            return out
-        raise failed if failed is not None else OutOfReach(self.arm.robot, ["tilted"])
+            arm._warm = q_first
+            return stage, out
+        raise failed if failed is not None else OutOfReach(arm.robot, ["tilted"])
 
     # ---- helpers --------------------------------------------------------------------------------------
 
-    def _stage(self, toward: np.ndarray, z: float, point: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Where the hand points down before it turns and goes in to `point`, and after it draws back: on the way from
-        the arm's base to the point, at height `z` or up to STAGE_RISE higher, as far out toward it as the arm
-        reaches pointing down there, the whole arm clear of the counter. (The point, the joint values there and the
-        tool body's rotation.) Pointing down 0.69 m out at a desk's height, a Panda's forearm was 4 cm into it."""
+    def _stage(
+        self, toward: np.ndarray, z: float, first: np.ndarray, q_first: np.ndarray, turn: np.ndarray, down: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Where the hand points down before it turns and goes in to `first` (reached tilted at `q_first`), and the
+        path there from it: on the way from the arm's base to `first`, at height `z` or up to STAGE_RISE higher, as
+        far out toward it as the arm reaches pointing down there, the whole arm clear of the counter (pointing down
+        0.69 m out at a desk's height, a Panda's forearm was 4 cm into it). The path is worked out from `first` back
+        to the stage and returned the right way round: (the stage, the knots from it to `first`)."""
         arm = self.arm
-        out = float(np.linalg.norm(np.asarray(point, float)[:2] - arm.base_xy))
+        out = float(np.linalg.norm(np.asarray(first, float)[:2] - arm.base_xy))
+        failed: OutOfReach | None = None
         for dz in np.arange(0.0, STAGE_RISE + 1e-9, 0.05):
             for r in np.arange(out, 0.05, -STAGE_STEP):
                 p = np.array([*(arm.base_xy + r * toward), z + dz])
-                q, err = arm.pose_for(p)
-                if err <= REACH_TOL and self._clear(q):
-                    arm.ik.point(arm.chain, q)
-                    return p, q, arm.ik.data.xmat[arm.chain.body].reshape(3, 3).copy()
-        raise OutOfReach(arm.robot, ["stage"], {"stage": np.array([*(arm.base_xy + 0.1 * toward), z])})
+                q, err = arm.ik.solve(arm.chain, p, q_first, iterations=80, rotation=down)
+                if err > REACH_TOL or self._off(q, down) > ROT_TOL or not self._clear(q):
+                    continue
+                try:
+                    return p, self._path(q_first, first, turn, p, down)[::-1].copy()
+                except OutOfReach as exc:
+                    failed = exc
+        raise failed or OutOfReach(arm.robot, ["stage"], {"stage": np.array([*(arm.base_xy + 0.1 * toward), z])})
 
     def _path(self, q0: np.ndarray, a: np.ndarray, turn_a: np.ndarray, b: np.ndarray, turn_b: np.ndarray) -> np.ndarray:
         """The knots (joint values) of a straight move of the tool point from `a` to `b` while the tool body turns

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import math
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
@@ -45,6 +46,8 @@ HOLD_GRID = 0.04  # m between the spots over the robot tried for it
 HOLD_SPREAD = 0.5  # m of height a held load is raised rather than held a meter further off the robot's middle
 HOLD_TRIES = 400  # IK checks hold_pose makes at most
 HOLD_MARGIN = 0.03  # m the arm may reach past the robot's outline, holding a load
+HOLD_BELOW = 0.1  # m below the arm's first hinge that it holds a load at most
+HOLD_LIMIT = math.radians(12.0)  # rad a hinge keeps from its limits holding a load (hold_pose)
 TUCK_STARTS = 6  # other IK starts tried for a tucked pose that stays inside the robot's outline
 HOLD_RISE = 0.6  # m above the robot's lowest top that a load is held at most
 
@@ -432,10 +435,10 @@ class ArmMotion:
     # ---- picking up and putting down on the move (behaviors/fetch.py) --------------------
 
     def pick_up(self, obj_pos: np.ndarray, obj_half_height: float, hold: np.ndarray) -> None:
-        """Queue picking an object up and holding it at `hold`: a tool point over the robot that carries the arm,
-        where the load clears it and sticks out nowhere, so that the robot can drive or walk with it (fetch.Errand).
-        Raises OutOfReach for key points the gripper cannot point down at, and ValueError when the load cannot be
-        carried round to `hold`, as pick_and_place does."""
+        """Queue picking an object up and carrying it round to over `hold`: a tool point over the robot that carries
+        the arm, where the load clears it and sticks out nowhere, so that the robot can drive or walk with it (the
+        errand lowers it there: fetch.Errand). Raises OutOfReach for key points the gripper cannot point down at, and
+        ValueError when the load cannot be carried round to `hold`, as pick_and_place does."""
         grasp = np.asarray(obj_pos, float).copy()
         hold = np.asarray(hold, float)
         travel_z = max(grasp[2], hold[2]) + APPROACH
@@ -453,7 +456,6 @@ class ArmMotion:
         self._go_over(above, carry_z)
         self._take(grasp, above)
         self._carry(above, over, turn, joints, obj_half_height)
-        self.queue.append(Waypoint(hold, None, self._time(over, hold) + 0.3, "tuck", turn=0.0, load=obj_half_height))
 
     def put_down(self, place: np.ndarray, obj_half_height: float, place_top: float | None = None) -> None:
         """Queue putting down the load the gripper holds where the tool will be (picked up with pick_up): up, across
@@ -615,6 +617,10 @@ class ArmMotion:
         base = frame @ (self.base_xy - root[:2])
         aim = np.clip(base / 2, low, high)  # between the arm's base and the robot's middle
         ceiling = min(top for _, _, top in under) + HOLD_RISE
+        # Not far below the arm's shoulder: folded down behind its own base to 0.24 m under its shoulder, a Panda went
+        # in and out of that pose only by swinging round, and swung an apple out of its fingers.
+        hinge = next((j for j in self.joints if j not in self._slides), self.joints[0])
+        shoulder = float(d.xanchor[hinge][2]) - HOLD_BELOW
         # Best first: each spot by the lowest score it could have, the load just clear of what is under it there.
         spots = []
         for x in np.arange(low[0], high[0] + 1e-9, HOLD_GRID):
@@ -624,7 +630,7 @@ class ArmMotion:
                     (top for center, half, top in under if np.all(np.abs(xy - center) < half + load_radius)),
                     default=-np.inf,
                 )
-                lowest = max(floor + LOAD_CLEARANCE + load_half_height + 0.005, ceiling - HOLD_RISE)
+                lowest = max(floor + LOAD_CLEARANCE + load_half_height + 0.005, ceiling - HOLD_RISE, shoulder)
                 spread = HOLD_SPREAD * float(np.hypot(x - aim[0], 2 * (y - aim[1])))  # off to a side: twice
                 spots.append((lowest + spread, lowest, spread, xy))
         spots.sort(key=lambda spot: spot[0])
@@ -674,9 +680,17 @@ class ArmMotion:
                 q, err = self.ik.solve(self.chain, p, start, iterations=60, axis=(self.tool_axis, DOWN))
                 if err > REACH_TOL or self._collides(q):
                     continue
-            if not self._load_hits_arm(q, p, half_height, radius) and self._inside(q, outline):
+            if not self._load_hits_arm(q, p, half_height, radius) and self._inside(q, outline) and self._roomy(q):
                 return q
         return None
+
+    def _roomy(self, q: np.ndarray) -> bool:
+        """Whether every hinge of the arm at `q` is HOLD_LIMIT or more from its limits. Folded with its elbow and its
+        base joint 2 degrees from their stops, a Panda could not lower a load into that pose from above and swung
+        round to get there."""
+        hinges = np.array([j not in self._slides for j in self.joints])
+        lower, upper = self.chain.lower, self.chain.upper
+        return bool(np.all(((q - lower > HOLD_LIMIT) & (upper - q > HOLD_LIMIT)) | ~hinges))
 
     def _inside(self, q: np.ndarray, outline: tuple[np.ndarray, ...]) -> bool:
         """Whether the arm at `q`, seen from above, stays inside the outline (heading frame, middle, low, high)."""

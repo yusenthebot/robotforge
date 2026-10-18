@@ -67,6 +67,8 @@ WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, wi
 GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of what its friction can hold
 STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
 SWEEP_STEP = 0.08  # rad of the furthest joint between the poses a joint move is checked at
+LOADED_TILT = math.radians(45.0)  # how far off pointing down a gripper with a load may turn on a joint move
+NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 
 
 class FetchError(ValueError):
@@ -890,11 +892,11 @@ def _heights(arm: ArmMotion) -> str:
     return f"{found[0]:.2f} and {found[-1]:.2f}" if found else "no heights at all"
 
 
-def _sweeps_clear(
-    arm: ArmMotion, q0: np.ndarray, q1: np.ndarray, robot: str, load: tuple[int, float] | None = None
-) -> bool:
+def _sweeps_clear(arm: ArmMotion, q0: np.ndarray, q1: np.ndarray, load: tuple[int, float] | None = None) -> bool:
     """Whether the arm moving joint by joint from `q0` to `q1` hits nothing on the way (in the IK's copy of the world:
-    the robot it rides on, the floor, furniture), and a load (body, half height) in its gripper clears the robot."""
+    the robot it rides on, the floor, furniture), and a load (body, half height) in its gripper clears the robot and
+    hangs from a gripper within LOADED_TILT of pointing down. Swung round with the hand 23 degrees off down and its
+    wrist spinning, a mobile Panda let an apple slip out of its fingers."""
     m, d = arm.ik.model, arm.ik.data
     n = max(4, math.ceil(float(np.max(np.abs(q1 - q0))) / SWEEP_STEP))
     arm.ik.point(arm.chain, q0)
@@ -902,8 +904,10 @@ def _sweeps_clear(
     for s in np.linspace(0.0, 1.0, n + 1)[1:]:
         q = q0 + (q1 - q0) * s
         p = arm.ik.point(arm.chain, q)
-        if load is not None and not arm._load_clears(p, load[1], under):
-            return False
+        if load is not None:
+            axis = d.xmat[arm.chain.body].reshape(3, 3) @ arm.tool_axis
+            if not arm._load_clears(p, load[1], under) or float(axis[2]) > -math.cos(LOADED_TILT):
+                return False
         mujoco.mj_collision(m, d)
         for con in d.contact[: d.ncon]:
             if con.dist > -PENETRATE:
@@ -965,6 +969,7 @@ class Errand:
     _tries: int = 0
     _creep: tuple[float, Spot] | None = None  # (since when, into which spot)
     tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
+    _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     hand: Hand = field(init=False)
 
     def __post_init__(self) -> None:
@@ -983,6 +988,7 @@ class Errand:
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         if self.done:
             return
+        self._hold_fast(model)
         try:
             self._update(data)
         except Exception as exc:  # an error here must end the errand, not every step of the simulation
@@ -1071,7 +1077,13 @@ class Errand:
             return
         self.held = True
         self.arm.sync(data)
-        self.step = "folding" if self._stow(data, loaded=True) else "folded"
+        if not self._stow(data, loaded=True):  # down onto the robot the way the tool points
+            hold = self.hold_world(data)
+            start = self.arm.tool_target_end()
+            self.arm.queue.append(
+                Waypoint(hold, None, self.arm._time(start, hold) + 0.3, "tuck", turn=0.0, load=self.half)
+            )
+        self.step = "folding"
 
     def _on_folding(self, t: float, data: mujoco.MjData) -> None:
         if self.arm.done:
@@ -1117,7 +1129,7 @@ class Errand:
         if float(np.max(np.abs(arm.q - self.hold_q))) <= STOW_SAME:
             return False
         load = (self.body, self.half) if loaded else None
-        if not _sweeps_clear(arm, arm.q, self.hold_q, self.robot, load):
+        if not _sweeps_clear(arm, arm.q, self.hold_q, load):
             return False
         travel = float(np.max(np.abs(self.hold_q - arm.q)))
         arm.queue.append(Waypoint(None, None, max(0.5, travel / JOINT_SPEED), "stow", self.hold_q.copy()))
@@ -1276,11 +1288,25 @@ class Errand:
 
     def _leave(self) -> None:
         self.arm._warm = None  # the arm plans as it did before the errand
+        if self._noslip is not None:
+            self.manager.session.model.opt.noslip_iterations = self._noslip
+            self._noslip = None
         self.manager.errand_ended(self)
+
+    def _hold_fast(self, model: mujoco.MjModel) -> None:
+        """Run MuJoCo's no-slip pass while the errand goes on: its soft contacts let a load creep out between the
+        fingers (an apple held tilted slid 5 mm a second through a Panda's pads and fell out on the way round;
+        learn/cloning.py found the same with a cube). It costs about a third more time a step, for the errand only."""
+        if self._noslip is None and model.opt.noslip_iterations < NOSLIP:
+            self._noslip = int(model.opt.noslip_iterations)
+            model.opt.noslip_iterations = NOSLIP
 
     def interrupt(self, note: str, time: float) -> None:
         if not self.done:
             self.state, self.why, self.note, self.ended = "failed", "interrupted", note, time
+        if self._noslip is not None:
+            self.manager.session.model.opt.noslip_iterations = self._noslip
+            self._noslip = None
 
     def result(self) -> dict[str, Any]:
         """What it did: the trips (path_m, distance_m, time_s each), where it picked the load up and put it down."""
