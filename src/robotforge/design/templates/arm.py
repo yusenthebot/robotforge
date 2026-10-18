@@ -8,7 +8,7 @@ from typing import Literal
 import mujoco
 from pydantic import Field
 
-from robotforge.design import components
+from robotforge.design import components, end_effectors
 from robotforge.design.templates.base import (
     DARK,
     GEOM,
@@ -34,6 +34,10 @@ class ArmParams(TemplateParams):
     gripper: bool = True
     gripper_opening: float = Field(0.07, ge=0.02, le=0.2, description="max finger gap in meters")
     material: Literal["pla", "aluminum", "carbon"] = "pla"
+    end_effector: Literal["gripper", "suction", "magnet"] = Field(
+        "gripper",
+        description="what the hand holds with: two fingers, a suction cup (flat things) or an electromagnet (steel)",
+    )
 
 
 class Arm(Template):
@@ -48,7 +52,11 @@ class Arm(Template):
         spec = new_spec()
         radius = max(0.012, 0.035 * p.reach)
         upper, fore = 0.45 * p.reach, 0.35 * p.reach
-        hand = 0.2 * p.reach - (0.05 if p.gripper else 0.0)
+        # What the hand holds with: an end effector chosen by name wins; "gripper" is the fingers, unless gripper
+        # is false (an arm with a bare flange, as before end effectors had a name).
+        holder = p.end_effector if p.end_effector != "gripper" else ("gripper" if p.gripper else None)
+        tool_length = end_effectors.TOOLS[holder].length if holder in end_effectors.TOOLS else 0.05
+        hand = 0.2 * p.reach - (tool_length if holder else 0.0)
 
         vis = Visuals(spec)
         base = spec.worldbody.add_body(name="base")
@@ -126,9 +134,11 @@ class Arm(Template):
         tool.add_camera(name="wrist_cam", pos=[0.035, 0, 0.0095], xyaxes=[0, -1, 0, -1, 0, 0], fovy=70)
         declare_camera(spec, tool, "wrist_cam", 70)
         tcp_z = 0.0
-        if p.gripper:
+        if holder == "gripper":
             tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis)
-        _dress_wrist_camera(vis, tool, p.gripper)
+        elif holder is not None:  # a suction cup or an electromagnet where the fingers would be
+            tcp_z = end_effectors.add_tool(spec, tool, holder, vis, holder)
+        _dress_wrist_camera(vis, tool, holder == "gripper")
         vis.finish()
         tool.add_site(name="tcp", pos=[0, 0, tcp_z], size=[0.006, 0, 0], rgba=[1, 0.6, 0.1, 0.6])
         # The shoulder's drum sits in the pedestal it turns on (6 mm deep, folded down): their contact held the base
@@ -144,16 +154,15 @@ class Arm(Template):
         if p.dof >= 4:
             home["wrist_pitch"] = math.pi - home["shoulder"] - home["elbow"]
         ctrl = dict(home)
-        if p.gripper:
+        if holder == "gripper":
             ctrl["gripper"] = p.gripper_opening / 2
-        return BuiltRobot(
-            spec=spec,
-            home_qpos=home,
-            home_ctrl=ctrl,
-            spawn_height=0.0,
-            floating=False,
-            notes=[f"{p.dof}-joint arm, reach {p.reach:.2f} m, {part.name} servos ({part.stall_torque} N*m)"],
-        )
+        elif holder is not None:
+            ctrl["gripper"] = 0.0  # off: it holds once told to close
+        notes = [f"{p.dof}-joint arm, reach {p.reach:.2f} m, {part.name} servos ({part.stall_torque} N*m)"]
+        if holder in end_effectors.TOOLS:
+            info = end_effectors.TOOLS[holder]
+            notes.append(f"{info.title} on the hand: holds {info.holds}; gripper close turns it on, open lets go")
+        return BuiltRobot(spec=spec, home_qpos=home, home_ctrl=ctrl, spawn_height=0.0, floating=False, notes=notes)
 
 
 def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accent, vis: Visuals | None = None) -> float:

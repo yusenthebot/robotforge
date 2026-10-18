@@ -18,7 +18,19 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, air, airways, fetch, flight, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import (
+    Kind,
+    air,
+    airways,
+    fetch,
+    flight,
+    humanoid,
+    marine,
+    nav_map,
+    quadruped,
+    robot_kind,
+    water_nav,
+)
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
@@ -26,22 +38,35 @@ from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
-from robotforge.design import library, mounting
+from robotforge.design import end_effectors, library, mechanisms, mounting
 from robotforge.design.world import ObjectEntry, RobotEntry, World
 from robotforge.sim.session import SimSession
 
-MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE, Kind.AIRCRAFT)
+MOBILE = (
+    Kind.QUADRUPED,
+    Kind.HEXAPOD,
+    Kind.ROVER,
+    Kind.HUMANOID,
+    Kind.BALANCER,
+    Kind.SNAKE,
+    Kind.BOAT,
+    Kind.ROV,
+    Kind.AIRCRAFT,
+)
 WALKERS = (
     quadruped.QuadrupedGait,
     DiffDrive,
     humanoid.HumanoidController,
     WheelBalancer,
     SnakeGait,
+    marine.BoatPilot,
+    marine.RovPilot,
     flight.FlightController,
 )
 # They fall over without a controller; an aircraft also keeps its motors idle on the ground and hovers in the air.
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER, Kind.AIRCRAFT)
-TRIPS = (navigation.Navigator, airways.FlightTrip)  # a trip to a destination over the ground or through the air
+# A trip to a destination over the ground, under water or through the air.
+TRIPS = (navigation.Navigator, marine.DiveTrip, airways.FlightTrip)
 # Legged walkers stand on their servos alone, but dragged in the viewer before their first move they rolled onto
 # their backs (dog, Go2 and a dog built from parts: 180 degrees; scripts/push_bench.py --states fresh). Their gait
 # steps along with a push (quadruped.PUSH_DRIFT) and stands exactly as the servos do, so in an open world they
@@ -127,6 +152,8 @@ def _how_to_move(kind: Kind) -> str:
 DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
+FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
 
 @dataclass(frozen=True)
@@ -569,13 +596,17 @@ class BehaviorManager:
         return out
 
     def _can_learn_walk(self, robot: str) -> bool:
+        return self._cannot_learn_walk(robot) is None
+
+    def _cannot_learn_walk(self, robot: str) -> str | None:
+        """Why `robot` cannot learn a walk of its own in RL II, None if it can."""
         from robotforge.control.cpg import Body, CPGError
 
         try:
             Body.find(self.session.model, robot)
-        except CPGError:
-            return False
-        return True
+        except CPGError as exc:
+            return str(exc)
+        return None
 
     def kept_walk(self, robot: str) -> SavedWalk | None:
         """The walk `robot` learned in the RL II lesson and kept in this world's folder, if any."""
@@ -596,16 +627,28 @@ class BehaviorManager:
     def _rhythm_walker(self, robot: str, existing: Any, create: bool) -> RhythmWalker:
         walk = self.kept_walk(robot)
         if walk is None:
-            raise BehaviorError(f"{robot} has not learned a walk of its own; {LEARN_A_WALK}")
+            why = self._cannot_learn_walk(robot)
+            how = LEARN_A_WALK if why is None else f"and it cannot learn one in the RL II lesson: {why}"
+            raise BehaviorError(f"{robot} has not learned a walk of its own; {how}")
         if isinstance(existing, RhythmWalker) and existing.walk == walk:
             return existing
         try:
-            ctrl = RhythmWalker(self.session.model, robot, walk, self.home_qpos())
+            ctrl = RhythmWalker(self.session.model, robot, walk, self._walk_home(robot, walk))
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
+
+    def _walk_home(self, robot: str, walk: SavedWalk) -> np.ndarray:
+        """The pose a kept walk swings around when its file does not say (one kept before files said). An MJCF
+        robot's home was then the file's zero pose, its keyframe dropped as the world was built: played around the
+        crouched keyframe instead, a critter's walk went 0.88 m in 4 s instead of 1.25."""
+        world = self._world()
+        entry = next((r for r in world.robots if r.name == robot), None) if world else None
+        if walk.home is None and entry is not None and entry.mjcf_file:
+            return self.session.model.qpos0.copy()
+        return self.home_qpos()
 
     def _mobile_controller(self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None):
         """The controller that walks or drives a robot: the one it has, or a new one (see MOBILE). `world` is the
@@ -635,6 +678,8 @@ class BehaviorManager:
                 ctrl = WheelBalancer(m, robot, self.home_qpos())
             elif kind == Kind.SNAKE:
                 ctrl = SnakeGait(m, robot, self.home_qpos())
+            elif kind in (Kind.BOAT, Kind.ROV):  # thrusters; the pilot measures its own drag in the water now
+                ctrl = marine.pilot_for(kind.value, m, robot, self.session.water, self.session.data)
             elif kind == Kind.AIRCRAFT:
                 ctrl = flight.FlightController(m, robot, self.home_qpos())
             else:
@@ -854,26 +899,35 @@ class BehaviorManager:
                 f"{robot} walks only straight ahead (its learned walk has no turns yet), so it cannot follow a path; "
                 "teach it turns in the RL II lesson, or drive it with move and turn"
             )
+        if isinstance(ctrl, marine.RovPilot):  # under water it goes straight to a point in 3D
+            return self._dive(robot, to, ctrl, speed, seconds, model, data)
         destination = self._destination(robot, to, model, data)
         if face is not None and destination.name is None:
             destination = dataclasses.replace(destination, face=(float(face[0]), float(face[1])))
-        try:
-            body = nav_map.measure_body(model, data, robot, kind, ctrl)
-        except ValueError as exc:
-            raise BehaviorError(str(exc)) from exc
-        load = -1
-        if carrying is not None:
-            load = self._body(carrying)
-            body = nav_map.with_load(model, data, robot, body, load)
-        arm = self._carried_arm(robot, data)
-        planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version), carried=load)
+        if isinstance(ctrl, marine.BoatPilot):  # on the water: a map of where it floats clear of the shore
+            try:
+                planner = water_nav.planner(model, data, robot, ctrl, destination, self._layers(version))
+            except ValueError as exc:
+                raise BehaviorError(str(exc)) from exc
+        else:
+            try:
+                body = nav_map.measure_body(model, data, robot, kind, ctrl)
+            except ValueError as exc:
+                raise BehaviorError(str(exc)) from exc
+            load = -1
+            if carrying is not None:
+                load = self._body(carrying)
+                body = nav_map.with_load(model, data, robot, body, load)
+            arm = self._carried_arm(robot, data)
+            planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version), carried=load)
         try:
             plan = planner.plan(data)
         except navigation.NoWay as exc:
             exc.destination = destination.describe()
             raise
         top = float(ctrl.max_speed)
-        cruise = navigation.default_cruise(top) if speed is None else min(abs(speed), top)
+        own = getattr(ctrl, "cruise", None)  # a boat's own pace: it carries way and slows for the corners
+        cruise = (own or navigation.default_cruise(top)) if speed is None else min(abs(speed), top)
         key = TRIP + robot
 
         def finished(trip: navigation.Navigator) -> None:  # runs inside a sim step, with the session lock held
@@ -892,6 +946,7 @@ class BehaviorManager:
             turn_rate=navigation.turn_rate_for(kind.value, ctrl),
             turns_in_place=not isinstance(ctrl, SnakeGait),
             backs_up=not isinstance(ctrl, (SnakeGait, RhythmWalker)) and getattr(ctrl, "max_reverse", 1.0) > 0,
+            turns_walking=not isinstance(ctrl, RhythmWalker),
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
@@ -912,6 +967,57 @@ class BehaviorManager:
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip
         return trip
+
+    def _dive(self, robot: str, to, pilot: marine.RovPilot, speed, seconds, model, data) -> marine.DiveTrip:
+        """move(to=...) for an ROV: straight to a point under water, [x, y, z] ([x, y] keeps the depth it holds), or
+        next to an object or another robot at its height (marine.dive_target)."""
+        named = None if isinstance(to, (list, tuple)) or NUMBER_LIST.fullmatch(str(to)) else to
+        destination = self._destination(robot, to, model, data) if named is not None else None
+        try:
+            target, note = marine.dive_target(pilot, to, destination, model, data)
+            via, way = marine.dive_route(pilot, model, data, target) if pilot.water is not None else ([], None)
+        except navigation.NoWay:
+            raise  # no water to dive in there: an answer (move says why), not a mistake in the call
+        except ValueError as exc:
+            raise BehaviorError(str(exc)) from exc
+        key = TRIP + robot
+
+        def finished(trip: marine.DiveTrip) -> None:  # runs inside a sim step, with the session lock held
+            if self.session.controllers.get(key) is trip:
+                self.session.set_controller(key, None)
+                self._last_trips[robot] = trip.result()
+            if self._live_trips.get(robot) is trip:
+                del self._live_trips[robot]
+
+        with self.session.lock:
+            if self.session.controllers.get(robot) is not pilot:
+                raise BehaviorError(f"{robot} was changed while its dive was planned; send it again")
+            if speed is not None:
+                pilot.cruise = min(abs(float(speed)), pilot.max_speed)
+            now = float(self.session.data.time)
+            trip = marine.DiveTrip(
+                robot,
+                pilot,
+                target,
+                self.session.data.subtree_com[pilot.root].copy(),
+                start_time=now,
+                deadline=now + seconds if seconds is not None else None,
+                still_mine=lambda: self.session.controllers.get(robot) is pilot,
+                on_finish=finished,
+                name=destination.name if destination is not None else None,
+                note="; ".join(n for n in (note, way) if n) or None,
+                via=via,
+            )
+            self.session.set_controller(key, trip)
+            self._live_trips[robot] = trip
+        return trip
+
+    def heave(self, robot: str, rate: float) -> None:
+        """Up (+) or down (-) in m/s for an ROV driven from the keyboard; it holds the depth it reaches."""
+        with self.session.lock:
+            pilot = self.session.controllers.get(self.resolve(robot))
+            if isinstance(pilot, marine.RovPilot):
+                pilot.command(pilot.speed, pilot.turn, heave=rate)
 
     def _fly(self, robot: str, to: str | list[Any], speed: float | None, seconds: float | None) -> airways.FlightTrip:
         """navigate for an aircraft: through the air, straight to the point or through the points, up over what is
@@ -953,7 +1059,7 @@ class BehaviorManager:
             self._live_trips[robot] = trip
         return trip
 
-    def trip(self, robot: str) -> navigation.Navigator | airways.FlightTrip | None:
+    def trip(self, robot: str) -> navigation.Navigator | marine.DiveTrip | airways.FlightTrip | None:
         """The robot's trip to a destination, while it is on one."""
         found = self.session.controllers.get(TRIP + robot)
         return found if isinstance(found, TRIPS) else None
@@ -966,7 +1072,7 @@ class BehaviorManager:
             self.session.set_controller(TRIP + robot, None)
             trip.interrupt("it was flown another way (keys, move or stop) on the way")
             self._last_trips[robot] = trip.result()
-        elif isinstance(trip, navigation.Navigator):
+        elif isinstance(trip, (navigation.Navigator, marine.DiveTrip)):
             self.session.set_controller(TRIP + robot, None)
             if not trip.done:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
@@ -1280,7 +1386,10 @@ class BehaviorManager:
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
-            goes = go and self._goes(arm.robot)
+            # A suction cup or a magnet picks from where it stands: an errand's grasp and carry are for fingers.
+            goes = go and self._goes(arm.robot) and arm.tool is None
+            if arm.tool == "magnet":
+                self._check_steel(arm.robot, obj)
             try:
                 place, place_top, region = self._place_target(target)
             except BehaviorError:
@@ -1294,9 +1403,14 @@ class BehaviorManager:
                     # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
                     # goes with it wherever it drives, and the refusal names it.
                     if not goes or exc.over is not None:
-                        raise BehaviorError(
-                            self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
-                        ) from exc
+                        text = self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
+                        if "object" in exc.bad and arm.tool is None and 2 * pick["half_height"] < FLAT:
+                            text += (
+                                f". {obj} is only {2000 * pick['half_height']:.0f} mm thick: fingers cannot close "
+                                "round something that flat, a suction cup can (update_robot with "
+                                "end_effector='suction')"
+                            )
+                        raise BehaviorError(text) from exc
                 except ValueError as exc:
                     raise BehaviorError(str(exc)) from exc
                 else:
@@ -1516,8 +1630,30 @@ class BehaviorManager:
             return None
         return next((o for o in world.objects if o.name == name), None)
 
+    def _check_steel(self, robot: str, obj: str) -> None:
+        """An electromagnet holds steel only: say so before the arm goes for something it cannot hold (it went all
+        the way there and back for a plastic plate, and came back with nothing)."""
+        m = self.session.model
+        body = self._body(obj)
+        if end_effectors.magnetic(m, [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) == body]):
+            return
+        entry = self._object_entry(obj)
+        made = f"is {entry.material or 'plastic'}" if entry is not None else "is not steel"
+        raise BehaviorError(
+            f"{robot}'s electromagnet holds steel only, and {obj} {made}: make it steel (update_object with "
+            f"material='steel'), or change the tool (update_robot with end_effector='suction')"
+        )
+
     def _object_geometry(self, name: str) -> dict[str, Any]:
         entry = self._object_entry(name)
+        if entry is not None and entry.shape in mechanisms.MECHANISMS:
+            actions = " or ".join(mechanisms.MECHANISMS[entry.shape].actions) or "set its speed"
+            raise BehaviorError(f"{name} is a {entry.shape}, built in place: operate can {actions} it")
+        if entry is not None and entry.shape in mechanisms.SOFT:
+            raise BehaviorError(
+                f"{name} is a {entry.shape}, soft: pick_and_place carries solid things; move_arm and gripper can take "
+                "hold of it by hand"
+            )
         body = self._body(name)
         if entry is not None and entry.fixed:
             raise BehaviorError(f"{name} is fixed in place and cannot be picked up")
@@ -1554,6 +1690,8 @@ class BehaviorManager:
             raise BehaviorError(wording.unknown("object", target, names) + " (or give a position [x, y])")
         target = found
         m, d = self.session.model, self.session.data
+        if entry.shape in mechanisms.CONTAINERS:
+            return self._into(target)
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
         if b >= 0:
             base = d.xpos[b].copy()
@@ -1572,6 +1710,32 @@ class BehaviorManager:
         region = {"center": [base[0], base[1], top], "half_xy": [length / 2, width / 2], "min_z": top - 0.01}
         return np.array([base[0], base[1], top]), top, region
 
+    def _into(self, name: str) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """Place point, rim and success region for putting something in drawer `name`, as far open as it is now:
+        only the part pulled out of the chest can take it."""
+        m, d = self.session.model, self.session.data
+        site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{name}/inside")
+        joint = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, f"{name}/drawer")
+        if site < 0 or joint < 0:
+            raise BehaviorError(f"{name} has nothing to put things in")
+        opened = float(d.qpos[m.jnt_qposadr[joint]])
+        if opened < OPEN_ENOUGH:
+            raise BehaviorError(
+                f"{name} is closed ({opened:.2f} m open): open it first with operate on {name}, then put things in it"
+            )
+        # In the drawer's own frame its front panel is at y = 0 and the chest's front at y = opened: things go on
+        # the floor between the two, the part pulled out, coming down over the drawer's front, its highest edge.
+        # Clearing the chest's top instead, the kitchen's arm could not carry the plate that high.
+        drawer = int(m.site_bodyid[site])
+        rot = d.xmat[drawer].reshape(3, 3)
+        center = d.xpos[drawer] + rot @ np.array([0.0, opened / 2, float(m.site_pos[site][2])])
+        half_out = max(opened - mechanisms.PANEL, 0.0) / 2
+        across = np.abs(rot[:2, :2]) @ np.array([float(m.site_size[site][0]), half_out])
+        front = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"{name}/drawer_front")
+        top = float(d.geom_xpos[front][2] + m.geom_size[front][2]) if front >= 0 else float(center[2])
+        region = {"center": center.tolist(), "half_xy": across.tolist(), "min_z": float(center[2]) - 0.01}
+        return center, top, region
+
     # ---- status --------------------------------------------------------------------------
 
     def status(self) -> list[dict[str, Any]]:
@@ -1579,7 +1743,8 @@ class BehaviorManager:
             {"behavior": "navigate", "navigating": robot, "state": "done", "last_trip": result}
             for robot, result in self._last_trips.items()
         ]
-        return [c.status() for c in self.session.controllers.values()] + done
+        shown = [c for c in self.session.controllers.values() if not getattr(c, "hidden", False)]
+        return [c.status() for c in shown] + done
 
 
 def _told_kind(entry: Any) -> str | None:

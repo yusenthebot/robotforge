@@ -9,6 +9,7 @@ own x axis and `depth` along y, with shelves and benches open (or facing) toward
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import mujoco
@@ -93,9 +94,95 @@ SHAPES: dict[str, ShapeInfo] = {
         True,
         summary="a flat mark on the ground (goal, lane, path); nothing collides with it",
     ),
+    "buoy": ShapeInfo(
+        "[diameter, height]",
+        (2,),
+        (0.45, 1.0),
+        "red",
+        False,
+        summary="a floating buoy, moored to the bottom where it is put (in water it floats upright and bobs)",
+    ),
+    "dock": ShapeInfo(
+        "[length, width, deck height]",
+        (3,),
+        (4.0, 1.2, 1.2),
+        tuple(WOOD),
+        True,
+        summary="a wooden dock: a deck on posts (give a height above the water, the posts reach the bottom)",
+    ),
+    # Mechanisms and soft things (mechanisms.py): a fixed carcass with one moving part, which operate works.
+    "drawer": ShapeInfo(
+        "[length, depth, height]",
+        (3,),
+        (0.3, 0.3, 0.14),
+        (0.62, 0.48, 0.34, 1),
+        True,
+        summary="a chest with a drawer that pulls out toward -y (operate opens it; pick_and_place puts things in it)",
+    ),
+    "cabinet": ShapeInfo(
+        "[length, depth, height]",
+        (3,),
+        (0.3, 0.24, 0.22),
+        (0.86, 0.85, 0.82, 1),
+        True,
+        summary="a cabinet with a shelf and a door hinged on its left that opens toward -y (operate)",
+    ),
+    "button": ShapeInfo(
+        "[diameter, height]", (2,), (0.04, 0.05), "red", True, summary="a push button that springs back up (operate)"
+    ),
+    "switch": ShapeInfo(
+        "[length, width, height]", (3,), (0.06, 0.04, 0.03), "red", True, summary="a toggle switch, off at the start"
+    ),
+    "lever": ShapeInfo("[length]", (1,), (0.15,), "red", True, summary="a lever on a box that tips toward -y or +y"),
+    "valve": ShapeInfo(
+        "[wheel diameter, height]",
+        (2,),
+        (0.16, 0.22),
+        "red",
+        True,
+        summary="a pipe valve with a handwheel on top, closed at the start (operate opens it: two turns)",
+    ),
+    "conveyor": ShapeInfo(
+        "[length, width, height]",
+        (3,),
+        (1.2, 0.3, 0.75),
+        (0.36, 0.45, 0.56, 1),
+        True,
+        summary="a conveyor belt running along +x at `speed` m/s (default 0.1); things on it ride along",
+    ),
+    "rope": ShapeInfo(
+        "[length, diameter]",
+        (2,),
+        (0.6, 0.012),
+        (0.85, 0.66, 0.32, 1),
+        True,
+        summary="a rope: fixed, it hangs from pos (and swings); fixed=false, it lies loose on the ground",
+    ),
+    "cloth": ShapeInfo(
+        "[length, width]",
+        (2,),
+        (0.3, 0.3),
+        (0.3, 0.6, 0.65, 1),
+        False,
+        summary="a cloth that drapes over what is under it; fixed=true pins its +y edge like a curtain",
+    ),
 }
-PROPS = ("wall", "pillar", "shelf", "door_frame", "counter", "pallet", "tree", "bench", "rock", "marker")
+PROPS = (
+    "wall",
+    "pillar",
+    "shelf",
+    "door_frame",
+    "counter",
+    "pallet",
+    "tree",
+    "bench",
+    "rock",
+    "marker",
+    "buoy",
+    "dock",
+)
 DEFAULT_MASS = {"pallet": 20.0}
+WATER = 1000.0  # kg/m^3
 
 
 @dataclass
@@ -106,12 +193,17 @@ class Part:
     rgba: list[float]
     collide: bool = True
     quat: list[float] = field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
+    weight: float | None = None  # share of the prop's mass (a buoy's ballast); None: by volume among the rest
 
 
 def footprint(shape: str, size: list[float]) -> tuple[float, float]:
     """Half extents (x, y) of a shape's footprint in its own frame."""
     if shape == "tree":  # the trunk stands on the ground, the crown can hang over a slope
         return size[0] * 0.06, size[0] * 0.06
+    if shape in ("button", "valve"):
+        return size[0] / 2 + 0.02, size[0] / 2 + 0.02
+    if shape in ("lever", "rope"):
+        return 0.04, 0.04
     if shape in ("sphere", "pillar", "rock") or (shape == "marker" and len(size) == 1):
         return size[0] / 2, size[0] / 2
     if shape == "cylinder":
@@ -147,13 +239,17 @@ def build(
     movable = not fixed and shape != "marker"
     if movable:
         body.add_freejoint(name=name)
-    total = mass if mass is not None else DEFAULT_MASS.get(shape, 5.0)
-    volumes = [_volume(p) for p in parts]
+    total = mass if mass is not None else _default_mass(shape, size)
+    volumes = [_volume(p) if p.weight is None else 0.0 for p in parts]
+    given = sum(p.weight for p in parts if p.weight is not None)
     geoms = []
     for i, part in enumerate(parts):
         kwargs = {}
-        if movable:
+        if movable and not given:  # the old expression to the last bit, so old worlds replay exactly
             kwargs["mass"] = total * volumes[i] / sum(volumes)
+        elif movable:
+            share = part.weight if part.weight is not None else (1 - given) * volumes[i] / max(sum(volumes), 1e-12)
+            kwargs["mass"] = total * share
         if not part.collide:
             kwargs.update(contype=0, conaffinity=0)
         geom = body.add_geom(
@@ -169,6 +265,25 @@ def build(
         geoms.append(geom)
     # Meshes over the primitives (visual only); the primitives stay for contacts and mass.
     looks.dress(spec, body, shape, size, rgba, name, geoms)
+
+
+def _default_mass(shape: str, size: list[float]) -> float:
+    if shape == "buoy":  # rides with about half its float under water
+        d, h = size
+        return 0.55 * WATER * math.pi * (d / 2) ** 2 * BUOY_FLOAT * h
+    return DEFAULT_MASS.get(shape, 5.0)
+
+
+def moor(spec: mujoco.MjSpec, name: str, anchor: list[float], rope: float) -> None:
+    """Tie a buoy to the bottom: a rope from `anchor` (a point on the bottom) to the buoy's keel, `rope` m long,
+    slack until it is pulled taut, so the buoy bobs and leans but stays where it was put."""
+    spec.worldbody.add_site(name=f"{name}/anchor", pos=anchor, size=[0.03, 0, 0], group=3)
+    body = next(b for b in spec.worldbody.bodies if b.name == name)
+    body.add_site(name=f"{name}/keel", pos=[0, 0, 0], size=[0.02, 0, 0], group=3)
+    tendon = spec.add_tendon(name=f"{name}/rope", limited=True, range=[0.0, rope], rgba=[0.15, 0.15, 0.15, 1])
+    tendon.width = 0.006
+    tendon.wrap_site(f"{name}/anchor")
+    tendon.wrap_site(f"{name}/keel")
 
 
 def _volume(p: Part) -> float:
@@ -307,6 +422,51 @@ def _marker(size: list[float], rgba: list[float]) -> list[Part]:
     return [_box([size[0] / 2, size[1] / 2, MARK / 2], [0, 0, MARK / 2], rgba, collide=False)]
 
 
+BUOY_FLOAT = 0.4  # of a buoy's height: its float; ballast under it, a mast and a top mark over it
+
+
+def _buoy(size: list[float], rgba: list[float]) -> list[Part]:
+    """Ballast at the bottom (heavy, so it floats upright), a float, a mast and a ball as its top mark."""
+    d, h = size
+    r = d / 2
+    ballast = 0.1 * h
+    top = ballast + BUOY_FLOAT * h
+    mast = 0.35 * h
+    white = [0.94, 0.94, 0.92, 1.0]
+    return [
+        Part(G.mjGEOM_CYLINDER, [0.36 * r, ballast / 2, 0], [0, 0, ballast / 2], DARK, weight=0.45),
+        Part(G.mjGEOM_CYLINDER, [r, BUOY_FLOAT * h / 2, 0], [0, 0, ballast + BUOY_FLOAT * h / 2], rgba),
+        Part(G.mjGEOM_CYLINDER, [0.07 * r, mast / 2, 0], [0, 0, top + mast / 2], white, weight=0.04),
+        Part(G.mjGEOM_SPHERE, [0.3 * r, 0, 0], [0, 0, top + mast + 0.25 * r], rgba, weight=0.02),
+    ]
+
+
+DOCK_DECK = 0.07  # m, deck thickness
+DOCK_POST = 0.07  # m, post radius
+DOCK_DEPTH = 3.0  # m the posts reach below the dock's base: down to the bottom wherever it is put
+
+
+def _dock(size: list[float], rgba: list[float]) -> list[Part]:
+    """A deck on two rows of posts. Its base is the ground (or the bottom) under it; the posts go on down."""
+    length, width, height = size
+    n = max(2, round(length / 1.3) + 1)
+    parts = [_box([length / 2, width / 2, DOCK_DECK / 2], [0, 0, height - DOCK_DECK / 2], rgba)]
+    post_h = height - DOCK_DECK + DOCK_DEPTH
+    for i in range(n):
+        x = -length / 2 + DOCK_POST + i * (length - 2 * DOCK_POST) / (n - 1)
+        for side in (1, -1):
+            y = side * (width / 2 - DOCK_POST)
+            parts.append(
+                Part(
+                    G.mjGEOM_CYLINDER,
+                    [DOCK_POST, post_h / 2, 0],
+                    [x, y, height - DOCK_DECK - post_h / 2],
+                    _shade(rgba, 0.7),
+                )
+            )
+    return parts
+
+
 def _shade(rgba: list[float], k: float) -> list[float]:
     return [min(1.0, c * k) for c in rgba[:3]] + [rgba[3]]
 
@@ -322,4 +482,6 @@ _PARTS = {
     "bench": _bench,
     "rock": _rock,
     "marker": _marker,
+    "buoy": _buoy,
+    "dock": _dock,
 }

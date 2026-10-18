@@ -276,6 +276,109 @@ def _go(robot: str, to: Any) -> Callable[[Any], None]:
     return act
 
 
+def _after_trip(robot: str, hold: float, longest: float = 40.0) -> Callable[[Any], None]:
+    """An action that waits (the timeline with it) until `robot` is at the end of its trip, then `hold` s more: the
+    viewer's clock runs behind the wall clock on a busy machine, and a cut timed in seconds came before the boat
+    was at the dock."""
+
+    def act(pg: Any) -> None:
+        end = time.monotonic() + longest
+        while pg.behaviors.trip(robot) is not None and time.monotonic() < end:
+            time.sleep(0.1)
+        time.sleep(hold)
+
+    return act
+
+
+def _dive_then_go(robot: str, z: float, to: list[float]) -> Callable[[Any], None]:
+    """An action: the ROV dives straight down where it floats to `z`, then goes on to `to` (the camera crosses the
+    surface quickly instead of lingering at it while the ROV glides down a long slope)."""
+
+    def act(pg: Any) -> None:
+        x, y = pg.behaviors.pose(robot)["position"][:2]
+        pg.behaviors.navigate(robot, [x, y, z])
+        _after_trip(robot, 0.3, 12.0)(pg)
+        pg.behaviors.navigate(robot, to)
+
+    return act
+
+
+def _trip_over(robot: str, hold: float) -> Callable[[Any], bool]:
+    """For Demo.until: `robot` ended its trip `hold` s ago."""
+    since: list[float] = []
+
+    def over(pg: Any) -> bool:
+        if pg.behaviors.trip(robot) is not None:
+            since.clear()
+            return False
+        if not since:
+            since.append(time.monotonic())
+        return time.monotonic() - since[0] >= hold
+
+    return over
+
+
+def _water_lake(pg: Any) -> None:
+    """The lake with its boat at the east end, and an ROV floating near it."""
+    S._in_scene("lake", {"boat": {"template": "boat"}, "rov": {"template": "rov"}})(pg)
+
+
+def _dive_camera(
+    robot: str,
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    seconds: float,
+    orbit_deg: float,
+    orbit_seconds: float,
+) -> str:
+    """Page script: follow `robot` from `start` metres away, easing to `end` over `seconds` (above the water down
+    through the surface with a diving ROV), then circle it by `orbit_deg` over `orbit_seconds`."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge, t0 = performance.now();
+        rf.select(null);
+        const id = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic).id;
+        const a = {json.dumps(list(start))}, b = {json.dumps(list(end))};
+        const smooth = (s) => s * s * (3 - 2 * s);
+        (async () => {{
+            let at = rf.bodyPosition(id);
+            while (window.__cam === me) {{
+                const t = (performance.now() - t0) / 1000;
+                const p = rf.bodyPosition(id);
+                at = at.map((v, i) => v + 0.15 * (p[i] - v));
+                const s = smooth(Math.min(1, t / {seconds}));
+                let off = a.map((v, i) => v + s * (b[i] - v));
+                const turn = Math.max(0, Math.min(1, (t - {seconds}) / {orbit_seconds})) * {orbit_deg} * Math.PI / 180;
+                const c = Math.cos(turn), n = Math.sin(turn);
+                off = [off[0] * c - off[1] * n, off[0] * n + off[1] * c, off[2]];
+                rf.lookAt(at.map((v, i) => v + off[i]), p);  // the camera eases after it; the aim stays on it
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
+def _follow_level(robot: str, offset: tuple[float, float, float], ease: float = 0.05) -> str:
+    """Page script: keep the camera on `robot` from `offset` metres away, aimed at the robot's own height (a boat on
+    the water, an ROV under it: _follow aims lower, at the ground under a walker)."""
+    return f"""
+        window.__cam = Symbol();
+        const me = window.__cam, rf = window.__robotforge;
+        rf.select(null);
+        const id = rf.scene.bodies.find((b) => b.name.startsWith({json.dumps(robot + "/")}) && b.dynamic).id;
+        const off = {json.dumps(list(offset))};
+        (async () => {{
+            let at = rf.bodyPosition(id);
+            while (window.__cam === me) {{
+                const p = rf.bodyPosition(id);
+                at = at.map((v, i) => v + {ease} * (p[i] - v));
+                rf.lookAt(at.map((v, i) => v + off[i]), at);
+                await new Promise((r) => requestAnimationFrame(r));
+            }}
+        }})();
+    """
+
+
 DEMOS = [
     Demo(
         "gallery_tour",
@@ -350,6 +453,22 @@ DEMOS = [
         timeline=[(1.0, _move("centaur", 0.22)), (9.0, _move("centaur", 0.15, 0.6))],
         page=_follow("centaur", (1.2, -1.4, 0.75), ease=0.04),
     ),
+    Demo(  # across the lake, between the buoys, to the dock while the crates bob; then the ROV dives
+        "water_lake",
+        _water_lake,
+        45.0,
+        timeline=[
+            (0.3, _go("boat", "dock")),
+            (12.0, _after_trip("boat", 1.2)),  # then the cut, however long the crossing took
+            # From the side it goes, south-east: it heads south-west, and the buoys are north of its way.
+            (12.01, _dive_camera("rov", (1.2, -1.6, 0.9), (0.9, -0.9, -0.02), 2.5, -25.0, 7.0)),
+            (12.02, _dive_then_go("rov", 0.45, [3.0, -0.2, 0.4])),  # clear of the buoys on its way
+        ],
+        page=_follow_level("boat", (3.0, -3.0, 1.9), ease=0.12),
+        settle=1.0,
+        until=_trip_over("rov", 1.0),  # and the tail: 2.5 s holding at the goal
+        tail=1.5,
+    ),
     Demo(  # the lidar on its back and the depth camera on its nose ride along without a wobble or a gap
         "sensors_go2_walk",
         S._sensing_go2((-4.6, 0.0)),  # the open floor between the racks and the pallets
@@ -390,6 +509,16 @@ DEMOS = [
         28.0,
         timeline=[(0.5, S._press("train"))],
         page=S._lesson("learn_to_walk"),
+        settle=0.5,
+    ),
+    # The factory: the belt brings boxes to the stop, the camera says their colors, the suction cup sorts them (the
+    # sorter of scripts/factory_bench.py, in real time). Close on the arm, so the cup is seen taking hold.
+    Demo(
+        "factory_sorting",
+        lambda pg: pg.load_scene("factory", options={"boxes": 12}),
+        42.0,
+        timeline=[(0.2, S._sorting)],
+        page="window.__robotforge.select(null);" + _orbit((0.3, -0.26, 0.6), 0.78, 0.52, -66.0, 30.0, 42.0),
         settle=0.5,
     ),
 ]

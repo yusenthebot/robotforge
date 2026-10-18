@@ -104,7 +104,7 @@ add_sensor's own MuJoCo sensors are named `rf_...` and are left out of `observe`
 ## The viewer
 
 The viewer draws what the sensors sense.
-In the world: a lidar's hit points colored by distance (near red, far blue, over the middle of the distances it sees) with some of its rays fading out from the sensor, a camera's frustum on the robot, touch pads that light up green with their force, contact arrows from the feet and a force arrow at a force-torque sensor, a rangefinder's beam.
+In the world: a lidar's hit points colored by distance (near red, far blue, over the middle of the distances it sees) and rays fading out from the sensor to them (a 2D lidar's every ray, a 3D lidar's most level ray every 5 degrees round, one fan that reads at a glance), a camera's frustum on the robot, touch pads that light up green with their force, contact arrows from the feet and a force arrow at a force-torque sensor, a rangefinder's beam.
 Beside the view, for the selected robot: what one of its cameras sees and live plots of its IMUs (acceleration, turn rate, tilt), force-torque sensors (force, torque, payload, with what the wrist holds) and encoders (a leg, or a run of six joints, at a time).
 
 The picture is rendered in the browser with three.js from the camera's pose, so it works where the server has no OpenGL.
@@ -125,7 +125,7 @@ Each entry has the sensor's `name`, `robot`, `type`, whether it was `added`, its
 What sits on a robot follows its body in every frame drawn; a scan's points stay where they were measured.
 A message is cheap to build: ideal lidars are scanned for it within 6000 rays, the stalest first, so with several big lidars each is redrawn a few times a second, and while time stands still the last message is sent again without measuring.
 
-Measured in headless Chrome (`--use-angle=metal`, 1280 x 800 at 2x) with the Go2 in the warehouse carrying a 10 Hz 3D lidar (1200 points drawn, 150 rays), the depth camera's picture beside the view and four touch pads, on the development Mac while other jobs shared it:
+Measured in headless Chrome (`--use-angle=metal`, 1280 x 800 at 2x) with the Go2 in the warehouse carrying a 10 Hz 3D lidar (1200 points drawn, 150 rays then; 72 since 2026-10-19), the depth camera's picture beside the view and four touch pads, on the development Mac while other jobs shared it:
 
 | | frames a second | page main thread | render per frame (GPU work finished) |
 |---|---|---|---|

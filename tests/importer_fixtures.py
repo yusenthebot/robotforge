@@ -103,6 +103,33 @@ def critter_urdf(leg: float = 0.12) -> str:
     return robot(body, "critter")
 
 
+CRITTER_HOME = (0.4, -0.8)  # rad: hip and knee of every leg in the MJCF critter's home keyframe
+
+
+def critter_mjcf(leg: float = 0.12) -> str:
+    """The critter as someone might write it by hand in MJCF: angles in degrees (MJCF's default), a free joint, shins
+    and motors without names, a floor and a light of its own, and a crouched home keyframe lower than its body."""
+    hip, knee = CRITTER_HOME
+    legs = ""
+    for i, (x, y) in enumerate(((0.12, 0.1), (0.12, -0.1), (-0.12, 0.1), (-0.12, -0.1))):
+        legs += (
+            f'<body name="thigh{i}" pos="{x} {y} -0.025"><joint name="hip{i}" range="-60 60"/>'
+            f'<geom type="capsule" fromto="0 0 0 0 0 {-leg}" size="0.015" mass="0.15"/>'
+            f'<body pos="0 0 {-leg}"><joint name="knee{i}" range="-70 70"/>'
+            f'<geom type="capsule" fromto="0 0 0 0 0 {-leg}" size="0.0125" mass="0.1"/></body></body>'
+        )
+    motors = "".join(f'<position joint="hip{i}" ctrlrange="-1 1"/><position joint="knee{i}"/>' for i in range(4))
+    pose = " ".join(f"{hip} {knee}" for _ in range(4))
+    return (
+        '<mujoco model="critter"><default><joint axis="0 1 0" damping="0.5" armature="0.01"/>'
+        '<position kp="20" forcerange="-8 8" forcelimited="true"/></default>'
+        '<worldbody><light pos="0 0 3"/><geom name="their_floor" type="plane" size="5 5 0.1"/>'
+        f'<body name="trunk" pos="0 0 0.3"><freejoint/><geom type="box" size="0.15 0.1 0.025" mass="2"/>{legs}</body>'
+        f"</worldbody><actuator>{motors}</actuator>"
+        f'<keyframe><key name="home" qpos="0 0 0.25 1 0 0 0 {pose}" ctrl="{pose}"/></keyframe></mujoco>'
+    )
+
+
 def write(path: Path, text: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")

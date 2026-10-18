@@ -23,10 +23,25 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from robotforge import wording
-from robotforge.design import builder, components, importer, library, menagerie, mounting, props, templates, terrain
+from robotforge.design import (
+    builder,
+    components,
+    end_effectors,
+    importer,
+    library,
+    mechanisms,
+    menagerie,
+    mounting,
+    props,
+    templates,
+    terrain,
+)
+from robotforge.design import water as waters
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
+from robotforge.design.water import WaterEntry
 from robotforge.sensors.spec import SensorEntry
+from robotforge.sim import water as water_physics
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
@@ -36,6 +51,12 @@ ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, w
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+def _unset(value: object) -> bool:
+    """For fields added after worlds were first saved: left out of a world.yaml while unset, so a world that does not
+    use them saves exactly as it did."""
+    return value is None
 
 
 def _check_name(value: str) -> str:
@@ -108,12 +129,20 @@ class RobotEntry(_Strict):
     pos: list[float] = Field(default_factory=lambda: [0.0, 0.0])  # x, y (and optional z) in meters
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
     mounts: list[MountEntry] = Field(default_factory=list)  # robots it carries (see mounting.py)
+    # What its arm holds with, whatever the arm came with: "suction" (a suction cup), "magnet" (an electromagnet),
+    # or "gripper" (the arm's own fingers); None keeps it as built. See end_effectors.py.
+    end_effector: str | None = Field(None, exclude_if=_unset)
     sensors: list[SensorEntry] = Field(default_factory=list)  # added to any robot (add_sensor), see sensors/
 
     @field_validator("name")
     @classmethod
     def _name(cls, v: str) -> str:
         return _check_name(v)
+
+    @field_validator("end_effector")
+    @classmethod
+    def _end_effector(cls, v: str | None) -> str | None:
+        return end_effectors.check(v) if v is not None else None
 
     @field_validator("sensors")
     @classmethod
@@ -151,6 +180,11 @@ class RobotEntry(_Strict):
             raise ValueError(f"robot {self.name!r}: pos is [x, y] or [x, y, z]")
         return self
 
+    @property
+    def mjcf_file(self) -> bool:
+        """Whether it comes from an MJCF file of its own (URDF and mesh files go through the import doctor)."""
+        return self.file is not None and not importer.is_importable(self.file)
+
 
 class ObjectEntry(_Strict):
     name: str
@@ -159,8 +193,13 @@ class ObjectEntry(_Strict):
     pos: list[float] = Field(default_factory=lambda: [0.3, 0.0])  # x, y (and optional z); z defaults to resting
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
     color: str | list[float] = "red"
-    mass: float | None = Field(None, gt=0, description="kg; default from size and a plastic density")
+    mass: float | None = Field(None, gt=0, description="kg; default from size and the material's density")
     fixed: bool = False
+    # What a loose box, ball or can is made of: its default mass, and steel is what an electromagnet holds.
+    material: Literal["plastic", "wood", "steel"] | None = Field(None, exclude_if=_unset)
+    speed: float | None = Field(
+        None, ge=-0.5, le=0.5, description="m/s a conveyor's belt runs at (conveyors only)", exclude_if=_unset
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -182,9 +221,17 @@ class ObjectEntry(_Strict):
         info = props.SHAPES[self.shape]
         if len(self.size) not in info.size_lengths or any(s <= 0 for s in self.size):
             raise ValueError(f"object {self.name!r}: {self.shape} size is {info.size_hint} in meters")
+        try:
+            mechanisms.check_size(self.shape, self.size, info.size_hint)
+        except ValueError as exc:
+            raise ValueError(f"object {self.name!r}: {exc}") from exc
         if len(self.pos) not in (2, 3):
             raise ValueError(f"object {self.name!r}: pos is [x, y] or [x, y, z]")
         components.color(self.color)
+        if self.speed is not None and self.shape != "conveyor":
+            raise ValueError(f"object {self.name!r}: speed is a conveyor's belt speed; a {self.shape} has none")
+        if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
+            raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
         return self
 
 
@@ -192,6 +239,7 @@ class World(_Strict):
     name: str = "my_world"
     floor: Floor = Field(default_factory=Floor)
     terrain: list[TerrainPatch] = Field(default_factory=list)
+    water: WaterEntry | None = None  # a lake, a harbor, a pool: see design/water.py
     robots: list[RobotEntry] = Field(default_factory=list)
     objects: list[ObjectEntry] = Field(default_factory=list)
 
@@ -236,6 +284,8 @@ class World(_Strict):
 
     def to_yaml(self) -> str:
         data = self.model_dump(mode="json", exclude_defaults=False)
+        if data.get("water") is None:
+            data.pop("water", None)  # a world without water saves as it always did
         for robot in data["robots"]:  # most robots carry nothing and have no added sensors: saved as they always were
             for extra in ("mounts", "sensors"):
                 if not robot.get(extra):
@@ -351,10 +401,23 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
 
     for obj in world.objects:
         _object(spec, obj, ground)
+        if obj.shape in mechanisms.MECHANISMS:  # a switch starts off, a conveyor running (the home keyframe)
+            homes.append((obj.name, *mechanisms.home(obj.shape, obj.name, obj.speed)))
+    if world.water is not None:
+        water_physics.encode(spec, world.water.physics())
+        notes.append(waters.describe(world.water))
+        _moor_buoys(spec, world, ground)
+        notes += _docks_under_water(world, ground)
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
         model = _compile(spec)
+    if world.water is not None and _float_on_water(spec, model, world, homes, frames, ground):
+        model = _compile(spec)
+    if world.water is not None:
+        notes += waters.stranded(model, world.water, [r.name for r in world.robots], ground.height)
+    if world.water is not None:
+        water_physics.add_surface(spec, world.water.physics(), model)
     _add_home_key(spec, model, homes)
     return CompiledWorld(spec, _compile(spec), notes, doctor)
 
@@ -382,6 +445,64 @@ def _settle_on_ground(model: mujoco.MjModel, homes, frames, ground: terrain.Grou
     return moved
 
 
+def _moor_buoys(spec: mujoco.MjSpec, world: World, ground: terrain.Ground) -> None:
+    """A buoy over water is tied to the bottom under it (see props.moor), with a little slack in its rope."""
+    for obj in world.objects:
+        if obj.shape != "buoy" or obj.fixed:
+            continue
+        x, y = obj.pos[0], obj.pos[1]
+        bottom = ground.height(x, y)
+        depth = world.water.level - bottom
+        if depth > 0.2 and world.water.covers(x, y):
+            props.moor(spec, obj.name, [x, y, bottom + 0.02], max(depth - 0.2 * obj.size[1], 0.15))
+
+
+def _docks_under_water(world: World, ground: terrain.Ground) -> list[str]:
+    """A dock's third size is its deck's height above the ground or bottom under it: an agent that read it as the
+    deck's thickness put a deck under water, and only found out by looking. Say so at once, with a height that works."""
+    notes = []
+    for obj in world.objects:
+        if obj.shape != "dock" or not world.water.covers(obj.pos[0], obj.pos[1]):
+            continue
+        base = (
+            obj.pos[2]
+            if len(obj.pos) == 3
+            else ground.under(obj.pos[0], obj.pos[1], *props.footprint("dock", obj.size), obj.yaw)
+        )
+        deck = base + obj.size[2]
+        if deck < world.water.level + 0.05:
+            better = round(world.water.level - base + 0.35, 2)
+            notes.append(
+                f"{obj.name}: its deck is {world.water.level - deck:.2f} m under the water (deck height "
+                f"{obj.size[2]:g} m above the bottom, water {world.water.level - base:.2f} m deep there); give it size "
+                f"[{obj.size[0]:g}, {obj.size[1]:g}, {better:g}] for a deck 35 cm over the water"
+            )
+    return notes
+
+
+def _float_on_water(spec: mujoco.MjSpec, model: mujoco.MjModel, world: World, homes, frames, ground) -> bool:
+    """Robots and loose objects placed without a height over water start where they float (see design/water.py).
+    Returns True if anything moved."""
+
+    def lift(handle):
+        def place(dz: float) -> None:
+            handle.pos = [handle.pos[0], handle.pos[1], handle.pos[2] + dz]
+
+        return place
+
+    candidates = []
+    for robot, frame in frames:
+        root = waters.robot_root(model, robot)
+        if root is not None:
+            candidates.append((root, lift(frame)))
+    free = {o.name for o in world.objects if len(o.pos) == 2 and not o.fixed and o.shape != "marker"}
+    for body in spec.worldbody.bodies:  # not spec.body(): after an attach it can miss names
+        if body.name in free:
+            candidates.append((body.name, lift(body)))
+    qpos = _home_qpos(model, homes)
+    return bool(waters.float_up(spec, model, qpos, world.water, candidates, ground.height))
+
+
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
     try:
         return spec.compile()
@@ -390,9 +511,10 @@ def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:
 
 
 def _robot_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
-    """The robot as built from its source, with the robots it carries mounted on it."""
+    """The robot as built from its source, holding with the end effector it was given, with the robots it carries
+    mounted on it."""
     key = _placement_key(entry, base_dir) if entry.mounts else None
-    return mounting.attach(_source_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
+    return mounting.attach(_held_spec(entry, base_dir), entry.mounts, entry.name, entry.library, key)
 
 
 def _placement_key(entry: RobotEntry, base_dir: Path | None) -> str:
@@ -408,6 +530,23 @@ def _placement_key(entry: RobotEntry, base_dir: Path | None) -> str:
             stamp = [str(path.resolve()), stat.st_mtime_ns, stat.st_size]
     menagerie_from = [os.environ.get(v, "") for v in ("ROBOTFORGE_MENAGERIE", "ROBOTFORGE_CACHE")]
     return json.dumps([made_of, stamp, menagerie_from, menagerie.COMMIT], sort_keys=True)
+
+
+def _held_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
+    """The robot as its source builds it, holding with the end effector it was given: our arm template builds it
+    in place of its fingers, any other arm gets it in front of them (see end_effectors.fit)."""
+    tool = entry.end_effector
+    if tool is not None and entry.template is not None and templates.canonical(entry.template) == "arm":
+        native = entry.model_copy(update={"params": {**entry.params, "end_effector": tool}, "end_effector": None})
+        return _source_spec(native, base_dir)
+    built = _source_spec(entry, base_dir)
+    if tool in (None, end_effectors.FINGERS):
+        return built
+    try:
+        built.notes += end_effectors.fit(built.spec, tool, built.home_ctrl)
+    except ValueError as exc:
+        raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+    return built
 
 
 def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot:
@@ -452,12 +591,76 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
         raise ValueError(f"robot {entry.name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
     if path.suffix.lower() not in (".xml", ".mjcf"):
         raise ValueError(f"robot {entry.name!r}: {path.name}: expected {importer.formats_hint()}")
+    return _mjcf_robot(entry.name, path)
+
+
+def _mjcf_robot(name: str, path: Path) -> templates.BuiltRobot:
+    """An MJCF file, ready to stand in a world as a library robot does: parts it left unnamed get names, and its
+    home keyframe becomes its home pose (the world brings its own keyframe, so the file's is dropped)."""
     try:
         child = mujoco.MjSpec.from_file(str(path))
     except ValueError as exc:
-        raise ValueError(f"robot {entry.name!r}: MuJoCo could not read {path.name}: {exc}") from exc
+        raise ValueError(f"robot {name!r}: MuJoCo could not read {path.name}: {exc}") from exc
+    notes = [f"imported from {path.name}"]
+    motors = _name_unnamed(child)
+    if motors:
+        notes.append(f"named the {motors} motors the file left unnamed after their joints, so they can be driven")
+    key = _home_key(child)
+    key_qpos, key_ctrl = library.read_key(child, key)
     _strip_world_extras(child)
-    return templates.BuiltRobot(spec=child, notes=[f"imported from {path.name}"])
+    if child.worldbody.first_body() is None:
+        return templates.BuiltRobot(spec=child, notes=notes)
+    home_qpos, home_ctrl, spawn, floating = library.stand_at_home(child, key_qpos, key_ctrl)
+    if key is not None:
+        notes.append(f"starts in its {key!r} keyframe")
+    return templates.BuiltRobot(
+        spec=child,
+        home_qpos=home_qpos,
+        home_ctrl=home_ctrl,
+        # A floating robot stands on its lowest point; one fixed to the world stays where its file puts it.
+        spawn_height=spawn if floating else 0.0,
+        floating=floating,
+        notes=notes,
+    )
+
+
+def _home_key(spec: mujoco.MjSpec) -> str | None:
+    """The keyframe a file starts in: the one named home (Menagerie's convention), else its first (named home
+    here if the file left it unnamed, so it can be read)."""
+    keys = list(spec.keys)
+    if not keys:
+        return None
+    if any(k.name == "home" for k in keys):
+        return "home"
+    if not keys[0].name:
+        keys[0].name = "home"
+    return keys[0].name
+
+
+def _name_unnamed(spec: mujoco.MjSpec) -> int:
+    """Name the bodies, joints and actuators a file left unnamed; returns how many actuators. A world finds each
+    robot's parts by their names ("<robot>/..."), and attaching only prefixes names a file gave: a hand-written MJCF's
+    unnamed motors belonged to no robot, so nothing could drive them. A motor is named after the joint it moves. Free
+    joints stay as they are: nothing drives them, and a world finds a robot's base by its body."""
+
+    def unique(base: str, taken: set[str]) -> str:
+        name, k = base, 1
+        while name in taken:
+            k += 1
+            name = f"{base}_{k}"
+        taken.add(name)
+        return name
+
+    motors = 0
+    for elements, kind in ((spec.bodies, "body"), (spec.joints, "joint"), (spec.actuators, "actuator")):
+        taken = {e.name for e in elements if e.name}
+        for i, element in enumerate(elements):
+            if element.name or (kind == "joint" and element.type == mujoco.mjtJoint.mjJNT_FREE):
+                continue
+            on_joint = kind == "actuator" and element.trntype == mujoco.mjtTrn.mjTRN_JOINT and element.target
+            element.name = unique(element.target if on_joint else f"{kind}{i}", taken)
+            motors += kind == "actuator"
+    return motors
 
 
 def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:
@@ -524,6 +727,7 @@ def _plain(color: str | tuple[float, ...]) -> str | list[float]:
 
 
 PLASTIC_DENSITY = 600.0  # kg/m^3, light printed or molded parts
+DENSITY = {"plastic": PLASTIC_DENSITY, "wood": 550.0, "steel": 7850.0}  # kg/m^3, by ObjectEntry.material
 
 
 def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> None:
@@ -533,6 +737,12 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     # Without an explicit z, objects rest on the ground (floor or terrain) under their footprint.
     ground_z = ground.under(x, y, *props.footprint(obj.shape, obj.size), obj.yaw)
     quat = _yaw_quat(obj.yaw)
+    if obj.shape in mechanisms.SHAPES:
+        # A rope with no height given hangs from a hook its length and 20 cm above the ground.
+        hang = obj.size[0] + 0.2 if obj.shape == "rope" and obj.fixed else 0.0
+        base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z + hang]
+        mechanisms.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed)
+        return
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
         props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
@@ -556,7 +766,9 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         geom = {"type": G.mjGEOM_CYLINDER, "size": [r, h, 0]}
         rest_z, volume = h, math.pi * r * r * obj.size[1]
     z = obj.pos[2] if len(obj.pos) == 3 else ground_z + rest_z
-    mass = obj.mass if obj.mass is not None else volume * PLASTIC_DENSITY
+    mass = obj.mass if obj.mass is not None else volume * DENSITY[obj.material or "plastic"]
+    if obj.material == "steel":  # an electromagnet's core touches steel only (end_effectors.MAGNET_BIT)
+        geom["conaffinity"] = end_effectors.steel_affinity()
     if obj.fixed:
         g = spec.worldbody.add_geom(name=obj.name, pos=[x, y, z], quat=quat, rgba=rgba, **geom)
         looks.dress(spec, spec.worldbody, obj.shape, obj.size, rgba, obj.name, [g], pos=[x, y, z], quat=quat)
@@ -592,6 +804,8 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: f
                 )
             )
     looks.dress(spec, body, "table", obj.size, rgba, obj.name, geoms)
+    # a cloth hangs over its edges, not in under its top
+    mechanisms.cloth_skirt(body, length, width, height - top, height)
 
 
 def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:

@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from robotforge.design import library, props
+from robotforge.design import library, props, water_scenes
 
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
@@ -57,6 +57,8 @@ class Content:
     arm_slots: list[Slot] = field(default_factory=list)
     starter: list[dict[str, Any]] = field(default_factory=list)  # robots for an empty world
     tips: list[str] = field(default_factory=list)
+    water: dict[str, Any] | None = None  # world.yaml's water: a lake, a harbor, a pool (design/water.py)
+    water_slots: list[Slot] = field(default_factory=list)  # places on the water, for boats and underwater robots
 
     def add(self, name: str, shape: str, pos: list[float], **fields: Any) -> None:
         self.objects.append({"name": name, "shape": shape, "pos": [round(v, 4) for v in pos], **fields})
@@ -153,13 +155,17 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     island = [
         ("red_cup", "cylinder", [0.15, 0.25], [0.06, 0.08], "red"),
         ("blue_cup", "cylinder", [-0.13, 0.27], [0.06, 0.08], "blue"),
-        ("plate", "cylinder", [0.3, 0.1], [0.14, 0.015], "white"),
+        ("plate", "cylinder", [0.22, 0.17], [0.14, 0.015], "white"),
         ("apple", "sphere", [0.02, 0.33], [0.06], "green"),
         ("cereal", "box", [0.45, 0.45], [0.06, 0.14, 0.2], "yellow"),
     ]
     for name, shape, (x, y), size, color in island:
         c.add(name, shape, [x, y, resting_z(COUNTER_TOP, shape, size)], size=size, color=color)
     c.add("bowl", "bin", [-0.29, 0.1, COUNTER_TOP], size=[0.16, 0.16, 0.06], color="white")
+    # A chest of drawers beside the arm, its drawer pulling out toward the arm (operate opens it; the plate fits in it),
+    # and a bread cabinet on the counter by the fridge for a robot that comes to it.
+    c.add("drawer", "drawer", [0.5, -0.05, COUNTER_TOP], size=[0.3, 0.3, 0.14], yaw=-90, color=WHITE)
+    c.add("cabinet", "cabinet", [1.0, 1.75, COUNTER_TOP], size=[0.3, 0.24, 0.3], color=WHITE)
     c.add("dining_table", "table", [-1.9, -0.9], size=[1.2, 0.8, 0.75], color=WOOD)
     c.add("fruit", "sphere", [-1.9, -0.9, resting_z(0.75, "sphere", [0.08])], size=[0.08], color="orange")
     c.arm_slots = [Slot((0.0, -0.02), 90, COUNTER_TOP)]
@@ -168,9 +174,94 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.starter = [{"name": "arm", "template": "arm"}]
     c.tips = [
         "pick_and_place('arm', 'red_cup', 'bowl') clears the island",
+        "operate('arm', 'drawer', 'open') pulls the drawer out; with a suction cup (update_robot end_effector="
+        "'suction') the arm can put the plate in it: pick_and_place('arm', 'plate', 'drawer')",
         "the jars on the wall shelf and the sink are out of the arm's reach: try a taller arm",
         "a robot that walks or drives, added without pos, starts on the first free one of robot_places, clear of "
         "the furniture; move(robot, to='island') takes it to the island",
+    ]
+    return c
+
+
+# ---- factory -----------------------------------------------------------------------------------
+
+BELT_TOP = 0.6  # m, the conveyor's belt
+BELT_WIDTH = 0.12  # m: one box wide
+STAND_TOP = 0.55  # m, the arm's stand: boxes on the belt come up to 10 cm above its base
+BIN_STAND = 0.5  # m, the bins' stands
+FACTORY_BOX = 0.05  # m, the boxes' edge
+FACTORY_COLORS = ("red", "green", "blue")
+# Where the parts are: the conveyor runs along +x to a stop at its end, where the arm on its stand picks.
+CONVEYOR_X, CONVEYOR_LENGTH = -0.6, 2.0
+STOP_X = CONVEYOR_X + CONVEYOR_LENGTH / 2 - 0.03  # middle of the stop across the belt's end
+PICK_X = STOP_X - 0.015 - FACTORY_BOX / 2  # where a box against the stop has its middle
+ARM_AT = (PICK_X, -0.24)  # a box anywhere across the belt at the stop is 0.2 to 0.28 m from the arm
+
+
+def _factory(rng: random.Random, opts: dict[str, float]) -> Content:
+    c = Content(floor={"style": "concrete"})
+    c.add("back_wall", "wall", [0.0, 2.0], size=[6.0, 0.15, 2.4], color=[0.72, 0.74, 0.76, 1])
+    c.add("lane", "marker", [0.0, -1.0], size=[5.0, 0.08], color=YELLOW_LINE)
+    speed = float(opts["speed"])
+    # A belt one box wide, so boxes come in single file: on a 30 cm belt the ones that came up while the arm was
+    # busy waited side by side at the stop, and the arm could not reach the far one.
+    c.add(
+        "conveyor",
+        "conveyor",
+        [CONVEYOR_X, 0.0],
+        size=[CONVEYOR_LENGTH, BELT_WIDTH, BELT_TOP],
+        speed=speed,
+        color=STEEL,
+    )
+    # A stop across the end of the belt: the belt slides on under what waits against it, ready to be picked.
+    c.add(
+        "stop",
+        "box",
+        [STOP_X, 0.0, BELT_TOP + 0.03],
+        size=[0.03, BELT_WIDTH + 0.02, 0.06],
+        color=YELLOW_LINE,
+        fixed=True,
+    )
+    n = int(opts["boxes"])
+    gap = (CONVEYOR_LENGTH - 0.2) / max(n, 1)
+    for i in range(n):
+        x = PICK_X - 0.12 - i * gap
+        size = [FACTORY_BOX] * 3
+        c.add(
+            f"box_{i + 1}",
+            "box",
+            [x, rng.uniform(-0.01, 0.01), resting_z(BELT_TOP, "box", size)],
+            size=size,
+            color=rng.choice(FACTORY_COLORS),
+        )
+    c.add("stand", "pillar", [ARM_AT[0], ARM_AT[1] - 0.005], size=[0.15, STAND_TOP], color=[0.3, 0.32, 0.35, 1])
+    # One bin per color round the arm, each on a stand of its own, where the arm puts things down pointing down.
+    for color, (dx, dy) in zip(FACTORY_COLORS, ((0.26, 0.0), (0.0, -0.26), (-0.26, 0.0)), strict=True):
+        x, y = ARM_AT[0] + dx, ARM_AT[1] + dy
+        c.add(f"{color}_stand", "table", [x, y], size=[0.2, 0.2, BIN_STAND], color=[0.45, 0.47, 0.5, 1])
+        c.add(f"{color}_bin", "bin", [x, y, BIN_STAND], size=[0.17, 0.17, 0.08], color=color, fixed=True)
+    # A workbench with a drawer of parts.
+    c.add("workbench", "table", [1.4, 0.9], size=[1.0, 0.6, 0.75], color=LIGHT_WOOD)
+    c.add("parts_drawer", "drawer", [1.4, 0.95, 0.75], size=[0.4, 0.34, 0.14], color=STEEL)
+    for i, color in enumerate(("gray", "orange", "gray")):
+        size = [0.03, 0.03]
+        c.add(
+            f"part_{i + 1}",
+            "cylinder",
+            [1.3 + 0.1 * i, 0.98, resting_z(0.75 + 0.021, "cylinder", size)],
+            size=size,
+            color=color,
+        )
+    # Facing its red bin: at rest its hand is over the bin, not over the stop, where it hid the boxes from the camera.
+    c.arm_slots = [Slot(ARM_AT, 0, STAND_TOP)]
+    c.ground_slots = [Slot((1.4, -0.4), 90), Slot((-1.6, -0.8), 0)]
+    c.starter = [{"name": "arm", "template": "arm", "end_effector": "suction"}]
+    c.tips = [
+        "the conveyor brings colored boxes to the stop at its end; observe(find='all', view='top') says each box's "
+        "color and where it is",
+        f"pick_and_place('arm', 'box_1', 'red_bin') sorts one (the arm has a suction cup); stop the belt while "
+        f"picking with set_controls({{'conveyor/speed': 0}}) and start it again with {speed:g}",
+        "the workbench's drawer holds parts: operate opens it",
     ]
     return c
 
@@ -525,9 +616,20 @@ SCENES: dict[str, Scene] = {
         Scene(
             "kitchen",
             "Kitchen",
-            "Counter with a sink and burners, a fridge, a wall shelf with jars and an island "
-            "with cups, a plate, a bowl and an apple. Starter robot: an arm on the island.",
+            "Counter with a sink, burners and a bread cabinet, a fridge, a wall shelf with jars and an island "
+            "with cups, a plate, a bowl, an apple and a chest of drawers. Starter robot: an arm on the island.",
             _kitchen,
+        ),
+        Scene(
+            "factory",
+            "Factory",
+            "A conveyor bringing colored boxes to a stop, an arm with a suction cup on a stand to sort them into a "
+            "red, a green and a blue bin, and a workbench with a drawer of parts. Starter robot: the arm.",
+            _factory,
+            {
+                "boxes": Option(12, 1, 16, "boxes on the belt", integer=True),
+                "speed": Option(0.1, 0.0, 0.3, "belt speed, m/s"),
+            },
         ),
         Scene(
             "warehouse",
@@ -561,6 +663,29 @@ SCENES: dict[str, Scene] = {
             "A straight course along +x: ramp, stairs, rough ground, curbs, "
             "stepping stones and bumps. Starter robot: a robot dog.",
             _obstacle_course,
+        ),
+        Scene(
+            "harbor",
+            "Harbor",
+            "A harbor on the sea: a concrete quay with bollards and cargo, a wooden dock, a breakwater with a "
+            "lighthouse, channel buoys, floating crates and a steel block on the bottom. Starter robot: a boat.",
+            water_scenes.harbor,
+            {"depth": Option(1.4, 0.5, 4.0, "water depth, m")},
+        ),
+        Scene(
+            "lake",
+            "Lake",
+            "A lake in a grassy hollow with a beach all round, a dock on the west shore, a slalom of buoys, crates "
+            "adrift, trees and rocks. Starter robot: a boat.",
+            water_scenes.lake,
+        ),
+        Scene(
+            "pool",
+            "Pool",
+            "An indoor pool, 12 x 7 m, with a tiled deck, lane lines on the bottom, a steel block to dive to and a "
+            "floating crate and balls. Starter robot: an underwater ROV.",
+            water_scenes.pool,
+            {"depth": Option(1.6, 0.6, 4.0, "water depth, m")},
         ),
     ]
 }
@@ -603,10 +728,14 @@ def build(name: str, seed: int = 0, options: dict[str, float] | None = None) -> 
 # ---- putting a scene into a world -----------------------------------------------------------------
 
 
+WATER_TEMPLATES = ("boat", "rov")
+
+
 def robot_kind(entry: Any) -> str:
-    """'arm' for robots that stand on a surface (fixed base), else 'ground'."""
+    """'arm' for robots that stand on a surface (fixed base), 'water' for boats and underwater robots, else
+    'ground'."""
     if entry.template is not None:
-        return "arm" if entry.template == "arm" else "ground"
+        return "arm" if entry.template == "arm" else "water" if entry.template in WATER_TEMPLATES else "ground"
     if entry.library is not None:
         return "arm" if library.get(entry.library).kind == "arm" else "ground"
     return "ground"
@@ -619,11 +748,11 @@ def place(robots: list[Any], content: Content, spawn_height: Callable[[Any], flo
     arm on a table needs added to the table height.
     """
     notes = []
-    ground, arms = list(content.ground_slots), list(content.arm_slots)
+    ground, arms, water = list(content.ground_slots), list(content.arm_slots), list(content.water_slots)
     extra = 0
     for entry in robots:
         kind = robot_kind(entry)
-        slots = arms if kind == "arm" and arms else ground
+        slots = arms if kind == "arm" and arms else water if kind == "water" and water else ground
         if slots:
             slot = slots.pop(0)
         else:  # more robots than places: line them up next to the first ground place
