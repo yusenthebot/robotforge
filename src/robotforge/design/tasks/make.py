@@ -31,6 +31,7 @@ from robotforge.design.tasks.spec import DEFAULT_SECONDS, Randomize, Ref, Start,
 # what an object's name says it is, by concept (a generated world names things this way; a hand-made one may too)
 NAME_KEYS: dict[str, tuple[str, ...]] = {
     "table": ("table",),
+    "coffee_table": ("coffee_table",),
     "desk": ("desk",),
     "shelf": ("shelf", "rack"),
     "rack": ("rack",),
@@ -47,7 +48,8 @@ NAME_KEYS: dict[str, tuple[str, ...]] = {
 SHAPES: dict[str, tuple[str, ...]] = {
     "cube": ("box",), "box": ("box",), "ball": ("sphere",), "apple": ("sphere",), "cup": ("cylinder",),
     "can": ("cylinder",), "plate": ("cylinder",), "bin": ("bin",), "bowl": ("bin",), "table": ("table",),
-    "desk": ("table",), "shelf": ("shelf",), "rack": ("shelf",), "counter": ("counter",), "drawer": ("drawer",),
+    "desk": ("table",), "coffee_table": ("table",), "shelf": ("shelf",),
+    "rack": ("shelf",), "counter": ("counter",), "drawer": ("drawer",),
     "cabinet": ("cabinet",), "button": ("button",), "switch": ("switch",), "lever": ("lever",), "valve": ("valve",),
     "bench": ("bench",), "tree": ("tree",), "rock": ("rock",), "pallet": ("pallet",), "conveyor": ("conveyor",),
     "pillar": ("pillar",),
@@ -113,10 +115,8 @@ def plan(
         # of the things that fit, one not where it has to go already (a can generated on the shelf it is to go to)
         there = _already(objects, place) if place is not None else None
         thing = _find(objects, world, asked.thing, notes, there)
-        if thing is None:
+        if thing is None:  # (one already there is said by add_task, from the check itself)
             thing = _add_thing(world, objects, asked.thing, robots, rng, out)
-        elif there is not None and there(next(o for o in objects if o["name"] == thing)):
-            notes.append(f"{thing} is in or on {place} already: the task is done before it starts")
     chosen = _robot(kind, asked.robot, robot, robots, objects, thing, place, world, out, spawn_height)
     entry = _robot_entry(world, chosen)
     start = Start(
@@ -394,7 +394,7 @@ def _robot(kind, said, given, robots, objects, thing, place, world, out: Plan, s
         able = [r for r in able if r.kind in WANTED.get(said, ()) and (said != "picker" or r.arms)]
     if able:
         return able[0].name
-    if kind in MECHANISM_KINDS or (kind in ("put", "pick_up") and said == "arm"):
+    if kind in MECHANISM_KINDS or (kind == "pick_up" and said == "arm"):
         return _add_arm(objects, thing, place, world, out, spawn_height)
     taken = set(names) | {o["name"] for o in objects}
     starter = {"dog": {"template": "quadruped"}, "go2": {"library": "go2"}, "rover": {"template": "rover"},
@@ -434,7 +434,7 @@ def _can(kind: str, r: RobotInfo, objects, thing, place, world) -> bool:
         if r.kind != "arm":
             return False
         spots = [p for p in (_xy(objects, thing), _xy(objects, place)) if p is not None]
-        return all(math.dist(r.pos, p) <= ARM_REACH + 0.15 for p in spots)
+        return all(math.dist(r.pos, p) <= ARM_REACH - 0.1 for p in spots)
     # a mechanism: an arm within reach of it
     spot = _xy(objects, thing)
     return r.kind == "arm" and spot is not None and math.dist(r.pos, spot) <= ARM_REACH

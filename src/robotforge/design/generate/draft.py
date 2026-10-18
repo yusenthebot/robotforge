@@ -22,9 +22,12 @@ WALK_GAP = 0.65  # m of floor kept round furniture in the middle of a room, for 
 WALL_GAP = 0.03  # m between furniture and the wall it stands against
 ITEM_GAP = 0.025  # m between two things on a surface
 EDGE = 0.035  # m a thing keeps from a surface's edge
-ROBOT_RADIUS = 0.3  # m: the floor map is grown by this (a lift picker is 0.55 m across)
+ROBOT_RADIUS = 0.36  # m: the floor map is grown by this (a lift picker is 0.55 m across, and turns with its load)
+# m over a thing on a shelf's board to the board above: a hand comes down to it from there (a book stood 0.2 m
+# tall under a board 0.37 m above its own, and a lift picker's gripper could not get over it)
+SHELF_HEADROOM = 0.25
 FRONT = 0.7  # m of floor kept clear before furniture against a wall
-REACH = 0.75  # m from free floor to a thing on a surface: an arm on a robot standing there reaches it
+REACH = 0.7  # m from free floor to a thing on a surface: an arm on a robot standing there reaches it
 LOW, HIGH = 0.3, 0.9  # m: surfaces things are put on, for an arm to reach them (not the floor, not up a shelf)
 TRIES = 80
 
@@ -197,7 +200,8 @@ class Draft:
 
     def spot_on(self, surface: Surface, item: Item) -> tuple[float, float, float] | None:
         hx, hy = item.half()
-        if item.height() > surface.clearance - 0.02:
+        headroom = SHELF_HEADROOM if surface.kind == "shelf" else 0.02
+        if item.height() > surface.clearance - headroom:
             return None
         a = surface.area
         if hx > a.hx or hy > a.hy:

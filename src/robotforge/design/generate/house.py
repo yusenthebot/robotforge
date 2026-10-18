@@ -68,6 +68,7 @@ HOME_OF = {
     "bowl": "kitchen",
     "sofa": "living_room",
     "tv": "living_room",
+    "coffee_table": "living_room",
     "bed": "bedroom",
     "toy": "bedroom",
     "desk": "office",
@@ -332,7 +333,7 @@ def _on_top(
         if shape != "box":  # a mechanism: the top beside it kept clear, where an arm stands to work it
             # a cabinet's handle is on its right (its door hinges on the left and sweeps the front): there only
             towards = (1,) if shape == "cabinet" else (1, -1)
-            sides = [Footprint(*a.world(lx + side * (hx + 0.2), ly), 0.16, min(0.16, a.hy), a.yaw) for side in towards]
+            sides = [Footprint(*a.world(lx + side * (hx + 0.2), 0.0), 0.16, a.hy, a.yaw) for side in towards]
             keep = [z for z in sides if all(a.contains(cx, cy, -1e-3) for cx, cy in z.corners())
                     and not any(z.overlaps(o, 0.0) for o in surface.items)][:1]  # fmt: skip
             if not keep:
@@ -398,7 +399,8 @@ def _at_end(draft: Draft, room: str, top: Surface, shape: str, size: list[float]
 
 def _living_room(draft: Draft, room: str, rect: Footprint) -> None:
     _sofa(draft, room, rect)
-    _table(draft, room, rect, (1.0, 0.55, 0.42), name="coffee_table")
+    if not any(o["name"].startswith(f"{room}_coffee_table") for o in draft.content.objects):  # one said goes first
+        _table(draft, room, rect, (1.0, 0.55, 0.42), name="coffee_table")
     stand = _counter(draft, room, rect, 1.4, 0.45, 0.5, name="tv_stand")
     if stand is not None:
         name, fp = stand
@@ -555,7 +557,7 @@ FURNISH: dict[str, Callable[[Draft, str, Footprint], None]] = {
 
 
 # what stands on the floor and may be said with a room (a drawer is the room's own chest, on a counter in a kitchen)
-FURNITURE_SAID = ("table", "desk", "shelf", "counter", "sofa", "bed")
+FURNITURE_SAID = ("table", "coffee_table", "desk", "shelf", "counter", "sofa", "bed")
 
 
 def _asked_furniture(
@@ -579,6 +581,8 @@ def _asked_furniture(
             k += 1
             if concept in ("table", "desk"):
                 done = _table(draft, room, rect, (1.2, 0.65, 0.75), wall=draft.rng.random() < 0.5, name=concept)
+            elif concept == "coffee_table":
+                done = _table(draft, room, rect, (1.0, 0.55, 0.42), name="coffee_table")
             elif concept == "shelf":
                 done = _shelf(draft, room, rect)
             elif concept == "counter":

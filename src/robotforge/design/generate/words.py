@@ -83,7 +83,8 @@ ROOMS: Lexicon = {
 # What can be put in a world, by the name the generator builds it under.
 THINGS: Lexicon = {
     # furniture
-    "table": (("table", "dining table", "coffee table", "workbench"), ("桌子", "餐桌", "茶几", "工作台")),
+    "table": (("table", "dining table", "workbench"), ("桌子", "餐桌", "工作台")),
+    "coffee_table": (("coffee table", "side table", "low table"), ("茶几", "边几")),
     "desk": (("desk", "workstation"), ("书桌", "办公桌", "写字台")),
     "shelf": (("shelf", "shelves", "bookshelf", "bookshelves", "bookcase", "shelving"), ("架子", "书架", "置物架")),
     "rack": (("rack", "racks", "rack row", "shelving row"), ("货架",)),
@@ -120,6 +121,7 @@ THINGS: Lexicon = {
 }
 FURNITURE = (
     "table",
+    "coffee_table",
     "desk",
     "shelf",
     "rack",
