@@ -115,7 +115,7 @@ def float_up(
     shifts = physics.float_height(model, data, entry.physics(), list(roots))
     moved = []
     for b, dz in shifts.items():
-        if abs(dz) > 5e-4:
+        if dz > 5e-4:  # placed on the bottom: lower than that, the water is too shallow for it to float
             name, place = roots[b]
             place(dz)
             moved.append(name)

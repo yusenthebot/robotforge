@@ -126,6 +126,37 @@ def test_the_boat_rights_itself_after_a_push(pg):
     assert max(tilts[-50:]) < 1.0, f"still heeled {max(tilts[-50:]):.1f} degrees after 6 s"
 
 
+def test_in_deep_water_things_start_where_they_float(tmp_path, monkeypatch):
+    """The search for the floating height covered 4 m: in water 12 m deep a crate and the boat started 8 m under."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground.with_demo()
+    playground.new_world("deep")
+    playground.set_floor("sand", water=10.0)
+    playground.add_object("float_box", shape="box", size=[0.6, 0.4, 0.2], pos=[2, 0], mass=40.0)
+    playground.add_robot("boat", template="boat", pos=[0, 0])
+    m, d = playground.session.model, playground.session.data
+    box, hull = m.body("float_box").id, marine.root_body(m, "boat")
+    assert d.xpos[box][2] == pytest.approx(10.0 - 40.0 / (1000 * 0.6 * 0.4) + 0.1, abs=0.02)  # Archimedes
+    start = float(d.xpos[hull][2])
+    playground.session.step(1500)
+    assert abs(float(d.xpos[hull][2]) - start) < 0.02
+    assert abs(float(d.xpos[box][2]) - (10.0 - 40.0 / 240 + 0.1)) < 0.02
+
+
+def test_in_water_too_shallow_to_float_in_the_boat_rests_on_the_bottom(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground.with_demo()
+    playground.new_world("puddle")
+    playground.add_robot("boat", template="boat", pos=[0, 0])
+    dry = float(playground.session.data.xpos[marine.root_body(playground.session.model, "boat")][2])
+    playground.set_floor("sand", water=0.04)
+    m, d = playground.session.model, playground.session.data
+    hull = marine.root_body(m, "boat")
+    assert float(d.xpos[hull][2]) == pytest.approx(dry, abs=1e-3)  # not pushed into the ground
+    playground.session.step(500)
+    assert float(np.abs(d.qvel).max()) < 0.05
+
+
 # ---- the ROV ----------------------------------------------------------------------------------------------------
 
 

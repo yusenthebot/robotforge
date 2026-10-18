@@ -591,12 +591,11 @@ class Hydro:
         return out
 
 
-def float_height(
-    model: mujoco.MjModel, data: mujoco.MjData, water: Water, roots: list[int], span: float = 4.0
-) -> dict[int, float]:
+def float_height(model: mujoco.MjModel, data: mujoco.MjData, water: Water, roots: list[int]) -> dict[int, float]:
     """How far to raise (+) or lower each free root body in `roots` (with all it carries) so it floats in still
     water, its weight held by its buoyancy at its present tilt. Bodies that sink are left out. `data` is posed
-    (mj_kinematics)."""
+    (mj_kinematics). The search runs from where its top is just under the surface to where its bottom is just
+    over it, however deep the water (a fixed 4 m had a crate start 8 m under in water 12 m deep)."""
     still = Water(water.level, water.density, 0.0, area=water.area)
     hydro = Hydro(model, still)
     owner = model.body_rootid[hydro.bodies] if len(hydro.bodies) else np.zeros(0, int)
@@ -613,8 +612,14 @@ def float_height(
         per_body = hydro._geoms_to_bodies @ hydro.per_geom(wet)
         return np.bincount(pick[chosen], per_body[chosen], minlength=len(roots)) * still.density * GRAVITY
 
-    low, high = np.full(len(roots), -span), np.full(len(roots), span)
-    floats = buoyancy(low) >= need  # pushed well under, it still lifts its weight
+    mine = pick[hydro.geom_body]  # water geom -> its root's place in `roots`
+    shapes = mine >= 0
+    z, r = data.geom_xpos[hydro.geoms[shapes], 2], hydro._geom_rbound[shapes]
+    top, bottom = np.full(len(roots), -np.inf), np.full(len(roots), np.inf)
+    np.maximum.at(top, mine[shapes], z + r)
+    np.minimum.at(bottom, mine[shapes], z - r)
+    low, high = water.level - top - 0.01, water.level - bottom + 0.01  # all under; all out
+    floats = buoyancy(low) >= need  # pushed all under, it lifts its weight
     for _ in range(40):
         mid = (low + high) / 2
         up = buoyancy(mid) >= need  # more than its weight at this height: it floats higher
