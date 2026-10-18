@@ -93,8 +93,9 @@ class IKSolver:
             raise ValueError("give IK either an axis to point or a full rotation, not both")
         # Walking robots solve this four times a plan, a hundred plans a second, so what is the same every
         # iteration is done once and small vectors are measured with floats: the same numbers as before.
-        q = np.clip(np.asarray(q_init, float), chain.lower, chain.upper)
+        q = np.minimum(np.maximum(np.asarray(q_init, float), chain.lower), chain.upper)
         target = np.asarray(target, float)
+        want_quat = None if rotation is None else _quat_of(rotation)
         err = np.inf
         for _ in range(iterations):
             self._set(chain, q)
@@ -109,13 +110,13 @@ class IKSolver:
                 rot = self.data.xmat[chain.body].reshape(3, 3)
                 have = rot @ local_axis
                 e_rot = np.cross(have, want) * axis_weight
-                J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
-                e = np.concatenate([e, e_rot])
-            elif rotation is not None:
-                e_rot = _rotation_error(self.data.xquat[chain.body], rotation) * axis_weight
-                J = np.vstack([J, self._jacr[:, chain.dof_adr] * axis_weight])
-                e = np.concatenate([e, e_rot])
-            if err < tol and (len(e) == 3 or np.linalg.norm(e[3:]) < tol * 10):
+                J = np.concatenate((J, self._jacr[:, chain.dof_adr] * axis_weight))
+                e = np.concatenate((e, e_rot))
+            elif want_quat is not None:
+                e_rot = _rotation_error(self.data.xquat[chain.body], want_quat) * axis_weight
+                J = np.concatenate((J, self._jacr[:, chain.dof_adr] * axis_weight))
+                e = np.concatenate((e, e_rot))
+            if err < tol and (len(e) == 3 or _norm3(e[3:]) < tol * 10):
                 break
             n = J.shape[0]
             damped = self._damped.get((n, damping))
@@ -136,10 +137,21 @@ class IKSolver:
         return self.data.xpos[chain.body] + rot @ chain.local_point
 
 
-def _rotation_error(have_quat: np.ndarray, want: np.ndarray) -> np.ndarray:
-    """Rotation vector (world frame) that turns orientation `have_quat` into rotation matrix `want`."""
-    want_quat = np.zeros(4)
-    mujoco.mju_mat2Quat(want_quat, np.ascontiguousarray(want, float).ravel())
+def _quat_of(rotation: np.ndarray) -> np.ndarray:
+    """The quaternion of a rotation matrix."""
+    quat = np.zeros(4)
+    mujoco.mju_mat2Quat(quat, np.ascontiguousarray(rotation, float).ravel())
+    return quat
+
+
+def _norm3(v: np.ndarray) -> float:
+    """np.linalg.norm of three numbers, without its overhead (the same sum in the same order)."""
+    x, y, z = v.tolist()
+    return math.sqrt(x * x + y * y + z * z)
+
+
+def _rotation_error(have_quat: np.ndarray, want_quat: np.ndarray) -> np.ndarray:
+    """Rotation vector (world frame) that turns orientation `have_quat` into orientation `want_quat`."""
     local = np.zeros(3)
     mujoco.mju_subQuat(local, want_quat, have_quat)  # have * quat(local) = want
     rot = np.zeros(9)

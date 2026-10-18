@@ -473,6 +473,10 @@ def _go2(pg: Any) -> None:
     pg.add_robot("go2", library="go2")
 
 
+def _humanoid(pg: Any) -> None:
+    pg.add_robot("humanoid", template="humanoid")
+
+
 def _walk(robot: str, speed: float = 0.3, walker: str | None = "gait") -> Callable[[Any], Any]:
     def start(pg: Any) -> Any:
         pg.behaviors.move(robot, speed, 0.0, walker=walker)
@@ -548,6 +552,8 @@ WORLDS: dict[str, World] = {
     "go2_walk": World(_go2, _walk("go2"), _went("go2")),
     # The learned walk (a neural network policy) standing still: it holds its spot.
     "go2_rl_idle": World(_go2, _walk("go2", 0.0, "rl"), _went("go2")),
+    # Keeps its balance from the start: a walking controller (footsteps, ZMP preview, leg IK) standing still.
+    "humanoid_idle": World(_humanoid, _nothing, _stood("humanoid")),
     "arm_pick": World(_arm_world, _arm_start, _arm_check, seconds=8.0, warm=0.0),
     "warehouse_nav": World(_warehouse, _warehouse_start, _went("go2"), seconds=6.0),
     "objects_20": World(_objects, _nothing, _objects_check, seconds=3.0, warm=0.0),
