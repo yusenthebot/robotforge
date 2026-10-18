@@ -523,6 +523,8 @@ def test_a_robot_with_only_its_own_mujoco_sensors_reads_them(pg, tmp_path):
     reading, _ = pg.read_sensors("bot")
     assert reading["sensors"] == {}
     assert reading["other_sensors"]["torso_accel"][2] == pytest.approx(9.81, abs=0.2)
+    with pytest.raises(PlaygroundError, match="only its own MuJoCo sensors"):
+        pg.read_sensors("bot", ["torso_accel"])
 
 
 def test_a_definition_that_does_not_load_is_said_not_dropped(pg, tmp_path):

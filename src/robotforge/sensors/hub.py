@@ -121,6 +121,11 @@ class SensorHub:
             broken = self._broken(robot)
             if broken:
                 raise SensorError(f"{robot}'s sensors could not be set up: {'; '.join(broken)}")
+            if self._has_other(robot):
+                raise SensorError(
+                    f"{robot} carries only its own MuJoCo sensors; read_sensors(robot={robot!r}) without names lists "
+                    "them under other_sensors, and add_sensor adds more"
+                )
             raise SensorError(
                 f"{robot} has no sensors yet; add one with add_sensor, e.g. add_sensor(robot={robot!r}, type='lidar3d')"
             )
