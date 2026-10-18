@@ -315,6 +315,16 @@ def test_the_centaur_walks_and_picks_with_one_hand(pg):
     assert _pick(pg, "centaur/left_hand", "cube", "bin")["success"]
 
 
+def test_the_centaur_does_not_reach_down_between_its_front_legs(pg):
+    """Regression: only the reach was checked, and leaning over a cube between the centaur's front legs, its hand
+    came down into the legs and the pick missed. The way down is checked when the pick is planned, and refused."""
+    pg.add_robot("r", design="centaur")
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.27, 0.06])
+    _run(pg, 1.0)
+    with pytest.raises(BehaviorError, match="cannot go straight down to the object .* put the object further from"):
+        pg.behaviors.pick_and_place("r/left_hand", "cube", [0.411, 0.155])
+
+
 def test_an_arm_built_from_parts_answers_to_the_parts_it_hangs_from(pg):
     pg.add_robot("centaur", design="centaur")
     assert pg.behaviors.resolve("centaur/left_arm", arm=True) == "centaur/left_hand"

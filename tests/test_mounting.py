@@ -15,7 +15,7 @@ from mcp import Client
 
 from robotforge import tool_input
 from robotforge.behaviors import Kind
-from robotforge.behaviors.manager import CARRIER_WAIT, CARRIER_WAIT_SWAYING
+from robotforge.behaviors.manager import CARRIER_WAIT, CARRIER_WAIT_SWAYING, BehaviorError
 from robotforge.cli import find_free_port
 from robotforge.design import library, mounting
 from robotforge.design.templates.base import BuiltRobot
@@ -810,6 +810,56 @@ def test_real_a_ur5e_with_a_robotiq_gripper_picks_a_cube(pg):
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
 def test_real_anymal_carrying_a_ur5e_with_a_robotiq_picks_across_its_back(pg):
     test_a_dog_carries_an_arm_and_the_gripper_on_its_flange_picks_a_cube(pg)
+
+
+# Floor picks a UR5e with a Robotiq made from ANYmal's back, drawn at random (cube, target), that each went wrong once.
+ANYMAL_FLOOR = {
+    # On its servos alone the arm sagged, and the grasp closed 2 cm beside the cube.
+    "a sagging grasp": ([0.661, -0.281], [-0.218, -0.437]),
+    # Come over the cube in another pose than its way down was checked from, the wrist ran into the hind thigh.
+    "another pose over the cube": ([-0.345, -0.423], [0.008, 0.545]),
+    # Unfolding joint by joint to a goal worked out as it set off, the arm ended 6 cm low as the dog sank under it.
+    "the dog sank": ([-0.147, -0.717], [0.398, -0.574]),
+    # By the time the arm was over the cube, the dog leaning under it had moved a front leg into the way down.
+    "a leg in the way down": ([0.268, -0.453], [0.566, -0.382]),
+}
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize("case", list(ANYMAL_FLOOR))
+def test_real_anymal_carrying_a_ur5e_picks_from_the_floor_without_touching_the_dog(pg, case):
+    cube, target = ANYMAL_FLOOR[case]
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=cube)
+    _run(pg, 1.0)
+    arm, info = pg.behaviors.pick_and_place("anymal/arm", "cube", target)
+    m, d = pg.session.model, pg.session.data
+    dog = {b for b in range(m.nbody) if m.body(b).name.startswith("anymal/")} - arm._moving - arm._own_base
+    hits = set()
+    for _ in range(round(40 / 0.02)):
+        _run(pg, 0.02)
+        for c in d.contact[: d.ncon]:
+            bodies = {int(m.geom_bodyid[g]) for g in c.geom}
+            if c.dist < 0 and bodies & arm._moving and bodies & dog:
+                hits.add((arm.current_label, *sorted(m.body(b).name for b in bodies)))
+        if arm.done:
+            break
+    _run(pg, 0.5)
+    assert not hits, hits
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+    assert pg.behaviors.pose("anymal")["upright"]
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_anymal_carrying_a_ur5e_refuses_a_cube_its_forearm_cannot_come_down_to_clear_of_the_dog(pg):
+    """Regression: 0.68 m out in front of ANYmal the UR5e's forearm comes down past the front left leg within a
+    centimetre of it in every pose. The pick was accepted, the arm lagged 4 cm on the lift, the carry set off from
+    there unchecked, its forearm struck the dog's back, jammed and lost the cube. It is refused when planned now."""
+    pg.add_robot("anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.678, 0.217])
+    _run(pg, 1.0)
+    with pytest.raises(BehaviorError, match="cannot go straight down to the object .* without running into the robot"):
+        pg.behaviors.pick_and_place("anymal/arm", "cube", [0.167, -0.578])
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")

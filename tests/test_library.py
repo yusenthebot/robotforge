@@ -703,6 +703,47 @@ def test_an_arm_that_cannot_pick_yet_is_refused_and_says_what_works(pg, monkeypa
             pg.behaviors.pick_and_place(arm, "cube", [0.3, -0.2])
 
 
+def _tool_lag(pg: Playground, motion) -> float:
+    """How far (m) the arm's tool is from where its controller tells it to be."""
+    told = motion.ik.point(motion.chain, motion.q)
+    return float(np.linalg.norm(told - pg.session.data.site_xpos[motion.site]))
+
+
+def test_an_industrial_arm_holds_its_pose_against_gravity_and_keeps_up_with_its_path(pg):
+    """Regression: the UR5e model leaves out what its real controller does, pushing the torques gravity needs and
+    making up for its servos' damping. On its servos alone it sagged 13 mm 0.62 m out and ran up to 4 cm behind its
+    path, so riding on ANYmal its grasps closed 2 cm beside the cube and its forearm caught on the dog's thigh."""
+    pg.add_robot("ur", library="ur5e")
+    _run(pg, 0.5)
+    target = np.array([0.55, 0.25, 0.12])
+    motion = pg.behaviors.move_arm("ur", target)
+    behind = 0.0
+    while not motion.done:
+        _run(pg, 0.02)
+        behind = max(behind, _tool_lag(pg, motion))
+    _run(pg, 1.0)
+    assert behind < 0.01, behind
+    assert np.linalg.norm(pg.session.data.site_xpos[motion.site] - target) < 0.002
+
+
+def test_an_arm_closes_its_jaws_once_its_tool_has_caught_up(pg):
+    """Regression: the jaws closed the moment the way down was over, wherever the lagging tool was then: a UR5e on
+    ANYmal closed them 1.6 cm off the cube and knocked it away. The Panda's tool sags a few millimetres under its own
+    weight, so it waits only as long as the tool still closes in."""
+    pg.add_robot("bot", library="panda")
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.45, 0.2])
+    _run(pg, 1.0)
+    motion, info = pg.behaviors.pick_and_place("bot", "cube", [0.35, -0.25])
+    while motion.current_label != "grasp":
+        _run(pg, 0.01)
+    at_close = _tool_lag(pg, motion)
+    _run(pg, 0.2)
+    assert at_close - _tool_lag(pg, motion) < 0.001  # caught up as far as it gets before closing
+    pg.run_fast(lambda: motion.done, 40)
+    _run(pg, 1.0)
+    assert pg.behaviors.placed("cube", info["region"])["success"]
+
+
 # Cube and bin (x, y) around an arm's base, for an arm facing +x: in front, from the front to either side, and long
 # carries across it. An xArm 7 gripping at its fingertips dropped the cube on four of these.
 PICK_LAYOUTS = {

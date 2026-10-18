@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sys
+import time
 import urllib.request
 
 import anyio
@@ -11,6 +12,7 @@ from mcp.client.stdio import StdioServerParameters
 from robotforge import mcp_server
 from robotforge.mcp_server import VIEWER_UI_URI, build_server
 from robotforge.playground import Playground
+from robotforge.sim.session import SimSession
 
 pytestmark = pytest.mark.anyio
 
@@ -53,6 +55,45 @@ async def test_tools_drive_the_demo_arm(gl_reason):
             assert obs.content[1].type == "image" and obs.content[1].mime_type == "image/png"
         else:  # headless machine: the state still arrives, with a note instead of an image
             assert len(obs.content) == 1 and "No image" in state["note"]
+
+
+@pytest.mark.parametrize("tool", ["move_arm", "pick_and_place"])
+async def test_an_arm_plans_its_move_off_the_event_loop(tmp_path, monkeypatch, tool):
+    """Regression: pick_and_place and move_arm planned on the server's event loop, so the live viewer froze for as
+    long as a plan took: seconds for an arm on a carrier, or for the advice on where a refused pick works."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    playground.new_world("lab")
+    playground.add_robot("arm", template="arm")
+    playground.add_object("cube", shape="box", size=[0.04] * 3, pos=[0.25, -0.1])
+    planner = getattr(playground.behaviors, tool)
+    planning: list[float] = []  # when the planning began and ended
+    ticks: list[float] = []  # when the event loop got round to the ticker
+
+    def slow(*args):
+        planning.append(time.monotonic())
+        time.sleep(0.3)  # planning, holding the event loop if it runs there
+        planning.append(time.monotonic())
+        return planner(*args)
+
+    monkeypatch.setattr(playground.behaviors, tool, slow)
+
+    async def tick():
+        while True:
+            await asyncio.sleep(0.01)
+            ticks.append(time.monotonic())
+
+    args = {"robot": "arm", "position": [0.25, 0.1, 0.15]}
+    if tool == "pick_and_place":
+        args = {"robot": "arm", "object": "cube", "target": [0.2, 0.15]}
+    server = build_server(playground, 0)
+    async with Client(server) as client:
+        ticker = asyncio.ensure_future(tick())
+        result = await client.call_tool(tool, args)
+        ticker.cancel()
+    assert not result.is_error, _text(result)
+    began, ended = planning
+    assert sum(began < t < ended for t in ticks) >= 10  # the loop went on ticking while the arm planned
 
 
 async def test_tool_errors_reach_the_agent_with_guidance():
