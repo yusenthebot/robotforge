@@ -2,6 +2,7 @@
 
 import json
 import math
+from pathlib import Path
 
 import mujoco
 import numpy as np
@@ -9,6 +10,7 @@ import pytest
 from mcp import Client
 
 from robotforge.behaviors import operate
+from robotforge.behaviors.arm import ArmMotion, servo_stiffness, servo_targets
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.design import mechanisms as design
 from robotforge.design.world import ObjectEntry, World, compile_world
@@ -17,6 +19,7 @@ from robotforge.playground import Playground
 from robotforge.sim import mechanisms
 from robotforge.sim.session import SimSession
 
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"
 # Where the template arm (on the floor at the origin) reaches each one with its gripper pointing down.
 DRAWER = dict(shape="drawer", pos=[0.5, 0.0], yaw=-90)
 CABINET = dict(shape="cabinet", size=[0.24, 0.2, 0.18], pos=[0.4, -0.05], yaw=-90)
@@ -25,6 +28,7 @@ CABINET = dict(shape="cabinet", size=[0.24, 0.2, 0.18], pos=[0.4, -0.05], yaw=-9
 @pytest.fixture
 def pg(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
     playground = Playground(session=SimSession.from_xml("<mujoco/>"))
     playground.new_world("lab", "grass")
     return playground
@@ -153,6 +157,32 @@ def test_an_arm_presses_a_button_flips_a_switch_and_opens_a_valve(pg):
     assert flipped["success"] and flipped["state"]["on"]
     turned = _operate(pg, "tap", "open", 180)  # two holds of 90 degrees
     assert turned["success"] and turned["state"]["turns"] > 0.35
+
+
+@pytest.mark.parametrize("robot", ["template", "piper"])
+def test_servo_targets_hold_an_arm_where_it_is_put(pg, robot):
+    """The weight an arm's servos hold up, less what MuJoCo's gravity compensation already does: counted twice on a
+    PiPER (gravcomp on 9 of its bodies), the hand stood 3.7 cm too high and pressed no button."""
+    pg.add_robot("r", **({"template": "arm"} if robot == "template" else {"library": robot}))
+    m, d = pg.session.model, pg.session.data
+    arm = ArmMotion(m, "r", pg.behaviors.home_qpos())
+    q, _, _ = arm._solve(np.array([arm.base_xy[0] + 0.3, arm.base_xy[1], 0.15]))
+    want = arm.ik.point(arm.chain, q).copy()
+    kp = servo_stiffness(m, arm.actuators)
+    d.qpos[arm.chain.qpos_adr] = q
+    d.qvel[:] = 0.0
+    mujoco.mj_forward(m, d)
+    for _ in range(int(3.0 / m.opt.timestep)):
+        d.ctrl[arm.actuators] = servo_targets(d, arm.chain.dof_adr, kp, q)
+        mujoco.mj_step(m, d)
+    assert np.linalg.norm(d.site_xpos[arm.site] - want) < 0.005
+
+
+def test_a_piper_presses_a_button(pg):
+    pg.add_robot("piper", library="piper")
+    pg.add_object("bell", shape="button", pos=[0.3, 0.0])
+    pressed = _operate(pg, "bell", "press", robot="piper")
+    assert pressed["success"] and pressed["state"]["presses"] == 1
 
 
 def test_operate_says_what_it_cannot_do(pg):

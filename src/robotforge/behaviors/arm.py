@@ -716,8 +716,11 @@ def servo_targets(data: mujoco.MjData, dofs: np.ndarray, kp: np.ndarray, q: np.n
     """Servo targets that hold joints at `q`: each aimed past its value by what holds the arm's weight up (gravity's
     share of the bias force over the stiffness). A position servo pushes only in proportion to how far it is kept from
     its target, and these have no integral term the way a real servo's controller has: aimed at the values
-    themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch."""
-    bias = data.qfrc_bias[dofs]
+    themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch.
+
+    Less what MuJoCo's own gravity compensation already gives (bodies with gravcomp, as a PiPER's): counted twice,
+    a PiPER held still stood 3.7 cm too high and pressed no button."""
+    bias = data.qfrc_bias[dofs] - data.qfrc_gravcomp[dofs]
     return q + np.divide(bias, kp, out=np.zeros_like(bias), where=kp > 0)
 
 
