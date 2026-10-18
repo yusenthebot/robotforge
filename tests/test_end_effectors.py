@@ -103,6 +103,12 @@ def test_an_arm_built_from_parts_takes_a_suction_cup_template_on_its_end_or_a_ma
     assert end_effectors.tool_of(model, gripper) == "magnet"
     assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "bot/hand/fingers") >= 0
 
+    # Built with a cup and given end_effector too: it keeps its cup (it used to refuse the whole robot).
+    built = compile_world(World(robots=[RobotEntry(name="bot", build=build, end_effector="magnet")]))
+    gripper = mujoco.mj_name2id(built.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "bot/hand/gripper")
+    assert end_effectors.tool_of(built.model, gripper) == "suction"
+    assert any("keeps the tool it was built with" in note for note in built.notes)
+
 
 def test_a_world_keeps_the_tool_and_old_worlds_still_load():
     entry = RobotEntry(name="arm", template="arm", end_effector="Suction Cup")

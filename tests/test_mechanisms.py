@@ -167,6 +167,9 @@ def test_operate_says_what_it_cannot_do(pg):
         operate.start(pg.behaviors, "arm", "cube", "open", None)
     with pytest.raises(BehaviorError, match="chest is a drawer, built in place: operate can open or close it"):
         pg.behaviors.pick_and_place("arm", "chest", [0.2, 0.2])
+    pg.add_object("rope", shape="rope", size=[0.3, 0.01], pos=[0.25, 0.2], fixed=False)
+    with pytest.raises(BehaviorError, match="rope is a rope, soft: pick_and_place carries solid things"):
+        pg.behaviors.pick_and_place("arm", "rope", [0.2, 0.2])
 
 
 def test_a_plate_goes_into_an_open_drawer_and_not_a_closed_one(pg):

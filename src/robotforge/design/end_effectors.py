@@ -232,7 +232,9 @@ def fit(spec: mujoco.MjSpec, kind: str, home_ctrl: dict[str, float]) -> list[str
         prefix = site.name[: -len("tcp")]
         fingers = next((a for a in spec.actuators if a.name == f"{prefix}gripper"), None)
         if fingers is not None and int(fingers.trntype) == mujoco.mjtTrn.mjTRN_BODY:
-            raise ValueError(f"{prefix[:-1] or 'the arm'} already holds by suction or magnetism")
+            # Built with a cup or a magnet already (a suction_cup part on a built arm): it keeps the one it has.
+            notes.append(f"{prefix[:-1] or 'the arm'} keeps the tool it was built with")
+            continue
         ahead = 0.0
         if fingers is not None:  # open, out of the way, and no longer what "gripper" works
             fingers.name = f"{prefix}fingers"

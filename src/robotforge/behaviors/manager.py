@@ -1101,6 +1101,11 @@ class BehaviorManager:
         if entry is not None and entry.shape in mechanisms.MECHANISMS:
             actions = " or ".join(mechanisms.MECHANISMS[entry.shape].actions) or "set its speed"
             raise BehaviorError(f"{name} is a {entry.shape}, built in place: operate can {actions} it")
+        if entry is not None and entry.shape in mechanisms.SOFT:
+            raise BehaviorError(
+                f"{name} is a {entry.shape}, soft: pick_and_place carries solid things; move_arm and gripper can take "
+                "hold of it by hand"
+            )
         body = self._body(name)
         if entry is not None and entry.fixed:
             raise BehaviorError(f"{name} is fixed in place and cannot be picked up")
