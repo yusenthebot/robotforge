@@ -320,6 +320,29 @@ def test_a_panda_opens_a_drawer_and_a_door(pg):
     assert shut["success"] and abs(shut["state"]["angle_deg"]) < 3
 
 
+def test_a_robotiqs_fingers_are_posed_open_the_way_its_linkage_opens(pg):
+    """A Robotiq 2F-85 closes toward the far end of its joints (0 is open): posed by the rule for fingers that close
+    toward 0, its pads stood inside each other and every hold of a UR5e on a drawer bar was turned down."""
+    pg.add_robot("ur", library="ur5e", mounts=[{"library": "robotiq_2f85"}])
+    pg.add_robot("panda", library="panda", pos=[0.0, 1.5])
+    m = pg.session.model
+    panda = ArmMotion(m, "panda", pg.behaviors.home_qpos())
+    assert not operate._closes_outward(m, panda)
+    arm = ArmMotion(m, "ur", pg.behaviors.home_qpos())
+    assert operate._closes_outward(m, arm)
+    gaps = []
+    for fraction in (1.0, 0.5, 0.25):
+        operate._open_fingers(m, arm, fraction)
+        assert not arm._collides(arm.q), fraction  # the pads clear of each other
+        d = arm.ik.data
+        arm.ik.point(arm.chain, arm.q)
+        pads = [g for g in range(m.ngeom) if "pad" in (m.geom(g).name or "") and m.geom(g).name.startswith("ur/")]
+        left = [g for g in pads if "left" in m.geom(g).name]
+        right = [g for g in pads if "right" in m.geom(g).name]
+        gaps.append(min(mujoco.mj_geomDistance(m, d, a, b, 1.0, None) for a in left for b in right))
+    assert gaps[0] > 0.06 and gaps[0] > gaps[1] > gaps[2] > 0.0  # wide open, then narrower
+
+
 def test_a_panda_comes_down_onto_a_drawer_bar_from_above(pg):
     """Of its holds on the bar the one that comes straight down from highest: the one at a wrist limit came down 3 cm,
     swung in low over the drawer from afar and caught a finger on its top."""

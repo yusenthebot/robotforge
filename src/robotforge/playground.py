@@ -106,6 +106,10 @@ class Playground:
     # The ground places of the scene last loaded, and the world it went into: a robot added there without pos
     # starts on the first free one. Not saved: a world opened later starts robots round [0, 0].
     _places: tuple[Path, list[scenes.Slot]] | None = field(default=None, init=False, repr=False)
+    # Each task's state as its attempt began (pick_up and press compare with it), and the probes that read tasks
+    # from the model, for the model they were made for (design/tasks/live.py)
+    _task_starts: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+    _probes: tuple[int, dict[str, Any]] = field(default=(-1, {}), init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -116,6 +120,7 @@ class Playground:
         self.sensors = SensorHub(self.session)
         # belts keep running and button presses are counted, through resets
         mechanisms.attach(self.session, self._mechanism_shapes)
+        self.session.reset_hooks.append(self._task_starts.clear)  # a reset starts every task's attempt again
 
     def attach_viewer(self, hub: ViewerHub) -> None:
         """Let the viewer drive robots from the keyboard and list them in its UI."""
@@ -757,15 +762,18 @@ class Playground:
 
         def change(w: World) -> None:
             names = [*(r.name for r in w.robots), *(o.name for o in w.objects), *(t.name for t in w.terrain)]
+            names += [t.name for t in w.tasks if t.name not in names]
             found = wording.match(name, names, plurals=False)  # "dogs" may be dog, dog2 or both: ask, do not delete
             if found is None:
-                text = wording.unknown("robot, object or terrain patch", name, names, many="names")
+                kinds = "robot, object, terrain patch or task" if w.tasks else "robot, object or terrain patch"
+                text = wording.unknown(kinds, name, names, many="names")
                 raise PlaygroundError(
                     f"{text}. The floor is changed with set_floor" if "floor" in name.lower() else text
                 )
             w.robots = [r for r in w.robots if r.name != found]
             w.objects = [o for o in w.objects if o.name != found]
             w.terrain = [t for t in w.terrain if t.name != found]
+            w.tasks = [t for t in w.tasks if t.name != found]
 
         return self._edit(change)
 
@@ -894,6 +902,88 @@ class Playground:
             "viewer_url": self.viewer_url,
         }
 
+    # ---- tasks (design/tasks) --------------------------------------------------------------
+
+    @_one_edit_at_a_time
+    def add_task(
+        self, sentence: str, robot: str | None = None, name: str | None = None, seed: int = 0
+    ) -> dict[str, Any]:
+        """Turn a sentence into a task saved with the open world: what has to happen, judged by a success check
+        (observe reports it under "tasks"), with a reward and randomized starts for learning. What the task needs and
+        the world lacks is added: the thing it names, a bin, a robot that can do it."""
+        from robotforge.design.tasks import make
+
+        store = self._require_store()
+        world = store.load()
+        infos = [
+            make.RobotInfo(r["name"], r["kind"], list(r.get("arms") or []), tuple(_entry_pos(world, r["name"])))
+            for r in self.behaviors.robots()
+        ]
+        try:
+            plan = make.plan(world, sentence, infos, robot, name, seed, lambda e: spawn_height(e, store.dir))
+        except ValueError as exc:
+            raise PlaygroundError(str(exc)) from exc
+        task = plan.task
+        notes = list(plan.notes)
+        if plan.add_objects:
+
+            def furnish(w: World) -> None:
+                w.objects += [ObjectEntry(**o) for o in plan.add_objects]
+
+            self._edit(furnish)
+        if plan.add_robot is not None:
+            fields = dict(plan.add_robot)
+            build = fields.pop("build", None)
+            added = self.add_robot(fields.pop("name"), build=build, **fields)
+            for spot in plan.arm_spots[1:]:  # an arm put beside a mechanism: a place where it stands clear
+                if not any(n.startswith(f"{task.robot} starts") for n in added.get("notes", [])):
+                    break
+                added = self.update_robot(task.robot, pos=spot["pos"], yaw=spot["yaw"])
+                clash = self._clear_start(task.robot, spot["pos"])
+                added["notes"] = [clash] if clash else []
+            notes += [n for n in added.get("notes", []) if n.startswith(f"{task.robot} ")][:2]
+            entry = next(r for r in self.current_world().robots if r.name == task.robot)
+            task.start.robot = [float(entry.pos[0]), float(entry.pos[1]), float(entry.yaw)]
+
+        def save(w: World) -> None:
+            w.tasks = [t for t in w.tasks if t.name != task.name] + [task]
+
+        result = self._edit(save)
+        self._task_starts.pop(task.name, None)
+        status = self.task_status().get(task.name, {})
+        result["task"] = {**task.model_dump(mode="json", exclude={"start", "randomize"}), "goal": task.describe(),
+                          "status": status}  # fmt: skip
+        result["notes"] = notes + [n for n in result.get("notes", []) if "task" in n]
+        return result
+
+    def task_status(self) -> dict[str, dict[str, Any]]:
+        """Each task of the open world: its goal and the check's verdict now (done, distance still to go, reward,
+        why)."""
+        world = self.current_world()
+        if world is None or not world.tasks:
+            return {}
+        from robotforge.design.tasks.live import Probe
+
+        version, probes = self._probes
+        if version != self.session.version:
+            probes = {}
+            self._task_starts.clear()
+        m, d = self.session.model, self.session.data
+        out = {}
+        with self.session.lock:
+            watcher = self.session.controllers.get(mechanisms.KEY)
+            for task in world.tasks:
+                probe = probes.get(task.name)
+                if probe is None or probe.task != task:
+                    probe = probes[task.name] = Probe(m, task, world)
+                start = self._task_starts.get(task.name)
+                if start is None:
+                    start = self._task_starts[task.name] = probe.state(d, watcher)
+                verdict = probe.verdict(d, start, watcher)
+                out[task.name] = {"goal": task.describe(), "robot": task.robot, **verdict.as_dict()}
+        self._probes = (self.session.version, probes)
+        return out
+
     # ---- scenes and terrain (design/scenes.py, design/terrain.py) ------------------------
 
     def list_scenes(self) -> dict[str, Any]:
@@ -906,18 +996,39 @@ class Playground:
     @_one_edit_at_a_time
     def load_scene(
         self,
-        preset: str,
+        preset: str | None = None,
         seed: int = 0,
         keep_robots: bool = True,
         starter: bool = True,
         options: dict[str, float] | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        """Replace the floor, terrain and objects with a ready-made scene (opening a world named after it if
-        none is open). Kept robots move to the scene's places; an empty world gets the scene's starter robot."""
+        """Replace the floor, terrain and objects with a ready-made scene, or one generated from `description` (a
+        sentence: design/generate), opening a world named after it if none is open. Kept robots move to the scene's
+        places; an empty world gets the scene's starter robot."""
+        generated = None
         try:
-            content = scenes.build(preset, seed, options)
+            if description is not None:
+                from robotforge.design import generate  # only when asked: it is not needed to start
+
+                if preset is not None:
+                    raise ValueError(
+                        "give preset (a ready-made scene) or description (a sentence to generate one from), not both"
+                    )
+                if options:
+                    raise ValueError("options size the ready-made scenes; a description says the size in words")
+                generated = generate.generate(description, seed)
+                content = generated.content
+            elif preset is None:
+                raise ValueError(f"give preset (one of {', '.join(scenes.SCENES)}) or description (a sentence)")
+            else:
+                content = scenes.build(preset, seed, options)
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
+        if preset is None:
+            from robotforge.design import generate
+
+            preset = generate.world_name(description)
         if self.store is None:
             self.store = WorldStore.create(preset, content.floor.get("style", "checker"))
         base_dir = self.store.dir
@@ -938,7 +1049,7 @@ class Playground:
         result = self._edit(change)
         self._places = (self.store.dir, list(content.ground_slots))
         result["scene"] = {
-            "preset": preset,
+            **({"generated": generated.summary()} if generated is not None else {"preset": preset}),
             "seed": seed,
             "placed": placed,
             "robot_places": [list(s.pos) for s in content.ground_slots],
@@ -1256,6 +1367,11 @@ class Playground:
             _name(m, mujoco.mjtObj.mjOBJ_BODY, b) or f"body{b}": [round(float(x), 4) for x in d.xpos[b]]
             for b in _free_bodies(m)
         }
+
+
+def _entry_pos(world: World, robot: str) -> list[float]:
+    entry = next((r for r in world.robots if r.name == robot), None)
+    return [float(v) for v in entry.pos[:2]] if entry is not None else [0.0, 0.0]
 
 
 def _unused(name: str, taken: set[str]) -> str:

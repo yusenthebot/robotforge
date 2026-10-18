@@ -37,6 +37,7 @@ from robotforge.design import (
     terrain,
 )
 from robotforge.design import water as waters
+from robotforge.design.tasks.spec import TaskEntry
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 from robotforge.design.water import WaterEntry
@@ -242,6 +243,8 @@ class World(_Strict):
     water: WaterEntry | None = None  # a lake, a harbor, a pool: see design/water.py
     robots: list[RobotEntry] = Field(default_factory=list)
     objects: list[ObjectEntry] = Field(default_factory=list)
+    # Goals with success checks (design/tasks): add_task; a world without tasks saves as it always did
+    tasks: list[TaskEntry] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _unique(self) -> World:
@@ -253,6 +256,10 @@ class World(_Strict):
                 f"{', '.join(map(repr, dupes))} already exists: names must be unique across robots, objects and "
                 "terrain. Pick another, or change it with update_robot, update_object or update_terrain"
             )
+        tasks = [t.name for t in self.tasks]
+        twice = sorted({n for n in tasks if tasks.count(n) > 1})
+        if twice:
+            raise ValueError(f"task names must be unique: {', '.join(map(repr, twice))} is used twice")
         return self
 
     # ---- persistence ----------------------------------------------------------------
@@ -286,6 +293,8 @@ class World(_Strict):
         data = self.model_dump(mode="json", exclude_defaults=False)
         if data.get("water") is None:
             data.pop("water", None)  # a world without water saves as it always did
+        if not data.get("tasks"):
+            data.pop("tasks", None)  # nor does one without tasks
         for robot in data["robots"]:  # most robots carry nothing and have no added sensors: saved as they always were
             for extra in ("mounts", "sensors"):
                 if not robot.get(extra):
