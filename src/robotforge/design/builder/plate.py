@@ -21,6 +21,8 @@ SHARE = 0.6  # of the robot's body length and width the plate covers
 SIDE = (0.06, 0.3)  # m: the plate's length and width stay within these
 MASS = (0.02, 0.4)  # kg: about 3% of the robot, within these
 FIXED_PLATE = [0.2, 0.2, THICK]  # m: the plate under a robot fixed to the floor
+PROBES = 7  # rays a side, down onto the robot over the plate's area
+MAX_LAYERS = 8  # shapes one of them passes through on its way down
 
 
 def mount_of(entry: Any) -> dict[str, Any] | None:
@@ -59,7 +61,8 @@ def carried(model: mujoco.MjModel, robot: str, mount: dict[str, Any], build: dic
         low, high = corners.min(axis=0), corners.max(axis=0)
         size = [round(float(np.clip(SHARE * (high[i] - low[i]), *SIDE)), 2) for i in (0, 1)]
         base["size"] = [*size, THICK]
-        at: Any = [0, 0, -round(float(high[2]) + THICK / 2 + GAP, 4)]
+        top = _top_under(model, data, root, size[0] / 2, size[1] / 2, float(high[2]))
+        at: Any = [0, 0, -round(top + THICK / 2 + GAP, 4)]
     else:
         base.update(size=FIXED_PLATE, fixed=True)
         at = "top"
@@ -98,6 +101,31 @@ def _corners(model: mujoco.MjModel, data: mujoco.MjData, root: int) -> np.ndarra
     if not out:
         return np.zeros((1, 3))
     return np.concatenate(out)
+
+
+def _top_under(
+    model: mujoco.MjModel, data: mujoco.MjData, root: int, half_x: float, half_y: float, high: float
+) -> float:
+    """How high the root body reaches under a plate of these half sizes, in its own frame: rays straight down onto
+    it over the plate's area. The boxes round its shapes say too much for a mesh turned in its frame: on the rover
+    template a dressing mesh's box reached 7.1 cm where its lid is 3.7 cm, and the plate floated above the lid.
+    Anything else the rays meet first (a leg, a shelf above) is passed through; `high` (the boxes' top) when no ray
+    meets the root body."""
+    frame, origin = data.xmat[root].reshape(3, 3), data.xpos[root]
+    down, hit, best = -frame[:, 2], np.zeros(1, np.int32), None
+    for fx, fy in itertools.product(np.linspace(-1.0, 1.0, PROBES), repeat=2):
+        start = origin + frame @ np.array([fx * half_x, fy * half_y, high + 0.05])
+        for _ in range(MAX_LAYERS):
+            far = mujoco.mj_ray(model, data, start, down, None, 1, -1, hit)
+            if far < 0:
+                break
+            point = start + down * far
+            if int(model.geom_bodyid[int(hit[0])]) == root:
+                z = float((point - origin) @ frame[:, 2])
+                best = z if best is None else max(best, z)
+                break
+            start = point + down * 1e-4
+    return high if best is None else best
 
 
 def _free_name(wanted: str, build: dict[str, Any]) -> str:

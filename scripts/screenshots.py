@@ -595,6 +595,23 @@ def _rocks(pg: Any) -> None:
     pg.set_terrain("rough", params={"size": [6, 6], "height": 0.04})
 
 
+LIDAR_PUCK = {"name": "lidar", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
+
+
+def _on_plates(pg: Any) -> None:
+    """A template dog, a template rover and a Go2, each carried on a plate with a lidar puck on it: the build that
+    add_part's refusal offers for a robot that is not built from parts (design/builder/plate.py)."""
+    from robotforge.design.builder import plate
+
+    for name, source, y in (("dog", {"template": "quadruped"}, 0.55), ("rover", {"template": "rover"}, 0.0)):
+        pg.add_robot(name, **source, pos=[0.0, y])
+    pg.add_robot("go2", library="go2", pos=[0.0, -0.75])
+    for robot in pg.current_world().robots:
+        puck = {**LIDAR_PUCK, "sensors": [{"type": "lidar", "at": "top"}]}
+        build = plate.carried(pg.session.model, robot.name, plate.mount_of(robot), {"parts": [puck]})
+        pg.update_robot(robot.name, build=build)
+
+
 def _gallery_line_up(pg: Any) -> None:
     """Several designs side by side, for an overview picture."""
     for name, pos in (
@@ -717,6 +734,13 @@ SHOTS = [
         "built_robots",
         _built(("dog", "scout", "spider", "centaur")),
         page="window.__robotforge.select(null); window.__robotforge.lookAt([1.8, -0.28, 0.66], [0.0, 0.0, 0.1]);",
+    ),
+    # Robots that are not built from parts, kept as they are under a plate that carries a lidar.
+    Shot(
+        "carried_on_plates",
+        _on_plates,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.9, -1.4, 1.0], [0.0, -0.1, 0.15]);",
+        settle=3.0,
     ),
     Shot(
         "built_materials",

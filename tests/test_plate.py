@@ -114,3 +114,16 @@ def test_an_arm_fixed_to_the_floor_is_carried_on_a_plate_under_it(world):
     }
     world.update_robot("arm", build=offered)
     assert world.behaviors.kind("arm").value == "arm"
+
+
+def test_the_plate_rests_on_the_rover_lid_not_on_a_dressing_meshs_box(world):
+    """The box round a dressing mesh turned in the rover template's frame reached 7.1 cm, where its lid is 3.7 cm,
+    and the plate floated 3 cm above the lid in the viewer. Rays down onto the body find the lid."""
+    world.add_robot("rover", template="rover")
+    with pytest.raises(PlaygroundError) as refused:
+        world.add_part("rover", dict(LIDAR_PUCK))
+    drop = -_plated(refused.value, dict(LIDAR_PUCK))["parts"][0]["at"][2]
+    assert 0.037 + 0.006 < drop < 0.05  # the lid's top, half the plate and the gap; the box gave 0.0785
+
+
+LIDAR_PUCK = {"name": "puck", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
