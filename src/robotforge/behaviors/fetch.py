@@ -59,6 +59,7 @@ POS_TOL, YAW_TOL = 0.015, math.radians(2.0)  # where creeping into a spot stops
 ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm reaches from SHIFT off)
 LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on, creeping the rest
 LEG_RETRIES = 2  # trips planned again from where the robot got stuck, in one errand
+REPLANS = 2  # spots looked for again from where the robot stopped, in one errand
 CREEP_SPEED, CREEP_TURN = 0.08, 0.5  # m/s and rad/s at most, creeping
 CREEP_SECONDS = 12.0
 STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm did not reach
@@ -691,6 +692,57 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
     return Errand(manager, robot, arm, obj, body, half, radius, hold_local, hold_q, pick, drop, place, held=holds)
 
 
+def _spot_from_here(errand: Errand, data: mujoco.MjData, picking: bool) -> Spot | None:
+    """Another spot to pick the load up from (or to put it down on its spot on the place from), looked for from where
+    the robot stands now, as plan() looks for the first."""
+    manager, arm = errand.manager, errand.arm
+    model = manager.session.model
+    arm.sync(data)
+    stand = Stand(model, data, errand.robot, arm, errand.hold_q, errand.body)
+    stand.hold_local = errand.hold
+    stand.walks = manager.kind(errand.robot).value in WALKERS
+    root = manager.root(errand.robot)
+    start = np.array(data.xpos[root][:2], float)
+    half, radius = errand.half, errand.radius
+    if picking:
+        center = np.array(data.xpos[errand.body], float)
+
+        def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
+            return stand.rehearse(
+                xy, heading, tilt, lambda hold: _pick(stand.hand, target, half, hold, tilt, stand.hold_q, radius)
+            )
+
+        nav = manager.floor_map(errand.robot, _posed(model, data, arm, errand.hold_q))
+        reach = _reachable_cells(nav, start)
+        supports = _supports(model, data, errand.body)
+        spot, _ = spots_for(stand, nav, [center], APPROACH_UP, start, reach, supports, rehearse=pick_from)
+        return spot
+    place = errand.place
+    target = np.array(errand.drop.target, float)
+    tool = target + [0.0, 0.0, half + 0.01]
+
+    def put_from(xy: np.ndarray, heading: float, tool: np.ndarray, tilt: float) -> bool:
+        return stand.rehearse(xy, heading, tilt, lambda hold: _put(stand.hand, target, half, place.top, tilt))
+
+    nav = manager.floor_map(errand.robot, data, carrying=errand.obj)
+    reach = _reachable_cells(nav, start)
+    stand.skip = {errand.body}
+    lift = max(APPROACH_UP, place.top + 2 * half + 0.03 - float(tool[2]))
+    middle = np.array(place.region["center"][:2])
+    top = (middle - place.region["half_xy"], middle + place.region["half_xy"], float(place.region["min_z"]) + 0.01)
+    tops = [top] if target[2] > 0.05 else []
+    spot, _ = spots_for(stand, nav, [tool], lift, start, reach, tops, rehearse=put_from)
+    return spot
+
+
+def _put(hand: Hand, spot: np.ndarray, half: float, top: float | None, tilt: float) -> None:
+    """Queue putting the load down at `spot` with the hand tilted `tilt`, or straight down (_put_down)."""
+    if tilt == 0.0:
+        _put_down(hand, spot, half, top)
+    else:
+        hand.put(spot, half, top, tilt)
+
+
 def _pick(
     hand: Hand, center: np.ndarray, half: float, hold: np.ndarray, tilt: float, hold_q: np.ndarray, radius: float
 ) -> None:
@@ -1052,6 +1104,7 @@ class Errand:
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
     _retries: int = 0  # trips planned again after getting stuck
+    _replans: int = 0  # spots looked for again from where the robot stopped (_again)
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
     _resume: tuple | None = None  # (step, what to do) after that
     hand: Hand = field(init=False)
@@ -1396,12 +1449,31 @@ class Errand:
         return failed
 
     def _again(self, t: float, data: mujoco.MjData, spot: Spot | None, leg: str) -> bool:
-        """Creep into the spot once more (it stopped short of it); True if it does."""
-        if spot is None or self._tries >= STAND_TRIES:
+        """Creep into the spot once more (it stopped short of it), or once it has, look for another spot from where
+        it stands and go there; True if it does either. A Go2 walking into a spot stopped 7 cm aside, and its arm did
+        not reach the cube from there; creeping, its gait turned back and forth round the spot for 12 s."""
+        walks = self.manager.kind(self.robot).value in WALKERS
+        if spot is not None and self._tries < STAND_TRIES and not walks:
+            self._tries += 1
+            self._creep = (t, spot)
+            self.step = "creep_object" if leg == "to_object" else "creep_place"
+            return True
+        if self._replans >= REPLANS:
             return False
-        self._tries += 1
-        self._creep = (t, spot)
-        self.step = "creep_object" if leg == "to_object" else "creep_place"
+        self._replans += 1
+        picking = leg == "to_object"
+        try:
+            found = _spot_from_here(self, data, picking)
+        except (FetchError, ValueError, RuntimeError) as exc:
+            log.info("%s found no other spot: %s", self.robot, exc)
+            return False
+        if found is None:
+            return False
+        if picking:
+            self.pick = found
+        else:
+            self.drop = Spot(found.xy, found.heading, self.drop.target, found.tilt)
+        self._go(data, leg)  # on its way, or failed saying why there is no way there
         return True
 
     def _fail(self, data: mujoco.MjData, why: str, note: str) -> None:
