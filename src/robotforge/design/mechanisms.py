@@ -502,18 +502,16 @@ def _rope(spec, name, size, rgba, base, quat, fixed) -> None:
     count = max(8, min(60, round(length / (2.5 * diameter))))
     color = " ".join(f"{c:.3f}" for c in rgba)
     initial = "none" if fixed else "free"
-    xml = f"""
-    <mujoco>
-      <worldbody>
-        <body name="anchor">
+    cable = f"""
           <composite prefix="seg" type="cable" curve="s" count="{count + 1} 1 1" size="{length}" initial="{initial}">
             <joint kind="main" damping="{2e-4 * length:.6f}" armature="1e-6"/>
             <geom type="capsule" size="{diameter / 2}" rgba="{color}" density="900" friction="1 0.01 0.001"
                   condim="3"/>
-          </composite>
-        </body>
-      </worldbody>
-    </mujoco>"""
+          </composite>"""
+    # Hung, its first piece is welded to a hook body; loose, that piece floats free, which MuJoCo allows only at the
+    # top of the body tree (inside the hook body it refused the world).
+    held = f'<body name="anchor">{cable}</body>' if fixed else cable
+    xml = f"<mujoco><worldbody>{held}</worldbody></mujoco>"
     child = mujoco.MjSpec.from_string(xml)
     child.compiler.degree = False
     lift = 0.0 if fixed else diameter / 2
