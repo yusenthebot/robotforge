@@ -107,7 +107,8 @@ the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, m
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
 pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table");
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
-handle along the joint's own path; robots lists robots with kind, arms and positions. For anything custom,
+handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
+drawer"); robots lists robots with kind, arms and positions. For anything custom,
 set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/"). observe reports
 state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture
 and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):

@@ -29,6 +29,7 @@ from robotforge.behaviors import (
     nav_map,
     quadruped,
     robot_kind,
+    visit,
     water_nav,
 )
 from robotforge.behaviors import navigate as navigation
@@ -1440,7 +1441,7 @@ class BehaviorManager:
     def _fetch(self, arm: ArmMotion, obj: str, target: str | list[float]) -> fetch.Errand:
         """Start an errand for `arm`'s robot to bring `obj` to `target` (session lock held)."""
         robot = arm.robot.split("/", 1)[0]
-        _check_standing(self._mobile_controller(robot, self.kind(robot), self._world(), create=True))
+        self.ready_to_go(robot)
         kind = self._place_kind(target)
         named = target
         if isinstance(target, str) and NUMBER_LIST.fullmatch(target):
@@ -1453,18 +1454,26 @@ class BehaviorManager:
             errand = fetch.plan(self, arm, obj, named, kind)
         except fetch.FetchError as exc:
             raise BehaviorError(str(exc)) from exc
+        self.start_errand(robot, errand)
+        return errand
+
+    def ready_to_go(self, robot: str) -> None:
+        """Before planning an errand for `robot` (session lock held): its walker made, and refused if it has fallen."""
+        _check_standing(self._mobile_controller(robot, self.kind(robot), self._world(), create=True))
+
+    def start_errand(self, robot: str, errand: fetch.Errand | visit.Visit) -> None:
+        """Set an errand going for `robot` (session lock held): a fetch, or a visit to work a mechanism."""
         self._end_trip(robot)
         self._last_trips.pop(robot, None)
         self.session.set_controller(fetch.KEY + robot, errand)
         self._errands[robot] = errand
-        return errand
 
-    def errand(self, robot: str) -> fetch.Errand | None:
-        """The robot's errand (pick_and_place that goes over), while it is on one."""
+    def errand(self, robot: str) -> fetch.Errand | visit.Visit | None:
+        """The robot's errand (pick_and_place or operate that goes over), while it is on one."""
         found = self.session.controllers.get(fetch.KEY + robot)
-        return found if isinstance(found, fetch.Errand) else None
+        return found if isinstance(found, (fetch.Errand, visit.Visit)) else None
 
-    def errand_ended(self, errand: fetch.Errand) -> None:
+    def errand_ended(self, errand: fetch.Errand | visit.Visit) -> None:
         """Called by an errand as it ends (inside a sim step, the session lock held)."""
         if self.session.controllers.get(fetch.KEY + errand.robot) is errand:
             self.session.set_controller(fetch.KEY + errand.robot, None)
