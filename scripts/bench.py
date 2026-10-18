@@ -314,7 +314,8 @@ def table(
     busy: bool = False,
 ) -> list[str]:
     """One row per metric. On a busy machine raw timings get no better or worse (the change is shown, not
-    judged); speeds over the machine check still do, since the check moved with the machine."""
+    judged); speeds over the machine check still do, since the check moved with the machine. The check itself is
+    never better or worse: it is the machine, not robotforge."""
     by_metric = {b["metric"]: b for b in budgets}
     lines = [f"{'metric':<40} {'now':>10} {'unit':<8} {'before':>10} {'change':>8}  {'budget':<14} status"]
     for name, m in now.items():
@@ -323,7 +324,7 @@ def table(
         change = "" if c.get("change") is None else f"{100 * c['change']:+.0f}%{'*' if c.get('relative') else ''}"
         limit = "" if b is None else f"{'<=' if b['kind'] == 'max' else '>='} {_fmt(b['limit'], m['unit'])}"
         status = "" if b is None else b["status"]
-        unjudged = busy and m["unit"] in LOAD_SENSITIVE and not c.get("relative")
+        unjudged = name == MACHINE or (busy and m["unit"] in LOAD_SENSITIVE and not c.get("relative"))
         if c.get("verdict") in ("better", "worse") and not unjudged:
             status = f"{status} ({c['verdict']})".strip()
         lines.append(

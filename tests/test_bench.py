@@ -475,6 +475,9 @@ def test_the_table_shows_the_change_and_the_budget(bench):
     speed = {"physics.dog_idle.steps_per_s": m(50000, "steps/s", "higher", machine=150000)}
     compared = bench.compare(speed, {"physics.dog_idle.steps_per_s": m(69403, "steps/s", "higher", machine=150000)})
     assert "(worse)" in bench.table(speed, compared, [], busy=True)[1]
+    machine = {bench.MACHINE: m(120000, "steps/s", "higher")}
+    compared = bench.compare(machine, {bench.MACHINE: m(220000, "steps/s", "higher")})
+    assert "-45%" in bench.table(machine, compared, [])[1] and "worse" not in bench.table(machine, compared, [])[1]
 
 
 def test_the_budget_file_names_metrics_the_bench_measures(bench):
