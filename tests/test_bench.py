@@ -279,18 +279,18 @@ def test_exit_codes_say_over_busy_or_unchecked(bench, tmp_path, monkeypatch, cap
 
 
 def test_a_slower_robotforge_is_over_budget_not_a_busy_machine(bench, tmp_path, monkeypatch, capsys):
-    """One extra mj_forward per step in Session.step: objects_20 and the dog ran half as fast while the machine
-    check, in the same processes, ran as fast as ever. That is a regression (exit 1), not a busy machine (3).
-    Numbers from that run; floors from the real budget.json."""
+    """One extra mj_forward per step in Session.step: objects_20 and the dog ran at half their speed while the
+    machine check, in the same processes, stayed above its floor. That is a regression (exit 1), not a busy
+    machine (3). Numbers from that run at load 14; floors from the real budget.json."""
     real = json.loads(BUDGET.read_text(encoding="utf-8"))["budgets"]
     names = ("physics.objects_20.steps_per_s", "physics.dog_idle.steps_per_s", bench.MACHINE)
     budget = tmp_path / "budget.json"
     budget.write_text(json.dumps({"budgets": {name: real[name] for name in names}}))
     m = bench.metric
     found = _results(bench)
-    found["physics"]["objects_20.steps_per_s"] = m(4652, "steps/s", "higher", machine=222000)
-    found["physics"]["dog_idle.steps_per_s"] = m(29533, "steps/s", "higher", machine=225000)
-    found["physics"]["machine.steps_per_s"] = m(222000, "steps/s", "higher", slowest="objects_20")
+    found["physics"]["objects_20.steps_per_s"] = m(5780, "steps/s", "higher")
+    found["physics"]["dog_idle.steps_per_s"] = m(32581, "steps/s", "higher")
+    found["physics"]["machine.steps_per_s"] = m(175665, "steps/s", "higher")
     _fake_main(bench, monkeypatch, found, load=5.0)
     assert bench.main(["--no-save", "--budget", str(budget), "--out", str(tmp_path / "runs")]) == 1
     out = capsys.readouterr().out
