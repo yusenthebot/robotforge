@@ -28,7 +28,9 @@ SOUTH_WALL = 0.5  # m: no robot steps over it, and the camera sees in over it
 LOW_TABLE = 0.36  # m: a Go2's arm points its gripper down 0.35 m out at 0.45 m high, further lower down
 HALF_X, HALF_Y = 4.0, 2.5  # m, the home's floor: 8 by 5
 DOOR_Y = -0.9  # where the doorway in the wall between the rooms is
-DOOR_WIDTH = 1.0  # the frame's; its opening is 16 cm narrower (props.py)
+# The frame's; its opening is 16 cm narrower (props.py), 0.94 m, as an accessible door: ANYmal with its arm folded
+# needs 0.77 m and did not fit through 0.84 m with the room a walking robot keeps.
+DOOR_WIDTH = 1.1
 FRAME_HEIGHT = 2.0
 
 
@@ -76,12 +78,14 @@ def home(rng: random.Random, opts: dict[str, float]) -> Content:
     ):
         x, y = x + rng.uniform(-0.08, 0.08), front + rng.uniform(0.07, 0.12)
         c.add(name, shape, [x, y, resting_z(LOW_TABLE, shape, size)], size=size, color=color)
-    chest = [0.32, 0.4, 0.36]  # narrow: a Go2 beside the drawer's way reaches its bar all the way out
+    # Narrow and low: a Go2 beside the drawer's way reaches its bar all the way out, and a Panda's hand fits down
+    # into the drawer between its walls (with a chest 0.36 m high they stood 0.25 m over its floor).
+    chest = [0.36, 0.4, 0.26]
     c.add("chest", "drawer", [-0.9, 1.4], size=chest, color=WHITE)
     # In the drawer, on its floor (the drawer's box sits 1.2 cm over the chest's bottom board), near its front and
     # its east side: a Go2 standing beside the open drawer reaches it there, and not in the drawer's middle, 0.38 m
     # from its arm's base.
-    x, y = -0.9 + 0.07 + rng.uniform(-0.02, 0.02), 1.4 - 0.1 + rng.uniform(-0.02, 0.02)
+    x, y = -0.9 + 0.06 + rng.uniform(-0.02, 0.02), 1.4 - 0.08 + rng.uniform(-0.02, 0.02)
     c.add("block", "box", [x, y, 0.012 + 0.003 + 0.006 + 0.02 + 0.002], size=[0.04, 0.04, 0.04], color="green")
 
     # The living room: a sofa, the low table to bring things to and a side table with a button.

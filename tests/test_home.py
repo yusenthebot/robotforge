@@ -77,6 +77,23 @@ def test_a_rover_drives_through_a_shut_door_pushing_it_open(pg):
     assert pg.behaviors.pose("rover")["position"][0] < -0.8
 
 
+def test_a_robot_folds_its_arm_over_itself_to_go_through_a_door(pg):
+    """ANYmal with a UR5e as it was built is 1.25 m wide (the arm stands out); folded, it goes through a door."""
+    _doorway(pg)
+    pg.add_robot(
+        "anymal", library="anymal_c", mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}], pos=[1.2, 0.0], yaw=180
+    )
+    pg.run_fast(lambda: False, 0.5)
+    trip = pg.behaviors.navigate("anymal", [-1.3, 0.0])
+    arm = pg.session.controllers["anymal/arm"]
+    assert not arm.done  # folding before it sets off
+    start = np.array(pg.behaviors.pose("anymal")["position"][:2])
+    pg.run_fast(lambda: arm.done, 10.0)
+    assert np.linalg.norm(np.array(pg.behaviors.pose("anymal")["position"][:2]) - start) < 0.05  # waited for it
+    pg.run_fast(lambda: trip.done, 60.0)
+    assert trip.result()["arrived"], trip.result()
+
+
 def test_the_home_has_two_rooms_a_door_and_things_a_dogs_arm_reaches(pg):
     out = pg.load_scene("home")
     assert out["robots"] == ["go2_arm"]

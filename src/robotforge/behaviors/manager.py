@@ -37,6 +37,7 @@ from robotforge.behaviors.airframe import find_airframe
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
 from robotforge.behaviors.drive import DiffDrive
+from robotforge.behaviors.reach_in import LOADED_TILT, Hand
 from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
 from robotforge.design import end_effectors, library, mechanisms, mounting
@@ -87,6 +88,10 @@ LEARN_A_WALK = (
 # 0.9 s; the tools wait up to CARRIER_WAIT s for it. A robot that balances sways for longer (a T1 with an SO-100 on its
 # head, stopped after walking 0.1 to 0.12 m/s, stood still after 2.5 to 4.1 s): for those, CARRIER_WAIT_SWAYING s.
 CARRIER_STILL, CARRIER_STILL_TURN = 0.03, 0.05
+# A robot sent somewhere folds an idle arm over itself first when that makes it this much narrower (m of footprint
+# radius: navigation plans for the folded robot), unless something lies within HOLDING_NEAR (m) of its tool point.
+FOLD_GAIN = 0.03
+HOLDING_NEAR = 0.08
 CARRIER_CALM = 0.2
 CARRIER_WAIT = 3.0
 CARRIER_WAIT_SWAYING = 6.0
@@ -895,6 +900,9 @@ class BehaviorManager:
             model, version = self.session.model, self.session.version
             data = copy.copy(self.session.data)
             ctrl = self.session.controllers[robot]
+            folding = self._fold_for_trip(robot, kind, ctrl, data) if carrying is None else None
+        if folding is not None:
+            data = folding[0]  # planned for as it will be, its arm folded
         if isinstance(ctrl, RhythmWalker) and not {"left", "right"} <= set(ctrl.rhythms):
             raise BehaviorError(
                 f"{robot} walks only straight ahead (its learned walk has no turns yet), so it cannot follow a path; "
@@ -951,6 +959,7 @@ class BehaviorManager:
             start_time=float(data.time),
             deadline=float(data.time) + seconds if seconds is not None else None,
             still_mine=lambda: self.session.controllers.get(robot) is ctrl,
+            ready=folding[1] if folding is not None else (lambda: True),
             on_finish=finished,
             others=[
                 navigation.Other(name, nav_map.root_body(model, name), nav_map.footprint_radius(model, data, name))
@@ -1133,6 +1142,51 @@ class BehaviorManager:
             top = navigation.landing(model, data, destination.geoms)
             destination = dataclasses.replace(destination, point=top) if top else destination
         return destination
+
+    def _fold_for_trip(
+        self, robot: str, kind: Kind, walker: Any, data: mujoco.MjData
+    ) -> tuple[mujoco.MjData, Callable[[], bool]] | None:
+        """For a trip of a robot carrying an idle arm that sticks out (FOLD_GAIN wider than folded): fold the arm over
+        the robot first (ArmMotion.hold_pose, as an errand does), and (the world as it will be with the arm folded, when
+        the trip may set off). None to go as it is: no arm, a busy one, one holding something, or one already in.
+        ANYmal with a UR5e as it was built was 1.25 m wide and went through no door; folded, 0.67 m. Session lock
+        held."""
+        if self.errand(robot) is not None:
+            return None  # an errand folds the arm itself, and holds what it carries
+        arms = [a for a in self.arms(robot) if a != robot]
+        if not arms:
+            return None
+        name = arms[0]
+        busy = self.session.controllers.get(name)
+        if busy is not None and not getattr(busy, "done", True):
+            return None
+        model = self.session.model
+        tcp = data.site_xpos[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{name}/tcp")]
+        for obj in self._movable():
+            if float(np.linalg.norm(data.xpos[self._body(obj)] - tcp)) < HOLDING_NEAR:
+                return None  # it holds something, or is right at it: left as it is
+        try:
+            arm = self._arm_motion(name)
+        except BehaviorError:
+            return None
+        arm.sync(data)
+        tuck = arm.hold_pose(0.0, 0.0)
+        if tuck is None:
+            return None
+        folded = fetch._posed(model, data, arm, tuck[1])
+        try:
+            now = nav_map.measure_body(model, data, robot, kind, walker).radius
+            then = nav_map.measure_body(model, folded, robot, kind, walker).radius
+        except ValueError:
+            return None
+        if then > now - FOLD_GAIN:
+            return None
+        moves = Hand(arm)._joint_way(arm.q, tuck[1], None, "stow", LOADED_TILT, -1)
+        if moves is not None:
+            arm.queue.extend(moves)
+        else:
+            arm.move_to(tuck[0])
+        return folded, lambda: arm.done
 
     def _carried_arm(self, robot: str, data: mujoco.MjData) -> navigation.Arm | None:
         """The arm a moving robot carries (the first, if it has several), for stopping within its reach."""
