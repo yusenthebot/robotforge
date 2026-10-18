@@ -306,6 +306,8 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         model = _compile(spec)
     if world.water is not None and _float_on_water(spec, model, world, homes, frames, ground):
         model = _compile(spec)
+    if world.water is not None:
+        water_physics.add_surface(spec, world.water.physics(), model)
     _add_home_key(spec, model, homes)
     return CompiledWorld(spec, _compile(spec), notes, doctor)
 

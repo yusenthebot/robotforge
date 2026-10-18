@@ -99,7 +99,7 @@ class Water:
 
 
 def encode(spec: mujoco.MjSpec, water: Water) -> None:
-    """Store `water` in the model (a custom numeric field) and add a see-through surface for MuJoCo's renderer."""
+    """Store `water` in the model, as a custom numeric field."""
     area = water.area if water.area is not None else (0.0, 0.0, 0.0, 0.0)
     data = [
         ENCODING,
@@ -113,11 +113,21 @@ def encode(spec: mujoco.MjSpec, water: Water) -> None:
         *area,
     ]
     spec.add_numeric(name=NUMERIC, data=[float(v) for v in data])
+
+
+def add_surface(spec: mujoco.MjSpec, water: Water, model: mujoco.MjModel) -> None:
+    """A see-through sheet at the water level for MuJoCo's own renderer (observe's pictures); the browser viewer
+    draws its own. `model` is the world compiled without it: open water gets a sheet twice the scene's size round
+    its middle, and the model's statistics are pinned to that model's, so the sheet moves neither the cameras that
+    frame the scene nor the near clipping plane (a 120 m sheet had pushed it out of a boat's own camera)."""
     if water.area is not None:
         x0, y0, x1, y1 = water.area
         center, half = [(x0 + x1) / 2, (y0 + y1) / 2], [(x1 - x0) / 2, (y1 - y0) / 2]
     else:
-        center, half = [0.0, 0.0], [60.0, 60.0]
+        reach = max(20.0, 2.0 * float(model.stat.extent))
+        center, half = [float(model.stat.center[0]), float(model.stat.center[1])], [reach, reach]
+    spec.stat.extent = float(model.stat.extent)
+    spec.stat.center = [float(v) for v in model.stat.center]
     # Thin, not a plane: a plane is the floor to the viewer and to the navigation map. It collides with nothing,
     # and its material is fully transparent to rays, so rangefinders and lidars look through it.
     if not any(m.name == "water_rays" for m in spec.materials):

@@ -273,6 +273,21 @@ def test_water_in_world_yaml_round_trips_and_takes_a_bare_level():
     assert water.surface_geom(model) >= 0
 
 
+def test_the_surface_sheet_does_not_move_cameras_or_clip_planes():
+    """observe's pictures: a 120 m sheet for open water had the overview frame the sheet (the harbor a speck) and
+    pushed the near clipping plane out of a boat's own camera. The model's statistics are the world's without it."""
+    from robotforge.sim import render
+
+    text = "name: sea\nwater: 1.0\nobjects:\n  - {name: crate, shape: box, size: [0.6, 0.4, 0.2], mass: 20}\n"
+    wet = compile_world(World.from_yaml(text)).model
+    assert water.surface_geom(wet) >= 0
+    assert wet.stat.extent < 3.0  # the floating crate's world; with the sheet counted it was 170 m
+    data = mujoco.MjData(wet)
+    mujoco.mj_forward(wet, data)
+    low, high = render._scene_box(wet, data)
+    assert max(high[:2] - low[:2]) < 2.0  # the crate, not the sea
+
+
 @pytest.mark.parametrize(
     "bad",
     [{"level": 0}, {"level": 1, "current": [5, 0]}, {"level": 1, "area": [2, 0, 1, 1]}, {"level": 1, "wave": 1}],

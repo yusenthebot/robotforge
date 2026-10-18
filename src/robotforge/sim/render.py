@@ -21,6 +21,7 @@ from PIL import Image
 from robotforge import wording
 from robotforge.design.visuals import HIDDEN_GROUP, VISUAL_GROUP
 from robotforge.sim import vision
+from robotforge.sim import water as water_model
 from robotforge.sim.session import SimSession
 
 # Free-camera presets as (azimuth deg, elevation deg, share of the image the content spans).
@@ -474,7 +475,10 @@ def _scene_box(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.nd
     if data is None:
         return None
     plane = int(mujoco.mjtGeom.mjGEOM_PLANE)
+    sheet = water_model.surface_geom(model)  # the water's surface reaches past the scene: it is not what to frame
     box = _geom_box(
-        model, data, [g for g in range(model.ngeom) if int(model.geom_type[g]) != plane and model.geom_group[g] < 3]
+        model,
+        data,
+        [g for g in range(model.ngeom) if int(model.geom_type[g]) != plane and model.geom_group[g] < 3 and g != sheet],
     )
     return box if box is not None else _moving_box(model, data)
