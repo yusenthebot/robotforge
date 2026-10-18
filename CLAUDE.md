@@ -20,6 +20,9 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - Trunk-based (user request, 2026-10-15): work on `main`. No long-lived feature branches; parallel branches made merging painful.
   If a task truly needs isolation, use one short-lived branch, merge it the same day and delete it. Never run two branches that touch the same shared files.
 - Push in real time: push main after every commit. Never force-push.
+- Parallel lanes (user request, 2026-10-19: no piles of branches to merge by hand): each lane works in a worktree and lands on main after every verified step with `uv run python <main checkout>/scripts/land.py` from its worktree.
+  It merges main in, runs ruff, the suite and the smoke test under a lock (one lane at a time), fast-forwards main and pushes; exit 2 means conflicts to resolve, 3 a failed check.
+  A landed lane's branch and worktree are removed when the lane ends.
 - Docs: one sentence per line in long Markdown; no em dashes; no emojis.
 
 ## Dev notes
