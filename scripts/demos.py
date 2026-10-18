@@ -275,6 +275,13 @@ DEMOS = [
         timeline=[(1.0, _move("centaur", 0.22)), (9.0, _move("centaur", 0.15, 0.6))],
         page=_follow("centaur", (1.2, -1.4, 0.75), ease=0.04),
     ),
+    Demo(  # the lidar on its back and the depth camera on its nose ride along without a wobble or a gap
+        "sensors_go2_walk",
+        S._sensing_go2((-4.6, 0.0)),  # the open floor between the racks and the pallets
+        13.0,
+        timeline=[(0.8, _move("go2", 0.45))],
+        page=_follow("go2", (0.84, 0.72, 0.5), ease=0.05),
+    ),
     Demo(
         "lesson_learn_to_walk",
         lambda pg: None,

@@ -595,6 +595,21 @@ def _rocks(pg: Any) -> None:
     pg.set_terrain("rough", params={"size": [6, 6], "height": 0.04})
 
 
+def _sensing_go2(pos: tuple[float, float] = (-3.2, 2.6)) -> Callable[[Any], None]:
+    """A Go2 in the warehouse with a 3D lidar on its back, a depth camera on its nose and touch pads under its
+    feet, each added in one call as an agent would (add_sensor)."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene("warehouse", keep_robots=False, starter=False)
+        pg.add_robot("go2", library="go2", pos=list(pos))
+        pg.add_sensor("go2", {"type": "lidar3d", "rate_hz": 10})
+        pg.add_sensor("go2", {"type": "camera", "mode": "depth"})
+        for foot in ("FL", "FR", "RL", "RR"):
+            pg.add_sensor("go2", {"type": "touch", "on": foot, "rows": 2, "cols": 2})
+
+    return build
+
+
 def _gallery_line_up(pg: Any) -> None:
     """Several designs side by side, for an overview picture."""
     for name, pos in (
@@ -727,6 +742,7 @@ SHOTS = [
         Shot(f"gallery_{name}", _design(name, extras), page=_look_at([name], offset), settle=3.0)
         for name, extras, offset in GALLERY_SHOTS
     ),
+    Shot("sensors_go2", _sensing_go2(), page=_look_at(["go2"], (0.85, 0.7, 0.42)), settle=1.0),
     Shot(
         "gallery",
         _gallery_line_up,
