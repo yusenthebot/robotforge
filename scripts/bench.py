@@ -167,9 +167,10 @@ def machine_scale(now: dict[str, dict[str, Any]], before: dict[str, dict[str, An
 
 def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Per metric: the previous value, the change and a verdict (better, worse, same, new), from flattened results.
-    Physics speeds change relative to the control world when both runs measured it ("relative": True): a world
-    that slowed by as much as the control did is the machine, not robotforge."""
-    scale = machine_scale(now, before)
+    Physics speeds change relative to the machine ("relative": True): to the machine check timed in the same
+    process when both runs have it, else to the control world when both runs measured it. A world that slowed by
+    as much as the machine did is the machine, not robotforge."""
+    control = machine_scale(now, before)
     out = {}
     for name, m in now.items():
         old = before.get(name)
@@ -178,7 +179,12 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             out[name] = {"before": None, "change": None, "verdict": "new"}
             continue
         prev = float(old["value"])
-        relative = scale is not None and m.get("unit") == "steps/s" and name != CONTROL
+        scale = None
+        if m.get("unit") == "steps/s":
+            scale = m["machine"] / old["machine"] if m.get("machine") and old.get("machine") else None
+            if scale is None and name != CONTROL:
+                scale = control
+        relative = scale is not None
         ref = prev * scale if relative else prev
         change = (value - ref) / abs(ref) if ref else (0.0 if value == ref else math.inf)
         share, amount = _noise(m)
@@ -628,6 +634,40 @@ def bench_imports(quick: bool) -> dict[str, Any]:
 
 CHUNK = 0.05  # s of sim per timed slice
 MAX_WALL_PER_WORLD = 120.0  # s; a world that is far too slow stops early and says so
+MACHINE_STEPS, MACHINE_TRIES = 100, 10  # the machine check: steps per try, tries before each repeat
+
+
+class MachineCheck:
+    """How fast this machine runs MuJoCo right now, timed in the world's own process before each repeat: a chain
+    of 20 links that touch nothing, restarted from the same pose every time, so on the same machine it always costs
+    the same. A world's speed over it moves less with how busy the machine was than its speed alone, and the load
+    drifts within one run: the first worlds and the last can see different machines. On a very busy machine both
+    still wobble (10 to 20 percent between two runs at load 17 to 43), so a change needs --ab to be sure of."""
+
+    def __init__(self, links: int = 20) -> None:
+        import mujoco
+
+        self._mujoco = mujoco
+        link = (
+            '<body pos="0 0 -0.1"><joint type="hinge" axis="0 1 0" damping="0.01"/>'
+            '<geom type="capsule" fromto="0 0 0 0 0 -0.1" size="0.01" contype="0" conaffinity="0"/>'
+        )
+        xml = f'<mujoco><worldbody><body pos="0 0 3">{link * links}{"</body>" * links}</body></worldbody></mujoco>'
+        self.model = mujoco.MjModel.from_xml_string(xml)
+        self.data = mujoco.MjData(self.model)
+        self.best = math.inf
+
+    def time(self, tries: int = MACHINE_TRIES) -> None:
+        for _ in range(tries):
+            self._mujoco.mj_resetData(self.model, self.data)
+            self.data.qpos[:] = 0.3
+            c0 = time.process_time()
+            self._mujoco.mj_step(self.model, self.data, nstep=MACHINE_STEPS)
+            self.best = min(self.best, time.process_time() - c0)
+
+    @property
+    def steps_per_s(self) -> float:
+        return MACHINE_STEPS / max(self.best, 1e-9)
 
 
 @dataclass(frozen=True)
@@ -759,6 +799,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
     built = time.perf_counter() - t0
     slices = max(1, round(world.seconds / CHUNK))
     best = [math.inf] * slices  # each slice's least process time over the repeats
+    machine = MachineCheck()
     done: dict[str, Any] = {}
     share = 0.0
     started = time.monotonic()
@@ -770,6 +811,8 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
         pg.run_fast(lambda: False, world.warm)
         # The last run times the controllers apart (which costs a little itself), and is not counted for speed.
         timed = rep == repeats
+        if not timed:
+            machine.time()
         in_controllers = 0.0
         if timed:
             original = s._run_controllers
@@ -801,6 +844,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
     rate = len(measured) * chunk / max(sum(measured), 1e-9)
     return {
         "steps_per_s": rate,
+        "machine": machine.steps_per_s,
         "rtf": rate * m.opt.timestep,
         "controllers_share": share,
         "peak_mb": _rss_mb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) if resource else None,
@@ -832,6 +876,7 @@ def bench_physics(quick: bool, worlds: list[str] | None = None) -> dict[str, Any
             out[f"{name}_error"] = str(exc)
             continue
         info = {k: r[k] for k in r if k not in ("steps_per_s", "rtf", "controllers_share", "peak_mb")}
+        info["machine"] = round(info["machine"])  # steps/s of the machine check, timed in the same process
         out[f"{name}.steps_per_s"] = metric(r["steps_per_s"], "steps/s", "higher", **info)
         out[f"{name}.controllers_share"] = metric(r["controllers_share"], "share", "lower")
         out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower", noise=WORLDS[name].memory_noise)
@@ -1283,11 +1328,12 @@ def main(argv: list[str] | None = None) -> int:
     busy = busy_reason(loads, cores, now, budget_spec)
     budgets = check_budgets(now, budget_spec, ran, busy is not None)
     print("\n".join(table(now, compared, budgets)))
-    scale = machine_scale(now, before)
-    if scale is not None:
+    if any(c.get("relative") for c in compared.values()):
+        scale = machine_scale(now, before)
+        control = "" if scale is None else f"; objects_20, with only MuJoCo in its loop, ran {scale - 1:+.0%}"
         print(
-            f"\n* steps/s changes are relative to objects_20 (only MuJoCo in its loop), which ran {scale - 1:+.0%}: "
-            "how much faster or slower the machine was than then"
+            "\n* steps/s changes allow for the machine's speed, timed in each world's own process (for older runs,"
+            f" by the objects_20 world){control}"
         )
     if busy:
         print(f"\nnote: {busy}: timings run slow on a machine this busy, so timings over budget are inconclusive")

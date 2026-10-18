@@ -23,7 +23,7 @@
     "physics.humanoid_idle.controllers_share": {"max": 0.58, "why": "0.47: a standing humanoid runs its full walking controller (preview control, leg IK) at 100 Hz"},
     "physics.arm_pick.steps_per_s": {"min": 12000, "why": "20,600 steps/s; 40 percent margin"},
     "physics.warehouse_nav.steps_per_s": {"min": 2000, "why": "3,300 steps/s for a Go2 crossing the warehouse (59 bodies, 294 geoms); 40 percent margin"},
-    "physics.objects_20.steps_per_s": {"min": 8500, "why": "14,500 steps/s for 20 objects settling on a table; no robotforge code in its loop, so it also tells how busy the machine was"},
+    "physics.objects_20.steps_per_s": {"min": 12000, "why": "14,500 to 20,100 steps/s for 20 objects settling on a table at load 11 to 25; no robotforge code in its loop, so it tells how busy the machine was: at 9,500 (load 17 to 23) the humanoid fell under its own floor with no code change. Under 12,000 speed budgets are inconclusive, not failures"},
     "physics.dog_idle.peak_mb": {"max": 200, "why": "160 MB for a process with a dog world"},
     "physics.go2_walk.peak_mb": {"max": 620, "why": "501 to 522 MB: MuJoCo compiling the Go2's OBJ meshes takes about 260 MB of it"},
     "physics.warehouse_nav.peak_mb": {"max": 880, "why": "760 MB"},

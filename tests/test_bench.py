@@ -333,6 +333,35 @@ def test_speeds_compare_relative_to_the_control_world(bench):
     assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
 
 
+def test_speeds_compare_relative_to_the_machine_check_in_their_own_process(bench):
+    """The load drifts within a run: the dog, timed first, saw a machine half as fast; the control, timed last,
+    a machine as fast as before. The machine check timed with each world tells them apart."""
+    m = bench.metric
+    before = {
+        "physics.objects_20.steps_per_s": m(10000, "steps/s", "higher", machine=280000),
+        "physics.dog_idle.steps_per_s": m(100000, "steps/s", "higher", machine=280000),
+    }
+    now = {
+        "physics.objects_20.steps_per_s": m(10000, "steps/s", "higher", machine=280000),
+        "physics.dog_idle.steps_per_s": m(52000, "steps/s", "higher", machine=140000),
+    }
+    out = bench.compare(now, before)
+    assert out["physics.dog_idle.steps_per_s"]["verdict"] == "same" and out["physics.dog_idle.steps_per_s"]["relative"]
+    assert out["physics.objects_20.steps_per_s"]["verdict"] == "same"
+    now["physics.dog_idle.steps_per_s"] = m(52000, "steps/s", "higher", machine=280000)  # same machine: the code
+    assert bench.compare(now, before)["physics.dog_idle.steps_per_s"]["verdict"] == "worse"
+
+
+def test_the_machine_check_costs_the_same_every_time(bench):
+    """Restarted from the same pose, the check's best time is steady on one machine (a busy one may move it some)."""
+    rates = []
+    for _ in range(3):
+        check = bench.MachineCheck()
+        check.time(tries=20)
+        rates.append(check.steps_per_s)
+    assert max(rates) / min(rates) < 1.25, rates
+
+
 def test_flatten_names_metrics_by_section_and_skips_errors(bench):
     m = bench.metric
     results = {
