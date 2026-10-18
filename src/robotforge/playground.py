@@ -26,7 +26,7 @@ from robotforge.behaviors.manager import BehaviorManager
 from robotforge.design import gallery, importer, scenes, terrain
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import plate
-from robotforge.design.store import WorldStore
+from robotforge.design.store import WorldStore, worlds_home
 from robotforge.design.world import (
     CompiledWorld,
     Floor,
@@ -607,7 +607,18 @@ class Playground:
         return self._load_world(store.compile())
 
     def show_world(self) -> dict[str, Any]:
-        store = self._require_store()
+        """The open world's world.yaml. With none open it says so and lists the saved worlds, not an error: agents
+        call it first to see where things stand (both go2_arm_kitchen sessions on the branch began with it, and it
+        counted as a failed call)."""
+        if self.store is None:
+            home = worlds_home()
+            saved = sorted(p.parent.name for p in home.glob("*/world.yaml")) if home.is_dir() else []
+            return {
+                "world": None,
+                "saved_worlds": _limit(saved),
+                "notes": ["no world is open: new_world makes one, load_scene a ready-made one, open_world a saved one"],
+            }
+        store = self.store
         return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
 
     def _edit(self, change, snapshot: bool = True) -> dict[str, Any]:

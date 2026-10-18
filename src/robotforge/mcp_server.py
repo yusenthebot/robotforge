@@ -440,7 +440,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def show_world() -> str:
-        """Show the world.yaml of the open world (the editable description of everything in it)."""
+        """Show the world.yaml of the open world (the editable description of everything in it); with none open, the
+        saved worlds open_world can open."""
         with _tool_errors():
             return _json(playground.show_world())
 
