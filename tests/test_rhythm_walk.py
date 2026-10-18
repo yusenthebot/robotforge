@@ -844,7 +844,6 @@ async def test_move_reports_a_half_turn_as_turned_not_wrapped(pg, monkeypatch):
 
     monkeypatch.setattr(rhythm_walk, "WALKING_ROUNDS", 2)  # it turns from standing here
     monkeypatch.setattr(rhythm_walk, "WALK_CHECKS", rhythm_walk.WALK_CHECKS[::5])
-    from robotforge.cli import find_free_port
     from robotforge.mcp_server import build_server
 
     pg.add_robot("crab", build=STAR)
@@ -852,7 +851,7 @@ async def test_move_reports_a_half_turn_as_turned_not_wrapped(pg, monkeypatch):
     walk = learn_turns(solo, "crab", _walk("crab", joint_names(solo, Body.find(solo, "crab"))), seed=1)
     save_walk(pg.store.dir, walk)
     seconds = 1.2 * math.pi / walk.turn_rate  # past a half turn at the slower side's rate
-    async with Client(build_server(pg, find_free_port(8790))) as client:
+    async with Client(build_server(pg, 0)) as client:
         result = await client.call_tool("move", {"robot": "crab", "speed": 0.0, "turn": 0.8, "seconds": seconds})
         turned = _json.loads(result.content[0].text)["turned_deg"]
     assert turned > 180, f"turned {turned} degrees"

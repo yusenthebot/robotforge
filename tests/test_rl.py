@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.control import TaskError, compare_methods, make_env, make_task
 from robotforge.control.rl import JOBS, MlpPolicy, TrainedPolicy, list_policies, make_spec, store
 from robotforge.control.rl.jobs import INSTALL_HINT, Jobs
@@ -228,7 +227,7 @@ async def test_mcp_runs_a_trained_policy_and_explains_missing_extras(tmp_path, m
     net = _random_net(4, 1, np.random.default_rng(4))
     folder = store.policies_home(world["world_dir"]) / "pole_net"
     _fake_policy(folder, "balance", net, robot="pole", template="cartpole")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         names = {t.name for t in (await client.list_tools()).tools}
         assert {"train_policy", "training_status", "stop_training", "list_policies"} <= names
@@ -276,7 +275,7 @@ async def test_scripts_can_hand_a_robot_to_a_trained_policy(tmp_path, monkeypatc
         "except Exception as exc:\n"
         "    print('refused:', exc)\n"
     )
-    async with Client(build_server(pg, find_free_port(8790))) as client:
+    async with Client(build_server(pg, 0)) as client:
         await client.call_tool("write_script", {"name": "use_policy", "code": code})
         out = json.loads((await client.call_tool("run_script", {"name": "use_policy"})).content[0].text)
     assert out["exit_code"] == 0, out
@@ -340,7 +339,7 @@ async def test_mcp_trains_follows_and_stops_a_policy(tmp_path, monkeypatch):
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
     pg.new_world("lab")
     pg.add_robot("pole", template="cartpole")
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         before = pg.session.data.time
         started = json.loads(

@@ -13,7 +13,6 @@ import pytest
 import yaml
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 
@@ -107,7 +106,7 @@ def test_skill_texts_have_no_em_dashes():
 
 @pytest.mark.anyio
 async def test_skill_only_names_tools_the_server_has():
-    server = build_server(Playground.with_demo(), find_free_port(8790))
+    server = build_server(Playground.with_demo(), 0)
     async with Client(server) as client:
         tools = {t.name for t in (await client.list_tools()).tools}
     named = {name for path in SKILL.rglob("*.md") for name in TOOL_CALL.findall(path.read_text(encoding="utf-8"))}

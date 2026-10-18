@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 from mcp import Client
 
-from robotforge.cli import find_free_port
 from robotforge.mcp_server import build_server
 from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
@@ -59,7 +58,7 @@ async def _call(client, tool, args):
 
 
 async def test_agent_written_script_walks_and_places(pg):
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         _, saved = await _call(client, "write_script", {"name": "demo_task", "code": SCRIPT})
         assert Path(json.loads(saved)["saved"]).parts[-2:] == ("behaviors", "demo_task.py")  # separator-agnostic
@@ -73,7 +72,7 @@ async def test_agent_written_script_walks_and_places(pg):
 
 
 async def test_script_errors_come_back_as_tracebacks(pg):
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     code = "from robotforge.script import connect\nsim = connect()\nsim.move('arm', 0.2)\n"
     async with Client(server) as client:
         await _call(client, "write_script", {"name": "bad", "code": code})
@@ -84,7 +83,7 @@ async def test_script_errors_come_back_as_tracebacks(pg):
 
 
 async def test_script_time_budget_is_enforced(pg):
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     code = "from robotforge.script import connect\nsim = connect()\nwhile True:\n    sim.step(1.0)\n"
     async with Client(server) as client:
         await _call(client, "write_script", {"name": "forever", "code": code})
@@ -96,7 +95,7 @@ async def test_script_time_budget_is_enforced(pg):
 
 
 async def test_script_names_are_validated(pg):
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         result, text = await _call(client, "write_script", {"name": "../escape", "code": "print(1)"})
         assert result.is_error and "lowercase" in text
@@ -105,7 +104,7 @@ async def test_script_names_are_validated(pg):
 async def test_script_output_survives_non_ascii_text(pg):
     # A child process writing to a pipe uses the ANSI code page on Windows unless told otherwise.
     code = "print('h\\u00e9llo \\u4f60\\u597d \\U0001f916')\n"
-    server = build_server(pg, find_free_port(8790))
+    server = build_server(pg, 0)
     async with Client(server) as client:
         await _call(client, "write_script", {"name": "unicode_out", "code": code})
         _, ran = await _call(client, "run_script", {"name": "unicode_out"})
