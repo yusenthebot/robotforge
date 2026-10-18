@@ -702,9 +702,11 @@ SHOTS = [
         "fetch_put_down",
         _kitchen_panda,
         viewer=[_fetch("mm", "apple", "dining_table"), {"wait": 1.0}],
-        page=_when("apple", "p[0] < -1.25 && p[2] < 0.8 && p[2] > 0.76")
-        + _wait(2.0)
-        + _look_at(["mm"], (1.2, -1.5, 1.5)),
+        # over the table first: on the way up the apple passes the table's height before it gets there
+        page=_when("apple", "p[0] < -1.25 && p[2] > 0.84")
+        + _when("apple", "p[0] < -1.25 && p[2] < 0.79")
+        + _wait(1.2)
+        + _look_at(["mm"], (1.6, -2.0, 1.8)),
         settle=0.2,
     ),
     Shot(  # the stairs, the curbs and the stepping stones are more than the dog climbs: its path goes round them
