@@ -47,9 +47,9 @@ def test_compare_says_better_or_worse_by_the_metrics_direction(bench):
     }
     before = {
         "imports.cli_ms": m(600, "ms", "lower"),  # halved: better
-        "physics.dog.steps_per_s": m(40000, "steps/s", "higher"),  # a quarter slower: worse
+        "physics.dog.steps_per_s": m(45000, "steps/s", "higher"),  # a third slower: worse
         "install.installed_mb": m(160.0, "MB", "lower"),  # +0.3 %: sizes are exact, but this is within 2 %
-        "mcp.move_ms": m(65, "ms", "lower"),  # +8 %: within the noise of a shared machine
+        "mcp.move_ms": m(56, "ms", "lower"),  # +25 %: within the noise of a shared machine
         "viewer.fps": m(None, "fps", "higher"),  # not measured last time
     }
     out = bench.compare(now, before)
@@ -68,6 +68,15 @@ def test_a_tiny_timing_that_wobbles_is_not_a_regression(bench):
     assert out["mcp.observe_ms"]["verdict"] == "same"
     out = bench.compare({"mcp.observe_ms": m(6.0, "ms", "lower")}, {"mcp.observe_ms": m(1.8, "ms", "lower")})
     assert out["mcp.observe_ms"]["verdict"] == "worse"
+
+
+def test_measured_memory_wobbles_but_a_size_on_disk_does_not(bench):
+    m = bench.metric
+    peak = bench.compare(
+        {"physics.dog.peak_mb": m(160, "MB", "lower", noise=bench.MEMORY_NOISE)},
+        {"physics.dog.peak_mb": m(155, "MB", "lower", noise=bench.MEMORY_NOISE)},
+    )
+    assert peak["physics.dog.peak_mb"]["verdict"] == "same"
 
 
 def test_a_size_that_grows_past_two_percent_is_worse(bench):

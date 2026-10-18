@@ -55,10 +55,12 @@ SECTIONS = ("install", "imports", "physics", "viewer", "mcp")
 HEAVY_MODULES = ("trimesh", "manifold3d", "coacd", "PIL", "gymnasium", "torch", "stable_baselines3", "onnxruntime")
 IMPORT_TARGETS = ("robotforge", "robotforge.cli", "robotforge.mcp_server")
 TOP_N = 8  # rows of "where the time or the bytes go" kept in a result
-# A change within this share or this amount is noise, by unit: sizes are exact, times on a shared machine are not,
-# and a 2 ms call that takes 3 ms once is not a regression.
-NOISE = {"MB": (0.02, 1.0), "KB": (0.02, 10.0), "": (0.0, 0.0), "ms": (0.15, 2.0), "s": (0.15, 0.05), "%": (0.15, 1.0)}
-TIME_NOISE = (0.15, 0.0)
+# A change within this share or this amount is noise, by unit: sizes on disk are exact; speeds and times on a shared
+# machine are not (the same commit measured 103,000 and 75,000 steps/s for the idle dog at the same load average,
+# minutes apart), and a 2 ms call that takes 3 ms once is not a regression. Measured memory wobbles a few percent.
+NOISE = {"MB": (0.02, 1.0), "KB": (0.02, 10.0), "": (0.0, 0.0), "ms": (0.3, 2.0), "s": (0.3, 0.05), "%": (0.3, 1.0)}
+TIME_NOISE = (0.3, 0.0)
+MEMORY_NOISE = (0.05, 5.0)  # peak and resident memory of a process, in MB
 
 
 # ---- results: metrics, comparison, budgets ---------------------------------------------------------------
@@ -81,8 +83,10 @@ def flatten(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _noise(unit: str) -> tuple[float, float]:
-    return NOISE.get(unit, TIME_NOISE)
+def _noise(m: dict[str, Any]) -> tuple[float, float]:
+    if m.get("noise"):
+        return tuple(m["noise"])
+    return NOISE.get(m.get("unit", ""), TIME_NOISE)
 
 
 def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -96,7 +100,7 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             continue
         prev = float(old["value"])
         change = (value - prev) / abs(prev) if prev else (0.0 if value == prev else math.inf)
-        share, amount = _noise(m.get("unit", ""))
+        share, amount = _noise(m)
         if abs(change) <= share or abs(value - prev) <= amount:
             verdict = "same"
         else:
@@ -274,14 +278,22 @@ def _stop(proc: subprocess.Popen) -> float | None:
     return None
 
 
+def _ps(*args: str) -> subprocess.CompletedProcess | None:
+    """ps (macOS and Linux); None where there is none (Windows), and those numbers go unmeasured."""
+    try:
+        return subprocess.run(["ps", *args], capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+
+
 def _cpu_seconds(pid: int) -> float | None:
     """Processor time a process has used so far (s): /proc on Linux, ps elsewhere."""
     stat = Path(f"/proc/{pid}/stat")
     if stat.is_file():
         fields = stat.read_text(encoding="utf-8").rsplit(")", 1)[1].split()
         return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
-    done = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True, check=False)
-    text = done.stdout.strip()
+    done = _ps("-o", "time=", "-p", str(pid))
+    text = done.stdout.strip() if done else ""
     if not text:
         return None
     days, _, clock = text.rpartition("-")
@@ -598,7 +610,10 @@ WORLDS: dict[str, World] = {
 def physics_world(name: str, repeats: int) -> dict[str, Any]:
     """Runs in a worker process: build the world, then time it `repeats` times and once more with the
     controllers timed apart."""
-    import resource
+    try:
+        import resource
+    except ImportError:  # Windows: peak memory goes unmeasured
+        resource = None
 
     from robotforge.playground import Playground
 
@@ -654,7 +669,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
         "steps_per_s": rate,
         "rtf": rate * m.opt.timestep,
         "controllers_share": share,
-        "peak_mb": _rss_mb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),
+        "peak_mb": _rss_mb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) if resource else None,
         "build_s": built,
         "bodies": m.nbody - 1,
         "geoms": m.ngeom,
@@ -685,7 +700,7 @@ def bench_physics(quick: bool, worlds: list[str] | None = None) -> dict[str, Any
         info = {k: r[k] for k in r if k not in ("steps_per_s", "rtf", "controllers_share", "peak_mb")}
         out[f"{name}.steps_per_s"] = metric(r["steps_per_s"], "steps/s", "higher", **info)
         out[f"{name}.controllers_share"] = metric(r["controllers_share"], "share", "lower")
-        out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower")
+        out[f"{name}.peak_mb"] = metric(r["peak_mb"], "MB", "lower", noise=MEMORY_NOISE)
     return out
 
 
@@ -940,7 +955,9 @@ def bench_viewer(quick: bool, shots: Path | None = None) -> dict[str, Any]:
         "cold_start_s": metric(best["first_frame_s"], "s", "lower", served_s=round(best["served_s"], 3)),
         "fps": metric(rate["fps"], "fps", "higher", world="warehouse + go2", size=[VIEW_W, VIEW_H, VIEW_SCALE]),
         "frame_ms": metric(rate["frame"]["median"], "ms", "lower", **{k: rate["frame"][k] for k in rate["frame"]}),
-        "server_peak_mb": metric(max(peaks) if peaks else None, "MB", "lower", warehouse=rate["server_peak_mb"]),
+        "server_peak_mb": metric(
+            max(peaks) if peaks else None, "MB", "lower", noise=MEMORY_NOISE, warehouse=rate["server_peak_mb"]
+        ),
         # The viewer server simulating an idle dog in real time for an open page: what leaving it open costs.
         "idle_cpu_pct": metric(starts[0]["idle_cpu"], "%", "lower", seconds=IDLE_SECONDS),
     }
@@ -951,14 +968,14 @@ def bench_viewer(quick: bool, shots: Path | None = None) -> dict[str, Any]:
 
 def _rss_of(pid: int) -> float | None:
     """A process's resident memory now (MB), from ps (macOS and Linux)."""
-    done = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, check=False)
-    return int(done.stdout.strip()) / 1024 if done.stdout.strip().isdigit() else None
+    done = _ps("-o", "rss=", "-p", str(pid))
+    return int(done.stdout.strip()) / 1024 if done and done.stdout.strip().isdigit() else None
 
 
 def _server_pid(port: int) -> int | None:
     """The `robotforge mcp --port <port>` process this one started."""
-    done = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,command="], capture_output=True, text=True, check=False)
-    for line in done.stdout.splitlines():
+    done = _ps("-A", "-o", "pid=,ppid=,command=")
+    for line in done.stdout.splitlines() if done else []:
         parts = line.split(None, 2)
         if len(parts) == 3 and int(parts[1]) == os.getpid() and "mcp" in parts[2] and f"--port {port}" in parts[2]:
             return int(parts[0])
@@ -1016,7 +1033,7 @@ def bench_mcp(quick: bool) -> dict[str, Any]:
     out = {"start_s": metric(r["start_s"], "s", "lower", tools=r["tools"])}
     for name, times in r["latencies"].items():
         out[f"{name}_ms"] = metric(1000 * statistics.median(times), "ms", "lower", calls=len(times))
-    out["server_rss_mb"] = metric(r["rss"], "MB", "lower")
+    out["server_rss_mb"] = metric(r["rss"], "MB", "lower", noise=MEMORY_NOISE)
     out["idle_cpu_pct"] = metric(r["idle_cpu"], "%", "lower", seconds=IDLE_SECONDS)
     return out
 
