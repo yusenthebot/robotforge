@@ -10,7 +10,7 @@ import contextlib
 import itertools
 import math
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from typing import NamedTuple
 
@@ -601,18 +601,19 @@ class ArmMotion:
         own base, and does behind it, over the back of its deck."""
         d = self.ik.data
         self.ik.point(self.chain, self.q)  # the robot under the arm as it is now
-        under = self._carrier_boxes()
-        if not under:
-            return None
         root = np.array(d.xpos[self._robot_root], float)
         rot = d.xmat[self._robot_root].reshape(3, 3)
         heading = float(np.arctan2(rot[1, 0], rot[0, 0]))
         c, s = np.cos(heading), np.sin(heading)
         frame = np.array([[c, s], [-s, c]])  # world xy -> the robot's heading frame
+        # Worked out in the robot's heading frame, each shape's box turned with it: boxes square to the world grew
+        # with the robot's heading (a Panda's deck 40 percent at 45 degrees), and the robot found another tuck or
+        # none, standing at an angle.
+        under = self._carrier_boxes(frame, root[:2])
+        if not under:
+            return None
         corners = [
-            frame @ (center + np.array(sign) * half - root[:2])
-            for center, half, _ in under
-            for sign in itertools.product((-1, 1), repeat=2)
+            center + np.array(sign) * half for center, half, _ in under for sign in itertools.product((-1, 1), repeat=2)
         ]
         outline = (frame, root[:2], np.min(corners, axis=0) - HOLD_MARGIN, np.max(corners, axis=0) + HOLD_MARGIN)
         low, high = np.min(corners, axis=0) + load_radius, np.max(corners, axis=0) - load_radius
@@ -629,14 +630,15 @@ class ArmMotion:
         spots = []
         for x in np.arange(low[0], high[0] + 1e-9, HOLD_GRID):
             for y in np.arange(low[1], high[1] + 1e-9, HOLD_GRID):
+                local = np.array([x, y])
                 xy = root[:2] + np.array([c * x - s * y, s * x + c * y])
                 floor = max(
-                    (top for center, half, top in under if np.all(np.abs(xy - center) < half + load_radius)),
+                    (top for center, half, top in under if np.all(np.abs(local - center) < half + load_radius)),
                     default=-np.inf,
                 )
                 lowest = max(floor + LOAD_CLEARANCE + load_half_height + 0.005, ceiling - HOLD_RISE, shoulder)
                 spread = HOLD_SPREAD * float(np.hypot(x - aim[0], 2 * (y - aim[1])))  # off to a side: twice
-                spots.append((lowest + spread, lowest, spread, xy))
+                spots.append((lowest + spread, lowest, spread, xy, local))
         spots.sort(key=lambda spot: spot[0])
         # The pose the arm folds into by itself from the one it is in comes first: the moves there keep to it (a
         # Panda folded into another pose found by a restart went back to its own on the way, elbow out). Others, from
@@ -644,14 +646,14 @@ class ArmMotion:
         for restarts in (0, TUCK_STARTS):
             best: tuple[float, np.ndarray, np.ndarray] | None = None  # (score, point, joint values)
             tries = 0
-            for bound, lowest, spread, xy in spots:
+            for bound, lowest, spread, xy, local in spots:
                 if best is not None and bound >= best[0] or tries >= HOLD_TRIES:
                     break  # the spots left can only score worse
                 for z in np.arange(lowest, ceiling, HOLD_STEP):
                     if best is not None and z + spread >= best[0]:
                         break
                     p = np.array([*xy, z])
-                    if not self._load_clears(p, load_half_height, under):
+                    if not self._load_clears(np.array([*local, z]), load_half_height, under):
                         continue
                     tries += 1
                     if self.quick_error(p) > REACH_TOL:
@@ -686,7 +688,11 @@ class ArmMotion:
                 q, err = self.ik.solve(self.chain, p, start, iterations=60, axis=(self.tool_axis, DOWN))
                 if err > REACH_TOL or self._collides(q):
                     continue
-            if not self._load_hits_arm(q, p, half_height, radius) and self._inside(q, outline) and self._roomy(q):
+            if (
+                not self._load_hits_arm(q, p, half_height, radius, outline[:2])
+                and self._inside(q, outline)
+                and self._roomy(q)
+            ):
                 return q
         return None
 
@@ -700,53 +706,48 @@ class ArmMotion:
 
     def _inside(self, q: np.ndarray, outline: tuple[np.ndarray, ...]) -> bool:
         """Whether the arm at `q`, seen from above, stays inside the outline (heading frame, middle, low, high)."""
-        m, d = self.ik.model, self.ik.data
+        m = self.ik.model
         frame, middle, low, high = outline
         self.ik.point(self.chain, q)
-        for g in range(m.ngeom):
-            if int(m.geom_bodyid[g]) not in self._moving or not collides(m, g):
-                continue
-            rot = d.geom_xmat[g].reshape(3, 3)
-            center = d.geom_xpos[g] + rot @ m.geom_aabb[g, :3]
-            half = (np.abs(rot) @ m.geom_aabb[g, 3:])[:2]
-            for sign in itertools.product((-1, 1), repeat=2):
-                corner = frame @ (center[:2] + np.array(sign) * half - middle)
-                if np.any(corner < low) or np.any(corner > high):
-                    return False
-        return True
+        boxes = _boxes_in(self.ik, lambda g: int(m.geom_bodyid[g]) in self._moving, frame, middle)
+        return all(np.all(center - half >= low) and np.all(center + half <= high) for center, half, _ in boxes)
 
-    def _load_hits_arm(self, q: np.ndarray, p: np.ndarray, half_height: float, radius: float) -> bool:
+    def _load_hits_arm(
+        self, q: np.ndarray, p: np.ndarray, half_height: float, radius: float, frame: tuple | None = None
+    ) -> bool:
         """Whether a load held at `p` with the arm at `q` overlaps the arm's own links (other than the hand holding it),
-        seen as boxes: folded back over its robot, an arm can bend round its own load."""
-        m, d = self.ik.model, self.ik.data
+        seen as boxes: folded back over its robot, an arm can bend round its own load. In a robot's heading frame
+        (`frame`: (world xy to it, its middle)) if given, as hold_pose works."""
+        m = self.ik.model
         self.ik.point(self.chain, q)
         hand = {b for b in self._moving if _descends_from(m, b, self.chain.body)}
+        if frame is not None:
+            turn, middle = frame
+            p = np.array([*(turn @ (p[:2] - middle)), p[2]])
         low, high = p - [radius, radius, half_height], p + [radius, radius, half_height]
-        for g in range(m.ngeom):
-            body = int(m.geom_bodyid[g])
-            if body not in self._moving or body in hand or not collides(m, g):
-                continue
-            rot = d.geom_xmat[g].reshape(3, 3)
-            center = d.geom_xpos[g] + rot @ m.geom_aabb[g, :3]
-            half = np.abs(rot) @ m.geom_aabb[g, 3:]
-            if np.all(center + half > low) and np.all(center - half < high):
-                return True
-        return False
+        links = _boxes_in(
+            self.ik,
+            lambda g: int(m.geom_bodyid[g]) in self._moving and int(m.geom_bodyid[g]) not in hand,
+            *(frame if frame is not None else (None, None)),
+            tops=False,
+        )
+        return any(np.all(center + half > low) and np.all(center - half < high) for center, half in links)
 
-    def _carrier_boxes(self) -> list[tuple[np.ndarray, np.ndarray, float]]:
+    def _carrier_boxes(
+        self, frame: np.ndarray | None = None, middle: np.ndarray | None = None
+    ) -> list[tuple[np.ndarray, np.ndarray, float]]:
         """The robot under the arm as boxes seen from above: (center xy, half size xy, top z) of each solid shape
-        of the robot the arm does not move, as posed in the IK's copy."""
-        m, d = self.ik.model, self.ik.data
-        boxes = []
-        for g in range(m.ngeom):
-            body = int(m.geom_bodyid[g])
-            if body in self._moving or int(m.body_rootid[body]) != self._robot_root or not collides(m, g):
-                continue
-            rot = d.geom_xmat[g].reshape(3, 3)
-            center = d.geom_xpos[g] + rot @ m.geom_aabb[g, :3]
-            half = np.abs(rot) @ m.geom_aabb[g, 3:]
-            boxes.append((center[:2], half[:2], float(center[2] + half[2])))
-        return boxes
+        of the robot the arm does not move, as posed in the IK's copy; in a robot's heading frame (`frame`: world xy
+        to it, about `middle`) if given, each box turned with its shape there."""
+        m = self.ik.model
+        return _boxes_in(
+            self.ik,
+            lambda g: (
+                int(m.geom_bodyid[g]) not in self._moving and int(m.body_rootid[m.geom_bodyid[g]]) == self._robot_root
+            ),
+            frame,
+            middle,
+        )
 
     def tool_target_end(self) -> np.ndarray:
         """Where the tool will be once the queued moves are done."""
@@ -1099,3 +1100,29 @@ def _descends_from(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
             return True
         body = int(model.body_parentid[body])
     return False
+
+
+def _boxes_in(
+    ik: IKSolver,
+    keep: Callable[[int], bool],
+    frame: np.ndarray | None = None,
+    middle: np.ndarray | None = None,
+    tops: bool = True,
+) -> list[tuple]:
+    """The bounding boxes of the solid shapes `keep` takes, as posed in the IK's copy: in the world, or in a robot's
+    heading frame (`frame`: world xy to it, about `middle`), each box turned with its shape there. Seen from above,
+    (center xy, half size xy, top z); with `tops` false, (center, half size) in 3D."""
+    m, d = ik.model, ik.data
+    turn = np.eye(3)
+    if frame is not None:
+        turn[:2, :2] = frame
+    origin = np.zeros(2) if middle is None else np.asarray(middle, float)
+    out = []
+    for g in range(m.ngeom):
+        if not collides(m, g) or not keep(g):
+            continue
+        rot = turn @ d.geom_xmat[g].reshape(3, 3)
+        center = turn @ np.array([*(d.geom_xpos[g][:2] - origin), d.geom_xpos[g][2]]) + rot @ m.geom_aabb[g, :3]
+        half = np.abs(rot) @ m.geom_aabb[g, 3:]
+        out.append((center[:2], half[:2], float(center[2] + half[2])) if tops else (center, half))
+    return out

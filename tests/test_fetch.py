@@ -351,3 +351,23 @@ def test_a_pick_that_fails_from_where_it_stopped_says_why_and_not_where_it_picke
     result = errand.result()
     assert errand.state == "failed" and result["why"] == "out_of_reach", result
     assert "picked_up_at" not in result and "could not pick up the cube" in result["note"]
+
+
+@pytest.mark.parametrize("yaw", [6.0, 45.0, 111.0])
+def test_the_pose_for_the_way_is_the_same_whichever_way_the_robot_faces(tmp_path, monkeypatch, yaw):
+    """The tuck was worked out from boxes square to the world, which grow as the robot turns: a lift picker set down
+    6 degrees off found another tuck than one set down square, and from it reached into a kitchen island no more; a
+    mobile Panda at 45 degrees found none at all."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    poses = []
+    for heading in (90.0, yaw):
+        playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+        playground.new_world(f"facing_{int(heading)}")
+        playground.add_robot("picker", design="lift_picker", yaw=heading)
+        playground.run_fast(lambda: False, 0.5)
+        arm = playground.behaviors._arm(playground.behaviors.resolve("picker", arm=True))
+        arm.sync(playground.session.data)
+        found = arm.hold_pose(0.03, 0.03)
+        assert found is not None
+        poses.append(found[1])
+    assert poses[1] == pytest.approx(poses[0], abs=0.02)
