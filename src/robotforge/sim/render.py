@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import io
+import itertools
 import logging
 import sys
 import threading
@@ -37,6 +38,9 @@ VIEWS: dict[str, tuple[float, float, float]] = {
     "top": (90.0, -89.0, 0.75),
 }
 MIN_SPAN = np.array([0.8, 0.8, 0.3])  # m: a lone small robot is still shown with some ground around it
+FADED_ALPHA = 0.25  # opacity of what stands between the camera and the robot a video or a robot's view shows
+OCCLUDER_LAYERS = 6  # geoms one ray goes through on its way to the robot
+DRAWN_GROUPS = np.array([1, 1, 1, 0, 0, 0], np.uint8)  # geom groups a picture shows (3 and up are collision shapes)
 
 MAX_PIXELS = 1280 * 960
 TOUCHING = 0.001  # m: geoms a contact holds closer than this touch (a contact with a margin can be further apart)
@@ -131,14 +135,49 @@ class SnapshotRenderer:
             width = min(width, model.vis.global_.offwidth)
             height = min(height, model.vis.global_.offheight)
             camera = _camera_for(model, view, data, width / height)  # bad views fail the same with or without GL
-            return _on_gl_thread(self._render, model, data, camera, (session.version, width, height))
+            name, _, robots = _named_view(model, view)
+            faded = occluders(model, data, camera, robot_geoms(model, name)) if name in robots else frozenset()
+            return _on_gl_thread(self._render, model, data, camera, (session.version, width, height), faded)
 
-    def _render(self, model: mujoco.MjModel, data: mujoco.MjData, camera, key: tuple[int, int, int]) -> np.ndarray:
+    def rgb_of(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        camera: Any,
+        width: int,
+        height: int,
+        version: int,
+        faded: frozenset[int] = frozenset(),
+    ) -> np.ndarray:
+        """A picture of a model and data no session holds (a recording's frame, posed in a scratch MjData), from a
+        camera already made (an MjvCamera, or a view or camera name); the `faded` geoms are drawn see-through."""
+        _check_size(width, height)
+        with self._lock:
+            width = min(width, model.vis.global_.offwidth)
+            height = min(height, model.vis.global_.offheight)
+            if isinstance(camera, str):
+                camera = _camera_for(model, camera, data, width / height)
+            return _on_gl_thread(self._render, model, data, camera, (version, width, height), faded)
+
+    def _render(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        camera,
+        key: tuple[int, int, int],
+        faded: frozenset[int] = frozenset(),
+    ) -> np.ndarray:
         """Runs on the GL thread, with the renderer and session locks held by the caller."""
         self._ready(model, key)
         self._renderer.update_scene(data, camera=camera)
         if isinstance(camera, str):
             see_out_of_own_part(model, data, self._renderer.scene, model.camera(camera).id)
+        if faded:
+            scene = self._renderer.scene
+            for i in range(scene.ngeom):
+                g = scene.geoms[i]
+                if g.objtype == mujoco.mjtObj.mjOBJ_GEOM and g.objid in faded:
+                    g.rgba[3] = min(float(g.rgba[3]), FADED_ALPHA)
         return self._renderer.render().copy()
 
     def _ready(self, model: mujoco.MjModel, key: tuple[int, int, int]) -> None:
@@ -400,19 +439,32 @@ def _distance(model: mujoco.MjModel, data: mujoco.MjData, geom: int, point: np.n
     return float(np.max(np.abs(p) - size))
 
 
+def _named_view(model: mujoco.MjModel, view: str) -> tuple[str, list[str], list[str]]:
+    """The view as the model spells it ("Front" is front, "Go2" the robot go2), with the model's cameras and
+    robots."""
+    cameras = [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
+    robots = _robot_names(model)
+    if view not in VIEWS and view not in cameras and view not in robots:
+        view = wording.match(view, [*VIEWS, *cameras, *robots]) or view
+    return view, cameras, robots
+
+
 def _camera_for(
     model: mujoco.MjModel, view: str, data: mujoco.MjData | None = None, aspect: float = 4 / 3
 ) -> mujoco.MjvCamera | str:
-    cameras = [model.camera(i).name for i in range(model.ncam) if model.camera(i).name]
-    if view not in VIEWS and view not in cameras:
-        view = wording.match(view, [*VIEWS, *cameras]) or view  # "Front", "Dog/Front_Cam"
-    if view in VIEWS:
-        azimuth, elevation, fill = VIEWS[view]
+    view, cameras, robots = _named_view(model, view)
+    if view in VIEWS or view in robots:
+        # A robot's name: the default direction, framed on that robot alone. Asked to show a Go2 with a lidar in
+        # the warehouse, an agent's first observe was view="go2", refused (agent eval).
+        azimuth, elevation, fill = VIEWS.get(view, VIEWS["default"])
         cam = mujoco.MjvCamera()
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         cam.azimuth = azimuth
         cam.elevation = elevation
-        box = _scene_box(model, data) if view == "overview" else _moving_box(model, data)
+        if view in VIEWS:
+            box = _scene_box(model, data) if view == "overview" else _moving_box(model, data)
+        else:
+            box = _robot_box(model, data, view)
         if box is None:  # nothing posed yet: the model's own statistics
             cam.lookat[:] = model.stat.center
             cam.distance = 2.0 * max(float(model.stat.extent), 0.1)
@@ -425,7 +477,7 @@ def _camera_for(
         return cam
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, view) >= 0:
         return view
-    options = [*sorted(VIEWS), *cameras]
+    options = [*sorted(VIEWS), *cameras, *robots]
     close = wording.near(view, options)
     hint = f" Did you mean {', '.join(close)}?" if close else ""
     raise ValueError(f"unknown view {view!r}.{hint} Views: {', '.join(options)}")
@@ -457,6 +509,70 @@ def _moving_box(model: mujoco.MjModel, data: mujoco.MjData | None) -> tuple[np.n
         return None
     moving = model.body_weldid[model.geom_bodyid] != 0
     return _geom_box(model, data, [g for g in range(model.ngeom) if moving[g] and model.geom_group[g] < 3])
+
+
+def _robot_names(model: mujoco.MjModel) -> list[str]:
+    """The robots in a world, by name: a robot's bodies are named <robot>/<body> under a root body of its own
+    (a carried robot's are <robot>/<part>/<body>, under the same root)."""
+    names: dict[str, None] = {}
+    for root in sorted({int(r) for r in model.body_rootid[1:]}):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, root) or ""
+        if "/" in name:
+            names[name.split("/", 1)[0]] = None
+    return list(names)
+
+
+def robot_geoms(model: mujoco.MjModel, robot: str) -> list[int]:
+    """The geoms a picture draws of one robot: those under a root body named <robot>/..."""
+    prefix = f"{robot}/"
+    return [
+        g
+        for g in range(model.ngeom)
+        if model.geom_group[g] < 3
+        and (
+            mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.body_rootid[model.geom_bodyid[g]])) or ""
+        ).startswith(prefix)
+    ]
+
+
+def _robot_box(model: mujoco.MjModel, data: mujoco.MjData | None, robot: str) -> tuple[np.ndarray, np.ndarray] | None:
+    """Bounds of one robot's drawn geoms as it is now."""
+    return None if data is None else _geom_box(model, data, robot_geoms(model, robot))
+
+
+def occluders(model: mujoco.MjModel, data: mujoco.MjData, cam: Any, followed: list[int]) -> frozenset[int]:
+    """The geoms standing between the camera and the robot, to be drawn see-through: a Go2 walking in the park
+    went behind a bench, and a kitchen's counters would hide it as often (a video's frames and a robot's view).
+    Rays from the camera to the middle and the box corners of each of the robot's shapes find what is in the way
+    (a few rays at the robot's outline missed the bench's thin post; bounding spheres faded a rock beside the dog).
+    The ground and terrain (on the world body) and the robot itself never count."""
+    if not followed or isinstance(cam, str):
+        return frozenset()
+    az, el = np.radians(cam.azimuth), np.radians(cam.elevation)
+    eye = np.array(cam.lookat) - cam.distance * np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
+    corners = np.array(list(itertools.product((-1.0, 1.0), repeat=3)))
+    aims = []
+    for g in followed:
+        rot, aabb = data.geom_xmat[g].reshape(3, 3), model.geom_aabb[g]
+        aims.append(data.geom_xpos[g] + rot @ aabb[:3])
+        aims.extend(data.geom_xpos[g] + (aabb[:3] + corners * aabb[3:]) @ rot.T)
+    mine, found = set(followed), set()
+    hit = np.zeros(1, np.int32)
+    for aim in aims:
+        start, toward = eye.copy(), aim - eye
+        left = float(np.linalg.norm(toward))
+        if left < 1e-6:
+            continue
+        toward /= left
+        for _ in range(OCCLUDER_LAYERS):
+            far = mujoco.mj_ray(model, data, start, toward, DRAWN_GROUPS, 1, -1, hit)
+            g = int(hit[0])
+            if far < 0 or far >= left - 1e-4 or g in mine:
+                break
+            if model.geom_bodyid[g] != 0:  # not the ground or terrain
+                found.add(g)
+            start, left = start + toward * (far + 1e-4), left - far - 1e-4
+    return frozenset(found)
 
 
 def _geom_box(model: mujoco.MjModel, data: mujoco.MjData, geoms: list[int]) -> tuple[np.ndarray, np.ndarray] | None:

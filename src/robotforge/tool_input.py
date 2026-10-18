@@ -137,6 +137,9 @@ SYNONYMS = {
     "source": "code",
     "joint_targets": "controls",
     "duration_s": "seconds",
+    "video": "record",
+    "record_video": "record",
+    "save_video": "record",
 }
 # What a parameter takes, in words, for a value of the wrong shape.
 FORMS = {

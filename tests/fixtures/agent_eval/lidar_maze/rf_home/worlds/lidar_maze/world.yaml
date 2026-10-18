@@ -1,0 +1,347 @@
+name: lidar_maze
+floor:
+  style: grass
+  friction: 1.0
+terrain: []
+robots:
+- name: lidar_car
+  template: null
+  file: null
+  library: null
+  build:
+    color: orange
+    motor: tt_motor
+    base:
+      shape: box
+      size:
+      - 0.22
+      - 0.16
+      - 0.05
+      mass: 0.3
+      sensors:
+      - imu
+      - type: lidar
+        at:
+        - 0
+        - 0
+        - 0.07
+        rays: 64
+        fov: 160
+        range: 5
+    parts:
+    - name: left_wheel
+      at:
+      - 0
+      - 0.095
+      - -0.025
+      shape: wheel
+      size:
+      - 0.07
+      - 0.025
+      joint:
+        axis: y
+        continuous: true
+      actuator:
+        model: tt_motor
+        control: velocity
+      mirror: true
+    - name: rear_caster
+      at:
+      - -0.08
+      - 0
+      - -0.045
+      shape: caster
+      size:
+      - 0.03
+      joint: fixed
+  params: {}
+  pos:
+  - -2.0
+  - -3.0
+  yaw: 90.0
+objects:
+- name: wall_1
+  shape: wall
+  size:
+  - 4.1
+  - 0.1
+  - 0.4
+  pos:
+  - 0.5
+  - -2.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_2
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - -2.0
+  - -1.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_3
+  shape: wall
+  size:
+  - 2.1
+  - 0.1
+  - 0.4
+  pos:
+  - 0.5
+  - -1.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_4
+  shape: wall
+  size:
+  - 2.1
+  - 0.1
+  - 0.4
+  pos:
+  - -0.5
+  - -0.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_5
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - 0.0
+  - 0.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_6
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - 1.0
+  - 1.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_7
+  shape: wall
+  size:
+  - 4.1
+  - 0.1
+  - 0.4
+  pos:
+  - -0.5
+  - 2.5
+  yaw: 0.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_8
+  shape: wall
+  size:
+  - 5.1
+  - 0.1
+  - 0.4
+  pos:
+  - -2.5
+  - 0.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_9
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - -1.5
+  - -1.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_10
+  shape: wall
+  size:
+  - 2.1
+  - 0.1
+  - 0.4
+  pos:
+  - -1.5
+  - 1.5
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_11
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - -0.5
+  - -2.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_12
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - -0.5
+  - 1.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_13
+  shape: wall
+  size:
+  - 1.1
+  - 0.1
+  - 0.4
+  pos:
+  - 0.5
+  - 0.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_14
+  shape: wall
+  size:
+  - 3.1
+  - 0.1
+  - 0.4
+  pos:
+  - 1.5
+  - 0.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: wall_15
+  shape: wall
+  size:
+  - 5.1
+  - 0.1
+  - 0.4
+  pos:
+  - 2.5
+  - 0.0
+  yaw: 90.0
+  color:
+  - 0.2
+  - 0.42
+  - 0.22
+  - 1.0
+  mass: null
+  fixed: true
+- name: goal
+  shape: marker
+  size:
+  - 0.6
+  pos:
+  - 2.0
+  - 3.0
+  yaw: 0.0
+  color:
+  - 0.3
+  - 0.8
+  - 0.45
+  - 1.0
+  mass: null
+  fixed: true
+- name: start
+  shape: marker
+  size:
+  - 0.6
+  pos:
+  - -2.0
+  - -3.0
+  yaw: 0.0
+  color:
+  - 0.95
+  - 0.78
+  - 0.2
+  - 1.0
+  mass: null
+  fixed: true

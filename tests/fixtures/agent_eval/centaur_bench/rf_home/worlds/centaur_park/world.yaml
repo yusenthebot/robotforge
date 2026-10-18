@@ -1,0 +1,539 @@
+name: centaur_park
+floor:
+  style: grass
+  friction: 1.0
+terrain:
+- type: hills
+  name: hills
+  pos:
+  - 5.5
+  - 4.0
+  yaw: 0.0
+  style: null
+  friction: null
+  size:
+  - 9.0
+  - 8.0
+  height: 0.6
+  scale: 2.6
+  seed: 864
+robots:
+- name: centaur
+  template: null
+  file: null
+  library: null
+  build:
+    color: '#3a7ca5'
+    base:
+      shape: box
+      size:
+      - 0.34
+      - 0.15
+      - 0.07
+      mass: 1.1
+      sensors:
+      - imu
+    parts:
+    - name: left_hip
+      at:
+      - 0.13
+      - 0.075
+      - 0
+      joint:
+        axis: x
+        range:
+        - -35
+        - 35
+      shape: none
+      mirror: true
+      repeat:
+        count: 2
+        along: back
+        spacing: 0.26
+    - name: left_thigh
+      parent: left_hip
+      at:
+      - 0
+      - 0.035
+      - 0
+      joint:
+        axis: y
+        range:
+        - -70
+        - 140
+        home: 46
+      size:
+      - 0.026
+      - 0.13
+      direction: down
+      color: '#2b3038'
+    - name: left_shin
+      parent: left_thigh
+      at: end
+      joint:
+        axis: y
+        range:
+        - -150
+        - -15
+        home: -92
+      size:
+      - 0.02
+      - 0.13
+      direction: down
+      foot: true
+      sensors:
+      - touch
+    - name: torso
+      at: top
+      shift:
+      - 0.1
+      - 0
+      - 0
+      joint: fixed
+      shape: box
+      size:
+      - 0.09
+      - 0.13
+      - 0.14
+      mass: 0.35
+      direction: up
+      color: '#e4e0d6'
+    - name: chest
+      parent: torso
+      at:
+      - 0.045
+      - 0
+      - 0.085
+      joint: fixed
+      shape: box
+      size:
+      - 0.008
+      - 0.09
+      - 0.07
+      direction: forward
+      color: main
+    - name: head
+      parent: torso
+      at: end
+      shift:
+      - 0
+      - 0
+      - 0.012
+      joint:
+        axis: z
+        range:
+        - -90
+        - 90
+      actuator: sg90
+      shape: sphere
+      size:
+      - 0.075
+      direction: up
+      color: '#e4e0d6'
+      sensors:
+      - type: camera
+        name: left_eye
+        at:
+        - 0.034
+        - 0.016
+        - 0.042
+      - type: camera
+        name: right_eye
+        at:
+        - 0.034
+        - -0.016
+        - 0.042
+    - name: left_shoulder
+      parent: torso
+      at:
+      - 0
+      - 0.065
+      - 0.118
+      joint: fixed
+      shape: cylinder
+      size:
+      - 0.042
+      - 0.1
+      mass: 0.03
+      direction: left
+      color: main
+      mirror: true
+    - name: left_arm
+      parent: left_shoulder
+      at:
+      - 0
+      - 0.078
+      - -0.021
+      joint:
+        axis: z
+        range:
+        - -150
+        - 150
+        home: 0
+      shape: cylinder
+      size:
+      - 0.036
+      - 0.022
+      direction: down
+      color: '#2b3038'
+      mirror: false
+    - name: left_upper
+      parent: left_arm
+      at: end
+      joint:
+        axis: y
+        range:
+        - -170
+        - 60
+        home: -20
+      size:
+      - 0.026
+      - 0.18
+      direction: down
+      color: '#e4e0d6'
+    - name: left_fore
+      parent: left_upper
+      at: end
+      joint:
+        axis: y
+        range:
+        - -160
+        - 10
+        home: -110
+      size:
+      - 0.022
+      - 0.18
+      direction: down
+      color: '#e4e0d6'
+    - name: left_wrist
+      parent: left_fore
+      at: end
+      joint:
+        axis: y
+        range:
+        - -135
+        - 135
+        home: 130
+      size:
+      - 0.02
+      - 0.03
+      direction: down
+      color: '#2b3038'
+    - name: left_hand
+      parent: left_wrist
+      at: end
+      rotate:
+      - 180
+      - 0
+      - 0
+      robot:
+        template: gripper
+        params:
+          color: '#3a7ca5'
+  params: {}
+  pos:
+  - 0.0
+  - -1.0
+  yaw: 0.0
+objects:
+- name: path
+  shape: marker
+  size:
+  - 16.0
+  - 1.2
+  pos:
+  - 0.0
+  - -1.0
+  yaw: 0.0
+  color:
+  - 0.78
+  - 0.7
+  - 0.55
+  - 1.0
+  mass: null
+  fixed: true
+- name: pond
+  shape: marker
+  size:
+  - 3.4
+  pos:
+  - -4.5
+  - 3.5
+  yaw: 0.0
+  color:
+  - 0.25
+  - 0.5
+  - 0.75
+  - 1.0
+  mass: null
+  fixed: true
+- name: picnic_table
+  shape: table
+  size:
+  - 1.6
+  - 0.8
+  - 0.72
+  pos:
+  - -1.2
+  - 2.6
+  yaw: 0.0
+  color:
+  - 0.62
+  - 0.48
+  - 0.34
+  - 1.0
+  mass: null
+  fixed: false
+- name: bench_1
+  shape: bench
+  size:
+  - 1.4
+  - 0.45
+  - 0.45
+  pos:
+  - -4.0
+  - 0.0
+  yaw: 0.0
+  color:
+  - 0.72
+  - 0.58
+  - 0.4
+  - 1.0
+  mass: null
+  fixed: true
+- name: bench_2
+  shape: bench
+  size:
+  - 1.4
+  - 0.45
+  - 0.45
+  pos:
+  - 2.5
+  - 0.0
+  yaw: 0.0
+  color:
+  - 0.72
+  - 0.58
+  - 0.4
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_1
+  shape: tree
+  size:
+  - 2.0
+  - 3.59
+  pos:
+  - -1.1435
+  - 6.0183
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_2
+  shape: tree
+  size:
+  - 1.44
+  - 2.47
+  pos:
+  - -6.832
+  - 7.0338
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_3
+  shape: tree
+  size:
+  - 1.3
+  - 2.25
+  pos:
+  - 6.1926
+  - 7.0653
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_4
+  shape: tree
+  size:
+  - 1.94
+  - 3.26
+  pos:
+  - -3.8957
+  - -4.1198
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_5
+  shape: tree
+  size:
+  - 1.84
+  - 3.35
+  pos:
+  - 1.2873
+  - 3.5198
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_6
+  shape: tree
+  size:
+  - 1.43
+  - 2.34
+  pos:
+  - 2.4314
+  - -4.016
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_7
+  shape: tree
+  size:
+  - 1.84
+  - 3.17
+  pos:
+  - 7.6139
+  - -4.7408
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_8
+  shape: tree
+  size:
+  - 1.39
+  - 2.33
+  pos:
+  - 6.3615
+  - 3.5884
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: tree_9
+  shape: tree
+  size:
+  - 1.86
+  - 3.0
+  pos:
+  - 8.8882
+  - 5.8137
+  yaw: 0.0
+  color:
+  - 0.27
+  - 0.55
+  - 0.25
+  - 1.0
+  mass: null
+  fixed: true
+- name: rock_1
+  shape: rock
+  size:
+  - 0.75
+  - 0.41
+  pos:
+  - 5.7756
+  - -5.1678
+  yaw: 332.417165740661
+  color:
+  - 0.5
+  - 0.49
+  - 0.47
+  - 1.0
+  mass: null
+  fixed: true
+- name: rock_2
+  shape: rock
+  size:
+  - 0.74
+  - 0.4
+  pos:
+  - 4.1095
+  - 1.9385
+  yaw: 188.84661808034986
+  color:
+  - 0.5
+  - 0.49
+  - 0.47
+  - 1.0
+  mass: null
+  fixed: true
+- name: rock_3
+  shape: rock
+  size:
+  - 0.63
+  - 0.35
+  pos:
+  - 0.2615
+  - 1.3722
+  yaw: 162.20271838721587
+  color:
+  - 0.5
+  - 0.49
+  - 0.47
+  - 1.0
+  mass: null
+  fixed: true
+- name: rock_4
+  shape: rock
+  size:
+  - 0.43
+  - 0.24
+  pos:
+  - 1.9229
+  - 1.9336
+  yaw: 220.6019178146564
+  color:
+  - 0.5
+  - 0.49
+  - 0.47
+  - 1.0
+  mass: null
+  fixed: true
+- name: ball
+  shape: sphere
+  size:
+  - 0.2
+  pos:
+  - 1.5
+  - -0.6
+  yaw: 0.0
+  color: red
+  mass: 0.3
+  fixed: false
