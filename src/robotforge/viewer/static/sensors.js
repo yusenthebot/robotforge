@@ -34,7 +34,7 @@ const MAX_RAYS = { lidar: 360, lidar3d: 150 }; // rays drawn: a 3D scan's every 
 const RAY_ALPHA = { lidar: [0.6, 0.12], lidar3d: [0.45, 0.04] }; // opacity of a ray at the sensor and at its hit
 const POINT_PX = 3.2; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
-const FRUSTUM_M = 0.12; // m: how far out a camera's frustum is drawn
+const FRUSTUM_HALF = 0.045; // m: half the height of a camera's frustum where it ends, whatever its field of view
 const ARROW_REACH = 0.22; // m: the arrow of the largest force seen lately
 const ARROW_FLOOR = { touch: 5, force_torque: 2 }; // N: a scale never finer than this, so a whisper stays short
 const PEAK_DECAY = 0.985; // per message: the largest force seen fades with a half-life of about five seconds
@@ -116,6 +116,8 @@ export function sensorsScene(desc) {
   peaks.clear();
   entries = new Map();
   pip.meshes = pip.geoms = null;
+  sight.boxes = null;
+  sight.memo.clear();
   pip.name = null;
   sensorsSelect();
 }
@@ -377,7 +379,9 @@ function lidarDrawing(first) {
 
 function cameraDrawing(first) {
   const group = new THREE.Group();
-  const corners = frustumCorners(first.fov_deg, first.size[0] / first.size[1], FRUSTUM_M);
+  // As tall wherever it looks: a wide lens's frustum drawn as deep as a narrow one's reached past a small robot.
+  const depth = FRUSTUM_HALF / Math.tan((first.fov_deg * Math.PI) / 360);
+  const corners = frustumCorners(first.fov_deg, first.size[0] / first.size[1], depth);
   const v = [];
   for (const c of corners) v.push(0, 0, 0, ...c);
   for (let i = 0; i < 4; i++) v.push(...corners[i], ...corners[(i + 1) % 4]);
@@ -402,6 +406,47 @@ function cameraDrawing(first) {
       face.visible = pip.name === last.name && views.showsPicture(); // the camera whose picture is up
     },
   };
+}
+
+// Pads and arrows are drawn over everything, so a robot's own leg does not hide the force in it. Scenery between them
+// and the eye (a rack, a wall) does: they are left out while it stands in the way, judged a few times a second
+// against the boxes of the world's fixed shapes (drawn over everything, they showed through the racks).
+const SIGHT_EVERY_MS = 150;
+const SIGHT_MARGIN = 0.25; // m: scenery this near the point is what it stands on, not something in the way
+const sight = { boxes: null, ray: new THREE.Ray(), hit: new THREE.Vector3(), memo: new Map() };
+
+function sceneryBoxes() {
+  if (sight.boxes) return sight.boxes;
+  const desc = api.desc();
+  sight.boxes = [];
+  api.world()?.updateMatrixWorld(true);
+  api.world()?.traverse((o) => {
+    const body = o.userData.body;
+    if (!o.isMesh || o.userData.isPlane || o.userData.lift || body === undefined || desc?.bodies[body]?.dynamic) return;
+    sight.boxes.push(new THREE.Box3().setFromObject(o));
+  });
+  return sight.boxes;
+}
+
+function behindScenery(key, point) {
+  const now = performance.now();
+  const memo = sight.memo.get(key);
+  if (memo && now - memo.t < SIGHT_EVERY_MS) return memo.hidden;
+  const eye = api.camera.position;
+  const far = eye.distanceTo(point) - SIGHT_MARGIN;
+  let hidden = false;
+  if (far > 0) {
+    sight.ray.origin.copy(eye);
+    sight.ray.direction.copy(point).sub(eye).normalize();
+    for (const box of sceneryBoxes()) {
+      if (sight.ray.intersectBox(box, sight.hit) && eye.distanceTo(sight.hit) < far && !box.containsPoint(point)) {
+        hidden = true;
+        break;
+      }
+    }
+  }
+  sight.memo.set(key, { t: now, hidden });
+  return hidden;
 }
 
 // An arrow along +y, `length` long: a shaft and a head, drawn over everything so a force inside a leg still shows.
@@ -442,7 +487,7 @@ function forceDrawing() {
       last = e;
     },
     frame() {
-      group.visible = !!last && arrowsOn && onBody(last, last.local_pos, last.local_quat, at, null);
+      group.visible = !!last && arrowsOn && onBody(last, last.local_pos, last.local_quat, at, null) && !behindScenery(last.name, at);
       if (!group.visible) return;
       const size = Math.hypot(...last.force_n);
       dir.fromArray(last.force_n).normalize();
@@ -490,8 +535,8 @@ function touchDrawing(first) {
     },
     frame() {
       const node = api.bodyNode(last.body);
-      group.visible = !!node;
-      if (!node) return;
+      group.visible = !!node && !behindScenery(last.name, cells[0].getWorldPosition(center));
+      if (!group.visible) return;
       pad.position.copy(node.position);
       pad.quaternion.copy(node.quaternion);
       const total = last.total_n;

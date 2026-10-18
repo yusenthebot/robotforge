@@ -1999,6 +1999,7 @@ initLessons({
 initSensors({
   scene: scene3,
   renderer,
+  camera,
   bodyNode: (id) => bodyNodes[id],
   world: () => worldRoot,
   desc: () => sceneDesc,
