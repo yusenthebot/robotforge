@@ -89,6 +89,10 @@ class LibraryRobot:
     # Degrees to turn a fixed-base model about the vertical so its front faces +x, as every robot here does.
     facing: float = 0.0
     payload: Payload | None = None  # walkers: what they carry (see Payload)
+    # Arms whose real controllers push the torques gravity needs through their motors, which the Menagerie model
+    # leaves out: arm motions do the same for them (see ArmMotion._hold). Not for the PiPER, whose model cancels
+    # gravity on its links itself.
+    holds_against_gravity: bool = False
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -316,6 +320,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "unitree_z1",
             "z1_gripper.xml",
             mass=4.69,
+            holds_against_gravity=True,  # on its servos alone it sagged 3 to 4 mm 0.33 to 0.45 m out
             # The grasp point is the middle of the fingertip pads (0.172-0.2 m along link06's x), 1 cm above the fixed
             # jaw's pad: a cube rests on that jaw and the moving one closes onto it (at 0 rad; -1.52 is wide open).
             tools=(
@@ -342,6 +347,9 @@ CATALOG: dict[str, LibraryRobot] = {
             "universal_robots_ur5e",
             "ur5e.xml",
             mass=20.99,
+            # On its servos alone it sagged 7 to 17 mm 0.47 to 0.73 m out, and on ANYmal its grasps closed 2 cm beside
+            # the cube.
+            holds_against_gravity=True,
             tools=(Tool("attachment_site"),),
         ),
         LibraryRobot(
@@ -354,6 +362,7 @@ CATALOG: dict[str, LibraryRobot] = {
             "ufactory_xarm7",
             "xarm7.xml",
             mass=12.07,
+            holds_against_gravity=True,  # on its servos alone it sagged 11 to 17 mm 0.35 to 0.55 m out
             # link_tcp is the fingertips; the pads end 2 mm short of them and reach 3.9 cm up. Grasped at the tips, a
             # 4 cm cube was held by its top 18 mm and slipped out on 4 of 6 carries. 15 mm deeper the pads hold 2.4 cm
             # of it and still clear the floor by 7 mm: 6 of 6.

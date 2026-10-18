@@ -76,6 +76,13 @@ SELF_SLACK = 0.0005  # m links already closer than SELF_CLEARANCE where a move b
 # as every library arm has). Bending the whole arm to turn them instead, an eight-joint tentacle could not keep up with
 # the turn on its way down and its hand came down 5 cm beside the cube.
 ROLL = 0.99
+# Before it closes its jaws or carries a load away, the arm waits until its tool is this near (m) where it is told to
+# be, or stops closing in, or SETTLE_MAX (s) has gone by: lagging behind on the way up, a UR5e on ANYmal began the carry
+# 4 cm below where it was planned, ran its forearm into the dog's back and lost the cube.
+SETTLE = 0.004
+SETTLE_MAX = 1.0
+SETTLE_EVERY = 0.05  # s between looks at whether the tool still closes in (by at least SETTLE_GAIN, m)
+SETTLE_GAIN = 0.0005
 
 
 class OutOfReach(ValueError):
@@ -137,8 +144,10 @@ class Waypoint:
 class ArmMotion:
     rate_hz = 100.0
 
-    def __init__(self, model: mujoco.MjModel, robot: str, home_qpos: np.ndarray):
-        """`robot` names the arm: a robot ("arm") or an arm mounted on one ("rover/arm")."""
+    def __init__(self, model: mujoco.MjModel, robot: str, home_qpos: np.ndarray, gravity: bool = False):
+        """`robot` names the arm: a robot ("arm") or an arm mounted on one ("rover/arm"). With `gravity` the arm's
+        servos also push the torques gravity needs at the pose they are told, as an industrial arm's controller does
+        (see _hold); a model that cancels gravity on the arm's links itself needs no more."""
         self.robot = robot
         site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/tcp")
         if site < 0:
@@ -204,6 +213,15 @@ class ArmMotion:
         )
         self._self_pairs: list[tuple[int, int]] | None = None  # see _clear_of_itself, worked out when first needed
         self._carrier_pairs: tuple[np.ndarray, np.ndarray] | None = None  # see _near_carrier, the same
+        # Per joint, radians of servo target per N*m it pushes (1 / (kp * gear)), for joints on position servos; None
+        # for an arm that does not hold itself up (see _hold).
+        self._per_torque: np.ndarray | None = None
+        if gravity and not any(model.body_gravcomp[b] > 0 for b in self._moving):
+            gains = model.actuator_gainprm[self.actuators, 0] * model.actuator_gear[self.actuators, 0]
+            servos = np.array([is_position_servo(model, a) for a in self.actuators])
+            self._per_torque = np.where(servos, 1.0 / np.where(servos, gains, 1.0), 0.0)
+        self._bias = np.zeros(model.nv)
+        self._settle: tuple[float, float, float] | None = None  # (since, last look, how far off then) while waiting
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
@@ -1014,6 +1032,9 @@ class ArmMotion:
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         self.sync(data)
         t = data.time
+        if self._segment is None and self.queue and self._settling(data):
+            data.ctrl[self.actuators] = self._hold(self.q)
+            return
         if self._segment is None and self.queue:
             wp = self.queue.popleft()
             start = data.site_xpos[self.site].copy()
@@ -1036,7 +1057,7 @@ class ArmMotion:
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
-            data.ctrl[self.actuators] = self.q
+            data.ctrl[self.actuators] = self._hold(self.q)
             return
         start, wp, t0 = self._segment
         u = min(1.0, (t - t0) / wp.duration)
@@ -1048,11 +1069,47 @@ class ArmMotion:
             else:
                 target = self._arc_point(start, wp.position, s)
                 self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, **self._aim(wp)(s))
-        data.ctrl[self.actuators] = self.q
+        data.ctrl[self.actuators] = self._hold(self.q)
         if u >= 1.0:
             self._segment = None
             if self._branch is not None and wp.position is not None:
                 self._catch_up(wp)
+
+    def _hold(self, q: np.ndarray) -> np.ndarray:
+        """Servo targets for the arm at `q`: `q` itself, and for an arm that holds itself up (see __init__) each
+        position servo's target moved on by as much as it takes to push the torque gravity needs at `q`, with whatever
+        carries the arm posed as it is now (see sync). That is how industrial arms' controllers hold their pose, and
+        what some Menagerie models leave out: a UR5e's shoulder (2000 N*m/rad) sagged 17 mm at 0.73 m out, and riding
+        on ANYmal it closed its jaws 2 cm beside the cube and pushed it away. Pushed through the motors, not cancelled
+        on the links, the arm's weight still rests on what carries it."""
+        if self._per_torque is None:
+            return q
+        self.ik.point(self.chain, q)
+        self.ik.data.qvel[:] = 0.0  # standing still: gravity alone
+        mujoco.mj_rne(self.ik.model, self.ik.data, 0, self._bias)
+        return q + self._bias[self.chain.dof_adr] * self._per_torque
+
+    def _settling(self, data: mujoco.MjData) -> bool:
+        """Whether the arm waits before the next move: one that closes its jaws or carries a load away, while the tool
+        is still more than SETTLE from where it is told to be and closing in, for up to SETTLE_MAX (see SETTLE)."""
+        wp, t = self.queue[0], float(data.time)
+        closes = wp.position is None and wp.gripper is not None and wp.gripper == self.gripper_closed
+        if not (closes or wp.load is not None):
+            self._settle = None
+            return False
+        off = float(np.linalg.norm(self.ik.point(self.chain, self.q) - data.site_xpos[self.site]))
+        if self._settle is None:
+            self._settle = (t, t, off)
+        since, looked, then = self._settle
+        if off <= SETTLE or t - since >= SETTLE_MAX:
+            self._settle = None
+            return False
+        if t - looked >= SETTLE_EVERY:
+            if then - off < SETTLE_GAIN:  # not closing in any more: waiting longer does not help
+                self._settle = None
+                return False
+            self._settle = (since, t, off)
+        return True
 
     def _catch_up(self, wp: Waypoint) -> None:
         """After a joint-by-joint move to a tool position: if the robot carrying the arm moved meanwhile, so that the
@@ -1113,7 +1170,9 @@ class ArmMotion:
         # base swung its load 250 degrees on the way down and threw it.
         # On a robot the arm keeps off it, and a carry keeps LINK_CLEARANCE from it (see _follows_clear): going down
         # beside a mobile Panda's wheel from high above, its hand swung round into the wheel and missed the cube.
-        rises = float(wp.position[2]) > float(start[2]) + APPROACH / 2  # off the object or the place
+        # Straight up off the object or the place is never checked here; a carry always is, as it may start lower than
+        # planned: lagging on the lift, a UR5e on ANYmal set off across 4 cm low, unchecked, and hit the dog's back.
+        rises = wp.load is None and float(wp.position[2]) > float(start[2]) + APPROACH / 2
         keep = {"clear": self._rides, "apart": self._rides and wp.load is not None}
         if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps, aim, **keep)[1] <= REACH_TOL:
             return wp

@@ -1006,8 +1006,10 @@ class BehaviorManager:
         if isinstance(existing, ArmMotion):
             existing.sync(self.session.data)
             return existing
+        robot, _ = self._library_tool(name)
         try:
-            arm = ArmMotion(self.session.model, name, self.home_qpos())
+            gravity = robot is not None and robot.holds_against_gravity
+            arm = ArmMotion(self.session.model, name, self.home_qpos(), gravity=gravity)
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc
         # Continue from where the arm (and whatever carries it) is now, not from the home pose.
