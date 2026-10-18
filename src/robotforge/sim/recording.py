@@ -19,7 +19,6 @@ from typing import Any
 
 import mujoco
 import numpy as np
-from PIL import Image
 
 from robotforge import wording
 from robotforge.sim import render
@@ -228,6 +227,8 @@ def save(
 def _write(path: Path, draw: Callable[[int], np.ndarray], count: int, frame_ms: float) -> None:
     """Draw `count` frames one at a time into the file: a GIF keeps each frame in 256 colors (0.2 MB at 640 x 360), a
     WebP keeps them whole until it is written."""
+    from PIL import Image  # only when a video is written: Pillow is slow to import, and the MCP server imports this
+
     if path.suffix.lower() == ".webp":
         images = [Image.fromarray(draw(k)) for k in range(count)]
         images[0].save(path, save_all=True, append_images=images[1:], duration=round(frame_ms), loop=0, quality=80)
