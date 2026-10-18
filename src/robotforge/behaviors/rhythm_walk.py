@@ -220,7 +220,12 @@ STEER_RAMP = 2.0  # s
 STEER_RELAX = 0.1  # rad/s
 # Holding the heading is not going straight: a walk that holds it can still walk a little crabwise, and its heading
 # swings before the steering is in. It steers back toward the line it started on, aiming at a point LINE_AHEAD
-# further along it, at most LINE_CUT (rad) off the course.
+# further along it, at most LINE_CUT (rad) off the course, as far as the steering learned to aim. Walking 20 s from
+# standing (scripts/rhythm_bench.py straight), kept walks ended to the side of their line by 0.10 m per metre walked
+# on average holding the heading alone (8 template dog walks), 0.05 (4 starfish) and 0.18 (6 imported A1); keeping to
+# the line, 0.022 (12 dog walks), 0.012 (6 starfish) and 0.029 (9 A1). Walks learned and played as 7a4aa92 did, with
+# no heading in the reward and no steering, turned 98 degrees in those 20 s (median of 12 dog walks), 8 (starfish)
+# and 165 (A1), ending 3.6, 0.25 and 2.6 m to the side.
 LINE_AHEAD = 1.0  # m
 LINE_CUT = 0.3  # rad
 # Standing still (trunk and joint speeds under these), a rhythm starts exactly as it was learned.
