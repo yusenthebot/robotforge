@@ -1857,6 +1857,7 @@ function faceoffRig(rig) {
     const sub = e.sub === null ? "" : e.sub ? pick(e.sub) : t(e.real ? "real_robot" : "our_template");
     const tag = nameTag(pick(e.label), sub, color);
     tag.position.set(e.base[0], e.base[1], e.top + TAG_RISE);
+    tag.userData.foot = new THREE.Vector3(e.base[0], e.base[1], 0); // where its robot stands
     labels.add(tag);
     tags.push([tag, e]);
     if (e.cloud.length) {
@@ -1891,7 +1892,9 @@ function faceoffRig(rig) {
     frame() {
       for (const [tag, e] of tags) {
         const node = e.body !== undefined ? api.bodyNode(e.body) : null;
-        if (node) tag.position.set(node.position.x, node.position.y, e.top + TAG_RISE); // walking robots take theirs along
+        if (!node) continue;
+        tag.position.set(node.position.x, node.position.y, e.top + TAG_RISE); // walking robots take theirs along
+        tag.userData.foot.set(node.position.x, node.position.y, 0);
       }
       if (labels.visible) declutter(tags.map(([tag]) => tag));
       workspace.visible = (state.values.workspace ?? 0) >= 1;
@@ -1914,16 +1917,31 @@ const TAG_RISE = 0.06;
 
 // Name tags of robots standing in a row, seen down the row, land on top of each other. Keep the nearest
 // where it is and lift any farther tag that would cover one already placed, just clear of it.
+// A tag whose robot stands in the free part of the view is kept inside it: seen from above, the PiPER's tag in the
+// motion planning lesson stood so high over the arm that only its bottom edge showed, at the top of the window.
 const tagPoint = new THREE.Vector3();
+const footPoint = new THREE.Vector3();
 function declutter(sprites) {
   const cam = api.camera;
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
+  const r = api.freeRect();
+  const [W, H] = [window.innerWidth, window.innerHeight];
+  const free = { left: (2 * r.left) / W - 1, right: (2 * r.right) / W - 1, top: 1 - (2 * r.top) / H, bottom: 1 - (2 * r.bottom) / H };
+  const inside = (p) => p.z < 1 && p.x > free.left && p.x < free.right && p.y < free.top && p.y > free.bottom;
   const items = sprites
     .map((s) => {
       s.center.set(0.5, 0.5 - TAG_LIFT);
       const p = tagPoint.copy(s.position).project(cam); // screen position, -1 to 1 across the view
-      const h = s.scale.y * sy;
-      return { s, x: p.x, y: p.y + TAG_LIFT * h, z: p.z, w: s.scale.x * sx, h }; // y: the tag's middle
+      const [w, h] = [s.scale.x * sx, s.scale.y * sy];
+      const y0 = p.y + TAG_LIFT * h; // the tag's middle
+      let [x, y] = [p.x, y0];
+      if (s.userData.foot && inside(footPoint.copy(s.userData.foot).project(cam))) {
+        const pad = (2 * 6) / H; // 6 px clear of the edge
+        y = Math.min(y, free.top - h / 2 - pad);
+        x = Math.min(Math.max(x, free.left + w / 2 + pad), free.right - w / 2 - pad);
+      }
+      s.center.x = 0.5 - (x - p.x) / w; // a smaller anchor draws the sprite further right
+      return { s, x, y, y0, z: p.z, w, h };
     })
     .filter((it) => it.z < 1)
     .sort((a, b) => a.z - b.z);
@@ -1935,7 +1953,7 @@ function declutter(sprites) {
       if (!hit) break;
       y = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
     }
-    it.s.center.y = 0.5 - TAG_LIFT - (y - it.y) / it.h; // a lower anchor draws the sprite higher
+    it.s.center.y = 0.5 - TAG_LIFT - (y - it.y0) / it.h; // a lower anchor draws the sprite higher
     placed.push({ ...it, y });
   }
 }

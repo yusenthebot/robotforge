@@ -433,3 +433,41 @@ def test_the_motion_planning_target_shows_where_it_is(viewer):
 
     shown = viewer("laptop", "en", scenario)
     assert len(shown) == 1 and shown[0] != [0, 0, 0], shown  # the target alone, at its place
+
+
+TAG_RECTS = """(async () => {
+    const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
+    const rf = window.__robotforge;
+    const { scene, camera } = rf.three();
+    camera.updateMatrixWorld();
+    const [W, H] = [innerWidth, innerHeight];
+    const [sx, sy] = [camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]];
+    const px = (p) => [((p.x + 1) / 2) * W, ((1 - p.y) / 2) * H];
+    const tags = [];
+    scene.traverse((o) => { if (o.isSprite && o.visible && o.renderOrder === 10) tags.push(o); });
+    return { free: rf.freeRect(), tags: tags.map((s) => {
+        const p = s.getWorldPosition(new THREE.Vector3()).project(camera);
+        const [w, h] = [s.scale.x * sx, s.scale.y * sy];
+        const [left, top] = px({ x: p.x - s.center.x * w, y: p.y + (1 - s.center.y) * h });
+        const [right, bottom] = px({ x: p.x + (1 - s.center.x) * w, y: p.y - s.center.y * h });
+        const foot = px(new THREE.Vector3(s.position.x, s.position.y, 0).project(camera));
+        return { left, top, right, bottom, foot };
+    }) };
+})()"""
+
+
+def test_a_name_tag_stays_in_the_free_view_while_its_robot_is_in_sight(viewer):
+    """On a phone the PiPER's tag stood under the plots strip, and seen from above in the planning lesson only the
+    bottom edge of its tag showed, at the top of the window."""
+
+    async def scenario(tab, _server):
+        await _start(tab, "ik_arm")
+        return await tab.eval(TAG_RECTS)
+
+    seen = viewer("phone", "en", scenario)
+    free, tags = seen["free"], seen["tags"]
+    in_sight = lambda x, y: free["left"] < x < free["right"] and free["top"] < y < free["bottom"]  # noqa: E731
+    shown = [t for t in tags if in_sight(*t["foot"])]
+    assert len(shown) == 2, seen
+    for t in shown:
+        assert t["top"] >= free["top"] and t["left"] >= free["left"] - 1 and t["right"] <= free["right"] + 1, seen

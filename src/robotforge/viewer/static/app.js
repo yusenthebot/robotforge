@@ -1973,6 +1973,7 @@ initLessons({
   send,
   toast,
   bodyNode: (id) => bodyNodes[id],
+  freeRect: () => freeRect(), // the part of the window no panel covers, in CSS px
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {
     // A rig is measured where its robots stand: a scene whose first poses have not come yet has every body at the
