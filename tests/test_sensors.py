@@ -1,6 +1,7 @@
 """The sensor suite: every type against known geometry, the realism knobs, world.yaml, the tools and the viewer."""
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -145,6 +146,48 @@ def test_depth_and_segmentation_cameras_see_the_wall(post, needs_gl):
     assert seen["wall"] > 0.3 and "floor" in seen
     assert [name for name, _ in pictures] == ["post/depth_camera", "post/seg"]
     assert all(png.startswith(b"\x89PNG") for _, png in pictures)
+
+
+def test_a_depth_camera_gives_the_distance_to_an_obstacle_off_its_axis(pg, needs_gl):
+    """A pole 26 degrees to the side: its depth along the axis is 10 percent short of its distance, and the
+    nearest obstacle is the distance (the lidar beside the lens agrees). The lidar's puck stands next to the
+    lens and fills part of the picture; it is the camera's own robot, not an obstacle."""
+    pg.add_robot("post", build=POST)
+    radius, bearing = 0.025, math.radians(26)
+    middle = np.array([0.1 + 1.85 * math.cos(bearing), 1.85 * math.sin(bearing)])
+    pg.add_object("pole", shape="cylinder", pos=middle.tolist(), size=[2 * radius, 1.0], fixed=True)
+    pg.add_sensor("post", {"type": "depth camera"})
+    pg.add_sensor("post", {"type": "lidar", "at": "front"})  # its puck stands beside the lens
+    m, d = pg.session.model, pg.session.data
+    eye = d.cam_xpos[m.camera("post/depth_camera").id][:2]
+    origin = d.site_xpos[m.site("post/rf_lidar").id][:2]
+    reading, _ = pg.read_sensors("post")
+    depth, lidar = reading["sensors"]["depth_camera"], reading["sensors"]["lidar"]
+    truth = float(np.linalg.norm(middle - eye)) - radius
+    assert depth["nearest"]["distance_m"] == pytest.approx(truth, abs=0.01)
+    assert depth["own_share"] > 0.01  # the puck is in the picture
+    assert depth["nearest"]["bearing_deg"] == pytest.approx(26, abs=1.5)
+    assert depth["nearest"]["distance_m"] - truth * math.cos(bearing) > 0.15  # not its depth along the axis
+    lidar_truth = float(np.linalg.norm(middle - origin)) - radius
+    assert lidar["nearest"]["distance_m"] == pytest.approx(lidar_truth, abs=0.01)
+    # The same obstacle from both, once the 1.4 cm between the lens and the puck's middle is allowed for.
+    between = depth["nearest"]["distance_m"] - lidar["nearest"]["distance_m"]
+    assert between == pytest.approx(truth - lidar_truth, abs=0.01)
+    again = [_read(pg, "post", "depth_camera")["nearest"] for _ in range(3)]
+    assert all(n == depth["nearest"] for n in again)  # ties do not move it between reads
+
+
+def test_a_noisy_depth_camera_reads_the_nearest_wall_where_it_is(post, needs_gl):
+    post.add_sensor("post", {"type": "depth camera", "noise": 0.01, "rate_hz": 10})
+    m, d = post.session.model, post.session.data
+    truth = WALL_X - float(d.cam_xpos[m.camera("post/depth_camera").id][0])
+    near = []
+    for _ in range(10):
+        post.session.step(50)
+        near.append(_read(post, "post", "depth_camera")["nearest"]["distance_m"])
+    # The single nearest of 76800 noisy pixels reads about four noise widths (4 cm) short; the median around it
+    # does not. The wall's drawn plaster stands 6 mm proud of its collision face.
+    assert float(np.mean(near)) == pytest.approx(truth - 0.003, abs=0.006)
 
 
 def test_imu_on_a_dropped_box_reads_free_fall_then_gravity(pg):

@@ -18,7 +18,7 @@ remove("go2/lidar")
 
 | type | measures | options (defaults) | reading |
 |---|---|---|---|
-| `camera` | a picture, a depth image or a segmentation image | `mode` rgb, depth or segmentation (rgb), `width` 320, `height` 240, `fov` 60 degrees, `range` 10 m | depth: `center_m`, `min_m`, `median_m`, `beyond_range`, `nearest`; segmentation: `seen` (what, and how much of the picture); the picture with `image=true` |
+| `camera` | a picture, a depth image or a segmentation image | `mode` rgb, depth or segmentation (rgb), `width` 320, `height` 240, `fov` 60 degrees, `range` 10 m | depth: `center_m`, `min_m`, `median_m` (depths along the axis), `beyond_range`, `own_share`, `nearest` (a distance); segmentation: `seen` (what, and how much of the picture); the picture with `image=true` |
 | `lidar` | one ring of laser rays | `rays` 360, `hfov` 360, `range` 12 m, `vfov` tilts the ring | `hits`, `nearest`, `ahead`, `sectors_m` (36 numbers) |
 | `lidar3d` | several rings over a vertical field | `channels` 16, `rays` 180 per ring, `vfov` [-15, 15], `hfov` 360, `range` 30 m | `points`, `ground_points`, `box_m`, `nearest` and `ahead` with `height_m` and `point_m`, `sectors_m` |
 | `imu` | proper acceleration, turn rate, orientation | | `accel_m_s2`, `gyro_rad_s`, `orientation_deg` (roll, pitch, yaw) |
@@ -36,6 +36,10 @@ Bearings are degrees from the sensor's forward, counter-clockwise, so +90 is its
 `nearest` is the closest obstacle in any direction, `ahead` the closest within 15 degrees of forward.
 `sectors_m[k]` is the nearest obstacle in the 10 degree sector centered on `k * 10` degrees (`sector_bearings_deg` gives the first center and the step).
 The floor, terrain grids and flat ground marks are ground, not obstacles; a lidar's rays that meet its own robot are masked out, as a real lidar's self filter does.
+A depth camera's `center_m`, `min_m` and `median_m` are depths, how far along the camera's axis a pixel's surface is, as a depth image holds them.
+Its `nearest` is a distance: straight from the lens to the closest obstacle in the picture, with `bearing_deg`, `elevation_deg` and `point_m` (world).
+Off to the side depth is shorter than distance by the cosine of the angle, so a pole 26 degrees off the axis is 10 percent nearer in depth than it is.
+The camera's own robot is not an obstacle either (a lidar puck beside the lens, its own legs); `own_share` is how much of the picture shows it.
 `payload_kg` is what a force-torque sensor carries beyond the weight of everything hanging below it, so a wrist sensor reads the weight of what the gripper holds.
 
 ## Where a sensor goes

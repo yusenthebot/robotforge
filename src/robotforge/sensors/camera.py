@@ -5,10 +5,13 @@ the world at that moment (joint positions and mocap poses, a few hundred numbers
 state on a scratch copy of the simulation: a camera with a rate or a latency shows the world as it was
 when its frame was due, without rendering every frame nobody looks at.
 
-A depth reading is the distance along the camera's view to what each pixel shows (MuJoCo's depth camera),
-summarized as the distance at the center, the nearest and the median, and the nearest obstacle (the floor and
-flat ground marks left out) with its bearing; a segmentation reading lists what the picture shows and how
-much of it. Pictures come back only when asked for (image=true).
+A depth image holds each pixel's depth: how far what it shows is along the camera's axis (MuJoCo's depth
+camera). A reading summarizes it as the depth at the center, the smallest and the median, and gives the nearest
+obstacle as a distance: straight from the lens to the closest thing the picture shows, leaving out the floor,
+flat ground marks and the camera's own robot (its legs, a lidar mounted beside the lens), as a lidar's self
+filter does. Off to the side, depth is shorter than distance by the cosine of the angle (a pole 26 degrees off
+the axis reads 10 percent near in depth). A segmentation reading lists what the picture shows and how much of
+it. Pictures come back only when asked for (image=true).
 """
 
 from __future__ import annotations
@@ -26,6 +29,8 @@ from robotforge.sensors import declare
 from robotforge.sensors.runtime import Sensor
 
 SEEN_LIMIT = 6  # things a segmentation reading names, the biggest first
+TIE_M = 0.002  # m: pixels this close to the nearest distance tie, and the one nearest the picture's middle wins
+SPREAD_DEG = 3.0  # with noise, the nearest is the median of the pixels within this angle of it (see _nearest)
 GROUND_TYPES = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 
 
@@ -45,7 +50,11 @@ class Camera(Sensor):
         self.fov = float(d.get("fov", model.cam_fovy[self.camera]))
         self.range = float(d.get("range", 10.0))
         not_colliding = (model.geom_contype == 0) & (model.geom_conaffinity == 0)
-        self.ground = np.isin(model.geom_type, GROUND_TYPES) | (not_colliding & (model.geom_size[:, 2] < 0.01))
+        flat = model.geom_aabb[:, 5] < 0.01  # half as thick as a centimetre in its own frame: a mark on the ground
+        self.ground = np.isin(model.geom_type, GROUND_TYPES) | (not_colliding & flat)
+        root = int(model.body_rootid[model.cam_bodyid[self.camera]])
+        # The camera's own robot: its shapes are not obstacles. A camera on the world itself has no robot.
+        self.own = (model.body_rootid[model.geom_bodyid] == root) if root > 0 else np.zeros(model.ngeom, bool)
 
     def measure(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, np.ndarray]:
         """The moment to draw: kept as the state, drawn when read (see the module notes)."""
@@ -95,6 +104,7 @@ class Camera(Sensor):
         return out
 
     def _depth_summary(self, value: dict[str, Any]) -> dict[str, Any]:
+        """center_m, min_m and median_m are depths along the axis, as the image holds them; nearest is a distance."""
         depth = value["depth"]
         layers = value["layers"]
         h, w = depth.shape
@@ -108,22 +118,46 @@ class Camera(Sensor):
         out["beyond_range"] = round(float(1 - valid.mean()), 3)
         geoms = layers.geoms
         if geoms is not None:
-            ground = np.zeros(depth.shape, bool)
             seen = geoms >= 0
-            ground[seen] = self.ground[geoms[seen]]
-            obstacle = valid & ~ground & seen
+            index = np.where(seen, geoms, 0)
+            own = seen & self.own[index]
+            obstacle = valid & seen & ~self.ground[index] & ~own
+            if own.any():
+                out["own_share"] = round(float(own.mean()), 3)  # the picture's share showing its own robot
             if obstacle.any():
-                masked = np.where(obstacle, depth, np.inf)
-                v, u = np.unravel_index(int(np.argmin(masked)), depth.shape)
-                cam = layers.camera
-                ray = cam.ray(u + 0.5, v + 0.5)
-                local = np.array([ray @ cam.right, ray @ cam.up, ray @ cam.forward])
-                out["nearest"] = {
-                    "distance_m": round(float(depth[v, u]), 3),
-                    "bearing_deg": round(-math.degrees(math.atan2(local[0], local[2])), 1),
-                    "elevation_deg": round(math.degrees(math.atan2(local[1], math.hypot(local[0], local[2]))), 1),
-                }
+                out["nearest"] = self._nearest(depth, obstacle, layers.camera)
         return out
+
+    def _nearest(self, depth: np.ndarray, obstacle: np.ndarray, cam: Any) -> dict[str, Any]:
+        """The closest obstacle pixel by distance from the lens (depth times the length of the pixel's ray, which
+        goes one meter along the axis), with its bearing (0 ahead, + left), elevation and world point. Pixels within
+        TIE_M of it tie (a wall facing the camera has a ring of them), and the one nearest the picture's middle
+        wins, so the bearing does not jump between reads. With depth noise the single nearest pixel is the one
+        whose noise came out shortest (four noise widths short among thousands), so a noisy camera reports the
+        median of the obstacle pixels within SPREAD_DEG of it that are not far behind it."""
+        vs, us = np.nonzero(obstacle)
+        rays = cam.ray(us + 0.5, vs + 0.5)
+        lengths = np.linalg.norm(rays, axis=1)
+        dist = depth[vs, us] * lengths
+        sigma = self.knobs.noise.get("depth", 0.0)
+        low = float(dist.min())
+        close = np.flatnonzero(dist <= low + max(TIE_M, 4 * sigma))
+        off_middle = (us[close] + 0.5 - cam.cx) ** 2 + (vs[close] + 0.5 - cam.cy) ** 2
+        i = int(close[int(np.argmin(off_middle))])
+        distance = low
+        if sigma:
+            units = rays / lengths[:, None]
+            around = (units @ units[i] >= math.cos(math.radians(SPREAD_DEG))) & (dist <= low + 8 * sigma)
+            distance = float(np.median(dist[around]))
+        ray = rays[i]
+        local = np.array([ray @ cam.right, ray @ cam.up, ray @ cam.forward])
+        point = cam.pos + ray * depth[vs[i], us[i]]
+        return {
+            "distance_m": round(distance, 3),
+            "bearing_deg": round(-math.degrees(math.atan2(local[0], local[2])), 1),
+            "elevation_deg": round(math.degrees(math.atan2(local[1], math.hypot(local[0], local[2]))), 1),
+            "point_m": [round(float(v), 3) for v in point],
+        }
 
     def _seen(self, layers: Any) -> list[dict[str, Any]]:
         geoms = layers.geoms

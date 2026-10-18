@@ -53,7 +53,9 @@ def register(server: MCPServer, playground: Playground) -> None:
         """Read a robot's sensors (all, or those in names) as compact readings with units. lidar and lidar3d:
         nearest obstacle and nearest ahead (distance_m, bearing_deg: 0 is the sensor's forward, +90 its left),
         ranges as the nearest per 10 degree sector (sectors_m); a 3D scan also its point count and bounding box. Depth
-        camera: center_m, min_m, median_m and the nearest obstacle; segmentation camera: what it sees and how much.
+        camera: center_m, min_m and median_m are depths along its axis; nearest is the closest obstacle's straight
+        distance from the lens with its bearing (its own robot and the floor left out); segmentation camera: what it
+        sees and how much.
         imu, encoders, force_torque (payload_kg is what it holds), touch, rangefinder, gps, odometry: their values.
         image=true adds each camera's picture. Readings follow each sensor's rate, noise and latency (age_s is how
         old a sample is)."""

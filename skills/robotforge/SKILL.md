@@ -65,7 +65,7 @@ Never say something worked because the call returned. Read the numbers, and look
 | `run_controller` | `success`, `failed_at`, `reward`, `stopped_early`; `keeps_running` means call `stop(robot)` later |
 | `compare_controllers` | the `table` and `best`; explain with its numbers |
 | `run_script` | `ok`, `output`, traceback |
-| `add_sensor` | `sensor` name, `position_m`, the first `reading`; then `read_sensors` (lidar `ahead` and `nearest` with `bearing_deg`, depth `center_m`) |
+| `add_sensor` | `sensor` name, `position_m`, the first `reading`; then `read_sensors` (lidar `ahead` and `nearest` with `bearing_deg`, depth `nearest` distance; `center_m` is depth along the axis) |
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
 `observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.
