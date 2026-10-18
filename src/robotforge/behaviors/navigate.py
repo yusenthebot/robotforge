@@ -642,6 +642,10 @@ class Navigator:
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
     backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
+    # Its walker turns as it walks. A learned walk turns only on the spot (any turn asked stops the walk) and keeps to
+    # its line as it walks, so it is only sent straight ahead, and turns on the spot past TURN_ON_SPOT: steered as the
+    # others, a template dog walk sent 3.2 m spent 30 s turning left and right and steadying, never walking forward.
+    turns_walking: bool = True
     rate_hz: float = RATE_HZ
     state: str = "following"  # following, facing, arrived, stopped
     note: str | None = None
@@ -807,7 +811,8 @@ class Navigator:
         self._spin_since = None
         speed = self.cruise * max(0.0, math.cos(alpha))
         slow = max(MIN_SPEED_SHARE * self.cruise, SLOW_GAIN * min(left, corner_left))
-        self.walker.command(min(speed, slow), float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)))
+        turn = float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)) if self.turns_walking else 0.0
+        self.walker.command(min(speed, slow), turn)
 
     def _make_way(self, t: float, xy: np.ndarray, s: float, data: mujoco.MjData) -> bool:
         """Another robot on the path just ahead (it moved there after the plan): stop, and after a moment plan
