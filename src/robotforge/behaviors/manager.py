@@ -1291,7 +1291,9 @@ class BehaviorManager:
                 try:
                     arm.pick_and_place(pick["center"], pick["half_height"], place, place_top, pick["faces"])
                 except OutOfReach as exc:
-                    if not goes:
+                    # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
+                    # goes with it wherever it drives, and the refusal names it.
+                    if not goes or exc.over is not None:
                         raise BehaviorError(
                             self._pick_out_of_reach(arm, exc, pick["center"], place, target, obj)
                         ) from exc
