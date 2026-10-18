@@ -77,6 +77,8 @@ STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm 
 HELD = 0.03  # m: a load whose middle is within its half height and this of the tool point is in the gripper
 SETTLE = 0.6  # s it stands still after it arrives, before the arm moves (a gait's sway dies down)
 KNOCKS = 2  # times in one errand it plans a pick or a put again after being pushed off where it stood (_knocked)
+HOLD_GAIN = 4.0  # 1/s: m/s and rad/s a robot on wheels drives back with per m and rad off where it stood (_hold_still)
+HOLD_SPEED, HOLD_TURN = 0.05, 0.3  # m/s and rad/s at most, doing so
 # m kept between a load put down and the edge of what it goes on: at 2 cm a lift picker let a can go 3 cm short of its
 # spot and it tipped off the table's edge
 EDGE_INSET = 0.05
@@ -1316,8 +1318,10 @@ class Errand:
         # Once it holds the load, the moves left bring it round over the robot wherever the robot is.
         if not self._holds(data) and self._knocked(t, data, "settle_object"):
             return
+        self._hold_still(data)
         if not self.arm.done:
             return
+        self._stand_free()
         if not self._holds(data):
             self._fail(data, "missed", f"its gripper closed but did not hold the {self.obj}")
             return
@@ -1341,8 +1345,10 @@ class Errand:
     def _on_placing(self, t: float, data: mujoco.MjData) -> None:
         if self._holds(data) and self._knocked(t, data, "settle_place"):
             return
+        self._hold_still(data)
         if not self.arm.done:
             return
+        self._stand_free()
         self.held = False
         self.placed_at = [round(float(v), 3) for v in data.xpos[self.body]]
         # Straight up off what it put down first: folding back from just over it, a Panda's wrist knocked a cup it
@@ -1388,7 +1394,7 @@ class Errand:
             return False
         self.arm.queue.clear()
         self.arm.sync(data)
-        self._stance = None
+        self._stand_free()
         struck = self._struck(data)
         log.info(
             "%s was pushed %.2f m and %.0f degrees off its spot (struck %s)",
@@ -1409,6 +1415,31 @@ class Errand:
         self._knocks += 1
         self.step, self._until = settle, t + SETTLE
         return True
+
+    def _hold_still(self, data: mujoco.MjData) -> None:
+        """Keep a robot on wheels where it stood while its arm works, as brakes would: drive back toward its heading
+        and along it (it cannot go sideways). Wheels whose servos only hold their speed at zero let the arm's swing
+        turn a mobile Panda 1.1 degrees under it on the way to an apple, and its fingers closed 1.3 cm off the middle:
+        turning down, the apple squeezed out of them."""
+        walker = self.manager.session.controllers.get(self.robot)
+        if self._stance is None or walker is None or not hasattr(walker, "command"):
+            return
+        if self.manager.kind(self.robot).value in WALKERS:
+            return
+        xy, heading = self._pose(data)
+        along = float((self._stance[0] - xy) @ np.array([math.cos(heading), math.sin(heading)]))
+        twist = math.remainder(self._stance[1] - heading, math.tau)
+        walker.command(
+            float(np.clip(HOLD_GAIN * along, -HOLD_SPEED, HOLD_SPEED)),
+            float(np.clip(HOLD_GAIN * twist, -HOLD_TURN, HOLD_TURN)),
+        )
+
+    def _stand_free(self) -> None:
+        """Stop holding the robot where it stood (_hold_still): its arm is done there."""
+        walker = self.manager.session.controllers.get(self.robot)
+        if self._stance is not None and walker is not None and hasattr(walker, "command"):
+            walker.command(0.0, 0.0)
+        self._stance = None
 
     def _struck(self, data: mujoco.MjData) -> str | None:
         """The name of something the robot's arm touches now, other than the load and the floor."""
@@ -1685,6 +1716,7 @@ class Errand:
         self._leave()
 
     def _leave(self) -> None:
+        self._stand_free()
         self.arm._warm = None  # the arm plans and moves as it did before the errand
         self._let_go()
         self.manager.errand_ended(self)
@@ -1737,6 +1769,7 @@ class Errand:
     def interrupt(self, note: str, time: float) -> None:
         if not self.done:
             self.state, self.why, self.note, self.ended = "failed", "interrupted", note, time
+        self._stand_free()
         self._let_go()
 
     def result(self) -> dict[str, Any]:

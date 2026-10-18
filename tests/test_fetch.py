@@ -212,6 +212,32 @@ def test_a_crate_beside_the_robot_blocks_the_hands_way_round_that_side(pg):
     assert hand._way_clear(behind, ahead, -math.pi)  # round its left
 
 
+def test_a_robot_on_wheels_holds_its_heading_while_its_arm_works(pg):
+    """The arm's swing turned a mobile Panda 1.1 degrees under it on its way to an apple, and the fingers closed 1.3 cm
+    off its middle. While its arm works the robot drives back to where it stood (Errand._hold_still), as brakes would:
+    pushed round for a second, it comes back."""
+    pg.add_robot("mm", design="mobile_panda")
+    pg.add_object("stand", shape="table", size=[0.4, 0.4, 0.45], pos=[1.6, 0.0], fixed=True)
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.45, 0.0, 0.47])
+    pg.add_object("goal", shape="table", size=[0.4, 0.4, 0.45], pos=[-1.6, 0.0], fixed=True)
+    pg.run_fast(lambda: False, 0.5)
+    errand, _ = pg.behaviors.pick_and_place(pg.behaviors.resolve("mm", arm=True), "cube", "goal")
+    pg.run_fast(lambda: errand.step == "picking" or errand.done, fetch.TIME_LIMIT)
+    assert errand.step == "picking", errand.result()
+    data, root = pg.session.data, pg.behaviors.root("mm")
+
+    def heading() -> float:
+        return math.degrees(math.atan2(data.xmat[root][3], data.xmat[root][0]))
+
+    before = heading()
+    data.xfrc_applied[root] = [0.0, 0.0, 0.0, 0.0, 0.0, 5.0]  # N m about the vertical
+    pg.run_fast(lambda: False, 1.0)
+    data.xfrc_applied[root] = 0.0
+    pg.run_fast(lambda: False, 1.0)
+    assert errand.step == "picking"
+    assert abs(heading() - before) < 0.2  # left alone it stayed 1.1 degrees round
+
+
 def test_a_robot_pushed_off_its_spot_while_its_arm_reaches_plans_the_pick_again(pg):
     """The arm's moves are planned for where the robot stands. A lift picker's hand struck a crate on its way over a
     parcel, the knock turned the robot 120 degrees, and its hand went on to close on nothing 1 m off. Here the robot
