@@ -151,7 +151,7 @@ LINT = r"""
         if (prev !== null && tops[i] > tops[prev] + lineH / 2) breaks.push(i);
         prev = i;
       }
-      if (!breaks.length) continue;
+      if (!breaks.length || cs.hyphens === "auto") continue; // a hyphenated word is broken on purpose
       const words = [...segmenter.segment(text)];
       for (const i of breaks) {
         const w = words.find((g) => g.index < i && i < g.index + g.segment.length);
