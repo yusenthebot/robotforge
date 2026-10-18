@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -26,8 +27,9 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors import nav_map
-from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach
+from robotforge.behaviors.arm import JOINT_SPEED, REACH_TOL, ArmMotion, OutOfReach, Waypoint
 from robotforge.behaviors.navigate import NoWay
+from robotforge.behaviors.reach_in import Hand
 from robotforge.sim.geometry import collides
 
 if TYPE_CHECKING:
@@ -51,6 +53,8 @@ SHIFT = 0.03  # m
 TWIST = math.radians(5.0)
 PENETRATE = 0.002  # m: deeper overlaps of the robot with something, posed at a spot, rule it out
 POS_TOL, YAW_TOL = 0.015, math.radians(2.0)  # where creeping into a spot stops
+ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm reaches from SHIFT off)
+LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on, creeping the rest
 CREEP_SPEED, CREEP_TURN = 0.08, 0.5  # m/s and rad/s at most, creeping
 CREEP_SECONDS = 12.0
 STAND_TRIES = 2  # times it creeps or goes again into a spot from which the arm did not reach
@@ -61,6 +65,8 @@ SPOT_STEP = 0.04  # m between the spots tried on a table or in a bin
 FREE_GAP = 0.015  # m kept between a load put down and what already stands there
 WEIGHT_SHARE = 0.8  # of a joint's torque limit that holding a load may take, with the arm's own weight
 GRIP_SAFETY = 2.0  # a gripper holds a load whose weight is at most 1 / this of what its friction can hold
+STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
+SWEEP_STEP = 0.08  # rad of the furthest joint between the poses a joint move is checked at
 
 
 class FetchError(ValueError):
@@ -74,6 +80,7 @@ class Spot:
     xy: tuple[float, float]
     heading: float  # rad
     target: tuple[float, float, float]
+    tilt: float = 0.0  # rad off straight down the hand reaches it with from there (reach_in.py)
 
     def face(self) -> tuple[float, float]:
         """A point 1 m ahead of the robot standing here, for navigation to turn it to."""
@@ -98,7 +105,9 @@ class Stand:
     """Posing the robot that carries an arm elsewhere, in copies of the world: does it fit there, and does its arm
     reach a point from there?"""
 
-    def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, robot: str, arm: ArmMotion, hold_q: np.ndarray):
+    def __init__(
+        self, model: mujoco.MjModel, data: mujoco.MjData, robot: str, arm: ArmMotion, hold_q: np.ndarray, load: int = -1
+    ):
         self.model, self.robot, self.arm = model, robot, arm
         self.root = nav_map.root_body(model, robot)
         joint = int(model.body_jntadr[self.root])
@@ -107,6 +116,9 @@ class Stand:
         self.adr = int(model.jnt_qposadr[joint])
         self.qpos = data.qpos.copy()
         self.qpos[arm.chain.qpos_adr] = hold_q  # the arm tucked in, as it is while the robot goes
+        self.hold_q = np.asarray(hold_q, float)
+        self.hold_local = np.zeros(3)  # the tool point it holds a load at, in the robot's frame (set by plan)
+        self.root_z = float(data.xpos[self.root][2])
         rot = data.xmat[self.root].reshape(3, 3)
         self.heading = math.atan2(rot[1, 0], rot[0, 0])
         self.xy = np.array(data.xpos[self.root][:2], float)
@@ -114,7 +126,8 @@ class Stand:
         frame = np.array([[c, s], [-s, c]])
         self.arm_base = frame @ (arm.base_xy - self.xy)  # the arm's base in the robot's heading frame
         self.probe = mujoco.MjData(model)
-        self._out: dict[float, float] = {}
+        self.hand = Hand(arm, load)
+        self._out: dict[tuple[float, bool], float] = {}
         self.robot_bodies = {b for b in range(model.nbody) if int(model.body_rootid[b]) == self.root}
         self.skip: set[int] = set()  # roots of what may overlap the robot (a load it carries)
 
@@ -159,21 +172,54 @@ class Stand:
             return False
         return True
 
-    def out_at(self, z: float) -> float:
-        """How far from its base (m) the arm points its gripper down at height z: the furthest of ahead of the robot
-        and to either side (measured once per cm of height, as the robot stands now). An arm on a Go2 reaches the
-        floor beside the dog, not past its head."""
-        key = round(z, 2)
+    def out_at(self, z: float, tilted: bool = False) -> float:
+        """How far from its base (m) the arm points its gripper down at height z (or reaches it with the hand
+        tilted): the furthest of ahead of the robot and to either side (measured once per cm of height, as the robot
+        stands now). An arm on a Go2 reaches the floor beside the dog, not past its head."""
+        key = (round(z, 2), tilted)
         if key not in self._out:
             yaw = self.heading
-            self._out[key] = max(_reach_out(self.arm, z, yaw + turn) for turn in (0.0, math.pi / 2, -math.pi / 2))
+            ways = (0.0, math.pi / 2, -math.pi / 2)
+            down = self.out_at(z) if tilted else 0.0
+            if tilted:
+                self._out[key] = max(_tilted_out(self.hand, z, yaw + turn, down) for turn in ways)
+            else:
+                self._out[key] = max(_reach_out(self.arm, z, yaw + turn) for turn in ways)
         return self._out[key]
 
-    def reaches(self, xy, heading: float, points: list[np.ndarray], quick: bool = True) -> bool:
-        """Whether the arm, with the robot at `xy` and `heading`, points its gripper down at every point."""
+    def rehearse(self, xy, heading: float, tilt: float, plan: Callable[[np.ndarray], None]) -> bool:
+        """Whether `plan(hold)` (queueing a pick or a put on the arm, `hold` the tool point it holds a load at over
+        the robot) works out with the robot at `xy` and `heading` and the arm tucked in as it arrives there. Nothing
+        stays queued."""
+        arm = self.arm
+        now, arm.q = arm.q, self.hold_q.copy()
+        try:
+            with arm.carried_to(self.qpos_at(xy, heading)):
+                plan(self.hold_at(xy, heading))
+            return True
+        except (OutOfReach, ValueError):
+            return False
+        finally:
+            arm.queue.clear()
+            arm.q = now
+
+    def hold_at(self, xy, heading: float) -> np.ndarray:
+        """The tool point the arm holds a load at, with the robot at `xy` and `heading`."""
+        c, s = math.cos(heading), math.sin(heading)
+        x, y, z = self.hold_local
+        return np.array([xy[0] + c * x - s * y, xy[1] + s * x + c * y, self.root_z + z])
+
+    def grip(self, xy, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]) -> float | None:
+        """The first of `tilts` (0: straight down) with which the arm, the robot at `xy` and `heading`, reaches
+        `target` and `lift` m above it; None if none does."""
         with self.arm.carried_to(self.qpos_at(xy, heading)):
-            check = self.arm.quick_error if quick else self.arm.reach_error
-            return all(check(p) <= REACH_TOL for p in points)
+            for tilt in tilts:
+                if tilt == 0.0:
+                    if all(self.arm.quick_error(p) <= REACH_TOL for p in (target, target + [0.0, 0.0, lift])):
+                        return tilt
+                elif self.hand.reaches(target, tilt, lift):
+                    return tilt
+        return None
 
 
 def spots_for(
@@ -184,34 +230,55 @@ def spots_for(
     start: np.ndarray,
     grid_reach: np.ndarray,
     below: list[tuple[np.ndarray, np.ndarray, float]] = (),
+    penalties: list[float] | None = None,
+    rehearse: Callable[[np.ndarray, float, np.ndarray, float], bool] | None = None,
 ) -> tuple[Spot | None, int]:
-    """The best spot from which the arm works on one of `targets` (points, best first) and on each `lift` m above it:
-    near the robot's start, the point at a comfortable distance from the arm's base and ahead of it rather than
-    behind, with room round it; and how many spots were checked by IK. `grid_reach`: the cells the robot can get to.
-    `below`: boxes (low xy, high xy, top z) of what the targets stand on, which the arm's base must not be under."""
+    """The best spot from which the arm works on one of `targets` and on each `lift` m above it: near the robot's
+    start, the point at a comfortable distance from the arm's base and ahead of it rather than behind, with room
+    round it, and as little of `penalties` (m, one per target: a place's spots nearer its middle cost less) as that
+    allows; and how many spots were checked by IK. Straight down first; then also tilted (reach_in.py), further out,
+    when no spot works that way. `grid_reach`: the cells the robot can get to. `below`: boxes (low xy, high xy, top
+    z) of what the targets stand on, which the arm's base must not be under. `rehearse(xy, heading, target, tilt)`
+    plans the whole pick or put from a spot that passes the quick checks: a spot whose plan does not work out is
+    passed over."""
+    penalties = penalties or [0.0] * len(targets)
     checked = 0
     fallback: Spot | None = None
-    for target in targets:
-        candidates = _candidates(stand, nav, target, start, grid_reach, below)
-        for _, xy, heading in candidates:
-            if checked >= MAX_CHECKS:
-                return fallback, checked
+    for tilts in [(0.0,), *([(0.0, *stand.hand.tilts)] if stand.hand.tilts else [])]:
+        tilted = len(tilts) > 1
+        candidates = sorted(
+            (
+                (score + penalty, xy, heading, target)
+                for target, penalty in zip(targets, penalties, strict=True)
+                for score, xy, heading in _candidates(stand, nav, target, start, grid_reach, below, tilted)
+            ),
+            key=lambda c: c[0],
+        )
+        checks = 0
+        for _, xy, heading, target in candidates:
+            if checks >= MAX_CHECKS:
+                break
             if not stand.fits(xy, heading):
                 continue
-            checked += 1
-            points = [target, target + [0.0, 0.0, lift]]
-            if not stand.reaches(xy, heading, points):
+            checks += 1
+            tilt = stand.grip(xy, heading, target, lift, tilts)
+            if tilt is None:
                 continue
-            spot = Spot((float(xy[0]), float(xy[1])), float(heading), tuple(float(v) for v in target))
+            spot = Spot((float(xy[0]), float(xy[1])), float(heading), tuple(float(v) for v in target), tilt)
             # Navigation stops within 8 cm and 12 degrees, and creeping in gets within 2.5 cm and 3 degrees: a spot
             # on the edge of where the arm reaches is reached in the plan and missed from where it really stops.
-            if _robust(stand, xy, heading, target):
-                return spot, checked
+            if rehearse is not None and not rehearse(xy, heading, target, tilt):
+                continue
+            if _robust(stand, xy, heading, target, lift, tilts):
+                return spot, checked + checks
             fallback = fallback or spot
+        checked += checks
     return fallback, checked
 
 
-def _robust(stand: Stand, xy: np.ndarray, heading: float, target: np.ndarray) -> bool:
+def _robust(
+    stand: Stand, xy: np.ndarray, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]
+) -> bool:
     c, s = math.cos(heading), math.sin(heading)
     shifts = [
         np.array([c, s]) * SHIFT,
@@ -220,7 +287,7 @@ def _robust(stand: Stand, xy: np.ndarray, heading: float, target: np.ndarray) ->
         np.array([s, -c]) * SHIFT,
     ]
     poses = [(xy + d, heading) for d in shifts] + [(xy, heading + TWIST), (xy, heading - TWIST)]
-    return all(stand.reaches(p, h, [target]) for p, h in poses)
+    return all(stand.grip(p, h, target, lift, tilts) is not None for p, h in poses)
 
 
 def _candidates(
@@ -230,10 +297,11 @@ def _candidates(
     start: np.ndarray,
     grid_reach: np.ndarray,
     below: list[tuple[np.ndarray, np.ndarray, float]],
+    tilted: bool = False,
 ) -> list[tuple[float, np.ndarray, float]]:
     """(score, robot xy, heading) of the spots round `target` on free floor it can get to, best (lowest) first."""
     grid = nav.grid
-    reach = stand.out_at(float(target[2]))  # how far it reaches out at that height
+    reach = stand.out_at(float(target[2]), tilted)  # how far it reaches out at that height
     if reach <= MIN_OUT:
         return []
     out = []
@@ -251,7 +319,7 @@ def _candidates(
                     continue
                 score = (
                     float(np.linalg.norm(xy - start))
-                    + 0.6 * abs(share - SHARES[0]) * reach
+                    + 1.5 * abs(share - SHARES[0]) * reach  # reaching far out works less well
                     + 0.15 * abs(bearing) / (math.pi / 2)
                     - 0.5 * min(float(nav.room[cell]) - nav.body.need, 0.2)
                 )
@@ -512,66 +580,118 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
             f"{opening:.2f} m"
         )
     arm.sync(data)
-    hold = arm.hold_point(half, radius)
-    if hold is None:
+    tuck = arm.hold_pose(half, radius)
+    if tuck is None:
         raise FetchError(
             f"{arm.robot} cannot fold back over {robot} with something in its gripper, so it cannot carry anything "
             f"while {robot} goes; move {robot} next to the {obj} and to the place yourself (move with to=...)"
         )
-    hold_q, _ = arm.pose_for(hold)
+    hold, hold_q = tuck
     root = manager.root(robot)
     rot = data.xmat[root].reshape(3, 3)
     heading = math.atan2(rot[1, 0], rot[0, 0])
     c, s = math.cos(heading), math.sin(heading)
     off = hold - data.xpos[root]
     hold_local = np.array([c * off[0] + s * off[1], -s * off[0] + c * off[1], off[2]])
-    stand = Stand(model, data, robot, arm, hold_q)
+    stand = Stand(model, data, robot, arm, hold_q, body)
+    stand.hold_local = hold_local
     start = np.array(data.xpos[root][:2], float)
     tucked = _posed(model, data, arm, hold_q)
     holds = holding(data, arm, body, half)
+    # Not more than it can hold (tucked in, where holding it takes least), and somewhere free to put it: told before
+    # it looks for where to stand.
+    mass = float(model.body_subtreemass[body])
+    friction = _grip_friction(model, arm, body)
+    _check_weight(model, arm, hold_q, friction, obj, mass)
+    place = place_for(model, data, target, kind, body, radius)
     # Where it picks it up.
     center = np.array(data.xpos[body], float)
     pick: Spot | None = None
-    if not holds and not all(arm.reach_error(p) <= REACH_TOL for p in (center, center + [0, 0, APPROACH_UP])):
+
+    def pick_from(xy: np.ndarray, heading: float, target: np.ndarray, tilt: float) -> bool:
+        def queue(hold: np.ndarray) -> None:
+            if tilt == 0.0:
+                arm.pick_up(target, half, hold)
+            else:
+                stand.hand.pick(target, half, hold, tilt)
+
+        return stand.rehearse(xy, heading, tilt, queue)
+
+    here = None if holds else stand.grip(start, heading, center, APPROACH_UP, (0.0, *stand.hand.tilts))
+    if not holds and (here is None or not pick_from(start, heading, center, here)):
         nav = manager.floor_map(robot, tucked)
         reach = _reachable_cells(nav, start)
-        pick, _ = spots_for(stand, nav, [center], APPROACH_UP, start, reach, _supports(model, data, body))
+        supports = _supports(model, data, body)
+        pick, _ = spots_for(stand, nav, [center], APPROACH_UP, start, reach, supports, rehearse=pick_from)
         if pick is None:
             raise FetchError(_nowhere(manager, stand, nav, reach, robot, center, f"the {obj}", body))
     # Where it puts it down.
-    place = place_for(model, data, target, kind, body, radius)
     loaded = _posed(model, data, arm, hold_q, body, hold)
     nav = manager.floor_map(robot, loaded, carrying=obj)
     reach = _reachable_cells(nav, start)
     stand.skip = {body}
     lift = max(APPROACH_UP, place.top + 2 * half + 0.03 - (min(p[2] for p in place.spots) + half + 0.01))
-    tools = [p + [0.0, 0.0, half + 0.01] for p in place.spots[:PLACE_SPOTS]]
+    middle = np.array(place.region["center"][:2])
+    spots = _spread(place.spots, PLACE_SPOTS)
+    tools = [p + [0.0, 0.0, half + 0.01] for p in spots]
+    penalties = [PLACE_SPREAD * float(np.linalg.norm(p[:2] - middle)) for p in spots]
+    top = (middle - place.region["half_xy"], middle + place.region["half_xy"], float(place.region["min_z"]) + 0.01)
     begin = np.array(pick.xy) if pick is not None else start
-    drop, _ = spots_for(stand, nav, tools, lift, begin, reach, [])
+
+    def put_from(xy: np.ndarray, heading: float, tool: np.ndarray, tilt: float) -> bool:
+        def queue(hold: np.ndarray) -> None:
+            spot = tool - [0.0, 0.0, half + 0.01]
+            if tilt == 0.0:
+                arm.put_down(spot, half, place.top)
+            else:
+                stand.hand.put(spot, half, place.top, tilt)
+
+        return stand.rehearse(xy, heading, tilt, queue)
+
+    tops = [top] if place.spots[0][2] > 0.05 else []
+    drop, _ = spots_for(stand, nav, tools, lift, begin, reach, tops, penalties, rehearse=put_from)
     stand.skip = set()
     if drop is None:
         raise FetchError(
             _nowhere(manager, stand, nav, reach, robot, tools[0], f"a free spot on the {place.name}", body)
         )
-    drop = Spot(drop.xy, drop.heading, tuple(float(v) for v in np.array(drop.target) - [0.0, 0.0, half + 0.01]))
-    # Not more than it can hold.
-    mass = float(model.body_subtreemass[body])
-    q = hold_q
-    if not holds:
-        at = stand.qpos_at(pick.xy, pick.heading) if pick is not None else data.qpos
-        with arm.carried_to(at):
-            q, _ = arm.pose_for(center)
-    limit, why = heaviest(model, arm, q, _grip_friction(model, arm, body))
+    drop = Spot(
+        drop.xy, drop.heading, tuple(float(v) for v in np.array(drop.target) - [0.0, 0.0, half + 0.01]), drop.tilt
+    )
+    # Not more than it can hold where it picks it up, the arm reaching out.
+    if not holds and pick is not None and pick.tilt == 0.0:
+        with arm.carried_to(stand.qpos_at(pick.xy, pick.heading)):
+            q, err = arm.pose_for(center)
+        if err <= REACH_TOL:
+            _check_weight(model, arm, q, friction, obj, mass)
     arm.sync(data)
+    return Errand(manager, robot, arm, obj, body, half, radius, hold_local, hold_q, pick, drop, place, held=holds)
+
+
+def _check_weight(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, friction: float, obj: str, mass: float) -> None:
+    limit, why = heaviest(model, arm, q, friction)
     if mass > limit:
         raise FetchError(
             f"the {obj} weighs {mass:.2f} kg, more than {arm.robot} can hold out there (about {limit:.2f} kg: {why})"
         )
-    return Errand(manager, robot, arm, obj, body, half, radius, hold_local, pick, drop, place, held=holds)
+
+
+def _spread(spots: list[np.ndarray], most: int) -> list[np.ndarray]:
+    """Up to `most` of a place's spots (best first), each at least SPREAD_GAP from those taken before it, so that
+    a search over them covers the whole place rather than its middle."""
+    taken: list[np.ndarray] = []
+    for p in spots:
+        if all(float(np.linalg.norm(p[:2] - q[:2])) >= SPREAD_GAP for q in taken):
+            taken.append(p)
+            if len(taken) >= most:
+                break
+    return taken
 
 
 APPROACH_UP = 0.07  # m: the arm comes down onto a load from this high (arm.APPROACH)
-PLACE_SPOTS = 12  # spots on a place tried, best first
+PLACE_SPOTS = 16  # spots on a place tried (_spread)
+SPREAD_GAP = 0.12  # m between them
+PLACE_SPREAD = 0.5  # how much nearer the robot a spot is worth taking, per m it is further from the place's middle
 
 
 def _posed(
@@ -743,6 +863,23 @@ def _reach_out(arm: ArmMotion, z: float, way: float | None = None) -> float:
 WARM_OUT = (0.2, 0.3, 0.4, 0.5, 0.12, 0.6)  # m from the base where _reach_out looks the long way
 
 
+def _tilted_out(hand: Hand, z: float, way: float, down: float) -> float:
+    """How far from its base (m) the arm reaches height z along `way` with its hand tilted, the furthest of its
+    tilts, going on out from `down` (how far it points down there) until two points in a row are out of reach."""
+    arm = hand.arm
+    ahead = np.array([math.cos(way), math.sin(way)])
+    best = down
+    for tilt in hand.tilts:
+        misses, r = 0, max(down, MIN_OUT)
+        while misses < 2 and r < 1.6:
+            r += 0.03
+            if hand.reaches(np.array([*(arm.base_xy + r * ahead), z]), tilt, 0.0):
+                best, misses = max(best, r), 0
+            else:
+                misses += 1
+    return best
+
+
 def _heights(arm: ArmMotion) -> str:
     """The heights (m) the arm points its gripper down at, a little way out from its base: "0.15 and 0.62"."""
     found = []
@@ -751,6 +888,35 @@ def _heights(arm: ArmMotion) -> str:
         if any(arm.quick_error(np.array([*(arm.base_xy + r * ahead), z])) <= REACH_TOL for r in (0.15, 0.25, 0.35)):
             found.append(float(z))
     return f"{found[0]:.2f} and {found[-1]:.2f}" if found else "no heights at all"
+
+
+def _sweeps_clear(
+    arm: ArmMotion, q0: np.ndarray, q1: np.ndarray, robot: str, load: tuple[int, float] | None = None
+) -> bool:
+    """Whether the arm moving joint by joint from `q0` to `q1` hits nothing on the way (in the IK's copy of the world:
+    the robot it rides on, the floor, furniture), and a load (body, half height) in its gripper clears the robot."""
+    m, d = arm.ik.model, arm.ik.data
+    n = max(4, math.ceil(float(np.max(np.abs(q1 - q0))) / SWEEP_STEP))
+    arm.ik.point(arm.chain, q0)
+    under = arm._carrier_boxes()
+    for s in np.linspace(0.0, 1.0, n + 1)[1:]:
+        q = q0 + (q1 - q0) * s
+        p = arm.ik.point(arm.chain, q)
+        if load is not None and not arm._load_clears(p, load[1], under):
+            return False
+        mujoco.mj_collision(m, d)
+        for con in d.contact[: d.ncon]:
+            if con.dist > -PENETRATE:
+                continue
+            g1, g2 = int(con.geom1), int(con.geom2)
+            b1, b2 = int(m.geom_bodyid[g1]), int(m.geom_bodyid[g2])
+            if (b1 in arm._moving) == (b2 in arm._moving) or (min(g1, g2), max(g1, g2)) in arm._touching_at_home:
+                continue
+            other = b2 if b1 in arm._moving else b1
+            if load is not None and int(m.body_rootid[other]) == load[0]:
+                continue  # what it holds
+            return False
+    return True
 
 
 # ---- the errand ---------------------------------------------------------------------------------------------
@@ -779,6 +945,7 @@ class Errand:
     half: float  # m, half the load's height
     radius: float  # m, the load seen from above
     hold: np.ndarray  # the tool point over the robot, in the robot's frame: (ahead, left, up) from its root
+    hold_q: np.ndarray  # the arm's joint values there (folded inside the robot's outline: Arm.hold_pose)
     pick: Spot | None  # None: the arm reaches the object from where the robot stands
     drop: Spot
     place: Place
@@ -797,6 +964,11 @@ class Errand:
     _until: float = 0.0
     _tries: int = 0
     _creep: tuple[float, Spot] | None = None  # (since when, into which spot)
+    tilt: float = 0.0  # rad off straight down of the hand in its last pick or put
+    hand: Hand = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.hand = Hand(self.arm, self.body)
 
     @property
     def done(self) -> bool:
@@ -862,11 +1034,16 @@ class Errand:
         if leg is None or leg.trip is None or not leg.trip.done:
             return
         leg.result = leg.trip.result()
-        if not leg.trip.arrived:
+        root = self.manager.root(self.robot)
+        short = math.dist(leg.spot.xy, data.xpos[root][:2])
+        if not leg.trip.arrived and short > LEG_SLACK:
             note = leg.result.get("note") or "it did not get there"
             self._fail(data, leg.result.get("why") or "stuck", f"on its way to the {leg.to}: {note}")
             return
-        self.step, self._creep, self._tries = then, (t, leg.spot), 0
+        # Stopped a little short (its map gave it no room right there): it creeps the rest if the arm needs it to.
+        # It works from where it stopped if its arm reaches from there; it creeps in only if it does not (_again).
+        self.step, self._creep, self._tries = then.replace("creep", "settle"), (t, leg.spot), 0
+        self._until = t + SETTLE
 
     def _on_creep_object(self, t: float, data: mujoco.MjData) -> None:
         if self._creep_in(t, data):
@@ -893,7 +1070,14 @@ class Errand:
             self._fail(data, "missed", f"its gripper closed but did not hold the {self.obj}")
             return
         self.held = True
-        self.picked_at = [round(float(v), 3) for v in self.arm.ik.data.site_xpos[self.arm.site]]
+        self.arm.sync(data)
+        self.step = "folding" if self._stow(data, loaded=True) else "folded"
+
+    def _on_folding(self, t: float, data: mujoco.MjData) -> None:
+        if self.arm.done:
+            self.step = "folded"
+
+    def _on_folded(self, t: float, data: mujoco.MjData) -> None:
         self._go(data, "to_place")
 
     def _on_placing(self, t: float, data: mujoco.MjData) -> None:
@@ -925,9 +1109,26 @@ class Errand:
         tool = data.site_xpos[self.arm.site]
         return float(np.linalg.norm(data.xpos[self.body] - tool)) <= self.half + HELD
 
+    def _stow(self, data: mujoco.MjData, loaded: bool = False) -> bool:
+        """Fold the arm into its pose for the way (hold_q) joint by joint, from the pose it is in, if on the way it
+        hits nothing (nor does the load in its gripper); True if it does. The same tool point in another pose (an
+        elbow out to the side) made the robot too wide for the gaps its trips were planned through."""
+        arm = self.arm
+        if float(np.max(np.abs(arm.q - self.hold_q))) <= STOW_SAME:
+            return False
+        load = (self.body, self.half) if loaded else None
+        if not _sweeps_clear(arm, arm.q, self.hold_q, self.robot, load):
+            return False
+        travel = float(np.max(np.abs(self.hold_q - arm.q)))
+        arm.queue.append(Waypoint(None, None, max(0.5, travel / JOINT_SPEED), "stow", self.hold_q.copy()))
+        return True
+
     def _tuck(self, data: mujoco.MjData, hold: np.ndarray) -> None:
-        """Back over the robot: across at the height the tool is at, if it can, then down."""
+        """Back over the robot: joint by joint into its pose for the way if that hits nothing (_stow), else across
+        at the height the tool is at, if it can, then down."""
         self.arm.sync(data)
+        if self._stow(data):
+            return
         start = self.arm.tool_target_end()
         over = np.array([hold[0], hold[1], max(start[2], hold[2])])
         if float(np.linalg.norm(start[:2] - hold[:2])) > 0.05 and self.arm.reach_error(over) <= REACH_TOL:
@@ -951,60 +1152,108 @@ class Errand:
 
     def _creep_in(self, t: float, data: mujoco.MjData) -> bool:
         """Creep the last few cm and degrees into the spot (navigation stops within 8 cm and 12 degrees); True when
-        it is there or has tried long enough."""
+        it is there or has tried long enough. Off to one side it turns toward the spot, goes and turns back; else it
+        turns to the spot's heading on the spot and goes straight ahead or back. Turning toward a spot 3.5 cm
+        behind it to get there, a mobile Panda swung 60 degrees past its heading and rocked there for 12 s."""
         since, spot = self._creep
         walker = self.manager.session.controllers.get(self.robot)
+        if walker is None or not hasattr(walker, "command"):
+            return True
         root = self.manager.root(self.robot)
         xy = np.array(data.xpos[root][:2])
         rot = data.xmat[root].reshape(3, 3)
         yaw = math.atan2(rot[1, 0], rot[0, 0])
         off = np.array(spot.xy) - xy
-        dist = float(np.linalg.norm(off))
+        ahead = np.array([math.cos(yaw), math.sin(yaw)])
+        along, aside = float(off @ ahead), float(ahead[0] * off[1] - ahead[1] * off[0])
         twist = _wrap(spot.heading - yaw)
-        if walker is None or not hasattr(walker, "command"):
-            return True
-        if (dist <= POS_TOL and abs(twist) <= YAW_TOL) or t - since > CREEP_SECONDS:
+        if t - since > CREEP_SECONDS:
             walker.command(0.0, 0.0)
             return True
         backs = getattr(walker, "max_reverse", 1.0) > 0 and type(walker).__name__ != "RhythmWalker"
-        if dist > POS_TOL:
+        if abs(aside) > ASIDE_TOL:
             alpha = _wrap(math.atan2(off[1], off[0]) - yaw)
             way = 1.0
             if backs and abs(alpha) > math.pi / 2:
                 way, alpha = -1.0, _wrap(alpha - math.pi)
-            if abs(alpha) > math.radians(30.0) and dist > 2 * POS_TOL:
+            if abs(alpha) > math.radians(30.0):
                 walker.command(0.0, _turn(alpha))
             else:
+                dist = float(np.linalg.norm(off))
                 walker.command(way * min(CREEP_SPEED, max(0.03, 1.5 * dist)), float(np.clip(1.5 * alpha, -0.3, 0.3)))
             return False
-        walker.command(0.0, _turn(twist))
-        return False
+        if abs(twist) > YAW_TOL:
+            walker.command(0.0, _turn(twist))
+            return False
+        if abs(along) > POS_TOL and (along > 0 or backs):
+            speed = math.copysign(min(CREEP_SPEED, max(0.03, 1.5 * abs(along))), along)
+            walker.command(speed, float(np.clip(1.5 * twist, -0.3, 0.3)))
+            return False
+        walker.command(0.0, 0.0)
+        return True
 
     def _start_pick(self, t: float, data: mujoco.MjData) -> None:
         self.arm.sync(data)
         center = np.array(data.xpos[self.body], float)
-        try:
-            self.arm.pick_up(center, self.half, self.hold_world(data))
-        except (OutOfReach, ValueError) as exc:
+        hold = self.hold_world(data)
+
+        def queue(tilt: float) -> None:
+            if tilt == 0.0:
+                self.arm.pick_up(center, self.half, hold)
+            else:
+                self.hand.pick(center, self.half, hold, tilt)
+
+        failed = self._first_tilt(self.pick, queue)
+        self.picked_at = [round(float(v), 3) for v in center]
+        if failed is not None:
             if self._again(t, data, self.pick, "to_object"):
                 return
-            self._fail(data, "out_of_reach", f"from where it stopped its arm could not pick up the {self.obj}: {exc}")
+            self._fail(
+                data, "out_of_reach", f"from where it stopped its arm could not pick up the {self.obj}: {failed}"
+            )
             return
         self.step = "picking"
 
     def _start_place(self, t: float, data: mujoco.MjData) -> None:
         self.arm.sync(data)
         target = np.array(self.drop.target, float)
-        try:
-            self.arm.put_down(target, self.half, self.place.top)
-        except (OutOfReach, ValueError) as exc:
+
+        def queue(tilt: float) -> None:
+            if tilt == 0.0:
+                self.arm.put_down(target, self.half, self.place.top)
+            else:
+                self.hand.put(target, self.half, self.place.top, tilt)
+
+        failed = self._first_tilt(self.drop, queue)
+        if failed is not None:
             if self._again(t, data, self.drop, "to_place"):
                 return
             self._fail(
-                data, "out_of_reach", f"from where it stopped its arm could not put it on the {self.place.name}: {exc}"
+                data,
+                "out_of_reach",
+                f"from where it stopped its arm could not put it on the {self.place.name}: {failed}",
             )
             return
         self.step = "placing"
+
+    def _first_tilt(self, spot: Spot | None, queue: Callable[[float], None]) -> Exception | None:
+        """Queue the arm's moves with the first tilt of the hand that works from where the robot stands: the one the
+        spot was chosen for, then straight down, then the others; the last error if none works."""
+        tilts = [0.0, *self.hand.tilts]
+        if spot is not None and spot.tilt in tilts:
+            tilts.remove(spot.tilt)
+            tilts.insert(0, spot.tilt)
+        failed: Exception | None = None
+        for tilt in tilts:
+            try:
+                queue(tilt)
+            except (OutOfReach, ValueError) as exc:
+                self.arm.queue.clear()
+                failed = exc
+                continue
+            self.tilt = tilt
+            return None
+        return failed
 
     def _again(self, t: float, data: mujoco.MjData, spot: Spot | None, leg: str) -> bool:
         """Creep into the spot once more (it stopped short of it); True if it does."""
@@ -1026,6 +1275,7 @@ class Errand:
         self._leave()
 
     def _leave(self) -> None:
+        self.arm._warm = None  # the arm plans as it did before the errand
         self.manager.errand_ended(self)
 
     def interrupt(self, note: str, time: float) -> None:

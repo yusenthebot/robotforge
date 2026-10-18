@@ -27,6 +27,7 @@ RISE_MIN = 0.05  # m: a tool this far below the carrying height rises straight u
 REACH_TOL = 0.008  # m: an IK answer further than this from the target means "cannot reach"
 RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nearest start gets stuck
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
+PATH_GAP = 0.02  # rad: an arm further than this from where a path starts moves there first
 PENETRATION = 0.002  # m: deeper overlaps of the arm with itself or the floor rule an IK answer out
 GROUND = (int(mujoco.mjtGeom.mjGEOM_PLANE), int(mujoco.mjtGeom.mjGEOM_HFIELD))
 UPRIGHT = 0.9  # an arm's first hinge turns it toward a target when its axis is this close to vertical (cosine)
@@ -39,10 +40,12 @@ LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying th
 # behind its base, where its first joint cannot point (14 degrees each side on a Panda), twists the rest of the way
 JOINT_SLACK = 0.35
 PATH_SAMPLES = 33  # points a path around the base is measured at: 32 chords of at most 11 degrees in a full turn
-HOLD_STEP = 0.02  # m between the heights tried for holding a load over the robot (hold_point)
+HOLD_STEP = 0.02  # m between the heights tried for holding a load over the robot (hold_pose)
 HOLD_GRID = 0.04  # m between the spots over the robot tried for it
 HOLD_SPREAD = 0.5  # m of height a held load is raised rather than held a meter further off the robot's middle
-HOLD_TRIES = 400  # IK checks hold_point makes at most
+HOLD_TRIES = 400  # IK checks hold_pose makes at most
+HOLD_MARGIN = 0.03  # m the arm may reach past the robot's outline, holding a load
+TUCK_STARTS = 6  # other IK starts tried for a tucked pose that stays inside the robot's outline
 HOLD_RISE = 0.6  # m above the robot's lowest top that a load is held at most
 
 
@@ -76,6 +79,9 @@ class Waypoint:
     # the base joint can go when the move starts
     turn: float | None = None
     load: float | None = None  # m, half the height of the load a carry takes across, kept clear of the robot under it
+    # joint values to pass through on the way to `joints`, in order (ending with them): a path worked out beforehand
+    # (fetch.py reaching in with the hand tilted), followed knot to knot rather than joint by joint
+    path: np.ndarray | None = None
 
 
 class ArmMotion:
@@ -130,6 +136,7 @@ class ArmMotion:
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
+        self._knots: np.ndarray | None = None  # the joint values a path move passes through, from where it started
         self._axis0 = DOWN  # where the tool pointed when the current move began
         self._turn: float | None = None  # how far the current move turns about the base, rad
         self._reposed: Waypoint | None = None  # the move the arm last changed its pose for (once is enough)
@@ -258,8 +265,9 @@ class ArmMotion:
         seed = self._seed(target)
         q, err = self.q, np.inf
         # From the pose the arm is in, then with its base turned toward the target: the first keeps an arm
-        # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS.
-        for start in (self.q, seed):
+        # reaching over its shoulder in that pose, the second handles big turns that stall plain DLS. (And from the
+        # last answer quick_error found, when a search left one: what it found reachable is found again.)
+        for start in (self.q, seed, *(() if self._warm is None else (self._seed(target, self._warm),))):
             q2, err2 = self.ik.solve(self.chain, target, start, iterations=60, axis=(self.tool_axis, DOWN))
             if err2 <= REACH_TOL and not self._collides(q2):
                 return q2, err2, False
@@ -575,13 +583,13 @@ class ArmMotion:
         points = [*([a, b] if ends else []), *self._way_around(a, b, turn)]
         return all(self.reach_error(p) <= REACH_TOL for p in points)
 
-    def hold_point(self, load_half_height: float, load_radius: float) -> np.ndarray | None:
-        """Where the tool holds a load (or nothing) while the robot carrying the arm drives or walks: over the robot,
-        the load inside its outline seen from above, so nothing sticks out to catch on furniture, and clear of it by
-        LOAD_CLEARANCE; low (a load held high swings) and near the middle between the arm's base and the robot's,
-        HOLD_SPREAD m of height counting as much as a meter off that middle ahead or behind, or half a meter to a side
-        (where it tips the robot and sticks out). None for an arm that cannot fold over its robot that way. A world
-        point, for the robot as it stands now.
+    def hold_pose(self, load_half_height: float, load_radius: float) -> tuple[np.ndarray, np.ndarray] | None:
+        """Where the tool holds a load (or nothing) while the robot carrying the arm drives or walks, and the arm's
+        joint values there: over the robot, the load and the arm inside its outline seen from above, so nothing
+        sticks out to catch on furniture, and the load clear of it by LOAD_CLEARANCE; low (a load held high swings)
+        and near the middle between the arm's base and the robot's, HOLD_SPREAD m of height counting as much as a
+        meter off that middle ahead or behind, or half a meter to a side (where it tips the robot and sticks out).
+        None for an arm that cannot fold over its robot that way. A world point, for the robot as it stands now.
 
         Every spot over the robot is tried, nearest that middle first: a Panda cannot hold anything low next to its
         own base, and does behind it, over the back of its deck."""
@@ -600,6 +608,7 @@ class ArmMotion:
             for center, half, _ in under
             for sign in itertools.product((-1, 1), repeat=2)
         ]
+        outline = (frame, root[:2], np.min(corners, axis=0) - HOLD_MARGIN, np.max(corners, axis=0) + HOLD_MARGIN)
         low, high = np.min(corners, axis=0) + load_radius, np.max(corners, axis=0) - load_radius
         if np.any(low > high):
             return None
@@ -619,23 +628,72 @@ class ArmMotion:
                 spread = HOLD_SPREAD * float(np.hypot(x - aim[0], 2 * (y - aim[1])))  # off to a side: twice
                 spots.append((lowest + spread, lowest, spread, xy))
         spots.sort(key=lambda spot: spot[0])
-        best: tuple[float, np.ndarray] | None = None  # (score, point)
-        tries = 0
-        for bound, lowest, spread, xy in spots:
-            if best is not None and bound >= best[0] or tries >= HOLD_TRIES:
-                break  # the spots left can only score worse
-            for z in np.arange(lowest, ceiling, HOLD_STEP):
-                if best is not None and z + spread >= best[0]:
+        # The pose the arm folds into by itself from the one it is in comes first: the moves there keep to it (a
+        # Panda folded into another pose found by a restart went back to its own on the way, elbow out). Others, from
+        # restarts, only if no spot is held that way.
+        for restarts in (0, TUCK_STARTS):
+            best: tuple[float, np.ndarray, np.ndarray] | None = None  # (score, point, joint values)
+            tries = 0
+            for bound, lowest, spread, xy in spots:
+                if best is not None and bound >= best[0] or tries >= HOLD_TRIES:
+                    break  # the spots left can only score worse
+                for z in np.arange(lowest, ceiling, HOLD_STEP):
+                    if best is not None and z + spread >= best[0]:
+                        break
+                    p = np.array([*xy, z])
+                    if not self._load_clears(p, load_half_height, under):
+                        continue
+                    tries += 1
+                    if self.quick_error(p) > REACH_TOL:
+                        continue
+                    q = self._tucked(p, load_half_height, load_radius, outline, restarts)
+                    if q is None:
+                        continue
+                    best = (float(z) + spread, p, q)
                     break
-                p = np.array([*xy, z])
-                if not self._load_clears(p, load_half_height, under):
+            if best is not None:
+                return best[1], best[2]
+        return None
+
+    def _tucked(
+        self, p: np.ndarray, half_height: float, radius: float, outline: tuple[np.ndarray, ...], restarts: int
+    ) -> np.ndarray | None:
+        """Joint values with the tool at `p` pointing down that keep a load held there clear of the arm and the arm
+        inside the robot's outline (heading frame, its middle, low and high corners): the answer quick_error found,
+        else one from `restarts` other starts. Folded back over its deck from its ready pose, a Panda stuck its elbow
+        0.42 m out to the side, and the robot no longer fitted between a kitchen island and the counter."""
+        rng = np.random.default_rng(1)
+        seed = self._seed(p)
+        for k in range(restarts + 1):
+            if k == 0:
+                q = self._warm
+            else:
+                start = rng.uniform(self.chain.lower, self.chain.upper)
+                if self.yaw is not None:
+                    start[self.yaw] = seed[self.yaw]
+                q, err = self.ik.solve(self.chain, p, start, iterations=60, axis=(self.tool_axis, DOWN))
+                if err > REACH_TOL or self._collides(q):
                     continue
-                tries += 1
-                if self.quick_error(p) > REACH_TOL or self._load_hits_arm(self._warm, p, load_half_height, load_radius):
-                    continue
-                best = (float(z) + spread, p)
-                break
-        return None if best is None else best[1]
+            if not self._load_hits_arm(q, p, half_height, radius) and self._inside(q, outline):
+                return q
+        return None
+
+    def _inside(self, q: np.ndarray, outline: tuple[np.ndarray, ...]) -> bool:
+        """Whether the arm at `q`, seen from above, stays inside the outline (heading frame, middle, low, high)."""
+        m, d = self.ik.model, self.ik.data
+        frame, middle, low, high = outline
+        self.ik.point(self.chain, q)
+        for g in range(m.ngeom):
+            if int(m.geom_bodyid[g]) not in self._moving or not collides(m, g):
+                continue
+            rot = d.geom_xmat[g].reshape(3, 3)
+            center = d.geom_xpos[g] + rot @ m.geom_aabb[g, :3]
+            half = (np.abs(rot) @ m.geom_aabb[g, 3:])[:2]
+            for sign in itertools.product((-1, 1), repeat=2):
+                corner = frame @ (center[:2] + np.array(sign) * half - middle)
+                if np.any(corner < low) or np.any(corner > high):
+                    return False
+        return True
 
     def _load_hits_arm(self, q: np.ndarray, p: np.ndarray, half_height: float, radius: float) -> bool:
         """Whether a load held at `p` with the arm at `q` overlaps the arm's own links (other than the hand holding it),
@@ -702,6 +760,7 @@ class ArmMotion:
             wp = self.queue.popleft()
             start = data.site_xpos[self.site].copy()
             self._branch = None
+            self._knots = None
             self._turn = None
             # Where the tool points now. On a robot that drives or walks too: an arm carried folded, gripper forward,
             # that was told it pointed down already snapped its wrist over on the first tick and the kick shoved the
@@ -709,7 +768,14 @@ class ArmMotion:
             self._axis0 = data.xmat[self.chain.body].reshape(3, 3) @ self.tool_axis
             if wp.position is not None and wp.joints is None:
                 wp = self._plan_move(wp, start)
-            if wp.joints is not None:
+            if wp.path is not None and float(np.max(np.abs(wp.path[0] - self.q))) > PATH_GAP:
+                # A path starts from the pose it was worked out from: get there first, joint by joint.
+                self.queue.appendleft(wp)
+                travel = float(np.max(np.abs(wp.path[0] - self.q)))
+                wp = Waypoint(None, None, max(0.3, travel / JOINT_SPEED), wp.label, wp.path[0], load=wp.load)
+            if wp.path is not None:
+                self._knots = np.vstack([self.q, wp.path])
+            elif wp.joints is not None:
                 self._branch = (self.q.copy(), wp.joints)
             self._segment = (start, wp, t)
             self.current_label = wp.label
@@ -723,7 +789,11 @@ class ArmMotion:
         u = min(1.0, (t - t0) / wp.duration)
         if wp.position is not None or wp.joints is not None:
             s = u * u * (3 - 2 * u)  # smoothstep
-            if self._branch is not None:
+            if self._knots is not None:
+                k = min(s * (len(self._knots) - 1), len(self._knots) - 1 - 1e-9)
+                i = int(k)
+                self.q = self._knots[i] + (self._knots[i + 1] - self._knots[i]) * (k - i)
+            elif self._branch is not None:
                 q0, q1 = self._branch
                 self.q = q0 + (q1 - q0) * s
             else:
