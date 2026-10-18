@@ -63,11 +63,12 @@ CARRY_MARGIN = 0.04
 # only out of it, a UR5e on ANYmal swung its Robotiq round the dog's back 1 cm past its rear: the servos lagging, the
 # gripper caught on the dog, jammed and dropped the cube 60 cm from the bin.
 LINK_CLEARANCE = 0.03
-# m it keeps from that robot on the way straight down to an object or a place and back up, where the gripper has to
-# come near the robot's legs to get to things beside them: a UR5e on ANYmal reaching the floor beside the dog passes its
-# forearm within 3 cm of the dog's side, and held to LINK_CLEARANCE there it refused 6 of 14 floor picks that it made
-# without touching the dog.
-DOWN_CLEARANCE = 0.01
+# m it keeps from that robot on slow moves close to it: straight down to an object or a place and back up, where the
+# gripper has to come near the robot's legs to get to things beside them, and joint by joint. A UR5e on ANYmal reaching
+# the floor beside the dog passes its forearm within 3 cm of the dog's side, and held to LINK_CLEARANCE there it
+# refused 6 of 14 floor picks that it made without touching the dog; a PiPER on a Go2, held to it unfolding from its
+# home pose, unfolded into another pose and came down on the cube's top instead of round it.
+NEAR_CLEARANCE = 0.01
 CARRY_STEP = 0.01
 CARRY_ARC_STEPS = 8  # points along the way round between two of a carry's checked points, for what lies under it
 # Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
@@ -150,7 +151,7 @@ class Waypoint:
     # The joint angles the plan checked this move from (see _way_down): an arm that cannot follow it from the pose it
     # is in changes into that one first, where it can (see _repose).
     pose: np.ndarray | None = None
-    near: float = LINK_CLEARANCE  # m an arm riding on a robot keeps from it on this move (see DOWN_CLEARANCE)
+    near: float = LINK_CLEARANCE  # m an arm riding on a robot keeps from it on this move (see NEAR_CLEARANCE)
 
 
 class ArmMotion:
@@ -609,7 +610,7 @@ class ArmMotion:
             return [
                 Waypoint(a, None, self._time(start, a), "rise", tilt=True),
                 Waypoint(b, None, self._time(a, b), "move over", turn=turn, tilt=True),
-                Waypoint(target, None, self._time(b, target) + 0.3, "move", turn=0.0, pose=pose, near=DOWN_CLEARANCE),
+                Waypoint(target, None, self._time(b, target) + 0.3, "move", turn=0.0, pose=pose, near=NEAR_CLEARANCE),
             ]
         raise ValueError(
             f"{self.robot} cannot get to {[round(float(v), 3) for v in target]} without running into the robot "
@@ -746,7 +747,7 @@ class ArmMotion:
             turn=0.0,
             faces=faces,
             pose=poses["object"],
-            near=DOWN_CLEARANCE,
+            near=NEAR_CLEARANCE,
         )
         self.queue.append(descend)
         self.queue.append(Waypoint(None, self._grip("close"), 0.6, "grasp"))
@@ -767,7 +768,7 @@ class ArmMotion:
             )
         )
         lower = Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0, pose=poses["place"])
-        self.queue.append(replace(lower, near=DOWN_CLEARANCE))
+        self.queue.append(replace(lower, near=NEAR_CLEARANCE))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0, tilt=True))
 
@@ -979,7 +980,7 @@ class ArmMotion:
 
     def _way_down(self, top: np.ndarray, bottom: np.ndarray) -> tuple[bool, np.ndarray | None]:
         """Whether an arm riding on a robot gets from `top` straight down to `bottom` (and back up the same way)
-        clear of itself and DOWN_CLEARANCE from that robot, as _plan_move moves it, and the pose at `top` it does so
+        clear of itself and NEAR_CLEARANCE from that robot, as _plan_move moves it, and the pose at `top` it does so
         from (see Waypoint.pose): the one it gets to `top` in, or one it changes into up there, backing up from
         `bottom` or any other that works. (True, None) for an arm that rides on nothing. Leaning over a cube between
         a centaur's front legs, its hand came down into the legs and the pick missed; come over a cube in another pose
@@ -995,14 +996,14 @@ class ArmMotion:
             down = lambda s: {"axis": (self.tool_axis, _turn_toward(tilt, DOWN, s))}  # noqa: E731
 
             def goes_down(q: np.ndarray) -> bool:
-                return self._follow(q, top, bottom, steps, down, clear=True, apart=DOWN_CLEARANCE)[1] <= REACH_TOL
+                return self._follow(q, top, bottom, steps, down, clear=True, apart=NEAR_CLEARANCE)[1] <= REACH_TOL
 
             if goes_down(high):
                 return True, high
             low, err, _ = self._solve(bottom)
             if err <= REACH_TOL:
                 up = lambda s: {"axis": (self.tool_axis, _turn_toward(DOWN, tilt, s))}  # noqa: E731
-                high, off = self._follow(low, bottom, top, steps, up, clear=True, apart=DOWN_CLEARANCE)
+                high, off = self._follow(low, bottom, top, steps, up, clear=True, apart=NEAR_CLEARANCE)
                 if off <= REACH_TOL:
                     return True, high
             # Another pose over it, as the UR5e's elbow and wrist can turn either way: from 0.15 m over a cube 0.67 m
@@ -1318,7 +1319,7 @@ class ArmMotion:
 
     def _joint_way(self, wp: Waypoint, goal: np.ndarray) -> Waypoint:
         """The move `wp` made joint by joint to `goal`; for an arm riding on a robot that would come nearer that robot
-        on the way than LINK_CLEARANCE (see _joints_clear), to the nearest other pose with the tool at the same place
+        on the way than NEAR_CLEARANCE (see _joints_clear), to the nearest other pose with the tool at the same place
         (leaning, where it may) that keeps clear, if there is one."""
         if self._joints_clear(self.q, goal):
             return self._joint_move(wp, goal)
@@ -1421,8 +1422,7 @@ class ArmMotion:
                 return False
             if wp.load is not None and self._wanders(self.q, here, start):
                 return False
-            # changing pose, on a robot, keeps as clear of it as the move does
-            return self._joints_clear(self.q, here, keep.get("apart") or LINK_CLEARANCE)
+            return self._joints_clear(self.q, here)  # changing pose, on a robot, keeps clear of it too
 
         here = next((q for q in self._repose_poses(wp, start, goal, steps, aim) if works(q)), None)
         if here is None and self._rides and "axis" in aim(0.0):
@@ -1456,7 +1456,7 @@ class ArmMotion:
                 poses.append(here)
         return [q for q in poses if not self._collides(q)]
 
-    def _joints_clear(self, q0: np.ndarray, q1: np.ndarray, margin: float = LINK_CLEARANCE) -> bool:
+    def _joints_clear(self, q0: np.ndarray, q1: np.ndarray, margin: float = NEAR_CLEARANCE) -> bool:
         """Whether an arm riding on a robot, moving joint by joint from pose `q0` to `q1`, keeps off that robot, itself
         and the floor (see _collides) and `margin` from that robot (see _near_carrier; parts already that near at
         `q0` may stay so), checked every JOINT_STEP of the largest joint's travel; always for an arm that rides on
