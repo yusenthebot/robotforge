@@ -12,6 +12,7 @@ Adapt names and numbers; keep the checks.
 5. Import a URDF (or xacro, MJCF, mesh)
 6. Build a robot that no template covers
 7. Train a policy
+8. Drawers, doors and a suction cup
 
 ## 1. Walk a robot dog
 
@@ -114,3 +115,19 @@ Say clearly which parts are approximations.
 - If `train_policy` reports that the rl extra is missing, tell the user what it adds (PyTorch and Stable-Baselines3, a large download) and point to docs/ALGORITHMS.md; do not install anything without their yes.
 
 Explain: reward, trial and error, a policy maps observations to actions; test it with a push it never saw.
+
+## 8. Drawers, doors and a suction cup
+
+"打开厨房的抽屉，再用吸盘把桌上的薄板放进抽屉."
+
+1. `load_scene("kitchen")`: the island's arm has a chest with a drawer (`drawer`) beside it, and the island a plate.
+2. `operate(robot="arm", target="drawer", action="open", amount=0.2)`. Check `success`, `moved` (m) and `state.open_m`.
+3. The plate is 1.5 cm thick and 14 cm wide: fingers cannot get round it, a suction cup can. `update_robot(name="arm", end_effector="suction")` (a tool change; the drawer stays open).
+4. `pick_and_place(robot="arm", object="plate", target="drawer")`. Check `success`; `operate(..., action="close")` slides it in with the plate.
+
+A door: `operate(robot, "cabinet", "open", 60)` (degrees). A button: `operate(robot, "button", "press")`, then `observe()` shows `mechanisms.button.presses`. A valve: `operate(robot, "valve", "open", 180)` turns it half a turn, a quarter at a time.
+"cannot take hold of ...'s handle": the handle is out of the arm's reach pointing down; move the arm or the thing nearer each other (a template arm reaches pointing down from about 0.1 to 0.3 m of its base at table height).
+Notes saying it could follow the handle only part of the way mean the same, partway: move them nearer.
+
+The factory (`load_scene("factory")`): a conveyor brings colored boxes to a stop next to an arm with a suction cup and a red, a green and a blue bin. `observe(view="top", find="red")` names the red boxes; `set_controls({"conveyor/speed": 0})` stops the belt while picking; `pick_and_place("arm", "box_3", "red_bin")` sorts one.
+Explain: a suction cup holds by pressing a flat face against it (air pressure), a magnet holds only steel, fingers hold by squeezing; the right tool depends on the thing.

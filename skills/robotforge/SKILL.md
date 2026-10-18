@@ -15,7 +15,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
 
 1. **Understand the wish.** If the request is clear, act with sensible defaults. Ask one short question only when a choice really matters (which robot, what it should do). "Teach me" or "lesson N" means the learning path: call `lessons`.
 2. **World.** `new_world(name, floor)` creates a project; `open_world` reopens one.
-   - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, warehouse, park, maze, obstacle_course. Robots already in the world move to the scene's places.
+   - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, factory, warehouse, park, maze, obstacle_course. Robots already in the world move to the scene's places.
    - Ground and terrain: `set_floor(style)` (checker, grass, wood, concrete, dirt, sand, rock, snow, tile); `set_terrain(type)` for the whole ground or `add_terrain(type, pos)` for one feature (hills, rough, stairs, ramp, stones, curb, platform).
 3. **Robot.** Pick the source that fits:
    - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, tuned with `params` (sizes, servo, color);
@@ -24,13 +24,17 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover);
    - design (`list_templates` lists them): a ready-made unusual robot from the gallery, `add_robot(name, design="centaur")` (wheel-legged biped, Mars rover, centaur, scorpion, a Go2 carrying a PiPER arm, tentacle...), saved as parts so `update_part` changes it;
    - nothing fits: write a small URDF and import it (see recipes).
-   Add props with `add_object` (box, sphere, cylinder, table, bin).
+   Add props with `add_object` (box, sphere, cylinder, table, bin; `material="steel"` for what a magnet holds).
+   Things that move on a joint of their own are objects too: drawer, cabinet (a door), button, switch, lever, valve, conveyor (`speed` in m/s), and soft ones: rope, cloth.
+   - End effectors: any arm takes `end_effector="suction"` (a suction cup: flat things fingers cannot get round, a tile, a plate) or `"magnet"` (steel only) in `add_robot`, or later in `update_robot` (a tool change; `"gripper"` goes back to its fingers). `gripper(robot, "close")` turns a cup or magnet on, `"open"` off; `pick_and_place` uses them as it uses fingers.
 4. **Viewer early.** Call `open_viewer()` as soon as a robot exists and tell the user what they can do: drag the robot, drive with W A S D, and use the panels.
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
    - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
-   - `move_arm` / `gripper` / `pick_and_place`: arms;
+   - `move_arm` / `gripper` / `pick_and_place`: arms; `pick_and_place(robot, object, "drawer")` puts things in an open drawer;
+   - `operate(robot, target, action, amount)`: an arm opens or closes a drawer (amount in m) or a cabinet door (degrees), presses a button, flips a switch or a lever, turns a valve (open, close or turn, degrees); it holds the handle and follows the joint's own line or arc;
+   - a conveyor runs by itself: `set_controls({"<conveyor>/speed": 0})` stops it, any other value (m/s) runs it;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;
    - `write_script` + `run_script`: custom sequences, loops and logic the user can keep;
@@ -59,6 +63,7 @@ Never say something worked because the call returned. Read the numbers, and look
 | `pose` | `upright` |
 | `move_arm` | `tool_position` against the target (within about 3 cm) |
 | `pick_and_place` | `success`, `object_position` |
+| `operate` | `success`, `moved` (m or degrees), `state`, any `notes` (how far the arm could follow); `observe()` lists every mechanism under `mechanisms` |
 | `run_controller` | `success`, `failed_at`, `reward`, `stopped_early`; `keeps_running` means call `stop(robot)` later |
 | `compare_controllers` | the `table` and `best`; explain with its numbers |
 | `run_script` | `ok`, `output`, traceback |
