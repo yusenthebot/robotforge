@@ -344,7 +344,7 @@ DEMOS = [
         S._in_scene("park", {"drone": {"template": "drone"}}),
         40.0,
         timeline=[(0.3, _fly("drone", UNDER_TREE, 1.5))],
-        page=_follow("drone", (1.2, -3.3, 0.55), ease=0.05),
+        page=_chase("drone", (-0.94, -0.34), 1.8, 0.7, 0.1),  # nearly level: the trees and the crown in view
         settle=0.8,
         until=lambda pg: pg.behaviors.trip("drone") is None,
         tail=1.2,
