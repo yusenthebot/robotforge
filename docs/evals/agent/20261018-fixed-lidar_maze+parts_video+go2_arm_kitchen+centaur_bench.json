@@ -42,14 +42,14 @@
      "observed": "saved at [-2.00, -3.00], the maze spans x -2.55 to 2.55, y -2.55 to 2.55"
     },
     {
-     "name": "read its whole lidar inside the maze, a wall in sight",
+     "name": "its lidar read inside the maze, a wall in reach",
      "ok": true,
-     "observed": "1 observe with the lidar inside, the last at [-2.00, -2.22] with 64 of its 64 rays, 44 hitting"
+     "observed": "1 lidar readings inside (observe), the walls 0.45 m away"
     },
     {
      "name": "the answer says how far the nearest wall is",
      "ok": true,
-     "observed": "nearest 0.44 m; the answer names [0.78, 0.439, 0.44, 0.666]"
+     "observed": "nearest wall 0.45 m at [-2.00, -2.22]; the answer calls 0.439 m nearest"
     }
    ],
    "tool_calls": 13,

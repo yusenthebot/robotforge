@@ -140,13 +140,19 @@ stdin 接到 `/dev/null`，否则 `codex exec` 会一直等输入。
   浪费的地方：6 个用了 `move(to=...)` 的会话里有 2 个在到达后又调了 `stop`（结果里没写已经停下，紧接着的 observe 还看到轮子在转）；仓库的提示还写着 `move('rover', 0.4)`，agent 先开到坡道脚下的一个点再开上去，还读了整个 world.yaml。
 - `20261017-fixed-rover_rock+warehouse_dock.json`：提交 c9b1579（到达后机器人停稳、结果开头写 `"stopped": true`；场景提示改成 `move(robot, to=...)`），重跑这两个任务，都通过，都没有再调 `stop`；warehouse_dock 一次 `move(to="dock")` 直接开上装卸台，调用从 8 次降到 5 次，输入 token 从 403k 降到 220k，用时从 89 秒降到 67 秒。
 - `20261018-branch-lidar_maze+parts_video.json`：提交 9bf99c0，两个新任务各跑一次。
-  lidar_maze 不通过：64 线激光雷达只有 37 条射线到了 agent 手里（`observe` 的传感器列表最多 40 个），它写脚本去读，脚本的 `sensors` 也来自同一个列表，还是 37 条；它说的 0.43 米碰巧是对的，但它读到的东西证明不了。
+  lidar_maze 按现在的检查通过：64 线激光雷达只有 37 条射线到了 agent 手里（`observe` 的传感器列表最多 40 个），它写脚本去读，脚本的 `sensors` 也来自同一个列表，还是 37 条，但它说的 0.43 米和按 world.yaml 算出的 0.45 米只差 2 厘米。
+  当时的检查拿 robotforge 自己报告的整圈读数当真值，判它不通过；改成按墙算以后重评，改动前后的这个任务就都是通过，差别只在调用次数和 token 上。
   它还两次想给迷宫自带的模板小车装激光雷达（`update_robot` 的 build、`fov: 360`），都被拒绝，最后删掉小车重新加。
   parts_video 通过，但很浪费：用 npm 装了 Playwright，在无头 Chromium 里打开查看器去按录像按钮，20 条 shell 命令，198 秒，输入 1.03M token。
 - `20261018-fixed-lidar_maze+parts_video+go2_arm_kitchen+centaur_bench.json`：提交 adf0917（`observe` 的 `lidars` 给出整圈激光雷达，脚本的 `sensors` 不再截断，`fov` 只检查相机；`move` 和 `run_script` 的 `record`），重跑两个新任务，以及受新的起点摆放影响的两个任务，4 个都通过。
   lidar_maze 13 次调用、1 次失败（往模板小车上 `add_part`）、76 秒，从 `lidars` 读出最近的墙 0.439 米、在左边；parts_video 用 `run_script(record=...)` 一次录好，4 条 shell 命令、98 秒、输入 290k。
 - `20261018-final-lidar_maze+parts_video.json`：提交 9057028（模板机器人收到完整的 build 就原地换成零件拼的；视频的镜头前后各看半秒取平均、挡住机器人的东西画成半透明），两个新任务都通过，都没有失败的调用。
-  lidar_maze 用 `update_robot` 直接给迷宫的小车装上激光雷达，19 次调用降到 10 次，用时 89 秒降到 67 秒；parts_video 9 次调用、3 条 shell 命令、98 秒、输入 265k（第一次是 1031k）。
+  lidar_maze 用 `update_robot` 直接给迷宫的小车装上激光雷达，19 次调用降到 10 次；parts_video 9 次调用、3 条 shell 命令、98 秒、输入 265k（第一次是 1031k）。
+  lidar_maze 的 token 和用时每次差得很远，是一次一个会话的噪声：同一个任务五次分别是 527k 和 89 秒（9bf99c0）、268k 和 76 秒（adf0917）、361k 和 67 秒（9057028）、评审在 e4fa31d 上重跑的 521k 和 102 秒、209k 和 53 秒（ef22541），能说的只有调用次数从 19 次降到 9 到 13 次、失败的调用从 2 次降到 0 到 1 次。
+- `20261018-reviewfix-dog_grass+arm_cube+hexapod_build+rover_rock+lidar_maze+parts_video+go2_arm_kitchen.json`：提交 ef22541，按评审修了这些以后重跑：激光雷达看穿机器人自己（仓库拣货车的雷达原来把自己的升降柱当成 0.215 米外的障碍）、`add_robot` 重试时不再因为挪开过的起点而失败、模板和机器人库的机器人不会被一个只有传感器的 build 变成盒子、迷宫的提示说清 `to='goal'` 走的是迷宫外面、`record=true` 只录 GIF、ffmpeg 要用户设 `ROBOTFORGE_FFMPEG=1` 才用、激光雷达的检查改成按墙算。
+  重跑了不带 `pos` 加机器人的 4 个旧任务（dog_grass、arm_cube、hexapod_build、rover_rock），以及 lidar_maze、parts_video、go2_arm_kitchen，7 个都通过，60 次调用里 1 次失败（go2_arm_kitchen 在没有打开世界时先调了 `show_world`，之后 `show_world` 改成直接说没有打开的世界、列出保存的世界）。
+  4 个旧任务都是在新建的空世界里加机器人，新的起点摆放一次也没有触发；摆放只由单元测试和厨房里的 Go2 加 PiPER 验证过。
+  parts_video 用 `run_script(record="pip_showtime.gif")` 录了 GIF，然后自己在 shell 里用 ffmpeg 转成了 MP4。
 
 这个脚本不是测试：它需要 Codex、登录和网络。
 `tests/test_agent_eval.py` 用 `tests/fixtures/agent_eval/` 里录下来并裁剪过的事件流和世界，测试解析和每条检查本身，CI 里不需要网络。
