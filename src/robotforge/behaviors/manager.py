@@ -842,7 +842,9 @@ class BehaviorManager:
             _check_standing(fc)
             model, data = self.session.model, self.session.data
             named = None
-            if isinstance(to, str) and not NUMBER_LIST.fullmatch(to):
+            if isinstance(to, str) and to.strip().startswith("[") and flight.parse_points(to) is not None:
+                to = flight.parse_points(to)  # "[[0, 0, 2], [3, 0, 2]]" as text
+            elif isinstance(to, str) and not NUMBER_LIST.fullmatch(to):
                 named = self._destination(robot, to, model, data)
             elif isinstance(to, str):
                 to = [float(w) for w in re.split(r"[^\d.+-]+", to.strip(" []()")) if w]

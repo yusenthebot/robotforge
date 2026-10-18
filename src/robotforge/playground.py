@@ -685,16 +685,27 @@ class Playground:
                     notes.append(note)
         return applied, notes
 
-    def simulate(self, seconds: float, controls: dict[str, float] | None = None) -> dict[str, Any]:
+    def simulate(
+        self, seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None
+    ) -> dict[str, Any]:
         if not 0 < seconds <= MAX_SIM_SECONDS:
             raise PlaygroundError(wording.seconds_range("seconds", seconds, MAX_SIM_SECONDS))
         notes: list[str] = []
+        blown: dict[str, Any] | None = None
         with self.session.lock:
             if controls:
                 _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))
             before = self._free_body_positions()
-            self.session.step(steps)
+            if wind is not None:
+                from robotforge.behaviors import flight
+
+                try:
+                    blown = flight.blow(self.session, wind, seconds, steps)
+                except flight.FlightError as exc:
+                    raise PlaygroundError(str(exc)) from exc
+            else:
+                self.session.step(steps)
             after = self._free_body_positions()
             unstable = not np.isfinite(self.session.data.qpos).all()
         moved = {
@@ -709,6 +720,8 @@ class Playground:
         }
         if notes:
             result["notes"] = notes
+        if blown is not None:
+            result["wind"] = blown
         if unstable:
             result["warning"] = "simulation became unstable (NaN state); reset and check the model"
         return result

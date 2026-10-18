@@ -213,6 +213,54 @@ def test_a_tree_in_the_way_is_flown_over(pg):
     assert "over tree" in result["note"]
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.mark.anyio
+async def test_an_agent_flies_a_square_and_lands_through_the_mcp_tools(tmp_path, monkeypatch):
+    import json
+
+    from mcp import Client
+
+    from robotforge.cli import find_free_port
+    from robotforge.mcp_server import build_server
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    playground = Playground(session=SimSession.from_xml("<mujoco/>"))
+    server = build_server(playground, find_free_port(8831))
+    async with Client(server) as client:
+
+        async def call(tool: str, args: dict) -> dict:
+            return json.loads((await client.call_tool(tool, args)).content[0].text)
+
+        await call("new_world", {"name": "sky"})
+        await call("add_robot", {"name": "drone", "template": "drone"})
+        up = await call("move", {"robot": "drone", "to": [0, 0, 2]})
+        assert up["arrived"] and up["to"]["position"][2] == pytest.approx(2.0, abs=0.08)
+        square = await call("move", {"robot": "drone", "to": "[[3, 0, 2], [3, 3, 2], [0, 3, 2], [0, 0, 2]]"})
+        assert square["arrived"] and square["path_m"] == pytest.approx(12.0, abs=0.1)
+        assert square["max_tracking_error_m"] < 0.15
+        gust = await call("simulate", {"seconds": 1.5, "wind": [6, 0]})
+        assert 0.02 < gust["wind"]["pushed_m"]["drone"] < 0.5
+        stopped = await call("stop", {"robot": "drone"})
+        assert stopped["hovering"]
+        down = await call("move", {"robot": "drone", "to": [0, 0, 0]})
+        assert down["arrived"] and down["landed"] and down["touchdown_m_s"] < 0.4
+        robots = await call("robots", {})
+        assert robots["robots"][0]["kind"] == "aircraft" and robots["robots"][0]["flight"]["state"] == "landed"
+        described = await call("describe_model", {})
+        assert described["aircraft"][0]["rotors"] == [f"drone/rotor_{k}" for k in range(1, 5)]
+
+
+def test_wind_needs_an_aircraft_and_meters_per_second(pg):
+    pg.remove("drone")
+    pg.add_robot("rover", template="rover")
+    with pytest.raises(ValueError, match="only pushes aircraft"):
+        pg.simulate(1.0, wind=[5, 0])
+
+
 def test_side_and_climb_are_for_aircraft(pg):
     pg.add_robot("rover", template="rover", pos=[0.0, 1.0])
     with pytest.raises(ValueError, match="only aircraft"):

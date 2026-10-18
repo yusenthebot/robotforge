@@ -552,6 +552,55 @@ def ground_height(
     return None
 
 
+MAX_WIND = 30.0  # m/s; more is a storm no drone flies in (and a number in km/h by mistake)
+
+
+def blow(session: Any, wind: list[float], seconds: float, steps: int) -> dict[str, Any]:
+    """simulate(wind=...): a gust on every aircraft the session flies, for `seconds` (`steps` physics steps, taken
+    here), and how far it pushed each one. Called with the session lock held."""
+    if len(wind) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in wind):
+        raise FlightError(f"wind is [x, y] or [x, y, z] in m/s, got {wind}")
+    if float(np.linalg.norm(wind)) > MAX_WIND:
+        raise FlightError(f"wind {list(wind)} is over {MAX_WIND:g} m/s: it is in m/s (36 km/h is 10 m/s)")
+    flying = {n: c for n, c in session.controllers.items() if isinstance(c, FlightController)}
+    if not flying:
+        raise FlightError("wind only pushes aircraft, and none is flying here (add_robot template='drone')")
+    now = float(session.data.time)
+    start = {n: session.data.xpos[c.frame.root].copy() for n, c in flying.items()}
+    for c in flying.values():
+        c.gusts(wind, max(0.0, seconds - 0.6), now)
+    worst = dict.fromkeys(flying, 0.0)
+    done = 0
+    while done < steps:
+        chunk = min(10, steps - done)
+        session.step(chunk)
+        done += chunk
+        for n, c in flying.items():
+            worst[n] = max(worst[n], float(np.linalg.norm(session.data.xpos[c.frame.root] - start[n])))
+    return {
+        "m_s": [float(v) for v in wind],
+        "pushed_m": {n: round(v, 3) for n, v in worst.items()},
+        "off_by_m": {
+            n: round(float(np.linalg.norm(session.data.xpos[c.frame.root] - start[n])), 3) for n, c in flying.items()
+        },
+    }
+
+
+def parse_points(text: str) -> list[Any] | None:
+    """Points written as text ("[[0, 0, 2], [3, 0, 2]]"), as some agents send them, or None."""
+    import ast
+    import json
+
+    for read in (json.loads, ast.literal_eval):
+        try:
+            value = read(text)
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+            continue
+        if isinstance(value, (list, tuple)):
+            return [list(p) if isinstance(p, (list, tuple)) else p for p in value]
+    return None
+
+
 # ---- trips through the air ---------------------------------------------------------------------------
 
 
