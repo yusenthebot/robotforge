@@ -760,6 +760,19 @@ function robotBox(name, { baseOnly = false } = {}) {
   return box.isEmpty() ? null : box;
 }
 
+// The parts of a robot you can see, as meshes placed where it stands now; empty for a name that is not a robot.
+function robotMeshes(name) {
+  const meshes = [];
+  if (!worldRoot) return meshes;
+  worldRoot.updateMatrixWorld();
+  for (const id of robotBodies.get(name) ?? []) {
+    bodyNodes[id]?.traverse((o) => {
+      if (o.isMesh && o.visible) meshes.push(o);
+    });
+  }
+  return meshes;
+}
+
 function updateRing() {
   const robot = robotByName(selected);
   // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
@@ -2082,6 +2095,7 @@ initLessons({
   toast,
   bodyNode: (id) => bodyNodes[id],
   robotTop: (name) => robotBox(name)?.max.z ?? null, // the highest point of a robot as it stands now (m)
+  robotMeshes: (name) => robotMeshes(name), // the parts of a robot you can see, where it stands now
   freeRect: () => freeRect(), // the part of the window no panel covers, in CSS px
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   moveCamera: (eye, target, fit = false) => {

@@ -1903,6 +1903,7 @@ function faceoffRig(rig) {
           tag.userData.foot.set(node.position.x, node.position.y, 0);
         }
         tag.position.z = topOf(e) + TAG_RISE;
+        tag.userData.meshes = api.robotMeshes(e.name); // what the other robots' tags must leave in sight
       }
       if (labels.visible) declutter(tags.map(([tag]) => tag), avoid);
       workspace.visible = (state.values.workspace ?? 0) >= 1;
@@ -1924,17 +1925,42 @@ const TAG_LIFT = 0.6; // the tag's middle above its point, in tag heights
 const TAG_RISE = 0.06;
 
 // Name tags of robots standing in a row, seen down the row, land on top of each other. Keep the nearest
-// where it is and lift any farther tag that would cover one already placed, just clear of it.
+// where it is and move any farther tag that would cover one already placed: above it, beside it or below it.
 // A tag whose robot stands in the free part of the view is kept inside it: seen from above, the PiPER's tag in the
 // motion planning lesson stood so high over the arm that only its bottom edge showed, at the top of the window.
-// Where that pushes the tag down onto its robot or onto what the rig marks (`avoid`: the IK lesson's target ball),
-// it hangs under the robot instead, or else stands beside what it would hide; and where lifting it clear of another
-// tag would take it out of the free view, it goes beside that tag, or below it.
+// Wherever it goes, it leaves in sight the lower half of its own robot, what the rig marks (`avoid`: the IK lesson's
+// target ball) and the other robots: seen down the row in the gait lesson, the template dog's tag stood on the front
+// legs of the Go2 behind it. Where it would hide one of them over its robot, it hangs under its robot instead, or else
+// stands beside what it would hide.
 const tagPoint = new THREE.Vector3();
 const footPoint = new THREE.Vector3();
 const topPoint = new THREE.Vector3();
 const TAG_EDGE = 6; // px a kept tag stays clear of the free view's edge, and of a tag beside it
+const TAG_STAY = 6; // px a tag must clear the other robots by to change place: a walking robot's legs swing in and out
 const SPINE_BASE = 0.05; // m, the lowest point of a robot a tag must not hide (its base, not the floor)
+
+// Each part of a robot as the camera sees it: the screen box round the corners of the part's own box, in the view's
+// -1 to 1 units. A part with a corner behind the camera is left out.
+const corner = new THREE.Vector3();
+function screenParts(meshes, cam) {
+  const parts = [];
+  for (const mesh of meshes ?? []) {
+    const g = mesh.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    const [lo, hi] = [g.boundingBox.min, g.boundingBox.max];
+    const r = { left: Infinity, right: -Infinity, bottom: Infinity, top: -Infinity };
+    let behind = false;
+    for (let k = 0; k < 8 && !behind; k++) {
+      corner.set(k & 1 ? hi.x : lo.x, k & 2 ? hi.y : lo.y, k & 4 ? hi.z : lo.z).applyMatrix4(mesh.matrixWorld).project(cam);
+      behind = corner.z > 1;
+      [r.left, r.right] = [Math.min(r.left, corner.x), Math.max(r.right, corner.x)];
+      [r.bottom, r.top] = [Math.min(r.bottom, corner.y), Math.max(r.top, corner.y)];
+    }
+    if (!behind) parts.push(r);
+  }
+  return parts;
+}
+
 function declutter(sprites, avoid = []) {
   const cam = api.camera;
   const [sx, sy] = [cam.projectionMatrix.elements[0], cam.projectionMatrix.elements[5]];
@@ -1956,59 +1982,90 @@ function declutter(sprites, avoid = []) {
     const dy = (Math.max(Math.abs(m.y - y) - h / 2, 0) * H) / 2;
     return dx * dx + dy * dy < m.r * m.r;
   };
+  // How much of the screen box b, grown by `grow` px, does it cover? In the view's units, 0 when it is clear.
+  const covers = (x, y, w, h, b, grow) => {
+    const [gx, gy] = [(2 * grow) / W, (2 * grow) / H];
+    const across = Math.min(x + w / 2, b.right + gx) - Math.max(x - w / 2, b.left - gx);
+    const down = Math.min(y + h / 2, b.top + gy) - Math.max(y - h / 2, b.bottom - gy);
+    return Math.max(across, 0) * Math.max(down, 0);
+  };
+  // Each tag's robot as the camera sees it: the lower half of its middle as points, its parts and the box round them.
+  const robots = sprites.map((s) => {
+    const [low, high] = [Math.min(SPINE_BASE, s.position.z - TAG_RISE), s.position.z - TAG_RISE];
+    const spine = [0, 0.25, 0.5]
+      .map((f) => topPoint.copy(s.position).setZ(low + f * (high - low)).project(cam).clone())
+      .filter((q) => q.z < 1)
+      .map((q) => ({ x: q.x, y: q.y, r: 2 }));
+    const parts = screenParts(s.userData.meshes, cam);
+    const box = parts.length
+      ? parts.reduce((a, b) => ({ left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), bottom: Math.min(a.bottom, b.bottom), top: Math.max(a.top, b.top) }))
+      : null;
+    return { spine, parts, box };
+  });
   const items = sprites
-    .map((s) => {
+    .map((s, i) => {
       s.center.set(0.5, 0.5 - TAG_LIFT);
       const p = tagPoint.copy(s.position).project(cam); // screen position, -1 to 1 across the view
       const [w, h] = [s.scale.x * sx, s.scale.y * sy];
       const y0 = p.y + TAG_LIFT * h; // the tag's middle
-      let [x, y] = [p.x, y0];
-      let room = null; // where the tag's middle may go, for a tag kept in the free view
-      if (s.userData.foot && inside(footPoint.copy(s.userData.foot).project(cam))) {
-        room = { left: free.left + w / 2 + padX, right: free.right - w / 2 - padX, top: free.top - h / 2 - padY, bottom: free.bottom + h / 2 + padY };
-        // The lower half of the robot, as points up its middle, and what the rig marks: left in sight. A tag held down
-        // over a tall robot's head still names it; one held down onto its base (the planning arm on a phone) does not.
-        const [low, high0] = [Math.min(SPINE_BASE, s.position.z - TAG_RISE), s.position.z - TAG_RISE];
-        const spine = [0, 0.25, 0.5].map((f) => {
-          const q = topPoint.copy(s.position).setZ(low + f * (high0 - low)).project(cam);
-          return { x: q.x, y: q.y, r: 2 };
-        });
-        const keep = [...spine, ...marks];
-        const fits = ([cx, cy]) =>
-          cx >= room.left && cx <= room.right && cy >= room.bottom && cy <= room.top && !keep.some((m) => hides(cx, cy, w, h, m));
-        const high = Math.min(y0, room.top);
-        const held = Math.min(Math.max(x, room.left), room.right);
-        const beside = keep
-          .flatMap((m) => [-1, 1].map((k) => [m.x + k * (w / 2 + (2 * m.r) / W + padX), high]))
-          .sort((a, b) => Math.abs(a[0] - held) - Math.abs(b[0] - held));
-        // Above its point, held in the free view; else under where its robot stands; else beside what it would hide.
-        [x, y] = [[held, high], [held, footPoint.y - padY - h / 2], ...beside].find(fits) ?? [held, high];
-      }
-      return { s, px: p.x, x, y, y0, z: p.z, w, h, room };
+      const it = { s, px: p.x, x: p.x, y: y0, y0, z: p.z, w, h, fits: null };
+      if (!s.userData.foot || !inside(footPoint.copy(s.userData.foot).project(cam))) return it;
+      const room = { left: free.left + w / 2 + padX, right: free.right - w / 2 - padX, top: free.top - h / 2 - padY, bottom: free.bottom + h / 2 + padY };
+      // A tag held down over a tall robot's head still names it; one held down onto its base (the planning arm on a
+      // phone) does not, and one on another robot names the wrong one.
+      const others = robots.filter((_, k) => k !== i);
+      const keep = [...robots[i].spine, ...marks, ...others.filter((o) => !o.parts.length).flatMap((o) => o.spine)];
+      const boxes = others.flatMap((o) => o.parts);
+      it.inRoom = ([cx, cy]) => cx >= room.left && cx <= room.right && cy >= room.bottom && cy <= room.top;
+      const clear = (c) => it.inRoom(c) && !keep.some((m) => hides(c[0], c[1], w, h, m));
+      const hidden = (c, grow = 0) => boxes.reduce((sum, b) => sum + covers(c[0], c[1], w, h, b, grow), 0);
+      it.fits = (c, grow = 0) => clear(c) && hidden(c, grow) === 0;
+      const own = robots[i].box;
+      const high = Math.min(y0, room.top);
+      // Over the whole of its robot as the camera sees it: from overhead (the robot vacuums) the point over a robot's
+      // middle is inside its outline, and the tag stood on the far half of it.
+      const over = Math.min(own ? Math.max(y0, own.top + TAG_LIFT * h) : y0, room.top);
+      const held = Math.min(Math.max(p.x, room.left), room.right);
+      const under = Math.min(footPoint.y, own?.bottom ?? Infinity) - padY - h / 2; // under its feet
+      const beside = [
+        ...keep.flatMap((m) => [-1, 1].map((k) => m.x + k * (w / 2 + (2 * m.r) / W + padX))),
+        ...boxes.flatMap((b) => [b.left - w / 2 - padX, b.right + w / 2 + padX]),
+      ]
+        .map((bx) => ["beside", [bx, high]])
+        .sort((a, b) => Math.abs(a[1][0] - held) - Math.abs(b[1][0] - held));
+      // Over its robot's outline, or else over its point, held in the free view; else under its robot; else beside what
+      // it would hide. A place other than last frame's must clear the other robots by TAG_STAY, so the tag does not hop
+      // to and fro as they walk.
+      const places = [["over", [held, over]], ["above", [held, high]], ["under", [held, under]], ...beside];
+      // Where nothing fits (four robots in lanes on a phone), the place in the free view that hides the least of them.
+      const [kind, at] =
+        places.find(([k, c]) => it.fits(c, k === s.userData.place ? 0 : TAG_STAY)) ??
+        places.filter(([, c]) => clear(c)).sort((a, b) => hidden(a[1]) - hidden(b[1]))[0] ??
+        places[0];
+      s.userData.place = kind;
+      [it.x, it.y] = at;
+      return it;
     })
     .filter((it) => it.z < 1)
     .sort((a, b) => a.z - b.z);
   const placed = [];
-  const meets = (it, x, y) => placed.find((p) => Math.abs(p.x - x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
+  const meets = (it, x, y) => placed.some((p) => Math.abs(p.x - x) < (p.w + it.w) / 2 && Math.abs(p.y - y) < (p.h + it.h) / 2);
   for (const it of items) {
     let [x, y] = [it.x, it.y];
-    for (let tries = 0; tries <= placed.length; tries++) {
-      const hit = meets(it, x, y);
-      if (!hit) break;
-      const lifted = hit.y + (hit.h + it.h) / 2 + it.h * 0.08;
-      if (!it.room || lifted <= it.room.top) {
-        y = lifted;
-        continue;
-      }
-      const reach = (hit.w + it.w) / 2 + padX;
-      const beside = [hit.x + reach, hit.x - reach]
-        .filter((bx) => bx >= it.room.left && bx <= it.room.right && !meets(it, bx, y))
-        .sort((a, b) => Math.abs(a - it.x) - Math.abs(b - it.x))[0];
-      if (beside !== undefined) {
-        x = beside;
-        break;
-      }
-      y = hit.y - (hit.h + it.h) / 2 - it.h * 0.08;
+    if (meets(it, x, y)) {
+      const gap = it.h * 0.08;
+      const column = placed.filter((p) => Math.abs(p.x - x) < (p.w + it.w) / 2);
+      const row = placed.filter((p) => Math.abs(p.y - y) < (p.h + it.h) / 2);
+      const lifts = column.map((p) => [x, p.y + (p.h + it.h) / 2 + gap]).filter((c) => c[1] > y).sort((a, b) => a[1] - b[1]);
+      const sides = row
+        .flatMap((p) => [-1, 1].map((k) => [p.x + k * ((p.w + it.w) / 2 + padX), y]))
+        .sort((a, b) => Math.abs(a[0] - it.x) - Math.abs(b[0] - it.x));
+      const drops = column.map((p) => [x, p.y - (p.h + it.h) / 2 - gap]).filter((c) => c[1] < y).sort((a, b) => b[1] - a[1]);
+      const open = (c) => !meets(it, c[0], c[1]);
+      const all = [...lifts, ...sides, ...drops];
+      // Clear of the other tags and of all a tag leaves in sight; else clear of the tags in the free view; else lifted
+      // over the others, as a tag whose robot is out of the free view always is.
+      [x, y] = (it.fits && (all.find((c) => open(c) && it.fits(c)) ?? all.find((c) => open(c) && it.inRoom(c)))) ?? lifts.find(open) ?? [x, y];
     }
     it.s.center.x = 0.5 - (x - it.px) / it.w; // a smaller anchor draws the sprite further right
     it.s.center.y = 0.5 - TAG_LIFT - (y - it.y0) / it.h; // a lower anchor draws the sprite higher
