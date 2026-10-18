@@ -175,10 +175,9 @@ class FlightController:
     def __init__(self, model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = None) -> None:
         self.robot = robot
         self.frame: Airframe = find_airframe(model, robot, qpos)
-        self.model = model
         root = self.frame.root
         joint = int(model.body_jntadr[root])
-        self.qadr, self.dadr = int(model.jnt_qposadr[joint]), int(model.jnt_dofadr[joint])
+        self.dadr = int(model.jnt_dofadr[joint])
         self.actuators = np.array(self.frame.actuators, dtype=int)
         self._pushes = np.array([r.push for r in self.frame.rotors])  # n x 3, body frame
         self._outside = np.zeros(3)  # N, the estimated push from outside (world frame)
@@ -202,7 +201,6 @@ class FlightController:
         self._integral = np.zeros(3)
         self._spool_from = 0.0
         self._started = False
-        self._land_ground: float | None = None
         self._p = np.zeros(3)
         self._v = np.zeros(3)
 
@@ -265,7 +263,6 @@ class FlightController:
         self._integral[:] = 0.0
         self._started = False  # the reference starts from where it stands, at the next tick
         self.touchdown_speed = None
-        self._land_ground = None
         if self.mission is None:
             self.mode = "keys"
 
@@ -282,6 +279,8 @@ class FlightController:
         }
         if self.mode == "keys" and self.airborne:
             out["keys"] = {"forward": self.speed, "left": self.side, "up": self.climb, "turn": self.turn}
+        if self.saturated and self.airborne:  # asked for more than the rotors give: it flies as well as it can
+            out["rotors_at_limit"] = True
         if self.touchdown_speed is not None and self.phase in ("landed", "spooling"):
             out["touchdown_m_s"] = round(self.touchdown_speed, 3)
         return out
@@ -359,7 +358,7 @@ class FlightController:
             ref.drive(np.array([*across, vz]), dt)
             ref.yaw = _wrap(ref.yaw + self.turn * dt)
             if ref.p[2] < floor + 0.05 and self.climb < 0:  # brought down to the ground by keys: land
-                self._start_landing(ground)
+                self._start_landing()
             elif ref.p[2] < floor + 0.05:
                 ref.p[2], ref.v[2] = floor + 0.05, max(ref.v[2], 0.0)
             return
@@ -385,7 +384,7 @@ class FlightController:
                 self._face(dt, above)
                 return
             if float(np.hypot(*(point[:2] - self._p[:2]))) < ARRIVE_TOL and float(np.hypot(*self._v[:2])) < 0.2:
-                self._start_landing(None)
+                self._start_landing()
             return
         reached = ref.toward(point, dt, mission.cruise)
         self._face(dt, point)
@@ -406,9 +405,8 @@ class FlightController:
         if float(np.hypot(point[0] - ref.p[0], point[1] - ref.p[1])) > 0.5:
             ref.turn_toward(math.atan2(point[1] - ref.p[1], point[0] - ref.p[0]), dt)
 
-    def _start_landing(self, ground: float | None) -> None:
+    def _start_landing(self) -> None:
         self.phase = "landing"
-        self._land_ground = ground
 
     def _descend(self, dt: float, floor: float) -> None:
         ref = self.ref
