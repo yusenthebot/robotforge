@@ -757,7 +757,7 @@ SHOTS = [
     Shot(
         "water_lake",
         _in_scene("lake", {"boat": {"template": "boat"}}),
-        page="window.__robotforge.select(null); window.__robotforge.lookAt([13.0, -11.5, 8.0], [-0.5, 0.3, 0.6]);",
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([7.5, -11.0, 13.5], [-0.8, 0.4, 0.8]);",
         settle=3.0,
     ),
 ]

@@ -127,7 +127,7 @@ def lake(rng: random.Random, opts: dict[str, float]) -> Content:
         "area": [-a - 4, -b - 4, a + 4, b + 4],
     }
     # A dock out from the west shore; its base on the lake bed, the deck 35 cm over the water.
-    c.add("dock", "dock", [-a + 0.3, 0.0, 0.0], size=[4.6, 1.3, level + 0.35], color=WOOD)
+    c.add("dock", "dock", [-a + 1.0, 0.0, 0.0], size=[3.6, 1.3, level + 0.35], color=WOOD)
     c.add("bench", "bench", [-a - 3.0, 2.2], yaw=-90)
     c.add("picnic_table", "table", [-a - 3.2, -2.4], size=[1.5, 0.8, 0.72], color=WOOD)
     # A slalom of buoys across the lake, a few crates adrift, and a steel block sunk near the dock.
