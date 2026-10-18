@@ -341,6 +341,10 @@ def test_a_rope_hangs_and_swings_and_a_cloth_drapes(pg):
     points = pg.session.data.flexvert_xpos
     over = (np.abs(points[:, 0] - 1.0) < 0.15) & (np.abs(points[:, 1]) < 0.15)
     assert np.median(points[over, 2]) == pytest.approx(0.3, abs=0.01)
+    # and what hangs over the edges hangs outside them: only its points touch things, and 110 of its 256 points
+    # slipped round the top's lower edge and hung tucked in under it (design.cloth_skirt)
+    under = (np.abs(points[:, 0] - 1.0) < 0.2) & (np.abs(points[:, 1]) < 0.2) & (points[:, 2] < 0.3 - 0.025)
+    assert not under.any()
 
 
 @pytest.fixture

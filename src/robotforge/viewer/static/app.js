@@ -5,6 +5,7 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
 import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { clothGeometry, shapeCloth } from "./cloth.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -483,42 +484,50 @@ async function applyScene(desc) {
 
 // A cloth (a MuJoCo flex) is a triangle mesh whose corners ride on bodies: one per vertex, or a point on one for a
 // pinned edge. Its vertices follow those bodies' poses, which already stream every frame (see scene.py _flexes).
-let flexMeshes = []; // { mesh, bodies, local: Float32Array }
+let flexMeshes = []; // { mesh, shape, points, bodies, local: Float32Array }
+const CLOTH_THICKNESS = 0.006; // m, the radius of a cloth's points where they touch things (mechanisms.CLOTH_BALL)
 const flexPoint = new THREE.Vector3();
 
 function flexMesh(f) {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(f.bodies.length * 3), 3));
-  geometry.setIndex(f.faces);
-  // Drawn through its middle, a cloth lies a few millimetres over what it rests on (its thickness), where a table
-  // top's dressed edge showed through it in patches: pulled toward the camera in depth, it wins.
+  const shape = clothGeometry(f.faces, f.bodies.length); // a smooth surface through its points (cloth.js)
   const material = new THREE.MeshStandardMaterial({
     color: rgbaColor(f.rgba),
     roughness: 0.95,
     metalness: 0,
     side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -8,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  pullNearer(material, CLOTH_THICKNESS);
+  const mesh = new THREE.Mesh(shape.geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.frustumCulled = false; // its bounds change every frame
   mesh.userData.flex = true;
-  return { mesh, bodies: f.bodies, local: new Float32Array(f.local) };
+  const points = new Float32Array(f.bodies.length * 3);
+  return { mesh, shape, points, bodies: f.bodies, local: new Float32Array(f.local) };
+}
+
+// Draw a material's surfaces `by` metres nearer the camera than they are, in depth only: each vertex moves along its
+// own line of sight, so it stays where it is on screen. A cloth is drawn through the middle of its points, which lie
+// its thickness (6 mm) over what it rests on, and where it bends over a table's edge the table's rounded edge still
+// showed through it in streaks; nearer by its thickness, it wins against what lies within it.
+function pullNearer(material, by) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      gl_Position = projectionMatrix * vec4(mvPosition.xyz * max(0.0, 1.0 - ${by.toFixed(4)} / length(mvPosition.xyz)), 1.0);`,
+    );
+  };
 }
 
 function updateFlexes() {
   for (const flex of flexMeshes) {
-    const pos = flex.mesh.geometry.attributes.position;
     for (let i = 0; i < flex.bodies.length; i++) {
       const node = bodyNodes[flex.bodies[i]];
       flexPoint.fromArray(flex.local, 3 * i).applyQuaternion(node.quaternion).add(node.position);
-      pos.setXYZ(i, flexPoint.x, flexPoint.y, flexPoint.z);
+      flexPoint.toArray(flex.points, 3 * i);
     }
-    pos.needsUpdate = true;
-    flex.mesh.geometry.computeVertexNormals();
+    shapeCloth(flex.shape, flex.points);
   }
 }
 

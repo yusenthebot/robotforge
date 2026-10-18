@@ -83,8 +83,22 @@ ROPE_SEGMENT = 0.04  # m, a rope's pieces
 ROPE_DAMPING = 0.002  # N*m*s/rad at each joint of a rope
 ROPE_ARMATURE = 3e-5  # kg*m^2 at each joint of a rope
 CLOTH_SPACING = 0.04  # m between a cloth's points, at least (see _cloth)
-CLOTH_POINTS = 16  # points along a side, at most: 256 points simulate twice as fast as real time
+# Points along a side, at most: a 0.6 m square on a table (196 points, 4.6 cm apart) runs at 2.8 times real time on
+# an M-series Mac shared with other work, and with 16 (256 points) at 1.8; a 0.3 m one (81) at 10. A bigger cloth
+# has its points further apart.
+CLOTH_POINTS = 14
 CLOTH_BALL = 0.006  # m, the radius of a cloth's points where they touch things
+# How the cloth's edges hold their length (solref: a time constant of 4 ms). MuJoCo's default (20 ms) let them
+# stretch 35% as a cloth landed on a table from 15 cm, and the hanging part slipped in under the table top round
+# the slab's edge, the cloth's edges passing through it (only its points touch things).
+CLOTH_EDGE_SOLREF = (0.004, 1.0)
+# N*s/m on each point: the air a cloth falls through. Dropped onto a table without it, the cloth hit at 1.7 m/s and
+# tucked in under the top; with it a 0.6 x 0.5 m cloth falls at about half a metre a second and drapes outside it.
+CLOTH_DRAG = 0.05
+# A contact bit only a cloth's points and the cloth skirts under table tops have (see cloth_skirt): nothing else
+# touches the skirts.
+CLOTH_BIT = 4
+CLOTH_SKIRT = 0.05  # m a table top's cloth skirt reaches down below it
 SWITCH_RANGE = math.radians(25)
 LEVER_RANGE = math.radians(40)
 
@@ -579,7 +593,7 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
         <body name="rail">
           <flexcomp name="{name}" type="grid" count="{nx} {ny} 1" spacing="{spacing}"
                     radius="{CLOTH_BALL}" dim="2" mass="{mass:.4f}" rgba="{color}">
-            <edge equality="true" damping="0.002"/>
+            <edge equality="true" damping="0.002" solref="{CLOTH_EDGE_SOLREF[0]} {CLOTH_EDGE_SOLREF[1]}"/>
             <contact contype="0" conaffinity="0" selfcollide="none"/>
             {pin}
           </flexcomp>
@@ -590,10 +604,37 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
     for point in child.bodies:
         if point.name.startswith(f"{name}_"):
             point.add_geom(
-                type=G.mjGEOM_SPHERE, size=[CLOTH_BALL, 0, 0], mass=0.0, group=3, friction=[0.8, 0.01, 0.001]
+                type=G.mjGEOM_SPHERE,
+                size=[CLOTH_BALL, 0, 0],
+                mass=0.0,
+                group=3,
+                friction=[0.8, 0.01, 0.001],
+                contype=1 | CLOTH_BIT,
+                conaffinity=1 | CLOTH_BIT,
             )
+    for joint in child.joints:  # each point's slides
+        joint.damping = [CLOTH_DRAG, 0.0, 0.0]
     frame = spec.worldbody.add_frame(pos=[base[0], base[1], base[2] + CLOTH_BALL], quat=quat)
     spec.attach(child, prefix=f"{name}/", frame=frame)
+
+
+def cloth_skirt(body: mujoco.MjsBody, length: float, width: float, underside: float) -> None:
+    """Hidden walls round the underside of a table top (its body's frame, the top's underside at `underside`), which
+    only a cloth's points touch. Only a cloth's points touch things, 4 cm apart: hung over the edge of a 2.5 cm top,
+    the first hanging point came down level with the top's lower edge, slipped round it, and the cloth hung tucked in
+    under the top, the cloth between its points passing through the top. Against these walls it hangs straight down
+    from the edge, as a tablecloth does."""
+    hidden = {"contype": CLOTH_BIT, "conaffinity": CLOTH_BIT, "group": 3, "rgba": [0, 0, 0, 0]}
+    t = 0.005
+    z = underside - CLOTH_SKIRT / 2
+    for sx in (1, -1):
+        body.add_geom(
+            type=G.mjGEOM_BOX, size=[t, width / 2, CLOTH_SKIRT / 2], pos=[sx * (length / 2 - t), 0, z], **hidden
+        )
+    for sy in (1, -1):
+        body.add_geom(
+            type=G.mjGEOM_BOX, size=[length / 2, t, CLOTH_SKIRT / 2], pos=[0, sy * (width / 2 - t), z], **hidden
+        )
 
 
 _BUILDERS: dict[str, Callable] = {
