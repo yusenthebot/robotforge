@@ -93,12 +93,12 @@ class SimSession:
     @classmethod
     def from_path(cls, path: str | Path) -> SimSession:
         model = _compile_path(Path(path))
-        return cls(model=model, data=_fresh_data(model), source=str(path))
+        return cls(model=model, data=fresh_data(model), source=str(path))
 
     @classmethod
     def from_xml(cls, xml: str, assets: dict[str, bytes] | None = None) -> SimSession:
         model = _compile_xml(xml, assets)
-        return cls(model=model, data=_fresh_data(model))
+        return cls(model=model, data=fresh_data(model))
 
     def load_path(self, path: str | Path) -> None:
         self._swap(_compile_path(Path(path)), str(path))
@@ -110,7 +110,7 @@ class SimSession:
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
             self.model = model
-            self.data = _fresh_data(model)
+            self.data = fresh_data(model)
             self.source = source
             self.drag = None
             self._sim_debt = 0.0
@@ -257,7 +257,8 @@ class SimSession:
             )
 
 
-def _fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+def fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+    """`model`'s state at its start: its first keyframe if it has one, everything computed."""
     data = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)

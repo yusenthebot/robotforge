@@ -168,8 +168,8 @@ def _kitchen(rng: random.Random, opts: dict[str, float]) -> Content:
     c.tips = [
         "pick_and_place('arm', 'red_cup', 'bowl') clears the island",
         "the jars on the wall shelf and the sink are out of the arm's reach: try a taller arm",
-        "a robot that walks or drives starts on one of robot_places, clear of the furniture, and goes to the island "
-        "with move(robot, to='island')",
+        "a robot that walks or drives, added without pos, starts on the first free one of robot_places, clear of "
+        "the furniture; move(robot, to='island') takes it to the island",
     ]
     return c
 

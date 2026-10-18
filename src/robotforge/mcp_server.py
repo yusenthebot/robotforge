@@ -329,7 +329,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         file: str | None = None,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
-        yaw: float = 0.0,
+        yaw: float | None = None,
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
@@ -352,8 +352,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         A library robot downloads on first use (4-55 MB, usually 5-30 s, with progress updates); if the call timed
         out, call again: the download continues and a repeated identical call reports the robot. For templates,
         params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}. pos is [x, y] in meters (height is
-        automatic; left out, [0, 0], or the nearest free place when furniture or a robot stands there); yaw is in
-        degrees."""
+        automatic; left out: after load_scene the first free one of the scene's robot_places, else [0, 0] or the
+        nearest free place when furniture or a robot stands there); yaw is in degrees (left out: the place's
+        heading, else 0)."""
         with _tool_errors():
             parts = build
             if design is not None:  # the robots it mounts download first, like a build's

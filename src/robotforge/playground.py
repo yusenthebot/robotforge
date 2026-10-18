@@ -41,7 +41,7 @@ from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sim import carry, finder, lidar, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
-from robotforge.sim.session import SimSession
+from robotforge.sim.session import SimSession, fresh_data
 from robotforge.viewer.server import ViewerHub
 
 DEMO_MODEL = Path(__file__).parent / "assets" / "demo.xml"
@@ -94,6 +94,9 @@ class Playground:
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    # The ground places of the scene last loaded, and the world it went into: a robot added there without pos
+    # starts on the first free one. Not saved: a world opened later starts robots round [0, 0].
+    _places: tuple[Path, list[scenes.Slot]] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.behaviors = BehaviorManager(
@@ -285,7 +288,7 @@ class Playground:
         file: str | None = None,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
-        yaw: float = 0.0,
+        yaw: float | None = None,
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
@@ -303,18 +306,17 @@ class Playground:
                 build=build,
                 params=params or {},
                 pos=pos or [0.0, 0.0],
-                yaw=yaw,
+                yaw=yaw or 0.0,
             )
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         world = self.current_world()
         existing = next((r for r in world.robots if r.name == name), None) if world else None
-        # Without a pos the call asked for no place, and the first one may have been moved clear of furniture (in
-        # the kitchen [0, 0] is inside the island): the same call again is still the same robot.
-        if (
-            existing is not None
-            and (existing.model_copy(update={"pos": entry.pos}) if pos is None else existing) == entry
-        ):
+        # Without a pos (or a yaw) the call asked for no place (or heading), and the first one was given the scene's
+        # or moved clear of furniture (in the kitchen [0, 0] is inside the island): the same call again is still
+        # the same robot.
+        unasked = {**({"pos": entry.pos} if pos is None else {}), **({"yaw": entry.yaw} if yaw is None else {})}
+        if existing is not None and existing.model_copy(update=unasked) == entry:
             # Typically a retry after the client timed out while the first call was still downloading.
             return self._unchanged(
                 f"{name} is already in the world exactly like this (at {_xy(existing.pos)}); nothing to do"
@@ -324,11 +326,17 @@ class Playground:
             w.robots.append(entry)
 
         result = self._edit(change)
-        free, placed = self._clear_start(name, entry.pos, asked=pos is not None)
-        if free is not None:  # put at [0, 0] for want of a place, inside something there: to the nearest free one
+        if pos is None:  # a place of the scene's, or clear of what stands at [0, 0]
+            free, facing, placed = self._start_for(name, entry.pos, None if yaw is None else entry.yaw)
+        else:
+            free, facing, placed = None, None, self._clear_start(name, entry.pos)
+        if free is not None:
 
             def move(w: World) -> None:
-                _find(w.robots, name, "robot").pos = free
+                robot = _find(w.robots, name, "robot")
+                robot.pos = free
+                if facing is not None:
+                    robot.yaw = facing
 
             result = self._edit(move, snapshot=False)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
@@ -390,7 +398,7 @@ class Playground:
                 )
 
         result = self._edit(change)
-        placed = self._clear_start(found[0], pos, asked=True)[1] if pos is not None else None
+        placed = self._clear_start(found[0], pos) if pos is not None else None
         return _noted(result, _yaw_note(yaw), *replaced, *kept, placed)
 
     def _replacing(self, name: str, build: dict[str, Any]) -> str | None:
@@ -459,28 +467,84 @@ class Playground:
         robot.params, robot.build = {}, build
         return compile_world(World.model_validate(world.model_dump()), store.dir).model
 
-    def _clear_start(self, robot: str, pos: list[float], asked: bool) -> tuple[list[float] | None, str | None]:
-        """Whether `robot`, just put at `pos`, stands inside something: furniture, a wall, a ramp, another robot.
-        Put there for want of a place, it is to go to the nearest free one (returned, with a note); put there on
-        purpose, it stays, and the note says so and where is free. Added without a place after load_scene, a Go2
-        carrying an arm stood inside the kitchen's island at [0, 0], came out under the counter's edge and got stuck
-        on every trip, and nothing said why."""
+    def _worlds(self) -> tuple[mujoco.MjModel, list[mujoco.MjData]]:
+        """The open world as it starts (every robot at its saved place, as a reset or reload_world puts them) and as
+        it is now: a place has to be free in both."""
         with self.session.lock:
-            model, data = self.session.model, copy.copy(self.session.data)
-        hit = placement.inside(model, data, robot)
-        if not hit:
-            return None, None
-        what = ", ".join(list(hit)[:3]) + (" and more" if len(hit) > 3 else "")
-        shift = placement.move_to_free(model, data, robot)
-        free = None if shift is None else [round(pos[0] + shift[0], 2), round(pos[1] + shift[1], 2), *pos[2:]]
-        if free is not None and not asked:
-            return free, f"{robot}: {_xy(pos)} is inside {what}, so it starts at {_xy(free)}, the nearest free place"
-        where = f"; {_xy(free)} is free" if free is not None else ""
-        deep = max(hit.values()) * 100
-        return None, (
-            f"{robot} starts inside {what} at {_xy(pos)} ({deep:.0f} cm deep): it will be pushed out or get stuck "
-            f"there; give it a free pos{where}"
+            model, live = self.session.model, copy.copy(self.session.data)
+        return model, [fresh_data(model), live]
+
+    def _clear_start(self, robot: str, pos: list[float]) -> str | None:
+        """What `robot`, put at `pos` on purpose, stands inside (furniture, a wall, a ramp, another robot, or another
+        robot's start), as a note saying where is free; it stays there. None when it stands clear."""
+        model, (start, live) = self._worlds()
+        now = placement.inside(model, live, robot)
+        then = {k: v for k, v in placement.inside(model, start, robot).items() if k not in now}
+        if not now and not then:
+            return None
+        spot = placement.free_place(model, [start, live], robot, ((x, y, 0.0) for x, y in placement.rings(*pos[:2])))
+        where = f"; {_xy(spot)} is free" if spot is not None else ""
+        hit = now or then
+        what, deep = _names(hit), max(hit.values()) * 100
+        if now:
+            return (
+                f"{robot} starts inside {what} at {_xy(pos)} ({deep:.0f} cm deep): it will be pushed out or get stuck "
+                f"there; give it a free pos{where}"
+            )
+        return (
+            f"{robot} starts at {_xy(pos)} where {what} starts too ({deep:.0f} cm into it): after a reset or "
+            f"reload_world they stand inside each other; give it a free pos{where}"
         )
+
+    def _start_for(
+        self, robot: str, pos: list[float], yaw: float | None
+    ) -> tuple[list[float] | None, float | None, str | None]:
+        """Where `robot`, added without pos (so at `pos`, [0, 0]), is to start instead, the heading to give it (None
+        to keep it), and the note saying so. After load_scene it is the first of the scene's robot_places free in
+        the world as it starts and as it is now, facing the way the place does unless `yaw` was given; with every
+        place taken, or no scene, the nearest free place round the first place or round `pos`, if something
+        stands at `pos`. Moved clear of the kitchen's island to the nearest free place, 0.1 m from it, a dog told
+        to walk over to the island was already there, and a rover added next went under a Go2's belly."""
+        model, worlds = self._worlds()
+        if placement.movable(model, robot) is None:  # fixed to the floor: only told
+            return None, None, self._clear_start(robot, pos)
+        slots = self._scene_places()
+
+        def turn(heading: float) -> float:  # added facing 0 degrees, or the yaw given (kept)
+            return 0.0 if yaw is not None else heading
+
+        for slot in slots:
+            found = placement.free_place(model, worlds, robot, [(*slot.pos, turn(slot.yaw))])
+            if found is not None:
+                facing = None if yaw is not None else float(slot.yaw)
+                said = "" if facing is None else f", facing {facing:g} degrees"
+                where = [found[0], found[1]]
+                return where, facing, f"{robot} starts at {_xy(where)}{said}, the first free one of robot_places"
+        if slots:
+            around, heading, why = slots[0].pos, slots[0].yaw, "the scene's robot_places are all taken"
+        else:
+            hit: dict[str, float] = {}
+            for world in worlds:
+                for name, much in placement.blocked(model, world, robot).items():
+                    hit[name] = max(hit.get(name, 0.0), much)
+            if not hit:
+                return None, None, None
+            inside = any(placement.inside(model, w, robot) for w in worlds)
+            around, heading = pos[:2], 0.0
+            why = f"{_xy(pos)} is {'inside' if inside else 'too close to'} {_names(hit)}"
+        rings = placement.rings(*around)
+        found = placement.free_place(model, worlds, robot, ((x, y, turn(heading)) for x, y in rings))
+        if found is None:
+            return None, None, self._clear_start(robot, pos)
+        facing = None if yaw is not None or not slots else float(heading)
+        free = [found[0], found[1], *pos[2:]]
+        return free, facing, f"{robot}: {why}, so it starts at {_xy(free)}, the nearest free place"
+
+    def _scene_places(self) -> list[scenes.Slot]:
+        """The ground places of the scene loaded into the open world, if one was loaded this session."""
+        if self._places is None or self.store is None or self._places[0] != self.store.dir:
+            return []
+        return self._places[1]
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -591,6 +655,7 @@ class Playground:
             w.terrain = []
             w.objects = []
 
+        self._places = None  # the scene's places went with it
         return self._edit(change)
 
     @_one_edit_at_a_time
@@ -722,6 +787,7 @@ class Playground:
             w.objects = [ObjectEntry(**{**o, "name": _unused(o["name"], taken)}) for o in content.objects]
 
         result = self._edit(change)
+        self._places = (self.store.dir, list(content.ground_slots))
         result["scene"] = {
             "preset": preset,
             "seed": seed,
@@ -1087,8 +1153,13 @@ def _joints(count: int) -> str:
     return f"{count} joint" if count == 1 else f"{count} joints"
 
 
-def _xy(pos: list[float]) -> str:
+def _xy(pos: list[float] | tuple[float, ...]) -> str:
     return f"[{pos[0]:g}, {pos[1]:g}]"
+
+
+def _names(found: dict[str, float]) -> str:
+    """The first three names of what a robot stands in or by, most first."""
+    return ", ".join(list(found)[:3]) + (" and more" if len(found) > 3 else "")
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
