@@ -15,6 +15,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.ik import Chain, IKSolver
+from robotforge.design import end_effectors
 from robotforge.sim.actuators import drives_joint, is_position_servo
 from robotforge.sim.geometry import collides
 
@@ -37,6 +38,7 @@ LOAD_CLEARANCE = 0.03  # m kept between a carried load and the robot carrying th
 # behind its base, where its first joint cannot point (14 degrees each side on a Panda), twists the rest of the way
 JOINT_SLACK = 0.35
 PATH_SAMPLES = 33  # points a path around the base is measured at: 32 chords of at most 11 degrees in a full turn
+PAD_PRESS = 0.001  # m a suction cup or magnet is pressed into the top of what it picks, so the whole face meets it
 
 
 class OutOfReach(ValueError):
@@ -95,6 +97,14 @@ class ArmMotion:
         self.tool_axis = rot.reshape(3, 3)[:, 2].copy()
         self.gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
         self.gripper_open = float(model.actuator_ctrlrange[self.gripper][1]) if self.gripper >= 0 else 0.0
+        # A suction cup or an electromagnet (end_effectors.py) holds by adhesion: on when closed, off when open, and
+        # it holds what it picks by the top, under its face, where fingers hold it around the middle.
+        self.tool = end_effectors.tool_of(model, self.gripper)
+        if self.tool is not None:
+            self.gripper_open = 0.0
+        # An arm with a tool holds its weight up with its servo targets (servo_targets): it carries what it picks by a
+        # face at the end of a long reach. Arms with fingers keep the targets, and the moves, they always had.
+        self._kp = servo_stiffness(model, self.actuators) if self.tool is not None else None
         self.ik = IKSolver(model, home_qpos)
         self.q = home_qpos[self.chain.qpos_adr].copy()
         self.home = self.q.copy()
@@ -293,8 +303,12 @@ class ArmMotion:
         around it (e.g. a bin's rim), which the carried object must clear.
         """
         grasp = obj_pos.copy()
-        drop = place + [0, 0, obj_half_height + 0.01]
-        rim = max(place_top if place_top is not None else place[2], grasp[2] - obj_half_height)
+        below = obj_half_height  # how far the load reaches below the tool point: fingers hold it by the middle
+        if self.tool is not None:  # a suction cup or a magnet holds it by its top, pressed on a little
+            grasp[2] += obj_half_height - PAD_PRESS
+            below = 2 * obj_half_height
+        drop = place + [0, 0, below + 0.01]
+        rim = max(place_top if place_top is not None else place[2], grasp[2] - below)
         travel_z = max(grasp[2], drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
@@ -303,7 +317,7 @@ class ArmMotion:
         bad = self.unreachable(points)
         if bad:
             raise OutOfReach(self.robot, bad, points)
-        across = self._carry_height(grasp, drop, travel_z, obj_half_height)
+        across = self._carry_height(grasp, drop, travel_z, below)
         if across is None:
             under, fix = "the robot carrying the arm", "put both on the same side of the robot, or turn it"
             if int(self.ik.model.body_jntnum[self._robot_root]) == 0:  # bolted to the floor: no robot to turn
@@ -344,9 +358,7 @@ class ArmMotion:
         carry_time = self._time(above, above_drop)
         if carry_joints is not None:
             carry_time = max(carry_time, float(np.max(np.abs(carry_joints - self._solve(above)[0]))) / JOINT_SPEED)
-        self.queue.append(
-            Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=obj_half_height)
-        )
+        self.queue.append(Waypoint(above_drop, None, carry_time, "carry", carry_joints, turn=carry_turn, load=below))
         self.queue.append(Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0))
         self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0))
@@ -516,7 +528,7 @@ class ArmMotion:
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
-            data.ctrl[self.actuators] = self.q
+            data.ctrl[self.actuators] = self._targets(data)
             return
         start, wp, t0 = self._segment
         u = min(1.0, (t - t0) / wp.duration)
@@ -529,9 +541,16 @@ class ArmMotion:
                 target = self._arc_point(start, wp.position, s)
                 axis = (self.tool_axis, _turn_toward(self._axis0, DOWN, s))  # e.g. out of a home pose, gradually
                 self.q, _ = self.ik.solve(self.chain, target, self.q, iterations=6, axis=axis)
-        data.ctrl[self.actuators] = self.q
+        data.ctrl[self.actuators] = self._targets(data)
         if u >= 1.0:
             self._segment = None
+
+    def _targets(self, data: mujoco.MjData) -> np.ndarray:
+        """The servo targets for the joints at self.q: the values themselves for fingers, with gravity's share for a
+        cup or a magnet (see __init__)."""
+        if self._kp is None:
+            return self.q
+        return servo_targets(data, self.chain.dof_adr, self._kp, self.q)
 
     def _plan_move(self, wp: Waypoint, start: np.ndarray) -> Waypoint:
         """Work out how a move to a tool position goes, as it starts with the tool at `start`: which way round the
@@ -679,11 +698,49 @@ class ArmMotion:
     def _grip(self, state: str | None) -> float | None:
         if state is None or self.gripper < 0:
             return None
+        if self.tool is not None:  # adhesion: closing turns it on, at full power
+            return 0.0 if state == "open" else float(self.ik.model.actuator_ctrlrange[self.gripper][1])
         return self.gripper_open if state == "open" else 0.0
 
     @staticmethod
     def _time(a: np.ndarray, b: np.ndarray) -> float:
         return max(0.5, float(np.linalg.norm(np.asarray(b) - np.asarray(a))) / SPEED)
+
+
+def servo_stiffness(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each actuator's position-servo stiffness (0 for one that is not a position servo), for servo_targets."""
+    return np.array([float(model.actuator_gainprm[a, 0]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_damping(model: mujoco.MjModel, actuators: np.ndarray) -> np.ndarray:
+    """Each position servo's damping (its kv, force per joint speed; 0 for one that is not a position servo)."""
+    return np.array([-float(model.actuator_biasprm[a, 2]) if is_position_servo(model, a) else 0.0 for a in actuators])
+
+
+def servo_targets(
+    data: mujoco.MjData,
+    dofs: np.ndarray,
+    kp: np.ndarray,
+    q: np.ndarray,
+    kv: np.ndarray | None = None,
+    qdot: np.ndarray | None = None,
+) -> np.ndarray:
+    """Servo targets that hold joints at `q`: each aimed past its value by what holds the arm's weight up (gravity's
+    share of the bias force over the stiffness). A position servo pushes only in proportion to how far it is kept from
+    its target, and these have no integral term the way a real servo's controller has: aimed at the values
+    themselves, the template arm hung 1.6 cm low over a switch and 5.6 cm low carrying a plate at full stretch.
+
+    Less what MuJoCo's own gravity compensation already gives (bodies with gravcomp, as a PiPER's): counted twice,
+    a PiPER held still stood 3.7 cm too high and pressed no button.
+
+    Given the servos' damping `kv` and the speed `qdot` the targets move at, also aimed past by what that damping takes
+    from a joint moving at that speed: a servo damps against the joint's speed, not the error's, so a moving target is
+    otherwise followed behind. A PiPER (kv 5 to kp 80, its wrist 1.5 to 10) swinging in to a drawer ran 3 cm behind
+    its plan and put a finger on the drawer's top; with it, 6 mm."""
+    bias = data.qfrc_bias[dofs] - data.qfrc_gravcomp[dofs]
+    if kv is not None and qdot is not None:
+        bias = bias + kv * qdot
+    return q + np.divide(bias, kp, out=np.zeros_like(bias), where=kp > 0)
 
 
 def _whole_turns_from(step: float) -> list[float]:

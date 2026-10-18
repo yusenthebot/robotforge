@@ -14,7 +14,7 @@ from robotforge.design.scenes import SCENES
 from robotforge.design.terrain import TYPES, StyleName
 from robotforge.playground import Playground
 
-SceneName = Literal[tuple(SCENES)]  # desk_lab, kitchen, warehouse, park, maze, obstacle_course
+SceneName = Literal[tuple(SCENES)]  # desk_lab, kitchen, factory, warehouse, park, maze, obstacle_course
 TerrainType = Literal[tuple(TYPES)]  # hills, rough, stairs, ramp, stones, curb, platform
 
 
@@ -23,9 +23,9 @@ def register(server: MCPServer, playground: Playground) -> None:
 
     @server.tool()
     def list_scenes() -> str:
-        """List ready-made scenes (desk_lab, kitchen, warehouse, park, maze, obstacle_course; with water: harbor,
-        lake, pool) with their options,
-        the terrain types add_terrain can lay down with every parameter, and the ground styles."""
+        """List ready-made scenes (desk_lab, kitchen, factory, warehouse, park, maze, obstacle_course; with water:
+        harbor, lake, pool) with their options, the terrain types add_terrain can lay down with every parameter, and
+        the ground styles."""
         return _json(playground.list_scenes())
 
     @server.tool()

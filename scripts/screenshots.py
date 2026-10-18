@@ -52,6 +52,10 @@ class Shot:
     storage: dict[str, str] = field(default_factory=lambda: {"robotforge.coached": "1", "robotforge.world": "0"})
     settle: float = 2.0  # s after the page is ready
     size: tuple[int, int] = (WIDTH, HEIGHT)  # CSS px
+    # Python calls on the robots, (s after the page has drawn, call on the Playground), for a picture mid-way through
+    # a behavior: a shot with actions serves its world in this process (as scripts/demos.py does), so the calls act on
+    # the very simulation the page shows, and is captured `settle` s after the last one.
+    actions: list[tuple[float, Callable[[Any], None]]] = field(default_factory=list)
     # Python calls on the robots while the page watches (a lift, so a plot has it in its history), run before the
     # page script; a shot with one serves its world in this process instead of with `robotforge open`.
     act: Callable[[Any], None] | None = None
@@ -130,6 +134,14 @@ async def _drive_viewer(port: int, messages: list[dict[str, Any]]) -> None:
                         break
 
 
+async def _act(shot: Shot, pg: Any) -> None:
+    """Run a shot's Python calls on the served playground at their times."""
+    t0 = time.monotonic()
+    for at, action in sorted(shot.actions, key=lambda a: a[0]):
+        await asyncio.sleep(max(0.0, at - (time.monotonic() - t0)))
+        await asyncio.to_thread(action, pg)
+
+
 async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str, pg: Any = None) -> None:
     """Open the viewer in a tab, wait until it has drawn, put the world in the shot's state while the page
     watches (so plots have their history), and capture it."""
@@ -167,8 +179,12 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str
             await _drive_viewer(port, shot.viewer)
         if shot.act is not None:
             await asyncio.to_thread(shot.act, pg)
+        if shot.actions:
+            if shot.page:  # the camera first, so the page watches the whole behavior
+                await page.eval(f"(async () => {{ {shot.page} }})()")
+            await _act(shot, pg)
         await asyncio.sleep(shot.settle)
-        if shot.page:
+        if shot.page and not shot.actions:
             await page.eval(f"(async () => {{ {shot.page} }})()")
             await asyncio.sleep(1.0)
         data = (await page.call("Page.captureScreenshot", format="png", captureBeyondViewport=False))["data"]
@@ -213,7 +229,7 @@ def take(shot: Shot, out_dir: Path, lang: str) -> Path:
     world_dir = home / "worlds" / shot.name
     port, chrome_port = _free_port(), _free_port()
     server = None
-    if shot.act is not None:
+    if shot.act is not None or shot.actions:  # served here, so the shot's calls act on what the page shows
         _serve_here(pg, port)
     else:
         server = subprocess.Popen(
@@ -753,6 +769,100 @@ GALLERY_SHOTS: list[tuple[str, Callable[[Any], None] | None, tuple[float, float,
 ]
 
 
+def _tile_and_tray(pg: Any) -> None:
+    pg.add_robot("arm", template="arm", end_effector="suction", params={"color": "orange"})
+    pg.add_object("tile", shape="box", size=[0.07, 0.07, 0.008], pos=[0.25, -0.12], color="teal")
+    pg.add_object("tray", shape="bin", size=[0.14, 0.14, 0.05], pos=[0.05, 0.28], color="gray")
+
+
+def _pick(robot: str, obj: str, target: str) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        pg.behaviors.pick_and_place(robot, obj, target)
+
+    return act
+
+
+def _operate(robot: str, target: str, action: str, amount: float | None = None) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        from robotforge.behaviors import operate
+
+        operate.start(pg.behaviors, robot, target, action, amount)
+
+    return act
+
+
+def _sorting(pg: Any) -> None:
+    """Start the factory's sorter in the background, in real time (scripts/factory_bench.py)."""
+    import threading
+
+    from factory_bench import Sorter
+
+    def wait(until: Callable[[], bool], seconds: float) -> None:
+        start = float(pg.session.data.time)
+        while not until() and float(pg.session.data.time) - start < seconds:
+            time.sleep(0.02)
+
+    sorter = Sorter(pg, wait, 0.1)
+    threading.Thread(target=lambda: [sorter.cycle() for _ in range(30)], daemon=True).start()
+
+
+def _mechanism_row(pg: Any) -> None:
+    things = [
+        ("drawer", {"shape": "drawer", "pos": [-0.75, 0.0]}),
+        ("cabinet", {"shape": "cabinet", "pos": [-0.35, 0.0]}),
+        ("button", {"shape": "button", "pos": [-0.05, 0.0]}),
+        ("switch", {"shape": "switch", "pos": [0.12, 0.0]}),
+        ("lever", {"shape": "lever", "pos": [0.32, 0.0], "yaw": 90}),
+        ("valve", {"shape": "valve", "pos": [0.56, 0.0]}),
+    ]
+    for name, fields in things:
+        pg.add_object(name, **fields)
+
+
+def _soft(pg: Any) -> None:
+    pg.add_object("hook_post", shape="pillar", size=[0.04, 1.0], pos=[-0.45, 0.0])
+    pg.add_object("rope", shape="rope", size=[0.6, 0.014], pos=[-0.45, -0.02, 0.98])
+    pg.add_object("table", shape="table", size=[0.5, 0.4, 0.35], pos=[0.25, 0.0], color="brown")
+    pg.add_object("cloth", shape="cloth", size=[0.6, 0.5], pos=[0.25, 0.0, 0.5], color="teal")
+
+
+# Pictures of the mechanisms lane (G3): the lane's own folder, not the README's.
+G3_SHOTS = [
+    Shot(
+        "g3_suction_tile",
+        _tile_and_tray,
+        actions=[(0.5, _pick("arm", "tile", "tray"))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.5, -0.45, 0.3], [0.13, 0.05, 0.08]);",
+        settle=4.6,
+    ),
+    Shot(
+        "g3_kitchen_drawer",
+        lambda pg: pg.load_scene("kitchen"),
+        actions=[(0.5, _operate("arm", "drawer", "open", 0.2))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.12, -0.82, 1.33], [0.26, -0.02, 0.95]);",
+        settle=7.8,
+    ),
+    Shot(
+        "g3_factory",
+        lambda pg: pg.load_scene("factory"),
+        actions=[(0.5, _sorting)],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.95, -0.95, 1.08], [0.2, -0.12, 0.62]);",
+        settle=6.5,
+    ),
+    Shot(
+        "g3_mechanisms",
+        _mechanism_row,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.1, -1.25, 0.65], [-0.05, 0.0, 0.1]);",
+    ),
+    Shot(
+        "g3_soft",
+        _soft,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.3, -1.6, 0.9], [-0.05, 0.0, 0.45]);",
+        settle=4.0,
+    ),
+]
+
+
 SHOTS = [
     Shot(
         "hero",
@@ -966,6 +1076,7 @@ SHOTS = [
         page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -4.3, 1.85], [0.8, 0.0, 0.85]);",
         settle=0.5,
     ),
+    *G3_SHOTS,
 ]
 
 

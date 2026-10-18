@@ -17,9 +17,23 @@ from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
 from robotforge.design.templates.rov import Rov
 from robotforge.design.templates.rover import Rover
+from robotforge.design.templates.tools import Magnet, SuctionCup
 
 TEMPLATES: dict[str, Template] = {
-    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Boat(), Rov(), Drone())
+    t.name: t
+    for t in (
+        Arm(),
+        Quadruped(),
+        Humanoid(),
+        Rover(),
+        Cartpole(),
+        Gripper(),
+        SuctionCup(),
+        Magnet(),
+        Boat(),
+        Rov(),
+        Drone(),
+    )
 }
 
 
@@ -43,6 +57,9 @@ NICKNAMES = {
     "submarine": "rov",
     "underwater": "rov",
     "auv": "rov",
+    "suction": "suction_cup",
+    "vacuum": "suction_cup",
+    "electromagnet": "magnet",
     "quadrotor": "drone",
     "quadcopter": "drone",
     "multirotor": "drone",

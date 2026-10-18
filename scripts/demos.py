@@ -490,6 +490,16 @@ DEMOS = [
         page=S._lesson("learn_to_walk"),
         settle=0.5,
     ),
+    # The factory: the belt brings boxes to the stop, the camera says their colors, the suction cup sorts them (the
+    # sorter of scripts/factory_bench.py, in real time). Close on the arm, so the cup is seen taking hold.
+    Demo(
+        "factory_sorting",
+        lambda pg: pg.load_scene("factory", options={"boxes": 12}),
+        42.0,
+        timeline=[(0.2, S._sorting)],
+        page="window.__robotforge.select(null);" + _orbit((0.3, -0.26, 0.6), 0.78, 0.52, -66.0, 30.0, 42.0),
+        settle=0.5,
+    ),
 ]
 
 

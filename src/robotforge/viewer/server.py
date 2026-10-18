@@ -180,7 +180,12 @@ class ViewerHub:
             "ctrl": [float(c) for c in s.data.ctrl],
             "source": s.source,
             "clients": len(self.clients),
-            "behaviors": [{"robot": name, **c.status()} for name, c in list(s.controllers.items())],
+            # Not the hidden ones (a world's mechanism watcher): they are no robot's behavior.
+            "behaviors": [
+                {"robot": name, **c.status()}
+                for name, c in list(s.controllers.items())
+                if not getattr(c, "hidden", False)
+            ],
             **(self.state_extras() if self.state_extras is not None else {}),
         }
 

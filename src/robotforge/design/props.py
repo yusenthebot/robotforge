@@ -110,6 +110,62 @@ SHAPES: dict[str, ShapeInfo] = {
         True,
         summary="a wooden dock: a deck on posts (give a height above the water, the posts reach the bottom)",
     ),
+    # Mechanisms and soft things (mechanisms.py): a fixed carcass with one moving part, which operate works.
+    "drawer": ShapeInfo(
+        "[length, depth, height]",
+        (3,),
+        (0.3, 0.3, 0.14),
+        (0.62, 0.48, 0.34, 1),
+        True,
+        summary="a chest with a drawer that pulls out toward -y (operate opens it; pick_and_place puts things in it)",
+    ),
+    "cabinet": ShapeInfo(
+        "[length, depth, height]",
+        (3,),
+        (0.3, 0.24, 0.22),
+        (0.86, 0.85, 0.82, 1),
+        True,
+        summary="a cabinet with a shelf and a door hinged on its left that opens toward -y (operate)",
+    ),
+    "button": ShapeInfo(
+        "[diameter, height]", (2,), (0.04, 0.05), "red", True, summary="a push button that springs back up (operate)"
+    ),
+    "switch": ShapeInfo(
+        "[length, width, height]", (3,), (0.06, 0.04, 0.03), "red", True, summary="a toggle switch, off at the start"
+    ),
+    "lever": ShapeInfo("[length]", (1,), (0.15,), "red", True, summary="a lever on a box that tips toward -y or +y"),
+    "valve": ShapeInfo(
+        "[wheel diameter, height]",
+        (2,),
+        (0.16, 0.22),
+        "red",
+        True,
+        summary="a pipe valve with a handwheel on top, closed at the start (operate opens it: two turns)",
+    ),
+    "conveyor": ShapeInfo(
+        "[length, width, height]",
+        (3,),
+        (1.2, 0.3, 0.75),
+        (0.36, 0.45, 0.56, 1),
+        True,
+        summary="a conveyor belt running along +x at `speed` m/s (default 0.1); things on it ride along",
+    ),
+    "rope": ShapeInfo(
+        "[length, diameter]",
+        (2,),
+        (0.6, 0.012),
+        (0.85, 0.66, 0.32, 1),
+        True,
+        summary="a rope: fixed, it hangs from pos (and swings); fixed=false, it lies loose on the ground",
+    ),
+    "cloth": ShapeInfo(
+        "[length, width]",
+        (2,),
+        (0.3, 0.3),
+        (0.3, 0.6, 0.65, 1),
+        False,
+        summary="a cloth that drapes over what is under it; fixed=true pins its +y edge like a curtain",
+    ),
 }
 PROPS = (
     "wall",
@@ -144,6 +200,10 @@ def footprint(shape: str, size: list[float]) -> tuple[float, float]:
     """Half extents (x, y) of a shape's footprint in its own frame."""
     if shape == "tree":  # the trunk stands on the ground, the crown can hang over a slope
         return size[0] * 0.06, size[0] * 0.06
+    if shape in ("button", "valve"):
+        return size[0] / 2 + 0.02, size[0] / 2 + 0.02
+    if shape in ("lever", "rope"):
+        return 0.04, 0.04
     if shape in ("sphere", "pillar", "rock") or (shape == "marker" and len(size) == 1):
         return size[0] / 2, size[0] / 2
     if shape == "cylinder":

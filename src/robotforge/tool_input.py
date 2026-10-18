@@ -37,6 +37,20 @@ ALIASES: dict[str, dict[str, str]] = {
         "boulder": "rock",
         "stone": "rock",
         "column": "pillar",
+        # Mechanisms and soft things (design/mechanisms.py); "door" is left out: it may mean a door frame.
+        "chest": "drawer",
+        "drawers": "drawer",
+        "cupboard": "cabinet",
+        "push_button": "button",
+        "toggle": "switch",
+        "handwheel": "valve",
+        "conveyor_belt": "conveyor",
+        "belt": "conveyor",
+        "cord": "rope",
+        "string": "rope",
+        "cable": "rope",
+        "towel": "cloth",
+        "fabric": "cloth",
     },
     "type": {
         "slope": "ramp",
@@ -49,8 +63,25 @@ ALIASES: dict[str, dict[str, str]] = {
         "stepping_stones": "stones",
     },
     "action": {"resume": "play", "start": "play", "unpause": "play", "continue": "play", "restart": "reset"},
-    "state": {"closed": "close", "grab": "close", "grasp": "close", "opened": "open", "release": "open"},
-    "gripper": {"closed": "close", "grab": "close", "grasp": "close", "opened": "open", "release": "open"},
+    # A suction cup or an electromagnet is switched on and off: on holds (close), off lets go (open).
+    "state": {
+        "closed": "close",
+        "grab": "close",
+        "grasp": "close",
+        "opened": "open",
+        "release": "open",
+        "on": "close",
+        "off": "open",
+    },
+    "gripper": {
+        "closed": "close",
+        "grab": "close",
+        "grasp": "close",
+        "opened": "open",
+        "release": "open",
+        "on": "close",
+        "off": "open",
+    },
     "name": {
         "hi": "wave",
         "hello": "wave",
@@ -242,7 +273,8 @@ def _drop_empty_build(tool: str, arguments: Mapping[str, Any], out: dict[str, An
     if tool == "add_robot" and any(k in arguments for k in ("template", "file", "library")):
         del out["build"]
     elif tool == "update_robot":
-        if not (out.get("params") or out.get("pos") is not None or out.get("yaw") is not None):
+        changes = ("pos", "yaw", "end_effector")
+        if not (out.get("params") or any(out.get(k) is not None for k in changes)):
             raise ToolError("build={} would remove every part of the robot; leave build out to keep them")
         del out["build"]
 
