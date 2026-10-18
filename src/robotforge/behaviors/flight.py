@@ -295,6 +295,8 @@ class FlightController:
             self._first = False
             if self.altitude > 0.15 and self.phase == "landed" and rot[2, 2] > 0.5:
                 self.phase, self.mode, self.target, self._started = "flying", "hold", None, False
+        if np.any(data.qfrc_applied[self.dadr : self.dadr + 6]):
+            self._held_by_hand(rot)
         if rot[2, 2] < UPSIDE_DOWN and not self.fallen:
             self.fallen = True
             self.phase = "crashed"
@@ -325,6 +327,25 @@ class FlightController:
         self.saturated = mixed.saturated
         data.ctrl[self.actuators] = mixed.controls
         self._touchdown(t)
+
+    def _held_by_hand(self, rot: np.ndarray) -> None:
+        """A hand in the viewer is moving it: it goes along, and holds where it is let go, as the walkers do. It
+        flew back to where it had hovered, 1.5 m away, and its observer read the hand as a gust and fought it.
+        Lifted off the ground by hand, it spins up and hovers where it is let go."""
+        if self.phase in ("landed", "spooling") and not self.fallen and self.altitude > 0.15 and rot[2, 2] > 0.5:
+            self._take_off()
+            self.mode = "hold"
+        if not self.airborne:
+            return
+        yaw = self.ref.yaw if self.ref is not None else math.atan2(rot[1, 0], rot[0, 0])
+        self.ref = Reference(self._p.copy(), self._v.copy(), yaw=yaw)
+        self.ref.sv = self._v.copy()  # let go while moving, it brakes from that speed
+        self._started = True
+        if self.mode == "hold":
+            self.target = None  # set at the next tick after it is let go, from where it brakes to
+        self._integral[:] = 0.0
+        self._outside[:] = 0.0
+        self._com_v = None
 
     # ---- the reference ------------------------------------------------------------------------
 

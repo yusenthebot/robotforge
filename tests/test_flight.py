@@ -304,6 +304,38 @@ def test_a_landing_that_comes_down_somewhere_else_did_not_arrive(pg):
     assert isinstance(trip, airways.FlightTrip)
 
 
+def _drag(pg, body: int, by, seconds: float = 1.2) -> np.ndarray:
+    """Drag a body in the viewer's way (SimSession's spring on the cursor) by `by` metres, and let it go."""
+    session = pg.session
+    pick = session.data.xpos[body].copy()
+    session.start_drag(body, pick)
+    steps = int(seconds / 0.02)
+    for k in range(steps):
+        session.move_drag(pick + np.asarray(by, float) * min(1.0, (k + 1) / (0.7 * steps)))
+        pg.run_fast(lambda: False, 0.02)
+    session.end_drag()
+    return session.data.xpos[body].copy()
+
+
+def test_dragged_in_the_viewer_it_holds_where_it_is_let_go(pg):
+    _trip(pg, [0.0, 0.0, 2.0])
+    root = pg.session.controllers["drone"].frame.root
+    let_go = _drag(pg, root, [1.5, 0.0, 0.0])
+    assert let_go[0] > 1.3
+    pg.run_fast(lambda: False, 3.0)  # it flew back to x 0.03
+    here = pg.session.data.xpos[root]
+    assert np.linalg.norm(here - let_go) < 0.1 and here[2] > 1.8
+
+
+def test_lifted_off_the_ground_by_hand_it_hovers_where_it_is_let_go(pg):
+    pg.run_fast(lambda: False, 0.5)
+    fc = pg.session.controllers["drone"]
+    assert fc.phase == "landed"
+    let_go = _drag(pg, fc.frame.root, [0.0, 0.0, 1.0], seconds=1.5)
+    pg.run_fast(lambda: False, 3.0)
+    assert fc.phase == "flying" and np.linalg.norm(pg.session.data.xpos[fc.frame.root] - let_go) < 0.15
+
+
 # ---- aircraft built from parts ------------------------------------------------------------------------
 
 
