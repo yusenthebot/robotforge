@@ -198,6 +198,8 @@ OFFERED = {
     "agilex_piper": "fixed to the world",
     "franka_emika_panda": "fixed to the world",
     "trs_so_arm100": "fixed to the world",
+    "bitcraze_crazyflie_2": "no built-in way to move",  # drones: no joint but the free one
+    "skydio_x2": "0 servo joints",
 }
 
 
