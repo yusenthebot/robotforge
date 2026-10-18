@@ -24,13 +24,6 @@ from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
-# The finger pads' contacts: nearly rigid (impedance 0.9999), and theirs rather than a mix with what they hold
-# (priority). With MuJoCo's soft default contacts a held thing creeps down between the pads under its own weight: a
-# 6 cm ball 53 mm/s, a cup 7 and a 4 cm cube 3.8, so a fixed arm dropped a 5 cm ball on the way and a robot driving
-# with its load lost it within seconds. With these: 0.3, 0.3 and 0.8 mm/s, and cubes and cups land as precisely.
-FINGER_SOLIMP = [0.9999, 0.9999, 0.001, 0.5, 2.0]
-FINGER_SOLREF = [0.01, 1.0]
-
 
 class ArmParams(TemplateParams):
     dof: int = Field(5, ge=3, le=6, description="number of arm joints (gripper not counted)")
@@ -199,9 +192,7 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
             rgba=accent,
             friction=[1.5, 0.02, 0.002],
             condim=4,
-            priority=1,
-            solimp=FINGER_SOLIMP,
-            solref=FINGER_SOLREF,
+            solref=[0.005, 1],
             mass=0.012,
         )
         vis.hide(pad)

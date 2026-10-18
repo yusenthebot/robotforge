@@ -277,15 +277,16 @@ def test_a_lift_arm_out_of_reach_is_told_to_bring_the_cube_nearer(pg):
     pg.add_object("near", shape="table", size=[0.26, 0.26, 0.45], pos=[0.45, -0.25], fixed=True)
     pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[0.75, 0.1, 0.42])
     _run(pg, 0.5)
-    # The message says where the gripper points down at that height and sends the cube nearer, to a spot in it.
+    # The message says where the gripper points down at that height and sends the cube nearer, to a spot in it. (Told
+    # to stay where it is: by default the picker drives over and fetches it, tests/test_fetch.py.)
     with pytest.raises(
         BehaviorError, match=r"it is 0.66 m from the arm's base.*points down only .* move the cube nearer"
     ):
-        pg.behaviors.pick_and_place("picker", "cube", "near")
+        pg.behaviors.pick_and_place("picker", "cube", "near", go=False)
     pg.update_object("cube", pos=[0.6, 0.1, 0.42])  # just beyond its 0.49 m with the gripper down
     _run(pg, 0.5)
     with pytest.raises(BehaviorError, match="move the cube nearer") as refused:
-        pg.behaviors.pick_and_place("picker", "cube", "near")
+        pg.behaviors.pick_and_place("picker", "cube", "near", go=False)
     assert "further" not in str(refused.value)
 
 

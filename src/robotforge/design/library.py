@@ -47,16 +47,6 @@ class LibraryRobot:
     # the "tcp" site that move_arm, pick_and_place and reach steer, as on our own arms.
     tool: tuple[str, float] | None = None
     gripper: str | None = None  # actuator that opens the gripper, renamed "gripper" like ours
-    # Bodies of the gripper's fingers whose contacts are made firm (see FINGER_SOLIMP), for a gripper that lets what it
-    # holds creep out in MuJoCo's soft default contacts.
-    fingers: tuple[str, ...] = ()
-
-
-# The Panda's finger pads, as for our own gripper (templates/arm.py FINGER_SOLIMP) but a little softer: in the soft
-# default contacts a 6 cm ball crept out of its fingers at 12 mm/s and a cup at 3; with these 0.3 and 0.15. Made as
-# rigid as our gripper's, its twelve small pads let the ball go at 57 mm/s.
-FIRM_SOLIMP = [0.99, 0.999, 0.001, 0.5, 2.0]
-FIRM_SOLREF = [0.01, 1.0]
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -115,7 +105,6 @@ CATALOG: dict[str, LibraryRobot] = {
             "panda.xml",
             tool=("hand", 0.1034),  # Franka's own flange-to-TCP distance
             gripper="actuator8",
-            fingers=("left_finger", "right_finger"),
         ),
         LibraryRobot(
             "so_arm100",
@@ -257,15 +246,6 @@ def _add_tool(spec: mujoco.MjSpec, robot: LibraryRobot) -> None:
         if actuator is None:
             raise LibraryError(f"{robot.title}: the model has no gripper actuator {robot.gripper!r}")
         actuator.name = "gripper"
-    for name in robot.fingers:
-        finger = spec.body(name)
-        if finger is None:
-            raise LibraryError(f"{robot.title}: the model has no finger body {name!r}")
-        for geom in finger.geoms:
-            if geom.contype or geom.conaffinity:  # not the pictures
-                geom.priority = 1
-                geom.solimp = FIRM_SOLIMP
-                geom.solref = FIRM_SOLREF
 
 
 def _read_key(spec: mujoco.MjSpec, name: str | None) -> tuple[np.ndarray | None, np.ndarray | None]:

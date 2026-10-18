@@ -87,6 +87,11 @@ STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 RUB = 0.001  # m: an arm overlapping itself or its robot deeper than this in the simulation rubs on it
 SQUEEZE = 10.0  # N a gripper pushes with a cm short of closed during an errand, at most its force limit (_hold_fast)
+# The finger pads' contacts during an errand: firm, and theirs rather than a mix with what they hold (priority). In
+# MuJoCo's soft default contacts a 6 cm ball crept out of a Panda's fingers at 12 mm/s and a cup at 3; with these 0.3
+# and 0.15. Made fully rigid, the Panda's twelve small pads let the ball go at 57 mm/s.
+FIRM_SOLIMP = [0.99, 0.999, 0.001, 0.5, 2.0]
+FIRM_SOLREF = [0.01, 1.0]
 RISE = 0.1  # m the hand is lifted off such a rub before the arm moves on (Errand._unstick)
 
 
@@ -1117,6 +1122,17 @@ def _heights(arm: ArmMotion) -> str:
     return f"{found[0]:.2f} and {found[-1]:.2f}" if found else "no heights at all"
 
 
+def _finger_geoms(model: mujoco.MjModel, arm: ArmMotion) -> np.ndarray:
+    """The solid shapes of the gripper's fingers (the bodies its finger joints move)."""
+    bodies = [int(model.jnt_bodyid[j]) for j in _finger_joints(model, arm.gripper)]
+    geoms = [
+        g
+        for g in range(model.ngeom)
+        if any(_descends(model, int(model.geom_bodyid[g]), b) for b in bodies) and collides(model, g)
+    ]
+    return np.array(geoms, int)
+
+
 def _rubbing(arm: ArmMotion, data: mujoco.MjData) -> bool:
     """Whether the arm presses on itself or on the robot it rides on, in the simulation as it is."""
     m = arm.ik.model
@@ -1178,6 +1194,7 @@ class Errand:
     tilts: dict[str, float] = field(default_factory=dict)  # the same for the pick and the put
     _noslip: int | None = None  # the model's no-slip iterations before the errand set them (_hold_fast)
     _squeezed: tuple | None = None  # the gripper's gain and bias before the errand stiffened it (_hold_fast)
+    _pads: tuple | None = None  # the finger pads' geoms and contact settings before the errand firmed them
     _retries: int = 0  # trips planned again after getting stuck
     _replans: int = 0  # spots looked for again from where the robot stopped (_again)
     _unstuck: bool = False  # the hand was just lifted off a rub (_unstick)
@@ -1606,14 +1623,22 @@ class Errand:
         """While the errand goes on: run MuJoCo's no-slip pass (its soft contacts let a load creep out between the
         fingers: an apple held tilted slid 5 mm a second through a Panda's pads and fell out on the way round, as
         learn/cloning.py found with a cube; it costs about a third more time a step), hold the arm up against its
-        weight (ArmMotion.carry_weight), and have the gripper squeeze SQUEEZE newtons a cm short of closed, up to its
-        force limit. Menagerie's Panda and PiPER grippers are servos as soft as springs (1 N and 0.4 N a cm short)
-        and ours 2 N: a cup slid out of the Panda's hand, and a lift picker driving to a loading dock lost a parcel
-        squeezed with 4 N. At 100 N an apple squeezed off-centre shot out of the Panda's pads."""
+        weight (ArmMotion.carry_weight), firm the finger pads' contacts (FIRM_SOLIMP) and have the gripper squeeze
+        SQUEEZE newtons a cm short of closed, up to its force limit. Menagerie's Panda and PiPER grippers are servos
+        as soft as springs (1 N and 0.4 N a cm short) and ours 2 N: a cup slid out of the Panda's hand, and a lift
+        picker driving to a loading dock lost a parcel squeezed with 4 N. At 100 N an apple squeezed off-centre shot
+        out of the Panda's pads. All of it only for the errand: a fixed arm picks with the robot as it was built."""
         if self._noslip is None and model.opt.noslip_iterations < NOSLIP:
             self._noslip = int(model.opt.noslip_iterations)
             model.opt.noslip_iterations = NOSLIP
         self.arm.carry_weight = True
+        if self._pads is None and self.arm.gripper >= 0:
+            pads = _finger_geoms(model, self.arm)
+            self._pads = (pads, model.geom_priority[pads].copy(), model.geom_solimp[pads].copy())
+            self._pads += (model.geom_solref[pads].copy(),)
+            model.geom_priority[pads] = 1
+            model.geom_solimp[pads] = FIRM_SOLIMP
+            model.geom_solref[pads] = FIRM_SOLREF
         g = self.arm.gripper
         if self._squeezed is None and g >= 0 and int(model.actuator_biastype[g]) == mujoco.mjtBias.mjBIAS_AFFINE:
             kp = -float(model.actuator_biasprm[g, 1])
@@ -1633,6 +1658,10 @@ class Errand:
         if self._squeezed is not None:
             model.actuator_gainprm[self.arm.gripper], model.actuator_biasprm[self.arm.gripper] = self._squeezed
             self._squeezed = None
+        if self._pads is not None:
+            pads, priority, solimp, solref = self._pads
+            model.geom_priority[pads], model.geom_solimp[pads], model.geom_solref[pads] = priority, solimp, solref
+            self._pads = None
         self.arm.carry_weight = False
 
     def interrupt(self, note: str, time: float) -> None:
