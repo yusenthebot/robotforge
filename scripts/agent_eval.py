@@ -1377,12 +1377,17 @@ def video_info(path: Path) -> tuple[int, float, float] | str:
     except (ValueError, TypeError, IndexError):
         return f"unreadable: {probe.stderr.strip()[:200]}"
     shots = []
-    for where in (["-ss", "0"], ["-sseof", "-0.1"]):
-        grab = ["-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-"]
-        shot = subprocess.run(["ffmpeg", "-v", "error", *where, "-i", str(path), *grab], capture_output=True)
-        if not shot.stdout:
+    # The first frame, and the last: seeking from the end lands past it in a video of few frames a second (a
+    # browser's recording at 7 fps gave nothing 0.1 s from its end), so step further back until one comes.
+    for tries in ([["-ss", "0"]], [["-sseof", f"-{s}"] for s in (0.1, 0.5, 1, 2)]):
+        for where in tries:
+            grab = ["-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-"]
+            shot = subprocess.run(["ffmpeg", "-v", "error", *where, "-i", str(path), *grab], capture_output=True)
+            if shot.stdout:
+                shots.append(Image.open(io.BytesIO(shot.stdout)))
+                break
+        else:
             return f"no frame at {' '.join(where)}: {shot.stderr.decode(errors='replace').strip()[:200]}"
-        shots.append(Image.open(io.BytesIO(shot.stdout)))
     return frames, seconds, _frames_apart(*shots)
 
 
@@ -1881,8 +1886,13 @@ def _trim_result(tool: str, text: str) -> str:
         return json.dumps(data, ensure_ascii=False)
     if tool == "observe" and text.startswith("{"):
         data = json.loads(text)  # the image and joint lists go; where things are and which way robots face stay
-        kept = {k: data[k] for k in ("time", "free_bodies") if k in data}
-        orientation = {k: v for k, v in (data.get("sensors") or {}).items() if k.endswith("/orientation")}
+        kept = {k: data[k] for k in ("time", "free_bodies", "lidars") if k in data}
+        # The orientations, and single numbers (a lidar's rays, touch): what the checks read of the sensors.
+        orientation = {
+            k: v
+            for k, v in (data.get("sensors") or {}).items()
+            if k.endswith("/orientation") or isinstance(v, (int, float))
+        }
         found = data.get("found")
         if isinstance(found, dict):  # what the camera saw, without the long how-to-read-it text
             seen = [{k: o[k] for k in FOUND_KEYS if k in o} for o in found.get("objects") or [] if isinstance(o, dict)]

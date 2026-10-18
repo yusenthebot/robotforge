@@ -1,0 +1,159 @@
+{
+ "label": "branch",
+ "commit": "9bf99c0",
+ "started": "20261018-201009",
+ "codex": "0.159.2",
+ "model": "gpt-6.1-sol",
+ "effort": "medium",
+ "max_session_seconds": 600,
+ "summary": {
+  "passed": 2,
+  "tasks": 2,
+  "tool_calls": 31,
+  "failed_calls": 2,
+  "shell_commands": 23,
+  "sessions_with_problems": 0,
+  "input_tokens": 1557994,
+  "uncached_input_tokens": 88554,
+  "output_tokens": 6014,
+  "mean_wall_seconds": 143.7
+ },
+ "tasks": [
+  {
+   "task": "lidar_maze",
+   "lang": "zh",
+   "covers": [
+    "scene",
+    "parts",
+    "lidar",
+    "drive"
+   ],
+   "prompt": "把一台带激光雷达的小车放到迷宫入口，让它开进迷宫里，然后告诉我激光雷达看到了什么：离它最近的墙有多远？",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot carrying a lidar, in a maze",
+     "ok": true,
+     "observed": "lidar_maze/lidar_car, lidars ['lidar_car/base_lidar']"
+    },
+    {
+     "name": "started outside the maze (at its entrance)",
+     "ok": true,
+     "observed": "saved at [-2.00, -3.00], the maze spans x -2.55 to 2.55, y -2.55 to 2.55"
+    },
+    {
+     "name": "read its lidar inside the maze, a wall in sight",
+     "ok": true,
+     "observed": "1 observe with the lidar inside, the last at [-2.00, -2.13]"
+    },
+    {
+     "name": "the answer says how far the nearest wall is",
+     "ok": true,
+     "observed": "nearest 0.43 m; the answer names [0.87, 0.43, 0.43]"
+    }
+   ],
+   "tool_calls": 19,
+   "failed_calls": 2,
+   "other_mcp_calls": 0,
+   "shell_commands": 3,
+   "input_tokens": 527341,
+   "cached_input_tokens": 485888,
+   "output_tokens": 2056,
+   "reasoning_tokens": 134,
+   "wall_seconds": 89.0,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "list_templates",
+    "list_scenes",
+    "new_world",
+    "load_scene",
+    "describe_model",
+    "builder_guide",
+    "open_viewer",
+    "show_world",
+    "update_robot!",
+    "describe_model",
+    "observe",
+    "add_robot!",
+    "remove",
+    "add_robot",
+    "describe_model",
+    "move",
+    "observe",
+    "write_script",
+    "run_script"
+   ],
+   "failures": [
+    {
+     "tool": "update_robot",
+     "args": "{\"name\": \"rover\", \"build\": {\"color\": \"blue\", \"motor\": \"tt_motor\", \"base\": {\"shape\": \"box\", \"size\": [0.22, 0.16, 0.05], \"mass\": 0.3, \"sensors\": [\"imu\", {\"type\": \"lidar\", \"at\": [0, 0, 0.07], \"rays\": 72, \"fov\": 360, \"range\": 5}]}, \"parts\": [{\"name\": \"left_wheel\", \"at\": [0, 0.095, -0.025], \"shape\": \"...",
+     "error": "rover comes from the rover template; parts can only be edited on robots built from parts (add_robot with build=...). To build on a template, mount it as a part: {\"name\": \"arm\", \"robot\": {\"template\": \"arm\"}}"
+    },
+    {
+     "tool": "add_robot",
+     "args": "{\"name\": \"lidar_car\", \"pos\": [-2, -3], \"yaw\": 90, \"build\": {\"color\": \"orange\", \"motor\": \"tt_motor\", \"base\": {\"shape\": \"box\", \"size\": [0.22, 0.16, 0.05], \"mass\": 0.3, \"sensors\": [\"imu\", {\"type\": \"lidar\", \"at\": [0, 0, 0.07], \"rays\": 72, \"fov\": 360, \"range\": 5}]}, \"parts\": [{\"name\": \"left_wheel\", \"a...",
+     "error": "robot 'lidar_car': base sensors[1] fov must be below 170.0, got 360; base sensors[1] rays must be at most 64, got 72"
+    }
+   ],
+   "problems": [],
+   "final_message": "小车已从入口向迷宫内行驶约 **0.87 米**，并停下。 激光雷达测得，最近的墙面距离约 **0.43 米（43 厘米）**。这是雷达传感器到墙面的距离；未命中的射线已排除。"
+  },
+  {
+   "task": "parts_video",
+   "lang": "en",
+   "covers": [
+    "parts",
+    "drive or walk",
+    "record a video"
+   ],
+   "prompt": "Build me a small robot out of parts, any design you like, get it moving, and record a short video of it that I can share.",
+   "passed": true,
+   "criteria": [
+    {
+     "name": "a robot built from parts",
+     "ok": true,
+     "observed": "pip_rover/pip"
+    },
+    {
+     "name": "it moved >= 0.2 m",
+     "ok": true,
+     "observed": "1.03 m"
+    },
+    {
+     "name": "a video >= 1 s in which something moves",
+     "ok": true,
+     "observed": "pip-original.mp4: 124 frames, 18.9 s, frames change 0.012; pip-rover.mp4: 79 frames, 11.5 s, frames change 0.023; pip-take2.mp4: 81 frames, 11.4 s, frames change 0.023"
+    }
+   ],
+   "tool_calls": 12,
+   "failed_calls": 0,
+   "other_mcp_calls": 0,
+   "shell_commands": 20,
+   "input_tokens": 1030653,
+   "cached_input_tokens": 983552,
+   "output_tokens": 3958,
+   "reasoning_tokens": 436,
+   "wall_seconds": 198.4,
+   "exit_code": 0,
+   "timed_out": false,
+   "tools": [
+    "builder_guide",
+    "new_world",
+    "add_robot",
+    "open_viewer",
+    "move",
+    "observe",
+    "write_script",
+    "sim_control",
+    "run_script",
+    "robots",
+    "sim_control",
+    "run_script"
+   ],
+   "failures": [],
+   "problems": [],
+   "final_message": "Meet Pip: a small teal rover built from eight parts in simulation. It drives, turns, and spins while staying upright. [Download the 11-second video]( RUN/tasks/parts_video/work/pip-rover.mp4) — shareable 720p MP4."
+  }
+ ]
+}
