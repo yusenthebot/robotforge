@@ -8,6 +8,8 @@ The jobs, each as an agent would do it with the tools (pick_and_place, operate, 
 - fetch: "go to the kitchen and bring the apple to the living-room table" (pick_and_place goes over by itself).
 - drawer: open the chest of drawers in the kitchen and take the block out onto the kitchen table.
 - button: press the button on the living room's side table.
+- conveyor: in the factory, beside the running belt, catch the last box as it rides by and take it to the
+  workbench (pick_and_place catches it, then the robot carries it).
 A seed jitters the things on the tables (the scene's own seed) and where and how the robot starts. The demo videos
 (scripts/demos.py mobile_*) run the same jobs in real time. Maintainer tool, not part of robotforge.
 """
@@ -34,7 +36,9 @@ ROBOTS: dict[str, dict[str, Any]] = {
     "spot_z1": {"library": "spot", "mounts": [{"library": "z1"}]},
     "anymal_ur5e": {"library": "anymal_c", "mounts": [{"library": "ur5e"}, {"library": "robotiq_2f85"}]},
 }
-JOBS = ("door", "fetch", "drawer", "button")
+JOBS = ("door", "fetch", "drawer", "button", "conveyor")
+BESIDE_BELT = (-0.9, 0.5)  # in the factory: north of the belt, facing it, upstream of the boxes' stop
+BELT_SPEED = 0.1  # m/s
 NAME = "mm"  # the robot's name in every run
 STARTS = ((2.4, -1.5), (1.4, -1.7), (3.0, -0.6))  # in the living room, clear of its furniture
 DOOR_PUSHED = 45.0  # degrees the door must have swung for the robot to have pushed through it
@@ -43,9 +47,15 @@ OPERATE_S, ERRAND_S, TRIP_S = 150.0, 200.0, 90.0  # sim seconds each may take
 Wait = Callable[[Callable[[], bool], float], None]
 
 
-def build(pg: Any, robot: str, seed: int) -> None:
-    """The home (seed `seed`) with `robot` at one of the living room's starting spots, turned some way."""
+def build(pg: Any, robot: str, seed: int, job: str = "fetch") -> None:
+    """The home (seed `seed`) with `robot` at one of the living room's starting spots, turned some way; for the
+    conveyor, the factory with the robot beside its belt, a little further up or down it."""
     rng = random.Random(seed)
+    if job == "conveyor":
+        pg.load_scene("factory", seed=seed, starter=False, options={"boxes": 6, "speed": BELT_SPEED})
+        x, y = BESIDE_BELT
+        pg.add_robot(NAME, pos=[x + rng.uniform(-0.1, 0.1), y], yaw=-90 + rng.uniform(-8, 8), **ROBOTS[robot])
+        return
     pg.load_scene("home", seed=seed, starter=False)
     x, y = STARTS[seed % len(STARTS)]
     pg.add_robot(
@@ -141,17 +151,39 @@ def job_button(pg: Any, wait: Wait) -> dict[str, Any]:
     return out
 
 
+def job_conveyor(pg: Any, wait: Wait) -> dict[str, Any]:
+    from robotforge.behaviors import catch
+
+    motion, info = pg.behaviors.pick_and_place(_arm(pg), "box_6", "workbench")
+    wait(lambda: motion.done, getattr(motion, "time_limit", 40.0))
+    wait(lambda: False, 0.5)
+    region = motion.region if isinstance(motion, catch.Catch) else info["region"]
+    out = pg.behaviors.placed("box_6", region) if region is not None else {"success": False}
+    res = {"success": bool(out.get("success"))}
+    if isinstance(motion, catch.Catch):
+        caught = motion.result()
+        res["caught_at"] = caught.get("caught_at")
+        if not res["success"]:
+            res["why"] = "missed" if not caught.get("caught") else (caught.get("why") or "not_there")
+            res["note"] = caught.get("note")
+    elif not res["success"]:
+        res["why"] = "not_caught"
+    return res
+
+
 JOB_FUNCS: dict[str, Callable[[Any, Wait], dict[str, Any]]] = {
     "door": job_door,
     "fetch": job_fetch,
     "drawer": job_drawer,
     "button": job_button,
+    "conveyor": job_conveyor,
 }
 
 
 def cause(text: str) -> str:
     """A short cause for a refusal's message (what the tools raise before anything moves)."""
     for key, words in (
+        ("cannot_catch", ("is riding on",)),
         ("nowhere_to_stand", ("nowhere", "no room")),
         ("too_high_or_low", ("too high", "too low")),
         ("no_way", ("no way",)),
@@ -175,7 +207,7 @@ def run_one(robot: str, job: str, seed: int) -> dict[str, Any]:
     try:
         pg = Playground(session=SimSession.from_xml("<mujoco/>"))
         pg.new_world(f"{robot}_{job}_{seed}")
-        build(pg, robot, seed)
+        build(pg, robot, seed, job)
         pg.run_fast(lambda: False, 1.0)
         out.update(JOB_FUNCS[job](pg, lambda until, seconds: pg.run_fast(until, seconds)))
         out["sim_s"] = round(float(pg.session.data.time), 1)

@@ -31,6 +31,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
 from robotforge.behaviors import Kind, fetch
+from robotforge.behaviors import catch as catching
 from robotforge.behaviors import mcp_tools as operate_tools
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
@@ -108,7 +109,8 @@ Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-whe
 snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
 the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
-pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table");
+pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table";
+a box riding on a running conveyor is caught as it goes by);
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
 handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
 drawer"); robots lists robots with kind, arms and positions. For anything custom,
@@ -841,7 +843,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         result then says what it did ("went": path_m, distance_m, time_s each; "driven_m", "picked_up_at",
         "put_down_at", "hand_tilt_deg", "errand_s"). go=false keeps the robot where it stands and refuses instead. It
         refuses before moving when the object is too heavy or too big for the gripper, there is no way there, nowhere
-        it can stand reaches it, or the target is full. A robot carrying the arm stops first."""
+        it can stand reaches it, or the target is full. A robot carrying the arm stops first. Something riding on a
+        running conveyor is caught as it goes by, the belt left running: the arm waits over a point on its way, follows
+        it down, takes hold and lifts it off ("caught", "caught_at"); a robot that goes then carries it there."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
@@ -850,7 +854,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
-            if errand is None:
+            caught = motion if isinstance(motion, catching.Catch) else None
+            if caught is not None:  # caught off a moving belt, then put down or carried there
+                run = await run_until(lambda: motion.done, caught.time_limit)
+            elif errand is None:
                 run = await run_until(lambda: motion.done, 40.0)
             else:  # a reset or a world edit ends it; one no longer attached is waited for no more
                 robot_name = errand.robot
@@ -865,13 +872,15 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     )
                     errand.why = "out_of_time"
             settle = await run_until(lambda: False, 0.5)
-            result = playground.behaviors.placed(object, info["region"])
+            region = info["region"] if caught is None or caught.region is None else caught.region
+            result = playground.behaviors.placed(object, region) if region is not None else {"success": False}
             return _json(
                 {
                     **result,
                     "object": object,
                     "target": target,
                     **(errand.result() if errand is not None else {}),
+                    **(caught.result() if caught is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
                     "shown_live": run["shown_live"],
                     **stopped,
