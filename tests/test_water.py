@@ -12,6 +12,7 @@ import pytest
 from robotforge.design.water import WaterEntry
 from robotforge.design.world import World, compile_world
 from robotforge.sim import water
+from robotforge.sim.geometry import lowest_point
 from robotforge.sim.session import SimSession
 
 G = mujoco.mjtGeom
@@ -81,6 +82,99 @@ def test_floats_at_the_draft_archimedes_predicts(label, shape, size, density, qu
     measured = LEVEL - bottom
     assert measured == pytest.approx(draft, rel=0.05), f"{label}: draft {measured:.4f} m, Archimedes {draft:.4f} m"
     assert np.abs(session.data.qvel).max() < 0.02, f"{label} still moving: {session.data.qvel}"
+
+
+ON_X = (math.cos(math.pi / 4), 0.0, math.sin(math.pi / 4), 0.0)  # an ellipsoid's x axis turned to vertical
+
+
+def _bisect(f, target: float, high: float) -> float:
+    low = 0.0
+    for _ in range(80):
+        mid = (low + high) / 2
+        low, high = (mid, high) if f(mid) < target else (low, mid)
+    return (low + high) / 2
+
+
+def _ball_cap(r: float, d: float) -> float:
+    d = min(max(d, 0.0), 2 * r)
+    return math.pi * d * d * (3 * r - d) / 3
+
+
+def _circle_segment(r: float, d: float) -> float:
+    d = min(max(d, 0.0), 2 * r)
+    return r * r * math.acos((r - d) / r) - (r - d) * math.sqrt(max(2 * r * d - d * d, 0.0))
+
+
+def _exact_draft(shape: str, size: tuple, pose: str, share: float) -> float:
+    """How deep a shape of `share` of the water's density sits, from its own geometry."""
+    if shape == "capsule":
+        r, h = size
+        volume = math.pi * r * r * 2 * h + 4 / 3 * math.pi * r**3
+        if pose == "upright":
+
+            def wet(d):
+                top_end = _ball_cap(r, d - 2 * h) - _ball_cap(r, r) if d > r + 2 * h else 0.0
+                return _ball_cap(r, min(d, r)) + math.pi * r * r * min(max(d - r, 0.0), 2 * h) + top_end
+
+            return _bisect(wet, share * volume, 2 * r + 2 * h)
+        return _bisect(lambda d: 2 * h * _circle_segment(r, d) + _ball_cap(r, d), share * volume, 2 * r)
+    if shape == "cylinder":
+        r, h = size
+        if pose == "upright":
+            return share * 2 * h
+        return _bisect(lambda d: _circle_segment(r, d), share * math.pi * r * r, 2 * r)
+    vertical = size[0] if pose == "on_x" else size[2]
+    return vertical * _cap_depth(share)
+
+
+@pytest.mark.parametrize("share", [0.1, 0.15, 0.85])
+@pytest.mark.parametrize(
+    ("shape", "size", "pose"),
+    [
+        ("capsule", (0.1, 0.2), "upright"),
+        ("capsule", (0.1, 0.2), "lying"),
+        ("cylinder", (0.12, 0.2), "upright"),
+        ("cylinder", (0.1, 0.4), "lying"),
+        ("ellipsoid", (0.3, 0.2, 0.1), "level"),
+        ("ellipsoid", (0.1, 0.3, 0.2), "on_x"),
+    ],
+)
+def test_the_draft_at_uneven_densities_matches_the_shape(shape, size, pose, share):
+    """At half the water's density symmetry makes most formulas right; at a tenth or most of it they must follow
+    the shape. An upright capsule's ends had been whole balls at half volume: 31 percent too deep at 100 kg/m^3."""
+    kind = {"capsule": G.mjGEOM_CAPSULE, "cylinder": G.mjGEOM_CYLINDER, "ellipsoid": G.mjGEOM_ELLIPSOID}[shape]
+    quat = {"upright": (1, 0, 0, 0), "level": (1, 0, 0, 0), "lying": LYING, "on_x": ON_X}[pose]
+    session = _pool(kind, list(size) + [0.0] * (3 - len(size)), 1000 * share, quat=quat, z=LEVEL)
+    m, d = session.model, session.data
+    mujoco.mj_kinematics(m, d)
+    shift = water.float_height(m, d, water.decode(m), [1])[1]
+    bottom = float(lowest_point(m, d, m.body("thing").geomadr[0])[2]) + shift
+    assert LEVEL - bottom == pytest.approx(_exact_draft(shape, size, pose, share), rel=0.01)
+
+
+@pytest.mark.parametrize("shape", [G.mjGEOM_CYLINDER, G.mjGEOM_CAPSULE])
+@pytest.mark.parametrize("tilt", [30, 60])
+def test_a_tilted_cylinder_or_capsule_wets_as_much_as_its_shape_does(shape, tilt):
+    """Against a count of points inside the shape: the tilted slabs had been a blend of a box's and a circle's
+    share, 2 to 18 percent off as an end came out of the water."""
+    r, h = 0.1, 0.2
+    a = math.radians(tilt) / 2
+    session = _pool(shape, [r, h, 0.0], 500, quat=(math.cos(a), math.sin(a), 0.0, 0.0), z=LEVEL)
+    m, d = session.model, session.data
+    g = int(m.body("thing").geomadr[0])
+    rng = np.random.default_rng(7)
+    points = rng.uniform([-r, -r, -h - r], [r, r, h + r], size=(300_000, 3))
+    if shape == G.mjGEOM_CAPSULE:
+        along = np.clip(points[:, 2], -h, h)
+        inside = (points[:, 0] ** 2 + points[:, 1] ** 2 + (points[:, 2] - along) ** 2) <= r * r
+    else:
+        inside = (points[:, 0] ** 2 + points[:, 1] ** 2 <= r * r) & (np.abs(points[:, 2]) <= h)
+    box = (2 * r) ** 2 * (2 * h + 2 * r)
+    heights = d.geom_xpos[g][2] + points @ d.geom_xmat[g].reshape(3, 3)[2]
+    for lift in (-0.15, -0.05, 0.05, 0.15):
+        counted = box * np.mean(inside & (heights + lift < LEVEL))
+        wet, _ = session.water.cells(d, lift=np.array([lift]))
+        assert float(wet.sum()) == pytest.approx(counted, rel=0.02, abs=2e-5), f"raised {lift} m"
 
 
 def _half_height(quat, shape, size) -> float:

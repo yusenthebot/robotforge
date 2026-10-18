@@ -5,8 +5,8 @@ water. Here the water has a surface, a still level with gentle waves on it, and 
 feels it. Every colliding shape of a body that moves is cut, once, into a few dozen small cells in its own frame;
 each physics step all cells of all bodies are evaluated at once with numpy:
 
-- buoyancy: the share of each cell below the surface (exact for spheres and ellipsoids at any tilt, for boxes that
-  float level and for upright or lying cylinders; close for everything in between) times its volume, pushed up at
+- buoyancy: the share of each cell below the surface (exact for spheres, ellipsoids and cylinders at any tilt and
+  for boxes that float level; within a percent for capsules; close for a tilted box) times its volume, pushed up at
   the centroid of its wet part, so a boat that heels is pushed back upright by the shift of its wet volume;
 - drag: on the wet share of each shape, per axis of the shape (a hull slides forward easily and resists going
   sideways, like a keel), linear (calm water, wave making) plus quadratic (turbulence) in the velocity relative to
@@ -39,6 +39,7 @@ NUMERIC = "robotforge_water"  # the custom numeric field that carries a model's 
 SURFACE_GEOM = "water:surface"  # the visual surface for MuJoCo's renderer (the browser viewer draws its own)
 ENCODING = 1  # version of the numeric layout below
 CELLS_PER_GEOM = 32  # aim for about this many box cells per shape (see _box_cells)
+DOME_SLABS = 4  # discs per round end of a capsule (see _dome_cells)
 MAX_CELLS_ALONG = 6
 # Drag: linear coefficient in m/s. Floating things lose their heave, roll and pitch to the waves they make, so a
 # 40 cm crate settles in a few bobs (damping ratio about 0.2); going along or turning flat on the water makes far
@@ -210,6 +211,19 @@ def _disc_cells(cells: _Cells, g: int, r: float, h: float, center: np.ndarray | 
         cells.add(g, center + [0, 0, z], [r, r, t], math.pi * r * r * 2 * t, KIND_DISC)
 
 
+def _dome_cells(cells: _Cells, g: int, r: float, h: float, end: int) -> None:
+    """A capsule's round end (a half ball of radius r on the end of its middle at z = end * h) as DOME_SLABS discs
+    across its axis, each holding the volume of its slice of the half ball. A whole ball there, counted at half
+    its volume, had an upright capsule of 100 kg/m^3 float 31 percent too deep: the half ball below the middle's
+    end is all under water when that ball is only half."""
+    edges = np.linspace(0.0, r, DOME_SLABS + 1)
+    for u0, u1 in zip(edges[:-1], edges[1:], strict=True):
+        volume = math.pi * (r * r * (u1 - u0) - (u1**3 - u0**3) / 3)
+        half = (u1 - u0) / 2
+        radius = math.sqrt(volume / (math.pi * 2 * half))  # a disc of that thickness and volume
+        cells.add(g, [0, 0, end * (h + (u0 + u1) / 2)], [radius, radius, half], volume, KIND_DISC)
+
+
 def _cut(model: mujoco.MjModel, g: int, cells: _Cells) -> bool:
     """Add the cells of geom `g`; False for shapes water ignores (planes, heightfields)."""
     kind, size = int(model.geom_type[g]), model.geom_size[g]
@@ -228,8 +242,8 @@ def _cut(model: mujoco.MjModel, g: int, cells: _Cells) -> bool:
     elif kind == G.mjGEOM_CAPSULE:
         r, h = float(size[0]), float(size[1])
         _disc_cells(cells, g, r, h)
-        for end in (1, -1):  # the two round ends: half a ball each (exact while the capsule lies level)
-            cells.add(g, [0, 0, end * h], [r, r, r], 2 / 3 * math.pi * r**3, KIND_ELLIPSOID)
+        for end in (1, -1):
+            _dome_cells(cells, g, r, h, end)
     else:
         return False
     return True
@@ -269,8 +283,25 @@ def _segment(t: np.ndarray) -> np.ndarray:
     return (math.pi - np.arccos(t) + t * np.sqrt(np.maximum(1 - t * t, 0.0))) / math.pi
 
 
-def _linear(t: np.ndarray) -> np.ndarray:
-    return np.clip((t + 1) / 2, 0.0, 1.0)
+def _segment_sum(u: np.ndarray) -> np.ndarray:
+    """The integral of _segment from -1 to u (u clipped to the reals: 0 below -1, u above 1)."""
+    v = np.clip(u, -1.0, 1.0)
+    root = np.sqrt(np.maximum(1 - v * v, 0.0))
+    inner = (math.pi * v - (v * np.arccos(v) - root) - root**3 / 3) / math.pi
+    return np.where(u > 1.0, u, np.where(u < -1.0, 0.0, inner))
+
+
+def _slab_share(above: np.ndarray, r: np.ndarray, half: np.ndarray, axis_z: np.ndarray) -> np.ndarray:
+    """Share of a slab of a cylinder (radius r, half thickness `half`, its axis' world z `axis_z`) below a plane
+    `above` m over its center, exact at any tilt: every slice across the axis is a disc cut by a line, its share
+    _segment of where the line crosses it, averaged over the thickness in closed form (_segment_sum). Upright it is
+    the share of a box; lying, of a circle (a blend of the two was 4 to 30 percent off near the ends)."""
+    lean = np.maximum(r * np.sqrt(np.maximum(1 - axis_z * axis_z, 0.0)), 1e-9)  # half the face's height
+    spread = half * np.abs(axis_z)  # how far the slices' centers spread up and down
+    lo, hi = (above - spread) / lean, (above + spread) / lean
+    width = hi - lo
+    averaged = (_segment_sum(hi) - _segment_sum(lo)) / np.maximum(width, 1e-9)
+    return np.where(width > 1e-6, averaged, _segment(np.clip(above / lean, -1.0, 1.0)))
 
 
 # ---- the model in a running simulation -----------------------------------------------------------------------
@@ -442,10 +473,10 @@ class Hydro:
                 conj = np.einsum("nij,nj->ni", rot[s], self.cell_half[s] * ue[s]) / reach[s, None]
                 centroid[s] += _cap_centroid(ts)[:, None] * conj
                 continue
-            lin = np.clip((ts + 1) / 2, 0.0, 1.0)
-            if kind == KIND_DISC:  # a leaning disc wets like a circle segment, an upright one like a slab
-                lean = self.cell_half[s, 0] * np.sqrt(np.maximum(1 - up[s, 2] ** 2, 0.0)) / reach[s]
-                lin = lean * _segment(ts) + (1 - lean) * lin
+            if kind == KIND_DISC:
+                lin = _slab_share(top[s] - center[s, 2], self.cell_half[s, 0], self.cell_half[s, 2], up[s, 2])
+            else:
+                lin = np.clip((ts + 1) / 2, 0.0, 1.0)
             share[s] = lin
             centroid[s, 2] -= reach[s] * (1 - lin)  # halfway between its bottom and the waterline
         return share * self.cell_volume, centroid
