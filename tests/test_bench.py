@@ -356,8 +356,10 @@ def test_the_machine_check_costs_the_same_every_time(bench):
     """Restarted from the same pose, the check's best time is steady on one machine (a busy one may move it some)."""
     rates = []
     for _ in range(3):
-        check = bench.MachineCheck()
-        check.time(tries=20)
+        check = bench.MachineCheck(slices=20)
+        for _repeat in range(3):
+            for k in range(20):
+                check.time(k)
         rates.append(check.steps_per_s)
     assert max(rates) / min(rates) < 1.25, rates
 

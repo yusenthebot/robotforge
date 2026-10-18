@@ -22,10 +22,11 @@ the budgets in docs/bench/budget.json. Exits 0 when every budget is met, 1 when 
 measurement failed or a budget went unchecked, and 3 when only timings went over on a busy machine (load above the
 cores, or the control world objects_20, with no robotforge code in its loop, under its own floor): rerun calm.
 A quick or partial run (--quick, --only, --worlds) is not saved unless --save, and then as <date>-<sha>-partial.json,
-which no later run compares with. Physics speeds are compared relative to objects_20, so a busier machine than last
-time does not read as a slower robotforge; --wait-calm waits for the load to drop first. Two runs an hour apart on a
-shared machine can still differ more than a change does, so --ab measures a change instead: imports, cold start and
-the physics worlds on this tree and on revision <rev>, alternately.
+which no later run compares with. Physics speeds are compared relative to a MuJoCo-only machine check timed with
+each world (objects_20 for older runs), so a busier machine than last time reads less as a slower robotforge;
+--wait-calm waits for the load to drop first. Two runs an hour apart on a shared machine can still differ more than a
+change does, so --ab measures a change instead: imports, cold start and the physics worlds on this tree and on
+revision <rev>, alternately.
 The physics, viewer and MCP parts use the real Menagerie Go2 (downloaded once into the cache); the viewer part
 needs Google Chrome (or CHROME=...). Maintainer tool, not part of robotforge.
 """
@@ -634,17 +635,18 @@ def bench_imports(quick: bool) -> dict[str, Any]:
 
 CHUNK = 0.05  # s of sim per timed slice
 MAX_WALL_PER_WORLD = 120.0  # s; a world that is far too slow stops early and says so
-MACHINE_STEPS, MACHINE_TRIES = 100, 10  # the machine check: steps per try, tries before each repeat
+MACHINE_STEPS = 25  # steps of the machine check after each timed slice: about 0.1 ms
 
 
 class MachineCheck:
-    """How fast this machine runs MuJoCo right now, timed in the world's own process before each repeat: a chain
-    of 20 links that touch nothing, restarted from the same pose every time, so on the same machine it always costs
-    the same. A world's speed over it moves less with how busy the machine was than its speed alone, and the load
-    drifts within one run: the first worlds and the last can see different machines. On a very busy machine both
-    still wobble (10 to 20 percent between two runs at load 17 to 43), so a change needs --ab to be sure of."""
+    """How fast this machine runs MuJoCo at the moments a world is timed: a chain of 20 links that touch nothing,
+    restarted from the same pose every time (so on the same machine it always costs the same), stepped right after
+    each timed slice in the world's own process and kept, like the world's slices, as each slice's best over the
+    repeats. A world's speed over it moves less with how busy the machine was than its speed alone, and the load
+    drifts within one run, so the first worlds and the last can see different machines. On a very busy machine both
+    still wobble, so a small change needs --ab to be sure of."""
 
-    def __init__(self, links: int = 20) -> None:
+    def __init__(self, slices: int, links: int = 20) -> None:
         import mujoco
 
         self._mujoco = mujoco
@@ -655,19 +657,19 @@ class MachineCheck:
         xml = f'<mujoco><worldbody><body pos="0 0 3">{link * links}{"</body>" * links}</body></worldbody></mujoco>'
         self.model = mujoco.MjModel.from_xml_string(xml)
         self.data = mujoco.MjData(self.model)
-        self.best = math.inf
+        self.best = [math.inf] * slices
 
-    def time(self, tries: int = MACHINE_TRIES) -> None:
-        for _ in range(tries):
-            self._mujoco.mj_resetData(self.model, self.data)
-            self.data.qpos[:] = 0.3
-            c0 = time.process_time()
-            self._mujoco.mj_step(self.model, self.data, nstep=MACHINE_STEPS)
-            self.best = min(self.best, time.process_time() - c0)
+    def time(self, k: int) -> None:
+        self._mujoco.mj_resetData(self.model, self.data)
+        self.data.qpos[:] = 0.3
+        c0 = time.process_time()
+        self._mujoco.mj_step(self.model, self.data, nstep=MACHINE_STEPS)
+        self.best[k] = min(self.best[k], time.process_time() - c0)
 
     @property
     def steps_per_s(self) -> float:
-        return MACHINE_STEPS / max(self.best, 1e-9)
+        measured = [t for t in self.best if math.isfinite(t)]
+        return len(measured) * MACHINE_STEPS / max(sum(measured), 1e-9)
 
 
 @dataclass(frozen=True)
@@ -799,7 +801,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
     built = time.perf_counter() - t0
     slices = max(1, round(world.seconds / CHUNK))
     best = [math.inf] * slices  # each slice's least process time over the repeats
-    machine = MachineCheck()
+    machine = MachineCheck(slices)
     done: dict[str, Any] = {}
     share = 0.0
     started = time.monotonic()
@@ -811,8 +813,6 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
         pg.run_fast(lambda: False, world.warm)
         # The last run times the controllers apart (which costs a little itself), and is not counted for speed.
         timed = rep == repeats
-        if not timed:
-            machine.time()
         in_controllers = 0.0
         if timed:
             original = s._run_controllers
@@ -830,6 +830,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
             s.step(chunk)
             if not timed:
                 best[k] = min(best[k], time.process_time() - c0)
+                machine.time(k)
             if time.monotonic() - started > MAX_WALL_PER_WORLD:
                 done["note"] = f"stopped after {MAX_WALL_PER_WORLD:.0f} s"
                 break
