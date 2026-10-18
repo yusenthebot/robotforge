@@ -807,13 +807,17 @@ class Playground:
             }
 
     def sensor_readings(self) -> dict[str, Any]:
-        """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones)."""
+        """Every sensor's reading by name, none left out (a script reads them all; observe lists the first ones).
+        A rangefinder on a robot reads past the robot's own parts, as its lidar does (sim/lidar.seen)."""
         m, d = self.session.model, self.session.data
         with self.session.lock:
             out: dict[str, Any] = {}
             for s in range(m.nsensor):
                 adr, dim = m.sensor_adr[s], m.sensor_dim[s]
-                values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
+                if dim == 1 and int(m.sensor_type[s]) == mujoco.mjtSensor.mjSENS_RANGEFINDER:
+                    values = [round(lidar.seen(m, d, s), 4)]
+                else:
+                    values = [round(float(v), 4) for v in d.sensordata[adr : adr + dim]]
                 out[_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) or f"sensor{s}"] = values[0] if dim == 1 else values
             return out
 

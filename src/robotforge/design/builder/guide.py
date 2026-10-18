@@ -73,8 +73,8 @@ def guide() -> dict[str, Any]:
             "foot": "true adds a rubber ball at the end",
             "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", '
             '"range"}; a lidar is a level ring of rays (rays 3 to 64, default 16; range in m, default 4) all the way '
-            'round, and observe\'s "lidars" gives its nearest hit, which side that is and every ray; fov is for '
-            "cameras only",
+            "round, and observe's \"lidars\" gives its nearest hit, which side that is and every ray (the robot's own "
+            "parts are seen through); fov is for cameras only",
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",
             "repeat": '{"count", "around": axis} ring | {"count", "along": axis, "spacing"} row | '
             '{"count", "chain": true} each copy hangs on the previous one (snakes, tentacles); names get _1, _2...',

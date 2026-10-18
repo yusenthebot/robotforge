@@ -69,6 +69,7 @@ Never say something worked because the call returned. Read the numbers, and look
 `observe(view, find="red")` (a color name, a hex code, or "all") lists what that view sees of the color: each find's world `position`, the `object` name `pick_and_place` takes, and `about_cm`, how far off the position may be.
 A flag on a find (cut_off, hidden, side_on, raised, held_by) means it may be much further off; the result's `how` says what each one it carries means.
 A lidar (a sensor on a robot built from parts) comes whole in `observe()`'s `lidars`: `nearest_m`, `nearest_bearing_deg` from the robot's front (positive is left), `nearest_side`, the nearest hit on each side, and every ray in `ranges_m` (null: nothing within range).
+A lidar or rangefinder sees past its own robot's parts (a column, the wheels), so its nearest hit is something else.
 Without OpenGL it returns the state with a note instead of an image: rely on the numbers and ask the user to look at the viewer.
 When something fails, say so plainly, read the error (it says what to do), fix it and check again.
 Report real numbers, including disappointing ones.

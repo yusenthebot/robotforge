@@ -4,7 +4,9 @@ and a script's sensors are all of them, not observe's first 40."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+import mujoco
 import pytest
 from mcp import Client
 
@@ -134,3 +136,57 @@ def test_the_mazes_starter_rover_can_be_rebuilt_with_a_lidar_where_it_stands(tmp
     assert pg.current_world().robots[0].template == "rover"
     with pytest.raises(PlaygroundError, match="parts and sensors"):  # a few fields are no whole robot
         pg.update_robot("rover", build={"servo": "sts3215"})
+
+
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"  # offline stand-ins for the real robots
+
+
+def _shorthand_car() -> dict:
+    car = _car(16)
+    return {**car, "base": {**car["base"], "sensors": ["lidar"]}}  # at the base's middle, below its wheels' tops
+
+
+@pytest.mark.parametrize("robot", [{"design": "lift_picker"}, {"design": "mobile_panda"}, {"build": _shorthand_car()}])
+def test_a_lidar_does_not_see_its_own_robot(tmp_path, monkeypatch, robot):
+    """Regression: a MuJoCo rangefinder leaves out only the body it is on. In an empty world the warehouse picker's
+    lidar read 0.215 m ahead (its own lift column), the mobile Panda's 0.05 m behind and a car's 0.148 m (its own
+    wheels), and an agent asked for the closest obstacle answered with the column."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("empty")
+    pg.add_robot("r", **robot)
+    pg.run_fast(lambda: False, 0.3)
+    ring = pg.state()["lidars"]["r/base_lidar"]
+    assert ring["hits"] == 0 and "nearest_m" not in ring, ring
+    assert set(ring["ranges_m"]) == {None}
+    rays = ScriptRunner(pg, watched=lambda: False)._op_sensors({"robot": "r"})  # a script's rays agree
+    assert all(v < 0 or v >= ring["range_m"] for k, v in rays.items() if k.startswith("base_lidar_"))
+
+
+def test_a_lidar_still_sees_past_its_robot_to_the_wall(tmp_path, monkeypatch):
+    """The same car with its lidar down among its wheels reads the wall beyond them, as far as MuJoCo itself does
+    from a lidar on top (the rays are level, so both measure the wall's face)."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("corridor")
+    pg.add_object("wall", shape="wall", size=[3.0, WALL_THICK, 0.5], pos=[0.0, WALL_Y])
+    pg.add_robot("scout", build=_shorthand_car(), pos=[0.0, 0.0])
+    pg.run_fast(lambda: False, 0.3)
+    ring = pg.state()["lidars"]["scout/base_lidar"]
+    assert ring["nearest_side"] == "left" and ring["nearest_m"] == pytest.approx(WALL_Y - WALL_THICK / 2, abs=0.01)
+    near = WALL_Y - WALL_THICK / 2
+    assert ring["nearest_by_side_m"]["front"] == pytest.approx(near * 2**0.5, abs=0.01)  # the ray 45 degrees left
+    assert ring["nearest_by_side_m"]["right"] is None and ring["hits"] == 7  # 45 to 135 degrees left: 7 rays
+
+
+def test_a_rangefinder_on_the_world_reads_as_mujoco_has_it():
+    """Only a robot's own parts are seen through: a rangefinder on the world body keeps MuJoCo's reading."""
+    xml = """<mujoco><worldbody>
+      <site name="eye" pos="0 0 0.2" zaxis="1 0 0"/>
+      <body name="crate" pos="1 0 0.2"><geom type="box" size="0.05 0.5 0.5"/></body>
+    </worldbody><sensor><rangefinder name="ahead" site="eye"/></sensor></mujoco>"""
+    model = mujoco.MjModel.from_xml_string(xml)
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    assert lidar.seen(model, data, 0) == pytest.approx(0.95) == data.sensordata[0]

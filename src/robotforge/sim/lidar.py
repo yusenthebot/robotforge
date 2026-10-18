@@ -6,6 +6,11 @@ last 27 rays never reached the agent, which then wrote a script to read them and
 sensors came from the same list). Here every ring is read whole, and each ray's bearing comes from where it really
 points, measured from the robot's front (+ is to the left, as move's turn), so a lidar turned on its part or
 mounted on a turret still says the right way.
+
+A MuJoCo rangefinder leaves out only the body its site is on, so a lidar on a car's middle measured its own wheels
+(0.15 m "ahead" in an empty world), and the warehouse picker's its own lift column: asked how far the nearest
+obstacle was, an agent answered with the column. Every rangefinder on a robot is read past the robot's own parts
+here (see `seen`), as robots filter themselves out of their scans.
 """
 
 from __future__ import annotations
@@ -21,6 +26,8 @@ import numpy as np
 MIN_RAYS = 3  # a ring: fewer numbered rangefinders are separate sensors
 RAY = re.compile(r"(.+)_(\d+)")
 SIDES = (("front", 45.0), ("left", 135.0), ("back", 180.0))  # by |bearing|, with right for the negative half
+MAX_LAYERS = 12  # the robot's own shapes one ray goes through (in and out of each) before what it measures
+PAST = 1e-4  # m a ray starts again beyond a shape of the robot's own
 
 
 @dataclass(frozen=True)
@@ -60,6 +67,34 @@ def _front(model: mujoco.MjModel, data: mujoco.MjData, robot: str) -> np.ndarray
     return None
 
 
+def seen(model: mujoco.MjModel, data: mujoco.MjData, sensor: int) -> float:
+    """What rangefinder `sensor` reads with its own robot seen through, in MuJoCo's terms: the distance (at most its
+    cutoff), or -1 for nothing at all. The ray is cast again the way MuJoCo casts it (every geom group, static
+    geoms too, leaving out the site's body); each time it meets a shape of the same robot (one tree of bodies under
+    the world) it carries on from just beyond. A rangefinder on the world itself reads as MuJoCo has it."""
+    value = float(data.sensordata[model.sensor_adr[sensor]])
+    site = int(model.sensor_objid[sensor])
+    own = int(model.body_rootid[model.site_bodyid[site]])
+    if value < 0 or own == 0:
+        return value
+    start = data.site_xpos[site].copy()
+    look = data.site_xmat[site].reshape(3, 3)[:, 2].copy()  # a rangefinder looks along its +z
+    cutoff = float(model.sensor_cutoff[sensor])
+    gone, hit = 0.0, np.zeros(1, np.int32)
+    for layer in range(MAX_LAYERS):
+        far = mujoco.mj_ray(model, data, start, look, None, 1, int(model.site_bodyid[site]), hit)
+        if far < 0:
+            return -1.0
+        if int(model.body_rootid[model.geom_bodyid[int(hit[0])]]) != own:
+            if layer == 0:
+                return value  # nothing of its own in the way: MuJoCo's own reading
+            return min(gone + far, cutoff) if cutoff > 0 else gone + far
+        start, gone = start + look * (far + PAST), gone + far + PAST
+        if cutoff > 0 and gone >= cutoff:
+            return cutoff  # MuJoCo's reading of a hit beyond the cutoff
+    return -1.0
+
+
 def side(bearing: float) -> str:
     """front, left, back or right of a bearing in degrees (+ left)."""
     turned = abs(bearing)
@@ -68,12 +103,12 @@ def side(bearing: float) -> str:
 
 
 def reading(model: mujoco.MjModel, data: mujoco.MjData, ring: Ring) -> dict[str, Any]:
-    """One lidar's reading, from `data` as it is (sensors computed by the last step)."""
+    """One lidar's reading, from `data` as it is (sensors computed by the last step), past the robot's own parts."""
     front = _front(model, data, ring.robot)
     ranges: list[float | None] = []
     bearings: list[float | None] = []
     for s in ring.sensors:
-        value = float(data.sensordata[model.sensor_adr[s]])
+        value = seen(model, data, s)
         hit = 0.0 <= value < ring.reach - 1e-6 if ring.reach > 0 else value >= 0.0
         ranges.append(round(value, 3) if hit else None)
         look = data.site_xmat[int(model.sensor_objid[s])].reshape(3, 3)[:2, 2]  # a rangefinder looks along its +z
