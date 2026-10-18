@@ -665,3 +665,62 @@ def test_the_ik_target_raised_to_its_highest_is_not_under_a_name_tag(viewer, siz
         assert ball is not None and seen["tags"], seen
         for tag in seen["tags"]:
             assert _clear_of(tag, ball["x"], ball["y"], ball["r"]), seen
+
+
+# For each robot in a lesson, the share of its mesh vertices (as the viewer's camera projects them) under the name tag
+# of another robot. A tag belongs to the robot whose middle is nearest the point it stands on.
+UNDER_OTHER_TAGS = """(async () => {
+    const THREE = await import(new URL("static/vendor/three/three.module.min.js", location).href);
+    const rf = window.__robotforge;
+    const { scene, camera } = rf.three();
+    camera.updateMatrixWorld();
+    scene.updateMatrixWorld(true);
+    const [sx, sy] = [camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]];
+    const tags = [];
+    scene.traverse((o) => { if (o.isSprite && o.visible && o.renderOrder === 10) tags.push(o); });
+    const rects = tags.map((s) => {
+        const p = s.getWorldPosition(new THREE.Vector3()).project(camera);
+        const [w, h] = [s.scale.x * sx, s.scale.y * sy];
+        const left = p.x - s.center.x * w, bottom = p.y - s.center.y * h;
+        return { left, right: left + w, bottom, top: bottom + h, at: s.position };
+    });
+    const points = {}, middle = {};
+    const v = new THREE.Vector3();
+    scene.traverse((o) => {
+        const body = rf.scene.bodies[o.userData.body];
+        if (!o.isMesh || !o.visible || !body?.dynamic || !body.name.includes("/")) return;
+        const robot = body.name.split("/")[0];
+        const pos = o.geometry.attributes.position;
+        const list = (points[robot] ??= []), m = (middle[robot] ??= [0, 0, 0]);
+        for (let k = 0; k < pos.count; k++) {
+            v.fromBufferAttribute(pos, k).applyMatrix4(o.matrixWorld);
+            [m[0], m[1], m[2]] = [m[0] + v.x, m[1] + v.y, m[2] + 1];
+            v.project(camera);
+            if (v.z < 1) list.push([v.x, v.y]);
+        }
+    });
+    const owner = rects.map((r) => Object.keys(middle).sort((a, b) =>
+        Math.hypot(middle[a][0] / middle[a][2] - r.at.x, middle[a][1] / middle[a][2] - r.at.y) -
+        Math.hypot(middle[b][0] / middle[b][2] - r.at.x, middle[b][1] / middle[b][2] - r.at.y))[0]);
+    return Object.fromEntries(Object.entries(points).map(([robot, list]) => [robot, Math.max(0, ...rects.map((r, i) =>
+        owner[i] === robot ? 0 : list.filter(([x, y]) => x > r.left && x < r.right && y > r.bottom && y < r.top).length
+            / list.length))]));
+})()"""
+
+
+@pytest.mark.parametrize("size", ["phone", "laptop", "wide"])
+@pytest.mark.parametrize("lesson", ["gait", "humanoid_faceoff"])
+def test_a_name_tag_does_not_hide_another_robot(viewer, lesson, size):
+    """Seen down the row, each tag stood over its own robot's top and on the robot behind it: the template dog's tag
+    covered the Go2's front legs in the step that asks which legs step together, and on a phone 'Our humanoid' the
+    G1's legs. The test models leave out the visual meshes (the G1 has none), so their collision shapes are shown."""
+
+    async def scenario(tab, _server):
+        await tab.run("document.getElementById('show-collision').click();")
+        await _start(tab, lesson)
+        await tab.until("!window.__robotforge.tweening()")
+        await asyncio.sleep(1.0)
+        return await tab.eval(UNDER_OTHER_TAGS)
+
+    hidden = viewer(size, "en", scenario)
+    assert len(hidden) == 2 and max(hidden.values()) < 0.05, hidden
