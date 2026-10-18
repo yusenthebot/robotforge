@@ -452,6 +452,24 @@ def test_a_rope_hangs_and_swings_and_a_cloth_drapes(pg):
     assert not under.any()
 
 
+def test_a_cloth_folds_over_a_tables_edge_without_cutting_into_it(pg):
+    """Drawn between its points, 4.6 cm apart, a cloth's sides cut up to 1 cm into a table top where they bent over
+    its sharp edge, and the edge showed through the cloth in a long streak; the hidden hem rounds the fold."""
+    pg.add_object("table", shape="table", size=[0.5, 0.4, 0.35], pos=[0.0, 0.0])
+    pg.add_object("cloth", shape="cloth", size=[0.6, 0.5], pos=[0.0, 0.0, 0.5])
+    m, d = pg.session.model, pg.session.data
+    pg.run_fast(lambda: False, 5.0)
+    points = d.flexvert_xpos[m.flex_vertadr[0] : m.flex_vertadr[0] + m.flex_vertnum[0]]
+    edges = m.flex_edge[m.flex_edgeadr[0] : m.flex_edgeadr[0] + m.flex_edgenum[0]]
+    s = np.linspace(0.0, 1.0, 21)[:, None]
+    deepest = 0.0
+    for a, b in edges:
+        q = points[a] * (1 - s) + points[b] * s
+        inside = np.minimum.reduce([0.25 - np.abs(q[:, 0]), 0.2 - np.abs(q[:, 1]), 0.35 - q[:, 2], q[:, 2] - 0.325])
+        deepest = max(deepest, float(inside.max()))
+    assert deepest < 0.002
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"

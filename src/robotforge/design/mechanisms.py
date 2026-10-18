@@ -99,6 +99,11 @@ CLOTH_DRAG = 0.05
 # touches the skirts.
 CLOTH_BIT = 4
 CLOTH_SKIRT = 0.05  # m a table top's cloth skirt reaches down below it
+# m, the radius of a hidden rounded hem along a table top's edges that only cloth points touch (see cloth_skirt):
+# with none, 50 of a 0.6 x 0.5 m cloth's 493 sides cut up to 1 cm into the top where they bent over its edge; with
+# 1 cm, none (a cloth 0.7 m wide, its points 5.4 cm apart, still cuts a little where it folds). Wider, the hanging
+# part stood out stiffly from the edge.
+CLOTH_HEM = 0.01
 SWITCH_RANGE = math.radians(25)
 LEVER_RANGE = math.radians(40)
 
@@ -644,7 +649,7 @@ def _cloth(spec, name, size, rgba, base, quat, fixed) -> None:
     spec.attach(child, prefix=f"{name}/", frame=frame)
 
 
-def cloth_skirt(body: mujoco.MjsBody, length: float, width: float, underside: float) -> None:
+def cloth_skirt(body: mujoco.MjsBody, length: float, width: float, underside: float, top: float) -> None:
     """Hidden walls round the underside of a table top (its body's frame, the top's underside at `underside`), which
     only a cloth's points touch. Only a cloth's points touch things, 4 cm apart: hung over the edge of a 2.5 cm top,
     the first hanging point came down level with the top's lower edge, slipped round it, and the cloth hung tucked in
@@ -661,6 +666,11 @@ def cloth_skirt(body: mujoco.MjsBody, length: float, width: float, underside: fl
         body.add_geom(
             type=G.mjGEOM_BOX, size=[length / 2, t, CLOTH_SKIRT / 2], pos=[0, sy * (width / 2 - t), z], **hidden
         )
+    # And a rounded hem along each edge of the top, for the fold to lie on: drawn between points 4 cm apart, the
+    # cloth cut under the top's sharp edge where it bent over it, and the edge showed through it in a long streak.
+    x, y, r = length / 2, width / 2, CLOTH_HEM
+    for a, b in (((-x, -y), (x, -y)), ((-x, y), (x, y)), ((-x, -y), (-x, y)), ((x, -y), (x, y))):
+        body.add_geom(type=G.mjGEOM_CAPSULE, fromto=[*a, top, *b, top], size=[r, 0, 0], **hidden)
 
 
 _BUILDERS: dict[str, Callable] = {

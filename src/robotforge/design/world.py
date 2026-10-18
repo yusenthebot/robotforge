@@ -804,7 +804,8 @@ def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: f
                 )
             )
     looks.dress(spec, body, "table", obj.size, rgba, obj.name, geoms)
-    mechanisms.cloth_skirt(body, length, width, height - top)  # a cloth hangs over its edges, not in under its top
+    # a cloth hangs over its edges, not in under its top
+    mechanisms.cloth_skirt(body, length, width, height - top, height)
 
 
 def _bin(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
