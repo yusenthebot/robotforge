@@ -582,12 +582,80 @@ def _finger_joints(model: mujoco.MjModel, arm: ArmMotion) -> list[int]:
 
 def _open_fingers(model: mujoco.MjModel, arm: ArmMotion, fraction: float | None = None) -> None:
     """Pose the fingers in IK's copy of the world as they will be coming for the handle: `fraction` of the way open
-    (fingers close toward 0 and open toward the far end of their range), or all the way beside a cup or a magnet."""
+    (fingers close toward 0 and open toward the far end of their range), or all the way beside a cup or a magnet. A
+    gripper whose fingers close toward the far end (a Robotiq 2F-85's linkage: 0 is open, 0.8 rad closed) is posed
+    as its own servo and linkage put it at that much of its control (_settled_fingers): posed by the rule, a UR5e's
+    Robotiq stood half closed with its pads inside each other, and every hold on a drawer bar was turned down."""
     if fraction is None or arm.tool is not None:
         fraction = PRE_OPENS[0] if arm.tool is None else 1.0
-    for j in _finger_joints(model, arm):
+    joints = _finger_joints(model, arm)
+    if arm.tool is None and _closes_outward(model, arm):
+        settled = _settled_fingers(model, arm, fraction, joints)
+        for j in joints:
+            arm.ik.base_qpos[model.jnt_qposadr[j]] = settled[j]
+        return
+    for j in joints:
         lo, hi = (float(v) for v in model.jnt_range[j])
         arm.ik.base_qpos[model.jnt_qposadr[j]] = fraction * (hi if abs(hi) >= abs(lo) else lo)
+
+
+def _closes_outward(model: mujoco.MjModel, arm: ArmMotion) -> bool:
+    """Whether the joint the gripper drives closes toward the end of its range further from 0, where _open_fingers'
+    rule has it open: told by where its servo holds the joint at the open and at the closed control."""
+    g = arm.gripper
+    if g < 0 or int(model.actuator_biastype[g]) != mujoco.mjtBias.mjBIAS_AFFINE:
+        return False
+    b1 = float(model.actuator_biasprm[g, 1])
+    if b1 >= 0:
+        return False
+    target = int(model.actuator_trnid[g, 0])
+    kind = int(model.actuator_trntype[g])
+    if kind == mujoco.mjtTrn.mjTRN_JOINT:
+        joint, coef = target, float(model.actuator_gear[g, 0])
+    elif kind == mujoco.mjtTrn.mjTRN_TENDON:
+        start = int(model.tendon_adr[target])
+        if int(model.wrap_type[start]) != mujoco.mjtWrap.mjWRAP_JOINT:
+            return False
+        joint, coef = int(model.wrap_objid[start]), float(model.wrap_prm[start])
+    else:
+        return False
+
+    def held_at(ctrl: float) -> float:  # the transmission's length where the servo pushes nothing
+        return -(float(model.actuator_gainprm[g, 0]) * ctrl + float(model.actuator_biasprm[g, 0])) / b1
+
+    closing = math.copysign(1.0, (held_at(arm.gripper_closed) - held_at(arm.gripper_open)) * coef)
+    lo, hi = (float(v) for v in model.jnt_range[joint])
+    far = hi if abs(hi) >= abs(lo) else lo
+    return math.copysign(1.0, far) == closing and abs(far) > 1e-9
+
+
+SETTLE_FINGERS_S = 0.6  # s of simulation the fingers get to come to where the gripper's control holds them
+
+
+def _settled_fingers(model: mujoco.MjModel, arm: ArmMotion, fraction: float, joints: list[int]) -> dict[int, float]:
+    """The finger joints' values with the gripper's control `fraction` of the way from closed to open, found by
+    simulating the gripper with everything else held where it is (its linkage holds together only through its
+    equality constraints, which posing joint by joint does not keep). Worked out once per arm and fraction."""
+    cache: dict[float, dict[int, float]] = arm.__dict__.setdefault("_settled_fingers", {})
+    key = round(fraction, 3)
+    if key in cache:
+        return cache[key]
+    d = mujoco.MjData(model)
+    d.qpos[:] = arm.ik.base_qpos
+    for j in joints:
+        d.qpos[model.jnt_qposadr[j]] = model.qpos0[model.jnt_qposadr[j]]
+    held = d.qpos.copy()
+    fingers_q = np.array([model.jnt_qposadr[j] for j in joints], int)
+    fingers_v = np.array([model.jnt_dofadr[j] for j in joints], int)
+    others_q = np.setdiff1d(np.arange(model.nq), fingers_q)
+    d.ctrl[arm.gripper] = arm.gripper_closed + fraction * (arm.gripper_open - arm.gripper_closed)
+    mujoco.mj_forward(model, d)
+    for _ in range(max(1, round(SETTLE_FINGERS_S / model.opt.timestep))):
+        d.qvel[np.setdiff1d(np.arange(model.nv), fingers_v)] = 0.0
+        mujoco.mj_step(model, d)
+        d.qpos[others_q] = held[others_q]
+    cache[key] = {j: float(d.qpos[model.jnt_qposadr[j]]) for j in joints}
+    return cache[key]
 
 
 def _opening(model: mujoco.MjModel, arm: ArmMotion, q: np.ndarray, parts: Parts) -> tuple[float, str | None]:
@@ -941,10 +1009,15 @@ def _joint_time(a: np.ndarray, b: np.ndarray) -> float:
     return max(0.8, float(np.max(np.abs(b - a))) / JOINT_SPEED)
 
 
-def start(manager: Any, robot: str, target: str, action: str, amount: float | None) -> tuple[Operation, str, str]:
+def start(
+    manager: Any, robot: str, target: str, action: str, amount: float | None, go: bool = True
+) -> tuple[Any, str, str]:
     """Plan `action` on `target` for the arm `robot` names and set it going in its place among the controllers:
-    (the operation, the target as the world spells it, its shape). Raises OperateError or BehaviorError."""
+    (the operation, the target as the world spells it, its shape). An arm that rides on a robot that drives or walks
+    and does not do the whole job from where the robot stands has the robot go over first (visit.Visit, returned in
+    the operation's place) unless `go` is False. Raises OperateError or BehaviorError."""
     from robotforge import wording  # light, but kept with the one use
+    from robotforge.behaviors import visit
 
     session = manager.session
     with session.lock:
@@ -967,7 +1040,24 @@ def start(manager: Any, robot: str, target: str, action: str, amount: float | No
             raise OperateError(str(exc)) from exc
         arm.sync(session.data)
         arm.q = session.data.qpos[arm.chain.qpos_adr].copy()
-        op = plan(session.model, session.data, arm, found, shape, action, amount)
+        goes = go and manager._goes(name)
+        try:
+            op = plan(session.model, session.data, arm, found, shape, action, amount)
+        except OperateError:
+            if not goes:
+                raise
+            op = None
+        if op is None or goes and not visit._full(op):
+            robot_name = name.split("/", 1)[0]
+            manager.ready_to_go(robot_name)
+            try:
+                trip = visit.plan(manager, arm, found, shape, action, amount)
+            except OperateError:
+                if op is None:
+                    raise
+            else:  # out of reach from here, or only part of the way: it goes over
+                manager.start_errand(robot_name, trip)
+                return trip, found, shape
         session.set_controller(name, op)
     return op, found, shape
 
