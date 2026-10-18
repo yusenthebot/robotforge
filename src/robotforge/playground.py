@@ -95,7 +95,8 @@ class Playground:
         def teleop(msg: dict[str, Any]) -> None:
             walker = msg.get("walker")  # set only when the user switches between the gait and a learned policy
             speed, turn = float(msg.get("speed", 0.0)), float(msg.get("turn", 0.0))
-            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None)
+            air = {k: float(msg[k]) for k in ("side", "climb") if msg.get(k)}  # aircraft: sideways, up and down
+            self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -214,7 +215,9 @@ class Playground:
             sensors = [_name(m, mujoco.mjtObj.mjOBJ_SENSOR, s) for s in range(m.nsensor)]
             cameras = [_name(m, mujoco.mjtObj.mjOBJ_CAMERA, c) for c in range(m.ncam)]
             free_bodies = [_name(m, mujoco.mjtObj.mjOBJ_BODY, b) for b in _free_bodies(m)]
+            flying = _aircraft(m, self.behaviors.robot_names())
         return {
+            **({"aircraft": flying} if flying else {}),
             "model": self.session.source,
             "counts": {"bodies": m.nbody - 1, "joints": m.njnt, "actuators": m.nu, "sensors": m.nsensor},
             "actuators": actuators,
@@ -918,6 +921,20 @@ def _validation_message(exc: ValidationError) -> str:
 
 def _name(m: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
     return mujoco.mj_id2name(m, obj, idx) or ""
+
+
+def _aircraft(m: mujoco.MjModel, robots: list[str]) -> list[dict[str, Any]]:
+    """The robots that fly: their rotors (thrust actuators) and the controller that flies them."""
+    from robotforge.behaviors import airframe, flight
+
+    out = []
+    for robot in robots:
+        root = airframe.root_of(m, robot)
+        rotors = airframe.thrust_actuators(m, robot, root) if root is not None else []
+        if rotors:
+            names = [_name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, a) for a in rotors]
+            out.append({"robot": robot, "rotors": names, "controller": flight.CONTROLLER})
+    return out
 
 
 def _free_bodies(m: mujoco.MjModel) -> list[int]:

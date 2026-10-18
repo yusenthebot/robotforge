@@ -16,7 +16,9 @@ from robotforge.design.templates.humanoid import Humanoid
 from robotforge.design.templates.quadruped import Quadruped
 from robotforge.design.templates.rover import Rover
 
-TEMPLATES: dict[str, Template] = {t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Drone())}
+TEMPLATES: dict[str, Template] = {
+    t.name: t for t in (Arm(), Quadruped(), Humanoid(), Rover(), Cartpole(), Gripper(), Drone())
+}
 
 
 # What agents call a template that has another name here; offered as "did you mean", never taken for the template:

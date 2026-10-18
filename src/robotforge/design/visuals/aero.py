@@ -99,7 +99,10 @@ def gimbal(size: float) -> P.Parts:
     """A camera on a two-axis gimbal hanging below z = 0, looking along +x."""
     s = size
     yoke_top = M.rounded_box(s * 0.25, s * 0.45, s * 0.05, s * 0.04, segments=3).moved((0, 0, -s * 0.05))
-    arms = [M.rounded_box(s * 0.12, s * 0.04, s * 0.28, s * 0.03, segments=2).moved((0, y, -s * 0.35)) for y in (-s * 0.47, s * 0.47)]
+    arms = [
+        M.rounded_box(s * 0.12, s * 0.04, s * 0.28, s * 0.03, segments=2).moved((0, y, -s * 0.35))
+        for y in (-s * 0.47, s * 0.47)
+    ]
     head = M.rounded_box(s * 0.36, s * 0.38, s * 0.3, s * 0.12, segments=4).moved((s * 0.05, 0, -s * 0.55))
     lens = P.lens(s * 0.2, s * 0.06)
     lens = P.moved(lens, (s * 0.41, 0, -s * 0.55), M.Z_TO_X)

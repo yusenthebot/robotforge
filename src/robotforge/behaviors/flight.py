@@ -33,6 +33,7 @@ import mujoco
 import numpy as np
 
 from robotforge.behaviors.airframe import Airframe, find_airframe
+from robotforge.behaviors.navigate import Destination, NoWay
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +50,8 @@ MAX_TILT = math.radians(30.0)
 MAX_TURN = 1.5  # rad/s of yaw
 SPOOL_DOWN = 0.5  # s from touchdown to motors off
 TOUCHDOWN = 0.02  # m of clearance at which it is down
-ARRIVE_TOL = 0.15  # m from the target, with the speed below ARRIVE_SPEED, counts as there
-ARRIVE_SPEED = 0.3
+ARRIVE_TOL = 0.08  # m from the target, with the speed below ARRIVE_SPEED, counts as there
+ARRIVE_SPEED = 0.2
 UPSIDE_DOWN = 0.0  # the body's up axis below the horizon: crashed
 CLEARANCE = 0.6  # m kept above anything a straight leg would hit, when it climbs over it
 MAX_ALTITUDE = 30.0
@@ -69,6 +70,14 @@ K_RATE = np.array([20.0, 20.0, 6.0])
 ROTOR_DRAG = 0.12
 BODY_CD = 0.25
 AIR_DENSITY = 1.225
+
+
+CONTROLLER = (
+    "cascaded flight controller: position (with a disturbance observer), then attitude, then body rates; a mixer "
+    "from its rotor layout shares thrust and torque among the rotors"
+)
+STOP_NOTE = "it hovers where it is; to land, move it with to=[x, y, 0] (the spot to land on)"
+MAX_POINTS = 50
 
 
 class FlightError(ValueError):
@@ -197,6 +206,7 @@ class FlightController:
         self._pushes = np.array([r.push for r in self.frame.rotors])  # n x 3, body frame
         self._outside = np.zeros(3)  # N, the estimated push from outside (world frame)
         self._com_v: np.ndarray | None = None
+        self._first = True
         self.resting = np.clip(0.0, self.frame.mixer.low, self.frame.mixer.high)  # motors off
         span = self.frame.radius * 2
         self.drag_quad = 0.5 * AIR_DENSITY * BODY_CD * span * span
@@ -318,6 +328,10 @@ class FlightController:
         omega = data.qvel[self.dadr + 3 : self.dadr + 6].copy()
         ground = self.ground_below(model, data, self._p)
         self.altitude = float(self._p[2] - ground - self.frame.rest_height) if ground is not None else self._p[2]
+        if self._first:  # placed in the air (a world with a height for it, a reset mid-flight): it hovers there
+            self._first = False
+            if self.altitude > 0.15 and self.phase == "landed" and rot[2, 2] > 0.5:
+                self.phase, self.mode, self.target, self._started = "flying", "hold", None, False
         self._air(data, t)
         if rot[2, 2] < UPSIDE_DOWN and not self.fallen:
             self.fallen = True
@@ -331,7 +345,9 @@ class FlightController:
             self.ref = Reference(self._p.copy(), yaw=math.atan2(rot[1, 0], rot[0, 0]))
             self._started = True
             if self.mode == "keys" and self.phase == "flying" and self.target is None and ground is not None:
-                self.target = np.array([*self._p[:2], max(self._p[2], ground + self.frame.rest_height + TAKEOFF_HEIGHT)])
+                self.target = np.array(
+                    [*self._p[:2], max(self._p[2], ground + self.frame.rest_height + TAKEOFF_HEIGHT)]
+                )
         self._observe(model, data, dt, rot)
         self._move_reference(dt, ground, rot)
         self.ref.smooth(dt)
@@ -379,8 +395,10 @@ class FlightController:
             elif ref.p[2] < floor + 0.05:
                 ref.p[2], ref.v[2] = floor + 0.05, max(ref.v[2], 0.0)
             return
-        # Holding a point: the stopping point of where it was going, then that point.
+        # Holding a point: where it stops braking from where it is now, then that point. From the smoothed reference
+        # (the one it follows): the raw one runs ahead of it, and a drone stopped at 1.5 m/s held 1 m further on.
         if self.target is None:
+            ref.p, ref.v = ref.sp.copy(), ref.sv.copy()
             v = ref.v
             brake = v * float(np.linalg.norm(v)) / (2 * ACCEL) if np.linalg.norm(v) > 1e-6 else np.zeros(3)
             self.target = ref.p + brake
@@ -473,7 +491,9 @@ class FlightController:
         err = ref.sp - self._p
         if self.phase == "flying":  # on the ground (landing) the integral would only wind up
             near = np.abs(err) < I_ZONE
-            self._integral = np.where(near, np.clip(self._integral + err * dt, -I_LIMIT / KI, I_LIMIT / KI), self._integral)
+            self._integral = np.where(
+                near, np.clip(self._integral + err * dt, -I_LIMIT / KI, I_LIMIT / KI), self._integral
+            )
         acc = ref.sa + KP * err + KD * (ref.sv - self._v) + KI * self._integral
         force = f.mass * (acc + np.array([0.0, 0.0, g])) - self._outside
         force[2] = max(force[2], 0.15 * f.mass * g)  # never ask to be pulled down: tilting over is worse
@@ -535,6 +555,60 @@ def ground_height(
 # ---- trips through the air ---------------------------------------------------------------------------
 
 
+def goals_for(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    fc: FlightController,
+    to: list[Any],
+    named: Destination | None = None,
+) -> tuple[list[np.ndarray], bool, dict[str, Any]]:
+    """The points a move(to=...) asks an aircraft to fly to, whether it lands at the last one, and how to describe
+    the destination. `to` is [x, y] (at the height it flies at, or TAKEOFF_HEIGHT from the ground), [x, y, z], a
+    list of such points, or a named thing (`named`, found by the caller), which it flies to 1 m above. A last point
+    at or below the ground under it (z 0 on flat ground) is a landing."""
+    frame = fc.frame
+    here = data.xpos[frame.root]
+    ground_here = fc.ground_below(model, data, here)
+    cruise_z = float(here[2]) if fc.airborne else (ground_here or 0.0) + frame.rest_height + TAKEOFF_HEIGHT
+    if named is not None:
+        from robotforge.behaviors.nav_map import world_extent
+
+        top = max((float(world_extent(model, data, g)[1][2]) for g in named.geoms), default=named.z)
+        z = max(cruise_z, top + frame.rest_height + TAKEOFF_HEIGHT)
+        point = np.array([named.point[0], named.point[1], z])
+        return [point], False, {"object": named.name, "at": [round(float(v), 3) for v in point]}
+    many = len(to) > 0 and all(isinstance(p, (list, tuple)) for p in to)
+    raw = list(to) if many else [to]
+    if not raw or len(raw) > MAX_POINTS:
+        raise FlightError(f"to is a point [x, y] or [x, y, z], or a list of 1 to {MAX_POINTS} of them")
+    goals: list[np.ndarray] = []
+    land = False
+    for k, p in enumerate(raw):
+        if len(p) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in p):
+            raise FlightError(f"each point is [x, y] or [x, y, z] in meters, got {p}")
+        if max(abs(p[0]), abs(p[1])) > 100.0:
+            raise FlightError(f"point {list(p)} is more than 100 m away: positions are in meters")
+        if len(p) == 3 and p[2] > MAX_ALTITUDE:
+            raise FlightError(f"z {p[2]:g} is above {MAX_ALTITUDE:g} m: heights are in meters")
+        z = float(p[2]) if len(p) == 3 else cruise_z
+        ground = ground_height(model, data, np.array([p[0], p[1], GROUND_PROBE]), frame.descendants, frame.root)
+        floor = (ground if ground is not None else 0.0) + frame.rest_height
+        if len(p) == 3 and z <= floor + 0.05:
+            if k < len(raw) - 1:
+                raise FlightError(
+                    f"point {k + 1} {list(p)} is on the ground: only the last point can be a landing (z 0); give "
+                    "the others a height, e.g. 2"
+                )
+            land, z = True, floor
+        goals.append(np.array([float(p[0]), float(p[1]), z]))
+        cruise_z = z
+    last = [round(float(v), 3) for v in goals[-1]]
+    described: dict[str, Any] = {"point": last} if len(goals) == 1 else {"points": len(goals), "last": last}
+    if land:
+        described["land"] = True
+    return goals, land, described
+
+
 @dataclass
 class FlightPlan:
     points: list[np.ndarray]
@@ -594,15 +668,16 @@ def _clear_legs(
     name, top = blocker
     over = top + CLEARANCE + fc.frame.rest_height
     if over > MAX_ALTITUDE:
-        raise FlightError(f"{name} is in the way and too tall to fly over ({top:.1f} m); add a point around it")
+        raise NoWay("blocked", f"{name} is in the way and too tall to fly over ({top:.1f} m); add a point around it")
     up = np.array([start[0], start[1], max(start[2], over)])
     across = np.array([end[0], end[1], max(end[2], over)])
     for a, b in ((start, up), (up, across)):
         again = _first_hit(model, data, fc, a, b)
         if again is not None:
-            raise FlightError(
+            raise NoWay(
+                "blocked",
                 f"{name} is in the way of the straight flight to {[round(float(v), 2) for v in end]}, and so is "
-                f"{again[0]} when it climbs over; add points around them"
+                f"{again[0]} when it climbs over; add points around them",
             )
     notes.append(f"climbed to {over:.1f} m to fly over {name} (its top is at {top:.1f} m)")
     legs = [up, across]
@@ -753,7 +828,12 @@ class FlightTrip:
             self._finish(t, "stopped", "out_of_time", "it ran out of time on the way and hovers where it was")
 
     def status(self) -> dict[str, Any]:
-        out: dict[str, Any] = {"behavior": "fly", "navigating": self.robot, "state": self.state, "goal": self.destination}
+        out: dict[str, Any] = {
+            "behavior": "fly",
+            "navigating": self.robot,
+            "state": self.state,
+            "goal": self.destination,
+        }
         if not self.done:
             ahead = self.mission.points[self.mission.index :]
             here = self._last_p if self._last_p is not None else ahead[0]

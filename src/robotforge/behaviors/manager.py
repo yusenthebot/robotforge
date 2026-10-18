@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import Kind, flight, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
@@ -28,9 +28,18 @@ from robotforge.design import library
 from robotforge.design.world import ObjectEntry, World
 from robotforge.sim.session import SimSession
 
-MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE)
-WALKERS = (quadruped.QuadrupedGait, DiffDrive, humanoid.HumanoidController, WheelBalancer, SnakeGait)
-SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER)  # they fall over without a controller
+MOBILE = (Kind.QUADRUPED, Kind.HEXAPOD, Kind.ROVER, Kind.HUMANOID, Kind.BALANCER, Kind.SNAKE, Kind.AIRCRAFT)
+WALKERS = (
+    quadruped.QuadrupedGait,
+    DiffDrive,
+    humanoid.HumanoidController,
+    WheelBalancer,
+    SnakeGait,
+    flight.FlightController,
+)
+# They fall over without a controller; an aircraft also keeps its motors idle on the ground and hovers in the air.
+SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER, Kind.AIRCRAFT)
+TRIPS = (navigation.Navigator, flight.FlightTrip)  # a trip to a destination over the ground or through the air
 # Legged walkers stand on their servos alone, but dragged in the viewer before their first move they rolled onto
 # their backs (dog, Go2 and a dog built from parts: 180 degrees; scripts/push_bench.py --states fresh). Their gait
 # steps along with a push (quadruped.PUSH_DRIFT) and stands exactly as the servos do, so in an open world they
@@ -325,6 +334,8 @@ class BehaviorManager:
             elif kind in MOBILE:
                 with contextlib.suppress(BehaviorError):
                     info["max_speed"] = round(self._mobile_controller(name, kind, create=False).max_speed, 3)
+            if kind == Kind.AIRCRAFT:
+                info["flight"] = self._flight_info(name)
             walk = self._kept_walk_or_none(name)
             if walk is not None:
                 info["learned_walk"] = walk.describe()
@@ -333,6 +344,22 @@ class BehaviorManager:
                 info["walk_hint"] = f"no gait code knows this body, so move cannot walk it yet; {LEARN_A_WALK}"
             out.append(info)
         return out
+
+    def _flight_info(self, robot: str) -> dict[str, Any]:
+        """An aircraft's rotors, how hard they lift, its controller and what it is doing (or why it cannot fly)."""
+        ctrl = self.session.controllers.get(robot)
+        if not isinstance(ctrl, flight.FlightController):
+            try:
+                ctrl = flight.FlightController(self.session.model, robot, self.home_qpos())
+            except ValueError as exc:
+                return {"cannot_fly": str(exc)}
+        state = ctrl.status()
+        return {
+            **ctrl.frame.describe(),
+            "controller": flight.CONTROLLER,
+            "state": state["state"],
+            "altitude_m": state["altitude_m"],
+        }
 
     def _prefixes(self) -> set[str]:
         m = self.session.model
@@ -409,10 +436,13 @@ class BehaviorManager:
 
     # ---- moving robots (legs and wheels) ---------------------------------------------
 
-    def move(self, robot: str, speed: float, turn: float, walker: str | None = None) -> dict[str, Any]:
+    def move(
+        self, robot: str, speed: float, turn: float, walker: str | None = None, side: float = 0.0, climb: float = 0.0
+    ) -> dict[str, Any]:
         """walker (legged robots): "gait" = the built-in walking controller, "rl" = the learned policy
-        installed for this robot, or a policy name; None keeps the robot's current walker."""
-        if not (math.isfinite(speed) and math.isfinite(turn)):
+        installed for this robot, or a policy name; None keeps the robot's current walker. side (m/s to the left)
+        and climb (m/s up) are for aircraft, which also fly sideways and up and down."""
+        if not all(math.isfinite(v) for v in (speed, turn, side, climb)):
             raise BehaviorError(f"speed and turn must be finite numbers, got speed={speed} turn={turn}")
         robot = self.resolve(robot)
         if walker is not None:
@@ -435,12 +465,17 @@ class BehaviorManager:
             raise BehaviorError(
                 f"{robot} is {_a(kind)}; walker {walker!r} is for quadrupeds and humanoids, so leave walker out"
             )
+        if (side or climb) and kind != Kind.AIRCRAFT:
+            raise BehaviorError(f"{robot} is {_a(kind)}: only aircraft fly sideways, up and down")
         with self.session.lock:
             ctrl = self._mobile_controller(robot, kind, create=True, walker=walker)
             _check_standing(ctrl)
             self._end_trip(robot)  # driven by hand (a key, a move) it stops following a path
             self._last_trips.pop(robot, None)
-            ctrl.command(speed, turn)
+            if isinstance(ctrl, flight.FlightController):
+                ctrl.command(speed, turn, side=side, climb=climb)
+            else:
+                ctrl.command(speed, turn)
             standing = self._standing.pop(robot, None)
             if standing is not None:  # moved: its gait is its own now, and stands as any gait it was moved with
                 standing.stand_leveled()
@@ -543,6 +578,8 @@ class BehaviorManager:
                 ctrl = WheelBalancer(m, robot, self.home_qpos())
             elif kind == Kind.SNAKE:
                 ctrl = SnakeGait(m, robot, self.home_qpos())
+            elif kind == Kind.AIRCRAFT:
+                ctrl = flight.FlightController(m, robot, self.home_qpos())
             else:
                 ctrl = DiffDrive(m, robot)
         except (ValueError, KeyError) as exc:
@@ -609,6 +646,13 @@ class BehaviorManager:
         with self.session.lock:
             self._end_trip(robot)
             ctrl = self.session.controllers.get(robot)
+            if isinstance(ctrl, flight.FlightController):
+                # Hovers, it does not land: cutting the rotors drops it, and landing wants a clear spot under it,
+                # which is the caller's to choose (move with to=[x, y, 0]).
+                ctrl.hover()
+                if not ctrl.airborne:
+                    return {"robot": robot, "stopped": True, "state": ctrl.status()["state"]}
+                return {"robot": robot, "stopped": True, "hovering": True, "note": flight.STOP_NOTE}
             if _is_mover(ctrl):
                 ctrl.command(0.0, 0.0)  # keep the gait so a dog settles into a stand instead of collapsing
                 if isinstance(ctrl, DiffDrive):
@@ -641,6 +685,8 @@ class BehaviorManager:
         "distance_m 0.002"; a hexapod on weak servos went 0.21 m backwards when asked forwards and was told
         nothing, since it had moved. `start` and `heading_deg` are where it was and faced when the move began."""
         ctrl = self.session.controllers.get(robot)
+        if isinstance(ctrl, flight.FlightController):  # nothing holds an aircraft back; a crash shows in its pose
+            return None
         speed = float(getattr(ctrl, "command_speed", getattr(ctrl, "speed", 0.0)) or 0.0)
         turn = float(getattr(ctrl, "command_turn", getattr(ctrl, "turn", 0.0)) or 0.0)
         going = max(0.0, seconds - SHORTFALL_STARTUP)
@@ -716,6 +762,10 @@ class BehaviorManager:
         named = to if isinstance(to, str) and not NUMBER_LIST.fullmatch(to) else None
         if named is not None and wording.match(named, [robot]) == robot:
             raise BehaviorError(f"{robot} cannot go to itself; give a point [x, y] or another object or robot")
+        if "/" not in robot and self.kind(robot) == Kind.AIRCRAFT:
+            if walker is not None:
+                raise BehaviorError(f"{robot} is an aircraft; walker is for quadrupeds and humanoids, so leave it out")
+            return self._fly(robot, to, speed, seconds)
         with self.session.lock:  # a destination it does not know is a mistake in the call: refused before it stops
             self._destination(robot, to, self.session.model, self.session.data)
         # The walker it goes with, standing. This also refuses what cannot move (an arm, "rover/arm") the way
@@ -784,16 +834,57 @@ class BehaviorManager:
             self._live_trips[robot] = trip
         return trip
 
-    def trip(self, robot: str) -> navigation.Navigator | None:
+    def _fly(self, robot: str, to: str | list[Any], speed: float | None, seconds: float | None) -> flight.FlightTrip:
+        """navigate for an aircraft: through the air, straight to the point or through the points, up over what is
+        in the way; a last point on the ground (z 0) lands there."""
+        with self.session.lock:
+            fc = self._mobile_controller(robot, Kind.AIRCRAFT, create=True)
+            _check_standing(fc)
+            model, data = self.session.model, self.session.data
+            named = None
+            if isinstance(to, str) and not NUMBER_LIST.fullmatch(to):
+                named = self._destination(robot, to, model, data)
+            elif isinstance(to, str):
+                to = [float(w) for w in re.split(r"[^\d.+-]+", to.strip(" []()")) if w]
+            try:
+                goals, land, described = flight.goals_for(model, data, fc, to, named)
+                plan = flight.plan_flight(model, data, fc, goals, land)
+            except flight.FlightError as exc:
+                raise BehaviorError(str(exc)) from exc
+            except navigation.NoWay as exc:
+                exc.destination = described
+                raise
+            self._end_trip(robot)
+            self._last_trips.pop(robot, None)
+            key = TRIP + robot
+
+            def finished(trip: flight.FlightTrip) -> None:  # inside a sim step, with the session lock held
+                if self.session.controllers.get(key) is trip:
+                    self.session.set_controller(key, None)
+                    self._last_trips[robot] = trip.result()
+                if self._live_trips.get(robot) is trip:
+                    del self._live_trips[robot]
+
+            cruise = flight.CRUISE if speed is None else min(abs(speed), fc.max_speed)
+            trip = flight.FlightTrip.start(fc, plan, described, cruise, float(data.time), seconds, finished)
+            self.session.set_controller(key, trip)
+            self._live_trips[robot] = trip
+        return trip
+
+    def trip(self, robot: str) -> navigation.Navigator | flight.FlightTrip | None:
         """The robot's trip to a destination, while it is on one."""
         found = self.session.controllers.get(TRIP + robot)
-        return found if isinstance(found, navigation.Navigator) else None
+        return found if isinstance(found, TRIPS) else None
 
     def _end_trip(self, robot: str) -> None:
         """Called with the session lock held: the robot is driven some other way now."""
         self._live_trips.pop(robot, None)
         trip = self.session.controllers.get(TRIP + robot)
-        if isinstance(trip, navigation.Navigator):
+        if isinstance(trip, flight.FlightTrip):
+            self.session.set_controller(TRIP + robot, None)
+            trip.interrupt("it was flown another way (keys, move or stop) on the way")
+            self._last_trips[robot] = trip.result()
+        elif isinstance(trip, navigation.Navigator):
             self.session.set_controller(TRIP + robot, None)
             if not trip.done:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"

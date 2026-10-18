@@ -311,7 +311,9 @@ def _rest_height(model: mujoco.MjModel, data: mujoco.MjData, bodies, root: int, 
 
     level = data.xmat[root].reshape(3, 3)
     tilt_ok = level[2, 2] > 0.999
-    lows = [lowest_point(model, data, g)[2] for g in range(model.ngeom) if g_in(model, g, bodies) and collides(model, g)]
+    lows = [
+        lowest_point(model, data, g)[2] for g in range(model.ngeom) if g_in(model, g, bodies) and collides(model, g)
+    ]
     if not lows:
         return 0.0
     height = float(data.xpos[root][2] - min(lows))

@@ -18,8 +18,7 @@ from pydantic import Field
 
 from robotforge.design import components
 from robotforge.design.templates.base import DARK, GEOM, BuiltRobot, Template, TemplateParams, imu, new_spec
-from robotforge.design.visuals import Visuals
-from robotforge.design.visuals import aero
+from robotforge.design.visuals import Visuals, aero
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
@@ -59,8 +58,8 @@ class Drone(Template):
         prop = p.prop if p.prop is not None else min(PROP_FILL * gap, 2 * (arm - 0.55 * hx))
         if prop > 0.98 * gap:
             raise ValueError(
-                f"propellers of {prop:g} m would hit each other {gap:.3f} m apart; use prop <= {0.98 * gap:.3f}, longer "
-                "arms or fewer rotors"
+                f"propellers of {prop:g} m would hit each other {gap:.3f} m apart; use prop <= {0.98 * gap:.3f}, "
+                "longer arms or fewer rotors"
             )
         accent = components.color(p.color)
         g = 9.81
@@ -99,10 +98,14 @@ class Drone(Template):
                 rgba=accent,
             )
             vis.hide(capsule)
-            path = np.array([root, root + (tip - root) * 0.5, tip - (tip - root) / np.linalg.norm(tip - root) * motor_r])
+            path = np.array(
+                [root, root + (tip - root) * 0.5, tip - (tip - root) / np.linalg.norm(tip - root) * motor_r]
+            )
             vis.add(body, "shell", accent, M.tube(path, [arm_r * 1.25, arm_r * 1.05, arm_r * 0.95], segments=16))
             mount_top = arm_z + arm_r + motor_h * 0.4
-            vis.add(body, "dark", DARK, aero.stator_mount(motor_r * 1.08, mount_top - arm_z + arm_r), (*tip[:2], mount_top))
+            vis.add(
+                body, "dark", DARK, aero.stator_mount(motor_r * 1.08, mount_top - arm_z + arm_r), (*tip[:2], mount_top)
+            )
             front = c > 0
             lamp = P.led(motor_r * 0.32)["led"].moved(rot=M.rot_x(math.pi))  # faces down
             vis.add(body, "led", LED_FRONT if front else LED_BACK, lamp, (tip[0], tip[1], arm_z - arm_r - 0.0005))
@@ -118,7 +121,9 @@ class Drone(Template):
             )
             vis.hide(disc)
             for preset, mesh in aero.bell(motor_r, motor_h * 0.6).items():
-                vis.add(rotor, "metal" if preset == "metal" else "dark", BELL_COLOR if preset == "metal" else DARK, mesh)
+                vis.add(
+                    rotor, "metal" if preset == "metal" else "dark", BELL_COLOR if preset == "metal" else DARK, mesh
+                )
             for preset, mesh in aero.propeller(prop, spin).items():
                 if preset == "blades":
                     vis.add(rotor, "shell", PROP_COLOR, mesh, (0, 0, 0.002))
@@ -205,13 +210,16 @@ def _hull(vis: Visuals, body, hx: float, hy: float, hz: float, accent) -> None:
     def ring(z: float, k: float) -> np.ndarray:
         return M.at_z(M.rounded_rect(hx * k, hy * k, 0.55 * min(hx, hy) * k, per), z)
 
-    upper = [ring(hz * z, k) for z, k in ((0.0, 1.0), (0.3, 0.985), (0.6, 0.93), (0.82, 0.82), (0.95, 0.64), (1.0, 0.42))]
+    upper = [
+        ring(hz * z, k) for z, k in ((0.0, 1.0), (0.3, 0.985), (0.6, 0.93), (0.82, 0.82), (0.95, 0.64), (1.0, 0.42))
+    ]
     lower = [ring(-hz * z, k * 0.985) for z, k in ((0.0, 1.0), (0.3, 0.99), (0.6, 0.95), (0.85, 0.84), (1.0, 0.64))]
     vis.add(body, "shell", accent, M.loft(upper))
     vis.add(body, "dark", DARK, M.loft(lower[::-1]))
     dome_r = 0.22 * min(hx, hy)
     dome = M.lathe(
-        [(0.0, 0.0), (dome_r, 0.0)] + [(dome_r * math.cos(a), dome_r * 0.5 * math.sin(a)) for a in np.linspace(0.2, 1.5, 5)],
+        [(0.0, 0.0), (dome_r, 0.0)]
+        + [(dome_r * math.cos(a), dome_r * 0.5 * math.sin(a)) for a in np.linspace(0.2, 1.5, 5)],
         segments=28,
         sharp=(1,),
     )
