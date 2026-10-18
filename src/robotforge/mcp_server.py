@@ -89,10 +89,11 @@ real time.
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
 of points flies a path ("a 3 m square at 2 m": to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]); a last point with z 0 lands
-there; stop hovers. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds its place;
-compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR and MPC.
-Viewer keys:
-W A S D fly, arrow keys turn and go forward or back, E climbs, Q descends (and lands).
+there; stop hovers. z is a height above the world's zero, not above the ground under it (over a hill or a table
+the result's clearance_m says how high it really is); a point under a tree's crown or a table hovers there, and it
+flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds
+its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
+and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -508,7 +509,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         extra = {k: run[k] for k in ("shown_live", "stopped_early") if k in run}
         result = trip.result()
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
-            result["note"] += "; call move with the same to again to go on (seconds=null lets it walk on meanwhile)"
+            goes = "fly" if "hovering" in result or "landed" in result else "walk"  # a trip through the air
+            result["note"] += f"; call move with the same to again to go on (seconds=null lets it {goes} on meanwhile)"
         return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
 
     @server.tool()
@@ -522,8 +524,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, fly an
         aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards),
-        turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each robot's
-        max_speed is
+        turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each
+        robot's max_speed is
         in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
         ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
         saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
@@ -534,10 +536,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why. Aircraft (drones)
-        fly: to=[x, y, z] flies there (z in meters; [x, y] keeps its height), a list of points flies through them in
-        order, and a last point with z 0 lands there; a landed aircraft takes off first, a leg that would hit
-        something climbs over it, and the result adds touchdown_m_s or hovering. Without to, speed and turn fly it
-        forward at its height (taking off first)."""
+        fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
+        its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
+        a table's height) lands there; a point under a crown or a table hovers there. A landed aircraft takes off
+        first, a leg that would hit something goes over or round it, and the result adds touchdown_m_s, or hovering
+        and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
+        (taking off first)."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if to is not None:

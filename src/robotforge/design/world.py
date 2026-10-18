@@ -391,7 +391,7 @@ def _share_options(world: mujoco.MjSpec, child: mujoco.MjSpec) -> None:
         world.option.impratio = max(world.option.impratio, child.option.impratio)
     for name in ("timestep", "integrator", "cone", "impratio", "iterations", "ls_iterations", "noslip_iterations"):
         setattr(child.option, name, getattr(world.option, name))
-    # Menagerie's aircraft bring air (density, viscosity); the world has none, its flight controller models drag.
+    # Menagerie's aircraft bring air (density, viscosity); the world has none: behaviors/air.py models drag.
     child.option.density, child.option.viscosity = world.option.density, world.option.viscosity
 
 

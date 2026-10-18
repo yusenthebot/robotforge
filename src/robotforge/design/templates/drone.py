@@ -79,7 +79,13 @@ class Drone(Template):
         body = spec.worldbody.add_body(name="body")
         body.add_freejoint(name="root")
         rest = p.mass - n * rotor_mass - 0.1 * p.mass - 0.05 * p.mass - 0.04 * p.mass
-        hull = body.add_geom(type=GEOM.mjGEOM_BOX, size=[hx * 0.95, hy * 0.95, hz], mass=rest, rgba=accent)
+        gimbal_size, gimbal_mass = 0.3 * s, 0.04 * p.mass
+        # The battery sits a little back, balancing the camera in front: with the center of mass off the middle,
+        # the front rotors ran out first and it lifted 2.36 times its weight instead of 2.4.
+        balance = -gimbal_mass * 0.3 * s / rest
+        hull = body.add_geom(
+            type=GEOM.mjGEOM_BOX, size=[hx * 0.95, hy * 0.95, hz], pos=[balance, 0, 0], mass=rest, rgba=accent
+        )
         vis.hide(hull)
         _hull(vis, body, hx, hy, hz, accent)
 
@@ -167,12 +173,11 @@ class Drone(Template):
                 mesh = mesh.moved(scale=(1.0, -1.0, 1.0))
             vis.add(body, "dark", DARK, mesh, (0, 0, -hz * 0.8))
 
-        gimbal_size = 0.3 * s
         cam = body.add_geom(
             type=GEOM.mjGEOM_BOX,
             size=[gimbal_size * 0.36, gimbal_size * 0.4, gimbal_size * 0.4],
             pos=[0.3 * s, 0, -hz - gimbal_size * 0.4],
-            mass=0.04 * p.mass,
+            mass=gimbal_mass,
             rgba=DARK,
             contype=0,
             conaffinity=0,

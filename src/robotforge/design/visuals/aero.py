@@ -68,22 +68,6 @@ def propeller(diameter: float, spin: int, blades: int = 2) -> P.Parts:
 
 
 @M.cached
-def motor(radius: float, height: float) -> P.Parts:
-    """A brushless outrunner below z = 0: a dark mount on the arm, the turning metal bell with cooling slots
-    above it up to the propeller plane (z = 0)."""
-    base_h = height * 0.4
-    mount = M.cylinder(radius * 1.08, base_h, segments=28, bevel=base_h * 0.25, z0=-height)
-    bell = M.cylinder(radius, height - base_h, segments=32, bevel=radius * 0.12, z0=-height + base_h)
-    slots = []
-    for k in range(10):  # dark slots round the bell
-        a = 2 * math.pi * k / 10
-        slot = M.box(radius * 0.06, radius * 0.16, (height - base_h) * 0.28)
-        slots.append(slot.moved((radius * 0.97 * math.cos(a), radius * 0.97 * math.sin(a), -height * 0.32), M.rot_z(a)))
-    cap = M.cylinder(radius * 0.55, height * 0.08, segments=24, z0=-height * 0.04)
-    return {"dark": M.merge([mount, *slots]), "metal": M.merge([bell, cap])}
-
-
-@M.cached
 def bell(radius: float, height: float) -> P.Parts:
     """The part of a motor that turns with its propeller (the bell), from z = -height up to the prop plane."""
     body = M.cylinder(radius, height, segments=32, bevel=radius * 0.12, z0=-height)

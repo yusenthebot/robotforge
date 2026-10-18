@@ -73,7 +73,8 @@ def test_the_template_is_an_aircraft_whose_rotors_lift_it_and_steer_it(rotors):
     assert len(frame.rotors) == rotors
     assert frame.mass == pytest.approx(1.2, rel=0.01)
     assert np.linalg.matrix_rank(frame.mixer.allocation) == 4
-    assert frame.mixer.max_thrust() / frame.weight == pytest.approx(2.4, rel=0.03)
+    assert frame.mixer.max_thrust() / frame.weight == pytest.approx(2.4, rel=0.005)  # balanced: as its note says
+    assert np.linalg.norm(frame.com[:2]) < 1e-6
     assert sorted({r.spin for r in frame.rotors}) == [-1, 1]  # half each way, or it could not hold its heading
 
 
@@ -509,6 +510,9 @@ async def test_an_agent_flies_a_square_and_lands_through_the_mcp_tools(tmp_path,
         assert robots["robots"][0]["kind"] == "aircraft" and robots["robots"][0]["flight"]["state"] == "landed"
         described = await call("describe_model", {})
         assert described["aircraft"][0]["rotors"] == [f"drone/rotor_{k}" for k in range(1, 5)]
+        assert described["aircraft"][0]["state"] == "landed"
+        short = await call("move", {"robot": "drone", "to": [6, 0, 2], "seconds": 2})
+        assert short["why"] == "out_of_time" and "fly on meanwhile" in short["note"]  # it said walk on
 
 
 def test_wind_stepped_a_little_at_a_time_keeps_blowing(pg):
