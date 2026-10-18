@@ -295,3 +295,25 @@ async def test_set_floor_water_and_observe_over_mcp(tmp_path, monkeypatch):
         assert bad.is_error and "current" in bad.content[0].text
         drained = json.loads((await client.call_tool("set_floor", {"water": 0})).content[0].text)
         assert not any("water up to" in n for n in drained["notes"])
+
+
+def test_a_dock_built_under_water_is_noted_with_a_size_that_works(pg):
+    """An agent read the dock's third size as the deck's thickness (0.18) and put its deck under water."""
+    result = pg.add_object("dock", shape="dock", pos=[4, 0], size=[2, 3, 0.18])
+    note = next(n for n in result["notes"] if n.startswith("dock:"))
+    assert "under the water" in note and "[2, 3, 1.35]" in note
+    fixed = pg.update_object("dock", size=[2, 3, 1.35])
+    assert not any(n.startswith("dock:") for n in fixed["notes"])
+
+
+def test_the_rov_is_there_only_within_a_few_centimeters(pg):
+    """Told it had arrived 6 cm off, an agent reported the depth it asked for rather than the one reached."""
+    pg.add_robot("rov", template="rov", pos=[0, 0])
+    trip = pg.behaviors.navigate("rov", [0.0, 0.0, 0.5])
+    for _ in range(40):
+        pg.session.step(250)
+        if trip.done:
+            break
+    result = trip.result()
+    assert result["arrived"] and result["error_m"] <= 0.04
+    assert result["depth_m"] == pytest.approx(LEVEL - 0.5, abs=0.05)

@@ -81,7 +81,8 @@ dry land), with waves, a current or only inside an area if asked. Things float o
 shape (a wooden crate floats, a steel block sinks); add_object(shape="buoy") is a moored buoy, shape="dock" a
 wooden dock. Templates boat (two thrusters, turns on the spot) and rov (an underwater robot, six thrusters) are
 driven with move and the keyboard; a boat's move(to=...) plans round the shore, buoys and docks ("to the
-dock"), an ROV's move(to=[x, y, z]) dives to that point and holds its depth and heading. observe reports what
+dock"), an ROV's move(to=[x, y, z]) dives to that point and holds its depth and heading (z is the height above
+the floor like every z: 0.5 m under a surface at 1.2 m is z = 0.7; the result gives depth_m). observe reports what
 floats and how deep things are under "water".
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a

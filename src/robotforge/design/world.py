@@ -299,6 +299,7 @@ def compile_world(world: World, base_dir: Path | None = None) -> CompiledWorld:
         water_physics.encode(spec, world.water.physics())
         notes.append(waters.describe(world.water))
         _moor_buoys(spec, world, ground)
+        notes += _docks_under_water(world, ground)
 
     model = _compile(spec)
     if not ground.flat and frames and _settle_on_ground(model, homes, frames, ground):
@@ -342,6 +343,29 @@ def _moor_buoys(spec: mujoco.MjSpec, world: World, ground: terrain.Ground) -> No
         depth = world.water.level - bottom
         if depth > 0.2 and world.water.covers(x, y):
             props.moor(spec, obj.name, [x, y, bottom + 0.02], max(depth - 0.2 * obj.size[1], 0.15))
+
+
+def _docks_under_water(world: World, ground: terrain.Ground) -> list[str]:
+    """A dock's third size is its deck's height above the ground or bottom under it: an agent that read it as the
+    deck's thickness put a deck under water, and only found out by looking. Say so at once, with a height that works."""
+    notes = []
+    for obj in world.objects:
+        if obj.shape != "dock" or not world.water.covers(obj.pos[0], obj.pos[1]):
+            continue
+        base = (
+            obj.pos[2]
+            if len(obj.pos) == 3
+            else ground.under(obj.pos[0], obj.pos[1], *props.footprint("dock", obj.size), obj.yaw)
+        )
+        deck = base + obj.size[2]
+        if deck < world.water.level + 0.05:
+            better = round(world.water.level - base + 0.35, 2)
+            notes.append(
+                f"{obj.name}: its deck is {world.water.level - deck:.2f} m under the water (deck height "
+                f"{obj.size[2]:g} m above the bottom, water {world.water.level - base:.2f} m deep there); give it size "
+                f"[{obj.size[0]:g}, {obj.size[1]:g}, {better:g}] for a deck 35 cm over the water"
+            )
+    return notes
 
 
 def _float_on_water(spec: mujoco.MjSpec, model: mujoco.MjModel, world: World, homes, frames, ground) -> bool:

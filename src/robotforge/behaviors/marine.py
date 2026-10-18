@@ -454,7 +454,9 @@ def _radius(model: mujoco.MjModel, data: mujoco.MjData, destination: Any, center
 
 # ---- going to a point under water ---------------------------------------------------------------------------
 
-ARRIVE = 0.1  # m from the point that counts as there
+# m from the point that counts as there: an agent sent an ROV 0.5 m under the surface, was told it arrived 6 cm off
+# (0.44 m under) and reported 0.50 m
+ARRIVE = 0.04
 STILL = 0.05  # m/s
 
 
