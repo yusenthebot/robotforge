@@ -1298,3 +1298,73 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 600px) {
   .camview canvas { width: auto; max-width: 100%; max-height: 24vh; margin: 0 auto; }
 }
+
+/* ---------------------------------------------------------------- sensors */
+
+/* What the selected robot's sensors sense: the camera's picture and live plots, in a column on the right as the
+   lessons' plots are, beside the robots drawer while it is open (sensors.js fills it). */
+.sensor-views {
+  position: fixed;
+  top: calc(var(--gutter) + 44px);
+  right: var(--gutter);
+  width: 320px;
+  max-height: calc(100% - 2 * var(--gutter) - 44px - 84px); /* ends above the dock */
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  scrollbar-width: thin;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+#drawer:not([hidden]) ~ .sensor-views { right: calc(var(--gutter) + 300px + 10px); }
+
+.sensor-pip .plot-head { align-items: center; }
+.sensor-pip .plot-title,
+.sensor-plot .plot-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sensor-views .seg { flex-shrink: 0; }
+.sensor-views .seg button { height: 22px; padding: 0 8px; font-size: 11.5px; }
+
+.sensor-plot .plot-head { align-items: center; }
+.sensor-plot > .plot-legend { justify-content: flex-start; margin: 0 0 2px; }
+.sensor-plot-tools { display: flex; flex-shrink: 0; }
+
+.sensor-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sensor-legend:empty { display: none; }
+.sensor-legend .depth-bar { flex: 1 1 60px; min-width: 60px; height: 8px; border-radius: 4px; }
+.legend-item.swatchy::before { width: 9px; height: 9px; border: 0; border-radius: 2px; background: var(--c); vertical-align: -1px; }
+
+.drawer .sensor-arrows { margin-top: 8px; }
+
+/* A small window shows one view at a time, picked in the strip of tabs at the top (as the lessons' plots do). */
+.sensor-views.tabbed > section.off { display: none !important; }
+.sensor-views.tabbed > section { margin-top: 0; padding-top: 0; border-top: 0; }
+
+@media (min-width: 1600px) {
+  .sensor-views { width: 380px; }
+}
+
+/* A narrow window has room for one panel beside the view: the robots drawer or the world panel, when open, wins. */
+@media (max-width: 900px) {
+  #world-panel:not([hidden]) ~ .sensor-views,
+  #drawer:not([hidden]) ~ .sensor-views { display: none !important; }
+}
+
+/* Phones: a strip along the top, the picture kept short so the robot below stays in view. */
+@media (max-width: 600px) {
+  .sensor-views { left: var(--gutter); right: var(--gutter); width: auto; padding: 8px 12px; }
+  .sensor-pip canvas { width: auto; max-width: 100%; max-height: 22vh; margin: 0 auto; }
+}
