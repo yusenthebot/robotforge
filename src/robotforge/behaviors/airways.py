@@ -374,7 +374,7 @@ def plan_flight(
             legs, touchdown = _landing(space, start, goal, notes)
         else:
             legs = _route(space, start, goal, notes)
-        points.extend(legs)
+        points.extend(q for q in legs if not points or not np.allclose(q, points[-1], atol=1e-3))
         start = points[-1] if points else start
     length = _length(here, points)
     if touchdown is not None:

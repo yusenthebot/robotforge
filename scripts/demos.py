@@ -192,6 +192,11 @@ def _chase(robot: str, heading: tuple[float, float], back: float, side: float, u
 SQUARE = [[0.63, -2.22, 2.2], [4.23, -2.22, 2.2], [4.23, -5.82, 2.2], [0.63, -5.82, 2.2], [0.63, -2.22, 2.2]]
 
 
+# Behind the park's tree_4 (at -3.90, -4.12, its crown 2.1 m up over the spot) and in under its crown, round its
+# trunk, to land beside it: one move with four points; the way round the trunk is the planner's.
+UNDER_TREE = [[-5.6, -3.0, 1.3], [-5.6, -4.12, 1.3], [-3.3, -4.12, 1.3], [-3.3, -4.12, 0.0]]
+
+
 def _fly(robot: str, points: list[list[float]], speed: float) -> Callable[[Any], None]:
     def act(pg: Any) -> None:
         trip = pg.behaviors.navigate(robot, points, speed)
@@ -332,6 +337,16 @@ DEMOS = [
         page=_chase("drone", (0.45, -0.89), 1.5, 0.8, 0.5),
         settle=0.8,
         until=lambda pg: pg.behaviors.trip("drone") is None,  # landed (or stopped)
+        tail=1.2,
+    ),
+    Demo(  # from the path, behind a tree, round its trunk and in under its crown to land beside it
+        "drone_round_trunk",
+        S._in_scene("park", {"drone": {"template": "drone"}}),
+        40.0,
+        timeline=[(0.3, _fly("drone", UNDER_TREE, 1.5))],
+        page=_follow("drone", (1.2, -3.3, 0.55), ease=0.05),
+        settle=0.8,
+        until=lambda pg: pg.behaviors.trip("drone") is None,
         tail=1.2,
     ),
     Demo(

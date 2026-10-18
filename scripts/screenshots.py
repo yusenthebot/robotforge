@@ -795,6 +795,14 @@ SHOTS = [
         page=_hover_look("x2", (0.82, -1.02, 0.28), 0.12),
         settle=0.5,
     ),
+    # Hovering under a tree's crown beside its trunk (tree_4, its crown 2.1 m up), where it once landed on the crown.
+    Shot(
+        "drone_under_crown",
+        _in_scene("park", {"drone": {"template": "drone"}}),
+        viewer=[_go("drone", [-3.3, -4.12, 1.2]), {"wait": 8.0}],
+        page=_hover_look("drone", (1.9, -2.6, 0.15), -0.35),
+        settle=0.5,
+    ),
     # Every aircraft side by side, each hovering a metre up: the template with 4, 6 and 8 rotors, the hexacopter
     # built from parts, the Skydio X2 and the palm-sized Crazyflie.
     Shot(

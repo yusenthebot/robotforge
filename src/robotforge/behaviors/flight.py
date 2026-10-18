@@ -564,18 +564,20 @@ def cast(
     reach: float = math.inf,
 ) -> RayHit | None:
     """The first solid thing a ray from `start` along `direction` (a unit vector) meets within `reach`, past the
-    bodies `own` (the aircraft's), or None."""
+    bodies `own` (the aircraft's) and what nothing collides with (a path drawn on the grass: an X2 standing on one
+    was told the path was right over it and it could not take off), or None."""
     at = np.array(start, float)
     way = np.asarray(direction, float)
     geom = np.zeros(1, dtype=np.int32)
     normal = np.zeros(3)
     travelled = 0.0
-    for _ in range(6):
+    for _ in range(12):
         dist = mujoco.mj_ray(model, data, at, way, SOLID, 1, root, geom, normal)
         if dist < 0 or travelled + dist > reach:
             return None
-        if int(model.geom_bodyid[geom[0]]) not in own:
-            return RayHit(travelled + dist, int(geom[0]), normal.copy())
+        g = int(geom[0])
+        if int(model.geom_bodyid[g]) not in own and (model.geom_contype[g] or model.geom_conaffinity[g]):
+            return RayHit(travelled + dist, g, normal.copy())
         travelled += dist + 1e-4
         at = at + way * (dist + 1e-4)
     return None

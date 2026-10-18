@@ -491,6 +491,14 @@ def test_the_skydio_x2_flies_on_its_own_four_thrust_motors(library_pg):
     assert np.linalg.norm(np.subtract(result["position"], [1.5, 1.0, 1.5])) < 0.08
 
 
+def test_an_x2_standing_on_a_path_drawn_on_the_grass_takes_off(library_pg):
+    library_pg.add_object("path", shape="marker", size=[3.0, 1.2], pos=[0.0, 0.0])  # nothing collides with it
+    library_pg.add_robot("x2", library="skydio_x2", pos=[0.0, 0.0])
+    trip = library_pg.behaviors.navigate("x2", [0.0, 0.0, 0.8], None, None, 20)  # "path is right over it"
+    library_pg.run_fast(lambda: trip.done, 21)
+    assert trip.result()["arrived"]
+
+
 def test_the_crazyflie_gets_its_real_rotors_and_flies(library_pg):
     out = library_pg.add_robot("cf", library="crazyflie")
     assert any("stand in for the model's body_thrust" in n for n in out["notes"])
