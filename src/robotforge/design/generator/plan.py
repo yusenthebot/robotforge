@@ -21,13 +21,20 @@ BODIES: tuple[str, ...] = ("legged", "wheeled", "balancer", "snake", "arm", "hum
 LEGS = (4, 6)
 WHEELS = (2, 4, 6)
 MAX_ARMS = 2
-SEGMENTS = (4, 14)
+SEGMENTS = (6, 14)  # 4 or 5 segments slithered 23 to 46 % of the way, 6 or 7 41 to 63 % (2026-10-19)
 JOINTS = (3, 6)  # a standing arm's joints, the gripper not counted
 FACTOR = (0.6, 1.8)  # length, width and height, each times the body's own default
 SIZE = (0.6, 1.6)  # the whole robot, times its default
+# A balancer's size cubed times its length, width and height at most this: x1.6 with x1.4 long and tall, or bulkier,
+# fell over driving off; x1.6 x1.4 x1.4 x1.0 drove (2026-10-19 sweep).
+BALANCER_BULK = 8.0
+TWO_ARMS_SIZE = 0.8  # a robot with two arms at least this size
 # A walker's legs (size times height) at least this long: shorter, a hexapod's feet are not 5 cm under its body, which
 # the gait needs to tell legs from the rest (a 0.6 size robot with 0.6 legs was not seen as a walker at all).
 MIN_LEG = 0.6
+SLIM = 0.55  # a quadruped's width factor at least this share of its length factor
+ARMED_SMALL_LEGS = 1.4  # the longest legs (factor) of a quadruped smaller than x0.8 with an arm
+MIN_LEG_TWO_ARMS = 0.7  # a two-armed dog's: on x0.6 legs they walked 17 to 71 % of the way, on x0.7 79 % and more
 # A snake's spine (first joint to last) at most this long: 1.7 to 2.5 m snakes did under half the way in 5 s at 0.1 m/s
 # and 0.03 m/s after 20 s; up to 1.6 m every one without jaws did (2026-10-19 sweep).
 SNAKE_SPINE = 1.6  # m
@@ -127,10 +134,36 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
     for name in ("length", "width", "height"):
         bounded(name, getattr(plan, name), *FACTOR, "further and the servos cannot hold it up or it tips over")
     bounded("size", plan.size, *SIZE, "further and the servos cannot hold it up")
+    arms = changes.get("arms", plan.arms)
+    if arms >= 2 and changes.get("size", plan.size) < TWO_ARMS_SIZE:
+        # Their grippers stay full size: on x0.6 robots they hit the base, or the robot tipped over (2026-10-19).
+        was = changes.get("size", plan.size)
+        changes["size"] = TWO_ARMS_SIZE
+        notes.append(
+            f"size x{was:.2f} became x{TWO_ARMS_SIZE:.2f}: two arms need a bigger robot (their grippers stay full size)"
+        )
     size, height = changes.get("size", plan.size), changes.get("height", plan.height)
-    if plan.body == "legged" and size * height < MIN_LEG:
-        changes["height"] = round(MIN_LEG / size, 3)
+    shortest = MIN_LEG_TWO_ARMS if plan.body == "legged" and plan.legs == 4 and arms >= 2 else MIN_LEG
+    if plan.body == "legged" and size * height < shortest:
+        changes["height"] = round(shortest / size, 3)
         notes.append(f"legs x{height:.2f} became x{changes['height']:.2f}: shorter legs do not lift its feet to walk")
+    dog = plan.body == "legged" and plan.legs == 4
+    length, width = changes.get("length", plan.length), changes.get("width", plan.width)
+    if dog and width < SLIM * length:
+        # Long and narrow, a dog rolls from foot to foot: x1.4 long and x0.6 wide walked 34 to 45 % of the way.
+        changes["width"] = width = round(SLIM * length, 3)
+        notes.append(f"width x{plan.width:.2f} became x{width:.2f}: a dog this long and narrower rolls over its feet")
+    if dog and arms and changes.get("size", plan.size) < 0.8 and changes.get("height", height) > ARMED_SMALL_LEGS:
+        # A small dog on long legs with an arm on its back is top-heavy: x0.6 size, x1.8 legs did not walk at all.
+        changes["height"] = ARMED_SMALL_LEGS
+        notes.append(
+            f"legs x{height:.2f} became x{ARMED_SMALL_LEGS:.2f}: a small dog with an arm on longer legs topples "
+            "(a bigger dog can have them)"
+        )
+    wide = MIN_LEG + max(0.0, width - 1.0)  # a six-legged body x1.1 wide walked on legs x0.7, x1.4 wide not on x0.8
+    if plan.body == "legged" and plan.legs == 6 and not plan.round and changes.get("height", height) < wide:
+        changes["height"] = round(wide, 3)
+        notes.append(f"legs x{height:.2f} became x{wide:.2f}: on a body x{width:.2f} wide shorter legs drag its belly")
     if plan.body == "snake":
         segments, length = changes.get("segments", plan.segments), changes.get("length", plan.length)
         per_length = (segments - 1) * SNAKE_SEGMENT * size * changes.get("width", plan.width)
@@ -140,6 +173,15 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
             notes.append(
                 f"length x{length:.2f} became x{best:.2f}: a snake longer than {SNAKE_SPINE} m crawls (fewer "
                 "segments or a smaller snake can be longer)"
+            )
+    if plan.body == "balancer":
+        bulk = changes.get("size", plan.size) ** 3 * plan.length * plan.width * changes.get("height", plan.height)
+        if bulk > BALANCER_BULK:
+            was = changes.get("size", plan.size)
+            changes["size"] = math.floor(was * (BALANCER_BULK / bulk) ** (1 / 3) * 1000) / 1000
+            notes.append(
+                f"size x{was:.2f} became x{changes['size']:.2f}: a balancer this big and long, wide or tall is too "
+                "heavy for its wheel motors to catch"
             )
     _equipment(plan, changes, notes)
     tall = HUMANOID_HEIGHT * size * height

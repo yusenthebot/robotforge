@@ -377,4 +377,19 @@ def test_each_of_the_fifteen_builds_stands_and_moves(pg, sentence, kind, fields)
     end = pg.behaviors.pose("bot")
     assert end["upright"]
     moved = np.hypot(end["position"][0] - pose["position"][0], end["position"][1] - pose["position"][1])
-    assert moved > (0.2 if kind == "snake" else 0.5 * speed * 5)
+    # Measured over three seeds each (scripts/gen_bench.py fifteen): snakes 56 to 95 % of the way, the rest 81 %+.
+    assert moved > (0.4 if kind == "snake" else 0.5) * speed * 5
+
+
+@pytest.mark.parametrize("change", ["make it shorter", "make the legs shorter", "make it narrower"])
+def test_a_dog_changed_by_a_sentence_still_walks(pg, change):
+    """A robot dog made shorter went -0.08 m in 5 s at 0.25 m/s: its hips came closer than two leg lengths."""
+    pg.add_robot("dog", describe="a robot dog")
+    pg.update_robot("dog", describe=change)
+    pg.run_fast(lambda: False, 2.0)
+    start = pg.behaviors.pose("dog")
+    pg.behaviors.move("dog", 0.25, 0.0)
+    pg.run_fast(lambda: False, 5.0)
+    end = pg.behaviors.pose("dog")
+    assert end["upright"]
+    assert end["position"][0] - start["position"][0] > 0.5 * 0.25 * 5

@@ -32,6 +32,11 @@ SCHEMES: tuple[tuple[str, str], ...] = (
 DARK = "#1d2026"
 HIP_SPACING = 2.0  # a quadruped's front and back hips at least this many leg (thigh) lengths apart
 HIP_WIDTH = 0.58  # and its left and right hips this many
+TORSO_WIDTH = (0.14, 0.16)  # m times the size: how wide a two-armed quadruped is (its torso is 0.13)
+ARM_BACK = 0.12  # an arm on a walker's back stands this share of its length behind the middle
+# Its gripper hangs forward over the head at home: on a robot 1.6 times the size a head that big was in its way.
+HEAD_UNDER_ARM = 0.08  # m, the largest head under an arm
+CARGO_TALL = 1.5  # a rover with an arm: its cargo box at most this many times as tall as the rover is long
 
 
 def r3(v: float) -> float:
@@ -183,7 +188,7 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         asked = length
         spacing = r3(HIP_SPACING * leg)
         length = r3(spacing + 0.06 * s)
-        if length > asked * 1.03:
+        if length > asked * 1.03 and (plan.length < 1 or plan.height > 1):  # not for a seed's few percent
             why = "its front and back feet would step into each other"
             notes.append(
                 f"its body is {length:.2f} m long, not shorter: with its hips closer than two leg lengths {why}; "
@@ -191,12 +196,20 @@ def quadruped(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
                 if plan.length < 1
                 else f"its body is {length:.2f} m long for its long legs: shorter, {why}"
             )
+    narrowest, widest = TORSO_WIDTH
+    if plan.arms >= 2 and not narrowest * s <= width <= widest * s:
+        # Two arms hang from a torso as wide as a default dog: wider, its front thighs swung into them; narrower (x0.6
+        # or x0.8), it tipped over or barely walked (2026-10-19 sweep).
+        width = r3(min(max(width, narrowest * s), widest * s))
+        notes.append(
+            f"its body is {width:.2f} m wide: a two-armed dog is as wide as its torso, or it tips or kicks its arms"
+        )
     if width < HIP_WIDTH * leg:
         # Narrow and long-legged, it tips over sideways: legs x1.8 on a body x0.6 or x0.8 wide walked 1 in 6, x0.9
         # wide 3 in 3; x1.6 legs walked from x0.7 wide (2026-10-19 sweep).
         asked = width
         width = r3(HIP_WIDTH * leg)
-        if width > asked * 1.03:
+        if width > asked * 1.03 and (plan.width < 1 or plan.height > 1):
             notes.append(f"its body is {width:.2f} m wide, not narrower: on its long legs a narrower one tips over")
     hip_y = r3(width / 2)
     parts: list[dict[str, Any]] = [
@@ -348,9 +361,10 @@ def _legged_dress(plan: Plan, look: Look, length: float, width: float, thick: fl
         out += torso_with_arms("top", shift, plan, look, riser=riser, raised=raised)
     else:
         if plan.arms == 1:
-            out.append(arm_on_top(plan, look, min(0.38 * s, 0.42), -length * 0.12))
+            out.append(arm_on_top(plan, look, min(0.38 * s, 0.42), -length * ARM_BACK))
         if plan.head:
-            out += head("base", [r3(length / 2 - 0.03 * s), 0, r3(thick / 2)], 0.07 * s, look, plan)
+            size = 0.07 * s if plan.arms == 0 else min(0.07 * s, HEAD_UNDER_ARM)
+            out += head("base", [r3(length / 2 - 0.03 * s), 0, r3(thick / 2)], size, look, plan)
     return out
 
 
@@ -489,8 +503,15 @@ def wheeled(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         )
     top_parts: list[dict[str, Any]] = []
     tall = plan.cargo or plan.height > 1.25
+    notes: list[str] = []
     if tall:  # a courier's cargo box, as tall as the plan asks
         box_h = r3(0.3 * plan.height * s)
+        if plan.arms and box_h > CARGO_TALL * length:
+            # Short rovers with an arm on a box twice as tall as they are long tipped over driving off (2026-10-19).
+            box_h = r3(CARGO_TALL * length)
+            notes.append(
+                f"its cargo box is {box_h:.2f} m tall, not taller: with an arm on it, a shorter rover tips over"
+            )
         top_parts.append(
             {
                 "name": "cargo",
@@ -570,7 +591,7 @@ def wheeled(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
         "sensors": sensors,
         "material": look.material,
     }
-    return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, []
+    return {"color": look.main, "motor": "jga25", "base": base, "parts": parts}, notes
 
 
 # ---- balancer, snake, arm, humanoid ------------------------------------------------------------------------------

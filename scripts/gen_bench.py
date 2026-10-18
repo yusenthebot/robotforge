@@ -5,6 +5,7 @@
     uv run python scripts/gen_bench.py sweep --body quadruped [--length 0.6,1,1.4] [--width 1] [--height 1]
         [--size 1] [--arms 0] [--set segments=8,12 --set material=pla,aluminum] [--seeds 5] [--jobs 4]
     uv run python scripts/gen_bench.py say "a robot dog" ["make it shorter" ...] [--variations 3]
+    uv run python scripts/gen_bench.py arms [--jobs 4]
 
 Each run adds the robot to an empty world the way add_robot(name, describe=...) does (sweep: the build a plan makes,
 added as a build), lets it stand for STAND seconds, then moves it forward for MOVE seconds at the speed its kind
@@ -15,6 +16,11 @@ distance. Arms only stand. --variations N runs each sentence with its own seed a
 fifteen: the milestone's fifteen sentences (tests/test_generator.py FIFTEEN). changes: a first sentence and one
 change ("a robot dog", then "make it shorter"). sweep: a grid of plans for one body (quadruped, hexapod, spider,
 rover, balancer, snake, arm, humanoid). say: one first sentence and any changes, in order.
+
+arms: every armed sentence in ARMED stands for a second, then its first hand picks a 4 cm cube put on the floor
+REACH[0] m beyond its tool point (away from the robot's middle; the next distance in REACH when that one is refused)
+and puts it 0.15 m to the side with pick_and_place (a robot that goes may walk or drive to reach; a magnet's cube is
+steel): placed or the refusal.
 """
 
 from __future__ import annotations
@@ -68,6 +74,20 @@ CHANGES = (
     ("a wheeled robot", "make it shorter"),
     ("a small robot dog 50 cm long", None),
 )
+ARMED = (
+    "a six-legged robot with two arms",
+    "a snake with a gripper head",
+    "a six-wheeled mars rover with an arm",
+    "a robot arm with six joints and a suction cup",
+    "a centaur in white and gold",
+    "a wheeled robot with two arms",
+    "a tentacle arm with a gripper",
+    "a robot dog with an arm",
+    "a snake with a suction head",
+    "a wheeled robot with two arms and suction cups",
+    "a tentacle with a magnet",
+)
+REACH = (0.06, 0.0, -0.06, -0.12)  # m beyond the tool point, tried in turn
 BODIES = {
     "quadruped": {"body": "legged", "legs": 4},
     "hexapod": {"body": "legged", "legs": 6},
@@ -148,6 +168,49 @@ def measure(run: Run) -> dict[str, Any]:
     return out
 
 
+def reach(sentence: str) -> dict[str, Any]:
+    """pick_and_place from where the robot stands (see the module's arms)."""
+    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="gen_bench_")
+    import mujoco
+    import numpy as np
+
+    from robotforge.design import generator
+    from robotforge.playground import Playground
+    from robotforge.sim.session import SimSession
+
+    refused = ""
+    for k, beyond in enumerate(REACH):
+        pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+        pg.new_world(f"arms{k}")
+        pg.add_robot("bot", describe=sentence)
+        pg.run_fast(lambda: False, 1.0)
+        hand = generator.generate(sentence).hands("bot")[0]
+        m, d = pg.session.model, pg.session.data
+        tcp = d.site_xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{hand}/tcp")][:2].copy()
+        middle = np.array(pg.behaviors.pose("bot")["position"][:2])
+        out = tcp - middle
+        out = out / np.linalg.norm(out) if np.linalg.norm(out) > 0.03 else np.array([1.0, 0.0])
+        cube = tcp + beyond * out
+        target = tcp + 0.15 * np.array([-out[1], out[0]])
+        steel = {"material": "steel"} if generator.generate(sentence).plan.hand == "magnet" else {}
+        pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[float(v) for v in cube], color="red", **steel)
+        pg.run_fast(lambda: False, 0.5)
+        try:
+            arm = pg.behaviors.resolve(hand, arm=True)
+            motion, info = pg.behaviors.pick_and_place(arm, "cube", [float(v) for v in target])
+        except ValueError as exc:
+            refused = str(exc)
+            continue
+        pg.run_fast(lambda m=motion: m.done, 90.0)
+        pg.run_fast(lambda: False, 0.5)
+        placed = pg.behaviors.placed("cube", info["region"])["success"]
+        reach = float(np.linalg.norm(cube - middle))
+        went = "went" in info or "driven_m" in info
+        return {"label": sentence, "hand": hand, "beyond": beyond, "from_middle": round(reach, 2), "placed": placed,
+                "went": went}  # fmt: skip
+    return {"label": sentence, "refused": refused[:160]}
+
+
 def _seeds(sentence: str, variations: int) -> list[int]:
     from robotforge.design.generator import seed_of
 
@@ -211,7 +274,7 @@ def _row(r: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("mode", choices=("fifteen", "changes", "sweep", "say"))
+    parser.add_argument("mode", choices=("fifteen", "changes", "sweep", "say", "arms"))
     parser.add_argument("sentences", nargs="*")
     parser.add_argument("--variations", type=int, default=1)
     parser.add_argument("--body", choices=sorted(BODIES), default="quadruped")
@@ -224,8 +287,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.mode == "say" and not args.sentences:
         parser.error("say needs a sentence")
-    runs = _runs(args)
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    if args.mode == "arms":
+        with ProcessPoolExecutor(max_workers=max(1, min(args.jobs, 4))) as pool:
+            done = list(pool.map(reach, ARMED))
+        print("| Sentence | Hand | Cube | Placed |")
+        print("|---|---|---|---|")
+        for r in done:
+            if "refused" in r:
+                print(f"| {r['label']} | | | refused: {r['refused']} |")
+            else:
+                where = f"{r['beyond']:+.2f} m past the hand, {r['from_middle']:.2f} m from the middle"
+                where += ", went over to it" if r["went"] else ""
+                print(f"| {r['label']} | {r['hand']} | {where} | {'yes' if r['placed'] else 'NO'} |")
+        return 0 if all(r.get("placed") for r in done) else 1
+    runs = _runs(args)
     with ProcessPoolExecutor(max_workers=max(1, min(args.jobs, 4))) as pool:
         results = list(pool.map(measure, runs))
     print("| Run | Kind | Forward in 5 s | Max tilt | Notes |")
