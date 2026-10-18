@@ -305,21 +305,21 @@ def test_course_titles_on_a_phone_break_between_words(viewer, lang):
                 assert any(word in line for line in title), title
 
 
-def test_a_lesson_opens_at_the_top_of_its_panel(viewer):
-    """The panel kept the last lesson's place: after another lesson's Finish had scrolled to its foot, the next lesson
-    opened with its title scrolled out of sight."""
+def test_a_new_step_starts_at_the_top_of_the_lesson_panel(viewer):
+    """The panel kept the last step's place: on a phone, a step reached with the sheet scrolled down to the last one's
+    buttons opened with its title and text scrolled out of sight."""
 
-    async def scenario(tab, _server):
+    async def scenario(tab, server):
         await _start(tab, "pid_twins")
         await tab.run("document.getElementById('lesson-panel').scrollTop = 1e6;")
         scrolled = await tab.eval("document.getElementById('lesson-panel').scrollTop")
-        await tab.run("document.getElementById('lesson-exit').click();")
-        await tab.until("window.__robotforge.lesson() === null", 120)
-        await _start(tab, "pd_control")
+        steps = await asyncio.to_thread(qa.play_lesson, server, "pid_twins")
+        assert all(s.passed for s in steps), [(s.id, s.failed) for s in steps]
+        await asyncio.sleep(1.0)
         return scrolled, await tab.eval("document.getElementById('lesson-panel').scrollTop")
 
     scrolled, top = viewer("phone", "en", scenario)  # the lesson sheet is 40% of a phone: it scrolls
-    assert scrolled > 0 and top == 0
+    assert scrolled > 0 and top == 0, (scrolled, top)
 
 
 TAGS = """(async () => {
