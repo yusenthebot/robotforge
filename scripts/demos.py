@@ -426,6 +426,10 @@ def _swap_bench(pg: Any) -> None:
 
 
 UNSELECT = "window.__robotforge.select(null);"
+# The world reloaded after a swap selects its robot again, a moment later: keep it unselected for a while.
+KEEP_UNSELECTED = (
+    "for (let k = 0; k < 60; k++) { window.__robotforge.select(null); await new Promise((r) => setTimeout(r, 50)); }"
+)
 _PICKED: list[str] = []  # what the hand swap has put in the bin: the last one ends the film
 
 
@@ -463,11 +467,11 @@ G10_DEMOS = [
         75.0,
         timeline=[
             (1.0, _picked("ur5e", "cube", "bin")),
+            (1.05, KEEP_UNSELECTED),  # from just before the swap: no ring round its base
             (1.1, _swap("ur5e", "leap_hand")),
-            (1.15, UNSELECT),  # the reloaded world selects the robot again: no ring round its base
             (1.2, _picked("ur5e", "ball", "bin")),
+            (1.25, KEEP_UNSELECTED),
             (1.3, _swap("ur5e", "allegro_hand")),
-            (1.35, UNSELECT),
             (1.4, _picked("ur5e", "can", "bin")),
         ],
         page=UNSELECT + _orbit((0.38, -0.05, 0.32), 1.3, 0.6, -100.0, 60.0, 55.0),

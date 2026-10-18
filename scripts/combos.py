@@ -267,8 +267,14 @@ TEN = {
     "go1_piper_eye": ("A PiPER with a depth camera on its wrist, saved as a design, on a Go1.", "go1"),
     "panda_cart": ("A Franka Panda on a wheeled base with a 3D lidar on its front.", "cart"),
 }
+# Cameras for the pictures where the default does not frame it: (offset from the point looked at, its height over the
+# carrier's main body), m.
+VIEWS = {
+    "t1_sensors": ((2.3, -2.5, 0.35), -0.1),  # all of a 1.2 m humanoid, and the crate it measures
+    "allegro_ur5e": ((1.0, -1.25, 0.65), 0.45),
+}
 COMBOS: dict[str, Combo] = {
-    name: Combo(name, sentence, globals()[f"_{name}"], globals()[f"_{name}_job"], robot)
+    name: Combo(name, sentence, globals()[f"_{name}"], globals()[f"_{name}_job"], robot, *VIEWS.get(name, ()))
     for name, (sentence, robot) in TEN.items()
 }
 
