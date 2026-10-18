@@ -698,6 +698,7 @@ const pip = {
     const swapped = [];
     try {
       if (e.mode === "rgb") {
+        scene.fog = null; // the view's haze is for its own distances: a camera on a robot saw the far half white
         renderer.setRenderTarget(this.light);
         renderer.render(scene, cam);
         const tone = this.toneQuad();
@@ -750,9 +751,9 @@ const pip = {
     if (canvas.width !== W || canvas.height !== H) {
       canvas.width = W;
       canvas.height = H;
-      this.ctx = null;
     }
-    this.ctx ??= canvas.getContext("2d");
+    // Another camera picked builds a new canvas the same size: drawing on with the old one's context left it blank.
+    if (this.ctx?.canvas !== canvas) this.ctx = canvas.getContext("2d");
     if (!this.image || this.image.width !== W || this.image.height !== H) this.image = this.ctx.createImageData(W, H);
     const rows = this.image.data;
     const src = this.bytes;
