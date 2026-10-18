@@ -1,7 +1,9 @@
 """How light is robotforge? Measure it the same way every time and hold it to a budget.
 
-    uv run python scripts/bench.py [--only install imports physics viewer mcp] [--quick] [--no-save]
-        [--budget docs/bench/budget.json] [--against docs/bench/<run>.json] [--shots <folder>]
+    uv run python scripts/bench.py [--only install imports physics viewer mcp] [--worlds dog_idle ...]
+        [--quick] [--no-save] [--wait-calm MIN] [--budget docs/bench/budget.json]
+        [--against docs/bench/<run>.json] [--shots <folder>]
+    uv run python scripts/bench.py --ab <rev> [--worlds ...] [--rounds 3]
 
 Measures, each in fresh processes:
 - install: the built wheel, and the wheel plus its runtime dependencies installed in a clean uv venv in a temp
@@ -16,7 +18,9 @@ Measures, each in fresh processes:
 
 Writes docs/bench/<date>-<sha>.json, prints a table that compares with the previous run there and with the
 budgets in docs/bench/budget.json, and exits 1 when a budget is exceeded (2 when a measurement failed).
-Timings on a busy machine run slow: the run records the load average and says so next to a failed budget.
+Timings on a busy machine run slow: the run records the load average and says so next to a failed budget, and
+--wait-calm waits for the load to drop first. Two runs an hour apart on a shared machine can differ more than a
+change does, so --ab measures a change instead: the physics worlds on this tree and on revision <rev>, alternately.
 The physics, viewer and MCP parts use the real Menagerie Go2 (downloaded once into the cache); the viewer part
 needs Google Chrome (or CHROME=...). Maintainer tool, not part of robotforge.
 """
@@ -127,6 +131,16 @@ def load_budgets(path: Path) -> dict[str, dict[str, Any]]:
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
     return data.get("budgets", {})
+
+
+def wait_for_calm(seconds: float) -> None:
+    """Wait (at most `seconds`) until the last minute's load average drops below the number of cores."""
+    if not hasattr(os, "getloadavg"):
+        return
+    end, cores = time.monotonic() + seconds, os.cpu_count() or 1
+    while os.getloadavg()[0] >= cores and time.monotonic() < end:
+        print(f"waiting for a calm machine: load {os.getloadavg()[0]:.0f} on {cores} cores", file=sys.stderr)
+        time.sleep(30)
 
 
 def previous_run(directory: Path) -> Path | None:
@@ -951,7 +965,10 @@ def run(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--only", nargs="*", choices=SECTIONS, help="parts to run (default: all)")
-    parser.add_argument("--quick", action="store_true", help="fewer repeats: a rough look, not a record")
+    parser.add_argument("--quick", action="store_true", help="fewer repeats: a rough look, not saved")
+    parser.add_argument(
+        "--wait-calm", type=float, default=0.0, metavar="MIN", help="first wait up to MIN minutes for a calm machine"
+    )
     parser.add_argument("--no-save", action="store_true", help="print only; write nothing to docs/bench")
     parser.add_argument("--out", type=Path, default=BENCH_DIR)
     parser.add_argument("--budget", type=Path, default=BUDGET_FILE)
@@ -974,6 +991,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.shots:
         args.shots.mkdir(parents=True, exist_ok=True)
+    if args.wait_calm > 0:
+        wait_for_calm(args.wait_calm * 60)
     started = dt.datetime.now().astimezone()
     sha = git_sha()
     before_machine = machine()
@@ -990,8 +1009,10 @@ def main(argv: list[str] | None = None) -> int:
     against = args.against or previous_run(args.out)
     before: dict[str, Any] = {}
     if against is not None and against.is_file():
-        before = flatten(json.loads(against.read_text(encoding="utf-8")).get("results", {}))
-        print(f"compared with {against.name}")
+        old = json.loads(against.read_text(encoding="utf-8"))
+        before = flatten(old.get("results", {}))
+        then, here = old.get("machine", {}).get("load", ["?"])[0], before_machine.get("load", ["?"])[0]
+        print(f"compared with {against.name} (load {then} then, {here} now)")
     compared = compare(now, before)
     budgets = check_budgets(now, load_budgets(args.budget))
     print("\n".join(table(now, compared, budgets)))
@@ -1004,7 +1025,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"OVER BUDGET  {b['metric']} = {b['value']} ({b['kind']} {b['limit']}): {b['why']}")
     for e in errors:
         print(f"ERROR  {e}")
-    if not args.no_save:
+    if not (args.no_save or args.quick):
         args.out.mkdir(parents=True, exist_ok=True)
         path = args.out / run_name(started, sha)
         record["budgets"] = {b["metric"]: b["status"] for b in budgets}
