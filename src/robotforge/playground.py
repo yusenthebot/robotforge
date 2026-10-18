@@ -6,6 +6,7 @@ without an MCP client. Methods return plain dicts that serialize to JSON.
 
 from __future__ import annotations
 
+import copy
 import functools
 import math
 import threading
@@ -25,7 +26,7 @@ from robotforge.design.builder import edit as build_edit
 from robotforge.design.store import WorldStore
 from robotforge.design.world import CompiledWorld, Floor, ObjectEntry, RobotEntry, World, spawn_height, tidy_name
 from robotforge.learn import LESSONS, LessonRunner
-from robotforge.sim import carry, finder, vision
+from robotforge.sim import carry, finder, placement, vision
 from robotforge.sim.actuators import is_position_servo
 from robotforge.sim.render import VIEWS, SnapshotRenderer
 from robotforge.sim.session import SimSession
@@ -304,9 +305,16 @@ class Playground:
             w.robots.append(entry)
 
         result = self._edit(change)
+        free, placed = self._clear_start(name, entry.pos, asked=pos is not None)
+        if free is not None:  # put at [0, 0] for want of a place, inside something there: to the nearest free one
+
+            def move(w: World) -> None:
+                _find(w.robots, name, "robot").pos = free
+
+            result = self._edit(move, snapshot=False)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
-        return _noted(_renamed(result, given, name), _yaw_note(yaw))
+        return _noted(_renamed(result, given, name), _yaw_note(yaw), placed)
 
     @_one_edit_at_a_time
     def update_robot(
@@ -319,9 +327,11 @@ class Playground:
     ) -> dict[str, Any]:
         _check_meters("pos", pos, MAX_POSITION)
         kept: list[str] = []
+        found: list[str] = []
 
         def change(w: World) -> None:
             robot = _find(w.robots, name, "robot")
+            found.append(robot.name)
             if not params and pos is None and yaw is None and build is None:
                 raise PlaygroundError("nothing to change: give params, pos, yaw or build")
             if params:
@@ -349,7 +359,32 @@ class Playground:
                     'changes the fields it gives (send "parts" to replace them)'
                 )
 
-        return _noted(self._edit(change), _yaw_note(yaw), *kept)
+        result = self._edit(change)
+        placed = self._clear_start(found[0], pos, asked=True)[1] if pos is not None else None
+        return _noted(result, _yaw_note(yaw), *kept, placed)
+
+    def _clear_start(self, robot: str, pos: list[float], asked: bool) -> tuple[list[float] | None, str | None]:
+        """Whether `robot`, just put at `pos`, stands inside something: furniture, a wall, a ramp, another robot.
+        Put there for want of a place, it is to go to the nearest free one (returned, with a note); put there on
+        purpose, it stays, and the note says so and where is free. Added without a place after load_scene, a Go2
+        carrying an arm stood inside the kitchen's island at [0, 0], came out under the counter's edge and got stuck
+        on every trip, and nothing said why."""
+        with self.session.lock:
+            model, data = self.session.model, copy.copy(self.session.data)
+        hit = placement.inside(model, data, robot)
+        if not hit:
+            return None, None
+        what = ", ".join(list(hit)[:3]) + (" and more" if len(hit) > 3 else "")
+        shift = placement.move_to_free(model, data, robot)
+        free = None if shift is None else [round(pos[0] + shift[0], 2), round(pos[1] + shift[1], 2), *pos[2:]]
+        if free is not None and not asked:
+            return free, f"{robot}: {_xy(pos)} is inside {what}, so it starts at {_xy(free)}, the nearest free place"
+        where = f"; {_xy(free)} is free" if free is not None else ""
+        deep = max(hit.values()) * 100
+        return None, (
+            f"{robot} starts inside {what} at {_xy(pos)} ({deep:.0f} cm deep): it will be pushed out or get stuck "
+            f"there; give it a free pos{where}"
+        )
 
     # ---- robots built from parts ------------------------------------------------------
 
@@ -466,14 +501,15 @@ class Playground:
         store = self._require_store()
         return {"world_dir": str(store.dir), "world_yaml": store.file.read_text(encoding="utf-8")}
 
-    def _edit(self, change) -> dict[str, Any]:
+    def _edit(self, change, snapshot: bool = True) -> dict[str, Any]:
+        """Apply `change` to the open world and load it; snapshot=False finishes the edit before it (one undo)."""
         store = self._require_store()
         before = store.load()
         with self.session.lock:
             live = carry.take(self.session.model, self.session.data)
             hands_off = self.behaviors.hands_off()
         try:
-            after, compiled = store.apply(change)
+            after, compiled = store.apply(change, snapshot=snapshot)
         except ValidationError as exc:
             raise PlaygroundError(_validation_message(exc)) from exc
         result = self._load_world(compiled)
@@ -888,6 +924,10 @@ def _merged_build(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     elif "base" in new:
         out = {**out, "base": base}  # not a mapping: the build's own check says what a base is
     return out
+
+
+def _xy(pos: list[float]) -> str:
+    return f"[{pos[0]:g}, {pos[1]:g}]"
 
 
 def _noted(result: dict[str, Any], *notes: str | None) -> dict[str, Any]:
