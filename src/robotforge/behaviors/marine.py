@@ -28,6 +28,8 @@ GRAVITY = 9.81
 DEFAULT_SPEED = 0.5  # m/s, until the pilot has measured its own drag in the water
 SURFACE_MARGIN = 0.12  # m an ROV keeps its center below the surface when told to go up
 INTEGRATE_NEAR = 0.1  # m/s or rad/s: the speed and turn integrals gather only this near what was asked
+DEPTH_GAIN = 0.8  # m/s of climb or dive per meter off the depth it holds: the last stretch closes in 1.25 s
+POSITION_GAIN = 0.8  # the same for holding a point (m/s per meter off it)
 
 
 def _wrap(angle: float) -> float:
@@ -260,16 +262,20 @@ class RovPilot(_Pilot):
         self.water = hydro.water if hydro is not None else None
         self.lift = 0.0  # N it would rise with fully under water, all thrusters off
         self.drag = (0.0, 0.0)
+        self.sway_drag = (0.0, 0.0)
         self.heave_drag = (0.0, 0.0)
         self.turn_drag = (0.0, 0.0)
         self.max_push = sum(t.push * abs(t.direction[0]) for t in found)
         if hydro is not None:
             self.lift = hydro.buoyancy(self.root) - self.mass * GRAVITY
         if hydro is not None and data is not None:
+            # Its drag as it would be fully under water: it is pulled along at the surface where it starts.
             rot = data.xmat[self.root].reshape(3, 3)
-            self.drag = hydro.resistance(data, self.root, along=rot[:, 0])
-            self.heave_drag = hydro.resistance(data, self.root, along=np.array([0.0, 0.0, 1.0]))
-            self.turn_drag = hydro.resistance(data, self.root, about=np.array([0.0, 0.0, 1.0]))
+            under = np.full(len(hydro.bodies), -2.0 * hydro.water.level)
+            self.drag = hydro.resistance(data, self.root, along=rot[:, 0], lift=under)
+            self.sway_drag = hydro.resistance(data, self.root, along=rot[:, 1], lift=under)
+            self.heave_drag = hydro.resistance(data, self.root, along=np.array([0.0, 0.0, 1.0]), lift=under)
+            self.turn_drag = hydro.resistance(data, self.root, about=np.array([0.0, 0.0, 1.0]), lift=under)
         wet = self.drag[0] + self.drag[1] > 0
         # Its share of the most forward push, with a good part kept for depth and heading.
         self.max_speed = min(_speed_for(0.6 * self.max_push, *self.drag), 1.5) if wet else DEFAULT_SPEED
@@ -283,6 +289,7 @@ class RovPilot(_Pilot):
         self.cruise = 0.6 * self.max_speed
         self._ki_z = 0.0
         self._ki_v = 0.0
+        self._ki_xy = np.zeros(2)
 
     def command(self, speed: float = 0.0, turn: float = 0.0, heave: float | None = None) -> None:
         self.goal = None
@@ -340,10 +347,18 @@ class RovPilot(_Pilot):
             else:
                 hold_xy = self.goal[:2]
         self.depth_target = self._clamp_depth(self.depth_target)
-        # Depth by PID (natural frequency 1.2 rad/s, damping 0.9), with its buoyancy fed forward.
+        # Depth: the error asks for a vertical speed (DEPTH_GAIN per meter, at most max_heave; with heave, that
+        # speed), and a PI loop on the speed gets it, its heave drag and buoyancy fed forward. The water's own drag
+        # damps it: a PD on depth alone was so overdamped that it crept the last ten centimeters for seconds.
         e_z = self.depth_target - float(pos[2])
-        self._ki_z = float(np.clip(self._ki_z + e_z * dt, -0.5, 0.5))
-        fz = self.mass * (1.44 * e_z - 2.16 * world_v[2] + 0.6 * self._ki_z) - self.lift
+        vz = float(np.clip(DEPTH_GAIN * e_z, -self.max_heave, self.max_heave))
+        if self.heave:
+            vz = self.heave
+        e_vz = vz - float(world_v[2])
+        if abs(e_vz) < INTEGRATE_NEAR:
+            self._ki_z = float(np.clip(self._ki_z + e_vz * dt, -0.5, 0.5))
+        h1, h2 = self.heave_drag
+        fz = h1 * vz + h2 * vz * abs(vz) + self.mass * (3.0 * e_vz + 2.0 * self._ki_z) - self.lift
         # Heading: follow the turn rate asked, or hold the heading (PD, 2 rad/s).
         if turn:
             self.yaw_target = yaw
@@ -351,12 +366,24 @@ class RovPilot(_Pilot):
             mz = r1 * turn + r2 * turn * abs(turn) + self.inertia[2] * 4.0 * (turn - w[2])
         else:
             mz = self.inertia[2] * (4.0 * _wrap(self.yaw_target - yaw) - 3.6 * w[2])
-        # Along and across: the speed asked (drag fed forward), no drift sideways; or hold a point.
+        # Along and across: the speed asked (drag fed forward) with no drift sideways; at the goal, a point held
+        # the same way as the depth (the error asks for a speed, the speed loop gets it).
         if hold_xy is not None:
-            e_xy = np.array([hold_xy[0] - pos[0], hold_xy[1] - pos[1], 0.0])
-            local = rot.T @ (self.mass * (1.0 * e_xy - 1.8 * np.array([world_v[0], world_v[1], 0.0])))
-            fx, fy = float(local[0]), float(local[1])
+            e_xy = hold_xy - pos[:2]
+            want = POSITION_GAIN * e_xy
+            norm = float(np.linalg.norm(want))
+            if norm > self.cruise:
+                want *= self.cruise / norm
+            local_want = rot[:2, :2].T @ want
+            e_local = local_want - v[:2]
+            self._ki_xy = np.clip(self._ki_xy + e_local * dt, -0.3, 0.3)
+            (c1, c2), (s1, s2) = self.drag, self.sway_drag
+            fx = c1 * local_want[0] + c2 * local_want[0] * abs(local_want[0])
+            fy = s1 * local_want[1] + s2 * local_want[1] * abs(local_want[1])
+            fx += self.mass * (2.0 * e_local[0] + 1.0 * self._ki_xy[0])
+            fy += self.mass * (2.0 * e_local[1] + 1.0 * self._ki_xy[1])
         else:
+            self._ki_xy[:] = 0.0
             c1, c2 = self.drag
             e_v = speed - v[0]
             if abs(e_v) < INTEGRATE_NEAR:

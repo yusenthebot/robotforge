@@ -43,6 +43,7 @@ class WaterPlanner(navigation.Planner):
     ) -> None:
         super().__init__(model, robot, body, destination, None, layers)
         self.water, self.draft, self.freeboard = water, draft, freeboard
+        self._bottom: np.ndarray | None = None  # height of the bottom and what stands on it, per cell of the map
 
     @property
     def keel(self) -> float:
@@ -63,10 +64,14 @@ class WaterPlanner(navigation.Planner):
             shallow |= ~((xs >= x0) & (xs <= x1) & (ys >= y0) & (ys <= y1)).ravel()
         lethal[shallow] = OBSTACLE
         owner[shallow] = np.where(layer.floor_owner[shallow] >= 0, layer.floor_owner[shallow], shore)
+        bottom = layer.floor.copy()  # the bottom with what stands on it (a quay, an island), for _why_not
         for col in [*layer.columns, *moving]:
             hit = (col.low < top) & (col.high > keel)
             lethal[col.cells[hit]] = OBSTACLE
             owner[col.cells[hit]] = col.owner
+            rooted = col.low <= layer.floor[col.cells] + 0.05
+            np.maximum.at(bottom, col.cells[rooted], col.high[rooted])
+        self._bottom = bottom.reshape(grid.shape)
         lethal2 = lethal.reshape(grid.shape)
         if blocked is not None:
             lethal2[blocked] = OBSTACLE
@@ -76,19 +81,17 @@ class WaterPlanner(navigation.Planner):
     def _why_not(self, nav: NavMap, start: tuple[int, int], goal: np.ndarray) -> navigation.NoWay:
         """A point on land or in shallow water says so; anything else as on land (closed off, too narrow)."""
         here = nav.grid.cell(*self.destination.point)
-        if (not self.destination.name or self.destination.onto) and nav.grid.inside(*here):
-            layer = self.layers.get(self.robot) or self._own
-            if layer is not None and layer.grid is nav.grid:
-                bottom = float(layer.floor.reshape(nav.grid.shape)[here])
-                depth = self.water.level - bottom
-                if bottom > self.keel:
-                    where = "on land" if depth <= 0 else f"in water {depth:.2f} m deep"
-                    need = self.draft + UNDER_KEEL
-                    return navigation.NoWay(
-                        "on_land",
-                        f"no way to {self._label()} for {self.robot}: it is {where}, and the boat needs {need:.2f} m "
-                        "of water; send it to a point on the water (a dock or a buoy by name stops it next to them)",
-                    )
+        a_point = not self.destination.name or self.destination.onto
+        mapped = self._bottom is not None and self._bottom.shape == nav.grid.shape
+        if a_point and mapped and nav.grid.inside(*here) and self._bottom[here] > self.keel:
+            depth = self.water.level - float(self._bottom[here])
+            where = "on land" if depth <= 0 else f"in water {depth:.2f} m deep"
+            need = self.draft + UNDER_KEEL
+            return navigation.NoWay(
+                "on_land",
+                f"no way to {self._label()} for {self.robot}: it is {where}, and the boat needs {need:.2f} m of "
+                "water; send it to a point on the water (a dock or a buoy by name stops it next to them)",
+            )
         return super()._why_not(nav, start, goal)
 
 

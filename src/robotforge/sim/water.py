@@ -533,15 +533,21 @@ class Hydro:
     # ---- for pilots -----------------------------------------------------------------------------------------
 
     def resistance(
-        self, data: mujoco.MjData, root: int, along: np.ndarray | None = None, about: np.ndarray | None = None
+        self,
+        data: mujoco.MjData,
+        root: int,
+        along: np.ndarray | None = None,
+        about: np.ndarray | None = None,
+        lift: np.ndarray | None = None,
     ) -> tuple[float, float]:
         """How the water holds back the robot whose root body is `root` as it is now (its wet share), moving along
         the world direction `along` (force c1 v + c2 v |v|, N) or turning about the world axis `about` (torque,
-        N m): what a pilot needs to know its top speed and to feed forward the thrust that drag takes."""
+        N m): what a pilot needs to know its top speed and to feed forward the thrust that drag takes. `lift` (per
+        water body, m) moves bodies first, as in cells (an ROV asks with itself pushed under)."""
         mine = self.model.body_rootid[self._geom_bodyid] == root
         if not mine.any():
             return 0.0, 0.0
-        wet, _ = self.cells(data)
+        wet, _ = self.cells(data, lift=lift)
         share = (self._cells_to_geoms @ wet) / np.maximum(self.geom_volume, 1e-12)
         rot = data.geom_xmat[self.geoms].reshape(-1, 3, 3)[mine]
         up = np.abs(rot[:, 2, :])
