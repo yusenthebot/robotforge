@@ -15,7 +15,8 @@ step passed, and after Finish.
 
 Every capture comes with a layout report (DIR/report.json, a summary printed at the end): panels on top of each
 other or off the screen, text cut off, words broken across two lines (Intl.Segmenter decides what a word is, so
-Chinese counts too), panels that scroll sideways, the robots on screen that a panel covers, script errors.
+Chinese counts too), panels that scroll sideways, the robots on screen that a panel covers and how tall each is
+drawn, script errors.
 
 Needs Google Chrome (or CHROME=/path/to/chrome). Maintainer tool, not part of robotforge.
 """
