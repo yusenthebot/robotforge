@@ -37,6 +37,7 @@ DEFAULT_ROBOTS: dict[str, tuple[str, str]] = {
     "stand": ("quadruped", "dog"),
     "walk": ("quadruped", "dog"),
     "drive_to": ("rover", "rover"),
+    "hover": ("drone", "drone"),
 }
 MARKER = "goal_marker"
 UNSTABLE_PENALTY = 10.0  # reward lost when the simulation diverges (ends the episode)

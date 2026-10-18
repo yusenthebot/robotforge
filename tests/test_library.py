@@ -60,7 +60,7 @@ def test_catalog_describes_each_robot_with_its_license():
     assert entries["go2"]["kind"] == "quadruped"
     assert entries["go2"]["license"] == "BSD-3-Clause"
     assert entries["panda"]["license"] == "Apache-2.0"
-    assert {e["kind"] for e in entries.values()} == {"quadruped", "arm", "humanoid"}
+    assert {e["kind"] for e in entries.values()} == {"quadruped", "arm", "humanoid", "aircraft"}
     assert entries["go2"]["downloaded"] is True  # the offline fixture counts as downloaded
 
 

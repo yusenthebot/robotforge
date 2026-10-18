@@ -499,6 +499,7 @@ class SensorsLesson(Lesson):
                 Series("odom", {"zh": "编码器算的", "en": "from encoders"}, "ink"),
             ),
             window=10.0,
+            floor=0.0,
         ),
         Plot(
             "imu",
@@ -508,12 +509,14 @@ class SensorsLesson(Lesson):
                 Series("ax", {"zh": "前后加速度 m/s²（滤波后）", "en": "forward accel m/s² (filtered)"}, "blue"),
                 Series("gz", {"zh": "转速 °/s ÷ 50", "en": "turn rate °/s ÷ 50"}, "violet"),
             ),
+            span=1.0,  # parked, it drew its 0.02 m/s² settling across the whole plot
         ),
         Plot(
             "range",
             {"zh": "正前方距离（激光雷达）", "en": "Distance ahead (lidar)"},
             "m",
             (Series("front", {"zh": "前方", "en": "ahead"}, "amber"),),
+            floor=0.0,
         ),
     )
     steps = STEPS

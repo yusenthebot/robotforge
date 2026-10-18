@@ -40,10 +40,10 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
 
     @server.tool()
     def list_algorithms() -> str:
-        """List the control tasks (reach, balance, stand, walk, drive_to) with the robots, algorithms and parameters
-        that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc, mppi, hold, gait,
-        none), reinforcement learning (ppo, sac: train_policy first) and the trained policies. Use it to explain the
-        options."""
+        """List the control tasks (reach, balance, stand, walk, drive_to, hover) with the robots, algorithms and
+        parameters that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc, mppi, hold,
+        gait, cascade, none), reinforcement learning (ppo, sac: train_policy first) and the trained policies. Use it to
+        explain the options."""
         from robotforge.control.rl.mcp_tools import ALGOS
         from robotforge.control.rl.store import list_policies
 
@@ -67,7 +67,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
 
         Examples: robot="arm", task="reach", method="mpc", task_params={"target": [0.3, 0.1, 0.2]}; robot="pole",
         task="balance", method="lqr", push_at=2 (shoves it at 2 s to show recovery); robot="dog", task="stand",
-        method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}. list_algorithms says which
+        method="mpc"; robot="rover", task="drive_to", task_params={"goal": [1, 0.5]}; robot="drone", task="hover",
+        method="lqr", push_at=2 (an aircraft; cascade is its own flight controller). list_algorithms says which
         methods fit which task; method="policy:<name>" runs a policy from train_policy. Plays in real time when the
         viewer is open. The controller stays attached afterwards (e.g. keeps the pole balanced; keeps_running says
         so) until stop(robot). Returns reward, success, effort (joules), the task's own numbers and, for MPC,

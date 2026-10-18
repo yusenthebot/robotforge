@@ -57,10 +57,10 @@ INSTRUCTIONS = wording.unwrap(
 robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
-humanoid, rover, cartpole, gripper; list_templates), takes a real one from the library (list_library: Unitree Go2,
-Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the import doctor
-repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any robot from
-parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
+humanoid, rover, cartpole, gripper, drone; list_templates), takes a real one from the library (list_library:
+Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the
+import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
+robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
 Mars rover, centaur, ...; list_templates), saved as its parts. add_object places boxes, balls, cylinders, tables,
 bins, furniture and architecture (walls, shelves, counters, pallets, trees, benches, rocks, flat ground markers).
@@ -85,6 +85,15 @@ prefixed "<robot>/"). observe reports state with an image so you can check your 
 colored objects in a camera's picture and names them ("pick the red one"). open_viewer gives the
 user a live 3D view (they can also drive with WASD): offer it early; while it is open, actions play out in
 real time.
+
+Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
+parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
+of points flies a path ("a 3 m square at 2 m": to=[[3,0,2],[3,3,2],[0,3,2],[0,0,2]]); a last point with z 0 lands
+there; stop hovers. z is a height above the world's zero, not above the ground under it (over a hill or a table
+the result's clearance_m says how high it really is); a point under a tree's crown or a table hovers there, and it
+flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a gust (m/s) to test how it holds
+its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
+and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
@@ -203,14 +212,14 @@ _SERVED_ONCE_PER_SOCKET = sys.platform == "win32"
 
 def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
     """The MCP server, with the viewer on `port`. `viewer_socket`, when given, is already listening there (run()
-    takes the port before anything else can). Port 0 takes a free port from the system and holds it as long as
-    the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
-    listens, and then the viewer exits (tests run side by side on one machine hit that)."""
+    takes the port before anything else can). Otherwise the port (0: any free one) is taken here and held as long
+    as the server lives: a port only found free (find_free_port) can be taken by another process before the viewer
+    listens, and then the viewer exits. Tests side by side on one machine hit that: with many agents testing at
+    once, a test lost port 8791 between finding it free and its first session (2026-10-18)."""
     held: socket.socket | None = viewer_socket
-    if held is None and port == 0:
-        held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        held.bind((HOST, 0))
-        held.listen()  # Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+    if held is None:
+        # Listening at once: Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
+        held = listen_on_free_port(port, HOST, attempts=1)
         port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
@@ -283,8 +292,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper) with parameters, defaults and
-        limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, drone) with parameters, defaults
+        and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
         linear actuators). For other robots build from parts (builder_guide)."""
         from robotforge.design import components, gallery, templates
 
@@ -506,7 +515,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         extra = {k: run[k] for k in ("shown_live", "stopped_early") if k in run}
         result = trip.result()
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
-            result["note"] += "; call move with the same to again to go on (seconds=null lets it walk on meanwhile)"
+            goes = "fly" if "hovering" in result or "landed" in result else "walk"  # a trip through the air
+            result["note"] += f"; call move with the same to again to go on (seconds=null lets it {goes} on meanwhile)"
         return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
 
     @server.tool()
@@ -516,11 +526,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         turn: float = 0.0,
         seconds: float | None = 3.0,
         walker: str | None = None,
-        to: str | list[float] | None = None,
+        to: str | list[float] | list[list[float]] | None = None,
     ) -> str:
-        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
-        a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
-        (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
+        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, fly an
+        aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards),
+        turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each
+        robot's max_speed is
         in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
         ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
         saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
@@ -530,7 +541,15 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why."""
+        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why. Aircraft (drones)
+        fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
+        its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
+        a table's height) lands there; a point under a crown or a table hovers there. A landing where something
+        stands (a ball, a crate, a robot), on top of what moves or a crown, or at an edge is refused, and the refusal
+        names a spot nearby on the same surface that has room. A landed aircraft takes off
+        first, a leg that would hit something goes over or round it, and the result adds touchdown_m_s, or hovering
+        and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
+        (taking off first)."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if to is not None:
@@ -595,7 +614,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     @server.tool()
     def stop(robot: str) -> str:
         """Stop a robot's current behavior (a walking robot settles into a stand; a quadruped or hexapod keeps its
-        walking controller at speed 0, so it still steps along with a push)."""
+        walking controller at speed 0, so it still steps along with a push; an aircraft hovers where it is: land it
+        with move(to=[x, y, 0]))."""
         with _tool_errors():
             return _json(playground.behaviors.stop(playground.behaviors.resolve(robot)))
 
@@ -714,9 +734,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def robots() -> str:
-        """List robots with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake, other), the arms
-        they carry, position, heading, whether upright, and any running behavior. A quadruped or hexapod in a world
-        stands on its walking controller from the start: "walk" at speed 0 means standing (it steps along if pushed)."""
+        """List robots with their kind (arm, quadruped, hexapod, humanoid, rover, balancer, snake, aircraft, other),
+        the arms they carry, position, heading, whether upright, and any running behavior. A quadruped or hexapod in
+        a world stands on its walking controller from the start: "walk" at speed 0 means standing (it steps along if
+        pushed). An aircraft's "flight" gives its rotors, thrust_to_weight, controller, state and altitude_m."""
         with _tool_errors():
             out = []
             for info in playground.behaviors.robots():
@@ -748,11 +769,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json(playground.set_controls(controls))
 
     @server.tool()
-    def simulate(seconds: float, controls: dict[str, float] | None = None) -> str:
+    def simulate(seconds: float, controls: dict[str, float] | None = None, wind: list[float] | None = None) -> str:
         """Advance physics by `seconds` (max 60) as fast as possible, optionally setting controls first. Returns the
-        new time and which free bodies moved (from/to positions in meters)."""
+        new time and which free bodies moved (from/to positions in meters). wind=[x, y] (or [x, y, z]) in m/s blows
+        on every aircraft for those seconds (rising over 0.3 s, dying down over 0.3 s after); the same wind in the
+        next call keeps it blowing. "wind" in the result says how far each was pushed. Call simulate again without
+        wind to watch it come back."""
         with _tool_errors():
-            return _json(playground.simulate(seconds, controls))
+            return _json(playground.simulate(seconds, controls, wind))
 
     @server.tool()
     def sim_control(action: Literal["play", "pause", "reset"]) -> str:
