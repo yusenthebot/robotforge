@@ -261,7 +261,7 @@ DEMOS = [
         _kitchen_fetch,
         58.0,
         timeline=[(0.3, _play)],
-        page=_follow("mm", (1.4, -1.9, 2.1), ease=0.04),
+        page=_follow("mm", (0.6, -1.0, 3.0), ease=0.04),  # steep: over the island into the aisle behind it
         settle=1.0,
     ),
     Demo(

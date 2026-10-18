@@ -956,11 +956,11 @@ def _nowhere(
         )
     everywhere = np.ones(nav.grid.shape, bool)
     near = _nearest_base(stand, nav, reach, point)
-    if near is None:
-        far = _nearest_base(stand, nav, everywhere, point)
-        if far is not None:
-            return f"there is no way for {robot} to where its arm would reach {what}: walls or furniture close it off"
+    far = _nearest_base(stand, nav, everywhere, point)
+    if far is None:
         return f"there is no room for {robot} anywhere near {what}"
+    if near is None or (far < near - 0.15 and far <= max(out, tilted)):  # it would reach from where it cannot get
+        return f"there is no way for {robot} to where its arm would reach {what}: walls or furniture close it off"
     return (
         f"nowhere {robot} can stand does its arm reach {what}: the nearest its arm's base gets is {near:.2f} m from it "
         f"(seen from above), and at that height (z {point[2]:.2f} m) {arm.robot} points its gripper down at most "
