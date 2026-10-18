@@ -34,6 +34,7 @@ SURFACE_MARGIN = 0.12  # m an ROV keeps its center below the surface when told t
 INTEGRATE_NEAR = 0.1  # m/s or rad/s: the speed and turn integrals gather only this near what was asked
 DEPTH_GAIN = 0.8  # m/s of climb or dive per meter off the depth it holds: the last stretch closes in 1.25 s
 POSITION_GAIN = 0.8  # the same for holding a point (m/s per meter off it)
+HOLD_NEAR = 0.4  # m from a point (horizontally) where an ROV stops steering for it and holds it
 
 
 def _wrap(angle: float) -> float:
@@ -314,13 +315,14 @@ class RovPilot(_Pilot):
             self.cruise = min(abs(cruise), self.max_speed)
 
     def _leg_depth(self, dist: float) -> float:
-        """The depth to hold `dist` m (horizontally) from the goal: on the line from where the leg started."""
+        """The depth to hold `dist` m (horizontally) from the goal: on the line from where the leg started, at the
+        goal's depth from where it closes in on the point itself (HOLD_NEAR), so it gets there level."""
         if self._leg_from is None:
             return float(self.goal[2])
-        length = float(np.linalg.norm(self.goal[:2] - self._leg_from[:2]))
+        length = float(np.linalg.norm(self.goal[:2] - self._leg_from[:2])) - HOLD_NEAR
         if length < 0.05:
             return float(self.goal[2])
-        share = min(dist / length, 1.0)
+        share = float(np.clip((dist - HOLD_NEAR) / length, 0.0, 1.0))
         return float(self.goal[2] + share * (self._leg_from[2] - self.goal[2]))
 
     def status(self) -> dict[str, Any]:
@@ -359,7 +361,7 @@ class RovPilot(_Pilot):
             away = self.goal[:2] - pos[:2]
             dist = float(np.linalg.norm(away))
             self.depth_target = self._leg_depth(dist)
-            if dist > 0.4:
+            if dist > HOLD_NEAR:
                 self.yaw_target = math.atan2(away[1], away[0])
                 off = abs(_wrap(self.yaw_target - yaw))
                 speed = min(self.cruise, 0.6 * dist) * max(0.0, math.cos(off)) ** 2
