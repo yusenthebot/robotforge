@@ -53,6 +53,12 @@ def _text(zh: str, en: str) -> Text:
     return {"zh": zh, "en": en}
 
 
+def _signed(value: float, digits: int) -> str:
+    """`value` with its sign, as the live formula shows it; one that rounds to zero reads +0.00, not -0.00."""
+    text = f"{value:+.{digits}f}"
+    return text.replace("-", "+") if float(text) == 0 else text
+
+
 class JointPD:
     """u = Kp*e - Kd*omega + Ki*integral(e) + gravity feedforward, clipped to the motor's limit.
 
@@ -296,8 +302,8 @@ class JointLesson(Lesson):
             readout = _text(f"控制器关着 · 角度 {q:.1f}°", f"Controller off · angle {q:.1f}°")
         else:
             readout = _text(
-                f"角度 {q:.1f}° · 目标 {target:g}° · 差 {target - q:+.1f}°",
-                f"angle {q:.1f}° · target {target:g}° · off by {target - q:+.1f}°",
+                f"角度 {q:.1f}° · 目标 {target:g}° · 差 {_signed(target - q, 1)}°",
+                f"angle {q:.1f}° · target {target:g}° · off by {_signed(target - q, 1)}°",
             )
         if self.test is not None:
             readout = _text("测试中……", "Testing...")
@@ -326,42 +332,42 @@ class JointLesson(Lesson):
             "show": "f_p",
             "label": _text("电机出力", "Motor"),
             "expr": _text("上面几项加起来", "the terms added up"),
-            "value": f"{t['u']:+.2f} N·m",
+            "value": f"{_signed(t['u'], 2)} N·m",
             "color": "ink",
         }
         if saturated:
             motor["note"] = _text(
-                f"算出来要 {t['raw']:+.1f}，可电机最多 ±{limit:g} N·m，只能出满力",
-                f"the sum asks for {t['raw']:+.1f}, but the motor tops out at ±{limit:g} N·m",
+                f"算出来要 {_signed(t['raw'], 1)}，可电机最多 ±{limit:g} N·m，只能出满力",
+                f"the sum asks for {_signed(t['raw'], 1)}, but the motor tops out at ±{limit:g} N·m",
             )
         ff_on = bool(v["gravity"])
         return [
             {
                 "show": "f_p",
                 "label": _text("P 项", "P"),
-                "expr": f"Kp × e = {v['kp']:g} × {t['e']:+.3f} rad",
-                "value": f"{t['p']:+.2f} N·m",
+                "expr": f"Kp × e = {v['kp']:g} × {_signed(t['e'], 3)} rad",
+                "value": f"{_signed(t['p'], 2)} N·m",
                 "color": "blue",
             },
             {
                 "show": "f_d",
                 "label": _text("D 项", "D"),
-                "expr": f"−Kd × ω = −{v['kd']:g} × {t['w']:+.2f} rad/s",
-                "value": f"{t['d']:+.2f} N·m",
+                "expr": f"−Kd × ω = −{v['kd']:g} × {_signed(t['w'], 2)} rad/s",
+                "value": f"{_signed(t['d'], 2)} N·m",
                 "color": "violet",
             },
             {
                 "show": "f_i",
                 "label": _text("I 项", "I"),
-                "expr": f"Ki × ∫e = {v['ki']:g} × {self.pd.integral:+.3f}",
-                "value": f"{t['i']:+.2f} N·m",
+                "expr": f"Ki × ∫e = {v['ki']:g} × {_signed(self.pd.integral, 3)}",
+                "value": f"{_signed(t['i'], 2)} N·m",
                 "color": "green",
             },
             {
                 "show": "f_i",
                 "label": _text("前馈", "Feedforward"),
                 "expr": _text("模型算出的重力", "gravity from the model") if ff_on else _text("关着", "off"),
-                "value": f"{t['ff']:+.2f} N·m",
+                "value": f"{_signed(t['ff'], 2)} N·m",
                 "color": "green",
             },
             motor,
@@ -369,7 +375,7 @@ class JointLesson(Lesson):
                 "show": "f_g",
                 "label": _text("重力要", "Gravity needs"),
                 "expr": _text("把手臂托住要的力矩", "to hold the arm up"),
-                "value": f"{self.pd.needed(data):+.2f} N·m",
+                "value": f"{_signed(self.pd.needed(data), 2)} N·m",
                 "color": "muted",
             },
         ]
@@ -605,8 +611,8 @@ STEPS = (
             f"三颗星：1 秒内稳定在 ±{FINE_BAND:g}° 以内，超调不超过 5%。\n"
             "所有旋钮都可以调，目标角度也解锁了，可以随便玩。",
             "Press Run test; it is the same climb from hanging down to 120 degrees.\n"
-            f"Two stars: within +-{SETTLE_BAND:g} degrees in 1.5 s, overshooting by at most 15%. "
-            f"Three stars: within +-{FINE_BAND:g} degree in 1 s, overshooting by at most 5%.\n"
+            f"Two stars: within ±{SETTLE_BAND:g} degrees in 1.5 s, overshooting by at most 15%. "
+            f"Three stars: within ±{FINE_BAND:g} degree in 1 s, overshooting by at most 5%.\n"
             "Every knob is yours now, and the target slider is unlocked to play with.",
         ),
         done=_text(

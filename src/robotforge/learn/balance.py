@@ -36,6 +36,12 @@ def _text(zh: str, en: str) -> Text:
     return {"zh": zh, "en": en}
 
 
+def _signed(value: float, digits: int) -> str:
+    """`value` with its sign, as the live formula shows it; one that rounds to zero reads +0.0, not -0.0."""
+    text = f"{value:+.{digits}f}"
+    return text.replace("-", "+") if float(text) == 0 else text
+
+
 def _runs(ctx: LessonContext, **want: Any) -> list[dict[str, Any]]:
     return [r for r in ctx.runs if all(test(r["params"].get(k, 0.0)) for k, test in want.items())]
 
@@ -515,7 +521,7 @@ class BalanceLesson(Lesson):
             "show": "f_edge",
             "label": _text("还剩多少", "Margin"),
             "expr": _text("脚边 − 捕获点", "foot edge - capture point"),
-            "value": f"{100 * inside:+.1f} cm",
+            "value": f"{_signed(100 * inside, 1)} cm",
             "color": "violet",
         }
         if inside < 0:
@@ -524,8 +530,8 @@ class BalanceLesson(Lesson):
             {
                 "show": "f_cp",
                 "label": _text("捕获点", "Capture point"),
-                "expr": f"v × √(z ÷ g) = {speed:+.2f} × √({z:.3f} ÷ 9.81)",
-                "value": f"{100 * cp:+.1f} cm",
+                "expr": f"v × √(z ÷ g) = {_signed(speed, 2)} × √({z:.3f} ÷ 9.81)",
+                "value": f"{_signed(100 * cp, 1)} cm",
                 "color": "amber",
             },
             {

@@ -259,7 +259,7 @@ class PIDTwins(TwinsLesson):
             body=_text(
                 "现在只调 A 的 Kp 和 Kd，让它拿到两颗星：1.5 秒内稳到 ±3° 以内，超调不超过 15%。"
                 "B 和 C 留着当参照。每次改完点「三个一起测试」。",
-                "Now tune only A's Kp and Kd until it earns two stars: inside +-3° within 1.5 s and no more than 15% "
+                "Now tune only A's Kp and Kd until it earns two stars: inside ±3° within 1.5 s and no more than 15% "
                 "overshoot. Leave B and C as they are, for reference. Press Test all three after each change.",
             ),
             done=_text(
