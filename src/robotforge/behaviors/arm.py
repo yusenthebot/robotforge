@@ -56,6 +56,10 @@ TILTS = (0.35, 0.6, 0.9)
 # at. The load also clears the shapes under the tool all the way (LOAD_CLEARANCE), the arm's own base among them, and
 # every robot's: a template arm bolted to the floor carries over its own stand.
 CARRY_MARGIN = 0.04
+# m an arm riding on a robot keeps its links and gripper from that robot all along a carry (see _follows_clear). Kept
+# only out of it, a UR5e on ANYmal swung its Robotiq round the dog's back 1 cm past its rear: the servos lagging, the
+# gripper caught on the dog, jammed and dropped the cube 60 cm from the bin.
+LINK_CLEARANCE = 0.03
 CARRY_STEP = 0.01
 CARRY_ARC_STEPS = 8  # points along the way round between two of a carry's checked points, for what lies under it
 # Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
@@ -199,6 +203,7 @@ class ArmMotion:
             model.jnt_type[last] == mujoco.mjtJoint.mjJNT_HINGE and abs(float(self.ik.data.xaxis[last] @ tool)) > ROLL
         )
         self._self_pairs: list[tuple[int, int]] | None = None  # see _clear_of_itself, worked out when first needed
+        self._carrier_pairs: tuple[np.ndarray, np.ndarray] | None = None  # see _near_carrier, the same
         self.queue: deque[Waypoint] = deque()
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
@@ -353,6 +358,42 @@ class ArmMotion:
         self.ik.point(self.chain, q)
         fromto = np.zeros(6)
         return np.array([mujoco.mj_geomDistance(m, d, a, b, SELF_CLEARANCE, fromto) for a, b in self._self_pairs])
+
+    def _near_carrier(self, q: np.ndarray) -> set[tuple[int, int]]:
+        """The pairs of shapes, one of the arm's (its gripper's too) and one of the robot carrying it (what the arm
+        stands on left out, see _own_base), nearer than LINK_CLEARANCE with the arm at `q`."""
+        m, d = self.ik.model, self.ik.data
+        if self._carrier_pairs is None:
+            mine = [g for g in range(m.ngeom) if int(m.geom_bodyid[g]) in self._moving and collides(m, g)]
+            under = [
+                g
+                for g in range(m.ngeom)
+                if int(m.body_rootid[m.geom_bodyid[g]]) == self._robot_root
+                and int(m.geom_bodyid[g]) not in self._moving | self._own_base
+                and collides(m, g)
+            ]
+            pairs = np.array(
+                [
+                    (a, b)
+                    for a in mine
+                    for b in under
+                    if m.geom_contype[a] & m.geom_conaffinity[b] or m.geom_contype[b] & m.geom_conaffinity[a]
+                ],
+                int,
+            ).reshape(-1, 2)
+            self._carrier_pairs = (pairs[:, 0], pairs[:, 1])
+        arm, carrier = self._carrier_pairs
+        if not len(arm):
+            return set()
+        self.ik.point(self.chain, q)
+        apart = np.linalg.norm(d.geom_xpos[arm] - d.geom_xpos[carrier], axis=1)
+        maybe = np.flatnonzero(apart - m.geom_rbound[arm] - m.geom_rbound[carrier] < LINK_CLEARANCE)
+        fromto = np.zeros(6)
+        return {
+            (int(arm[i]), int(carrier[i]))
+            for i in maybe
+            if mujoco.mj_geomDistance(m, d, int(arm[i]), int(carrier[i]), LINK_CLEARANCE, fromto) < LINK_CLEARANCE
+        }
 
     def _link_pairs(self) -> list[tuple[int, int]]:
         """Pairs of the arm's solid shapes that its own joints move toward each other: on bodies neither the same nor
@@ -802,7 +843,7 @@ class ArmMotion:
         try:
             steps = max(1, round(self._path_length(a, b) / SPEED * self.rate_hz))
             aim = lambda s: {"axis": (self.tool_axis, _turn_toward(axis_a, axis_b, s))}  # noqa: E731
-            return self._follow(start, a, b, steps, aim, clear=True)[1] < np.inf
+            return self._follow(start, a, b, steps, aim, clear=True, apart=True)[1] < np.inf
         finally:
             self._turn = planned
 
@@ -976,15 +1017,17 @@ class ArmMotion:
         # from another pose with the tool where it is (down by the object, changing pose could knock it). Moving joint
         # by joint instead, a tentacle's hand swung in sideways on the way down and pushed the cube 4 cm, and a Panda
         # base swung its load 250 degrees on the way down and threw it.
+        # On a robot the arm keeps off it, and a carry keeps LINK_CLEARANCE from it (see _follows_clear): going down
+        # beside a mobile Panda's wheel from high above, its hand swung round into the wheel and missed the cube.
         rises = float(wp.position[2]) > float(start[2]) + APPROACH / 2  # off the object or the place
-        clear = wp.load is not None and self._rides  # a carry keeps off the robot carrying the arm (_follows_clear)
-        if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps, aim, clear)[1] <= REACH_TOL:
+        keep = {"clear": self._rides, "apart": self._rides and wp.load is not None}
+        if rises or wp is self._reposed or self._follow(self.q, start, wp.position, steps, aim, **keep)[1] <= REACH_TOL:
             return wp
         if wp.load is not None:
             other = self._other_way_across(start, wp, aim)
             if other is not None:
                 return other
-        reposed = self._repose(wp, start, goal, steps, aim)
+        reposed = self._repose(wp, start, goal, steps, aim, **keep)
         if reposed is not None:
             return reposed
         # A carry the arm cannot follow round from any pose here goes joint by joint, as it did before it had a
@@ -1013,7 +1056,7 @@ class ArmMotion:
         self._turn = other
         duration = max(wp.duration, self._path_length(start, wp.position) / SPEED)
         steps = max(1, round(duration * self.rate_hz))
-        if self._follow(self.q, start, wp.position, steps, aim, clear=self._rides)[1] > REACH_TOL:
+        if self._follow(self.q, start, wp.position, steps, aim, clear=self._rides, apart=self._rides)[1] > REACH_TOL:
             self._turn = planned
             return None
         return replace(wp, duration=duration, turn=other)
@@ -1030,39 +1073,52 @@ class ArmMotion:
         steps: int,
         aim: Callable[[float], dict[str, Any]],
         clear: bool = False,
+        apart: bool = False,
     ) -> tuple[np.ndarray, float]:
         """The pose the arm ends in when it follows the current move's path from `a` to `b` (turning self._turn)
         from pose `q`, with the tool turned as `aim` says along the way, tick by tick as update() does, and how far
         the tool strays from the path on the way (m); infinitely far when, checked at FOLLOW_CHECKS poses, the arm
         runs into itself or what carries it, with `clear` or where the jaws turn (then also too near itself, see
-        _clear_of_itself)."""
+        _clear_of_itself), or comes nearer than LINK_CLEARANCE to what carries it, with `apart`."""
         worst = 0.0
         turning = "rotation" in aim(0.0)  # the jaws turn too: the wrist may swing into the arm (see _square)
         gaps = self._self_gaps(q) if turning else None
-        every = max(1, steps // FOLLOW_CHECKS) if turning or clear else steps + 1
+        near = self._near_carrier(q) if apart else set()  # already that near where it starts: as its own base is
+        every = max(1, steps // FOLLOW_CHECKS) if turning or clear or apart else steps + 1
         for k in range(1, steps + 1):
             u = k / steps
             s = u * u * (3 - 2 * u)
             q, err = self.ik.solve(self.chain, self._arc_point(a, b, s), q, iterations=6, **aim(s))
             worst = max(worst, err)
-            checked = k % every == 0 or (k == steps and every <= steps)
-            if checked and (self._collides(q) or (turning and not self._clear_of_itself(q, gaps))):
+            if not (k % every == 0 or (k == steps and every <= steps)):
+                continue
+            if self._collides(q) or (turning and not self._clear_of_itself(q, gaps)):
+                return q, np.inf
+            if apart and self._near_carrier(q) - near:
                 return q, np.inf
         return q, max(worst, float(np.linalg.norm(self.ik.point(self.chain, q) - b)))
 
     def _repose(
-        self, wp: Waypoint, start: np.ndarray, goal: np.ndarray, steps: int, aim: Callable[[float], dict[str, Any]]
+        self,
+        wp: Waypoint,
+        start: np.ndarray,
+        goal: np.ndarray,
+        steps: int,
+        aim: Callable[[float], dict[str, Any]],
+        **keep: bool,
     ) -> Waypoint | None:
         """A change of pose, joint by joint with the tool where it is, into the pose the arm reaches by backing along
-        the path from `goal`, so that it follows the path from there (`wp` is put back in the queue to follow it);
-        None when that pose does not work. Straying from the way down, a tentacle whose IK found the grasp 74
-        degrees of joint travel away ended 8 cm off and closed on nothing, and a Panda with its first joint at its
-        limit slid 8 cm aside."""
+        the path from `goal`, so that it follows the path from there (`wp` is put back in the queue to follow it),
+        clear of what `keep` says (see _follow); None when that pose does not work. Straying from the way down, a
+        tentacle whose IK found the grasp 74 degrees of joint travel away ended 8 cm off and closed on nothing, and a
+        Panda with its first joint at its limit slid 8 cm aside."""
         forward = self._turn
         self._turn = None if forward is None else -forward
         here, off = self._follow(goal, wp.position, start, steps, lambda s: aim(1.0 - s))
         self._turn = forward
-        if off > REACH_TOL or self._collides(here) or self._follow(here, start, wp.position, steps, aim)[1] > REACH_TOL:
+        if off > REACH_TOL or self._collides(here):
+            return None
+        if self._follow(here, start, wp.position, steps, aim, **keep)[1] > REACH_TOL:
             return None
         if wp.load is not None and self._wanders(self.q, here, start):
             return None
