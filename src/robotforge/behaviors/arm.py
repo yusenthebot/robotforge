@@ -1267,7 +1267,9 @@ class ArmMotion:
             return reposed
         # A carry the arm cannot follow round from any pose here goes joint by joint, as it did before it had a
         # planned path: following the path anyway, a scorpion's tail lost it halfway and dropped the cube.
-        return self._joint_way(wp, goal) if wp.load is not None and reached else wp
+        if wp.load is not None and reached:
+            return self._joint_way(wp, goal)
+        return self._short_of_carrier(wp, start, steps, aim, **keep) if self._rides else wp
 
     def _other_way_across(
         self, start: np.ndarray, wp: Waypoint, aim: Callable[[float], dict[str, Any]]
@@ -1332,7 +1334,21 @@ class ArmMotion:
         the tool strays from the path on the way (m); infinitely far when, checked at FOLLOW_CHECKS poses, the arm
         runs into itself or what carries it, with `clear` or where the jaws turn (then also too near itself, see
         _clear_of_itself), or comes nearer to what carries it than `apart` (m; 0 does not look)."""
-        worst = 0.0
+        q, off, _ = self._follow_until(q, a, b, steps, aim, clear, apart)
+        return q, off
+
+    def _follow_until(
+        self,
+        q: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        steps: int,
+        aim: Callable[[float], dict[str, Any]],
+        clear: bool = False,
+        apart: float = 0.0,
+    ) -> tuple[np.ndarray, float, float]:
+        """As _follow, and how far along the path (0 to 1) the last of the checked poses that passed lies."""
+        worst, passed = 0.0, 0.0
         turning = "rotation" in aim(0.0)  # the jaws turn too: the wrist may swing into the arm (see _square)
         gaps = self._self_gaps(q) if turning else None
         near = self._near_carrier(q, apart) if apart else set()  # already that near where it starts: may stay
@@ -1345,10 +1361,23 @@ class ArmMotion:
             if not (k % every == 0 or (k == steps and every <= steps)):
                 continue
             if self._collides(q) or (turning and not self._clear_of_itself(q, gaps)):
-                return q, np.inf
+                return q, np.inf, passed
             if apart and self._near_carrier(q, apart) - near:
-                return q, np.inf
-        return q, max(worst, float(np.linalg.norm(self.ik.point(self.chain, q) - b)))
+                return q, np.inf, passed
+            passed = s
+        return q, max(worst, float(np.linalg.norm(self.ik.point(self.chain, q) - b))), 1.0
+
+    def _short_of_carrier(
+        self, wp: Waypoint, start: np.ndarray, steps: int, aim: Callable[[float], dict[str, Any]], **keep: Any
+    ) -> Waypoint:
+        """The move `wp` of an arm riding on a robot, that no pose here follows clear of that robot, ending where it
+        still is clear: the robot has shifted under the arm since the plan checked it. Lowering a cube behind ANYmal,
+        whose hind thigh had moved 1.3 cm into the way checked when the pick was planned, a UR5e went on down anyway,
+        caught its forearm on the thigh and let go of the cube 7 cm from the place."""
+        _, off, passed = self._follow_until(self.q, start, wp.position, steps, aim, **keep)
+        if off < np.inf:
+            return wp
+        return replace(wp, position=self._arc_point(start, wp.position, passed), pose=None)
 
     def _repose(
         self,
