@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import socket
+import sys
 import time
 import weakref
 from collections.abc import AsyncIterator, Iterator
@@ -190,6 +191,10 @@ def _lean_schemas(server: MCPServer) -> None:
         tool.parameters = lean(tool.parameters)
 
 
+# Windows ties a socket to one IO completion port for good (see build_server's serving()).
+_SERVED_ONCE_PER_SOCKET = sys.platform == "win32"
+
+
 def build_server(playground: Playground, port: int, viewer_socket: socket.socket | None = None) -> MCPServer:
     """The MCP server, with the viewer on `port`. `viewer_socket`, when given, is already listening there (run()
     takes the port before anything else can). Port 0 takes a free port from the system and holds it as long as
@@ -199,6 +204,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     if held is None and port == 0:
         held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         held.bind((HOST, 0))
+        held.listen()  # Windows serves a duplicate only of a listening socket (WinError 87 for one just bound)
         port = held.getsockname()[1]
     hub = ViewerHub(playground.session)
     playground.attach_viewer(hub)
@@ -226,16 +232,29 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             open_in_browser(playground.viewer_url)
         return _json({"viewer_url": playground.viewer_url, "model": playground.session.source})
 
+    def serving() -> list[socket.socket] | None:
+        """The sockets this session's viewer serves on. uvicorn closes them when it stops, so it gets a copy of
+        the held socket and the port stays bound for the next session on this server (the second session found
+        nothing listening when it was given the held socket itself). Windows ties a socket to one completion port
+        for good, so a copy of one already served cannot be served again (WinError 87): there uvicorn gets the
+        held socket itself and the next session takes the port anew (Windows binds a closed listening port again
+        at once)."""
+        nonlocal held
+        if held is None:
+            return None
+        if not _SERVED_ONCE_PER_SOCKET:
+            return [held.dup()]
+        if held.fileno() == -1:
+            held = socket.create_server((HOST, port))
+        return [held]
+
     @contextlib.asynccontextmanager
     async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
         config = uvicorn.Config(
             create_app(hub), host=HOST, port=port, log_level="warning", access_log=False, log_config=None
         )
         viewer = uvicorn.Server(config)
-        # uvicorn closes the sockets it serves on when it stops, so it gets a copy of the held one: the port stays
-        # bound for the next session on this server (the second one found nothing listening when it was given the
-        # held socket itself).
-        task = asyncio.create_task(viewer.serve(sockets=[held.dup()] if held is not None else None))
+        task = asyncio.create_task(viewer.serve(sockets=serving()))
         log.info("viewer at %s", playground.viewer_url)
         try:
             yield
@@ -253,7 +272,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         lifespan=lifespan,
     )
     if held is not None:
-        weakref.finalize(server, held.close)  # the port is let go with the server
+        weakref.finalize(server, lambda: held.close())  # the port is let go with the server (Windows: the newest)
     _plain_tools(server)
 
     @server.tool()
