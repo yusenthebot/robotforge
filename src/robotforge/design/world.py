@@ -478,7 +478,10 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         return
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
     body.add_freejoint(name=obj.name)
-    g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=4, **geom)
+    # Round things also feel their rolling friction (condim 6): without it an apple a robot put down on a table
+    # rolled on at 3 cm/s from the nudge of the fingers letting go, and off the edge.
+    condim = 6 if obj.shape in ("sphere", "cylinder") else 4
+    g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=condim, **geom)
     looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g])
 
 
