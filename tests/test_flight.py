@@ -212,11 +212,96 @@ def test_the_keys_take_off_fly_forward_and_set_it_down(pg):
     assert pg.behaviors.robots()[0]["flight"]["state"] == "landed"
 
 
-def test_a_tree_in_the_way_is_flown_over(pg):
+def test_a_trunk_in_the_way_is_flown_round_and_a_long_wall_over(pg):
     pg.add_object("tree", shape="tree", size=[1.2, 3.0], pos=[2.0, 0.0])
     result = _trip(pg, [4.0, 0.0, 1.5])
-    assert result["arrived"]
-    assert "over tree" in result["note"]
+    assert result["arrived"] and "round the" in result["note"] and "tree" in result["note"]  # not up to 3.6 m
+    pg.add_object("wall", shape="wall", size=[12.0, 0.2, 2.0], pos=[6.0, 0.0], yaw=90)
+    result = _trip(pg, [8.0, 0.0, 1.5])
+    assert result["arrived"] and "over wall" in result["note"]  # shorter than 6 m round its end
+    assert np.linalg.norm(np.subtract(result["position"], [8.0, 0.0, 1.5])) < 0.08
+
+
+def _crown_world(pg):
+    pg.add_object("tree", shape="tree", size=[2.0, 4.0], pos=[3.0, 0.0])
+    pg.add_object("table", shape="table", size=[1.2, 0.8, 0.75], pos=[-2.0, 0.0], fixed=True)
+
+
+def _touches(pg, robot: str = "drone") -> set[str]:
+    """The names of what the aircraft touches now, but the floor."""
+    m, d = pg.session.model, pg.session.data
+    own = pg.session.controllers[robot].frame.descendants
+    out = set()
+    for c in d.contact[: d.ncon]:
+        a, b = int(m.geom_bodyid[c.geom1]) in own, int(m.geom_bodyid[c.geom2]) in own
+        if a != b:
+            g = int(c.geom2 if a else c.geom1)
+            out.add(mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, g) or f"body {int(m.geom_bodyid[g])}")
+    return out - {"floor"}
+
+
+def _clean_trip(pg, to, seconds: float = 40.0) -> tuple[dict, set[str]]:
+    trip = pg.behaviors.navigate("drone", to, None, None, seconds)
+    touched: set[str] = set()
+    while not trip.done and pg.session.data.time < 200:
+        pg.run_fast(lambda: False, 0.05)
+        touched |= _touches(pg)
+    return trip.result(), touched
+
+
+def test_a_point_under_a_crown_is_a_hover_there_not_a_landing_on_top(pg):
+    _crown_world(pg)
+    result, touched = _clean_trip(pg, [2.5, 0.0, 1.5])  # it once landed on the crown and fell through it
+    assert result["arrived"] and result["hovering"] and "land" not in result["destination"]
+    assert np.linalg.norm(np.subtract(result["position"], [2.5, 0.0, 1.5])) < 0.06
+    assert result["clearance_m"] == pytest.approx(1.5 - 0.14, abs=0.05)
+    assert not touched
+
+
+def test_a_point_under_a_table_is_a_hover_under_it_not_a_landing_on_it(pg):
+    _crown_world(pg)
+    result, touched = _clean_trip(pg, [-2.0, 0.0, 0.4])  # it once landed on the tabletop at 0.89 m
+    assert result["arrived"] and result["hovering"]
+    assert result["position"][2] == pytest.approx(0.4, abs=0.03)
+    assert not touched  # round the table's legs, not through one
+
+
+def test_a_target_beside_a_trunk_is_reached_round_it_from_behind(pg):
+    _crown_world(pg)
+    _trip(pg, [5.0, 0.0])
+    result, touched = _clean_trip(pg, [2.5, 0.0])  # over the tree meant down through its crown
+    assert result["arrived"] and "round the" in result["note"]
+    assert np.hypot(result["position"][0] - 2.5, result["position"][1]) < 0.06
+    assert not touched
+
+
+def test_it_comes_in_under_a_crown_to_land_beneath_it(pg):
+    _crown_world(pg)
+    _trip(pg, [2.5, 3.0, 5.5])
+    result, touched = _clean_trip(pg, [2.5, 0.3, 0.0])
+    assert result["arrived"] and result["landed"] and "under tree" in result["note"]
+    assert np.hypot(result["position"][0] - 2.5, result["position"][1] - 0.3) < 0.1
+    assert not touched
+
+
+def test_a_point_inside_something_is_refused_and_z_is_a_world_height(pg):
+    _crown_world(pg)
+    with pytest.raises(ValueError, match="inside tree.*world's zero"):
+        pg.behaviors.navigate("drone", [3.0, 0.0, 3.5], None, None, 10)
+    result, _ = _clean_trip(pg, [-2.0, 0.0, 0.75])  # the tabletop's height: a landing on it
+    assert result["arrived"] and result["landed"] and result["position"][2] > 0.75
+
+
+def test_a_landing_that_comes_down_somewhere_else_did_not_arrive(pg):
+    from robotforge.behaviors import airways
+
+    _trip(pg, [0.0, 0.0, 1.5])
+    trip = pg.behaviors.navigate("drone", [1.0, 0.0, 0.0], None, None, 30)
+    trip.touchdown = trip.touchdown + np.array([0.0, 0.0, 1.0])  # as if it had settled on top of something
+    pg.run_fast(lambda: trip.done, 31)
+    result = trip.result()
+    assert not result["arrived"] and result["why"] == "landed_elsewhere" and "not on the spot" in result["note"]
+    assert isinstance(trip, airways.FlightTrip)
 
 
 # ---- aircraft built from parts ------------------------------------------------------------------------

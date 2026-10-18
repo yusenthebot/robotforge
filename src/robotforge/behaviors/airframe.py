@@ -132,6 +132,7 @@ class Airframe:
     rest_height: float  # m from the lowest point (feet, skids) up to the root body's origin, standing level
     radius: float  # m from the center to the furthest rotor tip seen from above
     descendants: frozenset[int]  # every body of the aircraft
+    height: float = 0.0  # m from the root body's origin up to the top of the aircraft (a GPS dome, a camera)
 
     @property
     def actuators(self) -> list[int]:
@@ -291,6 +292,7 @@ def find_airframe(model: mujoco.MjModel, robot: str, qpos: np.ndarray | None = N
         rest_height=_rest_height(model, data, bodies, root),
         radius=_radius(model, data, bodies, origin),
         descendants=bodies,
+        height=_height(model, data, bodies, origin),
     )
     _check_flies(frame)
     return frame
@@ -363,6 +365,15 @@ def _radius(model: mujoco.MjModel, data: mujoco.MjData, bodies, origin: np.ndarr
         center = data.geom_xpos[g] - origin
         reach = max(reach, float(np.hypot(center[0], center[1]) + model.geom_rbound[g]))
     return reach
+
+
+def _height(model: mujoco.MjModel, data: mujoco.MjData, bodies, origin: np.ndarray) -> float:
+    """How far its top (drawn parts too: flown under a table, a dome through the tabletop shows) is above its
+    origin."""
+    from robotforge.behaviors.nav_map import world_extent
+
+    tops = [float(world_extent(model, data, g)[1][2]) for g in range(model.ngeom) if g_in(model, g, bodies)]
+    return max(0.0, max(tops, default=float(origin[2])) - float(origin[2]))
 
 
 def g_in(model: mujoco.MjModel, geom: int, bodies) -> bool:

@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.behaviors import Kind, air, flight, humanoid, nav_map, quadruped, robot_kind
+from robotforge.behaviors import Kind, air, airways, flight, humanoid, nav_map, quadruped, robot_kind
 from robotforge.behaviors import navigate as navigation
 from robotforge.behaviors.arm import REACH_TOL, ArmMotion, OutOfReach, arm_bodies
 from robotforge.behaviors.balance import WheelBalancer
@@ -39,7 +39,7 @@ WALKERS = (
 )
 # They fall over without a controller; an aircraft also keeps its motors idle on the ground and hovers in the air.
 SELF_BALANCING = (Kind.HUMANOID, Kind.BALANCER, Kind.AIRCRAFT)
-TRIPS = (navigation.Navigator, flight.FlightTrip)  # a trip to a destination over the ground or through the air
+TRIPS = (navigation.Navigator, airways.FlightTrip)  # a trip to a destination over the ground or through the air
 # Legged walkers stand on their servos alone, but dragged in the viewer before their first move they rolled onto
 # their backs (dog, Go2 and a dog built from parts: 180 degrees; scripts/push_bench.py --states fresh). Their gait
 # steps along with a push (quadruped.PUSH_DRIFT) and stands exactly as the servos do, so in an open world they
@@ -846,7 +846,7 @@ class BehaviorManager:
             self._live_trips[robot] = trip
         return trip
 
-    def _fly(self, robot: str, to: str | list[Any], speed: float | None, seconds: float | None) -> flight.FlightTrip:
+    def _fly(self, robot: str, to: str | list[Any], speed: float | None, seconds: float | None) -> airways.FlightTrip:
         """navigate for an aircraft: through the air, straight to the point or through the points, up over what is
         in the way; a last point on the ground (z 0) lands there."""
         with self.session.lock:
@@ -854,15 +854,15 @@ class BehaviorManager:
             _check_standing(fc)
             model, data = self.session.model, self.session.data
             named = None
-            if isinstance(to, str) and to.strip().startswith("[") and flight.parse_points(to) is not None:
-                to = flight.parse_points(to)  # "[[0, 0, 2], [3, 0, 2]]" as text
+            if isinstance(to, str) and to.strip().startswith("[") and airways.parse_points(to) is not None:
+                to = airways.parse_points(to)  # "[[0, 0, 2], [3, 0, 2]]" as text
             elif isinstance(to, str) and not NUMBER_LIST.fullmatch(to):
                 named = self._destination(robot, to, model, data)
             elif isinstance(to, str):
                 to = [float(w) for w in re.split(r"[^\d.+-]+", to.strip(" []()")) if w]
             try:
-                goals, land, described = flight.goals_for(model, data, fc, to, named)
-                plan = flight.plan_flight(model, data, fc, goals, land)
+                goals, land, described = airways.goals_for(model, data, fc, to, named)
+                plan = airways.plan_flight(model, data, fc, goals, land)
             except flight.FlightError as exc:
                 raise BehaviorError(str(exc)) from exc
             except navigation.NoWay as exc:
@@ -872,7 +872,7 @@ class BehaviorManager:
             self._last_trips.pop(robot, None)
             key = TRIP + robot
 
-            def finished(trip: flight.FlightTrip) -> None:  # inside a sim step, with the session lock held
+            def finished(trip: airways.FlightTrip) -> None:  # inside a sim step, with the session lock held
                 if self.session.controllers.get(key) is trip:
                     self.session.set_controller(key, None)
                     self._last_trips[robot] = trip.result()
@@ -880,12 +880,12 @@ class BehaviorManager:
                     del self._live_trips[robot]
 
             cruise = flight.CRUISE if speed is None else min(abs(speed), fc.max_speed)
-            trip = flight.FlightTrip.start(fc, plan, described, cruise, float(data.time), seconds, finished)
+            trip = airways.FlightTrip.start(fc, plan, described, cruise, float(data.time), seconds, finished)
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip
         return trip
 
-    def trip(self, robot: str) -> navigation.Navigator | flight.FlightTrip | None:
+    def trip(self, robot: str) -> navigation.Navigator | airways.FlightTrip | None:
         """The robot's trip to a destination, while it is on one."""
         found = self.session.controllers.get(TRIP + robot)
         return found if isinstance(found, TRIPS) else None
@@ -894,7 +894,7 @@ class BehaviorManager:
         """Called with the session lock held: the robot is driven some other way now."""
         self._live_trips.pop(robot, None)
         trip = self.session.controllers.get(TRIP + robot)
-        if isinstance(trip, flight.FlightTrip):
+        if isinstance(trip, airways.FlightTrip):
             self.session.set_controller(TRIP + robot, None)
             trip.interrupt("it was flown another way (keys, move or stop) on the way")
             self._last_trips[robot] = trip.result()

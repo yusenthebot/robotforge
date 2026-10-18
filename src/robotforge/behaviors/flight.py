@@ -23,16 +23,13 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 from typing import Any
 
 import mujoco
 import numpy as np
 
 from robotforge.behaviors.airframe import Airframe, find_airframe
-from robotforge.behaviors.navigate import Destination, NoWay
 
 log = logging.getLogger(__name__)
 
@@ -52,9 +49,6 @@ TOUCHDOWN = 0.02  # m of clearance at which it is down
 ARRIVE_TOL = 0.04  # m from the target, with the speed below ARRIVE_SPEED, counts as there
 ARRIVE_SPEED = 0.1
 UPSIDE_DOWN = 0.0  # the body's up axis below the horizon: crashed
-CLEARANCE = 0.6  # m kept above anything a straight leg would hit, when it climbs over it
-MAX_ALTITUDE = 30.0
-GROUND_PROBE = 50.0  # m above which the ground under a point is looked for
 # Gains: position (per axis x, y, z), attitude and body rates (roll, pitch, yaw).
 KP = np.array([4.0, 4.0, 9.0])
 KD = np.array([4.4, 4.4, 5.4])
@@ -72,9 +66,10 @@ CONTROLLER = (
     "from its rotor layout shares thrust and torque among the rotors"
 )
 STOP_NOTE = "it hovers where it is; to land, move it with to=[x, y, 0] (the spot to land on)"
-MAX_POINTS = 50
 # Geom groups the altimeter and the look ahead see: what a drone can bump into, not the visual meshes (group 2).
 SOLID = np.array([1, 1, 0, 1, 1, 1], dtype=np.uint8)
+DOWN = np.array([0.0, 0.0, -1.0])
+UP = np.array([0.0, 0.0, 1.0])
 
 
 class FlightError(ValueError):
@@ -489,355 +484,39 @@ def ground_height(
     model: mujoco.MjModel, data: mujoco.MjData, point: np.ndarray, own: frozenset[int] = frozenset(), root: int = -1
 ) -> float | None:
     """The height of the first thing straight below `point` that is not one of the bodies `own`."""
-    start = np.array(point, float)
-    down = np.array([0.0, 0.0, -1.0])
+    hit = cast(model, data, point, DOWN, own, root)
+    return None if hit is None else float(point[2]) - hit.distance
+
+
+@dataclass(frozen=True)
+class RayHit:
+    distance: float  # m from where the ray starts
+    geom: int
+    normal: np.ndarray  # the surface's outward normal there: along the ray means it left something it was inside
+
+
+def cast(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    start: np.ndarray,
+    direction: np.ndarray,
+    own: frozenset[int] = frozenset(),
+    root: int = -1,
+    reach: float = math.inf,
+) -> RayHit | None:
+    """The first solid thing a ray from `start` along `direction` (a unit vector) meets within `reach`, past the
+    bodies `own` (the aircraft's), or None."""
+    at = np.array(start, float)
+    way = np.asarray(direction, float)
     geom = np.zeros(1, dtype=np.int32)
+    normal = np.zeros(3)
+    travelled = 0.0
     for _ in range(6):
-        dist = mujoco.mj_ray(model, data, start, down, SOLID, 1, root, geom)
-        if dist < 0:
+        dist = mujoco.mj_ray(model, data, at, way, SOLID, 1, root, geom, normal)
+        if dist < 0 or travelled + dist > reach:
             return None
-        hit = start + down * dist
         if int(model.geom_bodyid[geom[0]]) not in own:
-            return float(hit[2])
-        start = hit + down * 1e-4
+            return RayHit(travelled + dist, int(geom[0]), normal.copy())
+        travelled += dist + 1e-4
+        at = at + way * (dist + 1e-4)
     return None
-
-
-def parse_points(text: str) -> list[Any] | None:
-    """Points written as text ("[[0, 0, 2], [3, 0, 2]]"), as some agents send them, or None."""
-    import ast
-    import json
-
-    for read in (json.loads, ast.literal_eval):
-        try:
-            value = read(text)
-        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
-            continue
-        if isinstance(value, (list, tuple)):
-            return [list(p) if isinstance(p, (list, tuple)) else p for p in value]
-    return None
-
-
-# ---- trips through the air ---------------------------------------------------------------------------
-
-
-def goals_for(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    fc: FlightController,
-    to: list[Any],
-    named: Destination | None = None,
-) -> tuple[list[np.ndarray], bool, dict[str, Any]]:
-    """The points a move(to=...) asks an aircraft to fly to, whether it lands at the last one, and how to describe
-    the destination. `to` is [x, y] (at the height it flies at, or TAKEOFF_HEIGHT from the ground), [x, y, z], a
-    list of such points, or a named thing (`named`, found by the caller), which it flies to 1 m above. A last point
-    at or below the ground under it (z 0 on flat ground) is a landing."""
-    frame = fc.frame
-    here = data.xpos[frame.root]
-    ground_here = fc.ground_below(model, data, here)
-    cruise_z = float(here[2]) if fc.airborne else (ground_here or 0.0) + frame.rest_height + TAKEOFF_HEIGHT
-    if named is not None:
-        from robotforge.behaviors.nav_map import world_extent
-
-        top = max((float(world_extent(model, data, g)[1][2]) for g in named.geoms), default=named.z)
-        z = max(cruise_z, top + frame.rest_height + TAKEOFF_HEIGHT)
-        point = np.array([named.point[0], named.point[1], z])
-        return [point], False, {"object": named.name, "at": [round(float(v), 3) for v in point]}
-    many = len(to) > 0 and all(isinstance(p, (list, tuple)) for p in to)
-    raw = list(to) if many else [to]
-    if not raw or len(raw) > MAX_POINTS:
-        raise FlightError(f"to is a point [x, y] or [x, y, z], or a list of 1 to {MAX_POINTS} of them")
-    goals: list[np.ndarray] = []
-    land = False
-    for k, p in enumerate(raw):
-        if len(p) not in (2, 3) or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in p):
-            raise FlightError(f"each point is [x, y] or [x, y, z] in meters, got {p}")
-        if max(abs(p[0]), abs(p[1])) > 100.0:
-            raise FlightError(f"point {list(p)} is more than 100 m away: positions are in meters")
-        if len(p) == 3 and p[2] > MAX_ALTITUDE:
-            raise FlightError(f"z {p[2]:g} is above {MAX_ALTITUDE:g} m: heights are in meters")
-        z = float(p[2]) if len(p) == 3 else cruise_z
-        ground = ground_height(model, data, np.array([p[0], p[1], GROUND_PROBE]), frame.descendants, frame.root)
-        floor = (ground if ground is not None else 0.0) + frame.rest_height
-        if len(p) == 3 and z <= floor + 0.05:
-            if k < len(raw) - 1:
-                raise FlightError(
-                    f"point {k + 1} {list(p)} is on the ground: only the last point can be a landing (z 0); give "
-                    "the others a height, e.g. 2"
-                )
-            land, z = True, floor
-        goals.append(np.array([float(p[0]), float(p[1]), z]))
-        cruise_z = z
-    last = [round(float(v), 3) for v in goals[-1]]
-    described: dict[str, Any] = {"point": last} if len(goals) == 1 else {"points": len(goals), "last": last}
-    if land:
-        described["land"] = True
-    return goals, land, described
-
-
-@dataclass
-class FlightPlan:
-    points: list[np.ndarray]
-    land: bool
-    length: float
-    notes: list[str]
-
-
-def plan_flight(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    fc: FlightController,
-    goals: list[np.ndarray],
-    land: bool,
-) -> FlightPlan:
-    """Points a mission flies through for `goals` (world points; with `land`, it lands at the last one): straight
-    up first when it stands on the ground, and over anything a straight leg would fly into. Raises FlightError
-    when something in the way is too tall to fly over."""
-    frame = fc.frame
-    here = data.xpos[frame.root].copy()
-    notes: list[str] = []
-    points: list[np.ndarray] = []
-    rest = frame.rest_height
-    start = here
-    if not fc.airborne:  # straight up first: to the first point's height, or TAKEOFF_HEIGHT for a hop to land
-        ground = fc.ground_below(model, data, here)
-        floor = (ground if ground is not None else here[2] - rest) + rest
-        hop = land and len(goals) == 1
-        lift = floor + TAKEOFF_HEIGHT if hop else max(goals[0][2], floor + 0.3)
-        start = np.array([here[0], here[1], lift])
-        points.append(start)
-    for k, goal in enumerate(goals):
-        is_landing = land and k == len(goals) - 1
-        end = goal.copy()
-        if is_landing:
-            end[2] = max(start[2], end[2])  # it lands straight down at the end
-        legs = _clear_legs(model, data, fc, start, end, notes)
-        points.extend(legs)
-        start = legs[-1] if legs else start
-        if is_landing:
-            points[-1] = np.array([goal[0], goal[1], start[2]])
-    path = [here, *points]
-    length = float(sum(np.linalg.norm(b - a) for a, b in zip(path[:-1], path[1:], strict=True)))
-    if land:
-        ground = ground_height(model, data, np.array([*points[-1][:2], points[-1][2]]), frame.descendants, frame.root)
-        length += max(0.0, points[-1][2] - (ground or 0.0) - rest)
-    return FlightPlan(points, land, length, notes)
-
-
-def _clear_legs(
-    model: mujoco.MjModel, data: mujoco.MjData, fc: FlightController, start: np.ndarray, end: np.ndarray, notes
-) -> list[np.ndarray]:
-    """The straight leg from start to end, or, when something is in the way, up over it, across and down."""
-    blocker = _first_hit(model, data, fc, start, end)
-    if blocker is None:
-        return [end]
-    name, top = blocker
-    over = top + CLEARANCE + fc.frame.rest_height
-    if over > MAX_ALTITUDE:
-        raise NoWay("blocked", f"{name} is in the way and too tall to fly over ({top:.1f} m); add a point around it")
-    up = np.array([start[0], start[1], max(start[2], over)])
-    across = np.array([end[0], end[1], max(end[2], over)])
-    for a, b in ((start, up), (up, across)):
-        again = _first_hit(model, data, fc, a, b)
-        if again is not None:
-            raise NoWay(
-                "blocked",
-                f"{name} is in the way of the straight flight to {[round(float(v), 2) for v in end]}, and so is "
-                f"{again[0]} when it climbs over; add points around them",
-            )
-    notes.append(f"climbed to {over:.1f} m to fly over {name} (its top is at {top:.1f} m)")
-    legs = [up, across]
-    if end[2] < across[2] - 1e-6:
-        legs.append(end)
-    return [p for i, p in enumerate(legs) if i == 0 or not np.allclose(p, legs[i - 1])]
-
-
-def _first_hit(
-    model: mujoco.MjModel, data: mujoco.MjData, fc: FlightController, a: np.ndarray, b: np.ndarray
-) -> tuple[str, float] | None:
-    """What a straight flight from a to b runs into (its name and top, m), or None. Rays from the middle and
-    the four sides of the aircraft, as wide as its rotors reach."""
-    d = b - a
-    length = float(np.linalg.norm(d))
-    if length < 1e-6:
-        return None
-    u = d / length
-    side = np.cross(u, [0.0, 0.0, 1.0])
-    side = side / np.linalg.norm(side) if np.linalg.norm(side) > 1e-6 else np.array([1.0, 0.0, 0.0])
-    lift = np.cross(side, u)
-    r = fc.frame.radius
-    own = fc.frame.descendants
-    geom = np.zeros(1, dtype=np.int32)
-    best: tuple[float, int] | None = None
-    for offset in (np.zeros(3), side * r, -side * r, lift * 0.5 * r, -lift * 0.5 * r):
-        start = a + offset
-        travelled = 0.0
-        for _ in range(6):
-            dist = mujoco.mj_ray(model, data, start, u, SOLID, 1, fc.frame.root, geom)
-            if dist < 0 or travelled + dist > length:
-                break
-            g = int(geom[0])
-            if int(model.geom_bodyid[g]) in own:
-                travelled += dist + 1e-4
-                start = start + u * (dist + 1e-4)
-                continue
-            if best is None or travelled + dist < best[0]:
-                best = (travelled + dist, g)
-            break
-    if best is None:
-        return None
-    return _thing(model, data, best[1])
-
-
-def _thing(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> tuple[str, float]:
-    """The name of what a geom belongs to (an object, a robot, a terrain patch) and the top of that thing."""
-    from robotforge.behaviors.nav_map import world_extent
-
-    body = int(model.geom_bodyid[geom])
-    if body > 0:
-        top_body = int(model.body_rootid[body])
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, top_body) or "something"
-        geoms = [g for g in range(model.ngeom) if int(model.body_rootid[model.geom_bodyid[g]]) == top_body]
-    else:
-        gname = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom) or ""
-        name = gname.split("/", 1)[0] or "the ground"
-        for cut in ("_wall", "_trunk", "_crown", "_leg"):
-            name = name.split(cut, 1)[0]
-        stem = name
-        geoms = [
-            g
-            for g in range(model.ngeom)
-            if int(model.geom_bodyid[g]) == 0
-            and (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g) or "").startswith(stem)
-        ] or [geom]
-    top = max(float(world_extent(model, data, g)[1][2]) for g in geoms)
-    return name.split("/", 1)[0], top
-
-
-@dataclass
-class FlightTrip:
-    """A trip through the air for move(to=...): the flight controller flies the mission, this watches it and
-    reports how it went. It answers like navigate.Navigator, so the tools wait on and report both the same way."""
-
-    robot: str
-    fc: FlightController
-    mission: Mission
-    destination: dict[str, Any]
-    plan: Any
-    start_time: float
-    deadline: float | None
-    on_finish: Callable[[FlightTrip], None] = lambda trip: None
-    notes: list[str] = field(default_factory=list)
-    rate_hz: float = 20.0
-    state: str = "flying"  # flying, arrived, stopped
-    cause: str | None = None
-    note: str | None = None
-    end_time: float | None = None
-    _last_t: float | None = None
-    _travelled: float = 0.0
-    _last_p: np.ndarray | None = None
-    _worst: float = 0.0  # m, the furthest it strayed from its reference while flying
-
-    @classmethod
-    def start(
-        cls,
-        fc: FlightController,
-        plan: FlightPlan,
-        destination: dict[str, Any],
-        cruise: float,
-        now: float,
-        seconds: float | None,
-        on_finish: Callable[[FlightTrip], None],
-    ) -> FlightTrip:
-        mission = Mission([p.copy() for p in plan.points], plan.land, cruise)
-        fc.fly(mission)
-        return cls(
-            fc.robot,
-            fc,
-            mission,
-            destination,
-            SimpleNamespace(length=plan.length),
-            now,
-            now + seconds if seconds is not None else None,
-            on_finish,
-            list(plan.notes),
-        )
-
-    @property
-    def done(self) -> bool:
-        return self.state in ("arrived", "stopped")
-
-    @property
-    def arrived(self) -> bool:
-        return self.state == "arrived"
-
-    def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
-        if self.done:
-            return
-        t = float(data.time)
-        self._last_t = t
-        p = data.xpos[self.fc.frame.root].copy()
-        if self._last_p is not None:
-            self._travelled += float(np.linalg.norm(p - self._last_p))
-        self._last_p = p
-        if self.fc.ref is not None and self.fc.phase == "flying":
-            self._worst = max(self._worst, float(np.linalg.norm(self.fc.ref.sp - p)))
-        m = self.mission
-        if self.fc.fallen or m.state == "aborted":
-            self._finish(t, "stopped", "crashed", "it crashed on the way")
-        elif self.fc.mission is not m and not m.done:
-            self._finish(t, "stopped", "interrupted", "it was flown another way (keys, move or stop) on the way")
-        elif m.state in ("arrived", "landed") and (m.state == "arrived" or self.fc.phase == "landed"):
-            self._finish(t, "arrived")
-        elif self.deadline is not None and t >= self.deadline - 1e-9:
-            self.fc.hover()
-            self._finish(t, "stopped", "out_of_time", "it ran out of time on the way and hovers where it was")
-
-    def status(self) -> dict[str, Any]:
-        out: dict[str, Any] = {
-            "behavior": "fly",
-            "navigating": self.robot,
-            "state": self.state,
-            "goal": self.destination,
-        }
-        if not self.done:
-            ahead = self.mission.points[self.mission.index :]
-            here = self._last_p if self._last_p is not None else ahead[0]
-            out["path"] = [[round(float(v), 3) for v in p] for p in [here, *ahead]]
-        if self.note:
-            out["note"] = self.note
-        return out
-
-    def interrupt(self, note: str) -> None:
-        if not self.done:
-            self._finish(self._last_t if self._last_t is not None else self.start_time, "stopped", "interrupted", note)
-
-    def _finish(self, t: float, state: str, cause: str | None = None, note: str | None = None) -> None:
-        self.state, self.cause, self.end_time = state, cause, t
-        if note:
-            self.note = note
-        self.on_finish(self)
-
-    def result(self) -> dict[str, Any]:
-        end = self.end_time if self.end_time is not None else (self._last_t or self.start_time)
-        out: dict[str, Any] = {
-            "arrived": self.arrived,
-            "destination": self.destination,
-            "path_m": round(float(self.plan.length), 2),
-            "distance_m": round(self._travelled, 2),
-            "time_s": round(end - self.start_time, 2),
-        }
-        if self._last_p is not None:
-            out["position"] = [round(float(v), 3) for v in self._last_p]
-        out["landed" if self.mission.land else "hovering"] = (
-            self.fc.phase == "landed" if self.mission.land else self.fc.airborne
-        )
-        if self.mission.touchdown_speed is not None:
-            out["touchdown_m_s"] = round(self.mission.touchdown_speed, 3)
-        out["max_tracking_error_m"] = round(self._worst, 3)
-        notes = [*self.notes, *([self.note] if self.note else [])]
-        if notes:
-            out["note"] = "; ".join(notes)
-        if self.cause and not self.arrived:
-            out["why"] = self.cause
-        return out
