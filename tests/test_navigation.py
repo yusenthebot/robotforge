@@ -341,6 +341,23 @@ def test_a_rover_finds_its_way_through_the_maze_without_touching_a_wall(pg):
     assert TRIP + "rover" not in pg.session.controllers  # done: the path is gone from the viewer
 
 
+def test_the_maze_tip_says_where_the_planner_goes(pg):
+    """Regression: the maze's tip said move(to='goal') "finds its own way through" the maze, and the trip went round
+    the outside of the hedges, so an agent asked to drive into the maze never did. The tip now says so, and its way
+    through (the middle first) is planned inside the hedges."""
+    pg.add_robot("rover", template="rover")
+    tip = next(t for t in pg.load_scene("maze")["scene"]["tips"] if "to='goal'" in t)
+    assert "round the outside of the hedges" in tip
+    middle = [float(v) for v in re.search(r"to=\[([-\d.]+), ([-\d.]+)\]", tip).groups()]
+
+    def inside(to) -> float:
+        trip = pg.behaviors.navigate("rover", to)
+        pg.behaviors.stop("rover")
+        return sum(abs(x) < 2.5 and abs(y) < 2.5 for x, y in trip.plan.points) / len(trip.plan.points)
+
+    assert inside("goal") == 0.0 and inside(middle) > 0.8
+
+
 def test_a_dog_walks_to_the_fridge_and_stops_facing_it(pg):
     pg.add_robot("dog", template="quadruped")
     pg.load_scene("kitchen")
@@ -829,6 +846,22 @@ async def test_move_to_a_place_reports_the_trip(pg):
         assert math.dist(result["to"]["position"][:2], [2.0, 0.0]) < 0.25
         nowhere = json.loads((await client.call_tool("move", {"robot": "dog", "to": "1, 0"})).content[0].text)
         assert nowhere["arrived"] is False and nowhere["why"] == "inside" and "wall" in nowhere["note"]
+
+
+@pytest.mark.anyio
+async def test_a_trip_says_the_robot_stopped_where_it_ended(pg):
+    """In the agent eval (main at c2e37cd) two of six sessions that sent a robot somewhere called stop right after
+    the trip, on a robot that already stood: a timed move says "stopped" at the top, a trip did not."""
+    pg.add_robot("rover", template="rover")
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        result = json.loads((await client.call_tool("move", {"robot": "rover", "to": [1.0, 0.5]})).content[0].text)
+        assert result["arrived"] is True and result["stopped"] is True, result
+        assert list(result)[:2] == ["arrived", "stopped"]  # at the top, where it is read first
+        state = json.loads((await client.call_tool("observe", {"include_image": False})).content[0].text)
+        assert state["controls"]["rover/left_wheel"] == 0 and state["controls"]["rover/right_wheel"] == 0
+        listed = json.loads((await client.call_tool("robots", {})).content[0].text)
+        assert not any(b.get("navigating") == "rover" and "last_trip" not in b for b in listed["behaviors"])
 
 
 @pytest.mark.anyio

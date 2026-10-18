@@ -102,9 +102,12 @@ def guide() -> dict[str, Any]:
             "offset, color, material, mass, friction, collide": 'look and physics of the shape; color "main" '
             "follows the robot's color, so recoloring the robot recolors the part",
             "foot": "true adds a rubber ball at the end",
-            "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", "range"} '
-            "plus realism knobs rate_hz, noise, bias, drift, latency_s, dropout (ideal when left out); add_sensor puts "
-            "the other types (depth camera, 3D lidar, force_torque, gps, ...) on any part",
+            "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", '
+            '"range"}; a lidar is a level ring of rays (rays 3 to 64, default 16; range in m, default 4) all the way '
+            "round, and observe's \"lidars\" gives its nearest hit, which side that is and every ray (the robot's own "
+            "parts are seen through); fov is for cameras only; realism knobs rate_hz, noise, bias, drift, latency_s, "
+            "dropout (ideal when left out); add_sensor puts the other types (depth camera, 3D lidar, force_torque, "
+            "gps, ...) on any part",
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",
             "repeat": '{"count", "around": axis} ring | {"count", "along": axis, "spacing"} row | '
             '{"count", "chain": true} each copy hangs on the previous one (snakes, tentacles); names get _1, _2...',

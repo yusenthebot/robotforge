@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import inspect
 import logging
 import os
@@ -29,6 +30,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
 from robotforge import lessons, tool_input, wording
+from robotforge.behaviors import Kind
 from robotforge.behaviors.manager import BehaviorError
 from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
@@ -37,11 +39,13 @@ from robotforge.control import mcp_tools as control_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
+from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
 from robotforge.sensors import mcp_tools as sensor_tools
+from robotforge.sim import recording
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
@@ -351,7 +355,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         file: str | None = None,
         params: dict[str, Any] | None = None,
         pos: list[float] | None = None,
-        yaw: float = 0.0,
+        yaw: float | None = None,
         library: str | None = None,
         build: dict[str, Any] | None = None,
         design: str | None = None,
@@ -374,7 +378,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         A library robot downloads on first use (4-55 MB, usually 5-30 s, with progress updates); if the call timed
         out, call again: the download continues and a repeated identical call reports the robot. For templates,
         params override defaults, e.g. {"leg_length": 0.3, "color": "orange"}. pos is [x, y] in meters (height is
-        automatic); yaw is in degrees."""
+        automatic; left out: after load_scene the first free one of the scene's robot_places, else [0, 0] or the
+        nearest free place when furniture or a robot stands there); yaw is in degrees (left out: the place's
+        heading, else 0)."""
         with _tool_errors():
             parts = build
             if design is not None:  # the robots it mounts download first, like a build's
@@ -398,7 +404,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     ) -> str:
         """Change a robot's template params (merged), position or heading. For a robot built from parts, a build with
         "parts" replaces its whole description, one without changes only the fields it gives (servo, base, ...) and
-        keeps the parts (add_part / update_part change one part)."""
+        keeps the parts (add_part / update_part change one part). A template, library or file robot given a whole
+        build (a base or parts) becomes that robot built from parts where it stands, if the build carries it as a
+        mounted part or is a robot of the same kind; given only base sensors ({"base": {"sensors": ["lidar"]}}) it
+        is carried on a plate with them; any other is refused with the build that keeps it."""
         with _tool_errors():
             return _json(playground.update_robot(name, params, pos, yaw, build))
 
@@ -460,7 +469,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def show_world() -> str:
-        """Show the world.yaml of the open world (the editable description of everything in it)."""
+        """Show the world.yaml of the open world (the editable description of everything in it); with none open, the
+        saved worlds open_world can open."""
         with _tool_errors():
             return _json(playground.show_world())
 
@@ -517,7 +527,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
         # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
         run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
-        if not trip.done:  # the viewer's clock lagged behind the wall clock: end the trip here
+        # Standing now, not at its walker's next tick (and a trip the viewer's lagging clock left going ends here):
+        # an observe right after a trip showed the rover's wheels still driven at 3.4 rad/s, and the agent called
+        # stop. A trip sent since (a double-click in the viewer) is left to go on. An aircraft whose trip is over
+        # already hovers or has landed; stopping it then would only hold it, so it is stopped only when cut short.
+        flies = playground.behaviors.kind(robot) == Kind.AIRCRAFT
+        if playground.behaviors.trip(robot) in (None, trip) and not (flies and trip.done):
             playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
         if settled is not None:  # a humanoid finishes its step first; report where it really stops
@@ -527,7 +542,42 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
             goes = "fly" if "hovering" in result or "landed" in result else "walk"  # a trip through the air
             result["note"] += f"; call move with the same to again to go on (seconds=null lets it {goes} on meanwhile)"
-        return {**result, "from": before, "to": playground.behaviors.pose(robot), **extra}
+        # Stopped, said at the top as a timed move says it: after a trip, agents in the eval called stop on a robot
+        # that already stood (2 of 6 sessions that sent one somewhere).
+        here = playground.behaviors.pose(robot)
+        return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
+
+    def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
+        """Where record=... saves its video (checked before anything moves; record=true names it after `called`),
+        or None for no recording."""
+        if record is None or record is False:
+            return None
+        if seconds is None:
+            raise PlaygroundError("record needs seconds: it saves a timed move or a trip once it is over")
+        store = playground.store
+        folder = (store.dir if store is not None else worlds_home().parent) / "videos"
+        return recording.target(record, folder, called)
+
+    @contextlib.contextmanager
+    def recorded(target: recording.Target | None) -> Iterator[recording.Recorder | None]:
+        """Keep the poses while the block runs, when there is somewhere to save them."""
+        rec = recording.Recorder(playground.session).start() if target is not None else None
+        try:
+            yield rec
+        finally:
+            if rec is not None:
+                rec.stop()
+
+    async def video(rec: recording.Recorder, target: recording.Target, robot: str | None) -> dict[str, Any]:
+        """Draw a recording into its file, off the event loop (the viewer stays live), or say why it could not."""
+        try:
+            draw = functools.partial(recording.save, note=target.note)
+            return await asyncio.to_thread(draw, rec, playground.renderer, target.path, robot)
+        except (RenderUnavailable, recording.RecordingError, OSError) as exc:
+            return {"error": f"no video: {exc}"}
+        except Exception as exc:  # the move itself is done: its result is not to be lost to the drawing
+            log.exception("drawing the video %s failed", target.path)
+            return {"error": f"no video: drawing it failed ({type(exc).__name__}: {exc})"}
 
     @server.tool()
     async def move(
@@ -537,6 +587,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         seconds: float | None = 3.0,
         walker: str | None = None,
         to: str | list[float] | list[list[float]] | None = None,
+        record: bool | str | None = None,
     ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, fly an
         aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards),
@@ -551,7 +602,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
         round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why. Aircraft (drones)
+        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
+        where it ended ("stopped": true, no need to call stop). Aircraft (drones)
         fly: to=[x, y, z] flies there (z in meters above the world's zero, not above the ground under it; [x, y] keeps
         its height), a list of points flies through them in order, and a last point at the surface under it (z 0, or
         a table's height) lands there; a point under a crown or a table hovers there. A landing where something
@@ -559,61 +611,72 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         names a spot nearby on the same surface that has room. A landed aircraft takes off
         first, a leg that would hit something goes over or round it, and the result adds touchdown_m_s, or hovering
         and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
-        (taking off first)."""
+        (taking off first). record=true (a GIF) or a file name ("walk.gif"; .gif or .webp) saves a video of the move
+        in real time, the camera following the robot, in the world's videos folder; "video" in the result says
+        where."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
-            if to is not None:
-                return _json(await go_to(robot, to, speed, turn, seconds, walker))
-            speed = MOVE_SPEED if speed is None else speed
-            if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
-                raise PlaygroundError(
-                    f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; "
-                    "seconds=null keeps moving until stop"
-                )
-            before = playground.behaviors.pose(robot)
-            status = playground.behaviors.move(robot, speed, turn, walker)
-            if seconds is None:
-                return _json({"started": status, "pose": before})
-            # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
-            # to the left read as -177.6 degrees, a turn to the right.
-            heading = {"last": before["heading_deg"], "turned": 0.0}
+            path = video_path(record, robot, seconds)
+            with recorded(path) as rec:
+                if to is not None:
+                    out = await go_to(robot, to, speed, turn, seconds, walker)
+                else:
+                    out = await timed_move(robot, speed, turn, seconds, walker)
+            if rec is not None and out.get("stopped"):  # it went (a trip that found no way did not)
+                out["video"] = await video(rec, path, robot)
+            return _json(out)
 
-            def track() -> bool:
-                now = playground.behaviors.pose(robot)["heading_deg"]
-                heading["turned"] += (now - heading["last"] + 180) % 360 - 180
-                heading["last"] = now
-                return False
-
-            run = await run_until(track, seconds)
-            why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
-            moving = playground.session.controllers.get(robot)
-            # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
-            # the clamp notes from the start kept.
-            status = {**status, **(moving.status() if moving is not None else {})}
-            playground.behaviors.stop(robot)
-            settled = playground.behaviors.settled(robot)
-            if settled is not None:  # a humanoid finishes its step first; measure where it really stops
-                extra = await run_until(lambda: track() or settled(), 3.0)
-                run["settle_seconds"] = extra["sim_seconds"]
-                run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
-            track()
-            after = playground.behaviors.pose(robot)
-            moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
-            turned = heading["turned"]
-            return _json(
-                {
-                    "from": before,
-                    "to": after,
-                    "distance_m": round(moved, 3),
-                    "turned_deg": round(turned, 1),
-                    # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going
-                    # and called stop after nearly every timed move.
-                    "stopped": True,
-                    **run,
-                    "behavior": status,
-                    **({"note": why} if why else {}),
-                }
+    async def timed_move(
+        robot: str, speed: float | None, turn: float, seconds: float | None, walker: str | None
+    ) -> dict[str, Any]:
+        """move without a destination: at a speed and turn for `seconds`, or on until stop when seconds is None."""
+        speed = MOVE_SPEED if speed is None else speed
+        if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:  # before starting, or the robot keeps going
+            raise PlaygroundError(
+                f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; seconds=null keeps moving until stop"
             )
+        before = playground.behaviors.pose(robot)
+        status = playground.behaviors.move(robot, speed, turn, walker)
+        if seconds is None:
+            return {"started": status, "pose": before}
+        # The heading is followed as it goes: the difference of the two ends wraps at 180, and a half turn
+        # to the left read as -177.6 degrees, a turn to the right.
+        heading = {"last": before["heading_deg"], "turned": 0.0}
+
+        def track() -> bool:
+            now = playground.behaviors.pose(robot)["heading_deg"]
+            heading["turned"] += (now - heading["last"] + 180) % 360 - 180
+            heading["last"] = now
+            return False
+
+        run = await run_until(track, seconds)
+        why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
+        moving = playground.session.controllers.get(robot)
+        # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
+        # the clamp notes from the start kept.
+        status = {**status, **(moving.status() if moving is not None else {})}
+        playground.behaviors.stop(robot)
+        settled = playground.behaviors.settled(robot)
+        if settled is not None:  # a humanoid finishes its step first; measure where it really stops
+            extra = await run_until(lambda: track() or settled(), 3.0)
+            run["settle_seconds"] = extra["sim_seconds"]
+            run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
+        track()
+        after = playground.behaviors.pose(robot)
+        moved = float(np.linalg.norm(np.subtract(after["position"][:2], before["position"][:2])))
+        turned = heading["turned"]
+        return {
+            "from": before,
+            "to": after,
+            "distance_m": round(moved, 3),
+            "turned_deg": round(turned, 1),
+            # At the top: beside "behavior" (the speed it moved at) agents read the robot as still going and
+            # called stop after nearly every timed move.
+            "stopped": True,
+            **run,
+            "behavior": status,
+            **({"note": why} if why else {}),
+        }
 
     control_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
@@ -732,9 +795,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return path.read_text(encoding="utf-8")
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False))
-    async def run_script(name: str, max_sim_seconds: float = 60.0) -> str:
+    async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
-        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback."""
+        the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
+        record=true (a GIF) or a file name ("show.gif"; .gif or .webp) saves a video of the run in real time, the
+        camera following the robots, in the world's videos folder; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
@@ -742,7 +807,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             if not 0 < max_sim_seconds <= 300:
                 raise PlaygroundError(wording.seconds_range("max_sim_seconds", max_sim_seconds, 300))
             runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
-            return _json(await runner.run(path, max_sim_seconds=max_sim_seconds))
+            target = video_path(record, path.stem, max_sim_seconds)
+            with recorded(target) as rec:
+                out = await runner.run(path, max_sim_seconds=max_sim_seconds)
+            if rec is not None:
+                out["video"] = await video(rec, target, None)
+            return _json(out)
 
     @server.tool()
     def robots() -> str:
@@ -804,12 +874,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         include_image: bool = True,
         find: str | None = None,
     ) -> list:
-        """Report the state (joint angles, controls, free body positions, sensors, contacts, and one line per sensor
-        added with add_sensor in sensor_summary) and, by default, a rendered image (without OpenGL the state comes
-        back with a note instead). `view` is a preset (default,
-        front, back, left, right, top, overview for the whole scene with terrain and furniture) or a camera name
-        from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees of it,
-        with world positions estimated from the picture and the name of what those pixels show (for
+        """Report the state (joint angles, controls, free body positions, sensors, contacts; each lidar whole under
+        "lidars": its nearest hit, that hit's bearing from the robot's front (+ left) and side, every ray; one line
+        per sensor added with add_sensor in sensor_summary) and, by default, a rendered image (without OpenGL the
+        state comes back with a note instead). `view` is a preset (default, front, back, left, right, top, overview
+        for the whole scene with terrain and furniture), a robot's name (the default view framed on that robot) or a
+        camera name from describe_model. find: a color ("red", "#9c6b3f") or "all": "found" lists what the view sees
+        of it, with world positions estimated from the picture and the name of what those pixels show (for
         pick_and_place)."""
         with _tool_errors():
             state = playground.state()

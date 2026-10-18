@@ -1,0 +1,377 @@
+name: go2_arm_kitchen
+floor:
+  style: wood
+  friction: 1.0
+terrain: []
+robots:
+- name: go2_arm
+  template: null
+  file: null
+  library: null
+  build:
+    color: '#2b3038'
+    base:
+      shape: box
+      size:
+      - 0.24
+      - 0.13
+      - 0.012
+      mass: 0.4
+      sensors:
+      - imu
+    parts:
+    - name: dog
+      at:
+      - 0
+      - 0
+      - -0.0645
+      robot:
+        library: go2
+    - name: arm
+      at: top
+      shift:
+      - 0.04
+      - 0
+      - 0
+      robot:
+        library: piper
+        home:
+          joint2: 88
+          joint3: -6
+          joint5: -63
+  params: {}
+  pos:
+  - -2.0
+  - 0.0
+  yaw: 0.0
+objects:
+- name: back_wall
+  shape: wall
+  size:
+  - 6.2
+  - 0.1
+  - 2.2
+  pos:
+  - 0.0
+  - 2.05
+  yaw: 0.0
+  color:
+  - 0.86
+  - 0.85
+  - 0.82
+  - 1.0
+  mass: null
+  fixed: true
+- name: side_wall
+  shape: wall
+  size:
+  - 3.8
+  - 0.1
+  - 2.2
+  pos:
+  - -3.05
+  - 0.2
+  yaw: 90.0
+  color:
+  - 0.86
+  - 0.85
+  - 0.82
+  - 1.0
+  mass: null
+  fixed: true
+- name: counter
+  shape: counter
+  size:
+  - 3.6
+  - 0.6
+  - 0.9
+  pos:
+  - -0.6
+  - 1.7
+  yaw: 0.0
+  color:
+  - 0.3
+  - 0.38
+  - 0.47
+  - 1.0
+  mass: null
+  fixed: true
+- name: burner_1
+  shape: cylinder
+  size:
+  - 0.2
+  - 0.008
+  pos:
+  - -1.9
+  - 1.72
+  - 0.904
+  yaw: 0.0
+  color: black
+  mass: null
+  fixed: true
+- name: burner_2
+  shape: cylinder
+  size:
+  - 0.2
+  - 0.008
+  pos:
+  - -1.55
+  - 1.72
+  - 0.904
+  yaw: 0.0
+  color: black
+  mass: null
+  fixed: true
+- name: sink
+  shape: bin
+  size:
+  - 0.5
+  - 0.38
+  - 0.12
+  pos:
+  - 0.5
+  - 1.7
+  - 0.9
+  yaw: 0.0
+  color: gray
+  mass: null
+  fixed: true
+- name: fridge
+  shape: box
+  size:
+  - 0.75
+  - 0.7
+  - 1.85
+  pos:
+  - 1.85
+  - 1.62
+  yaw: 0.0
+  color:
+  - 0.92
+  - 0.92
+  - 0.9
+  - 1.0
+  mass: null
+  fixed: true
+- name: fridge_handle
+  shape: box
+  size:
+  - 0.03
+  - 0.03
+  - 0.5
+  pos:
+  - 1.55
+  - 1.255
+  - 1.1
+  yaw: 0.0
+  color: gray
+  mass: null
+  fixed: true
+- name: wall_shelf
+  shape: shelf
+  size:
+  - 1.4
+  - 0.3
+  - 0.7
+  pos:
+  - -0.9
+  - 1.85
+  - 1.45
+  yaw: 0.0
+  color:
+  - 0.78
+  - 0.64
+  - 0.46
+  - 1.0
+  mass: null
+  fixed: true
+- name: jar_1
+  shape: cylinder
+  size:
+  - 0.08
+  - 0.12
+  pos:
+  - -1.45
+  - 1.83
+  - 1.53
+  yaw: 0.0
+  color: red
+  mass: null
+  fixed: false
+- name: jar_2
+  shape: cylinder
+  size:
+  - 0.08
+  - 0.12
+  pos:
+  - -1.18
+  - 1.83
+  - 1.53
+  yaw: 0.0
+  color: yellow
+  mass: null
+  fixed: false
+- name: jar_3
+  shape: cylinder
+  size:
+  - 0.08
+  - 0.12
+  pos:
+  - -0.91
+  - 1.83
+  - 1.53
+  yaw: 0.0
+  color: white
+  mass: null
+  fixed: false
+- name: jar_4
+  shape: cylinder
+  size:
+  - 0.08
+  - 0.12
+  pos:
+  - -0.64
+  - 1.83
+  - 1.53
+  yaw: 0.0
+  color: teal
+  mass: null
+  fixed: false
+- name: jar_5
+  shape: cylinder
+  size:
+  - 0.08
+  - 0.12
+  pos:
+  - -0.37
+  - 1.83
+  - 1.53
+  yaw: 0.0
+  color: orange
+  mass: null
+  fixed: false
+- name: island
+  shape: counter
+  size:
+  - 1.4
+  - 0.8
+  - 0.9
+  pos:
+  - 0.0
+  - 0.2
+  yaw: 0.0
+  color:
+  - 0.55
+  - 0.42
+  - 0.32
+  - 1.0
+  mass: null
+  fixed: true
+- name: red_cup
+  shape: cylinder
+  size:
+  - 0.06
+  - 0.08
+  pos:
+  - 0.15
+  - 0.25
+  - 0.94
+  yaw: 0.0
+  color: red
+  mass: null
+  fixed: false
+- name: blue_cup
+  shape: cylinder
+  size:
+  - 0.06
+  - 0.08
+  pos:
+  - -0.13
+  - 0.27
+  - 0.94
+  yaw: 0.0
+  color: blue
+  mass: null
+  fixed: false
+- name: plate
+  shape: cylinder
+  size:
+  - 0.14
+  - 0.015
+  pos:
+  - 0.3
+  - 0.1
+  - 0.9075
+  yaw: 0.0
+  color: white
+  mass: null
+  fixed: false
+- name: apple
+  shape: sphere
+  size:
+  - 0.06
+  pos:
+  - 0.02
+  - 0.33
+  - 0.93
+  yaw: 0.0
+  color: green
+  mass: null
+  fixed: false
+- name: cereal
+  shape: box
+  size:
+  - 0.06
+  - 0.14
+  - 0.2
+  pos:
+  - 0.45
+  - 0.45
+  - 1.0
+  yaw: 0.0
+  color: yellow
+  mass: null
+  fixed: false
+- name: bowl
+  shape: bin
+  size:
+  - 0.16
+  - 0.16
+  - 0.06
+  pos:
+  - -0.29
+  - 0.1
+  - 0.9
+  yaw: 0.0
+  color: white
+  mass: null
+  fixed: false
+- name: dining_table
+  shape: table
+  size:
+  - 1.2
+  - 0.8
+  - 0.75
+  pos:
+  - -1.9
+  - -0.9
+  yaw: 0.0
+  color:
+  - 0.62
+  - 0.48
+  - 0.34
+  - 1.0
+  mass: null
+  fixed: false
+- name: fruit
+  shape: sphere
+  size:
+  - 0.08
+  pos:
+  - -1.9
+  - -0.9
+  - 0.79
+  yaw: 0.0
+  color: orange
+  mass: null
+  fixed: false

@@ -69,7 +69,8 @@ class Sim:
         return self._call("joints", robot=robot)
 
     def sensors(self, robot: str) -> dict[str, Any]:
-        """Sensor readings of a robot (IMU, touch, tool position...)."""
+        """Sensor readings of a robot (IMU, touch, tool position...); rangefinders and lidar rays read past the robot's
+        own parts (-1, or their full range: nothing within it)."""
         return self._call("sensors", robot=robot)
 
     def sensor(self, robot: str, name: str, full: bool = False) -> dict[str, Any]:

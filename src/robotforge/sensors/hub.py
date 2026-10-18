@@ -83,7 +83,15 @@ class SensorHub:
         self._install()
 
     def _install(self) -> None:
-        self.session.step_hook = self.suite.after_step if self.suite.stepped else None
+        """Sample the suite after every physics step while it has sensors that sample as time passes."""
+        hooks = self.session.step_hooks
+        if self._after_step in hooks:
+            hooks.remove(self._after_step)
+        if self.suite.stepped:
+            hooks.append(self._after_step)
+
+    def _after_step(self) -> None:
+        self.suite.after_step(self.session.model, self.session.data)
 
     @property
     def renderer(self) -> Any:

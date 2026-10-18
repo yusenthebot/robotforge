@@ -186,7 +186,7 @@ class ScriptRunner:
 
     def _op_sensors(self, req) -> dict[str, Any]:
         prefix = f"{req['robot']}/"
-        sensors = self.pg.state()["sensors"]
+        sensors = self.pg.sensor_readings()  # all of them: observe's list stops at 40, and a lidar's rays went missing
         return {k[len(prefix) :]: v for k, v in sensors.items() if k.startswith(prefix)}
 
     def _op_sensor(self, req) -> dict[str, Any]:

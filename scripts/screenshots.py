@@ -694,6 +694,28 @@ def _lift_cube(pg: Any) -> None:
     time.sleep(1.5)
 
 
+LIDAR_PUCK = {"name": "lidar", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
+
+
+def _on_plates(pg: Any) -> None:
+    """A template dog, a template rover and a Go2, each given a lidar puck with add_part, which carries a robot that
+    is not built from parts on a plate and puts the part there (design/builder/plate.py)."""
+    for name, source, y in (("dog", {"template": "quadruped"}, 0.55), ("rover", {"template": "rover"}, 0.0)):
+        pg.add_robot(name, **source, pos=[0.0, y])
+    pg.add_robot("go2", library="go2", pos=[0.0, -0.75])
+    for robot in pg.current_world().robots:
+        pg.add_part(robot.name, {**LIDAR_PUCK, "sensors": [{"type": "lidar", "at": "top"}]})
+
+
+def _kitchen_starts(pg: Any) -> None:
+    """Robots added without pos after load_scene: each starts on the first free one of the kitchen's robot_places,
+    clear of the island and of each other (a rover added after the Go2 used to go under its belly)."""
+    pg.load_scene("kitchen")
+    pg.add_robot("dog", design="go2_arm")
+    pg.add_robot("rover", template="rover")
+    pg.add_robot("pup", template="quadruped")
+
+
 def _gallery_line_up(pg: Any) -> None:
     """Several designs side by side, for an overview picture."""
     for name, pos in (
@@ -740,6 +762,12 @@ SHOTS = [
         settle=1.0,
     ),
     Shot("scene_kitchen", lambda pg: pg.load_scene("kitchen"), page=_look_at(["arm"], (1.1, -1.3, 0.9))),
+    Shot(
+        "kitchen_starts",
+        _kitchen_starts,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([3.0, -3.4, 2.6], [0.45, -0.35, 0.3]);",
+        settle=2.0,
+    ),
     # Navigation: the path still ahead shows as an amber line on the ground while the robot follows it.
     Shot(
         "nav_warehouse",
@@ -823,6 +851,13 @@ SHOTS = [
         "built_robots",
         _built(("dog", "scout", "spider", "centaur")),
         page="window.__robotforge.select(null); window.__robotforge.lookAt([1.8, -0.28, 0.66], [0.0, 0.0, 0.1]);",
+    ),
+    # Robots that are not built from parts, kept as they are under a plate that carries a lidar.
+    Shot(
+        "carried_on_plates",
+        _on_plates,
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.9, -1.4, 1.0], [0.0, -0.1, 0.15]);",
+        settle=3.0,
     ),
     Shot(
         "built_materials",
