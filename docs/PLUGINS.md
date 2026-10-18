@@ -137,6 +137,14 @@ stdin 接到 `/dev/null`，否则 `codex exec` 会一直等输入。
 - `20261017-main.json`：main 的提交 c2e37cd（导航、设计库、用颜色找东西合进来之后），13 个任务各跑一次，全部通过；102 次 robotforge 调用，2 次失败（都是任务故意设下的：箱子够不着、模板名拼错）。
   浪费的地方：6 个用了 `move(to=...)` 的会话里有 2 个在到达后又调了 `stop`（结果里没写已经停下，紧接着的 observe 还看到轮子在转）；仓库的提示还写着 `move('rover', 0.4)`，agent 先开到坡道脚下的一个点再开上去，还读了整个 world.yaml。
 - `20261017-fixed-rover_rock+warehouse_dock.json`：提交 c9b1579（到达后机器人停稳、结果开头写 `"stopped": true`；场景提示改成 `move(robot, to=...)`），重跑这两个任务，都通过，都没有再调 `stop`；warehouse_dock 一次 `move(to="dock")` 直接开上装卸台，调用从 8 次降到 5 次，输入 token 从 403k 降到 220k，用时从 89 秒降到 67 秒。
+- `20261018-branch-lidar_maze+parts_video.json`：提交 9bf99c0，两个新任务各跑一次。
+  lidar_maze 不通过：64 线激光雷达只有 37 条射线到了 agent 手里（`observe` 的传感器列表最多 40 个），它写脚本去读，脚本的 `sensors` 也来自同一个列表，还是 37 条；它说的 0.43 米碰巧是对的，但它读到的东西证明不了。
+  它还两次想给迷宫自带的模板小车装激光雷达（`update_robot` 的 build、`fov: 360`），都被拒绝，最后删掉小车重新加。
+  parts_video 通过，但很浪费：用 npm 装了 Playwright，在无头 Chromium 里打开查看器去按录像按钮，20 条 shell 命令，198 秒，输入 1.03M token。
+- `20261018-fixed-lidar_maze+parts_video+go2_arm_kitchen+centaur_bench.json`：提交 adf0917（`observe` 的 `lidars` 给出整圈激光雷达，脚本的 `sensors` 不再截断，`fov` 只检查相机；`move` 和 `run_script` 的 `record`），重跑两个新任务，以及受新的起点摆放影响的两个任务，4 个都通过。
+  lidar_maze 13 次调用、1 次失败（往模板小车上 `add_part`）、76 秒，从 `lidars` 读出最近的墙 0.439 米、在左边；parts_video 用 `run_script(record=...)` 一次录好，4 条 shell 命令、98 秒、输入 290k。
+- `20261018-final-lidar_maze+parts_video.json`：提交 9057028（模板机器人收到完整的 build 就原地换成零件拼的；视频的镜头前后各看半秒取平均、挡住机器人的东西画成半透明），两个新任务都通过，都没有失败的调用。
+  lidar_maze 用 `update_robot` 直接给迷宫的小车装上激光雷达，19 次调用降到 10 次，用时 89 秒降到 67 秒；parts_video 9 次调用、3 条 shell 命令、98 秒、输入 265k（第一次是 1031k）。
 
 这个脚本不是测试：它需要 Codex、登录和网络。
 `tests/test_agent_eval.py` 用 `tests/fixtures/agent_eval/` 里录下来并裁剪过的事件流和世界，测试解析和每条检查本身，CI 里不需要网络。
@@ -145,6 +153,8 @@ stdin 接到 `/dev/null`，否则 `codex exec` 会一直等输入。
 它还手工编了几个“走捷径”的会话（方块直接建在箱子里、方块放在实心盒子上、改世界把方块挪进箱子、四足狗走到石头旁、翻倒的火星车、在另一个世界里走的同名狗），检查必须判它们不通过；一个先修好文件、没有失败过的花园会话必须判通过。
 main（c2e37cd）上录下的 4 个新任务的会话也在里面，必须判通过；从它们改出来的捷径必须判不通过：直接摆到装卸台上的小车、停在坡道半路的小车、一开始就摆在长椅旁的半人马、没有手的零件狗、没用摄像头或者抓完才看的会话、放错方块的会话、保存在中岛里面的 Go2、不带机械臂的 Go2。
 世界里的 Go2 和 PiPER 用 `tests/fixtures/menagerie` 里的离线替身编译，测试不用下载。
+9bf99c0 上录下的两个新任务的会话也在里面：激光雷达那个只读到 37 条射线，必须判不通过；录视频那个的录像里没有视频文件，测试自己放一个 GIF 进去才算有。
+从它们改出来的会话必须判不通过：说错距离的回答、在迷宫外的起点上读的雷达、保存在迷宫里面的小车、不带激光雷达的模板小车、只有一帧或者画面不动的 GIF、会话开始前就有的视频、没有动过的机器人。
 
 ## Not done yet (needs a decision)
 
