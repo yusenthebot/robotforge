@@ -168,9 +168,12 @@ LINT = r"""
   if (rf && rf.scene && rf.three) {
     const { scene, camera } = rf.three();
     const robotOf = new Map();
-    // A world's robots are named "go2/trunk"; a lesson's rig has plain body names, and counts as one.
+    // A world's robots are named "go2/trunk"; a lesson's rig has plain body names, and counts as one. Outside a
+    // lesson a plain name is a loose object (the park's ball), not a robot.
+    const lesson = !!(rf.lesson && rf.lesson());
     for (const b of rf.scene.bodies) {
-      if (b.dynamic) robotOf.set(b.id, b.name.includes("/") ? b.name.split("/")[0] : "rig");
+      const robot = b.name.includes("/") ? b.name.split("/")[0] : lesson ? "rig" : null;
+      if (b.dynamic && robot) robotOf.set(b.id, robot);
     }
     const points = {};
     const V = camera.position.constructor;
@@ -542,8 +545,9 @@ async def worlds(run: Pass, server: Server) -> None:
         if view.edit is not None:
             await run.everywhere(MARK_SCENE)
             await asyncio.to_thread(view.edit, server.pg)
-            if view.rebuilds:
-                await asyncio.gather(*(tab.until(NEW_SCENE) for tab in run.tabs))
+            if view.rebuilds:  # the last of the scenes the change sent: the gallery is eight edits in a row
+                last = f"{NEW_SCENE} && window.__robotforge.scene.nbody === {server.pg.session.model.nbody}"
+                await asyncio.gather(*(tab.until(last) for tab in run.tabs))
                 await asyncio.sleep(1.0)  # the first poses come in and the lights are fitted
         await run.everywhere(view.script)
         await asyncio.gather(*(tab.until("!window.__robotforge.tweening()") for tab in run.tabs))
