@@ -469,3 +469,18 @@ def test_water_costs_little_per_step():
     session.step(500)
     per_step = (time.perf_counter() - start) / 500
     assert per_step < 2e-3, f"{per_step * 1e6:.0f} us per step"
+
+
+def test_props_without_ballast_split_their_mass_as_they_always_did():
+    """The split for a buoy's ballast rounded a pallet's part masses differently in the last bit, so a saved
+    warehouse no longer replayed step for step. Props with no weighted part keep the old expression."""
+    from robotforge.design import props
+
+    spec = mujoco.MjSpec()
+    size = [1.2, 1.0, 0.15]
+    props.build(spec, "pallet", "pallet", size, [0.6, 0.5, 0.3, 1], [0, 0, 0], [1, 0, 0, 0], False, 21.0)
+    parts = props._PARTS["pallet"](size, [0.6, 0.5, 0.3, 1])
+    volumes = [props._volume(p) for p in parts]
+    body = next(b for b in spec.worldbody.bodies if b.name == "pallet")
+    masses = [g.mass for g in body.geoms][: len(parts)]
+    assert masses == [21.0 * v / sum(volumes) for v in volumes]  # exactly, not approximately

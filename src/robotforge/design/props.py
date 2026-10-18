@@ -185,7 +185,9 @@ def build(
     geoms = []
     for i, part in enumerate(parts):
         kwargs = {}
-        if movable:
+        if movable and not given:  # the old expression to the last bit, so old worlds replay exactly
+            kwargs["mass"] = total * volumes[i] / sum(volumes)
+        elif movable:
             share = part.weight if part.weight is not None else (1 - given) * volumes[i] / max(sum(volumes), 1e-12)
             kwargs["mass"] = total * share
         if not part.collide:
