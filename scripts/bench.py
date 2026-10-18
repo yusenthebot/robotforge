@@ -55,9 +55,10 @@ SECTIONS = ("install", "imports", "physics", "viewer", "mcp")
 HEAVY_MODULES = ("trimesh", "manifold3d", "coacd", "PIL", "gymnasium", "torch", "stable_baselines3", "onnxruntime")
 IMPORT_TARGETS = ("robotforge", "robotforge.cli", "robotforge.mcp_server")
 TOP_N = 8  # rows of "where the time or the bytes go" kept in a result
-# A change smaller than this share is noise, by unit: sizes are exact, times on a shared machine are not.
-NOISE = {"MB": 0.02, "KB": 0.02, "": 0.0}
-TIME_NOISE = 0.15
+# A change within this share or this amount is noise, by unit: sizes are exact, times on a shared machine are not,
+# and a 2 ms call that takes 3 ms once is not a regression.
+NOISE = {"MB": (0.02, 1.0), "KB": (0.02, 10.0), "": (0.0, 0.0), "ms": (0.15, 2.0), "s": (0.15, 0.05), "%": (0.15, 1.0)}
+TIME_NOISE = (0.15, 0.0)
 
 
 # ---- results: metrics, comparison, budgets ---------------------------------------------------------------
@@ -80,7 +81,7 @@ def flatten(results: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
-def _noise(unit: str) -> float:
+def _noise(unit: str) -> tuple[float, float]:
     return NOISE.get(unit, TIME_NOISE)
 
 
@@ -95,7 +96,8 @@ def compare(now: dict[str, dict[str, Any]], before: dict[str, dict[str, Any]]) -
             continue
         prev = float(old["value"])
         change = (value - prev) / abs(prev) if prev else (0.0 if value == prev else math.inf)
-        if abs(change) <= _noise(m.get("unit", "")):
+        share, amount = _noise(m.get("unit", ""))
+        if abs(change) <= share or abs(value - prev) <= amount:
             verdict = "same"
         else:
             verdict = "better" if (change < 0) == (m.get("better") == "lower") else "worse"
@@ -245,6 +247,13 @@ def _child_env(home: Path) -> dict[str, str]:
     return {**os.environ, "ROBOTFORGE_HOME": str(home), "ROBOTFORGE_NO_BROWSER": "1", "PYTHONUNBUFFERED": "1"}
 
 
+def _with_source(env: dict[str, str], src: Path | None) -> dict[str, str]:
+    """`env` with robotforge's source taken from `src` (another commit's), ahead of the installed one."""
+    if src is not None:
+        env["PYTHONPATH"] = os.pathsep.join([str(src), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+    return env
+
+
 def _stop(proc: subprocess.Popen) -> float | None:
     """Stop a child and return its peak memory (MB) where the platform tells (os.wait4)."""
     if proc.poll() is None:
@@ -263,6 +272,31 @@ def _stop(proc: subprocess.Popen) -> float | None:
         proc.kill()
         proc.wait()
     return None
+
+
+def _cpu_seconds(pid: int) -> float | None:
+    """Processor time a process has used so far (s): /proc on Linux, ps elsewhere."""
+    stat = Path(f"/proc/{pid}/stat")
+    if stat.is_file():
+        fields = stat.read_text(encoding="utf-8").rsplit(")", 1)[1].split()
+        return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+    done = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True, check=False)
+    text = done.stdout.strip()
+    if not text:
+        return None
+    days, _, clock = text.rpartition("-")
+    seconds = 0.0
+    for part in clock.split(":"):
+        seconds = seconds * 60 + float(part)
+    return seconds + 86400 * int(days or 0)
+
+
+def _cpu_share(pid: int, seconds: float) -> float | None:
+    """The share of one core a process uses over the next `seconds` (percent)."""
+    before = _cpu_seconds(pid)
+    time.sleep(seconds)
+    after = _cpu_seconds(pid)
+    return None if before is None or after is None else 100.0 * (after - before) / seconds
 
 
 def _free_port() -> int:
@@ -398,12 +432,13 @@ print(json.dumps({{"wall": wall, "cpu": cpu, "heavy": heavy, "modules": len(sys.
 """
 
 
-def _import_once(target: str, importtime: bool = False) -> tuple[dict[str, Any], str]:
+def _import_once(target: str, importtime: bool = False, src: Path | None = None) -> tuple[dict[str, Any], str]:
     code = _IMPORT_PROBE.format(target=target, heavy=HEAVY_MODULES)
     args = [sys.executable, *(["-X", "importtime"] if importtime else []), "-c", code]
+    env = _with_source(dict(os.environ), src)
     # Run from a neutral folder, so `import robotforge` finds the installed package, not a folder named so
     done = subprocess.run(
-        args, capture_output=True, text=True, encoding="utf-8", check=False, cwd=tempfile.gettempdir()
+        args, capture_output=True, text=True, encoding="utf-8", check=False, cwd=tempfile.gettempdir(), env=env
     )
     if done.returncode != 0:
         raise RuntimeError(f"import {target} failed: {done.stderr.strip()[-400:]}")
@@ -631,9 +666,7 @@ def physics_world(name: str, repeats: int) -> dict[str, Any]:
 def _physics_worker(name: str, repeats: int, src: Path | None = None) -> dict[str, Any]:
     """One world timed in a fresh process; `src`: robotforge's source from another commit instead of this one."""
     with tempfile.TemporaryDirectory(prefix="rf-bench-phys-") as home:
-        env = _child_env(Path(home))
-        if src is not None:
-            env["PYTHONPATH"] = os.pathsep.join([str(src), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+        env = _with_source(_child_env(Path(home)), src)
         args = [sys.executable, str(Path(__file__).resolve()), "--worker", name, "--repeats", str(repeats)]
         done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", env=env)
     if done.returncode != 0:
@@ -671,12 +704,44 @@ def _source_at(rev: str) -> Iterator[Path]:
         yield Path(tmp) / "src"
 
 
+def ab_imports(old: Path, rounds: int) -> None:
+    """Import times on this tree and on another commit's source, alternately: best process time of each."""
+    for target in IMPORT_TARGETS:
+        _import_once(target)  # bytecode compiled first, for both
+        _import_once(target, src=old)
+        now, then = [], []
+        for _ in range(rounds):
+            now.append(_import_once(target)[0]["cpu"])
+            then.append(_import_once(target, src=old)[0]["cpu"])
+        a, b = 1000 * min(then), 1000 * min(now)
+        print(f"import {target:<22} {a:>7.0f} -> {b:>7.0f} ms process time ({b / a - 1:+.0%})", flush=True)
+
+
+def ab_cold_start(old: Path, rounds: int) -> None:
+    """Cold start to the first frame on this tree and on another commit's source, alternately: best of each."""
+    with tempfile.TemporaryDirectory(prefix="rf-bench-viewer-") as tmp:
+        home = Path(tmp)
+        dog = _make_world(home, "bench_dog", _dog)
+        with _chrome(home) as chrome_port:
+            now, then = [], []
+            for _ in range(rounds + 1):  # the first of each warms the disk cache and is not counted
+                now.append(asyncio.run(_cold_start(chrome_port, dog, home))["first_frame_s"])
+                then.append(asyncio.run(_cold_start(chrome_port, dog, home, src=old))["first_frame_s"])
+    a, b = min(then[1:]), min(now[1:])
+    print(f"cold start to the first frame {a:>6.2f} -> {b:>6.2f} s ({b / a - 1:+.0%})", flush=True)
+
+
 def ab_physics(rev: str, worlds: list[str], rounds: int) -> list[dict[str, Any]]:
     """The physics worlds timed on this tree and on `rev`, alternately, so both see the same machine load:
     on a shared machine two runs an hour apart differ more than a change does. Steps per second: the best round
     of each (each round is already the best of four per 50 ms slice); controllers' share: the median round."""
     rows = []
     with _source_at(rev) as old:
+        ab_imports(old, 2 * rounds + 1)
+        try:
+            ab_cold_start(old, rounds)
+        except (SystemExit, RuntimeError, OSError) as exc:  # no Chrome here: the rest still counts
+            print(f"cold start not compared: {exc}", flush=True)
         for name in worlds:
             now: list[dict[str, Any]] = []
             then: list[dict[str, Any]] = []
@@ -700,6 +765,7 @@ def ab_physics(rev: str, worlds: list[str], rounds: int) -> list[dict[str, Any]]
 # ---- viewer (headless Chrome) -------------------------------------------------------------------------------
 
 VIEW_W, VIEW_H, VIEW_SCALE = 1280, 800, 2  # CSS px and device pixel ratio, as the README's screenshots
+IDLE_SECONDS = 5.0  # processor use of an idle server is measured over this long
 READY_TIMEOUT = 90.0
 
 
@@ -796,24 +862,30 @@ def _http_body(url: str) -> bytes:
         return resp.read()
 
 
-async def _cold_start(chrome_port: int, world_dir: Path, home: Path) -> dict[str, Any]:
-    """From running the command to the first frame with the world in it, in a tab opened beforehand."""
+async def _cold_start(
+    chrome_port: int, world_dir: Path, home: Path, idle: float = 0.0, src: Path | None = None
+) -> dict[str, Any]:
+    """From running the command to the first frame with the world in it, in a tab opened beforehand; with `idle`,
+    then the server's processor use over that many seconds while the page shows the world (real time, nobody
+    touching anything)."""
     ws, browser, page, target = await _open_tab(chrome_port)
     port = _free_port()
     cmd = [_robotforge_command(), "open", str(world_dir), "--no-browser", "--port", str(port)]
+    env = _with_source(_child_env(home), src)
     t0 = time.perf_counter()
-    proc = subprocess.Popen(cmd, env=_child_env(home), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         await asyncio.to_thread(_wait_http, f"http://127.0.0.1:{port}/", READY_TIMEOUT, proc)
         served = time.perf_counter() - t0
         await page.call("Page.navigate", url=f"http://127.0.0.1:{port}/?lang=en")
         await asyncio.wait_for(page.eval(_FIRST_FRAME), READY_TIMEOUT)
         first = time.perf_counter() - t0
+        idle_cpu = await asyncio.to_thread(_cpu_share, proc.pid, idle) if idle > 0 else None
     finally:
         peak = await asyncio.to_thread(_stop, proc)
         await browser.call("Target.closeTarget", targetId=target)
         await ws.close()
-    return {"served_s": served, "first_frame_s": first, "server_peak_mb": peak}
+    return {"served_s": served, "first_frame_s": first, "server_peak_mb": peak, "idle_cpu": idle_cpu}
 
 
 async def _frame_rate(chrome_port: int, world_dir: Path, home: Path, shots: Path | None) -> dict[str, Any]:
@@ -860,7 +932,7 @@ def bench_viewer(quick: bool, shots: Path | None = None) -> dict[str, Any]:
         dog = _make_world(home, "bench_dog", _dog)
         warehouse = _make_world(home, "bench_warehouse", _warehouse)
         with _chrome(home) as chrome_port:
-            starts = [asyncio.run(_cold_start(chrome_port, dog, home)) for _ in range(runs)]
+            starts = [asyncio.run(_cold_start(chrome_port, dog, home, IDLE_SECONDS * (k == 0))) for k in range(runs)]
             rate = asyncio.run(_frame_rate(chrome_port, warehouse, home, shots))
     best = min(starts[1:] or starts, key=lambda r: r["first_frame_s"])  # the first run also warms the disk cache
     peaks = [r["server_peak_mb"] for r in starts if r["server_peak_mb"] is not None]
@@ -869,6 +941,8 @@ def bench_viewer(quick: bool, shots: Path | None = None) -> dict[str, Any]:
         "fps": metric(rate["fps"], "fps", "higher", world="warehouse + go2", size=[VIEW_W, VIEW_H, VIEW_SCALE]),
         "frame_ms": metric(rate["frame"]["median"], "ms", "lower", **{k: rate["frame"][k] for k in rate["frame"]}),
         "server_peak_mb": metric(max(peaks) if peaks else None, "MB", "lower", warehouse=rate["server_peak_mb"]),
+        # The viewer server simulating an idle dog in real time for an open page: what leaving it open costs.
+        "idle_cpu_pct": metric(starts[0]["idle_cpu"], "%", "lower", seconds=IDLE_SECONDS),
     }
 
 
@@ -925,7 +999,15 @@ async def _mcp_session(home: Path, calls: int) -> dict[str, Any]:
                 found = await asyncio.to_thread(_rss_of, pid)
                 if found is not None:
                     rss.append(found)
-    return {"start_s": started, "tools": len(tools), "latencies": latencies, "rss": max(rss) if rss else None}
+        # Between calls, with no viewer open: an agent session spends most of its time like this.
+        idle = await asyncio.to_thread(_cpu_share, pid, IDLE_SECONDS) if pid is not None else None
+    return {
+        "start_s": started,
+        "tools": len(tools),
+        "latencies": latencies,
+        "rss": max(rss) if rss else None,
+        "idle_cpu": idle,
+    }
 
 
 def bench_mcp(quick: bool) -> dict[str, Any]:
@@ -935,6 +1017,7 @@ def bench_mcp(quick: bool) -> dict[str, Any]:
     for name, times in r["latencies"].items():
         out[f"{name}_ms"] = metric(1000 * statistics.median(times), "ms", "lower", calls=len(times))
     out["server_rss_mb"] = metric(r["rss"], "MB", "lower")
+    out["idle_cpu_pct"] = metric(r["idle_cpu"], "%", "lower", seconds=IDLE_SECONDS)
     return out
 
 
@@ -981,7 +1064,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--against", type=Path, help="compare with this run (default: the newest in --out)")
     parser.add_argument("--shots", type=Path, help="save a picture of the viewer frame measured here")
     parser.add_argument("--worlds", nargs="*", choices=list(WORLDS), help="physics: only these worlds")
-    parser.add_argument("--ab", metavar="REV", help="physics only: time this tree and revision REV alternately")
+    parser.add_argument("--ab", metavar="REV", help="time imports and physics on this tree and REV alternately")
     parser.add_argument("--rounds", type=int, default=3, help="--ab: rounds per world")
     parser.add_argument("--worker", help=argparse.SUPPRESS)  # internal: time one physics world in this process
     parser.add_argument("--repeats", type=int, default=4, help=argparse.SUPPRESS)
@@ -1031,7 +1114,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"OVER BUDGET  {b['metric']} = {b['value']} ({b['kind']} {b['limit']}): {b['why']}")
     for e in errors:
         print(f"ERROR  {e}")
-    if not (args.no_save or args.quick):
+    if errors and not (args.no_save or args.quick):
+        # A run with parts missing would become the next run's "previous": not a record.
+        print("\nnot saved: parts of the run failed")
+    elif not (args.no_save or args.quick):
         args.out.mkdir(parents=True, exist_ok=True)
         path = args.out / run_name(started, sha)
         record["budgets"] = {b["metric"]: b["status"] for b in budgets}
