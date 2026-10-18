@@ -366,7 +366,9 @@ def plan_flight(
         if crowded is not None:
             where = [round(float(v), 2) for v in goal]
             doing = "land" if landing else "hover"
-            raise NoWay("blocked", f"there is no room to {doing} at {where}: it would touch {crowded.name}")
+            near = _room_near(space, goal, landing)
+            instead = f"; {[round(float(v), 2) for v in near]} has room" if near is not None else ""
+            raise NoWay("blocked", f"there is no room to {doing} at {where}: it would touch {crowded.name}{instead}")
         if landing:
             _check_slope(space, goal)
             legs, touchdown = _landing(space, start, goal, notes)
@@ -378,6 +380,20 @@ def plan_flight(
     if touchdown is not None:
         length += max(0.0, float(points[-1][2] - touchdown[2]))
     return FlightPlan(points, land, length, notes, touchdown)
+
+
+def _room_near(space: Airspace, goal: np.ndarray, landing: bool) -> np.ndarray | None:
+    """The nearest point round `goal` (out to a metre) where it fits, at the same height or on the ground there."""
+    for r in (0.25, 0.5, 0.75, 1.0):
+        for k in range(12):
+            a = 2 * math.pi * k / 12
+            p = goal + np.array([r * math.cos(a), r * math.sin(a), 0.0])
+            if landing:
+                surface = ground_height(space.model, space.data, p + UP * 0.5, space.own, space.root)
+                p[2] = (surface if surface is not None else 0.0) + space.rest
+            if space.crowding(p) is None and space.spot(p).exit is None:
+                return p
+    return None
 
 
 def _check_slope(space: Airspace, touchdown: np.ndarray) -> None:

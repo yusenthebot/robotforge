@@ -1,5 +1,6 @@
 """Aircraft: the rotor mixer for any layout, the flight controller, trips through the air and the drone template."""
 
+import json
 import math
 
 import mujoco
@@ -308,6 +309,19 @@ def test_it_lands_on_a_slope_where_it_was_sent_and_refuses_one_too_steep(pg):
     top = ground_height(pg.session.model, pg.session.data, np.array([2.8, 4.0, 50.0]))
     with pytest.raises(NoWay, match="slopes 35 degrees, too steep"):  # on it, at its height
         pg.behaviors.navigate("drone", [2.8, 4.0, top], None, None, 30)
+
+
+def test_no_room_beside_a_trunk_is_refused_with_a_spot_that_has_room(pg):
+    import re
+
+    from robotforge.behaviors.navigate import NoWay
+
+    _crown_world(pg)
+    with pytest.raises(NoWay, match="no room to land") as refused:
+        pg.behaviors.navigate("drone", [3.2, 0.0, 0.0], None, None, 30)  # 0.2 m from the trunk's middle
+    near = json.loads(re.search(r"(\[[^\]]+\]) has room", str(refused.value)).group(1))
+    result, touched = _clean_trip(pg, near)
+    assert result["arrived"] and result["landed"] and not touched
 
 
 def test_a_landing_that_comes_down_somewhere_else_did_not_arrive(pg):
