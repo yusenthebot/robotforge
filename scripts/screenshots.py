@@ -292,6 +292,23 @@ def _hexacopter() -> dict[str, Any]:
 HEXACOPTER = _hexacopter()
 
 
+DRONE_ROW = [("quad", -1.6), ("hexa_t", -0.7), ("octo", 0.3), ("hexa", 1.35), ("x2", 2.4), ("cf", 3.15)]
+
+
+def _drone_family(pg: Any) -> None:
+    sources = {
+        "quad": {"template": "drone"},
+        "hexa_t": {"template": "drone", "params": {"rotors": 6, "color": "orange", "arm_length": 0.24}},
+        "octo": {"template": "drone", "params": {"rotors": 8, "color": "black", "arm_length": 0.3, "size": 0.2}},
+        "hexa": {"build": HEXACOPTER},
+        "x2": {"library": "skydio_x2"},
+        "cf": {"library": "crazyflie"},
+    }
+    for name, x in DRONE_ROW:
+        pg.add_robot(name, pos=[x, 0.0], **sources[name])
+    pg.set_floor("grass")
+
+
 def _in_scene(scene: str, robots: dict[str, dict[str, Any]], seed: int = 0) -> Callable[[Any], None]:
     """A world builder: these robots, then the scene, which puts them on its free spots."""
 
@@ -776,6 +793,15 @@ SHOTS = [
         _in_scene("park", {"x2": {"library": "skydio_x2"}}),
         viewer=[_go("x2", [0.0, -1.0, 0.8]), {"wait": 5.0}],
         page=_hover_look("x2", (0.82, -1.02, 0.28), 0.12),
+        settle=0.5,
+    ),
+    # Every aircraft side by side, each hovering a metre up: the template with 4, 6 and 8 rotors, the hexacopter
+    # built from parts, the Skydio X2 and the palm-sized Crazyflie.
+    Shot(
+        "drone_family",
+        _drone_family,
+        viewer=[_go(name, [x, 0.0, 1.0]) for name, x in DRONE_ROW] + [{"wait": 6.0}],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.8, -4.3, 1.85], [0.8, 0.0, 0.85]);",
         settle=0.5,
     ),
 ]
