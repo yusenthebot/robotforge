@@ -40,6 +40,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    - a robot that no gait code knows, built from parts or imported from a URDF (`move` says so), can learn a walk of its own in the viewer's RL II lesson ("Keep this walk for my robot"); `robots` then lists its `learned_walk` and `move` uses it: forward at its own pace, and once its turns are learned (they follow keeping the walk) turning on the spot;
    - when the user asks such a robot (it has a `walk_hint`) to walk, say so before anything else and offer that lesson: about ten seconds of learning, and the walk is kept; a hand-written gait script is the fallback if they decline;
    - `train_policy` when the tool list has it: reinforcement learning (optional `rl` extra); `unilab_check` / `unilab_train` for the UniLab backend.
+   - a video to keep or share: `move(..., record=true)` or `run_script(name, record="show.gif")` saves the motion, playing in real time (record=true: a GIF; a file name picks `.gif` or `.webp`, and `.mp4` is saved as a GIF) in the world's `videos` folder; the result's `video.path` says where, to copy it from. No browser is needed.
 6. **Check, then explain.** Verify with numbers and an image (next section), explain what happened and why, offer a next step.
 
 ## Conventions
@@ -67,9 +68,11 @@ Never say something worked because the call returned. Read the numbers, and look
 | `run_script` | `ok`, `output`, traceback |
 | `set_controls` + `simulate` | `observe()` joints against controls; any `warning` |
 
-`observe(view=...)` takes default, front, back, left, right, top, or a robot camera such as `dog/front_cam`.
+`observe(view=...)` takes default, front, back, left, right, top, a robot's name (`view="dog"`: the default view framed on that robot), or a robot camera such as `dog/front_cam`.
 `observe(view, find="red")` (a color name, a hex code, or "all") lists what that view sees of the color: each find's world `position`, the `object` name `pick_and_place` takes, and `about_cm`, how far off the position may be.
 A flag on a find (cut_off, hidden, side_on, raised, held_by) means it may be much further off; the result's `how` says what each one it carries means.
+A lidar (a sensor on a robot built from parts) comes whole in `observe()`'s `lidars`: `nearest_m`, `nearest_bearing_deg` from the robot's front (positive is left), `nearest_side`, the nearest hit on each side, and every ray in `ranges_m` (null: nothing within range).
+A lidar or rangefinder sees past its own robot's parts (a column, the wheels), so its nearest hit is something else.
 Without OpenGL it returns the state with a note instead of an image: rely on the numbers and ask the user to look at the viewer.
 When something fails, say so plainly, read the error (it says what to do), fix it and check again.
 Report real numbers, including disappointing ones.

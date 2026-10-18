@@ -1,0 +1,124 @@
+name: pip_rover
+floor:
+  style: checker
+  friction: 1.0
+terrain: []
+robots:
+- name: pip
+  template: null
+  file: null
+  library: null
+  build:
+    color: '#19b8ad'
+    motor: jga25
+    base:
+      shape: box
+      size:
+      - 0.28
+      - 0.18
+      - 0.07
+      mass: 0.8
+    parts:
+    - name: right_wheel_1
+      at:
+      - -0.09
+      - -0.115
+      - -0.025
+      joint:
+        axis: y
+        continuous: true
+      shape: wheel
+      size:
+      - 0.105
+      - 0.04
+      color: '#263343'
+      material: rubber
+      mass: 0.09
+    - name: left_wheel_1
+      at:
+      - -0.09
+      - 0.115
+      - -0.025
+      joint:
+        axis: y
+        continuous: true
+      shape: wheel
+      size:
+      - 0.105
+      - 0.04
+      color: '#263343'
+      material: rubber
+      mass: 0.09
+    - name: right_wheel_2
+      at:
+      - 0.09
+      - -0.115
+      - -0.025
+      joint:
+        axis: y
+        continuous: true
+      shape: wheel
+      size:
+      - 0.105
+      - 0.04
+      color: '#263343'
+      material: rubber
+      mass: 0.09
+    - name: left_wheel_2
+      at:
+      - 0.09
+      - 0.115
+      - -0.025
+      joint:
+        axis: y
+        continuous: true
+      shape: wheel
+      size:
+      - 0.105
+      - 0.04
+      color: '#263343'
+      material: rubber
+      mass: 0.09
+    - name: head
+      at:
+      - 0.07
+      - 0
+      - 0.085
+      joint: fixed
+      shape: box
+      size:
+      - 0.095
+      - 0.14
+      - 0.065
+      color: '#e6eff2'
+      mass: 0.08
+    - name: right_eye
+      parent: head
+      at:
+      - 0.054
+      - -0.042
+      - 0.006
+      joint: fixed
+      shape: sphere
+      size:
+      - 0.027
+      color: '#162339'
+      mass: 0.005
+    - name: left_eye
+      parent: head
+      at:
+      - 0.054
+      - 0.042
+      - 0.006
+      joint: fixed
+      shape: sphere
+      size:
+      - 0.027
+      color: '#162339'
+      mass: 0.005
+  params: {}
+  pos:
+  - 0.0
+  - 0.0
+  yaw: 0.0
+objects: []

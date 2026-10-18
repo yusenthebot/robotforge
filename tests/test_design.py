@@ -207,3 +207,15 @@ def test_world_files_are_utf8_with_lf_endings(tmp_path):
     store.apply(lambda w: w.robots.append(_entry("dog", "quadruped")))
     for path in (store.file, store.build_dir / "world.xml", *store.history.glob("*.yaml")):
         assert b"\r" not in path.read_bytes(), path
+
+
+def test_show_world_with_no_world_open_says_so_and_lists_the_saved_ones(tmp_path, monkeypatch):
+    """Agents call show_world first to see where things stand; with no world open it was a failed call (both
+    go2_arm_kitchen sessions on the evals branch began with one)."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    empty = pg.show_world()
+    assert empty["world"] is None and empty["saved_worlds"] == [] and "new_world makes one" in empty["notes"][0]
+    pg.new_world("garden")
+    assert "name: garden" in pg.show_world()["world_yaml"]
+    assert Playground(session=SimSession.from_xml("<mujoco/>")).show_world()["saved_worlds"] == ["garden"]

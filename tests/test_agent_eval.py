@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures" / "agent_eval"
+MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"  # offline stand-ins for the Go2 and the PiPER
 SCRIPT = Path(__file__).parents[1] / "scripts" / "agent_eval.py"
 
 
@@ -56,12 +57,46 @@ BASELINE = {
     # On ae450e3: a hexapod on xl430 servos sent forwards at 0.12 m/s for 5 s went 0.21 m backwards; counted as
     # distance it passed, and the agent told the user it had walked.
     "hexapod_backwards": (False, {"it is a hexapod": True, "went >= 0.2 m the way it was sent": False}),
+    # On main at c2e37cd, the tasks for going somewhere, the gallery and the camera, all four done:
+    # the starter rover from [-5.5, 2.6] to a waypoint at the ramp's foot, then up onto the dock;
+    "warehouse_dock": (True, {"started >= 3.0 m from the dock's top": True, "ended on the dock's top": True}),
+    # the centaur design in the park, 2.8 m to bench_1;
+    "centaur_bench": (True, {"a centaur: four legs that walk and two arms": True}),
+    # the wrist camera saw no red (it looks down beside the base), the top view found block_2, then the pick;
+    "find_red": (True, {"found before an arm handled it": True, "the other cubes are still out of the bin": True}),
+    # the go2_arm design put at [-2, 0] by the agent, 0.72 m to the island.
+    "go2_arm_kitchen": (True, {"a Go2 carrying an arm": True, "not next to the island at the start": True}),
+    # On 9bf99c0, the tasks that are not lessons. A 64-ray lidar car driven 0.87 m into the maze: observe listed 40
+    # sensors, 37 of them its rays, and the script the agent wrote to read them all got the same 37. Its answer,
+    # 0.43 m, is right all the same: the nearest hedge is 0.45 m from the lidar there, worked out from world.yaml.
+    # (Held to the whole ring as robotforge reported it, this session used to fail.)
+    "lidar_maze": (
+        True,
+        {
+            "started outside the maze (at its entrance)": True,
+            "its lidar read inside the maze, a wall in reach": True,
+            "the answer says how far the nearest wall is": True,
+        },
+    ),
+    # On ef22541, after the lidar saw past its own robot: the car read its 64 rays from "lidars" 0.92 m into the
+    # maze and said the nearest hedge was 0.426 m to its left; worked out from world.yaml it is 0.45 m.
+    "lidar_maze_ef22541": (
+        True,
+        {"its lidar read inside the maze, a wall in reach": True, "the answer says how far the nearest wall is": True},
+    ),
 }
 TASK_OF = {
+    "lidar_maze_ef22541": "lidar_maze",
     "learn_control_table_only": "learn_control",
     "learn_control_live": "learn_control",
     "hexapod_backwards": "hexapod_build",
 }
+
+
+@pytest.fixture(autouse=True)
+def offline_menagerie(monkeypatch):
+    """The Go2 and the PiPER a world mounts compile from the offline stand-ins, never a download."""
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
 
 
 @pytest.mark.parametrize("task", list(BASELINE))
@@ -564,3 +599,334 @@ def test_a_fixture_keeps_which_world_each_result_is_in(ev):
     assert json.loads(ev._trim_result("open_model", json.dumps({"model": "a.urdf", "joints": [1] * 99}))) == {
         "model": "a.urdf"
     }
+
+
+# ---- going somewhere, the gallery and the camera (main at c2e37cd) -------------------------------------------
+
+
+def _copy(tmp_path: Path, fixture: str) -> Path:
+    import shutil
+
+    return Path(shutil.copytree(FIXTURES / fixture, tmp_path / "run" / "tasks" / fixture))
+
+
+def _edit_world(task_dir: Path, world: str, change) -> None:
+    """Change a recorded world as a session might have left it instead (change takes and edits its YAML data)."""
+    import yaml
+
+    path = task_dir / "rf_home" / "worlds" / world / "world.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    change(data)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _robot(data: dict, name: str) -> dict:
+    return next(r for r in data["robots"] if r["name"] == name)
+
+
+def test_a_ramps_landing_and_the_gaps_seen_from_above(ev):
+    dock = {"type": "ramp", "pos": [5.0, -1.4], "yaw": 0, "angle": 8, "length": 2.1, "landing": 2.0, "width": 2.4}
+    xs, ys = zip(*ev.landing({**dock, "direction": "up"}), strict=True)
+    assert (min(xs), max(xs), min(ys), max(ys)) == pytest.approx((5.05, 7.05, -2.6, -0.2))
+    xs, _ = zip(*ev.landing({**dock, "direction": "up_down"}), strict=True)  # the landing between two slopes
+    assert (min(xs), max(xs)) == pytest.approx((5.0 - 3.1 + 2.1, 5.0 - 3.1 + 4.1))
+    xs, _ = zip(*ev.landing({**dock, "direction": "down", "yaw": 180}), strict=True)  # first, then turned round
+    assert (min(xs), max(xs)) == pytest.approx((5.05, 7.05))
+    assert ev.landing({"type": "stairs", "pos": [0, 0]}) is None
+    square = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    assert ev.polygon_gap(square, [(2, 0), (3, 0), (3, 1), (2, 1)]) == pytest.approx(1.0)
+    assert ev.polygon_gap(square, [(1.5, 1.5)]) == pytest.approx(0.5**0.5)  # corner to corner
+    assert ev.polygon_gap(square, [(0.5, 0.5)]) == 0.0  # inside
+    turned = [(1.5, 0.5), (2.0, 1.0), (1.5, 1.5), (1.0, 1.0)]  # a diamond touching the square's side
+    assert ev.polygon_gap(square, turned) == 0.0
+    # A robot 0.4 m long facing a counter's side from 1.0 m away (its middle), its nose 0.2 m off it.
+    counter = {"shape": "counter", "pos": [0.0, 0.0], "size": [1.4, 0.8, 0.9]}
+    assert ev._gap_to(-1.0, 0.0, 0.0, (-0.3, 0.1, -0.15, 0.15), counter) == pytest.approx(0.2)
+
+
+def test_a_trip_counts_as_sent_toward_its_destination(ev):
+    """move(to=...) plans its own way, turns and all: the way it was sent is toward the destination, not the way it
+    faced when it set off (a dog facing +x sent to a point behind it went the right way)."""
+    start = {"robot": "dog", "position": [0, 0, 0.3], "heading_deg": 0, "upright": True}
+    end = {"robot": "dog", "position": [-1.0, 0.0, 0.3], "heading_deg": 180, "upright": True}
+    result = {"arrived": True, "destination": {"point": [-1.0, 0.0]}, "distance_m": 1.1, "from": start, "to": end}
+    session = ev.parse_events([_event("move", {"robot": "dog", "to": [-1, 0]}, result)])
+    assert ev.progress(session, "dog") == pytest.approx(1.0)
+
+
+def test_the_warehouse_dock_is_measured_from_the_saved_start_to_the_top(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["warehouse_dock"], FIXTURES / "warehouse_dock")
+    assert _verdict(outcome)["ended on the dock's top"] and outcome.tools.count("move") == 2
+    far = next(c for c in outcome.criteria if c["name"].startswith("started >="))
+    assert far["observed"] == "10.92 m"  # from [-5.5, 2.6] to the landing's corner at [5.05, -0.2]
+    # Put on the dock by hand (its saved place moved there): no trip across the warehouse.
+    teleported = _copy(tmp_path / "a", "warehouse_dock")
+    _edit_world(teleported, "warehouse", lambda d: _robot(d, "rover").update(pos=[6.0, -1.4]))
+    assert _verdict(ev.score(ev.TASKS["warehouse_dock"], teleported))["started >= 3.0 m from the dock's top"] is False
+    # Stopped on the ramp, short of the top (as the trip and the observe after it report it).
+    short = _copy(tmp_path / "b", "warehouse_dock")
+    events = short / "events.jsonl"
+    text = events.read_text(encoding="utf-8")
+    assert text.count("5.977,") == 1 and text.count("5.9768,") == 1
+    events.write_text(text.replace("5.977,", "4.2,").replace("5.9768,", "4.2,"), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["warehouse_dock"], short))
+    assert verdict["ended on the dock's top"] is False and verdict["started >= 3.0 m from the dock's top"]
+
+
+def test_a_centaur_must_be_one_and_must_walk_to_the_bench(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["centaur_bench"], FIXTURES / "centaur_bench")
+    assert "centaur_park/centaur (quadruped, arms ['centaur/left_hand', 'centaur/right_hand'])" in str(outcome.criteria)
+    # Saved beside the bench it ended at: it walked, but not to the bench.
+    beside = _copy(tmp_path / "a", "centaur_bench")
+    _edit_world(beside, "centaur_park", lambda d: _robot(d, "centaur").update(pos=[-2.8, -0.4], yaw=180))
+    verdict = _verdict(ev.score(ev.TASKS["centaur_bench"], beside))
+    assert verdict["not next to a bench at the start"] is False and verdict["ended within 0.5 m of a bench"]
+    # A dog from parts with no arms: not a centaur, though it walked there.
+    armless = _copy(tmp_path / "b", "centaur_bench")
+
+    def no_hands(data):
+        build = _robot(data, "centaur")["build"]
+        build["parts"] = [p for p in build["parts"] if not str(p.get("name", "")).endswith("hand")]
+
+    _edit_world(armless, "centaur_park", no_hands)
+    verdict = _verdict(ev.score(ev.TASKS["centaur_bench"], armless))
+    assert verdict["a centaur: four legs that walk and two arms"] is False and verdict["ended within 0.5 m of a bench"]
+
+
+def test_the_red_cube_must_be_found_by_the_camera_before_it_is_picked(ev, tmp_path):
+    outcome = ev.score(ev.TASKS["find_red"], FIXTURES / "find_red")
+    found = next(c for c in outcome.criteria if c["name"].startswith("the camera found"))
+    assert found["observed"] == "3 observe(find=...): red, red, red; saw ['block_2']"
+    lines = (FIXTURES / "find_red" / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    looks = [i for i, line in enumerate(lines) if '"find": "red"' in line and '"item.completed"' in line]
+    picked = next(i for i, line in enumerate(lines) if '"tool": "pick_and_place"' in line)
+    # Picked without looking: the world file says which cube is red, but the user asked for the camera.
+    blind = _copy(tmp_path / "a", "find_red")
+    (blind / "events.jsonl").write_text("\n".join(x for i, x in enumerate(lines) if i not in looks), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["find_red"], blind))
+    assert verdict["the camera found block_2, the red cube"] is False and verdict["block_2 ended in a bin"]
+    # Looked only after picking it (the last observe saw it in the bin).
+    late = _copy(tmp_path / "b", "find_red")
+    kept = [x for i, x in enumerate(lines) if i not in looks or i > picked]
+    (late / "events.jsonl").write_text("\n".join(kept), encoding="utf-8")
+    verdict = _verdict(ev.score(ev.TASKS["find_red"], late))
+    assert verdict["the camera found block_2, the red cube"] and verdict["found before an arm handled it"] is False
+
+
+def test_the_wrong_cube_in_the_bin_does_not_pass(ev, tmp_path):
+    seen = {"found": {"view": "top", "color": "red", "objects": [{"n": 1, "object": "block_2"}]}, "time": 0}
+    placed = {"success": True, "object_position": [-0.05, 0.3, 0.025], "object": "block_1", "target": "bin"}
+    events = [
+        _opened("desk"),
+        _event("observe", {"view": "top", "find": "red"}, seen),
+        _event("pick_and_place", {"robot": "arm", "object": "block_1", "target": "bin"}, placed),
+    ]
+    outcome = ev.score(ev.TASKS["find_red"], _made_up(tmp_path, {"desk": ev.DESK}, *events))
+    verdict = _verdict(outcome)
+    assert not outcome.passed and verdict["the camera found block_2, the red cube"]
+    assert verdict["block_2 ended in a bin"] is False and verdict["the other cubes are still out of the bin"] is False
+
+
+def test_a_go2_saved_inside_the_island_made_no_trip_to_it(ev, tmp_path):
+    """Added without a place after load_scene, a robot stands at [0, 0], inside the kitchen's island: pushed out,
+    it is next to the island at once."""
+    inside = _copy(tmp_path / "a", "go2_arm_kitchen")
+    _edit_world(inside, "go2_arm_kitchen", lambda d: _robot(d, "go2_arm").update(pos=[0.0, 0.0]))
+    verdict = _verdict(ev.score(ev.TASKS["go2_arm_kitchen"], inside))
+    assert verdict["not next to the island at the start"] is False and verdict["a Go2 carrying an arm"]
+    # The plain Go2 from the library carries no arm.
+    plain = _copy(tmp_path / "b", "go2_arm_kitchen")
+    _edit_world(plain, "go2_arm_kitchen", lambda d: _robot(d, "go2_arm").update(build=None, library="go2"))
+    assert _verdict(ev.score(ev.TASKS["go2_arm_kitchen"], plain))["a Go2 carrying an arm"] is False
+
+
+def test_a_fixture_keeps_what_the_camera_found(ev):
+    found = {"view": "top", "color": "red", "how": "x" * 400, "objects": [{"n": 1, "object": "block_2", "pixels": 9}]}
+    trimmed = json.loads(ev._trim_result("observe", json.dumps({"time": 1, "joints": {"a": 1}, "found": found})))
+    assert trimmed == {"time": 1, "found": {"view": "top", "color": "red", "objects": [{"n": 1, "object": "block_2"}]}}
+
+
+# ---- the tasks that are not lessons: a lidar in the maze, a video of a robot from parts (9bf99c0) ---------------
+
+
+def _said(text: str) -> str:
+    return json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": text}})
+
+
+MAZE_WORLD = FIXTURES / "lidar_maze" / "rf_home" / "worlds" / "lidar_maze" / "world.yaml"
+
+
+def _lidar_seen(where: list[float], nearest: float, rays: int = 64) -> str:
+    """An observe as robotforge answers it now: the whole lidar under "lidars"."""
+    ranges = [round(nearest + 0.01 * abs(i - 16), 3) for i in range(rays)]
+    whole = {"rays": rays, "range_m": 5.0, "hits": rays, "nearest_m": nearest, "nearest_side": "left"}
+    state = {
+        "time": 6,
+        "free_bodies": {"lidar_car/base": [*where, 0.06]},
+        "lidars": {"lidar_car/base_lidar": {**whole, "ranges_m": ranges}},
+    }
+    return _event("observe", {"view": "top"}, state)
+
+
+def _maze_session(tmp_path: Path, *events: str, world: str | None = None) -> Path:
+    text = world if world is not None else MAZE_WORLD.read_text(encoding="utf-8")
+    return _made_up(tmp_path, {"lidar_maze": text}, _opened("lidar_maze"), *events)
+
+
+def test_the_answer_is_held_to_the_walls_where_the_lidar_was(ev, tmp_path):
+    """The truth is worked out from the hedges in world.yaml at the pose observe reported: 0.45 m from the car at
+    [-2, -2.13]. What robotforge's lidar said there does not decide it."""
+    inside = [-2.0, -2.13]
+    good = _maze_session(tmp_path / "a", _lidar_seen(inside, 0.43), _said("最近的墙在左边，约 43 厘米。"))
+    assert ev.score(ev.TASKS["lidar_maze"], good).passed
+    wrong = _maze_session(tmp_path / "b", _lidar_seen(inside, 0.43), _said("最近的墙大约 0.9 米远。"))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], wrong))
+    assert verdict["its lidar read inside the maze, a wall in reach"]
+    assert verdict["the answer says how far the nearest wall is"] is False
+    # Read at the start mark, outside the maze: the car never drove in.
+    outside = _maze_session(tmp_path / "c", _lidar_seen([-2.0, -3.0], 0.5), _said("最近的墙 0.5 米。"))
+    assert (
+        _verdict(ev.score(ev.TASKS["lidar_maze"], outside))["its lidar read inside the maze, a wall in reach"] is False
+    )
+
+
+def test_a_reading_of_the_robot_itself_is_no_wall(ev, tmp_path):
+    """Before the lidar saw past its own robot, observe could say 0.148 m (the car's own wheels): repeating it is
+    wrong, and the true distance is right whatever observe said."""
+    inside = [-2.0, -2.13]
+    echoed = _maze_session(tmp_path / "a", _lidar_seen(inside, 0.148), _said("最近的墙只有 0.15 米。"))
+    assert _verdict(ev.score(ev.TASKS["lidar_maze"], echoed))["the answer says how far the nearest wall is"] is False
+    true = _maze_session(tmp_path / "b", _lidar_seen(inside, 0.148), _said("The nearest wall is 0.45 m to the left."))
+    assert ev.score(ev.TASKS["lidar_maze"], true).passed
+
+
+def test_only_the_distance_called_nearest_counts(ev, tmp_path):
+    """An answer naming how far the car drove (0.45 m here, the wall's distance by chance) and a wrong nearest wall
+    does not pass on the first number."""
+    inside = [-2.0, -2.13]
+    text = "小车开进了 0.45 米。最近的墙在右边 0.9 米。"
+    said = _maze_session(tmp_path, _lidar_seen(inside, 0.43), _said(text))
+    assert _verdict(ev.score(ev.TASKS["lidar_maze"], said))["the answer says how far the nearest wall is"] is False
+
+
+def test_a_lidar_read_by_a_script_counts_where_the_robot_was_seen_inside(ev, tmp_path):
+    """The whole ring need not come through observe: a script that reads the sensors after the car drove in."""
+    code = "from robotforge.script import connect\nsim = connect()\nprint(sim.sensors('lidar_car'))\n"
+    start = {"robot": "lidar_car", "position": [-2.0, -3.0, 0.06], "heading_deg": 90, "upright": True}
+    end = {"robot": "lidar_car", "position": [-2.0, -2.13, 0.06], "heading_deg": 90, "upright": True}
+    moved = {"from": start, "to": end, "distance_m": 0.87, "turned_deg": 0, "stopped": True}
+    events = [
+        _event("move", {"robot": "lidar_car", "speed": 0.15, "seconds": 6}, moved),
+        _event("write_script", {"name": "read", "code": code}, {"saved": "read.py"}),
+        _event("run_script", {"name": "read"}, {"ok": True, "exit_code": 0, "output": "..."}),
+    ]
+    scripted = _maze_session(tmp_path / "a", *events, _said("最近的墙约 0.44 米。"))
+    outcome = ev.score(ev.TASKS["lidar_maze"], scripted)
+    assert outcome.passed, outcome.criteria
+    unread = _maze_session(tmp_path / "b", events[0], _said("最近的墙约 0.44 米。"))  # nothing read the lidar
+    assert (
+        _verdict(ev.score(ev.TASKS["lidar_maze"], unread))["its lidar read inside the maze, a wall in reach"] is False
+    )
+
+
+def test_a_lidar_car_saved_inside_the_maze_did_not_start_at_its_entrance(ev, tmp_path):
+    import yaml
+
+    data = yaml.safe_load(MAZE_WORLD.read_text(encoding="utf-8"))
+    _robot(data, "lidar_car").update(pos=[-2.0, -2.13])
+    placed = _maze_session(tmp_path, _lidar_seen([-2.0, -2.13], 0.43), _said("0.43 m"), world=yaml.safe_dump(data))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], placed))
+    assert verdict["started outside the maze (at its entrance)"] is False
+    assert verdict["the answer says how far the nearest wall is"]
+
+
+def test_the_maze_starter_rover_carries_no_lidar(ev, tmp_path):
+    import yaml
+
+    data = yaml.safe_load(MAZE_WORLD.read_text(encoding="utf-8"))
+    data["robots"] = [{"name": "lidar_car", "template": "rover", "pos": [-2.0, -3.0], "yaw": 90}]
+    plain = _maze_session(tmp_path, _lidar_seen([-2.0, -2.13], 0.43), _said("0.43 m"), world=yaml.safe_dump(data))
+    verdict = _verdict(ev.score(ev.TASKS["lidar_maze"], plain))
+    assert verdict["a robot carrying a lidar, in a maze"] is False
+
+
+def test_a_distance_said_is_held_to_the_true_one(ev):
+    assert ev.said_near(0.4, 0.43) and not ev.said_near(0.3, 0.43) and ev.said_near(2.2, 2.5)
+    assert not ev.said_near(0.5, 0.43) and ev.said_near(0.5, 0.43, slack=0.02)  # where the robot faced is unknown
+    assert ev.nearest_said("最近的墙 43 厘米") == 0.43 and ev.nearest_said("nearest wall: 0.5 meters") == 0.5
+    assert ev.nearest_said("最近的墙 0.2 m/s 开过去，0.45 米") == 0.45  # a speed is not a distance
+
+
+def test_the_distance_called_nearest_is_the_one_after_the_word(ev):
+    assert ev.nearest_said("最近的墙面距离约 **0.43 米（43 厘米）**。") == 0.43
+    assert ev.nearest_said("小车开了 0.79 m。最近的墙在左侧 0.439 m，右侧 0.65 m。") == 0.439
+    assert ev.nearest_said("The car drove 0.79 m. The nearest wall is 44 cm to the left.") == 0.44
+    assert ev.nearest_said("离它最近的墙有多远？0.44 米。") == 0.44  # the closest one to the word
+    assert ev.nearest_said("0.44 米") == 0.44 and ev.nearest_said("左边 0.44 米，右边 0.65 米") is None
+
+
+def _gif(path: Path, frames: int = 20, moving: bool = True, ms: int = 100) -> Path:
+    from PIL import Image, ImageDraw
+
+    images = []
+    for i in range(frames):
+        im = Image.new("RGB", (160, 120), (200, 200, 200))
+        x = 5 + 6 * i if moving else 5
+        ImageDraw.Draw(im).rectangle([x, 40, x + 20, 60], fill=(30, 160, 150))
+        images.append(im)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    images[0].save(path, save_all=True, append_images=images[1:], duration=ms, loop=0)
+    return path
+
+
+def test_a_video_of_the_robot_from_parts_must_be_there_and_move(ev, tmp_path):
+    """The recorded session left MP4s in its working folder; a fixture keeps no video, so each case puts one there."""
+    task = ev.TASKS["parts_video"]
+    none = _copy(tmp_path / "a", "parts_video")
+    verdict = _verdict(ev.score(task, none))
+    assert verdict["a robot built from parts"] and verdict["it moved >= 0.2 m"]
+    assert verdict["a video >= 1 s in which something moves"] is False
+    good = _copy(tmp_path / "b", "parts_video")
+    _gif(good / "work" / "pip.gif")
+    outcome = ev.score(task, good)
+    assert outcome.passed, outcome.criteria
+    assert "work/pip.gif: 20 frames, 2.0 s" in outcome.criteria[-1]["observed"]
+    still = _copy(tmp_path / "c", "parts_video")
+    _gif(still / "rf_home" / "worlds" / "pip_rover" / "videos" / "pip.gif", moving=False)
+    assert _verdict(ev.score(task, still))["a video >= 1 s in which something moves"] is False
+    short = _copy(tmp_path / "d", "parts_video")
+    _gif(short / "work" / "pip.gif", frames=5)
+    assert _verdict(ev.score(task, short))["a video >= 1 s in which something moves"] is False
+
+
+def test_a_video_saved_elsewhere_counts_when_the_answer_names_it_and_it_is_new(ev, tmp_path):
+    import os
+
+    task = ev.TASKS["parts_video"]
+    named = _copy(tmp_path / "a", "parts_video")
+    elsewhere = _gif(tmp_path / "Desktop" / "pip.gif")
+    with (named / "events.jsonl").open("a", encoding="utf-8") as f:
+        f.write(_said(f"Here is the video: [pip.gif]({elsewhere})") + "\n")
+    assert ev.score(task, named).passed
+    started = json.loads((named / "meta.json").read_text(encoding="utf-8"))["started"]
+    os.utime(elsewhere, (started - 3600, started - 3600))  # there before the session: not its video
+    assert _verdict(ev.score(task, named))["a video >= 1 s in which something moves"] is False
+
+
+def test_a_robot_that_never_moved_is_not_a_video_of_it_moving(ev, tmp_path):
+    world = (FIXTURES / "parts_video" / "rf_home" / "worlds" / "pip_rover" / "world.yaml").read_text(encoding="utf-8")
+    still = _made_up(tmp_path, {"pip_rover": world}, _opened("pip_rover"))
+    _gif(still / "work" / "pip.gif")
+    verdict = _verdict(ev.score(ev.TASKS["parts_video"], still))
+    assert verdict["a robot built from parts"] and verdict["it moved >= 0.2 m"] is False
+
+
+def test_a_fixture_keeps_each_lidar_whole(ev):
+    state = {
+        "time": 1,
+        "joints": {"a": 1},
+        "sensors": {"c/imu": [0, 0, 1], "c/l_0": 0.5},
+        "lidars": {"c/l": {"rays": 3}},
+    }
+    kept = json.loads(ev._trim_result("observe", json.dumps(state)))
+    assert kept == {"time": 1, "lidars": {"c/l": {"rays": 3}}, "sensors": {"c/l_0": 0.5}}

@@ -82,6 +82,9 @@ class SimSession:
     # Run with the actuator's id after set_ctrl sets it by hand (a viewer slider, set_controls), e.g. so a robot
     # standing on a gait it never asked for lets go of that joint.
     ctrl_hooks: list[Callable[[int], None]] = field(default_factory=list, repr=False)
+    # Run after every physics step, whoever steps (the viewer's clock, a tool, a script), e.g. so a recording keeps
+    # the poses at its frame rate.
+    step_hooks: list[Callable[[], None]] = field(default_factory=list, repr=False)
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
@@ -98,12 +101,12 @@ class SimSession:
     @classmethod
     def from_path(cls, path: str | Path) -> SimSession:
         model = _compile_path(Path(path))
-        return cls(model=model, data=_fresh_data(model), source=str(path))
+        return cls(model=model, data=fresh_data(model), source=str(path))
 
     @classmethod
     def from_xml(cls, xml: str, assets: dict[str, bytes] | None = None) -> SimSession:
         model = _compile_xml(xml, assets)
-        return cls(model=model, data=_fresh_data(model))
+        return cls(model=model, data=fresh_data(model))
 
     def load_path(self, path: str | Path) -> None:
         self._swap(_compile_path(Path(path)), str(path))
@@ -115,7 +118,7 @@ class SimSession:
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
             self.model = model
-            self.data = _fresh_data(model)
+            self.data = fresh_data(model)
             self.source = source
             self.drag = None
             self.water = water_model.hydro_for(model)
@@ -198,6 +201,8 @@ class SimSession:
                     mujoco.mj_step(self.model, self.data)
                 else:
                     self._step_in_water()
+                for hook in tuple(self.step_hooks):  # a hook may take itself off (a recording that ends)
+                    hook()
 
     def _step_in_water(self) -> None:
         """One step with the water's forces worked out from this step's pose (sim/water.py), added to xfrc_applied
@@ -287,7 +292,8 @@ class SimSession:
             )
 
 
-def _fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+def fresh_data(model: mujoco.MjModel) -> mujoco.MjData:
+    """`model`'s state at its start: its first keyframe if it has one, everything computed."""
     data = mujoco.MjData(model)
     if model.nkey > 0:
         mujoco.mj_resetDataKeyframe(model, data, 0)
