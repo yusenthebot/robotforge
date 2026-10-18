@@ -153,3 +153,22 @@ def test_the_plate_rests_on_the_rover_lid_not_on_a_dressing_meshs_box(world):
 
 
 LIDAR_PUCK = {"name": "puck", "at": "top", "shape": "cylinder", "size": [0.06, 0.04], "joint": "fixed"}
+
+
+def test_no_adapter_plate_is_drawn_through_a_robot_hanging_under_its_plate(world):
+    """Regression: the aluminium plate a mounted template robot stands on was drawn for one hung under a plate too:
+    a disc 0.48 m across through a carried quadruped's trunk, and one round a carried rover's chassis. An arm
+    standing on its part keeps its plate."""
+    world.add_robot("dog", template="quadruped", pos=[0.0, 0.6])
+    world.add_robot("rover", template="rover", pos=[0.0, 0.0])
+    for name in ("dog", "rover"):
+        world.add_part(name, dict(LIDAR_PUCK))
+    world.add_robot("picker", design="lift_picker", pos=[1.5, 0.0])
+    m = world.session.model
+
+    def drawn(body: str) -> list[float]:
+        b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, body)
+        return [float(max(m.geom_aabb[g][3:])) for g in range(m.ngeom) if m.geom_bodyid[g] == b]
+
+    assert drawn("dog/quadruped") == [] and drawn("rover/rover") == []
+    assert max(drawn("picker/arm")) > 0.05  # the arm on the lift still stands on its plate
