@@ -71,10 +71,18 @@ saved as red_cube, "the dog" finds dog). Units: meters, kilograms, radians for j
 builder takes degrees for joints too).
 
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, warehouse, park,
-maze, obstacle_course; list_scenes describes them). set_terrain and add_terrain shape the ground (hills,
-rough ground, stairs, ramps, stepping stones, curbs, platforms); robots and objects stand on the ground
-under them. To build a scene from a sentence, combine load_scene, add_terrain and add_object, then check it
-with observe(view="overview").
+maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
+add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
+and objects stand on the ground under them. To build a scene from a sentence, combine load_scene, add_terrain
+and add_object, then check it with observe(view="overview").
+
+Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
+dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
+shape (a wooden crate floats, a steel block sinks); add_object(shape="buoy") is a moored buoy, shape="dock" a
+wooden dock. Templates boat (two thrusters, turns on the spot) and rov (an underwater robot, six thrusters) are
+driven with move and the keyboard; a boat's move(to=...) plans round the shore, buoys and docks ("to the
+dock"), an ROV's move(to=[x, y, z]) dives to that point and holds its depth and heading. observe reports what
+floats and how deep things are under "water".
 
 Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
 snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
@@ -277,9 +285,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper) with parameters, defaults and
-        limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos, motors,
-        linear actuators). For other robots build from parts (builder_guide)."""
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov) with parameters,
+        defaults and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts catalog (servos,
+        motors, linear actuators). For other robots build from parts (builder_guide)."""
         from robotforge.design import components, gallery, templates
 
         parts = {
@@ -391,8 +399,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
         door_frame [width, depth, height]; pallet [length, width, height]; tree [crown diameter, height]; marker
-        [diameter] or [length, width]. Every shape has a default size and color; color is a name, a hex code like
-        "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
+        [diameter] or [length, width]; buoy [diameter, height] (floats upright, moored where it is put); dock [length,
+        width, deck height] (posts reach the bottom). In water a light object floats (set mass: a wooden crate about 450
+        kg/m^3 of its size, steel 7850 sinks). Every shape has a default size and color; color is a name, a hex code
+        like "#9c6b3f" or [r, g, b]. pos is [x, y] (rests on the ground or terrain there) or [x, y, z]; yaw is in
         degrees. fixed objects never move (walls, shelves, counters, trees, benches and rocks are fixed unless
         fixed=false). A bin is an open-top container; a marker is a flat mark nothing collides with (goals, lanes).
         Ramps and stairs are terrain: see add_terrain."""
@@ -422,10 +432,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json(playground.remove(name))
 
     @server.tool()
-    def set_floor(style: StyleName) -> str:
-        """Change the floor look and feel."""
+    def set_floor(style: StyleName | None = None, water: float | dict[str, Any] | None = None) -> str:
+        """Change the floor's look and grip, and the water over it. water=1.2 fills the world with water 1.2 m deep:
+        the floor becomes the bottom, and terrain or furniture higher than that is dry land (a quay, a pool deck).
+        water={"level": 1.2, "waves": 0.03, "current": [0.2, 0], "area": [x0, y0, x1, y1]} adds waves (crest
+        height, m), a current (m/s) or keeps the water inside a rectangle; water=0 takes it away. What floats starts
+        afloat; load_scene("harbor"), "lake" or "pool" are ready-made water."""
         with _tool_errors():
-            return _json(playground.set_floor(style))
+            return _json(playground.set_floor(style, water))
 
     @server.tool()
     def undo() -> str:
@@ -512,19 +526,21 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         walker: str | None = None,
         to: str | list[float] | None = None,
     ) -> str:
-        """Walk a quadruped, hexapod or humanoid, drive a rover or two-wheeled balancer, make a snake slither, or walk
-        a robot with a walk it learned itself (RL II lesson). speed in m/s (negative = backwards), turn in rad/s
-        (positive = left); more than the robot can do is clamped, and the result says so. Each robot's max_speed is
-        in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that long, stops
-        ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a note
-        saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
-        the viewer is open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned
-        policy (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
-        `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard
-        driving uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path
-        round walls, furniture and steps it cannot climb and follows it (next to an object it stops facing it, within
-        reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
-        (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why."""
+        """Walk a quadruped, hexapod or humanoid, drive a rover, a two-wheeled balancer, a boat or an underwater ROV,
+        make a snake slither, or walk a robot with a walk it learned itself (RL II lesson). speed in m/s (negative =
+        backwards), turn in rad/s (positive = left); more than the robot can do is clamped, and the result says so. Each
+        robot's max_speed is in `robots` (humanoids: about 0.1 m/s, slow to start and stop). With seconds it moves that
+        long, stops ("stopped": true, no need to call stop; "behavior" is how it moved) and reports the distance, with a
+        note saying why when it fell far short; seconds=null keeps moving until `stop`. The user watches in real time if
+        the viewer is open. walker (legged robots): "gait" = the built-in controller, "rl" = this robot's learned policy
+        (list_walkers), or a policy name; omitted keeps the current one. "rhythm" (a robot with learned_walk in
+        `robots`) = the walk it learned in the viewer, forward at its own pace, turning on the spot. Keyboard driving
+        uses the same walker. to=[x, y] or the name of an object, robot or terrain patch: it plans a path round walls,
+        furniture and steps it cannot climb and follows it (next to an object it stops facing it, within reach of an arm
+        it carries); speed is then its top speed (left out: its own pace) and seconds a time limit (left out: 60). A
+        boat's path keeps to water deep enough for it, round buoys and docks; an ROV takes to=[x, y, z] (z: height above
+        the bottom, under the surface) and goes straight there, holding depth and heading. The result says arrived,
+        path_m, time_s and, if it did not get there, why."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if to is not None:

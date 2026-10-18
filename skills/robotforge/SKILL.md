@@ -15,10 +15,11 @@ Do not work around missing tools by importing robotforge's Python modules yourse
 
 1. **Understand the wish.** If the request is clear, act with sensible defaults. Ask one short question only when a choice really matters (which robot, what it should do). "Teach me" or "lesson N" means the learning path: call `lessons`.
 2. **World.** `new_world(name, floor)` creates a project; `open_world` reopens one.
-   - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, warehouse, park, maze, obstacle_course. Robots already in the world move to the scene's places.
+   - Ready-made scenes (`list_scenes`, `load_scene(preset)`): desk_lab, kitchen, warehouse, park, maze, obstacle_course, and with water harbor, lake, pool. Robots already in the world move to the scene's places (boats and ROVs onto the water).
    - Ground and terrain: `set_floor(style)` (checker, grass, wood, concrete, dirt, sand, rock, snow, tile); `set_terrain(type)` for the whole ground or `add_terrain(type, pos)` for one feature (hills, rough, stairs, ramp, stones, curb, platform).
+   - Water: `set_floor(water=1.2)` fills the world 1.2 m deep (or `water={"level": 1.2, "waves": 0.03}`); higher terrain is dry land. Light things float, heavy ones sink; `add_object(shape="buoy")` is a moored buoy, `shape="dock"` a wooden dock.
 3. **Robot.** Pick the source that fits:
-   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, tuned with `params` (sizes, servo, color);
+   - template (`list_templates`): arm, quadruped, humanoid, rover, cartpole, boat, rov (an underwater robot), tuned with `params` (sizes, servo, color);
    - library (`list_library`): real robots such as `go2` or `panda`, downloaded on first use (4-55 MB);
    - file: `add_robot(file=...)` imports URDF, xacro, MJCF or a mesh and returns the import doctor's report;
    - parts (`builder_guide`, then `add_part` / `update_part` / `remove_part`): any robot from bodies, legs, wheels, arms, grippers and sensors (hexapods, snakes, self-balancers, an arm on a rover);
@@ -29,7 +30,7 @@ Do not work around missing tools by importing robotforge's Python modules yourse
    The top left "Maps, terrain, modes" panel switches scenes, ground and terrain, and how each robot is controlled (keyboard gait, learned walk, MPC, LQR, IK...); the Robots panel has the joint sliders; Learn opens hands-on lessons.
    While the viewer is open, actions play out in real time.
 5. **Make it move**, with the highest-level tool that fits:
-   - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover, humanoid poses;
+   - `move` / `stop` / `pose`: walk a quadruped or humanoid, drive a rover or a boat, humanoid poses; a boat's `move(to="dock")` plans round buoys and the shore; an ROV's `move(to=[x, y, z])` dives to that point and holds depth and heading;
    - `move_arm` / `gripper` / `pick_and_place`: arms;
    - `run_controller` / `compare_controllers`: a named algorithm on a task (reach, balance, stand, walk, drive_to), see `list_algorithms`;
    - `set_controls` + `simulate`: raw actuator targets;

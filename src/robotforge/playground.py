@@ -776,7 +776,16 @@ class Playground:
                 "free_bodies": _limit_dict(self._free_body_positions()),
                 "sensors": _limit_dict(sensors),
                 "contacts": int(d.ncon),
+                **self._water_state(),
             }
+
+    def _water_state(self) -> dict[str, Any]:
+        """For a world with water: its level, and how deep in it the things it has touched are (share under the
+        surface, depth of their middle), so an agent can tell what floats and what sank."""
+        hydro = self.session.water
+        if hydro is None:
+            return {}
+        return {"water": {"level": hydro.water.level, "afloat": hydro.report(self.session.data)}}
 
     def snapshot(self, view: str = "default", width: int = 640, height: int = 480) -> bytes:
         try:

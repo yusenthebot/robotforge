@@ -55,7 +55,7 @@ def guide() -> dict[str, Any]:
         "robot": f"color ({components.COLOR_HINT}), material (pla, aluminum, carbon, rubber), servo / motor / linear "
         "(default actuators), servo_caps (draw servos), base, parts",
         "base": "shape box|sphere|capsule|cylinder, size, axis (capsule/cylinder), color, material, mass, "
-        "fixed (true = bolted to the floor), mounts {name: [x,y,z]}, sensors",
+        "fixed (true = bolted to the floor), mounts {name: [x,y,z]}, sensors, thrusters",
         "part": {
             "name": "lowercase_with_underscores; also names its joint and actuator",
             "parent": "base (default) or another part's name",
@@ -72,6 +72,8 @@ def guide() -> dict[str, Any]:
             "follows the robot's color, so recoloring the robot recolors the part",
             "foot": "true adds a rubber ball at the end",
             "sensors": 'imu, touch, camera, rangefinder, lidar, or {"type", "at", "direction", "fov", "rays", "range"}',
+            "thrusters": 'propellers that push in water: a direction ("forward", "up"), or {"at", "direction", '
+            '"force" (N, default 20), "size" (diameter), "name"}; flat ones make a boat, up and down ones an ROV',
             "mirror": "true adds a copy on the other side of the parent (left <-> right in names and positions)",
             "repeat": '{"count", "around": axis} ring | {"count", "along": axis, "spacing"} row | '
             '{"count", "chain": true} each copy hangs on the previous one (snakes, tentacles); names get _1, _2...',
@@ -81,7 +83,8 @@ def guide() -> dict[str, Any]:
         },
         "behaviors": (
             "Built robots get sliders and set_controls like any robot, and the built-in behaviors when their shape "
-            "fits: 4 or 6 legs of 3 hinges walk (move, WASD); speed-driven wheels on both sides drive; exactly two "
+            "fits: 4 or 6 legs of 3 hinges walk (move, WASD); speed-driven wheels on both sides drive; thrusters "
+            "sail it on water (a boat) or dive it (an ROV, when some push up or down); exactly two "
             "wheels on one axle balance by themselves (LQR); a chain of 4+ side-to-side servos slithers; a mounted "
             "arm or gripper works with move_arm / pick_and_place (robot name 'rover' or 'rover/arm')."
         ),

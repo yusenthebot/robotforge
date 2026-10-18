@@ -17,7 +17,7 @@ import mujoco
 import numpy as np
 
 from robotforge.design import components
-from robotforge.design.builder import looks
+from robotforge.design.builder import looks, thrusters
 from robotforge.design.builder.expand import Placed, link_end, shape_box
 from robotforge.design.builder.schema import (
     MAIN_COLOR,
@@ -80,6 +80,7 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
         base.add_freejoint(name="root")
     _shape(base, build.base, build, np.eye(3), accent, "base", vis, layout)
     _sensors(spec, base, "base", build.base, np.eye(3), vis, layout)
+    thrusters.add(spec, base, "base", build.base, np.eye(3), vis)
     bodies: dict[str, mujoco.MjsBody] = {"base": base}
     for part in placed:
         parent = bodies[part.parent]
@@ -94,6 +95,7 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
             _foot(body, part, vis)
             out.feet += 1
         _sensors(spec, body, part.name, part.spec, part.local, vis, layout)
+        thrusters.add(spec, body, part.name, part.spec, part.local, vis)
         if part.spec.robot is not None:
             child, what = mounted[part.name]
             _mount(spec, body, part, out, child, what)
