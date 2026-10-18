@@ -270,6 +270,25 @@ def test_water_scenes_start_their_robot_afloat(tmp_path, monkeypatch, preset):
     assert all(0.3 < r["under_water"] < 0.7 for name, r in report.items() if name.startswith("crate"))
 
 
+def test_the_lake_shore_slopes_gently_into_the_water():
+    """A 3 m beach made a 33 degree bank at the waterline (42 at its steepest): a quadruped slid in sideways."""
+    from robotforge.design import terrain
+
+    content = scenes.build("lake")
+    entry = next(t for t in content.terrain if t["type"] == "basin")
+    patch = terrain.Basin(**entry)
+    h, cell = terrain.heights(patch)
+    gy, gx = np.gradient(h, cell)
+    slope = np.degrees(np.arctan(np.hypot(gx, gy)))
+    xs = np.linspace(-patch.size[0] / 2, patch.size[0] / 2, h.shape[1])
+    ys = np.linspace(-patch.size[1] / 2, patch.size[1] / 2, h.shape[0])
+    x, y = np.meshgrid(xs, ys)
+    x0, y0, x1, y1 = content.water["area"]
+    at_water = (np.abs(h - content.water["level"]) < 0.03) & (x > x0) & (x < x1) & (y > y0) & (y < y1)
+    assert at_water.sum() > 50
+    assert np.median(slope[at_water]) < 20.0 and slope[at_water].max() < 25.0
+
+
 def test_load_scene_puts_a_kept_boat_on_the_water(tmp_path, monkeypatch):
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     pg = Playground.with_demo()
