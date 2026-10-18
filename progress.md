@@ -418,9 +418,25 @@ Rounds 1-3 done, 2026-10-14.
   - A second WebSocket client starting a lesson leaves the page that shows it without plot history (screenshots now play lessons through the page; real users start lessons from their own page).
   - Every quadruped in a world now runs its gait: headless simulation is about 20 percent slower with several dogs; a forward drag by the back still flips a never-moved template dog.
 
+## Rounds 33 and 34 (2026-10-17): assets and phase F, eight agents in parallel
+
+- The user asked for better and more unique robot assets (heterogeneous, spliced, complex), then for a bigger goal worked overnight; phase F in docs/PLAY_PLAN.md: robots that do whole jobs in real scenes.
+- Merged into main and pushed:
+  - Gallery: ten designs built from parts, added by name (`add_robot(name, design=...)`): wheel biped, lift picker, rocker-bogie mars rover, wheel dog, centaur, scorpion, Go2 with a PiPER, a real Franka Panda on a wheeled base, twin-arm torso, tentacle. Each stands, drives or walks, turns and picks in real runs with the real models.
+  - Visual dressing for robots built from parts (shells with parting lines, joint covers, screws, LEDs, materials that look different); physics bit-identical.
+  - F2 navigation: `move(robot, to=[x, y] or a name)` plans around what blocks the robot (a 2D map from the compiled scene, A*, a follower on the robot's own walker), draws the path in the viewer, double-click to send; the Go2 reaches the warehouse dock landing 24 of 24 after review.
+  - F4 imitation lesson: the learner demonstrates picks, k-nearest neighbours and a small numpy MLP copy them, DAgger corrects; F5 seeing lesson: color masks, centroids, back-projection, and `observe(..., find="red")` for agents; F6 `scripts/agent_eval.py` runs fixed tasks through `codex exec` with deterministic checks; F7 the viewer records the 3D view as a video.
+- Held back: the real-robot library and splicing (assets/library: ANYmal C, H1, Z1, UR5e, Kinova Gen3, xArm 7, Booster T1, Barkour; arms on a Go2's or Spot's back with payload limits). Its arm planner and the gallery's grew apart in behaviors/arm.py; round 35 integrates them. Straight walks: still a high finding, continued in round 35.
+- Found and fixed while merging: lesson.js lost the closing lines two new rigs shared, so the viewer drew nothing (a module-parse test now guards every viewer script); the dressed camera-in-part rule left stale segmentation ids; a screenshot helper lost its return; two tests written for one branch's wording; Windows CI file paths and a course test timing.
+- Verified: 1227 passed / 27 skipped, 5 slow, smoke, 22 of 22 lessons played; screenshots of the gallery sent to the user.
+- What did NOT work:
+  - Resolving conflicts by keeping both sides broke code twice where a hunk ended inside a function; read every conflict with its shared context.
+  - Two branches implementing the same feature differently (pick-and-place reach messages, carry planning) cannot be merged mechanically.
+  - A workflow agent's API connection dropped (ECONNRESET) on its last fix; the branch was left as it was.
+
 ## Next-round seed
 
-Round 33 is running (wf_e788486f-0f5), on the user's new direction (2026-10-16: better assets, unique robots that are heterogeneous, spliced together, complex): a gallery of at least 8 working robots built from parts (wheel-legged biped, rocker-bogie rover, centaur, mobile manipulator, ...), more real Menagerie robots plus real robots carrying other robots (an arm on a Go2), visual dressing for robots built from parts, and the straight-walks branch made safe. Open from round 32: a forward drag by the back flips a never-moved dog; gaits for idle quadrupeds cost 20 percent of headless speed.
+Round 35 is running (wf_260edd7c-1bf): integrate the real-robot library with the gallery, safe straight walks, F3 mobile picking ("bring the apple to the table"), agent evals round 2 on tonight's main, and a pixel-level UI pass at three sizes. Then: README with the gallery, splicing and phase F pictures; a review round.
 
 ## Frontier
 
@@ -429,6 +445,7 @@ Round 33 is running (wf_e788486f-0f5), on the user's new direction (2026-10-16: 
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Done in round 30: edits and lesson round trips keep robots and objects where they are.
+- Done in rounds 33 and 34: a gallery of ten unique robots, dressed parts, navigation, imitation and seeing lessons, agent evals, video recording.
 - Done in round 32: agent errors that say how to fix them, quadrupeds that stand on their gait from load, README pictures from the real viewer.
 - Done in round 31: a playtester that plays every lesson (20 of 20 finish), quadrupeds that take a push on their gait, URDF imports that learn to walk, the public repo installed and driven by Codex end to end.
 - Next frontiers (2026-10-15, after round 26): a `learn_walk` tool (gate); learned walks that turn (a steering term or a second rhythm); measuring and cutting agent token cost (321k for a 6-call task); learned walking for robots the user builds (round 21; reflexes and shoves round 22); a playtest agent that plays every lesson; tutor MCP tools (gate); a statically stable crawl with planned body shifts (taught next to the trot); obstacle-aware arm motion (joint-space RRT-Connect with the collision check we now have, taught as a lesson); G1 trained with shoves and on rough ground (domain randomization made visible); custom-morphology RL.
