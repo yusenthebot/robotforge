@@ -1,6 +1,5 @@
 """Videos of what robots do, for an agent: move(record=...) and run_script(record=...) save a GIF or an animated WebP
-(Pillow), or an MP4 where the user has turned that on (ffmpeg on PATH and ROBOTFORGE_FFMPEG=1: ffmpeg is not one of
-robotforge's approved dependencies, so nothing calls it unless asked to).
+(Pillow), in the world's videos folder, playing in real time.
 
 The viewer's Record button records the browser's canvas, and an agent has no browser: asked for a video of a robot
 from parts, one installed Playwright with npm, drove the viewer in headless Chromium and pressed the button for it
@@ -11,13 +10,9 @@ robot smoothly from the viewer's opening direction.
 
 from __future__ import annotations
 
-import contextlib
 import datetime as dt
 import itertools
 import math
-import os
-import shutil
-import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,23 +22,35 @@ import mujoco
 import numpy as np
 from PIL import Image
 
+from robotforge import wording
 from robotforge.sim import render
 from robotforge.sim.session import SimSession
 
 FPS = 20  # frames kept per simulated second
 WIDTH, HEIGHT = 640, 360
-MAX_FRAMES = 300  # drawn: 15 s at FPS; a longer recording plays faster, every k-th frame
-FORMATS = (".gif", ".webp", ".mp4")
+MAX_FRAMES = 300  # drawn: 15 s at FPS; a longer recording keeps every k-th frame, each shown k times as long
+FORMATS = (".gif", ".webp")
+# Video files Pillow does not write: a name ending in one is saved as a GIF, and the result says so. An MP4 needs
+# ffmpeg, which is not one of robotforge's approved dependencies.
+ELSEWHERE = (".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi")
 FOLLOW_SECONDS = 0.5  # s either side the camera averages the robot's place over, so it does not shake
 MIN_SPAN = np.array([0.7, 0.7, 0.25])  # m the picture keeps round a small robot: the floor sliding by shows it moving
 VIEW = "default"  # the direction the camera looks from: the viewer's opening one
 DRAWN = np.array([1, 1, 1, 0, 0, 0], np.uint8)  # geom groups a picture shows (3 and up are collision shapes)
 MAX_LAYERS = 6  # geoms one ray goes through on its way to the robot
-FFMPEG_SWITCH = "ROBOTFORGE_FFMPEG"  # set to 1 to let a name ending in .mp4 call ffmpeg
 
 
 class RecordingError(ValueError):
-    """A record argument that cannot be used (an unknown format, an MP4 without ffmpeg), or a video not written."""
+    """A record argument that cannot be used (a format Pillow does not write, a folder outside the world's videos
+    folder), or a video not written."""
+
+
+@dataclass(frozen=True)
+class Target:
+    """Where a recording goes, and what the result says about the name it was given (an .mp4 saved as a GIF)."""
+
+    path: Path
+    note: str | None = None
 
 
 @dataclass
@@ -97,33 +104,37 @@ class Recorder:
         return self.times[-1] - self.times[0] if len(self.times) > 1 else 0.0
 
 
-def mp4_allowed() -> bool:
-    """Whether a name ending in .mp4 may call ffmpeg: the user turned it on and ffmpeg is installed. An MP4 is far
-    smaller (0.4 MB where a GIF of 6 s on the park's grass took 5.6), but ffmpeg is a program robotforge would run
-    that is not among its approved dependencies."""
-    return os.environ.get(FFMPEG_SWITCH) == "1" and shutil.which("ffmpeg") is not None
-
-
-def target(record: bool | str, folder: Path, robot: str | None) -> Path:
-    """Where a recording goes: record=true names it after the robot and the time, a GIF in `folder`; a name without
-    a folder goes in `folder` too; a path ending in .gif, .webp or .mp4 is used as given (~ is the home folder)."""
+def target(record: bool | str, folder: Path, robot: str | None) -> Target:
+    """Where a recording goes: always in `folder`, the world's videos folder. record=true names it after the robot
+    and the time, a GIF; a name is kept, a GIF without a suffix, and one ending in .mp4 (or another video type
+    Pillow does not write) is saved as a GIF beside it. A full path, ~ or .. is refused, as write_script refuses
+    "../evil": move(record="../../../escape.gif") wrote outside the world, so any GIF, WebP or MP4 on the disk could
+    have been overwritten."""
     if record is True:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        return folder / f"{(robot or 'world').replace('/', '_')}-{stamp}.gif"
+        return Target(folder / f"{(robot or 'world').replace('/', '_')}-{stamp}.gif")
     name = str(record).strip()
     if not name:
         raise RecordingError('record is true or a file name such as "dog_walk.gif"')
-    path = Path(name).expanduser()
-    if not path.suffix:
-        path = path.with_suffix(".gif")
-    if path.suffix.lower() not in FORMATS:
-        raise RecordingError(f'record saves {", ".join(FORMATS)} files, not {path.suffix}; e.g. record="walk.gif"')
-    if path.suffix.lower() == ".mp4" and not mp4_allowed():
+    given = Path(name)
+    inside = folder / given
+    if given.is_absolute() or given.drive or name.startswith("~") or ".." in given.parts:
         raise RecordingError(
-            f"an .mp4 needs ffmpeg, which robotforge runs only where the user set {FFMPEG_SWITCH}=1 and ffmpeg is "
-            'installed; .gif and .webp always work, e.g. record="walk.webp"'
+            f'record {wording.short(name)} is a file name, e.g. "walk.gif": videos are saved in the world\'s videos '
+            "folder, and the result's video.path says where (copy it from there)"
         )
-    return path if path.is_absolute() else folder / path
+    if not inside.resolve().is_relative_to(folder.resolve()):  # a link in the videos folder pointing out of it
+        raise RecordingError(f"record {wording.short(name)} leads out of the world's videos folder; give a file name")
+    path, note = inside, None
+    suffix = path.suffix.lower()
+    if not suffix:
+        path = path.with_suffix(".gif")
+    elif suffix in ELSEWHERE:
+        path = path.with_suffix(".gif")
+        note = f"saved as {path.name}: robotforge writes GIF and WebP ({suffix} needs ffmpeg)"
+    elif suffix not in FORMATS:
+        raise RecordingError(f'record saves {", ".join(FORMATS)} files, not {path.suffix}; e.g. record="walk.gif"')
+    return Target(path, note)
 
 
 def _followed(model: mujoco.MjModel, robot: str | None) -> list[int]:
@@ -215,9 +226,12 @@ def save(
     robot: str | None,
     width: int = WIDTH,
     height: int = HEIGHT,
+    note: str | None = None,
 ) -> dict[str, Any]:
-    """Draw the kept poses into a video at `path` and say what it is. Raises render.RenderUnavailable without
-    OpenGL."""
+    """Draw the kept poses into a video at `path` and say what it is (with `note`, what was said about its name).
+    It plays in real time: a recording longer than MAX_FRAMES keeps every k-th pose and shows each k times as long
+    (each frame used to last 1/FPS whatever k was, and a 32 s trip to the warehouse dock played in 10.7 s; an agent
+    slowed it down again with ffmpeg in the shell). Raises render.RenderUnavailable without OpenGL."""
     model = rec._model
     if model is None or len(rec.times) < 2:
         raise RecordingError("nothing was recorded: no time passed")
@@ -233,46 +247,26 @@ def save(
         return renderer.rgb_of(model, posed, cams[k], width, height, rec._version, faded=faded)
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    _write(path, draw, len(picked), 1000.0 / rec.fps)  # each drawn frame stands for `every` kept ones
+    _write(path, draw, len(picked), every * 1000.0 / rec.fps)  # each drawn frame stands for `every` kept ones
+    fps = round(rec.fps / every, 2)
     out = {
         "path": str(path),
         "seconds": round(rec.seconds, 2),
         "frames": len(picked),
+        "fps": fps,
         "size_mb": round(path.stat().st_size / 1e6, 2),
+        "plays": "in real time" if every == 1 else f"in real time, {fps:g} frames a second (at most {MAX_FRAMES})",
     }
-    if every > 1:
-        out["plays"] = f"{every}x faster (at most {MAX_FRAMES} frames)"
-    if rec.stopped_by:
-        out["note"] = rec.stopped_by
+    notes = [n for n in (note, rec.stopped_by) if n]
+    if notes:
+        out["note"] = "; ".join(notes)
     return out
 
 
 def _write(path: Path, draw: Callable[[int], np.ndarray], count: int, frame_ms: float) -> None:
-    """Draw `count` frames one at a time into the file: an MP4 is fed to ffmpeg as they come, a GIF keeps each
-    frame in 256 colors (0.2 MB at 640 x 360), a WebP keeps them whole until it is written."""
-    kind = path.suffix.lower()
-    if kind == ".mp4":
-        first = draw(0)
-        h, w = first.shape[:2]
-        cmd = ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}"]
-        cmd += ["-r", f"{1000.0 / frame_ms:g}", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
-        cmd += ["-movflags", "+faststart", str(path)]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-        broken = False
-        try:
-            for k in range(count):
-                proc.stdin.write((first if k == 0 else draw(k)).tobytes())
-        except BrokenPipeError:  # ffmpeg stopped reading; what it wrote to stderr says why
-            broken = True
-        finally:
-            with contextlib.suppress(BrokenPipeError):
-                proc.stdin.close()
-            err = proc.stderr.read().decode(errors="replace").strip()
-            proc.wait()
-        if broken or proc.returncode != 0:
-            raise RecordingError(f"ffmpeg could not write {path.name}: {err[-300:] or 'it stopped reading the frames'}")
-        return
-    if kind == ".webp":
+    """Draw `count` frames one at a time into the file: a GIF keeps each frame in 256 colors (0.2 MB at 640 x 360), a
+    WebP keeps them whole until it is written."""
+    if path.suffix.lower() == ".webp":
         images = [Image.fromarray(draw(k)) for k in range(count)]
         images[0].save(path, save_all=True, append_images=images[1:], duration=round(frame_ms), loop=0, quality=80)
         return

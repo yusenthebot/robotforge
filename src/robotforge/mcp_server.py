@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import inspect
 import logging
 import os
@@ -515,7 +516,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         here = playground.behaviors.pose(robot)
         return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
-    def video_path(record: bool | str | None, called: str, seconds: float | None) -> Path | None:
+    def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
         """Where record=... saves its video (checked before anything moves; record=true names it after `called`),
         or None for no recording."""
         if record is None or record is False:
@@ -527,23 +528,24 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         return recording.target(record, folder, called)
 
     @contextlib.contextmanager
-    def recorded(path: Path | None) -> Iterator[recording.Recorder | None]:
+    def recorded(target: recording.Target | None) -> Iterator[recording.Recorder | None]:
         """Keep the poses while the block runs, when there is somewhere to save them."""
-        rec = recording.Recorder(playground.session).start() if path is not None else None
+        rec = recording.Recorder(playground.session).start() if target is not None else None
         try:
             yield rec
         finally:
             if rec is not None:
                 rec.stop()
 
-    async def video(rec: recording.Recorder, path: Path, robot: str | None) -> dict[str, Any]:
+    async def video(rec: recording.Recorder, target: recording.Target, robot: str | None) -> dict[str, Any]:
         """Draw a recording into its file, off the event loop (the viewer stays live), or say why it could not."""
         try:
-            return await asyncio.to_thread(recording.save, rec, playground.renderer, path, robot)
+            draw = functools.partial(recording.save, note=target.note)
+            return await asyncio.to_thread(draw, rec, playground.renderer, target.path, robot)
         except (RenderUnavailable, recording.RecordingError, OSError) as exc:
             return {"error": f"no video: {exc}"}
         except Exception as exc:  # the move itself is done: its result is not to be lost to the drawing
-            log.exception("drawing the video %s failed", path)
+            log.exception("drawing the video %s failed", target.path)
             return {"error": f"no video: drawing it failed ({type(exc).__name__}: {exc})"}
 
     @server.tool()
@@ -570,9 +572,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         reach of an arm it carries); speed is then its top speed (left out: its own pace) and seconds a time limit
         (left out: 60). The result says arrived, path_m, time_s and, if it did not get there, why; the robot stands
         where it ended ("stopped": true, no need to call stop). record=true (a GIF) or a file name ("walk.gif";
-        .gif or .webp) saves a video of the move, the camera
-        following the robot, in the world's videos folder unless the name is a full path; "video" in the result
-        says where."""
+        .gif or .webp) saves a video of the move in real time, the camera following the robot, in the world's
+        videos folder; "video" in the result says where."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             path = video_path(record, robot, seconds)
@@ -754,8 +755,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def run_script(name: str, max_sim_seconds: float = 60.0, record: bool | str | None = None) -> str:
         """Run behaviors/<name>.py against the live world: Python on this computer (not a sandbox), in lockstep with
         the simulation, shown live if the viewer is open. Returns the output, exit code and any traceback.
-        record=true (a GIF) or a file name ("show.gif"; .gif or .webp) saves a video of the run, the camera following
-        the robots, in the world's videos folder unless the name is a full path; "video" in the result says where."""
+        record=true (a GIF) or a file name ("show.gif"; .gif or .webp) saves a video of the run in real time, the
+        camera following the robots, in the world's videos folder; "video" in the result says where."""
         with _tool_errors():
             path = _script_path(playground._require_store().dir, name)
             if not path.exists():
