@@ -403,7 +403,7 @@ def run_leads(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
             for k, lead in enumerate(LEADS):
                 pg.session.reset()
                 calls = _sequence(path, turn, lead, opts["idle"], GAPS[k % len(GAPS)], WALK_ON[k])
-                fell, turned = _play(pg, robot, calls)
+                fell, turned = _play(pg, robot, calls, next(i for i, c in enumerate(calls) if c[2]))
                 share = round(turn * turned / rate, 2) if turned is not None and rate > 0 else None
                 out.append(
                     {
@@ -420,9 +420,11 @@ def run_leads(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
     return out
 
 
-def _play(pg, robot: str, calls: list[tuple[str, float, float, float]]) -> tuple[int | None, float | None]:
+def _play(
+    pg, robot: str, calls: list[tuple[str, float, float, float]], measure: int | None
+) -> tuple[int | None, float | None]:
     """Make the calls one after the other: the call during or after which the robot fell (None: it stayed up), and
-    the degrees it turned during the 1 s turn command (None if it fell before)."""
+    the degrees it turned in the first TURN_SECONDS of call `measure` (None if it fell before, or none is measured)."""
     root = pg.behaviors._root_body(robot)
     state = {"fell": False, "turned": 0.0, "last": 0.0}
 
@@ -444,11 +446,14 @@ def _play(pg, robot: str, calls: list[tuple[str, float, float, float]]) -> tuple
         else:
             pg.behaviors.move(robot, speed, angle, "rhythm")
         state["last"], state["turned"] = heading(), 0.0
-        if seconds:
-            pg.run_fast(watch, seconds)
+        first = min(seconds, TURN_SECONDS) if i == measure else seconds
+        if first:
+            pg.run_fast(watch, first)
         watch()
-        if angle and seconds == TURN_SECONDS and turned is None:
+        if i == measure:
             turned = round(state["turned"], 1)
+            if seconds > first and not state["fell"]:
+                pg.run_fast(watch, seconds - first)
         if state["fell"]:
             return i, turned
     return None, turned
@@ -456,6 +461,153 @@ def _play(pg, robot: str, calls: list[tuple[str, float, float, float]]) -> tuple
 
 def _leads_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
     return run_leads(*args)
+
+
+# oos: sequences drawn at random, none on a grid the switch checks or leads play, each played by the walk as kept, by
+# the same walk switched as 7a4aa92 switched every kept walk but holding its heading (steered), and as 7a4aa92 plays
+# the file (base: switched so, its heading not held, around the world's home pose).
+OOS_PATHS = ("move", "idle", "held", "keys", "chain")
+SWITCHINGS = ("kept", "steered", "base")
+OOS_LEAD = (0.2, 6.0)  # s of walking before the turn
+OOS_TURN = (0.3, 2.5)  # s of turning
+OOS_ON = (0.3, 4.0)  # s of walking after it
+OOS_IDLE = (0.05, 3.0)  # s the sim runs on after a move call ends, the viewer open while the agent thinks
+OOS_GAP = (0.0, 0.4)  # s between letting go of one key and pressing the next (0: the next update)
+OOS_CHAIN = (6, 10)  # key changes in a chain
+OOS_HOLD = (0.2, 3.0)  # s each key of a chain is held
+
+
+def as_base(walk):
+    """The walk switched as 7a4aa92 switches every kept walk: any switch while moving holds home until the robot stands
+    still (SETTLE_MAX at most) and starts the next rhythm as learned, and a stop holds home at once."""
+    sides = ("left", "right")
+    cleared = {f"turn_{s}_walking{part}": None for s in sides for part in ("", "_at")}
+    return walk.model_copy(update={**cleared, "switching": None, **{f"turn_{s}_exit": None for s in sides}})
+
+
+def _oos_cases(path: str, count: int, rng) -> list[tuple[list[tuple[str, float, float, float]], int | None]]:
+    """`count` sequences of calls for `path` (as _sequence gives them), turning left and right in turn, and the index of
+    the turn whose first second is measured (None: none is)."""
+
+    def u(span: tuple[float, float]) -> float:
+        return round(float(rng.uniform(*span)), 3)
+
+    out = []
+    for k in range(count):
+        side = 1.0 if k % 2 == 0 else -1.0
+        speed, turn = u((0.05, 0.5)), side * u((0.2, 2.0))
+        lead, turning, on = u(OOS_LEAD), u(OOS_TURN), u(OOS_ON)
+        if path in ("move", "idle"):  # the move tool with seconds: each call ends with a stop
+            idle = (u(OOS_IDLE), u(OOS_IDLE)) if path == "idle" else (0.0, 0.0)
+            calls = [
+                ("move", speed, 0.0, lead),
+                ("stop", 0.0, 0.0, idle[0]),
+                ("move", 0.0, turn, turning),
+                ("stop", 0.0, 0.0, idle[1]),
+                ("move", speed, 0.0, on),
+                ("stop", 0.0, 0.0, STAND_SECONDS),
+            ]
+            out.append((calls, 2))
+        elif path == "held":  # walking with seconds=null (or W held), then the turn (A or D pressed too), then walking
+            calls = [("move", speed, 0.0, lead), ("move", speed, turn, turning), ("move", speed, 0.0, on)]
+            out.append(([*calls, ("move", 0.0, 0.0, STAND_SECONDS)], 1))
+        elif path == "keys":  # W let go, A or D pressed a moment later, let go, W again a moment later
+            gaps = [max(QUICK, u(OOS_GAP)) for _ in range(2)]
+            calls = [
+                ("move", speed, 0.0, lead),
+                ("move", 0.0, 0.0, gaps[0]),
+                ("move", 0.0, side, turning),
+                ("move", 0.0, 0.0, gaps[1]),
+                ("move", speed, 0.0, on),
+                ("move", 0.0, 0.0, STAND_SECONDS),
+            ]
+            out.append((calls, 2))
+        else:  # chain: random key changes, each held a while
+            calls, last = [], "S"
+            for _ in range(int(rng.integers(OOS_CHAIN[0], OOS_CHAIN[1] + 1))):
+                key = str(rng.choice([c for c in COMMANDS if c != last]))
+                calls.append(("move", *COMMANDS[key], u(OOS_HOLD)))
+                last = key
+            out.append(([*calls, ("move", 0.0, 0.0, STAND_SECONDS)], None))
+    return out
+
+
+def run_oos(robot: str, seed: int, opts: dict[str, Any]) -> list[dict]:
+    """Every out-of-sample sequence on a saved walk, played as kept and switched as 7a4aa92 switched: whether it fell
+    (trunk past 60 degrees at any update) and in which call, and the degrees of the measured turn's first second."""
+    import numpy as np
+
+    from robotforge.behaviors.rhythm_walk import SavedWalk, save_walk
+    from robotforge.playground import Playground
+
+    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf_rhythm_")
+    kept = SavedWalk.model_validate_json(Path(opts["walks"], f"{robot}_{seed}.json").read_text(encoding="utf-8"))
+    plain = {"steer": None, "home": None}
+    walks = {"kept": kept, "steered": as_base(kept), "base": as_base(kept).model_copy(update=plain)}
+    pg = Playground.with_demo()
+    pg.new_world(f"oos_{robot}")
+    pg.add_robot(robot, **_entry(robot, opts))
+    out = []
+    for p, path in enumerate(opts["paths"]):
+        rng = np.random.default_rng([opts["bench_seed"], seed, p, sum(map(ord, robot))])
+        for k, (calls, measure) in enumerate(_oos_cases(path, opts["cases"], rng)):
+            for switching in opts["switchings"]:
+                save_walk(pg.store.dir, walks[switching])
+                pg.session.reset()
+                fell, turned = _play(pg, robot, calls, measure)
+                out.append(
+                    {
+                        "robot": robot,
+                        "seed": seed,
+                        "path": path,
+                        "case": k,
+                        "switching": switching,
+                        "fell": fell,
+                        "calls": len(calls),
+                        "turned": turned,
+                        "lead": calls[0][3],
+                        "side": None if measure is None else ("L" if calls[measure][2] > 0 else "R"),
+                        "measured": None if measure is None else min(TURN_SECONDS, calls[measure][3]),
+                    }
+                )
+    return out
+
+
+def _oos_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
+    return run_oos(*args)
+
+
+def _print_oos(results: list[dict], rates: dict[tuple[str, int], float]) -> None:
+    """Per robot, path and switching: the sequences that fell after the walk they start with (and during it), which
+    walks they were, and the measured turns' first second as a share of the rate from standing (median, over turns
+    asked after WALKED_MIN or more of walking)."""
+    from robotforge.behaviors.rhythm_walk import WALKED_MIN
+
+    for robot in dict.fromkeys(r["robot"] for r in results):
+        mine = [r for r in results if r["robot"] == robot]
+        totals = {}
+        for path in dict.fromkeys(r["path"] for r in mine):
+            for switching in dict.fromkeys(r["switching"] for r in mine):
+                runs = [r for r in mine if r["path"] == path and r["switching"] == switching]
+                after = [r for r in runs if r["fell"] not in (None, 0)]
+                during = sum(r["fell"] == 0 for r in runs)
+                where: dict[str, int] = {}
+                for r in after:
+                    where[f"s{r['seed']}"] = where.get(f"s{r['seed']}", 0) + 1
+                shares = sorted(
+                    r["turned"] * (1 if r["side"] == "L" else -1) / (rates[(robot, r["seed"])] * r["measured"])
+                    for r in runs
+                    if r["turned"] is not None and r["lead"] >= WALKED_MIN and rates[(robot, r["seed"])] > 0
+                )
+                share = f"; turn after the walk {shares[len(shares) // 2]:.0%} of the rate" if shares else ""
+                print(
+                    f"{robot:9} {path:5} {switching:4}: {len(after):3} fell in {len(runs)} after the walk"
+                    + (f" ({', '.join(f'{k} {n}' for k, n in sorted(where.items()))})" if where else "")
+                    + (f", {during} during it" if during else "")
+                    + share
+                )
+                totals[switching] = totals.get(switching, 0) + len(after)
+        print(f"{robot:9} all: " + ", ".join(f"{s} {n} falls" for s, n in totals.items()))
 
 
 def _print_leads(results: list[dict], min_share: float) -> None:
@@ -498,7 +650,7 @@ def _switch_job(args: tuple[str, int, dict[str, Any]]) -> list[dict]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("what", choices=("forward", "switch", "leads"))
+    parser.add_argument("what", choices=("forward", "switch", "leads", "oos"))
     parser.add_argument("--robots", default="dog,star,humanoid")
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--import", dest="imports", action="append", default=[], metavar="NAME=FILE")
@@ -514,7 +666,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--trials", type=int, default=0, help="switch: tries of each switch on its own")
     parser.add_argument("--keep", help="switch: save the trained walks here")
     parser.add_argument("--walks", help="switch: play the walks saved here instead of training")
-    parser.add_argument("--paths", default=",".join(PATHS), help="leads: which of " + ", ".join(PATHS))
+    parser.add_argument(
+        "--paths", help=f"leads: which of {', '.join(PATHS)} (all); oos: which of {', '.join(OOS_PATHS)} (all)"
+    )
+    parser.add_argument("--cases", type=int, default=40, help="oos: sequences per path and walk")
+    parser.add_argument("--bench-seed", type=int, default=0, help="oos: draws other sequences")
+    parser.add_argument("--switchings", default=",".join(SWITCHINGS), help="oos: which of " + ", ".join(SWITCHINGS))
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--json", action="store_true", help="print one JSON line per run")
     args = parser.parse_args(argv)
@@ -537,16 +694,40 @@ def main(argv: list[str] | None = None) -> int:
         "trials": args.trials,
         "keep": args.keep,
         "walks": args.walks,
-        "paths": [p for p in args.paths.split(",") if p],
+        "paths": [p for p in (args.paths or ",".join(OOS_PATHS if args.what == "oos" else PATHS)).split(",") if p],
+        "cases": args.cases,
+        "bench_seed": args.bench_seed,
+        "switchings": [s for s in args.switchings.split(",") if s],
     }
     names = [r for r in args.robots.split(",") if r]
     robots = names + [n for n in imports if n not in names]
     jobs = [(r, int(s), opts) for r in robots for s in args.seeds.split(",")]
-    if args.what == "leads" and not args.walks:
-        parser.error("leads plays saved walks: give --walks DIR (from switch --keep DIR)")
-    worker = {"forward": _forward_job, "switch": _switch_job, "leads": _leads_job}[args.what]
+    if args.what in ("leads", "oos") and not args.walks:
+        parser.error(f"{args.what} plays saved walks: give --walks DIR (from switch --keep DIR)")
+    if args.what == "oos":
+        unknown = set(opts["paths"]) - set(OOS_PATHS) or set(opts["switchings"]) - set(SWITCHINGS)
+        if unknown:
+            parser.error(f"oos does not know {', '.join(sorted(unknown))}")
+        missing = [f"{r}_{s}" for r, s, _ in jobs if not Path(args.walks, f"{r}_{s}.json").is_file()]
+        if missing:  # robots kept with different seeds share a folder
+            print(f"no walk kept for {', '.join(missing)}: left out", file=sys.stderr)
+        jobs = [(r, s, o) for r, s, o in jobs if f"{r}_{s}" not in missing]
+    worker = {"forward": _forward_job, "switch": _switch_job, "leads": _leads_job, "oos": _oos_job}[args.what]
     with ProcessPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         results = list(pool.map(worker, jobs))
+    if args.what == "oos":
+        from robotforge.behaviors.rhythm_walk import SavedWalk
+
+        flat = [r for batch in results for r in batch]
+        if args.json:
+            for r in flat:
+                print(json.dumps(r))
+        rates = {}
+        for r, s, _ in jobs:
+            walk = SavedWalk.model_validate_json(Path(args.walks, f"{r}_{s}.json").read_text(encoding="utf-8"))
+            rates[(r, s)] = math.degrees(walk.turn_rate or 0.0)
+        _print_oos(flat, rates)
+        return 0
     if args.what == "leads":
         flat = [r for batch in results for r in batch]
         if args.json:
