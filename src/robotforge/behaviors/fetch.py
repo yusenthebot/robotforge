@@ -87,11 +87,15 @@ STOW_SAME = 0.05  # rad: an arm this near its pose for the way is in it
 NOSLIP = 5  # MuJoCo no-slip iterations while an errand runs (_hold_fast), as learn/cloning.py uses
 RUB = 0.001  # m: an arm overlapping itself or its robot deeper than this in the simulation rubs on it
 SQUEEZE = 10.0  # N a gripper pushes with a cm short of closed during an errand, at most its force limit (_hold_fast)
-# The finger pads' contacts during an errand: firm, and theirs rather than a mix with what they hold (priority). In
+# The finger pads' contacts during an errand: firm, and all but theirs in the mix with what they hold (FIRM_SOLMIX). In
 # MuJoCo's soft default contacts a 6 cm ball crept out of a Panda's fingers at 12 mm/s and a cup at 3; with these 0.3
-# and 0.15. Made fully rigid, the Panda's twelve small pads let the ball go at 57 mm/s.
+# and 0.15. Made fully rigid, the Panda's twelve small pads let the ball go at 57 mm/s. Not by priority: a geom with
+# it brings its own condim and friction to the contact as well, and the Panda's pads (condim 3) took away the
+# torsional friction of what they held (condim 4). An apple held tilted, touching a pad a side, spun 6 rad/s about the
+# line between them; put down, the spin rolled it 5 cm a second off the dining table.
 FIRM_SOLIMP = [0.99, 0.999, 0.001, 0.5, 2.0]
 FIRM_SOLREF = [0.01, 1.0]
+FIRM_SOLMIX = 1000.0
 RISE = 0.1  # m the hand is lifted off such a rub before the arm moves on (Errand._unstick)
 
 
@@ -1634,9 +1638,9 @@ class Errand:
         self.arm.carry_weight = True
         if self._pads is None and self.arm.gripper >= 0:
             pads = _finger_geoms(model, self.arm)
-            self._pads = (pads, model.geom_priority[pads].copy(), model.geom_solimp[pads].copy())
+            self._pads = (pads, model.geom_solmix[pads].copy(), model.geom_solimp[pads].copy())
             self._pads += (model.geom_solref[pads].copy(),)
-            model.geom_priority[pads] = 1
+            model.geom_solmix[pads] = FIRM_SOLMIX
             model.geom_solimp[pads] = FIRM_SOLIMP
             model.geom_solref[pads] = FIRM_SOLREF
         g = self.arm.gripper
@@ -1659,8 +1663,8 @@ class Errand:
             model.actuator_gainprm[self.arm.gripper], model.actuator_biasprm[self.arm.gripper] = self._squeezed
             self._squeezed = None
         if self._pads is not None:
-            pads, priority, solimp, solref = self._pads
-            model.geom_priority[pads], model.geom_solimp[pads], model.geom_solref[pads] = priority, solimp, solref
+            pads, solmix, solimp, solref = self._pads
+            model.geom_solmix[pads], model.geom_solimp[pads], model.geom_solref[pads] = solmix, solimp, solref
             self._pads = None
         self.arm.carry_weight = False
 

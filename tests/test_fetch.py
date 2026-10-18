@@ -197,6 +197,31 @@ def test_the_template_arm_turns_its_base_under_the_no_slip_pass(pg):
     assert abs(math.degrees(data.qpos[yaw.qposadr[0]])) < 10
 
 
+def test_a_ball_held_on_an_errand_does_not_spin_between_the_fingers(pg):
+    """The finger pads are made firm for an errand without taking the contact over: a load keeps its own torsional
+    friction against them. Given priority, the Panda's pads (condim 3) let an apple held tilted, a point of contact a
+    side, spin 6 rad/s about the line between them, and put down on the dining table it rolled off. (Held straight
+    down as here, two points a side stop the spin anyway: the contacts are what is checked.)"""
+    pg.add_robot("mm", design="mobile_panda")
+    pg.add_object("stand", shape="table", size=[0.4, 0.4, 0.45], pos=[1.6, 0.0], fixed=True)
+    pg.add_object("ball", shape="sphere", size=[0.06], pos=[1.45, 0.0, 0.48])
+    pg.add_object("goal", shape="table", size=[0.4, 0.4, 0.45], pos=[-1.6, 0.0], fixed=True)
+    pg.run_fast(lambda: False, 0.5)
+    errand, _ = pg.behaviors.pick_and_place(pg.behaviors.resolve("mm", arm=True), "ball", "goal")
+    assert isinstance(errand, fetch.Errand)
+    pg.run_fast(lambda: errand.step == "to_place" or errand.done, fetch.TIME_LIMIT)
+    assert errand.step == "to_place", errand.result()
+    model, data = pg.session.model, pg.session.data
+    pads, ball = set(fetch._finger_geoms(model, errand.arm).tolist()), errand.body
+    held = [
+        c
+        for c in data.contact[: data.ncon]
+        if {int(c.geom1), int(c.geom2)} & pads and ball in (model.geom_bodyid[c.geom1], model.geom_bodyid[c.geom2])
+    ]
+    assert held and all(c.dim >= 4 for c in held)  # the ball's own condim 4: torsional friction with it
+    assert all(c.solref == pytest.approx(fetch.FIRM_SOLREF, abs=1e-3) for c in held)  # and the pads' firm contact
+
+
 def test_a_path_move_gets_to_where_its_path_starts_joint_by_joint_first(pg):
     pg.add_robot("arm", template="arm")
     pg.run_fast(lambda: False, 0.3)
