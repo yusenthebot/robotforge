@@ -566,11 +566,13 @@ def _bench_world(robot: str, job: str, seed: int = 0) -> Callable[[Any], None]:
     return build
 
 
-def _mobile(name: str, robot: str, job: str, seconds: float, camera: tuple[float, float, float], ease=0.04) -> Demo:
+def _mobile(
+    name: str, robot: str, job: str, seconds: float, camera: tuple[float, float, float], ease=0.04, seed: int = 0
+) -> Demo:
     act = _Job(job)
     return Demo(
         name,
-        _bench_world(robot, job),
+        _bench_world(robot, job, seed),
         seconds,
         timeline=[(0.5, act)],
         page="window.__robotforge.select(null);" + _follow("mm", camera, ease=ease),
@@ -943,11 +945,11 @@ DEMOS = [
     _mobile("mobile_door_anymal", "anymal_ur5e", "door", 60.0, (0.2, -2.0, 3.5), ease=0.06),
     _mobile("mobile_fetch_panda", "mobile_panda", "fetch", 90.0, (0.4, -1.9, 3.3), ease=0.06),
     _mobile("mobile_button_panda", "mobile_panda", "button", 50.0, (1.3, -0.5, 1.4), ease=0.05),
-    _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05),
+    _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05, seed=9),
     _mobile("mobile_button_spot", "spot_z1", "button", 60.0, (1.4, -0.6, 1.6), ease=0.05),
     _mobile("mobile_drawer_panda", "mobile_panda", "drawer", 100.0, (-0.5, -1.7, 2.9), ease=0.06),
     _mobile("mobile_fetch_anymal", "anymal_ur5e", "fetch", 130.0, (0.4, -2.0, 3.6), ease=0.06),
-    _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05),
+    _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05, seed=9),
     *G10_DEMOS,
 ]
 
