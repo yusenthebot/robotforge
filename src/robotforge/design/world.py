@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from robotforge import wording
 from robotforge.design import (
     builder,
+    catalogue,
     components,
     end_effectors,
     importer,
@@ -132,6 +133,8 @@ class RobotEntry(_Strict):
     template: str | None = None
     file: str | None = None  # MJCF or URDF path, relative to the world directory
     library: str | None = None  # a robot from the library, e.g. "go2" (see library.CATALOG)
+    # An open robot from the catalogue, e.g. "a1_mj" (see catalogue.py): fetched on first use, then read as a file.
+    catalogue: str | None = Field(None, exclude_if=_unset)
     build: dict[str, Any] | None = None  # built from parts: {"base": {...}, "parts": [...]} (see builder)
     params: dict[str, Any] = Field(default_factory=dict)
     pos: list[float] = Field(default_factory=lambda: [0.0, 0.0])  # x, y (and optional z) in meters
@@ -183,9 +186,14 @@ class RobotEntry(_Strict):
     def _library(cls, v: str | None) -> str | None:
         return library.canonical(v) if v is not None else None
 
+    @field_validator("catalogue")
+    @classmethod
+    def _catalogue(cls, v: str | None) -> str | None:
+        return catalogue.get(v).id if v is not None else None
+
     @model_validator(mode="after")
     def _one_source(self) -> RobotEntry:
-        if [self.template, self.file, self.library, self.build].count(None) != 3:
+        if [self.template, self.file, self.library, self.build, self.catalogue].count(None) != 4:
             raise ValueError(f"robot {self.name!r}: give exactly one of 'template', 'library', 'file' or 'build'")
         if self.library is not None:
             library.get(self.library)
@@ -203,6 +211,8 @@ class RobotEntry(_Strict):
     @property
     def mjcf_file(self) -> bool:
         """Whether it comes from an MJCF file of its own (URDF and mesh files go through the import doctor)."""
+        if self.catalogue is not None:
+            return catalogue.get(self.catalogue).format == "mjcf"
         return self.file is not None and not importer.is_importable(self.file)
 
 
@@ -575,7 +585,8 @@ def _has_tool_point(entry: RobotEntry) -> bool:
         return True
     if entry.library is not None:
         return bool(library.get(entry.library).tools)
-    return entry.file is not None or entry.build is not None  # these say so themselves (end_effectors.fit)
+    # these say so themselves (end_effectors.fit)
+    return entry.file is not None or entry.build is not None or entry.catalogue is not None
 
 
 def _placement_key(entry: RobotEntry, base_dir: Path | None) -> str:
@@ -626,6 +637,8 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
             return builder.build_robot(entry.build)
         except ValueError as exc:
             raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+    if entry.catalogue is not None:
+        return _catalogue_robot(entry)
     path = Path(entry.file).expanduser()
     if not path.is_absolute() and base_dir is not None:
         path = base_dir / path
@@ -634,11 +647,33 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
         raise ValueError(
             f"robot {entry.name!r}: file not found: {entry.file}{where} (give the path of {importer.formats_hint()})"
         )
+    return _file_robot(entry.name, path, entry.params)
+
+
+def _catalogue_robot(entry: RobotEntry) -> templates.BuiltRobot:
+    """An open catalogue robot: its folder is fetched on first use, then its file is read like any other and
+    catalogue_inspect.py makes it ready (an arm's tool point, its description)."""
+    from robotforge.design import catalogue_inspect  # lazy: it needs the behaviors
+
+    try:
+        robot = catalogue.get(entry.catalogue)
+        path = catalogue.model_path(robot.id)
+        params = {"xacro_args": dict(robot.xacro_args), **entry.params} if robot.format == "xacro" else entry.params
+        if robot.format == "xacro" and not params["xacro_args"]:
+            del params["xacro_args"]
+        built = _file_robot(entry.name, path, params)
+        return catalogue_inspect.finish(built, robot)
+    except ValueError as exc:
+        raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+
+
+def _file_robot(name: str, path: Path, params: dict[str, Any]) -> templates.BuiltRobot:
+    """A robot from a file: MJCF as it is, URDF, xacro and meshes through the import doctor."""
     if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
         try:
-            result = importer.import_file(path, entry.params)
+            result = importer.import_file(path, params)
         except ValueError as exc:
-            raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+            raise ValueError(f"robot {name!r}: {exc}") from exc
         return templates.BuiltRobot(
             spec=result.spec,
             home_qpos=result.home_qpos,
@@ -649,10 +684,10 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
             doctor=result.report.to_dict(),
         )
     if path.is_dir():
-        raise ValueError(f"robot {entry.name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
+        raise ValueError(f"robot {name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
     if path.suffix.lower() not in (".xml", ".mjcf"):
-        raise ValueError(f"robot {entry.name!r}: {path.name}: expected {importer.formats_hint()}")
-    return _mjcf_robot(entry.name, path)
+        raise ValueError(f"robot {name!r}: {path.name}: expected {importer.formats_hint()}")
+    return _mjcf_robot(name, path)
 
 
 def _mjcf_robot(name: str, path: Path) -> templates.BuiltRobot:

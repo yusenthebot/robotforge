@@ -17,7 +17,7 @@ import socket
 import sys
 import time
 import weakref
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any, Literal
 
@@ -69,8 +69,10 @@ robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
 humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
-Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the
-import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
+Unitree Go2, Franka Panda, ...; list_library(kind="arm", search="kinova") also searches over 200 more open robots
+that add_robot(library=<name>) downloads, imports and describes) or imports a file (URDF, xacro, MJCF, or a mesh such as
+.stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
+add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
 Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
@@ -382,16 +384,28 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         )
 
     @server.tool()
-    def list_library() -> str:
+    def list_library(
+        kind: Literal["arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other"] | None = None,
+        search: str | None = None,
+        limit: int = 40,
+    ) -> str:
         """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
         keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work), humanoids
         (G1, Robotis OP3, Booster T1) and grippers and hands to mount on an arm (Robotiq 2F-85, Franka Hand, LEAP and
         Allegro hands). The first add_robot of each downloads it from MuJoCo Menagerie (size in download_mb, usually
-        5-30 s) and caches it."""
-        from robotforge.design import library
+        5-30 s) and caches it.
+
+        Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
+        open catalogue: kind and search ("ur", "kinova", "unitree": words of the name, maker or tags) list those that
+        match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
+        URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
+        structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
+        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
+        move with set_controls and pose."""
+        from robotforge.design import catalogue
 
         with _tool_errors():
-            return _json({"robots": library.catalog()})
+            return _json(catalogue.listing(kind, search, max(1, min(limit, 200))))
 
     @server.tool()
     def new_world(name: str, floor: StyleName = "checker") -> str:
@@ -1128,27 +1142,46 @@ def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:
-    """Download a library robot off the event loop (the viewer stays live), reporting progress."""
-    from robotforge.design import library
+    """Download a library or catalogue robot off the event loop (the viewer stays live), reporting progress."""
+    from robotforge.design import catalogue, library
 
-    robot = library.get(name)
+    curated, opened = catalogue.source_of(name)
+    if opened is not None:
+        entry = catalogue.get(opened)
+        if entry.is_downloaded():
+            return
+        await _download_task(
+            f"catalogue:{entry.id}",
+            entry.title,
+            f"downloading {entry.title}",
+            lambda p: catalogue.model_path(opened, p),
+            ctx,
+        )
+        return
+    robot = library.get(curated)
     name = robot.name  # "Go2" and "Unitree Go2" are one download: a retry in another spelling joins the running one
     if library.is_downloaded(name):
         return
-    running = _downloads.get(name)
-    if running is None or running[0].done():
-        state: dict[str, Any] = {
-            "fraction": 0.0,
-            "message": f"downloading {robot.title} ({library.download_mb(name)} MB)",
-            "started": time.monotonic(),
-        }
+    await _download_task(
+        name,
+        robot.title,
+        f"downloading {robot.title} ({library.download_mb(name)} MB)",
+        lambda p: library.model_dir(robot, p),
+        ctx,
+    )
 
-        def progress(fraction: float, message: str) -> None:  # called from the download thread
-            state.update(fraction=fraction, message=f"{robot.title}: {message}")
+
+async def _download_task(key: str, title: str, message: str, fetch: Callable[[Any], Any], ctx: Context) -> None:
+    running = _downloads.get(key)
+    if running is None or running[0].done():
+        state: dict[str, Any] = {"fraction": 0.0, "message": message, "started": time.monotonic()}
+
+        def progress(fraction: float, text: str) -> None:  # called from the download thread
+            state.update(fraction=fraction, message=f"{title}: {text}")
 
         # If the client gives up, the download thread keeps going and fills the cache for the next call.
-        running = (asyncio.ensure_future(asyncio.to_thread(library.model_dir, robot, progress)), state)
-        _downloads[name] = running
+        running = (asyncio.ensure_future(asyncio.to_thread(fetch, progress)), state)
+        _downloads[key] = running
     task, state = running
     while True:
         elapsed = time.monotonic() - state["started"]
