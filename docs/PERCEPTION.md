@@ -24,11 +24,14 @@ A flat 2D ring clears at its own height.
 **The pose.** The odometry (an `odometry` sensor with its own noise, bias and drift) says how far the robot moved between two scans.
 A particle filter (150 guesses by default) moves every guess by that step with its own noise, then weighs each guess by how well the scan's end points fall on the map's occupied cells (a likelihood field, 60 ends spread evenly in bearing, the nearly level rays only).
 The weighted mean is the pose estimate; the scan is then added to the map at that pose.
+The filter also learns a constant error of the odometry's turn (wheels of unequal radius, a bent gait) from how far the scans keep pulling the heading, and turns by it in advance, so a drift of several degrees a second is followed.
 So the filter pulls the odometry's drift back wherever the map has walls to hold on to, and the map is drawn from the corrected poses (a particle-filter scan-matching mapper with one map, like Gmapping with one particle's map).
 `pose="truth"` maps from the simulator's exact pose and `pose="odometry"` from the odometry alone: they exist to show what the filter buys.
 
 **Localizing in a finished map.** `action="localize"` keeps the map as it is.
-`init="pose"` starts the filter at the pose the robot believed; `init="global"` spreads 1500 guesses over the map's free cells at any heading and softens the scans' say while the robot has traveled less than 6 m, with a few new guesses at each resampling, so that a room like several others does not collapse the filter onto the wrong one.
+`init="pose"` starts the filter at the pose the robot believed.
+`init="global"` tries the first scan at every place of a 20 cm lattice over the free cells within 9 m of a mapped wall, at every heading in 5 degree steps, and starts the 1500 particles where it fits best (drawn in proportion, softened).
+While the robot has then traveled less than 6 m the scans' say is softened and a few new guesses are added at each resampling, so that a room like several others does not collapse the filter onto the wrong one.
 
 **Going somewhere.** `move(to=..., map="own")` plans on the robot's own grid: occupied cells are walls (inflated by the robot's size as on the scene's map), and cells it has not seen are walls too, so it plans only through space it has seen free.
 The follower steers by the pose estimate, not the true pose.
@@ -71,7 +74,7 @@ The camera's own robot is left out of its cloud.
 ## Limits
 
 - The mapper is 2D: one floor, no stairs.
-  A ramp is ground to it (the lidar's rays hit it as floor) and passable on the scene's map but not always on its own.
+  A ramp or loading dock is mapped as what the lidar sees of it, a solid block: the scene's own planner climbs it, the robot's own map plans round it.
 - It needs walls or objects to hold on to: in a wide open space the filter has nothing to match and the pose drifts as the odometry does, until it sees something.
 - A moved object stays where it was mapped; a person walking through a scan leaves little, but a crate pushed to another place leaves a ghost until rays clear it.
 - Global localization can settle on the wrong one of two places that look alike; it needs the robot to move and see something that tells them apart.

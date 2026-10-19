@@ -14,7 +14,7 @@ from robotforge.perception.mapper import Mapper
 UNKNOWN_RGB, FREE_RGB, OCCUPIED_RGB = (38, 42, 48), (214, 224, 230), (232, 140, 30)
 POSE_RGB, ODOMETRY_RGB, PARTICLE_RGB = (30, 90, 220), (120, 120, 120), (60, 120, 230)
 MAX_SIDE = 900  # px
-MARGIN_CELLS = 10
+FRAME_M = 2.0  # m of floor shown beyond the walls
 
 
 def map_png(mapper: Mapper) -> bytes:
@@ -23,9 +23,19 @@ def map_png(mapper: Mapper) -> bytes:
     grid = mapper.grid
     if grid is None or grid.extent() is None:
         raise ValueError("nothing is mapped yet: start mapping and move the robot first")
-    rows, cols = np.nonzero(grid.seen)
-    r0, r1 = max(rows.min() - MARGIN_CELLS, 0), min(rows.max() + MARGIN_CELLS + 1, grid.rows)
-    c0, c1 = max(cols.min() - MARGIN_CELLS, 0), min(cols.max() + MARGIN_CELLS + 1, grid.cols)
+    # Framed on what was found (and where the robot is): the open floor its rays crossed far beyond is in the picture
+    # only as far as that, or the walls shrink to a speck.
+    rows, cols = np.nonzero(grid.occupied())
+    if not len(rows):
+        rows, cols = np.nonzero(grid.seen)
+    near = int(FRAME_M / grid.res)
+    r_lo, r_hi, c_lo, c_hi = rows.min(), rows.max(), cols.min(), cols.max()
+    for pose in (mapper.estimate_pose, mapper.odometry_pose):
+        if pose is not None:
+            r, c = grid.cell(float(pose[0]), float(pose[1]))
+            r_lo, r_hi, c_lo, c_hi = min(r_lo, r), max(r_hi, r), min(c_lo, c), max(c_hi, c)
+    r0, r1 = max(r_lo - near, 0), min(r_hi + near + 1, grid.rows)
+    c0, c1 = max(c_lo - near, 0), min(c_hi + near + 1, grid.cols)
     state = grid.state()[r0:r1, c0:c1]
     rgb = np.empty(state.shape + (3,), np.uint8)
     rgb[:] = UNKNOWN_RGB

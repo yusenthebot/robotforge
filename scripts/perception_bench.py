@@ -172,7 +172,7 @@ def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path)
     """Pose error while exploring (the filter's and the odometry's alone), and while searching from nowhere."""
     from PIL import Image, ImageDraw, ImageFont
 
-    width, height, margin = 1500, 640, 70
+    width, height, margin = 1560, 640, 90
     image = Image.new("RGB", (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(image)
     font = ImageFont.load_default(18)
@@ -185,7 +185,7 @@ def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path)
         ymax: float,
         xlabel: str,
     ) -> None:
-        w, h = 660, height - 2 * margin - 20
+        w, h = 620, height - 2 * margin - 20
         top = margin + 20
         draw.text((x0, margin - 38), title, fill=(29, 32, 38), font=font)
         draw.rectangle([x0, top, x0 + w, top + h], outline=(120, 124, 130))
@@ -221,7 +221,7 @@ def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path)
     )
     if search_trace:
         panel(
-            780,
+            840,
             "Finding itself from nowhere (m)",
             [("position error", blue, [(row[1], row[2]) for row in search_trace])],
             3.0,

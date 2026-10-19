@@ -133,7 +133,9 @@ and names them ("pick the red one"). open_viewer gives the user a live 3D view (
 offer it early; while it is open, actions play out in real time.
 
 Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
-force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry on any body of any robot,
+force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry, a sonar (a cone, deaf up
+close), wheel odometry, a tactile skin (taxels over faces of a body), a thermometer or a gas sensor (they read the
+heat_source and gas_source objects add_object puts in the world) on any body of any robot,
 ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
 nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).

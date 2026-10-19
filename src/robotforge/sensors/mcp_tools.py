@@ -35,7 +35,10 @@ def register(server: MCPServer, playground: Playground) -> None:
         parts), on any of its bodies. type: camera (options mode rgb, depth or segmentation, width, height, fov),
         lidar (one ring) or lidar3d (options channels, rays per ring, vfov, hfov, range), imu, encoders (joints,
         resolution), force_torque (on a body such as a wrist, e.g. on="hand", or between=[parent, child]), touch
-        (rows and cols make an array; e.g. on a foot), rangefinder, gps, odometry. on: a body, part, geom, site or
+        (rows and cols make an array; e.g. on a foot), rangefinder, gps, odometry, wheel_odometry (a wheeled robot's
+        wheels added up; option slip), sonar (a 30 degree cone, options beam, range, min_range), skin (a tactile skin:
+        taxels on faces of a body, options faces, rows, cols), temperature or gas (what heat_source and gas_source
+        objects put into the world; option response_s, how slowly it follows). on: a body, part, geom, site or
         joint (default the base); at: top, bottom, front, back, left, right, center, origin or [x, y, z] m in that
         body's frame (lidars default to top, cameras to front); direction: where it looks (forward, down,
         [1, 0, -0.3]). Realism goes in options, ideal by default: rate_hz, noise (standard deviation in the reading's
