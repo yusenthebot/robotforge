@@ -102,14 +102,14 @@ def geom_points(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarra
     return pos + local @ rot.T
 
 
-def body_points(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> np.ndarray:
-    """The world points of every shape that collides on `body` (a thing may be several shapes)."""
+def body_parts(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> list[np.ndarray]:
+    """The world points of each shape that collides on `body`, one array per shape (a thing may be several)."""
     geoms = [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) == body and _solid(model, g)]
-    parts = [geom_points(model, data, g) for g in geoms]
-    points = np.vstack(parts) if parts else np.zeros((0, 3))
-    if len(points) > MAX_POINTS:
-        points = points[np.linspace(0, len(points) - 1, MAX_POINTS).astype(int)]
-    return points
+    parts = [p for p in (geom_points(model, data, g) for g in geoms) if len(p)]
+    for k, part in enumerate(parts):
+        if len(part) > MAX_POINTS:
+            parts[k] = part[np.linspace(0, len(part) - 1, MAX_POINTS).astype(int)]
+    return parts
 
 
 def _solid(model: mujoco.MjModel, g: int) -> bool:
@@ -190,18 +190,47 @@ def hull_volume_centroid(verts: np.ndarray, faces: np.ndarray) -> tuple[float, n
 # ---- planning --------------------------------------------------------------------------------------------------
 
 
+def _hulls(parts: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, list[tuple[np.ndarray, np.ndarray]], np.ndarray]:
+    """(all the vertices, all the faces, each shape's own hull, the centre of mass by volume) of a thing made of
+    `parts`. Each shape keeps its own hull, so a thing made of several (a post with a plate on it) is not filled in
+    between them."""
+    own: list[tuple[np.ndarray, np.ndarray]] = []
+    loose: list[np.ndarray] = []
+    weighted, volumes = np.zeros(3), 0.0
+    for part in parts:
+        try:
+            verts, faces = convex_hull(part)
+        except ValueError:  # a flat or thin shape: its points count, its faces do not
+            loose.append(part)
+            continue
+        own.append((verts, faces))
+        volume, centre = hull_volume_centroid(verts, faces)
+        weighted += volume * centre
+        volumes += volume
+    if not own:
+        raise ValueError("the thing has no volume to take hold of")
+    centre = weighted / volumes
+    offset, all_faces = 0, []
+    for verts, faces in own:
+        all_faces.append(faces + offset)
+        offset += len(verts)
+    verts = np.vstack([v for v, _ in own] + loose)
+    return verts, np.vstack(all_faces), own, centre
+
+
 def plan(
-    points: np.ndarray,
+    parts: np.ndarray | list[np.ndarray],
     opening: float,
     centre_of_mass: np.ndarray | None = None,
     friction: float = FRICTION,
     keep: int = 5,
 ) -> list[Grasp]:
-    """The best `keep` grasps of the thing made of `points` for jaws that open `opening` m, best first (possibly none:
-    a thing wider than the opening everywhere, or too flat to get fingers under)."""
-    verts, faces = convex_hull(points)
+    """The best `keep` grasps of the thing made of `parts` (the points of each shape; one array is one shape) for jaws
+    that open `opening` m, best first (possibly none: a thing wider than the opening everywhere, or too flat to get
+    fingers under)."""
+    parts = [np.asarray(parts, float)] if isinstance(parts, np.ndarray) else [np.asarray(p, float) for p in parts]
+    verts, faces, own, hull_centre = _hulls(parts)
     normals, areas = face_normals(verts, faces)
-    _, hull_centre = hull_volume_centroid(verts, faces)
     com = hull_centre if centre_of_mass is None else np.asarray(centre_of_mass, float)
     z_low, z_high = float(verts[:, 2].min()), float(verts[:, 2].max())
     cone = math.cos(math.atan(friction))
@@ -213,8 +242,8 @@ def plan(
     for z in levels:
         band = verts[np.abs(verts[:, 2] - z) <= BAND]
         # the hull's own cross-section at z, not only vertices near it: points along the edges that cross the level
-        section = _section(verts, faces, z)
-        slab = np.vstack([band, section]) if len(section) else band
+        sections = [_section(v, f, z) for v, f in own]
+        slab = np.vstack([band, *[sec for sec in sections if len(sec)]])
         if len(slab) < 3:
             continue
         above = verts[verts[:, 2] >= z - BAND]
