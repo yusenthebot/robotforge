@@ -125,24 +125,23 @@ the floor like every z, depth = water level - z: 0.5 m under a surface at 1.2 m 
 depth_m, and a point on land or under the bottom gets why). observe reports what floats and how deep things are
 under "water"; an ROV's depth sensor reads meters under the surface.
 
-Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a
-snake slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to
-the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work
-arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
-pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table";
-a box riding on a running conveyor is caught as it goes by, the robot first driving beside the belt if its arm
-does not reach it from where it stands);
+Behavior: move walks a quadruped, hexapod or humanoid, drives a rover or two-wheeled balancer and makes a snake
+slither; with to=[x, y] or an object's name it finds its own way there round furniture and walls ("go to the
+fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, move_arm and gripper work arms (an arm
+mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks, pick_and_place fetches: it
+goes to the object and carries it to the target, "bring the apple to the table"; a box riding on a running conveyor
+is caught as it goes by, the robot first driving beside the belt if its arm does not reach it from where it stands);
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
 handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
 drawer"; operate(force=15) pushes with at most 15 N and says whether the handle stalled it, and add_object(resist=60)
 makes a mechanism take 60 N). plan_grasp(robot, object) shows how a gripper can take hold of an odd shape (tee,
-bottle, stone, a mesh) and pick_and_place takes the best grasp by itself. run_controller and compare_controllers
-also put an arm through press, wipe and insert (a peg into a socket) with joint_impedance, cartesian_impedance
-and osc, compliant controllers that give way to touch; robots lists robots with kind, arms and positions. For
-anything custom, set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/").
-observe reports state with an image so you can check your work; observe(find="red") locates colored objects in a
-camera's picture and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):
-offer it early; while it is open, actions play out in real time.
+bottle, stone, a mesh) and pick_and_place takes the best grasp by itself. run_controller and compare_controllers also
+put an arm through press, wipe and insert (a peg into a socket) with joint_impedance, cartesian_impedance and osc,
+compliant controllers that give way to touch; robots lists robots with kind, arms and positions. For anything custom,
+set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/"). observe reports
+state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture and
+names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD): offer it
+early; while it is open, actions play out in real time.
 
 Sensors: add_sensor puts a camera (rgb, depth, segmentation, a stereo pair, a fisheye or an event camera), a 2D or
 3D lidar, an IMU, joint encoders, a force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or
