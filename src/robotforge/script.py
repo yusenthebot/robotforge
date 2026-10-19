@@ -108,6 +108,37 @@ class Sim:
         r running, s succeeded, f failed; `notes` short texts by node id. nodes=[] takes the panel away."""
         self._call("show_flow", name=name, nodes=nodes, status=status, notes=notes or {})
 
+    # ---- demonstrations: record what a robot does, replay it, export it (robot.record and replay wrap these) ----
+    def start_recording(
+        self,
+        robot: str,
+        name: str | None = None,
+        rate_hz: float = 20.0,
+        sensors: list[str] | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Keep what `robot` does from now on: joint positions, actuator targets, base pose, sensor readings (the cheap
+        ones; sensors=[...] names them) and the commands it is given, at rate_hz frames a simulated second."""
+        return self._call("demo_start", robot=robot, name=name, rate_hz=rate_hz, sensors=sensors, overwrite=overwrite)
+
+    def stop_recording(self, name: str | None = None) -> dict[str, Any]:
+        """End the recording (the only one going, or `name`): it is saved in the world's demonstrations folder."""
+        return self._call("demo_stop", name=name)
+
+    def replay(self, name: str, robot: str | None = None, mode: str = "commands", wait: bool = True) -> dict[str, Any]:
+        """Play a demonstration on `robot` (default: the one that recorded it, or another of its kind). mode "commands"
+        gives the recorded commands again at their times, "joints" plays the actuator targets back. wait=True returns
+        when it is over (time passes meanwhile), else it plays as time passes through step()."""
+        return self._call("demo_replay", name=name, robot=robot, mode=mode, wait=wait)
+
+    def export_demo(self, name: str, format: str = "json", to: str | None = None) -> dict[str, Any]:
+        """Write a demonstration as "json" or "npz" in the world's demonstrations folder; the result has the path."""
+        return self._call("demo_export", name=name, format=format, to=to)
+
+    def demos(self) -> dict[str, Any]:
+        """The demonstrations kept and what is being recorded or replayed."""
+        return self._call("demo_list")
+
     def start_controller(self, robot: str, name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Hand `robot` to a plugin's controller (see the plugins tool); it runs until stop(robot)."""
         return self._call("start_controller", robot=robot, name=name, params=params or {})

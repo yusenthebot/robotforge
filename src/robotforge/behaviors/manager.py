@@ -5,10 +5,13 @@ from __future__ import annotations
 import contextlib
 import copy
 import dataclasses
+import functools
+import inspect
 import json
 import math
 import re
 import sys
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -121,6 +124,61 @@ MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid 
 
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
+
+
+# ---- the commands a robot is given, told to whoever records them (a demonstration, sim/demonstration.py) ----
+
+
+def _commanded(op: str, tell: Callable[[BehaviorManager, dict[str, Any]], tuple[str, dict[str, Any]]]):
+    """Make a public command report itself to `command_hooks` once it has worked: (robot, {"op", ...its numbers}). Only
+    the outermost call reports: a trip that stops the robot first, or a controller (an errand) asking for a move
+    while it runs, is part of that command and not another one."""
+
+    def wrap(method):
+        signature = inspect.signature(method)
+
+        @functools.wraps(method)
+        def command(self: BehaviorManager, *args: Any, **kwargs: Any):
+            if not self.command_hooks:
+                return method(self, *args, **kwargs)
+            outer = not getattr(self._issuing, "depth", 0) and not self.session.in_controller
+            self._issuing.depth = getattr(self._issuing, "depth", 0) + 1
+            try:
+                result = method(self, *args, **kwargs)
+            finally:
+                self._issuing.depth -= 1
+            if outer:
+                bound = signature.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+                robot, event = tell(self, dict(bound.arguments))
+                for hook in tuple(self.command_hooks):
+                    hook(robot, {"op": op, **event})
+            return result
+
+        return command
+
+    return wrap
+
+
+def _floats(values: Any) -> list[float]:
+    return [round(float(v), 5) for v in values]
+
+
+def _tell_move(m: BehaviorManager, a: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    event: dict[str, Any] = {"speed": float(a["speed"]), "turn": float(a["turn"])}
+    for key in ("side", "climb"):
+        if a[key]:
+            event[key] = float(a[key])
+    return m.resolve(a["robot"]), event
+
+
+def _tell_go(m: BehaviorManager, a: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    to = a["to"] if isinstance(a["to"], str) else _floats(a["to"])
+    return m.resolve(a["robot"]), {"to": to, **({"speed": a["speed"]} if a["speed"] else {})}
+
+
+def _tell_arm_target(m: BehaviorManager, a: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    return m._arm_name(a["robot"]), {"position": _floats(a["position"]), "gripper": a["gripper"]}
 
 
 def _height_out_of_reach(point: np.ndarray, base: np.ndarray) -> str:
@@ -322,6 +380,9 @@ class BehaviorManager:
         self._last_trips: dict[str, dict[str, Any]] = {}  # robot -> how its last trip ended, until it is moved again
         self._live_trips: dict[str, navigation.Navigator] = {}  # robot -> the trip it is on
         self._errands: dict[str, fetch.Errand] = {}  # robot -> the errand it is on (pick_and_place that goes over)
+        # What a demonstration listens to: (robot, {"op": "move", ...}) after each command given from outside
+        self.command_hooks: list[Callable[[str, dict[str, Any]], None]] = []
+        self._issuing = threading.local()
         session.reset_hooks.append(self._trips_after_reset)
         session.reset_hooks.append(self.start_balancing)
         session.ctrl_hooks.append(self._set_by_hand)
@@ -523,6 +584,7 @@ class BehaviorManager:
 
     # ---- moving robots (legs and wheels) ---------------------------------------------
 
+    @_commanded("move", _tell_move)
     def move(
         self, robot: str, speed: float, turn: float, walker: str | None = None, side: float = 0.0, climb: float = 0.0
     ) -> dict[str, Any]:
@@ -761,6 +823,7 @@ class BehaviorManager:
             }
         return out
 
+    @_commanded("stop", lambda m, a: (m.resolve(a["robot"]), {}))
     def stop(self, robot: str) -> dict[str, Any]:
         robot = self.resolve(robot)
         with self.session.lock:
@@ -869,6 +932,7 @@ class BehaviorManager:
 
     # ---- going somewhere ------------------------------------------------------------------
 
+    @_commanded("go", _tell_go)
     def navigate(
         self,
         robot: str,
@@ -1046,6 +1110,7 @@ class BehaviorManager:
             self._live_trips[robot] = trip
         return trip
 
+    @_commanded("heave", lambda m, a: (m.resolve(a["robot"]), {"rate": float(a["rate"])}))
     def heave(self, robot: str, rate: float) -> None:
         """Up (+) or down (-) in m/s for an ROV driven from the keyboard; it holds the depth it reaches."""
         with self.session.lock:
@@ -1229,6 +1294,7 @@ class BehaviorManager:
         forward = float((base[:2] - data.xpos[root][:2]) @ heading)
         return navigation.Arm(forward, float(base[2]), reach)
 
+    @_commanded("pose", lambda m, a: (m.resolve(a["robot"]), {"name": a["name"]}))
     def strike_pose(self, robot: str, name: str) -> humanoid.HumanoidController:
         """Start a named humanoid pose (wave, squat, ...); a walking humanoid stops first."""
         robot = self.resolve(robot)
@@ -1408,6 +1474,7 @@ class BehaviorManager:
                 f"{owner} is still coming to a stand ({speed:.2f} m/s); give it a second, then use {arm}"
             )
 
+    @_commanded("move_arm", _tell_arm_target)
     def move_arm(self, robot: str, position: list[float], gripper: str | None = None) -> ArmMotion:
         target = np.asarray(position, float)
         if target.shape != (3,):
@@ -1445,6 +1512,7 @@ class BehaviorManager:
             f"height; try a point a little {way}"
         )
 
+    @_commanded("gripper", lambda m, a: (m._arm_name(a["robot"]), {"state": a["state"]}))
     def set_gripper(self, robot: str, state: str) -> ArmMotion:
         with self.session.lock:
             arm = self._arm(robot)
@@ -1453,6 +1521,35 @@ class BehaviorManager:
             arm.set_gripper(state)
         return arm
 
+    @_commanded(
+        "jog",
+        lambda m, a: (m._arm_name(a["robot"]), {"velocity": _floats(a["velocity"]), "gripper": a["gripper"]}),
+    )
+    def jog_arm(self, robot: str, velocity: list[float], gripper: str | None = None) -> ArmMotion:
+        """Teleoperation of an arm's tool: move it at `velocity` [x, y, z] m/s in the world, pointing down, until told
+        otherwise (a zero velocity holds it; a gamepad's stream of these stops it too if it goes quiet). gripper
+        "open" or "close" sets the hand at once."""
+        v = np.asarray(velocity, float)
+        if v.shape != (3,) or not np.isfinite(v).all():
+            raise BehaviorError(f"velocity must be [x, y, z] in m/s, got {list(velocity)}")
+        if gripper not in (None, "open", "close"):
+            raise BehaviorError(f'gripper is "open" or "close", got {gripper!r}')
+        with self.session.lock:
+            name = self._arm_name(robot)
+            self._check_carrier(name)
+            arm = self._arm_motion(name)
+            if gripper is not None and arm.gripper < 0:
+                raise BehaviorError(f"{robot} has no gripper")
+            arm.jog(v, self.session.data, gripper)
+        return arm
+
+    @_commanded(
+        "pick_and_place",
+        lambda m, a: (
+            m._arm_name(a["robot"]),
+            {"object": a["obj"], "target": a["target"] if isinstance(a["target"], str) else _floats(a["target"])},
+        ),
+    )
     def pick_and_place(
         self, robot: str, obj: str, target: str | list[float], go: bool = True
     ) -> tuple[ArmMotion | fetch.Errand, dict[str, Any]]:
