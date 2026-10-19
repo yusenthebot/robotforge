@@ -69,7 +69,13 @@ def world(**robot) -> Playground:
 
 def test_the_page_has_all_the_examples_it_promises():
     titles = set(examples())
-    assert {"plugins/signpost.py", "plugins/coaster.py", "plugins/geiger.py", "plugins/sweep.py", "plugins/square.py"} <= titles
+    assert {
+        "plugins/signpost.py",
+        "plugins/coaster.py",
+        "plugins/geiger.py",
+        "plugins/sweep.py",
+        "plugins/square.py",
+    } <= titles
     assert {"behaviors/tour.py", "behaviors/reach.py", "behaviors/patrol.py", "check_export.py"} <= titles
 
 

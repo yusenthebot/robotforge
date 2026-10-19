@@ -63,8 +63,7 @@ class Generator:
             "material": self.material,
             "summary": self.summary,
             "params": {
-                k: _kind_of(p) | {"default": p.default}
-                | ({"doc": p.doc} if p.doc else {})
+                k: _kind_of(p) | {"default": p.default} | ({"doc": p.doc} if p.doc else {})
                 for k, p in self.params.items()
             },
         }
