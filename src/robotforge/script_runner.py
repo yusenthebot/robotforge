@@ -90,6 +90,7 @@ class ScriptRunner:
         # PYTHONUTF8: on Windows a piped child would print in the ANSI code page and crash on non-Latin text.
         env = {**os.environ, ENV_PORT: str(port), ENV_TOKEN: token, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1"}
         session.clock_owner = "script"
+        self.pg.flow.clear()  # the last script's tree is not this one's
         started = time.monotonic()
         output = bytearray()
         timed_out = False
@@ -226,6 +227,12 @@ class ScriptRunner:
             return next(iter(reading["sensors"].values()))
 
         return start_controller(self.pg.session, robot, str(req["name"]), req.get("params"), read)
+
+    def _op_show_flow(self, req) -> None:
+        """A script's behavior tree for the viewer's tree panel (robotforge.flow)."""
+        self.pg.flow.update(
+            str(req.get("name", "tree")), req.get("nodes"), str(req.get("status", "")), req.get("notes")
+        )
 
     def _op_set_controls(self, req) -> None:
         self.pg.set_controls({str(k): float(v) for k, v in req["controls"].items()})

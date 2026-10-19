@@ -41,6 +41,7 @@ from robotforge.design.world import (
     tidy_name,
 )
 from robotforge.extend import plugin_notes
+from robotforge.flow_board import FlowBoard
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.perception.hub import PerceptionHub
 from robotforge.sensors import edit as sensor_edit
@@ -106,6 +107,7 @@ class Playground:
     lessons: LessonRunner = field(init=False)
     sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     perception: PerceptionHub = field(init=False)  # the maps robots draw and localize in (perception/)
+    flow: FlowBoard = field(default_factory=FlowBoard, init=False)  # the behavior tree a script shows (flow.py)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
     _soft: tuple[int, set[int]] = field(default=(-1, set()), init=False, repr=False)  # see _soft_bodies
@@ -125,6 +127,7 @@ class Playground:
         self.session.reset_hooks.append(self.lessons.after_reset)
         self.sensors = SensorHub(self.session)
         self.perception = PerceptionHub(self)
+        self.session.reset_hooks.append(self.flow.clear)  # a reset starts the world over: the tree's progress is stale
         # belts keep running and button presses are counted, through resets
         mechanisms.attach(self.session, self._mechanism_shapes)
         self.session.reset_hooks.append(self._task_starts.clear)  # a reset starts every task's attempt again
@@ -212,6 +215,7 @@ class Playground:
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
         hub.state_extras = lambda: {"mode": modes.current(self)}
+        hub.flow = self.flow
         hub.sensor_stream = self.sensors.viewer_message
         hub.map_stream = self.perception.viewer_message
 

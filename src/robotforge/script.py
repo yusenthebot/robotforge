@@ -30,6 +30,11 @@ class ScriptError(RuntimeError):
     """The playground refused a request; the message says why."""
 
 
+class ScriptTimeLimit(ScriptError):
+    """The run's simulated-time budget is used up, or the run was stopped: nothing a script does can go on. Behavior
+    trees let this one through instead of counting it as a failed node."""
+
+
 class Sim:
     def __init__(self, sock: socket.socket):
         self._sock = sock
@@ -41,10 +46,10 @@ class Sim:
         self._file.flush()
         line = self._file.readline()
         if not line:
-            raise ScriptError("the playground closed the connection (time limit reached or run stopped)")
+            raise ScriptTimeLimit("the playground closed the connection (time limit reached or run stopped)")
         reply = json.loads(line)
         if "error" in reply:
-            raise ScriptError(reply["error"])
+            raise (ScriptTimeLimit if reply["error"].startswith("time limit of") else ScriptError)(reply["error"])
         return reply.get("result")
 
     # ---- time ----
@@ -90,6 +95,18 @@ class Sim:
         from robotforge.robot import Robot
 
         return Robot(self, name, self._call("describe", robot=name))
+
+    def show_flow(
+        self,
+        name: str = "tree",
+        nodes: list[dict[str, Any]] | None = None,
+        status: str = "",
+        notes: dict[str, str] | None = None,
+    ) -> None:
+        """Show a behavior tree or state machine in the viewer (robotforge.flow does this for Tree.run): `nodes` are
+        {"id", "parent", "kind", "name"} (leave out to keep the ones shown), `status` one letter per node: . not run,
+        r running, s succeeded, f failed; `notes` short texts by node id. nodes=[] takes the panel away."""
+        self._call("show_flow", name=name, nodes=nodes, status=status, notes=notes or {})
 
     def start_controller(self, robot: str, name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Hand `robot` to a plugin's controller (see the plugins tool); it runs until stop(robot)."""
