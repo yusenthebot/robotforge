@@ -13,6 +13,7 @@ import pytest
 import yaml
 from importer_fixtures import box_link, critter_urdf, revolute, robot, rover_urdf, write
 from mcp import Client
+from test_mjcf_doctor import _legs as _dog_mjcf
 
 from robotforge.design import catalogue, catalogue_fetch, library
 from robotforge.design.world import RobotEntry
@@ -110,12 +111,14 @@ def folders(tmp_path, monkeypatch):
     write(repos / "fake_repo" / "robots" / "arm" / "arm.urdf", _wrist_arm())
     write(repos / "fake_repo" / "robots" / "critter" / "critter.urdf", critter_urdf())
     write(repos / "fake_repo" / "robots" / "rover" / "rover.urdf", rover_urdf())
+    write(repos / "fake_repo" / "robots" / "dog" / "dog.xml", _dog_mjcf())
     monkeypatch.setenv("ROBOTFORGE_REPOS", str(repos))
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "none"))
 
     def entry(name: str, tags: tuple[str, ...]) -> catalogue.Entry:
+        suffix = "xml" if name == "dog" else "urdf"
         return catalogue.Entry(
             id=name,
             robot=name.title(),
@@ -127,13 +130,16 @@ def folders(tmp_path, monkeypatch):
             url="https://example.invalid/fake_repo.git",
             commit="0" * 40,
             package=f"robots/{name}",
-            format="urdf",
-            model=f"robots/{name}/{name}.urdf",
+            format="mjcf" if suffix == "xml" else "urdf",
+            model=f"robots/{name}/{name}.{suffix}",
             variants=(),
             xacro_args=(),
         )
 
-    fake = {n: entry(n, t) for n, t in (("arm", ("arm",)), ("critter", ("quadruped",)), ("rover", ("wheeled",)))}
+    fake = {
+        n: entry(n, t)
+        for n, t in (("arm", ("arm",)), ("critter", ("quadruped",)), ("rover", ("wheeled",)), ("dog", ("quadruped",)))
+    }
     monkeypatch.setattr(catalogue, "entries", lambda: fake)
     return fake
 
@@ -274,3 +280,87 @@ def test_the_agent_is_told_about_it():
     skill = (Path(__file__).parent.parent / "skills" / "robotforge" / "SKILL.md").read_text(encoding="utf-8")
     assert "open catalogue" in skill and "list_library" in skill
     assert "open robots" in INSTRUCTIONS
+
+
+def test_a_dog_of_torque_motors_with_no_standing_pose_stands_and_walks(folders):
+    """The unitree_mujoco kind of file: motors that take torques, joint limits that exclude the zero pose, no
+    keyframe. It is driven as servos and stood up, so it stands, and the walker finds its legs."""
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    result = pg.add_robot("d", library="dog")
+    assert any("torque motors driven as position servos" in n for n in result["notes"])
+    assert any("standing pose" in n for n in result["notes"])
+    start = float(pg.session.data.xpos[pg.behaviors._root_body("d")][2])
+    pg.run_fast(lambda: False, 3.0)
+    now = pg.behaviors.pose("d")
+    assert now["upright"] and start - now["position"][2] < 0.1
+    assert result["catalogue"]["kind"] == "quadruped" and result["catalogue"]["legs"] == 4
+
+
+def test_a_humanoid_whose_leg_joint_has_no_motor_gets_an_error_that_says_so(tmp_path, monkeypatch):
+    """Oli and Cassie have linkage legs: a walker looking up the motor of a passive joint failed with a bare "5"."""
+    from robotforge.behaviors import humanoid
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
+
+    def no_motor(*_args, **_kwargs):
+        raise KeyError(5)
+
+    monkeypatch.setattr(humanoid, "for_template", no_motor)
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("h", template="humanoid")
+    with pytest.raises(ValueError, match="no gait fits the body of h.*no motor of its own"):
+        pg.behaviors.move("h", 0.2, 0.0)
+
+
+def test_a_xacro_that_includes_a_package_outside_its_folder_gets_the_whole_repository(tmp_path, monkeypatch):
+    """The Toyota HSR's xacro asks for `$(find hsrb_parts_description)`, a folder next to its own: the first download
+    is the robot's folder only, so the import finds the package missing, downloads the repository and goes again."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "none"))
+    monkeypatch.delenv("ROBOTFORGE_REPOS", raising=False)
+    sha = "b" * 40
+    entry = catalogue.Entry(
+        id="needy",
+        robot="Needy",
+        maker="Acme",
+        dof=1,
+        tags=("arm",),
+        license="MIT",
+        repo="needy_repo",
+        url="https://example.invalid/needy_repo",
+        commit=sha,
+        package="robots/needy",
+        format="xacro",
+        model="robots/needy/needy.urdf.xacro",
+        variants=(),
+        xacro_args=(),
+    )
+    monkeypatch.setattr(catalogue, "entries", lambda: {"needy": entry})
+    root = catalogue_fetch.repo_dir("needy_repo", sha)
+    xmlns = 'xmlns:xacro="http://www.ros.org/wiki/xacro"'
+    write(
+        root / "robots" / "needy" / "needy.urdf.xacro",
+        f'<robot {xmlns} name="needy"><xacro:include filename="$(find parts)/parts.xacro"/><xacro:parts/></robot>',
+    )
+    wholes = []
+
+    def download(name, url, commit, folder, progress=None, whole=False):
+        wholes.append(whole)
+        write(
+            root / "robots" / "parts" / "parts.xacro",
+            f'<robot {xmlns}><xacro:macro name="parts"><link name="base"><inertial>'
+            '<mass value="1"/><inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/></inertial>'
+            '<collision><geometry><box size="0.1 0.1 0.1"/></geometry></collision></link></xacro:macro></robot>',
+        )
+        (root / catalogue_fetch.WHOLE_MARKER).write_text(commit, encoding="utf-8")
+        return root
+
+    monkeypatch.setattr(catalogue_fetch, "fetch", download)
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("n", library="needy")
+    assert wholes == [True]
+    assert catalogue_fetch.is_whole("needy_repo", sha)

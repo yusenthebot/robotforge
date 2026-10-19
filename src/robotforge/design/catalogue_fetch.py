@@ -41,6 +41,14 @@ def _safe(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
 
 
+WHOLE_MARKER = ".whole"  # in a repository's folder once all of it was downloaded
+
+
+def is_whole(name: str, commit: str) -> bool:
+    """Whether the whole repository is on disk (some robots need files from folders next to their own)."""
+    return (repo_dir(name, commit) / WHOLE_MARKER).is_file()
+
+
 def folder_path(name: str, commit: str, folder: str) -> Path | None:
     """The folder on disk if it was downloaded (or is in a local checkout named by $ROBOTFORGE_REPOS), else None."""
     for root in _local_roots(name, commit):
@@ -85,6 +93,8 @@ def fetch(
     with tempfile.TemporaryDirectory(dir=root.parent, prefix=".fetch-", ignore_cleanup_errors=True) as tmp:
         fetched = _download(url, commit, wanted, Path(tmp), report)
         _place(fetched, target if not whole else root)
+    if whole:
+        (root / WHOLE_MARKER).write_text(commit, encoding="utf-8")
     report(1.0, "done")
     return target
 

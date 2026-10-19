@@ -68,7 +68,22 @@ _SAFE_NAMES: dict[str, Any] = {
     "True": True,
     "False": False,
 }
-_STR_METHODS = frozenset({"split", "strip", "lstrip", "rstrip", "lower", "upper", "replace", "startswith", "endswith"})
+_STR_METHODS = frozenset(
+    {
+        "split",
+        "strip",
+        "lstrip",
+        "rstrip",
+        "lower",
+        "upper",
+        "replace",
+        "startswith",
+        "endswith",
+        "find",
+        "count",
+        "join",
+    }
+)
 _DICT_METHODS = frozenset({"get", "keys", "values", "items"})
 _BINOPS = {
     ast.Add: operator.add,
@@ -325,6 +340,10 @@ def _eval_node(node: ast.AST, lookup, expr: str, extra: dict[str, Any]) -> Any:
         return ev(node.body) if ev(node.test) else ev(node.orelse)
     if isinstance(node, ast.Tuple | ast.List):
         return [ev(v) for v in node.elts]
+    if isinstance(node, ast.Dict) and all(k is not None for k in node.keys):
+        return {ev(k): ev(v) for k, v in zip(node.keys, node.values, strict=True)}  # type: ignore[arg-type]
+    if isinstance(node, ast.ListComp | ast.GeneratorExp) and len(node.generators) == 1:
+        return _comprehension(node, lookup, expr, extra)
     if isinstance(node, ast.Subscript):
         return ev(node.value)[ev(node.slice)]
     if isinstance(node, ast.Attribute):
@@ -356,6 +375,24 @@ def _eval_node(node: ast.AST, lookup, expr: str, extra: dict[str, Any]) -> Any:
     raise XacroError(f"cannot evaluate '${{{expr}}}' (only arithmetic and math functions are supported)")
 
 
+def _comprehension(node: ast.ListComp | ast.GeneratorExp, lookup, expr: str, extra: dict[str, Any]) -> list[Any]:
+    """`[f(x) for x in items if g(x)]`, as ROS packages write them in their formulas: one loop, names bound by it."""
+    gen = node.generators[0]
+    if gen.is_async or not isinstance(gen.target, ast.Name):
+        raise XacroError(f"cannot evaluate '${{{expr}}}' (only a simple loop is supported)")
+    bound: dict[str, Any] = {}
+
+    def inner(name: str) -> Any:
+        return bound[name] if name in bound else lookup(name)
+
+    out = []
+    for item in list(_eval_node(gen.iter, lookup, expr, extra))[:_MAX_SEQ]:
+        bound[gen.target.id] = item
+        if all(_eval_node(c, inner, expr, extra) for c in gen.ifs):
+            out.append(_eval_node(node.elt, inner, expr, extra))
+    return out
+
+
 def _fmt(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -375,6 +412,7 @@ class _Scope:
         self.values: dict[str, Any] = {}
         self.lazy: dict[str, str] = {}
         self.blocks: dict[str, ET.Element] = {}
+        self.block_owner: dict[str, _Scope] = {}  # where each block was written: the caller of the macro
 
     def find(self, name: str) -> _Scope | None:
         scope: _Scope | None = self
@@ -506,11 +544,13 @@ class _Expander:
             if truth == (name == "if"):
                 self._children(el, out, scope, file)
         elif name == "insert_block":
-            block = self._lookup_block(el.get("name", ""), scope)
+            block, owner = self._lookup_block(el.get("name", ""), scope)
+            # A block means what it meant where it was written: a macro that is given `<xacro:insert_block
+            # name="origin"/>` as its own origin block would otherwise insert itself without end (the HSR's).
             if block.tag == _GROUP:
-                self._children(block, out, scope, file)
+                self._children(block, out, owner, file)
             else:
-                out.append(self._copy_expanded(block, scope, file))
+                out.append(self._copy_expanded(block, owner, file))
         elif name in self.macros:
             self._call(self.macros[name], el, out, scope, file)
         elif name in _KNOWN_DIRECTIVES:
@@ -568,12 +608,14 @@ class _Expander:
                 group = ET.Element(_GROUP)
                 group.extend(blocks[index:])
                 scope.blocks[token[2:]] = group
+                scope.block_owner[token[2:]] = caller
                 index = len(blocks)
                 continue
             if token.startswith("*"):
                 if index >= len(blocks):
                     raise XacroError(f"macro '{macro.get('name')}' needs a block for parameter {token}")
                 scope.blocks[token[1:]] = blocks[index]
+                scope.block_owner[token[1:]] = caller
                 index += 1
                 continue
             name, has_default, default = _split_param(token)
@@ -614,11 +656,11 @@ class _Expander:
             return holder.values[name]
         raise XacroError(f"'{name}' is a block property and cannot be used inside a formula")
 
-    def _lookup_block(self, name: str, scope: _Scope) -> ET.Element:
+    def _lookup_block(self, name: str, scope: _Scope) -> tuple[ET.Element, _Scope]:
         holder = scope.find(name)
         if holder is None or name not in holder.blocks:
             raise XacroError(f"xacro:insert_block refers to '{name}', which is not a block")
-        return holder.blocks[name]
+        return holder.blocks[name], holder.block_owner.get(name, scope)
 
     def _copy_expanded(self, block: ET.Element, scope: _Scope, file: Path) -> ET.Element:
         holder = ET.Element("holder")

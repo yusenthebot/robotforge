@@ -538,3 +538,30 @@ def test_xacro_reads_only_its_own_folder_when_there_is_no_package_xml(tmp_path):
         f'<robot {XACRO_NS}><xacro:include filename="../inc/own.xacro"/></robot>',
     )
     assert 'name="own"' in xacro.expand(tmp_path / "up" / "proj" / "sub" / "deep.xacro").text
+
+
+def test_a_thin_rod_whose_inertia_is_a_hair_from_singular_imports(tmp_path):
+    """Hello Robot's Stretch RE1 gives a rod ixx = iyy = 1.256e-4 and izz = 1.1e-10 with iyz = 1.2e-7: positive by a
+    rounding error, and not once written out with nine digits, when MuJoCo refused to compile it."""
+    from importer_fixtures import box_link, revolute, robot, write
+
+    from robotforge.design.importer import import_file
+
+    rod = (
+        '<link name="rod"><inertial><origin xyz="0 0 -0.09"/><mass value="0.068"/>'
+        '<inertia ixx="0.0001256" ixy="-5.6914e-12" ixz="6.0647e-09" '
+        'iyy="0.0001256" iyz="1.1787e-07" izz="1.1091e-10"/>'
+        '</inertial><visual><geometry><cylinder radius="0.0018" length="0.149"/></geometry></visual>'
+        '<collision><geometry><cylinder radius="0.0018" length="0.149"/></geometry></collision></link>'
+    )
+    text = robot(
+        box_link("base_link", (0.2, 0.2, 0.1), 5.0)
+        + rod
+        + box_link("tip", (0.02, 0.02, 0.02), 0.1)
+        + revolute("rod_joint", "base_link", "rod", "0 0 0.1")
+        + revolute("tip_joint", "rod", "tip", "0 0 -0.2"),
+        "rod_robot",
+    )
+    result = import_file(write(tmp_path / "rod.urdf", text), cache_dir=tmp_path / "cache")
+    result.spec.compile()  # it did not before
+    assert any(f.topic == "inertia" for f in result.report.findings)
