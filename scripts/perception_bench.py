@@ -39,7 +39,7 @@ SEARCH_LOOP = [
 ]  # a walk for the filter to find itself on
 
 
-def build(seed: int) -> Any:
+def build(seed: int) -> Any:  # seed picks the warehouse layout
     from robotforge.playground import Playground
 
     pg = Playground.with_demo()
@@ -49,11 +49,13 @@ def build(seed: int) -> Any:
     return pg
 
 
-def explore(pg: Any, seconds: float) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Explore, sampling the map's accuracy every SAMPLE_EVERY s of simulated time."""
+def explore(pg: Any, seconds: float, filter_seed: int = 0) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Explore, sampling the map's accuracy every SAMPLE_EVERY s of simulated time. `filter_seed` seeds the particle
+    filter's random draws, which the layout's seed does not."""
     hub = pg.perception
     hub.start("go2", {})
     mapper = hub.mapper("go2")
+    mapper.filter.rng = np.random.default_rng(filter_seed)
     rows: list[dict[str, Any]] = []
     next_sample = 0.0
 
@@ -101,7 +103,8 @@ def search(pg: Any) -> dict[str, Any]:
     hub.localize("go2", "global", 2500)
     mapper = hub.mapper("go2")
     started = float(pg.session.data.time)
-    first_held = None
+    first_held = None  # judged against the truth (error < 0.3 m), to measure; the filter cannot know this
+    first_confident = None  # by the filter's own spread alone (sigma < 0.25 m), which is all it can know
     travelled = 0.0
     last = pg.behaviors.pose("go2")["position"][:2]
     errors: list[tuple[float, float, float]] = []
@@ -116,13 +119,20 @@ def search(pg: Any) -> dict[str, Any]:
             check = hub.pose_check("go2")
             error = check.get("error_position_m", math.inf)
             errors.append((float(pg.session.data.time) - started, travelled, error))
+            moment = (float(pg.session.data.time) - started, travelled, error)
+            if first_confident is None and est.sigma_m < 0.25:
+                first_confident = moment
             if first_held is None and est.sigma_m < 0.25 and error < 0.3:
-                first_held = (float(pg.session.data.time) - started, travelled, error)
+                first_held = moment
         if first_held is not None and len(errors) > 10 and errors[-1][1] - first_held[1] > 4.0:
             break
     out: dict[str, Any] = {"particles": 2500, "walked_m": round(travelled, 1)}
     if first_held is not None:
         out.update(held_after_s=round(first_held[0], 1), held_after_m=round(first_held[1], 1))
+    if first_confident is not None:  # what the filter itself would have claimed, and how right that was
+        out["confident_after_m"] = round(first_confident[1], 1)
+        out["error_when_confident_m"] = round(first_confident[2], 3)
+    out["held_means"] = "spread under 0.25 m and the true error under 0.3 m (the truth is read to say when)"
     final = errors[-1]
     out["final_error_m"] = round(final[2], 3)
     out["error_after_holding_m"] = {
@@ -219,6 +229,29 @@ def go_to(pg: Any, rack: str, seed: int) -> dict[str, Any]:
     }
 
 
+def headline(summary: dict[str, Any], accuracy: dict[str, Any], e: np.ndarray, o: np.ndarray) -> dict[str, Any]:
+    """The numbers a report states, together (all of them, not the flattering ones): how exploring ended, the map's
+    precision and recall against the scene, how much of the floor was seen, how much of what stands in the robot's
+    way (at any height) is mapped free, and the pose errors."""
+    nav = accuracy.get("navigation", {})
+    return {
+        "ended": summary.get("ended"),
+        "explored_share": accuracy.get("explored"),
+        "precision": accuracy.get("precision"),
+        "recall": accuracy.get("recall"),
+        "f1": accuracy.get("f1"),
+        "wall_error_mean_cm": round(100 * accuracy.get("wall_error_m", {}).get("mean", float("nan")), 1),
+        "unsafe_free": accuracy.get("unsafe_free"),
+        "reachability_found": nav.get("found"),
+        "planned_through_blocked": nav.get("through_blocked"),
+        "navigation_unscored": nav.get("unscored"),
+        "pose_rms_m": round(float(np.sqrt(np.mean(e**2))), 3),
+        "pose_max_m": round(float(e.max()), 3),
+        "odometry_rms_m": round(float(np.sqrt(np.mean(o**2))), 3),
+        "odometry_max_m": round(float(o.max()), 3),
+    }
+
+
 def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path) -> None:
     """Pose error while exploring (the filter's and the odometry's alone), and while searching from nowhere."""
     from PIL import Image, ImageDraw, ImageFont
@@ -286,13 +319,14 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("perception_proof"))
     parser.add_argument("--rack", default="farthest", help="a rack's name, or farthest from where it ends exploring")
     parser.add_argument("--seconds", type=float, default=150.0)
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=0, help="the warehouse layout")
+    parser.add_argument("--filter-seed", type=int, default=0, help="the particle filter's random draws")
     args = parser.parse_args()
     os.environ.setdefault("ROBOTFORGE_HOME", tempfile.mkdtemp(prefix="rf-proof-"))
     args.out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     pg = build(args.seed)
-    summary, rows = explore(pg, args.seconds)
+    summary, rows = explore(pg, args.seconds, args.filter_seed)
     hub = pg.perception
     status = hub.status("go2")
     print(f"explored: {summary} in {time.monotonic() - t0:.0f} s of computer time")
@@ -316,7 +350,9 @@ def main() -> None:
     final = hub.status("go2")
     result = {
         "seed": args.seed,
+        "filter_seed": args.filter_seed,
         "explore": summary,
+        "headline": headline(summary, status["accuracy"], e, o),
         "map": final["map"],
         "accuracy_after_exploring": status["accuracy"],
         "accuracy_at_the_end": final["accuracy"],

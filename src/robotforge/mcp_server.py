@@ -29,7 +29,7 @@ from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
-from robotforge import lessons, tool_input, wording
+from robotforge import demonstration_tool, lessons, tool_input, wording
 from robotforge.behaviors import Kind, catch_stand, fetch
 from robotforge.behaviors import catch as catching
 from robotforge.behaviors import mcp_tools as operate_tools
@@ -83,8 +83,8 @@ sensors) that moves at once; update_robot(describe="make it longer") changes it,
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
-end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
-add_robot or later in update_robot.
+end_effector="suction" (a suction cup: flat things fingers cannot get round), "magnet" (steel things only) or
+"wiper" (a flat sponge pad that presses and wipes, it holds nothing), in add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
 end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
@@ -183,11 +183,30 @@ flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a g
 its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
 and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
-Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
+Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, and for
+arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch). Touch tasks for an arm
+over a table: press (stop at a force, or hold one) and wipe (slide a pad over the table at a constant pressure);
+compare_controllers(robot="panda", task="wipe") returns each method's mean force, its spread and how well the path
+was followed. A wiper pad (update_robot end_effector="wiper") is the tool to wipe with.
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
-compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
-robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
-run or compare it as method "policy:<name>".
+compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches any
+robot of the world a task by trial and error in the background, with any algorithm (ars and cem need nothing
+installed; ppo and sac need the rl extra; plugins add more): algo=["ars", "cem"] runs both side by side, and
+search={"trials": 9} tunes their settings (successive halving). The learner's observation includes whatever the
+robot's sensors read (add_sensor a lidar or an IMU first to give it one). Follow it with training_status (each
+trial's settings, curve and test score side by side); the viewer's Training panel draws it live and plays the
+best policy. Run or compare the result as method "policy:<name>".
+
+Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
+interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on
+sensors) and state machines that a script runs with Tree(...).run(sim, robot): the viewer's tree panel shows the
+running node and the attempt a Retry is on.
+
+Demonstrations: demonstration(action="start", robot=..., name=...) records what a robot does from then on (joint
+positions, actuator targets, base pose, sensor readings, and the commands it is given from the keyboard or a gamepad
+in the viewer, move, move_arm or a script); "stop" saves it as JSON in the world; "replay" plays it again on the same
+robot or another of its kind (mode "commands": any robot of the kind; "joints": the same actuators, open loop);
+"export" writes JSON or NPZ for training; "list" shows what there is. Scripts: robot.record(), robot.replay(name).
 
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
@@ -458,7 +477,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         build: dict[str, Any] | None = None,
         design: str | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
@@ -474,7 +493,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
         end_effector (any arm):
         "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
-        steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
+        steel things only), "wiper" (a flat sponge pad that presses and wipes; it holds nothing, so the arm cannot
+        pick with it) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
         mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
         pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
@@ -525,7 +545,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. describe changes a robot made from a
@@ -537,7 +557,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         stands, if the build carries it as a mounted part or is a robot of the same kind; given only base sensors
         ({"base": {"sensors": ["lidar"]}}) it is carried on a plate with them; any other is refused with the build
         that keeps it. mounts replaces the robots it carries (see add_robot; [] takes them all off). end_effector
-        changes the tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
+        changes the tool on its arm: "suction" cup, "magnet", "wiper" pad or back to its "gripper"."""
         with _tool_errors():
             for wanted in _mounted_libraries(mounts):
                 await _download_with_progress(wanted, ctx)
@@ -720,6 +740,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         here = playground.behaviors.pose(robot)
         if mapper is not None:  # how far off its own pose estimate was where it stopped (the truth is read to say)
             extra["on_its_own_map"] = playground.perception.pose_check(robot)
+            if mapper.pose_source != "estimate":  # not its own estimate steered it: say so, the result reads otherwise
+                extra["pose_source"] = (
+                    f"{mapper.pose_source}: it steered by "
+                    + ("the exact pose" if mapper.pose_source == "truth" else "the odometry alone")
+                    + ", not by an estimate from its map (mapping option pose='estimate')"
+                )
         return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
     def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
@@ -792,7 +818,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         in real time, the camera following the robot, in the world's videos folder; "video" in the result says
         where. map="own" (a robot that is mapping, see `mapping`) goes by its own occupancy map and its own pose
         estimate instead of the scene's: it plans only through space it has seen free, and says where it believed it
-        was and how far off that was when it stopped."""
+        was and how far off that was when it stopped (and, when the mapping was started with pose "truth" or
+        "odometry", that it steered by that and not by an estimate)."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if map is not None and to is None:
@@ -865,6 +892,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
     perception_tools.register(server, playground, run_until)
+    demonstration_tool.register(server, playground, run_until)
 
     async def run_file(path: Path, max_sim_seconds: float, args: list[str], max_wall_seconds: float) -> dict[str, Any]:
         runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
@@ -1003,6 +1031,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # robot.sensors["imu"], robot.move(speed, turn, seconds=2), robot.stop(), robot.arm.move_to([x, y, z]),
             # robot.arm.pick_and_place(obj, target), robot.gripper.close(), robot.start(plugin_controller),
             # robot.on_step(fn, every=0.1) and robot.run(seconds): fn(robot) is called as the time passes
+            # robot.record(name) -> handle; ...act...; handle.stop(): a demonstration (joints, targets, base pose,
+            # sensors, commands); robot.replay(name, mode="commands"|"joints") plays one on this or another robot of
+            # the kind; sim.export_demo(name, "json"|"npz")
+            # task logic: from robotforge.flow import Tree, Sequence, Fallback, Parallel, Retry, Action, Condition,
+            # WaitFor, StateMachine, State; Tree(Sequence(Action(fn), Retry(Action(fn2), times=3)), name="job")
+            # .run(sim, robot) ticks it (fn(ctx) returns True/False; ctx.robot, ctx.bb) and the viewer shows which
+            # node runs; tree.summary() says what ended how
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call

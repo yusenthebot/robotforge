@@ -36,7 +36,10 @@ class OccupancyGrid:
         self.seen = np.zeros((cells, cells), bool)
         self.scans = 0
         self.version = 0  # counts changes: the viewer and the likelihood field are redone only when it moves
-        self._field: tuple[int, np.ndarray] | None = None
+        # the likelihood field (sigma, cap, cells) and the box (r0, r1, c0, c1) of cells whose occupied-or-not changed
+        # since it was made: only that box, widened by the field's reach, is made again
+        self._field: tuple[float, float, np.ndarray] | None = None
+        self._dirty: tuple[int, int, int, int] | None = None
 
     # ---- geometry -----------------------------------------------------------------------------------------
 
@@ -75,7 +78,13 @@ class OccupancyGrid:
         self.seen = np.pad(self.seen, pad)
         self.x0 -= pad_c0 * self.res
         self.y0 -= pad_r0 * self.res
-        self._field = None
+        if self._field is not None:  # new room is unmapped, so far from every wall: the field's far value there
+            sigma, cap, cells = self._field
+            far = np.float32(math.exp(-0.5 * (cap / sigma) ** 2))
+            self._field = (sigma, cap, np.pad(cells, pad, constant_values=far))
+        if self._dirty is not None:
+            r0, r1, c0, c1 = self._dirty
+            self._dirty = (r0 + pad_r0, r1 + pad_r0, c0 + pad_c0, c1 + pad_c0)
 
     # ---- integrating a scan ---------------------------------------------------------------------------------
 
@@ -110,22 +119,43 @@ class OccupancyGrid:
         xy = origin + delta[ray] * t[:, None]
         rows = np.rint((xy[:, 1] - self.y0) / self.res).astype(np.int64)
         cols = np.rint((xy[:, 0] - self.x0) / self.res).astype(np.int64)
-        free = np.zeros(self.logodds.shape, bool)
         inside = (rows >= 0) & (rows < self.rows) & (cols >= 0) & (cols < self.cols)
         if rise is not None and math.isfinite(clear_below):
             inside &= height + rise[ray] * length[ray] * t <= clear_below
-        free[rows[inside], cols[inside]] = True
-        occupied = np.zeros(self.logodds.shape, bool)
+        rows, cols = rows[inside], cols[inside]
         ends_hit = ends[hit]
-        if len(ends_hit):
-            er = np.rint((ends_hit[:, 1] - self.y0) / self.res).astype(np.int64)
-            ec = np.rint((ends_hit[:, 0] - self.x0) / self.res).astype(np.int64)
-            ok = (er >= 0) & (er < self.rows) & (ec >= 0) & (ec < self.cols)
-            occupied[er[ok], ec[ok]] = True
+        er = np.rint((ends_hit[:, 1] - self.y0) / self.res).astype(np.int64)
+        ec = np.rint((ends_hit[:, 0] - self.x0) / self.res).astype(np.int64)
+        ok = (er >= 0) & (er < self.rows) & (ec >= 0) & (ec < self.cols)
+        er, ec = er[ok], ec[ok]
+        if not len(rows) and not len(er):
+            self.scans += 1
+            self.version += 1
+            return
+        # the scan touches a box round the sensor: work on that box, not on the whole (ever growing) map
+        r0 = int(min(rows.min() if len(rows) else self.rows, er.min() if len(er) else self.rows))
+        r1 = int(max(rows.max() if len(rows) else 0, er.max() if len(er) else 0)) + 1
+        c0 = int(min(cols.min() if len(cols) else self.cols, ec.min() if len(ec) else self.cols))
+        c1 = int(max(cols.max() if len(cols) else 0, ec.max() if len(ec) else 0)) + 1
+        box = (slice(r0, r1), slice(c0, c1))
+        free = np.zeros((r1 - r0, c1 - c0), bool)
+        free[rows - r0, cols - c0] = True
+        occupied = np.zeros_like(free)
+        occupied[er - r0, ec - c0] = True
         free &= ~occupied
-        self.logodds[free] = np.maximum(self.logodds[free] + L_FREE, L_MIN)
-        self.logodds[occupied] = np.minimum(self.logodds[occupied] + L_OCC, L_MAX)
-        self.seen |= free | occupied
+        logodds = self.logodds[box]  # a view
+        was = logodds >= OCC_AT
+        logodds[free] = np.maximum(logodds[free] + L_FREE, L_MIN)
+        logodds[occupied] = np.minimum(logodds[occupied] + L_OCC, L_MAX)
+        self.seen[box] |= free | occupied
+        flipped = np.nonzero(was != (logodds >= OCC_AT))
+        if len(flipped[0]):
+            self._mark_dirty(
+                r0 + int(flipped[0].min()),
+                r0 + int(flipped[0].max()) + 1,
+                c0 + int(flipped[1].min()),
+                c0 + int(flipped[1].max()) + 1,
+            )
         self.scans += 1
         self.version += 1
 
@@ -161,15 +191,38 @@ class OccupancyGrid:
             self.y0 + rows.max() * self.res,
         )
 
+    def _mark_dirty(self, r0: int, r1: int, c0: int, c1: int) -> None:
+        if self._dirty is not None:
+            d = self._dirty
+            r0, r1, c0, c1 = min(r0, d[0]), max(r1, d[1]), min(c0, d[2]), max(c1, d[3])
+        self._dirty = (r0, r1, c0, c1)
+
     def likelihood_field(self, sigma: float = 0.12, cap: float = 0.6) -> np.ndarray:
         """exp(-d^2 / 2 sigma^2) per cell, d the distance to the nearest occupied cell (at most `cap`): how well
-        a scan end there agrees with the map. Kept until the map changes."""
-        if self._field is not None and self._field[0] == self.version:
-            return self._field[1]
-        room = clearance(self.occupied(), self.res, cap)
-        field = np.exp(-0.5 * (room / sigma) ** 2).astype(np.float32)
-        self._field = (self.version, field)
-        return field
+        a scan end there agrees with the map. Kept, and made again only where walls came or went (a cell's value
+        depends on the walls within `cap` of it), so a scan costs the size of what changed, not of the map."""
+        if self._field is None or self._field[:2] != (sigma, cap) or self._field[2].shape != self.logodds.shape:
+            room = clearance(self.occupied(), self.res, cap)
+            self._field = (sigma, cap, np.exp(-0.5 * (room / sigma) ** 2).astype(np.float32))
+            self._dirty = None
+        elif self._dirty is not None:
+            reach = math.ceil(cap / self.res) + 1
+            r0, r1, c0, c1 = self._dirty
+            # cells within `reach` of a changed one are made again, from the walls within `reach` of those
+            keep = (max(r0 - reach, 0), min(r1 + reach, self.rows), max(c0 - reach, 0), min(c1 + reach, self.cols))
+            wide = (
+                max(keep[0] - reach, 0),
+                min(keep[1] + reach, self.rows),
+                max(keep[2] - reach, 0),
+                min(keep[3] + reach, self.cols),
+            )
+            room = clearance(self.logodds[wide[0] : wide[1], wide[2] : wide[3]] >= OCC_AT, self.res, cap)
+            part = np.exp(-0.5 * (room / sigma) ** 2).astype(np.float32)
+            self._field[2][keep[0] : keep[1], keep[2] : keep[3]] = part[
+                keep[0] - wide[0] : keep[1] - wide[0], keep[2] - wide[2] : keep[3] - wide[2]
+            ]
+            self._dirty = None
+        return self._field[2]
 
     def frontier(self) -> np.ndarray:
         """Known free cells beside an unknown one: where the map can still grow."""
@@ -208,5 +261,5 @@ class OccupancyGrid:
         other = OccupancyGrid.__new__(OccupancyGrid)
         other.res, other.x0, other.y0 = self.res, self.x0, self.y0
         other.logodds, other.seen = self.logodds.copy(), self.seen.copy()
-        other.scans, other.version, other._field = self.scans, self.version, None
+        other.scans, other.version, other._field, other._dirty = self.scans, self.version, None, None
         return other

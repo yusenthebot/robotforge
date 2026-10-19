@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 from robotforge import modes, wording
 from robotforge.behaviors import airframe, robot_kind
 from robotforge.behaviors.manager import BehaviorManager
+from robotforge.demonstrations import Demonstrations
 from robotforge.design import catalogue, combine, gallery, importer, scenes, terrain
 from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
@@ -41,6 +42,7 @@ from robotforge.design.world import (
     tidy_name,
 )
 from robotforge.extend import plugin_notes
+from robotforge.flow_board import FlowBoard
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.perception.hub import PerceptionHub
 from robotforge.sensors import edit as sensor_edit
@@ -106,6 +108,8 @@ class Playground:
     lessons: LessonRunner = field(init=False)
     sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
     perception: PerceptionHub = field(init=False)  # the maps robots draw and localize in (perception/)
+    flow: FlowBoard = field(default_factory=FlowBoard, init=False)  # the behavior tree a script shows (flow.py)
+    demonstrations: Demonstrations = field(init=False)  # recordings, replays and exports (demonstrations.py)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
     _soft: tuple[int, set[int]] = field(default=(-1, set()), init=False, repr=False)  # see _soft_bodies
@@ -125,6 +129,8 @@ class Playground:
         self.session.reset_hooks.append(self.lessons.after_reset)
         self.sensors = SensorHub(self.session)
         self.perception = PerceptionHub(self)
+        self.demonstrations = Demonstrations(self)
+        self.session.reset_hooks.append(self.flow.clear)  # a reset starts the world over: the tree's progress is stale
         # belts keep running and button presses are counted, through resets
         mechanisms.attach(self.session, self._mechanism_shapes)
         self.session.reset_hooks.append(self._task_starts.clear)  # a reset starts every task's attempt again
@@ -139,6 +145,13 @@ class Playground:
             self.behaviors.move(str(msg["robot"]), speed, turn, str(walker) if walker else None, **air)
             if msg.get("heave") is not None:  # an underwater robot going up or down (keys E and Q)
                 self.behaviors.heave(str(msg["robot"]), float(msg["heave"]))
+
+        def teleop_arm(msg: dict[str, Any]) -> None:
+            """An arm's tool jogged from a gamepad: velocity [x, y, z] m/s in the world, and/or the gripper. The hand
+            sends it again every fraction of a second while a stick is held; an arm not told again holds still."""
+            velocity = [float(v) for v in msg.get("velocity", [0.0, 0.0, 0.0])]
+            grip = msg.get("gripper")
+            self.behaviors.jog_arm(str(msg["robot"]), velocity, str(grip) if grip else None)
 
         def go_to(msg: dict[str, Any]) -> dict[str, Any]:
             """A double-click on the ground: go there along a planned path, as move(to=...) does, until it arrives.
@@ -187,6 +200,7 @@ class Playground:
             raise PlaygroundError(f"unknown lesson action {msg.get('action')!r}")
 
         hub.handlers["teleop"] = teleop
+        hub.handlers["teleop_arm"] = teleop_arm
         hub.handlers["lesson"] = self.lessons.handle
         hub.slow_handlers["lesson_open"] = lesson_open
         hub.slow_handlers["go_to"] = go_to
@@ -211,9 +225,13 @@ class Playground:
         hub.slow_handlers["world"] = world_request
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
-        hub.state_extras = lambda: {"mode": modes.current(self)}
+        hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
+        hub.flow = self.flow
         hub.sensor_stream = self.sensors.viewer_message
         hub.map_stream = self.perception.viewer_message
+        from robotforge.training.live import install as install_training
+
+        install_training(self, hub)  # the Training panel: the run that changed last, its play and stop buttons
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None

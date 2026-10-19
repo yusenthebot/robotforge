@@ -70,7 +70,10 @@ def world(**robot) -> Playground:
 def test_the_page_has_all_the_examples_it_promises():
     titles = set(examples())
     assert {"plugins/signpost.py", "plugins/geiger.py", "plugins/sweep.py", "plugins/square.py"} <= titles
+    assert {"plugins/hill_climb.py", "plugins/stay_upright.py"} <= titles
     assert {"behaviors/tour.py", "behaviors/reach.py", "behaviors/patrol.py", "check_export.py"} <= titles
+    assert {"behaviors/walk_tree.py", "behaviors/turn_machine.py"} <= titles
+    assert {"behaviors/record_walk.py", "behaviors/record_reach.py"} <= titles
 
 
 def test_the_page_follows_the_house_style():
@@ -162,3 +165,27 @@ async def test_the_export_example_opens_the_urdf_it_wrote(tmp_path, monkeypatch)
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "bodies 14 joints 12"
+
+
+@pytest.mark.anyio
+async def test_the_training_examples_train_in_the_training_process(plugins_loaded):
+    """The algorithm and the task of the page, loaded from the plugin folder by the training process itself."""
+    pg = world(name="pole", template="cartpole")
+    server = build_server(pg, find_free_port(8864))
+    async with Client(server) as client:
+        listed = json.loads((await client.call_tool("plugins", {})).content[0].text)
+        assert [a["name"] for a in listed["algorithms"]] == ["hill_climb"]
+        assert [t["name"] for t in listed["tasks"]] == ["stay_upright"]
+        started = await client.call_tool(
+            "train_policy",
+            {"task": "stay_upright", "robot": "pole", "algo": ["ars", "hill_climb"], "timesteps": 3000, "parallel": 2},
+        )
+        assert not started.is_error, started.content[0].text
+        name = json.loads(started.content[0].text)["started"]
+        status = json.loads(
+            (await client.call_tool("training_status", {"name": name, "wait_seconds": 240})).content[0].text
+        )
+    assert status["state"] == "done", status
+    assert {t["algo"] for t in status["trials"]} == {"ars", "hill_climb"}
+    mine = next(t for t in status["trials"] if t["algo"] == "hill_climb")
+    assert mine["state"] == "done" and "best_return" in mine["latest"]

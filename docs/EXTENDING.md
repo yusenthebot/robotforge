@@ -1,11 +1,13 @@
 # Extending robotforge
 
 robotforge is meant to be bent to what you need.
-This page covers the three ways to do that without touching its source:
+This page covers five ways to do that without touching its source:
 
 - [Plugins](#plugins): your own parts, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
 - [Export](#export): a world or one robot written out as MJCF or URDF with meshes, so other simulators open it.
 - [One robot interface in scripts](#one-robot-interface-in-scripts): `robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper` and a per-step callback, so one script runs on a template dog and on a Go2, or on a template arm and on a Panda.
+- [Demonstrations](#recording-and-replaying-demonstrations): what a robot did, recorded, replayed on it or another robot of its kind, and exported as JSON or NPZ for training.
+- [Behavior trees and state machines](#behavior-trees-and-state-machines): task logic in a script, with the viewer showing which node runs.
 
 Every example below is run by the test suite (`tests/test_extending_docs.py`), so what you read here works.
 
@@ -157,6 +159,68 @@ robot = sim.robot(sim.robots()[0])
 print(robot.kind, call("square", robot, side_s=1.0))
 ```
 
+### Algorithms and tasks: training with your own
+
+A training algorithm is a function that spends a step budget and returns the policy it found.
+It sits beside ARS, CEM, PPO and SAC: `train_policy(algo="hill_climb")`, a list to compare it with them, and a search can draw its settings from the ranges you give.
+[TRAINING.md](TRAINING.md) has the whole contract; this is a complete one.
+
+```python title="plugins/hill_climb.py"
+from robotforge.extend import Hyper, algorithm
+
+
+@algorithm(
+    "hill_climb",
+    summary="keep a random change to the policy when it scores better",
+    hyper={"sigma": Hyper(0.2, low=0.05, high=0.5, log=True, help="size of each random change")},
+)
+def hill_climb(ctx):
+    theta = ctx.state.get("theta", ctx.new_shape().zeros()).copy()  # ctx.state is kept between a search's stretches
+    best = ctx.evaluate(theta)
+    while ctx.has_budget():
+        candidate = theta + ctx.params["sigma"] * ctx.rng.standard_normal(theta.shape)
+        score = ctx.evaluate(candidate)
+        if score > best:
+            theta, best = candidate, score
+        ctx.log(best_return=best)  # a line on the Training panel
+    ctx.state["theta"] = theta
+    return theta  # the policy's flat parameters; ctx.policy(theta) is the policy they make
+```
+
+- `ctx.env` is the environment (Gym API, actions in [-1, 1]), `ctx.params` the settings, `ctx.rng` a generator seeded per trial, `ctx.obs_dim` and `ctx.act_dim` its sizes.
+- `ctx.rollout(act)` plays one episode with `act(obs)`; `ctx.evaluate(theta, episodes)` plays the policy with parameters `theta`.
+  Both count against the budget and draw on the episode returns of the Training panel.
+- `ctx.has_budget()` is false when the steps are spent, a stop was asked for, or the time is up.
+- `ctx.new_shape(hidden=(16,))` sets the policy's layers (none: a linear policy); `ctx.update_norm()` scales the inputs by what they have been.
+- Return the flat parameters, or any object with `__call__(obs)` and `save(path)`.
+- `needs=("torch",)` names modules the algorithm imports, so a missing one is explained before training starts.
+
+A task is a function that builds a `Task` for a robot.
+`reward_task` makes one from a reward function, so any robot can be trained on anything that can be measured.
+
+```python title="plugins/stay_upright.py"
+from robotforge.extend import task
+from robotforge.training.custom import reward_task
+
+
+@task("stay_upright", summary="hold a pole straight up", params={"limit": 0.8})
+def build(model, robot, params):
+    return reward_task(
+        model,
+        robot,
+        params,
+        reward=lambda ctx: 1.0 - abs(ctx.joint("hinge")) - 0.01 * ctx.effort(),
+        failed=lambda ctx: abs(ctx.joint("hinge")) > ctx.params["limit"],
+        reset=lambda ctx, rng: ctx.set_joint("hinge", rng.uniform(-0.25, 0.25)),
+        seconds=3,
+        task_name="stay_upright",
+    )
+```
+
+Then `train_policy(task="stay_upright", robot="pole", algo=["ars", "hill_climb"])`.
+The reward function sees a context with the robot's state by its own names (`ctx.joint`, `ctx.body`, `ctx.base_velocity()`, `ctx.height()`, `ctx.up()`, `ctx.effort()`).
+A plugin algorithm or task runs inside the training process too: it loads from the plugin folders there, so keep it in `~/.robotforge/plugins` or a trusted world.
+
 ### Using plugins from Claude or GPT
 
 The agent writes the file for you (`write_script(name, code, plugin=true)`), then uses it with the ordinary tools: `add_object(shape="signpost")`, `add_sensor(type="geiger")`, `plugins(action="run", ...)`.
@@ -247,3 +311,132 @@ dog is a quadruped and cannot work an arm; it can walk or drive: use robot.move
 
 Blocking calls (`arm.move_to`, `pick_and_place`) run to their end without calling the per-step callback.
 A Go2 carrying a PiPER arm has both: `robot.move` walks it and `robot.arm` works the arm.
+
+## Recording and replaying demonstrations
+
+A demonstration is what a robot did, kept as data: its joint positions, the actuator targets, its base pose and sensor readings at a fixed rate, and the commands that steered it (a key or a gamepad stick in the viewer, `move`, `move_arm`, a script).
+It can be played again on the same robot or on another robot of the same kind, and written out as JSON or NPZ for training.
+
+```python title="behaviors/record_walk.py" robots="dog,go2"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+with robot.record("walk_demo") as demo:  # keeps frames and commands until the block ends
+    robot.move(speed=0.25, seconds=1.5)
+    robot.move(speed=0.0, turn=0.8, seconds=1.0)
+saved = demo.result
+print(
+    saved["kind"],
+    saved["frames"],
+    "frames,",
+    saved["command_counts"],
+    "->",
+    saved["path"].split("demonstrations")[-1][1:],
+)
+
+played = robot.replay("walk_demo")  # the same commands again (another robot of its kind would do as well)
+print("replayed", played["commands_issued"], "commands in", played["seconds"], "s")
+print("wrote", sim.export_demo("walk_demo", "npz")["size_kb"], "kB")
+```
+
+An agent does the same with the `demonstration` tool: `start` (robot, name), act, `stop`, then `replay` (name, robot), `export` (name, format) and `list`.
+
+| | |
+|---|---|
+| What is kept | `time`, `joint_pos` (rad or m), `ctrl` (the actuator targets), `base_pos` and `base_quat` (world frame), the numbers of the sensors the robot carries (not cameras and lidars unless named with `sensors=[...]`), and the commands, each with the time it was given |
+| `mode="commands"` (default) | gives the recorded commands again at their times; the robot's own controllers do the rest, so it works on any robot of the same kind. A slower robot gets the speeds scaled down (`speed_scale`) and a command it cannot do (out of reach) is listed under `refused`. Arm targets are kept relative to the arm's base |
+| `mode="joints"` | puts the robot in the first pose and plays the actuator targets back as recorded: exact for the same robot or one with the same actuators, open loop, so for arms and hands, not for walking |
+| Files | `stop` saves `demonstrations/<name>.json` in the world; `export` writes `json` or `npz` there (`to=` a file name). The NPZ holds `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text); LeRobot's parquet needs a library robotforge does not install |
+
+A recording ends on its own when the world is edited or reset, and says so.
+What an errand does inside the simulation (a fetch driving the robot over and stopping it) is part of the command that started it and is not recorded twice.
+
+```python title="behaviors/record_reach.py" robots="arm,panda"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+x, y, z = robot.position
+with robot.record("reach_demo") as demo:
+    robot.arm.move_to([x + 0.2, y, 0.15], gripper="open")
+    robot.gripper.close()
+print(demo.result["command_counts"])
+print(robot.replay("reach_demo")["commands_issued"], "commands replayed")
+```
+
+## Behavior trees and state machines
+
+`robotforge.flow` is a small library for the logic of a task: what to do first, what to do when it fails, what to check on the way.
+It needs nothing but a script's `sim`, and the viewer draws the tree while it runs: one row per node, the running one lit, a note such as `attempt 2 of 3` on a retry.
+
+```python title="behaviors/walk_tree.py" robots="dog,go2"
+from robotforge.flow import Action, Fallback, Retry, Sequence, Tree, WaitFor
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+start = robot.position
+
+
+def walked(metres):
+    def test(ctx):
+        x, y, _ = ctx.robot.position
+        return ((x - start[0]) ** 2 + (y - start[1]) ** 2) ** 0.5 >= metres
+
+    return test
+
+
+tree = Tree(
+    Sequence(
+        Action(lambda ctx: ctx.robot.move(speed=0.25), name="start walking"),
+        Fallback(
+            WaitFor(walked(0.4), timeout=6.0, name="walked 0.4 m"),
+            Retry(WaitFor(walked(0.2), timeout=3.0, name="walked 0.2 m"), times=2),
+            name="far enough",
+        ),
+        Action(lambda ctx: ctx.robot.stop(), name="stop"),
+        name="short walk",
+    ),
+    name="walk tree",
+)
+print(tree.run(sim, robot), "after", round(sim.time, 1), "s")
+print(tree.summary())
+```
+
+Every node answers success, failure or running, and the tree is ticked every 0.1 simulated seconds (`tick=`) until the root is done:
+
+| Node | What it does |
+|---|---|
+| `Action(fn)` | `fn(ctx)`: `True` or `None` is success, `False` failure, or return `SUCCESS`, `FAILURE`, `RUNNING`. A call that blocks (`arm.move_to`, `pick_and_place`) blocks inside the tick. A call the playground refuses (out of reach) is a failure, with its message as the node's note |
+| `Condition(fn)`, `sensor_is("lidar", "ahead.distance_m", ">", 0.5)` | success when it holds; a sensor the robot lacks is a failed condition, not an error |
+| `Wait(seconds)`, `WaitFor(test, timeout)` | running until the time has passed, or the test holds (failure at the timeout) |
+| `Sequence(*nodes)`, `Fallback(*nodes)` | all in order, or the first that works; they carry on from the child that was running, `reactive=True` re-checks the earlier ones every tick |
+| `Parallel(*nodes, success="all")` | all at once; `"any"` or a number of successes needed |
+| `Retry(node, times=3, wait=0)`, `Repeat(node, times=None)`, `Inverter(node)`, `Timeout(node, seconds)` | decorators |
+| `StateMachine(name, start)` with `State(name, do, enter, exit, result)` | states and `transition(source, target, when)`; a state with `result=SUCCESS` or `FAILURE` ends it; `do` may be a node and `when` may be `SUCCESS` or `FAILURE` of it |
+
+The context `ctx` has `ctx.sim`, `ctx.robot`, `ctx.time`, `ctx.bb` (a dictionary the nodes share) and `ctx.log(text)`, which goes into `tree.summary()` with when each node ended and how.
+A tree is a node too, so a state machine goes inside a tree and the other way round:
+
+```python title="behaviors/turn_machine.py" robots="dog,go2"
+from robotforge.flow import SUCCESS, Action, State, StateMachine, Tree
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+
+fsm = StateMachine("lap", start="straight")
+fsm.add(State("straight", do=Action(lambda ctx: ctx.robot.move(speed=0.25, seconds=1.0), name="walk 1 s")))
+fsm.add(State("turn", do=Action(lambda ctx: ctx.robot.move(speed=0.0, turn=1.2, seconds=1.0), name="turn 1 s")))
+fsm.add(State("done", result=SUCCESS))
+fsm.transition("straight", "turn", when=SUCCESS)  # the walk finished well
+fsm.transition("turn", "done", when=SUCCESS)
+
+tree = Tree(fsm, name="one corner")
+print(tree.run(sim, robot), "in", round(sim.time, 1), "s")
+```
+
+`Tree.run(sim, robot, tick=0.1, max_seconds=120, blackboard=None, show=True)` returns the status of the root; a tree that is still running after `max_seconds` simulated seconds stops with a failure.
+A node may appear once in a tree: make a second one for a second place.
+

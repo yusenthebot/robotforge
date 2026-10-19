@@ -288,3 +288,43 @@ def test_the_sensor_views_cut_no_title_or_button(playground, chrome):
         server.should_exit = True
         thread.join(timeout=10)
     assert seen == {key: [] for key in seen} and len(seen) == 4
+
+
+def test_the_map_the_viewer_draws_goes_when_the_map_is_cleared(playground, chrome):
+    """Clearing the map left a ghost in the page (grid, particles, readout) for ever: the stream sent nothing once no
+    robot mapped, and the page dropped a map only when a message left its robot out."""
+    pg = playground
+    pg.new_world("room", "concrete")
+    for name, pos, yaw in (
+        ("north", [0, 3.05], 0),
+        ("south", [0, -3.05], 0),
+        ("east", [3.05, 0], 90),
+        ("west", [-3.05, 0], 90),
+    ):
+        pg.add_object(name, shape="wall", pos=pos, yaw=yaw, size=[6.2, 0.1, 1.0])
+    pg.add_robot("rover", template="rover", pos=[0, 0], yaw=0)
+    pg.perception.start("rover", {"lidar": {"type": "lidar", "rays": 120, "range": 6.0, "rate_hz": 10.0}})
+    server, thread, port = _serve(pg)
+    state = "window.__robotforge.map()"
+    hud_hidden = "document.getElementById('map-hud').hidden"
+
+    async def run() -> dict:
+        out = {}
+        async with _page(chrome, f"http://127.0.0.1:{port}/?lang=en") as tab:
+            trip = pg.behaviors.navigate("rover", [2.0, 2.0], seconds=30)
+            await _until(tab, f"{state}.robots.length === 1 && {state}.robots[0].hasGrid")
+            out["drawn"] = (await tab.eval(state))["robots"][0]["robot"]
+            pg.perception.clear("rover")
+            await _until(tab, f"{state}.robots.length === 0")
+            out["after"] = await tab.eval(state)
+            out["hud_hidden"] = await tab.eval(hud_hidden)
+            del trip
+        return out
+
+    try:
+        seen = asyncio.run(run())
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+    assert seen["drawn"] == "rover"
+    assert seen["after"]["robots"] == [] and seen["hud_hidden"] is True

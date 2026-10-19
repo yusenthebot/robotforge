@@ -30,6 +30,11 @@ class ScriptError(RuntimeError):
     """The playground refused a request; the message says why."""
 
 
+class ScriptTimeLimit(ScriptError):
+    """The run's simulated-time budget is used up, or the run was stopped: nothing a script does can go on. Behavior
+    trees let this one through instead of counting it as a failed node."""
+
+
 class Sim:
     def __init__(self, sock: socket.socket):
         self._sock = sock
@@ -41,10 +46,10 @@ class Sim:
         self._file.flush()
         line = self._file.readline()
         if not line:
-            raise ScriptError("the playground closed the connection (time limit reached or run stopped)")
+            raise ScriptTimeLimit("the playground closed the connection (time limit reached or run stopped)")
         reply = json.loads(line)
         if "error" in reply:
-            raise ScriptError(reply["error"])
+            raise (ScriptTimeLimit if reply["error"].startswith("time limit of") else ScriptError)(reply["error"])
         return reply.get("result")
 
     # ---- time ----
@@ -90,6 +95,49 @@ class Sim:
         from robotforge.robot import Robot
 
         return Robot(self, name, self._call("describe", robot=name))
+
+    def show_flow(
+        self,
+        name: str = "tree",
+        nodes: list[dict[str, Any]] | None = None,
+        status: str = "",
+        notes: dict[str, str] | None = None,
+    ) -> None:
+        """Show a behavior tree or state machine in the viewer (robotforge.flow does this for Tree.run): `nodes` are
+        {"id", "parent", "kind", "name"} (leave out to keep the ones shown), `status` one letter per node: . not run,
+        r running, s succeeded, f failed; `notes` short texts by node id. nodes=[] takes the panel away."""
+        self._call("show_flow", name=name, nodes=nodes, status=status, notes=notes or {})
+
+    # ---- demonstrations: record what a robot does, replay it, export it (robot.record and replay wrap these) ----
+    def start_recording(
+        self,
+        robot: str,
+        name: str | None = None,
+        rate_hz: float = 20.0,
+        sensors: list[str] | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Keep what `robot` does from now on: joint positions, actuator targets, base pose, sensor readings (the cheap
+        ones; sensors=[...] names them) and the commands it is given, at rate_hz frames a simulated second."""
+        return self._call("demo_start", robot=robot, name=name, rate_hz=rate_hz, sensors=sensors, overwrite=overwrite)
+
+    def stop_recording(self, name: str | None = None) -> dict[str, Any]:
+        """End the recording (the only one going, or `name`): it is saved in the world's demonstrations folder."""
+        return self._call("demo_stop", name=name)
+
+    def replay(self, name: str, robot: str | None = None, mode: str = "commands", wait: bool = True) -> dict[str, Any]:
+        """Play a demonstration on `robot` (default: the one that recorded it, or another of its kind). mode "commands"
+        gives the recorded commands again at their times, "joints" plays the actuator targets back. wait=True returns
+        when it is over (time passes meanwhile), else it plays as time passes through step()."""
+        return self._call("demo_replay", name=name, robot=robot, mode=mode, wait=wait)
+
+    def export_demo(self, name: str, format: str = "json", to: str | None = None) -> dict[str, Any]:
+        """Write a demonstration as "json" or "npz" in the world's demonstrations folder; the result has the path."""
+        return self._call("demo_export", name=name, format=format, to=to)
+
+    def demos(self) -> dict[str, Any]:
+        """The demonstrations kept and what is being recorded or replayed."""
+        return self._call("demo_list")
 
     def start_controller(self, robot: str, name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Hand `robot` to a plugin's controller (see the plugins tool); it runs until stop(robot)."""
