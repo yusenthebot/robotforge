@@ -257,7 +257,7 @@ def test_a_cloud_is_thinned_to_the_number_asked_for():
 
 @pytest.mark.parametrize("limit", [1, 2, 7, 50])
 def test_a_cloud_across_the_origin_is_thinned_to_a_small_limit_at_once(limit):
-    """Cubes anchored at the world origin kept -1 and 0 apart for ever: points=1 took 20 s and answered an infinite voxel."""
+    """Cubes anchored at the world origin kept -1 and 0 apart: points=1 took 20 s and answered an infinite voxel."""
     rng = np.random.default_rng(1)
     points = rng.uniform(-4, 4, (20000, 3))
     t0 = time.perf_counter()
