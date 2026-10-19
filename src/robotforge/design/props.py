@@ -10,6 +10,7 @@ own x axis and `depth` along y, with shelves and benches open (or facing) toward
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import mujoco
@@ -207,6 +208,8 @@ class Part:
 
 def footprint(shape: str, size: list[float]) -> tuple[float, float]:
     """Half extents (x, y) of a shape's footprint in its own frame."""
+    if shape in _FOOTPRINTS:
+        return _FOOTPRINTS[shape](size)
     if shape == "tree":  # the trunk stands on the ground, the crown can hang over a slope
         return size[0] * 0.06, size[0] * 0.06
     if shape in ("button", "valve"):
@@ -480,7 +483,7 @@ def _shade(rgba: list[float], k: float) -> list[float]:
     return [min(1.0, c * k) for c in rgba[:3]] + [rgba[3]]
 
 
-_PARTS = {
+_PARTS: dict[str, Callable[[list[float], list[float]], list[Part]]] = {
     "wall": _wall,
     "pillar": _pillar,
     "shelf": _shelf,
@@ -494,3 +497,38 @@ _PARTS = {
     "buoy": _buoy,
     "dock": _dock,
 }
+
+
+# ---- shapes added by plugins (robotforge.extend): the same tables, so they place, save and build like the rest ----
+
+_FOOTPRINTS: dict[str, Callable[[list[float]], tuple[float, float]]] = {}
+BUILT_IN = tuple(SHAPES)  # the shapes robotforge ships, in order; a plugin shape cannot take one of these names
+
+
+def register_shape(
+    name: str,
+    info: ShapeInfo,
+    parts: Callable[[list[float], list[float]], list[Part]],
+    footprint_of: Callable[[list[float]], tuple[float, float]],
+    mass: float | None = None,
+) -> None:
+    """Make `name` a shape add_object takes. `parts(size, rgba)` gives its pieces; `mass` is a loose one's default."""
+    global PROPS
+    if name in SHAPES:
+        raise ValueError(f"{name!r} is already a shape")
+    SHAPES[name] = info
+    _PARTS[name] = parts
+    _FOOTPRINTS[name] = footprint_of
+    PROPS = (*PROPS, name)
+    if mass is not None:
+        DEFAULT_MASS[name] = mass
+
+
+def unregister_shape(name: str) -> None:
+    """Take a plugin's shape away again (a reload); the shapes robotforge ships stay."""
+    global PROPS
+    if name in BUILT_IN:
+        raise ValueError(f"{name!r} is built in")
+    for table in (SHAPES, _PARTS, _FOOTPRINTS, DEFAULT_MASS):
+        table.pop(name, None)
+    PROPS = tuple(p for p in PROPS if p != name)

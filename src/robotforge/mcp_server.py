@@ -45,6 +45,9 @@ from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
+from robotforge.extend import ensure_user_plugins
+from robotforge.extend import mcp_tools as plugin_tools
+from robotforge.extend.registry import REGISTRY, WORLD_FOLDER
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
 from robotforge.sensors import mcp_tools as sensor_tools
@@ -138,6 +141,13 @@ nearest obstacle ahead and 36 sector ranges, a depth camera's distances, picture
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
 The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
 a robot's own sensors and brings a camera's picture up.
+
+Plugins: the user can extend robotforge with their own Python (a file in ~/.robotforge/plugins, or in the open
+world's plugins/ folder): new parts for add_object (shape="their_name"), new sensor types for add_sensor, and
+controllers and behaviors for scripts. write_script(name, code, plugin=true) writes one for the user and loads it;
+plugins() lists what plugins added and which files failed to load, with the reason, plugins(action="reload") reads the
+folders again. A world's plugin files that were not written here do not load until you have read them, told the
+user what they do and called plugins(action="trust"): they are code that runs on this computer.
 
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
@@ -339,6 +349,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 await task
             playground.renderer.close()
 
+    ensure_user_plugins()  # the user's own parts and sensors, ready before any world is read
     server = _Server(
         "robotforge",
         title="robotforge robot playground",
@@ -506,7 +517,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     @server.tool()
     def add_object(
         name: str,
-        shape: ShapeName = "box",
+        shape: ShapeName | str = "box",
         size: list[float] | None = None,
         pos: list[float] | None = None,
         color: str | list[float] | None = None,
@@ -793,6 +804,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
+    plugin_tools.register(server, playground)
     mount_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
@@ -904,7 +916,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             )
 
     @server.tool()
-    def write_script(name: str, code: str) -> str:
+    def write_script(name: str, code: str, plugin: bool = False) -> str:
         """Save a Python robot script as behaviors/<name>.py in the open world. Scripts use:
 
             from robotforge.script import connect
@@ -922,10 +934,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call
-        run_script."""
+        run_script.
+
+        plugin=true saves it instead as plugins/<name>.py of the open world and loads it at once: a plugin adds parts,
+        sensors, controllers or behaviors (from robotforge.extend import part, sensor, controller, behavior; the
+        skill's EXTENDING reference has an example of each). The result lists what it added or why it did not load."""
         with _tool_errors():
             store = playground._require_store()
-            path = _script_path(store.dir, name)
+            path = _script_path(store.dir, name, WORLD_FOLDER if plugin else "behaviors")
             code, fenced = _unfence(code)
             try:
                 compile(code, path.name, "exec")  # parses only: nothing runs
@@ -939,7 +955,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
                 f.write(code)
             saved = {"saved": str(path), "lines": code.count("\n") + 1}
-            return _json({**saved, "note": "the ``` fence around the code was removed"} if fenced else saved)
+            if fenced:
+                saved["note"] = "the ``` fence around the code was removed"
+            if plugin:
+                saved["plugin"] = REGISTRY.written(store.dir, path)
+            return _json(saved)
 
     @server.tool()
     def read_script(name: str) -> str:
@@ -1174,14 +1194,14 @@ def _unfence(code: str) -> tuple[str, bool]:
     return (fenced[1] + "\n", True) if fenced else (code, False)
 
 
-def _script_path(world_dir: Path, name: str) -> Path:
+def _script_path(world_dir: Path, name: str, folder: str = "behaviors") -> Path:
     stem = wording.squash(name[:-3] if name.lower().endswith(".py") else name)  # "Pick Cube" is pick_cube
     if not SCRIPT_NAME.match(stem):
         raise PlaygroundError(
             f"script name {wording.short(name)} must use lowercase letters, digits and _, start with a letter, "
             "e.g. pick_cube"
         )
-    return world_dir / "behaviors" / f"{stem}.py"
+    return world_dir / folder / f"{stem}.py"
 
 
 def _no_script(name: str, path: Path) -> str:

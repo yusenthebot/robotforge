@@ -40,6 +40,7 @@ from robotforge.design.world import (
     spawn_height,
     tidy_name,
 )
+from robotforge.extend import plugin_notes
 from robotforge.learn import LESSONS, LessonRunner
 from robotforge.sensors import edit as sensor_edit
 from robotforge.sensors import without_sensors
@@ -954,7 +955,7 @@ class Playground:
             "robots": [r.name for r in world.robots],
             "objects": _limit([o.name for o in world.objects]),
             **({"terrain": [t.name for t in world.terrain]} if world.terrain else {}),
-            "notes": [*compiled.notes, *self.behaviors.walk_notes()],
+            "notes": [*compiled.notes, *self.behaviors.walk_notes(), *plugin_notes(store.dir)],
             "actuators": summary["actuators"],
             "viewer_url": self.viewer_url,
         }
