@@ -181,7 +181,8 @@ flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a g
 its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
 and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
-Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
+Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, and for
+arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
 robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
