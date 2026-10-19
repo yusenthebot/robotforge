@@ -75,6 +75,8 @@ class GaitBase:
         # and velocity and any hand pulling it (held at their current values) and writes ctrl.
         ghost = copy.copy(self.gait)
         ghost.legs = [copy.copy(leg) for leg in self.gait.legs]
+        if getattr(self.gait, "footing", None) is not None:  # it cannot see the ground from the stand-in below
+            ghost.footing = self.gait.footing.frozen()
         scratch = types.SimpleNamespace(
             time=0.0,
             xquat=data.xquat,
