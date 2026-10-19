@@ -648,10 +648,27 @@ def _catalogue_robot(entry: RobotEntry) -> templates.BuiltRobot:
         params = {"xacro_args": dict(robot.xacro_args), **entry.params} if robot.format == "xacro" else entry.params
         if robot.format == "xacro" and not params["xacro_args"]:
             del params["xacro_args"]
-        built = _file_robot(entry.name, path, params, drive=True)
+        problem = None
+        try:
+            built = _file_robot(entry.name, path, params, drive=True)
+            wide = _lost_meshes(built)
+        except ValueError as exc:  # a xacro that includes another package of the repository
+            if "was not found" not in str(exc):
+                raise
+            wide, built, problem = True, None, exc
+        if wide and catalogue.widen(robot.id):  # files next to the robot's folder: take the whole repository
+            built = _file_robot(entry.name, path, params, drive=True)
+        elif built is None:
+            raise ValueError(f"{problem}; it needs a package from elsewhere in {robot.repo}") from problem
         return catalogue_inspect.finish(built, robot)
     except ValueError as exc:
         raise ValueError(f"robot {entry.name!r}: {exc}") from exc
+
+
+def _lost_meshes(built: templates.BuiltRobot) -> bool:
+    """Whether the import doctor could not find some of the meshes a URDF names."""
+    findings = (built.doctor or {}).get("findings", [])
+    return any(f["topic"] == "meshes" and f["status"] == "unfixed" and "not be found" in f["problem"] for f in findings)
 
 
 def _file_robot(name: str, path: Path, params: dict[str, Any], drive: bool = False) -> templates.BuiltRobot:

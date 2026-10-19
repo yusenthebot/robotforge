@@ -312,3 +312,55 @@ def test_a_humanoid_whose_leg_joint_has_no_motor_gets_an_error_that_says_so(tmp_
     pg.add_robot("h", template="humanoid")
     with pytest.raises(ValueError, match="no gait fits the body of h.*no motor of its own"):
         pg.behaviors.move("h", 0.2, 0.0)
+
+
+def test_a_xacro_that_includes_a_package_outside_its_folder_gets_the_whole_repository(tmp_path, monkeypatch):
+    """The Toyota HSR's xacro asks for `$(find hsrb_parts_description)`, a folder next to its own: the first download
+    is the robot's folder only, so the import finds the package missing, downloads the repository and goes again."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "none"))
+    monkeypatch.delenv("ROBOTFORGE_REPOS", raising=False)
+    sha = "b" * 40
+    entry = catalogue.Entry(
+        id="needy",
+        robot="Needy",
+        maker="Acme",
+        dof=1,
+        tags=("arm",),
+        license="MIT",
+        repo="needy_repo",
+        url="https://example.invalid/needy_repo",
+        commit=sha,
+        package="robots/needy",
+        format="xacro",
+        model="robots/needy/needy.urdf.xacro",
+        variants=(),
+        xacro_args=(),
+    )
+    monkeypatch.setattr(catalogue, "entries", lambda: {"needy": entry})
+    root = catalogue_fetch.repo_dir("needy_repo", sha)
+    xmlns = 'xmlns:xacro="http://www.ros.org/wiki/xacro"'
+    write(
+        root / "robots" / "needy" / "needy.urdf.xacro",
+        f'<robot {xmlns} name="needy"><xacro:include filename="$(find parts)/parts.xacro"/><xacro:parts/></robot>',
+    )
+    wholes = []
+
+    def download(name, url, commit, folder, progress=None, whole=False):
+        wholes.append(whole)
+        write(
+            root / "robots" / "parts" / "parts.xacro",
+            f'<robot {xmlns}><xacro:macro name="parts"><link name="base"><inertial>'
+            '<mass value="1"/><inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/></inertial>'
+            '<collision><geometry><box size="0.1 0.1 0.1"/></geometry></collision></link></xacro:macro></robot>',
+        )
+        (root / catalogue_fetch.WHOLE_MARKER).write_text(commit, encoding="utf-8")
+        return root
+
+    monkeypatch.setattr(catalogue_fetch, "fetch", download)
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("n", library="needy")
+    assert wholes == [True]
+    assert catalogue_fetch.is_whole("needy_repo", sha)

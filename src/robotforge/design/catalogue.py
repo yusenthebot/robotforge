@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 from robotforge import wording
 from robotforge.design import catalogue_fetch, library, menagerie
 
+log = logging.getLogger(__name__)
 DATA = Path(__file__).with_name("catalogue.json")
 KINDS = ("arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other")
 # What robot_descriptions calls a robot, as one of ours. Several tags: the first that is here wins (a "biped" that is
@@ -272,3 +274,20 @@ def source_of(name: str) -> tuple[str | None, str | None]:
         return curated, None
     entry = get(name)
     return (entry.in_library, None) if entry.in_library else (None, entry.id)
+
+
+TOO_BIG = frozenset({"drake", "mujoco_menagerie"})  # repositories of hundreds of robots: never downloaded whole
+
+
+def widen(name: str, progress: menagerie.Progress | None = None) -> bool:
+    """Download the whole repository of a robot whose files refer to folders outside its own (a xacro that includes
+    another package, meshes shared with a sibling). False when all of it is here already, it is too big or it failed."""
+    entry = get(name)
+    if entry.repo in TOO_BIG or catalogue_fetch.is_whole(entry.repo, entry.commit):
+        return False
+    try:
+        catalogue_fetch.fetch(entry.repo, entry.url, entry.commit, "", progress, whole=True)
+    except catalogue_fetch.CatalogueFetchError as exc:
+        log.warning("could not download all of %s for %s: %s", entry.repo, entry.id, exc)
+        return False
+    return True

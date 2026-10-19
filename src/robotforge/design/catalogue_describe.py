@@ -19,6 +19,7 @@ from robotforge.sim.geometry import lowest_point
 MOVING = frozenset({int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)})  # joints that move
 FOOT_BAND = 0.08  # m above the lowest point of the robot at home that still counts as standing on it
 FOOT_APART = 0.1  # of the robot's height between feet: closer contact points belong to one foot (toe and heel)
+UPRIGHT_RATIO = 2.0  # a body this many times taller than its footprint is long stands on two feet, not four
 SMALL_HAND = 0.45  # m, the largest extent of a hand or gripper
 REACH_SAMPLES = 150
 
@@ -148,6 +149,10 @@ def _feet(model: mujoco.MjModel, data: mujoco.MjData, bodies: list[int]) -> int:
     for p in (p for p in points if p[2] <= floor + FOOT_BAND * max(height, 0.2) / 0.6):
         if all(np.linalg.norm(p[:2] - q[:2]) > apart for q in places):
             places.append(p)
+    if len(places) == 4:
+        spread = max(float(np.linalg.norm(a[:2] - b[:2])) for a in places for b in places)
+        if height > UPRIGHT_RATIO * spread:  # toe and heel of two feet under a body taller than they are long
+            return 2
     return len(places)
 
 
