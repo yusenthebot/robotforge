@@ -277,6 +277,8 @@ def test_mapping_adds_the_sensors_it_needs_and_reports_the_map(pg):
     accuracy = status["accuracy"]
     assert accuracy["precision"] > 0.9 and accuracy["wall_error_m"]["mean"] < 0.06
     assert accuracy["recall"] > 0.5
+    assert accuracy["navigation"]["through_blocked"] < 0.02  # almost nowhere it would plan through is blocked
+    assert accuracy["navigation"]["found"] > 0.6  # and most of what the scene lets it reach it can reach on its map
 
 
 def test_the_filter_keeps_the_pose_closer_to_the_truth_than_the_odometry_alone(pg):

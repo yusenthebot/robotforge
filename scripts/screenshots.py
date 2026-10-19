@@ -1312,8 +1312,52 @@ def _map_for(seconds: float, area: list[float] | None = None) -> Callable[[Any],
     return act
 
 
+SENSOR_DRAWER_VIEW_WIDE = (
+    'document.getElementById("drawer-toggle").click();'
+    "await new Promise((r) => setTimeout(r, 400));" + _look_at(["go2"], (-2.6, -0.2, 1.6))
+)
 G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
 G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.5, -5.5, 13.5], [0.5, 1.2, 0]);"
+
+
+def _sensing(*sensors: dict[str, Any], pos: tuple[float, float] = (-3.6, 2.6), yaw: float = 0.0, extra=None):
+    """A Go2 in the warehouse with these sensors, each added in one call as an agent would (add_sensor)."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene("warehouse", keep_robots=False, starter=False)
+        pg.add_robot("go2", library="go2", pos=list(pos), yaw=yaw)
+        for fields in sensors:
+            pg.add_sensor("go2", fields)
+        if extra is not None:
+            extra(pg)
+
+    return build
+
+
+def _push_crate(pg: Any) -> None:
+    """A heavy crate in the Go2's way, 0.9 m ahead: it walks into it, and the skin on its front feels it."""
+    x, y = pg.behaviors.pose("go2")["position"][:2]
+    pg.add_object("crate", shape="box", size=[0.4, 0.8, 0.4], pos=[x + 0.58, y], mass=80.0, color="orange")
+    pg.behaviors.move("go2", 0.45, 0.0)
+
+
+def _sonar_world(pg: Any) -> None:
+    """A pole 15 degrees off the sonar's axis, 1.3 m ahead, and a pallet-high wall behind it."""
+    pg.add_object("pole", shape="pillar", pos=[-2.1, 2.95], size=[0.16, 1.0], color="white")
+
+
+def _sources(pg: Any) -> None:
+    """A heater by the racks and a gas vent across the aisle, in the Go2's way."""
+    pg.add_object("heater", shape="heat_source", pos=[-1.8, 2.0], strength=90)
+    pg.add_object("vent", shape="gas_source", pos=[-0.8, 3.2], strength=700)
+
+
+G12_SENSOR_VIEWS = {
+    "front": _look_at(["go2"], (-2.3, 0.1, 1.15)),  # from behind, down the aisle it looks along
+    "back": _look_at(["go2"], (-2.3, 0.1, 1.15)),
+    "side": _look_at(["go2"], (-1.9, 0.5, 1.7)),  # from behind and above, the cone and the pole ahead
+    "skin": _look_at(["go2"], (0.5, -0.45, 1.25)),  # from above its left, its front pad in view
+}
 
 G12_SHOTS = [
     Shot(
@@ -1323,6 +1367,55 @@ G12_SHOTS = [
         page=G12_OVERVIEW,
         size=(1920, 1080),
         settle=2.5,
+    ),
+    Shot(
+        "g12_stereo",
+        _sensing({"type": "stereo", "name": "pair"}),
+        page=G12_SENSOR_VIEWS["front"],
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_fisheye",
+        _sensing({"type": "fisheye", "name": "wide", "width": 480, "height": 480}),
+        page=G12_SENSOR_VIEWS["back"],
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_event",
+        _sensing({"type": "event", "name": "dvs"}),
+        actions=[(0.5, lambda pg: pg.behaviors.move("go2", 0.5, 0.0))],
+        page=G12_SENSOR_VIEWS["front"],
+        size=(1920, 1080),
+        settle=2.2,
+    ),
+    Shot(
+        "g12_sonar",
+        _sensing({"type": "sonar", "name": "ping", "range": 3.0}, extra=_sonar_world),
+        page=G12_SENSOR_VIEWS["side"],
+        size=(1920, 1080),
+        settle=2.0,
+    ),
+    Shot(
+        "g12_skin",
+        _sensing({"type": "skin", "name": "skin", "rows": 3, "cols": 4, "faces": ["top", "front", "left", "right"]}),
+        actions=[(0.5, _push_crate)],
+        page=G12_SENSOR_VIEWS["skin"],
+        size=(1920, 1080),
+        settle=2.4,
+    ),
+    Shot(
+        "g12_heat_gas",
+        _sensing(
+            {"type": "temperature", "name": "thermo"},
+            {"type": "gas", "name": "nose", "response_s": 3.0},
+            extra=_sources,
+        ),
+        actions=[(0.5, lambda pg: pg.behaviors.navigate("go2", [-1.8, 2.6]))],
+        page=SENSOR_DRAWER_VIEW_WIDE,
+        size=(1920, 1080),
+        settle=5.0,
     ),
 ]
 

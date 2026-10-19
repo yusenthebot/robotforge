@@ -8,6 +8,7 @@
 // in every message. Nothing here is drawn in a lesson.
 
 import * as THREE from "three";
+import { t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -208,7 +209,29 @@ export function mapUpdate(msg) {
   for (const robot of [...drawn.keys()]) if (!present.has(robot)) dropMap(robot);
   const label = $("map-toggle");
   if (label) label.hidden = drawn.size === 0;
+  readout(msg.robots);
   root.visible = shown && !api.inLesson();
+}
+
+// The readout: for the robot mapping (the selected one when several map), how far off its pose estimate is, and the
+// odometry alone, as the server measures against the truth it can see.
+function readout(robots) {
+  const hud = $("map-hud");
+  if (!hud) return;
+  const r = robots.find((x) => x.robot === api.selected()) ?? robots[0];
+  hud.hidden = !r || r.error_m === undefined || !shown || api.inLesson();
+  if (hud.hidden) return;
+  const fmt = (v) => Number(v).toFixed(2);
+  hud.replaceChildren();
+  const title = document.createElement("div");
+  title.textContent = t("map_hud_title", { robot: r.robot });
+  title.className = "bad";
+  const pose = document.createElement("div");
+  pose.innerHTML = t("map_hud_pose", { err: `<b>${fmt(r.error_m)}</b>`, odo: `<b>${fmt(r.odometry_error_m)}</b>` });
+  const mapped = document.createElement("div");
+  mapped.className = "bad";
+  mapped.textContent = t("map_hud_mapped", { m2: Math.round(r.mapped_m2), scans: r.scans });
+  hud.append(title, pose, mapped);
 }
 
 function dropMap(robot) {
@@ -225,6 +248,7 @@ function clearMaps() {
 
 export function mapFrame() {
   root.visible = shown && drawn.size > 0 && !api.inLesson();
+  if (drawn.size === 0) $("map-hud")?.setAttribute("hidden", "");
 }
 
 export function mapState() {
