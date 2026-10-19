@@ -38,6 +38,9 @@ def build_quad_world(home: Path) -> Any:
 
     os.environ["ROBOTFORGE_HOME"] = str(home)
     pg = Playground.with_demo()
+    if (home / "worlds" / "quad_lab").is_dir():  # built by an earlier run: its policies live in it
+        pg.open_world("quad_lab")
+        return pg
     pg.new_world("quad_lab")
     pg.add_robot("dog", describe="a robot dog")
     pg.add_sensor("dog", {"type": "encoders"})
@@ -49,6 +52,9 @@ def build_arm_world(home: Path) -> Any:
 
     os.environ["ROBOTFORGE_HOME"] = str(home)
     pg = Playground.with_demo()
+    if (home / "worlds" / "arm_lab").is_dir():
+        pg.open_world("arm_lab")
+        return pg
     pg.new_world("arm_lab")
     pg.add_robot("arm", template="arm")
     pg.add_sensor("arm", {"type": "encoders"})
@@ -165,9 +171,27 @@ def train(home: Path, only: list[str] | None, walk_steps: int, reach_steps: int,
         print("reach_search", json.dumps(numbers["reach_search"]["final"]))
 
 
+def media(home: Path, out: Path, only: list[str] | None) -> None:
+    import demos as D
+    import training_films
+
+    out.mkdir(parents=True, exist_ok=True)
+    consts = {"reach_task": REACH_TASK, "reach_steps": 200_000, "space": SEARCH_SPACE, "walk_speed": WALK_SPEED}
+    for demo in training_films.demos(home, consts):
+        if only and demo.name not in only:
+            continue
+        t0 = time.monotonic()
+        path = D.take(demo, out)
+        print(f"{demo.name}: {path} ({path.stat().st_size / 1e6:.1f} MB, {time.monotonic() - t0:.0f} s)", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
+    m = sub.add_parser("media")
+    m.add_argument("--home", type=Path, required=True)
+    m.add_argument("--out", type=Path, required=True)
+    m.add_argument("--only", nargs="*")
     t = sub.add_parser("train")
     t.add_argument("--home", type=Path, required=True)
     t.add_argument("--only", nargs="*")
@@ -176,6 +200,8 @@ def main() -> None:
     t.add_argument("--parallel", type=int, default=3)
     args = parser.parse_args()
     args.home.mkdir(parents=True, exist_ok=True)
+    if args.command == "media":
+        media(args.home.resolve(), args.out.resolve(), args.only)
     if args.command == "train":
         train(args.home.resolve(), args.only, args.walk_steps, args.reach_steps, args.parallel)
 

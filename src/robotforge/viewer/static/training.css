@@ -127,6 +127,7 @@
   #drawer:not([hidden]) ~ .training-view { display: none !important; }
 }
 @media (max-width: 600px) {
-  .training-view { left: var(--gutter); right: var(--gutter); width: auto; }
+  /* above the drive keys and the dock, which a phone shows below it */
+  .training-view { left: var(--gutter); right: var(--gutter); width: auto; max-height: calc(100% - 2 * var(--gutter) - 44px - 150px); }
 }
 .in-lesson #training-view { display: none !important; }
