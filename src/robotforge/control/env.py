@@ -38,7 +38,12 @@ DEFAULT_ROBOTS: dict[str, tuple[str, str]] = {
     "walk": ("quadruped", "dog"),
     "drive_to": ("rover", "rover"),
     "hover": ("drone", "drone"),
+    "press": ("arm", "arm"),
+    "wipe": ("arm", "arm"),
 }
+# Tasks that need something to work on: a table in front of the arm (the template arm reaches about 0.35 m).
+WORK_SURFACE = {"name": "table", "shape": "table", "size": [0.3, 0.3, 0.06], "pos": [0.2, 0.0]}
+SURFACE_TASKS = ("press", "wipe")
 MARKER = "goal_marker"
 UNSTABLE_PENALTY = 10.0  # reward lost when the simulation diverges (ends the episode)
 
@@ -230,9 +235,13 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
 
     try:
         templates.get(template).Params.model_validate(robot_params or {})  # readable errors before compiling
-        world = World.model_validate(
-            {"name": f"{task}_lab", "robots": [{"name": robot, "template": template, "params": robot_params or {}}]}
-        )
+        spec: dict[str, Any] = {
+            "name": f"{task}_lab",
+            "robots": [{"name": robot, "template": template, "params": robot_params or {}}],
+        }
+        if task in SURFACE_TASKS:
+            spec["objects"] = [WORK_SURFACE]
+        world = World.model_validate(spec)
     except ValidationError as exc:
         raise TaskError(readable(exc, "robot settings")) from exc
     except ValueError as exc:  # e.g. an unknown template
