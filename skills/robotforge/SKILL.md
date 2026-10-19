@@ -120,6 +120,7 @@ A plugin part is a shape for `add_object`, a plugin sensor a type for `add_senso
 A world's plugin files that were not written on this computer do not load until the user has approved them (every file under plugins/, as one set): read them with `plugins(action="show", world=NAME)`, tell the user what they do, and if they want them they run `robotforge plugins trust WORLD` in a terminal; you cannot, they are Python that runs with the user's rights. A world that uses a part from them does not open until then.
 `export_model()` writes the open world as MJCF for other simulators, `export_model(robot="go2")` one robot, `format="urdf"` a robot as URDF; meshes go beside it as OBJ files, and `check` in the result says the file was loaded again and matched.
 In scripts `sim.robot(name)` is one interface to any robot (`robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper`, `robot.on_step`), so one script runs on a template dog and on a Go2.
+`robotforge.flow` gives scripts behavior trees and state machines (`Tree(Sequence(Action(fn), Retry(Action(fn2), times=3))).run(sim, robot)`) and the viewer shows which node runs.
 See [references/extending.md](references/extending.md) for the plugin API with an example of each kind.
 
 ## References

@@ -1,11 +1,12 @@
 # Extending robotforge
 
 robotforge is meant to be bent to what you need.
-This page covers the three ways to do that without touching its source:
+This page covers four ways to do that without touching its source:
 
 - [Plugins](#plugins): your own parts, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
 - [Export](#export): a world or one robot written out as MJCF or URDF with meshes, so other simulators open it.
 - [One robot interface in scripts](#one-robot-interface-in-scripts): `robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper` and a per-step callback, so one script runs on a template dog and on a Go2, or on a template arm and on a Panda.
+- [Behavior trees and state machines](#behavior-trees-and-state-machines): task logic in a script, with the viewer showing which node runs.
 
 Every example below is run by the test suite (`tests/test_extending_docs.py`), so what you read here works.
 
@@ -247,3 +248,79 @@ dog is a quadruped and cannot work an arm; it can walk or drive: use robot.move
 
 Blocking calls (`arm.move_to`, `pick_and_place`) run to their end without calling the per-step callback.
 A Go2 carrying a PiPER arm has both: `robot.move` walks it and `robot.arm` works the arm.
+
+## Behavior trees and state machines
+
+`robotforge.flow` is a small library for the logic of a task: what to do first, what to do when it fails, what to check on the way.
+It needs nothing but a script's `sim`, and the viewer draws the tree while it runs: one row per node, the running one lit, a note such as `attempt 2 of 3` on a retry.
+
+```python title="behaviors/walk_tree.py" robots="dog,go2"
+from robotforge.flow import Action, Fallback, Retry, Sequence, Tree, WaitFor
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+start = robot.position
+
+
+def walked(metres):
+    def test(ctx):
+        x, y, _ = ctx.robot.position
+        return ((x - start[0]) ** 2 + (y - start[1]) ** 2) ** 0.5 >= metres
+
+    return test
+
+
+tree = Tree(
+    Sequence(
+        Action(lambda ctx: ctx.robot.move(speed=0.25), name="start walking"),
+        Fallback(
+            WaitFor(walked(0.4), timeout=6.0, name="walked 0.4 m"),
+            Retry(WaitFor(walked(0.2), timeout=3.0, name="walked 0.2 m"), times=2),
+            name="far enough",
+        ),
+        Action(lambda ctx: ctx.robot.stop(), name="stop"),
+        name="short walk",
+    ),
+    name="walk tree",
+)
+print(tree.run(sim, robot), "after", round(sim.time, 1), "s")
+print(tree.summary())
+```
+
+Every node answers success, failure or running, and the tree is ticked every 0.1 simulated seconds (`tick=`) until the root is done:
+
+| Node | What it does |
+|---|---|
+| `Action(fn)` | `fn(ctx)`: `True` or `None` is success, `False` failure, or return `SUCCESS`, `FAILURE`, `RUNNING`. A call that blocks (`arm.move_to`, `pick_and_place`) blocks inside the tick. A call the playground refuses (out of reach) is a failure, with its message as the node's note |
+| `Condition(fn)`, `sensor_is("lidar", "ahead.distance_m", ">", 0.5)` | success when it holds; a sensor the robot lacks is a failed condition, not an error |
+| `Wait(seconds)`, `WaitFor(test, timeout)` | running until the time has passed, or the test holds (failure at the timeout) |
+| `Sequence(*nodes)`, `Fallback(*nodes)` | all in order, or the first that works; they carry on from the child that was running, `reactive=True` re-checks the earlier ones every tick |
+| `Parallel(*nodes, success="all")` | all at once; `"any"` or a number of successes needed |
+| `Retry(node, times=3, wait=0)`, `Repeat(node, times=None)`, `Inverter(node)`, `Timeout(node, seconds)` | decorators |
+| `StateMachine(name, start)` with `State(name, do, enter, exit, result)` | states and `transition(source, target, when)`; a state with `result=SUCCESS` or `FAILURE` ends it; `do` may be a node and `when` may be `SUCCESS` or `FAILURE` of it |
+
+The context `ctx` has `ctx.sim`, `ctx.robot`, `ctx.time`, `ctx.bb` (a dictionary the nodes share) and `ctx.log(text)`, which goes into `tree.summary()` with when each node ended and how.
+A tree is a node too, so a state machine goes inside a tree and the other way round:
+
+```python title="behaviors/turn_machine.py" robots="dog,go2"
+from robotforge.flow import SUCCESS, Action, State, StateMachine, Tree
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+
+fsm = StateMachine("lap", start="straight")
+fsm.add(State("straight", do=Action(lambda ctx: ctx.robot.move(speed=0.25, seconds=1.0), name="walk 1 s")))
+fsm.add(State("turn", do=Action(lambda ctx: ctx.robot.move(speed=0.0, turn=1.2, seconds=1.0), name="turn 1 s")))
+fsm.add(State("done", result=SUCCESS))
+fsm.transition("straight", "turn", when=SUCCESS)  # the walk finished well
+fsm.transition("turn", "done", when=SUCCESS)
+
+tree = Tree(fsm, name="one corner")
+print(tree.run(sim, robot), "in", round(sim.time, 1), "s")
+```
+
+`Tree.run(sim, robot, tick=0.1, max_seconds=120, blackboard=None, show=True)` returns the status of the root; a tree that is still running after `max_seconds` simulated seconds stops with a failure.
+A node may appear once in a tree: make a second one for a second place.
+

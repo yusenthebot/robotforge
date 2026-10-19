@@ -80,3 +80,29 @@ arm.gripper.close()
 `robot.kind`, `robot.sensors[name]` (also `.names()`, `.get(name, default)`, `.imu`), `robot.move(speed, turn, seconds=None)`, `robot.stop()`, `robot.pose(name)`, `robot.arm` / `robot.arms` (`move_to`, `pick_and_place`), `robot.gripper` (`open`, `close`), `robot.position`, `robot.heading`, `robot.joints`, `robot.set_controls`, `robot.start(controller, **options)`, `robot.on_step(fn, every)`, `robot.run(seconds)`.
 A robot that cannot do something raises an error that says what it can do instead (a dog has no arm).
 Blocking calls (`arm.move_to`, `pick_and_place`) do not call the per-step callback.
+
+## Behavior trees and state machines
+
+```python
+from robotforge.flow import Action, Condition, Fallback, Retry, Sequence, Tree, sensor_is
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot("go2")
+tree = Tree(
+    Sequence(
+        sensor_is("lidar", "ahead.distance_m", ">", 0.5, name="path clear"),
+        Retry(Action(lambda ctx: ctx.robot.arm.pick_and_place("cube", "tray"), name="fetch the cube"), times=3),
+        name="errand",
+    ),
+    name="cube errand",
+)
+print(tree.run(sim, robot))  # SUCCESS or FAILURE; the viewer's tree panel follows it
+print(tree.summary())
+```
+
+Nodes: `Action(fn)` (fn(ctx) returns True, None, False or a Status), `Condition(fn)`, `sensor_is(sensor, "path.to.value", op, number)`, `Wait(seconds)`, `WaitFor(test, timeout)`, `Sequence`, `Fallback`, `Parallel(success="all"|"any"|n)`, `Retry(node, times, wait)`, `Repeat`, `Inverter`, `Timeout(node, seconds)`, `StateMachine(name, start)` with `State(...)` and `transition(a, b, when)`.
+`ctx` has `sim`, `robot`, `time`, `bb` (shared dictionary) and `log(text)`.
+A call the playground refuses inside an `Action` is a failed node with its message as the note, so `Retry` and `Fallback` can handle it.
+See docs/EXTENDING.md in the robotforge repository for every node with an example.
+
