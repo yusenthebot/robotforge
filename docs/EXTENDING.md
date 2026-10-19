@@ -70,6 +70,47 @@ Then `add_object(name="sign", shape="signpost", pos=[1, 0])`, or `shape: signpos
   `at` is the middle of the shape in the part's own frame (x forward, y left, z up from the ground), `rotate` is degrees about x, y, z, `collide=False` makes it a picture only.
 - A part is checked when it is registered, at its default size, so a mistake shows up with the plugin's file named.
 
+### Generators: modelled objects with grasp hints
+
+A part is a handful of boxes.
+A generator is for a real thing: a mesh that looks like it, convex pieces that collide like it, a mass and friction from what it is made of, and grasp hints (where a gripper takes hold of it) that the arm planner uses.
+It is a function that gets a builder, `g`, and describes the object once in its own frame (origin at the middle of its base, z up, resting the way it is meant to stand or lie).
+
+```python title="plugins/coaster.py"
+from robotforge.design.visuals import mesh
+from robotforge.objects import Range, generator, kit
+
+
+@generator(
+    "coaster",
+    size="[diameter]",
+    default_size=(0.09,),
+    color="brown",
+    material="wood",
+    summary="a cork coaster",
+    keywords=("coaster", "mat"),
+    params={"edge": Range(0.001, 0.004, 0.002, "how round its edge is, m")},
+)
+def coaster(g):
+    d, t = g.size[0], 0.006
+    disc = mesh.cylinder(d / 2, t, 32, bevel=g.p("edge"), z0=0.0)  # how it looks
+    g.part(disc, "wood", [kit.cylinder(d / 2, t / 2, (0, 0, t / 2))])  # what it is made of, how it collides
+    g.grasp("edge", (d / 2 - 0.004, 0, t / 2), (1, 0), 0.012, 1.0, "pinch its rim")  # where to take hold of it
+    g.anchor("top", (0, 0, t))
+```
+
+Then `add_object(name="c", shape="coaster")`, `add_object(name="c", describe="a big cork coaster", seed=3)` or `shape: coaster` in `world.yaml`.
+
+- A seed varies what `params` lists (`Range(low, high, default)`, `Choice(...)`, `Flag(...)`): the same shape, size, seed and parameters always build the same object, and a caller can fix any of them with `params`.
+- `g.part(mesh, material, pieces)` adds a solid.
+  Its mass is the mesh's volume times the material's density (`robotforge.objects.materials`), its friction the material's.
+  `pieces` are convex shapes from `robotforge.objects.kit`: `box`, `cylinder`, `capsule`, `sphere`, `ellipsoid`, `hull(mesh)`, and for hollow things `vessel(...)`, a floor and a ring of boxes round a wall.
+  `g.decor(mesh, rgba)` adds a look with no mass (a printed label: `robotforge.objects.labels`).
+- `g.grasp(kind, pos, jaw, opening, score, note)` is a place a two-finger gripper takes hold of, `pos` where the tool point goes, `jaw` the horizontal direction the jaws close along (`(0, 0)`: any), `opening` the width they must open to straddle that part.
+- Meshes come from `robotforge.design.visuals.mesh` (lathe, loft, tube, rounded_box, ...) and `robotforge.objects.profiles` and `shapes`.
+  A mesh that is not convex is cut into convex pieces by `robotforge.objects.collision.decompose` (CoACD: slow, so the result is kept).
+- A generator is checked when it is registered, at its default size, and appears in `plugins()` as a part.
+
 ### Sensors: new types for `add_sensor`
 
 A sensor is a function that looks at the simulation and returns what it measures.

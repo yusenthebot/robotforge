@@ -69,7 +69,7 @@ def world(**robot) -> Playground:
 
 def test_the_page_has_all_the_examples_it_promises():
     titles = set(examples())
-    assert {"plugins/signpost.py", "plugins/geiger.py", "plugins/sweep.py", "plugins/square.py"} <= titles
+    assert {"plugins/signpost.py", "plugins/coaster.py", "plugins/geiger.py", "plugins/sweep.py", "plugins/square.py"} <= titles
     assert {"behaviors/tour.py", "behaviors/reach.py", "behaviors/patrol.py", "check_export.py"} <= titles
 
 
@@ -81,7 +81,7 @@ def test_the_page_follows_the_house_style():
 
 def test_every_plugin_example_loads(plugins_loaded):
     assert not REGISTRY.problems(), REGISTRY.problems()
-    assert set(REGISTRY.of("part")) == {"signpost"} and set(REGISTRY.of("sensor")) == {"geiger"}
+    assert set(REGISTRY.of("part")) == {"signpost", "coaster"} and set(REGISTRY.of("sensor")) == {"geiger"}
     assert set(REGISTRY.of("controller")) == {"sweep"} and set(REGISTRY.of("behavior")) == {"square"}
 
 
@@ -92,6 +92,17 @@ def test_the_part_example_places_and_stands(plugins_loaded):
     sign = pg.session.model
     assert mujoco.mj_name2id(sign, mujoco.mjtObj.mjOBJ_GEOM, "sign") >= 0
     assert "signpost" in pg.store.file.read_text(encoding="utf-8")
+
+
+def test_the_generator_example_is_a_shape_with_a_grasp_and_comes_to_rest(plugins_loaded):
+    from robotforge import objects
+
+    pg = world(name="arm", template="arm")
+    pg.add_object("c", shape="coaster", pos=[0.4, 0.2], seed=2)
+    pg.run_fast(lambda: False, 0.5)
+    assert objects.object_for("coaster").grasps[0].kind == "edge"
+    assert pg.session.data.xpos[pg.session.model.body("c").id][2] == pytest.approx(0.0, abs=0.004)
+    assert "seed: 2" in pg.store.file.read_text(encoding="utf-8")
 
 
 def test_the_sensor_example_reads_the_distance_to_its_source(plugins_loaded):

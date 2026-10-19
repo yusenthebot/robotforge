@@ -82,7 +82,9 @@ arms") makes a new robot from one sentence (legs, wheels, a snake, an arm, a hum
 sensors) that moves at once; update_robot(describe="make it longer") changes it, "another one" is a variation.
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
-button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
+button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Real things (mug, cup, bowl, plate, bottle,
+can, fruit, packages, books, tools) are modelled objects with grasp hints: add_object(shape="mug", seed=3) or
+add_object(describe="a tall blue mug with a big handle"). Any arm can hold with
 end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
 add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
@@ -565,6 +567,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
         strength: float | None = None,
+        describe: str | None = None,
+        seed: int | None = None,
+        params: dict[str, Any] | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -582,10 +587,20 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes).
         Sources for temperature and gas sensors (add_sensor): heat_source [diameter] (strength = degrees of rise at the
         source, default 80) and gas_source [diameter] (strength = ppm at the source, default 600); nothing collides
-        with them."""
+        with them.
+        Real things (each with a modelled mesh, convex collision, mass and friction from its material, and grasp hints
+        the arm planner uses: a mug's handle, a bottle's body, a tool's shaft): mug, cup, bowl, plate, bottle, can
+        [diameter, height]; apple, orange, pear [diameter]; banana, screwdriver, hammer, wrench [length];
+        package, tin, brick, squeeze_bottle [length, width, height]; book [length, width, thickness]. Add one by name
+        (shape="mug"), by description (describe="a tall blue mug with a big handle"; "a wine bottle"; "a fruit"; a
+        description sets the shape, size, color and parameters, and the answer says how it was read), and vary it with
+        seed (the same seed always builds the same object; a seed also picks a color when none is given). params sets
+        what a shape lets vary, e.g. {"handle": "square"} for a mug, {"fill": 0.3} for a bottle, {"style": "paper"}
+        for a cup; plugins() lists generators plugins add."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
             fields |= {"material": material, "speed": speed, "strength": strength}
+            fields |= {"describe": describe, "seed": seed, "params": params}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()

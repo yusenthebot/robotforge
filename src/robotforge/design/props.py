@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import mujoco
 import numpy as np
@@ -260,8 +261,19 @@ def build(
     quat: list[float],
     fixed: bool,
     mass: float | None,
+    seed: int | None = None,
+    params: dict | None = None,
 ) -> None:
-    """Add a prop as one body at `base`, turned by `quat`."""
+    """Add a prop as one body at `base`, turned by `quat`. `seed` and `params` are for generated objects
+    (robotforge.objects), which vary with them."""
+    builder = _BUILDERS.get(shape)
+    if builder is not None:  # a generated object: its own collision pieces, masses and meshes
+        body = spec.worldbody.add_body(name=name, pos=base, quat=quat)
+        if not fixed:
+            body.add_freejoint(name=name)
+        builder(spec=spec, body=body, owner=name, size=size, rgba=rgba, seed=seed, params=params, mass=mass,
+                movable=not fixed)  # fmt: skip
+        return
     parts = _PARTS[shape](size, rgba)
     # Look the name up in the list: after spec.attach, MuJoCo 3.15's spec.material() misses materials added later.
     if not any(m.name == MATTE for m in spec.materials):
@@ -558,24 +570,36 @@ _PARTS: dict[str, Callable[[list[float], list[float]], list[Part]]] = {
 # ---- shapes added by plugins (robotforge.extend): the same tables, so they place, save and build like the rest ----
 
 _FOOTPRINTS: dict[str, Callable[[list[float]], tuple[float, float]]] = {}
+_BUILDERS: dict[str, Callable[..., Any]] = {}  # shape -> builder of a generated object (robotforge.objects)
 BUILT_IN = tuple(SHAPES)  # the shapes robotforge ships, in order; a plugin shape cannot take one of these names
 
 
 def register_shape(
     name: str,
     info: ShapeInfo,
-    parts: Callable[[list[float], list[float]], list[Part]],
+    parts: Callable[[list[float], list[float]], list[Part]] | None,
     footprint_of: Callable[[list[float]], tuple[float, float]],
     mass: float | None = None,
+    builder: Callable[..., Any] | None = None,
+    builtin: bool = False,
 ) -> None:
-    """Make `name` a shape add_object takes. `parts(size, rgba)` gives its pieces; `mass` is a loose one's default."""
-    global PROPS
+    """Make `name` a shape add_object takes. `parts(size, rgba)` gives its pieces; `mass` is a loose one's default.
+    A generated object has a `builder` instead (objects/registry.py), which adds its own geoms and meshes to a body;
+    `builtin` marks one robotforge ships, which a plugin cannot take the name of or remove."""
+    global PROPS, BUILT_IN
     if name in SHAPES:
         raise ValueError(f"{name!r} is already a shape")
+    if parts is None and builder is None:
+        raise ValueError(f"shape {name!r} needs parts or a builder")
     SHAPES[name] = info
-    _PARTS[name] = parts
+    if parts is not None:
+        _PARTS[name] = parts
+    if builder is not None:
+        _BUILDERS[name] = builder
     _FOOTPRINTS[name] = footprint_of
     PROPS = (*PROPS, name)
+    if builtin:
+        BUILT_IN = (*BUILT_IN, name)
     if mass is not None:
         DEFAULT_MASS[name] = mass
 
@@ -585,6 +609,11 @@ def unregister_shape(name: str) -> None:
     global PROPS
     if name in BUILT_IN:
         raise ValueError(f"{name!r} is built in")
-    for table in (SHAPES, _PARTS, _FOOTPRINTS, DEFAULT_MASS):
+    for table in (SHAPES, _PARTS, _FOOTPRINTS, DEFAULT_MASS, _BUILDERS):
         table.pop(name, None)
     PROPS = tuple(p for p in PROPS if p != name)
+
+
+# The generated objects robotforge ships (mugs, bottles, ...): registered here so they are shapes before world.py
+# builds its list of them.
+from robotforge.objects import library as _library  # noqa: E402,F401

@@ -235,6 +235,10 @@ class ObjectEntry(_Strict):
     )
     # A source's strength: degrees of rise at a heat source, ppm at a gas source (sensors/fields.py)
     strength: float | None = Field(None, gt=0, le=10000, exclude_if=_unset)
+    # A generated object (mug, bottle, hammer, ...: robotforge.objects) varies with its seed, and the caller may fix
+    # some of what varies (params, e.g. {"handle": "d"}); the same shape, size, seed and params build the same object.
+    seed: int | None = Field(None, ge=0, le=2**31 - 1, exclude_if=_unset)
+    params: dict[str, Any] | None = Field(None, exclude_if=_unset)
 
     @model_validator(mode="before")
     @classmethod
@@ -292,7 +296,23 @@ class ObjectEntry(_Strict):
             )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
+        if self.seed is not None or self.params:
+            self._generated_fields()
         return self
+
+    def _generated_fields(self) -> None:
+        from robotforge.objects.registry import GENERATORS
+
+        gen = GENERATORS.get(self.shape)
+        if gen is None:
+            raise ValueError(
+                f"object {self.name!r}: seed and params are for generated objects ({', '.join(sorted(GENERATORS))}); "
+                f"a {self.shape} has none"
+            )
+        try:
+            self.params = gen.check_params(self.params) or None
+        except ValueError as exc:
+            raise ValueError(f"object {self.name!r}: {exc}") from exc
 
 
 class World(_Strict):
@@ -884,7 +904,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         return
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
-        props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
+        props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass, obj.seed, obj.params)
         if obj.shape in props.SOURCES:
             kind, default = props.SOURCES[obj.shape]
             at = props.source_lift(obj.shape, obj.size[0])
