@@ -214,6 +214,9 @@ class Playground:
         hub.state_extras = lambda: {"mode": modes.current(self)}
         hub.sensor_stream = self.sensors.viewer_message
         hub.map_stream = self.perception.viewer_message
+        from robotforge.training.live import install as install_training
+
+        install_training(self, hub)  # the Training panel: the run that changed last, its play and stop buttons
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None

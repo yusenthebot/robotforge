@@ -231,6 +231,7 @@ def env_spec(
     *,
     robot: Any = None,
     world: Any = None,
+    world_dir: str | Path | None = None,
     scope: str | None = None,
     task_params: dict[str, Any] | None = None,
     observation: str = "auto",
@@ -245,11 +246,11 @@ def env_spec(
     """The plain-data description of an environment (see make_env for the arguments)."""
     if observation not in OBSERVATIONS:
         raise TaskError(f"observation is one of {', '.join(OBSERVATIONS)}, not {wording.short(observation)}")
-    world_dir: Path | None = None
     if world is None:
         data, name = _default_world(task, robot)
     else:
-        found, world_dir = _as_world(world)
+        found, opened = _as_world(world)
+        world_dir = opened or world_dir  # a saved world's own folder wins
         data = found.model_dump(mode="json")
         if isinstance(robot, str):
             name = robot
@@ -365,6 +366,7 @@ def make_env(task: str, **kwargs: Any) -> TrainingEnv:
     robot: a robot of `world` by name; with no world, a template or library name, or a dict like a world.yaml
         robot entry (its `sensors` too), placed alone on a floor. Default: the task's usual robot.
     world: a World, its dict, or a saved world's name or path. Default: the robot alone on a flat floor.
+    world_dir: the folder a World or dict was opened from, for robots given as files.
     scope: "robot" (the robot, its mounts, the floor and terrain; the default) or "world" (everything in it,
         needed by saved tasks).
     task_params: the task's own settings, e.g. {"speed": 0.4}.

@@ -8,6 +8,7 @@
   <!-- Inline, so the browser does not ask the server for /favicon.ico and log a 404. -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='26' height='18' rx='6' fill='%23f2a900'/%3E%3Ccircle cx='11.5' cy='18' r='3' fill='%231b2027'/%3E%3Ccircle cx='20.5' cy='18' r='3' fill='%231b2027'/%3E%3Crect x='15' y='3' width='2' height='6' fill='%23f2a900'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="static/style.css">
+  <link rel="stylesheet" href="static/training.css">
   <script type="importmap">
     { "imports": { "three": "./static/vendor/three/three.module.min.js" } }
   </script>
@@ -32,6 +33,10 @@
       </button>
     </div>
     <div class="top-actions">
+      <button class="pill" id="training-toggle" type="button" aria-expanded="false" aria-controls="training-view" hidden>
+        <span class="dot" aria-hidden="true"></span>
+        <span data-i18n="training_button">Training</span>
+      </button>
       <button class="pill" id="drawer-toggle" type="button" aria-expanded="false" aria-controls="drawer">
         <span id="drawer-label" data-i18n="robots">Robots</span>
         <span class="count" id="drawer-count"></span>
@@ -153,6 +158,7 @@
     </section>
   </aside>
 
+  <aside class="training-view" id="training-view" hidden aria-live="off"></aside>
   <aside class="sensor-views" id="sensor-views" hidden></aside>
   <aside class="map-hud" id="map-hud" hidden></aside>
 
