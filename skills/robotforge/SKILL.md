@@ -109,9 +109,19 @@ The viewer has its own hands-on lessons behind the Learn button (学习): PID co
 Each is a guided experiment with live plots, quizzes and checks that run on the physics, and it works without you.
 When a beginner wants to understand how robots work, open the viewer and suggest one; afterwards, offer to build on it in their own world.
 
+## Extending
+
+The user's own code adds to robotforge: parts, sensors, controllers and behaviors, written as small Python plugins.
+`write_script(name, code, plugin=true)` saves one as `plugins/<name>.py` of the open world and loads it at once; the result says what it added or the line where it failed.
+`plugins()` lists everything plugins added and every file that did not load, with why; `plugins(action="reload")` reads the folders again.
+A plugin part is a shape for `add_object`, a plugin sensor a type for `add_sensor`.
+A world's plugin files that were not written on this computer do not load until you have read them, told the user what they do and called `plugins(action="trust")`: they are Python that runs with the user's rights.
+See [references/extending.md](references/extending.md) for the registration API with an example of each.
+
 ## References
 
 - [references/recipes.md](references/recipes.md): walk a dog, pick and place, compare LQR and MPC, write a script, import a URDF, build a new robot, train a policy.
 - [references/scripts.md](references/scripts.md): the script API and a complete closed-loop example.
 - [references/troubleshooting.md](references/troubleshooting.md): common mistakes and how to recover.
+- [references/extending.md](references/extending.md): plugins: parts, sensors, controllers, behaviors; exporting a world or robot; the unified robot interface in scripts.
 - [references/teaching.md](references/teaching.md): tone, short explanations of core ideas, how a teaching turn flows.
