@@ -1,0 +1,243 @@
+# Extending robotforge
+
+robotforge is meant to be bent to what you need.
+This page covers the three ways to do that without touching its source:
+
+- [Plugins](#plugins): your own parts, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
+- [Export](#export): a world or one robot written out as MJCF or URDF with meshes, so other simulators open it.
+- [One robot interface in scripts](#one-robot-interface-in-scripts): `robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper` and a per-step callback, so one script runs on a template dog and on a Go2, or on a template arm and on a Panda.
+
+Every example below is run by the test suite (`tests/test_extending_docs.py`), so what you read here works.
+
+## Plugins
+
+A plugin is a Python file that registers things with `robotforge.extend`.
+It is your own code running on your own computer with your own rights, like a script.
+Nothing is sandboxed.
+
+### Where plugins live
+
+| Place | Loaded | Trusted |
+|---|---|---|
+| `~/.robotforge/plugins/` (or the folders in `ROBOTFORGE_PLUGINS`, joined with `:` on macOS and Linux, `;` on Windows) | when robotforge starts, and on `plugins(action="reload")` | always: you put the files there |
+| `plugins/` inside a world's folder | when the world is opened | only files written on this computer, or approved with `plugins(action="trust")` |
+
+A world can come from somebody else, and a plugin in it is code that would run the moment you open it.
+So a world's plugin files that were not written here do not load.
+`open_world` says so, names the files, and the agent is told to read them and tell you what they do before trusting them.
+A file that changes after it was trusted, or a world copied to another place, is not trusted again.
+`write_script(name, code, plugin=true)` writes a plugin into the open world, trusts it (you asked for it) and loads it.
+
+If a file fails to load, nothing it registered is kept, and the error names the file and the line:
+
+```text
+plugins() ->
+  not_loaded: {"lab/plugins/geiger.py": "line 12: NameError: name 'distnce' is not defined"}
+```
+
+The other plugin files still load.
+`plugins()` lists what is loaded and what failed, `plugins(action="reload")` reads the folders again after an edit, and `robotforge plugins` on the command line does the first without an agent.
+In Python, the same registry is `robotforge.extend.REGISTRY`.
+
+### Parts: new shapes for `add_object`
+
+A part is a function from a size and a color to a list of boxes, cylinders and spheres.
+Placing it on the ground or a table, yaw, mass, saving it in `world.yaml` and drawing it in the viewer are what any shape gets.
+
+```python title="plugins/signpost.py"
+from robotforge.extend import Box, Cylinder, part
+
+
+@part("signpost", size="[height]", default_size=[1.2], fixed=True, color="brown", summary="a post with a board")
+def signpost(size, rgba):
+    height = size[0]
+    return [
+        Cylinder(0.05, height, at=[0, 0, height / 2]),
+        Box([0.4, 0.03, 0.2], at=[0, 0, height - 0.1], color=1.3),  # a number: lighter than the part's color
+    ]
+```
+
+Then `add_object(name="sign", shape="signpost", pos=[1, 0])`, or `shape: signpost` in `world.yaml`.
+
+- `size` says what the numbers mean, `default_size` is used when none is given, `sizes=(1, 2)` allows more than one length.
+- `fixed=True` makes it never move; otherwise it is loose, with `mass` kg (default 5).
+- Shapes: `Box(size, at, color, rotate, collide)`, `Cylinder(diameter, height, ...)`, `Sphere(diameter, ...)`.
+  `at` is the middle of the shape in the part's own frame (x forward, y left, z up from the ground), `rotate` is degrees about x, y, z, `collide=False` makes it a picture only.
+- A part is checked when it is registered, at its default size, so a mistake shows up with the plugin's file named.
+
+### Sensors: new types for `add_sensor`
+
+A sensor is a function that looks at the simulation and returns what it measures.
+It sits on any body of any robot, and has a rate, noise and latency like the built-in ones.
+
+```python title="plugins/geiger.py"
+from robotforge.extend import look, sensor
+
+
+@sensor(
+    "geiger",
+    summary="how close the hot source is: 1 on top of it, 0 at the radius",
+    channels=("level",),
+    params={"source": "hot", "radius": 2.0},
+    at="top",
+    appearance=look("cylinder", [0.07, 0.035], "yellow"),
+)
+def geiger(ctx):
+    distance = ctx.distance(ctx.params["source"])
+    return {"level": max(0.0, 1.0 - distance / ctx.params["radius"]), "distance_m": distance}
+```
+
+Then `add_sensor(robot="dog", type="geiger", options={"source": "cube", "radius": 3, "noise": 0.02, "rate_hz": 10})`.
+The reading comes back from `read_sensors`, `observe` and `sim.sensor(robot, "geiger")` in scripts; the viewer's sensor list shows it, and the yellow puck is drawn where it sits.
+
+- `channels` are the names in the reading that `noise` applies to.
+- `params` are the options `add_sensor` takes for it, with defaults; an option not listed is refused with the ones that are.
+- `ctx` is a `SensorContext`: `ctx.pos` and `ctx.rot` (where the sensor is and which way it faces), `ctx.params`, `ctx.time`, `ctx.position(name)`, `ctx.distance(name)`, `ctx.ray(direction, max_range)` (the first thing a ray from the sensor meets), `ctx.rng`, and `ctx.model`, `ctx.data` for anything else.
+- A class works too: `__init__(self, ctx)` once, `read(self, ctx)` at every reading, so a sensor can keep a count or a filter.
+  An edit of the world starts it again.
+- A sensor that raises does not stop the simulation: its reading is `{"error": "..."}` until it is fixed.
+
+### Controllers: feedback inside the simulation
+
+A controller is called every `1 / rate_hz` seconds of simulated time and sets actuators.
+It keeps running until `stop(robot)`, a `move`, or another controller takes the robot.
+
+```python title="plugins/sweep.py"
+import math
+
+from robotforge.extend import controller
+
+
+@controller("sweep", summary="swings one joint to and fro", params={"joint": "shoulder", "amplitude": 0.4, "hz": 0.5})
+def sweep(ctx):
+    p = ctx.params
+    ctx.set(p["joint"], p["amplitude"] * math.sin(2 * math.pi * p["hz"] * ctx.time))
+```
+
+Start it with `plugins(action="run", name="sweep", robot="arm", options={"amplitude": 0.6}, seconds=5)`, or from a script with `robot.start("sweep", amplitude=0.6)`.
+
+- `ctx` is a `StepContext`: `ctx.joint(name)`, `ctx.velocity(name)`, `ctx.joints()`, `ctx.set(actuator, value)`, `ctx.position`, `ctx.heading_deg`, `ctx.position_of(body)`, `ctx.sensor(name)`, `ctx.time`, `ctx.dt`, `ctx.params`.
+  Names are the robot's own, without the `robot/` prefix.
+- A class with `__init__(self, ctx)` and `update(self, ctx)` keeps state.
+- A controller that raises stops, and its status says why; the world goes on.
+
+### Behaviors: routines for any robot
+
+A behavior is a function written against the [robot interface](#one-robot-interface-in-scripts), so it runs on any robot that can do what it asks.
+It runs like a script: its own process, in lockstep with the simulation, with a time limit.
+
+```python title="plugins/square.py"
+from robotforge.extend import behavior
+
+
+@behavior("square", summary="walks or drives a square", params={"side_s": 1.5, "speed": 0.2})
+def square(robot, side_s, speed):
+    start = robot.position
+    for _ in range(4):
+        robot.move(speed=speed, seconds=side_s)
+        robot.move(speed=0.0, turn=1.2, seconds=1.0)
+    end = robot.position
+    return {"kind": robot.kind, "gap_m": round(((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5, 2)}
+```
+
+Run it with `plugins(action="run", name="square", robot="dog", options={"side_s": 2})`; the result is what it returns.
+Your own script can call it too, on any robot; the script's process reads the plugin folders itself:
+
+```python title="behaviors/patrol.py" robots="dog,go2"
+from robotforge.extend import call
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+print(robot.kind, call("square", robot, side_s=1.0))
+```
+
+### Using plugins from Claude or GPT
+
+The agent writes the file for you (`write_script(name, code, plugin=true)`), then uses it with the ordinary tools: `add_object(shape="signpost")`, `add_sensor(type="geiger")`, `plugins(action="run", ...)`.
+Ask for what you want ("add a sensor that tells me how close the red cube is") and it writes the plugin.
+
+## Export
+
+`export_model` writes the open world, or one robot, for other simulators.
+
+- `export_model()` writes the whole world as MJCF.
+- `export_model(robot="go2")` writes just that robot (on the floor) as MJCF.
+- `export_model(robot="go2", format="urdf")` writes the robot as URDF.
+- `to="/some/folder"` chooses the folder; the default is `exports/` in the world's folder.
+
+On the command line: `robotforge export <world> [--robot NAME] [--format mjcf|urdf] [--to FOLDER]` does the same and exits 1 if the check found a difference.
+
+Beside the `.xml` or `.urdf` there is a `meshes/` folder of OBJ files, one per mesh.
+The result says where, how many files, and a `check`: the export is loaded again in MuJoCo and compared with the world.
+For MJCF the check compares bodies, joints, actuators and geoms by name, the total mass, the position of every body and every mesh vertex in the world (agreeing to a millionth of a meter).
+For URDF it compares bodies, joints (by name, type and limits) and mass.
+
+Open an MJCF with `python -m mujoco.viewer --mjcf=<file>`; any tool that reads URDF opens the other.
+The sensors robotforge added are kept in the MJCF as custom text, which other tools ignore.
+
+URDF is a tree of rigid links, so it cannot say everything MuJoCo can; `notes` lists what changed:
+
+- a floating base (a dog, a humanoid) is the root link with no joint;
+- a body with several joints gets massless links between them, a ball joint becomes three revolute joints;
+- capsules become cylinders and ellipsoids become spheres;
+- closed loops and couplings (a Panda's two fingers, an arm's gripper) are not written.
+
+```python title="check_export.py"
+import mujoco
+
+model = mujoco.MjModel.from_xml_path("exports/go2_urdf/go2.urdf")
+print("bodies", model.nbody, "joints", model.njnt)
+```
+
+## One robot interface in scripts
+
+`sim.robot(name)` gives a script one interface to any robot, so the same script runs on a template dog and on a Go2, or on a template arm and on a Panda.
+
+```python title="behaviors/tour.py" robots="dog,go2"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+seen = []
+robot.on_step(lambda r: seen.append(round(r.time, 1)), every=0.5)
+
+start = robot.position
+robot.move(speed=0.25)  # walks, or drives, until robot.stop()
+robot.run(2.0)  # two simulated seconds pass; the callback fires as they do
+robot.stop()
+print(robot.kind, "moved", round(abs(robot.position[0] - start[0]), 2), "m; callback ran", len(seen), "times")
+```
+
+```python title="behaviors/reach.py" robots="arm,panda"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+x, y, z = robot.position
+tool = robot.arm.move_to([x + 0.2, y, 0.15], gripper="open")
+robot.gripper.close()
+print(robot.kind, "tool at", [round(v, 2) for v in tool])
+```
+
+What a `Robot` has:
+
+| | |
+|---|---|
+| `robot.kind` | `arm`, `quadruped`, `humanoid`, `rover`, ... as `robots` says |
+| `robot.sensors` | `robot.sensors["lidar"]`, `robot.sensors.imu`, `robot.sensors.names()`, `robot.sensors.get("x", default)`, `"imu" in robot.sensors` |
+| `robot.move(speed, turn, seconds=None)`, `robot.stop()`, `robot.pose(name)` | walk, drive or swim; with `seconds` it runs that long and stops |
+| `robot.arm`, `robot.arms`, `robot.gripper` | `arm.move_to([x, y, z], gripper=None)`, `arm.pick_and_place(obj, target)`, `gripper.open()`, `gripper.close()`; an arm on a dog is `go2/arm` |
+| `robot.position`, `robot.heading`, `robot.joints`, `robot.time` | where it is |
+| `robot.set_controls({"shoulder": 0.3})` | raw actuator targets by the robot's own names |
+| `robot.start(controller, **options)` | hand it to a plugin controller |
+| `robot.on_step(fn, every=0.02)`, `robot.run(seconds)` | `fn(robot)` is called every `every` simulated seconds while time passes through `run()` or `sim.step()` |
+
+A robot cannot do what its body cannot, and says so with what it can do instead:
+
+```text
+dog is a quadruped and cannot work an arm; it can walk or drive: use robot.move
+```
+
+Blocking calls (`arm.move_to`, `pick_and_place`) run to their end without calling the per-step callback.
+A Go2 carrying a PiPER arm has both: `robot.move` walks it and `robot.arm` works the arm.

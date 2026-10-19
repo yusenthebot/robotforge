@@ -158,11 +158,16 @@ map="own") then goes there by the robot's own map and pose alone, through space 
 point to go to is the task it is given; the way is its own). The viewer draws the growing map and the particles.
 
 Plugins: the user can extend robotforge with their own Python (a file in ~/.robotforge/plugins, or in the open
-world's plugins/ folder): new parts for add_object (shape="their_name"), new sensor types for add_sensor, and
-controllers and behaviors for scripts. write_script(name, code, plugin=true) writes one for the user and loads it;
-plugins() lists what plugins added and which files failed to load, with the reason, plugins(action="reload") reads the
-folders again. A world's plugin files that were not written here do not load until you have read them, told the
-user what they do and called plugins(action="trust"): they are code that runs on this computer.
+world's plugins/ folder): new parts for add_object (shape="their_name"), new sensor types for add_sensor, controllers
+(feedback inside the simulation) and behaviors (routines for any robot). write_script(name, code, plugin=true) writes
+one for the user and loads it; plugins() lists what plugins added and which files failed to load, with the reason,
+plugins(action="reload") reads the folders again, plugins(action="run", name=..., robot=...) starts a controller or
+behavior. A world's plugin files that were not written here do not load until you have read them, told the user what
+they do and called plugins(action="trust"): they are code that runs on this computer.
+
+Export: export_model() writes the open world as MJCF for other simulators, export_model(robot="go2") one robot,
+format="urdf" a robot as URDF, with the meshes as OBJ files; it loads the file again and its "check" says whether
+bodies, joints, masses and meshes match the world.
 
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
@@ -387,14 +392,15 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             n: {"kind": a.kind, "stall_torque_nm": a.stall_torque, "speed_rad_s": a.no_load_speed, "note": a.note}
             for n, a in components.ACTUATORS.items()
         }
-        return _json(
-            {
-                "templates": templates.catalog(),
-                "designs": gallery.catalog(),
-                "parts": parts,
-                "colors": list(components.COLORS),
-            }
-        )
+        listing = {
+            "templates": templates.catalog(),
+            "designs": gallery.catalog(),
+            "parts": parts,
+            "colors": list(components.COLORS),
+        }
+        if REGISTRY.items:  # what the user's plugins add: shapes for add_object, sensor types, controllers, behaviors
+            listing["plugins"] = REGISTRY.report()
+        return _json(listing)
 
     @server.tool()
     def list_library(
@@ -852,7 +858,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
     perception_tools.register(server, playground, run_until)
-    plugin_tools.register(server, playground)
+
+    async def run_file(path: Path, max_sim_seconds: float, args: list[str]) -> dict[str, Any]:
+        runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
+        return await runner.run(path, max_sim_seconds=max_sim_seconds, args=args)
+
+    plugin_tools.register(server, playground, run_until, run_file)
     mount_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
@@ -979,6 +990,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             sim.move_arm(robot, [x, y, z], gripper="open"|"close"|None)  # waits until arrived
             sim.gripper(robot, "open"|"close"); sim.pick_and_place(robot, obj, target) -> bool
             sim.run_policy(robot, policy_name)  # a trained policy drives it until stop
+            robot = sim.robot(name)  # one interface to any robot (a dog or a Go2, an arm or a Panda): robot.kind,
+            # robot.sensors["imu"], robot.move(speed, turn, seconds=2), robot.stop(), robot.arm.move_to([x, y, z]),
+            # robot.arm.pick_and_place(obj, target), robot.gripper.close(), robot.start(plugin_controller),
+            # robot.on_step(fn, every=0.1) and robot.run(seconds): fn(robot) is called as the time passes
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call

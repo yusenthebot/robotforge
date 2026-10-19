@@ -49,6 +49,16 @@ G8 还开着：
 
 验收：带臂的狗、带臂的轮式底盘各完成三件不同的事，录屏发给用户。
 
+进展（2026-10-20，G9 线）：
+
+- 两居室的家加一扇摆门，机器人推门过去，门自己回；`move(to="kitchen")`、`pick_and_place`、`operate` 遇到别的房间自己走过去。
+- `scripts/mobile_bench.py`：五台机器人（go2_arm、mobile_panda、lift_picker、Spot 背 Z1、ANYmal 背 UR5e）乘五件活（过门、取苹果、开抽屉取东西、按按钮、传送带上拿箱子）乘八个种子，真实 Menagerie 模型，失败按原因数。
+  结果和原因见 [docs/MOBILE.md](MOBILE.md)。
+- 修的毛病：Robotiq 夹爪在取东西时被放大了增益但没放大偏置，指头停在差 0.08 rad 的地方，ANYmal 背的 UR5e 取苹果 0/5，现在 5/8，传送带 0/5 到 8/8；蹭进站位时在转向站位和转向朝向之间来回晃 12 s，现在转一次走一次；站位按"离现在的朝向侧向多远"排序，侧向偏的少选。
+- 验收：Go2 带臂完成过门、取苹果、抽屉取东西、按按钮；轮式 mobile_panda 完成过门、取苹果、抽屉取东西、按按钮、传送带上拿箱子，全在真实时间的录屏里。
+  Spot 背 Z1 只有过门和按按钮（Z1 的单爪抓不稳，臂短够不着抽屉）；ANYmal 背 UR5e 过门、取苹果、按按钮、传送带，抽屉把手太低。
+- 还没做：抽屉旁转向会扫到抽屉（见 MOBILE.md）；Go2 的臂比传送带低，够不着；Z1 要换一只抓得住的手。
+
 ### G10 自由安装组合
 
 - 一个工具把任意机器人、末端、传感器装到任意刚体上，可以指定位置和朝向，自动转接板。
@@ -152,6 +162,14 @@ G8 还开着：
 - `list_library(kind=, search=)` 搜索 175 台开源机器人（robot_descriptions 3.3.0 的清单，存成 `catalogue.json`，不新增依赖），`add_robot(library=<名字>)` 下载那一台的文件夹（git 稀疏检出，没有 git 就流式下载压缩包），进导入诊断，回答里的 `catalogue` 写它按结构是什么（机械臂、四足、人形、轮式、手、飞行器、其他）和哪些工具能用。
 - 随机 20 台（种子 12）全部加载，17 台站得住，14 台能动；另外 105 台抽查只看加载，102 台能加载。表、原因和限制见 [CATALOGUE.md](CATALOGUE.md)，20 张查看器截图拼成一张图。
 - 这一轮修的导入问题：MJCF 里逗号写的数字、力矩电机变位置伺服、没有关键帧的狗站不起来、手被当成臂、臂在自重下下垂、xacro 的块作用域死循环、xacro 公式里的字符串方法和列表推导、需要同仓库兄弟包的 xacro。
+
+进展（2026-10-19，G12c 线，扩展力）：
+
+- 插件：`robotforge.extend` 里 `part`、`sensor`、`controller`、`behavior` 四个装饰器。文件放在 `~/.robotforge/plugins`（或 `ROBOTFORGE_PLUGINS` 列的文件夹），或世界自己的 `plugins/` 文件夹；启动和 `plugins(action="reload")` 时加载，出错的文件不影响别的文件，错误带文件名和行号。零件是 `add_object` 的新 shape，传感器是 `add_sensor` 的新 type（速率、噪声、延迟、查看器列表和模块都和内置的一样），控制器在仿真里按频率运行，行为用脚本的机器人接口写、当脚本跑。
+- 信任：世界自带的插件文件是 Python 代码，下载来的世界不能一打开就跑。只有在本机用 `write_script(plugin=true)` 写的、或 `plugins(action="trust")` 批准的文件才加载（按内容哈希记在 `~/robotforge/plugins_trusted.json`，文件改了或整个世界拷到别处都要重新批准）；`open_world` 会说有哪些文件没加载。
+- 导出：`export_model` 把世界或单个机器人写成 MJCF（网格存成 OBJ，不是行内数字），机器人还能写成 URDF；写完再用 MuJoCo 读回来对比（名字、质量、每个网格顶点在世界里的位置，URDF 对比关节和限位）。URDF 表达不了的东西（浮动底座、闭环、胶囊、球关节）在 `notes` 里列出。模板狗、模板臂、Go2、Panda、模板人形都读回一致。
+- 统一机器人接口：脚本里 `sim.robot(name)` 给出 `robot.sensors`、`robot.move`、`robot.arm`、`robot.gripper`、`robot.on_step`、`robot.run`；同一段脚本在模板狗和 Go2、模板臂和 Panda 上都跑过（测试用 Menagerie 替身）。机器人做不到的事报错并说它能做什么。
+- 文档：docs/EXTENDING.md，里面每个例子都由 `tests/test_extending_docs.py` 运行。
 
 ### G4 感知、建图和定位（全面）
 

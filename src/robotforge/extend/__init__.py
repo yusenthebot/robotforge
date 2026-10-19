@@ -19,6 +19,8 @@ from pathlib import Path
 
 from robotforge.extend.parts import Box, Cylinder, Sphere, part, unknown_part
 from robotforge.extend.registry import REGISTRY, PluginError
+from robotforge.extend.routines import behavior, call, controller
+from robotforge.extend.sensors import look, sensor
 
 __all__ = [
     "REGISTRY",
@@ -26,10 +28,15 @@ __all__ = [
     "Cylinder",
     "PluginError",
     "Sphere",
+    "behavior",
+    "call",
+    "controller",
     "ensure_user_plugins",
     "load_world_plugins",
+    "look",
     "part",
     "plugin_notes",
+    "sensor",
     "unknown_part",
 ]
 

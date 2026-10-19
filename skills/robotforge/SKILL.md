@@ -115,10 +115,12 @@ When a beginner wants to understand how robots work, open the viewer and suggest
 
 The user's own code adds to robotforge: parts, sensors, controllers and behaviors, written as small Python plugins.
 `write_script(name, code, plugin=true)` saves one as `plugins/<name>.py` of the open world and loads it at once; the result says what it added or the line where it failed.
-`plugins()` lists everything plugins added and every file that did not load, with why; `plugins(action="reload")` reads the folders again.
-A plugin part is a shape for `add_object`, a plugin sensor a type for `add_sensor`.
+A plugin part is a shape for `add_object`, a plugin sensor a type for `add_sensor` (its own options go in `options`), a controller runs inside the simulation and a behavior is a routine for any robot: `plugins(action="run", name=..., robot=..., options=..., seconds=...)` starts either, and `stop(robot)` ends a controller.
+`plugins()` lists everything plugins added (each with its options) and every file that did not load, with why; `plugins(action="reload")` reads the folders again after an edit.
 A world's plugin files that were not written on this computer do not load until you have read them, told the user what they do and called `plugins(action="trust")`: they are Python that runs with the user's rights.
-See [references/extending.md](references/extending.md) for the registration API with an example of each.
+`export_model()` writes the open world as MJCF for other simulators, `export_model(robot="go2")` one robot, `format="urdf"` a robot as URDF; meshes go beside it as OBJ files, and `check` in the result says the file was loaded again and matched.
+In scripts `sim.robot(name)` is one interface to any robot (`robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper`, `robot.on_step`), so one script runs on a template dog and on a Go2.
+See [references/extending.md](references/extending.md) for the plugin API with an example of each kind.
 
 ## References
 

@@ -48,6 +48,7 @@ class Item:
     summary: str
     obj: Any  # the part's builder, the sensor's reader, the controller's or behavior's function or class
     plugin: str = "<code>"  # the file it came from, "geiger.py" or "my_world/plugins/geiger.py"
+    path: Path | None = None  # that file
     meta: dict[str, Any] = field(default_factory=dict)  # what the kind needs (a part's sizes, a sensor's options)
     undo: Callable[[], None] | None = None  # takes it out of the tables it was put in
 
@@ -85,10 +86,12 @@ class Registry:
                 "have at most 32 characters, e.g. 'signpost'"
             )
         taken = self.items.get((item.kind, item.name))
+        if taken is None and item.kind in ("controller", "behavior"):  # plugins(run) takes either by name
+            taken = self.items.get(("behavior" if item.kind == "controller" else "controller", item.name))
         if taken is not None:
-            raise PluginError(f"{item.kind} {item.name!r} is already added by {taken.plugin}; pick another name")
+            raise PluginError(f"{taken.kind} {item.name!r} is already added by {taken.plugin}; pick another name")
         if self._loading is not None:
-            item.plugin = self._loading.label
+            item.plugin, item.path = self._loading.label, self._loading.path
         self.items[(item.kind, item.name)] = item
         if self._loading is not None:
             self._loading.items.append((item.kind, item.name))
@@ -118,6 +121,8 @@ class Registry:
         """A world's plugins/ folder: the trusted files load, the others are listed as not loaded."""
         self.load_user()
         folder = (world_dir / WORLD_FOLDER).resolve()
+        for other in [w for w in self.worlds if w != folder]:  # one world's plugins at a time: the open world's
+            self._forget_folder(other)
         if not folder.is_dir():
             if folder in self.worlds:
                 self._forget_folder(folder)

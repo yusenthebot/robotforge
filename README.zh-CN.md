@@ -21,6 +21,7 @@
 - 生成世界和任务：`load_scene(description=...)` 一句话生成一个家、仓库或山坡，`add_task` 把同一句话变成带成功判定的任务。
 - 学走路：任何有腿的机器人（拼出来的或导入的）在查看器里靠试错学出一种节奏，存下来之后用键盘或在聊天里叫它走和转。
 - 水上和空中：小船在浮标之间开到码头，水下机器人下潜，四旋翼绕着树飞一个方形。
+- 自己扩展：把 Python 文件放进 `~/.robotforge/plugins`，就多出一个零件、传感器、控制器或行为，用起来和内置的一样；世界或单个机器人可以导出成带网格的 MJCF 或 URDF；一段脚本既能控制模板狗也能控制 Go2（见 [docs/EXTENDING.md](docs/EXTENDING.md)，英文）。
 - 教学：查看器里有 13 节互动课、4 个调参台、2 场真机对比和 3 个挑战，每一步先猜再试。
 
 物理引擎是 MuJoCo，轻量，支持 macOS、Windows 和 Linux。
@@ -168,5 +169,6 @@ agent 通过 MCP 调用 robotforge 的工具，所有物理都在本地 Python �
 - 插件打包与验证（维护者）：[docs/PLUGINS.md](docs/PLUGINS.md)
 - 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
 - 足式机器人怎么看地面走、每台的实测表：[docs/LEGGED.md](docs/LEGGED.md)
+- 移动操作：底盘和臂怎么一起规划、每台机器人各件活的成功率和失败原因：[docs/MOBILE.md](docs/MOBILE.md)
 - 进度：[STATUS.md](STATUS.md)，[progress.md](progress.md)
 - README 里的截图由 `uv run python scripts/screenshots.py` 生成，用的是真实的查看器和无头 Chrome。

@@ -47,4 +47,5 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - `uv run python scripts/same_behavior.py <rev>` hashes the physics state every 0.25 s through 17 scenarios on this tree and on `<rev>`: a speed-up meant to change no behavior must leave every one identical.
 - Offscreen rendering needs OpenGL. Without it (Windows CI, VMs, servers) `observe` returns the state plus a note instead of an image, and rendering tests skip with the reason.
   `ROBOTFORGE_REQUIRE_GL=1` turns those skips into failures; the Ubuntu job sets it and uses Mesa EGL (`MUJOCO_GL=egl`).
+- Plugins (`robotforge.extend`, docs/EXTENDING.md): `tests/conftest.py` sets `ROBOTFORGE_PLUGINS` to nothing so a developer's own `~/.robotforge/plugins` never reaches the tests; a test that needs plugins points it at a temporary folder and wraps the registry in `registry.isolated()`. Every example in docs/EXTENDING.md is run by `tests/test_extending_docs.py`.
 - Portability rules: pass `encoding="utf-8"` to every text read and write, compare paths with `Path` (never `endswith("a/b")`), and do not bind or probe ports with `SO_REUSEADDR` on Windows.

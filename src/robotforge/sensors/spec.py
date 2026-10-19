@@ -17,7 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from robotforge import wording
 
-SENSOR_TYPES = (
+# A list, not a tuple: plugins add their types to it (robotforge.extend.sensor) and take them off again.
+SENSOR_TYPES: list[str] = [
     "camera",
     "lidar",
     "lidar3d",
@@ -33,8 +34,9 @@ SENSOR_TYPES = (
     "skin",
     "temperature",
     "gas",
-)
-SensorType = Literal[SENSOR_TYPES]
+]
+BUILT_IN_TYPES = tuple(SENSOR_TYPES)
+PLUGIN_PARAMS: dict[str, dict[str, Any]] = {}  # a plugin sensor type -> its options and their defaults
 
 # The words agents use for a type, and the options they imply ("depth camera" is a camera in depth mode).
 ALIASES: dict[str, tuple[str, dict[str, Any]]] = {
@@ -185,7 +187,7 @@ class SensorEntry(BaseModel):
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    type: SensorType
+    type: str
     name: str | None = None
     on: str | None = Field(None, description="body, part, geom, site or joint it sits on; default the base")
     at: str | list[float] | None = Field(None, description="anchor (top, front, center, ...) or [x, y, z] m")
@@ -237,6 +239,8 @@ class SensorEntry(BaseModel):
     drift: float | dict[str, float] | None = None
     dropout: float | None = Field(None, ge=0, lt=1)
     seed: int | None = None
+    # a plugin sensor's own options (robotforge.extend.sensor); the type declares which
+    params: dict[str, Any] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -252,7 +256,24 @@ class SensorEntry(BaseModel):
                 data = {**implied, **data, "type": kind}
             else:
                 data = {**data, "type": kind if kind in SENSOR_TYPES else data["type"]}
+            if data["type"] in PLUGIN_PARAMS:
+                # A plugin sensor's own options are written beside the standard ones, whatever another type calls
+                # them (a plugin's "radius" is not a wheel odometry's): all it takes are the placement and the knobs.
+                allowed = OPTIONS[data["type"]] | {"type"}
+                own = {k: v for k, v in data.items() if k not in allowed}
+                if own:
+                    given = data.get("params") if isinstance(data.get("params"), dict) else {}
+                    data = {**{k: v for k, v in data.items() if k in allowed}, "params": {**given, **own}}
         return data
+
+    @field_validator("type")
+    @classmethod
+    def _type(cls, v: str) -> str:
+        if v not in SENSOR_TYPES:
+            plugin = [t for t in SENSOR_TYPES if t not in BUILT_IN_TYPES]
+            more = f" (and from plugins: {', '.join(plugin)})" if plugin else "; plugins() lists the ones plugins add"
+            raise ValueError(f"unknown sensor type {wording.short(v)}; the types are {', '.join(BUILT_IN_TYPES)}{more}")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -334,6 +355,13 @@ class SensorEntry(BaseModel):
                 f"{', '.join(own)}"
             )
         self._camera_options()
+        if self.type in PLUGIN_PARAMS:
+            extra = sorted(set(self.params or {}) - set(PLUGIN_PARAMS[self.type]))
+            if extra:
+                have = ", ".join(PLUGIN_PARAMS[self.type]) or "none"
+                raise ValueError(
+                    f"the {self.type} sensor takes no option {', '.join(map(repr, extra))}; it takes {have}"
+                )
         channels = CHANNELS[self.type]
         if isinstance(self.noise, dict):
             _channels(self.noise, channels, self.type, "noise")
@@ -389,6 +417,25 @@ class SensorEntry(BaseModel):
     def _compact(self, handler: Any) -> dict[str, Any]:
         """Saved as written: the options left out stay out of world.yaml."""
         return {k: v for k, v in handler(self).items() if v is not None}
+
+
+def register_type(name: str, channels: tuple[str, ...], at: str, params: dict[str, Any]) -> None:
+    """Make `name` a sensor type (a plugin's): add_sensor takes it, world.yaml saves it, the tables below know it."""
+    SENSOR_TYPES.append(name)
+    CHANNELS[name] = channels
+    OPTIONS[name] = PLACED | (KNOBS - {"dropout"}) | {"params"}
+    DEFAULTS[name] = {"at": at}
+    BIASED[name] = ()
+    PLUGIN_PARAMS[name] = dict(params)
+
+
+def unregister_type(name: str) -> None:
+    if name in BUILT_IN_TYPES:
+        raise ValueError(f"{name!r} is a built-in sensor type")
+    if name in SENSOR_TYPES:
+        SENSOR_TYPES.remove(name)
+    for table in (CHANNELS, OPTIONS, DEFAULTS, BIASED, PLUGIN_PARAMS):
+        table.pop(name, None)
 
 
 def _a(word: str) -> str:

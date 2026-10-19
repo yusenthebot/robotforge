@@ -224,3 +224,9 @@ Cost, as headless physics steps per second of CPU time for a Go2 standing in the
 
 One 16 x 180 scan takes 1.07 ms against 0.23 ms for a physics step: ten scans a second add about 9 % to the 500 steps of each simulated second.
 A scan's cost grows with its rays and with the shapes in the world (the warehouse has 152 that rays can hit).
+
+## Sensors you write
+
+A sensor type of your own (a Geiger counter, a signal strength, a thermometer) is a Python function in a plugin file.
+It sits on any body, has a rate, noise and latency like the sensors above, is read with `read_sensors`, `observe` and `sim.sensor`, and the viewer lists its reading and draws its module on the robot.
+See [EXTENDING.md](EXTENDING.md).

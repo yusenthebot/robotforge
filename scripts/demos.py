@@ -818,6 +818,14 @@ DEMOS = [
         until=lambda pg: _MAP_DONE.is_set(),
         tail=4.0,
     ),
+    Demo(  # code a user wrote: a Geiger sensor on the Go2's back (a plugin) reads higher as it walks up to the drum
+        "extend_plugins_walk",
+        S._extend_plugins,
+        7.0,
+        timeline=[(0.8, _move("go2", 0.25)), (5.3, _move("go2", 0.0))],
+        page=S.EXTEND_VIEW,
+        settle=1.0,
+    ),
     Demo(  # take off from the path, fly a square round a tree, come back and land where it started
         "drone_park_square",
         S._in_scene("park", {"drone": {"template": "drone"}}),
@@ -923,6 +931,9 @@ DEMOS = [
     _mobile("mobile_button_panda", "mobile_panda", "button", 50.0, (1.3, -0.5, 1.4), ease=0.05),
     _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05),
     _mobile("mobile_button_spot", "spot_z1", "button", 60.0, (1.4, -0.6, 1.6), ease=0.05),
+    _mobile("mobile_drawer_panda", "mobile_panda", "drawer", 100.0, (-0.5, -1.7, 2.9), ease=0.06),
+    _mobile("mobile_fetch_anymal", "anymal_ur5e", "fetch", 130.0, (0.4, -2.0, 3.6), ease=0.06),
+    _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05),
     *G10_DEMOS,
 ]
 
