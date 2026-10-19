@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,32 @@ class Exported:
             "meshes": sum(1 for f in self.files if f.suffix == ".obj"),
             "notes": self.notes,
         }
+
+
+def target_folder(to: str | Path | None, default: Path, world_dir: Path, overwrite: bool = False) -> tuple[Path, bool]:
+    """The folder an export goes to and whether the export owns it (may empty an earlier export out of it first).
+
+    No `to`: the world's own exports/ folder, owned. A `to` must lie under the world's folder, the home folder or the
+    temporary folder (an agent must not be able to write meshes/ and an XML anywhere the user can), must not be the
+    home folder itself, and must be empty or missing unless overwrite=True, which replaces an earlier export in it
+    (only the XML, URDF and meshes/ an export writes)."""
+    if to is None:
+        return default, True
+    folder = Path(to).expanduser().resolve()
+    roots = [Path(r).resolve() for r in (world_dir, Path.home(), tempfile.gettempdir())]
+    home = Path.home().resolve()
+    if folder == home or not any(folder == r or r in folder.parents for r in roots):
+        raise ExportError(
+            f"{folder} is outside the places an export may go (the world's folder, a folder in your home folder, "
+            "or the temporary folder): pick a folder there"
+        )
+    if folder.exists() and not folder.is_dir():
+        raise ExportError(f"{folder} is a file: give a folder")
+    if folder.is_dir() and any(folder.iterdir()) and not overwrite:
+        raise ExportError(
+            f"{folder} is not empty: pick an empty or new folder, or overwrite=true to replace an earlier export in it"
+        )
+    return folder, overwrite
 
 
 def export_world(

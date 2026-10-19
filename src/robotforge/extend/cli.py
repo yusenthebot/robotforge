@@ -17,6 +17,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--robot", default=None, help="export just this robot (required for URDF)")
     p.add_argument("--format", choices=["mjcf", "urdf"], default="mjcf")
     p.add_argument("--to", type=Path, default=None, help="folder to write into (default: exports/ in the world)")
+    p.add_argument("--overwrite", action="store_true", help="replace an earlier export in a --to folder that is not empty")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -46,8 +47,9 @@ def _export(args: argparse.Namespace) -> int:
                 known = ", ".join(r.name for r in world.robots) or "none"
                 raise export.ExportError(f"the world has no robot named {args.robot!r}; its robots: {known}")
         name = entry.name if entry is not None else world.name
-        folder = args.to.expanduser() if args.to else store.dir / "exports" / f"{name}_{args.format}"
-        result = export.export_world(world, entry, store.dir, args.format, folder, own_folder=args.to is None)
+        default = store.dir / "exports" / f"{name}_{args.format}"
+        folder, own = export.target_folder(args.to, default, store.dir, args.overwrite)
+        result = export.export_world(world, entry, store.dir, args.format, folder, own_folder=own)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

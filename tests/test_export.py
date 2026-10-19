@@ -185,6 +185,26 @@ async def test_an_agent_exports_a_world_and_a_robot(tmp_path, monkeypatch):
         assert unknown.is_error and "no robot named 'cat'" in unknown.content[0].text
 
 
+def test_an_export_goes_only_to_a_new_or_empty_folder_in_a_safe_place(tmp_path):
+    world, default = tmp_path / "world", tmp_path / "world" / "exports" / "x"
+    world.mkdir()
+    free = world / "mine"
+    assert export.target_folder(free, default, world) == (free.resolve(), False)
+    assert export.target_folder(None, default, world) == (default, True)
+    for outside in (Path(Path.home().anchor) / "robotforge_not_here", Path.home()):
+        with pytest.raises(export.ExportError, match="outside the places"):
+            export.target_folder(outside, default, world, overwrite=True)
+    free.mkdir()
+    (free / "notes.txt").write_text("mine", encoding="utf-8")
+    with pytest.raises(export.ExportError, match="not empty"):
+        export.target_folder(free, default, world)
+    assert export.target_folder(free, default, world, overwrite=True) == (free.resolve(), True)
+    file = world / "a_file"
+    file.write_text("x", encoding="utf-8")
+    with pytest.raises(export.ExportError, match="is a file"):
+        export.target_folder(file, default, world)
+
+
 def test_a_height_field_and_water_come_through(tmp_path):
     c = compiled(
         tmp_path, [{"name": "dog", "template": "quadruped"}], terrain=[{"type": "hills"}], water={"level": 0.3}

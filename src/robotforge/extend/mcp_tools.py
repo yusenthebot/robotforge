@@ -121,11 +121,16 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
 
     @server.tool(annotations=ToolAnnotations(openWorldHint=False))
     async def export_model(
-        robot: str | None = None, format: Literal["mjcf", "urdf"] = "mjcf", to: str | None = None
+        robot: str | None = None,
+        format: Literal["mjcf", "urdf"] = "mjcf",
+        to: str | None = None,
+        overwrite: bool = False,
     ) -> str:
         """Write the open world, or one robot, for other simulators. format="mjcf" (MuJoCo's XML, the whole world
         or with robot=NAME just that robot on the floor) or "urdf" (one robot: robot is required), with the meshes as
-        OBJ files in a meshes/ folder beside it. to is a folder (default exports/ in the world's folder). The file is
+        OBJ files in a meshes/ folder beside it. to is a new or empty folder in the world's folder, your home folder or
+        the temporary folder (default exports/ in the world's folder; overwrite=true replaces an earlier export in a
+        folder that is not empty). The file is
         loaded again in MuJoCo and compared with the world (same bodies, joints, masses, vertices): "check" says
         so. URDF cannot say free joints, loops, capsules or ball joints; "notes" lists what changed. Open the result
         with python -m mujoco.viewer --mjcf=FILE (an MJCF) or any URDF tool."""
@@ -141,7 +146,5 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
                 if entry is None:
                     raise PlaygroundError(wording.unknown("robot", robot, [r.name for r in world.robots]))
             default = store.dir / "exports" / f"{entry.name if entry else world.name}_{format}"
-            folder = Path(to).expanduser() if to else default
-            return _json(
-                await asyncio.to_thread(export.export_world, world, entry, store.dir, format, folder, to is None)
-            )
+            folder, own = export.target_folder(to, default, store.dir, overwrite)
+            return _json(await asyncio.to_thread(export.export_world, world, entry, store.dir, format, folder, own))
