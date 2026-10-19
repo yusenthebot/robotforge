@@ -488,12 +488,43 @@ def check_mjcf(path: Path, model: mujoco.MjModel) -> dict[str, Any]:
         out["height_field_error_m"] = (
             float(np.abs(model.hfield_data - again.hfield_data).max()) if again.nhfield == model.nhfield else None
         )
+    out["joint_range_error"] = _joint_range_error(model, again)
     ok = all(v["same_names"] for k, v in out.items() if isinstance(v, dict) and "same_names" in v)
     ground = out.get("height_field_error_m", 0.0)
+    mass, mass_again = out["mass_kg"]["world"], out["mass_kg"]["export"]
+    vertices = out["vertex_error_m"]
     out["same"] = bool(
-        ok and out["body_position_error_m"] is not None and out["body_position_error_m"] < 1e-5 and ground is not None
+        ok
+        and out["body_position_error_m"] is not None
+        and out["body_position_error_m"] < 1e-5
+        and ground is not None
+        and ground < 1e-5
+        and abs(mass - mass_again) <= 1e-3 * max(mass, 1.0)
+        and (vertices is None and not _mesh_geoms(model) or vertices is not None and vertices < 1e-5)
+        and out["joint_range_error"] is not None
+        and out["joint_range_error"] < 1e-5
     )
     return out
+
+
+def _mesh_geoms(model: mujoco.MjModel) -> bool:
+    return bool((model.geom_type == int(G.mjGEOM_MESH)).any())
+
+
+def _joint_range_error(model: mujoco.MjModel, again: mujoco.MjModel) -> float | None:
+    """Largest gap between a limited joint's range in the world and in the reloaded export, by joint name; None when
+    a joint is missing or its limit was lost."""
+    worst = 0.0
+    for j in range(model.njnt):
+        name = _name(model, OBJ.mjOBJ_JOINT, j)
+        if not name:
+            continue
+        k = mujoco.mj_name2id(again, OBJ.mjOBJ_JOINT, name)
+        if k < 0 or bool(model.jnt_limited[j]) != bool(again.jnt_limited[k]):
+            return None
+        if model.jnt_limited[j]:
+            worst = max(worst, float(np.abs(model.jnt_range[j] - again.jnt_range[k]).max()))
+    return worst
 
 
 def check_urdf(path: Path, model: mujoco.MjModel, robot: str) -> dict[str, Any]:

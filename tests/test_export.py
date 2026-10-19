@@ -68,6 +68,26 @@ def test_the_exported_world_is_the_world_to_the_last_vertex_and_mass(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("what", ["mass", "vertices", "joint_ranges"])
+def test_the_check_fails_when_the_export_differs_from_the_world(tmp_path, what):
+    """'same' used to look only at names and positions: a world twice as heavy, with its meshes a centimetre off or
+    its joints three times wider than the file said still came back same=True."""
+    robots = [{"name": "go2", "library": "go2"}]
+    table = [{"name": "table", "shape": "table"}]  # the meshes
+    c = compiled(tmp_path, robots, table)
+    out = export.export_mjcf(c.spec, c.model, tmp_path / "out", "w")
+    assert export.check_mjcf(out.main, c.model)["same"]
+    other = compiled(tmp_path / "other", robots, table).model
+    if what == "mass":
+        other.body_mass[:] *= 2
+    elif what == "vertices":
+        other.mesh_vert[:] += 0.01
+    else:
+        other.jnt_range[:] *= 3
+    check = export.check_mjcf(out.main, other)
+    assert check["loads"] and not check["same"], check
+
+
 def test_a_sensor_is_still_declared_in_the_export(tmp_path):
     c = compiled(tmp_path, [{"name": "dog", "template": "quadruped", "sensors": [{"type": "lidar", "name": "scan"}]}])
     out = export.export_mjcf(c.spec, c.model, tmp_path / "out", "w")
