@@ -10,6 +10,7 @@ from __future__ import annotations
 import mujoco
 
 from robotforge.design import visuals
+from robotforge.design.visuals import mesh as M
 from robotforge.objects import materials
 from robotforge.objects.kit import Built
 
@@ -22,6 +23,15 @@ KINDS = {
     "ellipsoid": G.mjGEOM_ELLIPSOID,
     "hull": G.mjGEOM_MESH,
 }
+
+
+CYLINDER_SIDES = 24
+
+
+def _prism(radius: float, half_height: float) -> M.Mesh:
+    """A cylinder along z as a convex prism, centred on its own origin."""
+    h = max(half_height, 1e-5)
+    return M.lathe([(0.0, -h), (radius, -h), (radius, h), (0.0, h)], CYLINDER_SIDES, sharp=(1, 2))
 
 
 def add_to_spec(
@@ -48,14 +58,15 @@ def add_to_spec(
             "friction": list(materials.get(piece.material).coefficients()),
             "condim": 4,
         }
-        if piece.kind == "hull":
+        if piece.kind in ("hull", "cylinder"):
+            # A cylinder is a prism here: MuJoCo's own cylinder against the small boxes of a gripper's pads makes
+            # contacts that lock (a can stayed jammed between open fingers and was lifted away with them).
+            mesh = piece.hull if piece.kind == "hull" else _prism(piece.size[0], piece.size[1])
+            if piece.kind == "cylinder":
+                kwargs["type"] = G.mjGEOM_MESH
             hulls += 1
             mesh_name = f"{owner}_hull{hulls}"
-            spec.add_mesh(
-                name=mesh_name,
-                uservert=piece.hull.vertices.ravel(),
-                userface=piece.hull.faces.ravel(),
-            )
+            spec.add_mesh(name=mesh_name, uservert=mesh.vertices.ravel(), userface=mesh.faces.ravel())
             kwargs["meshname"] = mesh_name
         else:
             kwargs["size"] = list(piece.size) + [0.0] * (3 - len(piece.size))

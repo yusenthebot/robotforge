@@ -1209,7 +1209,8 @@ class Leg:
 def squeeze(
     model: mujoco.MjModel, actuator: int, newtons: float = SQUEEZE, short: float = 0.01
 ) -> tuple[np.ndarray, np.ndarray] | None:
-    """Stiffen a gripper's servo to push `newtons` (SQUEEZE) `short` (a cm) short of closed (if it is softer), in place; its gain and
+    """Stiffen a gripper's servo to push `newtons` (SQUEEZE) `short` (a cm) short of closed (if it is softer), in
+    place; its gain and
     bias before, or None when it is stiff enough already (or no servo). The whole servo scales together, offset
     included: a gripper turned around within its range (library.py, Robotiq's) has one, and without it the jaws
     stop 0.08 rad short of closed and miss what they take."""

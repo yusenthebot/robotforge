@@ -149,7 +149,7 @@ def bottle(g: Gen) -> None:
     material="aluminum",
     kind="container",
     summary="a drinks can, soup tin or tuna tin with a printed label (take it round the body)",
-    keywords=("can", "tin", "soda can", "soup can", "tuna can", "beverage can"),
+    keywords=("can", "tin can", "soda can", "soup can", "tuna can", "beverage can"),
     params={
         "style": Choice("soda", "soup", "tuna", doc="soda can with a tab, soup tin with a paper label, squat tuna tin"),
         "fill": Range(0.4, 1.0, 0.9, "how full"),

@@ -202,6 +202,23 @@ def object_for(
     return build(gen, use, rgba, seed, _key(gen.check_params(params)))
 
 
+def built_of(entry: Any) -> Built | None:
+    """The generated object a world entry (an ObjectEntry or its dict) is, or None when its shape is not generated."""
+    if isinstance(entry, dict):
+        shape, size, color, seed, params = (entry.get(k) for k in ("shape", "size", "color", "seed", "params"))
+    else:
+        shape, size, color, seed, params = (
+            getattr(entry, k, None) for k in ("shape", "size", "color", "seed", "params")
+        )
+    if shape not in GENERATORS:
+        return None
+    from robotforge.design import components
+
+    gen = GENERATORS[shape]
+    rgba = components.color(color if color is not None else gen.color)
+    return build(gen, tuple(size) if size else gen.default_size, rgba, seed, _key(params))
+
+
 def get(name: str) -> Generator:
     try:
         return GENERATORS[name]

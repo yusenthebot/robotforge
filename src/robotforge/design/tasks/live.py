@@ -16,7 +16,7 @@ import numpy as np
 
 from robotforge.design import mechanisms as mechanism_design
 from robotforge.design.tasks.check import State, Verdict, judge
-from robotforge.design.tasks.spec import TaskEntry
+from robotforge.design.tasks.spec import HARD_KINDS, TaskEntry
 
 UPRIGHT_COS = 0.7  # the robot's up axis within about 45 degrees of vertical
 OVERLAP = 0.01  # m: a randomized start overlapping something deeper than this is drawn again
@@ -47,7 +47,8 @@ class Probe:
                 self.hand = s
                 break
         self.things: dict[str, int] = {}
-        for name in (task.object, task.target):
+        names = [task.object, task.target, *(task.items or []), *((task.into or {}).values())]
+        for name in dict.fromkeys(names):
             if name is None:
                 continue
             b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
@@ -70,10 +71,38 @@ class Probe:
         if self.hand >= 0:
             hand = tuple(float(v) for v in data.site_xpos[self.hand])
         things = {n: tuple(float(v) for v in data.xpos[b]) for n, b in self.things.items()}
+        extra = self._extras(data) if self.task.kind in HARD_KINDS else {}
         moving = {}
         if self.mechanism is not None:
             moving = mechanisms.read(self.model, data, {self.mechanism: self.shapes[self.mechanism]}, watcher)
-        return State(robot, upright, hand, things, moving)
+        return State(robot, upright, hand, things, moving, **extra)
+
+    def _extras(self, data: mujoco.MjData) -> dict[str, Any]:
+        """For the harder kinds: each loose thing's lean, heading and speed, and which robots touch it."""
+        m = self.model
+        tilts, yaws, speeds = {}, {}, {}
+        for name, b in self.things.items():
+            rot = data.xmat[b]
+            tilts[name] = float(math.degrees(math.acos(max(-1.0, min(1.0, rot[8])))))
+            yaws[name] = float(math.degrees(math.atan2(rot[3], rot[0])))
+            adr = int(m.body_dofadr[b])
+            speeds[name] = float(np.linalg.norm(data.qvel[adr : adr + 3])) if m.body_dofnum[b] >= 3 else 0.0
+        touching: dict[str, set[str]] = {}
+        if self.task.kind == "hand_over":
+            owners = {name: set(self._roots(name)) for name in (self.task.robot, self.task.target) if name}
+            by_body = {b: n for n, b in self.things.items()}
+            for c in data.contact[: data.ncon]:
+                r1, r2 = int(m.body_rootid[m.geom_bodyid[c.geom1]]), int(m.body_rootid[m.geom_bodyid[c.geom2]])
+                for thing, other in ((r1, r2), (r2, r1)):
+                    if thing in by_body:
+                        for robot, roots in owners.items():
+                            if other in roots:
+                                touching.setdefault(by_body[thing], set()).add(robot)
+        return {"tilts": tilts, "yaws": yaws, "speeds": speeds, "touching": touching}
+
+    def _roots(self, robot: str) -> list[int]:
+        mine = _bodies(self.model, f"{robot}/")
+        return [int(self.model.body_rootid[b]) for b in mine[:1]]
 
     def verdict(self, data: mujoco.MjData, start: State | None = None, watcher: Any = None) -> Verdict:
         return judge(self.task, self.world, self.state(data, watcher), start)

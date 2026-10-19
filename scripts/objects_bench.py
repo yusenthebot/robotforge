@@ -85,7 +85,9 @@ def trial(pg: Any, shape: str, seed: int) -> dict[str, Any]:
     )
     tilt = float(result.get("tilt_deg") or 0.0)
     tipped_ok = shape in ("hammer", "screwdriver", "wrench", "banana", "book")  # lying things may lean on the rim
-    if result["success"] and (tilt < 25 or tipped_ok):
+    if result["success"] and float(end[2]) > TABLE_Z + 0.09:
+        row.update(result="failed", cause="still in the fingers, held in the air over the tray")
+    elif result["success"] and (tilt < 25 or tipped_ok):
         row["result"] = "ok"
     elif result["success"]:
         row.update(result="failed", cause="ended tipped over in the tray")

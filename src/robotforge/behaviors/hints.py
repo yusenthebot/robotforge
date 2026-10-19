@@ -33,6 +33,10 @@ PAD_TORSION = 0.005  # m: torsional friction of the pads of the library's grippe
 TURN_SAFETY = 6.0  # how much more than the turning of a load a squeeze must resist
 ROLL_SAFETY = 3.0  # the same for a load rolling about the pinch
 ROLL_ARM = 0.01  # m: the lever the pressure over a pad has against a load rolling about the pinch
+ROOM = 0.06  # m between the middles of two things put in one tray
+EDGE = 0.035  # m from a tray's wall that a thing is put at least
+STEP = 0.015  # m between the spots tried in a tray
+NEAR_Z = 0.12  # m: a thing this far above or below a tray's floor is not in it
 PALM_MARGIN = 0.004  # m the underside of the hand keeps clear of the object's top
 TIP_MARGIN = 0.001  # m the fingertips keep over the floor
 HOVER = 0.012  # m above its resting place an object is let go (the planner adds 1 cm; this is for a socket's chamfer)
@@ -59,13 +63,7 @@ class Choice:
 
 def built_for(entry: Any) -> Built | None:
     """The generated object an entry is (None for the shapes that are not generated)."""
-    if entry is None or entry.shape not in objects.GENERATORS:
-        return None
-    from robotforge.design import components
-
-    return objects.object_for(
-        entry.shape, entry.size, components.color(entry.color), entry.seed, **(entry.params or {})
-    )
+    return None if entry is None else objects.built_of(entry)
 
 
 @dataclass(frozen=True)
@@ -280,12 +278,21 @@ class FirmHold:
             before = fetch.squeeze(model, self.arm.gripper, self.force, self.short)
             if before is not None:
                 self._saved["squeeze"] = before
+        self.arm.on_open.append(self.stop)
         self.arm.on_idle.append(self.stop)
         self.session.reset_hooks.append(self.stop)
+
+    def relax(self) -> None:
+        """Give the gripper's own servo back (the jaws are about to open: a stiffened one did not let go of a can)."""
+        saved = self._saved.pop("squeeze", None)
+        if saved is not None:
+            g = self.arm.gripper
+            self.session.model.actuator_gainprm[g], self.session.model.actuator_biasprm[g] = saved
 
     def stop(self) -> None:
         if not self._saved:
             return
+        pass
         model = self.session.model
         saved, self._saved = self._saved, {}
         if "noslip" in saved:
@@ -361,12 +368,17 @@ def place_for(
     chosen, note = None, ""
     for s in slots:
         spot = base + rot @ np.asarray(s.pos)
+        if s.radius is None and s.half is not None:  # a tray or a top: room for several, put each where it is freest
+            free = _free_spot(spot, rot, s, taken)
+            if free is not None:
+                chosen = (s, free)
+                break
+            continue
         busy = [p for p in taken if np.hypot(*(p[:2] - spot[:2])) < (s.radius or 0.05) and p[2] > spot[2] - 0.02]
         if not busy:
             chosen = (s, spot)
             break
     if chosen is None:
-        s = slots[0]
         raise LookupError(f"every place on {name} is taken ({', '.join(x.name for x in slots)})")
     s, spot = chosen
     if s.radius is not None:
@@ -381,6 +393,29 @@ def place_for(
     if s.kind == "socket":
         spot = spot + np.array([0.0, 0.0, 0.0])
     return Place(spot, rim, region, s.name, note)
+
+
+def _free_spot(centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.ndarray]) -> np.ndarray | None:
+    """The spot in a slot's area farthest from what already stands in it (at least ROOM from each), nearest the middle
+    among equals; None when the area is full."""
+    hx, hy = slot.half
+    hx, hy = max(hx - EDGE, 0.0), max(hy - EDGE, 0.0)
+    near = [
+        p[:2] for p in taken if -0.01 <= p[2] - centre[2] < NEAR_Z and np.hypot(*(p[:2] - centre[:2])) < hx + hy + ROOM
+    ]
+    best, score = None, -np.inf
+    xs = np.linspace(-hx, hx, max(2, int(2 * hx / STEP) + 1)) if hx > 0 else [0.0]
+    ys = np.linspace(-hy, hy, max(2, int(2 * hy / STEP) + 1)) if hy > 0 else [0.0]
+    for x in xs:
+        for y in ys:
+            p = centre + rot @ np.array([x, y, 0.0])
+            gap = min((float(np.hypot(*(p[:2] - q))) for q in near), default=np.inf)
+            if gap < ROOM:
+                continue
+            value = min(gap, 3 * ROOM) - 0.1 * float(np.hypot(x, y))
+            if value > score:
+                best, score = p, value
+    return best
 
 
 def tilt_deg(data: mujoco.MjData, body: int) -> float:

@@ -163,6 +163,7 @@ DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for wh
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
 HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
@@ -1491,6 +1492,8 @@ class BehaviorManager:
                 if not goes or self._place_kind(target) != "terrain":
                     raise
                 place = None  # a terrain patch: only a robot that goes over puts things on one
+            if place is not None and pick.get("built") is not None:
+                place_top = max(place_top, self._tallest_between(obj, pick["center"], place))
             if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
                 try:
                     used = self._take(arm, pick, place, place_top)
@@ -1989,6 +1992,29 @@ class BehaviorManager:
                 faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
         return {"center": center, "half_height": half, "faces": faces}
 
+    def _tallest_between(self, obj: str, start: np.ndarray, end: np.ndarray) -> float:
+        """The height of the tallest thing in the corridor between two points (the things it carries over: a tray with
+        cans in it, a shelf), beside what stands under the load's path, so that it is carried over them: the arm's
+        planner knows only the place's own rim. Things no higher than the work surface do not count."""
+        m, d = self.session.model, self.session.data
+        me = self._body(obj)
+        lo = np.minimum(start[:2], end[:2]) - CORRIDOR
+        hi = np.maximum(start[:2], end[:2]) + CORRIDOR
+        floor = float(min(start[2], end[2])) + 0.02
+        top = -math.inf
+        for g in range(m.ngeom):
+            b = int(m.geom_bodyid[g])
+            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or ""
+            if b == 0 or b == me or "/" in name or not m.geom_contype[g]:
+                continue
+            rot = d.geom_xmat[g].reshape(3, 3)
+            centre = d.geom_xpos[g] + rot @ m.geom_aabb[g][:3]
+            half = np.abs(rot) @ m.geom_aabb[g][3:]
+            if np.any(centre[:2] + half[:2] < lo) or np.any(centre[:2] - half[:2] > hi):
+                continue
+            top = max(top, float(centre[2] + half[2]))
+        return top if top > floor else -math.inf
+
     def _hinted_geometry(
         self, name: str, entry: ObjectEntry, built: Any, arm: ArmMotion, want: str | None
     ) -> dict[str, Any]:
@@ -2044,6 +2070,8 @@ class BehaviorManager:
         built = hints.built_for(entry)
         if built is not None:  # a generated fixture's slot, or the flat top of a generated thing
             return self._generated_place(target, built, slot_name, obj)
+        if entry.shape == "shelf":
+            return self._on_shelf(target, entry, slot_name)
         if entry.shape in mechanisms.CONTAINERS:
             return self._into(target)
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
@@ -2085,6 +2113,30 @@ class BehaviorManager:
                 f"{name} is a {built.shape}: nothing can be put in or on it (a rack, a tray and a box can)"
             )
         return place.point, place.top, place.region
+
+    def _on_shelf(self, name: str, entry: ObjectEntry, slot: str | None) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """The top board of a shelf: the only one with nothing over it, so the only one a gripper coming from above
+        reaches (`name/2` asks for the second board counting from the bottom, refused unless it is the top)."""
+        from robotforge.design import props
+
+        m, d = self.session.model, self.session.data
+        levels = props.shelf_levels(entry.size)
+        want = len(levels) if slot is None else int(slot) if slot.isdigit() else 0
+        if not 1 <= want <= len(levels):
+            raise BehaviorError(f"{name} has boards 1 to {len(levels)}, counted from the bottom")
+        if want != len(levels):
+            raise BehaviorError(
+                f"board {want} of {name} has another board over it: a gripper coming from above cannot get a thing in; "
+                f"the top board ({len(levels)}) can take it"
+            )
+        b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)
+        base = d.xpos[b].copy() if b >= 0 else d.geom_xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, name)].copy()
+        rot = d.xmat[b].reshape(3, 3) if b >= 0 else np.eye(3)
+        top = float(base[2] + levels[-1])
+        half = np.abs(rot[:2, :2]) @ np.array([entry.size[0] / 2 - 0.04, entry.size[1] / 2 - 0.04])
+        spot = np.array([base[0], base[1], top])
+        region = {"center": spot.tolist(), "half_xy": [float(half[0]), float(half[1])], "min_z": top - 0.012}
+        return spot, top, region
 
     def _into(self, name: str) -> tuple[np.ndarray, float, dict[str, Any]]:
         """Place point, rim and success region for putting something in drawer `name`, as far open as it is now:
