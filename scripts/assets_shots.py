@@ -137,7 +137,13 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             size=HD,
             settle=2.5,
         ),
-        Shot("assets_sheet", _sheet, page=look((1.15, -0.05, 0.9), (0.0, 0.0, 0.03)), size=HD, settle=3.0),
+        Shot(
+            "assets_sheet",
+            _sheet,
+            page="window.__robotforge.select(null);" + look((0.95, -0.02, 0.8), (0.0, 0.0, 0.03)),
+            size=HD,
+            settle=3.0,
+        ),
         Shot(
             "assets_close",
             lambda pg: _sheet(pg, CLOSE),

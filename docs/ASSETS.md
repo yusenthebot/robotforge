@@ -40,6 +40,8 @@ A value outside the range is refused with the range in the message, so an agent 
 `add_robot(name, template="asset", params={"generator": "wheel", "args": {"radius": 0.07}, "style": "rugged", "seed": 2})` puts one on a turntable in the viewer (the `turn` slider spins it), so what a generator makes can be looked at before a robot uses it.
 `list_templates` lists the generators, their ranges, the styles and the materials.
 
+![Every generator in every style: a pedestal, a joint housing, a link shell, a chassis, a wheel, a foot, a camera, a lidar and a grip pad, one row per style](images/assets_sheet.jpg)
+
 ## Styles
 
 A style is one knob that changes how every generated part looks, not what it does.
@@ -55,7 +57,23 @@ The fields of a style (`robotforge.assets.Style`): the surfaces of the shell, ac
 `assets.for_material(style, "aluminum")` gives a style as it looks with a shell of bare aluminium, carbon or rubber; the builder and the arm template use it for their `material` field.
 A plugin adds its own with `style(name, based_on="cobot", fillet=1.6)`.
 
-The arm template takes `style` as a parameter: `add_robot("arm", template="arm", params={"dof": 3, "style": "lab"})`.
+![The same 3-joint arm in the cobot, lab, hobby and rugged styles](images/assets_styles.jpg)
+
+## Where robots use it
+
+- The arm, quadruped, humanoid, rover and gripper templates take `style` as a parameter: `add_robot("arm", template="arm", params={"dof": 3, "style": "lab"})`.
+  Their joint housings, link shells, chassis shells, wheels, feet and grippers are generated; the `material` parameter picks the shell's surface (aluminium, carbon) and `color` the robot's own color.
+- A builder spec takes `"style"` beside `"color"` and `"material"`: limbs become two-part shells with a parting line, servos get a label, a connector, mounting ears and (outside the hobby style) a round output head, wheels get a real tread and feet a collar.
+  The old surface names the builder draws with (`shell`, `dark`) become the style's: `gloss` and `soft_touch` in the default.
+- `describe` reads a style word: `add_robot("bot", describe="a rugged robot dog")`, `"a lab-grade arm"`, `"a hobby servo robot"`, `"a cobot"`; `update_robot(describe="make it rugged")` restyles it.
+  The style is kept in the robot's `generated` plan and in its build spec, so `world.yaml` only gains a `style` key where one was asked for.
+- A style never changes mass, joints or collision shapes: `tests/test_assets.py` and `tests/test_generator.py` compare compiled models across styles.
+
+![A 3-joint arm before and after: stacked rods and drums, then housings with bolt circles, glands, shells with parting lines and ridged finger pads](images/assets_arm3_before_after.jpg)
+
+![A hexapod before and after](images/assets_hexapod_before_after.jpg)
+
+Triangle budgets keep this light: a joint housing gets a detail level by its size (a dog's twelve small joints are plain, a shoulder has screws, a nameplate and a light ring), `tests/test_visuals.py` holds every template under 30k triangles and `tests/test_builder_looks.py` every gallery robot under 46k.
 
 ## Materials
 
