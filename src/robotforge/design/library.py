@@ -16,7 +16,7 @@ import mujoco
 import numpy as np
 
 from robotforge import wording
-from robotforge.design import menagerie, rotors
+from robotforge.design import hands, menagerie, rotors
 from robotforge.design.rotors import RotorLayout
 from robotforge.design.templates.base import BuiltRobot
 from robotforge.sim.actuators import is_position_servo
@@ -99,6 +99,7 @@ class LibraryRobot:
     # (Barkour's lilac body, yellow hips, green and orange covers) reads as a toy beside the other real robots.
     recolor: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...] = ()
     rotors: RotorLayout | None = None  # aircraft: real rotors in place of the model's own actuators (rotors.py)
+    hand: hands.Hand | None = None  # a dexterous hand: its fingers close together as the gripper (hands.py)
 
 
 CATALOG: dict[str, LibraryRobot] = {
@@ -421,6 +422,46 @@ CATALOG: dict[str, LibraryRobot] = {
             home_key=None,
             tools=(Tool("pinch", gripper="fingers_actuator", closes_high=True),),
         ),
+        LibraryRobot(
+            "panda_hand",
+            "Franka Hand",
+            "gripper",
+            "The Franka Emika Panda's own two-finger hand (80 mm stroke) on its own, for any arm's flange (ur5e).",
+            "Franka Emika",
+            "Apache-2.0",
+            "franka_emika_panda",
+            "hand.xml",
+            mass=0.73,
+            home_key=None,
+            tools=(Tool("hand", reach=0.1034, gripper="actuator8"),),
+        ),
+        # Dexterous hands: the grasping joints close together on one tendon, the gripper (hands.py).
+        LibraryRobot(
+            "leap_hand",
+            "LEAP Hand",
+            "gripper",
+            "CMU's low-cost 16-joint dexterous hand (right), mounted palm down; picks up blocks and balls of 5 cm.",
+            "Carnegie Mellon University",
+            "MIT",
+            "leap_hand",
+            "right_hand.xml",
+            mass=0.75,
+            home_key=None,
+            hand=hands.LEAP,
+        ),
+        LibraryRobot(
+            "allegro_hand",
+            "Wonik Allegro Hand",
+            "gripper",
+            "Wonik's 16-joint four-fingered research hand (right), mounted palm down; picks up balls and cans.",
+            "Wonik Robotics (model from SimLab)",
+            "BSD-2-Clause",
+            "wonik_allegro",
+            "right_hand.xml",
+            mass=0.64,
+            home_key=None,
+            hand=hands.ALLEGRO,
+        ),
         # Aircraft fly with robotforge's flight controller, from the rotors the model has (behaviors/airframe.py).
         # They start on the ground with their motors idle, so no hover keyframe.
         LibraryRobot(
@@ -533,6 +574,7 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
             notes.append(f"{stiffened} joint servos stiffened to kp {kp:g}, kv {kv:g} (force limits kept)")
     if robot.tools:
         key_ctrl = _add_tools(spec, robot, key_ctrl)
+    held = hands.fit(spec, robot.hand) if robot.hand is not None else {}
     if robot.rotors is not None:
         notes.append(rotors.fit(spec, robot.rotors))
     _recolor(spec, robot.recolor)
@@ -556,6 +598,9 @@ def build(name: str, params: dict[str, Any] | None = None) -> BuiltRobot:
         mujoco.mju_rotVecQuat(pos, np.asarray(root.pos, float), turn)
         root.quat, root.pos = quat.tolist(), pos.tolist()
     home_qpos, home_ctrl, spawn, floating = stand_at_home(spec, key_qpos, key_ctrl)
+    if robot.hand is not None:  # it starts open, its fingers spread as they grasp
+        home_qpos.update(hands.open_pose(robot.hand))
+        home_ctrl.update(held)
     for tool in robot.tools:  # a gripper with no keyframe to say otherwise starts open, as the arms' keyframes have it
         gripper = f"{tool.arm}gripper"
         actuator = next((a for a in spec.actuators if a.name == gripper), None)

@@ -205,6 +205,8 @@ OFFERED = {
     "universal_robots_ur5e": "no built-in way to move",  # an arm the file does not fix to the world
     "aloha": "no built-in way to move",
     "robotiq_2f85": "no built-in way to move",  # a gripper on its own
+    "leap_hand": "fixed to the world",  # hands: the file fixes the palm where it is
+    "wonik_allegro": "fixed to the world",
 }
 
 
