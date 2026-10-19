@@ -393,3 +393,88 @@ def test_a_dog_changed_by_a_sentence_still_walks(pg, change):
     end = pg.behaviors.pose("dog")
     assert end["upright"]
     assert end["position"][0] - start["position"][0] > 0.5 * 0.25 * 5
+
+
+# ---- counts after an article, negated body words, clamps (review of G11b) ----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sentence", "field", "value"),
+    [
+        ("a legged robot with six legs", "legs", 6),
+        ("a legged robot with 6 legs", "legs", 6),
+        ("a legged robot, six-legged", "legs", 6),
+        ("a walking robot with six legs", "legs", 6),
+        ("a wheeled robot with six wheels", "wheels", 6),
+        ("a wheeled robot with 6 wheels", "wheels", 6),
+        ("a wheeled robot that has six wheels", "wheels", 6),
+        ("a six wheeled rover", "wheels", 6),
+        ("a robot with a gripper and two arms", "arms", 2),
+        ("a rover with an arm and two arms", "arms", 2),
+    ],
+)
+def test_a_count_after_an_article_still_counts(sentence, field, value):
+    assert getattr(generator.generate(sentence).plan, field) == value
+
+
+def test_an_article_alone_is_not_a_count():
+    assert generator.generate("a wheeled courier").plan.wheels == 4
+    assert generator.generate("a legged robot").plan.legs == 4
+    assert generator.generate("a rover with an arm").plan.arms == 1
+
+
+def test_negated_body_words_are_not_read_and_odd_leg_counts_say_so():
+    assert generator.generate("a robot that is not a dog but a rover").kind == "rover"
+    assert generator.generate("a man-sized robot dog").kind == "quadruped"
+    with pytest.raises(generator.SentenceError):
+        generator.generate("a hot dog robot")
+    for sentence in ("a one-legged robot", "a legged robot without legs"):
+        made = generator.generate(sentence)
+        assert made.plan.legs == 4 and any("became 4 legs" in n for n in made.notes), sentence
+
+
+def test_a_small_humanoid_stays_tall_enough_to_walk_and_says_so():
+    made = generator.generate("a tiny humanoid")
+    assert made.source["params"]["height"] >= 0.36 - 1e-9
+    assert any("walk too slowly" in n for n in made.notes)
+
+
+def test_snakes_have_eight_segments_at_least_and_jaws_twelve_at_most():
+    short = generator.generate("a snake with 6 segments")
+    assert short.plan.segments == 8 and any("segments became 8" in n for n in short.notes)
+    jaws = generator.generate("a snake with a gripper head and 14 segments")
+    assert jaws.plan.segments == 12 and any("14 segments became 12" in n for n in jaws.notes)
+    assert any("slithers slowly" in n for n in jaws.notes)
+    assert generator.generate("a snake with 14 segments").plan.segments == 14
+
+
+def test_a_size_clamp_names_the_body_and_the_size_it_stops_at():
+    dog = generator.generate("a 1 m long robot dog")
+    note = next(n for n in dog.notes if n.startswith("length"))
+    assert "legged" in note and "0.54 m length at most" in note
+    snake = generator.generate("a 2 m long snake")
+    assert any("crawls instead of slithering" in n for n in snake.notes)
+
+
+def test_every_generated_robot_in_a_world_reports_how_it_moves(pg):
+    first = pg.add_robot("a", describe="a wheeled robot with three arms")
+    second = pg.add_robot("b", describe="a wheeled robot with three arms")
+    third = pg.add_robot("c", describe="a robot with 8 legs")
+    for result in (first, second, third):
+        assert "generated" in result and result["generated"]["how"]
+    assert any("at most two arms" in n for n in second["generated"]["notes"])
+
+
+def test_a_long_chain_of_fourteen_segments_is_shortened_with_a_note():
+    from robotforge.design.generator.plan import clamp
+
+    plan, notes = clamp(Plan("snake", segments=14, length=1.4))
+    assert plan.length < 1.25 and any("too heavy to slither" in n for n in notes)
+    assert clamp(Plan("snake", segments=12, length=1.4))[0].length == 1.4
+
+
+def test_a_stubby_chain_of_eight_segments_is_lengthened_with_a_note():
+    from robotforge.design.generator.plan import clamp
+
+    plan, notes = clamp(Plan("snake", segments=8, length=0.6))
+    assert plan.length >= 0.7 and any("too stubby to slither" in n for n in notes)

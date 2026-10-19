@@ -15,7 +15,7 @@ from dataclasses import replace
 from typing import Any
 
 from robotforge.design import components
-from robotforge.design.generator.plan import Plan, clamp
+from robotforge.design.generator.plan import NATURAL, Plan, clamp
 
 NUMBERS = {
     "a": 1, "an": 1, "one": 1, "single": 1, "two": 2, "pair": 2, "dual": 2, "twin": 2, "both": 2, "three": 3,
@@ -63,9 +63,10 @@ WHEELED = (
 BODY_WORDS: tuple[tuple[str, str], ...] = (
     ("snake", r"\b(snake|serpent|worm|eel|slither\w*)\b|蛇"),
     ("balancer", r"\b(segway|self balancing|balancing|balances|balancer|unicycle)\b|平衡"),
-    ("humanoid", r"\b(humanoid|android|biped|bipedal|person|man|woman|human)\b|人形|双足|人型"),
-    ("legged", r"\b(legs?|legged|walk\w*|dog|puppy|cat|horse|pony|cow|goat|lizard|quadruped|hexapod|spider|insect|"
-     r"ant|beetle|bug|crab|mantis|centaur|scorpion|cockroach|critter|animal)\b|腿|足|狗|猫|马|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|"
+    ("humanoid", r"\b(humanoid|android|biped|bipedal|person|man|woman|human)\b(?!\s+(sized?|scale|height|tall))"
+     r"|人形|双足|人型"),
+    ("legged", r"\b(legs?|legged|walk\w*|(?<!hot )dog|puppy|cat|horse|pony|cow|goat|lizard|quadruped|hexapod|spider|"
+     r"insect|ant|beetle|bug|crab|mantis|centaur|scorpion|cockroach|critter|animal)\b|腿|足|狗|猫|马|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|"
      r"半人马|蝎子|甲虫"),
     ("wheeled", WHEELED),
     ("arm", r"\b(arms?|manipulator|tentacle|gripper|claw)\b|机械臂|手臂|触手|夹爪"),
@@ -110,15 +111,6 @@ UNITS = {"m": 1.0, "meter": 1.0, "meters": 1.0, "metre": 1.0, "metres": 1.0, "�
          "mm": 0.001, "毫米": 0.001}  # fmt: skip
 DIMENSION = {"long": "length", "长": "length", "tall": "height", "high": "height", "高": "height", "wide": "width",
              "宽": "width"}  # fmt: skip
-# The default size of each body at factor 1 (meters), to turn "1 m long" into a factor.
-NATURAL = {
-    "legged": {"length": 0.3, "height": 0.26, "width": 0.14},
-    "wheeled": {"length": 0.36, "height": 0.3, "width": 0.24},
-    "balancer": {"length": 0.07, "height": 0.37, "width": 0.14},
-    "snake": {"length": 0.73, "height": 0.05, "width": 0.06},
-    "arm": {"length": 0.45, "height": 0.12, "width": 0.16},
-    "humanoid": {"length": 0.1, "height": 0.45, "width": 0.2},
-}
 # "again" is not here: "make it longer again" is the same robot, longer.
 RESEED = r"\b(another|different|new one|variation|variant|reroll|re roll|shuffle)\b|换一个|再来一个|另一个|重新"
 MAX_SENTENCES = 20  # a plan keeps the last ones it was made from
@@ -168,7 +160,7 @@ def read(sentence: str, plan: Plan | None = None, seed: int | None = None) -> tu
     elif not fresh and seed is not None:
         changes["seed"] = seed
     target = changes.get("body", plan.body)
-    changes |= _counts(text, plan, target, fresh)
+    changes |= _counts(text, plan, target, fresh, notes)
     changes |= _sizes(text, plan, target, notes, fresh)
     changes |= _looks(text)
     changes |= _equipment(text, plan, target)
@@ -204,8 +196,21 @@ def _a(word: str) -> str:
     return "an" if word[0] in "aeiou" else "a"
 
 
+def _said(text: str, pattern: str) -> bool:
+    """The pattern is in the text, and not negated: "not a dog but a rover" does not say a dog."""
+    return any(
+        not re.search(NEGATION + NEGATED + r"$", text[max(0, m.start() - 24) : m.start()])
+        for m in re.finditer(pattern, text)
+    )
+
+
+def _negated(text: str, pattern: str) -> bool:
+    """The pattern is in the text only negated ("without legs")."""
+    return re.search(pattern, text) is not None and not _said(text, pattern)
+
+
 def _body(text: str) -> str | None:
-    found = [body for body, pattern in BODY_WORDS if re.search(pattern, text)]
+    found = [body for body, pattern in BODY_WORDS if _said(text, pattern)]
     if not found:
         return None
     if "humanoid" in found and "wheeled" in found:
@@ -226,23 +231,37 @@ def _number(word: str) -> int:
     return int(word) if word.isdigit() else NUMBERS[word]
 
 
-def _count(text: str, noun: str) -> int | None:
-    """The number said before `noun` ("six legs", "6 legged", "六条腿"), or None."""
+ARTICLES = ("a", "an", "single")
+
+
+def _count(text: str, noun: str, articles: bool = True) -> int | None:
+    """The number said before `noun` ("six legs", "6 legged", "六条腿"), or None.
+
+    A real count wins over an article before the same noun: "a wheeled robot with six wheels" is six, not one.
+    """
     # ASCII only behind it: Chinese characters count as word characters, and a count mostly follows one (一辆六轮).
-    m = re.search(rf"(?<![0-9A-Za-z.]){NUM}\s*(?:条|只|个|节|根|台|辆)?\s*(?:{noun})", text)
-    if m is None:
+    found: list[tuple[int, bool]] = []  # (number, an article)
+    for m in re.finditer(rf"(?<![0-9A-Za-z.]){NUM}\s*(?:条|只|个|节|根|台|辆)?\s*(?:{noun})", text):
+        if re.search(NEGATION + r"\s*$", text[max(0, m.start() - 12) : m.start()]):
+            found.append((0, m.group(1) in ARTICLES))
+        else:
+            found.append((_number(m.group(1)), m.group(1) in ARTICLES))
+    if not articles:
+        found = [f for f in found if not f[1]]  # "a legged robot" says nothing about how many legs
+    if not found:
         return None
-    start = m.start()
-    if re.search(NEGATION + r"\s*$", text[max(0, start - 12) : start]):
-        return 0
-    return _number(m.group(1))
+    return next((n for n, article in found if not article), found[0][0])
 
 
-def _counts(text: str, plan: Plan, body: str, fresh: bool) -> dict[str, Any]:
+def _counts(text: str, plan: Plan, body: str, fresh: bool, notes: list[str]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    legs = _count(text, r"legs?\b|legged\b|feet\b|footed\b|腿|足")
+    legs = _count(text, r"legs?\b|legged\b|feet\b|footed\b|腿|足", articles=False)
     if legs is not None and legs > 2:
         out["legs"] = legs
+    elif body == "legged" and (legs is not None or _negated(text, r"\blegs?\b|腿")):
+        out["legs"] = 4
+        said = "no legs" if not legs else f"{legs} {'leg' if legs == 1 else 'legs'}"
+        notes.append(f"{said} became 4 legs: the built-in gaits walk four legs (a trot) or six (a tripod)")
     elif re.search(SIX_LEGS, text):
         out["legs"] = 6
     elif re.search(FOUR_LEGS, text):

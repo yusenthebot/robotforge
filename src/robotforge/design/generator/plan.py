@@ -21,7 +21,8 @@ BODIES: tuple[str, ...] = ("legged", "wheeled", "balancer", "snake", "arm", "hum
 LEGS = (4, 6)
 WHEELS = (2, 4, 6)
 MAX_ARMS = 2
-SEGMENTS = (6, 14)  # 4 or 5 segments slithered 23 to 46 % of the way, 6 or 7 41 to 63 % (2026-10-19)
+SEGMENTS = (8, 14)  # 4 or 5 segments slithered 23 to 46 % of the way, 6 or 7 41 to 63 %, 6 without jaws 51 % (median)
+JAW_SEGMENTS = 12  # with jaws at most: 14 segments and jaws did under half the way in 30 of 106 runs, 12 in 7 of 108
 JOINTS = (3, 6)  # a standing arm's joints, the gripper not counted
 FACTOR = (0.6, 1.8)  # length, width and height, each times the body's own default
 SIZE = (0.6, 1.6)  # the whole robot, times its default
@@ -39,9 +40,22 @@ MIN_LEG_TWO_ARMS = 0.7  # a two-armed dog's: on x0.6 legs they walked 17 to 71 %
 # and 0.03 m/s after 20 s; up to 1.6 m every one without jaws did (2026-10-19 sweep).
 SNAKE_SPINE = 1.6  # m
 SNAKE_SEGMENT = 0.08  # m, one segment at factor 1
+SNAKE_CHAIN = 17  # segments times the length factor at most: 14 segments x1.4 long and x1.4 thick, x0.6 big, moved 9 %
+SNAKE_CHAIN_MIN = 5.6  # and at least this: 8 segments x0.6 long did 47 to 49 % of the way, x0.7 and more all did more
 SNAKE_GIRTH = 1.4  # a snake's size times its width at most this
 HUMANOID_HEIGHT = 0.45  # m, the humanoid template's height at factor 1
-HUMANOID_RANGE = (0.3, 0.65)  # m: at 0.7 m some variations fell over walking at 0.15 m/s (2026-10-19 sweep)
+# m: at 0.7 m some variations fell over walking at 0.15 m/s; a 0.3 m one walked 49 % of the way in 5 s, 0.32 m 53 %,
+# 0.36 m 57 % (2026-10-19 sweep)
+HUMANOID_RANGE = (0.36, 0.65)
+# The default size of each body at factor 1 (meters), to turn "1 m long" into a factor.
+NATURAL = {
+    "legged": {"length": 0.3, "height": 0.26, "width": 0.14},
+    "wheeled": {"length": 0.36, "height": 0.3, "width": 0.24},
+    "balancer": {"length": 0.07, "height": 0.37, "width": 0.14},
+    "snake": {"length": 0.73, "height": 0.05, "width": 0.06},
+    "arm": {"length": 0.45, "height": 0.12, "width": 0.16},
+    "humanoid": {"length": 0.1, "height": 0.45, "width": 0.2},
+}
 
 
 @dataclass(frozen=True)
@@ -115,6 +129,25 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
             changes[name] = round(best, 3)
             notes.append(f"{name} x{value:.2f} became x{best:.2f}: {why}")
 
+    def factor(name: str, value: float) -> None:
+        """A length, width or height factor: the note names the body and the size in meters it stops at."""
+        low, high = FACTOR
+        if low <= value <= high:
+            return
+        best = min(max(value, low), high)
+        changes[name] = round(best, 3)
+        meters = NATURAL[plan.body][name] * min(max(plan.size, SIZE[0]), SIZE[1]) * best
+        more = value > high
+        fails = (
+            "it crawls instead of slithering"
+            if plan.body == "snake"
+            else "its servos cannot hold it up or it tips over"
+        )
+        notes.append(
+            f"{name} x{value:.2f} became x{best:.2f}: a {plan.body} robot this size is {meters:.2f} m {name} at "
+            f"{'most' if more else 'least'}; {'more' if more else 'less'}, {fails}"
+        )
+
     if plan.body not in BODIES:
         raise ValueError(f"unknown body {plan.body!r}; one of {', '.join(BODIES)}")
     if plan.body == "legged":
@@ -133,7 +166,7 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
         changes["joints"] = min(max(plan.joints, lo), hi)
         notes.append(f"{plan.joints} arm joints became {changes['joints']}: an arm has {lo} to {hi}")
     for name in ("length", "width", "height"):
-        bounded(name, getattr(plan, name), *FACTOR, "further and the servos cannot hold it up or it tips over")
+        factor(name, getattr(plan, name))
     bounded("size", plan.size, *SIZE, "further and the servos cannot hold it up")
     arms = changes.get("arms", plan.arms)
     if arms >= 2 and changes.get("size", plan.size) < TWO_ARMS_SIZE:
@@ -186,6 +219,22 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
                 f"length x{length:.2f} became x{best:.2f}: a snake longer than {SNAKE_SPINE} m crawls (fewer "
                 "segments or a smaller snake can be longer)"
             )
+    if plan.body == "snake":
+        segments, length = changes.get("segments", plan.segments), changes.get("length", plan.length)
+        if segments * length < SNAKE_CHAIN_MIN:
+            best = math.ceil(SNAKE_CHAIN_MIN / segments * 1000) / 1000
+            changes["length"] = best
+            notes.append(
+                f"length x{length:.2f} became x{best:.2f}: {segments} segments this short are a chain too stubby to "
+                "slither (more segments can be shorter)"
+            )
+        if segments * length > SNAKE_CHAIN:
+            best = math.floor(SNAKE_CHAIN / segments * 1000) / 1000
+            changes["length"] = best
+            notes.append(
+                f"length x{length:.2f} became x{best:.2f}: {segments} segments this long are a chain too heavy to "
+                "slither (fewer segments can be longer)"
+            )
     if plan.body == "balancer":
         bulk = changes.get("size", plan.size) ** 3 * plan.length * plan.width * changes.get("height", plan.height)
         if bulk > BALANCER_BULK:
@@ -200,7 +249,7 @@ def clamp(plan: Plan) -> tuple[Plan, list[str]]:
     if plan.body == "humanoid" and not HUMANOID_RANGE[0] <= tall <= HUMANOID_RANGE[1]:
         meters = min(max(tall, HUMANOID_RANGE[0]), HUMANOID_RANGE[1])
         changes["height"] = round(meters / (HUMANOID_HEIGHT * size), 3)
-        why = " (taller ones fell over walking)" if tall > meters else ""
+        why = " (taller ones fell over walking)" if tall > meters else " (shorter ones walk too slowly)"
         notes.append(
             f"a {tall:.2f} m humanoid became {meters:.2f} m: the humanoid walks from {HUMANOID_RANGE[0]} to "
             f"{HUMANOID_RANGE[1]} m tall{why}"
@@ -232,3 +281,8 @@ def _equipment(plan: Plan, changes: dict[str, Any], notes: list[str]) -> None:
     if plan.body == "snake" and changes.get("arms", plan.arms) > 1:
         changes["arms"] = 1
         notes.append("a snake has one head: it got jaws (a gripper) for its arms")
+    if plan.body == "snake" and changes.get("arms", plan.arms) and plan.segments > JAW_SEGMENTS:
+        changes["segments"] = JAW_SEGMENTS
+        notes.append(
+            f"{plan.segments} segments became {JAW_SEGMENTS}: with jaws on its head a longer chain does not slither"
+        )
