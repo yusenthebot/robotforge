@@ -17,11 +17,12 @@ const PARTICLE_LIFT = 0.03;
 const TRAIL_LIMIT = 600; // poses kept per trail
 const TRAIL_STEP = 0.04; // m between trail points
 const ARROW = 0.5; // m, the length of a pose arrow
-// RGBA of a cell by state; unknown is clear so the floor shows through, and what was found in the way is a hot pink
-// no shelf or crate is painted in
+// RGBA of a cell by state; unknown is clear so the floor shows through, free is a teal about 30 percent opaque (clear
+// enough to read the map's reach against the floor), and what was found in the way is a hot pink no shelf or crate
+// is painted in
 const PALETTE = [
   [0, 0, 0, 0],
-  [60, 170, 200, 34],
+  [30, 150, 190, 80],
   [236, 52, 112, 255],
 ];
 
@@ -246,8 +247,15 @@ function clearMaps() {
   for (const robot of [...drawn.keys()]) dropMap(robot);
 }
 
+const forward = new THREE.Vector3();
+const FROM_ABOVE = -0.8; // the camera's forward z below this: looking nearly straight down
+
 export function mapFrame() {
   root.visible = shown && drawn.size > 0 && !api.inLesson();
+  // Seen from above the map is drawn over shelves and crates (it is laid on the floor, which they hide from there);
+  // from the side it stays under them, where it belongs.
+  const over = api.camera.getWorldDirection(forward).z < FROM_ABOVE;
+  for (const e of drawn.values()) if (e.sheet) e.sheet.material.depthTest = !over;
   if (drawn.size === 0) $("map-hud")?.setAttribute("hidden", "");
 }
 

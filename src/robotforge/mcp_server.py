@@ -719,6 +719,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         here = playground.behaviors.pose(robot)
         if mapper is not None:  # how far off its own pose estimate was where it stopped (the truth is read to say)
             extra["on_its_own_map"] = playground.perception.pose_check(robot)
+            if mapper.pose_source != "estimate":  # not its own estimate steered it: say so, the result reads otherwise
+                extra["pose_source"] = (
+                    f"{mapper.pose_source}: it steered by "
+                    + ("the exact pose" if mapper.pose_source == "truth" else "the odometry alone")
+                    + ", not by an estimate from its map (mapping option pose='estimate')"
+                )
         return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
     def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
@@ -791,7 +797,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         in real time, the camera following the robot, in the world's videos folder; "video" in the result says
         where. map="own" (a robot that is mapping, see `mapping`) goes by its own occupancy map and its own pose
         estimate instead of the scene's: it plans only through space it has seen free, and says where it believed it
-        was and how far off that was when it stopped."""
+        was and how far off that was when it stopped (and, when the mapping was started with pose "truth" or
+        "odometry", that it steered by that and not by an estimate)."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
             if map is not None and to is None:

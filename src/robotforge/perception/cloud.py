@@ -29,11 +29,14 @@ def depth_points(depth: np.ndarray, cam: Any, stride: int = 1) -> np.ndarray:
 
 
 def voxel_downsample(points: np.ndarray, voxel: float) -> np.ndarray:
-    """One mean point per cube of side `voxel`."""
+    """One mean point per cube of side `voxel`; the cubes start at the cloud's minimum corner, so a voxel as large as
+    the cloud's box gives exactly one cube wherever the cloud lies relative to the world origin."""
     if len(points) == 0:
         return points
-    keys = np.floor(points / voxel).astype(np.int64)
-    _, inverse, count = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
+    keys = np.floor((points - points.min(axis=0)) / voxel).astype(np.int64)
+    dims = keys.max(axis=0) + 1
+    flat = (keys[:, 0] * dims[1] + keys[:, 1]) * dims[2] + keys[:, 2]  # one integer per cube
+    _, inverse, count = np.unique(flat, return_inverse=True, return_counts=True)
     inverse = inverse.reshape(-1)
     sums = np.zeros((len(count), 3))
     np.add.at(sums, inverse, points)
@@ -41,12 +44,29 @@ def voxel_downsample(points: np.ndarray, voxel: float) -> np.ndarray:
 
 
 def thin(points: np.ndarray, limit: int) -> tuple[np.ndarray, float]:
-    """`points` thinned to at most `limit` by the smallest voxel that does it; returns them and the voxel (m)."""
+    """`points` thinned to at most `limit` by about the smallest voxel that does it; returns them and the voxel (m).
+    The voxel grows until the count fits (it always does once the voxel passes the box, which holds one cube), then
+    is bisected back toward the largest count that still fits, so a small limit is not answered with far fewer."""
+    limit = max(1, int(limit))
     voxel = MIN_VOXEL
     out = voxel_downsample(points, voxel)
-    while len(out) > limit:
-        voxel *= GROWTH
+    if len(out) <= limit:
+        return out, round(voxel, 3)
+    box = float(np.ptp(points, axis=0).max())
+    top = max(box * 1.001, MIN_VOXEL * GROWTH)  # past the box there is a single cube, so the loop below ends here
+    low = voxel
+    while True:
+        low, voxel = voxel, min(voxel * GROWTH, top)
         out = voxel_downsample(points, voxel)
+        if len(out) <= limit:
+            break
+    for _ in range(6):
+        mid = (low + voxel) / 2
+        cand = voxel_downsample(points, mid)
+        if len(cand) <= limit:
+            voxel, out = mid, cand
+        else:
+            low = mid
     return out, round(voxel, 3)
 
 
