@@ -70,7 +70,9 @@ def _copy_name(name: str) -> str:
 
 def drive_motors(spec: mujoco.MjSpec) -> int:
     """Turn the torque motors on limited joints into position servos with the same torque limit, stiff enough to give
-    that torque at 0.25 rad of error. Wheels (joints without a range) keep their torque motors. Returns how many."""
+    that torque at 0.25 rad of error. Wheels (joints without a range) keep their torque motors; so does the last joint
+    of a chain (a continuous wrist), but a joint without a range that carries limited joints (a thigh whose file
+    gives hip and calf a range and itself none) is a limb joint and is driven over the full turn. Returns how many."""
     joints = {j.name: j for j in spec.joints}
     count = 0
     for act in spec.actuators:
@@ -82,11 +84,16 @@ def drive_motors(spec: mujoco.MjSpec) -> int:
             and act.dyntype == mujoco.mjtDyn.mjDYN_NONE
         )
         torque = float(np.abs(np.asarray(act.ctrlrange, float)).max() * abs(act.gear[0]))
-        if not motor or joint is None or torque <= 0 or not _limited(spec, joint):
+        if not motor or joint is None or torque <= 0:
             continue
-        low, high = np.asarray(joint.range, float)
-        if spec.compiler.degree and joint.type == mujoco.mjtJoint.mjJNT_HINGE:
-            low, high = np.radians([low, high])
+        if _limited(spec, joint):
+            low, high = np.asarray(joint.range, float)
+            if spec.compiler.degree and joint.type == mujoco.mjtJoint.mjJNT_HINGE:
+                low, high = np.radians([low, high])
+        elif joint.type == mujoco.mjtJoint.mjJNT_HINGE and _carries_limited_joints(spec, joint):
+            low, high = -np.pi, np.pi
+        else:
+            continue
         kp = torque / RAD_ERROR
         damping = float(np.asarray(joint.damping, float).ravel()[0])
         kv = DAMPING * kp if damping < 0.5 * DAMPING * kp else 0.0
@@ -107,3 +114,17 @@ def _limited(spec: mujoco.MjSpec, joint: mujoco.MjsJoint) -> bool:
         return True
     low, high = joint.range
     return joint.limited == mujoco.mjtLimited.mjLIMITED_AUTO and low < high
+
+
+def _carries_limited_joints(spec: mujoco.MjSpec, joint: mujoco.MjsJoint) -> bool:
+    """Whether a body further out on the chain than `joint` has a limited joint (so `joint` is in a limb, not a wheel)."""
+    todo = list(joint.parent.bodies)
+    own = [j for j in joint.parent.joints if j is not joint]
+    if any(_limited(spec, j) for j in own):
+        return True
+    while todo:
+        body = todo.pop()
+        if any(_limited(spec, j) for j in body.joints):
+            return True
+        todo += body.bodies
+    return False
