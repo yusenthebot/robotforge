@@ -29,7 +29,7 @@ from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
-from robotforge import lessons, tool_input, wording
+from robotforge import demonstration_tool, lessons, tool_input, wording
 from robotforge.behaviors import Kind, catch_stand, fetch
 from robotforge.behaviors import catch as catching
 from robotforge.behaviors import mcp_tools as operate_tools
@@ -199,6 +199,12 @@ Scripts and task logic: write_script / run_script run Python against the live wo
 interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on
 sensors) and state machines that a script runs with Tree(...).run(sim, robot): the viewer's tree panel shows the
 running node and the attempt a Retry is on.
+
+Demonstrations: demonstration(action="start", robot=..., name=...) records what a robot does from then on (joint
+positions, actuator targets, base pose, sensor readings, and the commands it is given from the keyboard or a gamepad
+in the viewer, move, move_arm or a script); "stop" saves it as JSON in the world; "replay" plays it again on the same
+robot or another of its kind (mode "commands": any robot of the kind; "joints": the same actuators, open loop);
+"export" writes JSON or NPZ for training; "list" shows what there is. Scripts: robot.record(), robot.replay(name).
 
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
@@ -884,6 +890,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
     perception_tools.register(server, playground, run_until)
+    demonstration_tool.register(server, playground, run_until)
 
     async def run_file(path: Path, max_sim_seconds: float, args: list[str], max_wall_seconds: float) -> dict[str, Any]:
         runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
@@ -1022,6 +1029,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # robot.sensors["imu"], robot.move(speed, turn, seconds=2), robot.stop(), robot.arm.move_to([x, y, z]),
             # robot.arm.pick_and_place(obj, target), robot.gripper.close(), robot.start(plugin_controller),
             # robot.on_step(fn, every=0.1) and robot.run(seconds): fn(robot) is called as the time passes
+            # robot.record(name) -> handle; ...act...; handle.stop(): a demonstration (joints, targets, base pose,
+            # sensors, commands); robot.replay(name, mode="commands"|"joints") plays one on this or another robot of
+            # the kind; sim.export_demo(name, "json"|"npz")
             # task logic: from robotforge.flow import Tree, Sequence, Fallback, Parallel, Retry, Action, Condition,
             # WaitFor, StateMachine, State; Tree(Sequence(Action(fn), Retry(Action(fn2), times=3)), name="job")
             # .run(sim, robot) ticks it (fn(ctx) returns True/False; ctx.robot, ctx.bb) and the viewer shows which

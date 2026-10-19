@@ -73,6 +73,7 @@ def test_the_page_has_all_the_examples_it_promises():
     assert {"plugins/hill_climb.py", "plugins/stay_upright.py"} <= titles
     assert {"behaviors/tour.py", "behaviors/reach.py", "behaviors/patrol.py", "check_export.py"} <= titles
     assert {"behaviors/walk_tree.py", "behaviors/turn_machine.py"} <= titles
+    assert {"behaviors/record_walk.py", "behaviors/record_reach.py"} <= titles
 
 
 def test_the_page_follows_the_house_style():

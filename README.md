@@ -100,7 +100,7 @@ Once it is installed, say things like:
 - "Teach me lesson 1."
 
 The agent opens the 3D viewer early.
-You can drag the robot, pull the sliders that drive each motor, and use W A S D to drive anything that walks or rolls.
+You can drag the robot, pull the sliders that drive each motor, and use W A S D (or a gamepad) to drive anything that walks or rolls, and a gamepad's sticks to jog an arm.
 Worlds are saved in `~/robotforge/worlds/`, and the scripts the agent writes are in each world's `behaviors/` folder: edit and rerun them as you like.
 Changing a world (adding a box, swapping the floor) keeps the robots and objects where they are.
 

@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { flowState, flowUpdate, initFlow } from "./flowview.js";
+import { initGamepad, padAxes, padConnected, padFrame, padMode, padProfile, padState, release as padRelease } from "./gamepad.js";
 import { initMap, mapFrame, mapState, mapUpdate } from "./mapview.js";
 import { initTraining, trainingState, trainingUpdate } from "./training.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
@@ -1352,6 +1353,7 @@ function applyState(s) {
   }
   $("world").title = s.source || "";
   const active = behaviors.find((b) => b.robot === selected);
+  renderDemo(s.recording, s.replaying);
   $("drive-speed").textContent = active && "speed" in active && Math.abs(active.speed) > 0.005 ? `${active.speed.toFixed(2)} m/s` : "";
   const modes = s.mode || {};
   if (JSON.stringify(modes) !== JSON.stringify(currentModes)) {
@@ -1393,25 +1395,43 @@ function driveTarget() {
 
 function renderDrive() {
   const robot = driveTarget();
-  $("drive").hidden = !robot;
+  const jog = padConnected() && (padProfile() === "arm" || (padProfile() === "both" && padMode() === "arm"));
+  const shown = robotByName(selected);
+  $("drive").hidden = !robot && !jog;
+  $("drive-wasd").hidden = jog;
   $("drive-heave").hidden = robot?.kind !== "rov";
-  $("fly-keys").hidden = !isAircraft(robot);
-  const say = isAircraft(robot) ? "fly" : robot?.kind === "rov" ? "drive_rov" : "drive";
-  if (robot) $("drive-text").innerHTML = t(say, { name: escapeHtml(robot.name) });
+  $("fly-keys").hidden = !isAircraft(robot) || jog;
+  $("drive-pad").hidden = !(padConnected() && padProfile());
+  const say = jog ? "drive_arm" : isAircraft(robot) ? "fly" : robot?.kind === "rov" ? "drive_rov" : "drive";
+  const named = robot || shown;
+  if (named) $("drive-text").innerHTML = t(say, { name: escapeHtml(named.name) });
   lastDrive = "";
 }
 
+// What the keys ask for, -1..1 on each axis; the gamepad's stick (gamepad.js) asks for the same things in between.
+function keyAxes() {
+  const n = (plus, minus) => (pressed.has(plus) ? 1 : 0) - (pressed.has(minus) ? 1 : 0);
+  return { fwd: n("fwd", "back"), left: n("left", "right"), slide: n("slide_left", "slide_right"), up: n("up", "down") };
+}
+
+// The pad where its stick asks for something on an axis, else the keys.
+function driveAxes() {
+  const keys = keyAxes();
+  const pad = padAxes();
+  if (!pad) return keys;
+  return { fwd: pad.fwd || keys.fwd, left: pad.left || keys.left, slide: pad.slide || keys.slide, up: pad.up || keys.up };
+}
+
 function driveCommand(robot) {
-  const fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
-  const left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+  const { fwd, left, slide, up } = driveAxes();
   const learned = learnedWalkers[robot.name];
   const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
   const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
-  if (robot.kind === "rov") cmd.heave = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * HEAVE;
+  if (robot.kind === "rov") cmd.heave = up * HEAVE;
   if (isAircraft(robot)) {
     cmd.speed = fwd * top * 0.5;
-    cmd.side = ((pressed.has("slide_left") ? 1 : 0) - (pressed.has("slide_right") ? 1 : 0)) * top * 0.5;
-    cmd.climb = ((pressed.has("up") ? 1 : 0) - (pressed.has("down") ? 1 : 0)) * FLY_CLIMB;
+    cmd.side = slide * top * 0.5;
+    cmd.climb = up * FLY_CLIMB;
   }
   return cmd;
 }
@@ -1422,8 +1442,7 @@ function sendDrive() {
   const lessonDrive = lessonDriveSpec();
   if (lessonDrive) {
     // A lesson with a robot to drive takes the keys; the lesson's own controller turns them into wheel speeds.
-    let fwd = (pressed.has("fwd") ? 1 : 0) - (pressed.has("back") ? 1 : 0);
-    let left = (pressed.has("left") ? 1 : 0) - (pressed.has("right") ? 1 : 0);
+    let { fwd, left } = driveAxes();
     if (lessonDrive.robot === false) [fwd, left] = screenToWorld(fwd, left);
     const cmd = { type: "lesson", action: "drive", speed: fwd * lessonDrive.max_speed * 0.7, turn: left * lessonDrive.turn * 0.7 };
     const key = `lesson:${cmd.speed}:${cmd.turn}`;
@@ -1460,8 +1479,9 @@ controls.addEventListener("change", () => {
 function stopDriving() {
   // Switching robots mid-drive must not leave the old one walking off on its own.
   const robot = driveTarget();
-  if (robot && pressed.size) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
+  if (robot && (pressed.size || padAxes())) send({ type: "teleop", robot: robot.name, speed: 0, turn: 0 });
   pressed.clear();
+  padRelease(false); // the pad's arm, if it was jogging one, is told to hold
   lastDrive = "";
 }
 
@@ -2176,6 +2196,18 @@ let frames = 0;
 let fps = 0;
 let fpsT0 = performance.now();
 
+function renderDemo(recording, replaying) {
+  const chip = $("demo-chip");
+  const rec = recording?.[0];
+  const play = replaying?.[0];
+  chip.hidden = !rec && !play;
+  if (!rec && !play) return;
+  chip.classList.toggle("rec", Boolean(rec));
+  $("demo-text").textContent = rec
+    ? `${t("demo_recording", { name: rec.name })} ${rec.seconds.toFixed(0)} s`
+    : t("demo_replaying", { name: play.name });
+}
+
 function updateClock() {
   const clock = $("clock");
   clock.textContent = paused ? t("paused") : `${latestTime.toFixed(1)} s`;
@@ -2212,6 +2244,7 @@ function loop() {
   if (water) waterFrame(water, latestTime, camera, scene3);
   sensorsFrame();
   mapFrame();
+  padFrame();
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();
@@ -2310,6 +2343,18 @@ initMap({
 initTraining({ request, toast });
 initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
 
+initGamepad({
+  send,
+  toast,
+  robot: () => robotByName(selected),
+  screenToWorld,
+  changed: renderDrive,
+  onDrive: () => {
+    if (padAxes() && driveTarget()) startFollow();
+    sendDrive();
+  },
+});
+
 connect();
 loop();
 
@@ -2388,6 +2433,7 @@ window.__robotforge = {
   },
   fps: () => fps, // frames drawn a second, counted over the last half second
   sensors: () => sensorsState(), // what the sensor drawings and views show (sensors.js)
+  pad: () => padState(), // the gamepad: connected, profile, what it asks for (gamepad.js)
   flow: () => flowState(), // the behavior tree a script runs (flowview.js)
   map: () => mapState(), // the maps robots build: grid, particles, poses (mapview.js)
   training: () => trainingState(), // the run the Training panel shows (training.js)

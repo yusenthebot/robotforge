@@ -1,11 +1,12 @@
 # Extending robotforge
 
 robotforge is meant to be bent to what you need.
-This page covers four ways to do that without touching its source:
+This page covers five ways to do that without touching its source:
 
 - [Plugins](#plugins): your own parts, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
 - [Export](#export): a world or one robot written out as MJCF or URDF with meshes, so other simulators open it.
 - [One robot interface in scripts](#one-robot-interface-in-scripts): `robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper` and a per-step callback, so one script runs on a template dog and on a Go2, or on a template arm and on a Panda.
+- [Demonstrations](#recording-and-replaying-demonstrations): what a robot did, recorded, replayed on it or another robot of its kind, and exported as JSON or NPZ for training.
 - [Behavior trees and state machines](#behavior-trees-and-state-machines): task logic in a script, with the viewer showing which node runs.
 
 Every example below is run by the test suite (`tests/test_extending_docs.py`), so what you read here works.
@@ -310,6 +311,59 @@ dog is a quadruped and cannot work an arm; it can walk or drive: use robot.move
 
 Blocking calls (`arm.move_to`, `pick_and_place`) run to their end without calling the per-step callback.
 A Go2 carrying a PiPER arm has both: `robot.move` walks it and `robot.arm` works the arm.
+
+## Recording and replaying demonstrations
+
+A demonstration is what a robot did, kept as data: its joint positions, the actuator targets, its base pose and sensor readings at a fixed rate, and the commands that steered it (a key or a gamepad stick in the viewer, `move`, `move_arm`, a script).
+It can be played again on the same robot or on another robot of the same kind, and written out as JSON or NPZ for training.
+
+```python title="behaviors/record_walk.py" robots="dog,go2"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+with robot.record("walk_demo") as demo:  # keeps frames and commands until the block ends
+    robot.move(speed=0.25, seconds=1.5)
+    robot.move(speed=0.0, turn=0.8, seconds=1.0)
+saved = demo.result
+print(
+    saved["kind"],
+    saved["frames"],
+    "frames,",
+    saved["command_counts"],
+    "->",
+    saved["path"].split("demonstrations")[-1][1:],
+)
+
+played = robot.replay("walk_demo")  # the same commands again (another robot of its kind would do as well)
+print("replayed", played["commands_issued"], "commands in", played["seconds"], "s")
+print("wrote", sim.export_demo("walk_demo", "npz")["size_kb"], "kB")
+```
+
+An agent does the same with the `demonstration` tool: `start` (robot, name), act, `stop`, then `replay` (name, robot), `export` (name, format) and `list`.
+
+| | |
+|---|---|
+| What is kept | `time`, `joint_pos` (rad or m), `ctrl` (the actuator targets), `base_pos` and `base_quat` (world frame), the numbers of the sensors the robot carries (not cameras and lidars unless named with `sensors=[...]`), and the commands, each with the time it was given |
+| `mode="commands"` (default) | gives the recorded commands again at their times; the robot's own controllers do the rest, so it works on any robot of the same kind. A slower robot gets the speeds scaled down (`speed_scale`) and a command it cannot do (out of reach) is listed under `refused`. Arm targets are kept relative to the arm's base |
+| `mode="joints"` | puts the robot in the first pose and plays the actuator targets back as recorded: exact for the same robot or one with the same actuators, open loop, so for arms and hands, not for walking |
+| Files | `stop` saves `demonstrations/<name>.json` in the world; `export` writes `json` or `npz` there (`to=` a file name). The NPZ holds `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text); LeRobot's parquet needs a library robotforge does not install |
+
+A recording ends on its own when the world is edited or reset, and says so.
+What an errand does inside the simulation (a fetch driving the robot over and stopping it) is part of the command that started it and is not recorded twice.
+
+```python title="behaviors/record_reach.py" robots="arm,panda"
+from robotforge.script import connect
+
+sim = connect()
+robot = sim.robot(sim.robots()[0])
+x, y, z = robot.position
+with robot.record("reach_demo") as demo:
+    robot.arm.move_to([x + 0.2, y, 0.15], gripper="open")
+    robot.gripper.close()
+print(demo.result["command_counts"])
+print(robot.replay("reach_demo")["commands_issued"], "commands replayed")
+```
 
 ## Behavior trees and state machines
 

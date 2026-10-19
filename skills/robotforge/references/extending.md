@@ -84,6 +84,26 @@ arm.gripper.close()
 A robot that cannot do something raises an error that says what it can do instead (a dog has no arm).
 Blocking calls (`arm.move_to`, `pick_and_place`) do not call the per-step callback.
 
+## Recording and replaying demonstrations
+
+```python
+from robotforge.script import connect
+
+sim = connect()
+dog = sim.robot("dog")
+with dog.record("square_walk") as demo:  # keeps joints, actuator targets, base pose, sensors and commands
+    dog.move(speed=0.25, seconds=2.0)
+    dog.move(speed=0.0, turn=1.2, seconds=1.0)
+print(demo.result["command_counts"])  # {"move": 2, "stop": 2}
+sim.robot("go2").replay("square_walk")  # the same commands on another quadruped
+sim.export_demo("square_walk", "npz")  # demonstrations/square_walk.npz
+```
+
+The same from an agent: `demonstration(action="start", robot="dog", name="square_walk")`, act, `demonstration(action="stop")`, `demonstration(action="replay", name="square_walk", robot="go2")`, `demonstration(action="export", name="square_walk", format="npz")`.
+`mode="commands"` (default) gives the recorded commands again at their times; arm targets are kept relative to the arm's base, so an arm standing elsewhere reaches the same place relative to itself.
+`mode="joints"` puts the robot in the first pose and plays the actuator targets back as recorded: exact, open loop, for arms and hands on the same actuators.
+The NPZ has `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text).
+
 ## Behavior trees and state machines
 
 ```python
