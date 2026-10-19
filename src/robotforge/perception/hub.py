@@ -72,6 +72,7 @@ class PerceptionHub:
         self.mappers: dict[str, Mapper] = {}
         self._retired: dict[str, Mapper] = {}
         self._sent: tuple | None = None
+        self._announced = False  # the viewer has been sent a map that is still on its screen
         self._sent_at = 0.0
         playground.session.reset_hooks.append(self._reset)
 
@@ -393,9 +394,15 @@ class PerceptionHub:
 
     def viewer_message(self) -> dict[str, Any] | None:
         """The "map" message: for each mapping robot the map's known part (deflated, sent when it changed or every
-        GRID_EVERY s), its pose estimate and the odometry's alone, and its particles. None without a mapper."""
+        GRID_EVERY s), its pose estimate and the odometry's alone, and its particles. None without a mapper, except
+        once when the last mapper has just gone (cleared, reset or failed): an empty robot list, so the viewer drops
+        the map it still draws."""
         if not self.mappers:
-            return None
+            if not self._announced:
+                return None
+            self._announced, self._sent = False, None
+            return {"type": "map", "version": self.pg.session.version, "robots": []}
+        self._announced = True
         session = self.pg.session
         now = time.monotonic()
         with session.lock:

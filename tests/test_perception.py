@@ -434,6 +434,23 @@ def test_the_viewer_message_carries_the_map_the_pose_and_the_particles(pg):
     json.dumps(message)
 
 
+def test_the_viewer_is_told_once_when_the_last_map_is_gone(pg):
+    """The page drew a dead map for ever: with no mapper the stream sent nothing, and the page drops a map only when a
+    later message leaves its robot out."""
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    _drive(pg, ROUND[:1])
+    assert pg.perception.viewer_message()["robots"]
+    pg.perception.clear("rover")
+    gone = pg.perception.viewer_message()
+    assert gone["type"] == "map" and gone["robots"] == []
+    assert pg.perception.viewer_message() is None  # said once
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    _drive(pg, ROUND[:1])
+    assert "grid" in pg.perception.viewer_message()["robots"][0]  # a new map is sent whole
+    pg.session.reset()
+    assert pg.perception.viewer_message()["robots"] == []  # a reset drops every mapper too
+
+
 def test_the_viewer_stream_sends_a_map_message_while_a_robot_maps(pg):
     from starlette.testclient import TestClient
 
