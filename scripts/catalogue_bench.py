@@ -228,7 +228,7 @@ def main() -> None:
         )
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
-            json.dump(rows, f, indent=1)
+            json.dump(rows, f, indent=1, default=lambda o: o.item() if hasattr(o, "item") else str(o))
     loaded = sum(r["load"] == "ok" for r in rows)
     stood = sum(bool(r.get("stand", {}).get("ok")) for r in rows)
     moved = sum(bool(r.get("move", {}).get("ok")) for r in rows)
