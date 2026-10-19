@@ -49,6 +49,14 @@ STYLES = {
     "太空": ("#e4e0d6", "#c8a043"), "工业": ("#f2b134", "#1d2026"),
 }  # fmt: skip
 
+# How a robot is drawn (assets styles): "a rugged robot dog", "a lab-grade arm", "a cobot", "a hobby servo robot".
+LOOK_STYLES = {
+    "rugged": r"\b(rugged|ruggedi[sz]ed|tough|all[ -]terrain|heavy[ -]duty|outdoor)\b|越野|野外|坚固",
+    "lab": r"\b(lab|laboratory|research|lab[ -]grade)\b|实验室|科研",
+    "hobby": r"\b(hobby|hobbyist|toy|diy|maker)\b|玩具|创客",
+    "cobot": r"\b(cobot|collaborative)\b|协作",
+}
+
 # Body words, strongest first: "a snake with a gripper" is a snake, "a dog with an arm" a walker.
 NOT_BUILT = (
     (r"\b(fly|flying|flies|drone|quadcopter|copter|propellers?|plane|aircraft)\b|飞|无人机",
@@ -390,6 +398,12 @@ def _looks(text: str) -> dict[str, Any]:
     for word, material in MATERIALS.items():
         if re.search(rf"\b{word}\b" if word.isascii() else word, text):
             out["material"] = material
+            break
+    for style, pattern in LOOK_STYLES.items():
+        if re.search(pattern, text) and not re.search(
+            NEGATION + NEGATED + r"$", text[: re.search(pattern, text).start()][-24:]
+        ):
+            out["style"] = style
             break
     return out
 

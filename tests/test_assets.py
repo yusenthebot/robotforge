@@ -102,9 +102,9 @@ def test_a_material_changes_the_shell_a_part_is_made_of():
     metal = assets.for_material(assets.get_style("cobot"), "aluminum")
     carbon = assets.for_material(assets.get_style("cobot"), "carbon")
     assert plain is assets.get_style("cobot")
-    assert metal.body_material == "brushed" and carbon.body_material == "carbon"
+    assert metal.body_material == "aluminum" and carbon.body_material == "carbon"
     asset = assets.generate("link_shell", style=metal)
-    assert "brushed" in {p.material for p in asset.pieces}
+    assert "aluminum" in {p.material for p in asset.pieces}
 
 
 # ---- mass from density -----------------------------------------------------------------------------------------

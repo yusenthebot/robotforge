@@ -36,6 +36,13 @@ def test_each_robot_gets_the_modes_that_fit_it(playground):
     assert offered["rover"] == ["drive", "goto_mpc"]  # the stand task alone would accept a rover
 
 
+def test_a_gripper_on_its_own_gets_sliders_and_does_not_break_the_scene(playground):
+    """A gripper template with no arm under it is told as "gripper", which is no behavior kind: the viewer's scene
+    message (which lists every robot's modes) failed, so the page never drew."""
+    playground.add_robot("hand", template="gripper", pos=[0.0, -1.0])
+    assert _available(playground)["hand"] == ["manual"]
+
+
 def test_modes_attach_controllers_and_report_themselves(playground):
     session = playground.session
     out = modes.apply(playground, "dog", "stand_mpc")

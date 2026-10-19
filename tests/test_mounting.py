@@ -704,7 +704,8 @@ def test_a_second_arm_is_moved_clear_of_the_first_or_told_where_it_fits(pg):
     is, the refusal gives a shift that was tried, clears, and keeps its base on the dog."""
     arm = {"template": "arm", "params": {"reach": 0.3}}
     result = pg.add_robot("go2", library="go2", mounts=[arm, {**arm, "name": "arm2"}])
-    assert "go2: arm2: moved 18 cm back to clear arm" in result["notes"]
+    # how far depends on how the arms are drawn (it is measured on what shows), so only that it moved back is fixed
+    assert any(re.fullmatch(r"go2: arm2: moved \d+ cm back to clear arm", n) for n in result["notes"]), result["notes"]
     assert pg.behaviors.robots()[0]["arms"] == ["go2/arm", "go2/arm2"]
     told = [arm, {**arm, "name": "arm2", "at": "top"}]
     with pytest.raises(

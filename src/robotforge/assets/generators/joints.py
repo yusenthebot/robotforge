@@ -31,6 +31,15 @@ from robotforge.design.visuals import mesh as M
         Param("bolts", -1, -1, 16, "screws on the output flange; -1 lets the style decide", kind="int", unit=""),
         Param("gland", True, doc="a cable gland on the side of the rear cap", kind="bool"),
         Param("gland_angle", 0.0, -180.0, 180.0, "where the gland points round the axis, degrees from +x", unit="deg"),
+        Param(
+            "detail",
+            -1,
+            -1,
+            2,
+            "0 a plain housing, 1 grooves and screws, 2 everything; -1 by size",
+            kind="int",
+            unit="",
+        ),
     ],
     category="joint",
     anchor="axis z, the output flange on the +z face, the middle of the housing at the origin",
@@ -39,7 +48,9 @@ def joint_actuator(a: Args) -> Asset:
     s = a.style
     r, length = a.radius, a.length
     pc = Pieces(a)
-    seg = segments(r, 0.005, 24, 56)
+    # Small joints are a few pixels across: fewer details and segments (a dog's twelve joints must stay light)
+    detail = a.detail if a.detail >= 0 else (2 if r >= 0.03 else 1 if r >= 0.02 else 0)
+    seg = segments(r, 0.005, 24 if detail == 2 else 16, 56)
     fine = max(16, 4 * round(seg * 0.67 / 4))  # small details need fewer segments than the housing
     half = length / 2
     fillet = s.fillet
@@ -52,16 +63,18 @@ def joint_actuator(a: Args) -> Asset:
     bevel = min(0.14 * r * fillet, 0.3 * (z_body1 - z_body0), 0.012)
 
     pc.add("body", M.cylinder(0.955 * r, cap, segments=seg, bevel=min(0.14 * r * fillet, 0.45 * cap), z0=z_cap0, arc=2))
-    # a nameplate on the rear face: a dark recessed disc with a bright ring round it
-    plate = max(0.0006, 0.012 * r)
-    pc.add(
-        "structure",
-        M.cylinder(0.5 * r, plate, segments=fine, bevel=0.3 * plate, z0=z_cap0 - plate + 0.0002, arc=1),
-        material="dark",
-    )
-    pc.add("trim", hollow_cylinder(0.58 * r, 0.5 * r, z_cap0 - plate * 0.6, z_cap0 + 0.0003, fine), material="metal")
+    if detail == 2:  # a nameplate on the rear face: a dark recessed disc with a bright ring round it
+        plate = max(0.0006, 0.012 * r)
+        pc.add(
+            "structure",
+            M.cylinder(0.5 * r, plate, segments=fine, bevel=0.3 * plate, z0=z_cap0 - plate + 0.0002, arc=1),
+            material="dark",
+        )
+        pc.add(
+            "trim", hollow_cylinder(0.58 * r, 0.5 * r, z_cap0 - plate * 0.6, z_cap0 + 0.0003, fine), material="metal"
+        )
     pc.add("body", M.cylinder(r, z_body1 - z_body0, segments=seg, bevel=bevel, z0=z_body0, arc=2))
-    if s.panel_lines:
+    if s.panel_lines and detail >= 1:
         pc.add("structure", groove(0.985 * r, z_cap1 + gap / 2, 2 * gap, seg=seg), material="dark")
         pc.add("structure", groove(0.985 * r, z_body1 + gap / 2, 2 * gap, seg=seg), material="dark")
     pc.add(
@@ -71,7 +84,7 @@ def joint_actuator(a: Args) -> Asset:
     flange_r = 0.8 * r
     pc.add("trim", M.cylinder(flange_r, flange_t, segments=seg, bevel=0.3 * flange_t, z0=half - 0.02 * length, arc=1))
     z_top = half - 0.02 * length + flange_t
-    n = a.bolts if a.bolts >= 0 else screw_count(s.fasteners, 6)
+    n = a.bolts if a.bolts >= 0 else (min(screw_count(s.fasteners, 6), 6 if detail == 1 else 16) if detail >= 1 else 0)
     bolt_r = max(0.0009, min(0.07 * r, 0.004))
     screw_ring(
         pc,
@@ -83,11 +96,12 @@ def joint_actuator(a: Args) -> Asset:
         socket=s.name == "lab",
         start=math.pi / max(n, 1),
     )
-    pc.add("structure", hollow_cylinder(0.42 * r, 0.33 * r, z_top - 0.0003, z_top + 0.0004, fine), material="dark")
-    pc.add("trim", M.cylinder(0.3 * r, 0.04 * r + 0.0005, segments=fine, bevel=0.012 * r, z0=z_top - 0.0002, arc=1))
-    if s.light_ring:
+    if detail == 2:
+        pc.add("structure", hollow_cylinder(0.42 * r, 0.33 * r, z_top - 0.0003, z_top + 0.0004, fine), material="dark")
+        pc.add("trim", M.cylinder(0.3 * r, 0.04 * r + 0.0005, segments=fine, bevel=0.012 * r, z0=z_top - 0.0002, arc=1))
+    if s.light_ring and detail == 2:
         pc.add("led", ring_led(0.985 * r, z_cap1 + gap / 2, max(0.0006, 0.018 * r), fine), color=CYAN)
-    if a.gland:
+    if a.gland and detail >= 1:
         ang = math.radians(a.gland_angle)
         turn = M.rot_z(ang) @ M.rot_y(math.pi / 2)  # the gland's z becomes the radial direction
         zc = z_cap0 + cap * 0.55
@@ -97,7 +111,7 @@ def joint_actuator(a: Args) -> Asset:
         pc.add("structure", boss.moved((0, 0, zc), turn))
         pc.add("metal", nut.moved((0, 0, zc), turn))
     ribs = int(round(3 * s.ribs))
-    if ribs and z_body1 - z_body0 > 0.012:
+    if ribs and detail == 2 and z_body1 - z_body0 > 0.012:
         span = z_body1 - z_body0
         for k in range(ribs):
             z = z_body0 + span * (k + 1) / (ribs + 1)

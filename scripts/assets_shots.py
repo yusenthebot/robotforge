@@ -30,6 +30,14 @@ def _arm(dof: int) -> Callable[[Any], None]:
     return world
 
 
+def _templates_row(pg: Any) -> None:
+    """The templates that draw with the engine: a dog, a humanoid, a rover and a gripper."""
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.7], params={"color": "orange"})
+    pg.add_robot("man", template="humanoid", pos=[0.0, 0.2], params={"color": "teal"})
+    pg.add_robot("car", template="rover", pos=[0.0, -0.3], params={"color": "red"})
+    pg.add_robot("hand", template="gripper", pos=[0.0, -0.7])
+
+
 def _describe(sentence: str) -> Callable[[Any], None]:
     def world(pg: Any) -> None:
         pg.add_robot("bot", describe=sentence)
@@ -86,6 +94,13 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             size=HD,
             settle=2.5,
         ),
+        Shot(
+            "assets_templates",
+            _templates_row,
+            page="window.__robotforge.select(null);" + look((1.9, -0.4, 0.8), (0.0, 0.0, 0.2)),
+            size=HD,
+            settle=3.0,
+        ),
         Shot("assets_arm6", _arm(6), page=arm_view, size=HD, settle=2.5),
         Shot(
             "assets_hexapod",
@@ -103,5 +118,5 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             settle=3.0,
         ),
         Shot("assets_gallery", gallery_world, page=look((3.5, -3.2, 1.9), (-0.3, 0.2, 0.3)), size=HD, settle=3.0),
-        Shot("assets_described", _described_row, page=look((3.4, -0.2, 1.1), (0.0, 0.0, 0.35)), size=HD, settle=3.0),
+        Shot("assets_described", _described_row, page=look((2.5, -0.3, 0.75), (0.0, 0.0, 0.3)), size=HD, settle=3.0),
     ]

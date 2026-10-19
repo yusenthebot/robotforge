@@ -62,8 +62,8 @@ def screw(r: float, h: float, socket: bool) -> tuple[M.Mesh, M.Mesh | None]:
     """A screw head standing on z = 0: (head, dark socket or None). A hex bolt, or a round socket-head cap screw."""
     if not socket:
         return P.bolt(r, h), None
-    head = M.cylinder(r, h, segments=12, bevel=min(h * 0.3, r * 0.2), z0=0.0, arc=1)
-    hole = M.cylinder(r * 0.46, h * 0.15, segments=6, z0=h * 0.9)
+    head = M.cylinder(r, h, segments=10, bevel=min(h * 0.3, r * 0.2), z0=0.0, arc=1)
+    hole = M.cylinder(r * 0.46, h * 0.15, segments=6, z0=h * 0.9) if r >= 0.0016 else None  # too small to be seen
     return head, hole
 
 

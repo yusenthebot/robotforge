@@ -196,6 +196,21 @@ def resolve(name: str, params: dict[str, Any]) -> tuple[Generator, dict[str, Any
     return gen, values
 
 
+def clamped(name: str, params: dict[str, Any]) -> dict[str, Any]:
+    """`params` with each number pulled inside its parameter's range: for callers that compute sizes (a template at
+    any size) and would rather draw a part at its limit than not draw it. Unknown names are still refused."""
+    gen = get(name)
+    known = {p.name: p for p in gen.params}
+    out = {}
+    for key, value in params.items():
+        p = known.get(key)
+        if p is not None and p.kind in ("float", "int") and isinstance(value, int | float):
+            value = min(max(value, p.low), p.high)  # type: ignore[type-var]
+            value = int(round(value)) if p.kind == "int" else float(value)
+        out[key] = value
+    return out
+
+
 def generate(name: str, *, style: str | Style | None = None, seed: int = 0, **params: Any) -> Asset:
     """Make the asset `name` makes for these parameters, in `style` (a name; default `cobot`), for `seed`.
 

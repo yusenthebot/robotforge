@@ -71,7 +71,23 @@ def make(plan: Plan) -> tuple[dict[str, Any], list[str]]:
         "arm": standing_arm,
         "humanoid": humanoid,
     }[plan.body]
-    return maker(plan, look)
+    made, notes = maker(plan, look)
+    if plan.style:
+        _in_style(made, plan.style)
+    return made, notes
+
+
+def _in_style(made: dict[str, Any], style: str) -> None:
+    """Draw the robot in a style: a builder spec's `style`, or the `style` of a template (and of the arms and hands a
+    spec mounts)."""
+    if "template" in made:
+        made.setdefault("params", {})["style"] = style
+        return
+    made["style"] = style
+    for part in made.get("parts", ()):
+        mounted = part.get("robot")
+        if mounted and mounted.get("template") in ("arm", "gripper", "quadruped", "humanoid", "rover"):
+            mounted.setdefault("params", {})["style"] = style
 
 
 # ---- details shared by the bodies --------------------------------------------------------------------------------

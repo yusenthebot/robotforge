@@ -478,3 +478,55 @@ def test_a_stubby_chain_of_eight_segments_is_lengthened_with_a_note():
 
     plan, notes = clamp(Plan("snake", segments=8, length=0.6))
     assert plan.length >= 0.7 and any("too stubby to slither" in n for n in notes)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "style"),
+    [
+        ("a rugged robot dog", "rugged"),
+        ("a lab-grade robot arm with six joints", "lab"),
+        ("a six-legged hobby robot", "hobby"),
+        ("a cobot arm", "cobot"),
+        ("一只越野机器狗", "rugged"),
+        ("a small orange robot dog", None),
+        ("a wheeled robot, not rugged", None),
+    ],
+)
+def test_a_style_word_draws_the_robot_in_that_style(sentence, style):
+    made = generator.generate(sentence)
+    assert made.plan.style == style
+    source = made.source
+    got = source["build"].get("style") if "build" in source else source["params"].get("style")
+    assert got == style
+
+
+def test_a_style_changes_how_a_generated_robot_looks_and_never_how_it_moves(pg):
+    import mujoco
+
+    plain = generator.generate("a six-legged robot with an arm")
+    styled = generator.generate("a rugged six-legged robot with an arm")
+    assert styled.plan.style == "rugged" and plain.plan.style is None
+    # the arm a spec mounts is drawn in the same style
+    mounted = [p["robot"] for p in styled.source["build"]["parts"] if p.get("robot")]
+    assert mounted and all(m["params"]["style"] == "rugged" for m in mounted)
+    pg.add_robot("a", describe="a six-legged robot with an arm", params={"seed": 5})
+    pg.add_robot("b", describe="a rugged six-legged robot with an arm", params={"seed": 5}, pos=[2.0, 0.0])
+    model = pg.session.model
+    masses = {}
+    for name in ("a", "b"):
+        bodies = [
+            i
+            for i in range(model.nbody)
+            if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i) or "").startswith(f"{name}/")
+        ]
+        masses[name] = float(sum(model.body_mass[i] for i in bodies))
+    assert masses["a"] == pytest.approx(masses["b"], rel=1e-9)
+    assert {"rf_cast", "rf_tread"} & {
+        (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MATERIAL, m) or "").split("/")[-1] for m in range(model.nmat)
+    }
+
+
+def test_a_change_can_restyle_a_generated_robot(pg):
+    pg.add_robot("bot", describe="a small robot dog")
+    pg.update_robot("bot", describe="make it rugged")
+    assert pg.current_world().robots[0].generated["style"] == "rugged"

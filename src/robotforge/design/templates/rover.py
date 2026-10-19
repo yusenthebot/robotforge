@@ -8,6 +8,7 @@ from typing import Literal
 import mujoco
 from pydantic import Field
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components
 from robotforge.design.templates.base import (
     DARK,
@@ -31,6 +32,9 @@ class RoverParams(TemplateParams):
     wheel_radius: float = Field(0.035, ge=0.015, le=0.3, description="drive wheel radius in meters")
     motor: str = Field("tt_motor", description="wheel motor from the parts catalog")
     material: Literal["pla", "aluminum", "carbon"] = "pla"
+    style: str | None = Field(
+        None, description="how it is drawn, not how it moves: cobot (default), lab, hobby, rugged (list_templates)"
+    )
 
 
 class Rover(Template):
@@ -42,6 +46,7 @@ class Rover(Template):
         part = components.actuator(p.motor)
         density = components.MATERIALS[p.material]
         accent = components.color(p.color)
+        dress = Dress(p.style, p.material, color=accent)
         spec = new_spec()
         r = p.wheel_radius
         deck_h = max(0.02, 0.5 * r)
@@ -49,6 +54,7 @@ class Rover(Template):
         caster_r = r * 0.45
 
         vis = Visuals(spec)
+        dress.attach(vis)
         chassis = spec.worldbody.add_body(name="chassis")
         chassis.add_freejoint(name="root")
         deck = chassis.add_geom(
@@ -90,7 +96,7 @@ class Rover(Template):
         )
         for geom in (deck, top, ball, socket):
             vis.hide(geom)
-        _dress_chassis(vis, chassis, p.length, p.width, deck_h, r, caster_r, accent)
+        _dress_chassis(vis, chassis, p.length, p.width, deck_h, r, caster_r, dress)
         chassis.add_camera(name="front_cam", pos=[p.length / 2, 0, deck_h], xyaxes=[0, -1, 0, 0, 0, 1], fovy=75)
         declare_camera(spec, chassis, "front_cam", 75)
         imu(spec, chassis)
@@ -117,7 +123,7 @@ class Rover(Template):
             )
             vis.hide(tyre)
             vis.hide(hub)
-            _dress_wheel(vis, wheel, r, sign, accent)
+            _dress_wheel(vis, wheel, r, sign, dress)
             act = spec.add_actuator(name=f"{side}_wheel", target=f"{side}_wheel", trntype=mujoco.mjtTrn.mjTRN_JOINT)
             # Stiff speed loop: full torque at ~5 % speed error, like a motor driver with feedback.
             act.set_to_velocity(kv=part.stall_torque / (0.05 * part.no_load_speed))
@@ -151,13 +157,23 @@ class Rover(Template):
 
 
 def _dress_chassis(
-    vis: Visuals, chassis, length: float, width: float, deck_h: float, r: float, caster_r: float, accent
+    vis: Visuals, chassis, length: float, width: float, deck_h: float, r: float, caster_r: float, dress: Dress
 ):
     hx, hy, hz = length / 2, width / 2 - 0.012, deck_h / 2
     z = hz + 0.004
     corner = min(hy * 0.35, hx * 0.2)
-    body = M.rounded_box(hx, hy, hz, min(hz * 0.6, 0.007), segments=4, corner=corner)
-    vis.add(chassis, "shell", accent, body, (0, 0, z))
+    dress.draw(
+        vis,
+        chassis,
+        "chassis",
+        dress.colored,
+        (0, 0, z),
+        length=length,
+        width=2 * hy,
+        height=deck_h,
+        hatch=False,
+        vents=False,
+    )
     skid = M.rounded_box(hx * 0.94, hy * 0.9, 0.003, 0.002, segments=2, corner=corner * 0.8)
     vis.add(chassis, "dark", DARK, skid, (0, 0, 0.0035))
     # Light top cover with a dark glass status screen and a metal button.
@@ -204,8 +220,6 @@ def _dress_chassis(
     vis.add(chassis, "dark", DARK, socket, (cx, 0, 0))
 
 
-def _dress_wheel(vis: Visuals, wheel, r: float, sign: int, accent) -> None:
+def _dress_wheel(vis: Visuals, wheel, r: float, sign: int, dress: Dress) -> None:
     outward = M.Z_TO_Y if sign > 0 else M.rot_x(math.pi / 2)
-    colors = {"rubber": P.RUBBER, "shell": accent, "dark": DARK, "metal": P.METAL}
-    for preset, mesh in P.tyre(r, 0.012).items():
-        vis.add(wheel, preset, colors[preset], mesh, (0, 0, 0), outward)
+    dress.draw(vis, wheel, "wheel", dress.colored, rot=outward, radius=r, width=0.024)

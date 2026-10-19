@@ -54,6 +54,7 @@ class Style:
     bumpers: bool = False  # rubber guards on corners, feet and ends
     light_ring: bool = False  # a thin glowing ring at a joint
     wall: float = 1.0  # how thick-walled and chunky shapes read: scales joint housings and collars
+    two_tone: bool = True  # neutral shells with the robot's color as a second tone, or all shells in its color
 
     def __post_init__(self) -> None:
         if not NAME_RE.match(self.name):
@@ -142,6 +143,7 @@ register_style(
         fasteners=1.6,
         panel_lines=False,
         wall=1.15,
+        two_tone=False,
     )
 )
 register_style(
@@ -162,6 +164,7 @@ register_style(
         ribs=1.0,
         bumpers=True,
         wall=1.3,
+        two_tone=False,
     )
 )
 
@@ -169,9 +172,9 @@ register_style(
 # printed plastic keeps the style's own shell. (The builder's `material` field and the arm's `material` parameter.)
 MATERIAL_BODIES: dict[str, tuple[str, Color] | None] = {
     "pla": None,
-    "aluminum": ("brushed", (0.76, 0.78, 0.8, 1.0)),
+    "aluminum": ("aluminum", (0.76, 0.78, 0.8, 1.0)),
     "carbon": ("carbon", (0.15, 0.155, 0.165, 1.0)),
-    "rubber": ("tread", (0.09, 0.09, 0.1, 1.0)),
+    "rubber": ("rubber", (0.09, 0.09, 0.1, 1.0)),
 }
 
 

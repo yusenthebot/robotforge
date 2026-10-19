@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components
 from robotforge.design.builder import looks, rotor, thrusters
 from robotforge.design.builder.expand import Placed, link_end, shape_box
@@ -72,6 +73,7 @@ def assemble(build: BuildSpec, placed: list[Placed]) -> Assembly:
     accent = components.color(build.color)
     out = Assembly(spec=spec, floating=not build.base.fixed)
     vis = Visuals(spec, rays=False)  # the dressing never changes what a rangefinder or lidar measures
+    Dress(build.style, build.material, color=build.color).attach(vis)  # in the style the robot asks for
     # Mounted robots are built first: the dressing keeps screws and vents off the spot each one stands on.
     mounted = {p.name: _mounted_robot(p) for p in placed if p.spec.robot is not None}
     reach = {name: looks.footprint(child.spec) for name, (child, _) in mounted.items()}
