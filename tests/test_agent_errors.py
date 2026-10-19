@@ -674,6 +674,15 @@ def test_unit_hint_only_for_values_far_over_the_maximum():
     assert wording.unit_hint("30", 0.8) == ""
 
 
+def test_a_count_over_its_maximum_is_not_taken_for_millimeters():
+    def over(field: str) -> str:
+        err = {"type": "less_than_equal", "loc": ("params", field), "input": 1000, "ctx": {"le": 8}}
+        return wording.validation_message([err])
+
+    assert "meters, so" in over("size")  # a length: 1000 mm is 1 m
+    assert "meters, so" not in over("rows") and "must be at most 8, got 1000" in over("rows")
+
+
 def test_unwrap_joins_prose_and_keeps_code():
     text = "one two\nthree\n\n    code a\n    code b\n\nfour\nfive"
     assert wording.unwrap(text) == "one two three\n\n    code a\n    code b\n\nfour five"

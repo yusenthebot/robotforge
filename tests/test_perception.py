@@ -566,3 +566,49 @@ async def test_read_sensors_gives_a_thinned_point_cloud_when_asked(pg):
         assert 0 < scan["cloud"]["shown"] <= 150 and scan["cloud"]["total"] >= scan["cloud"]["shown"]
         bad = await client.call_tool("read_sensors", {"robot": "rover", "points": 99999})
         assert bad.is_error and "1 to 2000" in bad.content[0].text
+
+
+@pytest.mark.anyio
+async def test_the_mapping_tool_refuses_what_it_cannot_do_and_says_how_the_robot_steered(pg):
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        for particles in ("many", 2.5, 3):
+            bad = await client.call_tool(
+                "mapping", {"robot": "rover", "action": "start", "options": {"particles": particles, "lidar": LIDAR}}
+            )
+            assert bad.is_error and "particles is how many guesses" in bad.content[0].text, bad.content[0].text
+            assert "int()" not in bad.content[0].text  # not Python's own complaint
+        await client.call_tool(
+            "mapping", {"robot": "rover", "action": "start", "options": {"pose": "truth", "lidar": LIDAR}}
+        )
+        await client.call_tool("mapping", {"robot": "rover", "action": "explore", "options": {"seconds": 120}})
+        moved = await client.call_tool("move", {"robot": "rover", "to": [1.8, 1.8], "map": "own"})
+        said = json.loads(moved.content[0].text)
+        assert "exact pose" in said.get("pose_source", ""), said
+
+
+def test_a_mapper_that_failed_is_told_to_the_agent_not_only_logged(pg, monkeypatch):
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    mapper = pg.perception.mapper("rover")
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("scan lost")
+
+    monkeypatch.setattr(mapper, "tick", broken)
+    pg.run_fast(lambda: False, 0.3)
+    with pytest.raises(PerceptionError) as caught:
+        pg.perception.mapper("rover")
+    assert "scan lost" in str(caught.value) and "action='start'" in str(caught.value)
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})  # starting again clears it
+    assert pg.perception.mapper("rover") is not mapper
+
+
+def test_localizing_from_nowhere_in_a_map_with_too_few_walls_says_it_cannot_match(pg):
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    grid = pg.perception.mapper("rover").grid
+    ends = np.array([[1.0, y] for y in np.linspace(-0.2, 0.2, 5)])
+    grid.integrate(np.zeros(2), ends, np.ones(5, bool))  # a few wall cells, free space in front of them
+    said = pg.perception.localize("rover", "global")
+    assert "walls" in said["warning"] and "map more" in said["warning"]
+    with pytest.raises(PerceptionError, match="particles is how many guesses"):
+        pg.perception.localize("rover", "global", "many")

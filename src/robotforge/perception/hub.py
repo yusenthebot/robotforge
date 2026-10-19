@@ -20,6 +20,7 @@ import numpy as np
 from robotforge.perception import truth
 from robotforge.perception.grid import FREE, OCCUPIED, UNKNOWN
 from robotforge.perception.mapper import POSES, Mapper
+from robotforge.perception.particles import MIN_OCCUPIED
 
 log = logging.getLogger(__name__)
 
@@ -67,10 +68,24 @@ class PerceptionError(ValueError):
     """A user-facing error: the message says what to do instead."""
 
 
+def _whole(name: str, value: Any, low: int, high: int, what: str) -> int:
+    """`value` as a whole number in [low, high], or a PerceptionError that says what it is."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        raise PerceptionError(f"{name} is {what}, a whole number {low} to {high}, got {value!r}")
+    try:
+        number = float(value)
+    except ValueError:
+        raise PerceptionError(f"{name} is {what}, a whole number {low} to {high}, got {value!r}") from None
+    if number != int(number) or not low <= number <= high:
+        raise PerceptionError(f"{name} is {what}, a whole number {low} to {high}, got {value!r}")
+    return int(number)
+
+
 class PerceptionHub:
     def __init__(self, playground: Any) -> None:
         self.pg = playground
         self.mappers: dict[str, Mapper] = {}
+        self.failed: dict[str, str] = {}  # robot -> why its mapper was stopped, until it is started again
         self._retired: dict[str, Mapper] = {}
         self._sent: tuple | None = None
         self._announced = False  # the viewer has been sent a map that is still on its screen
@@ -83,6 +98,7 @@ class PerceptionHub:
         """A new model or a reset: the maps go (an edit that leaves a robot where it stands gets its own back)."""
         self._retired = self.mappers
         self.mappers = {}
+        self.failed = {}
         self._install()
 
     def rebuild(self, kept: Any) -> None:
@@ -107,7 +123,7 @@ class PerceptionHub:
                 mapper.tick(suite, session.model, session.data)
             except Exception as exc:  # a mapper that breaks must not stop the simulation
                 log.exception("mapping %s failed", name)
-                mapper.note = f"stopped by an error: {type(exc).__name__}: {exc}"
+                self.failed[name] = f"stopped by an error: {type(exc).__name__}: {exc}"
                 del self.mappers[name]
                 self._install()
 
@@ -124,6 +140,10 @@ class PerceptionHub:
     def mapper(self, robot: str) -> Mapper:
         robot = self.resolve(robot)
         found = self.mappers.get(robot)
+        if found is None and robot in self.failed:
+            raise PerceptionError(
+                f"the map of {robot} {self.failed[robot]}; mapping(robot={robot!r}, action='start') begins a new one"
+            )
         if found is None:
             raise PerceptionError(
                 f"{robot} is not mapping: mapping(robot={robot!r}, action='start') starts a map, then move it about "
@@ -137,8 +157,11 @@ class PerceptionHub:
         opts = dict(options or {})
         robot = self.resolve(robot)
         pose = str(opts.pop("pose", "estimate"))
-        resolution = float(opts.pop("resolution", 0.05))
-        particles = int(opts.pop("particles", 150))
+        try:
+            resolution = float(opts.pop("resolution", 0.05))
+        except (TypeError, ValueError):
+            raise PerceptionError("resolution is the size of a map cell in meters, 0.02 to 0.5") from None
+        particles = opts.pop("particles", 150)
         wanted_lidar = opts.pop("lidar", None)
         wanted_odometry = opts.pop("odometry", None)
         if opts:
@@ -148,10 +171,10 @@ class PerceptionHub:
             )
         if not 0.02 <= resolution <= 0.5:
             raise PerceptionError(f"resolution is the size of a map cell, 0.02 to 0.5 m, got {resolution}")
-        if not 20 <= particles <= 5000:
-            raise PerceptionError(f"particles is how many guesses the filter keeps, 20 to 5000, got {particles}")
+        particles = _whole("particles", particles, 20, 5000, "how many guesses the filter keeps")
         if pose not in POSES:
             raise PerceptionError(f"pose is one of {', '.join(POSES)}, got {pose!r}")
+        self.failed.pop(robot, None)
         if robot in self.mappers:
             existing = self.mappers[robot]
             existing.mapping = True
@@ -225,10 +248,19 @@ class PerceptionHub:
         if init not in ("pose", "global"):
             raise PerceptionError("init is 'pose' (from where the robot believes it is) or 'global' (from nowhere)")
         mapper = self.mapper(robot)
+        if particles is not None:
+            particles = _whole("particles", particles, 20, 5000, "how many guesses the filter keeps")
         with self.pg.session.lock:
             if not mapper.localize_only(init, particles):
                 raise PerceptionError("the map has no free space yet: map first (action='start', then move the robot)")
-        return self.status(mapper.robot)
+            walls = int(mapper.grid.occupied().sum())
+        out = self.status(mapper.robot)
+        if walls < MIN_OCCUPIED:
+            out["warning"] = (
+                f"the map has {walls} wall cells and a scan needs {MIN_OCCUPIED} to be matched against: the filter "
+                "cannot find itself until the map has walls (map more first)"
+            )
+        return out
 
     # ---- exploring -----------------------------------------------------------------------------------------
 
