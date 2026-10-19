@@ -83,7 +83,7 @@ end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the de
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
 checks say the mass, how far the centre of mass is inside what the robot stands on, each arm's reach and what it can
 hit or hold; a robot that would tip or fall is refused with what to change. save_as keeps the combination as a design
-(add_robot(design=...) or mount(what=...) uses it again); remove("cart/arm") takes a mount off.
+(add_robot(design=...) or mount(what=...) uses it again; a name already saved needs overwrite=true); remove("cart/arm") takes a mount off.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
