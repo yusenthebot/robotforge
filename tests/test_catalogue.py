@@ -387,3 +387,172 @@ def test_a_xacro_that_includes_a_package_outside_its_folder_gets_the_whole_repos
     pg.add_robot("n", library="needy")
     assert wholes == [True]
     assert catalogue_fetch.is_whole("needy_repo", sha)
+
+
+# ---- the trial of a legged robot and what the description makes of it ----------------------------------------
+
+
+def test_a_legged_robot_is_tried_when_it_is_added_and_the_result_is_kept(folders, monkeypatch):
+    from robotforge.design import catalogue_probe
+
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    about = pg.add_robot("d", library="dog")["catalogue"]
+    checked = about["checked"]
+    assert checked["stands"] is True and checked["walk"] in {"walked", "fell", "stalled"}
+    assert checked["summary"].startswith("stood")
+    assert catalogue_probe.cached(folders["dog"]) is not None
+    # the same robot again reads the kept result instead of running it (a second world, nothing is simulated)
+    monkeypatch.setattr(catalogue_probe, "run", lambda *_: pytest.fail("tried twice"))
+    pg.new_world("u")
+    assert pg.add_robot("d", library="dog")["catalogue"]["checked"] == checked
+    # arms, wheels and hands are not tried: the trial is for legs
+    assert "checked" not in pg.add_robot("w", library="rover", pos=[2.0, 0.0])["catalogue"]
+
+
+def test_the_trial_does_not_try_a_robot_inside_its_own_trial(folders, monkeypatch):
+    from robotforge.design import catalogue_probe
+
+    monkeypatch.setattr(catalogue_probe, "run", lambda *_: pytest.fail("ran"))
+    token = catalogue_probe._probing.set(True)
+    try:
+        assert catalogue_probe.trial(folders["dog"]) is None
+    finally:
+        catalogue_probe._probing.reset(token)
+
+
+def test_a_trial_that_breaks_does_not_break_the_add(folders, monkeypatch):
+    from robotforge.design import catalogue_probe
+
+    def broken(*_):
+        raise RuntimeError("scratch world failed")
+
+    monkeypatch.setattr(catalogue_probe, "run", broken)
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    about = pg.add_robot("d", library="dog")["catalogue"]
+    assert about["kind"] == "quadruped" and "checked" not in about
+
+
+def _described(kind: str, can: list[str]):
+    from robotforge.design.catalogue_describe import Described
+
+    what = {"humanoid": "a walking robot on two legs", "quadruped": "a four-legged robot"}[kind]
+    return Described(kind, f"Acme X: {what}, 30.0 kg, 12 motors (URDF, MIT)", can, legs=2)
+
+
+GAIT = "move starts a gait found from its legs (up to 0.5 m/s); the gait is tuned for the library's robots"
+
+
+def test_a_robot_that_collapsed_is_not_called_a_walking_robot():
+    trial = {"settle_s": 2.0, "stands": False, "height_kept": 0.33, "walk": "not tried"}
+    described = _described("humanoid", [GAIT]).with_trial(trial)
+    out = described.to_dict()
+    assert "walking robot" not in out["about"] and "collapses at home" in out["about"]
+    assert len(out["can"]) == 1 and "move starts" not in out["can"][0] and "collapsed" in out["can"][0]
+    assert out["checked"]["stands"] is False and "33%" in out["checked"]["summary"]
+
+
+def test_a_gait_that_fell_is_offered_with_that_said():
+    trial = {
+        "stands": True,
+        "walk": "fell",
+        "fell_after_m": 1.7,
+        "fell_after_s": 3.4,
+        "walk_speed": 0.2,
+        "settle_s": 2.0,
+    }
+    out = _described("quadruped", [GAIT]).with_trial(trial).to_dict()
+    assert "move starts a gait" in out["can"][0] and "fell over after 1.7 m" in out["can"][0]
+    stalled = {"stands": True, "walk": "stalled", "walked_m": 0.0, "walk_s": 6.0, "walk_speed": 0.2, "settle_s": 2.0}
+    assert "got only 0.0 m" in _described("humanoid", [GAIT]).with_trial(stalled).to_dict()["can"][0]
+    walked = {"stands": True, "walk": "walked", "walked_m": 1.2, "walk_s": 6.0, "walk_speed": 0.2, "settle_s": 2.0}
+    assert "walked 1.2 m upright" in _described("quadruped", [GAIT]).with_trial(walked).to_dict()["can"][0]
+
+
+def test_run_fast_gives_up_on_a_simulation_that_blew_up(monkeypatch):
+    """MuJoCo resets a diverged simulation to time 0; run_fast used to wait for a clock that kept starting over
+    (the trial of H1_2 sat at full speed for twenty minutes)."""
+    pg = Playground.with_demo()
+    pg.session.data.time = 5.0
+    steps = []
+
+    def blow_up(n: int = 1) -> None:
+        steps.append(n)
+        pg.session.data.time = 0.0
+
+    monkeypatch.setattr(pg.session, "step", blow_up)
+    assert pg.run_fast(lambda: False, 1.0) == 0.0 and len(steps) == 1
+
+
+def test_a_trial_walk_that_blows_up_is_a_fall(folders, monkeypatch):
+    from robotforge.design import catalogue_probe
+
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("d", library="dog")
+    real = pg.run_fast
+    calls = []
+
+    def blown_on_the_third(until, seconds):
+        calls.append(seconds)
+        return 0.0 if len(calls) == 4 else real(until, seconds)  # the settle, then the third look at the walk
+
+    monkeypatch.setattr(pg, "run_fast", blown_on_the_third)
+    out = catalogue_probe.watch(pg, "d")
+    assert out["stands"] and out["walk"] == "fell"
+
+
+# ---- fixes found on real robots, each with the file that showed it ---------------------------------------------
+
+
+def _compiled(xml: str):
+    import mujoco
+
+    return mujoco.MjModel.from_xml_string(xml)
+
+
+def test_a_hand_whose_file_names_a_site_tcp_is_not_an_arm():
+    from robotforge.design import catalogue_describe
+
+    finger = (
+        '<body name="r/{n}" pos="{x} 0 -0.03"><joint name="r/{n}_j1" axis="0 1 0" range="0 1.5"/>'
+        '<geom type="capsule" fromto="0 0 0 0 0 -0.05" size="0.008" mass="0.02"/>'
+        '<body name="r/{n}_tip" pos="0 0 -0.05"><joint name="r/{n}_j2" axis="0 1 0" range="0 1.5"/>'
+        '<geom type="capsule" fromto="0 0 0 0 0 -0.04" size="0.007" mass="0.01"/></body></body>'
+    )
+    model = _compiled(
+        '<mujoco><worldbody><body name="r/palm" pos="0 0 0.3"><geom type="box" size="0.04 0.03 0.02" mass="0.3"/>'
+        '<site name="r/tcp" pos="0 0 -0.03"/>'
+        + finger.format(n="a", x=-0.02)
+        + finger.format(n="b", x=0.02)
+        + "</body></worldbody></mujoco>"
+    )
+    assert catalogue_describe.classify(model, "r", model.qpos0)[0] == "hand"
+
+
+def test_two_toe_and_heel_pairs_under_a_tall_body_are_two_feet():
+    """ergoCub: four contact places, but a body far taller than the feet are long stands on two."""
+    from robotforge.design import catalogue_describe
+
+    def leg(side: float) -> str:
+        return (
+            f'<body name="r/leg{side}" pos="0 {side} -0.2"><joint name="r/hip{side}" axis="0 1 0" range="-1 1"/>'
+            '<geom type="capsule" fromto="0 0 0 0 0 -0.6" size="0.04" mass="3"/>'
+            f'<body name="r/toe{side}" pos="0.15 0 -0.84"><geom type="sphere" size="0.02" mass="0.1"/></body>'
+            f'<body name="r/heel{side}" pos="-0.15 0 -0.84"><geom type="sphere" size="0.02" mass="0.1"/></body></body>'
+        )
+
+    model = _compiled(
+        '<mujoco><worldbody><body name="r/trunk" pos="0 0 1.2"><freejoint/>'
+        '<geom type="box" size="0.1 0.2 0.3" mass="20"/>' + leg(-0.1) + leg(0.1) + "</body></worldbody></mujoco>"
+    )
+    assert catalogue_describe.classify(model, "r", model.qpos0) == ("humanoid", 2)
+
+
+def test_a_catalogue_arm_holds_itself_against_gravity(folders):
+    """An iiwa stopped 7 cm short: its file's servos know nothing of the weight they carry."""
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("a", library="arm")
+    assert pg.behaviors._arm_motion("a")._holds_itself is True

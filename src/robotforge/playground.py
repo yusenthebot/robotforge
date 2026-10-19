@@ -1315,12 +1315,17 @@ class Playground:
         return result
 
     def run_fast(self, until: Callable[[], bool], max_seconds: float) -> float:
-        """Step as fast as possible until `until()` or `max_seconds` of sim time; returns sim seconds run."""
+        """Step as fast as possible until `until()` or `max_seconds` of sim time; returns sim seconds run. A simulation
+        that blows up is reset to its start by MuJoCo (its clock goes back to 0): the run ends there, and the seconds
+        returned are then short of `max_seconds` (it used to wait forever for a clock that kept starting over)."""
         with self.session.lock:
-            start = self.session.data.time
+            start = last = self.session.data.time
             chunk = max(1, round(0.02 / self.session.model.opt.timestep))
             while not until() and self.session.data.time - start < max_seconds:
                 self.session.step(chunk)
+                if self.session.data.time < last:
+                    return max(0.0, float(last - start))
+                last = self.session.data.time
             return float(self.session.data.time - start)
 
     def control(self, action: str) -> dict[str, Any]:

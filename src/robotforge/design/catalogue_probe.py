@@ -112,10 +112,9 @@ def watch(pg: Any, robot: str) -> dict[str, Any]:
     """Settle `robot` at home, then walk it slowly; what happened. `pg` is a Playground with the robot in it."""
     out: dict[str, Any] = {"settle_s": SETTLE_S}
     start = _span(pg, robot)
-    pg.run_fast(lambda: False, SETTLE_S)
+    ran = pg.run_fast(lambda: False, SETTLE_S)
     kept = min(1.0, _span(pg, robot) / start) if start > 0.02 else 1.0  # taller than at the start is standing
-    upright = _upright(pg, robot)
-    stands = bool(upright and kept >= STANDS_KEPT and _finite(pg))
+    stands = bool(_upright(pg, robot) and kept >= STANDS_KEPT and _finite(pg) and ran >= SETTLE_S)
     out.update(stands=stands, height_kept=round(kept, 2))
     if not stands:
         out["walk"] = "not tried"
@@ -131,11 +130,14 @@ def watch(pg: Any, robot: str) -> dict[str, Any]:
     out["walk_speed"] = round(speed, 2)
     elapsed, went, down = 0.0, 0.0, 0
     while elapsed < WALK_S:
-        pg.run_fast(lambda: False, STEP_S)
+        ran = pg.run_fast(lambda: False, STEP_S)
         elapsed += STEP_S
         pose = pg.behaviors.pose(robot)
         went = float(((pose["position"][0] - before[0]) ** 2 + (pose["position"][1] - before[1]) ** 2) ** 0.5)
-        down = down + 1 if not pose["upright"] or not _finite(pg) else 0
+        blown = ran < STEP_S - 1e-6  # the simulation blew up and started over
+        down = down + 1 if blown or not pose["upright"] or not _finite(pg) else 0
+        if blown:
+            down = FELL_SAMPLES
         if down >= FELL_SAMPLES:
             out.update(walk="fell", fell_after_m=round(went, 2), fell_after_s=round(elapsed - STEP_S * (down - 1), 1))
             break
