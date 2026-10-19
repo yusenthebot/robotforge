@@ -603,7 +603,8 @@ function touchDrawing(first, idleColor = 0xffffff) {
     },
     frame() {
       const node = api.bodyNode(last.body);
-      group.visible = !!node && !behindScenery(last.sightKey ?? last.name, cells[0].getWorldPosition(center));
+      // a skin lies over the robot itself, against what it touches: it is never taken for hidden behind it
+      group.visible = !!node && (last.noHide || !behindScenery(last.sightKey ?? last.name, cells[0].getWorldPosition(center)));
       if (!group.visible) return;
       pad.position.copy(node.position);
       pad.quaternion.copy(node.quaternion);
@@ -698,7 +699,7 @@ function sonarDrawing() {
 // A skin is a touch pad on each of several faces: each is drawn as a pad of its own.
 function skinDrawing(first) {
   const group = new THREE.Group();
-  const merged = (e, pad) => ({ ...e, ...pad, sightKey: `${e.name}#${pad.face}` }); // each pad is seen or hidden on its own
+  const merged = (e, pad) => ({ ...e, ...pad, sightKey: `${e.name}#${pad.face}`, noHide: true });
   // taxels rest blue: white ones vanish on a pale robot
   const parts = first.pads.map((pad) => touchDrawing(merged(first, pad), 0x4f7be8));
   group.add(...parts.map((p) => p.group));

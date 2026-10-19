@@ -1320,6 +1320,13 @@ def _sensing(*sensors: dict[str, Any], pos: tuple[float, float] = (-3.6, 2.6), y
     return build
 
 
+def _drop_crate(pg: Any) -> None:
+    """A 6 kg crate dropped on the Go2's back, where its tactile skin's top pad lies, and a heavy one pushed against its
+    side: the pads under them light up."""
+    x, y = pg.behaviors.pose("go2")["position"][:2]
+    pg.add_object("crate", shape="box", size=[0.3, 0.2, 0.15], pos=[x, y, 0.75], mass=6.0, color="orange")
+
+
 def _push_crate(pg: Any) -> None:
     """A heavy crate in the Go2's way, 0.9 m ahead: it walks into it, and the skin on its front feels it."""
     x, y = pg.behaviors.pose("go2")["position"][:2]
@@ -1342,7 +1349,7 @@ G12_SENSOR_VIEWS = {
     "front": _look_at(["go2"], (-2.3, 0.1, 1.15)),  # from behind, down the aisle it looks along
     "back": _look_at(["go2"], (-2.3, 0.1, 1.15)),
     "side": _look_at(["go2"], (-1.9, 0.5, 1.7)),  # from behind and above, the cone and the pole ahead
-    "skin": _look_at(["go2"], (0.5, -0.45, 1.25)),  # from above its left, its front pad in view
+    "skin": _look_at(["go2"], (-0.9, -0.8, 1.25)),  # from above its left, its front pad in view
 }
 
 
@@ -1418,7 +1425,7 @@ G12_SHOTS = [
     Shot(
         "g12_skin",
         _sensing({"type": "skin", "name": "skin", "rows": 3, "cols": 4, "faces": ["top", "front", "left", "right"]}),
-        actions=[(0.5, _push_crate)],
+        actions=[(0.5, _drop_crate)],
         page=G12_SENSOR_VIEWS["skin"],
         size=(1920, 1080),
         settle=2.4,
