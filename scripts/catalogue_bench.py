@@ -24,7 +24,7 @@ import mujoco
 import numpy as np
 
 QUOTAS = (("arm", 5), ("quadruped", 3), ("humanoid", 4), ("wheeled", 3), ("hand", 3), ("aircraft", 1), ("other", 1))
-SETTLE_S = 3.0
+SETTLE_S = 6.0
 
 
 def draw(seed: int, quotas=QUOTAS) -> list[str]:
