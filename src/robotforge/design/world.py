@@ -32,6 +32,8 @@ from robotforge.design import (
     library,
     mechanisms,
     menagerie,
+    mjcf_doctor,
+    mjcf_stance,
     mounting,
     props,
     templates,
@@ -667,14 +669,32 @@ def _catalogue_robot(entry: RobotEntry) -> templates.BuiltRobot:
         params = {"xacro_args": dict(robot.xacro_args), **entry.params} if robot.format == "xacro" else entry.params
         if robot.format == "xacro" and not params["xacro_args"]:
             del params["xacro_args"]
-        built = _file_robot(entry.name, path, params)
+        problem = None
+        try:
+            built = _file_robot(entry.name, path, params, drive=True)
+            wide = _lost_meshes(built)
+        except ValueError as exc:  # a xacro that includes another package of the repository
+            if "was not found" not in str(exc):
+                raise
+            wide, built, problem = True, None, exc
+        if wide and catalogue.widen(robot.id):  # files next to the robot's folder: take the whole repository
+            built = _file_robot(entry.name, path, params, drive=True)
+        elif built is None:
+            raise ValueError(f"{problem}; it needs a package from elsewhere in {robot.repo}") from problem
         return catalogue_inspect.finish(built, robot)
     except ValueError as exc:
         raise ValueError(f"robot {entry.name!r}: {exc}") from exc
 
 
-def _file_robot(name: str, path: Path, params: dict[str, Any]) -> templates.BuiltRobot:
-    """A robot from a file: MJCF as it is, URDF, xacro and meshes through the import doctor."""
+def _lost_meshes(built: templates.BuiltRobot) -> bool:
+    """Whether the import doctor could not find some of the meshes a URDF names."""
+    findings = (built.doctor or {}).get("findings", [])
+    return any(f["topic"] == "meshes" and f["status"] == "unfixed" and "not be found" in f["problem"] for f in findings)
+
+
+def _file_robot(name: str, path: Path, params: dict[str, Any], drive: bool = False) -> templates.BuiltRobot:
+    """A robot from a file: MJCF as it is (with `drive`, its torque motors become position servos), URDF, xacro and
+    meshes through the import doctor."""
     if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
         try:
             result = importer.import_file(path, params)
@@ -693,23 +713,33 @@ def _file_robot(name: str, path: Path, params: dict[str, Any]) -> templates.Buil
         raise ValueError(f"robot {name!r}: {path.name} is a folder; give a file: {importer.formats_hint()}")
     if path.suffix.lower() not in (".xml", ".mjcf"):
         raise ValueError(f"robot {name!r}: {path.name}: expected {importer.formats_hint()}")
-    return _mjcf_robot(name, path)
+    return _mjcf_robot(name, path, drive)
 
 
-def _mjcf_robot(name: str, path: Path) -> templates.BuiltRobot:
+def _mjcf_robot(name: str, path: Path, drive: bool = False) -> templates.BuiltRobot:
     """An MJCF file, ready to stand in a world as a library robot does: parts it left unnamed get names, and its
     home keyframe becomes its home pose (the world brings its own keyframe, so the file's is dropped)."""
     try:
-        child = mujoco.MjSpec.from_file(str(path))
+        child, repaired = mjcf_doctor.read(path)
     except ValueError as exc:
         raise ValueError(f"robot {name!r}: MuJoCo could not read {path.name}: {exc}") from exc
     notes = [f"imported from {path.name}"]
+    if repaired:
+        notes.append(f"repaired the file to read it ({'; '.join(repaired)})")
+    if drive:
+        servos = mjcf_doctor.drive_motors(child)
+        if servos:
+            notes.append(f"{servos} torque motors driven as position servos (torque limits kept), so it holds its pose")
     motors = _name_unnamed(child)
     if motors:
         notes.append(f"named the {motors} motors the file left unnamed after their joints, so they can be driven")
     key = _home_key(child)
     key_qpos, key_ctrl = library.read_key(child, key)
     _strip_world_extras(child)
+    if drive and key_qpos is None:  # no keyframe: a dog with its joints at zero lies down; stand it
+        key_qpos = mjcf_stance.find(child)
+        if key_qpos is not None:
+            notes.append("the file has no standing pose; found one with the feet under the hips")
     if child.worldbody.first_body() is None:
         return templates.BuiltRobot(spec=child, notes=notes)
     home_qpos, home_ctrl, spawn, floating = library.stand_at_home(child, key_qpos, key_ctrl)

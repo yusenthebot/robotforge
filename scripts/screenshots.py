@@ -1097,6 +1097,112 @@ def _g10_shots() -> list[Shot]:
     ]
 
 
+# ---- G12: the open catalogue ---------------------------------------------------------------------------------------
+# The 20 robots scripts/catalogue_bench.py draws (seed 12), each added by name for real and doing what its kind does:
+# an arm reaching, a dog or humanoid walking, a base driving, a hand closing. scripts/catalogue_grid.py puts the
+# pictures in one grid with their names.
+
+G12_SEED = 12
+G12_FRAME = """
+    const rf = window.__robotforge;
+    rf.select(null);
+    const mine = rf.scene.bodies.filter((b) => b.name.startsWith("r/"));
+    const points = mine.map((b) => rf.bodyPosition(b.id));
+    const lo = [1e9, 1e9, 1e9], hi = [-1e9, -1e9, -1e9];
+    points.forEach((p) => {
+        for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
+    });
+    const c = [0, 1, 2].map((i) => (lo[i] + hi[i]) / 2);
+    const radius = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.04) / 2;
+    const dist = radius * 3.0 + 0.12;
+    rf.lookAt([c[0] + dist * 0.8, c[1] - dist * 0.95, c[2] + dist * 0.45], c);
+"""
+
+
+def _g12_world(name: str) -> Callable[[Any], None]:
+    def world(pg: Any) -> None:
+        pg.add_robot("r", library=name)
+        _g12_pedestal(pg)
+
+    return world
+
+
+def _g12_pedestal(pg: Any) -> None:
+    """A hand or finger bolted down by its file hangs where the file has it, its drawn parts above the floor: give it a
+    stand, so the picture does not show something floating."""
+    import mujoco
+    import numpy as np
+
+    m, d = pg.session.model, pg.session.data
+    root = pg.behaviors._root_body("r")
+    if m.body_jntnum[root] and m.jnt_type[m.body_jntadr[root]] == mujoco.mjtJoint.mjJNT_FREE:
+        return  # it stands on its own
+    mujoco.mj_forward(m, d)
+    bodies = {
+        b for b in range(1, m.nbody) if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith("r/")
+    }
+    boxes = []  # (low, high) of each drawn part along x, y and z, from its bounding box in the world
+    for g in range(m.ngeom):
+        if int(m.geom_bodyid[g]) not in bodies or m.geom_rgba[g][3] == 0:
+            continue
+        rot = d.geom_xmat[g].reshape(3, 3)
+        center = d.geom_xpos[g] + rot @ m.geom_aabb[g][:3]
+        half = np.abs(rot) @ m.geom_aabb[g][3:]
+        boxes.append((center - half, center + half))
+    if not boxes:
+        return
+    low = min(float(b[0][2]) for b in boxes)
+    if low > 0.03:
+        lo = [min(float(b[0][i]) for b in boxes) for i in (0, 1)]
+        hi = [max(float(b[1][i]) for b in boxes) for i in (0, 1)]
+        size = [hi[0] - lo[0] + 0.06, hi[1] - lo[1] + 0.06, low]
+        pos = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]
+        pg.add_object("stand", shape="box", size=size, pos=pos, color="gray", fixed=True)
+
+
+def _g12_do(pg: Any) -> None:
+    """Start what the robot's kind does, as the bench does: reach, walk, drive, close."""
+    import mujoco
+    import numpy as np
+
+    from robotforge.behaviors.manager import BehaviorError
+
+    kind = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)["kind"]
+    d, m = pg.session.data, pg.session.model
+    try:
+        if kind == "arm":
+            arm = pg.behaviors.arms("r")[0]
+            site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{arm}/tcp")
+            home = d.site_xpos[site].copy()
+            for step in ((0.2, 0, 0), (0.15, 0, -0.15), (0.25, 0, 0.1), (0.1, 0.1, 0), (0.1, -0.1, -0.1)):
+                try:
+                    pg.behaviors.move_arm(arm, [float(home[i] + 0.4 * f) for i, f in enumerate(step)])
+                    return
+                except BehaviorError:
+                    continue
+        elif kind in ("quadruped", "humanoid"):
+            pg.behaviors.move("r", 0.25, 0.0)
+        elif kind == "wheeled":
+            pg.behaviors.move("r", 0.3, 0.0)
+        elif kind in ("hand", "other"):
+            for a in range(m.nu):
+                low, high = m.actuator_ctrlrange[a] if m.actuator_ctrllimited[a] else (-1.0, 1.0)
+                d.ctrl[a] = high if abs(high) >= abs(low) else low
+        elif kind == "aircraft":
+            pg.behaviors.heave("r", 0.5)
+    except (BehaviorError, ValueError, np.linalg.LinAlgError):
+        pass  # a robot that cannot do its kind's job stands in the picture, as it does in the bench
+
+
+def _g12_shots() -> list[Shot]:
+    import catalogue_bench
+
+    return [
+        Shot(f"g12_{name}", _g12_world(name), act=_g12_do, page=G12_FRAME, settle=4.0)
+        for name in catalogue_bench.draw(G12_SEED)
+    ]
+
+
 G3_SHOTS = [
     Shot(
         "g3_suction_tile",
@@ -1625,6 +1731,7 @@ SHOTS = [
     *G8_SHOTS,
     *GENERATED_SHOTS,
     *_g10_shots(),
+    *_g12_shots(),
     *_world_shots(),
 ]
 

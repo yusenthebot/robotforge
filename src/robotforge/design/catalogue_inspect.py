@@ -20,6 +20,7 @@ from robotforge.design.templates.base import BuiltRobot
 log = logging.getLogger(__name__)
 
 MIN_ARM_JOINTS = 3  # a chain with fewer movable joints does not reach in space
+MAX_ARMS = 2
 MIN_ARM_REACH = 0.2  # m of links from the first joint to the wrist: shorter chains are fingers
 HAND_JOINTS = 5  # a branch of the wrist with up to this many joints is a finger, not another arm
 TCP_RGBA = [1.0, 0.6, 0.1, 0.6]  # the tool point, as on our own arms
@@ -43,7 +44,7 @@ def finish(built: BuiltRobot, robot: catalogue.Entry) -> BuiltRobot:
         log.debug("catalogue: %s not compiled for its tool point: %s", robot.id, exc)
         return built
     flanges = arm_flanges(model, qpos=model.qpos0)
-    if not flanges:
+    if not flanges or len(flanges) > MAX_ARMS:  # three or more reaching chains are fingers or legs, not arms
         return built
     flanges.sort(key=lambda f: f.base_y)
     names = [""] if len(flanges) == 1 else [f"{side}/" for side in ("right", "left")] if len(flanges) == 2 else None
@@ -57,26 +58,19 @@ def finish(built: BuiltRobot, robot: catalogue.Entry) -> BuiltRobot:
 
 
 def arm_flanges(model: mujoco.MjModel, qpos: np.ndarray) -> list[Flange]:
-    """The wrists of a fixed-base robot: where a serial chain of movable joints ends in a hand, a gripper or nothing."""
-    joints_in = np.zeros(model.nbody, int)  # movable joints in the subtree of each body, its own included
-    for b in range(model.nbody - 1, 0, -1):
-        own = int(
-            sum(
-                int(model.jnt_type[j]) in MOVING
-                for j in range(model.body_jntadr[b], model.body_jntadr[b] + model.body_jntnum[b])
-            )
-        )
-        joints_in[b] += own
-        joints_in[model.body_parentid[b]] += joints_in[b]
+    """The wrists of a fixed-base robot: where a serial chain of motor-driven joints ends in a hand, a gripper or
+    nothing."""
+    powered = {
+        int(model.actuator_trnid[a, 0])
+        for a in range(model.nu)
+        if int(model.actuator_trntype[a]) == int(mujoco.mjtTrn.mjTRN_JOINT)
+    }
     own_joints = [
-        int(
-            sum(
-                int(model.jnt_type[j]) in MOVING
-                for j in range(model.body_jntadr[b], model.body_jntadr[b] + model.body_jntnum[b])
-            )
-        )
-        for b in range(model.nbody)
-    ]
+        sum(int(model.jnt_type[j]) in MOVING and j in powered for j in _joints(model, b)) for b in range(model.nbody)
+    ]  # joints with a motor: an arm moves by its motors, a hand's tendon-driven fingers do not make it one
+    joints_in = np.array(own_joints)  # in the subtree of each body, its own included
+    for b in range(model.nbody - 1, 0, -1):
+        joints_in[model.body_parentid[b]] += joints_in[b]
     children: dict[int, list[int]] = {}
     for b in range(1, model.nbody):
         children.setdefault(int(model.body_parentid[b]), []).append(b)

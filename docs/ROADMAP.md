@@ -72,6 +72,8 @@ G8 还开着：
 - 验收：`scripts/combos.py` 里十个一句话组合用真实 Menagerie 模型搭好、移动、干一件小事，十个全部成功（UR5e+LEAP 存成设计后装上轮式底盘、Spot 背两条臂、Go2 上 PiPER 手腕装激光雷达、ANYmal 背 UR5e+Franka Hand、UR5e+Allegro、小车上 PiPER+吸盘、底盘上 UR5e+电磁铁、T1 头上激光雷达胸前深度相机、存成设计的 PiPER+腕部相机装到 Go1、底盘上 Panda+三维激光雷达）。
   截图在 `scripts/screenshots.py` 的 `g10_*`，换手录像在 `scripts/demos.py` 的 `g10_hand_swap`（Robotiq 换 LEAP 再换 Allegro，各放一样东西进盒子）。
 - Z1 和 xArm 7 的 home 姿态不再用 Menagerie 的关键帧（上臂向后折在底座上，排在一起像倒了）：上臂近乎竖直、肘折起、手在前方 0.3 m（伸得更远或笔直向上，Spot 背 Z1 加 PiPER 搬方块会倒），测试 `test_real_arm_home_stands_up_instead_of_folding_back` 守着。
+  另有 `test_real_spot_carries_a_z1_at_home_while_its_piper_moves_a_cube` 守着 Spot 背 Z1 加 PiPER 搬方块不倒；两个测试用旧姿态都会失败（已验证）。
+- 存设计的规矩（2026-10-20 复查后）：`save_as` 在装上之前就检查，被拒时世界原样不动；已有同名设计要 `overwrite=true` 才覆盖，覆盖时说明哪些设计也会跟着变；设计不能存成自己所带设计的名字（循环）；磁盘上已有的循环设计在建造时报出循环路径，不再递归崩溃。`shift` 和 `rotate` 不是有限数或离谱（超过 5 m、720 度）时编译前就拒绝。`shadow_hand` 会说明为什么不支持并指向 `leap_hand` 和 `allegro_hand`。
 - 还没做：Shadow 手（模型自带 40 cm 前臂，没接）；装在胸前、基座水平的臂指向朝下很难，`move_arm` 和 `pick_and_place` 要求夹爪朝下，所以人形胸前挂臂只能装不能用；动态倾翻（PLA 小车上的 Panda 一甩臂就翻）检查只给百分比提示，不拒绝。
 
 ### G11 生成：机器人、环境、任务
@@ -144,6 +146,12 @@ G8 还开着：
 - 自由创造的扩展力：用户在一个文件夹里写自己的零件、传感器、控制器或行为（Python 文件），robotforge 自动发现并加载；世界导出成 MJCF 和 URDF；脚本里统一的机器人接口（robot.sensors、robot.move、robot.arm、每步回调），同一段脚本换个机器人也能跑。
 
 验收：随机抽 20 台 robot_descriptions 的机器人按名字加进来能站能动；Go2 在陌生仓库里自己建图定位走到货架；一个用户写的新传感器和新控制器放进文件夹就能用；导出的 MJCF 用 `python -m mujoco.viewer` 打开一致。
+
+进展（2026-10-20，G12a 机器人广度）：
+
+- `list_library(kind=, search=)` 搜索 175 台开源机器人（robot_descriptions 3.3.0 的清单，存成 `catalogue.json`，不新增依赖），`add_robot(library=<名字>)` 下载那一台的文件夹（git 稀疏检出，没有 git 就流式下载压缩包），进导入诊断，回答里的 `catalogue` 写它按结构是什么（机械臂、四足、人形、轮式、手、飞行器、其他）和哪些工具能用。
+- 随机 20 台（种子 12）全部加载，17 台站得住，14 台能动；另外 105 台抽查只看加载，102 台能加载。表、原因和限制见 [CATALOGUE.md](CATALOGUE.md)，20 张查看器截图拼成一张图。
+- 这一轮修的导入问题：MJCF 里逗号写的数字、力矩电机变位置伺服、没有关键帧的狗站不起来、手被当成臂、臂在自重下下垂、xacro 的块作用域死循环、xacro 公式里的字符串方法和列表推导、需要同仓库兄弟包的 xacro。
 
 进展（2026-10-19，G12c 线，扩展力）：
 
