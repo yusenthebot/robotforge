@@ -70,7 +70,8 @@ robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
 humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
 Unitree Go2, Franka Panda, ...; list_library(kind="arm", search="kinova") also searches over 200 more open robots
-that add_robot(library=<name>) downloads, imports and describes) or imports a file (URDF, xacro, MJCF, or a mesh such as
+that add_robot(library=<name>) downloads, imports and describes; legged ones are tried for a few seconds and the
+answer's catalogue.checked says whether they stand and walk) or imports a file (URDF, xacro, MJCF, or a mesh such as
 .stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
 add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
