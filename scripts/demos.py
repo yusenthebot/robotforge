@@ -810,7 +810,8 @@ DEMOS = [
                 ),
             ),
             (1.0, _map_then_rack(100.0, "farthest")),
-            (2.5, "window.__robotforge.showSensor('go2/map_lidar', false);"),
+            (4.0, "window.__robotforge.showSensor('go2/map_lidar', false);"),
+            (8.0, "window.__robotforge.showSensor('go2/map_lidar', false);"),
             (
                 14.0,
                 _caption(

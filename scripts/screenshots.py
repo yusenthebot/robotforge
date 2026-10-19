@@ -1431,7 +1431,10 @@ SENSOR_DRAWER_VIEW_WIDE = (
 )
 G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
 # straight down over the whole floor
-G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, 2.1, 13.8], [0.0, 2.2, 0]);"
+G12_OVERVIEW = (
+    "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, 2.1, 13.8], [0.0, 2.2, 0]);"
+    "rf.showSensor('go2/map_lidar', false);"
+)
 G12_SCENE_ONLY = (
     G12_OVERVIEW
     + "const box = document.getElementById('show-map'); box.checked = false; box.dispatchEvent(new Event('change'));"
