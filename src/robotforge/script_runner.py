@@ -260,7 +260,10 @@ class ScriptRunner:
         return replay.status()
 
     def _op_demo_export(self, req) -> dict:
-        return self.pg.demonstrations.export(str(req["name"]), str(req.get("format", "json")), req.get("to"))
+        fmt = req.get("format")
+        return self.pg.demonstrations.export(
+            str(req["name"]), str(fmt) if fmt else None, req.get("to"), bool(req.get("overwrite"))
+        )
 
     def _op_demo_list(self, _req) -> dict:
         return self.pg.demonstrations.listing()

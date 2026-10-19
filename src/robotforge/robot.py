@@ -108,9 +108,14 @@ class DemoRecording:
     def __enter__(self) -> DemoRecording:
         return self
 
-    def __exit__(self, *_exc: object) -> None:
-        if self.result is None:
+    def __exit__(self, exc_type: object, *_exc: object) -> None:
+        if self.result is not None:
+            return
+        try:
             self.stop()
+        except RuntimeError:
+            if exc_type is None:  # a body that failed keeps its own error; an empty recording is the only one to report
+                raise
 
 
 class Robot:

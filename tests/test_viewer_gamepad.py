@@ -254,3 +254,72 @@ def test_the_hud_and_chip_stay_inside_a_phone_screen(viewer):
 
     rights = viewer(scenario, two_robots, size="phone")
     assert all(math.isfinite(r) and r <= 390 for r in rights), rights
+
+
+MOBILE_ARM = {
+    "color": "yellow",
+    "motor": "jga25",
+    "base": {"shape": "box", "size": [0.34, 0.22, 0.06], "mass": 3.0, "sensors": ["imu"]},
+    "parts": [
+        {"name": "left_wheel", "at": [0, 0.13, -0.01], "shape": "wheel", "size": [0.1, 0.03], "mirror": True},
+        {"name": "front_caster", "at": [0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "rear_caster", "at": [-0.14, 0, -0.04], "shape": "caster", "size": [0.04]},
+        {"name": "arm", "at": "top", "shift": [0.06, 0, 0], "robot": {"template": "arm", "params": {"reach": 0.45}}},
+    ],
+}
+
+
+def rover_world(pg: Any) -> None:
+    pg.add_robot("rover", template="rover", pos=[0.0, 0.0])
+    pg.add_robot("mm", build=MOBILE_ARM, pos=[0.0, 2.0])
+
+
+def test_the_left_stick_drives_a_wheeled_rover_and_turns_it(viewer):
+    async def scenario(tab, server):
+        await tab.run("window.__robotforge.select('rover');")
+        await tab.run(PAD)
+        await tab.until("window.__robotforge.pad().profile === 'drive'")
+        start = np.array(pose(server, "rover")["position"][:2])
+        heading = pose(server, "rover")["heading_deg"]
+        await tab.run(axes(a1=-1))
+        await until_server(
+            lambda: np.linalg.norm(np.array(pose(server, "rover")["position"][:2]) - start) > 0.3, "drove"
+        )
+        await tab.run(axes(a1=0, a0=-1))  # the left stick to the left: turn left on the spot
+        await until_server(lambda: _turned(pose(server, "rover")["heading_deg"], heading) > 20, "turned")
+        await tab.run(axes(a0=0))
+        await until_server(lambda: _speed(server, "rover") == 0, "stopped")
+        return True
+
+    assert viewer(scenario, rover_world)
+
+
+def test_y_switches_a_mobile_manipulator_between_driving_and_its_arm(viewer):
+    async def scenario(tab, server):
+        pg = server.pg
+        await tab.run("window.__robotforge.select('mm');")
+        await tab.run(PAD)
+        await tab.until("window.__robotforge.pad().profile === 'both'")
+        assert await tab.eval("window.__robotforge.pad().mode") == "drive"
+        base = np.array(pose(server, "mm")["position"][:2])
+        await tab.run(axes(a1=-1))
+        await until_server(lambda: np.linalg.norm(np.array(pose(server, "mm")["position"][:2]) - base) > 0.2, "drove")
+        await tab.run(axes(a1=0))
+        await until_server(lambda: _speed(server, "mm") == 0, "stopped")
+        await tab.run(press(3))  # Y: the sticks now move the arm's tool
+        await tab.until("window.__robotforge.pad().mode === 'arm'")
+        await tab.run(press())
+        parked = np.array(pose(server, "mm")["position"][:2])
+        before = tool(server, "mm/arm")
+        await tab.run(axes(a3=-1))  # the right stick up raises the tool
+        await until_server(lambda: tool(server, "mm/arm")[2] - before[2] > 0.02, "raised the tool")
+        await tab.run(axes(a3=0))
+        moved = float(np.linalg.norm(np.array(pose(server, "mm")["position"][:2]) - parked))
+        await tab.run(press(3))
+        await tab.until("window.__robotforge.pad().mode === 'drive'")
+        await tab.run(press())
+        return moved, pg.behaviors.arms("mm")
+
+    moved, arms = viewer(scenario, rover_world)
+    assert arms == ["mm/arm"]
+    assert moved < 0.05, moved  # in arm mode the base stays where it is

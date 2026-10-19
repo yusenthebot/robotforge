@@ -54,9 +54,10 @@ No physical pad was used: the events are simulated through the browser's own Gam
 A recording keeps, at 20 frames a simulated second, the joint positions, the actuator targets, the base pose and the sensor readings, and the commands that steered the robot (keyboard, gamepad, `move`, `move_arm`, a script), each with its time.
 A fetch's own steps inside the simulation are not recorded as commands: only what was asked from outside.
 
-- Replay `commands` (default) gives the commands again on any robot of the same kind; speeds are scaled for a slower robot and arm targets are kept relative to the arm's base.
-- Replay `joints` puts the robot in the first pose and plays the actuator targets back, for the same actuators.
-- Export writes JSON or NPZ; LeRobot's parquet format needs `pyarrow`, which robotforge does not install (a gate).
+- Replay `commands` (default) gives the commands again on any robot of the same kind; speeds are scaled for a slower robot, and arm targets and the places of `go` and `pick_and_place` are kept relative to the robot's own frame, so another robot goes the same way from where it stands.
+- Replay `joints` puts the robot in the first pose and plays the actuator targets back, for the same actuators; it is open loop, so a robot that walks, drives or flies is refused.
+- A second replay on a robot takes over from the first.
+- Export writes JSON or NPZ (never over a file that exists or another demonstration, unless `overwrite=true`; a reading missing in some frames is `null` in the JSON and NaN in the NPZ); LeRobot's parquet format needs `pyarrow`, which robotforge does not install (a gate).
 
 Real models:
 

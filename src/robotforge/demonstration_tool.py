@@ -34,7 +34,7 @@ def register(
         robot: str | None = None,
         name: str | None = None,
         mode: Literal["commands", "joints"] = "commands",
-        format: Literal["json", "npz"] = "json",
+        format: Literal["json", "npz"] | None = None,
         to: str | None = None,
         rate_hz: float = RATE_HZ,
         sensors: list[str] | None = None,
@@ -52,11 +52,13 @@ def register(
         default) gives the recorded commands again at their times, mode "joints" puts the robot in the first pose and
         plays the actuator targets back as they were, for the same robot (or the same actuators), open loop. With
         wait=true (default) it returns when the replay is over, shown live if the viewer is open; wait=false starts it
-        and returns. "export" (name, format "json" or "npz", to = a file name) writes the data for training in the
-        world's demonstrations folder: the NPZ has time, joint_pos, joint_names, ctrl, ctrl_names, base_pos, base_quat,
-        sensors, sensor_names and the commands; LeRobot's parquet needs a library robotforge does not install. "list"
-        shows the demonstrations kept and what is recording or replaying. Scripts do the same with robot.record() and
-        robot.replay(name)."""
+        and returns. "export" (name, format "json" or "npz", to = a file name; a to with a .json or .npz suffix
+        sets the format) writes the data for training in the world's demonstrations folder, and refuses a file name
+        that exists or is another demonstration's unless overwrite=true replaces a file. The NPZ has time, joint_pos,
+        joint_names, ctrl, ctrl_names, base_pos, base_quat, sensors, sensor_names and the commands (a reading that
+        was missing in a frame is null in the JSON and NaN in the NPZ); LeRobot's parquet needs a library robotforge
+        does not install. "list" shows the demonstrations kept and what is recording or replaying. Scripts do the
+        same with robot.record() and robot.replay(name)."""
         with _tool_errors():
             if action == "start":
                 if robot is None:
@@ -77,5 +79,5 @@ def register(
             if action == "export":
                 if name is None:
                     raise ValueError("export needs name: the demonstration to write (action=list shows them)")
-                return _json(demos.export(name, format, to))
+                return _json(demos.export(name, format, to, overwrite))
             return _json(demos.listing())

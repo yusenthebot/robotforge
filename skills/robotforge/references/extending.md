@@ -97,9 +97,9 @@ sim.export_demo("square_walk", "npz")  # demonstrations/square_walk.npz
 ```
 
 The same from an agent: `demonstration(action="start", robot="dog", name="square_walk")`, act, `demonstration(action="stop")`, `demonstration(action="replay", name="square_walk", robot="go2")`, `demonstration(action="export", name="square_walk", format="npz")`.
-`mode="commands"` (default) gives the recorded commands again at their times; arm targets are kept relative to the arm's base, so an arm standing elsewhere reaches the same place relative to itself.
-`mode="joints"` puts the robot in the first pose and plays the actuator targets back as recorded: exact, open loop, for arms and hands on the same actuators.
-The NPZ has `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text).
+`mode="commands"` (default) gives the recorded commands again at their times; arm targets are kept relative to the arm's base, so an arm standing elsewhere reaches the same place relative to itself; the places of `go` and `pick_and_place` too. A second replay on a robot takes over from the first.
+`mode="joints"` puts the robot in the first pose and plays the actuator targets back as recorded: exact, open loop, for arms and hands on the same actuators (a robot that walks, drives or flies is refused).
+An export is refused over a file that exists or another demonstration unless `overwrite=true`; its suffix (`to="x.npz"`) sets the format. A reading missing in some frames is `null` in the JSON, NaN in the NPZ. The NPZ has `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text).
 
 ## Behavior trees and state machines
 
@@ -123,6 +123,7 @@ print(tree.summary())
 
 Nodes: `Action(fn)` (fn(ctx) returns True, None, False or a Status), `Condition(fn)`, `sensor_is` (a condition on a sensor, as in the example), `Wait(seconds)`, `WaitFor(test, timeout)`, `Sequence`, `Fallback`, `Parallel(success="all"|"any"|n)`, `Retry(node, times, wait)`, `Repeat`, `Inverter`, `Timeout(node, seconds)`, `StateMachine(name, start)` with `State(...)` and `fsm.transition(a, b, when)`.
 `ctx` has `sim`, `robot`, `time`, `bb` (shared dictionary) and `ctx.log(text)`.
-A call the playground refuses inside an `Action` is a failed node with its message as the note, so `Retry` and `Fallback` can handle it.
+A call the playground refuses inside an `Action` or a `Condition` is a failed node with its message as the note, so `Retry` and `Fallback` can handle it.
+A blocking call (`arm.move_to`, `pick_and_place`) holds the whole tree until it ends: two in a `Parallel` run one after the other, and a `Timeout` cannot cut one short (it fails the node afterwards, with a note, if it took longer than its seconds). A `reactive=True` Sequence or Fallback halts the later children when an earlier one decides.
 See docs/EXTENDING.md in the robotforge repository for every node with an example.
 
