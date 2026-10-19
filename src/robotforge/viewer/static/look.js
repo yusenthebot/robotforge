@@ -159,7 +159,8 @@ function addGrain(mat, kind, scale, strength) {
         "#include <common>",
         `#include <common>
 varying vec3 vGrainPos;
-float rfHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+uint rfPcg(uint v) { uint state = v * 747796405u + 2891336453u; uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u; return (word >> 22u) ^ word; }
+float rfHash(vec3 p) { uvec3 q = uvec3(ivec3(floor(p + 0.5)) + 32768); return float(rfPcg(q.x + rfPcg(q.y + rfPcg(q.z)))) / 4294967295.0; }
 float rfNoise(vec3 x) {
   vec3 i = floor(x), f = fract(x);
   f = f * f * (3.0 - 2.0 * f);

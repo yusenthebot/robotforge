@@ -13,6 +13,7 @@ import mujoco
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components
 from robotforge.design.visuals import Visuals
 from robotforge.design.visuals import mesh as M
@@ -169,9 +170,11 @@ def dress_servo(
     pos: list[float],
     quat=None,
     horn: tuple[int, int] = (2, 1),
+    dress: Dress | None = None,
 ) -> None:
     """Draw a servo case (as placed by `servo_case`) as a rounded housing with its round horn on the
-    face `horn` = (axis, sign) of the case frame, e.g. (0, -1) for the case's -x face."""
+    face `horn` = (axis, sign) of the case frame, e.g. (0, -1) for the case's -x face. With a `dress` (a style) the
+    case is drawn as that style's joint housing instead, filling the case's cross-section."""
     axis, sign = horn
     half = [v / 2 for v in part.size]
     e = np.eye(3)
@@ -181,6 +184,9 @@ def dress_servo(
     if quat is not None:
         rot = M.quat_to_mat(quat) @ rot
     hx, hy, hz = half[(axis + 1) % 3], half[(axis + 2) % 3], half[axis]
+    if dress is not None:
+        dress.draw(vis, body, "joint_actuator", pos=pos, rot=rot, radius=1.08 * min(hx, hy), length=2 * hz)
+        return
     horn_r = 0.78 * min(hx, hy)
     for preset, mesh in P.servo_box(hx, hy, hz, horn_r).items():
         vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, pos, rot)

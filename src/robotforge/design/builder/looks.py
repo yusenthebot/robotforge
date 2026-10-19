@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import mujoco
 import numpy as np
@@ -34,6 +34,7 @@ from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
 # Surface preset per material (see visuals.PRESETS). PLA parts look like the templates' shells.
+PRESET_MATERIAL = {"shell": "pla", "aluminum": "aluminum", "carbon": "carbon", "rubber": "rubber"}  # the other way
 MATERIAL_LOOK = {"pla": "shell", "aluminum": "aluminum", "carbon": "carbon", "rubber": "rubber"}
 # A part with no color of its own shows its material: bare aluminium, black carbon fibre.
 BARE_COLOR = {"aluminum": [0.76, 0.78, 0.8, 1.0], "carbon": [0.15, 0.155, 0.165, 1.0]}
@@ -687,6 +688,22 @@ def link(
         return
     per = n // 4 - 1  # points per rounded corner, so the section has n points like a cylinder of radius r
     e0, e1 = shape.ends
+    if vis.dress is not None:  # a two-part shell with a parting line, in the robot's style
+        d = vis.dress.with_material(PRESET_MATERIAL.get(preset, "pla"))
+        d.limb(
+            vis,
+            body,
+            length + e0 + e1,
+            shape.first,
+            shape.last,
+            replace(d.shell, body=tuple(rgba)),
+            pos=a - shape.rot[:, 2] * e0,
+            rot=shape.rot,
+            seam="strip",  # the shell stays the exact surface sensors and mounts are placed on
+            roundness=LINK_ROUNDNESS,
+            sides=n,
+        )
+        return
     mesh = M.link(
         length + e0 + e1,
         shape.first,
@@ -710,6 +727,21 @@ def wheel(
     vis: Visuals, body: mujoco.MjsBody, center: np.ndarray, r: float, half_w: float, face: np.ndarray, rim
 ) -> None:
     """A tyre with tread on a spoked rim (a dish on small wheels); detail scales with the wheel."""
+    if vis.dress is not None:
+        d = vis.dress
+        spokes = 5 if r >= 0.025 else 0
+        d.draw(
+            vis,
+            body,
+            "wheel",
+            replace(d.shell, body=tuple(rim)),
+            center,
+            M.z_to(face),
+            radius=r,
+            width=2 * half_w,
+            spokes=spokes,
+        )
+        return
     n = int(min(60, max(24, 4 * round(2 * math.pi * r / TREAD_STEP / 4))))
     colors = {"rubber": P.RUBBER, "shell": rim, "dark": DARK, "metal": P.METAL}
     _add(vis, body, P.tyre(r, half_w, segments=n, spokes=5 if r >= 0.025 else 0), colors, center, M.z_to(face))
@@ -719,6 +751,9 @@ def foot(
     vis: Visuals, body: mujoco.MjsBody, center: np.ndarray, r: float, toward_joint: np.ndarray, shin_r: float
 ) -> None:
     """A rubber ball foot with a metal collar on the side its leg comes from."""
+    if vis.dress is not None:
+        vis.dress.draw(vis, body, "foot", None, center, M.z_to(toward_joint), radius=r, shin=shin_r)
+        return
     colors = {"rubber": P.RUBBER, "metal": P.METAL}
     segments = 24 if r >= 0.02 else 18  # a small foot is a few pixels across
     _add(vis, body, P.ball_foot(r, shin_r, segments), colors, center, M.z_to(toward_joint))

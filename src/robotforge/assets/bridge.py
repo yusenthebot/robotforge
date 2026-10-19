@@ -13,7 +13,8 @@ import mujoco
 import numpy as np
 
 from robotforge.assets.asset import Asset, Collider
-from robotforge.assets.styles import Style, get_style
+from robotforge.assets.registry import clamped, generate
+from robotforge.assets.styles import Style, for_material, get_style
 from robotforge.design.visuals import HIDDEN_GROUP, VISUAL_GROUP, Visuals
 
 _GEOM = {
@@ -63,6 +64,87 @@ def draw(
     """Add every piece of `asset` to `vis` on `body`, placed by `pos` and `rot` (a 3x3 rotation)."""
     for piece in asset.pieces:
         vis.add(body, piece.material, piece.color or palette.color(piece.role), piece.mesh, pos, rot)
+
+
+class Dress:
+    """A style with its palettes: what a template or the builder draws its parts with.
+
+    `color` is the robot's own color. In a two-tone style (cobot, lab) most shells are the style's neutral body color
+    (`base`) and `colored` shells take the robot's color; in the others (hobby, rugged) every shell is the robot's
+    color. `dark` is a shell in the style's neutral dark. `draw` makes a generator's asset and puts it on a body;
+    sizes are pulled into the generator's ranges, since a template can be asked for any size and should still be
+    drawn."""
+
+    def __init__(self, style: str | Style | None = None, material: str = "pla", color=None) -> None:
+        from robotforge.design import components
+
+        color = None if color is None else components.color(color)  # a name, a hex code or numbers
+        self.base_style, self.material, self.color = get_style(style), material, color
+        self.style = for_material(self.base_style, material)
+        self.colored = Palette.of(self.style, body=color, accent=None)
+        self.base = Palette.of(self.style, accent=color) if self.style.two_tone else self.colored
+        self.shell = self.base
+        self.dark = Palette.of(self.style, body=self.style.structure_color, accent=color)
+
+    def with_material(self, material: str) -> Dress:
+        """The same style and color for a part made of another material (aluminium, carbon, rubber)."""
+        return self if material == self.material else Dress(self.base_style, material, self.color)
+
+    def attach(self, vis: Visuals) -> Dress:
+        """Draw `vis` in this style: its older preset names (shell, dark) become the style's surfaces, and code that
+        draws with generators finds the dress as `vis.dress`."""
+        vis.remap = {"shell": self.style.body_material, "dark": self.style.structure_material}
+        vis.dress = self
+        return self
+
+    def make(self, name: str, seed: int = 0, **params) -> Asset:
+        return generate(name, style=self.style, seed=seed, **clamped(name, params))
+
+    def draw(
+        self,
+        vis: Visuals,
+        body: mujoco.MjsBody,
+        name: str,
+        palette: Palette | None = None,
+        pos: Sequence[float] = (0.0, 0.0, 0.0),
+        rot: np.ndarray | None = None,
+        seed: int = 0,
+        **params,
+    ) -> Asset:
+        asset = self.make(name, seed, **params)
+        draw(vis, body, asset, palette or self.shell, pos, rot)
+        return asset
+
+    def limb(
+        self,
+        vis: Visuals,
+        body: mujoco.MjsBody,
+        length: float,
+        start: tuple[float, float],
+        end: tuple[float, float],
+        palette: Palette | None = None,
+        pos: Sequence[float] = (0.0, 0.0, 0.0),
+        rot: np.ndarray | None = None,
+        **params,
+    ) -> Asset:
+        """A tapered, domed limb along +z from 0 to `length`, its section's half extents (x, y) going from `start` to
+        `end`: what `design.visuals.mesh.link` draws, as a two-part shell with a parting line."""
+        (hx0, hy0), (hx1, hy1) = start, end
+        return self.draw(
+            vis,
+            body,
+            "link_shell",
+            palette,
+            pos,
+            rot,
+            length=length,
+            radius=hx0,
+            width=hy0 / hx0,
+            tip=hx1 / hx0,
+            tip_width=hy1 / hx0,
+            ends="dome",
+            **params,
+        )
 
 
 def collide(

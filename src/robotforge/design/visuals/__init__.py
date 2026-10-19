@@ -124,6 +124,10 @@ class Visuals:
         self.owner = owner
         self.rays = rays  # False: rangefinders and lidars see through these meshes (see the module notes)
         self.on = enabled()
+        # A style the robot is drawn in (robotforge.assets.Dress.attach): which surface each of the older preset names
+        # (shell, dark) stands for in it, and the dress itself for code that draws with generators.
+        self.remap: dict[str, str] = {}
+        self.dress = None
         self._groups: dict[tuple, tuple[mujoco.MjsBody, str, list[float], list[Mesh]]] = {}
         self._materials: set[str] = set()
 
@@ -138,7 +142,7 @@ class Visuals:
     ) -> None:
         if not self.on:
             return
-        material_name(preset)  # fail early on a typo
+        material_name(self.remap.get(preset, preset))  # fail early on a typo
         color = [float(c) for c in rgba]
         if len(color) == 3:
             color.append(1.0)
@@ -182,7 +186,7 @@ class Visuals:
             body.add_geom(
                 type=mujoco.mjtGeom.mjGEOM_MESH,
                 meshname=name,
-                material=ensure_material(self.spec, preset, self._materials, self.rays),
+                material=ensure_material(self.spec, self.remap.get(preset, preset), self._materials, self.rays),
                 rgba=color,
                 contype=0,
                 conaffinity=0,

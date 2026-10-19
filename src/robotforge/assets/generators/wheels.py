@@ -40,7 +40,7 @@ def wheel(a: Args) -> Asset:
     pc = Pieces(a)
     r, half_w = a.radius, a.width / 2
     tread = _tread_for(a)
-    n = segments(r, 0.005, 24, 72)
+    n = segments(r, 0.0065, 24, 64)
     shoulder = min(half_w * 0.45, r * 0.2) * min(s.fillet, 1.3)
     inner = r * 0.74
     prof = [(inner, -half_w * 0.9)]
@@ -81,7 +81,7 @@ def wheel(a: Args) -> Asset:
     )
     pc.add("body", rim)
     for k in range(a.spokes):
-        spoke = M.rounded_box(R * 0.27, R * 0.075, half_w * 0.22, R * 0.05, segments=2)
+        spoke = M.rounded_box(R * 0.27, R * 0.075, half_w * 0.22, R * 0.05, segments=1)
         pc.add("body", spoke.moved((R * 0.47, 0, half_w * 0.5)).moved(rot=M.rot_z(2 * math.pi * k / a.spokes)))
     if a.spokes == 0:
         pc.add(
@@ -99,7 +99,7 @@ def wheel(a: Args) -> Asset:
         "metal",
         M.cylinder(R * 0.26, half_w * 1.55, segments=max(16, n * 7 // 15), bevel=half_w * 0.18, z0=-half_w * 0.75),
     )
-    nb = 4 if R > 0.03 else 0
+    nb = 4 if R > 0.05 else 0
     screw_ring(
         pc, R * 0.17, nb, max(0.0008, R * 0.03), max(0.0006, half_w * 0.15), half_w * 0.8, socket=s.name == "lab"
     )

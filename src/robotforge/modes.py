@@ -79,7 +79,10 @@ def available(playground: Playground, robot: dict[str, Any], learned: bool) -> l
     """Mode keys for one robot from `BehaviorManager.robots()`: built-in behaviors first, then algorithms."""
     from robotforge.control.tasks import TaskError, make_task
 
-    kind = Kind(robot["kind"])
+    try:
+        kind = Kind(robot["kind"])
+    except ValueError:  # a gripper on its own is told as "gripper": it has sliders, no behavior
+        kind = Kind.OTHER
     kept = "learned_walk" in robot  # robots no gait code knows drive with their kept walk
     keys = ["drive"] if (kind in MOBILE or kept) and robot.get("max_speed") else ["manual"]
     if learned:

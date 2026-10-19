@@ -38,6 +38,7 @@ __all__ = [
     "Asset",
     "AssetError",
     "Collider",
+    "Dress",
     "Generator",
     "MassProperties",
     "Material",
@@ -84,7 +85,7 @@ def overview() -> dict[str, Any]:
 
 def __getattr__(name: str) -> Any:
     # The MuJoCo half is loaded when first used: asking for generators or styles does not need it.
-    if name in ("Palette", "draw", "collide"):
+    if name in ("Palette", "Dress", "draw", "collide"):
         from robotforge.assets import bridge
 
         return getattr(bridge, name)

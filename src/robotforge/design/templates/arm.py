@@ -9,7 +9,7 @@ import mujoco
 from pydantic import Field
 
 from robotforge import assets
-from robotforge.assets.bridge import Palette, draw
+from robotforge.assets.bridge import Dress, draw
 from robotforge.design import components, end_effectors
 from robotforge.design.templates.base import (
     DARK,
@@ -54,7 +54,7 @@ class Arm(Template):
         part = components.actuator(p.servo)
         density = components.MATERIALS[p.material]
         accent = components.color(p.color)
-        dress = Dress(p.style, p.material, accent)
+        dress = Dress(p.style, p.material, color=accent)
         spec = new_spec()
         radius = max(0.012, 0.035 * p.reach)
         upper, fore = 0.45 * p.reach, 0.35 * p.reach
@@ -65,6 +65,7 @@ class Arm(Template):
         hand = 0.2 * p.reach - (tool_length if holder else 0.0)
 
         vis = Visuals(spec)
+        dress.attach(vis)
         base = spec.worldbody.add_body(name="base")
         pedestal = base.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
@@ -186,8 +187,10 @@ def add_gripper(
     into `vis` (or into its own Visuals, finished here, when none is given).
     """
     own = vis is None
-    vis = vis or Visuals(spec)
-    dress = dress or Dress(None, "pla", accent)
+    dress = dress or Dress(color=accent)
+    if vis is None:
+        vis = Visuals(spec)
+        dress.attach(vis)
     palm_h = 0.02
     half_w = opening / 2 + 0.012
     palm = tool.add_geom(
@@ -241,15 +244,6 @@ def add_gripper(
 # ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
 
 
-class Dress:
-    """How an arm is drawn: a style (with the shell's material) and its palettes; nothing here is physics."""
-
-    def __init__(self, style: str | assets.Style | None, material: str, accent: list[float]) -> None:
-        self.style = assets.for_material(assets.get_style(style), material)
-        self.shell = Palette.of(self.style, accent=accent)  # white, grey or yellow shells with the accent as a trim
-        self.accented = Palette.of(self.style, body=accent, accent=self.style.default_body)  # a shell in the accent
-
-
 def _dress_base(vis: Visuals, base, turret, height: float, base_r: float, turret_r: float, dress: Dress) -> None:
     """A bolted mounting plate and column under a turret joint (a rotary housing turning about the vertical)."""
     h = height / 2
@@ -272,7 +266,7 @@ def _dress_link(
 ) -> None:
     """A joint housing on the pitch axis (y) and a tapered shell up to the next joint."""
     half_y = max(drum_half, link_r * 1.02 + 0.003)
-    palette = dress.accented if first else dress.shell
+    palette = dress.colored if first else dress.shell
     joint = assets.generate(
         "joint_actuator", radius=1.18 * drum_r, length=2 * half_y, gland_angle=180.0, style=dress.style
     )
@@ -318,4 +312,4 @@ def _dress_palm(vis: Visuals, tool, half_w: float, palm_h: float, dress: Dress) 
 def _dress_finger(vis: Visuals, finger, sign: int, length: float, dress: Dress) -> None:
     """A finger in the accent color with a ridged rubber grip pad on its inner (closing) face."""
     pad = assets.generate("grip_pad", length=length, width=0.024, thickness=0.01, style=dress.style)
-    draw(vis, finger, pad, dress.accented, (0, 0, 0), M.rot_z(-sign * math.pi / 2))
+    draw(vis, finger, pad, dress.colored, (0, 0, 0), M.rot_z(-sign * math.pi / 2))

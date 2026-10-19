@@ -16,9 +16,10 @@ def _station_extents(a: Args, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Half extents (x, y) of the link's section at each station t in 0..1: from the root to the tip, with the
     waist `a.waist` narrows in the middle."""
     tip = a.tip if a.tip > 0 else a.style.taper
-    scale = 1.0 + (tip - 1.0) * t - a.waist * np.sin(math.pi * t)
-    hx = a.radius * scale
-    hy = a.radius * a.width * scale
+    tip_y = a.tip_width / a.width if a.tip_width > 0 else tip  # the tip's width as a share of the root's
+    waist = a.waist * np.sin(math.pi * t)
+    hx = a.radius * (1.0 + (tip - 1.0) * t - waist)
+    hy = a.radius * a.width * (1.0 + (tip_y - 1.0) * t - waist)
     return hx, hy
 
 
@@ -36,6 +37,20 @@ def _half_rings(hx: np.ndarray, hy: np.ndarray, corner: np.ndarray, per: int, z:
     return front, back
 
 
+def _dome_rings(hx: float, hy: float, corner: float, per: int, z_end: float, depth: float, sign: float):
+    """Rings from the end section (at z_end) out to a pole `depth` beyond it, `sign` -1 below the link, +1 above."""
+    rings = []
+    count = 4 * (per + 1)
+    for ang in np.linspace(math.pi / 2, 0.0, 5):
+        k = math.sin(ang)
+        z = z_end + sign * depth * (1 - math.cos(ang))
+        if k < 1e-9:
+            rings.append(np.tile([0.0, 0.0, z], (count, 1)))
+        else:
+            rings.append(M.at_z(M.rounded_rect(hx * k, hy * k, corner * k, per), z))
+    return rings
+
+
 @generator(
     "link_shell",
     summary=(
@@ -45,8 +60,39 @@ def _half_rings(hx: np.ndarray, hy: np.ndarray, corner: np.ndarray, per: int, z:
     params=[
         Param("length", 0.25, 0.004, 2.0, "from the root joint's axis to the tip joint's axis"),
         Param("radius", 0.03, 0.003, 0.2, "half thickness at the root, front to back (x)"),
-        Param("width", 1.0, 0.5, 2.2, "the section's half width along y as a multiple of its half thickness", unit="x"),
+        Param("width", 1.0, 0.2, 3.0, "the section's half width along y as a multiple of its half thickness", unit="x"),
         Param("tip", 0.0, 0.0, 1.2, "the tip's size as a share of the root's; 0 lets the style decide", unit="x"),
+        Param(
+            "tip_width",
+            0.0,
+            0.0,
+            3.0,
+            "half width at the tip, as a multiple of the root's half thickness; 0 keeps the root's proportion",
+            unit="x",
+        ),
+        Param(
+            "ends",
+            "plate",
+            doc="a recessed plate (a joint housing hides it) or a dome (an exposed end)",
+            kind="choice",
+            choices=("plate", "dome"),
+        ),
+        Param(
+            "seam",
+            "split",
+            doc="a parting line: a gap between two shell halves, or a dark strip on a one-piece shell (domed ends)",
+            kind="choice",
+            choices=("split", "strip"),
+        ),
+        Param(
+            "roundness",
+            0.0,
+            0.0,
+            1.0,
+            "how round the section's corners are, 0 square to 1 round; 0 lets the style decide",
+            unit="",
+        ),
+        Param("sides", 0, 0, 96, "points round the section; 0 picks by size", kind="int", unit=""),
         Param("waist", 0.0, 0.0, 0.3, "how much narrower the middle is than a straight taper", unit="x"),
         Param("collar", 0.0, 0.0, 0.08, "radius of the collars at the two ends where joint housings meet; 0 for none"),
     ],
@@ -59,14 +105,43 @@ def link_shell(a: Args) -> Asset:
     length = a.length
     stations = 9 if length > 0.08 else 5
     t = np.linspace(0.0, 1.0, stations)
-    z = t * length
     hx, hy = _station_extents(a, t)
+    strip = a.seam == "strip" and s.panel_lines  # one piece: the exact surface a limb has always had, plus a line
+    dome = a.ends == "dome" or strip
+    # a domed end reaches 0.9 of the end section's smaller half extent; the straight part lies between the two domes
+    d0 = min(0.9 * float(min(hx[0], hy[0])), 0.3 * length) if dome else 0.0
+    d1 = min(0.9 * float(min(hx[-1], hy[-1])), 0.3 * length) if dome else 0.0
+    z = d0 + t * (length - d0 - d1)
     smallest = float(min(hx.min(), hy.min()))
-    share = min(1.0, 0.18 * s.fillet + (1.0 - 0.18 * s.fillet) * s.roundness)  # of the smaller half extent
+    share = a.roundness if a.roundness > 0 else min(1.0, 0.18 * s.fillet + (1.0 - 0.18 * s.fillet) * s.roundness)
     corner = np.minimum(hx, hy) * share
-    per = 4 if smallest > 0.015 else 3
+    per = a.sides // 4 - 1 if a.sides >= 8 else (4 if smallest > 0.015 else 3)
     gap = 0.0005 if s.panel_lines else 0.0
-    if s.panel_lines:
+    if strip:
+        body = M.link(
+            length,
+            (float(hx[0]), float(hy[0])),
+            (float(hx[-1]), float(hy[-1])),
+            roundness=share,
+            rounding=(0.9, 0.9),
+            stations=5,
+            per_corner=per,
+            domes=int(np.clip(per + 1, 4, 10)),
+        )
+        pc.add("body", body)
+        for sign in (1.0, -1.0):  # a dark line along the middle of each flank, a hair proud of the shell
+            line = [
+                M.at_z(
+                    np.array(
+                        [[-0.0005, sign * (hy[k] - 0.0002)], [0.0005, sign * (hy[k] - 0.0002)]]
+                        + [[0.0005, sign * (hy[k] + 0.00025)], [-0.0005, sign * (hy[k] + 0.00025)]]
+                    ),
+                    z[k],
+                )
+                for k in range(stations)
+            ]
+            pc.add("structure", M.loft(line), material="dark")
+    elif s.panel_lines:
         front, back = _half_rings(hx, hy, corner, per, z, gap)
         pc.add("body", M.loft(front, closed=False))
         pc.add("body", M.loft(back, closed=False))
@@ -85,11 +160,15 @@ def link_shell(a: Args) -> Asset:
     else:
         rings = [M.at_z(M.rounded_rect(hx[k], hy[k], corner[k], per), z[k]) for k in range(stations)]
         pc.add("body", M.loft(rings))
-    # the two ends are closed with a thin plate each (a joint housing normally hides it)
-    for k in (0, stations - 1):
-        inward = 1.0 if k == 0 else -1.0  # recessed a little, so it never shares a plane with a collar
-        ring = M.at_z(M.rounded_rect(hx[k], hy[k], corner[k], per), z[k] + inward * 0.0012)
-        pc.add("body", M.loft([ring, ring + np.array([0.0, 0.0, inward * 0.0006])]))
+    if dome and not strip:
+        for k, depth, sign in ((0, d0, -1.0), (stations - 1, d1, 1.0)):
+            pc.add("body", M.loft(_dome_rings(hx[k], hy[k], corner[k], per, z[k], depth, sign), cap_start=False))
+    elif not strip:
+        # the two ends are closed with a thin plate each (a joint housing normally hides it)
+        for k in (0, stations - 1):
+            inward = 1.0 if k == 0 else -1.0  # recessed a little, so it never shares a plane with a collar
+            ring = M.at_z(M.rounded_rect(hx[k], hy[k], corner[k], per), z[k] + inward * 0.0012)
+            pc.add("body", M.loft([ring, ring + np.array([0.0, 0.0, inward * 0.0006])]))
     # collars
     if a.collar > 0:
         c = a.collar

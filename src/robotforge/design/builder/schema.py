@@ -519,6 +519,20 @@ class BuildSpec(_Strict):
     motor: str = Field("tt_motor", description="default actuator for wheels and continuous joints")
     linear: str = Field("l16", description="default actuator for slide joints")
     servo_caps: bool = Field(True, description="draw each joint's servo or motor, case and horn (it carries its mass)")
+    style: str | None = Field(
+        None,
+        description="how every part is drawn, not how it works: cobot (the default), lab, hobby or rugged "
+        "(list_templates lists them, with the materials)",
+    )
+
+    @field_validator("style")
+    @classmethod
+    def _style(cls, v: str | None) -> str | None:
+        if v is not None:
+            from robotforge import assets
+
+            assets.get_style(v)  # says which styles exist
+        return v
 
     @field_validator("color")
     @classmethod

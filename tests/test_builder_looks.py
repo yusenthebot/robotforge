@@ -136,13 +136,13 @@ def test_powered_hinges_get_a_servo_case_on_the_parent_and_a_horn_on_the_part():
             # The thigh's servo sits on the hip and its horn turns with the thigh; the knee's on the thigh.
             assert f"r/rf_{side}_hip_{i}_dark" in meshes and f"r/rf_{side}_thigh_{i}_metal" in meshes
             assert f"r/rf_{side}_thigh_{i}_dark" in meshes and f"r/rf_{side}_shin_{i}_metal" in meshes
-            assert f"r/rf_{side}_shin_{i}_rubber" in meshes  # the foot
+            assert f"r/rf_{side}_shin_{i}_tread" in meshes  # the foot: moulded rubber
 
 
 @pytest.mark.parametrize(
     ("material", "surface", "bare_post"),
     [
-        ("pla", "rf_shell", [0.9, 0.91, 0.93, 1.0]),
+        ("pla", "rf_gloss", [0.9, 0.91, 0.93, 1.0]),
         ("aluminum", "rf_aluminum", [0.76, 0.78, 0.8, 1.0]),
         ("carbon", "rf_carbon", [0.15, 0.155, 0.165, 1.0]),
         ("rubber", "rf_rubber", [0.9, 0.91, 0.93, 1.0]),
@@ -356,9 +356,10 @@ def test_without_servo_caps_a_powered_hinge_shows_no_hardware():
         ],
     }
     with_caps = _compile(build)
-    assert "r/rf_dark" in _presets(with_caps, "base") and "r/rf_metal" in _presets(with_caps, "arm")
+    assert "r/rf_soft_touch" in _presets(with_caps, "base") and "r/rf_metal" in _presets(with_caps, "arm")
     without = _compile({**build, "servo_caps": False})
-    assert _presets(without, "base") == _presets(without, "arm") == {"r/rf_shell"}  # just the two shells
+    for body in ("base", "arm"):  # just the two shells (and their parting lines): no metal, no horns
+        assert "r/rf_gloss" in _presets(without, body) and "r/rf_metal" not in _presets(without, body)
 
 
 def test_a_tall_base_keeps_its_color_down_to_a_thin_dark_pan():
@@ -507,7 +508,7 @@ def test_a_lead_screw_with_nothing_near_its_far_end_ends_free():
         )
         for g in meshes
     }
-    assert highest["r/rf_dark"] < top + 0.005  # the pan, the vent, the motor: no bracket up in the air
+    assert highest["r/rf_soft_touch"] < top + 0.005  # the pan, the vent, the motor: no bracket up in the air
     assert highest["r/rf_metal"] < top + 0.08 + 0.0056 + 0.001  # the screw ends level with the nut at full stroke
 
 
