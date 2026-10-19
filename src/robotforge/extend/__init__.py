@@ -17,17 +17,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from robotforge.extend.algorithms import algorithm, task
 from robotforge.extend.parts import Box, Cylinder, Sphere, part, unknown_part
 from robotforge.extend.registry import REGISTRY, PluginError
 from robotforge.extend.routines import behavior, call, controller
 from robotforge.extend.sensors import look, sensor
+from robotforge.training.hyper import Hyper
 
 __all__ = [
     "REGISTRY",
     "Box",
     "Cylinder",
+    "Hyper",
     "PluginError",
     "Sphere",
+    "algorithm",
     "behavior",
     "call",
     "controller",
@@ -37,6 +41,7 @@ __all__ = [
     "part",
     "plugin_notes",
     "sensor",
+    "task",
     "unknown_part",
 ]
 

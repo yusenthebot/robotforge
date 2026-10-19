@@ -171,6 +171,10 @@ class TrainedPolicy:
             )
 
     def controller(self, task: Task, model: mujoco.MjModel, data: mujoco.MjData) -> LearnedPolicyController:
+        if self.meta.get("env"):  # trained by robotforge.training: on the sensors it was trained on
+            from robotforge.training.play import fit
+
+            task = fit(self.meta, task, model)
         self.check_fits(task)
         return LearnedPolicyController(task, model, data, self)
 
