@@ -151,7 +151,58 @@ It registers with `@algorithm(name, hyper={...})` in a plugin file, appears in `
 
 Real simulations on a MacBook with a loaded machine (other work was running), `scripts/training_media.py` reproduces them.
 
-RESULTS
+### A quadruped built from parts learns to walk faster
+
+The robot is `add_robot("dog", describe="a robot dog")`: 15 generated parts, 13 actuators, with its own IMU and touch pads, and `add_sensor("dog", {"type": "encoders"})` on top.
+Its observation is 68 numbers: the task's 38, the IMU's 9 (two of them), the touch pads' 8 and the encoders' 13.
+The task is `walk` at 0.4 m/s, as corrections on the built-in gait, 4 s episodes with shoves, 700k steps per trial, two trials side by side (7 min 8 s in all on a loaded machine).
+Scores are 10 test episodes on the same starts, no shoves.
+
+| | test return | speed | success | settings |
+|---|---|---|---|---|
+| built-in gait alone (the do-nothing correction) | 5.404 | 0.20 m/s | 90% | |
+| ARS | 7.311 | 0.29 m/s | 100% | defaults: directions 8, step_size 0.1, noise 0.3 |
+| CEM | 7.178 | 0.35 m/s | 100% | defaults: population 24, init_std 0.5 |
+
+Both beat the gait it started from by 45 to 75 percent in speed and stay upright.
+CEM walks faster, ARS earns the slightly higher return; the panel shows the two side by side.
+
+### An arm learns to reach, and a search makes the difference
+
+The robot is the arm template with encoders; the task is `reach` a red ball, 22, 8 and 14 cm from the base, which moves up to 4 cm every episode (`jitter`); success is the tool within 3 cm; 2 s episodes, direct actions, 200k steps per trial.
+
+| | test return | tool to ball | within 3 cm |
+|---|---|---|---|
+| doing nothing | -8.655 | 48 cm | 0% |
+| ARS, default settings | -3.086 | 15.8 cm | 0% |
+| CEM, default settings | -2.366 | 10.5 cm | 5% |
+| best of a search (trial t05, ARS: step size 0.26, noise 0.12) | -1.087 | 2.3 cm | 80% |
+
+The default settings, taken as they are, get close and no further.
+The search is successive halving over nine trials of ARS and CEM, `eta` 3, drawing the noise, the step size and CEM's starting spread from log ranges:
+
+| trial | algorithm | step size | noise or spread | steps run | test return | tool to ball | fate |
+|---|---|---|---|---|---|---|---|
+| t01 | ars | 0.016 | 0.252 | 25k | -5.703 | 32.0 cm | dropped |
+| t02 | cem | - | 0.075 | 26k | -7.8 | 43.5 cm | dropped |
+| t03 | ars | 0.146 | 0.028 | 22k | -4.124 | 18.7 cm | dropped |
+| t04 | cem | - | 0.038 | 69k | -2.606 | 13.4 cm | dropped |
+| t05 | ars | 0.263 | 0.118 | 208k | -1.087 | 2.3 cm | went on to the full budget |
+| t06 | cem | - | 0.454 | 23k | -6.849 | 31.1 cm | dropped |
+| t07 | ars | 0.226 | 0.011 | 72k | -2.446 | 5.1 cm | dropped |
+| t08 | cem | - | 0.158 | 23k | -4.02 | 11.8 cm | dropped |
+| t09 | ars | 0.057 | 0.130 | 22k | -4.2 | 21.1 cm | dropped |
+
+The whole search, trials side by side three at a time, took 33 s with three side by side.
+The poorest trials are dropped after about 25k steps; the leader's number of directions, large step and moderate noise are not what the defaults chose, which is what a search is for.
+
+### PPO and SAC through the same call
+
+On the same arm task, 30k steps each (far too few to converge, only to show the adapters run): PPO 16.3 cm, SAC 14.6 cm from the ball; both report their losses to the panel (`value_loss`, `policy_gradient_loss`, `entropy_loss` for PPO; `actor_loss`, `critic_loss`, `ent_coef` for SAC) and a halving search continues a PPO trial from its saved model.
+
+### Speed
+
+The dog's environment, with its sensors read at every step, runs about 1,700 steps a second in one process; the two 700k-step trials above took 7 minutes together on a machine that was busy with other work.
 
 ## Limits
 
