@@ -52,17 +52,26 @@ def _finite(pg: Any) -> bool:
     return bool(np.isfinite(pg.session.data.qpos).all())
 
 
+def _span(pg: Any, robot: str) -> float:
+    """How tall the robot's bodies stand: lying on its back is a fraction of that."""
+    m, d = pg.session.model, pg.session.data
+    zs = [
+        d.xpos[b][2]
+        for b in range(1, m.nbody)
+        if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith(f"{robot}/")
+    ]
+    return max(zs) - min(zs)
+
+
 def stand(pg: Any, robot: str, floating: bool) -> dict[str, Any]:
-    start = _base_height(pg, robot)
+    start = _span(pg, robot)
     q0 = pg.session.data.qpos.copy()
     pg.run_fast(lambda: False, SETTLE_S)
     out: dict[str, Any] = {"finite": _finite(pg)}
     if floating:
-        drop = start - _base_height(
-            pg, robot
-        )  # the body origin may sit at the floor (a wheeled base): look at the drop
-        out.update(drop_m=round(drop, 3), upright=_upright(pg, robot))
-        out["ok"] = out["finite"] and out["upright"] and drop < 0.2 * max(start, 0.1) + 0.05
+        kept = _span(pg, robot) / max(start, 1e-6)
+        out.update(height_kept=round(kept, 2), upright=_upright(pg, robot))
+        out["ok"] = out["finite"] and out["upright"] and kept > 0.7
     else:
         drift = float(np.max(np.abs(pg.session.data.qpos - q0))) if q0.size else 0.0
         out.update(max_joint_drift=round(drift, 3))
@@ -82,6 +91,10 @@ def move_arm(pg: Any, robot: str, about: dict[str, Any]) -> dict[str, Any]:
     # points round where the tool starts (a tall robot's shoulder is not at its base), then in front of the base
     around = [(0.2, 0.0, 0.0), (0.15, 0.0, -0.15), (0.25, 0.0, 0.1), (0.1, 0.1, 0.0), (0.1, -0.1, -0.1)]
     targets = [[float(home[i] + f * reach) for i, f in enumerate(step)] for step in around]
+    targets += [
+        [float(base[0] + f * reach), float(home[1]), float(base[2] + g * reach)]
+        for f, g in ((0.55, 0.45), (0.45, 0.6), (0.6, 0.3))
+    ]
     targets += [
         [float(base[0] + x), float(home[1]), float(base[2] + z)] for x, z in ((0.6, 0.5), (0.4, 0.3), (0.3, 0.2))
     ]

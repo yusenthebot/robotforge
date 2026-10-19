@@ -695,6 +695,11 @@ class BehaviorManager:
         except (ValueError, KeyError) as exc:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
+            if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
+                raise BehaviorError(
+                    f"no gait fits the body of {robot}: a joint of its legs has no motor of its own (a linkage?), "
+                    f"which the walkers need ({exc})"
+                ) from exc
             raise BehaviorError(str(exc)) from exc
         top = library.get(entry.library).max_speed if entry is not None and entry.library else None
         loaded = self._loaded_speed(robot, entry)
