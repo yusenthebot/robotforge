@@ -122,7 +122,7 @@ def test_an_option_it_does_not_have_is_refused_with_the_ones_it_has(pg, folder):
     plugin(folder, "geiger.py", GEIGER)
     with pytest.raises(PlaygroundError, match=r"takes no option 'sorce'.*source, radius"):
         pg.add_sensor("dog", {"type": "geiger", "sorce": "hot"})
-    with pytest.raises(PlaygroundError, match="takes no 'bias'"):
+    with pytest.raises(PlaygroundError, match=r"takes no option 'bias'.*source, radius"):  # a built-in type's own
         pg.add_sensor("dog", {"type": "geiger", "bias": 1.0})
 
 

@@ -238,11 +238,14 @@ class SensorEntry(BaseModel):
                 data = {**implied, **data, "type": kind}
             else:
                 data = {**data, "type": kind if kind in SENSOR_TYPES else data["type"]}
-            if data["type"] in PLUGIN_PARAMS:  # a plugin sensor's options are written beside the standard ones
-                own = {k: v for k, v in data.items() if k not in cls.model_fields}
+            if data["type"] in PLUGIN_PARAMS:
+                # A plugin sensor's own options are written beside the standard ones, whatever another type calls
+                # them (a plugin's "radius" is not a wheel odometry's): all it takes are the placement and the knobs.
+                allowed = OPTIONS[data["type"]] | {"type"}
+                own = {k: v for k, v in data.items() if k not in allowed}
                 if own:
                     given = data.get("params") if isinstance(data.get("params"), dict) else {}
-                    data = {**{k: v for k, v in data.items() if k in cls.model_fields}, "params": {**given, **own}}
+                    data = {**{k: v for k, v in data.items() if k in allowed}, "params": {**given, **own}}
         return data
 
     @field_validator("type")
