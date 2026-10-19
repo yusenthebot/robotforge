@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from robotforge.design.world import CompiledWorld, World, compile_world
+from robotforge.extend import load_world_plugins
 
 HISTORY_LIMIT = 50
 _SAFE = re.compile(r"[^a-z0-9_]+")
@@ -98,6 +99,7 @@ class WorldStore:
         raise ValueError(f"no world named {name_or_path!r}. Existing worlds: {', '.join(known) or 'none yet'}")
 
     def load(self) -> World:
+        load_world_plugins(self.dir)  # shapes and sensors the world uses may come from plugins (extend/registry.py)
         return World.from_yaml(self.file.read_text(encoding="utf-8"))
 
     def compile(self) -> CompiledWorld:
