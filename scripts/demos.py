@@ -813,7 +813,7 @@ DEMOS = [
             (45.0, _caption("The particle filter keeps its pose honest against the odometry's drift.")),
             (72.0, _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate.")),
         ],
-        page=_follow("go2", (-3.4, -4.6, 4.4), ease=0.04),
+        page=_follow("go2", (-1.2, -2.2, 6.2), ease=0.04),
         settle=2.0,
         until=lambda pg: _MAP_DONE.is_set(),
         tail=4.0,
