@@ -42,7 +42,10 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
 
     def arm_world(pg: Any) -> None:
         pg.open_world(str(copy_world(home / "worlds" / "arm_lab", "arm_film", keep_policies=False)))
-        pg.update_object("target", size=[0.05])  # big enough to see; the training worlds do not hold it
+        if "target" not in {o.name for o in pg.current_world().objects}:
+            pg.add_object("target", shape="sphere", size=[0.05], pos=consts["reach_task"]["target"], fixed=True)
+        else:
+            pg.update_object("target", size=[0.05])  # big enough to see; the training does not need it
 
     def search_and_wait(pg: Any) -> None:
         world, world_dir = pg.current_world(), pg.store.dir
@@ -106,7 +109,7 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
     def gait_walk(pg: Any) -> None:
         pg.session.reset()
         pg.behaviors.move("dog", consts["walk_speed"], 0.0)
-        time.sleep(7.0)
+        time.sleep(10.0)
         pg.behaviors.stop("dog")
 
     def policy_walk(pg: Any) -> None:
@@ -115,7 +118,7 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         marks["played"] = time.monotonic()
 
     def quad_done(_pg: Any) -> bool:
-        return "played" in marks and time.monotonic() - marks["played"] > 10.0
+        return "played" in marks and time.monotonic() - marks["played"] > 11.5
 
     ask = consts["walk_speed"]
     algo = walk["final"]["algo"].upper()
@@ -123,7 +126,7 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         "quad_walk",
         quad_world,
         seconds=90.0,
-        page=D._follow("dog", (1.7, -1.7, 0.95)),
+        page=D._follow("dog", (1.5, -1.5, 0.8)),
         settle=2.0,
         timeline=[
             (0.3, D._caption(f"The built-in gait, asked for {ask} m/s, manages {gait:.2f} m/s")),
