@@ -288,33 +288,56 @@ def env_spec(
         raise TaskError(readable(exc, "environment settings")) from exc
 
 
+def task_on(spec: EnvSpec, model: mujoco.MjModel, world: Any = None) -> Task:
+    """The spec's task on `model`: a built-in one, a task saved with `world`, or a plugin's."""
+    if spec.task in TASKS:
+        return make_task(spec.task, model, spec.robot, spec.task_params)
+    entry = next((t for t in getattr(world, "tasks", []) if t.name == spec.task), None)
+    if entry is not None:
+        from robotforge.control.tasks.world_task import WorldTask
+
+        return WorldTask(model, entry, world)
+    from robotforge.extend import REGISTRY, ensure_user_plugins
+
+    ensure_user_plugins()
+    plugin = REGISTRY.get("task", spec.task)
+    if plugin is not None:
+        return plugin.meta["build"](model, spec.robot, {**plugin.meta["params"], **spec.task_params})
+    known = [*TASKS, *(t.name for t in getattr(world, "tasks", [])), *REGISTRY.of("task")]
+    raise TaskError(wording.unknown("task", spec.task, known, where="built in, saved with the world or from plugins"))
+
+
 def _build_task(spec: EnvSpec) -> Task:
     from robotforge.design.world import World, compile_world
 
     full = World.model_validate(spec.world)
     world = _scoped(full, spec.robot, spec.scope)
     base = Path(spec.world_dir) if spec.world_dir else None
-    if spec.task in TASKS:
-        model = compile_task_world(spec.task, world, base)
-        return make_task(spec.task, model, spec.robot, spec.task_params)
-    entry = next((t for t in world.tasks if t.name == spec.task), None)
-    if entry is not None:
-        from robotforge.control.tasks.world_task import WorldTask
+    try:
+        compiler = compile_task_world if spec.task in TASKS else None  # built-in tasks may add a goal marker
+        model = compiler(spec.task, world, base) if compiler else compile_world(world, base).model
+    except ValidationError as exc:
+        raise TaskError(readable(exc, "robot settings")) from exc
+    return task_on(spec, model, world)
 
-        try:
-            compiled = compile_world(world, base)
-        except (ValidationError, ValueError) as exc:
-            raise TaskError(str(exc)) from exc
-        return WorldTask(compiled.model, entry, world)
-    from robotforge.extend import REGISTRY, ensure_user_plugins
 
-    ensure_user_plugins()
-    plugin = REGISTRY.get("task", spec.task)
-    if plugin is not None:
-        compiled = compile_world(world, base)
-        return plugin.meta["build"](compiled.model, spec.robot, spec.task_params)
-    known = [*TASKS, *(t.name for t in full.tasks), *REGISTRY.of("task")]
-    raise TaskError(wording.unknown("task", spec.task, known, where="built in, saved with the world or from plugins"))
+def observed(task: Task, spec: EnvSpec) -> Task | ObservedTask:
+    """The task with the observation the spec asks for: the robot's sensors added to it, or standing in for it."""
+    mode = spec.observation
+    if mode == "task":
+        return task
+    probe = SensorObservation(task.model, spec.robot, lidar_bins=spec.lidar_bins, depth_size=tuple(spec.depth_size))
+    if not probe.sensors:
+        probe.close()
+        if mode in ("task+sensors", "sensors"):
+            left_out = "".join(f" ({s['sensor']}: {s['why']})" for s in probe.skipped)
+            raise TaskError(
+                f"robot {spec.robot!r} carries no sensor an observation can use{left_out}, so there is nothing "
+                "to assemble it from; put some on it, e.g. add_sensor(robot=..., type='imu'), or use "
+                "observation='task'"
+            )
+        return task
+    return ObservedTask(task, "sensors" if mode == "sensors" else "task+sensors", probe)
 
 
 def build_env(spec: EnvSpec | dict[str, Any]) -> TrainingEnv:
@@ -324,28 +347,8 @@ def build_env(spec: EnvSpec | dict[str, Any]) -> TrainingEnv:
             spec = EnvSpec.model_validate(spec)
         except ValidationError as exc:
             raise TaskError(readable(exc, "environment settings")) from exc
-    task = _build_task(spec)
-    mode = spec.observation
-    sensors: SensorObservation | None = None
-    if mode != "task":
-        probe = SensorObservation(task.model, spec.robot, lidar_bins=spec.lidar_bins, depth_size=tuple(spec.depth_size))
-        if probe.sensors:
-            sensors = probe
-        else:
-            probe.close()
-            if mode in ("task+sensors", "sensors"):
-                left_out = "".join(f" ({s['sensor']}: {s['why']})" for s in probe.skipped)
-                raise TaskError(
-                    f"robot {spec.robot!r} carries no sensor an observation can use{left_out}, so there is nothing "
-                    "to assemble it from; put some on it, e.g. add_sensor(robot=..., type='imu'), or use "
-                    "observation='task'"
-                )
-            mode = "task"
-    if mode == "auto":
-        mode = "task+sensors"
-    wrapped: Task | ObservedTask = ObservedTask(task, mode, sensors) if sensors is not None else task
     return TrainingEnv(
-        wrapped,
+        observed(_build_task(spec), spec),
         push=spec.push,
         control_hz=spec.control_hz,
         episode_seconds=spec.episode_seconds,
