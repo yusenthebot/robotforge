@@ -273,7 +273,7 @@ def test_jaws_close_where_the_open_fingers_have_room_beside_a_wall(pg):
 def test_two_wide_things_in_a_tray_are_left_a_finger_apart_not_a_fixed_distance(pg):
     # Regression: the room between things in a tray was 5.5 cm whatever they were, narrower than a can, so the second
     # can went down against the first and the fingers knocked it over.
-    pg.add_object("hold", shape="tray", size=[0.16, 0.11, 0.05], pos=[0.62, 0.22, TABLE])
+    pg.add_object("hold", shape="tray", size=[0.2, 0.14, 0.05], pos=[0.62, 0.22, TABLE])
     pg.run_fast(lambda: False, 0.5)
     m, d = pg.session.model, pg.session.data
     built = hints.built_for(pg.behaviors._object_entry("hold"))

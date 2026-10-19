@@ -34,6 +34,8 @@ PAD_TORSION_FIRM = 0.012  # m: what a firm hold gives them (a soft pad pressed o
 TURN_SAFETY = 6.0  # how much more than the turning of a load a squeeze must resist
 ROLL_SAFETY = 3.0  # the same for a load rolling about the pinch
 ROLL_ARM = 0.01  # m: the lever the pressure over a pad has against a load rolling about the pinch
+CAPACITY_ROOM = 0.09  # m a typical thing wants round it, to count how many an area holds
+SPREAD_FROM = 4  # things an area must hold, by CAPACITY_ROOM, to be filled from its middle outward and spread apart
 FINGER_GAP = 0.025  # m left between two things put in one tray, beyond their own widths
 ROOM = 0.055  # m between the middles of two things put in one tray
 EDGE = 0.03  # m from a tray's wall that a thing is put at least
@@ -468,7 +470,7 @@ def place_for(
     for s in slots:
         spot = base + rot @ np.asarray(s.pos)
         if s.radius is None and s.half is not None:  # a tray or a top: room for several, put each where it is freest
-            free = _free_spot(spot, rot, s, taken, max(ROOM, 2 * radius + FINGER_GAP))
+            free = _free_spot(spot, rot, s, taken, max(ROOM, 2 * radius + FINGER_GAP), max(EDGE, radius + 0.005))
             if free is not None:
                 chosen = (s, free)
                 break
@@ -495,21 +497,21 @@ def place_for(
 
 
 def _free_spot(
-    centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.ndarray], room: float = ROOM
+    centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.ndarray], room: float = ROOM, edge: float = EDGE
 ) -> np.ndarray | None:
     """The spot in a slot's area farthest from what already stands in it (at least `room` from each), nearest the
-    middle among equals; None when the area is full."""
+    middle among equals, `edge` clear of the walls; None when the area is full."""
     hx, hy = slot.half
-    hx, hy = max(hx - EDGE, 0.0), max(hy - EDGE, 0.0)
+    hx, hy = max(hx - edge, 0.0), max(hy - edge, 0.0)
     near = [
         p[:2] for p in taken if -0.01 <= p[2] - centre[2] < NEAR_Z and np.hypot(*(p[:2] - centre[:2])) < hx + hy + room
     ]
     xs = np.linspace(-hx, hx, max(2, int(2 * hx / STEP) + 1)) if hx > 0 else [0.0]
     ys = np.linspace(-hy, hy, max(2, int(2 * hy / STEP) + 1)) if hy > 0 else [0.0]
-    capacity = (int(2 * hx / ROOM) + 1) * (int(2 * hy / ROOM) + 1)
+    capacity = (int(2 * hx / CAPACITY_ROOM) + 1) * (int(2 * hy / CAPACITY_ROOM) + 1)
     # A roomy area is filled from its middle outward, spread apart; a small one (a tray for two things) from a corner,
     # packed, so that what it holds is not left a middle that nothing else fits beside.
-    anchor = np.zeros(2) if capacity >= 6 else np.array([-hx, -hy])
+    anchor = np.zeros(2) if capacity >= SPREAD_FROM else np.array([-hx, -hy])
     best, score = None, -np.inf
     for x in xs:
         for y in ys:
@@ -517,7 +519,9 @@ def _free_spot(
             gap = min((float(np.hypot(*(p[:2] - q))) for q in near), default=np.inf)
             if gap < room:
                 continue
-            value = (min(gap, 3 * room) if capacity >= 6 else 0.0) - float(np.hypot(x - anchor[0], y - anchor[1]))
+            value = (min(gap, 3 * room) if capacity >= SPREAD_FROM else 0.0) - float(
+                np.hypot(x - anchor[0], y - anchor[1])
+            )
             if value > score:
                 best, score = p, value
     return best

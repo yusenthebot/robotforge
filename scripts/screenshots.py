@@ -1591,7 +1591,7 @@ G12_SHOTS = [
 G13_ROWS = (
     ("mug", "cup", "bowl", "plate", "bottle", "can", "squeeze_bottle"),
     ("apple", "orange", "pear", "banana", "package", "tin", "brick"),
-    ("book", "screwdriver", "hammer", "wrench", "mug", "bottle", "can"),
+    ("book", "screwdriver", "hammer", "wrench", "cable", "bottle", "can"),
 )
 
 

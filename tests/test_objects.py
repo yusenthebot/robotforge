@@ -19,8 +19,8 @@ from robotforge.sim.session import SimSession
 
 NAMES = sorted(objects.GENERATORS)
 EXPECTED = {
-    "apple", "banana", "book", "bottle", "bowl", "brick", "can", "cup", "hammer", "mug", "orange", "package", "pear",
-    "plate", "screwdriver", "squeeze_bottle", "tin", "wrench",
+    "apple", "banana", "book", "bottle", "bowl", "brick", "cable", "can", "cup", "hammer", "mug", "orange", "package",
+    "pear", "plate", "screwdriver", "squeeze_bottle", "tin", "wrench",
 }  # fmt: skip
 
 

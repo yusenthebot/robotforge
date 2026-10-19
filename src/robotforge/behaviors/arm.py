@@ -85,6 +85,7 @@ LINK_CLEARANCE = 0.03
 # refused 6 of 14 floor picks that it made without touching the dog; a PiPER on a Go2, held to it unfolding from its
 # home pose, unfolded into another pose and came down on the cube's top instead of round it.
 NEAR_CLEARANCE = 0.01
+HOLD_UP = 0.16  # m above the grasp that a hand-over's receiving arm holds the thing up
 CARRY_STEP = 0.01
 CARRY_ARC_STEPS = 8  # points along the way round between two of a carry's checked points, for what lies under it
 # Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
@@ -816,7 +817,7 @@ class ArmMotion:
         as pick_and_place up to the carry, with the place right over the object. Raises what pick_and_place raises."""
         grasp = obj_pos.copy()
         below = obj_half_height
-        travel_z = max(float(grasp[2]) + APPROACH, float(grasp[2]) + 2 * obj_half_height + 0.03)
+        travel_z = max(float(grasp[2]) + HOLD_UP, float(grasp[2]) + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
         points = {"object": grasp, "above object": above}
         bad = self._out_of_reach(points)
