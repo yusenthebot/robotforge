@@ -23,7 +23,7 @@ from pydantic import BaseModel, ValidationError
 from robotforge import modes, wording
 from robotforge.behaviors import airframe, robot_kind
 from robotforge.behaviors.manager import BehaviorManager
-from robotforge.design import combine, gallery, importer, scenes, terrain
+from robotforge.design import catalogue, combine, gallery, importer, scenes, terrain
 from robotforge.design import mechanisms as mechanism_shapes
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import plate
@@ -335,6 +335,12 @@ class Playground:
     ) -> dict[str, Any]:
         given, name = name, tidy_name(name)
         _check_meters("pos", pos, MAX_POSITION)
+        catalogued = None
+        if library is not None:  # the tuned library first, then the open catalogue (list_library finds both)
+            try:
+                library, catalogued = catalogue.source_of(library)
+            except catalogue.CatalogueError as exc:
+                raise PlaygroundError(str(exc)) from exc
         saved: dict[str, Any] = {}
         if design is not None and gallery.canonical(design) is None and combine.saved_design(wording.squash(design)):
             extra = [k for k, v in dict(template=template, file=file, library=library, build=build).items() if v]
@@ -365,6 +371,7 @@ class Playground:
                     template=template,
                     file=file,
                     library=library,
+                    catalogue=catalogued,
                     build=build,
                     params=params or {},
                     pos=pos or [0.0, 0.0],
@@ -410,6 +417,8 @@ class Playground:
             result["generated"] = made.describe(name)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
+        if catalogued is not None:
+            result["catalogue"] = self._about_catalogue_robot(name, catalogued)
         return _noted(_renamed(result, given, name), _yaw_note(yaw), placed)
 
     @_one_edit_at_a_time
@@ -920,6 +929,16 @@ class Playground:
                 # First samples from where the robots now are; their sensors' estimates carry on (odometry).
                 self.sensors.rebuild(kept=carried)
         return result
+
+    def _about_catalogue_robot(self, name: str, catalogue_id: str) -> dict[str, Any]:
+        """What an open catalogue robot turned out to be, from its structure, and which tools work on it."""
+        from robotforge.design import catalogue_describe
+
+        entry = catalogue.get(catalogue_id)
+        described = catalogue_describe.describe(
+            self.session.model, name, self.behaviors.home_qpos(), entry, self.behaviors
+        )
+        return {"name": entry.id, **described.to_dict()}
 
     def _unchanged(self, note: str) -> dict[str, Any]:
         """The world summary without recompiling: the simulation keeps running as it is."""
