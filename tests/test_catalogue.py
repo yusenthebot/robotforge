@@ -13,6 +13,7 @@ import pytest
 import yaml
 from importer_fixtures import box_link, critter_urdf, revolute, robot, rover_urdf, write
 from mcp import Client
+from test_mjcf_doctor import _legs as _dog_mjcf
 
 from robotforge.design import catalogue, catalogue_fetch, library
 from robotforge.design.world import RobotEntry
@@ -110,12 +111,14 @@ def folders(tmp_path, monkeypatch):
     write(repos / "fake_repo" / "robots" / "arm" / "arm.urdf", _wrist_arm())
     write(repos / "fake_repo" / "robots" / "critter" / "critter.urdf", critter_urdf())
     write(repos / "fake_repo" / "robots" / "rover" / "rover.urdf", rover_urdf())
+    write(repos / "fake_repo" / "robots" / "dog" / "dog.xml", _dog_mjcf())
     monkeypatch.setenv("ROBOTFORGE_REPOS", str(repos))
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "none"))
 
     def entry(name: str, tags: tuple[str, ...]) -> catalogue.Entry:
+        suffix = "xml" if name == "dog" else "urdf"
         return catalogue.Entry(
             id=name,
             robot=name.title(),
@@ -127,13 +130,16 @@ def folders(tmp_path, monkeypatch):
             url="https://example.invalid/fake_repo.git",
             commit="0" * 40,
             package=f"robots/{name}",
-            format="urdf",
-            model=f"robots/{name}/{name}.urdf",
+            format="mjcf" if suffix == "xml" else "urdf",
+            model=f"robots/{name}/{name}.{suffix}",
             variants=(),
             xacro_args=(),
         )
 
-    fake = {n: entry(n, t) for n, t in (("arm", ("arm",)), ("critter", ("quadruped",)), ("rover", ("wheeled",)))}
+    fake = {
+        n: entry(n, t)
+        for n, t in (("arm", ("arm",)), ("critter", ("quadruped",)), ("rover", ("wheeled",)), ("dog", ("quadruped",)))
+    }
     monkeypatch.setattr(catalogue, "entries", lambda: fake)
     return fake
 
@@ -274,3 +280,18 @@ def test_the_agent_is_told_about_it():
     skill = (Path(__file__).parent.parent / "skills" / "robotforge" / "SKILL.md").read_text(encoding="utf-8")
     assert "open catalogue" in skill and "list_library" in skill
     assert "open robots" in INSTRUCTIONS
+
+
+def test_a_dog_of_torque_motors_with_no_standing_pose_stands_and_walks(folders):
+    """The unitree_mujoco kind of file: motors that take torques, joint limits that exclude the zero pose, no
+    keyframe. It is driven as servos and stood up, so it stands, and the walker finds its legs."""
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    result = pg.add_robot("d", library="dog")
+    assert any("torque motors driven as position servos" in n for n in result["notes"])
+    assert any("standing pose" in n for n in result["notes"])
+    start = float(pg.session.data.xpos[pg.behaviors._root_body("d")][2])
+    pg.run_fast(lambda: False, 3.0)
+    now = pg.behaviors.pose("d")
+    assert now["upright"] and start - now["position"][2] < 0.1
+    assert result["catalogue"]["kind"] == "quadruped" and result["catalogue"]["legs"] == 4

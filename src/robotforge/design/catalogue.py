@@ -119,7 +119,15 @@ class Entry:
             return None
         root = folder.parents[len(Path(self.package).parts) - 1] if self.package else folder
         path = root / self.model
-        return path if path.is_file() else None
+        if not path.is_file():
+            return None
+        if self.format == "mjcf" and not path.stem.endswith(("_pos", "_position")):
+            # Menagerie's torque-motor models have a sibling driven by joint targets (toddlerbot): use that
+            for suffix in ("_pos", "_position"):
+                sibling = path.with_name(f"{path.stem}{suffix}{path.suffix}")
+                if sibling.is_file():
+                    return sibling
+        return path
 
 
 @functools.cache

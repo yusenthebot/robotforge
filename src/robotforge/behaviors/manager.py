@@ -1314,6 +1314,9 @@ class BehaviorManager:
         robot, _ = self._library_tool(name)
         try:
             gravity = robot is not None and robot.holds_against_gravity
+            if robot is None:  # an open catalogue arm: its file's servos know nothing of the weight they carry
+                entry = _entry(name.split("/")[0], self._world())
+                gravity = entry is not None and entry.catalogue is not None
             arm = ArmMotion(self.session.model, name, self.home_qpos(), gravity=gravity)
         except ValueError as exc:
             raise BehaviorError(str(exc)) from exc

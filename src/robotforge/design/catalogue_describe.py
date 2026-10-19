@@ -18,7 +18,7 @@ from robotforge.sim.geometry import lowest_point
 
 MOVING = frozenset({int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)})  # joints that move
 FOOT_BAND = 0.08  # m above the lowest point of the robot at home that still counts as standing on it
-FOOT_APART = 0.12  # m between feet: closer contact points belong to one foot (toe and heel)
+FOOT_APART = 0.1  # of the robot's height between feet: closer contact points belong to one foot (toe and heel)
 SMALL_HAND = 0.45  # m, the largest extent of a hand or gripper
 REACH_SAMPLES = 150
 
@@ -81,7 +81,7 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
         Kind.BALANCER: ("wheeled", 0),
         Kind.HUMANOID: ("humanoid", 2),
     }
-    if kind in known:
+    if kind in known and not (kind == Kind.ARM and not _moves_a_tool_point(model, robot)):
         return known[kind]
     bodies = _bodies(model, robot)
     if not bodies:
@@ -98,6 +98,15 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
     if not floating and _is_hand(model, data, bodies):
         return "hand", 0
     return "other", feet
+
+
+def _moves_a_tool_point(model: mujoco.MjModel, robot: str) -> bool:
+    """Whether the robot's "tcp" site is moved by powered joints: a hand whose file names a site "tcp" is no arm."""
+    from robotforge.behaviors.arm import arm_joints
+
+    prefix = f"{robot}/"
+    sites = [s for s in range(model.nsite) if _name(model, mujoco.mjtObj.mjOBJ_SITE, s).startswith(prefix)]
+    return any(_name(model, mujoco.mjtObj.mjOBJ_SITE, s).endswith("tcp") and arm_joints(model, s) for s in sites)
 
 
 def _name(model: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
@@ -123,20 +132,21 @@ def _colliders(model: mujoco.MjModel, bodies: list[int]) -> list[int]:
 
 
 def _feet(model: mujoco.MjModel, data: mujoco.MjData, bodies: list[int]) -> int:
-    """How many separate places the robot stands on at home: its leaf bodies' lowest points within a hand's width of
+    """How many separate places the robot stands on at home: the lowest points of its bodies within a hand's width of
     the lowest, merged where they are close."""
-    parents = {int(model.body_parentid[b]) for b in bodies}
     points = []
-    for leaf in (b for b in bodies if b not in parents):
-        geoms = _colliders(model, [leaf])
+    for body in bodies:  # a foot is often not a leaf: it carries a toe, a sensor or a wheel hub
+        geoms = _colliders(model, [body])
         if geoms:
             points.append(min((lowest_point(model, data, g) for g in geoms), key=lambda p: p[2]))
     if not points:
         return 0
     floor = min(p[2] for p in points)
+    height = max(float(data.xpos[b][2]) for b in bodies) - floor
+    apart = max(0.03, FOOT_APART * height)
     places: list[np.ndarray] = []
-    for p in (p for p in points if p[2] <= floor + FOOT_BAND):
-        if all(np.linalg.norm(p[:2] - q[:2]) > FOOT_APART for q in places):
+    for p in (p for p in points if p[2] <= floor + FOOT_BAND * max(height, 0.2) / 0.6):
+        if all(np.linalg.norm(p[:2] - q[:2]) > apart for q in places):
             places.append(p)
     return len(places)
 
@@ -180,13 +190,19 @@ def _reach(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> float | 
 
 def _abilities(model: mujoco.MjModel, robot: str, kind: str, manager: Any) -> list[str]:
     if kind == "arm":
-        gripper = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/gripper")
-        has = "gripper and pick_and_place work" if gripper >= 0 else "no gripper yet (mount one on its flange)"
-        return [f"move_arm('{robot}', [x, y, z]) steers its tool point by inverse kinematics", has]
+        arms = manager.arms(robot) if manager is not None else [robot]
+        names = " or ".join(f"'{a}'" for a in arms)
+        out = [f"move_arm({names}, [x, y, z]) steers a tool point by inverse kinematics"]
+        grippers = [a for a in arms if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{a}/gripper") >= 0]
+        out.append("gripper and pick_and_place work" if grippers else "no gripper yet: mount one on its flange")
+        return out
     if kind in ("quadruped", "humanoid") and manager is not None:
         info = next((r for r in manager.robots() if r["name"] == robot), {})
         if "max_speed" in info:
-            return [f"walks with move and the keyboard (up to {info['max_speed']} m/s)"]
+            return [
+                f"move starts a gait found from its legs (up to {info['max_speed']} m/s); the gait is tuned for the "
+                "library's robots, so check pose 'upright' after a move"
+            ]
         return [info.get("walk_hint") or "stands; move cannot walk it and it cannot learn a walk here"]
     if kind == "wheeled":
         return ["drives with move and navigate"]
@@ -194,4 +210,8 @@ def _abilities(model: mujoco.MjModel, robot: str, kind: str, manager: Any) -> li
         return ["its joints move with set_controls; it is a hand: it grasps once it is on an arm"]
     if kind == "aircraft":
         return ["flies with move (heave for height)"]
-    return ["its joints move with set_controls and pose"]
+    if model.nu and any(_name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a).startswith(f"{robot}/") for a in range(model.nu)):
+        return ["its joints move with set_controls and pose"]
+    return [
+        "a rigid body: the file has no motors or joints, so it rests or is pushed (the library has drones with rotors)"
+    ]
