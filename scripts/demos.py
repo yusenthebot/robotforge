@@ -490,6 +490,11 @@ def _wait_for(done: Callable[[], bool], longest: float) -> None:
         time.sleep(0.05)
 
 
+# straight down over the whole warehouse floor, so the map grows in one frame (the viewer draws the map over shelves
+# when seen from above)
+OVERHEAD = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, 2.2, 16.0], [0.0, 2.3, 0]);"
+
+
 def _map_then_rack(explore_s: float, rack: str) -> Callable[[Any], None]:
     """Start mapping, explore for `explore_s` s of simulated time, then go to `rack` by the robot's own map."""
 
@@ -793,10 +798,10 @@ DEMOS = [
         timeline=[(0.8, _go("go2", [1.6, 2.6]))],
         page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
     ),
-    Demo(  # an unseen warehouse: the Go2 draws its map, finds itself in it and goes to rack_8 by that map alone
+    Demo(  # an unseen warehouse: the Go2 draws its map, finds itself in it and goes to a rack by that map alone
         "g12_go2_maps_the_warehouse",
         S._go2_warehouse_start,
-        170.0,
+        230.0,
         timeline=[
             (
                 0.5,
@@ -804,16 +809,24 @@ DEMOS = [
                     "A Go2 enters a warehouse it has never seen. Its only senses: a lidar and a drifting odometry."
                 ),
             ),
-            (1.0, _map_then_rack(70.0, "farthest")),
+            (1.0, _map_then_rack(100.0, "farthest")),
             (2.5, "window.__robotforge.showSensor('go2/map_lidar', false);"),
             (
-                18.0,
-                _caption("The map grows from its own scans. Blue: where it believes it is. Grey: the odometry alone."),
+                14.0,
+                _caption(
+                    "Teal: floor it has seen free. Pink: what it found in the way. Blue arrow: where it believes it is."
+                ),
             ),
-            (45.0, _caption("The particle filter keeps its pose honest against the odometry's drift.")),
-            (72.0, _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate.")),
+            (
+                45.0,
+                _caption("Grey arrow: the odometry alone, drifting. The particle filter keeps the blue one honest."),
+            ),
+            (
+                103.0,
+                _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate."),
+            ),
         ],
-        page=_follow("go2", (-1.2, -2.2, 6.2), ease=0.04),
+        page=OVERHEAD,
         settle=2.0,
         until=lambda pg: _MAP_DONE.is_set(),
         tail=4.0,

@@ -1430,7 +1430,12 @@ SENSOR_DRAWER_VIEW_WIDE = (
     "await new Promise((r) => setTimeout(r, 400));" + _look_at(["go2"], (-2.6, -0.2, 1.6))
 )
 G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
-G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.5, -5.5, 13.5], [0.5, 1.2, 0]);"
+# straight down over the whole floor
+G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, 2.1, 13.8], [0.0, 2.2, 0]);"
+G12_SCENE_ONLY = (
+    G12_OVERVIEW
+    + "const box = document.getElementById('show-map'); box.checked = false; box.dispatchEvent(new Event('change'));"
+)
 
 
 def _sensing(*sensors: dict[str, Any], pos: tuple[float, float] = (-3.6, 2.6), yaw: float = 0.0, extra=None):
@@ -1507,8 +1512,16 @@ G12_SHOTS = [
     Shot(
         "g12_map_overview",
         _go2_warehouse_start,
-        act=_map_for(60.0, G12_AREA),
+        act=_map_for(120.0, G12_AREA),
         page=G12_OVERVIEW,
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(  # the same view with the map switched off: the scene the map is of
+        "g12_scene_overview",
+        _go2_warehouse_start,
+        act=_map_for(120.0, G12_AREA),
+        page=G12_SCENE_ONLY,
         size=(1920, 1080),
         settle=2.5,
     ),
