@@ -46,7 +46,7 @@ def register(server: MCPServer, playground: Playground) -> None:
         carrier and whether it can hold its tool stretched out; a robot that would tip or fall, or an arm that cannot
         hold itself, is refused saying what to change. save_as keeps the robot with all it carries as a design
         (add_robot(design=...) adds it again, mount(what=<design>) mounts it whole); with no what it saves as it is. A
-        name already saved is refused unless overwrite=true, and a design cannot be saved under the name of one it carries.
+        name already saved is refused unless overwrite=true, and a design cannot be saved under a name it carries.
         remove("rover/arm") takes a mount off with what is on it."""
         with _tool_errors():
             sort = None
