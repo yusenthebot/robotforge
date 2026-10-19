@@ -64,6 +64,29 @@ def test_search_by_kind_and_words():
     assert first.id == "hyq"  # an exact word in the name comes before partial matches
 
 
+def test_search_matches_words_of_the_name_not_the_file_format():
+    # "ur" once matched "urdf" (the format) and listed baxter, edo and iiwa among the UR arms
+    found = catalogue.search("arm", "ur")
+    assert found
+    for e in found:
+        assert any(t.startswith("ur") for t in catalogue._tokens(e.id, e.robot, e.maker, " ".join(e.tags))), e.id
+    assert not {e.id for e in found} & {"baxter", "edo", "iiwa14"}
+    assert not catalogue.search(None, "urdf")  # the file format is not a name
+
+
+def test_a_kind_can_be_asked_for_by_the_name_a_listing_row_uses():
+    assert catalogue.canonical_kind("gripper") == "hand" == catalogue.canonical_kind("Hand")
+    assert catalogue.canonical_kind("dog") == "quadruped" == catalogue.canonical_kind("legged")
+    assert catalogue.canonical_kind("drone") == "aircraft" and catalogue.canonical_kind(None) is None
+    assert {e.id for e in catalogue.search("gripper")} == {e.id for e in catalogue.search("hand")}
+    # every kind the tuned library's rows report is a kind list_library accepts
+    assert {catalogue.canonical_kind(r["kind"]) for r in library.catalog()} <= set(catalogue.KINDS)
+    rows = catalogue.listing("gripper")["robots"]
+    assert any(r["kind"] == "gripper" for r in rows)
+    with pytest.raises(catalogue.CatalogueError, match="kind must be one of"):
+        catalogue.listing("tank")
+
+
 def test_a_name_means_one_robot():
     assert catalogue.source_of("HyQ") == (None, "hyq")
     assert catalogue.source_of("open manipulator x") == (None, "open_manipulator_x")

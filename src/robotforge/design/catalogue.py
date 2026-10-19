@@ -187,20 +187,51 @@ def tuned(entry: Entry) -> bool:
     return entry.in_library is not None or entry.id in library.CATALOG
 
 
+KIND_ALIASES = {  # what an agent (or the tuned library's own rows) may call a kind that is called otherwise here
+    "gripper": "hand",
+    "end_effector": "hand",
+    "dog": "quadruped",
+    "legged": "quadruped",
+    "biped": "humanoid",
+    "drone": "aircraft",
+    "uav": "aircraft",
+    "mobile": "wheeled",
+    "rover": "wheeled",
+    "manipulator": "arm",
+}
+
+
+def canonical_kind(kind: str | None) -> str | None:
+    """`kind` as one of KINDS (aliases and capitals allowed), or None for no kind. Raises CatalogueError otherwise."""
+    if kind is None or not kind.strip():
+        return None
+    key = kind.strip().lower()
+    key = KIND_ALIASES.get(key, key)
+    if key not in KINDS:
+        aliases = ", ".join(sorted(KIND_ALIASES))
+        raise CatalogueError(f"kind must be one of {', '.join(KINDS)} (or {aliases}), got {kind!r}")
+    return key
+
+
+def _tokens(*texts: str | None) -> list[str]:
+    return re.findall(r"[a-z0-9]+", " ".join(t for t in texts if t).lower())
+
+
 def search(kind: str | None = None, query: str | None = None) -> list[Entry]:
-    """Catalogue robots of a kind whose name, maker or tags contain every word of `query`, best match first.
-    Robots the tuned library has are left out: list_library shows them from there."""
-    if kind is not None and kind not in KINDS:
-        raise CatalogueError(f"kind must be one of {', '.join(KINDS)}, got {kind!r}")
-    words = re.findall(r"[a-z0-9]+", (query or "").lower())
+    """Catalogue robots of a kind whose id, name, maker or tags have a word starting with every word of `query`
+    ("ur" finds ur5e and UR10e, not "urdf"), best match first. Robots the tuned library has are left out:
+    list_library shows them from there."""
+    kind = canonical_kind(kind)
+    words = _tokens(query)
     scored = []
     for e in entries().values():
         if (kind is not None and e.kind != kind) or tuned(e):
             continue
-        text = " ".join([e.id, e.robot, e.maker or "", *e.tags, e.format, e.repo]).lower()
-        if not all(w in text for w in words):
+        tokens = _tokens(e.id, e.robot, e.maker, " ".join(e.tags))
+        if not all(any(t.startswith(w) for t in tokens) for w in words):
             continue
-        exact = sum(w in re.findall(r"[a-z0-9]+", f"{e.id} {e.robot}".lower()) for w in words)
+        names = _tokens(e.id, e.robot)
+        exact = sum(w in names for w in words)
         scored.append((-exact, e.in_library is not None, e.id, e))
     return [e for *_, e in sorted(scored, key=lambda t: t[:3])]
 
@@ -212,12 +243,10 @@ def counts() -> dict[str, int]:
     return {k: v for k, v in out.items() if v}
 
 
-LIBRARY_KINDS = {"gripper": "hand"}  # what the tuned library calls a kind that is called otherwise here
-
-
 def listing(kind: str | None = None, query: str | None = None, limit: int = 40) -> dict[str, Any]:
     """list_library's answer: the tuned library's robots and the open catalogue's that match `kind` and `query`.
     Without either it is the tuned library plus a count of what the open catalogue has."""
+    kind = canonical_kind(kind)
     found = search(kind, query)
     if kind is None and not query:
         return {
@@ -225,16 +254,16 @@ def listing(kind: str | None = None, query: str | None = None, limit: int = 40) 
             "open_catalogue": {
                 "robots": len(found),
                 "by_kind": counts(),
-                "how": "list_library(kind='arm', search='ur') searches them; add_robot(library=<name>) loads one "
+                "how": "list_library(kind='arm', search='kinova') searches them; add_robot(library=<name>) loads one "
                 "(downloads its folder on first use, imports it and says what it is and what it can do)",
             },
         }
-    words = re.findall(r"[a-z0-9]+", (query or "").lower())
+    words = _tokens(query)
     tuned_rows = [
         r
         for r in library.catalog()
-        if (kind is None or LIBRARY_KINDS.get(r["kind"], r["kind"]) == kind)
-        and all(w in f"{r['name']} {r['title']} {r['maker']} {r['summary']}".lower() for w in words)
+        if (kind is None or canonical_kind(r["kind"]) == kind)
+        and all(any(t.startswith(w) for t in _tokens(r["name"], r["title"], r["maker"])) for w in words)
     ]
     out: dict[str, Any] = {
         "robots": [*tuned_rows, *(e.row() for e in found[:limit])],

@@ -386,7 +386,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_library(
-        kind: Literal["arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other"] | None = None,
+        kind: str | None = None,
         search: str | None = None,
         limit: int = 40,
     ) -> str:
@@ -397,8 +397,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         5-30 s) and caches it.
 
         Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
-        open catalogue: kind and search ("ur", "kinova", "unitree": words of the name, maker or tags) list those that
-        match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
+        open catalogue: kind (arm, quadruped, humanoid, wheeled, hand, aircraft, other; also gripper, dog, drone) and
+        search (words starting the name, maker or a tag: "kinova", "unitree", "ur5") list those that match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
         URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
         structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
         tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
