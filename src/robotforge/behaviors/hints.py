@@ -34,6 +34,7 @@ PAD_TORSION_FIRM = 0.012  # m: what a firm hold gives them (a soft pad pressed o
 TURN_SAFETY = 6.0  # how much more than the turning of a load a squeeze must resist
 ROLL_SAFETY = 3.0  # the same for a load rolling about the pinch
 ROLL_ARM = 0.01  # m: the lever the pressure over a pad has against a load rolling about the pinch
+FINGER_GAP = 0.025  # m left between two things put in one tray, beyond their own widths
 ROOM = 0.055  # m between the middles of two things put in one tray
 EDGE = 0.03  # m from a tray's wall that a thing is put at least
 STEP = 0.015  # m between the spots tried in a tray
@@ -41,6 +42,8 @@ NEAR_Z = 0.12  # m: a thing this far above or below a tray's floor is not in it
 BOOST_MAX = 4.0  # times a gripper's force limit a firm hold may raise it
 PALM_MARGIN = 0.004  # m the underside of the hand keeps clear of the object's top
 TIP_MARGIN = 0.001  # m the fingertips keep over the floor
+JAW_ANGLES = 12  # directions tried for the jaws of a grasp that has no preferred one
+PAD_ROOM = 0.025  # m beyond the open jaws that must be free of walls and neighbours
 HOVER = 0.012  # m above its resting place an object is let go (the planner adds 1 cm; this is for a socket's chamfer)
 
 
@@ -176,8 +179,11 @@ def choices(
     opening: float | None,
     palm: Palm,
     want: str | None = None,
+    model: mujoco.MjModel | None = None,
 ) -> tuple[list[Choice], list[str]]:
-    """The tool points to try for `built` as it lies now, best first, and why the others were left out."""
+    """The tool points to try for `built` as it lies now, best first, and why the others were left out. With the
+    `model`, a grasp that may close its jaws in any direction (a round thing) closes them where there is room for the
+    open fingers: not through the wall of the bin it lies in or the neighbour beside it."""
     rot = data.xmat[body].reshape(3, 3)
     base = data.xpos[body]
     tipped = float(rot[2, 2]) < UPRIGHT
@@ -207,6 +213,10 @@ def choices(
         if np.linalg.norm(flat) > 0.5:
             unit = flat / np.linalg.norm(flat)
             faces = np.array([unit, unit])  # the jaws close along it, either way round
+        elif model is not None and opening is not None:
+            free = free_jaw(model, data, body, point, opening)
+            if free is not None:
+                faces = np.array([free, free])
         force = _squeeze_for(built, hint, point, base, rot, faces)
         if force > FORCE_MAX:
             left.append(
@@ -216,6 +226,34 @@ def choices(
             continue
         out.append(Choice(point, float(point[2] - base[2]), faces, hint, why, force, hint.opening / 2))
     return out, left
+
+
+def free_jaw(
+    model: mujoco.MjModel, data: mujoco.MjData, body: int, point: np.ndarray, opening: float
+) -> np.ndarray | None:
+    """The horizontal direction (unit) the jaws should close along at `point` so that the open fingers, `opening` apart,
+    have room: the one whose two sides are clear the farthest of the JAW_ANGLES tried, found by rays along it at the
+    height of the fingertips. None when every direction is clear (nothing to avoid: the arm turns its hand as it
+    likes)."""
+    reach = opening / 2 + PAD_ROOM
+    ids = np.zeros(1, dtype=np.int32)
+    clear: list[float] = []
+    for k in range(JAW_ANGLES):
+        a = math.pi * k / JAW_ANGLES
+        direction = np.array([math.cos(a), math.sin(a), 0.0])
+        room = reach + 0.05
+        for sign in (1.0, -1.0):
+            for dz in (-0.015, 0.005):  # the pads' lower and upper edge
+                origin = np.asarray(point, float) + np.array([0.0, 0.0, dz])
+                hit = mujoco.mj_ray(model, data, origin, sign * direction, None, 1, body, ids)
+                if hit >= 0:
+                    room = min(room, float(hit))
+        clear.append(room)
+    if min(clear) >= reach:
+        return None
+    best = int(np.argmax(clear))
+    a = math.pi * best / JAW_ANGLES
+    return np.array([math.cos(a), math.sin(a), 0.0])
 
 
 def _squeeze_for(
@@ -271,7 +309,9 @@ class FirmHold:
         self.force, self.short = force, short
         self._saved: dict[str, Any] = {}
 
-    def start(self) -> None:
+    def start(self, keep: bool = False) -> None:
+        """Take hold firmly. With `keep` the settings stay when the arm has no more to do (it holds the thing up for
+        as long as it is told to) until the jaws are opened, the controller is replaced or the simulation is reset."""
         from robotforge.behaviors import fetch
 
         model = self.session.model
@@ -299,8 +339,14 @@ class FirmHold:
                 self._saved["squeeze"] = before
         self.arm.on_lift.append(self.boost)
         self.arm.on_open.append(self.stop)
-        self.arm.on_idle.append(self.stop)
+        if not keep:
+            self.arm.on_idle.append(self.stop)
         self.session.reset_hooks.append(self.stop)
+
+    @property
+    def live(self) -> bool:
+        """Whether the settings are changed now (start has been called and stop has not)."""
+        return "weight" in self._saved
 
     def boost(self) -> None:
         """The jaws have closed: if they squeeze less than the hold needs (a Robotiq's servo is as stiff as it gets and
@@ -308,7 +354,7 @@ class FirmHold:
         BOOST_MAX times what it was."""
         model, data = self.session.model, self.session.data
         g = self.arm.gripper
-        if g < 0 or not model.actuator_forcelimited[g]:
+        if not self.live or g < 0 or not model.actuator_forcelimited[g]:
             return
         fingers = set(int(i) for i in finger_geoms(model, self.arm))
         mine = {i for i in range(model.ngeom) if int(model.geom_bodyid[i]) == self.body}
@@ -336,9 +382,8 @@ class FirmHold:
             self.session.model.actuator_gainprm[g], self.session.model.actuator_biasprm[g] = saved
 
     def stop(self) -> None:
-        if not self._saved:
+        if not self.live:
             return
-        pass
         model = self.session.model
         saved, self._saved = self._saved, {}
         if "noslip" in saved:
@@ -395,10 +440,12 @@ def place_for(
     built: Built,
     slot_name: str | None,
     taken: list[np.ndarray],
+    radius: float = 0.0,
 ) -> Place | None:
     """The place on a generated object: the slot asked for, else the first free one, else its flat top. `taken` are
     the positions of other loose things (a socket with one in it is not free). None when it has no place to put things
-    (a mug is not a shelf)."""
+    (a mug is not a shelf). `radius` is the footprint radius of what is put there: things in a tray are spread
+    at least a finger's width apart."""
     body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
     if body < 0:
         return None
@@ -421,7 +468,7 @@ def place_for(
     for s in slots:
         spot = base + rot @ np.asarray(s.pos)
         if s.radius is None and s.half is not None:  # a tray or a top: room for several, put each where it is freest
-            free = _free_spot(spot, rot, s, taken)
+            free = _free_spot(spot, rot, s, taken, max(ROOM, 2 * radius + FINGER_GAP))
             if free is not None:
                 chosen = (s, free)
                 break
@@ -447,13 +494,15 @@ def place_for(
     return Place(spot, rim, region, s.name, note)
 
 
-def _free_spot(centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.ndarray]) -> np.ndarray | None:
-    """The spot in a slot's area farthest from what already stands in it (at least ROOM from each), nearest the middle
-    among equals; None when the area is full."""
+def _free_spot(
+    centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.ndarray], room: float = ROOM
+) -> np.ndarray | None:
+    """The spot in a slot's area farthest from what already stands in it (at least `room` from each), nearest the
+    middle among equals; None when the area is full."""
     hx, hy = slot.half
     hx, hy = max(hx - EDGE, 0.0), max(hy - EDGE, 0.0)
     near = [
-        p[:2] for p in taken if -0.01 <= p[2] - centre[2] < NEAR_Z and np.hypot(*(p[:2] - centre[:2])) < hx + hy + ROOM
+        p[:2] for p in taken if -0.01 <= p[2] - centre[2] < NEAR_Z and np.hypot(*(p[:2] - centre[:2])) < hx + hy + room
     ]
     xs = np.linspace(-hx, hx, max(2, int(2 * hx / STEP) + 1)) if hx > 0 else [0.0]
     ys = np.linspace(-hy, hy, max(2, int(2 * hy / STEP) + 1)) if hy > 0 else [0.0]
@@ -466,9 +515,9 @@ def _free_spot(centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.n
         for y in ys:
             p = centre + rot @ np.array([x, y, 0.0])
             gap = min((float(np.hypot(*(p[:2] - q))) for q in near), default=np.inf)
-            if gap < ROOM:
+            if gap < room:
                 continue
-            value = (min(gap, 3 * ROOM) if capacity >= 6 else 0.0) - float(np.hypot(x - anchor[0], y - anchor[1]))
+            value = (min(gap, 3 * room) if capacity >= 6 else 0.0) - float(np.hypot(x - anchor[0], y - anchor[1]))
             if value > score:
                 best, score = p, value
     return best

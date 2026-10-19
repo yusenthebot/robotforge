@@ -650,6 +650,100 @@ G10_DEMOS = [
 ]
 
 
+# ---- G13: hard tasks with realistic objects ---------------------------------------------------------------------
+
+_DONE: set[str] = set()  # the steps of a hard task that have run, the last one ends the film
+
+
+def _hard(kind: str, seed: int = 0, arm: str = "panda") -> Callable[[Any], None]:
+    """A world: the bench of a hard task (design/tasks/hard_bench.py) with its things and its task added."""
+
+    def world(pg: Any) -> None:
+        from robotforge.design.tasks import hard_bench
+
+        _DONE.clear()
+        hard_bench.build(pg, kind, seed, arm)
+
+    return world
+
+
+def _wait(motion: Any, longest: float) -> None:
+    end = time.monotonic() + longest
+    while not motion.done and time.monotonic() < end:
+        time.sleep(0.1)
+    time.sleep(0.6)
+
+
+def _step(tag: str, robot: str, obj: str, target: Any, longest: float = 90.0, **kw: Any) -> Callable[[Any], None]:
+    """An action: pick_and_place(robot, obj, target, ...) and wait for the arm, in the viewer's real time."""
+
+    def act(pg: Any) -> None:
+        motion, _ = pg.behaviors.pick_and_place(robot, obj, target, **kw)
+        _wait(motion, longest)
+        _DONE.add(tag)
+
+    return act
+
+
+def _park(tag: str, robot: str, at: list[float]) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        _wait(pg.behaviors.move_arm(robot, at), 20.0)
+        _DONE.add(tag)
+
+    return act
+
+
+def _sort_steps() -> Callable[[Any], None]:
+    """An action: the scripted expert's order for the sort task, one thing at a time."""
+
+    def act(pg: Any) -> None:
+        from robotforge.design.tasks import hard_bench
+
+        task = pg.current_world().tasks[0]
+        for thing, target in hard_bench._order(pg, task):
+            motion, _ = pg.behaviors.pick_and_place("arm", thing, target)
+            _wait(motion, 60.0)
+        _DONE.add("sorted")
+
+    return act
+
+
+CAMERA = "window.__robotforge.select(null);"
+G13_DEMOS = [
+    Demo(
+        "g13_pour",
+        _hard("pour", 4),
+        70.0,
+        timeline=[(1.0, _step("poured", "arm", "cup", "bowl", pour=True))],
+        page=CAMERA + _orbit((0.42, 0.0, 0.62), 1.0, 0.45, -78.0, 34.0, 40.0),
+        until=lambda _pg: "poured" in _DONE,
+        tail=1.5,
+    ),
+    Demo(
+        "g13_hand_over",
+        _hard("hand_over", 0),
+        80.0,
+        timeline=[
+            (1.0, _step("put", "arm", "hammer", [0.32, 0.0])),
+            (1.1, _park("parked", "arm", [0.25, -0.55, 0.75])),
+            (1.2, _step("held", "partner", "hammer", "hold")),
+        ],
+        page=CAMERA + _orbit((0.3, 0.0, 0.62), 1.15, 0.5, -62.0, 46.0, 50.0),
+        until=lambda _pg: "held" in _DONE,
+        tail=2.5,
+    ),
+    Demo(
+        "g13_sort",
+        _hard("sort", 0),
+        200.0,
+        timeline=[(1.0, _sort_steps())],
+        page=CAMERA + _orbit((0.5, 0.05, 0.5), 1.3, 0.85, -78.0, 36.0, 140.0),
+        until=lambda _pg: "sorted" in _DONE,
+        tail=2.0,
+    ),
+]
+
+
 # Legged robots on rough ground (G8): the quadrupeds in their lanes (screenshots.py) and the humanoids walking.
 
 
@@ -951,6 +1045,7 @@ DEMOS = [
     _mobile("mobile_fetch_anymal", "anymal_ur5e", "fetch", 130.0, (0.4, -2.0, 3.6), ease=0.06),
     _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05, seed=9),
     *G10_DEMOS,
+    *G13_DEMOS,
 ]
 
 

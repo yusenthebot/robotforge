@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from robotforge.design.tasks import hard, hard_bench, hard_check
+from robotforge.design.tasks import hard, hard_bench
 from robotforge.design.tasks.check import State, judge
 from robotforge.design.tasks.spec import HARD_KINDS, TaskEntry
 from robotforge.design.world import World
@@ -75,12 +75,11 @@ def test_a_stack_sentence_puts_the_last_thing_named_at_the_bottom_when_it_says_o
         {"name": "tin", "shape": "tin", "pos": [0.3, -0.2, Z]},
         {"name": "brick", "shape": "brick", "pos": [0.6, -0.2, Z]},
     )
-    task = hard.plan(world, "stack the brick on the tin on the book", [SimpleNamespace(name="arm", kind="arm", arms=[])],
-                     None, None, 0, "stack").task  # fmt: skip
+    arms = [SimpleNamespace(name="arm", kind="arm", arms=[])]
+    task = hard.plan(world, "stack the brick on the tin on the book", arms, None, None, 0, "stack").task
     assert task.items == ["book", "tin", "brick"] and task.kind == "stack"
     assert task.describe() == "brick on tin on book"
-    listed = hard.plan(world, "stack the book, the tin and the brick", [SimpleNamespace(name="arm", kind="arm", arms=[])],
-                       None, None, 0, "stack").task  # fmt: skip
+    listed = hard.plan(world, "stack the book, the tin and the brick", arms, None, None, 0, "stack").task
     assert listed.items == ["book", "tin", "brick"]
 
 
@@ -253,8 +252,6 @@ def test_a_hand_over_is_done_when_the_receiver_holds_it_up_and_the_giver_has_let
 
 def test_every_hard_kind_has_a_check_and_the_old_kinds_are_judged_as_they_were():
     assert set(HARD_KINDS) == {"upright", "stack", "insert", "sort", "pour", "hand_over"}
-    for kind in HARD_KINDS:
-        assert kind in hard_check.judge.__code__.co_consts or True
     world = _world({"name": "box", "shape": "box", "pos": [0.4, 0.0, Z]})
     done = judge(
         _task("pick_up", object="box"), world, _state({"box": (0.4, 0.0, Z + 0.1)}), _state({"box": (0.4, 0.0, Z)})
@@ -265,7 +262,7 @@ def test_every_hard_kind_has_a_check_and_the_old_kinds_are_judged_as_they_were()
 # ---- the bench and the expert -------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["upright", "insert", "stack", "pour"])
+@pytest.mark.parametrize("kind", ["upright", "insert", "stack", "pour", "hand_over"])
 def test_the_scripted_expert_does_the_task_and_the_tasks_own_check_says_so(kind):
     report = hard_bench.run(kind, 1, "panda")
     assert report["done"], report.get("cause") or report["why"]
@@ -325,3 +322,43 @@ def test_a_cup_with_a_lid_or_held_by_a_handle_only_is_not_poured_before_the_arm_
         pg.behaviors.pick_and_place(arm, "lidded", "bowl", True, None, True)
     with pytest.raises(Exception, match="no grip on its own axis"):
         pg.behaviors.pick_and_place(arm, "mug", "bowl", True, None, True)
+
+
+def test_a_hand_over_goes_through_the_table_and_the_second_arm_ends_up_holding_the_tool_up():
+    pg = hard_bench.fresh()
+    made = hard_bench.build(pg, "hand_over", 0, "panda")
+    assert made["sentence"] == "hand the hammer to the other arm"
+    task = pg.current_world().tasks[0]
+    assert (task.kind, task.robot, task.target) == ("hand_over", "arm", "partner")
+    report = hard_bench.solve(pg)
+    assert report["done"], report.get("cause") or report["why"]
+    assert [s["kind"] for s in report["steps"]] == ["put down", "take and hold"]
+    held = pg.behaviors.resolve("partner", arm=True)
+    pg.control("reset")
+    del held
+
+
+def test_target_hold_keeps_the_thing_lifted_in_the_fingers_and_a_second_pick_can_put_it_down():
+    pg = hard_bench.fresh()
+    hard_bench.bench(pg, "panda")
+    pg.add_object("hammer", shape="hammer", pos=[0.4, -0.2, Z])
+    pg.run_fast(lambda: False, 0.5)
+    arm = pg.behaviors.resolve("arm", arm=True)
+    motion, info = pg.behaviors.pick_and_place(arm, "hammer", "hold")
+    pg.run_fast(lambda: bool(motion.done), 40)
+    pg.run_fast(lambda: False, 1.5)
+    result = pg.behaviors.held(info)
+    assert result["success"] and result["held"] and result["lifted_cm"] >= 4.0
+    pg.control("reset")  # a reset puts back what the firm hold changed
+    assert pg.session.model.opt.noslip_iterations == 0 or not pg.session.reset_hooks
+
+
+def test_a_suite_of_hard_tasks_has_a_world_on_disk_for_each_kind(tmp_path):
+    from robotforge.design.tasks.suite import load_suite, make_hard_suite
+
+    cases = make_hard_suite(6, seed=1, out=tmp_path / "suite")
+    assert [c.kind for c in cases] == list(HARD_KINDS)
+    assert [c.name for c in load_suite(tmp_path / "suite")] == [c.name for c in cases]
+    for case in cases:
+        text = (tmp_path / "suite" / "worlds" / case.name / "world.yaml").read_text(encoding="utf-8")
+        assert f"kind: {case.kind}" in text and case.task

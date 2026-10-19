@@ -57,3 +57,32 @@ An object's frame has its origin at the middle of its base and z up, resting as 
 ## Writing your own generator
 
 See "Generators" in [EXTENDING.md](EXTENDING.md): a function over a builder, with a mesh, convex pieces, a material, grasp hints and parameters, saved as a plugin file; it is a shape for `add_object` and understood by `describe=` from its `keywords` and the choices of its `params`.
+
+## Hard tasks
+
+`add_task` reads these sentences, finds the things by what they are (and their color), adds nothing it cannot find (it says what to add), and saves a task with a check that looks at how things ended up.
+
+| sentence | what the check wants |
+|---|---|
+| put the mug on the shelf upright | the mug on a board of the shelf, within 15 degrees of upright and at rest |
+| stack the brick on the tin on the book | each thing standing on the one below, within 12 degrees of level and inside its top |
+| insert the bottle into the rack | the bottle in a socket, down to the socket floor, standing |
+| sort the things in the bin into the trays by kind | every thing in the tray named for its kind (fruit, cans, boxes, bottles, tools) |
+| pour the balls from the cup into the bowl | three quarters of the balls that were in the cup lie in the bowl |
+| hand the hammer to the other arm | the other arm holds it at least 4 cm up and the first arm has let go |
+
+Fixtures that go with them are shapes too: `rack` (sockets for bottles; `params={"bottle": diameter}` sizes them), `tray` (a low tray; `params={"tag": "fruit"}` prints a name on it), `shelf`.
+A thing is put on a slot of a fixture with the usual `pick_and_place(robot, "bottle", "rack")` (the first free socket, or `"rack/2"`), `"tray"` (spread out, a full tray says so) or `"shelf"` (a top board).
+`pick_and_place(..., pour=true)` takes a cup (or a bowl) by its body, carries it over the target's mouth, tilts it about its lip in joint space (the lip stays over the target, the wrist shakes so a heap of balls cannot jam), tips it back and puts it down where it stood.
+A cup with a lid, or one that can only be held by a handle, is refused before the arm moves, saying why.
+A hand-over goes through the table: two grippers cannot share a shaft, so the first arm puts the tool down at a spot both arms reach (`pick_and_place("arm", "hammer", [0.32, 0.0])`), moves out of the way (`move_arm`), and the second takes it and keeps it lifted with `pick_and_place("partner", "hammer", "hold")` (`held`, `lifted_cm` in the answer).
+`scripts/task_suite.py --hard` writes a suite of these worlds, one task each, in the layout `scripts/agent_eval.py --suite` runs.
+
+### How often the scripted expert does them
+
+`scripts/objects_tasks.py` plays each task as an agent would, with the real Menagerie models (a Franka Panda, and a UR5e with a Robotiq 2F-85) over seeds, and writes every failure with its cause (refused, never lifted, slipped, tipped over, landed outside, knocked something over, spilled).
+The tables below are from the last run; rerun the script to see yours.
+
+RATES
+
+The grip is where the arms differ: the Panda's pads have torsional friction, the Robotiq pads in the Menagerie have none, so a firm hold (pad torsion, squeeze, force range raised) is switched on while an object is carried and put back after.

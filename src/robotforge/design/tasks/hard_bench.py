@@ -33,36 +33,41 @@ SENTENCES = {
 }
 
 
-def bench(pg: Any, arm: str = "panda") -> None:
-    """The arm on a table, ready for a task's things."""
+def bench(pg: Any, arm: str = "panda", width: float = 1.2, at_y: float = 0.0) -> None:
+    """The arm (at `at_y` along the table's edge) on a table `width` wide, ready for a task's things."""
     spec = ARMS[arm]
-    pg.add_robot("arm", library=spec["library"], mounts=spec["mounts"], pos=[0, 0, TABLE_Z])
-    pg.add_object("table", shape="table", size=[1.4, 1.2, TABLE_Z], pos=[0.4, 0], fixed=True, color="#d9d2c5")
+    pg.add_robot("arm", library=spec["library"], mounts=spec["mounts"], pos=[0, at_y, TABLE_Z])
+    pg.add_object("table", shape="table", size=[1.4, width, TABLE_Z], pos=[0.4, 0], fixed=True, color="#d9d2c5")
 
 
-def fresh() -> Any:
-    """A Playground with an empty world in a folder of its own (the real Menagerie models are used)."""
+def fresh(home: str | None = None, name: str = "bench") -> Any:
+    """A Playground with an empty world `name` in a folder of its own, or in `home` (the real Menagerie models are
+    used)."""
     import os
 
     from robotforge.playground import Playground
     from robotforge.sim.session import SimSession
 
-    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp()
+    os.environ["ROBOTFORGE_HOME"] = home or tempfile.mkdtemp()
     pg = Playground(session=SimSession.from_xml("<mujoco/>"))
-    pg.new_world("bench")
+    pg.new_world(name)
     return pg
 
 
 def build(pg: Any, kind: str, seed: int = 0, arm: str = "panda") -> dict[str, Any]:
     """Furnish the open world for `kind` and add the task; returns what was made."""
     rng = random.Random(f"{kind}:{seed}")
-    bench(pg, arm)
+    if kind == "hand_over":  # two arms side by side, far enough apart that their folded hands do not meet
+        bench(pg, arm, width=1.5, at_y=-ARM_GAP / 2)
+    else:
+        bench(pg, arm)
     sentence = {
         "upright": _upright,
         "stack": _stack,
         "insert": _insert,
         "sort": _sort,
         "pour": _pour,
+        "hand_over": lambda pg, rng, seed: _hand_over(pg, rng, seed, arm),
     }[kind](pg, rng, seed)
     pg.run_fast(lambda: False, 0.6)
     added = pg.add_task(sentence, robot="arm", name=kind, seed=seed)
@@ -99,6 +104,22 @@ def _insert(pg: Any, rng: random.Random, seed: int) -> str:
     return SENTENCES["insert"]
 
 
+ARM_GAP = 0.6  # m between the two arms of a hand-over
+EXCHANGE = (0.32, 0.0)  # x, y of the spot on the table both arms reach, where the tool changes hands
+
+
+def _hand_over(pg: Any, rng: random.Random, seed: int, arm: str) -> str:
+    """A tool near one arm and a second arm across the table facing it."""
+    spec = ARMS[arm]
+    pg.add_robot("partner", library=spec["library"], mounts=spec["mounts"], pos=[0, ARM_GAP / 2, TABLE_Z])
+    shape = ("hammer", "wrench")[seed % 2]
+    pg.add_object(
+        shape, shape=shape, seed=seed, pos=[0.30 + rng.uniform(-0.03, 0.03), -0.52 + rng.uniform(-0.03, 0.03), TABLE_Z],
+        yaw=rng.uniform(-60, 60),
+    )  # fmt: skip
+    return f"hand the {shape} to the other arm"
+
+
 def _pour(pg: Any, rng: random.Random, seed: int) -> str:
     """A tumbler with a handful of balls in it, and a bowl across the table to pour them into."""
     pg.add_object(
@@ -120,7 +141,8 @@ def _pour(pg: Any, rng: random.Random, seed: int) -> str:
 
 SORT_KINDS = (("fruit", ("apple", "orange")), ("cans", ("can", "can")), ("boxes", ("brick", "tin")))
 TRAY_SPOTS = ((0.28, 0.42, 0.0), (0.54, 0.44, 0.0), (0.76, 0.26, 70.0))
-BIN = (0.46, -0.30, 0.34, 0.26)  # x, y, length, width of the bin the things start in
+BIN = (0.46, -0.30, 0.42, 0.32)  # x, y, length, width of the bin the things start in
+WALL_ROOM = 0.075  # m from the bin's wall to the middle of a thing in it: the open fingers must not meet the wall
 
 
 def _sort(pg: Any, rng: random.Random, seed: int) -> str:
@@ -142,7 +164,7 @@ def _sort(pg: Any, rng: random.Random, seed: int) -> str:
         item_seed = seed * 7 + counts[shape]
         built = objects.object_for(shape, seed=item_seed)
         radius = max(built.half) + 0.012
-        spot = _free(rng, placed, radius, bx, by, bl / 2 - 0.045, bw / 2 - 0.045)
+        spot = _free(rng, placed, radius, bx, by, bl / 2 - WALL_ROOM, bw / 2 - WALL_ROOM)
         placed.append((*spot, radius))
         name = f"{shape}_{counts[shape]}"
         pg.add_object(
@@ -159,7 +181,7 @@ def _free(rng: random.Random, placed: list[tuple[float, float, float]], radius: 
     for _ in range(300):
         x, y = cx + rng.uniform(-hx, hx), cy + rng.uniform(-hy, hy)
         room = min((math.hypot(x - px, y - py) - radius - pr for px, py, pr in placed), default=1.0)
-        if room >= 0.03:
+        if room >= 0.02:
             return x, y
         if room > gap:
             best, gap = (x, y), room
@@ -216,6 +238,8 @@ def solve(pg: Any, name: str | None = None, robot: str = "arm") -> dict[str, Any
     steps: list[dict[str, Any]] = []
     if task.kind == "pour":
         return _finish(pg, task, [_pour_step(pg, task.object, task.target, robot)], t0, wall)
+    if task.kind == "hand_over":
+        return _finish(pg, task, _hand_over_steps(pg, task, robot), t0, wall)
     order = _order(pg, task)
     placed: list[str] = []
     for thing, target in order:
@@ -230,6 +254,45 @@ def solve(pg: Any, name: str | None = None, robot: str = "arm") -> dict[str, Any
         if "refused" in step:
             break
     return _finish(pg, task, steps, t0, wall)
+
+
+def _hand_over_steps(pg: Any, task: Any, robot: str) -> list[dict[str, Any]]:
+    """The giver puts the tool down at the exchange spot, the receiver takes it from there and holds it up."""
+    first = act(pg, task.object, [*EXCHANGE], robot)
+    first["kind"] = "put down"
+    if "refused" not in first:  # near the spot is enough: it only has to lie where the other arm reaches it
+        at = pg.session.data.xpos[pg.session.model.body(task.object).id]
+        first["success"] = bool(np.hypot(at[0] - EXCHANGE[0], at[1] - EXCHANGE[1]) < 0.15)
+    if "refused" in first or not first.get("moved_cm"):
+        return [first]
+    motion = pg.behaviors.move_arm(robot, [0.25, -ARM_GAP / 2 - 0.25, 0.75])  # out of the way, over its own side
+    pg.run_fast(lambda: bool(motion.done), 15)
+    second = _hold_step(pg, task.object, task.target)
+    return [first, second]
+
+
+def _hold_step(pg: Any, thing: str, robot: str) -> dict[str, Any]:
+    arm = pg.behaviors.resolve(robot, arm=True)
+    d = pg.session.data
+    row: dict[str, Any] = {"thing": thing, "target": "hold", "robot": robot, "kind": "take and hold"}
+    try:
+        motion, info = pg.behaviors.pick_and_place(arm, thing, "hold")
+    except Exception as exc:  # the planner's refusal is the answer
+        row.update(refused=str(exc)[:300])
+        return row
+    t0 = float(d.time)
+    pg.run_fast(lambda: bool(motion.done), 60)
+    pg.run_fast(lambda: False, 1.5)
+    result = pg.behaviors.held(info)
+    row.update(
+        success=result["success"],
+        lifted_cm=result["lifted_cm"],
+        moved_cm=0.0 if result["held"] else 99.0,
+        tilt_deg=None,
+        grasp=(info.get("grasp") or {}).get("kind"),
+        sim_s=round(float(d.time) - t0, 1),
+    )
+    return row
 
 
 def _pour_step(pg: Any, thing: str, target: str, robot: str) -> dict[str, Any]:

@@ -120,6 +120,10 @@ MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.M
 MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid walks at 0.09)
 
 
+SPREAD_MAX = 0.05  # m: the most a thing's own width keeps its neighbours in a tray away
+HOLD_LIFT = 0.04  # m a held thing must be above where it lay for the hold to count
+
+
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
 
@@ -1497,6 +1501,8 @@ class BehaviorManager:
                 self._check_steel(arm.robot, obj)
             if pour:
                 return arm, self._pour(arm, obj, target, pick)
+            if isinstance(target, str) and target.strip().lower() == "hold" and not self._named("hold"):
+                return arm, self._hold(arm, obj, pick)
             try:
                 place, place_top, region = self._place_target(target, obj)
             except BehaviorError:
@@ -2003,6 +2009,55 @@ class BehaviorManager:
                 faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
         return {"center": center, "half_height": half, "faces": faces}
 
+    def _named(self, name: str) -> bool:
+        """Whether the world has an object called `name` (a target called "hold" is that object, not the keyword)."""
+        world = self._world()
+        return world is not None and any(o.name == name for o in world.objects)
+
+    def _hold(self, arm: ArmMotion, obj: str, pick: dict[str, Any]) -> dict[str, Any]:
+        """Queue taking `obj` and lifting it to stay held (target "hold": the receiving half of a hand-over)."""
+        body = self._body(obj)
+        began = float(self.session.data.xpos[body][2])
+        first: Exception | None = None
+        used = None
+        for choice in pick.get("choices") or [None]:
+            point, half, faces = (
+                (pick["center"], pick["half_height"], pick["faces"])
+                if choice is None
+                else (choice.point, choice.half_height, choice.faces)
+            )
+            try:
+                arm.pick_and_hold(point, half, faces)
+                used = choice
+                break
+            except (OutOfReach, ValueError) as exc:
+                first = first or exc
+        else:
+            if isinstance(first, OutOfReach):
+                raise BehaviorError(
+                    self._pick_out_of_reach(arm, first, pick["center"], pick["center"], "hold", obj)
+                ) from first
+            raise BehaviorError(str(first)) from first
+        built = pick.get("built")
+        if built is not None and built.mass >= HEAVY and used is not None:
+            hints.FirmHold(self.session, arm, body, used.force, used.short).start(keep=True)
+        return {
+            "object": obj,
+            "target": "hold",
+            "region": None,
+            "hold": {"robot": arm.robot, "began_z": began},
+            **({"grasp": used.describe()} if used is not None else {}),
+        }
+
+    def held(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Whether the arm that was told to hold a thing has it lifted in its fingers."""
+        hold = info["hold"]
+        arm = self._arm_motion(hold["robot"])
+        body = self._body(info["object"])
+        up = float(self.session.data.xpos[body][2]) - hold["began_z"]
+        holding = fetch.holding(self.session.data, arm, body)
+        return {"success": bool(holding and up >= HOLD_LIFT), "held": bool(holding), "lifted_cm": round(up * 100, 1)}
+
     def _pour(self, arm: ArmMotion, obj: str, target: Any, pick: dict[str, Any]) -> dict[str, Any]:
         """Queue taking `obj` (a cup, a mug, a bowl), pouring it into `target` and putting it back (pour.py)."""
         from robotforge.behaviors import pour as pouring
@@ -2131,7 +2186,7 @@ class BehaviorManager:
             center = d.xpos[body] + d.xmat[body].reshape(3, 3) @ np.array([0.0, 0.0, half])
             return {"center": center, "half_height": half, "faces": None, "choices": None}
         opening = fetch.gripper_opening(m, arm)
-        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want)
+        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want, m)
         if not found:
             asked = f" (asked for a {want} grasp; it has {', '.join(hints.kinds_of(built)) or 'none'})" if want else ""
             why = "; ".join(left) or "it has no grasp a top-down gripper can use"
@@ -2202,7 +2257,8 @@ class BehaviorManager:
             if other != moving and other != name:
                 taken.append(d.xpos[self._body(other)].copy())
         try:
-            place = hints.place_for(m, d, name, built, slot_name, taken)
+            size = self._spread(moving)
+            place = hints.place_for(m, d, name, built, slot_name, taken, size)
         except KeyError as exc:
             raise BehaviorError(exc.args[0]) from exc
         except LookupError as exc:
@@ -2212,6 +2268,14 @@ class BehaviorManager:
                 f"{name} is a {built.shape}: nothing can be put in or on it (a rack, a tray and a box can)"
             )
         return place.point, place.top, place.region
+
+    def _spread(self, name: str | None) -> float:
+        """How much room a generated thing wants round it in a tray: its widest half extent from above, at most the
+        width of a finger's reach (a long tool is not spread like a long box: it is laid, not stood)."""
+        built = hints.built_for(self._object_entry(name)) if name else None
+        if built is None:
+            return 0.0
+        return min(float(max(built.half[0], built.half[1])), SPREAD_MAX)
 
     def _on_shelf(self, name: str, entry: ObjectEntry, slot: str | None) -> tuple[np.ndarray, float, dict[str, Any]]:
         """The top board of a shelf: the only one with nothing over it, so the only one a gripper coming from above

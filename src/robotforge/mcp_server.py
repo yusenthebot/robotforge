@@ -116,6 +116,12 @@ add_task("bring the red cup from the kitchen to the bedroom desk") turns a sente
 a goal with a success check, a reward and randomized starts (go to, bring, put, pick up, push, open, close, press,
 switch on); it adds the thing or the robot the task needs. observe lists each task under "tasks" with done and
 distance_m: check it after acting, and say the task is done only when observe says so.
+Harder sentences with modelled objects are tasks too: "put the mug on the shelf upright", "stack the brick on the
+tin on the book", "insert the bottle into the rack", "sort the things in the bin into the trays by kind" (trays
+carry a name: shape="tray" with params={"tag": "fruit"}), "pour the balls from the cup into the bowl", "hand the
+hammer to the other arm" (two arms side by side). Do them with pick_and_place (pour=true for the pour; for the
+hand-over the first arm puts the tool down at a spot both arms reach, moves out of the way, and the second takes it
+with target="hold"); the check judges how things ended up, not how they got there.
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
@@ -987,7 +993,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         a tin takes things stacked on its top. pour=true pours instead: the object is a cup, a mug or a bowl with
         balls (or anything small) in it and the target a container with an open mouth; the arm carries it over the
         target, tilts it about its lip until what is in it has run out, tips it back and puts it down where it stood.
-        The answer says how many of the balls are in the target now ("balls_in_target", "balls")."""
+        The answer says how many of the balls are in the target now ("balls_in_target", "balls"). target="hold" takes
+        the object and keeps it lifted in the fingers ("held", "lifted_cm"): the receiving half of a hand-over from one
+        arm to another, which goes through the table, since two grippers cannot share a shaft: the first arm puts the
+        tool down at a spot both reach, the second takes it from there and holds it up."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
@@ -1020,6 +1029,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             result = playground.behaviors.placed(object, region) if region is not None else {"success": False}
             if info.get("pour"):
                 result = playground.behaviors.poured(info)
+            if info.get("hold"):
+                result = playground.behaviors.held(info)
             return _json(
                 {
                     **result,
