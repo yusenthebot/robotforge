@@ -25,8 +25,11 @@ def verdict(row: dict[str, Any]) -> str:
     move, stand = row.get("move", {}), row.get("stand", {})
     kind = row["kind"]
     if not stand.get("ok"):
+        if stand.get("blew_up_at_s") is not None:
+            return f"collapses at home, simulation diverges at {stand['blew_up_at_s']:.1f} s"
         if "upright" in stand:
-            return f"falls over at home (keeps {stand['height_kept']:.0%} of its height)"
+            when = f" after {stand['fell_at_s']:.1f} s" if "fell_at_s" in stand else ""
+            return f"falls over at home{when} (keeps {stand['height_kept']:.0%} of its height)"
         return "drifts at home"
     if kind == "arm" and move.get("ok"):
         return f"reaches a point, {move['error_m'] * 100:.1f} cm off (point {move['tries']} tried)"
@@ -93,9 +96,13 @@ def grid(shots: Path, rows: list[dict[str, Any]], out: Path) -> Path:
                 tile.paste(inset, (8, TILE_H - INSET_H - 8))
                 edge = ImageDraw.Draw(tile)
                 edge.rectangle([8, TILE_H - INSET_H - 8, 8 + INSET_W - 1, TILE_H - 9], outline=(255, 255, 255), width=3)
-                edge.text((14, TILE_H - INSET_H - 4), "as added", font=font(15), fill=(29, 32, 38))
+                edge.rectangle([8, TILE_H - INSET_H - 8, 8 + 76, TILE_H - INSET_H + 12], fill=(255, 255, 255))
+                edge.text((12, TILE_H - INSET_H - 6), "as added", font=font(15), fill=(29, 32, 38))
             stamp = f"t = {row['t_end']:.0f} s" if "t_end" in row else ""
-            ImageDraw.Draw(tile).text((TILE_W - 100, 10), stamp, font=font(18), fill=(29, 32, 38))
+            if stamp:  # on a light plate: the sky behind it is dark
+                plate = ImageDraw.Draw(tile)
+                plate.rounded_rectangle([TILE_W - 102, 8, TILE_W - 8, 36], radius=6, fill=(255, 255, 255))
+                plate.text((TILE_W - 92, 11), stamp, font=font(18), fill=(29, 32, 38))
             sheet.paste(tile, (x, y))
         draw.rectangle([x, y + TILE_H, x + TILE_W - 1, y + TILE_H + CAPTION - 1], fill=(255, 255, 255))
         draw.text((x + 12, y + TILE_H + 8), row["name"], font=font(22), fill=(29, 32, 38))

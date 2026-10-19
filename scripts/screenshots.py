@@ -1144,6 +1144,7 @@ def _g12_do(name: str) -> Callable[[Any], None]:
     import catalogue_bench
 
     def act(pg: Any) -> None:
+        pg.control("pause")  # the viewer's own clock must not run the robot while this does
         about = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)
         row = catalogue_bench.behave(pg, "r", about, {"name": name, "kind": about["kind"]}, stop=False)
         G12_ROWS[name] = row

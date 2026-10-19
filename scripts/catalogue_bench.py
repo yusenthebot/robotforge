@@ -65,14 +65,40 @@ def _span(pg: Any, robot: str) -> float:
     return max(zs) - min(zs)
 
 
+def advance(pg: Any, seconds: float, stop: Any = None, step: float = 0.25) -> tuple[float, bool]:
+    """Run `seconds` of simulation in short pieces; (seconds run, whether the simulation blew up). MuJoCo resets a
+    diverged simulation to its start, which would show a robot that collapsed as standing: the last good state is put
+    back instead. `stop()` ends the run early."""
+    m, d = pg.session.model, pg.session.data
+    backup = mujoco.MjData(m)
+    ran = 0.0
+    while ran < seconds - 1e-9 and not (stop is not None and stop()):
+        piece = min(step, seconds - ran)
+        mujoco.mj_copyData(backup, m, d)
+        got = pg.run_fast(lambda: False, piece)
+        if got < piece - 1e-6:
+            mujoco.mj_copyData(d, m, backup)
+            return ran, True
+        ran += got
+    return ran, False
+
+
 def stand(pg: Any, robot: str, floating: bool) -> dict[str, Any]:
     start = _span(pg, robot)
     q0 = pg.session.data.qpos.copy()
-    pg.run_fast(lambda: False, SETTLE_S)
-    out: dict[str, Any] = {"finite": _finite(pg)}
+
+    def collapsed() -> bool:  # a robot on its side stays there: no need to wait for the rest of the time
+        return floating and (not _upright(pg, robot) or _span(pg, robot) < 0.5 * start)
+
+    ran, blew_up = advance(pg, SETTLE_S, collapsed if floating else None)
+    out: dict[str, Any] = {"finite": _finite(pg) and not blew_up}
+    if blew_up:
+        out["blew_up_at_s"] = round(ran, 2)
     if floating:
         kept = _span(pg, robot) / start if start > 0.02 else 1.0  # one rigid body has no height to keep
         out.update(height_kept=round(kept, 2), upright=_upright(pg, robot))
+        if ran < SETTLE_S - 1e-6 and not blew_up:
+            out["fell_at_s"] = round(ran, 2)
         out["ok"] = out["finite"] and out["upright"] and kept > 0.7
     else:
         drift = float(np.max(np.abs(pg.session.data.qpos - q0))) if q0.size else 0.0
@@ -127,7 +153,7 @@ def move_walker(pg: Any, robot: str, speed: float, seconds: float, kind: str, st
         return {"ok": False, "why": str(exc)[:200]}
     except ValueError as exc:
         return {"ok": False, "why": str(exc)[:200]}
-    pg.run_fast(lambda: False, seconds)
+    _, blew_up = advance(pg, seconds)
     after = pg.behaviors.pose(robot)
     if stop:
         pg.behaviors.stop(robot)
@@ -141,6 +167,7 @@ def move_walker(pg: Any, robot: str, speed: float, seconds: float, kind: str, st
         "speed_asked": speed,
         "speed_got": round(went / seconds, 3),
         "upright": after["upright"],
+        **({"blew_up": True} if blew_up else {}),
     }
 
 
@@ -212,7 +239,9 @@ def behave(
     row["stand"] = stand(pg, robot, floating)
     kind = about["kind"]
     try:
-        if kind == "arm":
+        if floating and not row["stand"]["ok"]:  # a robot that fell over at home is not sent to walk
+            row["move"] = {"ok": False, "why": "it falls over at home, so it was not asked to move"}
+        elif kind == "arm":
             row["move"] = move_arm(pg, robot, about)
         elif kind in ("quadruped", "humanoid"):
             row["move"] = (
