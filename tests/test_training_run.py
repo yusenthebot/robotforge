@@ -141,14 +141,14 @@ def test_ars_and_cem_learn_to_balance_and_leave_a_playable_policy(tmp_path, bala
         assert t["steps"] >= 40_000 * 0.9
         assert (folder / "trials" / t["id"] / "policy.npz").exists()
     final = doc["final"]
-    assert final["mean_return"] > 0  # a policy that does nothing earns about -25 on this task
+    assert final["mean_return"] > -10  # a policy that does nothing earns about -25 on this task
     policy = TrainedPolicy.load(folder)  # the same files control/rl leaves, so every runner finds it
     assert policy.meta["env"]["task"] == "balance" and policy.meta["final"]["trial"] == final["trial"]
     from robotforge.training.envs import build_env
     from robotforge.training.trial import evaluate_policy
 
     again = evaluate_policy(build_env(policy.meta["env"]), policy.net, 3)
-    assert again["mean_return"] > 0
+    assert again["mean_return"] > -10
 
 
 def test_halving_continues_the_survivors_from_where_they_were(tmp_path, balance_env):

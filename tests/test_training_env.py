@@ -152,3 +152,21 @@ def test_a_reach_target_with_jitter_moves_around_its_point_each_episode():
     steady = make_env("reach", robot=ARM, task_params={"target": point.tolist()})
     steady.reset(seed=3)
     assert np.allclose(steady.task.target, point)
+
+
+def test_a_depth_camera_is_a_few_cells_of_the_nearest_thing_in_view(needs_gl):
+    robot = _arm_with({"type": "depth_camera", "width": 64, "height": 48, "range": 3.0})
+    env = make_env("reach", robot=robot, depth_size=(4, 3))
+    obs, _ = env.reset(seed=0)
+    block = next(b for b in env.layout if b["kind"] == "camera")
+    cells = obs[block["slice"][0] : block["slice"][1]]
+    assert len(cells) == 12 and cells.min() >= 0.0 and cells.max() <= 1.0
+    assert cells.min() < 1.0  # something is in view: the floor
+    env.close()
+
+
+def test_a_color_camera_is_left_out_and_said_so():
+    env = make_env("reach", robot=_arm_with({"type": "encoders"}, {"type": "camera"}))
+    assert [b["source"] for b in env.layout] == ["task", "encoders"]
+    left_out = describe(env)["observation"]["left_out"]
+    assert "camera" in {x["sensor"] for x in left_out} and all("picture" in x["why"] for x in left_out)
