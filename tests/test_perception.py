@@ -62,6 +62,27 @@ def test_the_grid_grows_to_hold_a_scan_that_reaches_past_its_edge():
     assert grid.state()[grid.cell(-3.0, 1.0)] == OCCUPIED
 
 
+def test_the_likelihood_field_made_in_parts_is_the_one_made_whole():
+    """The field is made again only where walls came or went, and padded when the grid grows: it must equal a field
+    made from scratch after every kind of change."""
+    rng = np.random.default_rng(3)
+    grid = OccupancyGrid(0.1, (0.0, 0.0), reach=1.5)  # small, so scans make it grow
+    shape, grew = None, 0
+    for i in range(14):
+        origin = (rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5))
+        ends, hit = _room_scan(origin, half=1.0 + 0.3 * i, rays=90, half_y=1.0 + 0.2 * i)
+        hit &= rng.random(len(hit)) > 0.15  # some rays only clear, some walls are seen later
+        grid.integrate(np.asarray(origin), ends, hit)
+        incremental = grid.likelihood_field().copy()
+        grew += int(shape is not None and shape != incremental.shape)
+        shape = incremental.shape
+        grid._field = None
+        whole = grid.likelihood_field()
+        assert incremental.shape == whole.shape
+        assert np.abs(incremental - whole).max() < 1e-6, i
+    assert grew > 0, "the grid never grew, so padding was not tried"
+
+
 def test_rays_over_a_low_crate_do_not_clear_it():
     """A 3D lidar's level ray passes over a crate; it must not undo what a steeper ray saw."""
     grid = OccupancyGrid(0.1, (0.0, 0.0), reach=4.0)

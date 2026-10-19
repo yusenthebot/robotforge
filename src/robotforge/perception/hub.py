@@ -2,7 +2,8 @@
 
 The hub hangs on the playground like the sensor hub does. A world without mapping has no step hook, so nothing
 slows the headless step; with a mapper, every step costs one comparison and a scan once every 0.1 to 0.2 s of
-simulated time (about 5 ms for a 360-ray scan on a 5 cm grid).
+simulated time (about 6 ms for a 360-ray scan of 8 m on a 5 cm grid, measured in a 650 x 800 cell warehouse map; the
+cost follows the scan's reach and what changed, not the map's area).
 """
 
 from __future__ import annotations
