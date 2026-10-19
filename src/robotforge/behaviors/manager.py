@@ -120,7 +120,7 @@ MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.M
 MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid walks at 0.09)
 
 
-SPREAD_MAX = 0.05  # m: the most a thing's own width keeps its neighbours in a tray away
+SPREAD_MAX = 0.04  # m: the most a thing's own width keeps its neighbours in a tray away
 HOLD_LIFT = 0.04  # m a held thing must be above where it lay for the hold to count
 
 

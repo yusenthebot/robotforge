@@ -140,8 +140,8 @@ def _pour(pg: Any, rng: random.Random, seed: int) -> str:
 
 
 SORT_KINDS = (("fruit", ("apple", "orange")), ("cans", ("can", "can")), ("boxes", ("brick", "tin")))
-TRAY_SPOTS = ((0.28, 0.42, 0.0), (0.54, 0.44, 0.0), (0.76, 0.26, 70.0))
-BIN = (0.46, -0.30, 0.42, 0.32)  # x, y, length, width of the bin the things start in
+TRAY_SPOTS = ((0.22, 0.46, 0.0), (0.50, 0.42, 0.0), (0.64, 0.10, 0.0))
+BIN = (0.46, -0.30, 0.50, 0.36)  # x, y, length, width of the bin the things start in
 WALL_ROOM = 0.075  # m from the bin's wall to the middle of a thing in it: the open fingers must not meet the wall
 
 

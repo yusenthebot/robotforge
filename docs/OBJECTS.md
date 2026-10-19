@@ -1,7 +1,7 @@
 # Objects: real things to pick up, and tasks that are hard
 
 A cube is a fine first thing to pick up, and a poor last one.
-robotforge ships generators for things people actually handle: a mug with a handle, a bottle with a cap and a label, a can, a bowl, fruit, a cereal box, a book, a screwdriver, a hammer, a wrench.
+robotforge ships generators for things people actually handle: a mug with a handle, a bottle with a cap and a label, a can, a bowl, fruit, a cereal box, a book, a screwdriver, a hammer, a wrench, a coil of cable.
 Each is parametric and seeded, with a modelled mesh, convex collision pieces, a mass and friction from what it is made of, and grasp hints that the arm planner uses.
 
 ## Adding one
@@ -39,6 +39,7 @@ An object's frame has its origin at the middle of its base and z up, resting as 
 | screwdriver | [length] | plastic and steel | tip flat, phillips; grip |
 | hammer | [length] | steel head, wooden or rubber shaft | handle; head (mass) |
 | wrench | [length] | steel | finish chrome, black; size_mm |
+| cable | [coil diameter] | rubber, steel plug | turns; gauge; plug usb, barrel |
 
 `objects.catalogue()` lists the same from the code, with each parameter's range or choices.
 

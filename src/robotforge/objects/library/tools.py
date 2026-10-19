@@ -217,3 +217,55 @@ def wrench(g: Gen) -> None:
     g.anchor("ring", (rx, 0.0, t))
     g.anchor("jaw", (x1, 0.0, t / 2))
     g.fact(kind="tool", handle_x=(sx0 + sx1) / 2, axis=(1.0, 0.0, 0.0))
+
+
+@generator(
+    "cable",
+    size="[diameter]",
+    default_size=(0.062,),
+    color="#2b2f36",
+    material="rubber",
+    kind="tool",
+    summary="a coil of cable wound in a few turns with a short tail and a plug toward +x; take it across the coil "
+    "(jaws along y, clear of the tail)",
+    keywords=("cable", "cord", "wire", "lead", "usb"),
+    params={
+        "turns": Range(3.0, 5.0, 4.0, "turns of the coil"),
+        "gauge": Range(0.0032, 0.0052, 0.0042, "radius of the cable, m"),
+        "plug": Choice("usb", "barrel"),
+    },
+    builtin=True,
+)
+def cable(g: Gen) -> None:
+    d = g.size[0]
+    r = g.p("gauge")
+    turns = max(2, round(g.p("turns")))
+    rc = d / 2 - r  # the cable's own centre line, so the coil is d across
+    steps = turns * 24
+    pitch = 2.04 * r  # a turn lies on the one below
+    t = np.linspace(0.0, turns * 2 * math.pi, steps + 1)
+    path = np.column_stack([rc * np.cos(t), rc * np.sin(t), r + pitch * (t / (2 * math.pi))])
+    coil = M.tube(path, [r] * len(path), segments=10)
+    top = float(path[-1, 2]) + r
+    # a hull of the whole coil: the fingers meet it as a solid ring, and a convex piece is all MuJoCo wants
+    g.part(coil, "rubber", [kit.hull(coil)], g.rgba)
+    tie = M.tube(
+        np.array([[rc, -0.002, r], [rc + r * 1.8, 0.0, r + pitch * turns * 0.5], [rc, 0.002, top - r]]),
+        [r * 0.55] * 3,
+        segments=8,
+    )
+    g.decor(tie, [0.9, 0.9, 0.92, 1.0], "paint")
+    tail_a = np.array([rc, 0.0, top - r])  # the last turn leaves the coil along +x
+    tail_b = tail_a + np.array([0.05, 0.0, 0.0])
+    tail = M.tube(np.array([tail_a, (tail_a + tail_b) / 2, tail_b]), [r] * 3, segments=10)
+    g.part(tail, "rubber", [kit.capsule_between(tuple(tail_a), tuple(tail_b), r)], g.rgba)
+    usb = g.p("plug") == "usb"
+    px, hw, hh = (0.019, 0.006, 0.0022) if usb else (0.014, 0.0045, 0.0045)
+    at = (float(tail_b[0]) + px / 2, 0.0, float(tail_b[2]))
+    plug = M.rounded_box(px / 2, hw, hh, min(hh, 0.002), 2, min(hh, 0.002)).moved(at)
+    g.part(plug, "steel", [kit.box(px / 2, hw, hh, at)], STEEL, preset="metal")
+    g.grasp(
+        "coil", (0.0, 0.0, top / 2), (0.0, 1.0), d, 1.0, "across the coil, jaws clear of the tail", top * 0.3, top * 0.7
+    )
+    g.anchor("top", (0.0, 0.0, top))
+    g.fact(kind="cable", radius=d / 2)
