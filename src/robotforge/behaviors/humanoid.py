@@ -39,6 +39,8 @@ PREVIEW = 0.8  # s of future ZMP the body sway looks at
 REPLAN_LEAD = 0.05  # s; plan pieces starting sooner than this are kept when the command changes
 REPLAN_NOTICE = 0.2  # s of warning (at 0.2 m legs) before a settle and a step may be swapped; see GaitPlan.rewind
 FALLEN_UP = 0.5  # torso up-axis z below this means the robot is lying down
+MAX_TURN_PER_STEP = 0.4  # rad
+TALL_LEG = 0.4  # m
 
 
 @dataclass(frozen=True)
@@ -200,7 +202,10 @@ class HumanoidController:
             half_width=self.half_width,
             min_width=1.6 * self.half_width,
             max_stride=0.25 * self.leg_length,
-            max_turn=0.2,
+            # A tall robot takes longer steps in time, so at a fixed turn per step it turned slower: a Booster T1
+            # (0.55 m legs, 0.8 s a step) managed 10 degrees a second, and A and D hardly turned it. Scaled like the
+            # timing, it turns 24 degrees a second. Small ones keep 0.2 rad: an OP3 turning more while walking fell.
+            max_turn=min(0.2 * scale, MAX_TURN_PER_STEP) if self.leg_length >= TALL_LEG else 0.2,
             zmp_inset=0.35 * self.half_width,  # less sway: wide steps rocked tall robots off their feet
             zmp_roll=0.5,
         )

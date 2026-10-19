@@ -360,6 +360,14 @@ class Planner:
         d = self.destination
         return not d.name or d.onto or (d.terrain and self._point_is_free(nav))
 
+    def _on_mark(self, data: mujoco.MjData, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        """The cells over the destination's flat mark, kept a robot's reach in from its edges: a room's floor marker
+        has a dining table at its middle, and "go to the dining room" stopped at the doorway as 'inside the table'."""
+        boxes = [nav_map.world_extent(self.model, data, g) for g in self.destination.geoms]
+        low, high = np.min([b[0] for b in boxes], axis=0), np.max([b[1] for b in boxes], axis=0)
+        inset = self.body.reach
+        return (xs >= low[0] + inset) & (xs <= high[0] - inset) & (ys >= low[1] + inset) & (ys <= high[1] - inset)
+
     def _short_note(self, nav: NavMap, end: tuple[int, int], on_point: bool, away: np.ndarray | None) -> str:
         """Why the path ends short of where the robot was sent."""
         d, grid = self.destination, nav.grid
@@ -403,6 +411,8 @@ class Planner:
             # The nearest spot it can get to: free cells nearby can be out of reach too, on top of a wide block
             # (its top is level ground, with walls all round) or behind a wall.
             candidates = nav_grid.reachable(grid, nav.free, start) & (to_point <= self.body.reach + SNAP)
+            if d.onto and d.geoms:  # a wide mark (a room's floor): anywhere on it, its middle under a table or not
+                candidates = candidates | (nav_grid.reachable(grid, nav.free, start) & self._on_mark(data, xs, ys))
             if not candidates.any():  # nothing near it either: on a step it cannot climb, or deep in something
                 raise self._why_not(nav, start, to_point <= grid.res)
             nearest = float(to_point[candidates].min())

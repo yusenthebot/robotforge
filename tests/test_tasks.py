@@ -243,3 +243,19 @@ def test_going_to_the_room_the_robot_is_in_starts_it_in_another(home):
     start = home.current_world().tasks[0].start.robot
     robot = home.current_world().robots[0]
     assert [round(v, 3) for v in robot.pos[:2]] == [round(v, 3) for v in start[:2]]
+
+
+def test_a_robot_sent_to_a_room_goes_onto_its_floor_though_a_table_stands_at_its_middle(tmp_path, monkeypatch):
+    """A room's floor marker had a dining table over its middle, and the trip stopped short: 'inside the table'."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("room")
+    pg.add_object("dining_room", shape="marker", size=[5.0, 4.0], pos=[3.5, 0.0])
+    pg.add_object("dining_table", shape="box", size=[2.6, 2.0, 0.75], pos=[3.5, 0.0], fixed=True)  # and chairs
+    pg.add_robot("rover", template="rover", pos=[-1.5, 0.0])
+    trip = pg.behaviors.navigate("rover", "dining_room", None, None, 40.0)
+    pg.run_fast(lambda: trip.done, 45)
+    x, y = pg.session.data.xpos[pg.behaviors.root("rover")][:2]
+    assert 1.0 < x < 6.0 and -2.0 < y < 2.0, (x, y)
+    pg.add_task("go to the dining room", robot="rover")
+    assert pg.task_status()["go_to_dining_room"]["done"]

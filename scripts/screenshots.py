@@ -1007,6 +1007,57 @@ def _soft(pg: Any) -> None:
     pg.add_object("cloth", shape="cloth", size=[0.6, 0.5], pos=[0.25, 0.0, 0.5], color="teal")
 
 
+# Legged robots on rough ground (G8): each quadruped in its own lane, across a flight of 8 cm stairs or a patch of
+# 3.5 cm gravel, side by side (scripts/demos.py films the same lanes).
+LANES = (("go2", -1.95), ("a1", -0.65), ("anymal_c", 0.65), ("barkour", 1.95))
+LANE_STAIRS = {"steps": 3, "step_height": 0.08, "step_depth": 0.3, "landing": 0.8, "width": 1.2}
+LANE_GRAVEL = {"size": [3.0, 1.2], "height": 0.035, "scale": 0.06, "seed": 3}
+
+
+def _lanes(kind: str, params: dict[str, Any], length: float, style: str | None = None) -> Callable[[Any], None]:
+    """A world with the LANES robots 0.4 m before a patch of terrain `length` m long, one patch per lane."""
+
+    def build(pg: Any) -> None:
+        for robot, y in LANES:
+            pg.add_robot(robot, library=robot, pos=[-0.4, y])
+            pg.add_terrain(kind, pos=[0.6 + length / 2, y], style=style, params=dict(params))
+
+    return build
+
+
+def _move_all(speed: float) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        for robot, _ in LANES:
+            pg.behaviors.move(robot, speed, 0.0)
+
+    return act
+
+
+G8_SHOTS = [
+    Shot(  # the four of them on the way up, each foot on a tread, none on a nosing
+        "g8_stairs",
+        _lanes("stairs", LANE_STAIRS, 2.0),
+        actions=[(0.5, _move_all(0.3))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([5.0, -0.9, 1.7], [0.8, 0.0, 0.15]);",
+        settle=5.0,
+    ),
+    Shot(  # close on the Go2 stepping up
+        "g8_stairs_go2",
+        _lanes("stairs", LANE_STAIRS, 2.0),
+        actions=[(0.5, _move_all(0.3))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([1.5, -3.25, 0.55], [0.85, -1.95, 0.2]);",
+        settle=3.6,
+    ),
+    Shot(
+        "g8_gravel",
+        _lanes("rough", LANE_GRAVEL, 3.0, style="rock"),
+        actions=[(0.5, _move_all(0.35))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([2.6, -3.9, 1.3], [1.3, -0.2, 0.1]);",
+        settle=4.0,
+    ),
+]
+
+
 # Pictures of the mechanisms lane (G3): the lane's own folder, not the README's.
 G3_SHOTS = [
     Shot(
@@ -1178,7 +1229,7 @@ def _world_overview(sentence: str) -> str:
     xs = [o["pos"][0] for o in objects if o["shape"] != "marker"] or [0.0]
     ys = [o["pos"][1] for o in objects if o["shape"] != "marker"] or [0.0]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.4, 4.0)
+    span = max(max(xs) - min(xs), (max(ys) - min(ys)) * 1.4, 5.5)
     eye = (round(cx + 0.18 * span, 2), round(cy - 0.78 * span, 2), round(0.72 * span, 2))
     return "window.__robotforge.select(null); " + _look(eye, (round(cx, 2), round(cy + 0.04 * span, 2), 0.0))
 
@@ -1503,6 +1554,7 @@ SHOTS = [
         settle=0.5,
     ),
     *G3_SHOTS,
+    *G8_SHOTS,
     *GENERATED_SHOTS,
     *_world_shots(),
 ]

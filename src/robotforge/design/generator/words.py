@@ -24,6 +24,7 @@ NUMBERS = {
     "七": 7, "八": 8, "九": 9, "十": 10, "十二": 12,
 }  # fmt: skip
 NUM = r"(\d+|" + "|".join(sorted((re.escape(k) for k in NUMBERS), key=len, reverse=True)) + r")"
+COUNT = r"(\d+|" + "|".join(k for k in NUMBERS if k.isascii() and k not in ("a", "an", "single", "pair")) + r")\b"
 
 # Colors beyond the builder's names, as hex: what people say about robots.
 EXTRA_COLORS = {
@@ -73,12 +74,20 @@ SIX_LEGS = (
     r"\b(hexapod|spider|insect|ant|beetle|bug|crab|mantis|scorpion|cockroach)\b|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|蝎子|甲虫|六足"
 )
 FOUR_LEGS = r"\b(dog|puppy|cat|horse|pony|cow|goat|lizard|quadruped|centaur)\b|狗|猫|马|四足|半人马"
-NEGATION = r"(\bno|\bwithout|\bremove|\btake off|\bdrop|\bminus|\bnot|\bless|去掉|不要|没有|无|拆掉)"
+NEGATION = (
+    r"(\bno|\bwithout|\bremove|\btake off|\bdrop|\bminus|\bnot|\bnever|\bdon'?t|\bdoesn'?t|\bless|去掉|不要|没有|无|"
+    r"拆掉)"
+)
+# What may stand between a negation and what it takes away: "does not have an arm", "without any lidar".
+NEGATED = r"\s*(have |has |need |want |with |make it |paint it |be )?(the |its |any |all |an? |one )?"
 
 # How much a word changes a factor; "very" and "extra" take it further.
+LEGS = r"leg(s|ged)?\b"  # "long legs", "long legged" ("long-legged": _normal makes the hyphen a space)
 SIZES: tuple[tuple[str, str, float], ...] = (
-    ("height", r"\b(longer|long) legs?\b|长腿|腿长", 1.4),
-    ("height", r"\b(shorter|short|stubby|stumpy) legs?\b|短腿|腿短", 0.8),
+    ("height", rf"\blonger {LEGS}|\blegs? (\w+ ){{0,2}}longer\b|腿更长|腿长一点|腿长一些", 1.25),
+    ("height", rf"\blong {LEGS}|长腿|腿长", 1.4),
+    ("height", rf"\bshorter {LEGS}|\blegs? (\w+ ){{0,2}}shorter\b|腿更短|腿短一点|腿短一些", 0.83),
+    ("height", rf"\b(short|stubby|stumpy) {LEGS}|短腿|腿短", 0.8),
     ("height", r"\btaller\b|更高|高一点|高一些", 1.25),
     ("height", r"\b(tall|towering|high)\b|高大|高个|很高|高的|高", 1.4),
     ("height", r"\b(squat|low|lower)\b|矮", 0.8),
@@ -87,15 +96,16 @@ SIZES: tuple[tuple[str, str, float], ...] = (
     ("length", r"\bshorter\b|短一点|短一些|更短", 0.8),
     ("length", r"\b(short|stubby|compact)\b|短", 0.8),
     ("width", r"\b(wider|broader)\b|更宽", 1.2),
-    ("width", r"\b(wide|broad|chunky)\b|宽", 1.3),
+    ("width", r"\b(wide|broad|chunky|fat|thick|stout)\b|宽|粗|胖", 1.3),
     ("width", r"\b(narrower|slimmer|thinner)\b|更窄|更细", 0.85),
-    ("width", r"\b(narrow|slim|thin|slender)\b|窄|细", 0.8),
+    ("width", r"\b(narrow|slim|thin|slender|skinny)\b|窄|细|瘦", 0.8),
     ("size", r"\b(bigger|larger)\b|更大|大一点|大一些", 1.2),
     ("size", r"\b(big|large|huge|giant|heavy|massive)\b|大|巨", 1.35),
     ("size", r"\b(smaller|tinier)\b|更小|小一点|小一些", 0.83),
     ("size", r"\b(small|tiny|mini|little|baby|desktop)\b|小|迷你|微型", 0.75),
 )
 INTENSE = r"\b(very|extra|super|really)\s+$|非常$|特别$|超$"
+SOFTENED = r"\b(not so|not too|not as|not that|less|no longer)\s+$|不那么$|不太$|没那么$"  # "make it not so long"
 UNITS = {"m": 1.0, "meter": 1.0, "meters": 1.0, "metre": 1.0, "metres": 1.0, "米": 1.0, "cm": 0.01, "厘米": 0.01,
          "mm": 0.001, "毫米": 0.001}  # fmt: skip
 DIMENSION = {"long": "length", "长": "length", "tall": "height", "high": "height", "高": "height", "wide": "width",
@@ -109,7 +119,9 @@ NATURAL = {
     "arm": {"length": 0.45, "height": 0.12, "width": 0.16},
     "humanoid": {"length": 0.1, "height": 0.45, "width": 0.2},
 }
-RESEED = r"\b(another|different|new one|variation|variant|again|reroll|re roll|shuffle)\b|换一个|再来|另一个|重新"
+# "again" is not here: "make it longer again" is the same robot, longer.
+RESEED = r"\b(another|different|new one|variation|variant|reroll|re roll|shuffle)\b|换一个|再来一个|另一个|重新"
+MAX_SENTENCES = 20  # a plan keeps the last ones it was made from
 
 
 class SentenceError(ValueError):
@@ -130,8 +142,11 @@ def read(sentence: str, plan: Plan | None = None, seed: int | None = None) -> tu
     for pattern, hint in NOT_BUILT:
         if re.search(pattern, text):
             raise SentenceError(f"generated robots walk, drive, slither or reach; {hint}")
-    text = re.sub(r"\b(instead of|rather than|not)\s+(a |an )?" + NUM + r"?\s*\w*", " ", text)  # "six legs instead of
-    text = re.sub(r"(而不是|代替|替换)\S*", " ", text)  # four": only the six counts
+    # "six legs instead of four", "six legs, not four": only the six counts. A bare "not" ("does not have an arm")
+    # stays for the negations to read.
+    text = re.sub(r"\b(instead of|rather than)\s+(a |an )?" + NUM + r"?\s*\w*", " ", text)
+    text = re.sub(r"\bnot\s+" + COUNT + r"\s*\w*", " ", text)
+    text = re.sub(r"(而不是|代替|替换)\S*", " ", text)
     body = _body(text)
     fresh = plan is None
     if fresh:
@@ -154,11 +169,13 @@ def read(sentence: str, plan: Plan | None = None, seed: int | None = None) -> tu
         changes["seed"] = seed
     target = changes.get("body", plan.body)
     changes |= _counts(text, plan, target, fresh)
-    changes |= _sizes(text, plan, target, notes)
+    changes |= _sizes(text, plan, target, notes, fresh)
     changes |= _looks(text)
     changes |= _equipment(text, plan, target)
     if fresh and target == "wheeled" and re.search(r"\b(courier|delivery|cargo|parcel|mail)\b|快递|送货|配送", text):
         changes.setdefault("cargo", True)
+    if fresh and target == "arm":
+        changes.setdefault("camera", False)  # a camera on its pedestal only when asked for
     if fresh and re.search(r"\b(spider|round|disc|disk|circular)\b|蜘蛛|圆", text):
         changes["round"] = True
     if target == "legged" and re.search(WHEELED, text):
@@ -172,7 +189,7 @@ def read(sentence: str, plan: Plan | None = None, seed: int | None = None) -> tu
             'instead of four", "add an arm", "add a lidar", "make it red", "bigger" or "another one" (a '
             "new variation)"
         )
-    sentences = (*plan.sentences, sentence.strip())
+    sentences = (*plan.sentences, sentence.strip())[-MAX_SENTENCES:]
     new, clamped = clamp(replace(plan, **changes, sentences=sentences))
     return new, notes + clamped
 
@@ -211,7 +228,8 @@ def _number(word: str) -> int:
 
 def _count(text: str, noun: str) -> int | None:
     """The number said before `noun` ("six legs", "6 legged", "六条腿"), or None."""
-    m = re.search(rf"(?<![\w.]){NUM}\s*(?:条|只|个|节|根|台)?\s*(?:{noun})", text)
+    # ASCII only behind it: Chinese characters count as word characters, and a count mostly follows one (一辆六轮).
+    m = re.search(rf"(?<![0-9A-Za-z.]){NUM}\s*(?:条|只|个|节|根|台|辆)?\s*(?:{noun})", text)
     if m is None:
         return None
     start = m.start()
@@ -260,9 +278,11 @@ def _arms(text: str, plan: Plan, body: str, fresh: bool) -> int | None:
         r"(?:robot |robotic |mechanical |gripper |grabbing )?"
         r"(?:arms?\b|hands?\b|grippers?\b|claws?\b|pincers?\b|手臂|臂|手|胳膊|夹爪)"
     )
-    if re.search(
-        NEGATION + r"\s*(the |its |any |all )?(?:arms?|hands?|grippers?|claws?)\b|(去掉|不要|没有)(手|臂|夹爪)", text
+    if not fresh and re.search(
+        r"\b(remove|drop|take off|minus|lose)\s+(one|an|a|1) (arm|hand|gripper)\b|去掉一(个|条|只)?(手臂|臂|手)", text
     ):
+        return max(0, plan.arms - 1)
+    if re.search(NEGATION + NEGATED + r"(?:arms?|hands?|grippers?|claws?)\b|(去掉|不要|没有)(手|臂|夹爪)", text):
         return 0
     if not fresh and re.search(
         r"\b(add|another|extra|one more|second)\s+(an? )?(arm|hand|gripper)\b|再加.?(臂|手)", text
@@ -282,32 +302,36 @@ def _arms(text: str, plan: Plan, body: str, fresh: bool) -> int | None:
     return None
 
 
-def _sizes(text: str, plan: Plan, body: str, notes: list[str]) -> dict[str, float]:
+def _sizes(text: str, plan: Plan, body: str, notes: list[str], fresh: bool) -> dict[str, float]:
+    """Size words first, then meters: "a small robot dog 50 cm long" is 50 cm long, whatever "small" did."""
     out: dict[str, float] = {}
     used: list[tuple[int, int]] = []
-    for m in re.finditer(
-        r"(\d+(?:\.\d+)?)\s*(mm|cm|m|meters?|metres?|米|厘米|毫米)\s*(long|tall|high|wide|长|高|宽)", text
-    ):
-        meters = float(m.group(1)) * UNITS[m.group(2)]
-        what = DIMENSION[m.group(3)]
-        natural = NATURAL[body][what] * (plan.size if what != "length" or body != "arm" else 1.0)
-        out[what] = round(meters / natural, 3)
+    metric: list[tuple[str, float]] = []
+    unit = r"(mm|cm|m|meters?|metres?|米|厘米|毫米)"
+    for m in re.finditer(rf"(\d+(?:\.\d+)?)\s*{unit}\s*(long|tall|high|wide|长|高|宽)", text):
+        metric.append((DIMENSION[m.group(3)], float(m.group(1)) * UNITS[m.group(2)]))
         used.append(m.span())
-    for m in re.finditer(
-        r"(long|tall|high|wide|长|高|宽)\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|meters?|metres?|米|厘米|毫米)", text
-    ):
-        what = DIMENSION[m.group(1)]
-        out[what] = round(float(m.group(2)) * UNITS[m.group(3)] / NATURAL[body][what], 3)
+    for m in re.finditer(rf"(long|tall|high|wide|长|高|宽)\s*(\d+(?:\.\d+)?)\s*{unit}", text):
+        metric.append((DIMENSION[m.group(1)], float(m.group(2)) * UNITS[m.group(3)]))
         used.append(m.span())
     for what, pattern, factor in SIZES:
         for m in re.finditer(pattern, text):
             if any(a <= m.start() < b for a, b in used):
                 continue  # "longer" in "longer legs" was read with the legs
             used.append(m.span())
-            strong = factor ** (1.4 if re.search(INTENSE, text[max(0, m.start() - 8) : m.start()]) else 1.0)
+            before = text[max(0, m.start() - 12) : m.start()]
+            strong = factor ** (1.4 if re.search(INTENSE, before) else 1.0)
+            if re.search(SOFTENED, before):
+                if fresh:
+                    continue  # "a not so tall robot": the usual height
+                strong = 1 / strong  # "make it not so long": shorter
             # A humanoid or a balancer is all height: a short one is a low one.
             what_here = "height" if what == "length" and body in ("humanoid", "balancer") else what
             out[what_here] = round(out.get(what_here, getattr(plan, what_here)) * strong, 3)
+    size = out.get("size", plan.size)
+    for what, meters in metric:
+        scale = 1.0 if what == "length" and body == "arm" else size  # an arm's reach is in meters already
+        out[what] = round(meters / (NATURAL[body][what] * scale), 3)
     if "height" in out and body == "snake":
         notes.append("a snake lies flat: its height stays")
         out.pop("height")
@@ -328,6 +352,8 @@ def _looks(text: str) -> dict[str, Any]:
     for m in re.finditer(rf"(?<![a-z])({pattern})(?![a-z])", text):
         if m.group(1) in ("sky",) and not re.match(r"\s*blue", text[m.end() :]):
             continue
+        if re.search(NEGATION + NEGATED + r"$", text[max(0, m.start() - 24) : m.start()]):
+            continue  # "don't make it red", "not red"
         color = _color(m.group(1))
         if color is not None and color not in colors:
             colors.append(color)
@@ -354,7 +380,7 @@ def _has(text: str, pattern: str) -> bool | None:
     m = re.search(pattern, text)
     if m is None:
         return None
-    return not re.search(NEGATION + r"\s*(an? |the |any |its )?$", text[max(0, m.start() - 16) : m.start()])
+    return not re.search(NEGATION + NEGATED + r"$", text[max(0, m.start() - 24) : m.start()])
 
 
 def _equipment(text: str, plan: Plan, body: str) -> dict[str, Any]:

@@ -19,9 +19,11 @@ import numpy as np
 from robotforge.sim.actuators import drives_joint, is_position_servo
 
 MIN_SEGMENTS = 4
-AMPLITUDE = math.radians(40)
+AMPLITUDE = math.radians(40)  # each joint's swing on a snake of up to TUNED_SEGMENTS joints
+TUNED_SEGMENTS = 8
 WAVES = 1.0  # bends along the body at once
 SPEED_PER_HZ = 0.2  # m/s per wave per second, measured on an 8-segment snake with passive wheels
+TUNED_SPINE = 0.56  # m from its first yaw joint to its last (seven 8 cm segments)
 MAX_HZ = 1.4
 HEADING_GAIN = 0.8  # rad of steady bend per rad of heading error
 MAX_BIAS = 0.35  # rad
@@ -72,6 +74,15 @@ def find_spine(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray | None =
     return best if len(best) >= MIN_SEGMENTS else None
 
 
+def _spine_length(model: mujoco.MjModel, joints: list[int], home_qpos: np.ndarray) -> float:
+    """Meters from the first joint of the spine to the last, along it."""
+    data = mujoco.MjData(model)
+    data.qpos[:] = home_qpos
+    mujoco.mj_kinematics(model, data)
+    anchors = data.xanchor[joints]
+    return float(np.sum(np.linalg.norm(np.diff(anchors, axis=0), axis=1)))
+
+
 def _name(model: mujoco.MjModel, body: int) -> str:
     return mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body) or ""
 
@@ -89,9 +100,18 @@ class SnakeGait:
         self.head = int(model.body_rootid[model.jnt_bodyid[joints[0]]])
         self.tail = int(model.jnt_bodyid[joints[-1]])
         limits = np.array([model.jnt_range[j] for j in joints])
-        self.amplitude = float(min(AMPLITUDE, 0.8 * np.min(np.abs(limits))))
+        # Hirose's serpenoid: a joint swings 2 a sin(pi waves / n) for a body winding a either way. More joints at the
+        # same swing wind the body into loops: a 12-joint snake went 29 to 56 % as far as an 8-joint one. Past the
+        # tuned count each joint swings less, so the body winds as the tuned snake's does: without it some 10 to 14
+        # joint snakes went backwards, with it all went at least a third of the way (2026-10-19 sweep).
+        share = math.sin(math.pi * WAVES / len(joints)) / math.sin(math.pi * WAVES / TUNED_SEGMENTS)
+        swing = AMPLITUDE * min(1.0, share)
+        self.amplitude = float(min(swing, 0.8 * np.min(np.abs(limits))))
         self.offsets = -2 * math.pi * WAVES * np.arange(len(joints)) / len(joints)
-        self.max_speed = SPEED_PER_HZ * MAX_HZ
+        # One wave runs along the whole body, so each wave carries a snake about a share of its own length: a
+        # 0.6-size snake went a third as far as asked and a 12-segment one up to three times (2026-10-19 sweep).
+        self.speed_per_hz = SPEED_PER_HZ * _spine_length(model, joints, home_qpos) / TUNED_SPINE
+        self.max_speed = self.speed_per_hz * MAX_HZ
         self.command_speed = self.command_turn = 0.0
         self.speed = self.turn = 0.0
         self._phase = 0.0
@@ -127,7 +147,7 @@ class SnakeGait:
         moving = abs(self.command_speed) > 1e-3 or abs(self.command_turn) > 1e-3
         self._level += alpha * ((1.0 if moving else 0.0) - self._level)
         # A snake turns by curving while it slithers, so turning on the spot still needs a (slow) wave.
-        hz = max(abs(self.speed) / SPEED_PER_HZ, 0.6 * abs(self.turn))
+        hz = max(abs(self.speed) / self.speed_per_hz, 0.6 * abs(self.turn))
         direction = -1.0 if self.speed < 0 else 1.0
         self._phase = (self._phase + direction * 2 * math.pi * min(hz, MAX_HZ) * dt) % (2 * math.pi)
         heading = self.heading(data)

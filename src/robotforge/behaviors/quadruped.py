@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import mujoco
 import numpy as np
 
+from robotforge.behaviors.footing import LIFT_FIRST, Footing
 from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.sim.actuators import drives_joint, is_torque_motor
 from robotforge.sim.geometry import collides, lowest_point
@@ -61,6 +62,12 @@ REFERENCE_LEG, REFERENCE_PERIOD = 0.28, 0.36
 # creep forward relative to the trunk. Menagerie's Go2 made 39% of a 0.3 m/s command and slid
 # backwards at 10 cm/s when stepping in place. A PI correction on the trunk's measured velocity and
 # yaw rate, active only while stepping, makes commands come true (Go2: 0.301 m/s for 0.3).
+# Told to walk straight, a robot keeps the heading it had: a turn of HOLD_KP rad/s per rad off it, at most HOLD_MAX.
+# Holding the turn rate at zero alone let slips add up: a Go2 on stairs ended up 55 degrees off and walked off their
+# side.
+HOLD_KP = 1.5
+HOLD_MAX = 0.5  # rad/s
+HOLD_BLOCKED = 0.3  # it makes less than this share of its speed: it is held up, and the heading is not held
 VELOCITY_KP = 0.5
 VELOCITY_KI = 2.0  # 1/s
 # The fastest command the gait accepts, as a share of what the longest stride allows. The rest is
@@ -90,6 +97,16 @@ DRIFT_TAU = 2.0  # ...lately (s; slow creep is forgotten)
 # Speeds are in units of sqrt(g * leg length), so one setting fits small and large robots.
 WALK_PUSH_SPEED = 0.08  # walking: sideways speed, averaged over a cycle (a straight trot stays under 0.012)
 PUSH_LEAN = math.radians(4.0)  # roll away from the usual that counts as a push (a straight trot: under 2)
+# Some robots roll more on their plain trot: the A1 4 to 5 degrees each step, so it "recovered" from pushes nobody
+# gave it for its first 3 s of every walk, and on a 12 degree ramp until it stalled. A lean counts as a push while
+# walking only past WOBBLE_SHARE times how far the trunk usually leans when nothing pushes it (its mean |lean|,
+# learned over WOBBLE_TAU s, starting from a robot that leans PUSH_LEAN / WOBBLE_SHARE).
+WOBBLE_SHARE = 2.5
+# On rough ground (footing.py: steps, stones) a walking robot rocks and sways as a pushed one does; recovering then
+# made a Go2 that had its front feet on the second stair turn sideways and fall back down. There a lean is no push,
+# and sideways speed counts only past this many times the usual.
+ROUGH_PUSH_SHARE = 2.0
+WOBBLE_TAU = 1.0  # s
 TURN_LEAN = math.radians(3.0)  # per rad/s of turn: turning leans the trunk and slips it sideways...
 TURN_SLIP = 0.5  # ...by up to this times turn rate times leg length (Go2 at 2 rad/s: 0.18 m/s)
 CALM_SPEED = 0.03  # recovered once the cycle-averaged speed off the command is this low...
@@ -218,6 +235,9 @@ class QuadrupedGait:
             self.rate_hz = 1.0 / model.opt.timestep
 
         leg_len = float(np.mean([np.linalg.norm(leg.home_foot - leg.hip) for leg in self.legs]))
+        # Feet placed on what the robot sees of the ground; None in a world with nothing but a flat floor.
+        footing = Footing(model, self.trunk, [(leg.chain.body, leg.chain.local_point) for leg in self.legs], leg_len)
+        self.footing: Footing | None = footing if footing.needed else None
         if period is None:
             period = float(np.clip(REFERENCE_PERIOD * leg_len / REFERENCE_LEG, 0.3, 0.7))
         self.leg_length = leg_len
@@ -244,6 +264,7 @@ class QuadrupedGait:
         self._own_pattern = [leg.phase_offset for leg in self.legs]  # recovery is tuned for this pattern
         self._v_fast = _ZERO3  # the trunk velocity again, smoothed over a quarter cycle
         self._rest_roll = 0.0  # the roll the trunk usually holds here
+        self._wobble = PUSH_LEAN / WOBBLE_SHARE  # how far it usually leans off that, walking (see WOBBLE_SHARE)
         self._started_at = -math.inf  # sim time of the start, or of the last reset under it
         self._calm_since = -math.inf  # while settling: since when the trunk has been calm
         self._settled_at = -math.inf  # pushes count from this time on (inf: not settled yet)
@@ -256,6 +277,8 @@ class QuadrupedGait:
         self._stand_recovered_at = -math.inf  # the last time it recovered standing
         self._stand_rest_until = -math.inf
         self._recovery = 0.0  # 0 = the plain gait, 1 = recovering, blended in between
+        self._held_yaw: float | None = None  # the heading kept while told to go straight (see HOLD_KP)
+        self._hold_turn = 0.0  # rad/s of turn that brings it back to it
 
     def set_period(self, period: float) -> None:
         """Seconds per gait cycle; the fastest accepted speed follows from it and the longest stride."""
@@ -307,16 +330,18 @@ class QuadrupedGait:
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         time_went_back = data.time < self._next_plan - 2.0 / PLAN_HZ  # e.g. the data was reset
         if data.time + 1e-9 >= self._next_plan or time_went_back:
-            self._plan(data)
+            self._plan(model, data)
             self._next_plan = data.time + 1.0 / PLAN_HZ
         if self.motors is None:
             data.ctrl[self._actuators] = self._targets
         else:
             _apply_pd(self.motors, data, self._targets)
 
-    def _plan(self, data: mujoco.MjData) -> None:
+    def _plan(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         t = data.time
         if self._last_t is None or t < self._last_t:  # a new start, or the data was reset under us
+            if self.footing is not None:
+                self.footing.reset()
             self._started_at = self._calm_since = t
             self._settled_at = math.inf
             # Recovery times are absolute: after a rewind they would keep it stepping until the old clock
@@ -336,6 +361,7 @@ class QuadrupedGait:
         qw, qx, qy, qz = quat.tolist()
         roll, pitch = _roll_pitch((qw, qx, qy, qz))
         measured = self._measure(data)
+        self._hold_heading(data, moving)
         self._v_meas = _toward(self._v_meas, measured, 1.0 - math.exp(-dt / self.period))
         self._v_fast = _toward(self._v_fast, measured, 1.0 - math.exp(-dt / (FOLLOW_TAU * self.period)))
         fallen = 1.0 - 2.0 * (qx**2 + qy**2) < math.cos(FALLEN_TILT)  # its z axis that far from up
@@ -374,6 +400,7 @@ class QuadrupedGait:
             level = _tilt(quat)
         half_cycle = self.period * self.duty
         saturated = False
+        strides = []
         for leg in self.legs:
             # Each foot sweeps backwards during stance at the body's commanded velocity.
             hx, hy = leg.hip_xy
@@ -383,16 +410,40 @@ class QuadrupedGait:
                 shorten = self.max_stride / norm
                 sx, sy = sx * shorten, sy * shorten
                 saturated = True
+            strides.append((sx, sy))
+        # Where a swinging foot lands depends on where the trunk gets to meanwhile, which is somewhere between the
+        # command and how fast it really goes: on stairs a Go2 made half its command, and feet aimed with the command
+        # came down on the nosing ahead of them and slid off; aimed with the measured speed alone, a Spot slowed on a
+        # ramp aimed short, came down early on the slope, made shorter steps and slowed to a crawl.
+        ahead = (0.5 * (vx + self._v_meas[0]), 0.5 * (vy + self._v_meas[1]))
+        footing = self._footing(model, data, t, dt, moving, strides, ahead)
+        if footing is not None:  # the trunk follows the ground it walks on (see footing.py)
+            pitch, roll = pitch - footing.pitch, roll - footing.roll
+            if level is not None:  # a pushed robot aims its feet as if level as it should be here, not as on flat
+                level = _attitude(footing.roll, footing.pitch).T @ level
+        for i, leg in enumerate(self.legs):
+            hx, hy = leg.hip_xy
+            sx, sy = strides[i]
             phase = (self._phase + leg.phase_offset) % 1.0
             fx, fy, fz = leg.home
             if phase < self.duty:
                 u = phase / self.duty
                 fx, fy = fx + sx * (0.5 - u), fy + sy * (0.5 - u)
+                if footing is not None:
+                    dx, dz, _ = footing.offset(i, fx, fy, None)
+                    fx, fz = fx + dx, fz + dz
             else:
                 u = (phase - self.duty) / (1.0 - self.duty)
-                s = 0.5 - 0.5 * math.cos(math.pi * u)  # ease in and out
+                ahead = u
+                if footing is not None and footing.climbs(i):  # up a step: rise first, then move on to it
+                    ahead = min(max((u - LIFT_FIRST) / (1.0 - LIFT_FIRST), 0.0), 1.0)
+                s = 0.5 - 0.5 * math.cos(math.pi * ahead)  # ease in and out
                 fx, fy = fx + sx * (s - 0.5), fy + sy * (s - 0.5)
-                fz += self._amplitude * self.lift * math.sin(math.pi * u)
+                lift = self.lift
+                if footing is not None:
+                    dx, dz, extra = footing.offset(i, fx, fy, s, u)
+                    fx, fz, lift = fx + dx, fz + dz, lift + extra
+                fz += self._amplitude * lift * math.sin(math.pi * u)
             # Level the trunk: extend legs on the low side.
             fz += leveling * (-pitch * hx + roll * hy)
             if level is not None and phase >= self.duty:
@@ -409,6 +460,36 @@ class QuadrupedGait:
             self._targets_from = [leg.q for leg in self.legs]
             self._targets = np.concatenate(self._targets_from)
         self._saturated = saturated
+
+    def _footing(
+        self,
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
+        t: float,
+        dt: float,
+        moving: bool,
+        strides: list[tuple[float, float]],
+        velocity: tuple[float, float],
+    ) -> Footing | None:
+        """The terrain corrections of this plan, or None on flat ground or before the robot ever stepped."""
+        footing = self.footing
+        if footing is None or (not footing.active and not moving and self._amplitude < 0.01):
+            return None
+        swings: list[float | None] = []
+        landings, stands = [], []
+        for leg, (sx, sy) in zip(self.legs, strides, strict=True):
+            phase = (self._phase + leg.phase_offset) % 1.0
+            fx, fy, _ = leg.home
+            swing = None if phase < self.duty else (phase - self.duty) / (1.0 - self.duty)
+            swings.append(swing if self._amplitude >= 0.01 else None)  # feet on the ground: nothing swings
+            landings.append((fx + 0.5 * sx, fy + 0.5 * sy))
+            u = phase / self.duty if phase < self.duty else 0.0
+            stands.append((fx + sx * (0.5 - u), fy + sy * (0.5 - u)))
+        if not footing.active:
+            footing.start(model, data, [s is not None for s in swings])
+        swing_time = self.period * (1.0 - self.duty)
+        footing.plan(model, data, t, dt, self.period, swings, landings, stands, swing_time, velocity)
+        return footing
 
     def _recovering(
         self,
@@ -447,6 +528,8 @@ class QuadrupedGait:
             self._creep = (cx, cy)
             self._drift = (decay * dx + dt * (mx - cx), decay * dy + dt * (my - cy))
         if not recovering:
+            if moving and t >= self._settled_at:
+                self._wobble += (1.0 - math.exp(-dt / WOBBLE_TAU)) * (abs(roll - self._rest_roll) - self._wobble)
             self._rest_roll += (1.0 - math.exp(-dt / REST_TAU)) * (roll - self._rest_roll)
         rise = RECOVER_RISE_WALKING if moving else RECOVER_RISE
         tau = rise if recovering else RECOVER_FALL * self.period
@@ -465,9 +548,12 @@ class QuadrupedGait:
         elif not moving and self._amplitude < 0.05:  # standing still
             dx, dy = self._drift
             pushed = math.sqrt(dx * dx + dy * dy) > PUSH_DRIFT * self.leg_length or abs(lean) > PUSH_LEAN
+        elif moving and self.footing is not None and self.footing.active and t < self.footing.rough_until:
+            # Steps and stones rock a walking trunk as a push would: only a much faster sideways shove counts there.
+            pushed = abs(self._v_meas[1]) > ROUGH_PUSH_SHARE * sideways_push
         elif moving:
             pushed = abs(self._v_meas[1]) > sideways_push
-            pushed = pushed or abs(lean) > PUSH_LEAN + TURN_LEAN * abs(self.turn)
+            pushed = pushed or abs(lean) > max(PUSH_LEAN, WOBBLE_SHARE * self._wobble) + TURN_LEAN * abs(self.turn)
         else:  # settling into a stand after a walk
             pushed = False
         if pushed:
@@ -535,9 +621,27 @@ class QuadrupedGait:
         yaw_rate = r[6] * wx + r[7] * wy + r[8] * wz
         return (c * vx + s * vy, -s * vx + c * vy, yaw_rate)
 
+    def _hold_heading(self, data: mujoco.MjData, moving: bool) -> None:
+        """Told to go straight, keep the heading it had when told (see HOLD_KP): a turn rate held at zero still lets
+        slips and stumbles add up."""
+        if not moving or abs(self.command_turn) > 1e-3 or self._recovery > 0.5:
+            self._held_yaw = None
+            self._hold_turn = 0.0
+            return
+        r = data.xmat[self.trunk]
+        yaw = math.atan2(float(r[3]), float(r[0]))
+        if self._held_yaw is None:
+            self._held_yaw = yaw
+        error = (self._held_yaw - yaw + math.pi) % (2.0 * math.pi) - math.pi
+        self._hold_turn = min(max(HOLD_KP * error, -HOLD_MAX), HOLD_MAX)
+        if abs(self._v_meas[0]) < HOLD_BLOCKED * abs(self.speed):
+            # Held up (a wall, a riser it cannot climb), turning back only twists it against what holds it: a dog
+            # pinned on a wall wobbled sideways and recovered as if pushed for 4.3 s at a time (2.5 without this).
+            self._hold_turn = 0.0
+
     def _corrected_velocity(self, dt: float) -> tuple[tuple[float, float], float]:
         """The body velocity and turn rate to step for: the command plus a PI correction, each limited."""
-        (w0, w1, w2), (m0, m1, m2) = (self.speed, 0.0, self.turn), self._v_meas
+        (w0, w1, w2), (m0, m1, m2) = (self.speed, 0.0, self.turn + self._hold_turn), self._v_meas
         top = 0.5 * self._stride_speed  # forward and sideways; the turn at 1 rad/s
         if self._amplitude < 0.05:  # standing: nothing to correct, and no windup for the next start
             self._v_int = _ZERO3
@@ -574,6 +678,12 @@ def _tilt(quat: np.ndarray) -> np.ndarray:
     yaw = math.atan2(rot[1, 0], rot[0, 0])
     c, s = math.cos(yaw), math.sin(yaw)
     return np.array([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]]) @ rot
+
+
+def _attitude(roll: float, pitch: float) -> np.ndarray:
+    """The rotation of a trunk with this roll and pitch (as _roll_pitch reads them) and no heading."""
+    cr, sr, cp, sp = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch)
+    return np.array([[cp, sp * sr, sp * cr], [0.0, cr, -sr], [-sp, cp * sr, cp * cr]])
 
 
 def _roll_pitch(quat: tuple[float, float, float, float] | np.ndarray) -> tuple[float, float]:

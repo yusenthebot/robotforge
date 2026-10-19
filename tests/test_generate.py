@@ -20,6 +20,8 @@ SENTENCES = [
     "a warehouse with three rows of racks and some pallets",
     "a park with hills, stairs and a ramp, a few trees and two benches",
     "一个有厨房、客厅和卧室的家，桌上有三个苹果",
+    # a dining table's chairs once closed the way across the dining room to the rooms beyond it
+    "Go to the dining room of a house with a kitchen, a dining room and a living room.",
 ]
 
 
