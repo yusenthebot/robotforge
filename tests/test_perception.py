@@ -612,3 +612,40 @@ def test_localizing_from_nowhere_in_a_map_with_too_few_walls_says_it_cannot_matc
     assert "walls" in said["warning"] and "map more" in said["warning"]
     with pytest.raises(PerceptionError, match="particles is how many guesses"):
         pg.perception.localize("rover", "global", "many")
+
+
+def test_a_rover_in_an_unseen_warehouse_maps_it_and_reaches_a_rack_by_its_own_map(tmp_path, monkeypatch):
+    """The headline claim on a short run (scripts/perception_bench.py is the long one, with the Go2): the robot knows
+    nothing of the warehouse, explores for 40 s of simulated time, keeps its place far better than the odometry
+    alone, and goes to a named rack by its own map and pose. Thresholds are loose: the run is deterministic, but
+    nothing here should sit on a millimetre."""
+    import mujoco
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("warehouse_smoke")
+    pg.load_scene("warehouse", seed=1, keep_robots=False, starter=False)
+    pg.add_robot("rover", template="rover", pos=[-6.2, 2.6], yaw=0)
+    hub = pg.perception
+    hub.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    trips = hub.explore_trips("rover", 40.0, area=[-7.5, -3.4, 7.5, 5.4])
+    try:
+        while True:
+            trip, limit = next(trips)
+            pg.run_fast(lambda t=trip: t.done, limit + 1.0)
+    except StopIteration:
+        pass
+    errors = hub.errors("rover")
+    rms = {k: float(np.sqrt(np.mean(v**2))) for k, v in errors.items() if k in ("estimate_m", "odometry_m")}
+    assert rms["estimate_m"] < 0.5 * rms["odometry_m"], rms  # the map corrects the odometry's drift
+    accuracy = hub.status("rover")["accuracy"]
+    assert accuracy["precision"] > 0.5 and accuracy["wall_error_m"]["mean"] < 0.15
+    model, data = pg.session.model, pg.session.data
+    here = np.array(pg.behaviors.pose("rover")["position"][:2])
+    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(model.nbody)]
+    racks = [n for n in names if n.startswith("rack_")]
+    near = min(racks, key=lambda n: np.hypot(*(data.xpos[names.index(n)][:2] - here)))
+    trip = pg.behaviors.navigate("rover", near, seconds=60, own_map=hub.mapper("rover"))
+    pg.run_fast(lambda: trip.done, 65.0)
+    assert trip.result()["arrived"], trip.result()
+    assert hub.pose_check("rover")["error_position_m"] < 0.5
