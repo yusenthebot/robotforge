@@ -843,3 +843,17 @@ def test_cache_file_names_never_contain_characters_from_the_mesh_name(tmp_path, 
         assert re.fullmatch(r"[A-Za-z0-9_.-]+", path.name) and not path.name.startswith("."), path.name
     outside = {p.name for p in tmp_path.iterdir()} - {"home", *names}
     assert not outside  # nothing was written next to the sources or anywhere else
+
+
+def test_a_visual_with_several_materials_keeps_the_first(tmp_path):
+    """Unitree's B2 exporter writes one material per mesh colour into the same visual, which MuJoCo refuses."""
+    two = '<material name="a"><color rgba="1 0 0 1"/></material><material name="b"><color rgba="0 0 1 1"/></material>'
+    body = box_link("base", mass=2.0).replace("</visual>", f"{two}</visual>")
+    result = import_file(
+        write(tmp_path / "bot.urdf", robot(body + box_link("arm", mass=1.0) + revolute("j", "base", "arm")))
+    )
+    notes = json.dumps(result.report.to_dict()) if hasattr(result.report, "to_dict") else str(result.report)
+    assert "several materials" in notes
+    model, _ = _world(result)
+    base_visual = next(g for g in range(model.ngeom) if model.geom_contype[g] == 0 and model.geom_conaffinity[g] == 0)
+    assert tuple(model.geom_rgba[base_visual]) == pytest.approx((1, 0, 0, 1))

@@ -2,7 +2,7 @@
 
 The describe step reads what a robot is from its structure; that says nothing about whether the generic gait the
 behaviors find from its legs keeps it up. So the first add of a quadruped or humanoid also runs it alone in a scratch
-world for a few seconds of simulated time (headless, well under the time of the import itself): two seconds standing
+world for a few seconds of simulated time (headless, well under the time of the import itself): four seconds standing
 at home, then six seconds of a slow walk. The result goes into the answer's `catalogue.checked` and shapes what the
 description promises. It is kept next to the download, keyed by the robot, its commit and a hash of the code it
 depends on, so the same robot is only tried once until that code changes.
@@ -24,7 +24,7 @@ from robotforge.design import catalogue, catalogue_fetch, menagerie
 
 log = logging.getLogger(__name__)
 
-SETTLE_S = 2.0  # at home before anything is asked of the robot
+SETTLE_S = 4.0  # at home before anything is asked of the robot (H1_2 diverges at 2.6 s)
 WALK_S = 6.0
 WALK_SPEED = 0.2  # m/s asked, or the gait's top speed if lower
 STEP_S = 0.25  # how often the walk is looked at
