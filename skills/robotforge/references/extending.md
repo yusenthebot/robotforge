@@ -101,7 +101,7 @@ print(tree.run(sim, robot))  # SUCCESS or FAILURE; the viewer's tree panel follo
 print(tree.summary())
 ```
 
-Nodes: `Action(fn)` (fn(ctx) returns True, None, False or a Status), `Condition(fn)`, `sensor_is` (`sensor_is("lidar", "ahead.distance_m", ">", 0.5)`), `Wait(seconds)`, `WaitFor(test, timeout)`, `Sequence`, `Fallback`, `Parallel(success="all"|"any"|n)`, `Retry(node, times, wait)`, `Repeat`, `Inverter`, `Timeout(node, seconds)`, `StateMachine(name, start)` with `State(...)` and `fsm.transition(a, b, when)`.
+Nodes: `Action(fn)` (fn(ctx) returns True, None, False or a Status), `Condition(fn)`, `sensor_is` (a condition on a sensor, as in the example), `Wait(seconds)`, `WaitFor(test, timeout)`, `Sequence`, `Fallback`, `Parallel(success="all"|"any"|n)`, `Retry(node, times, wait)`, `Repeat`, `Inverter`, `Timeout(node, seconds)`, `StateMachine(name, start)` with `State(...)` and `fsm.transition(a, b, when)`.
 `ctx` has `sim`, `robot`, `time`, `bb` (shared dictionary) and `ctx.log(text)`.
 A call the playground refuses inside an `Action` is a failed node with its message as the note, so `Retry` and `Fallback` can handle it.
 See docs/EXTENDING.md in the robotforge repository for every node with an example.
