@@ -55,6 +55,8 @@ HOLD_TRAVEL = 0.05  # m of height a pose for the way counts as worth, per rad it
 TUCK_STARTS = 6  # other IK starts tried for a tucked pose that stays inside the robot's outline
 HOLD_RISE = 0.6  # m above the robot's lowest top that a load is held at most
 FOLLOW_CHECKS = 10  # poses along a move that turns the jaws checked for the arm running into itself or its carrier
+GRIP_TIME = 0.6  # s jaws take to close on a thing (see ArmMotion.grip_time)
+HAND_GRIP_TIME = 1.2
 REPOSE_STRAY = 0.05  # m the tool may wander while the arm changes pose, joint by joint, with a load in the gripper
 # rad of the largest joint's travel between poses checked along a move joint by joint of an arm riding on a robot
 # (see _joints_clear)
@@ -205,6 +207,10 @@ class ArmMotion:
         # A suction cup or an electromagnet (end_effectors.py) holds by adhesion: on (at full power) when closed, off
         # when open, and it holds what it picks by the top, under its face, where fingers hold it around the middle.
         self.tool = end_effectors.tool_of(model, self.gripper)
+        # s a grasp takes: a dexterous hand (hands.py), its fingers drawn shut by one tendon over a dozen joints,
+        # closes round a thing slower than two jaws do; given the jaws' 0.6 s, a LEAP hand lifted off before its thumb
+        # had come round, and the cube stayed on the floor.
+        self.grip_time = HAND_GRIP_TIME if _is_hand(model, self.gripper) else GRIP_TIME
         if self.tool is not None:
             self.gripper_open, self.gripper_closed = 0.0, float(grip_range[1])
         # An arm with a tool holds its weight up with its servo targets (servo_targets): it carries what it picks by a
@@ -902,7 +908,7 @@ class ArmMotion:
                 pose=pose,
                 near=NEAR_CLEARANCE,
             ),
-            Waypoint(None, self._grip("close"), 0.6, "grasp"),
+            Waypoint(None, self._grip("close"), self.grip_time, "grasp"),
             Waypoint(above, None, self._time(grasp, above) + 0.3, "lift", turn=0.0, tilt=True),
             carry,
         ]
@@ -922,7 +928,7 @@ class ArmMotion:
         up."""
         lower = Waypoint(drop, None, self._time(above_drop, drop) + 0.3, "lower", turn=0.0, pose=pose)
         self.queue.append(replace(lower, near=NEAR_CLEARANCE))
-        self.queue.append(Waypoint(None, self._grip("open"), 0.5, "release"))
+        self.queue.append(Waypoint(None, self._grip("open"), self.grip_time - 0.1, "release"))
         self.queue.append(Waypoint(above_drop, None, self._time(drop, above_drop), "retreat", turn=0.0, tilt=True))
 
     # ---- picking up and putting down on the move (behaviors/fetch.py) --------------------
@@ -2176,6 +2182,13 @@ def _closing(
     across = axis - tool_axis * (axis @ tool_axis)
     norm = float(np.linalg.norm(across))
     return across / norm if norm > 0.3 else None
+
+
+def _is_hand(model: mujoco.MjModel, gripper: int) -> bool:
+    """Whether the gripper is a hand's: a tendon over more than two joints (a Panda's two fingers share one too)."""
+    if gripper < 0 or int(model.actuator_trntype[gripper]) != int(mujoco.mjtTrn.mjTRN_TENDON):
+        return False
+    return int(model.tendon_num[int(model.actuator_trnid[gripper, 0])]) > 2
 
 
 def _blend(a: np.ndarray, b: np.ndarray, s: float) -> np.ndarray:

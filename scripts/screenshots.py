@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/combos.py
 CHROME_PATHS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -1059,6 +1060,29 @@ G8_SHOTS = [
 
 
 # Pictures of the mechanisms lane (G3): the lane's own folder, not the README's.
+# ---- G10: mount anything on anything -----------------------------------------------------------------------------
+# The ten combinations live in scripts/combos.py (each made in one sentence, moving and doing a small job); these are
+# pictures of them standing, at 1920x1080.
+
+
+def _combo(name: str) -> Callable[[Any], None]:
+    def world(pg: Any) -> None:
+        import combos
+
+        combos.COMBOS[name].build(pg)
+
+    return world
+
+
+def _g10_shots() -> list[Shot]:
+    import combos
+
+    return [
+        Shot(f"g10_{c.name}", _combo(c.name), page=_framed(c.robot, c.view, c.lift), size=(1920, 1080), settle=2.5)
+        for c in combos.COMBOS.values()
+    ]
+
+
 G3_SHOTS = [
     Shot(
         "g3_suction_tile",
@@ -1564,6 +1588,7 @@ SHOTS = [
     *G3_SHOTS,
     *G8_SHOTS,
     *GENERATED_SHOTS,
+    *_g10_shots(),
     *_world_shots(),
 ]
 
@@ -1628,9 +1653,10 @@ def generated_grid(singles: list[Path], out: Path, cols: int = 5) -> Path:
         if draw.textlength(text, font=font(19)) < tile_w - 56:
             draw.text((x + 44, y + tile_h + 6), text, font=font(19), fill=(29, 32, 38))
         else:  # a long sentence goes on two lines at the same size, split near the middle
-            words = text.split(" ")
-            cut = min(range(1, len(words)), key=lambda k: abs(len(" ".join(words[:k])) - len(" ".join(words[k:]))))
-            for line, part in enumerate((" ".join(words[:cut]), " ".join(words[cut:]))):
+            words = text.split(" ") if " " in text else list(text)  # a sentence without spaces (Chinese) by character
+            join = " ".join if " " in text else "".join
+            cut = min(range(1, max(len(words), 2)), key=lambda k: abs(len(join(words[:k])) - len(join(words[k:]))))
+            for line, part in enumerate((join(words[:cut]), join(words[cut:]))):
                 draw.text((x + 44, y + tile_h + 3 + 24 * line), part, font=font(19), fill=(29, 32, 38))
     sheet.save(out, "JPEG", quality=88, optimize=True)
     return out

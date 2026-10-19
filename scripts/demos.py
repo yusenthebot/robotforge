@@ -425,6 +425,75 @@ def _follow_level(robot: str, offset: tuple[float, float, float], ease: float = 
     """
 
 
+# ---- G10: a quick change of end effectors -----------------------------------------------------------------
+
+
+def _swap_bench(pg: Any) -> None:
+    """A UR5e on the floor with a Robotiq 2F-85, three things to put in a bin: one for each end effector."""
+    pg.add_robot("ur5e", library="ur5e")
+    pg.mount("robotiq_2f85", "ur5e")
+    pg.add_object("cube", shape="box", size=[0.05, 0.05, 0.05], pos=[0.5, 0.25], color="orange")
+    pg.add_object("ball", shape="sphere", size=[0.05], pos=[0.55, 0.05], color="red")
+    pg.add_object("can", shape="cylinder", size=[0.05, 0.08], pos=[0.45, -0.1], color="green")
+    pg.add_object("bin", shape="bin", size=[0.2, 0.2, 0.08], pos=[0.3, -0.4], fixed=True, color="blue")
+
+
+UNSELECT = "window.__robotforge.select(null);"
+# The world reloaded after a swap selects its robot again, a moment later: keep it unselected for a while.
+KEEP_UNSELECTED = (
+    "for (let k = 0; k < 60; k++) { window.__robotforge.select(null); await new Promise((r) => setTimeout(r, 50)); }"
+)
+_PICKED: list[str] = []  # what the hand swap has put in the bin: the last one ends the film
+
+
+def _picked(robot: str, obj: str, target: str, longest: float = 40.0) -> Callable[[Any], None]:
+    """An action: pick `obj` into `target` and wait (the timeline with it) until the arm is done, in the viewer's real
+    time."""
+
+    def act(pg: Any) -> None:
+        motion, _ = pg.behaviors.pick_and_place(robot, obj, target)
+        end = time.monotonic() + longest
+        while not motion.done and time.monotonic() < end:
+            time.sleep(0.1)
+        time.sleep(0.6)
+        _PICKED.append(obj)
+
+    return act
+
+
+def _swap(robot: str, tool: str) -> Callable[[Any], None]:
+    """An action: a quick change of the arm's end effector (mount swaps the one on its flange), then a moment for the
+    viewer to show the new one."""
+
+    def act(pg: Any) -> None:
+        out = pg.mount(tool, robot)
+        print(f"{robot}: {out.get('swapped')} -> {out['mounted']}", flush=True)
+        time.sleep(1.2)
+
+    return act
+
+
+G10_DEMOS = [
+    Demo(
+        "g10_hand_swap",
+        _swap_bench,
+        75.0,
+        timeline=[
+            (1.0, _picked("ur5e", "cube", "bin")),
+            (1.05, KEEP_UNSELECTED),  # from just before the swap: no ring round its base
+            (1.1, _swap("ur5e", "leap_hand")),
+            (1.2, _picked("ur5e", "ball", "bin")),
+            (1.25, KEEP_UNSELECTED),
+            (1.3, _swap("ur5e", "allegro_hand")),
+            (1.4, _picked("ur5e", "can", "bin")),
+        ],
+        page=UNSELECT + _orbit((0.38, -0.05, 0.32), 1.3, 0.6, -100.0, 60.0, 55.0),
+        until=lambda _pg: "can" in _PICKED,
+        tail=1.0,
+    ),
+]
+
+
 # Legged robots on rough ground (G8): the quadrupeds in their lanes (screenshots.py) and the humanoids walking.
 
 
@@ -645,6 +714,7 @@ DEMOS = [
         page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.45, -2.0, 1.05)),
         settle=1.0,
     ),
+    *G10_DEMOS,
 ]
 
 

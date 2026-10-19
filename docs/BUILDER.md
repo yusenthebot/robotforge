@@ -42,7 +42,7 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 | 说法 | 生成什么 |
 |---|---|
 | 身体 | `legs`、`dog`、`spider`、`insect`、`centaur`、`mantis`、四足、六足（4 或 6 条腿）；`wheels`、`rover`、`car`、`courier`、小车、快递（2、4 或 6 个轮子）；`snake`、蛇；`segway`、`self-balancing`、`two wheels`、平衡；`robot arm`、`tentacle`、机械臂、触手；`humanoid`、`biped`、人形 |
-| 数量 | “six legs”“6-legged”“六足”“两只手”“带两个手臂的”“12 segments”“十二节”“six joints”“6轴”“一辆六轮”；八条腿生成六条，三只手臂生成两只，蛇 6 到 14 节，都在 notes 里说明（内置步态只走 4 条或 6 条腿） |
+| 数量 | “six legs”“6-legged”“六足”“两只手”“带两个手臂的”“12 segments”“十二节”“six joints”“6轴”“一辆六轮”；八条腿生成六条，三只手臂生成两只，蛇 8 到 14 节（带夹爪头的最多 12 节），都在 notes 里说明（内置步态只走 4 条或 6 条腿） |
 | 手臂 | `arm`、`gripper`、`claw` 加一只，`two arms`、`dual arm`、双臂加两只；`suction` 吸盘，`magnet` 电磁铁，蛇头和触手的末端也换成吸盘或电磁铁；蛇的手臂是头上的夹爪 |
 | 尺寸 | `tall`、`long`、`wide`（`fat`、粗）、`small`、`big`，前面加 `very` 更多；`long legs`、`long-legged`、“make the legs longer” 只改腿；也可以写米：“0.5 m long”“高 60 厘米”，和 `small` 这类词一起说时以米为准 |
 | 外观 | 颜色名（两个时第二个是点缀色）、`carbon`、`aluminum`、`plastic`，风格词 `military`、`space`、`industrial` |
@@ -69,9 +69,9 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 - 六足的双臂像螳螂一样举在胸前，装在随腿长加高的立柱上，避开往前伸的前腿；轮式的双臂装在立柱上，避开轮子；双臂工作台的底座有工作台那么高。
 - 双臂四足和它的躯干一样宽（0.14 到 0.16 米乘尺寸），腿至少 0.7：更宽前腿会踢到手臂，更窄或腿更短会翻或走不动；带两只手臂的机器人至少 0.8 倍大，因为夹爪不会跟着变小。
 - 背一只臂的机器人头最大 8 厘米（臂在家姿势下夹爪悬在头上方）；小于 0.8 倍、背着臂的狗腿最长 1.4 倍，否则头重脚轻。
-- 腿太短（尺寸乘腿长小于 0.6）时，脚离身体不到 5 厘米，步态认不出腿，所以加长到 0.6 并说明；宽身子的六足腿更长一些，不然肚子拖地；人形机器人生成 0.3 到 0.65 米高（0.7 米的有的变体走着会摔），0.5 米以上用关节模组。
+- 腿太短（尺寸乘腿长小于 0.6）时，脚离身体不到 5 厘米，步态认不出腿，所以加长到 0.6 并说明；宽身子的六足腿更长一些，不然肚子拖地；人形机器人生成 0.36 到 0.65 米高（0.7 米的有的变体走着会摔；0.3 米的 5 秒只走了 49% 的路，0.36 米的 57%，低于 0.36 米会抬到 0.36 并说明），0.5 米以上用关节模组。
 - 带臂的快递车货箱最高是车长的 1.5 倍，太大的平衡车会缩小到轮子电机接得住。
-- 蛇：多于 8 节时每节摆得小一些，身体像 8 节的蛇那样弯，而不是绕成圈；蛇的步态按自己的身长换算速度（以前所有蛇都按 0.56 米长算，短蛇只走三分之一的路，长蛇走三倍）；舵机按大小和长度选，粗乘大超过 1.4 倍、脊柱长过 1.6 米的蛇会被收小。
+- 蛇：多于 8 节时每节摆得小一些，身体像 8 节的蛇那样弯，而不是绕成圈；蛇的步态按自己的身长换算速度（以前所有蛇都按 0.56 米长算，短蛇只走三分之一的路，长蛇走三倍）；舵机按大小和长度选，粗乘大超过 1.4 倍、脊柱长过 1.6 米的蛇会被收小；节数乘长度倍数限制在 5.6 到 17（8 节的蛇至少 0.7 倍长，14 节的至多约 1.2 倍），不然蛇太短太硬或链子太重；句子没说材料时蛇用碳纤维（印刷件做的 1.35 倍大带夹爪头的 12 节蛇只走了 35% 的路，碳纤维的 70%）；带夹爪头的蛇仍然慢，约一半多到六成，结果的 notes 里会说。
 
 扫过的范围（2026-10-19，`uv run python scripts/gen_bench.py sweep --body <身体> --length 0.6,1.0,1.4,1.8 --width 0.6,1.0,1.4 --height 0.6,1.0,1.4,1.8 --size 0.6,1.0,1.6 --arms 0,1,2`，每个组合一个种子，加进空世界站 2 秒，再以 0.25 m/s 走或开 5 秒；通过是没倒、至少走了指令距离的一半）：
 
@@ -83,12 +83,14 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 | 轮式 | 432 / 432 | |
 | 平衡车 | 432 / 432 | |
 | 站立的手臂 | 432 / 432 | 都搭得起来、认得出是机械臂 |
-| 蛇（0.1 m/s；6、8、12、14 节，0 或 1 个夹爪头，288 个） | 246 / 288 | 277 个至少走了 40%；最差的是 0.6 倍小、1.4 倍粗、14 节的蛇，几乎不动；中位数 67% |
-| 人形（0.15 m/s；高度 0.6 到 1.4 倍、尺寸 0.6 到 1.4 倍，各两个种子） | 22 / 30 | 都没倒；没通过的是被抬到最低 0.3 米的人形，5 秒走 0.37 米（49%） |
+| 蛇（0.1 m/s；6、8、12、14 节，0 或 1 个夹爪头，288 个；6 节的按 8 节生成） | 288 / 288 | 最差 51%，中位数 77%，224 个至少走了 60%（收紧之前同一扫描 661 / 864 个种子通过，最差的几乎不动） |
+| 人形（0.15 m/s；高度 0.6 到 1.4 倍、尺寸 0.6 到 1.4 倍，各两个种子，50 个） | 50 / 50 | 都没倒；最矮的 0.36 米，5 秒走 0.42 米（57%） |
 
-`uv run python scripts/gen_bench.py changes` 跑一串改动的说法（“make it shorter”“make the legs shorter”“a short-legged robot dog”“a very short robot dog”“a long-legged insect”“a small robot dog 50 cm long” 等），每句两个种子，28 次全部通过。
+`uv run python scripts/gen_bench.py changes` 跑一串改动的说法（“make it shorter”“make the legs shorter”“a short-legged robot dog”“a very short robot dog”“a long-legged insect”“a small robot dog 50 cm long” 等），每句两个种子，28 次全部通过（2026-10-19 在这一版上重跑）。
 
 ### 实测：十五句话
+
+十五句话 3 个变体共 45 次全部通过（2026-10-19 重跑）。只有这十五句和上面扫过的范围是量过的：别的说法由 clamp 收进扫过的范围，收不进的（带夹爪头的蛇）在 notes 里说慢。
 
 `uv run python scripts/gen_bench.py fifteen --variations 3`：每句用自己的种子和后面两个种子，加进空世界站 2 秒，再以 0.25 m/s（人形 0.15，蛇 0.1）走或开 5 秒，量站好之后往前走了多远。
 
@@ -96,18 +98,18 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 |---|---|---|---|
 | a six-legged robot with two arms | 六足 | 1.26 m | 1° |
 | a tall wheeled courier with a lidar | 小车 | 1.25 m | 0° |
-| a snake with a gripper head | 蛇 | 0.28 到 0.32 m | 0° |
+| a snake with a gripper head | 蛇 | 0.32 m | 0° |
 | a small orange robot dog | 四足 | 1.28 m | 5° |
 | a big carbon fiber quadruped with long legs and a camera head | 四足 | 1.28 m | 3° |
 | a spider robot in black and red | 六足 | 1.27 m | 0° |
 | a six-wheeled mars rover with an arm | 小车 | 1.25 m | 0° |
 | a self-balancing robot on two wheels | 平衡车 | 1.09 m | 2° |
 | a robot arm with six joints and a suction cup | 机械臂 | 站着不动 | |
-| a long green snake with 12 segments | 蛇 | 0.45 到 0.48 m | 0° |
+| a long green snake with 12 segments | 蛇 | 0.45 m | 0° |
 | a centaur in white and gold | 四足 | 1.27 m | 2° |
 | a tall humanoid | 人形 | 0.60 m | 4° |
 | a wheeled robot with two arms | 小车 | 1.25 m | 0° |
-| 一只带激光雷达的蓝色四足机器狗 | 四足 | 1.12 到 1.26 m | 4° |
+| 一只带激光雷达的蓝色四足机器狗 | 四足 | 1.13 到 1.26 m | 4° |
 | a tentacle arm with a gripper | 机械臂 | 站着不动 | |
 
 手臂：`uv run python scripts/gen_bench.py arms` 让每个带手臂的机器人站好后，用第一只手把地上的 4 厘米方块（放在手的工具点外 6 厘米，够不着就往回挪）`pick_and_place` 到旁边 15 厘米处；会走会开的机器人够不着时自己过去。

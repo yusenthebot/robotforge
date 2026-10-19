@@ -1,0 +1,91 @@
+<!-- Offline stand-in of MuJoCo Menagerie's franka_emika_panda/hand.xml: its bodies, joints, actuators and names, with boxes round its meshes and no visual meshes. -->
+<mujoco model="panda hand">
+  <compiler angle="radian"/>
+
+  <option integrator="implicitfast"/>
+
+  <default>
+    <default class="panda">
+      <material shininess="0.25"/>
+      <joint range="-2.8973 2.8973" armature="0.1" damping="1"/>
+      <general ctrlrange="-2.8973 2.8973" forcerange="-87 87" biastype="affine"/>
+      <default class="finger">
+        <joint type="slide" range="0 0.04" axis="0 1 0"/>
+      </default>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="mesh" group="3"/>
+        <default class="fingertip_pad_collision_1">
+          <geom size="0.0085 0.004 0.0085" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_2">
+          <geom size="0.003 0.002 0.003" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_3">
+          <geom size="0.003 0.002 0.003" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_4">
+          <geom size="0.003 0.002 0.0035" type="box"/>
+        </default>
+        <default class="fingertip_pad_collision_5">
+          <geom size="0.003 0.002 0.0035" type="box"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <material name="white" class="panda"/>
+    <material name="off_white" class="panda" rgba="0.901961 0.921569 0.929412 1"/>
+    <material name="black" class="panda" rgba="0.25 0.25 0.25 1"/>
+  </asset>
+
+  <worldbody>
+    <body name="hand" childclass="panda" quat="0 0 0 1">
+      <inertial pos="-0.01 0 0.03" mass="0.73" diaginertia="0.001 0.0025 0.0017"/>
+      <geom class="collision" size="0.03 0.1 0.03" pos="0 0 0.033" type="box" mass="0"/>
+      <body name="left_finger" pos="0 0 0.0584">
+        <inertial pos="0 0 0" mass="0.015" diaginertia="2.375e-06 2.375e-06 7.5e-07"/>
+        <joint name="finger_joint1" class="finger"/>
+        <geom class="collision" size="0.0120498 0.0105018 0.0274169" pos="5.50819e-06 0.0125834 0.0265822" quat="0.706414 0.0271905 -0.0269828 0.706762" type="box" mass="0"/>
+        <geom class="fingertip_pad_collision_1" pos="0 0.0055 0.0445"/>
+        <geom class="fingertip_pad_collision_2" pos="0.0055 0.002 0.05"/>
+        <geom class="fingertip_pad_collision_3" pos="-0.0055 0.002 0.05"/>
+        <geom class="fingertip_pad_collision_4" pos="0.0055 0.002 0.0395"/>
+        <geom class="fingertip_pad_collision_5" pos="-0.0055 0.002 0.0395"/>
+      </body>
+      <body name="right_finger" pos="0 0 0.0584" quat="0 0 0 1">
+        <inertial pos="0 0 0" mass="0.015" diaginertia="2.375e-06 2.375e-06 7.5e-07"/>
+        <joint name="finger_joint2" class="finger"/>
+        <geom class="collision" size="0.0120498 0.0105018 0.0274169" pos="5.50819e-06 0.0125834 0.0265822" quat="0.706414 0.0271905 -0.0269828 0.706762" type="box" mass="0"/>
+        <geom class="fingertip_pad_collision_1" pos="0 0.0055 0.0445"/>
+        <geom class="fingertip_pad_collision_2" pos="0.0055 0.002 0.05"/>
+        <geom class="fingertip_pad_collision_3" pos="-0.0055 0.002 0.05"/>
+        <geom class="fingertip_pad_collision_4" pos="0.0055 0.002 0.0395"/>
+        <geom class="fingertip_pad_collision_5" pos="-0.0055 0.002 0.0395"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <exclude body1="hand" body2="left_finger"/>
+    <exclude body1="hand" body2="right_finger"/>
+  </contact>
+
+  <tendon>
+    <fixed name="split">
+      <joint joint="finger_joint1" coef="0.5"/>
+      <joint joint="finger_joint2" coef="0.5"/>
+    </fixed>
+  </tendon>
+
+  <equality>
+    <joint joint1="finger_joint1" joint2="finger_joint2" solref="0.005" solimp="0.95 0.99"/>
+  </equality>
+
+  <actuator>
+    <general name="actuator8" class="panda" tendon="split" ctrlrange="0 255" forcerange="-100 100" gainprm="0.0156863" biasprm="0 -100 -10"/>
+  </actuator>
+</mujoco>
