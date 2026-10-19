@@ -102,6 +102,20 @@ class Camera(Sensor):
             out["seen"] = self._seen(value["layers"])
         return out
 
+    def cloud(self, value: dict[str, Any], limit: int) -> dict[str, Any] | None:
+        """The depth picture as world points, thinned to `limit` (perception/cloud.py); None for the other modes. The
+        camera's own robot is left out, as in a reading's nearest obstacle."""
+        from robotforge.perception import cloud
+
+        if self.mode != "depth" or "depth" not in value:
+            return None
+        depth, layers = value["depth"], value["layers"]
+        if layers.geoms is not None:
+            seen = layers.geoms >= 0
+            own = seen & self.own[np.where(seen, layers.geoms, 0)]
+            depth = np.where(own, np.nan, depth)
+        return cloud.summary(cloud.depth_points(depth, layers.camera, stride=2), limit)
+
     def _depth_summary(self, value: dict[str, Any]) -> dict[str, Any]:
         """center_m, min_m and median_m are depths along the axis, as the image holds them; nearest is a distance."""
         depth = value["depth"]

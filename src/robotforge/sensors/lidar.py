@@ -123,7 +123,8 @@ class Lidar(Sensor):
         dist[own] = np.nan  # the robot's own legs and body: masked as a real lidar's self filter does
         ground = np.zeros(self.rays, bool)
         ground[hit] = self.ground[geom[hit]]
-        return {"origin": origin, "rot": rot, "dist": dist, "ground": ground & ~own}
+        # miss: rays that met nothing within range (not those the self filter masked), for mapping the open space
+        return {"origin": origin, "rot": rot, "dist": dist, "ground": ground & ~own, "miss": ~hit}
 
     def corrupt(self, value: dict[str, Any], dt: float) -> dict[str, Any]:
         k = self.knobs
@@ -142,6 +143,12 @@ class Lidar(Sensor):
         """World points of the rays that hit something (Nx3), in ray order."""
         hit = np.isfinite(value["dist"])
         return value["origin"] + (self.directions[hit] @ value["rot"].T) * value["dist"][hit, None]
+
+    def cloud(self, value: dict[str, Any], limit: int) -> dict[str, Any]:
+        """The scan's hit points in the world, thinned to `limit` (perception/cloud.py)."""
+        from robotforge.perception import cloud
+
+        return cloud.summary(self.points(value), limit)
 
     def _obstacles(self, value: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Horizontal distance, bearing (rad, in the sensor's frame) and ray index of every non-ground hit."""

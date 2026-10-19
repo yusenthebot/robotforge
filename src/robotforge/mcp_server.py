@@ -48,6 +48,7 @@ from robotforge.design.world import ShapeName
 from robotforge.extend import ensure_user_plugins
 from robotforge.extend import mcp_tools as plugin_tools
 from robotforge.extend.registry import REGISTRY, WORLD_FOLDER
+from robotforge.perception import mcp_tools as perception_tools
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
 from robotforge.sensors import mcp_tools as sensor_tools
@@ -138,12 +139,23 @@ and names them ("pick the red one"). open_viewer gives the user a live 3D view (
 offer it early; while it is open, actions play out in real time.
 
 Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
-force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry on any body of any robot,
+force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry, a sonar (a cone, deaf up
+close), wheel odometry, a tactile skin (taxels over faces of a body), a thermometer or a gas sensor (they read the
+heat_source and gas_source objects add_object puts in the world) on any body of any robot,
 ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
 nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
 The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
-a robot's own sensors and brings a camera's picture up.
+a robot's own sensors and brings a camera's picture up. read_sensors(points=N) adds a depth camera's or lidar's
+point cloud in world coordinates, thinned to N points.
+
+Perception: mapping(robot, "start") makes a robot draw an occupancy-grid map from its lidar and odometry (added if it
+has none) while it moves, and a particle filter keeps its pose estimate honest against the odometry's drift;
+mapping(robot, "explore") drives it to the nearest unseen frontier again and again; "status" reports the pose
+estimate and its error against the truth, and the map's accuracy against the scene (image=true draws it);
+"localize" finds the robot in the finished map (from where it believes it is, or from nowhere). move(robot, to=...,
+map="own") then goes there by the robot's own map and pose alone, through space it has seen free (the name or
+point to go to is the task it is given; the way is its own). The viewer draws the growing map and the particles.
 
 Plugins: the user can extend robotforge with their own Python (a file in ~/.robotforge/plugins, or in the open
 world's plugins/ folder): new parts for add_object (shape="their_name"), new sensor types for add_sensor, controllers
@@ -547,6 +559,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float = 0.0,
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
+        strength: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -561,10 +574,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         what an electromagnet holds). With a moving part (operate works them; front toward -y): drawer, cabinet
         [length, depth, height]; button [diameter, height]; switch [length, width, height]; lever [length]; valve
         [wheel diameter, height]; conveyor [length, width, height], belt along +x at speed m/s (default 0.1). Soft:
-        rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes)."""
+        rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes).
+        Sources for temperature and gas sensors (add_sensor): heat_source [diameter] (strength = degrees of rise at the
+        source, default 80) and gas_source [diameter] (strength = ppm at the source, default 600); nothing collides
+        with them."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
-            fields |= {"material": material, "speed": speed}
+            fields |= {"material": material, "speed": speed, "strength": strength}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -578,12 +594,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
+        strength: float | None = None,
     ) -> str:
-        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material or a
-        conveyor's belt speed (m/s, 0 stops it)."""
+        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material, a
+        conveyor's belt speed (m/s, 0 stops it) or a heat or gas source's strength."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
-            fields |= {"material": material, "speed": speed}
+            fields |= {"material": material, "speed": speed, "strength": strength}
             return _json(playground.update_object(name, **fields))
 
     @server.tool()
@@ -641,9 +658,16 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
     async def go_to(
-        robot: str, to: str | list[float], speed: float | None, turn: float, seconds: float | None, walker: str | None
+        robot: str,
+        to: str | list[float],
+        speed: float | None,
+        turn: float,
+        seconds: float | None,
+        walker: str | None,
+        own: bool = False,
     ) -> dict[str, Any]:
-        """move with a destination: plan, follow the path until there (or out of time), report how it went."""
+        """move with a destination: plan, follow the path until there (or out of time), report how it went. `own`:
+        on the robot's own map and pose estimate (mapping), not the scene's truth."""
         if seconds is not None and not 0 < seconds <= MAX_SIM_SECONDS:
             raise PlaygroundError(
                 f"{wording.seconds_range('seconds', seconds, MAX_SIM_SECONDS)}; with to, seconds=null starts the "
@@ -652,8 +676,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         if turn:
             raise PlaygroundError("turn is not used with to: the robot steers along its path itself; leave turn out")
         before = playground.behaviors.pose(robot)
+        mapper = playground.perception.mapper(robot) if own else None
         try:
-            trip = playground.behaviors.navigate(robot, to, speed, walker, seconds)
+            trip = playground.behaviors.navigate(robot, to, speed, walker, seconds, own_map=mapper)
         except NoWay as exc:  # not a mistake in the call: the answer is that it cannot get there, and why
             return {
                 "arrived": False,
@@ -686,6 +711,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         # Stopped, said at the top as a timed move says it: after a trip, agents in the eval called stop on a robot
         # that already stood (2 of 6 sessions that sent one somewhere).
         here = playground.behaviors.pose(robot)
+        if mapper is not None:  # how far off its own pose estimate was where it stopped (the truth is read to say)
+            extra["on_its_own_map"] = playground.perception.pose_check(robot)
         return {"arrived": result["arrived"], "stopped": True, **result, "from": before, "to": here, **extra}
 
     def video_path(record: bool | str | None, called: str, seconds: float | None) -> recording.Target | None:
@@ -729,6 +756,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         walker: str | None = None,
         to: str | list[float] | list[list[float]] | None = None,
         record: bool | str | None = None,
+        map: Literal["own"] | None = None,
     ) -> str:
         """Walk a quadruped, hexapod or humanoid, drive a rover, a two-wheeled balancer, a boat or an underwater ROV,
         make a snake slither, fly an aircraft, or walk a robot with a walk it learned itself (RL II lesson). speed in
@@ -755,13 +783,17 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         and clearance_m (its height above what is under it). Without to, speed and turn fly it forward at its height
         (taking off first). record=true (a GIF) or a file name ("walk.gif"; .gif or .webp) saves a video of the move
         in real time, the camera following the robot, in the world's videos folder; "video" in the result says
-        where."""
+        where. map="own" (a robot that is mapping, see `mapping`) goes by its own occupancy map and its own pose
+        estimate instead of the scene's: it plans only through space it has seen free, and says where it believed it
+        was and how far off that was when it stopped."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
+            if map is not None and to is None:
+                raise PlaygroundError('map="own" is for going somewhere: give to=[x, y] or the name of what to go to')
             path = video_path(record, robot, seconds)
             with recorded(path) as rec:
                 if to is not None:
-                    out = await go_to(robot, to, speed, turn, seconds, walker)
+                    out = await go_to(robot, to, speed, turn, seconds, walker, own=map == "own")
                 else:
                     out = await timed_move(robot, speed, turn, seconds, walker)
             if rec is not None and out.get("stopped"):  # it went (a trip that found no way did not)
@@ -825,6 +857,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
+    perception_tools.register(server, playground, run_until)
 
     async def run_file(path: Path, max_sim_seconds: float, args: list[str]) -> dict[str, Any]:
         runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
