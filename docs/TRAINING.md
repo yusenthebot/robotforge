@@ -131,6 +131,8 @@ Trials are ranked on test episodes that every trial shares (the same start seeds
 
 ## The training view
 
+![The Training panel in the middle of a search: nine trials of ARS and CEM as curves, the leader's episode returns and its best-direction return, a table of every trial's settings and test score, and the arm playing the leading trial at the red ball](images/training_view.jpg)
+
 The viewer shows a Training button once a run exists (top right) and opens the panel by itself when a run starts.
 
 - One chart with the learning curve of every trial: the leader bold, the dropped trials faded.
