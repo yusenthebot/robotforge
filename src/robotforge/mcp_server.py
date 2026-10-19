@@ -17,7 +17,7 @@ import socket
 import sys
 import time
 import weakref
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,6 +45,9 @@ from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
+from robotforge.extend import ensure_user_plugins
+from robotforge.extend import mcp_tools as plugin_tools
+from robotforge.extend.registry import REGISTRY, WORLD_FOLDER
 from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, design_build
 from robotforge.script_runner import ScriptRunner
 from robotforge.sensors import mcp_tools as sensor_tools
@@ -66,8 +69,10 @@ robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
 humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
-Unitree Go2, Franka Panda, ...) or imports a file (URDF, xacro, MJCF, or a mesh such as .stl/.obj/.dae/.glb; the
-import doctor repairs URDFs and meshes and reports in the result's "doctor" field). add_robot(build=...) builds any
+Unitree Go2, Franka Panda, ...; list_library(kind="arm", search="kinova") also searches over 200 more open robots
+that add_robot(library=<name>) downloads, imports and describes) or imports a file (URDF, xacro, MJCF, or a mesh such as
+.stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
+add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
 update_part / remove_part. add_robot(design=...) adds a ready-made robot from the gallery (wheel-legged biped,
 Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
@@ -83,7 +88,8 @@ end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the de
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
 checks say the mass, how far the centre of mass is inside what the robot stands on, each arm's reach and what it can
 hit or hold; a robot that would tip or fall is refused with what to change. save_as keeps the combination as a design
-(add_robot(design=...) or mount(what=...) uses it again); remove("cart/arm") takes a mount off.
+(add_robot(design=...) or mount(what=...) uses it again; a name already saved needs overwrite=true);
+remove("cart/arm") takes a mount off.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
@@ -138,6 +144,13 @@ nearest obstacle ahead and 36 sector ranges, a depth camera's distances, picture
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
 The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
 a robot's own sensors and brings a camera's picture up.
+
+Plugins: the user can extend robotforge with their own Python (a file in ~/.robotforge/plugins, or in the open
+world's plugins/ folder): new parts for add_object (shape="their_name"), new sensor types for add_sensor, and
+controllers and behaviors for scripts. write_script(name, code, plugin=true) writes one for the user and loads it;
+plugins() lists what plugins added and which files failed to load, with the reason, plugins(action="reload") reads the
+folders again. A world's plugin files that were not written here do not load until you have read them, told the
+user what they do and called plugins(action="trust"): they are code that runs on this computer.
 
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list
@@ -339,6 +352,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 await task
             playground.renderer.close()
 
+    ensure_user_plugins()  # the user's own parts and sensors, ready before any world is read
     server = _Server(
         "robotforge",
         title="robotforge robot playground",
@@ -371,16 +385,28 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         )
 
     @server.tool()
-    def list_library() -> str:
+    def list_library(
+        kind: Literal["arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other"] | None = None,
+        search: str | None = None,
+        limit: int = 40,
+    ) -> str:
         """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
         keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work), humanoids
         (G1, Robotis OP3, Booster T1) and grippers and hands to mount on an arm (Robotiq 2F-85, Franka Hand, LEAP and
         Allegro hands). The first add_robot of each downloads it from MuJoCo Menagerie (size in download_mb, usually
-        5-30 s) and caches it."""
-        from robotforge.design import library
+        5-30 s) and caches it.
+
+        Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
+        open catalogue: kind and search ("ur", "kinova", "unitree": words of the name, maker or tags) list those that
+        match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
+        URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
+        structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
+        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
+        move with set_controls and pose."""
+        from robotforge.design import catalogue
 
         with _tool_errors():
-            return _json({"robots": library.catalog()})
+            return _json(catalogue.listing(kind, search, max(1, min(limit, 200))))
 
     @server.tool()
     def new_world(name: str, floor: StyleName = "checker") -> str:
@@ -506,7 +532,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     @server.tool()
     def add_object(
         name: str,
-        shape: ShapeName = "box",
+        shape: ShapeName | str = "box",
         size: list[float] | None = None,
         pos: list[float] | None = None,
         color: str | list[float] | None = None,
@@ -793,6 +819,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
+    plugin_tools.register(server, playground)
     mount_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
@@ -904,7 +931,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             )
 
     @server.tool()
-    def write_script(name: str, code: str) -> str:
+    def write_script(name: str, code: str, plugin: bool = False) -> str:
         """Save a Python robot script as behaviors/<name>.py in the open world. Scripts use:
 
             from robotforge.script import connect
@@ -922,10 +949,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call
-        run_script."""
+        run_script.
+
+        plugin=true saves it instead as plugins/<name>.py of the open world and loads it at once: a plugin adds parts,
+        sensors, controllers or behaviors (from robotforge.extend import part, sensor, controller, behavior; the
+        skill's EXTENDING reference has an example of each). The result lists what it added or why it did not load."""
         with _tool_errors():
             store = playground._require_store()
-            path = _script_path(store.dir, name)
+            path = _script_path(store.dir, name, WORLD_FOLDER if plugin else "behaviors")
             code, fenced = _unfence(code)
             try:
                 compile(code, path.name, "exec")  # parses only: nothing runs
@@ -939,7 +970,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             with path.open("w", encoding="utf-8", newline="\n") as f:  # LF on every OS
                 f.write(code)
             saved = {"saved": str(path), "lines": code.count("\n") + 1}
-            return _json({**saved, "note": "the ``` fence around the code was removed"} if fenced else saved)
+            if fenced:
+                saved["note"] = "the ``` fence around the code was removed"
+            if plugin:
+                saved["plugin"] = REGISTRY.written(store.dir, path)
+            return _json(saved)
 
     @server.tool()
     def read_script(name: str) -> str:
@@ -1108,27 +1143,46 @@ def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:
-    """Download a library robot off the event loop (the viewer stays live), reporting progress."""
-    from robotforge.design import library
+    """Download a library or catalogue robot off the event loop (the viewer stays live), reporting progress."""
+    from robotforge.design import catalogue, library
 
-    robot = library.get(name)
+    curated, opened = catalogue.source_of(name)
+    if opened is not None:
+        entry = catalogue.get(opened)
+        if entry.is_downloaded():
+            return
+        await _download_task(
+            f"catalogue:{entry.id}",
+            entry.title,
+            f"downloading {entry.title}",
+            lambda p: catalogue.model_path(opened, p),
+            ctx,
+        )
+        return
+    robot = library.get(curated)
     name = robot.name  # "Go2" and "Unitree Go2" are one download: a retry in another spelling joins the running one
     if library.is_downloaded(name):
         return
-    running = _downloads.get(name)
-    if running is None or running[0].done():
-        state: dict[str, Any] = {
-            "fraction": 0.0,
-            "message": f"downloading {robot.title} ({library.download_mb(name)} MB)",
-            "started": time.monotonic(),
-        }
+    await _download_task(
+        name,
+        robot.title,
+        f"downloading {robot.title} ({library.download_mb(name)} MB)",
+        lambda p: library.model_dir(robot, p),
+        ctx,
+    )
 
-        def progress(fraction: float, message: str) -> None:  # called from the download thread
-            state.update(fraction=fraction, message=f"{robot.title}: {message}")
+
+async def _download_task(key: str, title: str, message: str, fetch: Callable[[Any], Any], ctx: Context) -> None:
+    running = _downloads.get(key)
+    if running is None or running[0].done():
+        state: dict[str, Any] = {"fraction": 0.0, "message": message, "started": time.monotonic()}
+
+        def progress(fraction: float, text: str) -> None:  # called from the download thread
+            state.update(fraction=fraction, message=f"{title}: {text}")
 
         # If the client gives up, the download thread keeps going and fills the cache for the next call.
-        running = (asyncio.ensure_future(asyncio.to_thread(library.model_dir, robot, progress)), state)
-        _downloads[name] = running
+        running = (asyncio.ensure_future(asyncio.to_thread(fetch, progress)), state)
+        _downloads[key] = running
     task, state = running
     while True:
         elapsed = time.monotonic() - state["started"]
@@ -1174,14 +1228,14 @@ def _unfence(code: str) -> tuple[str, bool]:
     return (fenced[1] + "\n", True) if fenced else (code, False)
 
 
-def _script_path(world_dir: Path, name: str) -> Path:
+def _script_path(world_dir: Path, name: str, folder: str = "behaviors") -> Path:
     stem = wording.squash(name[:-3] if name.lower().endswith(".py") else name)  # "Pick Cube" is pick_cube
     if not SCRIPT_NAME.match(stem):
         raise PlaygroundError(
             f"script name {wording.short(name)} must use lowercase letters, digits and _, start with a letter, "
             "e.g. pick_cube"
         )
-    return world_dir / "behaviors" / f"{stem}.py"
+    return world_dir / folder / f"{stem}.py"
 
 
 def _no_script(name: str, path: Path) -> str:
