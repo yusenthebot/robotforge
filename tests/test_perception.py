@@ -4,6 +4,7 @@ robot in a real MuJoCo room that maps it, finds itself in the map and goes somew
 import base64
 import json
 import math
+import time
 import zlib
 
 import numpy as np
@@ -231,6 +232,21 @@ def test_a_cloud_is_thinned_to_the_number_asked_for():
     summary = cloud.summary(points, 200)
     assert summary["total"] == 5000 and summary["shown"] == len(summary["points_m"])
     assert cloud.summary(np.zeros((0, 3)), 10)["shown"] == 0
+
+
+@pytest.mark.parametrize("limit", [1, 2, 7, 50])
+def test_a_cloud_across_the_origin_is_thinned_to_a_small_limit_at_once(limit):
+    """Cubes anchored at the world origin kept -1 and 0 apart for ever: points=1 took 20 s and answered an infinite voxel."""
+    rng = np.random.default_rng(1)
+    points = rng.uniform(-4, 4, (20000, 3))
+    t0 = time.perf_counter()
+    summary = cloud.summary(points, limit)
+    assert time.perf_counter() - t0 < 10  # generous: it takes well under a second
+    assert 1 <= summary["shown"] <= limit
+    assert np.isfinite(summary["voxel_m"])
+    json.dumps(summary, allow_nan=False)  # strict JSON, as the tool reply is
+    if limit >= 7:
+        assert summary["shown"] >= limit // 2  # not a handful when more were asked for
 
 
 # ---- a robot in a real room -------------------------------------------------------------------------------------
