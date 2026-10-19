@@ -171,6 +171,7 @@ class Walk(_Legged):
     alive_bonus = 2.0
     # Sampling cannot invent a gait within a 0.4 s look-ahead, so MPC corrects the built-in trot instead.
     mpc_defaults = {"horizon": 0.4, "knots": 4, "samples": 32, "noise": 0.1, "base": "gait"}
+    goal_prefixes = ("commanded",)  # observation entries that are the goal (kept when only sensors give the rest)
 
     def __init__(self, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None):
         super().__init__(model, robot, params)

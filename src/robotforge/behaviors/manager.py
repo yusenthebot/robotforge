@@ -35,6 +35,7 @@ from robotforge.behaviors import (
     robot_kind,
     visit,
     water_nav,
+    whole_body,
 )
 from robotforge.behaviors import catch as catching
 from robotforge.behaviors import navigate as navigation
@@ -403,7 +404,7 @@ class BehaviorManager:
                 kind = robot_kind(self.session.model, name, told.get(name))
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
-                        self._mobile_controller(name, kind, world, create=True)
+                        self._mobile_controller(name, kind, world, create=True, stand=True)
                     if kind == Kind.AIRCRAFT:
                         air.attach_air(self.session, name)  # drag and wind, whatever flies it (behaviors/air.py)
                 elif kind in STEPPING and in_world:
@@ -466,6 +467,10 @@ class BehaviorManager:
                     info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)
             if kind == Kind.AIRCRAFT:
                 info["flight"] = self.flight_info(name)
+            if isinstance(self.session.controllers.get(name), whole_body.WholeBodyBalancer):
+                info["balance"] = "whole-body balance: stands on its feet, holds a load, takes a push"
+                if "max_speed" not in info:
+                    info["walk_hint"] = "no gait fits its legs, so move cannot walk it; it stands on its own"
             walk = self._kept_walk_or_none(name)
             if walk is not None:
                 info["learned_walk"] = walk.describe()
@@ -721,15 +726,21 @@ class BehaviorManager:
             return self.session.model.qpos0.copy()
         return self.home_qpos()
 
-    def _mobile_controller(self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None):
+    def _mobile_controller(
+        self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None, stand: bool = False
+    ):
         """The controller that walks or drives a robot: the one it has, or a new one (see MOBILE). `world` is the
-        open world as the caller read it."""
+        open world as the caller read it. `stand`: it is only to keep the robot up (a humanoid nobody tuned a gait
+        to stands by whole-body balance, which holds a load and takes a push; the first move gives it a gait if one
+        fits its legs)."""
         existing = self.session.controllers.get(robot)
         if walker is None and _is_mover(existing):  # keep whatever walks it now, e.g. for WASD driving
             return existing
         if walker == RHYTHM or kind not in MOBILE:
             return self._rhythm_walker(robot, existing, create)
         entry = _entry(robot, world)
+        if stand and kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+            return self._stander(robot, existing, create)
         if walker not in (None, "gait") and kind in LEGGED:
             return self._policy_walker(robot, walker, existing, create, entry)
         if isinstance(existing, WALKERS):
@@ -758,6 +769,11 @@ class BehaviorManager:
         except (ValueError, KeyError) as exc:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
+            if kind == Kind.HUMANOID and isinstance(existing, whole_body.WholeBodyBalancer):
+                raise BehaviorError(
+                    f"{robot} stands on its feet by whole-body balance, but no gait fits its legs ({exc}); it holds a "
+                    "load and takes a push, move cannot walk it"
+                ) from exc
             if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
                 raise BehaviorError(
                     f"no gait fits the body of {robot}: a joint of its legs has no motor of its own (a linkage?), "
@@ -773,6 +789,18 @@ class BehaviorManager:
         slope = library.get(entry.library).max_slope if entry is not None and entry.library else None
         if slope is not None and isinstance(ctrl, quadruped.QuadrupedGait):
             ctrl.limit_slope(slope)
+        if create:
+            self.session.set_controller(robot, ctrl)
+        return ctrl
+
+    def _stander(self, robot: str, existing: Any, create: bool) -> whole_body.WholeBodyBalancer:
+        """Whole-body balance for a humanoid with no gait of its own: the one it has, or a new one."""
+        if isinstance(existing, whole_body.WholeBodyBalancer):
+            return existing
+        try:
+            ctrl = whole_body.WholeBodyBalancer(self.session.model, robot, self.home_qpos())
+        except whole_body.BalanceError as exc:
+            raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
@@ -2128,6 +2156,12 @@ def _told_kind(entry: Any) -> str | None:
 
 def _entry(robot: str, world: World | None) -> RobotEntry | None:
     return next((r for r in world.robots if r.name == robot), None) if world else None
+
+
+def _tuned_humanoid(entry: RobotEntry | None) -> bool:
+    """A humanoid whose walking gait was tuned for it: our template's and the library's (G1 learned, T1 and OP3 on
+    the balance gait). Files, catalogue robots and robots built from parts are not: they stand by whole-body balance."""
+    return entry is None or not (entry.file or entry.catalogue or entry.build)
 
 
 def _learned_humanoid(entry: RobotEntry | None) -> bool:

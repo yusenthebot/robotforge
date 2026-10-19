@@ -42,6 +42,7 @@ STATE_HZ = 4.0
 LESSON_HZ = 20.0
 SENSOR_HZ = 10.0
 MAP_HZ = 4.0
+TRAINING_HZ = 2.0
 REPORT_EVERY = 5.0  # s between log reports of a failing tick
 
 
@@ -143,6 +144,10 @@ class ViewerHub:
         # with "cells" a base64 of a zlib-deflated byte per cell (0 unknown, 1 free, 2 occupied), row by row from
         # row 0 at y0. The viewer's mapview.js draws them. See docs/PERCEPTION.md.
         self.map_stream: Callable[[], dict[str, Any] | None] | None = None
+        # The training run the viewer's Training panel shows: {"type": "training", "name", "state", "progress",
+        # "trials": [...], "leader", ...} (training/live.py), sent TRAINING_HZ times a second while the run changes
+        # and once to every viewer that connects; called with force=True it answers even if nothing changed.
+        self.training_stream: Callable[..., dict[str, Any] | None] | None = None
         # The behavior tree a script shows (flow_board.FlowBoard): {"type": "flow", "name", "nodes", "status",
         # "notes"} sent when it changes, and to a viewer that connects while one is up. No nodes: no panel.
         self.flow: FlowBoard | None = None
@@ -309,6 +314,7 @@ class ViewerHub:
         last_lesson = 0.0
         last_sensors = 0.0
         last_map = 0.0
+        last_training = 0.0
         last_flow = 0
         last_report = -math.inf
         while True:
@@ -337,6 +343,11 @@ class ViewerHub:
                     if self.sensor_stream is not None and tick_start - last_sensors > 1.0 / SENSOR_HZ:
                         last_sensors = tick_start
                         update = self.sensor_stream()
+                        if update is not None:
+                            await self._send_all(text=json.dumps(update))
+                    if self.training_stream is not None and tick_start - last_training > 1.0 / TRAINING_HZ:
+                        last_training = tick_start
+                        update = self.training_stream()
                         if update is not None:
                             await self._send_all(text=json.dumps(update))
                     if self.flow is not None and self.flow.rev != last_flow:
@@ -375,6 +386,8 @@ def create_app(hub: ViewerHub) -> Starlette:
         try:
             await ws.send_text(json.dumps(hub.scene_message()))
             await ws.send_text(json.dumps(hub.state_message()))
+            if hub.training_stream is not None and (training := hub.training_stream(True)) is not None:
+                await ws.send_text(json.dumps(training))
             if hub.flow is not None and hub.flow.nodes:
                 await ws.send_text(json.dumps(hub.flow.message()))
             while True:

@@ -1,0 +1,134 @@
+/* The training view (training.js): curves of every trial, the leader's returns and losses, and a table that sets the
+   trials' settings side by side. A panel on the right, beside the robots drawer when it is open. */
+
+#training-toggle .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+#training-toggle .dot[data-state="running"],
+#training-toggle .dot[data-state="starting"],
+#training-toggle .dot[data-state="testing"] {
+  background: var(--amber);
+  animation: tv-pulse 1.4s ease-in-out infinite;
+}
+#training-toggle .dot[data-state="done"] { background: var(--plot-green); }
+#training-toggle .dot[data-state="failed"] { background: var(--bad); }
+@keyframes tv-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { #training-toggle .dot { animation: none !important; } }
+
+.training-view {
+  position: fixed;
+  top: calc(var(--gutter) + 44px);
+  right: var(--gutter);
+  width: 580px;
+  max-width: calc(100% - 2 * var(--gutter));
+  max-height: calc(100% - 2 * var(--gutter) - 44px - 84px); /* ends above the dock */
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+  border-radius: var(--radius);
+  scrollbar-width: thin;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.training-view[hidden] { display: none; }
+#drawer:not([hidden]) ~ .training-view { right: calc(var(--gutter) + 300px + 10px); }
+.training-view:not([hidden]) ~ .sensor-views { display: none; }
+@media (min-width: 1600px) { .training-view { width: 640px; } }
+
+.tv-title { display: flex; align-items: center; gap: 10px; }
+.tv-title h2 { margin: 0; font-size: 15px; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-sub { margin: 2px 0 8px; color: var(--ink-2); }
+.training-view .chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--hover);
+  color: var(--ink-2);
+}
+.training-view .chip[data-state="running"],
+.training-view .chip[data-state="starting"],
+.training-view .chip[data-state="testing"] { background: var(--amber-soft); color: var(--ink); }
+.training-view .chip[data-state="done"] { background: rgba(44, 154, 106, 0.18); }
+.training-view .chip[data-state="failed"] { background: rgba(194, 65, 58, 0.18); color: var(--bad); }
+
+.tv-bar { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.tv-bar span { display: block; height: 100%; background: var(--amber); transition: width 0.4s; }
+.tv-meta { display: flex; align-items: center; gap: 12px; margin: 6px 0 4px; color: var(--ink-2); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.tv-actions { margin-left: auto; display: flex; gap: 8px; }
+.tv-actions .primary-button, .tv-actions .pill-button { margin: 0; height: 28px; padding: 0 12px; font-size: 12.5px; }
+.tv-actions button:disabled { opacity: 0.45; cursor: default; }
+
+.tv-chart { margin-top: 10px; min-width: 0; }
+.tv-chart h3 { margin: 0 0 3px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tv-chart canvas { display: block; width: 100%; }
+.tv-chart select.metric {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+.tv-chart .hint { font-weight: 400; color: var(--muted); }
+.tv-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .tv-two { grid-template-columns: 1fr; } }
+
+.tv-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.tv-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tv-legend span.lead { color: var(--ink); font-weight: 650; }
+.tv-legend span.faded { opacity: 0.5; }
+.tv-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+.tv-table { margin-top: 10px; overflow-x: auto; scrollbar-width: thin; }
+.tv-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tv-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 3px 6px 4px 0;
+  white-space: normal;
+  vertical-align: bottom;
+  border-bottom: 1px solid var(--line);
+}
+.tv-table td { padding: 4px 6px 4px 0; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.tv-table td.num { text-align: right; }
+.tv-table .muted { margin-left: 4px; color: var(--muted); font-size: 10.5px; }
+.tv-table tbody tr { cursor: pointer; }
+.tv-table tbody tr:hover { background: var(--hover); }
+.tv-table tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--ink-2); padding-left: 6px; }
+.tv-table tr.lead { background: var(--amber-soft); }
+.tv-table tr.faded td { opacity: 0.55; }
+.swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.lead-badge { margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 650; background: var(--amber); color: var(--amber-ink); }
+.tv-table button.mini {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.tv-table button.mini:disabled { opacity: 0.35; cursor: default; }
+
+@media (max-width: 900px) {
+  #drawer:not([hidden]) ~ .training-view { display: none !important; }
+}
+@media (max-width: 600px) {
+  /* above the drive keys and the dock, which a phone shows below it */
+  .training-view { left: var(--gutter); right: var(--gutter); width: auto; max-height: calc(100% - 2 * var(--gutter) - 44px - 150px); }
+}
+.in-lesson #training-view { display: none !important; }

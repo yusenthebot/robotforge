@@ -105,7 +105,9 @@ and objects stand on the ground under them. Go2, A1, ANYmal C and Barkour look a
 takes them up and down stairs (about 8 cm steps, 30 cm deep; 10 cm ones and long flights can still topple them),
 slopes and gravel on their own, straight on; over rough ground they slow to 60 percent of top speed by themselves.
 Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
-off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain.
+off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain. A humanoid from
+the catalogue or a file stands on its own by whole-body balance (`robots` says "balance"): it holds a load and takes
+a push of a few tenths of a m/s; move walks it only if a gait fits its legs (else `walk_hint` says so).
 load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
 instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
@@ -187,9 +189,13 @@ over a table: press (stop at a force, or hold one) and wipe (slide a pad over th
 compare_controllers(robot="panda", task="wipe") returns each method's mean force, its spread and how well the path
 was followed. A wiper pad (update_robot end_effector="wiper") is the tool to wipe with.
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
-compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
-robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
-run or compare it as method "policy:<name>".
+compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches any
+robot of the world a task by trial and error in the background, with any algorithm (ars and cem need nothing
+installed; ppo and sac need the rl extra; plugins add more): algo=["ars", "cem"] runs both side by side, and
+search={"trials": 9} tunes their settings (successive halving). The learner's observation includes whatever the
+robot's sensors read (add_sensor a lidar or an IMU first to give it one). Follow it with training_status (each
+trial's settings, curve and test score side by side); the viewer's Training panel draws it live and plays the
+best policy. Run or compare the result as method "policy:<name>".
 
 Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
 interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on

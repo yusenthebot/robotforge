@@ -52,6 +52,9 @@ def square(robot, side_s, speed):
 - Controller: `plugins(action="run", name="sweep", robot="arm", options={"amplitude": 0.6}, seconds=5)`; it keeps running until `stop(robot)`. `ctx` has `ctx.joint(name)`, `ctx.velocity(name)`, `ctx.joints()`, `ctx.set(actuator, value)`, `position`, `heading_deg`, `ctx.position_of(body)`, `ctx.sensor(name)`, `time`, `dt`, `params`; names are the robot's own, without the `robot/` prefix. A controller that raises stops itself and says why in its status.
 - Behavior: a function `def run(robot, **options)` written with the script robot interface, run as a script (`plugins(action="run", name="square", robot="dog")`); what it returns is the result.
 
+- Training algorithm: `@algorithm("hill_climb", hyper={"sigma": Hyper(0.2, low=0.05, high=0.5, log=True)})` on a function `def run(ctx)` that loops `while ctx.has_budget()`, tries policies with `ctx.evaluate(theta)` or `ctx.rollout(act)`, reports with `ctx.log(name=value)` and returns the flat parameter vector (shape set by `ctx.new_shape(hidden)`); `ctx.state` keeps arrays between a search's stretches. Then `train_policy(algo="hill_climb")` or `algo=["ars", "hill_climb"]` to compare, and a `search` draws from its `Hyper` ranges. `list_algorithms` shows it. The training process loads it from the plugin folders, so write it with `plugin=true` (docs/TRAINING.md has the contract).
+- Training task: `@task("stay_upright")` on `def build(model, robot, params)` returning the result of `reward_task` (`from robotforge.training.custom import reward_task`; pass it `model, robot, params` and `reward=lambda ctx: ...`, `failed=`, `success=`, `reset=`, `seconds=`); `ctx.joint(name)`, `ctx.body(name)`, `ctx.base_velocity()`, `ctx.height()`, `ctx.up()`, `ctx.effort()`. Then `train_policy(task="stay_upright", robot=...)` on any robot.
+
 When a plugin file fails, `plugins()` shows `not_loaded` with the file and line.
 After editing the file, `plugins(action="reload")`.
 

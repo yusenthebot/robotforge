@@ -5,6 +5,7 @@ import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { flowState, flowUpdate, initFlow } from "./flowview.js";
 import { initGamepad, padAxes, padConnected, padFrame, padMode, padProfile, padState, release as padRelease } from "./gamepad.js";
 import { initMap, mapFrame, mapState, mapUpdate } from "./mapview.js";
+import { initTraining, trainingState, trainingUpdate } from "./training.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
@@ -1084,6 +1085,7 @@ function connect() {
     else if (msg.type === "lesson") lessonUpdate(msg);
     else if (msg.type === "sensors") sensorsUpdate(msg);
     else if (msg.type === "map") mapUpdate(msg);
+    else if (msg.type === "training") trainingUpdate(msg);
     else if (msg.type === "flow") flowUpdate(msg);
     else if (msg.type === "error") toast(msg.message);
   };
@@ -2338,6 +2340,7 @@ initMap({
   storageSet,
 });
 
+initTraining({ request, toast });
 initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
 
 initGamepad({
@@ -2433,5 +2436,6 @@ window.__robotforge = {
   pad: () => padState(), // the gamepad: connected, profile, what it asks for (gamepad.js)
   flow: () => flowState(), // the behavior tree a script runs (flowview.js)
   map: () => mapState(), // the maps robots build: grid, particles, poses (mapview.js)
+  training: () => trainingState(), // the run the Training panel shows (training.js)
   showSensor: (name, on = true) => sensorsShow(name, on), // as switching it in the robots drawer
 };

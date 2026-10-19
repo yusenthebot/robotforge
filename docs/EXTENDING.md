@@ -159,6 +159,68 @@ robot = sim.robot(sim.robots()[0])
 print(robot.kind, call("square", robot, side_s=1.0))
 ```
 
+### Algorithms and tasks: training with your own
+
+A training algorithm is a function that spends a step budget and returns the policy it found.
+It sits beside ARS, CEM, PPO and SAC: `train_policy(algo="hill_climb")`, a list to compare it with them, and a search can draw its settings from the ranges you give.
+[TRAINING.md](TRAINING.md) has the whole contract; this is a complete one.
+
+```python title="plugins/hill_climb.py"
+from robotforge.extend import Hyper, algorithm
+
+
+@algorithm(
+    "hill_climb",
+    summary="keep a random change to the policy when it scores better",
+    hyper={"sigma": Hyper(0.2, low=0.05, high=0.5, log=True, help="size of each random change")},
+)
+def hill_climb(ctx):
+    theta = ctx.state.get("theta", ctx.new_shape().zeros()).copy()  # ctx.state is kept between a search's stretches
+    best = ctx.evaluate(theta)
+    while ctx.has_budget():
+        candidate = theta + ctx.params["sigma"] * ctx.rng.standard_normal(theta.shape)
+        score = ctx.evaluate(candidate)
+        if score > best:
+            theta, best = candidate, score
+        ctx.log(best_return=best)  # a line on the Training panel
+    ctx.state["theta"] = theta
+    return theta  # the policy's flat parameters; ctx.policy(theta) is the policy they make
+```
+
+- `ctx.env` is the environment (Gym API, actions in [-1, 1]), `ctx.params` the settings, `ctx.rng` a generator seeded per trial, `ctx.obs_dim` and `ctx.act_dim` its sizes.
+- `ctx.rollout(act)` plays one episode with `act(obs)`; `ctx.evaluate(theta, episodes)` plays the policy with parameters `theta`.
+  Both count against the budget and draw on the episode returns of the Training panel.
+- `ctx.has_budget()` is false when the steps are spent, a stop was asked for, or the time is up.
+- `ctx.new_shape(hidden=(16,))` sets the policy's layers (none: a linear policy); `ctx.update_norm()` scales the inputs by what they have been.
+- Return the flat parameters, or any object with `__call__(obs)` and `save(path)`.
+- `needs=("torch",)` names modules the algorithm imports, so a missing one is explained before training starts.
+
+A task is a function that builds a `Task` for a robot.
+`reward_task` makes one from a reward function, so any robot can be trained on anything that can be measured.
+
+```python title="plugins/stay_upright.py"
+from robotforge.extend import task
+from robotforge.training.custom import reward_task
+
+
+@task("stay_upright", summary="hold a pole straight up", params={"limit": 0.8})
+def build(model, robot, params):
+    return reward_task(
+        model,
+        robot,
+        params,
+        reward=lambda ctx: 1.0 - abs(ctx.joint("hinge")) - 0.01 * ctx.effort(),
+        failed=lambda ctx: abs(ctx.joint("hinge")) > ctx.params["limit"],
+        reset=lambda ctx, rng: ctx.set_joint("hinge", rng.uniform(-0.25, 0.25)),
+        seconds=3,
+        task_name="stay_upright",
+    )
+```
+
+Then `train_policy(task="stay_upright", robot="pole", algo=["ars", "hill_climb"])`.
+The reward function sees a context with the robot's state by its own names (`ctx.joint`, `ctx.body`, `ctx.base_velocity()`, `ctx.height()`, `ctx.up()`, `ctx.effort()`).
+A plugin algorithm or task runs inside the training process too: it loads from the plugin folders there, so keep it in `~/.robotforge/plugins` or a trusted world.
+
 ### Using plugins from Claude or GPT
 
 The agent writes the file for you (`write_script(name, code, plugin=true)`), then uses it with the ordinary tools: `add_object(shape="signpost")`, `add_sensor(type="geiger")`, `plugins(action="run", ...)`.

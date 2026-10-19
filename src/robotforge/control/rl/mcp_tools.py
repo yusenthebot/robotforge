@@ -26,6 +26,9 @@ from robotforge.control.rl.jobs import JOBS
 from robotforge.control.rl.spec import MAX_MINUTES, make_spec
 from robotforge.control.tasks import TaskError
 from robotforge.playground import Playground
+from robotforge.training.mcp_tools import new_pipeline as _new_pipeline
+from robotforge.training.mcp_tools import start as mcp_start
+from robotforge.training.mcp_tools import status_extra
 
 MAX_WAIT_SECONDS = 600.0
 PROGRESS_EVERY = 1.0
@@ -55,7 +58,7 @@ def register(server: MCPServer, playground: Playground) -> None:
     async def train_policy(
         task: str,
         robot: str | None = None,
-        algo: Literal["ppo", "sac"] | None = None,
+        algo: str | list[str] | None = None,
         minutes: float | None = None,
         timesteps: int | None = None,
         task_params: dict[str, Any] | None = None,
@@ -63,19 +66,57 @@ def register(server: MCPServer, playground: Playground) -> None:
         action_mode: Literal["direct", "residual"] | None = None,
         shoves: float | None = None,
         replace: bool = False,
+        observation: Literal["auto", "task", "task+sensors", "sensors"] | None = None,
+        search: dict[str, Any] | None = None,
+        settings: dict[str, dict[str, Any]] | None = None,
+        parallel: int | None = None,
     ) -> str:
-        """Teach a robot a task by reinforcement learning (trial and error with a neural network) in the background;
-        returns at once with the policy name and a time estimate.
+        """Teach a robot a task by trial and error, with any algorithm, in the background; returns at once with the
+        policy name, the trials it will run and a time estimate. Follow it with training_status; the viewer's
+        Training panel draws the curves live and plays the best policy.
 
-        Examples: task="balance", robot="pole" (PPO, about a minute); task="walk", robot="dog",
-        task_params={"speed": 0.4}, minutes=5 (PPO learning corrections on top of the trot gait); task="reach",
-        robot="arm", algo="sac". Defaults need no tuning. Give minutes (a time budget) or timesteps, or neither for
-        the default. shoves sets how hard the robot is pushed now and then while it learns (0 = never; harder shoves
-        teach recovery but make it cautious). The robot is rebuilt from this world's description and trained alone
-        on the same floor. Needs the optional rl extra. Then training_status(name) to follow it, and
-        run_controller(method="policy:<name>") or compare_controllers(methods=["lqr", "mpc", "policy:<name>"]) to
-        use it."""
+        task: reach, balance, stand, walk, drive_to, a task saved with the world (add_task), or one from a plugin.
+        robot: any robot of this world, whatever it is built from. algo: ppo or sac (neural networks, the optional
+        rl extra), ars or cem (numpy, nothing to install), a plugin's algorithm, or a list of names to run side by
+        side and compare; list_algorithms shows them with their settings. timesteps is the environment steps each
+        trial may use (or minutes, a time budget). settings: fixed settings per algorithm, {"ars": {"noise": 0.2}}.
+        search: tunes the settings by running several trials, {"method": "halving" (default, drops the poor early
+        and gives the rest more steps) or "random", "trials": 9, "space": {"noise": [0.1, 0.3], "step_size":
+        {"low": 0.02, "high": 0.4, "log": true}}}; settings left out of space are drawn from their own ranges.
+        observation: "auto" gives the learner the task's numbers plus whatever the robot's sensors read (add_sensor
+        a lidar or an IMU and the observation grows), "sensors" the goal plus the sensors only, "task" the task's
+        own. parallel: trials running at once (at most 4).
+
+        Examples: task="balance", robot="pole" (about a minute); task="walk", robot="dog", algo=["ars", "cem"],
+        task_params={"speed": 0.4} (two algorithms compared); task="reach", robot="arm", algo="ars",
+        search={"trials": 9}; task="walk", robot="dog", algo="ppo", minutes=5. Defaults need no tuning. shoves sets
+        how hard the robot is pushed now and then while it learns (0 = never). The robot is rebuilt from this
+        world's description and trained on its floor and terrain (a saved task: the whole world). Then
+        run_controller(method="policy:<name>") or compare_controllers(methods=["lqr", "mpc", "policy:<name>"])."""
         with _tool_errors():
+            if _new_pipeline(playground, task, robot, algo, search, settings, observation, parallel):
+                return _json(
+                    await asyncio.to_thread(
+                        mcp_start,
+                        playground,
+                        task,
+                        robot,
+                        algo,
+                        minutes,
+                        timesteps,
+                        task_params,
+                        name,
+                        action_mode,
+                        shoves,
+                        replace,
+                        observation,
+                        search,
+                        settings,
+                        parallel,
+                    )
+                )
+            if isinstance(algo, list) or algo not in (None, "ppo", "sac"):
+                raise TaskError("algo is ppo or sac here")
             if minutes is not None and not 0 < minutes <= MAX_MINUTES:
                 raise TaskError(f"minutes must be in (0, {MAX_MINUTES:.0f}]")
             robot_spec, floor, notes = _robot_spec(playground, task, robot)
@@ -235,6 +276,7 @@ def _status_view(name: str, folder: Path, status: dict[str, Any]) -> dict[str, A
         "reward is the task score per episode (higher is better); success_rate is the share of recent episodes "
         "that met the goal. Training shoves the robot now and then, so its numbers are a bit lower than a calm run."
     )
+    view.update(status_extra(status))  # a run with several trials or a search: each trial, side by side
     meta = store.read_json(folder / store.POLICY_FILE)
     state = view["state"]
     if state in ("done", "stopped") and (folder / store.WEIGHTS_FILE).exists():
