@@ -629,6 +629,9 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
     """A chain of side-to-side segments on passive wheels (the builder guide's snake), a head with eyes in front and,
     when asked, a gripper for jaws on a neck that lifts it."""
     s = plan.size * plan.width
+    # Carbon unless the sentence said a material: a stiff chain slithers further than a printed one (a x1.35 snake with
+    # jaws and 12 segments: printed 35 %, carbon 70 % of the way; sweep --body snake --set material=pla,carbon).
+    material = plan.material or "carbon"
     seg = r3(0.08 * s * plan.length)
     parts: list[dict[str, Any]] = [
         {
@@ -639,7 +642,7 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
             "size": [seg, r3(0.05 * s), r3(0.04 * s)],
             "direction": "back",
             "color": "main",
-            "material": look.material,
+            "material": material,
             "repeat": {"count": plan.segments, "chain": True},
         },
         {
@@ -689,6 +692,8 @@ def snake(plan: Plan, look: Look) -> tuple[dict[str, Any], list[str]]:
             },
         ]
     notes: list[str] = []  # a second arm comes off the plan in clamp()
+    if plan.arms:
+        notes.append("the jaws weigh its head down: it slithers slowly, about 60 % of the speed asked for")
     base = {"shape": "box", "size": [r3(0.09 * s), r3(0.06 * s), r3(0.045 * s)], "sensors": sensors}
     # Measured: on hobby servos a snake 1.6 times the size did not move at all (1.3 times: 0.43 m in 6 s on sts3215);
     # on joint modules it slithered 0.85 m in 6 s. On mg996r servos twelve segments went 15 to 44 % of the way when

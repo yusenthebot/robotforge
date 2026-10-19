@@ -393,8 +393,6 @@ class Playground:
         # The builder has checked a generated robot (generator.realize): what the world refuses now (a name taken, a
         # place outside it) is not the sentence's fault and comes back as it is.
         result = self._edit(change)
-        if made is not None:
-            result["generated"] = made.describe(name)
         if pos is None:  # a place of the scene's, or clear of what stands at [0, 0]
             free, facing, placed = self._start_for(name, entry.pos, None if yaw is None else entry.yaw)
         else:
@@ -407,7 +405,9 @@ class Playground:
                 if facing is not None:
                     robot.yaw = facing
 
-            result = self._edit(move, snapshot=False)
+            result = self._edit(move, snapshot=False)  # a new result: the generated report goes on it below
+        if made is not None:
+            result["generated"] = made.describe(name)
         if name in self.last_doctor:  # URDFs, xacro and meshes come with the doctor's report
             result["doctor"] = self.last_doctor[name]
         return _noted(_renamed(result, given, name), _yaw_note(yaw), placed)

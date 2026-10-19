@@ -93,10 +93,13 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, home, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. Quadrupeds look at the ground as they walk: move takes them up and down
-stairs (8 cm steps), slopes and gravel on their own, straight on and at about 0.3 m/s.
-load_scene(description="a flat with a kitchen and a bedroom, three
-apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
+and objects stand on the ground under them. Go2, A1, ANYmal C and Barkour look at the ground as they walk: move
+takes them up and down stairs (about 8 cm steps, 30 cm deep; 10 cm ones and long flights can still topple them),
+slopes and gravel on their own, straight on; over rough ground they slow to 60 percent of top speed by themselves.
+Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
+off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain.
+load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
+instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
 observe(view="overview").
 add_task("bring the red cup from the kitchen to the bedroom desk") turns a sentence into a task saved with the world:
