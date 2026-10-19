@@ -456,9 +456,26 @@ Rounds 1-3 done, 2026-10-14.
   - iCloud left "name 2.py" conflict copies in every worktree and "main 2" refs in .git; now ignored, and the broken refs moved out.
   - The library line-up still shows a grey arm lying down (the Z1 and xArm 7 library homes are Menagerie keyframes folded back); go2_arm cannot fetch from counter height.
 
+## Rounds 37 and 38 (2026-10-19/20): G8 to G12, lanes that land live, Sonnet to save tokens
+
+- Every lane landed through scripts/land.py after each verified step; nothing waited on a branch. The user asked (2026-10-19) to save tokens, so the second half ran on Sonnet with one review round per lane.
+- The repo went private on 2026-10-19 at the user's request; CI now runs only by hand (`gh workflow run CI --ref main`) at the end of a milestone.
+- Landed:
+  - G8 legged: one interface for library quadrupeds and humanoids; terrain sensing; Go2, A1, ANYmal C, Barkour and Go1 cross 8 x 30 cm stairs at 60 percent speed (14 of 15); Spot stands before stairs it cannot do; humanoids walk flat only (G1, T1, OP3). scripts/legged_bench.py, docs/LEGGED.md.
+  - G9 mobile manipulation: base and arm plan together; drawers, doors, buttons, conveyors (the base drives beside the belt), a two-room home; held-out seeds 8 to 27: doors and buttons near 20/20, Go2 fetch 19/20, wheeled drawer take 7/20, ANYmal fetch 7/20. docs/MOBILE.md.
+  - G10 mounting: `mount` puts any robot, end effector or sensor on any body with an adapter plate and checks; LEAP and Allegro hands, suction, magnet; saved designs mount again; Z1 and xArm 7 homes stand up.
+  - G11 generation: load_scene(description=...), add_task and task suites (19 of 20 generated tasks done for real); add_robot(describe=...) builds robots from a sentence (snake sweep 213 of 216).
+  - G12 breadth: add_robot(library=...) and list_library over 200+ open robots from robot_descriptions with a trial at add time (55 legged tried: 6 walk, 21 collapse); new sensors (stereo, fisheye, event camera, sonar, wheel odometry, tactile skin, heat and gas); occupancy mapping, particle-filter localization, navigation on the robot's own map; user plugins (parts, sensors, controllers, behaviors), MJCF and URDF export, one robot interface in scripts (docs/EXTENDING.md).
+  - README as a product page with a 68 s promo video from real footage (docs/media/promo.mp4).
+- What did NOT work:
+  - Network drops (ECONNRESET) killed whole workflows three times; landing per step kept the loss to minutes, and resuming in the same worktrees worked.
+  - Auto-triggered CI was cancelled by every next landing, so Windows went untested for a day; five Linux and Windows failures surfaced once runs completed (now fixed).
+  - iCloud keeps copying ref files ("main 3") and sources ("manager 2.py"); land.py sets the refs aside, .gitignore hides the copies; moving the repo out of iCloud is the real cure (the user's call).
+  - Humanoids beyond flat walking, the wheeled drawer take and ANYmal fetching through narrow gaps stay unreliable.
+
 ## Next-round seed
 
-Round 37 phase 2 is running (wf_ccf0a9ac-491): five lanes from the new main that land after every verified step: G8 legged (every library legged robot walks, stairs and gravel with terrain sensing, payloads), G9 mobile manipulation (base and arm plan together, drawers, doors, buttons, conveyors, two rooms), G10 mount anything on anything (checks, quick-change end effectors with dexterous hands, saved combinations), G11a environments and tasks from a sentence (success checks, rewards, task suites), G11b robots from a sentence. Then: library home poses for the Z1 and xArm 7, README pictures, a review round.
+Round 39 is running (wf_92345c88-f5a, Sonnet): G6 control depth (impedance, operational space, grasp planning, force in the loop), G5 flexible interfaces (behavior trees, gamepad, record and replay, demonstration export), humanoids standing and multi-robot handover. Then a review round (G2, G4 and G6 done): adversarially verify the claimed abilities, run CI by hand, refresh README pictures.
 
 ## Frontier
 
@@ -467,6 +484,7 @@ Round 37 phase 2 is running (wf_ccf0a9ac-491): five lanes from the new main that
 - Done in round 26: lessons in narrow windows and on phones; idle learned walkers hold their spot.
 - Done in round 29: learned walks turn on the spot (A/D, move turn).
 - Done in round 30: edits and lesson round trips keep robots and objects where they are.
+- Done in rounds 37 and 38: legged on terrain, mobile manipulation with mechanisms, mount anything on anything, worlds, tasks and robots from a sentence, 200+ open robots by name, perception and mapping, user plugins and export.
 - Done in rounds 35 to 37: real-robot splicing on one merged planner, mobile pick and place, the sensor suite, water, mechanisms and end effectors, drones, straighter learned walks, a 39-budget bench, and lanes that land live.
 - Done in rounds 33 and 34: a gallery of ten unique robots, dressed parts, navigation, imitation and seeing lessons, agent evals, video recording.
 - Done in round 32: agent errors that say how to fix them, quadrupeds that stand on their gait from load, README pictures from the real viewer.

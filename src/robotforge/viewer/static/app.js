@@ -2,6 +2,7 @@
 // this page draws the bodies it streams and sends user input back.
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
+import { flowState, flowUpdate, initFlow } from "./flowview.js";
 import { initMap, mapFrame, mapState, mapUpdate } from "./mapview.js";
 import { initTraining, trainingState, trainingUpdate } from "./training.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
@@ -1084,6 +1085,7 @@ function connect() {
     else if (msg.type === "sensors") sensorsUpdate(msg);
     else if (msg.type === "map") mapUpdate(msg);
     else if (msg.type === "training") trainingUpdate(msg);
+    else if (msg.type === "flow") flowUpdate(msg);
     else if (msg.type === "error") toast(msg.message);
   };
 }
@@ -2306,6 +2308,7 @@ initMap({
 });
 
 initTraining({ request, toast });
+initFlow({ inLesson: () => lessonActive(), storageGet, storageSet });
 
 connect();
 loop();
@@ -2385,6 +2388,7 @@ window.__robotforge = {
   },
   fps: () => fps, // frames drawn a second, counted over the last half second
   sensors: () => sensorsState(), // what the sensor drawings and views show (sensors.js)
+  flow: () => flowState(), // the behavior tree a script runs (flowview.js)
   map: () => mapState(), // the maps robots build: grid, particles, poses (mapview.js)
   training: () => trainingState(), // the run the Training panel shows (training.js)
   showSensor: (name, on = true) => sensorsShow(name, on), // as switching it in the robots drawer

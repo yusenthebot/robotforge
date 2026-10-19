@@ -9,7 +9,9 @@ import numpy as np
 from pydantic import Field
 
 from robotforge import wording
-from robotforge.control.tasks.base import Batch, Task, TaskError, TaskParams, home_qpos, smooth_abs
+from robotforge.control.tasks.arm import ArmTask
+from robotforge.control.tasks.base import Batch, TaskError, TaskParams, home_qpos, smooth_abs
+from robotforge.control.tasks.tool import ToolTarget, min_jerk
 
 MAX_REACH_RATIO = 2.0  # a target farther than this many arm lengths away is a wrong unit, not a hard reach
 
@@ -28,11 +30,11 @@ class ReachParams(TaskParams):
     )
 
 
-class Reach(Task):
+class Reach(ArmTask):
     name = "reach"
     summary = "Move an arm's tool to a target point and hold it there."
     robot_hint = "an arm with a tool point named 'tcp' (any robot from the arm template)"
-    methods = ("ik", "pd", "cartesian", "mpc", "mppi")
+    methods = ("ik", "pd", "cartesian", "joint_impedance", "cartesian_impedance", "osc", "mpc", "mppi")
     Params = ReachParams
     default_seconds = 4.0
     control_hz = 50.0
@@ -45,19 +47,7 @@ class Reach(Task):
     def __init__(self, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None):
         super().__init__(model, robot, params)
         self.params: ReachParams
-        self.site = self.robot.need(mujoco.mjtObj.mjOBJ_SITE, "tcp", self.robot_hint)
-        self.site_sensor = self.robot.framepos_sensor(self.site)
-        hinges = self.robot.hinge_joints()
-        if not hinges:
-            raise TaskError(f"robot {robot!r} has no hinge joints to move")
-        joint_to_act = {int(model.actuator_trnid[a, 0]): int(a) for a in self.actuators}
-        # Drive only the arm joints; a gripper does not help reach a point.
-        self.joints = [j for j in hinges if j in joint_to_act]
-        if not self.joints:
-            raise TaskError(f"none of {robot!r}'s hinge joints has an actuator")
-        self.actuators = np.array([joint_to_act[j] for j in self.joints])
-        self.qadr = np.array([model.jnt_qposadr[j] for j in self.joints])
-        self.dadr = np.array([model.jnt_dofadr[j] for j in self.joints])
+        self._find_arm(model, robot)
         self._fk = mujoco.MjData(model)  # scratch for forward kinematics, reused to avoid allocations
         self.target = np.zeros(3)
         self._anchor = np.zeros(3)  # the target as the task states it; episodes with a jitter move around it
@@ -134,6 +124,10 @@ class Reach(Task):
     def distance(self, data: mujoco.MjData) -> float:
         return float(np.linalg.norm(self.tool(data) - self.target))
 
+    def target_source(self, model: mujoco.MjModel, data: mujoco.MjData) -> ReachPath:
+        """The path the impedance controllers follow: a smooth line from the tool to the target."""
+        return ReachPath(self, data)
+
     # ---- task interface ----
 
     def observation(self, data: mujoco.MjData) -> np.ndarray:
@@ -203,3 +197,20 @@ class Reach(Task):
 
     def describe(self) -> dict[str, Any]:
         return {**super().describe(), "target": [round(float(v), 3) for v in self.target]}
+
+
+class ReachPath:
+    """A min-jerk line from where the tool is to the reach target, at about 25 cm/s; the orientation is left free."""
+
+    SPEED = 0.25  # m/s average tool speed along the path
+
+    def __init__(self, task: Reach, data: mujoco.MjData):
+        self.start = data.site_xpos[task.site].copy()
+        self.goal = task.target.copy()
+        self.duration = float(np.clip(np.linalg.norm(self.goal - self.start) / self.SPEED, 0.6, 2.5))
+        self.t0 = float(data.time)
+
+    def target(self, data: mujoco.MjData, feel: np.ndarray) -> ToolTarget:
+        s, ds = min_jerk((data.time - self.t0) / self.duration)
+        delta = self.goal - self.start
+        return ToolTarget(self.start + s * delta, ds * delta / self.duration)

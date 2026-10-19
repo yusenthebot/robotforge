@@ -41,9 +41,10 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
     @server.tool()
     def list_algorithms() -> str:
         """List the control tasks (reach, balance, stand, walk, drive_to, hover) with the robots, algorithms and
-        parameters that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, lqr, mpc, mppi, hold,
-        gait, cascade, none), the learning algorithms train_policy takes (ars, cem, ppo, sac and those of plugins, with
-        their settings and the ranges a search draws from) and the trained policies. Use it to explain the options."""
+        parameters that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, joint_impedance,
+        cartesian_impedance, osc, lqr, mpc, mppi, hold, gait, cascade, none), the learning algorithms train_policy
+        takes (ars, cem, ppo, sac and those of plugins, with their settings and the ranges a search draws from) and
+        the trained policies. Use it to explain the options."""
         from robotforge.control.rl.mcp_tools import ALGOS
         from robotforge.control.rl.store import list_policies
 
