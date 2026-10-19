@@ -362,11 +362,13 @@ class Catch:
 
     def _end(self, data: mujoco.MjData, caught: bool, note: str | None) -> None:
         self.caught, self.note = caught, note
-        self.step = "done" if caught else "missed"
         if not caught:
             self._grip(data, "open")
+        # What comes next is set going before the catch says it is done: read from another thread in between (a
+        # demo waiting on it), done with nothing after it ended the wait while the box was still in the hand.
         if self.then is not None:
             self.then(data, caught)
+        self.step = "done" if caught else "missed"
 
 
 KEY = "__catch_then__"  # session controller key of what follows a catch: KEY + arm

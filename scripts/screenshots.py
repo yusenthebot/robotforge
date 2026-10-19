@@ -400,6 +400,7 @@ def _when(body: str, condition: str, timeout: float = 150.0) -> str:
                 if ({condition}) break;
                 {_SLEEP.format(ms=100)}
             }}
+        }}
     """
 
 
@@ -424,7 +425,6 @@ def _look_between(robot: str, body: str, offset: tuple[float, float, float]) -> 
             const o = rf.bodyPosition(rf.scene.bodies.findIndex((b) => b.name === {json.dumps(body)}));
             const mid = [(r[0] + o[0]) / 2, (r[1] + o[1]) / 2, o[2] * 0.85];
             rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
-        }}
         }}
     """
 
@@ -1154,6 +1154,13 @@ def _generated_line_up(pg: Any) -> None:
         pg.add_robot(f"g{i + 1:02d}", describe=GENERATED[i], pos=pos, yaw=48 if snake else -42)
 
 
+def _generated_four(pg: Any) -> None:
+    """Four robots each built from one sentence, for the README: a humanoid, a courier, a six-legged one with arms, a
+    big dog (GENERATED 11, 1, 0 and 4), in a row facing the camera."""
+    for name, sentence, y in (("humanoid", 11, 1.55), ("courier", 1, 0.55), ("mantis", 0, -0.5), ("dog", 4, -1.5)):
+        pg.add_robot(name, describe=GENERATED[sentence], pos=[0.0, y])
+
+
 def _frame_robot(robot: str, direction=(1.0, -0.85, 0.55), scale: float = 1.9, least: float = 0.6) -> str:
     """Page script: nothing selected, the camera along `direction` from the middle of all of `robot`'s bodies (half
     way up from the ground to its highest one), far enough to see the whole robot whatever its size."""
@@ -1193,11 +1200,17 @@ GENERATED_SHOTS = [
     for i, sentence in enumerate(GENERATED)
 ] + [
     Shot(
+        "readme_generated",
+        _generated_four,
+        page="window.__robotforge.select(null);" + _look((2.9, -0.7, 1.05), (0.0, 0.05, 0.5)),
+        settle=3.0,
+    ),
+    Shot(
         "generated_robots",
         _generated_line_up,
         page="window.__robotforge.select(null);" + _look((3.1, -2.75, 1.75), (0.4, -0.35, 0.1)),
         settle=3.0,
-    )
+    ),
 ]
 
 

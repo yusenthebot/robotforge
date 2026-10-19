@@ -94,6 +94,18 @@ def test_a_robot_folds_its_arm_over_itself_to_go_through_a_door(pg):
     assert trip.result()["arrived"], trip.result()
 
 
+def test_an_arm_held_out_ahead_is_folded_before_the_robot_turns_through_a_door(pg):
+    """A mobile Panda's arm, held out ahead as built, caught the door's leaf as the robot turned in the doorway (the
+    map leaves the leaf out) and it stuck there: folded, it is no less wide but less far round as it turns."""
+    _doorway(pg)
+    pg.add_robot("mm", design="mobile_panda", pos=[1.0, -0.9], yaw=180)
+    pg.run_fast(lambda: False, 0.5)
+    trip = pg.behaviors.navigate("mm", [-1.2, 0.6])
+    assert not pg.session.controllers["mm/arm"].done  # folding first
+    pg.run_fast(lambda: trip.done, 60.0)
+    assert trip.result()["arrived"], trip.result()
+
+
 def test_the_home_has_two_rooms_a_door_and_things_a_dogs_arm_reaches(pg):
     out = pg.load_scene("home")
     assert out["robots"] == ["go2_arm"]

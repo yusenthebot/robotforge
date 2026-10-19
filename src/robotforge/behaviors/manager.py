@@ -89,8 +89,9 @@ LEARN_A_WALK = (
 # 0.9 s; the tools wait up to CARRIER_WAIT s for it. A robot that balances sways for longer (a T1 with an SO-100 on its
 # head, stopped after walking 0.1 to 0.12 m/s, stood still after 2.5 to 4.1 s): for those, CARRIER_WAIT_SWAYING s.
 CARRIER_STILL, CARRIER_STILL_TURN = 0.03, 0.05
-# A robot sent somewhere folds an idle arm over itself first when that makes it this much narrower (m of footprint
-# radius: navigation plans for the folded robot), unless something lies within HOLDING_NEAR (m) of its tool point.
+# A robot sent somewhere folds an idle arm over itself first when that makes it this much narrower or less far round
+# as it turns (m of footprint radius or reach: navigation plans for the folded robot), unless something lies
+# within HOLDING_NEAR (m) of its tool point.
 FOLD_GAIN = 0.03
 HOLDING_NEAR = 0.08
 CARRIER_CALM = 0.2
@@ -1179,11 +1180,13 @@ class BehaviorManager:
             return None
         folded = fetch._posed(model, data, arm, tuck[1])
         try:
-            now = nav_map.measure_body(model, data, robot, kind, walker).radius
-            then = nav_map.measure_body(model, folded, robot, kind, walker).radius
+            now = nav_map.measure_body(model, data, robot, kind, walker)
+            then = nav_map.measure_body(model, folded, robot, kind, walker)
         except ValueError:
             return None
-        if then > now - FOLD_GAIN:
+        # Narrower, or less far round as it turns: a mobile Panda's arm, held out ahead of it as built, caught a
+        # swing door's leaf as the robot turned in the doorway (the map leaves the leaf out) and it stuck there.
+        if then.radius > now.radius - FOLD_GAIN and then.reach > now.reach - FOLD_GAIN:
             return None
         moves = Hand(arm)._joint_way(arm.q, tuck[1], None, "stow", LOADED_TILT, -1)
         if moves is not None:

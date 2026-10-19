@@ -244,9 +244,12 @@ class Stand:
     def rehearse(self, xy, heading: float, tilt: float, plan: Callable[[np.ndarray], None]) -> bool:
         """Whether `plan(hold)` (queueing a pick or a put on the arm, `hold` the tool point it holds a load at over
         the robot) works out with the robot at `xy` and `heading` and the arm tucked in as it arrives there. Nothing
-        stays queued."""
+        stays queued. Planned with no answer of an earlier search to start the arm's IK from (ArmMotion._warm), as
+        it is planned for real where the robot stops (Errand._first_tilt): seeded by the spot search's checks, a
+        mobile Panda's rehearsed pick of a block in a drawer was not found again from the very spot it stopped on."""
         arm = self.arm
         now, arm.q = arm.q, self.hold_q.copy()
+        arm._warm = None
         try:
             with arm.carried_to(self.qpos_at(xy, heading)):
                 plan(self.hold_at(xy, heading))
@@ -1705,6 +1708,7 @@ class Errand(Footing):
         if spot is not None and spot.tilt in tilts:
             tilts.remove(spot.tilt)
             tilts.insert(0, spot.tilt)
+        self.arm._warm = None  # as it was rehearsed (Stand.rehearse)
         failed: Exception | None = None
         for tilt in tilts:
             try:

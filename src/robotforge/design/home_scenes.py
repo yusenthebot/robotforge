@@ -20,7 +20,7 @@ WALL = [0.88, 0.86, 0.82, 1]
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
 WHITE = [0.92, 0.92, 0.9, 1]
-KITCHEN_RUG = [0.8, 0.79, 0.74, 1]
+KITCHEN_RUG = [0.7, 0.7, 0.66, 1]
 LIVING_RUG = [0.64, 0.56, 0.5, 1]
 SOFA = [0.42, 0.5, 0.58, 1]
 WALL_HEIGHT = 2.1
@@ -78,22 +78,23 @@ def home(rng: random.Random, opts: dict[str, float]) -> Content:
     ):
         x, y = x + rng.uniform(-0.08, 0.08), front + rng.uniform(0.07, 0.12)
         c.add(name, shape, [x, y, resting_z(LOW_TABLE, shape, size)], size=size, color=color)
-    # Narrow and low: a Go2 beside the drawer's way reaches its bar all the way out, and a Panda's hand fits down
-    # into the drawer between its walls (with a chest 0.36 m high they stood 0.25 m over its floor).
-    chest = [0.36, 0.4, 0.26]
+    # Low and not too wide: a Go2 beside the drawer's way reaches its bar all the way out (from beside a chest 0.5 m
+    # wide it did not), and a Panda's hand fits down into the drawer between its walls (with a chest 0.36 m high
+    # they stood 0.25 m over its floor).
+    chest = [0.4, 0.4, 0.26]
     c.add("chest", "drawer", [-0.9, 1.4], size=chest, color=WHITE)
-    # In the drawer, on its floor (the drawer's box sits 1.2 cm over the chest's bottom board), near its front and
-    # its east side: a Go2 standing beside the open drawer reaches it there, and not in the drawer's middle, 0.38 m
-    # from its arm's base.
-    x, y = -0.9 + 0.06 + rng.uniform(-0.02, 0.02), 1.4 - 0.08 + rng.uniform(-0.02, 0.02)
+    # In the drawer, on its floor (the drawer's box sits 1.2 cm over the chest's bottom board), near its front and a
+    # little to its east side: a Go2 standing beside the open drawer reaches it there, and not in the drawer's middle
+    # (0.38 m from its arm's base); 6 cm to the side, a Panda's hand came down on the drawer's wall.
+    x, y = -0.9 + 0.03 + rng.uniform(-0.015, 0.015), 1.4 - 0.08 + rng.uniform(-0.015, 0.015)
     c.add("block", "box", [x, y, 0.012 + 0.003 + 0.006 + 0.02 + 0.002], size=[0.04, 0.04, 0.04], color="green")
 
     # The living room: a sofa, the low table to bring things to and a side table with a button.
     c.add("sofa", "box", [2.2, HALF_Y - 0.45, 0.21], size=[1.8, 0.75, 0.42], color=SOFA, fixed=True)
     c.add("sofa_back", "box", [2.2, HALF_Y - 0.12, 0.42], size=[1.8, 0.18, 0.84], color=SOFA, fixed=True)
     c.add("living_table", "table", [2.2, 0.5], size=[1.0, 0.6, LOW_TABLE], color=LIGHT_WOOD)
-    c.add("side_table", "table", [1.0, 1.5], size=[0.45, 0.4, 0.3], color=WOOD)
-    c.add("button", "button", [1.0, 1.5 - 0.1, 0.3], size=[0.05, 0.04], color="red")  # near its front edge
+    c.add("side_table", "table", [1.0, 1.5], size=[0.36, 0.34, 0.3], color=WOOD)
+    c.add("button", "button", [1.0, 1.5 - 0.11, 0.3], size=[0.05, 0.04], color="red")  # 6 cm in from its front
 
     c.ground_slots = [Slot((2.4, -1.5), 180), Slot((1.2, -1.6), 180), Slot((-2.2, -1.5), 0)]
     from robotforge.design import gallery

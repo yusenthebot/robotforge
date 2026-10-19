@@ -1,24 +1,36 @@
-# robotforge (暂名)
+# robotforge
+
+**Any robot, from a sentence, in a lightweight simulator.**
 
 [![CI](https://github.com/yusenthebot/robotforge/actions/workflows/ci.yml/badge.svg)](https://github.com/yusenthebot/robotforge/actions/workflows/ci.yml)
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-新手入门具身智能的机器人游乐场。
-在 Claude 或 GPT 里用一句话描述你想要的机器人，agent 帮你搭出来、让它动起来、在 3D 查看器里实时演示，并顺手讲清楚背后的道理。
+[![A tour of robotforge: robots built from a sentence, spliced real robots, a kitchen errand, sensors, a learned walk, a drawer, a conveyor and a boat. Click to watch the 1080p video.](docs/media/promo_preview.webp)](docs/media/promo.mp4)
 
-![公园里，宇树 Go2 和我们的模板机器狗沿着小路往前走](docs/images/hero.jpg)
+*Click the preview for the 1 minute tour (MP4, 1080p).
+Every shot is real footage of the viewer, recorded with `scripts/demos.py` and cut with `scripts/promo.py`.*
 
-- 搭：机械臂、机器狗、小车、人形机器人、倒立摆，或者宇树 Go2、宇树 G1、Franka Panda、AgileX PiPER、ANYmal C、Booster T1、ALOHA 2 这样的 16 台真实机器人。
-- 挑：设计库里有十个现成的奇特机器人，轮腿双足、火星车、半人马、背着 PiPER 的 Go2、装着 Panda 的移动底盘、六足蝎子、触手等，一句话加进来再一块一块地改（见 [零件拼装](docs/BUILDER.md)）。
-- 拼：把一台机器人装到另一台上，比如狗背上装机械臂、UR5e 法兰上装 Robotiq 夹爪；狗走到方块旁边停下，背上的臂就能把方块放进盒子。
-- 开：导入你自己的 URDF、xacro、MJCF 或网格文件，自动体检修复。
-- 动：走路、开车、抓取放置、摆姿势，或者写一段自己的 Python 脚本。
-- 学：查看器里有 12 节互动课、4 个调参台、2 场真机对比和 3 个挑战，每一步先猜再试；同一个任务还能换 PD、LQR、MPC、强化学习比一比。
+robotforge is a robot playground you drive with words.
+Tell Claude or GPT what you want, and it builds the robot, puts it in a world, makes it move, and shows it live in a 3D viewer in your browser.
+The physics is [MuJoCo](https://mujoco.org/), the viewer is a thin three.js page, and the agent talks to it through an MCP server, so there is nothing to configure and nothing heavy to install.
+It runs on macOS, Windows and Linux.
 
-物理引擎是 MuJoCo，轻量，支持 macOS 和 Windows。
+## What you can do
 
-## 安装
+- **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence. Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels ([builder guide](docs/BUILDER.md)).
+- **Import your own.** URDF, xacro, MJCF and mesh files go through a health check that repairs the usual problems (mesh formats, inertia, the starting pose).
+- **Use real robots, and splice them.** Nineteen robots and parts from MuJoCo Menagerie load by name: Unitree Go2, Boston Dynamics Spot, ANYmal C, Franka Panda, UR5e, AgileX PiPER, Unitree G1, Booster T1, ALOHA 2 and more. Mount any of them on another: a Go2 with a PiPER on its back, an ANYmal C with a UR5e and a Robotiq gripper, a Spot with a Z1.
+- **Sense.** Cameras (colour, depth, segmentation), 2D and 3D lidar, IMU, joint encoders, force and touch go on any robot, and the viewer draws the rays and the depth picture ([sensors](docs/SENSORS.md)).
+- **Move things around.** A mobile arm plans its drive and its reach together, fetches the apple from the kitchen island, and puts it on the dining table. Drawers, cabinets, buttons, switches, levers and valves can be operated, and a factory conveyor feeds boxes to a sorting arm.
+- **Generate worlds and tasks.** `load_scene(description=...)` lays out a home, a warehouse or a hillside from one sentence, and `add_task` turns the same sentence into a task with a success check ([scenes](docs/SCENES.md)).
+- **Learn to walk.** Any legged robot, built from parts or imported, learns a rhythm by trial and error in the viewer, keeps it, and then walks and turns with the keyboard or from chat.
+- **Go on water, and in the air.** A boat crosses a lake between buoys to a dock, an underwater robot dives, a quadcopter flies a square round a tree.
+- **Teach and learn.** The viewer's Learn button opens 13 interactive lessons, 4 benches, 2 face-offs against real robots and 3 challenges, each step "guess first, then try".
 
-robotforge 用 [uv](https://docs.astral.sh/uv/) 管理 Python 和依赖，先装 uv（只需一次）：
+## Quick start
+
+robotforge uses [uv](https://docs.astral.sh/uv/) to manage Python and its dependencies.
+Install uv once:
 
 ```bash
 # macOS / Linux
@@ -27,136 +39,144 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-第一次启动会下载约 50 MB 的 Python 依赖（没有 Python 3.12 时还会顺便装一个），之后每次启动约 1 秒。
-国内网络慢的话可以先设置镜像：`export UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple`。
+The first start downloads about 50 MB of Python packages (and a Python 3.12 if you have none); after that it starts in about a second.
+
+### Try the viewer, no agent needed
+
+```bash
+uvx --from git+https://github.com/yusenthebot/robotforge robotforge demo
+```
+
+To open a robot of your own, replace `demo` with `open path/to/robot.urdf` (URDF, xacro or MJCF).
 
 ### Claude Code
-
-在 Claude Code 里输入：
 
 ```
 /plugin marketplace add yusenthebot/robotforge
 /plugin install robotforge@robotforge
 ```
 
-装好后运行 `/reload-plugins` 或重开一个会话。
-插件带来 robotforge 的全部工具、一个教 agent 怎么搭机器人和怎么教新手的技能，以及九节课的提示词。
-第一次启动时如果工具还没出现（依赖还在下载），稍等片刻后在 `/mcp` 里重新连接 robotforge。
+Then run `/reload-plugins` or start a new session.
+The plugin brings all the tools, a skill that teaches the agent how to build robots and how to teach beginners, and the prompts of the first nine lessons.
+If the tools are missing on the very first start (the dependencies are still downloading), wait a moment and reconnect robotforge in `/mcp`.
 
-### Codex
-
-在终端里运行：
+### Codex (GPT)
 
 ```bash
 codex plugin marketplace add yusenthebot/robotforge
 codex plugin add robotforge@robotforge
 ```
 
-然后开一个新的 Codex 会话（也可以在 Codex 里用 `/plugins` 浏览和安装）。
-插件已经把 robotforge 的工具设为免确认，所以 `codex exec` 这样的非交互运行也能直接用。
+Then open a new Codex session (or browse with `/plugins`).
+The plugin marks robotforge's tools as pre-approved, so non-interactive runs such as `codex exec` work too.
 
 ### Claude Desktop
 
-双击 `robotforge-0.1.0.mcpb`，在弹出的窗口里点“安装”，Claude Desktop 会自己用 uv 准备好环境。
-目前还没有发布版本，安装包需要在本地构建：
+Double-click `robotforge-0.1.0.mcpb` and press Install; Claude Desktop prepares the environment with uv.
+There is no published release yet, so build the bundle locally:
 
 ```bash
-uv run python scripts/build_desktop.py   # 生成 dist/robotforge-0.1.0.mcpb 和 dist/robotforge-skill.zip
+uv run python scripts/build_desktop.py   # writes dist/robotforge-0.1.0.mcpb and dist/robotforge-skill.zip
 ```
 
-想让 Claude Desktop 也学会教学技能，在“设置 > 功能 > 技能”里上传 `dist/robotforge-skill.zip`。
+To teach Claude Desktop the teaching skill too, upload `dist/robotforge-skill.zip` under Settings > Capabilities > Skills.
 
-### 不用 agent，直接打开查看器
+## Ask Claude or GPT
 
-```bash
-uvx --from git+https://github.com/yusenthebot/robotforge robotforge demo
-```
+Once it is installed, say things like:
 
-发布到 PyPI 之后会变成 `uvx robotforge demo`。
-打开自己的机器人：把 `demo` 换成 `open path/to/robot.urdf`。
+- "Give me a four-legged robot dog on grass and have it walk forward for 10 seconds."
+- "Build a robot arm that puts the red cube in the blue box."
+- "Make me a six-legged robot with two arms, and a tall wheeled courier with a lidar." (built from the sentences)
+- "Put a PiPER arm on a Unitree Go2, and have it carry the cube to the bin."
+- "Generate a small flat with a kitchen and a bedroom, and bring the red cup from the kitchen to the bedroom desk."
+- "Add a lidar and a depth camera to a Go2 and walk it down the warehouse aisle."
+- "Open the drawer in the kitchen."
+- "Import this URDF: `/path/to/robot.urdf` and tell me what the health check found."
+- "My imported robot has no gait. How do I get it to learn to walk?"
+- "Teach me lesson 1."
 
-## 第一句话说什么
+The agent opens the 3D viewer early.
+You can drag the robot, pull the sliders that drive each motor, and use W A S D to drive anything that walks or rolls.
+Worlds are saved in `~/robotforge/worlds/`, and the scripts the agent writes are in each world's `behaviors/` folder: edit and rerun them as you like.
+Changing a world (adding a box, swapping the floor) keeps the robots and objects where they are.
 
-装好之后，直接对 agent 说，比如：
+## Gallery
 
-- 给我一只四足机器狗，放在草地上，让它往前走 10 秒。
-- 做一条机械臂，把红色方块放进蓝色盒子里。
-- 加一台宇树 Go2，我想用键盘遥控它。
-- 来一台火星车，开过碎石地，再用它的机械臂把一块石头放进盒子。
-- 帮我导入这个 URDF：`/path/to/robot.urdf`，告诉我体检报告说了什么。
-- 我导入的机器人没有现成的走法，怎么让它自己学会走？
-- 教我第 1 课。
+All of these are real screenshots of the viewer (`uv run python scripts/screenshots.py`).
 
-agent 会尽早打开 3D 查看器：你可以拖动机器人、拉滑条控制每个电机、用 W A S D 遥控会走的机器人。
-所有世界都保存在 `~/robotforge/worlds/` 里，agent 写的脚本在每个世界的 `behaviors/` 文件夹里，可以自己改、反复运行。
-改动世界（加个箱子、换地板）时，机器人和物体留在原地，不会跳回起点。
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/grid_generated.jpg" alt="Four robots built from one sentence each"><br><sub><b>Robots from a sentence.</b> A humanoid, a courier, a six-legged robot with two arms and a dog, each from one line of text.</sub></td>
+    <td width="33%"><img src="docs/images/grid_world.jpg" alt="A flat with a kitchen and a bedroom, generated from one sentence"><br><sub><b>A world and a task from a sentence.</b> A flat with a kitchen and a bedroom; the picker brings the red cup.</sub></td>
+    <td width="33%"><img src="docs/images/grid_splice.jpg" alt="An ANYmal C with a UR5e and gripper, a Go2 with two arms, a Spot with two arms"><br><sub><b>Real robots spliced.</b> ANYmal C with a UR5e and a Robotiq gripper, a Go2 with two arms, a Spot with a Z1 and a PiPER.</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="docs/images/grid_fetch.jpg" alt="A mobile Panda carrying an apple across the kitchen"><br><sub><b>Mobile pick and place.</b> The Panda on wheels drives to the apple, grasps it and carries it to the dining table.</sub></td>
+    <td width="33%"><img src="docs/images/grid_sensors.jpg" alt="A Go2 in a warehouse aisle with the lidar points drawn"><br><sub><b>Sensors.</b> A Go2 with a 3D lidar and a depth camera; the points and the depth picture are drawn live.</sub></td>
+    <td width="33%"><img src="docs/images/grid_walk.jpg" alt="Three robots learning to walk, with the learning curve on the right"><br><sub><b>Learning to walk.</b> A dog, a three-legged starfish and a humanoid each learn a gait; the curve is on the right.</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="docs/images/grid_factory.jpg" alt="An arm sorting coloured boxes from a conveyor into three bins"><br><sub><b>Mechanisms.</b> The factory belt brings boxes to the stop, the camera names their colour, the arm sorts them.</sub></td>
+    <td width="33%"><img src="docs/images/grid_lake.jpg" alt="A boat crossing a lake with buoys"><br><sub><b>Water.</b> A boat plans its way between the buoys to the dock; an underwater robot dives beside it.</sub></td>
+    <td width="33%"><img src="docs/images/grid_gallery.jpg" alt="Ten odd robots built from parts"><br><sub><b>Built from parts.</b> Ten odd robots (wheel-legged biped, Mars rover, centaur, scorpion, tentacle arm) that really work.</sub></td>
+  </tr>
+</table>
 
-![厨房场景：岛台上的五轴机械臂、杯子、苹果和托盘](docs/images/scene_kitchen.jpg)
+## Import your own robot
 
-现成的场景有书桌实验室、厨房、仓库、公园、迷宫和障碍赛道，地形有坡、台阶、碎石、起伏的草地和梅花桩。
+Give the agent the path of a URDF, xacro, MJCF or mesh file.
+robotforge checks it, repairs the common problems (mesh formats, inertia, the starting stance), and puts it in your world.
 
-## 导入你自己的机器人
+![The A1 quadruped imported from Unitree's own URDF](docs/images/import_a1.jpg)
 
-把 URDF、xacro、MJCF 或网格文件的路径告诉 agent，robotforge 会体检并修好常见问题（比如网格格式、惯量、初始站姿），再放进你的世界。
+An imported robot that can walk already has the built-in gait.
+To make it walk its own way, open Learn in the viewer, choose "RL II", pick your robot under "Which robot", and press Learn.
+A dozen seconds later it has a gait; press "Keep this walk for my robot" and it goes on to learn turning left and right on the spot.
+Back in your world, tell it to walk in chat, or select it and press W A S D.
 
-![从宇树官方 URDF 导入的 A1 四足机器人](docs/images/import_a1.jpg)
+![RL II: the imported A1 after 30 rounds walks 1.46 m in 4 s](docs/images/lesson_your_robot.jpg)
 
-导入的机器人如果会走，内置步态就能让它走起来。
-想让它走出自己的样子，打开查看器的“学习”，进“强化学习（二）”，在“哪个机器人”里选“你的机器人”，点“开始学”。
-十几秒后它就学会一种走法，点“把这个走法存给我的机器人”，它接着学原地左转和右转。
-回到你的世界，在聊天里叫它走，或者选中它按 W A S D，它就用学到的走法走。
+## Learn in the viewer
 
-![强化学习（二）里，导入的 A1 学了 30 轮，4 秒能走 1.46 米](docs/images/lesson_your_robot.jpg)
+Press **Learn** at the top left of the viewer.
+Each step asks you to guess first and then try, and your results stack up in a lab notebook so you can compare them.
 
-## 学习路线
+- **Lessons:** PID (a forearm, then the PiPER's shoulder), inverse kinematics (a planar two-link arm, then a six-axis arm and the PiPER), motion planning (RRT-Connect round a barrier), perception (sensors, two vacuum robots comparing lidar avoidance, then finding a red cube by colour with a camera and picking it up), quadruped gaits (the template dog, then the Go2), humanoid balance (the capture point, then the G1), reinforcement learning (a pendulum, then any robot learning to walk, including ones you built or imported), and imitation learning (you demonstrate the grasp, a nearest-neighbour rule and a small neural network copy you, DAgger corrects them).
+- **Benches:** PID triplets, LQR twins, MPC twins and gait twins: the same test, a different setting each, run side by side.
+- **Face-offs:** our arm against the PiPER and the Panda, our humanoid against the G1.
+- **Challenges:** maze escape, the unpushable robot, the obstacle course.
 
-九节课，每节 10 到 20 分钟，见 [docs/lessons](docs/lessons/README.md)：
+![RL II: a template dog, a three-legged starfish and a humanoid each learn to walk; the learning curve and the notebook are on the right](docs/images/lesson_learn_to_walk.jpg)
 
-1. [关节和舵机](docs/lessons/01-joints-and-actuators.md)
-2. [开一台小车](docs/lessons/02-drive-a-rover.md)
-3. [让机器狗走起来：什么是步态](docs/lessons/03-dog-walk-and-gait.md)
-4. [逆运动学和抓取放置](docs/lessons/04-ik-pick-and-place.md)
-5. [传感器和相机](docs/lessons/05-sensors-and-camera.md)
-6. [PD、LQR 和 MPC 比一比](docs/lessons/06-pd-lqr-mpc.md)
-7. [写自己的脚本](docs/lessons/07-your-own-script.md)
-8. [训练一个策略](docs/lessons/08-train-a-policy.md)
-9. [导入你自己的机器人](docs/lessons/09-import-a-urdf.md)
+![Imitation learning: after five demonstrations a small neural network tries 24 grasps; green is a success, red a miss](docs/images/lesson_imitation_network.jpg)
 
-## 在查看器里边玩边学
+![PID triplets: three identical joints with three settings take the same step; the overshoot and settling time are compared on the right](docs/images/bench_pid_twins.jpg)
 
-查看器左上角的“学习”打开互动课程，每一步先猜再试，结果留在实验记录里叠着比：
+![The obstacle course: drive the dog over a ramp, stairs, gravel, a curb and stepping stones with W A S D](docs/images/challenge_obstacle_course.jpg)
 
-- 课程：PID（小臂，然后 PiPER 肩关节）、逆运动学（平面两连杆，然后六轴臂和 PiPER）、运动规划（RRT-Connect 绕开挡板）、感知（传感器，两台扫地机器人比激光雷达避障，再用相机按颜色找到红方块、算出位置抓起来）、四足步态（模板狗，然后 Go2）、人形平衡（捕获点，然后 G1）、强化学习（倒立摆，然后任何形状的机器人学走路，包括你自己拼的和导入的）、模仿学习（你来示范抓方块，k 近邻和小神经网络照着学，DAgger 纠正）。
+There are also nine written lessons for the chat, each 10 to 20 minutes, in [docs/lessons](docs/lessons/README.md).
+A headless playthrough plays every lesson to the end by the book (`uv run python scripts/playtest.py`); all 22 finish (the camera lesson needs offscreen rendering).
 
-- 调参台：PID 三胞胎、LQR 双胞胎、MPC 双胞胎、步态双胞胎，同一个测试，各用一组参数，同时跑。
-- 真机对比：我们的机械臂对 PiPER 和 Panda，我们的人形对 G1。
-- 挑战：迷宫逃脱、推不倒、障碍赛道。
+## How it works
 
-![强化学习（二）：模板狗、三脚海星和人形各自学走路，右边是学习曲线和实验记录](docs/images/lesson_learn_to_walk.jpg)
+![robotforge architecture: the agent calls local Python over MCP, physics runs in one MuJoCo session, the browser only draws poses](docs/diagrams/architecture.png)
 
-![模仿学习：示范五次之后，小神经网络在桌上 24 处各抓一次，绿点成功、红点失败，右边是成功率对离示范多远](docs/images/lesson_imitation_network.jpg)
+The agent calls robotforge's tools over MCP, and all the physics runs in one MuJoCo session inside a local Python process.
+The browser only draws: it receives the pose of every body over a WebSocket and sends keyboard and drag input back.
+The diagram's source is a single HTML file, [docs/diagrams/architecture.html](docs/diagrams/architecture.html); open it in a browser.
 
-![PID 三胞胎：三个一样的关节用三组参数走同一个阶跃，右边比超调、稳定时间和曲线](docs/images/bench_pid_twins.jpg)
+## Documentation
 
-![障碍赛道：用 W A S D 驾驶机器狗过斜坡、台阶、碎石路、路沿和梅花桩](docs/images/challenge_obstacle_course.jpg)
-
-每节课都有一个无头试玩脚本按课文一步步玩到底（`uv run python scripts/playtest.py`），22 节都能走完（看相机的那节要能离屏渲染）。
-
-## 架构
-
-![robotforge 架构图：agent 通过 MCP 调用本地 Python 进程，物理只在一个 MuJoCo 会话里运行，浏览器只显示位姿](docs/diagrams/architecture.png)
-
-agent 通过 MCP 调用 robotforge 的工具，所有物理都在本地 Python 进程里的同一个 MuJoCo 会话中运行。
-浏览器只负责显示：它通过 WebSocket 接收每个刚体的位姿，再把键盘和拖拽操作传回来。
-图的源文件是单文件 HTML：[docs/diagrams/architecture.html](docs/diagrams/architecture.html)，下载后用浏览器打开即可。
-
-## 文档
-
-- 方案：[docs/OVERVIEW.md](docs/OVERVIEW.md)
-- 目标与验收：[docs/GOAL.md](docs/GOAL.md)
-- 算法对比：[docs/ALGORITHMS.md](docs/ALGORITHMS.md)
-- 插件打包与验证（维护者）：[docs/PLUGINS.md](docs/PLUGINS.md)
-- 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
-- 足式机器人怎么看地面走、每台的实测表：[docs/LEGGED.md](docs/LEGGED.md)
-- 进度：[STATUS.md](STATUS.md)，[progress.md](progress.md)
-- README 里的截图由 `uv run python scripts/screenshots.py` 生成，用的是真实的查看器和无头 Chrome。
+- Plan: [docs/OVERVIEW.md](docs/OVERVIEW.md) (Chinese)
+- Goals and acceptance: [docs/GOAL.md](docs/GOAL.md)
+- Building robots from parts: [docs/BUILDER.md](docs/BUILDER.md)
+- Scenes, terrain and generated worlds: [docs/SCENES.md](docs/SCENES.md)
+- Sensors: [docs/SENSORS.md](docs/SENSORS.md)
+- Navigation: [docs/NAVIGATION.md](docs/NAVIGATION.md)
+- Algorithm comparisons: [docs/ALGORITHMS.md](docs/ALGORITHMS.md)
+- Learned policies and UniLab training: [docs/UNILAB.md](docs/UNILAB.md)
+- How legged robots read the ground, with measured tables per robot: [docs/LEGGED.md](docs/LEGGED.md)
+- Packaging and verifying the plugins (maintainers): [docs/PLUGINS.md](docs/PLUGINS.md)
+- Progress: [STATUS.md](STATUS.md), [progress.md](progress.md)
+- The pictures above come from `uv run python scripts/screenshots.py`, which drives the real viewer in headless Chrome; the video comes from `scripts/demos.py` and `scripts/promo.py`.
