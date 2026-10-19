@@ -806,7 +806,22 @@ def servo(
     sunk = center - rot[:, 2] * (hz * 1.12 + 0.001)
     flush = layout.inside(part.parent, _box_corners(sunk, rot, outline))
     if not flush and not layout.inside(part.parent, _box_corners(center, rot, outline)):
-        _add(vis, parent, P.servo_case(hx, hy, hz, horn_r, -SHAFT_OFFSET * sx), NEUTRAL, center, rot)
+        if vis.dress is not None:
+            vis.dress.draw(
+                vis,
+                parent,
+                "servo_case",
+                None,
+                center,
+                rot,
+                length=sx,
+                width=sy,
+                thickness=sz,
+                shaft=-SHAFT_OFFSET * sx,
+                horn=horn_r,
+            )
+        else:
+            _add(vis, parent, P.servo_case(hx, hy, hz, horn_r, -SHAFT_OFFSET * sx), NEUTRAL, center, rot)
     # The horn and the idler turn with the part; inside a part thicker than the servo they cannot be seen.
     t = max(0.0016, hz * 0.09)
     at = face * (0.0 if flush else hz * 1.12 - 0.0012)
