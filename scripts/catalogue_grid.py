@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-TILE_W, TILE_H, CAPTION, GAP, MARGIN, TITLE_H, COLUMNS = 640, 400, 66, 12, 28, 78, 5
-CROP = (80, 50, 1520, 950)  # of a SAVED_WIDTH (1600 x 1000) picture: the viewer's side bars out
+TILE_W, TILE_H, CAPTION, GAP, MARGIN, TITLE_H, COLUMNS = 640, 360, 66, 12, 28, 78, 5
+CROP = (80, 80, 1520, 890)  # of a SAVED_WIDTH (1600 x 1000) picture: the viewer's bars out
 
 
 def verdict(row: dict[str, Any]) -> str:

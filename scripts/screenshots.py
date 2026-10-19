@@ -1085,8 +1085,8 @@ G12_FRAME = """
         for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], p[i]); hi[i] = Math.max(hi[i], p[i]); }
     });
     const c = [0, 1, 2].map((i) => (lo[i] + hi[i]) / 2);
-    const radius = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.25) / 2;
-    const dist = radius * 2.9 + 0.4;
+    const radius = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.04) / 2;
+    const dist = radius * 3.0 + 0.12;
     rf.lookAt([c[0] + dist * 0.8, c[1] - dist * 0.95, c[2] + dist * 0.45], c);
 """
 
