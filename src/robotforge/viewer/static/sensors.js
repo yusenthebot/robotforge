@@ -218,7 +218,7 @@ function remember(e) {
 const TYPE_KEYS = { camera: (e) => `sensor_camera_${e.mode}` };
 
 function typeLabel(e) {
-  return t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`);
+  return e.label ?? t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`); // a plugin's sensor names itself
 }
 
 // A phone's strip of tabs has room for a word each: "Force", not "Force-torque".
@@ -248,7 +248,7 @@ function summary(e) {
     case "odometry":
       return `x ${num(e.position_m[0])}, y ${num(e.position_m[1])} m`;
     default:
-      return "";
+      return e.line ?? ""; // a plugin's sensor sends its reading as a line
   }
 }
 

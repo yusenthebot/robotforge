@@ -155,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
     from robotforge.bridge import cli as bridge_cli  # `policies` and `unilab ...`
 
     bridge_cli.add_parsers(sub)
+    from robotforge.extend import cli as extend_cli  # `plugins` and `export`
+
+    extend_cli.add_parsers(sub)
     for p in (p_open, sub.choices["demo"]):
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int, default=None, help=f"default: first free port from {DEFAULT_PORT}")
@@ -163,6 +166,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command in ("walkers", "unilab"):
         return bridge_cli.run(args)
+    if args.command in ("plugins", "export"):
+        return extend_cli.run(args)
     if args.command == "mcp":
         from robotforge import mcp_server  # imported lazily: the viewer CLI does not need the MCP SDK
 

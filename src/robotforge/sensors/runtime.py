@@ -225,7 +225,10 @@ class Suite:
         for decl in declare.read(model):
             cls = KINDS.get(decl.data["type"])
             if cls is None:
-                self.broken[decl.name] = f"unknown sensor type {decl.data['type']!r}"
+                self.broken[decl.name] = (
+                    f"unknown sensor type {decl.data['type']!r}; if it comes from a plugin, that plugin is not loaded "
+                    "(plugins() lists the ones that are)"
+                )
                 continue
             try:
                 self.sensors[decl.name] = cls(model, decl)

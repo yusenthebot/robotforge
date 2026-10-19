@@ -145,6 +145,14 @@ G8 还开着：
 
 验收：随机抽 20 台 robot_descriptions 的机器人按名字加进来能站能动；Go2 在陌生仓库里自己建图定位走到货架；一个用户写的新传感器和新控制器放进文件夹就能用；导出的 MJCF 用 `python -m mujoco.viewer` 打开一致。
 
+进展（2026-10-19，G12c 线，扩展力）：
+
+- 插件：`robotforge.extend` 里 `part`、`sensor`、`controller`、`behavior` 四个装饰器。文件放在 `~/.robotforge/plugins`（或 `ROBOTFORGE_PLUGINS` 列的文件夹），或世界自己的 `plugins/` 文件夹；启动和 `plugins(action="reload")` 时加载，出错的文件不影响别的文件，错误带文件名和行号。零件是 `add_object` 的新 shape，传感器是 `add_sensor` 的新 type（速率、噪声、延迟、查看器列表和模块都和内置的一样），控制器在仿真里按频率运行，行为用脚本的机器人接口写、当脚本跑。
+- 信任：世界自带的插件文件是 Python 代码，下载来的世界不能一打开就跑。只有在本机用 `write_script(plugin=true)` 写的、或 `plugins(action="trust")` 批准的文件才加载（按内容哈希记在 `~/robotforge/plugins_trusted.json`，文件改了或整个世界拷到别处都要重新批准）；`open_world` 会说有哪些文件没加载。
+- 导出：`export_model` 把世界或单个机器人写成 MJCF（网格存成 OBJ，不是行内数字），机器人还能写成 URDF；写完再用 MuJoCo 读回来对比（名字、质量、每个网格顶点在世界里的位置，URDF 对比关节和限位）。URDF 表达不了的东西（浮动底座、闭环、胶囊、球关节）在 `notes` 里列出。模板狗、模板臂、Go2、Panda、模板人形都读回一致。
+- 统一机器人接口：脚本里 `sim.robot(name)` 给出 `robot.sensors`、`robot.move`、`robot.arm`、`robot.gripper`、`robot.on_step`、`robot.run`；同一段脚本在模板狗和 Go2、模板臂和 Panda 上都跑过（测试用 Menagerie 替身）。机器人做不到的事报错并说它能做什么。
+- 文档：docs/EXTENDING.md，里面每个例子都由 `tests/test_extending_docs.py` 运行。
+
 ### G4 感知、建图和定位（全面）
 
 - 深度转点云，平面和物体分割，按颜色和形状认物体，估计位姿。
