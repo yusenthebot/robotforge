@@ -64,6 +64,8 @@ WALK_SHIFT, WALK_TWIST = 0.07, math.radians(10.0)
 WALKERS = ("quadruped", "hexapod", "humanoid")
 PENETRATE = 0.002  # m: deeper overlaps of the robot with something, posed at a spot, rule it out
 POS_TOL, YAW_TOL = 0.015, math.radians(2.0)  # where creeping into a spot stops
+ASIDE_COST = 1.0  # of a spot's sideways distance from where the robot faces, per m, in the order spots are tried
+NEAR_SPOT, NEAR_ASIDE = 0.12, 0.06  # m: within NEAR_SPOT of its spot it leaves up to NEAR_ASIDE aside (_creep_in)
 ASIDE_TOL = 0.04  # m off to one side of a spot that creeping leaves (the arm reaches from SHIFT off)
 LEG_SLACK = 0.25  # m short of its spot that a trip may end and the errand go on, creeping the rest
 LEG_RETRIES = 2  # trips planned again from where the robot got stuck, in one errand
@@ -380,6 +382,7 @@ def _candidates(
     if reach <= MIN_OUT:
         return []
     out = []
+    ahead = np.array([math.cos(stand.heading), math.sin(stand.heading)])
     for theta in np.arange(0.0, 2 * math.pi, THETA_STEP):
         for share in SHARES:
             r = max(MIN_OUT, share * reach)
@@ -392,8 +395,11 @@ def _candidates(
                 cell = grid.cell(*xy)
                 if not (grid.inside(*cell) and nav.free[cell] and grid_reach[cell]):
                     continue
+                off = xy - start
+                aside = abs(ahead[0] * off[1] - ahead[1] * off[0])  # sideways of where it faces now: a turn and a creep
                 score = (
-                    float(np.linalg.norm(xy - start))
+                    float(np.linalg.norm(off))
+                    + ASIDE_COST * aside
                     + 1.5 * abs(share - SHARES[0]) * reach  # reaching far out works less well
                     + 0.15 * abs(bearing) / (math.pi / 2)
                     - 0.5 * min(float(nav.room[cell]) - nav.body.need, 0.2)
@@ -1214,6 +1220,8 @@ class Footing:
     """Where a robot carrying an arm stands while the arm works: creeping into a spot, kept there on its wheels, let
     go. Needs `manager`, `robot`, `_creep` and `_stance` (Errand, visit.Visit)."""
 
+    _swing: float | None = None  # when the creep (_creep) began, once it is going to the spot's point (_creep_in)
+
     manager: BehaviorManager
     robot: str
     _creep: tuple[float, Spot] | None
@@ -1274,7 +1282,19 @@ class Footing:
         aside_tol, yaw_tol, pos_tol = (
             (WALK_SHIFT, WALK_TWIST / 2, WALK_SHIFT / 2) if walks else (ASIDE_TOL, YAW_TOL, POS_TOL)
         )
-        if abs(aside) > aside_tol:
+        # Off to one side it goes to the spot's point first and turns to its heading there. Once begun it goes on to the
+        # point: turning toward it moved the aside offset back under the limit, the robot turned the other way
+        # to its heading, over the limit again, and a mobile Panda 6 cm from its spot rocked 12 s between the two.
+        # A few cm off the spot, it turns to the heading and creeps along it instead: swinging round to the point, its
+        # bumper was against a pulled-out drawer and the turn back to the heading jammed there.
+        dist = float(np.linalg.norm(off))
+        if dist < NEAR_SPOT:
+            aside_tol = max(aside_tol, NEAR_ASIDE)
+        if self._swing != since and abs(aside) > aside_tol:
+            self._swing = since
+        if self._swing == since and dist <= pos_tol:
+            self._swing = None
+        if self._swing == since:
             alpha = _wrap(math.atan2(off[1], off[0]) - yaw)
             way = 1.0
             if backs and abs(alpha) > math.pi / 2:
@@ -1282,7 +1302,6 @@ class Footing:
             if abs(alpha) > math.radians(30.0):
                 walker.command(0.0, _turn(alpha))
             else:
-                dist = float(np.linalg.norm(off))
                 walker.command(way * min(CREEP_SPEED, max(0.03, 1.5 * dist)), float(np.clip(1.5 * alpha, -0.3, 0.3)))
             return False
         if abs(twist) > yaw_tol:
