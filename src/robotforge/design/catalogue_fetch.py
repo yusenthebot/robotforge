@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 
 ARCHIVE_URL = "https://codeload.github.com/{owner}/{repo}/tar.gz/{commit}"
 FETCH_ATTEMPTS = 3
+TRIALS = "trials"  # the folder of kept trial results (catalogue_probe.py), next to the downloads
 
 
 class CatalogueFetchError(ValueError):
@@ -58,8 +59,41 @@ def folder_path(name: str, commit: str, folder: str) -> Path | None:
     return None
 
 
+def cache_report(limit: int = 5) -> dict[str, object]:
+    """Where the downloads are and how much room they take: {"folder", "mb", "largest": [{"repo", "mb"}, ...]}."""
+    root = repo_dir("x", "0").parent
+    sizes: dict[str, int] = {}
+    for repo in root.glob("*") if root.is_dir() else []:
+        if repo.is_dir() and repo.name != TRIALS:
+            sizes[repo.name] = _tree_size(repo)
+    top = sorted(sizes.items(), key=lambda kv: -kv[1])[:limit]
+    return {
+        "folder": str(root),
+        "mb": round(sum(sizes.values()) / 1e6),
+        "largest": [{"repo": name, "mb": round(size / 1e6)} for name, size in top],
+    }
+
+
+def _tree_size(path: Path) -> int:
+    total = 0
+    stack = [path]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as entries:
+                for e in entries:
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(Path(e.path))
+                    else:
+                        total += e.stat(follow_symlinks=False).st_size
+        except OSError:
+            continue
+    return total
+
+
 def _local_roots(name: str, commit: str) -> list[Path]:
     roots = [repo_dir(name, commit)]
+    if name == "mujoco_menagerie" and commit == menagerie.COMMIT:
+        roots.append(menagerie.cache_root() / f"menagerie-{commit[:12]}")  # what the tuned library already fetched
     override = os.environ.get("ROBOTFORGE_REPOS")  # a folder of checkouts named like the repositories, for tests
     if override:
         roots.insert(0, Path(override).expanduser() / name)

@@ -556,3 +556,26 @@ def test_a_catalogue_arm_holds_itself_against_gravity(folders):
     pg.new_world("t")
     pg.add_robot("a", library="arm")
     assert pg.behaviors._arm_motion("a")._holds_itself is True
+
+
+def test_the_plain_listing_says_what_the_downloads_take_up(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path))
+    monkeypatch.delenv("ROBOTFORGE_REPOS", raising=False)
+    write(catalogue_fetch.repo_dir("r", "a" * 40) / "x" / "big.bin", "x" * 3_000_000)
+    write(catalogue_fetch.repo_dir("s", "b" * 40) / "y.bin", "y" * 1_000_000)
+    write(tmp_path / "catalogue" / catalogue_fetch.TRIALS / "t.json", "{}")  # kept trial results are not downloads
+    cache = catalogue.listing()["open_catalogue"]["cache"]
+    assert cache["folder"] == str(tmp_path / "catalogue") and cache["mb"] == 4
+    assert [row["repo"] for row in cache["largest"]] == [f"r-{'a' * 12}", f"s-{'b' * 12}"]
+
+
+def test_the_menagerie_folders_the_tuned_library_fetched_are_not_fetched_again(tmp_path, monkeypatch):
+    from robotforge.design import menagerie
+
+    monkeypatch.setenv("ROBOTFORGE_CACHE", str(tmp_path))
+    monkeypatch.delenv("ROBOTFORGE_REPOS", raising=False)
+    monkeypatch.setenv("ROBOT_DESCRIPTIONS_CACHE", str(tmp_path / "none"))
+    fetched = tmp_path / f"menagerie-{menagerie.COMMIT[:12]}" / "unitree_h1"
+    write(fetched / "h1.xml", "<mujoco/>")
+    assert catalogue_fetch.folder_path("mujoco_menagerie", menagerie.COMMIT, "unitree_h1") == fetched
+    assert catalogue_fetch.folder_path("mujoco_menagerie", menagerie.COMMIT, "unitree_h2") is None

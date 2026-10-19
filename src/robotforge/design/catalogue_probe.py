@@ -57,7 +57,8 @@ def code_hash() -> str:
 
 
 def _cache_file(entry: catalogue.Entry) -> Path:
-    return menagerie.cache_root() / "catalogue" / "trials" / f"{entry.id}-{entry.commit[:12]}-{code_hash()}.json"
+    folder = menagerie.cache_root() / "catalogue" / catalogue_fetch.TRIALS
+    return folder / f"{entry.id}-{entry.commit[:12]}-{code_hash()}.json"
 
 
 def cached(entry: catalogue.Entry) -> dict[str, Any] | None:
@@ -189,6 +190,3 @@ def describe(checked: dict[str, Any]) -> str:
             f"at {checked['walk_speed']} m/s"
         )
     return "stood; no gait fits it"
-
-
-__all__ = ["LEGGED", "catalogue_fetch", "describe", "run", "trial", "watch"]

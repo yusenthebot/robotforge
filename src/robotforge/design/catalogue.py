@@ -254,6 +254,7 @@ def listing(kind: str | None = None, query: str | None = None, limit: int = 40) 
             "open_catalogue": {
                 "robots": len(found),
                 "by_kind": counts(),
+                "cache": catalogue_fetch.cache_report(),
                 "how": "list_library(kind='arm', search='kinova') searches them; add_robot(library=<name>) loads one "
                 "(downloads its folder on first use, imports it and says what it is and what it can do)",
             },
