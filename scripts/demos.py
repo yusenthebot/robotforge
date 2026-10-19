@@ -678,8 +678,10 @@ def _step(tag: str, robot: str, obj: str, target: Any, longest: float = 90.0, **
     """An action: pick_and_place(robot, obj, target, ...) and wait for the arm, in the viewer's real time."""
 
     def act(pg: Any) -> None:
-        motion, _ = pg.behaviors.pick_and_place(robot, obj, target, **kw)
+        motion, info = pg.behaviors.pick_and_place(robot, obj, target, **kw)
         _wait(motion, longest)
+        if info.get("hold"):
+            print(f"{tag}: {pg.behaviors.held(info)}", flush=True)
         _DONE.add(tag)
 
     return act
