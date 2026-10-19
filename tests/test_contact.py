@@ -121,7 +121,7 @@ def test_holding_a_force_needs_a_force_loop_and_osc_has_one(desk):
         out[method] = run(make_task("press", m, "arm", {"force": 6.0}), m, copy.copy(d), method, 9.0).report
     assert out["osc"]["settled_n"] == pytest.approx(6.0, abs=0.4)
     assert abs(out["cartesian_impedance"]["settled_n"] - 6.0) < 2.5  # its few mm of depth, times a soft spring
-    assert out["ik"]["settled_n"] > 25.0  # a few mm into a stiff servo
+    assert out["ik"]["settled_n"] > 12.0  # a few mm into a stiff servo: twice the force asked for
     assert out["osc"]["overshoot_n"] < 1.5
 
 

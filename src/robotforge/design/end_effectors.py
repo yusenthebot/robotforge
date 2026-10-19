@@ -58,8 +58,15 @@ WIPER_LENGTH = 0.05  # m from the mount to the pad's face
 # A pad that gives a little under a load does not rock on its edges and hop when it is pressed on a surface and slid
 # along it (a stiff pad's contact force flickers between zero and several times its value, whatever presses it). This
 # one gives way about 1 mm under 8 N. A contact takes the grippier of the two surfaces, so the
-# table's friction rules when it is higher.
-WIPER_CONTACT = {"solref": [0.15, 2.0], "solimp": [0.8, 0.9, 0.002, 0.5, 2.0], "friction": [0.8, 0.005, 0.0001]}
+# table's friction rules when it is higher. solmix makes the pad's softness count for most of the contact's (MuJoCo
+# mixes the two geoms' parameters by it: left at 1 the stiff table halves it, and the pad lets go and touches again
+# every few steps; at 10 the force a wipe reads has about half the spread).
+WIPER_CONTACT = {
+    "solref": [0.15, 2.0],
+    "solimp": [0.8, 0.9, 0.002, 0.5, 2.0],
+    "friction": [0.8, 0.005, 0.0001],
+    "solmix": 10.0,
+}
 
 
 @dataclass(frozen=True)
