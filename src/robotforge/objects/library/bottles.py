@@ -116,8 +116,26 @@ def bottle(g: Gen) -> None:
         wrap.text([0.3, 0.12, 0.1, 1.0], "2019", 0.0, h * 0.24, 0.007)
         for rgba_, mesh in wrap.patches:
             g.decor(mesh, rgba_, "paint")
-    g.grasp("body", (0.0, 0.0, h * 0.38), (0.0, 0.0), d + 0.004, 1.0, "round the body, any jaw direction")
-    g.grasp("neck", (0.0, 0.0, neck_z + 0.012), (0.0, 0.0), 2 * R * neck_r + 0.004, 0.55, "round the neck")
+    g.grasp(
+        "body",
+        (0.0, 0.0, h * 0.38),
+        (0.0, 0.0),
+        d,
+        1.0,
+        "round the body, any jaw direction",
+        z_body + 0.03,
+        body_h - 0.012,
+    )
+    g.grasp(
+        "neck",
+        (0.0, 0.0, neck_z + 0.012),
+        (0.0, 0.0),
+        2 * R * neck_r,
+        0.55,
+        "round the neck",
+        neck_z + 0.006,
+        neck_top - 0.004,
+    )
     g.anchor("mouth", (0.0, 0.0, h))
     g.anchor("base", (0.0, 0.0, 0.0))
     g.fact(kind="bottle", radius=R, closed=True, body_h=body_h, neck_r=R * neck_r, filled=round(fill, 2))
@@ -131,7 +149,7 @@ def bottle(g: Gen) -> None:
     material="aluminum",
     kind="container",
     summary="a drinks can, soup tin or tuna tin with a printed label (take it round the body)",
-    keywords=("can", "tin", "soda can", "soup can", "tuna can", "beverage can"),
+    keywords=("can", "tin can", "soda can", "soup can", "tuna can", "beverage can"),
     params={
         "style": Choice("soda", "soup", "tuna", doc="soda can with a tab, soup tin with a paper label, squat tuna tin"),
         "fill": Range(0.4, 1.0, 0.9, "how full"),
@@ -185,6 +203,6 @@ def can(g: Gen) -> None:
             shade(metal, 1.05),
             "aluminum",
         )
-    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d + 0.004, 1.0, "round the body, any jaw direction")
+    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d, 1.0, "round the body, any jaw direction", h * 0.3, h - 0.012)
     g.anchor("mouth", (0.0, 0.0, h))
     g.fact(kind="can", radius=R, closed=True)

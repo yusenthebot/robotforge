@@ -64,9 +64,16 @@ def screwdriver(g: Gen) -> None:
             shade(STEEL, 0.85),
             "metal",
         )
-    g.grasp("handle", (x0 + hl * 0.5, 0.0, zc), (0.0, 1.0), 2 * hr + 0.004, 1.0, "across the fluted handle")
+    g.grasp("handle", (x0 + hl * 0.5, 0.0, zc), (0.0, 1.0), 2 * hr, 1.0, "across the fluted handle", zc * 0.8, zc * 1.6)
     g.grasp(
-        "shaft", (sx0 + 0.035, 0.0, zc), (0.0, 1.0), 0.0072 + 0.002, 0.7, "pinch the steel shaft close to the handle"
+        "shaft",
+        (sx0 + 0.035, 0.0, zc),
+        (0.0, 1.0),
+        0.0072,
+        0.7,
+        "pinch the steel shaft close to the handle",
+        zc * 0.8,
+        zc * 1.4,
     )
     g.anchor("handle_end", (x0, 0.0, zc))
     g.anchor("tip", (tip_x, 0.0, zc))
@@ -125,9 +132,25 @@ def hammer(g: Gen) -> None:
         "metal",
     )
     grip_x = hx - 0.012 - 0.07
-    g.grasp("shaft", (grip_x, 0.0, ht), (0.0, 1.0), 2 * hw + 0.004, 1.0, "across the shaft, 7 cm behind the head")
     g.grasp(
-        "shaft", (x0 + shaft_len * 0.5, 0.0, ht), (0.0, 1.0), 2 * hw + 0.004, 0.75, "across the middle of the shaft"
+        "shaft",
+        (grip_x, 0.0, ht),
+        (0.0, 1.0),
+        2 * hw,
+        1.0,
+        "across the shaft, 7 cm behind the head",
+        ht * 0.7,
+        ht * 1.8,
+    )
+    g.grasp(
+        "shaft",
+        (x0 + shaft_len * 0.5, 0.0, ht),
+        (0.0, 1.0),
+        2 * hw,
+        0.75,
+        "across the middle of the shaft",
+        ht * 0.7,
+        ht * 1.8,
     )
     g.anchor("handle_end", (x0, 0.0, ht))
     g.anchor("head", (hx, 0.0, hh))
@@ -185,9 +208,11 @@ def wrench(g: Gen) -> None:
         "shaft",
         ((sx0 + sx1) / 2, 0.0, 0.0085),
         (0.0, 1.0),
-        2 * 0.0102 + 0.004,
+        2 * 0.0102,
         1.0,
         "across the shaft, jaws on its edges",
+        0.0075,
+        0.011,
     )
     g.anchor("ring", (rx, 0.0, t))
     g.anchor("jaw", (x1, 0.0, t / 2))

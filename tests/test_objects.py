@@ -129,7 +129,8 @@ def test_each_object_comes_to_rest_where_it_was_put_without_drifting(pg, name):
     assert d.xpos[body][2] == pytest.approx(0.0, abs=0.004)  # the origin is the middle of its base
     assert np.linalg.norm(d.cvel[body]) < 0.05
     assert d.xmat[body].reshape(3, 3)[2, 2] > 0.95  # still the right way up (or lying as it was meant to)
-    assert m.body_subtreemass[body] == pytest.approx(objects.object_for(name, seed=2).mass, rel=0.02)
+    if not objects.get(name).fixed:  # a fixed thing has no mass of its own
+        assert m.body_subtreemass[body] == pytest.approx(objects.object_for(name, seed=2).mass, rel=0.02)
 
 
 def test_a_loose_object_has_a_free_joint_and_a_fixed_one_has_none(pg):

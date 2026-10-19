@@ -233,7 +233,11 @@ class Grasp:
     opening: float  # m the jaws must open to straddle the part (the width between the pads when closed on it)
     score: float = 1.0  # preference among the hints, higher first
     note: str = ""
-    tilt: Vec3 = (0.0, 0.0, 1.0)  # direction of the object's up axis as the jaws leave it (object frame)
+    # The heights the tool point may be at (object frame): a hand whose palm would meet the top of the object holds it
+    # higher up, within [lo, hi]; without them the hint is at `pos` exactly.
+    lo: float | None = None
+    hi: float | None = None
+    side: bool = False  # taken with the gripper horizontal, from the side (a tall bottle's body), not from above
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -243,7 +247,30 @@ class Grasp:
             "opening": round(self.opening, 4),
             "score": self.score,
             "note": self.note,
+            **({"side": True} if self.side else {}),
+            **({"height_range": [round(self.lo, 4), round(self.hi, 4)]} if self.lo is not None else {}),
         }
+
+
+@dataclass(frozen=True)
+class Slot:
+    """A named place something is put: a round socket, a flat surface or a tray, in the object's own frame."""
+
+    name: str
+    pos: Vec3  # where the base of what is put there rests (the middle of the opening, at its floor)
+    kind: str  # socket, surface or tray
+    radius: float | None = None  # a round opening
+    half: tuple[float, float] | None = None  # a rectangular area, half extents along x and y
+    rim: float = 0.0  # height (object frame) of the highest thing round it: what a carried load must clear
+    depth: float = 0.0  # m from the rim down to the floor
+
+    def as_dict(self) -> dict[str, Any]:
+        out = {"name": self.name, "kind": self.kind, "pos": [round(v, 4) for v in self.pos], "rim": round(self.rim, 4)}
+        if self.radius is not None:
+            out["radius"] = round(self.radius, 4)
+        if self.half is not None:
+            out["half"] = [round(h, 4) for h in self.half]
+        return out
 
 
 @dataclass(frozen=True)
@@ -270,6 +297,7 @@ class Built:
     friction: tuple[float, float, float]
     facts: dict[str, Any] = field(default_factory=dict)  # what a task needs to know: mouth radius, slot depth, ...
     up: Vec3 = (0.0, 0.0, 1.0)  # the axis that is "up" for the object (a mug's opening faces it)
+    slots: list[Slot] = field(default_factory=list)  # places things are put in or on it (a rack's sockets)
 
     @property
     def height(self) -> float:
@@ -292,8 +320,69 @@ class Built:
             "pieces": len([p for p in self.pieces if p.solid]),
             "grasps": [g.as_dict() for g in self.grasps],
             "anchors": {k: [round(c, 4) for c in v] for k, v in self.anchors.items()},
+            "slots": [s.as_dict() for s in self.slots],
             "facts": self.facts,
         }
+
+
+def top_under(built: Built, center: tuple[float, float], jaw: tuple[float, float], half_jaw: float, half_across: float,
+              above: float = -math.inf) -> float:  # fmt: skip
+    """The highest point (object frame) of the object's solid pieces over a rectangle on the floor plane: centred at
+    `center`, `half_jaw` long along `jaw` and `half_across` across it. Conservative: each piece counts by the box that
+    bounds it. Only points over `above` (m) count, so a handle's own bar is not the thing that stops the palm."""
+    u = np.array(jaw, dtype=float)
+    u = u / (np.linalg.norm(u) or 1.0)
+    v = np.array([-u[1], u[0]])
+    top = -math.inf
+    for p in built.pieces:
+        if not p.solid:
+            continue
+        lo, hi = piece_bounds(p)
+        if hi[2] <= above:
+            continue
+        corners = np.array([[x, y] for x in (lo[0], hi[0]) for y in (lo[1], hi[1])]) - np.asarray(center)
+        along, across = corners @ u, corners @ v
+        if (
+            along.max() < -half_jaw
+            or along.min() > half_jaw
+            or across.max() < -half_across
+            or across.min() > half_across
+        ):
+            continue
+        top = max(top, float(hi[2]))
+    return top
+
+
+def center_of_mass(built: Built) -> np.ndarray:
+    """Where the object's mass is, in its own frame (the pieces' middles weighted by their masses)."""
+    total, weighted = 0.0, np.zeros(3)
+    for p in built.pieces:
+        if p.mass <= 0:
+            continue
+        lo, hi = piece_bounds(p)
+        weighted += p.mass * (lo + hi) / 2
+        total += p.mass
+    return weighted / total if total > 0 else np.zeros(3)
+
+
+def piece_bounds(p: Piece) -> tuple[np.ndarray, np.ndarray]:
+    """The axis-aligned box (object frame) that bounds a collision piece."""
+    if p.hull is not None:
+        return p.hull.vertices.min(axis=0), p.hull.vertices.max(axis=0)
+    c = np.asarray(p.pos, dtype=float)
+    r = np.abs(rot_of(p.quat))
+    if p.kind == "box":
+        e = r @ np.asarray(p.size)
+    elif p.kind == "cylinder":
+        axis = np.abs(r[:, 2])
+        e = p.size[0] * np.sqrt(np.maximum(1 - axis**2, 0.0)) + axis * p.size[1]
+    elif p.kind == "capsule":
+        e = r[:, 2] * p.size[1] + p.size[0]
+    elif p.kind == "sphere":
+        e = np.full(3, p.size[0])
+    else:  # ellipsoid
+        e = r @ np.asarray(p.size)
+    return c - e, c + e
 
 
 # ---- parameters ----------------------------------------------------------------------------------------------
@@ -372,6 +461,7 @@ class Gen:
         self._visuals: list[Visual] = []
         self._grasps: list[Grasp] = []
         self._anchors: dict[str, Vec3] = {}
+        self._slots: list[Slot] = []
         self._mass = 0.0
         self.facts: dict[str, Any] = {}
         self.up: Vec3 = (0.0, 0.0, 1.0)
@@ -448,12 +538,34 @@ class Gen:
         opening: float,
         score: float = 1.0,
         note: str = "",
+        lo: float | None = None,
+        hi: float | None = None,
+        side: bool = False,
     ) -> None:
+        """A place a two-finger gripper takes hold of: `lo` and `hi` (default: only `pos`'s height) are the heights the
+        tool point may be at, so a hand whose palm would meet the object's top holds it higher up; `side` says it is
+        taken with the gripper horizontal."""
         n = math.hypot(jaw[0], jaw[1]) or 1.0
-        self._grasps.append(Grasp(kind, _v(pos), (jaw[0] / n, jaw[1] / n), opening, score, note))
+        if (lo is None) != (hi is None):
+            raise ValueError("a grasp needs both lo and hi, or neither")
+        self._grasps.append(Grasp(kind, _v(pos), (jaw[0] / n, jaw[1] / n), opening, score, note, lo, hi, side))
 
     def anchor(self, name: str, pos: Vec3) -> None:
         self._anchors[name] = _v(pos)
+
+    def slot(
+        self,
+        name: str,
+        pos: Vec3,
+        kind: str = "surface",
+        radius: float | None = None,
+        half: tuple[float, float] | None = None,
+        rim: float = 0.0,
+        depth: float = 0.0,
+    ) -> None:
+        """A place something is put (tasks and the arm planner read it): `pos` is where the base of what goes there
+        rests, `rim` the height of the highest thing round it."""
+        self._slots.append(Slot(name, _v(pos), kind, radius, half, rim, depth))
 
     def fact(self, **values: Any) -> None:
         self.facts.update(values)
@@ -509,6 +621,7 @@ class Gen:
             friction=(float(fr[0]), float(fr[1]), float(fr[2])),
             facts=self.facts,
             up=self.up,
+            slots=self._slots,
         )
 
 

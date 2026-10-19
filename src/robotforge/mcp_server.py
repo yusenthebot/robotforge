@@ -85,8 +85,8 @@ pallets, trees, benches, rocks, flat ground markers), things with a moving part 
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Real things (mug, cup, bowl, plate, bottle,
 can, fruit, packages, books, tools) are modelled objects with grasp hints: add_object(shape="mug", seed=3) or
 add_object(describe="a tall blue mug with a big handle"). Any arm can hold with
-end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
-add_robot or later in update_robot.
+end_effector="suction" (a suction cup: flat things fingers cannot get round), "magnet" (steel things only) or
+"wiper" (a flat sponge pad that presses and wipes, it holds nothing), in add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
 end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
@@ -184,7 +184,10 @@ its place; compare_controllers(drone, task="hover", push_at=3) compares its flig
 and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, and for
-arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch).
+arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch). Touch tasks for an arm
+over a table: press (stop at a force, or hold one) and wipe (slide a pad over the table at a constant pressure);
+compare_controllers(robot="panda", task="wipe") returns each method's mean force, its spread and how well the path
+was followed. A wiper pad (update_robot end_effector="wiper") is the tool to wipe with.
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
 robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
@@ -464,7 +467,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         build: dict[str, Any] | None = None,
         design: str | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
@@ -480,7 +483,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
         end_effector (any arm):
         "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
-        steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
+        steel things only), "wiper" (a flat sponge pad that presses and wipes; it holds nothing, so the arm cannot
+        pick with it) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
         mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
         pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
@@ -531,7 +535,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. describe changes a robot made from a
@@ -543,7 +547,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         stands, if the build carries it as a mounted part or is a robot of the same kind; given only base sensors
         ({"base": {"sensors": ["lidar"]}}) it is carried on a plate with them; any other is refused with the build
         that keeps it. mounts replaces the robots it carries (see add_robot; [] takes them all off). end_effector
-        changes the tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
+        changes the tool on its arm: "suction" cup, "magnet", "wiper" pad or back to its "gripper"."""
         with _tool_errors():
             for wanted in _mounted_libraries(mounts):
                 await _download_with_progress(wanted, ctx)
@@ -953,7 +957,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json({"gripper": state, **run})
 
     @server.tool()
-    async def pick_and_place(robot: str, object: str, target: str | list[float], go: bool = True) -> str:
+    async def pick_and_place(
+        robot: str, object: str, target: str | list[float], go: bool = True, grasp: str | None = None
+    ) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
         it and reports whether the object ended up there. An arm on a robot that drives or walks (a mobile
@@ -967,13 +973,21 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         running conveyor is caught as it goes by, the belt left running: the arm waits over a point on its way, follows
         it down, takes hold and lifts it off ("caught", "caught_at"); a robot that goes first drives to a place beside
         the belt from which its arm reaches ("stood_at"; or, if the box will be at the end of the belt before it can
-        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target."""
+        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target.
+        A modelled object (mug, bottle, hammer, ... see add_object) is taken where its generator says to take it, by
+        the first grasp the arm can reach and carry: a mug by its handle, a bottle round its body, a tool across its
+        shaft; grasp="handle" (or "body", "shaft", "rim", "neck", "edge") asks for one kind, and the answer's "grasp"
+        says which was used and "tilt_deg" how far from upright the object ended. The target may be a slot of a
+        fixture: "rack" fills its first free socket, "rack/2" the second, a tray takes things inside, and a package or
+        a tin takes things stacked on its top."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
             # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
             # take seconds, and the viewer froze meanwhile.
-            motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)
+            motion, info = await asyncio.to_thread(
+                playground.behaviors.pick_and_place, robot, object, target, go, grasp
+            )
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
             caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
@@ -1001,6 +1015,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **result,
                     "object": object,
                     "target": target,
+                    **({"grasp": info["grasp"]} if info.get("grasp") else {}),
                     **(errand.result() if errand is not None else {}),
                     **(caught.result() if caught is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),

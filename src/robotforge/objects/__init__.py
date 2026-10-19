@@ -17,7 +17,7 @@ Writing your own (a plugin file, see docs/EXTENDING.md):
 from __future__ import annotations
 
 from robotforge.objects.kit import Choice, Flag, Gen, Grasp, Range
-from robotforge.objects.registry import GENERATORS, catalogue, generator, get, object_for
+from robotforge.objects.registry import GENERATORS, built_of, catalogue, generator, get, object_for
 
 __all__ = [
     "GENERATORS",
@@ -26,6 +26,7 @@ __all__ = [
     "Gen",
     "Grasp",
     "Range",
+    "built_of",
     "catalogue",
     "generator",
     "get",

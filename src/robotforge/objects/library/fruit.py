@@ -63,7 +63,7 @@ def apple(g: Gen) -> None:
         )
         g.decor(leaf, LEAF, "foliage")
     h = 0.93 * d * squat
-    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d + 0.004, 1.0, "round the middle, any jaw direction")
+    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d, 1.0, "round the middle, any jaw direction", h * 0.3, h * 0.7)
     g.anchor("top", (0.0, 0.0, h))
     g.fact(kind="fruit", radius=d / 2)
 
@@ -71,7 +71,7 @@ def apple(g: Gen) -> None:
 @generator(
     "orange",
     size="[diameter]",
-    default_size=(0.078,),
+    default_size=(0.072,),
     color="orange",
     material="fruit",
     kind="food",
@@ -93,7 +93,7 @@ def orange(g: Gen) -> None:
     g.part(skin, "fruit", [kit.hull(M.lathe(shape, 24, sharp=(1,)))], g.rgba)
     g.decor(M.cylinder(0.0045, 0.0025, 14, z0=2 * r - flat - 0.0012), LEAF, "foliage")
     h = 2 * r - flat
-    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d + 0.004, 1.0, "round the middle, any jaw direction")
+    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d, 1.0, "round the middle, any jaw direction", h * 0.3, h * 0.7)
     g.anchor("top", (0.0, 0.0, h))
     g.fact(kind="fruit", radius=r)
 
@@ -121,7 +121,16 @@ def pear(g: Gen) -> None:
               (0.14 * d, 0.98 * d * k), (0.0, 1.0 * d * k)]  # fmt: skip
     g.part(mesh, "fruit", [kit.hull(M.lathe(convex, 24, sharp=(1,)))], g.rgba)
     g.decor(_stem(d * k * 0.99, d, 0.006), BROWN, "bark")
-    g.grasp("body", (0.0, 0.0, d * k * 0.22), (0.0, 0.0), d + 0.004, 1.0, "round the wide part, any jaw direction")
+    g.grasp(
+        "body",
+        (0.0, 0.0, d * k * 0.22),
+        (0.0, 0.0),
+        d,
+        1.0,
+        "round the wide part, any jaw direction",
+        d * k * 0.1,
+        d * k * 0.75,
+    )
     g.anchor("top", (0.0, 0.0, d * k))
     g.fact(kind="fruit", radius=d / 2)
 

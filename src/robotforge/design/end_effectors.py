@@ -29,7 +29,8 @@ GEOM = mujoco.mjtGeom
 Kind = Literal["suction", "magnet"]
 KINDS: tuple[str, ...] = ("suction", "magnet")
 FINGERS = "gripper"  # the end effector an arm is built with, when none is chosen
-NAMES = (FINGERS, *KINDS)
+WIPER = "wiper"  # a flat sponge pad that presses and slides on a surface; it holds nothing, so it has no actuator
+NAMES = (FINGERS, *KINDS, WIPER)
 MAGNET_BIT = 2  # contact bit of a magnet's core; steel objects answer to it (see steel_affinity)
 DARK = [0.16, 0.17, 0.2, 1.0]
 CUP_RUBBER = [0.12, 0.13, 0.15, 1.0]
@@ -51,6 +52,14 @@ PAD_FRICTION = {"friction": [1.2, 0.02, 0.01], "condim": 6}
 # How far a tool in front of fingers sticks out past the old tool point: past the fingertips of our gripper (12 mm),
 # a Panda's (about 10 mm) and a PiPER's (15 mm), with room to spare so they never touch what the pad holds.
 AHEAD_OF_FINGERS = 0.04  # m
+SPONGE = [0.93, 0.78, 0.18, 1.0]
+WIPER_HALF = (0.03, 0.025)  # m, half the pad's length and width
+WIPER_LENGTH = 0.05  # m from the mount to the pad's face
+# A pad that gives a little under a load does not rock on its edges and hop when it is pressed on a surface and slid
+# along it (a stiff pad's contact force flickers between zero and several times its value, whatever presses it). This
+# one gives way about 1 mm under 8 N. A contact takes the grippier of the two surfaces, so the
+# table's friction rules when it is higher.
+WIPER_CONTACT = {"solref": [0.15, 2.0], "solimp": [0.8, 0.9, 0.002, 0.5, 2.0], "friction": [0.8, 0.005, 0.0001]}
 
 
 @dataclass(frozen=True)
@@ -85,6 +94,10 @@ def canonical(name: str | None) -> str | None:
         "magnet": "magnet",
         "electromagnet": "magnet",
         "electro magnet": "magnet",
+        "wiper": WIPER,
+        "sponge": WIPER,
+        "pad": WIPER,
+        "squeegee": WIPER,
         "gripper": FINGERS,
         "fingers": FINGERS,
         "parallel gripper": FINGERS,
@@ -99,7 +112,7 @@ def check(name: str) -> str:
     if found not in NAMES:
         raise ValueError(
             f"unknown end_effector {name!r}; choose suction (a suction cup: flat things), magnet (an electromagnet: "
-            f"steel things) or gripper (the arm's own fingers)"
+            f"steel things), wiper (a flat sponge pad that presses and wipes) or gripper (the arm's own fingers)"
         )
     return found
 
@@ -212,6 +225,50 @@ def _magnet(holder: mujoco.MjsBody, tool: ToolSpec, vis: Visuals, name: str) -> 
     return face, core_body
 
 
+def add_wiper(
+    spec: mujoco.MjSpec,
+    body: mujoco.MjsBody,
+    name: str,
+    pos: Sequence[float] = (0.0, 0.0, 0.0),
+    quat: Sequence[float] = (1.0, 0.0, 0.0, 0.0),
+) -> float:
+    """Build a wiper pad on `body` as a child body called `name` at `pos` and `quat` (the pad along that frame's +z):
+    a flange, a stem and a flat sponge. Returns the distance from that frame's origin to the pad's face."""
+    vis = Visuals(spec)
+    holder = body.add_body(name=name, pos=list(pos), quat=list(quat))
+    hx, hy = WIPER_HALF
+    thick = 0.012
+    face = WIPER_LENGTH
+    plate = holder.add_geom(
+        type=GEOM.mjGEOM_BOX, size=[hx, hy, 0.002], pos=[0, 0, face - thick - 0.002], rgba=STEEL, mass=0.03
+    )
+    pad = holder.add_geom(
+        type=GEOM.mjGEOM_BOX,
+        size=[hx, hy, thick / 2],
+        pos=[0, 0, face - thick / 2],
+        rgba=SPONGE,
+        mass=0.03,
+        **WIPER_CONTACT,
+    )
+    stem = holder.add_geom(
+        type=GEOM.mjGEOM_CYLINDER,
+        size=[0.008, (face - thick) / 2, 0],
+        pos=[0, 0, (face - thick) / 2],
+        rgba=DARK,
+        mass=0.03,
+    )
+    for g in (plate, pad, stem):
+        vis.hide(g)
+    vis.add(holder, "metal", P.METAL, M.cylinder(0.016, 0.004, segments=36, bevel=0.0008, z0=0.0))
+    vis.add(holder, "dark", DARK, M.cylinder(0.008, face - thick, segments=24, z0=0.0))
+    metal = M.rounded_box(hx, hy, 0.002, 0.0012, segments=2).moved(pos=(0, 0, face - thick - 0.002))
+    vis.add(holder, "metal", P.METAL, metal)
+    sponge = M.rounded_box(hx, hy, thick / 2, 0.004, segments=3).moved(pos=(0, 0, face - thick / 2))
+    vis.add(holder, "rubber", SPONGE, sponge)
+    vis.finish()
+    return face
+
+
 # ---- fitting a tool onto any arm -----------------------------------------------------------------------
 
 
@@ -227,8 +284,8 @@ def fit(spec: mujoco.MjSpec, kind: str, home_ctrl: dict[str, float]) -> list[str
     sites = tool_points(spec)
     if not sites:
         raise ValueError(
-            f"it has no tool point to put a {TOOLS[kind].title} on: end_effector is for arms (and robots carrying "
-            "one); build the arm with a tool point, e.g. a gripper template on its last part"
+            f"it has no tool point to put a {TOOLS[kind].title if kind in TOOLS else kind} on: end_effector is for "
+            "arms (and robots carrying one); build the arm with a tool point, e.g. a gripper template on its last part"
         )
     notes = []
     for site in sites:
@@ -247,11 +304,16 @@ def fit(spec: mujoco.MjSpec, kind: str, home_ctrl: dict[str, float]) -> list[str
             ahead = AHEAD_OF_FINGERS
         axis = _forward(site.quat)
         at = np.asarray(site.pos, float) + axis * ahead
+        where = f" on {prefix[:-1]}" if prefix else ""
+        kept = "; its fingers stay open (actuator 'fingers')" if fingers is not None else ""
+        if kind == WIPER:
+            face = add_wiper(spec, site.parent, f"{prefix}{kind}", at, site.quat)
+            site.pos = list(at + axis * face)
+            notes.append(f"wiper pad{where}: a flat sponge that presses and wipes, it holds nothing{kept}")
+            continue
         face = add_tool(spec, site.parent, kind, None, f"{prefix}{kind}", at, site.quat)
         site.pos = list(at + axis * face)
         home_ctrl[f"{prefix}gripper"] = 0.0
-        where = f" on {prefix[:-1]}" if prefix else ""
-        kept = "; its fingers stay open (actuator 'fingers')" if fingers is not None else ""
         notes.append(f"{TOOLS[kind].title}{where}: holds {TOOLS[kind].holds}{kept}")
     return notes
 

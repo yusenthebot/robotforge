@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-from robotforge.objects.library import bottles, drinkware, fruit, packaged, tools  # noqa: F401  (registers them)
+from robotforge.objects.library import bottles, drinkware, fixtures, fruit, packaged, tools  # noqa: F401  (registers them)
