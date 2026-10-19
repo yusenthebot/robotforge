@@ -386,9 +386,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov, drone) with
-        parameters, defaults and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts
-        catalog (servos, motors, linear actuators). For other robots build from parts (builder_guide)."""
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov, drone, asset) with
+        parameters, defaults and limits, the gallery's ready-made designs (add_robot(design=...)), the parts
+        catalog (servos, motors, linear actuators) and the asset engine's generators (joint housings, link shells,
+        wheels, sensor housings, ...) with their parameter ranges, styles (cobot, lab, hobby, rugged) and surface
+        materials. For other robots build from parts (builder_guide)."""
+        from robotforge import assets
         from robotforge.design import components, gallery, templates
 
         parts = {
@@ -400,6 +403,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             "designs": gallery.catalog(),
             "parts": parts,
             "colors": list(components.COLORS),
+            "assets": assets.overview(),
         }
         if REGISTRY.items:  # what the user's plugins add: shapes for add_object, sensor types, controllers, behaviors
             listing["plugins"] = REGISTRY.report()

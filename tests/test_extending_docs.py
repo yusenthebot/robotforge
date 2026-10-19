@@ -70,6 +70,7 @@ def world(**robot) -> Playground:
 def test_the_page_has_all_the_examples_it_promises():
     titles = set(examples())
     assert {"plugins/signpost.py", "plugins/geiger.py", "plugins/sweep.py", "plugins/square.py"} <= titles
+    assert "plugins/standoff.py" in titles
     assert {"behaviors/tour.py", "behaviors/reach.py", "behaviors/patrol.py", "check_export.py"} <= titles
 
 
@@ -83,6 +84,29 @@ def test_every_plugin_example_loads(plugins_loaded):
     assert not REGISTRY.problems(), REGISTRY.problems()
     assert set(REGISTRY.of("part")) == {"signpost"} and set(REGISTRY.of("sensor")) == {"geiger"}
     assert set(REGISTRY.of("controller")) == {"sweep"} and set(REGISTRY.of("behavior")) == {"square"}
+    assert set(REGISTRY.of("generator")) == {"standoff"} and set(REGISTRY.of("material")) == {"anodized_red"}
+    assert set(REGISTRY.of("style")) == {"showroom"}
+
+
+def test_the_generator_example_draws_weighs_and_shows_in_the_viewer(plugins_loaded):
+    from robotforge import assets
+    from robotforge.assets import surface_of
+    from robotforge.design import templates
+    from robotforge.viewer import scene
+
+    asset = assets.generate("standoff", height=0.04, style="showroom")
+    assert asset.params == {"height": 0.04, "across": 0.008}
+    assert 0 < asset.mass_properties(2700.0).mass < 0.01
+    with pytest.raises(assets.AssetError, match="height is between 0.005 and 0.1 m"):
+        assets.generate("standoff", height=5)
+    pg = world(name="arm", template="arm")
+    pg.add_robot(
+        "peg", template="asset", params={"generator": "standoff", "args": {"height": 0.04}, "style": "showroom"}
+    )
+    desc = scene.describe(pg.session.model, 1, [])
+    assert desc["surfaces"]["peg/rf_anodized_red"]["texture"] == "speckle"
+    assert surface_of("rf_anodized_red")["metalness"] == 0.9
+    assert "standoff" in templates.build("asset", {"generator": "standoff"}).notes[0]
 
 
 def test_the_part_example_places_and_stands(plugins_loaded):

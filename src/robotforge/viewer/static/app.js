@@ -462,7 +462,7 @@ async function applyScene(desc) {
       if (!g) continue;
       const mat = look
         ? new THREE.MeshStandardMaterial({ color: rgbaColor(geom.rgba), roughness: 0.95, metalness: 0 })
-        : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3]);
+        : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces);
       if (g.userData.vertexColors) mat.vertexColors = true;
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:

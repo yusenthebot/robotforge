@@ -80,6 +80,8 @@ def disabled() -> Iterator[None]:
 
 def material_name(preset: str) -> str:
     if preset not in PRESETS:
+        import robotforge.assets.materials  # noqa: F401  (adds the asset engine's surfaces to PRESETS, once)
+    if preset not in PRESETS:
         raise ValueError(f"unknown material preset {preset!r}; use one of {', '.join(PRESETS)}")
     return f"rf_{preset}"
 

@@ -1587,6 +1587,10 @@ G12_SHOTS = [
     ),
 ]
 
+import assets_shots  # noqa: E402  (scripts/assets_shots.py)
+
+ASSET_SHOTS = assets_shots.shots(Shot, _look, _frame_robot, _gallery_line_up)
+
 SHOTS = [
     Shot(
         "hero",
@@ -1912,6 +1916,7 @@ SHOTS = [
     *G8_SHOTS,
     *G12_SHOTS,
     *GENERATED_SHOTS,
+    *ASSET_SHOTS,
     *_g10_shots(),
     *_g12_shots(),
     *_world_shots(),

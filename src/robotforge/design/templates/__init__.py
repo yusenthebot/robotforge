@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from robotforge import wording
 from robotforge.design.templates.arm import Arm
+from robotforge.design.templates.asset import AssetPreview
 from robotforge.design.templates.base import BuiltRobot, Template
 from robotforge.design.templates.boat import Boat
 from robotforge.design.templates.cartpole import Cartpole
@@ -33,6 +34,7 @@ TEMPLATES: dict[str, Template] = {
         Boat(),
         Rov(),
         Drone(),
+        AssetPreview(),
     )
 }
 

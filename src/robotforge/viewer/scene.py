@@ -214,6 +214,7 @@ def describe(
         "meshes": mesh_entries,
         "hfields": hfield_entries or [],
         "grounds": _ground_looks(model),
+        "surfaces": _surfaces(model),
         "water": water.describe() if (water := water_model.decode(model)) is not None else None,
         "actuators": actuators,
         "visibleGroupLimit": VISIBLE_GROUP_LIMIT,
@@ -241,6 +242,20 @@ def _flexes(model: mujoco.MjModel) -> list[dict]:
                 "rgba": [round(float(c), 4) for c in model.flex_rgba[f]],
             }
         )
+    return out
+
+
+def _surfaces(model: mujoco.MjModel) -> dict[str, dict]:
+    """The viewer's half of every asset-engine material the model uses (clear coat, texture, ...), by material name.
+    Materials the viewer knows by name (rf_shell, rf_metal, ...) are not listed."""
+    from robotforge.assets.materials import surface_of
+
+    out = {}
+    for m in range(model.nmat):
+        name = _name(model, mujoco.mjtObj.mjOBJ_MATERIAL, m)
+        found = surface_of(name) if name else None
+        if found is not None:
+            out[name] = found
     return out
 
 

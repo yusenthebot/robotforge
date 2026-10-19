@@ -32,8 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-Kind = Literal["part", "sensor", "controller", "behavior"]
-KINDS: tuple[Kind, ...] = ("part", "sensor", "controller", "behavior")
+Kind = Literal["part", "sensor", "controller", "behavior", "generator", "material", "style"]
+KINDS: tuple[Kind, ...] = ("part", "sensor", "controller", "behavior", "generator", "material", "style")
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 ENV_FOLDERS = "ROBOTFORGE_PLUGINS"
 WORLD_FOLDER = "plugins"

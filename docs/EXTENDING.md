@@ -3,7 +3,7 @@
 robotforge is meant to be bent to what you need.
 This page covers the three ways to do that without touching its source:
 
-- [Plugins](#plugins): your own parts, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
+- [Plugins](#plugins): your own parts, asset generators, materials, styles, sensors, controllers and behaviors, written as small Python files that robotforge finds and uses like its own.
 - [Export](#export): a world or one robot written out as MJCF or URDF with meshes, so other simulators open it.
 - [One robot interface in scripts](#one-robot-interface-in-scripts): `robot.sensors`, `robot.move`, `robot.arm`, `robot.gripper` and a per-step callback, so one script runs on a template dog and on a Go2, or on a template arm and on a Panda.
 
@@ -69,6 +69,53 @@ Then `add_object(name="sign", shape="signpost", pos=[1, 0])`, or `shape: signpos
 - Shapes: `Box(size, at, color, rotate, collide)`, `Cylinder(diameter, height, ...)`, `Sphere(diameter, ...)`.
   `at` is the middle of the shape in the part's own frame (x forward, y left, z up from the ground), `rotate` is degrees about x, y, z, `collide=False` makes it a picture only.
 - A part is checked when it is registered, at its default size, so a mistake shows up with the plugin's file named.
+
+### Generators, materials and styles: new parts for the asset engine
+
+The asset engine ([ASSETS.md](ASSETS.md)) draws every robot part from a named, parametric generator with a style.
+A generator is a function from checked parameters to an `Asset`: drawn pieces with a role and a material, collision shapes, and so a mass from a density.
+A material is a surface the viewer draws (roughness, metalness, clear coat, a procedural texture), a style is a set of finishing choices (how round, how many screws, whether there are panel lines).
+
+```python title="plugins/standoff.py"
+from robotforge.design.visuals import mesh as M
+from robotforge.extend import Asset, Collider, Param, Piece, generator, material, style
+
+material(
+    "anodized_red", roughness=0.3, metalness=0.9, clearcoat=0.2, texture="speckle", summary="red anodised aluminium"
+)
+style("showroom", based_on="cobot", fillet=1.6, light_ring=False, summary="soft shells, no light ring")
+
+
+@generator(
+    "standoff",
+    summary="a hexagonal standoff with a threaded stud",
+    params=[
+        Param("height", 0.02, 0.005, 0.1, "height of the hex body"),
+        Param("across", 0.008, 0.003, 0.03, "across the flats"),
+    ],
+    category="fitting",
+    anchor="stands on z = 0, the stud on top",
+)
+def standoff(a):
+    hex_body = M.cylinder(a.across / 1.732, a.height, segments=6, z0=0.0)
+    stud = M.cylinder(a.across * 0.25, a.height * 0.4, segments=12, z0=a.height)
+    return Asset(
+        "standoff",
+        (Piece("accent", "anodized_red", hex_body), Piece("metal", "metal", stud)),
+        (Collider("cylinder", (a.across / 2, a.height * 0.7), (0, 0, a.height * 0.7)),),
+    )
+```
+
+Then `add_robot(name="peg", template="asset", params={"generator": "standoff", "args": {"height": 0.04}, "style": "showroom"})` shows it on a turntable in the viewer, and `robotforge.assets.generate("standoff", height=0.04).mass_properties(2700.0)` gives its mass, centre of mass and inertia.
+
+- `Param(name, default, low, high, doc)` is a length in meters; `kind="int"`, `"bool"` or `"choice"` (with `choices=(...)`) make the others.
+  A value outside its range is refused with the range, so an agent that asks for `height=5` is told what is allowed.
+- `a` has the checked parameters as attributes, `a.style` (the style being drawn), `a.seed` and `a.rng` (a numpy generator seeded from it).
+  The same arguments always make the same asset.
+- A `Piece(role, material, mesh)` takes its color from the palette by role: `body`, `accent`, `structure`, `trim`, `metal`, `rubber`, `glass`, `led`.
+  Build meshes with `robotforge.design.visuals.mesh` (lofts, lathes, rounded boxes, tubes).
+- A `Collider` is a box, cylinder, capsule, sphere or a convex mesh; `robotforge.assets.hulls_of(mesh)` splits a concave mesh into convex pieces.
+- It is built once with its defaults and once in the `rugged` style when it is registered, so a mistake shows up with the plugin's file named.
 
 ### Sensors: new types for `add_sensor`
 
