@@ -117,7 +117,7 @@ def _limited(spec: mujoco.MjSpec, joint: mujoco.MjsJoint) -> bool:
 
 
 def _carries_limited_joints(spec: mujoco.MjSpec, joint: mujoco.MjsJoint) -> bool:
-    """Whether a body further out on the chain than `joint` has a limited joint (so `joint` is in a limb, not a wheel)."""
+    """Whether a body further out on the chain than `joint` has a limited joint: `joint` is in a limb, not a wheel."""
     todo = list(joint.parent.bodies)
     own = [j for j in joint.parent.joints if j is not joint]
     if any(_limited(spec, j) for j in own):

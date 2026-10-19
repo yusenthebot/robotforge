@@ -398,11 +398,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
         Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
         open catalogue: kind (arm, quadruped, humanoid, wheeled, hand, aircraft, other; also gripper, dog, drone) and
-        search (words starting the name, maker or a tag: "kinova", "unitree", "ur5") list those that match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
-        URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
-        structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
-        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
-        move with set_controls and pose."""
+        search (words starting the name, maker or a tag: "kinova", "unitree", "ur5") list those that match.
+        add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute,
+        once), runs a URDF through the import doctor and answers with "catalogue": what the robot turned out to be from
+        its structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
+        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs, and the answer's
+        "checked" says what a short trial showed (stands, walked or fell over after how far); the others move with
+        set_controls and pose."""
         from robotforge.design import catalogue
 
         with _tool_errors():

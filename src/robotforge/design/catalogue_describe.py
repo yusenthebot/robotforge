@@ -13,7 +13,7 @@ from typing import Any
 import mujoco
 import numpy as np
 
-from robotforge.design import catalogue
+from robotforge.design import catalogue, catalogue_probe
 from robotforge.sim.geometry import lowest_point
 
 MOVING = frozenset({int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)})  # joints that move
@@ -34,6 +34,7 @@ class Described:
     mass: float = 0.0
     joints: int = 0
     motors: int = 0
+    checked: dict[str, Any] | None = None  # what a short trial of its legs showed (catalogue_probe.py)
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"kind": self.kind, "about": self.line, "can": self.can}
@@ -42,7 +43,43 @@ class Described:
             out["legs"] = self.legs
         if self.reach is not None:
             out["reach_m"] = round(self.reach, 2)
+        if self.checked is not None:
+            out["checked"] = {**self.checked, "summary": catalogue_probe.describe(self.checked)}
         return out
+
+    def with_trial(self, checked: dict[str, Any]) -> Described:
+        """This description after a trial of the robot's legs: what the trial showed, and what it makes of the promises
+        (a robot that collapsed at home is not "a walking robot", a gait that fell is offered with that warning)."""
+        what = {"humanoid": "a walking robot on two legs", "quadruped": "a four-legged robot"}.get(self.kind)
+        line = self.line
+        can = list(self.can)
+        if not checked["stands"]:
+            collapsed = (
+                "a two-legged robot that collapses at home"
+                if self.kind == "humanoid"
+                else ("a four-legged robot that collapses at home")
+            )
+            line = line.replace(what, collapsed) if what else line
+            can = [
+                f"it {catalogue_probe.describe(checked)}: no controller here keeps it up. "
+                "set_controls and pose move its joints; do not expect move to walk it"
+            ]
+        elif checked["walk"] == "fell":
+            can = [
+                f"{c.split(';')[0]}; in a trial it fell over after {checked['fell_after_m']} m at "
+                f"{checked['walk_speed']} m/s, so keep moves short and slow and check pose 'upright'"
+                if c.startswith("move starts a gait")
+                else c
+                for c in can
+            ]
+        elif checked["walk"] == "walked":
+            can = [
+                f"{c} (a trial walked {checked['walked_m']} m upright)" if c.startswith("move starts") else c
+                for c in can
+            ]
+        elif checked["walk"] == "no gait":
+            can = [f"{c} (it stands at home)" for c in can]
+        return Described(self.kind, line, can, self.legs, self.reach, self.mass, self.joints, self.motors, checked)
 
 
 def describe(

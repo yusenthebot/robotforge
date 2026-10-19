@@ -933,12 +933,16 @@ class Playground:
 
     def _about_catalogue_robot(self, name: str, catalogue_id: str) -> dict[str, Any]:
         """What an open catalogue robot turned out to be, from its structure, and which tools work on it."""
-        from robotforge.design import catalogue_describe
+        from robotforge.design import catalogue_describe, catalogue_probe
 
         entry = catalogue.get(catalogue_id)
         described = catalogue_describe.describe(
             self.session.model, name, self.behaviors.home_qpos(), entry, self.behaviors
         )
+        if described.kind in catalogue_probe.LEGGED and described.legs:  # the gait is generic: try it, once
+            checked = catalogue_probe.trial(entry)
+            if checked is not None:
+                described = described.with_trial(checked)
         return {"name": entry.id, **described.to_dict()}
 
     def _unchanged(self, note: str) -> dict[str, Any]:
