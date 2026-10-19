@@ -20,13 +20,18 @@ Nothing is sandboxed.
 | Place | Loaded | Trusted |
 |---|---|---|
 | `~/.robotforge/plugins/` (or the folders in `ROBOTFORGE_PLUGINS`, joined with `:` on macOS and Linux, `;` on Windows) | when robotforge starts, and on `plugins(action="reload")` | always: you put the files there |
-| `plugins/` inside a world's folder | when the world is opened | only files written on this computer, or approved with `plugins(action="trust")` |
+| `plugins/` inside a world's folder | when the world is opened | only when every file under it was written on this computer, or approved by you in a terminal with `robotforge plugins trust WORLD` |
 
 A world can come from somebody else, and a plugin in it is code that would run the moment you open it.
 So a world's plugin files that were not written here do not load.
-`open_world` says so, names the files, and the agent is told to read them and tell you what they do before trusting them.
-A file that changes after it was trusted, or a world copied to another place, is not trusted again.
-`write_script(name, code, plugin=true)` writes a plugin into the open world, trusts it (you asked for it) and loads it.
+Trust covers everything under the folder as one set: helper files (`_helper.py`), subfolders and packages a plugin imports are as much code as the plugin.
+One file nobody approved, or one added or changed later, and none of the folder loads.
+A world's plugin never takes the place of a standard module of the same name (`random.py` beside it is not `import random`).
+`open_world` says which files did not load and why; a world that uses a part from them does not open until they are approved, and says how.
+The agent can read them (`plugins(action="show", world=NAME)` prints every file) and tell you what they do, but it cannot trust them: that decision is yours.
+You approve in a terminal: `robotforge plugins show WORLD` prints the files, `robotforge plugins trust WORLD` prints them again and asks `yes` (`--yes` skips the question once you have read them).
+A world copied to another place is not trusted again.
+`write_script(name, code, plugin=true)` writes a plugin into the open world, trusts it (you asked for it, as for any script it runs) and loads it, unless the folder holds other files that nobody approved: then it is saved and waits with them.
 
 If a file fails to load, nothing it registered is kept, and the error names the file and the line:
 
@@ -165,12 +170,13 @@ Ask for what you want ("add a sensor that tells me how close the red cube is") a
 - `export_model(robot="go2")` writes just that robot (on the floor) as MJCF.
 - `export_model(robot="go2", format="urdf")` writes the robot as URDF.
 - `to="/some/folder"` chooses the folder; the default is `exports/` in the world's folder.
+  A `to` must be a new or empty folder inside the world's folder, your home folder or the temporary folder; `overwrite=true` replaces an earlier export in a folder that is not empty (it removes only the `.xml`, `.urdf` and `meshes/` an export writes).
 
-On the command line: `robotforge export <world> [--robot NAME] [--format mjcf|urdf] [--to FOLDER]` does the same and exits 1 if the check found a difference.
+On the command line: `robotforge export <world> [--robot NAME] [--format mjcf|urdf] [--to FOLDER] [--overwrite]` does the same and exits 1 if the check found a difference.
 
 Beside the `.xml` or `.urdf` there is a `meshes/` folder of OBJ files, one per mesh.
 The result says where, how many files, and a `check`: the export is loaded again in MuJoCo and compared with the world.
-For MJCF the check compares bodies, joints, actuators and geoms by name, the total mass, the position of every body and every mesh vertex in the world (agreeing to a millionth of a meter).
+For MJCF the check compares bodies, joints, actuators and geoms by name, the total mass (to 0.1 percent), joint limits, the position of every body and every mesh vertex in the world (agreeing to 10 micrometers), and height fields; `same` is false if any of them differs.
 For URDF it compares bodies, joints (by name, type and limits) and mass.
 
 Open an MJCF with `python -m mujoco.viewer --mjcf=<file>`; any tool that reads URDF opens the other.

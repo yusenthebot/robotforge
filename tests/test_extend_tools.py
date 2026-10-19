@@ -88,6 +88,8 @@ async def test_opening_a_world_with_untrusted_plugins_says_so_and_an_agent_canno
     REGISTRY.trust(store.dir)  # what the user's `robotforge plugins trust` does
     again = pg.open_world(str(store.dir))
     assert any("runs its own Python plugin sign.py" in n for n in again["notes"])
+    later = pg.add_object("cube", shape="box", pos=[2.0, 0.0])
+    assert not any("plugin" in n for n in later["notes"])  # said once, when the world opened
 
 
 def test_a_world_that_uses_a_plugin_shape_it_may_not_load_says_why_it_will_not_open(pg):

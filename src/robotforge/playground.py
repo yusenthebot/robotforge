@@ -320,7 +320,9 @@ class Playground:
         # Only now: a world that did not open used to become the one edits went to while the simulation still
         # ran the last one, so robots listed the broken file's dog and add_object failed on its template.
         self.store = store
-        return self._load_world(compiled)
+        opened = self._load_world(compiled)
+        opened["notes"].extend(plugin_notes(store.dir))  # said once, as the world opens, not with every edit after
+        return opened
 
     @_one_edit_at_a_time
     def add_robot(
@@ -984,7 +986,7 @@ class Playground:
             "robots": [r.name for r in world.robots],
             "objects": _limit([o.name for o in world.objects]),
             **({"terrain": [t.name for t in world.terrain]} if world.terrain else {}),
-            "notes": [*compiled.notes, *self.behaviors.walk_notes(), *plugin_notes(store.dir)],
+            "notes": [*compiled.notes, *self.behaviors.walk_notes()],
             "actuators": summary["actuators"],
             "viewer_url": self.viewer_url,
         }
