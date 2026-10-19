@@ -298,7 +298,9 @@ class ScriptRunner:
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
         await self._carrier_stands(req["robot"])
-        motion, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
+        # Planned off the event loop: working out a trip and a grasp takes seconds, and the viewer's stream (and the
+        # tree panel a script shows) stood still for that long
+        motion, info = await asyncio.to_thread(self.pg.behaviors.pick_and_place, req["robot"], req["object"], target)
         await self._advance(lambda: motion.done, getattr(motion, "time_limit", 40.0))  # an errand goes over first
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])

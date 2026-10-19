@@ -264,7 +264,14 @@ with robot.record("walk_demo") as demo:  # keeps frames and commands until the b
     robot.move(speed=0.25, seconds=1.5)
     robot.move(speed=0.0, turn=0.8, seconds=1.0)
 saved = demo.result
-print(saved["kind"], saved["frames"], "frames,", saved["command_counts"], "->", saved["path"].split("demonstrations")[-1][1:])
+print(
+    saved["kind"],
+    saved["frames"],
+    "frames,",
+    saved["command_counts"],
+    "->",
+    saved["path"].split("demonstrations")[-1][1:],
+)
 
 played = robot.replay("walk_demo")  # the same commands again (another robot of its kind would do as well)
 print("replayed", played["commands_issued"], "commands in", played["seconds"], "s")
