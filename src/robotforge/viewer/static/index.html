@@ -155,6 +155,14 @@
 
   <aside class="sensor-views" id="sensor-views" hidden></aside>
   <aside class="map-hud" id="map-hud" hidden></aside>
+  <aside class="flow-panel" id="flow-panel" hidden aria-live="off">
+    <button class="flow-head" id="flow-head" type="button">
+      <span class="flow-caret" aria-hidden="true"></span>
+      <span class="flow-title" id="flow-title" data-i18n="flow_title">Behavior tree</span>
+      <span class="flow-state" id="flow-state"></span>
+    </button>
+    <ul class="flow-rows" id="flow-rows"></ul>
+  </aside>
 
   <div class="help" id="help" hidden>
     <p class="help-lead" data-i18n="help_lead">This page shows your robot world live. Build robots and change the world by chatting with Claude or ChatGPT.</p>

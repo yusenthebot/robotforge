@@ -183,11 +183,17 @@ flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a g
 its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
 and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
-Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
+Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, and for
+arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
 robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
 run or compare it as method "policy:<name>".
+
+Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
+interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on
+sensors) and state machines that a script runs with Tree(...).run(sim, robot): the viewer's tree panel shows the
+running node and the attempt a Retry is on.
 
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
@@ -1023,6 +1029,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # robot.sensors["imu"], robot.move(speed, turn, seconds=2), robot.stop(), robot.arm.move_to([x, y, z]),
             # robot.arm.pick_and_place(obj, target), robot.gripper.close(), robot.start(plugin_controller),
             # robot.on_step(fn, every=0.1) and robot.run(seconds): fn(robot) is called as the time passes
+            # task logic: from robotforge.flow import Tree, Sequence, Fallback, Parallel, Retry, Action, Condition,
+            # WaitFor, StateMachine, State; Tree(Sequence(Action(fn), Retry(Action(fn2), times=3)), name="job")
+            # .run(sim, robot) ticks it (fn(ctx) returns True/False; ctx.robot, ctx.bb) and the viewer shows which
+            # node runs; tree.summary() says what ended how
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call
