@@ -28,10 +28,16 @@ In Python:
 from robotforge.training.api import train
 
 policy = train(
-    "walk", world=world, robot="dog", algo=["ars", "cem"], steps=250_000,
-    task_params={"speed": 0.4}, action_mode="residual", episode_seconds=4.0,
+    "walk",
+    world=world,
+    robot="dog",
+    algo=["ars", "cem"],
+    steps=250_000,
+    task_params={"speed": 0.4},
+    action_mode="residual",
+    episode_seconds=4.0,
 )
-print(policy.meta["final"])   # the best trial: algorithm, settings, test return, the task's own numbers
+print(policy.meta["final"])  # the best trial: algorithm, settings, test return, the task's own numbers
 ```
 
 `start(...)` has the same arguments and returns at once.
@@ -46,7 +52,7 @@ Closing the agent does not stop it; `stop_training(name)` does, and keeps the be
 from robotforge.training import describe, make_env
 
 env = make_env("walk", world=world, robot="dog", task_params={"speed": 0.4})
-print(describe(env))                  # both spaces in words
+print(describe(env))  # both spaces in words
 obs, info = env.reset(seed=0)
 obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 ```
