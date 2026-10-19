@@ -27,7 +27,7 @@ from robotforge import wording
 from robotforge.control.actuation import ActionScale
 from robotforge.control.methods import make_controller
 from robotforge.control.spaces import Box
-from robotforge.control.tasks import Task, TaskError, make_task
+from robotforge.control.tasks import TASKS, Task, TaskError, make_task
 from robotforge.control.tasks.base import divergences, readable
 from robotforge.sim.session import SimSession
 
@@ -227,6 +227,10 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
     Returns (model, robot name)."""
     from robotforge.design.world import World
 
+    if task in TASKS and task not in DEFAULT_ROBOTS:  # insert: a peg held over a socket, which only a world has
+        raise TaskError(
+            f"{task} has no stand-alone world (it needs a peg in the gripper and a socket): use run_controller"
+        )
     if task not in DEFAULT_ROBOTS:
         raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, robot = DEFAULT_ROBOTS[task]

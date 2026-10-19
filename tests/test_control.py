@@ -171,8 +171,13 @@ def test_tasks_explain_what_does_not_fit():
 # ---- Gym-style environment contract -------------------------------------------------------------
 
 
+def test_insert_has_no_stand_alone_env():
+    with pytest.raises(TaskError, match="run_controller"):
+        make_env("insert")
+
+
 @pytest.mark.parametrize("mode", ["direct", "residual"])
-@pytest.mark.parametrize("task", list(TASKS))
+@pytest.mark.parametrize("task", [t for t in TASKS if t != "insert"])
 def test_env_passes_the_gym_contract_check(task, mode):
     env = make_env(task, episode_seconds=0.6, action_mode=mode)
     check_env(env, steps=80)
