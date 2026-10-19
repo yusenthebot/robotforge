@@ -82,6 +82,24 @@ A hand-over goes through the table: two grippers cannot share a shaft, so the fi
 ### How often the scripted expert does them
 
 `scripts/objects_tasks.py` plays each task as an agent would, with the real Menagerie models (a Franka Panda, and a UR5e with a Robotiq 2F-85) over seeds, and writes every failure with its cause (refused, never lifted, slipped, tipped over, landed outside, knocked something over, spilled).
-Run it to see the rates on your machine.
+Measured on 2026-10-20 with the real Menagerie models, six seeds each (the seed moves the things, picks the objects' variations and the number of balls):
+
+| task | Franka Panda | UR5e with Robotiq 2F-85 |
+|---|---|---|
+| mug on the shelf upright | 6/6 | 6/6 |
+| stack a brick, a tin and a book | 6/6 | 6/6 |
+| bottle into the rack | 4/6 | 6/6 |
+| sort a crowded bin into three trays | 4/6 | 6/6 |
+| pour balls from a cup into a bowl | 6/6 | 4/6 |
+| hand a hammer or a wrench to the other arm | 6/6 | 3/6 |
+
+Why the rest failed, as the script reports it:
+
+- Panda, rack: the bottle stands in its socket at release and falls over after the fingers leave, rolling out of the rack (2 of 6).
+- Panda, bin: an apple in a corner was never lifted (the open fingers met a neighbour), and a tin tipped over 27 degrees in its tray.
+- UR5e, pour: 3 of 6 and 3 of 8 balls reached the bowl; the rest stayed in the cup, jammed against its wall, through the tilt and the wrist shake.
+- UR5e, hand-over: the wrench slips out of the Robotiq pads on the way or is never lifted (3 of 3 failures are the wrench; the hammer is 3/3).
+
+Single objects, `scripts/objects_bench.py` (pick each shape from the table and put it in a tray, three seeds each): the Panda 53/55 (the two misses tipped over in the tray), the UR5e 49/55 (every plate, which slips out of the Robotiq pads on the way, and every wrench, which is never lifted).
 
 The grip is where the arms differ: the Panda's pads have torsional friction, the Robotiq pads in the Menagerie have none, so a firm hold (pad torsion, squeeze, force range raised) is switched on while an object is carried and put back after.
