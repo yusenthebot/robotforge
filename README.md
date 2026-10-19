@@ -176,6 +176,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Navigation: [docs/NAVIGATION.md](docs/NAVIGATION.md)
 - Algorithm comparisons: [docs/ALGORITHMS.md](docs/ALGORITHMS.md)
 - Learned policies and UniLab training: [docs/UNILAB.md](docs/UNILAB.md)
+- How legged robots read the ground, with measured tables per robot: [docs/LEGGED.md](docs/LEGGED.md)
 - Packaging and verifying the plugins (maintainers): [docs/PLUGINS.md](docs/PLUGINS.md)
 - Progress: [STATUS.md](STATUS.md), [progress.md](progress.md)
 - The pictures above come from `uv run python scripts/screenshots.py`, which drives the real viewer in headless Chrome; the video comes from `scripts/demos.py` and `scripts/promo.py`.
