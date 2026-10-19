@@ -493,8 +493,7 @@ def _wait_for(done: Callable[[], bool], longest: float) -> None:
 def _map_then_rack(explore_s: float, rack: str) -> Callable[[Any], None]:
     """Start mapping, explore for `explore_s` s of simulated time, then go to `rack` by the robot's own map."""
 
-    def act(pg: Any) -> None:
-        _MAP_DONE.clear()
+    def job(pg: Any) -> None:
         pg.perception.start("go2", {})
         trips = pg.perception.explore_trips("go2", explore_s, area=MAP_AREA)
         try:
@@ -511,6 +510,11 @@ def _map_then_rack(explore_s: float, rack: str) -> Callable[[Any], None]:
         print(f"to {rack}: {trip.result()}", flush=True)
         print(f"pose check: {pg.perception.pose_check('go2')}", flush=True)
         _MAP_DONE.set()
+
+    def act(pg: Any) -> None:
+        """Starts the job and returns: the timeline (captions, the camera) goes on while the robot works."""
+        _MAP_DONE.clear()
+        threading.Thread(target=job, args=(pg,), daemon=True).start()
 
     return act
 
@@ -801,7 +805,7 @@ DEMOS = [
                 ),
             ),
             (1.0, _map_then_rack(70.0, "farthest")),
-            (3.0, "window.__robotforge.showSensor('go2/map_lidar', false);"),
+            (2.5, "window.__robotforge.showSensor('go2/map_lidar', false);"),
             (
                 18.0,
                 _caption("The map grows from its own scans. Blue: where it believes it is. Grey: the odometry alone."),
@@ -809,7 +813,7 @@ DEMOS = [
             (45.0, _caption("The particle filter keeps its pose honest against the odometry's drift.")),
             (72.0, _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate.")),
         ],
-        page=S.G12_OVERVIEW,
+        page=_follow("go2", (-3.4, -4.6, 4.4), ease=0.04),
         settle=2.0,
         until=lambda pg: _MAP_DONE.is_set(),
         tail=4.0,

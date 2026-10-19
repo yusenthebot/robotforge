@@ -1345,12 +1345,44 @@ G12_SENSOR_VIEWS = {
     "skin": _look_at(["go2"], (0.5, -0.45, 1.25)),  # from above its left, its front pad in view
 }
 
+
+def _room_with_rover(pg: Any) -> None:
+    """A 6 m room with a divider and a small rover (7 cm wheels, a 16 cm track) at one corner."""
+    for name, pos, yaw in (
+        ("north", [0, 3.05], 0),
+        ("south", [0, -3.05], 0),
+        ("east", [3.05, 0], 90),
+        ("west", [-3.05, 0], 90),
+    ):
+        pg.add_object(name, shape="wall", pos=pos, yaw=yaw, size=[6.2, 0.1, 1.0])
+    pg.add_object("divider", shape="wall", pos=[0.5, 0.8], yaw=90, size=[3.2, 0.1, 1.0])
+    pg.add_robot("rover", template="rover", pos=[-2.2, -2.0], yaw=0)
+
+
+def _map_with_wheels(pg: Any) -> None:
+    """The rover maps the room on its wheel odometry alone (each wheel reading its radius 1 percent off): a loop and a
+    half, headless, so the page opens on the finished map with the two paths, the filter's and the wheels'."""
+    pg.add_sensor("rover", {"type": "wheel_odometry", "name": "wheels", "slip": 0.01, "seed": 3})
+    pg.perception.start("rover", {"odometry": "wheels", "lidar": {"type": "lidar", "rays": 240, "range": 8.0}})
+    for point in ([2.2, -2.0], [2.2, 2.2], [-2.2, 2.2], [-2.2, -1.0], [2.2, -2.0], [2.2, 2.2]):
+        trip = pg.behaviors.navigate("rover", point, seconds=40)
+        pg.run_fast(lambda t=trip: t.done, 41.0)
+
+
 G12_SHOTS = [
     Shot(
         "g12_map_overview",
         _go2_warehouse_start,
         act=_map_for(60.0, G12_AREA),
         page=G12_OVERVIEW,
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_wheel_odometry",
+        _room_with_rover,
+        act=_map_with_wheels,
+        page="const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, -5.2, 8.2], [0.0, 0.1, 0]);",
         size=(1920, 1080),
         settle=2.5,
     ),

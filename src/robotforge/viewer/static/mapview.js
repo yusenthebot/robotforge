@@ -21,7 +21,7 @@ const ARROW = 0.5; // m, the length of a pose arrow
 // no shelf or crate is painted in
 const PALETTE = [
   [0, 0, 0, 0],
-  [60, 170, 200, 46],
+  [60, 170, 200, 34],
   [236, 52, 112, 255],
 ];
 

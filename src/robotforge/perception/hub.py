@@ -193,7 +193,12 @@ class PerceptionHub:
             usable = [s for s in own if s.type in types and not getattr(s, "native", None)]
             if usable:
                 return usable[0].local
-        fields = {**defaults, **(given or {}), "name": (given or {}).get("name", name)}
+        wanted = dict(given or {})
+        # What mapping would add is the default; asked for another kind (a flat "lidar" for the 3D one it would add),
+        # the options of the default are not carried over to it.
+        base = defaults if wanted.get("type", defaults["type"]) == defaults["type"] else {}
+        fields = {**base, **wanted, "name": wanted.get("name", name)}
+        fields.setdefault("type", defaults["type"])
         taken = {s.local for s in own}
         if fields["name"] in taken:
             fields["name"] = f"{fields['name']}_{len(taken)}"

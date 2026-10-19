@@ -32,7 +32,8 @@ def register(server: MCPServer, playground: Playground) -> None:
         options: dict[str, Any] | None = None,
     ) -> str:
         """Put a sensor on any robot (a template, a library robot like go2 or panda, an imported file, one built from
-        parts), on any of its bodies. type: camera (options mode rgb, depth or segmentation, width, height, fov),
+        parts), on any of its bodies. type: camera (options mode rgb, depth, segmentation, stereo (baseline), event
+        (threshold, window_s), width, height, fov; lens fisheye reaches 200 degrees),
         lidar (one ring) or lidar3d (options channels, rays per ring, vfov, hfov, range), imu, encoders (joints,
         resolution), force_torque (on a body such as a wrist, e.g. on="hand", or between=[parent, child]), touch
         (rows and cols make an array; e.g. on a foot), rangefinder, gps, odometry, wheel_odometry (a wheeled robot's
