@@ -563,9 +563,9 @@ class Playground:
         bare = plate.carried(self.session.model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
         whole = add(bare)  # a part that is wrong says so here, as on any robot built from parts
         try:
-            after = robot_kind(self._compiled_with(entry.name, bare), entry.name).value
+            after = robot_kind(self._compiled_with(entry.name, bare), entry.name, by_feet=False).value
             if after == kind:  # the plate keeps it what it was; then the part has its say (it may overlap the robot)
-                after = robot_kind(self._compiled_with(entry.name, whole), entry.name).value
+                after = robot_kind(self._compiled_with(entry.name, whole), entry.name, by_feet=False).value
         except ValidationError as exc:  # as an edit says it (a part with no size)
             raise PlaygroundError(_validation_message(exc)) from exc
         if after != kind:
@@ -592,7 +592,7 @@ class Playground:
         model = self.session.model
         bare = plate.carried(model, entry.name, mount, {k: v for k, v in build.items() if k != "parts"})
         try:
-            still = robot_kind(self._compiled_with(entry.name, bare), entry.name).value == kind
+            still = robot_kind(self._compiled_with(entry.name, bare), entry.name, by_feet=False).value == kind
         except (ValueError, ValidationError):
             still = False
         if not still:

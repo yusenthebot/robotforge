@@ -14,13 +14,10 @@ from typing import Any
 import mujoco
 import numpy as np
 
+from robotforge.behaviors import stance
 from robotforge.design import catalogue, catalogue_probe
-from robotforge.sim.geometry import lowest_point
 
 MOVING = frozenset({int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE)})  # joints that move
-FOOT_BAND = 0.08  # m above the lowest point of the robot at home that still counts as standing on it
-FOOT_APART = 0.1  # of the robot's height between feet: closer contact points belong to one foot (toe and heel)
-UPRIGHT_RATIO = 2.0  # a body this many times taller than its footprint is long stands on two feet, not four
 SMALL_HAND = 0.45  # m, the largest extent of a hand or gripper
 REACH_SAMPLES = 150
 
@@ -136,8 +133,8 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
     }
     bodies = _bodies(model, robot)
     # Wheels as feet make a wheeled robot, however many legs carry them (a wheel-legged robot is no walker)
-    on_wheels = bool(bodies) and kind not in (Kind.ARM, Kind.AIRCRAFT) and _floating(model, bodies)
-    if on_wheels and kind not in (Kind.ROVER, Kind.BALANCER) and _wheels(model, bodies) >= 2:
+    on_wheels = bool(bodies) and kind not in (Kind.ARM, Kind.AIRCRAFT) and stance.is_floating(model, bodies)
+    if on_wheels and kind not in (Kind.ROVER, Kind.BALANCER) and stance.count_wheels(model, bodies) >= 2:
         return "wheeled", 0
     if kind in known and not (kind == Kind.ARM and not _moves_a_tool_point(model, robot)):
         return known[kind]
@@ -146,8 +143,8 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
     data = mujoco.MjData(model)
     data.qpos[:] = home_qpos
     mujoco.mj_kinematics(model, data)
-    floating = _floating(model, bodies)
-    feet = _feet(model, data, bodies) if floating else 0
+    floating = stance.is_floating(model, bodies)
+    feet = stance.count_feet(model, data, bodies) if floating else 0
     if feet == 2:
         return "humanoid", 2
     if feet == 4:
@@ -158,27 +155,6 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
 
 
 GRIPPER_NAME = re.compile(r"gripper|finger|jaw|claw|hand", re.IGNORECASE)
-FULL_TURNS = 2  # a hinge whose range allows this many turns round is a wheel's, not a limb's
-WHEEL_NAME = re.compile(r"wheel|tire|tyre|caster", re.IGNORECASE)
-
-
-def _floating(model: mujoco.MjModel, bodies: list[int]) -> bool:
-    return any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for b in bodies for j in _joints(model, b))
-
-
-def _wheels(model: mujoco.MjModel, bodies: list[int]) -> int:
-    """How many wheels the robot has: unlimited hinges at the end of a chain whose joint or body is named for one."""
-    count = 0
-    carriers = {int(model.body_parentid[c]) for c in range(1, model.nbody) if model.body_jntnum[c]}
-    for b in bodies:
-        if b in carriers:
-            continue  # something with joints hangs off it: not the end of a chain
-        for j in _joints(model, b):
-            turns_on = not model.jnt_limited[j] or float(np.ptp(model.jnt_range[j])) >= FULL_TURNS * 2 * np.pi
-            if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_HINGE) and turns_on:
-                names = f"{_name(model, mujoco.mjtObj.mjOBJ_JOINT, j)} {_name(model, mujoco.mjtObj.mjOBJ_BODY, b)}"
-                count += bool(WHEEL_NAME.search(names))
-    return count
 
 
 def _arm_chains(model: mujoco.MjModel, robot: str) -> list[int]:
@@ -215,39 +191,6 @@ def _joints(model: mujoco.MjModel, body: int) -> range:
 def _bodies(model: mujoco.MjModel, robot: str) -> list[int]:
     prefix = f"{robot}/"
     return [b for b in range(1, model.nbody) if _name(model, mujoco.mjtObj.mjOBJ_BODY, b).startswith(prefix)]
-
-
-def _colliders(model: mujoco.MjModel, bodies: list[int]) -> list[int]:
-    wanted = set(bodies)
-    return [
-        g
-        for g in range(model.ngeom)
-        if int(model.geom_bodyid[g]) in wanted and model.geom_contype[g] + model.geom_conaffinity[g] > 0
-    ]
-
-
-def _feet(model: mujoco.MjModel, data: mujoco.MjData, bodies: list[int]) -> int:
-    """How many separate places the robot stands on at home: the lowest points of its bodies within a hand's width of
-    the lowest, merged where they are close."""
-    points = []
-    for body in bodies:  # a foot is often not a leaf: it carries a toe, a sensor or a wheel hub
-        geoms = _colliders(model, [body])
-        if geoms:
-            points.append(min((lowest_point(model, data, g) for g in geoms), key=lambda p: p[2]))
-    if not points:
-        return 0
-    floor = min(p[2] for p in points)
-    height = max(float(data.xpos[b][2]) for b in bodies) - floor
-    apart = max(0.03, FOOT_APART * height)
-    places: list[np.ndarray] = []
-    for p in (p for p in points if p[2] <= floor + FOOT_BAND * max(height, 0.2) / 0.6):
-        if all(np.linalg.norm(p[:2] - q[:2]) > apart for q in places):
-            places.append(p)
-    if len(places) == 4:
-        spread = max(float(np.linalg.norm(a[:2] - b[:2])) for a in places for b in places)
-        if height > UPRIGHT_RATIO * spread:  # toe and heel of two feet under a body taller than they are long
-            return 2
-    return len(places)
 
 
 def _is_hand(model: mujoco.MjModel, data: mujoco.MjData, bodies: list[int]) -> bool:

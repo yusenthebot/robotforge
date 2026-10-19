@@ -105,7 +105,9 @@ and objects stand on the ground under them. Go2, A1, ANYmal C and Barkour look a
 takes them up and down stairs (about 8 cm steps, 30 cm deep; 10 cm ones and long flights can still topple them),
 slopes and gravel on their own, straight on; over rough ground they slow to 60 percent of top speed by themselves.
 Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
-off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain.
+off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain. A humanoid from
+the catalogue or a file stands on its own by whole-body balance (`robots` says "balance"): it holds a load and takes
+a push of a few tenths of a m/s; move walks it only if a gait fits its legs (else `walk_hint` says so).
 load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
 instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with

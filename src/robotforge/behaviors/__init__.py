@@ -25,8 +25,10 @@ class Kind(StrEnum):
     OTHER = "other"
 
 
-def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -> Kind:
-    """Recognize a robot by its template, by the names our templates use, or by its shape."""
+def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None, by_feet: bool = True) -> Kind:
+    """Recognize a robot by its template, by the names our templates use, or by its shape. `by_feet`: a floating robot
+    that stands on two feet is a humanoid even when nothing else says so (see stance.py); off, only the names and the
+    shapes of dogs, wheels and snakes decide, as before robots were told apart by their feet."""
     if template in {k.value for k in Kind}:
         return Kind(template)
 
@@ -57,6 +59,10 @@ def robot_kind(model: mujoco.MjModel, robot: str, template: str | None = None) -
         return Kind.HUMANOID
     if find_wheels(model, robot) is not None:
         return Kind.ROVER  # an imported or hand-built robot with a driven wheel on each side
+    from robotforge.behaviors.stance import stands_on_two_feet  # lazy: it imports this package
+
+    if by_feet and stands_on_two_feet(model, robot, home_pose(model)):
+        return Kind.HUMANOID  # nothing else says so, but it stands on two feet under a body taller than they are long
     from robotforge.behaviors.quadruped import discover_legs  # lazy: it imports this package
 
     found = discover_legs(model, robot, home_pose(model))
