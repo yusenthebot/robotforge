@@ -162,8 +162,9 @@ world's plugins/ folder): new parts for add_object (shape="their_name"), new sen
 (feedback inside the simulation) and behaviors (routines for any robot). write_script(name, code, plugin=true) writes
 one for the user and loads it; plugins() lists what plugins added and which files failed to load, with the reason,
 plugins(action="reload") reads the folders again, plugins(action="run", name=..., robot=...) starts a controller or
-behavior. A world's plugin files that were not written here do not load until you have read them, told the user what
-they do and called plugins(action="trust"): they are code that runs on this computer.
+behavior. A world's plugin files that were not written here do not load until the user has approved them: read them
+(plugins(action="show", world=...)), tell the user what they do, and if the user wants them they run
+`robotforge plugins trust WORLD` in a terminal (you cannot: it is code that runs on this computer).
 
 Export: export_model() writes the open world as MJCF for other simulators, export_model(robot="go2") one robot,
 format="urdf" a robot as URDF, with the meshes as OBJ files; it loads the file again and its "check" says whether
@@ -859,9 +860,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     sensor_tools.register(server, playground)
     perception_tools.register(server, playground, run_until)
 
-    async def run_file(path: Path, max_sim_seconds: float, args: list[str]) -> dict[str, Any]:
+    async def run_file(path: Path, max_sim_seconds: float, args: list[str], max_wall_seconds: float) -> dict[str, Any]:
         runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
-        return await runner.run(path, max_sim_seconds=max_sim_seconds, args=args)
+        return await runner.run(path, max_sim_seconds=max_sim_seconds, max_wall_seconds=max_wall_seconds, args=args)
 
     plugin_tools.register(server, playground, run_until, run_file)
     mount_tools.register(server, playground)

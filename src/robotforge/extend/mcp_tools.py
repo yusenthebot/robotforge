@@ -16,6 +16,7 @@ from mcp.types import ToolAnnotations
 
 from robotforge import wording
 from robotforge.design import export
+from robotforge.design.store import WorldStore
 from robotforge.extend import routines
 from robotforge.extend.registry import REGISTRY, WORLD_FOLDER
 from robotforge.playground import Playground, PlaygroundError
@@ -24,7 +25,7 @@ MAX_CONTROLLER_SECONDS = 60.0
 MAX_BEHAVIOR_SECONDS = 300.0
 
 RunUntil = Callable[[Callable[[], bool], float], Awaitable[dict[str, Any]]]
-RunScript = Callable[[Path, float, list[str]], Awaitable[dict[str, Any]]]
+RunScript = Callable[[Path, float, list[str], float], Awaitable[dict[str, Any]]]  # file, sim s, args, wall s
 
 
 def register(server: MCPServer, playground: Playground, run_until: RunUntil, run_script: RunScript) -> None:
@@ -32,8 +33,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
 
     @server.tool(annotations=ToolAnnotations(openWorldHint=False))
     async def plugins(
-        action: Literal["list", "reload", "trust", "run"] = "list",
+        action: Literal["list", "reload", "show", "trust", "run"] = "list",
         name: str | None = None,
+        world: str | None = None,
         robot: str | None = None,
         options: dict[str, Any] | None = None,
         seconds: float | None = None,
@@ -41,21 +43,34 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         """The user's own code that adds parts, sensors, controllers and behaviors. list: what is loaded (each with
         what it is for and its options) and every plugin file that failed or was not loaded, with why. reload: read the
         plugin folders again after a file was edited or added (~/.robotforge/plugins, and the open world's plugins/
-        folder). trust: load the open world's plugins/ folder as it is now. run: start the controller or behavior
-        `name` on `robot` with `options`; a controller runs inside the simulation for `seconds` (default 5, at most
-        60) and keeps running afterwards until stop(robot), a behavior is a script that runs to its end (`seconds` is
-        its time limit, default 60) and returns what it returns. A world's plugin files load only when they were
-        written here (write_script with plugin=true) or trusted: they are Python that runs on this computer with the
-        user's rights, so read each one (read_script) and tell the user what it does before trusting a world you did
-        not make. Plugin parts are shapes for add_object, plugin sensors types for add_sensor."""
+        folder). show: the source of every file in a world's plugins/ folder (the open world, or world=NAME or a
+        path), for you to read and tell the user what it does. run: start the controller or behavior `name` on
+        `robot` with `options`; a controller runs inside the simulation for `seconds` (default 5, at most 60) and
+        keeps running afterwards until stop(robot), a behavior is a script that runs to its end (`seconds` is its
+        time limit, default 60) and returns what it returns. A world's plugin files load only when they were written
+        here (write_script with plugin=true) or the user approved them: they are Python that runs on this computer
+        with the user's rights, so you cannot trust a world's plugins yourself. Read them (show), tell the user what
+        they do, and if the user wants them, they run `robotforge plugins trust WORLD` in a terminal; then
+        reload (or open_world). Plugin parts are shapes for add_object, plugin sensors types for add_sensor."""
         with _tool_errors():
             store = playground.store
             if action == "trust":
-                if store is None:
-                    raise PlaygroundError("no world is open; plugins(action='trust') trusts the open world's plugins")
-                if not REGISTRY.trust(store.dir):
-                    raise PlaygroundError(f"the world has no {WORLD_FOLDER}/ folder with plugin files")
-            elif action == "reload":
+                where = store.dir if store is not None else "WORLD"
+                raise PlaygroundError(
+                    "Trusting Python that came with a world is the user's decision, not an agent's. Read it with "
+                    'plugins(action="show"), tell the user what it does, and if they want it they approve it in a '
+                    f'terminal: robotforge plugins trust "{where}" (it prints the files and asks). Then '
+                    'plugins(action="reload") or open_world.'
+                )
+            if action == "show":
+                directory = WorldStore.open(world).dir if world else (store.dir if store is not None else None)
+                if directory is None:
+                    raise PlaygroundError("no world is open: give world=NAME or the path of a world's folder")
+                shown = REGISTRY.show(directory)
+                if not shown["files"]:
+                    raise PlaygroundError(f"{directory} has no {WORLD_FOLDER}/ folder with files")
+                return _json(shown)
+            if action == "reload":
                 REGISTRY.reload()
                 if store is not None:
                     REGISTRY.load_world(store.dir)
@@ -110,11 +125,12 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         seconds = 60.0 if seconds is None else seconds
         if not 0 < seconds <= MAX_BEHAVIOR_SECONDS:
             raise PlaygroundError(wording.seconds_range("seconds", seconds, MAX_BEHAVIOR_SECONDS))
-        path, args, used = routines.behavior_command(name, robot, options)
+        store = playground._require_store()
+        path, args, used = routines.behavior_command(name, robot, options, store.dir)
         with tempfile.TemporaryDirectory(prefix="robotforge_behavior_") as folder:
             script = Path(folder) / "run_behavior.py"
             script.write_text(routines.BEHAVIOR_SCRIPT, encoding="utf-8", newline="\n")
-            out = await run_script(script, seconds, args)
+            out = await run_script(script, seconds, args, routines.wall_limit(seconds))
         result, text = routines.parse_result(out.get("output", ""))
         out["output"] = text
         return {"behavior": name, "robot": robot, "options": used, "result": result, **out}
