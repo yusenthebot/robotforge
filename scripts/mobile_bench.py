@@ -187,6 +187,9 @@ def job_conveyor(pg: Any, wait: Wait) -> dict[str, Any]:
         if not res["success"]:
             res["why"] = "missed" if not caught.get("caught") else (caught.get("why") or "not_there")
             res["note"] = caught.get("note")
+            named = cause(res["note"] or "")  # the arm cannot put it on the workbench, wherever the robot stands
+            if named == "refused:cannot_place":
+                res["why"] = named
     elif not res["success"]:
         res["why"] = "not_caught"
     return res
@@ -208,6 +211,7 @@ def cause(text: str) -> str:
         ("too_late", ("sooner than",)),
         ("no_place_at_belt", ("anywhere beside the belt",)),
         ("cannot_catch", ("is riding on",)),
+        ("cannot_place", ("free spot on the",)),
         ("nowhere_to_stand", ("nowhere", "no room")),
         ("too_high_or_low", ("too high", "too low")),
         ("no_way", ("no way",)),
