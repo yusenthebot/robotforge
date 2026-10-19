@@ -76,9 +76,16 @@ def test_a_part_becomes_a_shape_like_any_other(folders, tmp_path):
     assert world.objects[1].shape == "signpost"  # "Signpost" is the shape it names
 
 
-def test_an_unloaded_shape_says_where_plugins_come_from(folders):
-    with pytest.raises(ValueError, match=r"plugins\(\) lists"):
-        World.model_validate({"objects": [{"name": "a", "shape": "signpost"}]})
+def test_a_shape_that_is_not_loaded_is_unknown_like_any_other_and_loaded_it_is_listed(folders):
+    yaml_text = "name: w\nobjects:\n- {name: a, shape: signpost}\n"
+    with pytest.raises(ValueError, match=r"shape 'signpost' is not one of: box, sphere") as unknown:
+        World.from_yaml(yaml_text)
+    assert "signpost," not in str(unknown.value) and "plugin" not in str(unknown.value)
+    write(folders, "sign.py", SIGNPOST)
+    REGISTRY.load_user()
+    assert World.from_yaml(yaml_text).objects[0].shape == "signpost"
+    with pytest.raises(ValueError, match=r"is not one of: box.*cloth, signpost"):
+        World.from_yaml(yaml_text.replace("signpost", "pyramid"))
 
 
 def test_unload_takes_the_shape_away_and_keeps_the_built_ins(folders):

@@ -208,7 +208,7 @@ def _footprint_of(pieces: list[Any]) -> tuple[float, float]:
 
 
 def unknown_part(name: str, shapes: list[str]) -> str:
-    """The message for a shape no one has added: the shapes there are, and where plugin shapes come from."""
+    """The message for a shape no one has added, when plugin files of the world were left unloaded: why."""
     left = sorted({f"{p.parent.parent.name}/{p.name}" for p in REGISTRY.untrusted})
     if left:
         return (

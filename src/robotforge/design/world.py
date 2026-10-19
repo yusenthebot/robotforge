@@ -257,9 +257,15 @@ class ObjectEntry(_Strict):
         found = wording.match(v, props.SHAPES)
         if found is not None:
             return found
+        from pydantic_core import PydanticCustomError
+
         from robotforge import extend
 
-        raise ValueError(extend.unknown_part(v, list(props.SHAPES)))
+        if extend.REGISTRY.untrusted:  # the shape may be one a plugin file would add if it were trusted
+            raise ValueError(extend.unknown_part(v, list(props.SHAPES)))
+        # The message every unknown name gets, with the shapes there are (plugins' too, once loaded)
+        expected = ", ".join(f"'{s}'" for s in props.SHAPES)
+        raise PydanticCustomError("literal_error", "Input should be {expected}", {"expected": expected})
 
     @model_validator(mode="after")
     def _sizes(self) -> ObjectEntry:
