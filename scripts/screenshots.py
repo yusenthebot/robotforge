@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/combos.py
 CHROME_PATHS = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -399,6 +400,7 @@ def _when(body: str, condition: str, timeout: float = 150.0) -> str:
                 if ({condition}) break;
                 {_SLEEP.format(ms=100)}
             }}
+        }}
     """
 
 
@@ -423,7 +425,6 @@ def _look_between(robot: str, body: str, offset: tuple[float, float, float]) -> 
             const o = rf.bodyPosition(rf.scene.bodies.findIndex((b) => b.name === {json.dumps(body)}));
             const mid = [(r[0] + o[0]) / 2, (r[1] + o[1]) / 2, o[2] * 0.85];
             rf.lookAt(mid.map((v, i) => v + {json.dumps(list(offset))}[i]), mid);
-        }}
         }}
     """
 
@@ -1059,6 +1060,29 @@ G8_SHOTS = [
 
 
 # Pictures of the mechanisms lane (G3): the lane's own folder, not the README's.
+# ---- G10: mount anything on anything -----------------------------------------------------------------------------
+# The ten combinations live in scripts/combos.py (each made in one sentence, moving and doing a small job); these are
+# pictures of them standing, at 1920x1080.
+
+
+def _combo(name: str) -> Callable[[Any], None]:
+    def world(pg: Any) -> None:
+        import combos
+
+        combos.COMBOS[name].build(pg)
+
+    return world
+
+
+def _g10_shots() -> list[Shot]:
+    import combos
+
+    return [
+        Shot(f"g10_{c.name}", _combo(c.name), page=_framed(c.robot, c.view, c.lift), size=(1920, 1080), settle=2.5)
+        for c in combos.COMBOS.values()
+    ]
+
+
 G3_SHOTS = [
     Shot(
         "g3_suction_tile",
@@ -1144,6 +1168,13 @@ def _generated_line_up(pg: Any) -> None:
         pg.add_robot(f"g{i + 1:02d}", describe=GENERATED[i], pos=pos, yaw=48 if snake else -42)
 
 
+def _generated_four(pg: Any) -> None:
+    """Four robots each built from one sentence, for the README: a humanoid, a courier, a six-legged one with arms, a
+    big dog (GENERATED 11, 1, 0 and 4), in a row facing the camera."""
+    for name, sentence, y in (("humanoid", 11, 1.55), ("courier", 1, 0.55), ("mantis", 0, -0.5), ("dog", 4, -1.5)):
+        pg.add_robot(name, describe=GENERATED[sentence], pos=[0.0, y])
+
+
 def _frame_robot(robot: str, direction=(1.0, -0.85, 0.55), scale: float = 1.9, least: float = 0.6) -> str:
     """Page script: nothing selected, the camera along `direction` from the middle of all of `robot`'s bodies (half
     way up from the ground to its highest one), far enough to see the whole robot whatever its size."""
@@ -1171,15 +1202,29 @@ def _generated(sentence: str) -> Callable[[Any], None]:
 
 # One picture per generated robot (gen_01 ... gen_15), for the gallery grid; and all fifteen together.
 GENERATED_SHOTS = [
-    Shot(f"gen_{i + 1:02d}", _generated(sentence), page=_frame_robot("bot"), settle=2.5)
+    Shot(
+        f"gen_{i + 1:02d}",
+        _generated(sentence),
+        # A snake is long and thin: seen from the side and close, it fills the picture instead of a thin diagonal
+        page=(
+            _frame_robot("bot", direction=(0.25, -1.0, 0.45), scale=1.7) if "snake" in sentence else _frame_robot("bot")
+        ),
+        settle=2.5,
+    )
     for i, sentence in enumerate(GENERATED)
 ] + [
+    Shot(
+        "readme_generated",
+        _generated_four,
+        page="window.__robotforge.select(null);" + _look((2.9, -0.7, 1.05), (0.0, 0.05, 0.5)),
+        settle=3.0,
+    ),
     Shot(
         "generated_robots",
         _generated_line_up,
         page="window.__robotforge.select(null);" + _look((3.1, -2.75, 1.75), (0.4, -0.35, 0.1)),
         settle=3.0,
-    )
+    ),
 ]
 
 
@@ -1556,6 +1601,7 @@ SHOTS = [
     *G3_SHOTS,
     *G8_SHOTS,
     *GENERATED_SHOTS,
+    *_g10_shots(),
     *_world_shots(),
 ]
 
@@ -1585,7 +1631,7 @@ def generated_grid(singles: list[Path], out: Path, cols: int = 5) -> Path:
     """The gen_ pictures in a grid, each cropped to its robot (no viewer bars) with its sentence under it."""
     from PIL import Image, ImageDraw, ImageFont
 
-    tile_w, tile_h, caption, gap, margin, title_h = 560, 380, 54, 14, 28, 76
+    tile_w, tile_h, caption, gap, margin, title_h = 560, 380, 56, 14, 28, 76
     crop = (220, 110, 1380, 900)  # of a SAVED_WIDTH (1600 x 1000) picture
 
     def font(size: int) -> Any:
@@ -1617,8 +1663,14 @@ def generated_grid(singles: list[Path], out: Path, cols: int = 5) -> Path:
         draw.rectangle([x, y + tile_h, x + tile_w - 1, y + tile_h + caption - 1], fill=(255, 255, 255))
         draw.text((x + 12, y + tile_h + 8), f"{i + 1:02d}", font=font(17), fill=(200, 120, 30))
         text = f'"{sentence}"'
-        size = 19 if draw.textlength(text, font=font(19)) < tile_w - 56 else 15
-        draw.text((x + 44, y + tile_h + 6), text, font=font(size), fill=(29, 32, 38))
+        if draw.textlength(text, font=font(19)) < tile_w - 56:
+            draw.text((x + 44, y + tile_h + 6), text, font=font(19), fill=(29, 32, 38))
+        else:  # a long sentence goes on two lines at the same size, split near the middle
+            words = text.split(" ") if " " in text else list(text)  # a sentence without spaces (Chinese) by character
+            join = " ".join if " " in text else "".join
+            cut = min(range(1, max(len(words), 2)), key=lambda k: abs(len(join(words[:k])) - len(join(words[k:]))))
+            for line, part in enumerate((join(words[:cut]), join(words[cut:]))):
+                draw.text((x + 44, y + tile_h + 3 + 24 * line), part, font=font(19), fill=(29, 32, 38))
     sheet.save(out, "JPEG", quality=88, optimize=True)
     return out
 

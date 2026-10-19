@@ -2,8 +2,10 @@
 
 Legged walkers place their feet with it (quadruped.py): where a swinging foot will land, what lies in its way, the
 slope it stands on. It measures the live scene the way a depth camera or a height-scan lidar on the trunk would:
-whatever is there counts as ground (terrain, a step, a crate it climbs onto), except the robot itself, which a real
-robot filters out of its own scans, and shapes that only look (visual meshes, which nothing stands on).
+whatever is fixed in the world counts as ground (terrain, steps, stones, furniture), except the robot itself, which a
+real robot filters out of its own scans, shapes that only look (visual meshes, which nothing stands on), and anything
+that moves: another robot, an arm, a loose box. A walker feels those through its feet, and reading them as ground
+deflected a dog from a box it could push aside.
 
 A ray costs about 1.5 us against a world of 60 shapes; a physics step about 14. Scans are made only in worlds that
 have something to step on besides the flat floor (see `needed`), so walking on flat ground costs nothing extra.
@@ -37,8 +39,9 @@ class GroundScan:
         ngeom = int(model.ngeom)
         rootid = model.body_rootid[model.geom_bodyid[:ngeom]]
         hit = np.array([collides(model, g) for g in range(ngeom)], dtype=bool)
-        # Shapes a ray goes through: the robot's own, and those nothing touches (they only look).
-        self.through = (rootid == self.root) | ~hit
+        # Shapes a ray goes through: the robot's own, those nothing touches (they only look), and those on anything
+        # that can move (a kinematic tree with a joint in it).
+        self.through = (rootid == self.root) | ~hit | ~static_geoms(model)
         self.needed = needed(model, self.through)
         self._hit = np.zeros(1, np.int32)
         self._down = np.array([0.0, 0.0, -1.0])
@@ -67,9 +70,18 @@ class GroundScan:
         return np.array([self.height(model, data, float(p[0]), float(p[1]), top) for p in points])
 
 
+def static_geoms(model: mujoco.MjModel) -> np.ndarray:
+    """Per geom: whether it is fixed in the world, on a body whose whole kinematic tree has no joint."""
+    ngeom = int(model.ngeom)
+    moves = np.zeros(int(model.nbody), dtype=bool)
+    for dof in range(int(model.nv)):
+        moves[int(model.body_rootid[model.dof_bodyid[dof]])] = True
+    return ~moves[model.body_rootid[model.geom_bodyid[:ngeom]]]
+
+
 def needed(model: mujoco.MjModel, through: np.ndarray) -> bool:
     """Whether the world has anything to step on but a flat floor: a heightfield, or a solid shape that is not a
-    plane and not the robot's own (stairs, ramps, stones, furniture, objects lying about)."""
+    plane, not the robot's own and not on anything that moves (stairs, ramps, stones, furniture)."""
     for g in range(int(model.ngeom)):
         if through[g]:
             continue

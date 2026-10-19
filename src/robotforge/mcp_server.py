@@ -38,6 +38,7 @@ from robotforge.behaviors.navigate import NoWay
 from robotforge.bridge import mcp_tools as policy_tools
 from robotforge.cli import DEFAULT_PORT, listen_on_free_port, open_in_browser
 from robotforge.control import mcp_tools as control_tools
+from robotforge.design import combine, mount_tools
 from robotforge.design import mcp_tools as scene_tools
 from robotforge.design.builder import edit as build_edit
 from robotforge.design.builder import mcp_tools as builder_tools
@@ -77,6 +78,12 @@ pallets, trees, benches, rocks, flat ground markers), things with a moving part 
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
 end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
 add_robot or later in update_robot.
+mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
+end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
+suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
+checks say the mass, how far the centre of mass is inside what the robot stands on, each arm's reach and what it can
+hit or hold; a robot that would tip or fall is refused with what to change. save_as keeps the combination as a design
+(add_robot(design=...) or mount(what=...) uses it again); remove("cart/arm") takes a mount off.
 update_robot, update_object, remove, set_floor and undo edit the world; every edit is validated and the live
 viewer updates at once. Robots and objects an edit does not change stay where they are (new terrain or a scene
 starts them fresh). Names are lowercase with underscores; other capitals and spaces are accepted ("Red Cube" is
@@ -86,10 +93,13 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, home, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. Quadrupeds look at the ground as they walk: move takes them up and down
-stairs (8 cm steps), slopes and gravel on their own, straight on and at about 0.3 m/s.
-load_scene(description="a flat with a kitchen and a bedroom, three
-apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
+and objects stand on the ground under them. Go2, A1, ANYmal C and Barkour look at the ground as they walk: move
+takes them up and down stairs (about 8 cm steps, 30 cm deep; 10 cm ones and long flights can still topple them),
+slopes and gravel on their own, straight on; over rough ground they slow to 60 percent of top speed by themselves.
+Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
+off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain.
+load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
+instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
 observe(view="overview").
 add_task("bring the red cup from the kitchen to the bedroom desk") turns a sentence into a task saved with the world:
@@ -363,9 +373,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     @server.tool()
     def list_library() -> str:
         """List real robots that add_robot(library=...) loads: robot dogs (Go2, Spot, ANYmal C, ...; move and the
-        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work),
-        humanoids (G1, Robotis OP3, Booster T1) and a gripper to mount on an arm (Robotiq 2F-85). The first add_robot
-        of each downloads it from MuJoCo Menagerie (size in download_mb, usually 5-30 s) and caches it."""
+        keyboard walk them), arms (Franka Panda, PiPER, UR5e, ALOHA 2, ...; move_arm and pick_and_place work), humanoids
+        (G1, Robotis OP3, Booster T1) and grippers and hands to mount on an arm (Robotiq 2F-85, Franka Hand, LEAP and
+        Allegro hands). The first add_robot of each downloads it from MuJoCo Menagerie (size in download_mb, usually
+        5-30 s) and caches it."""
         from robotforge.design import library
 
         with _tool_errors():
@@ -438,10 +449,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         nearest free place when furniture or a robot stands there); yaw is in degrees (left out: the place's
         heading, else 0)."""
         with _tool_errors():
-            parts = build
-            if design is not None:  # the robots it mounts download first, like a build's
+            parts, kept = build, []
+            if design is not None and combine.saved_design(wording.squash(design)) is not None:
+                kept = combine.libraries(wording.squash(design))  # a combination saved with mount(save_as=...)
+            elif design is not None:  # the robots it mounts download first, like a build's
                 parts = design_build(design, template=template, file=file, library=library, build=build, params=params)
-            for wanted in [library, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
+            for wanted in [library, *kept, *build_edit.libraries_in(parts), *_mounted_libraries(mounts)]:
                 if wanted is not None:
                     await _download_with_progress(wanted, ctx)
             # A cold import of a URDF or mesh file converts meshes and simulates the robot for up to a
@@ -780,6 +793,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)
     sensor_tools.register(server, playground)
+    mount_tools.register(server, playground)
     lessons.register(server)
     policy_tools.register(server)
 
@@ -1083,8 +1097,14 @@ _downloads: dict[str, tuple[asyncio.Future, dict[str, Any]]] = {}
 
 
 def _mounted_libraries(mounts: list[dict[str, Any]] | None) -> list[str]:
-    """The library robots a mounts list names, to download before the world is compiled."""
-    return [m["library"] for m in mounts or [] if isinstance(m, dict) and isinstance(m.get("library"), str)]
+    """The library robots a mounts list names, its saved designs' too, to download before the world is compiled."""
+    out = []
+    for m in mounts or []:
+        if isinstance(m, dict) and isinstance(m.get("library"), str):
+            out.append(m["library"])
+        elif isinstance(m, dict) and isinstance(m.get("design"), str):
+            out += combine.libraries(wording.squash(m["design"]))
+    return out
 
 
 async def _download_with_progress(name: str, ctx: Context) -> None:
