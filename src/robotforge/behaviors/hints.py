@@ -38,6 +38,7 @@ ROOM = 0.055  # m between the middles of two things put in one tray
 EDGE = 0.03  # m from a tray's wall that a thing is put at least
 STEP = 0.015  # m between the spots tried in a tray
 NEAR_Z = 0.12  # m: a thing this far above or below a tray's floor is not in it
+BOOST_MAX = 4.0  # times a gripper's force limit a firm hold may raise it
 PALM_MARGIN = 0.004  # m the underside of the hand keeps clear of the object's top
 TIP_MARGIN = 0.001  # m the fingertips keep over the floor
 HOVER = 0.012  # m above its resting place an object is let go (the planner adds 1 cm; this is for a socket's chamfer)
@@ -135,6 +136,20 @@ def _measure_palm(model: mujoco.MjModel, arm: ArmMotion) -> Palm | None:
 def _reach(rot: np.ndarray, half: np.ndarray, direction: np.ndarray) -> float:
     """How far a box with half extents `half` in the frame `rot` reaches along a direction from its middle."""
     return float(np.abs(rot.T @ direction) @ half)
+
+
+def finger_geoms(model: mujoco.MjModel, arm: ArmMotion) -> np.ndarray:
+    """The solid shapes of everything that moves on the hand: its fingers and their pads and linkage (the shapes on
+    bodies the tool body carries by a joint, the pads of a Robotiq among them, which ride on a follower link)."""
+    tool = arm.chain.body
+    found = [
+        g
+        for g in range(model.ngeom)
+        if collides(model, g)
+        and _below(model, int(model.geom_bodyid[g]), tool)
+        and not _fixed_to(model, int(model.geom_bodyid[g]), tool)
+    ]
+    return np.array(found, int)
 
 
 def _below(model: mujoco.MjModel, body: int, ancestor: int) -> bool:
@@ -266,7 +281,7 @@ class FirmHold:
         self._saved["weight"] = self.arm.carry_weight
         self.arm.carry_weight = True
         if self.arm.gripper >= 0:
-            pads = fetch._finger_geoms(model, self.arm)
+            pads = finger_geoms(model, self.arm)
             self._saved["pad_friction"] = (pads, model.geom_condim[pads].copy(), model.geom_friction[pads].copy())
             model.geom_condim[pads] = np.maximum(model.geom_condim[pads], 4)  # the contact can resist turning
             model.geom_friction[pads, 1] = np.maximum(model.geom_friction[pads, 1], PAD_TORSION_FIRM)
@@ -282,9 +297,36 @@ class FirmHold:
             before = fetch.squeeze(model, self.arm.gripper, self.force, self.short)
             if before is not None:
                 self._saved["squeeze"] = before
+        self.arm.on_lift.append(self.boost)
         self.arm.on_open.append(self.stop)
         self.arm.on_idle.append(self.stop)
         self.session.reset_hooks.append(self.stop)
+
+    def boost(self) -> None:
+        """The jaws have closed: if they squeeze less than the hold needs (a Robotiq's servo is as stiff as it gets and
+        its force limit is what limits it), raise that limit so that they squeeze as hard as it takes, up to
+        BOOST_MAX times what it was."""
+        model, data = self.session.model, self.session.data
+        g = self.arm.gripper
+        if g < 0 or not model.actuator_forcelimited[g]:
+            return
+        fingers = set(int(i) for i in finger_geoms(model, self.arm))
+        mine = {i for i in range(model.ngeom) if int(model.geom_bodyid[i]) == self.body}
+        normal = np.zeros(6)
+        total, pairs = 0.0, 0
+        for c in range(data.ncon):
+            con = data.contact[c]
+            if (con.geom1 in fingers and con.geom2 in mine) or (con.geom2 in fingers and con.geom1 in mine):
+                mujoco.mj_contactForce(model, data, c, normal)
+                total += abs(float(normal[0]))
+                pairs += 1
+        per_side = total / 2.0
+        if pairs == 0 or per_side <= 0 or per_side >= self.force:
+            return
+        factor = min(self.force / per_side, BOOST_MAX)
+        if "force_range" not in self._saved:
+            self._saved["force_range"] = (g, model.actuator_forcerange[g].copy())
+        model.actuator_forcerange[g] = self._saved["force_range"][1] * factor
 
     def relax(self) -> None:
         """Give the gripper's own servo back (the jaws are about to open: a stiffened one did not let go of a can)."""
@@ -305,6 +347,9 @@ class FirmHold:
         if "pad_friction" in saved:
             pads, condim, friction = saved["pad_friction"]
             model.geom_condim[pads], model.geom_friction[pads] = condim, friction
+        if "force_range" in saved:
+            g, limits = saved["force_range"]
+            model.actuator_forcerange[g] = limits
         if "pads" in saved:
             pads, solmix, solimp, solref = saved["pads"]
             model.geom_solmix[pads], model.geom_solimp[pads], model.geom_solref[pads] = solmix, solimp, solref

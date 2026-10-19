@@ -265,11 +265,11 @@ def test_every_hard_kind_has_a_check_and_the_old_kinds_are_judged_as_they_were()
 # ---- the bench and the expert -------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", ["upright", "insert", "stack"])
+@pytest.mark.parametrize("kind", ["upright", "insert", "stack", "pour"])
 def test_the_scripted_expert_does_the_task_and_the_tasks_own_check_says_so(kind):
     report = hard_bench.run(kind, 1, "panda")
     assert report["done"], report.get("cause") or report["why"]
-    assert all(step.get("success") for step in report["steps"]) and not any(s["knocked"] for s in report["steps"])
+    assert all(step.get("success") for step in report["steps"]) and not any(s.get("knocked") for s in report["steps"])
     assert report["sentence"]
 
 
@@ -288,3 +288,40 @@ def test_a_failure_is_given_a_cause_from_its_steps():
         [{"thing": "can_1", "target": "t", "success": True, "knocked": ["apple_1"], "tilt_deg": 0}], ""
     )
     assert knocked == "knocked over apple_1 while handling can_1"
+
+
+def test_a_failed_pour_says_how_many_balls_got_across():
+    spilled = hard_bench.cause(
+        [{"thing": "cup", "target": "bowl", "success": False, "balls_in_target": 2, "balls": 7}], ""
+    )
+    assert spilled == "only 2 of 7 balls reached bowl (the rest spilled)"
+
+
+def test_a_pour_sentence_takes_the_balls_in_the_cup_and_a_cup_without_balls_is_refused():
+    inside = [
+        {"name": f"b{i}", "shape": "sphere", "size": [0.012], "pos": [0.4 + 0.01 * i, -0.2, Z + 0.02]} for i in range(3)
+    ]
+    far = {"name": "far", "shape": "sphere", "size": [0.012], "pos": [0.9, 0.5, Z + 0.02]}
+    cup = {"name": "cup", "shape": "cup", "pos": [0.4, -0.2, Z]}
+    bowl = {"name": "bowl", "shape": "bowl", "pos": [0.5, 0.2, Z]}
+    arms = [SimpleNamespace(name="arm", kind="arm", arms=[])]
+    sentence = "pour the balls from the cup into the bowl"
+    task = hard.plan(_world(cup, bowl, far, *inside), sentence, arms, None, None, 0, "pour").task
+    assert (task.object, task.target, task.items) == ("cup", "bowl", ["b0", "b1", "b2"])
+    with pytest.raises(hard.TaskProblem, match="nothing in cup to pour"):
+        hard.plan(_world(cup, bowl, far), sentence, arms, None, None, 0, "pour")
+
+
+def test_a_cup_with_a_lid_or_held_by_a_handle_only_is_not_poured_before_the_arm_moves():
+    pg = hard_bench.fresh()
+    hard_bench.bench(pg, "panda")
+    pg.add_object("bowl", shape="bowl", pos=[0.5, 0.25, Z])
+    pg.add_object("lidded", shape="cup", params={"style": "tumbler", "lid": True}, pos=[0.45, -0.22, Z])
+    pg.add_object("mug", shape="mug", pos=[0.3, -0.3, Z])
+    pg.add_object("ball", shape="sphere", size=[0.012], pos=[0.3, -0.3, Z + 0.03])
+    pg.run_fast(lambda: False, 0.5)
+    arm = pg.behaviors.resolve("arm", arm=True)
+    with pytest.raises(Exception, match="no open mouth"):
+        pg.behaviors.pick_and_place(arm, "lidded", "bowl", True, None, True)
+    with pytest.raises(Exception, match="no grip on its own axis"):
+        pg.behaviors.pick_and_place(arm, "mug", "bowl", True, None, True)

@@ -282,6 +282,7 @@ class ArmMotion:
         # of something heavy firmed for the load (hints.FirmHold) put back.
         self.on_idle: list[Callable[[], None]] = []
         self.on_open: list[Callable[[], None]] = []  # called once, as the jaws are told to open what they hold
+        self.on_lift: list[Callable[[], None]] = []  # called once, as the arm begins to lift what the jaws closed on
         self._gripping = False  # the jaws were told to close and have not been told to open since
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
@@ -1575,6 +1576,10 @@ class ArmMotion:
                 self._branch = (self.q.copy(), wp.joints)
             self._segment = (start, wp, t)
             self.current_label = wp.label
+            if wp.label == "lift" and self._gripping and self.on_lift:
+                callbacks, self.on_lift = self.on_lift, []
+                for callback in callbacks:
+                    callback()
             if wp.gripper is not None and self.gripper >= 0:
                 if wp.gripper == self.gripper_closed:
                     self._gripping = True

@@ -958,7 +958,12 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     async def pick_and_place(
-        robot: str, object: str, target: str | list[float], go: bool = True, grasp: str | None = None
+        robot: str,
+        object: str,
+        target: str | list[float],
+        go: bool = True,
+        grasp: str | None = None,
+        pour: bool = False,
     ) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
@@ -979,14 +984,17 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         shaft; grasp="handle" (or "body", "shaft", "rim", "neck", "edge") asks for one kind, and the answer's "grasp"
         says which was used and "tilt_deg" how far from upright the object ended. The target may be a slot of a
         fixture: "rack" fills its first free socket, "rack/2" the second, a tray takes things inside, and a package or
-        a tin takes things stacked on its top."""
+        a tin takes things stacked on its top. pour=true pours instead: the object is a cup, a mug or a bowl with
+        balls (or anything small) in it and the target a container with an open mouth; the arm carries it over the
+        target, tilts it about its lip until what is in it has run out, tips it back and puts it down where it stood.
+        The answer says how many of the balls are in the target now ("balls_in_target", "balls")."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
             # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
             # take seconds, and the viewer froze meanwhile.
             motion, info = await asyncio.to_thread(
-                playground.behaviors.pick_and_place, robot, object, target, go, grasp
+                playground.behaviors.pick_and_place, robot, object, target, go, grasp, pour
             )
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
@@ -994,7 +1002,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             if caught is not None:  # caught off a moving belt, then put down or carried there
                 run = await run_until(lambda: motion.done, caught.time_limit)
             elif errand is None:
-                run = await run_until(lambda: motion.done, 40.0)
+                run = await run_until(lambda: motion.done, 100.0 if pour else 40.0)
             else:  # a reset or a world edit ends it; one no longer attached is waited for no more
                 robot_name = errand.robot
                 run = await run_until(
@@ -1010,6 +1018,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             settle = await run_until(lambda: False, 0.5)
             region = info["region"] if caught is None or caught.region is None else caught.region
             result = playground.behaviors.placed(object, region) if region is not None else {"success": False}
+            if info.get("pour"):
+                result = playground.behaviors.poured(info)
             return _json(
                 {
                     **result,

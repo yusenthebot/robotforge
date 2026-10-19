@@ -62,6 +62,7 @@ def build(pg: Any, kind: str, seed: int = 0, arm: str = "panda") -> dict[str, An
         "stack": _stack,
         "insert": _insert,
         "sort": _sort,
+        "pour": _pour,
     }[kind](pg, rng, seed)
     pg.run_fast(lambda: False, 0.6)
     added = pg.add_task(sentence, robot="arm", name=kind, seed=seed)
@@ -96,6 +97,25 @@ def _insert(pg: Any, rng: random.Random, seed: int) -> str:
     )
     pg.add_object("bottle", shape="bottle", seed=seed, pos=[0.40, -0.24, TABLE_Z])
     return SENTENCES["insert"]
+
+
+def _pour(pg: Any, rng: random.Random, seed: int) -> str:
+    """A tumbler with a handful of balls in it, and a bowl across the table to pour them into."""
+    pg.add_object(
+        "bowl", shape="bowl", seed=seed, pos=[0.50 + rng.uniform(-0.03, 0.03), 0.25 + rng.uniform(-0.03, 0.03), TABLE_Z]
+    )
+    x, y = 0.45 + rng.uniform(-0.03, 0.03), -0.22 + rng.uniform(-0.03, 0.03)
+    pg.add_object("cup", shape="cup", seed=seed, params={"style": "tumbler", "lid": False}, pos=[x, y, TABLE_Z])
+    count = rng.randint(6, 9)
+    ring = 0.55 * float(objects.object_for("cup", seed=seed, style="tumbler", lid=False).facts["mouth_r"])
+    for i in range(count):  # layers of four, each turned an eighth from the one below: they rest, not wedge
+        layer, k = divmod(i, 4)
+        a = math.pi / 2 * k + math.pi / 4 * layer
+        pg.add_object(
+            f"ball{i}", shape="sphere", size=[0.012], mass=0.003, color="#d9453d",
+            pos=[x + ring * math.cos(a), y + ring * math.sin(a), TABLE_Z + 0.02 + 0.021 * layer],
+        )  # fmt: skip
+    return SENTENCES["pour"]
 
 
 SORT_KINDS = (("fruit", ("apple", "orange")), ("cans", ("can", "can")), ("boxes", ("brick", "tin")))
@@ -194,6 +214,8 @@ def solve(pg: Any, name: str | None = None, robot: str = "arm") -> dict[str, Any
     task = next(t for t in world.tasks if name in (None, t.name))
     t0, wall = float(pg.session.data.time), time.time()
     steps: list[dict[str, Any]] = []
+    if task.kind == "pour":
+        return _finish(pg, task, [_pour_step(pg, task.object, task.target, robot)], t0, wall)
     order = _order(pg, task)
     placed: list[str] = []
     for thing, target in order:
@@ -207,6 +229,34 @@ def solve(pg: Any, name: str | None = None, robot: str = "arm") -> dict[str, Any
         steps.append(step)
         if "refused" in step:
             break
+    return _finish(pg, task, steps, t0, wall)
+
+
+def _pour_step(pg: Any, thing: str, target: str, robot: str) -> dict[str, Any]:
+    """One pour as an agent makes it: pick_and_place(pour=true), run to its end, then what came of it."""
+    arm = pg.behaviors.resolve(robot, arm=True)
+    d = pg.session.data
+    row: dict[str, Any] = {"thing": thing, "target": target}
+    try:
+        motion, info = pg.behaviors.pick_and_place(arm, thing, target, True, None, True)
+    except Exception as exc:  # the planner's refusal is the answer
+        row.update(refused=str(exc)[:300])
+        return row
+    t0 = float(d.time)
+    pg.run_fast(lambda: bool(motion.done), 120)
+    pg.run_fast(lambda: False, 1.5)
+    result = pg.behaviors.poured(info)
+    row.update(
+        success=bool(result["success"]),
+        balls_in_target=result["balls_in_target"],
+        balls=result["balls"],
+        toward_deg=result["poured_toward_deg"],
+        sim_s=round(float(d.time) - t0, 1),
+    )
+    return row
+
+
+def _finish(pg: Any, task: Any, steps: list[dict[str, Any]], t0: float, wall: float) -> dict[str, Any]:
     pg.run_fast(lambda: False, 1.2)
     verdict = pg.task_status()[task.name]
     report = {
@@ -255,6 +305,8 @@ def cause(steps: list[dict[str, Any]], why: str) -> str:
     for s in steps:
         if "refused" in s:
             return f"refused: {s['refused'][:140]}"
+        if "balls_in_target" in s and not s.get("success"):
+            return f"only {s['balls_in_target']} of {s['balls']} balls reached {s['target']} (the rest spilled)"
         if s.get("knocked"):
             return f"knocked over {', '.join(s['knocked'])} while handling {s['thing']}"
         if not s.get("success"):
