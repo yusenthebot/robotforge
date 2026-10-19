@@ -1241,12 +1241,15 @@ class BehaviorManager:
         ctrl = self.session.controllers.get(robot)
         # A balancer knows best: a wheel-legged robot that folds its legs back tips its body far over, balanced.
         upright = not ctrl.fallen if isinstance(ctrl, WheelBalancer) else rot[2, 2] > 0.7
-        return {
+        found = {
             "robot": robot,
             "position": [round(float(v), 3) for v in d.xpos[root]],
             "heading_deg": round(math.degrees(math.atan2(rot[1, 0], rot[0, 0])), 1),
             "upright": bool(upright),
         }
+        if getattr(ctrl, "blocked", False):  # a walker standing before ground too steep for it (quadruped.py)
+            found["blocked"] = ctrl.status()["blocked"]
+        return found
 
     def _root_body(self, robot: str) -> int:
         m = self.session.model

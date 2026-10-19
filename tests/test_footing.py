@@ -157,7 +157,7 @@ def test_a_robot_limited_in_slope_stands_before_stairs_it_cannot_climb(pg):
     gait.limit_slope(0.24)
     pg.run_fast(lambda: False, 12.0)
     trunk = _trunk(pg, "go2")
-    assert gait.blocked and gait.status()["blocked"]
+    assert gait.blocked and "steep" in pg.behaviors.pose("go2")["blocked"]
     assert pg.behaviors.pose("go2")["upright"]
     assert pg.session.data.xpos[trunk][0] < 0.6  # it did not walk up to the first step
     pg.behaviors.move("go2", -0.2, 0.0, walker="gait")  # backing off is always allowed
@@ -180,3 +180,22 @@ def test_tall_humanoids_turn_further_per_step_than_small_ones():
     tall = turn_per_step(math.sqrt(0.55 / 0.2), 0.55)
     assert small == 0.2
     assert 0.2 < tall <= MAX_TURN_PER_STEP
+
+
+def test_told_to_run_at_stairs_a_go2_slows_for_them_and_stays_upright(pg):
+    """At its top speed a Go2 toppled on 8 cm stairs (0 of 3); it now walks rough ground at 60 percent at most."""
+    pg.add_terrain("stairs", pos=[1.6, 0.0], params=STAIRS)
+    pg.add_robot("go2", library="go2")
+    gait = pg.behaviors.move("go2", 5.0, 0.0, walker="gait") and pg.session.controllers["go2"]
+    top = gait.max_speed
+    trunk = _trunk(pg, "go2")
+    fastest_on_steps = 0.0
+    for _ in range(40):
+        pg.run_fast(lambda: False, 0.5)
+        assert pg.behaviors.pose("go2")["upright"]
+        if 0.9 < pg.session.data.xpos[trunk][0] < 1.8:  # well onto the flight (it starts at 0.6 m, 2 m long)
+            fastest_on_steps = max(fastest_on_steps, gait.speed)
+        if pg.session.data.xpos[trunk][0] > 2.8:
+            break
+    assert pg.session.data.xpos[trunk][0] > 2.8
+    assert 0.0 < fastest_on_steps <= 0.7 * top  # 60 percent, and a margin for how it blends in
