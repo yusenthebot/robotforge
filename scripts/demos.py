@@ -509,7 +509,28 @@ def _humanoids_walk(pg: Any) -> None:
     pg.behaviors.move("op3", 0.09, 0.0)
 
 
+QUADRUPEDS = ("go2", "go1", "a1", "anymal_c", "spot", "barkour")
+
+
+def _quadrupeds(pg: Any) -> None:
+    for i, robot in enumerate(QUADRUPEDS):
+        pg.add_robot(robot, library=robot, pos=[0.0, (i - 2.5) * 0.95])
+
+
+def _quadrupeds_walk(pg: Any) -> None:
+    for robot in QUADRUPEDS:
+        pg.behaviors.move(robot, 0.3, 0.0)
+
+
 DEMOS = [
+    Demo(  # every library quadruped on the same command (move 0.3 m/s), abreast
+        "legged_quadrupeds",
+        _quadrupeds,
+        14.0,
+        timeline=[(0.5, _quadrupeds_walk)],
+        page="window.__robotforge.select(null);" + _follow_group(list(QUADRUPEDS), (4.4, 0.4, 1.5), ease=0.05),
+        settle=1.0,
+    ),
     Demo(
         "gallery_tour",
         _gallery_moving,

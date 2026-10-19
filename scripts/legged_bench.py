@@ -37,7 +37,8 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
 
-ROBOTS = ("go2", "go1", "a1", "anymal_c", "spot", "barkour", "g1", "h1", "t1", "op3")
+ROBOTS = ("go2", "go1", "a1", "anymal_c", "spot", "barkour", "g1", "t1", "op3")
+# (Unitree H1 is not in the library: docs/LEGGED.md says why)
 GAP = 0.6  # m of flat floor between the robot and the patch
 FLAT_RUN = 3.0  # m a robot must cover on flat ground
 SPEED_SHARE = 0.6
