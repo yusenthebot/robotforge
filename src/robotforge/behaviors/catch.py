@@ -42,6 +42,8 @@ SEARCH_STEP = 0.02  # m between the points along its way tried for the meeting
 LOOK_AHEAD = 4.0  # m along its way, at most
 MARGIN_S = 0.6  # s spare between the arm being there and the box coming
 LATE = 3.0  # s after the box should have come that the arm gives up waiting
+CATCH_S = 60.0  # s of sim time a catch may take, from the arm setting off
+CARRY_S = 180.0  # s more for the robot to carry it to the place after (fetch.TIME_LIMIT), when it has to
 MAX_PAST = 30  # loose things a look ahead passes through at most
 HELD = 0.03  # m: a box whose middle is within its half height and this of the tool point is in the hand
 
@@ -75,15 +77,29 @@ class Meeting:
 
 
 def meeting(
-    model: mujoco.MjModel, data: mujoco.MjData, arm: ArmMotion, body: int, half: float, v: np.ndarray
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    arm: ArmMotion,
+    body: int,
+    half: float,
+    v: np.ndarray,
+    *,
+    delay: float = 0.0,
+    sync: bool = True,
 ) -> Meeting:
-    """The first point on the box's way where the arm can catch it (see the module), or CatchError."""
-    arm.sync(data)
+    """The first point on the box's way where the arm can catch it (see the module), or CatchError. For an arm that
+    is not ready yet: `delay` s from now (the robot carrying it is still on its way, the box rides on meanwhile), and
+    `sync=False` to plan with the robot posed elsewhere (ArmMotion.carried_to) rather than where it stands."""
+    if sync:
+        arm.sync(data)
     speed = float(np.linalg.norm(v))
     way = v / speed
     start = np.array(data.xpos[body], float)
     grasp_z = float(start[2]) + (half - PAD_PRESS if arm.tool is not None else 0.0)
-    stop = _clear_ahead(model, data, body, way)
+    stop = clear_ahead(model, data, body, way)
+    gone = min(speed * delay, max(0.0, stop - SEARCH_STEP))  # where the box is by then: the rest is what is left
+    start[:2] += way * gone
+    stop -= gone
     rotation = _square(model, data, arm, body, way)
     closing = speed * (SETTLE_S + (CUP_S if arm.tool is not None else CLOSE_S))  # how far it rides, held
     window = closing + speed * SLOW  # and on as the hand slows to a stop, lifting it
@@ -108,7 +124,7 @@ def meeting(
             continue
         ready = float(np.max(np.abs(q_wait - arm.q))) / JOINT_SPEED + MARGIN_S + DESCEND_S
         if s / speed >= ready:
-            return Meeting(p, v.copy(), q_wait, rotation, float(data.time) + s / speed, lifted, qs)
+            return Meeting(p, v.copy(), q_wait, rotation, float(data.time) + delay + s / speed, lifted, qs)
         best_late = best_late if best_late is not None else s
     if best_late is not None:
         raise CatchError(
@@ -121,7 +137,7 @@ def meeting(
     )
 
 
-def _clear_ahead(model: mujoco.MjModel, data: mujoco.MjData, body: int, way: np.ndarray) -> float:
+def clear_ahead(model: mujoco.MjModel, data: mujoco.MjData, body: int, way: np.ndarray) -> float:
     """How far the box's middle goes along `way` before something fixed stops it (the end stop across a belt): a ray
     from its middle that passes through the loose things ahead of it, which ride along too and queue up against the
     stop before it, less their lengths and half its own; LOOK_AHEAD when nothing stops it. Through the boxes ahead as
@@ -200,6 +216,7 @@ class Catch:
     meet: Meeting
     then: Callable[[mujoco.MjData, bool], None] | None = None  # (data, caught) once it is done
     after: Any = None  # what `then` set going (putting it down, an errand to carry it): done when that is
+    carries: bool = False  # the robot carries it on to the place (an errand follows), which takes its time
     region: dict[str, Any] | None = None  # where the load counts as put (BehaviorManager.placed)
     rate_hz: float = 100.0
     step: str = "going"
@@ -226,7 +243,7 @@ class Catch:
 
     @property
     def time_limit(self) -> float:
-        return 60.0 + (180.0 if self.after is not None else 0.0)
+        return CATCH_S + (CARRY_S if self.carries else 0.0)
 
     def result(self) -> dict[str, Any]:
         """How the catch went, and what came after (an errand's trips)."""

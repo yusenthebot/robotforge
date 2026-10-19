@@ -22,6 +22,7 @@ from robotforge.behaviors import (
     Kind,
     air,
     airways,
+    catch_stand,
     fetch,
     flight,
     humanoid,
@@ -1509,18 +1510,34 @@ class BehaviorManager:
         return errand, {"object": obj, "target": target, "region": errand.place.region}
 
     def _catch(
-        self, arm: ArmMotion, obj: str, target: str | list[float], half: float, riding: np.ndarray, goes: bool
-    ) -> catching.Catch:
+        self,
+        arm: ArmMotion,
+        obj: str,
+        target: str | list[float],
+        half: float,
+        riding: np.ndarray,
+        goes: bool,
+        tries: int = 0,
+    ) -> catching.Catch | catch_stand.Approach:
         """Catch `obj` as it rides by on a conveyor (catching.Catch), from where the robot stands, then put it on
         `target`: from there if the arm reaches it, else (an arm on a robot that goes) the robot carries it there
-        (fetch.Errand). Raises BehaviorError before anything moves when the arm cannot meet it or put it down.
-        Session lock held."""
+        (fetch.Errand). A robot that goes, whose arm does not reach the box's way from where it stands, first goes to
+        a place beside the belt from which it does (catch_stand.Approach, which plans the catch again from where it
+        stops, `tries` times at most). Raises BehaviorError before anything moves when the arm cannot meet it or put
+        it down. Session lock held."""
         model, data = self.session.model, self.session.data
         body = self._body(obj)
         try:
             meet = catching.meeting(model, data, arm, body, half, riding)
         except catching.CatchError as exc:
             hint = "; or move the robot next to the conveyor first (move with to=...)" if goes else ""
+            if goes and tries < catch_stand.TRIES:
+                try:
+                    return self._approach(arm, obj, target, body, half, riding, tries)
+                except catch_stand.NoStand as why:
+                    hint = f"; {why}"
+                    if why.late:  # it fetches the box where it lies at the end of the belt
+                        return self._approach(arm, obj, target, body, half, riding, tries, wait=True)
             raise BehaviorError(f"{obj} is riding on at {np.linalg.norm(riding):.2f} m/s: {exc}{hint}") from exc
         below = 2 * half if arm.tool is not None else half  # what the load hangs below the tool point
         try:
@@ -1579,10 +1596,58 @@ class BehaviorManager:
             caught.after = catching.Then(arm, carry)
             self.session.set_controller(catching.KEY + arm.robot, caught.after)
 
-        caught = catching.Catch(arm, body, half, meet, then=then)
+        caught = catching.Catch(arm, body, half, meet, then=then, carries=not puts)
         caught.region = region
         self.session.set_controller(name, caught)
         return caught
+
+    def _approach(
+        self,
+        arm: ArmMotion,
+        obj: str,
+        target: str | list[float],
+        body: int,
+        half: float,
+        riding: np.ndarray,
+        tries: int,
+        wait: bool = False,
+    ) -> catch_stand.Approach:
+        """Send the robot to a place beside the belt from which `arm` catches `obj`, to catch it from there; with
+        `wait`, to wait where it is for the box to lie still at the end of the belt, and fetch it there."""
+        stance = None if wait else catch_stand.stand_for(self, arm, body, half, riding, self.session.data)
+        robot = arm.robot.split("/", 1)[0]
+        self.ready_to_go(robot)
+        try:
+            region = self._place_target(target)[2]
+        except BehaviorError:
+            region = None  # a terrain patch, or a place the robot goes to: known once it has the load
+        approach = catch_stand.Approach(
+            self,
+            robot,
+            arm,
+            obj,
+            body,
+            half,
+            target,
+            None if stance is None else stance.spot,
+            region,
+            tries=tries,
+            drive_s=0.0 if stance is None else stance.drive_s,
+        )
+        self._end_trip(robot)
+        self.session.set_controller(catch_stand.KEY + robot, approach)
+        return approach
+
+    def catch_from_here(
+        self, arm: ArmMotion, obj: str, target: str | list[float], half: float, riding: np.ndarray, tries: int
+    ) -> catching.Catch | catch_stand.Approach:
+        """Plan the catch again from where the robot stopped (catch_stand.Approach), inside a sim step."""
+        return self._catch(arm, obj, target, half, riding, True, tries)
+
+    def end_approach(self, approach: catch_stand.Approach) -> None:
+        """Called by an approach as it ends or hands over (inside a sim step, the session lock held)."""
+        if self.session.controllers.get(catch_stand.KEY + approach.robot) is approach:
+            self.session.set_controller(catch_stand.KEY + approach.robot, None)
 
     def _puts_from(
         self, arm: ArmMotion, meet: catching.Meeting, place: np.ndarray, below: float, top: float | None

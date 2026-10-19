@@ -1,17 +1,22 @@
 """Mobile manipulation jobs in the home scene, run headless over robots and seeds: success rates and failures by cause.
 
     uv run python scripts/mobile_bench.py [--robots go2_arm mobile_panda ...] [--jobs fetch drawer ...]
-                                          [--seeds 5] [--workers 3] [--json out.jsonl]
+                                          [--seeds 8] [--seed-start 0] [--workers 3] [--json out.jsonl]
 
 The jobs, each as an agent would do it with the tools (pick_and_place, operate, move):
 - door: from the living room, through the swing door into the kitchen (move with to="kitchen").
 - fetch: "go to the kitchen and bring the apple to the living-room table" (pick_and_place goes over by itself).
 - drawer: open the chest of drawers in the kitchen and take the block out onto the kitchen table.
 - button: press the button on the living room's side table.
-- conveyor: in the factory, beside the running belt, catch the last box as it rides by and take it to the
-  workbench (pick_and_place catches it, then the robot carries it).
-A seed jitters the things on the tables (the scene's own seed) and where and how the robot starts. The demo videos
-(scripts/demos.py mobile_*) run the same jobs in real time. Maintainer tool, not part of robotforge.
+- conveyor: in the factory, beside the running belt (the start varies along it by 1.5 m and away from it by 0.85 m),
+  catch the last box as it rides by and take it to the workbench (pick_and_place drives to a place beside the belt
+  where the arm reaches if the arm does not reach from the start, catches the box, and carries it; too late for
+  that, it waits for the box at the end stop and fetches it there).
+A seed jitters the things on the tables (the scene's own seed) and where and how the robot starts. Seeds 0-7 are the
+ones the fixes were tuned on: measure on others (--seed-start 8 --seeds 20). A cell where every seed was refused for
+what the robot or its arm cannot do (a refusal before anything moves, UNSUPPORTED) prints as "not supported", not as
+a measured failure. The demo videos (scripts/demos.py mobile_*) run the same jobs in real time. Maintainer tool, not
+part of robotforge.
 """
 
 from __future__ import annotations
@@ -37,24 +42,38 @@ ROBOTS: dict[str, dict[str, Any]] = {
     "anymal_ur5e": {"library": "anymal_c", "mounts": [{"library": "ur5e"}, {"library": "robotiq_2f85"}]},
 }
 JOBS = ("door", "fetch", "drawer", "button", "conveyor")
-BESIDE_BELT = (-0.9, 0.5)  # in the factory: north of the belt, facing it, upstream of the boxes' stop
+BESIDE_BELT = (-1.3, 0.2)  # in the factory: where along the belt (x) the robot starts, north of it, facing it
+BELT_Y = (0.45, 1.3)  # and how far from it (y; the belt runs along y = 0)
 BELT_SPEED = 0.1  # m/s
 NAME = "mm"  # the robot's name in every run
 STARTS = ((2.4, -1.5), (1.4, -1.7), (3.0, -0.6))  # in the living room, clear of its furniture
 DOOR_PUSHED = 45.0  # degrees the door must have swung for the robot to have pushed through it
 OPERATE_S, ERRAND_S, TRIP_S = 150.0, 200.0, 90.0  # sim seconds each may take
 
+# Refusals that say what the robot (or its library entry) cannot do at all, the same for every seed.
+UNSUPPORTED = (
+    "cannot_reach_belt",
+    "cannot_pick",
+    "nowhere_to_stand",
+    "too_high_or_low",
+    "cannot_hold",
+    "gripper_too_small",
+    "too_heavy",
+)
+
 Wait = Callable[[Callable[[], bool], float], None]
 
 
 def build(pg: Any, robot: str, seed: int, job: str = "fetch") -> None:
     """The home (seed `seed`) with `robot` at one of the living room's starting spots, turned some way; for the
-    conveyor, the factory with the robot beside its belt, a little further up or down it."""
+    conveyor, the factory with the robot beside its belt, anywhere from 1.3 m upstream of where the last box starts to
+    0.2 m downstream, 0.45 to 1.3 m from the belt, facing it within 40 degrees (the box takes 13 s to the end stop:
+    further up the belt the robot is too late)."""
     rng = random.Random(seed)
     if job == "conveyor":
         pg.load_scene("factory", seed=seed, starter=False, options={"boxes": 6, "speed": BELT_SPEED})
-        x, y = BESIDE_BELT
-        pg.add_robot(NAME, pos=[x + rng.uniform(-0.1, 0.1), y], yaw=-90 + rng.uniform(-8, 8), **ROBOTS[robot])
+        x = rng.uniform(*BESIDE_BELT)
+        pg.add_robot(NAME, pos=[x, rng.uniform(*BELT_Y)], yaw=-90 + rng.uniform(-40, 40), **ROBOTS[robot])
         return
     pg.load_scene("home", seed=seed, starter=False)
     x, y = STARTS[seed % len(STARTS)]
@@ -152,17 +171,19 @@ def job_button(pg: Any, wait: Wait) -> dict[str, Any]:
 
 
 def job_conveyor(pg: Any, wait: Wait) -> dict[str, Any]:
-    from robotforge.behaviors import catch
+    from robotforge.behaviors import catch, catch_stand
 
     motion, info = pg.behaviors.pick_and_place(_arm(pg), "box_6", "workbench")
-    wait(lambda: motion.done, getattr(motion, "time_limit", 40.0))
+    catching = isinstance(motion, (catch.Catch, catch_stand.Approach))
+    wait(lambda: motion.done, motion.time_limit if catching else 40.0)
     wait(lambda: False, 0.5)
-    region = motion.region if isinstance(motion, catch.Catch) else info["region"]
+    region = motion.region if catching else info["region"]
     out = pg.behaviors.placed("box_6", region) if region is not None else {"success": False}
-    res = {"success": bool(out.get("success"))}
-    if isinstance(motion, catch.Catch):
+    res = {"success": bool(out.get("success")), "approach": isinstance(motion, catch_stand.Approach)}
+    if catching:
         caught = motion.result()
         res["caught_at"] = caught.get("caught_at")
+        res["stood_at"] = caught.get("stood_at")
         if not res["success"]:
             res["why"] = "missed" if not caught.get("caught") else (caught.get("why") or "not_there")
             res["note"] = caught.get("note")
@@ -183,6 +204,9 @@ JOB_FUNCS: dict[str, Callable[[Any, Wait], dict[str, Any]]] = {
 def cause(text: str) -> str:
     """A short cause for a refusal's message (what the tools raise before anything moves)."""
     for key, words in (
+        ("cannot_reach_belt", ("height of the belt",)),
+        ("too_late", ("sooner than",)),
+        ("no_place_at_belt", ("anywhere beside the belt",)),
         ("cannot_catch", ("is riding on",)),
         ("nowhere_to_stand", ("nowhere", "no room")),
         ("too_high_or_low", ("too high", "too low")),
@@ -223,15 +247,46 @@ def run_one(robot: str, job: str, seed: int) -> dict[str, Any]:
     return out
 
 
+def unsupported(row: dict[str, Any]) -> bool:
+    return (
+        not row.get("success")
+        and str(row.get("why", "")).removeprefix("refused:") in UNSUPPORTED
+        and (str(row.get("why", "")).startswith("refused:"))
+    )
+
+
+def report(results: list[dict[str, Any]]) -> str:
+    """The table: per robot and job the successes over the runs, and the failures by cause. A cell where every run was
+    refused for the same thing the robot cannot do reads "not supported (cause)" and is left out of the totals."""
+    table: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in results:
+        table[(r["robot"], r["job"])].append(r)
+    lines = ["robot          job      success  failures by cause"]
+    won = ran = 0
+    for (robot, job), rows in table.items():
+        causes = Counter(r.get("why") or "?" for r in rows if not r.get("success"))
+        if all(unsupported(r) for r in rows) and len(causes) == 1:
+            lines.append(f"{robot:14} {job:8} n/s      not supported: {next(iter(causes))}")
+            continue
+        good = sum(1 for r in rows if r.get("success"))
+        won, ran = won + good, ran + len(rows)
+        text = ", ".join(f"{c} x{n}" for c, n in causes.most_common()) or "-"
+        lines.append(f"{robot:14} {job:8} {good}/{len(rows):<6} {text}")
+    lines.append(f"measured cells: {won}/{ran} runs succeeded (not-supported cells left out)")
+    return "\n".join(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--robots", nargs="*", default=list(ROBOTS))
     parser.add_argument("--jobs", nargs="*", default=list(JOBS))
-    parser.add_argument("--seeds", type=int, default=5)
+    parser.add_argument("--seeds", type=int, default=8)
+    parser.add_argument("--seed-start", type=int, default=0, help="the first seed (seeds 0-7 are the tuning ones)")
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--json", help="write each run as a line of JSON here")
     args = parser.parse_args()
-    runs = [(r, j, s) for r in args.robots for j in args.jobs for s in range(args.seeds)]
+    seeds = range(args.seed_start, args.seed_start + args.seeds)
+    runs = [(r, j, s) for r in args.robots for j in args.jobs for s in seeds]
     results = []
     sink = open(args.json, "w", encoding="utf-8") if args.json else None  # noqa: SIM115
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
@@ -244,12 +299,7 @@ def main() -> None:
     table: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in results:
         table[(r["robot"], r["job"])].append(r)
-    print("\nrobot          job      success  failures by cause")
-    for (robot, job), rows in table.items():
-        good = sum(1 for r in rows if r.get("success"))
-        causes = Counter(r.get("why") or "?" for r in rows if not r.get("success"))
-        text = ", ".join(f"{c} x{n}" for c, n in causes.most_common()) or "-"
-        print(f"{robot:14} {job:8} {good}/{len(rows):<6} {text}")
+    print(report(results))
     if sink:
         sink.close()
 

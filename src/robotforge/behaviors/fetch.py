@@ -669,6 +669,15 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
         )
     arm.sync(data)
     tuck = arm.hold_pose(half, radius)
+    if tuck is None and holding(data, arm, body, half):
+        # Already in the gripper and folded some way (a catch off a belt): the search for the pose for the way starts
+        # from the pose the arm is in, and from this one a mobile Panda found none (it did from its home pose, the
+        # one it began the fold from).
+        now, arm.q = arm.q, arm.home.copy()
+        try:
+            tuck = arm.hold_pose(half, radius)
+        finally:
+            arm.q = now
     if tuck is None:
         raise FetchError(
             f"{arm.robot} cannot fold back over {robot} with something in its gripper, so it cannot carry anything "
