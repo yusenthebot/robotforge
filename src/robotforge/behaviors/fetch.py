@@ -1191,6 +1191,25 @@ class Leg:
     result: dict[str, Any] | None = None
 
 
+def squeeze(model: mujoco.MjModel, actuator: int) -> tuple[np.ndarray, np.ndarray] | None:
+    """Stiffen a gripper's servo to push SQUEEZE newtons a cm short of closed (if it is softer), in place; its gain and
+    bias before, or None when it is stiff enough already (or no servo). The whole servo scales together, offset
+    included: a gripper turned around within its range (library.py, Robotiq's) has one, and without it the jaws
+    stop 0.08 rad short of closed and miss what they take."""
+    if int(model.actuator_biastype[actuator]) != mujoco.mjtBias.mjBIAS_AFFINE:
+        return None
+    kp = -float(model.actuator_biasprm[actuator, 1])
+    if not 0 < kp < SQUEEZE / 0.01:
+        return None
+    before = model.actuator_gainprm[actuator].copy(), model.actuator_biasprm[actuator].copy()
+    scale = SQUEEZE / 0.01 / kp
+    model.actuator_gainprm[actuator, 0] *= scale
+    model.actuator_biasprm[actuator, 0] *= scale
+    model.actuator_biasprm[actuator, 1] *= scale
+    model.actuator_biasprm[actuator, 2] *= math.sqrt(scale)
+    return before
+
+
 class Footing:
     """Where a robot carrying an arm stands while the arm works: creeping into a spot, kept there on its wheels, let
     go. Needs `manager`, `robot`, `_creep` and `_stance` (Errand, visit.Visit)."""
@@ -1800,14 +1819,8 @@ class Errand(Footing):
             model.geom_solimp[pads] = FIRM_SOLIMP
             model.geom_solref[pads] = FIRM_SOLREF
         g = self.arm.gripper
-        if self._squeezed is None and g >= 0 and int(model.actuator_biastype[g]) == mujoco.mjtBias.mjBIAS_AFFINE:
-            kp = -float(model.actuator_biasprm[g, 1])
-            if 0 < kp < SQUEEZE / 0.01:
-                self._squeezed = (model.actuator_gainprm[g].copy(), model.actuator_biasprm[g].copy())
-                scale = SQUEEZE / 0.01 / kp
-                model.actuator_gainprm[g, 0] *= scale
-                model.actuator_biasprm[g, 1] *= scale
-                model.actuator_biasprm[g, 2] *= math.sqrt(scale)
+        if self._squeezed is None and g >= 0:
+            self._squeezed = squeeze(model, g)
 
     def _let_go(self) -> None:
         """Put the simulation back as the errand found it (_hold_fast)."""

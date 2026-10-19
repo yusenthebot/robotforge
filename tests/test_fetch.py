@@ -449,3 +449,24 @@ def test_a_fetch_picks_up_only_with_its_gripper_pointing_down_high_above_the_loa
         arm.pick_up(grasp, 0.02, grasp + [-0.1, 0.0, 0.1])
     assert "above object" in refused.value.bad
     assert not arm.queue
+
+
+def test_squeezing_a_gripper_turned_around_keeps_where_it_closes():
+    """Robotiq's 0-open, 255-closed servo is turned around in the library (c becomes 255 - c), which leaves it a bias
+    offset: scaling the gain and stiffness alone moved its setpoint, so its jaws stopped 0.08 rad short of closed and
+    an ANYmal's UR5e missed every apple it took."""
+    xml = """<mujoco><worldbody><body><joint name="j" type="hinge" range="0 0.8"/><geom size="0.01"/></body></worldbody>
+      <actuator><general name="g" joint="j" ctrlrange="0 255" gainprm="-0.3137255" biasprm="80 -100 -10"
+      biastype="affine"/></actuator></mujoco>"""
+    model = mujoco.MjModel.from_xml_string(xml)
+
+    def closed_at(ctrl: float) -> float:
+        gain, bias = model.actuator_gainprm[0, 0], model.actuator_biasprm[0]
+        return (gain * ctrl + bias[0]) / -bias[1]
+
+    before = closed_at(0.0), closed_at(255.0)
+    saved = fetch.squeeze(model, 0)
+    assert saved is not None and model.actuator_biasprm[0, 1] == pytest.approx(-fetch.SQUEEZE / 0.01)
+    assert (closed_at(0.0), closed_at(255.0)) == pytest.approx(before)
+    assert before[0] == pytest.approx(0.8)  # closed: the joint's far end
+    assert fetch.squeeze(model, 0) is None  # stiff enough now
