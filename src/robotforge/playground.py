@@ -390,12 +390,9 @@ class Playground:
         def change(w: World) -> None:
             w.robots.append(entry)
 
-        try:
-            result = self._edit(change)
-        except ValueError as exc:
-            if made is None:
-                raise
-            raise PlaygroundError(_generated_failed(describe, made.plan.seed, exc)) from exc
+        # The builder has checked a generated robot (generator.realize): what the world refuses now (a name taken, a
+        # place outside it) is not the sentence's fault and comes back as it is.
+        result = self._edit(change)
         if made is not None:
             result["generated"] = made.describe(name)
         if pos is None:  # a place of the scene's, or clear of what stands at [0, 0]
@@ -1011,10 +1008,38 @@ class Playground:
         result = self._edit(save)
         self._task_starts.pop(task.name, None)
         status = self.task_status().get(task.name, {})
+        if status.get("done") and task.kind == "go_to":  # "go to the kitchen" from the kitchen: start it elsewhere
+            moved = self._start_elsewhere(task)
+            if moved is not None:
+                notes.append(moved)
+                status = self.task_status().get(task.name, {})
+        if status.get("done"):
+            notes.append(f"{task.describe()} is so already: the task is done before it starts")
         result["task"] = {**task.model_dump(mode="json", exclude={"start", "randomize"}), "goal": task.describe(),
                           "status": status}  # fmt: skip
         result["notes"] = notes + [n for n in result.get("notes", []) if "task" in n]
         return result
+
+    def _start_elsewhere(self, task: Any) -> str | None:
+        """Move a go_to task's robot (and the task's start) to the first of the scene's places from which it still
+        has to go; a note saying so, or None when there is none."""
+        from robotforge.design.tasks.check import State, judge
+
+        world = self.current_world()
+        for slot in self._scene_places():
+            if judge(task, world, State(robot=(slot.pos[0], slot.pos[1], 0.0))).done:
+                continue
+
+            def move(w: World, slot: scenes.Slot = slot) -> None:
+                robot = _find(w.robots, task.robot, "robot")
+                robot.pos, robot.yaw = [slot.pos[0], slot.pos[1]], slot.yaw
+                saved = next(t for t in w.tasks if t.name == task.name)
+                saved.start.robot = [slot.pos[0], slot.pos[1], slot.yaw]
+
+            self._edit(move, snapshot=False)
+            self._task_starts.pop(task.name, None)
+            return f"{task.robot} starts at {_xy(slot.pos)}, away from {task.target}, so it has somewhere to go"
+        return None
 
     def task_status(self) -> dict[str, dict[str, Any]]:
         """Each task of the open world: its goal and the check's verdict now (done, distance still to go, reward,
@@ -1480,7 +1505,7 @@ def described_robot(describe: str, params: dict[str, Any] | None, **others: Any)
         return generator.generate(describe, seed)
     except generator.SentenceError as exc:
         raise PlaygroundError(str(exc)) from None
-    except ValueError as exc:  # its parts, checked while its leg joints were chosen
+    except generator.BuildError as exc:  # its parts did not pass the builder's checks
         plan, _ = generator.read(describe, seed=seed)
         raise PlaygroundError(_generated_failed(describe, plan.seed, exc)) from None
 
@@ -1498,8 +1523,10 @@ def _regenerate(robot: RobotEntry, describe: str, notes: list[str]) -> generator
     old = generator.Plan.from_dict(robot.generated)
     try:
         made = generator.change(old, describe)
-    except ValueError as exc:
+    except generator.SentenceError as exc:
         raise PlaygroundError(str(exc)) from None
+    except generator.BuildError as exc:
+        raise PlaygroundError(_generated_failed(describe, old.seed, exc, change=True)) from None
     before = generator.realize(old).source
     if before != {k: v for k, v in (("build", robot.build), ("template", robot.template)) if v is not None} | (
         {"params": robot.params} if robot.template else {}
@@ -1512,11 +1539,12 @@ def _regenerate(robot: RobotEntry, describe: str, notes: list[str]) -> generator
     return made
 
 
-def _generated_failed(describe: str, seed: int, exc: Exception) -> str:
+def _generated_failed(describe: str, seed: int, exc: Exception, change: bool = False) -> str:
     """What to do when a robot made from a sentence does not pass the builder's checks."""
+    other = 'say "another one" for another variation' if change else f"try params={{'seed': {seed + 1}}}"
     return (
         f"the robot made from {describe!r} did not pass the builder's checks: {exc}. Say it another way (fewer arms, "
-        f"a smaller size), or try another variation with params={{'seed': {seed + 1}}}"
+        f"a smaller size), or {other}"
     )
 
 

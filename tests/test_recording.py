@@ -79,7 +79,19 @@ def test_where_a_recording_goes(tmp_path):
         recording.target("lap.png", folder, "pip")
 
 
-@pytest.mark.parametrize("name", ["../../../escape.gif", "takes/../../escape.gif", "/tmp/escape.gif", "~/escape.gif"])
+ESCAPES = ["../../../escape.gif", "takes/../../escape.gif", "/tmp/escape.gif", "~/escape.gif"]
+# Windows spellings, refused on every system: on Windows "/tmp/escape.gif" is rooted but not absolute, and was
+# refused only by the later check, with another message.
+WINDOWS_ESCAPES = [
+    "C:\\escape.gif",
+    "C:escape.gif",
+    "\\escape.gif",
+    "\\\\host\\share\\escape.gif",
+    "..\\..\\escape.gif",
+]
+
+
+@pytest.mark.parametrize("name", ESCAPES + WINDOWS_ESCAPES)
 def test_a_recording_stays_in_the_videos_folder(tmp_path, name):
     """Regression: move(record="../../../escape.gif") wrote outside the world, and a full path could overwrite any
     GIF, WebP or MP4 on the disk. It is refused, as write_script refuses "../evil"."""

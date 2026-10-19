@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from robotforge.design.generator import bodies
+from robotforge.design.generator import bodies, fit
 from robotforge.design.generator.plan import Plan, clamp
 from robotforge.design.generator.words import SentenceError, read, seed_of
 
@@ -29,6 +29,7 @@ HOW = {
     "arm": "it reaches: move_arm and pick_and_place",
     "humanoid": "it walks: move and the WASD keys; pose makes it wave, squat, bow or cheer",
 }
+TOOL = {"suction": "suction cup", "magnet": "magnet"}
 
 
 @dataclass(frozen=True)
@@ -43,7 +44,9 @@ class Generated:
         hands = self.hands(robot)
         how = HOW[self.kind]
         if self.plan.body == "snake" and hands:
-            how += f"; gripper({hands[0]!r}, ...) opens and closes its jaws"
+            hand = self.plan.hand
+            jaws = "opens and closes its jaws" if hand == "gripper" else f"turns its {TOOL[hand]} on"
+            how += f"; gripper({hands[0]!r}, ...) {jaws}"
         elif self.kind == "arm":
             how += f" with {' or '.join(hands)}"
         elif hands:
@@ -73,10 +76,20 @@ def _kind(plan: Plan) -> str:
     return {"wheeled": "rover"}.get(plan.body, plan.body)
 
 
+class BuildError(ValueError):
+    """The parts a plan made did not pass the builder's checks: another wording or seed may."""
+
+
 def realize(plan: Plan, notes: list[str] | None = None) -> Generated:
-    """The robot a plan describes (its numbers first brought inside what builds and moves)."""
+    """The robot a plan describes (its numbers first brought inside what builds and moves), checked by the builder
+    here, so a failure is told apart from what the world refuses later (a name taken)."""
     plan, clamped = clamp(plan)
-    made, more = bodies.make(plan)
+    try:
+        made, more = bodies.make(plan)
+        if "template" not in made and plan.body != "legged":  # fit.fit_legs has checked a walker's build
+            fit.strain(made)
+    except ValueError as exc:
+        raise BuildError(str(exc)) from exc
     source = made if "template" in made else {"build": made}
     return Generated(plan, source, _kind(plan), [*(notes or []), *clamped, *more])
 
@@ -95,4 +108,4 @@ def change(plan: Plan | dict[str, Any], sentence: str, seed: int | None = None) 
     return realize(new, notes)
 
 
-__all__ = ["Generated", "Plan", "SentenceError", "change", "generate", "read", "realize", "seed_of"]
+__all__ = ["BuildError", "Generated", "Plan", "SentenceError", "change", "generate", "read", "realize", "seed_of"]

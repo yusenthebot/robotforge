@@ -284,6 +284,19 @@ def _kitchen_fetch(pg: Any) -> None:
     pg.behaviors.pick_and_place(pg.behaviors.resolve("mm", arm=True), "apple", "dining_table")
 
 
+def _generated_bring(pg: Any) -> None:
+    """A home generated from a sentence and its task: the lift picker brings the red cup from the kitchen to the desk
+    in the bedroom; paused until the recording plays it (the errand plans while the page loads)."""
+    S._generated_world(S.GENERATED_WORLDS[0])(pg)
+    pg.run_fast(lambda: False, 1.0)
+    pg.control("pause")
+    pg.behaviors.pick_and_place(pg.behaviors.resolve("picker", arm=True), "red_cup", "bedroom_desk")
+
+
+def _task_done(pg: Any) -> bool:
+    return bool(pg.task_status().get("task", {}).get("done"))
+
+
 def _play(pg: Any) -> None:
     pg.control("play")
 
@@ -522,6 +535,16 @@ DEMOS = [
         timeline=[(0.3, _play)],
         page=_follow("mm", (0.6, -1.0, 3.0), ease=0.04),  # steep: over the island into the aisle behind it
         settle=1.0,
+    ),
+    Demo(  # a world and a task from one sentence, done start to end: the check says done as the cup lands
+        "generated_home_bring",
+        _generated_bring,
+        90.0,
+        timeline=[(0.3, _play)],
+        page=_follow("picker", (0.4, -2.2, 3.4), ease=0.04),
+        settle=1.0,
+        until=_task_done,
+        tail=2.0,
     ),
     Demo(
         "nav_warehouse",

@@ -73,6 +73,9 @@ MECHANISMS: dict[str, Mechanism] = {
         "wheel", ("open", "close", "turn"), "deg", "bar", "a valve with a handwheel on top: counter-clockwise opens"
     ),
     "conveyor": Mechanism("belt", (), "m", "none", "a conveyor belt along x; things on it ride at its speed"),
+    "door": Mechanism(
+        "leaf", (), "deg", "none", "a room door hinged on its -x edge that swings both ways and closes by itself"
+    ),
 }
 SOFT = ("rope", "cloth")
 SHAPES = (*MECHANISMS, *SOFT)
@@ -119,6 +122,7 @@ MIN_SIZES: dict[str, tuple[float, ...]] = {
     "lever": (0.03,),
     "valve": (0.08, 0.04),
     "conveyor": (0.2, 0.05, 0.06),
+    "door": (0.3, 0.01, 0.3),
     "rope": (0.05, 0.002),
     "cloth": (0.1, 0.1),
 }
@@ -673,6 +677,70 @@ def cloth_skirt(body: mujoco.MjsBody, length: float, width: float, underside: fl
         body.add_geom(type=G.mjGEOM_CAPSULE, fromto=[*a, top, *b, top], size=[r, 0, 0], **hidden)
 
 
+# ---- door ---------------------------------------------------------------------------------------------
+
+# A room door that swings both ways and closes by itself, pushed open by a robot driving or walking through it: a light
+# leaf on a weak closer and a damped hinge (navigation counts it as something to push, behaviors/nav_map.py). Put it
+# in a door_frame of the same place and turn: its leaf fills the frame's opening, 16 cm narrower than the frame.
+DOOR_RANGE = math.radians(100)  # either way from shut
+DOOR_CLOSER = 0.8  # N*m/rad back toward shut
+DOOR_DAMPING = 1.2  # N*m*s/rad
+DOOR_MASS = 3.0  # kg
+DOOR_GAP = 0.012  # m between the leaf's bottom and the floor
+# m from the leaf's hinge edge in to its pin: swinging about its very edge, the leaf's corner would go into the post
+# of the frame beside it.
+DOOR_PIN = 0.03
+DOOR_OPEN_AT = math.radians(10)  # past this either way it reads as open
+
+
+def _door(spec: mujoco.MjSpec, carcass: mujoco.MjsBody, name: str, size: list[float], rgba) -> None:
+    width, thick, height = size
+    pin = -width / 2 + DOOR_PIN
+    carcass.add_geom(
+        name=f"{name}/pin",
+        type=G.mjGEOM_CYLINDER,
+        size=[0.008, height / 2],
+        pos=[pin, 0, DOOR_GAP + height / 2],
+        rgba=METAL,
+        contype=0,
+        conaffinity=0,
+    )
+    leaf = carcass.add_body(name=f"{name}/leaf", pos=[pin, 0, 0])
+    leaf.add_joint(
+        name=f"{name}/leaf",
+        type=J.mjJNT_HINGE,
+        axis=[0, 0, 1],
+        range=[-DOOR_RANGE, DOOR_RANGE],
+        limited=mujoco.mjtLimited.mjLIMITED_TRUE,
+        stiffness=DOOR_CLOSER,
+        damping=DOOR_DAMPING,
+        frictionloss=0.2,
+        armature=0.05,
+    )
+    span = width - DOOR_PIN  # from the pin to the free edge
+    near = 0.012  # m from the pin to the panel's hinge-side face: it clears the pin and the post as it swings
+    _box(
+        leaf,
+        f"{name}/panel",
+        [(span - near) / 2, thick / 2, height / 2],
+        [(span + near) / 2, 0, DOOR_GAP + height / 2],
+        _shade(rgba, 1.04),
+        mass=DOOR_MASS,
+    )
+    # Push plates on both faces near the free edge (seen, not felt).
+    for sy in (1, -1):
+        plate = [span - 0.12, sy * (thick / 2 + 0.002), DOOR_GAP + 1.0]
+        _box(leaf, None, [0.05, 0.002, 0.15], plate, METAL, collide=False)
+    leaf.add_site(name=f"{name}/handle", pos=[span - 0.12, 0, DOOR_GAP + 1.0], size=[0.005, 0, 0], rgba=[0, 0, 0, 0])
+
+
+def is_door_leaf(model: mujoco.MjModel, body: int) -> bool:
+    """Whether `body` is the leaf of a door (a mechanism's moving part, named "<object>/leaf" under its carcass)."""
+    root = int(model.body_rootid[body])
+    carcass = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, root) or ""
+    return "/" not in carcass and (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body) or "") == f"{carcass}/leaf"
+
+
 _BUILDERS: dict[str, Callable] = {
     "drawer": _drawer,
     "cabinet": _cabinet,
@@ -681,6 +749,7 @@ _BUILDERS: dict[str, Callable] = {
     "lever": _lever,
     "valve": _valve,
     "conveyor": _conveyor,
+    "door": _door,
 }
 _SOFT: dict[str, Callable] = {"rope": _rope, "cloth": _cloth}
 

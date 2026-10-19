@@ -22,9 +22,13 @@ WALK_GAP = 0.65  # m of floor kept round furniture in the middle of a room, for 
 WALL_GAP = 0.03  # m between furniture and the wall it stands against
 ITEM_GAP = 0.025  # m between two things on a surface
 EDGE = 0.035  # m a thing keeps from a surface's edge
-ROBOT_RADIUS = 0.3  # m: the floor map is grown by this (a lift picker is 0.55 m across)
-REACH = 0.75  # m from free floor to a thing on a surface: an arm on a robot standing there reaches it
-LOW, HIGH = 0.3, 1.0  # m: surfaces things are put on, for an arm to reach them (not the floor, not up a shelf)
+ROBOT_RADIUS = 0.36  # m: the floor map is grown by this (a lift picker is 0.55 m across, and turns with its load)
+# m over a thing on a shelf's board to the board above: a hand comes down to it from there (a book stood 0.2 m
+# tall under a board 0.37 m above its own, and a lift picker's gripper could not get over it)
+SHELF_HEADROOM = 0.25
+FRONT = 0.7  # m of floor kept clear before furniture against a wall
+REACH = 0.7  # m from free floor to a thing on a surface: an arm on a robot standing there reaches it
+LOW, HIGH = 0.3, 0.9  # m: surfaces things are put on, for an arm to reach them (not the floor, not up a shelf)
 TRIES = 80
 
 
@@ -59,6 +63,7 @@ class Draft:
     obstacles: dict[str, Footprint] = field(default_factory=dict)  # fixed things on the floor, by name
     keepout: list[Footprint] = field(default_factory=list)  # door ways, paths, the robots' starts
     walls: set[str] = field(default_factory=set)  # obstacles that are walls (furniture stands against them)
+    obstacles_on: dict[str, Footprint] = field(default_factory=dict)  # things fixed on tops, by name
     wall_thick: float = 0.0  # m: rooms' rectangles run along the middle of their walls
     surfaces: list[Surface] = field(default_factory=list)
     rooms: dict[str, Footprint] = field(default_factory=dict)  # room name -> its floor
@@ -101,10 +106,16 @@ class Draft:
         return True
 
     def against_wall(
-        self, room: Footprint, length: float, depth: float, sides: tuple[str, ...] | None = None
+        self,
+        room: Footprint,
+        length: float,
+        depth: float,
+        sides: tuple[str, ...] | None = None,
+        front: float = FRONT,
     ) -> tuple[Footprint, str] | None:
         """A spot along one of the room's walls for something `length` wide and `depth` deep, its back to the wall
-        and its front (its own -y) to the room: (footprint, side)."""
+        and its front (its own -y) to the room: (footprint, side). The `front` m of floor before it stay clear (a
+        robot stands there to reach what is on it; a desk put in a corner behind the bed could not be reached)."""
         x0, x1, y0, y1 = room.bounds()
         inner = self.wall_thick / 2
         x0, x1, y0, y1 = x0 + inner, x1 - inner, y0 + inner, y1 - inner
@@ -127,7 +138,12 @@ class Draft:
                     x = x1 - depth / 2 - WALL_GAP if side == "east" else x0 + depth / 2 + WALL_GAP
                     yaw = -90.0 if side == "east" else 90.0
                 fp = Footprint(round(x, 3), round(y, 3), length / 2, depth / 2, yaw)
-                if self.free(fp, FURNITURE_GAP, wall_gap=0.0):
+                ahead = Footprint(*fp.world(0.0, -depth / 2 - front / 2), length / 2, front / 2, yaw) if front else None
+                if self.free(fp, FURNITURE_GAP, wall_gap=0.0) and (
+                    ahead is None or self.free(ahead, 0.0, wall_gap=0.0)
+                ):
+                    if ahead is not None:
+                        self.keepout.append(ahead)
                     return fp, side
         return None
 
@@ -184,7 +200,8 @@ class Draft:
 
     def spot_on(self, surface: Surface, item: Item) -> tuple[float, float, float] | None:
         hx, hy = item.half()
-        if item.height() > surface.clearance - 0.02:
+        headroom = SHELF_HEADROOM if surface.kind == "shelf" else 0.02
+        if item.height() > surface.clearance - headroom:
             return None
         a = surface.area
         if hx > a.hx or hy > a.hy:
