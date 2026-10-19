@@ -128,13 +128,13 @@ def speed_notes(spec: RunSpec, meta: dict[str, Any]) -> list[str]:
     slow, rate = meta.get("slow_sensors"), meta.get("steps_per_second")
     if not slow:
         return []
-    names = ", ".join(slow)
+    names = ", ".join(repr(n) for n in slow)
     note = f"the depth camera {names} draws a picture at every step, which makes the simulation many times slower"
     if rate:
         minutes = spec.steps / rate / 60.0
         note += (
-            f" (measured {rate:.0f} steps a second; {spec.steps:,} steps per trial is about {minutes:.0f} min"
-            f"{' per trial' if minutes >= 1 else ''}, trials running side by side share the cores)"
+            f" (measured {rate:.0f} steps a second here, so {spec.steps:,} steps take about {minutes:.0f} min "
+            "for each trial, and trials side by side share the cores)"
         )
     return [note + "; fewer timesteps, a lidar or observation='task' are faster"]
 

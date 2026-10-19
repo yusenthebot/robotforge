@@ -3,8 +3,9 @@
     from robotforge.training.api import train
 
     policy = train("walk", world=world, robot="dog", algo=["ars", "cem"], steps=150_000)       # two algorithms
-    policy = train("reach", robot="arm", algo="ars", search={"method": "halving", "trials": 9})  # a search
-    print(policy.meta["final"])                          # the best trial: algorithm, settings, test return
+    policy = train("reach", robot="arm", algo="ars", search={"trials": 9},
+                   task_params={"target": [0.22, 0.08, 0.14], "jitter": 0.04})                  # a search
+    print(policy.meta["final"])        # the best trial: algorithm, settings, test return, and "held_out": the fair one
 
 `start` returns at once (the training runs in a process of its own and writes status.json for the viewer and the
 agent); `train` waits for it and loads the best policy.

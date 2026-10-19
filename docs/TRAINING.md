@@ -18,7 +18,9 @@ The same environment, the same algorithm interface and the same view serve a qua
 From Claude or GPT:
 
 - "Train the dog to walk at 0.4 m/s with ARS and CEM and tell me which is better" is `train_policy(task="walk", robot="dog", algo=["ars", "cem"], task_params={"speed": 0.4})`.
-- "Tune ARS for the arm" is `train_policy(task="reach", robot="arm", algo="ars", search={"trials": 9})`.
+- "Tune ARS to reach the red ball" is `train_policy(task="reach", robot="arm", algo="ars", task_params={"target": "ball", "jitter": 0.04}, search={"trials": 9})`.
+  An object's name as the target is turned into the point it stands at, and the arm is trained to reach that point.
+  Without a `target`, `reach` draws a random point every episode, which the linear policies of ARS and CEM do not learn in these budgets; the response and the finished run's summary say so.
 - `training_status(name)` says how each trial is going, side by side; the viewer's Training panel draws it.
 - `run_controller(robot, task, method="policy:<name>")` and `compare_controllers(...)` use the result like any other algorithm.
 
@@ -40,6 +42,7 @@ policy = train(
 print(policy.meta["final"])  # the best trial: algorithm, settings, test return, the task's own numbers
 ```
 
+Without `algo` the task's usual one runs (PPO or SAC, like the plain trainer), and ARS when the `rl` extra is not installed; the response says which and why, in `notes`.
 `start(...)` has the same arguments and returns at once.
 Training runs in a process of its own, trials side by side (up to four), and keeps `status.json` in the policy's folder.
 Closing the agent does not stop it; `stop_training(name)` does, and keeps the best policy so far.
@@ -132,8 +135,13 @@ A ball named `target` in the world is where a reach policy aims when the viewer 
   Settings left out are drawn from their own ranges; `"all_settings": false` searches only the ones named.
 - With several algorithms the trials take them in turn, so the search also compares the algorithms.
 
-Trials are ranked on test episodes that every trial shares (the same start seeds, calm), never on their noisy training episodes.
+Trials are ranked on test episodes that every trial shares (the same start seeds, calm), never on their noisy training episodes, and the leader is the trial with the best test return, so nobody leads before the first test.
 `timesteps` is the environment steps each trial may use at most; a halving search spends a fraction of that on most of them.
+
+The score a winner won on is optimistic: it was picked out of several trials because it did well on exactly those starts.
+So when several trials compete, the winner is scored again on 50 fresh starts that no trial was ranked on (`held_out_episodes`, 0 turns it off) and the result is kept next to the ranking score: `final.held_out` in `policy.json`, `winner.held_out` in `training_status`, a "Winner" line in the panel.
+Quote the held-out number.
+A single trial has nothing to be flattered by and is not scored again.
 
 ## The training view
 
@@ -141,13 +149,17 @@ Trials are ranked on test episodes that every trial shares (the same start seeds
 
 The viewer shows a Training button once a run exists (top right) and opens the panel by itself when a run starts.
 
-- One chart with the learning curve of every trial: the leader bold, the dropped trials faded.
+- One chart with the training-episode reward of every trial: the leader (best test return so far) bold, the dropped trials faded.
+  These are training episodes, and ARS and CEM try perturbed policies in them, so their curves sit lower and noisier than the policy's own test return and do not compare across algorithms; the test return column does.
 - The leader's episode returns, one dot per episode, and a loss or other series the algorithm reports (the selector lists them), for the trial you click in the table.
 - A table with the settings of the trials side by side (the ones that differ, or all of them for a single trial), their test return and success rate, steps and state, and a play button on each row.
+- When the run ends, the winner and its held-out result; notes about the run (a random-target reach, a slow camera) sit under the progress bar.
 - Progress, time left, a Stop button, and "Play the best policy": the policy runs on its robot in the world.
   Open the world the robot was trained in first; a reset starts it again.
 
-Agents get the same facts in `training_status`: each trial's settings, state, steps, latest losses, a handful of curve points and its test return, and which trial leads.
+The panel updates in place while a run goes on, so an open selector and the hover or focus of a button survive the updates.
+
+Agents get the same facts in `training_status`: each trial's settings, state, steps, latest losses, a handful of curve points and its test return, which trial leads, the notes, and the winner with its held-out result.
 
 ## Writing your own algorithm
 
@@ -212,10 +224,16 @@ On the same arm task, 30k steps each (far too few to converge, only to show the 
 
 The dog's environment, with its sensors read at every step, runs about 1,700 steps a second in one process; the two 700k-step trials above took 7 minutes together on a machine that was busy with other work.
 
+A depth camera in the observation changes this a great deal, because it draws a picture at every step.
+Measured on a rover (`drive_to`) on one core: no sensors 2,886 steps a second, a lidar 2,599, an IMU and a lidar 2,372, a depth camera 110.
+The default 100k steps per trial then take about 15 minutes instead of 35 seconds.
+`train_policy` measures the rate when the observation has a depth camera and puts the estimate in its `notes`; fewer `timesteps`, a lidar or `observation="task"` are the way out.
+
 ## Limits
 
 - Trials are trained on the robot's world as `scope` says; a task that depends on other robots moving is trained with them standing still.
 - PPO and SAC train one simulation per trial (a search runs trials side by side instead), so a single PPO run is slower than control/rl's eight-process trainer, which `train_policy` still uses for plain `algo="ppo"` or `"sac"` on a robot without sensors and without a search.
 - Cameras other than depth are not part of an observation.
+- A continued SAC trial gets back the newest 100k experiences of its replay memory (`replay.npz` in its folder); older ones are not kept.
 - `halving` needs `timesteps` per trial; with only `minutes` a search is refused.
 - A plugin algorithm or task is code: it runs in the training process with your rights, like any plugin ([EXTENDING.md](EXTENDING.md#where-plugins-live)).

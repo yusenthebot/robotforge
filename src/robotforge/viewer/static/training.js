@@ -404,7 +404,10 @@ function prepare(canvas) {
   if (!canvas) return null;
   const ratio = window.devicePixelRatio || 1;
   const w = Math.max(120, Math.floor(canvas.parentElement.clientWidth));
-  const h = Number(canvas.getAttribute("height")) || 120;
+  // The height attribute is the canvas's own pixel height (scaled by the pixel ratio below), so the drawn height
+  // is remembered on the first draw: reading the attribute again would multiply it by the ratio on every redraw.
+  if (!canvas.dataset.h) canvas.dataset.h = String(Number(canvas.getAttribute("height")) || 120);
+  const h = Number(canvas.dataset.h);
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
   canvas.width = Math.round(w * ratio);

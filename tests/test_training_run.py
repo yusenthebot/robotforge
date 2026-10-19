@@ -231,7 +231,7 @@ def test_a_depth_camera_in_the_observation_comes_with_a_speed_note(balance_env):
     spec = make_run_spec("slow", balance_env, algos=["ars"], steps=100_000, parallel=0)
     assert speed_notes(spec, {}) == []
     note = speed_notes(spec, {"slow_sensors": ["cam"], "steps_per_second": 110.0})[0]
-    assert "cam" in note and "110 steps a second" in note and "15 min" in note and "lidar" in note
+    assert "'cam'" in note and "110 steps a second" in note and "15 min" in note and "lidar" in note
 
 
 def test_a_stop_request_ends_the_run_with_the_policy_so_far(tmp_path, balance_env):

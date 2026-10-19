@@ -165,6 +165,20 @@ def test_a_depth_camera_is_a_few_cells_of_the_nearest_thing_in_view(needs_gl):
     env.close()
 
 
+def test_a_run_with_a_depth_camera_measures_its_speed_and_says_it_is_slow(needs_gl):
+    from robotforge.training import api
+    from robotforge.training.runs import policy_meta, speed_notes
+
+    robot = _arm_with({"type": "depth_camera", "width": 32, "height": 24, "range": 3.0})
+    spec = api.build_spec("reach", name="slow", robot=robot, algo="ars", steps=50_000, parallel=0)
+    meta = policy_meta(spec)
+    assert meta["slow_sensors"] and meta["steps_per_second"] > 0  # measured, never assumed
+    note = speed_notes(spec, meta)[0]
+    assert "draws a picture at every step" in note and "steps a second" in note
+    plain = api.build_spec("reach", name="fast", robot=_arm_with({"type": "encoders"}), algo="ars", parallel=0)
+    assert "slow_sensors" not in policy_meta(plain)  # nothing to measure, so no delay at the start
+
+
 def test_a_color_camera_is_left_out_and_said_so():
     env = make_env("reach", robot=_arm_with({"type": "encoders"}, {"type": "camera"}))
     assert [b["source"] for b in env.layout] == ["task", "encoders"]

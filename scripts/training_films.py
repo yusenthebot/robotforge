@@ -100,7 +100,8 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
 
     walk = numbers["walk"]
     gait = walk["gait_alone"]["mean_result"]["avg_speed_m_s"]
-    learned = walk["final"]["mean_result"]["avg_speed_m_s"]
+    scored = walk["final"].get("held_out") or walk["final"]  # the held-out episodes are the fair ones to quote
+    learned = scored["mean_result"]["avg_speed_m_s"]
     marks: dict[str, float] = {}
 
     def quad_world(pg: Any) -> None:
@@ -131,7 +132,12 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         timeline=[
             (0.3, D._caption(f"The built-in gait, asked for {ask} m/s, manages {gait:.2f} m/s")),
             (0.5, gait_walk),
-            (1.0, D._caption(f"A policy trained by {algo} on the dog's own sensors: {learned:.2f} m/s")),
+            (
+                1.0,
+                D._caption(
+                    f"A policy trained by {algo} on the task's numbers plus the dog's sensors: {learned:.2f} m/s"
+                ),
+            ),
             (1.2, policy_walk),
         ],
         until=quad_done,
