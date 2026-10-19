@@ -25,9 +25,25 @@ ARMS = {
     "panda": ("franka_emika_panda", None),
     "ur5e": ("ur5e", [{"library": "robotiq_2f85"}]),
 }
-OBJECTS = (
-    "mug cup bowl plate bottle can apple orange pear banana package tin brick squeeze_bottle screwdriver hammer wrench"
-).split()
+OBJECTS = [
+    "mug",
+    "cup",
+    "bowl",
+    "plate",
+    "bottle",
+    "can",
+    "apple",
+    "orange",
+    "pear",
+    "banana",
+    "package",
+    "tin",
+    "brick",
+    "squeeze_bottle",
+    "screwdriver",
+    "hammer",
+    "wrench",
+]
 TABLE_Z = 0.4
 PICK = (0.45, -0.22)
 TRAY = (0.45, 0.28)
@@ -118,14 +134,19 @@ def main(argv: list[str] | None = None) -> int:
                 rows.append(row)
                 outcomes.append(row["result"])
                 note = row.get("cause") or row.get("why") or ""
-                print(f"{arm:6s} {shape:15s} seed {seed}: {row['result']:8s} {row.get('grasp') or '':8s} {note}", flush=True)
+                print(
+                    f"{arm:6s} {shape:15s} seed {seed}: {row['result']:8s} {row.get('grasp') or '':8s} {note}",
+                    flush=True,
+                )
             print(f"{arm:6s} {shape:15s} {outcomes.count('ok')}/{len(outcomes)}", flush=True)
     print()
     for arm in args.arms.split(","):
         mine = [r for r in rows if r["arm"] == arm]
         ok = sum(r["result"] == "ok" for r in mine)
         print(f"{arm}: {ok}/{len(mine)} placed ({100 * ok / max(len(mine), 1):.0f}%)")
-        causes = Counter(r.get("cause") or ("refused" if r["result"] == "refused" else "") for r in mine if r["result"] != "ok")
+        causes = Counter(
+            r.get("cause") or ("refused" if r["result"] == "refused" else "") for r in mine if r["result"] != "ok"
+        )
         for cause, n in causes.most_common():
             print(f"   {n:3d}  {cause}")
     if args.out:

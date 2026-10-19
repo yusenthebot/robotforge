@@ -1,6 +1,7 @@
 """Success rates of the hard tasks with real Menagerie arms, over seeds, with the cause of every failure.
 
-    uv run python scripts/objects_tasks.py [--kinds upright,stack,insert,sort] [--arms panda,ur5e] [--seeds 8] [--out FILE]
+    uv run python scripts/objects_tasks.py [--kinds upright,stack,insert,sort] [--arms panda,ur5e] [--seeds 8]
+                                           [--out FILE]
 
 Each trial builds a bench (design/tasks/hard_bench.py: the arm on a table, the fixtures and things of the task, placed
 from the seed), adds the task with add_task, has the scripted expert make the pick_and_place calls and reads the
@@ -37,7 +38,8 @@ def main(argv: list[str] | None = None) -> int:
                     row = {"kind": kind, "seed": seed, "arm": arm, "done": False, "why": "", "steps": [],
                            "cause": f"crashed: {type(exc).__name__}: {exc}"[:200]}  # fmt: skip
                 rows.append(row)
-                print(f"{kind:8s} {arm:6s} seed {seed}: {'ok' if row['done'] else 'FAILED':6s} {row.get('cause') or row['why']}", flush=True)
+                verdict = "ok" if row["done"] else "FAILED"
+                print(f"{kind:8s} {arm:6s} seed {seed}: {verdict:6s} {row.get('cause') or row['why']}", flush=True)
     print()
     print(f"{'task':10s} {'arm':6s} placed")
     for kind in args.kinds.split(","):

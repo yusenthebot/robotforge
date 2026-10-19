@@ -30,11 +30,12 @@ SOCKET_REACH = 0.8  # of a socket's radius: where the base of what is put in it 
 FORCE_MIN = 20.0  # N: what a firm hold squeezes with at least
 FORCE_MAX = 90.0  # N: and at most (a Panda's hand holds 70 N for good, 140 N for a moment)
 PAD_TORSION = 0.005  # m: torsional friction of the pads of the library's grippers
+PAD_TORSION_FIRM = 0.012  # m: what a firm hold gives them (a soft pad pressed on a smooth thing, about 5 mm of patch)
 TURN_SAFETY = 6.0  # how much more than the turning of a load a squeeze must resist
 ROLL_SAFETY = 3.0  # the same for a load rolling about the pinch
 ROLL_ARM = 0.01  # m: the lever the pressure over a pad has against a load rolling about the pinch
-ROOM = 0.06  # m between the middles of two things put in one tray
-EDGE = 0.035  # m from a tray's wall that a thing is put at least
+ROOM = 0.055  # m between the middles of two things put in one tray
+EDGE = 0.03  # m from a tray's wall that a thing is put at least
 STEP = 0.015  # m between the spots tried in a tray
 NEAR_Z = 0.12  # m: a thing this far above or below a tray's floor is not in it
 PALM_MARGIN = 0.004  # m the underside of the hand keeps clear of the object's top
@@ -266,6 +267,9 @@ class FirmHold:
         self.arm.carry_weight = True
         if self.arm.gripper >= 0:
             pads = fetch._finger_geoms(model, self.arm)
+            self._saved["pad_friction"] = (pads, model.geom_condim[pads].copy(), model.geom_friction[pads].copy())
+            model.geom_condim[pads] = np.maximum(model.geom_condim[pads], 4)  # the contact can resist turning
+            model.geom_friction[pads, 1] = np.maximum(model.geom_friction[pads, 1], PAD_TORSION_FIRM)
             self._saved["pads"] = (
                 pads,
                 model.geom_solmix[pads].copy(),
@@ -298,6 +302,9 @@ class FirmHold:
         if "noslip" in saved:
             model.opt.noslip_iterations = saved["noslip"]
         self.arm.carry_weight = saved["weight"]
+        if "pad_friction" in saved:
+            pads, condim, friction = saved["pad_friction"]
+            model.geom_condim[pads], model.geom_friction[pads] = condim, friction
         if "pads" in saved:
             pads, solmix, solimp, solref = saved["pads"]
             model.geom_solmix[pads], model.geom_solimp[pads], model.geom_solref[pads] = solmix, solimp, solref
@@ -403,16 +410,20 @@ def _free_spot(centre: np.ndarray, rot: np.ndarray, slot: Slot, taken: list[np.n
     near = [
         p[:2] for p in taken if -0.01 <= p[2] - centre[2] < NEAR_Z and np.hypot(*(p[:2] - centre[:2])) < hx + hy + ROOM
     ]
-    best, score = None, -np.inf
     xs = np.linspace(-hx, hx, max(2, int(2 * hx / STEP) + 1)) if hx > 0 else [0.0]
     ys = np.linspace(-hy, hy, max(2, int(2 * hy / STEP) + 1)) if hy > 0 else [0.0]
+    capacity = (int(2 * hx / ROOM) + 1) * (int(2 * hy / ROOM) + 1)
+    # A roomy area is filled from its middle outward, spread apart; a small one (a tray for two things) from a corner,
+    # packed, so that what it holds is not left a middle that nothing else fits beside.
+    anchor = np.zeros(2) if capacity >= 6 else np.array([-hx, -hy])
+    best, score = None, -np.inf
     for x in xs:
         for y in ys:
             p = centre + rot @ np.array([x, y, 0.0])
             gap = min((float(np.hypot(*(p[:2] - q))) for q in near), default=np.inf)
             if gap < ROOM:
                 continue
-            value = min(gap, 3 * ROOM) - 0.1 * float(np.hypot(x, y))
+            value = (min(gap, 3 * ROOM) if capacity >= 6 else 0.0) - float(np.hypot(x - anchor[0], y - anchor[1]))
             if value > score:
                 best, score = p, value
     return best

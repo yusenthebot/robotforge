@@ -64,10 +64,7 @@ def rack(g: Gen) -> None:
     r = (g.p("bottle") + g.p("clearance")) / 2
     depth = min(g.p("depth"), height - 0.012)
     cell = length / n
-    if 2 * r > min(cell, width) - 0.012:
-        raise ValueError(
-            f"a socket {2 * r * 100:.1f} cm wide does not fit a {cell * 100:.1f} by {width * 100:.1f} cm cell"
-        )
+    r = min(r, (min(cell, width) - 0.012) / 2)  # sockets never wider than their cell: more of them, smaller ones
     floor = height - depth
     hx, hy = length / 2, width / 2
     # how it looks: the block, a top with round holes, each socket's wall and floor
