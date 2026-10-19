@@ -152,7 +152,7 @@ def test_a_reset_in_the_middle_of_a_firm_hold_puts_the_settings_back(pg):
     pg.add_object("can", shape="can", pos=[0.45, -0.22, TABLE])
     pg.run_fast(lambda: False, 0.8)
     m = pg.session.model
-    noslip, hooks = int(m.opt.noslip_iterations), len(pg.session.reset_hooks)
+    noslip = int(m.opt.noslip_iterations)
     arm = pg.behaviors.resolve("arm", arm=True)
     pg.behaviors.pick_and_place(arm, "can", "tray")
     assert m.opt.noslip_iterations > noslip
@@ -236,3 +236,49 @@ def test_the_carry_clears_what_stands_between_the_pick_and_the_place(pg):
     start = d.xpos[tower].copy()
     info, result = _pick(pg, "mug", "tray")
     assert result["success"] and np.linalg.norm(d.xpos[tower] - start) < 0.01  # carried over it, not through it
+
+
+def test_a_firm_hold_is_not_cut_short_by_a_light_pick_before_it(pg):
+    # Regression: a light thing picked first left the arm believing its jaws were still closed, so the next pick's firm
+    # hold was let go of at its first move and its boost later changed settings that nothing put back.
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], mass=0.02, pos=[0.4, -0.2, TABLE])
+    pg.add_object("can", shape="can", pos=[0.45, -0.32, TABLE])
+    pg.run_fast(lambda: False, 0.8)
+    m = pg.session.model
+    noslip = int(m.opt.noslip_iterations)
+    arm = pg.behaviors.resolve("arm", arm=True)
+    first, _ = pg.behaviors.pick_and_place(arm, "cube", "tray")
+    pg.run_fast(lambda: first.done, 60)
+    second, _ = pg.behaviors.pick_and_place(arm, "can", [0.4, 0.15])
+    pg.run_fast(lambda: second.current_label == "lift", 60)
+    assert m.opt.noslip_iterations > noslip  # still firm when the can leaves the table
+    pg.run_fast(lambda: second.done, 60)
+    pg.run_fast(lambda: False, 0.5)
+    assert m.opt.noslip_iterations == noslip
+
+
+def test_jaws_close_where_the_open_fingers_have_room_beside_a_wall(pg):
+    pg.add_object("bin", shape="tray", size=[0.3, 0.2, 0.06], pos=[0.45, -0.3, TABLE])
+    pg.add_object("apple", shape="apple", pos=[0.36, -0.3, TABLE + 0.006])  # 6 cm from the wall's inside, on x
+    pg.add_object("far", shape="apple", pos=[0.95, -0.2, TABLE])
+    pg.run_fast(lambda: False, 0.8)
+    m, d = pg.session.model, pg.session.data
+    near, away = m.body("apple").id, m.body("far").id
+    point = d.xpos[near] + [0, 0, 0.03]
+    jaw = hints.free_jaw(m, d, near, point, 0.08)
+    assert jaw is not None and abs(float(jaw[0])) < 0.6  # turned away from the wall, not square to it
+    assert hints.free_jaw(m, d, away, d.xpos[away] + [0, 0, 0.03], 0.08) is None  # nothing near: the arm's own way
+
+
+def test_two_wide_things_in_a_tray_are_left_a_finger_apart_not_a_fixed_distance(pg):
+    # Regression: the room between things in a tray was 5.5 cm whatever they were, narrower than a can, so the second
+    # can went down against the first and the fingers knocked it over.
+    pg.add_object("hold", shape="tray", size=[0.16, 0.11, 0.05], pos=[0.62, 0.22, TABLE])
+    pg.run_fast(lambda: False, 0.5)
+    m, d = pg.session.model, pg.session.data
+    built = hints.built_for(pg.behaviors._object_entry("hold"))
+    first = hints.place_for(m, d, "hold", built, None, [], 0.033).point
+    narrow = hints.place_for(m, d, "hold", built, None, [first], 0.0).point
+    wide = hints.place_for(m, d, "hold", built, None, [first], 0.033).point
+    assert float(np.hypot(*(narrow[:2] - first[:2]))) < 0.066  # a thing with no width: the old fixed room
+    assert float(np.hypot(*(wide[:2] - first[:2]))) >= 2 * 0.033 + 0.02  # a can: its width and a finger's gap

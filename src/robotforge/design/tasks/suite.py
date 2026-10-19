@@ -224,6 +224,37 @@ def make_suite(count: int, seed: int = 0, out: str | Path = "suite", zh_share: f
     return cases
 
 
+def make_hard_suite(
+    count: int, seed: int = 0, out: str | Path = "suite", arms: tuple[str, ...] = ("panda", "ur5e")
+) -> list[Case]:
+    """`count` cases of the hard tasks (a mug upright on a shelf, a stack, a bottle into a rack, a bin sorted into
+    trays, a pour, a tool handed to the other arm), each a bench world with the task added from its sentence, in the
+    same layout as make_suite (scripts/agent_eval.py --suite runs either). Kinds and arms take turns; the seed of a
+    case moves its objects."""
+    from robotforge.design.tasks import hard_bench
+    from robotforge.design.tasks.spec import HARD_KINDS
+
+    out = Path(out)
+    cases: list[Case] = []
+    with _home(out):
+        for i in range(count):
+            kind, arm = HARD_KINDS[i % len(HARD_KINDS)], arms[(i // len(HARD_KINDS)) % len(arms)]
+            case_seed = seed * 1000 + i
+            name = f"case_{i + 1:02d}"
+            pg = hard_bench.fresh(str(out), name)
+            made = hard_bench.build(pg, kind, case_seed, arm)
+            task = made["task"]
+            two = " and a second one beside it" if kind == "hand_over" else ""
+            text = f"a table with a {arm} arm{two}"
+            cases.append(Case(name, text, case_seed, made["sentence"], task["kind"], task["robot"], task["object"],
+                              task["target"], "en"))  # fmt: skip
+    (out / "suite.json").write_text(
+        json.dumps({"count": count, "seed": seed, "cases": [asdict(c) for c in cases]}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+    return cases
+
+
 def load_suite(folder: str | Path) -> list[Case]:
     data = json.loads((Path(folder) / "suite.json").read_text(encoding="utf-8"))
     return [Case(**c) for c in data["cases"]]

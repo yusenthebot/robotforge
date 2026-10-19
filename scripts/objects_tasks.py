@@ -1,7 +1,7 @@
 """Success rates of the hard tasks with real Menagerie arms, over seeds, with the cause of every failure.
 
-    uv run python scripts/objects_tasks.py [--kinds upright,stack,insert,sort] [--arms panda,ur5e] [--seeds 8]
-                                           [--out FILE]
+    uv run python scripts/objects_tasks.py [--kinds upright,stack,insert,sort,pour,hand_over]
+                                           [--arms panda,ur5e] [--seeds 8] [--out FILE]
 
 Each trial builds a bench (design/tasks/hard_bench.py: the arm on a table, the fixtures and things of the task, placed
 from the seed), adds the task with add_task, has the scripted expert make the pick_and_place calls and reads the
@@ -20,7 +20,7 @@ from pathlib import Path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--kinds", default="upright,stack,insert,sort")
+    parser.add_argument("--kinds", default="upright,stack,insert,sort,pour,hand_over")
     parser.add_argument("--arms", default="panda,ur5e")
     parser.add_argument("--seeds", type=int, default=8)
     parser.add_argument("--first-seed", type=int, default=0)

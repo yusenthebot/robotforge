@@ -120,6 +120,10 @@ MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.M
 MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid walks at 0.09)
 
 
+SPREAD_MAX = 0.05  # m: the most a thing's own width keeps its neighbours in a tray away
+HOLD_LIFT = 0.04  # m a held thing must be above where it lay for the hold to count
+
+
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
 
@@ -164,6 +168,7 @@ CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base o
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
 CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
+POUR_FORCE = 40.0  # N a cup is squeezed with while it is tipped
 HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
@@ -1457,14 +1462,22 @@ class BehaviorManager:
         return arm
 
     def pick_and_place(
-        self, robot: str, obj: str, target: str | list[float], go: bool = True, grasp: str | None = None
+        self,
+        robot: str,
+        obj: str,
+        target: str | list[float],
+        go: bool = True,
+        grasp: str | None = None,
+        pour: bool = False,
     ) -> tuple[ArmMotion | fetch.Errand, dict[str, Any]]:
         """Pick `obj` up and put it on or in `target`. An arm that rides on a robot that drives or walks, told to fetch
         something out of its reach from where the robot stands, has the robot go over (fetch.Errand): to the object,
         then with it to the place. `go=False` keeps the robot where it is and refuses instead, as before. Returns what
         does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}. A generated object (mug,
         bottle, hammer, ...) is taken by one of the grasps its generator gives (`grasp` asks for a kind: "handle",
-        "body", "shaft", "rim"), the first the arm can reach and carry; the answer says which."""
+        "body", "shaft", "rim"), the first the arm can reach and carry; the answer says which. With `pour` the
+        thing is a cup or a bowl with something in it: the arm carries it over the target container, tilts it about
+        its lip until what is in it has run out, tips it back and puts it down where it stood."""
         with self.session.lock:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
@@ -1486,6 +1499,10 @@ class BehaviorManager:
                 return caught, {"object": obj, "target": target, "region": caught.region}
             if arm.tool == "magnet":
                 self._check_steel(arm.robot, obj)
+            if pour:
+                return arm, self._pour(arm, obj, target, pick)
+            if isinstance(target, str) and target.strip().lower() == "hold" and not self._named("hold"):
+                return arm, self._hold(arm, obj, pick)
             try:
                 place, place_top, region = self._place_target(target, obj)
             except BehaviorError:
@@ -1992,6 +2009,142 @@ class BehaviorManager:
                 faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
         return {"center": center, "half_height": half, "faces": faces}
 
+    def _named(self, name: str) -> bool:
+        """Whether the world has an object called `name` (a target called "hold" is that object, not the keyword)."""
+        world = self._world()
+        return world is not None and any(o.name == name for o in world.objects)
+
+    def _hold(self, arm: ArmMotion, obj: str, pick: dict[str, Any]) -> dict[str, Any]:
+        """Queue taking `obj` and lifting it to stay held (target "hold": the receiving half of a hand-over)."""
+        body = self._body(obj)
+        began = float(self.session.data.xpos[body][2])
+        first: Exception | None = None
+        used = None
+        for choice in pick.get("choices") or [None]:
+            point, half, faces = (
+                (pick["center"], pick["half_height"], pick["faces"])
+                if choice is None
+                else (choice.point, choice.half_height, choice.faces)
+            )
+            try:
+                arm.pick_and_hold(point, half, faces)
+                used = choice
+                break
+            except (OutOfReach, ValueError) as exc:
+                first = first or exc
+        else:
+            if isinstance(first, OutOfReach):
+                raise BehaviorError(
+                    self._pick_out_of_reach(arm, first, pick["center"], pick["center"], "hold", obj)
+                ) from first
+            raise BehaviorError(str(first)) from first
+        built = pick.get("built")
+        if built is not None and built.mass >= HEAVY and used is not None:
+            hints.FirmHold(self.session, arm, body, used.force, used.short).start(keep=True)
+        return {
+            "object": obj,
+            "target": "hold",
+            "region": None,
+            "hold": {"robot": arm.robot, "began_z": began},
+            **({"grasp": used.describe()} if used is not None else {}),
+        }
+
+    def held(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Whether the arm that was told to hold a thing has it lifted in its fingers."""
+        hold = info["hold"]
+        arm = self._arm_motion(hold["robot"])
+        body = self._body(info["object"])
+        up = float(self.session.data.xpos[body][2]) - hold["began_z"]
+        holding = fetch.holding(self.session.data, arm, body)
+        return {"success": bool(holding and up >= HOLD_LIFT), "held": bool(holding), "lifted_cm": round(up * 100, 1)}
+
+    def _pour(self, arm: ArmMotion, obj: str, target: Any, pick: dict[str, Any]) -> dict[str, Any]:
+        """Queue taking `obj` (a cup, a mug, a bowl), pouring it into `target` and putting it back (pour.py)."""
+        from robotforge.behaviors import pour as pouring
+
+        built = pick.get("built")
+        if built is None or "mouth_r" not in built.facts or built.facts.get("closed"):
+            raise BehaviorError(f"{obj} has no open mouth to pour from: pour takes a cup, a mug or a bowl")
+        if not isinstance(target, str):
+            raise BehaviorError("pour into an object: give its name (a bowl, a cup)")
+        world = self._world()
+        names = [o.name for o in world.objects] if world else []
+        found = wording.match(target, names)
+        entry = self._object_entry(found) if found else None
+        into = hints.built_for(entry)
+        if entry is None or into is None or "mouth_r" not in into.facts:
+            raise BehaviorError(f"{target} cannot be poured into: it needs an open mouth (a cup, a mug, a bowl)")
+        d = self.session.data
+        mouth = d.xpos[self._body(found)] + np.array([0.0, 0.0, float(into.facts["rim_z"])])
+        cup = d.xpos[pick["body"]]
+        balls = [
+            o.name
+            for o in world.objects
+            if o.shape == "sphere" and not o.fixed and self._inside(d.xpos[self._body(o.name)], cup, built)
+        ]
+        spec = pouring.Pour(
+            float(built.facts["rim_z"]), float(built.facts["mouth_r"]), 0.0, mouth, float(into.facts["mouth_r"])
+        )
+        base = d.xpos[pick["body"]].copy()
+        first: Exception | None = None
+        on_axis = [
+            c for c in pick.get("choices") or [] if float(np.hypot(*(np.asarray(c.point[:2]) - base[:2]))) < 0.015
+        ]
+        if not on_axis:
+            raise BehaviorError(
+                f"{obj} has no grip on its own axis (a body, a rim) to pour from: a handle would swing it"
+            )
+        for choice in on_axis:
+            spec.held_at = choice.half_height
+            try:
+                toward = pouring.pick_and_pour(arm, choice.point, choice.half_height, choice.faces, spec, base)
+                # tipped over, a cup turns in the fingers: held as firmly as a heavy thing is
+                hints.FirmHold(self.session, arm, pick["body"], max(choice.force, POUR_FORCE), choice.short).start()
+                break
+            except (OutOfReach, ValueError) as exc:
+                first = first or exc
+        else:
+            if isinstance(first, OutOfReach):
+                raise BehaviorError(self._pick_out_of_reach(arm, first, pick["center"], base, target, obj)) from first
+            raise BehaviorError(str(first)) from first
+        return {
+            "object": obj,
+            "target": found,
+            "pour": {
+                "into": found,
+                "toward_deg": round(math.degrees(math.atan2(toward[1], toward[0])), 1),
+                "balls": balls,
+                "mouth": [round(float(v), 3) for v in mouth],
+            },
+            "region": None,
+        }
+
+    @staticmethod
+    def _inside(ball: np.ndarray, cup: np.ndarray, built: Any) -> bool:
+        """Whether a ball lies in a cup's mouth, as the world has them."""
+        reach = float(built.facts["mouth_r"]) + 0.01
+        return bool(
+            np.hypot(*(ball[:2] - cup[:2])) <= reach and -0.01 <= ball[2] - cup[2] <= float(built.facts["rim_z"]) + 0.02
+        )
+
+    def poured(self, info: dict[str, Any]) -> dict[str, Any]:
+        """How a pour went: how many of the balls that were in the cup lie in the target now."""
+        pour = info["pour"]
+        d = self.session.data
+        into = self._body(pour["into"])
+        entry = self._object_entry(pour["into"])
+        built = hints.built_for(entry)
+        inside = sum(
+            1 for n in pour["balls"] if built is not None and self._inside(d.xpos[self._body(n)], d.xpos[into], built)
+        )
+        total = len(pour["balls"])
+        return {
+            "success": total > 0 and inside >= math.ceil(0.75 * total),
+            "balls_in_target": inside,
+            "balls": total,
+            "poured_toward_deg": pour["toward_deg"],
+        }
+
     def _tallest_between(self, obj: str, start: np.ndarray, end: np.ndarray) -> float:
         """The height of the tallest thing in the corridor between two points (the things it carries over: a tray with
         cans in it, a shelf), beside what stands under the load's path, so that it is carried over them: the arm's
@@ -2033,7 +2186,7 @@ class BehaviorManager:
             center = d.xpos[body] + d.xmat[body].reshape(3, 3) @ np.array([0.0, 0.0, half])
             return {"center": center, "half_height": half, "faces": None, "choices": None}
         opening = fetch.gripper_opening(m, arm)
-        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want)
+        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want, m)
         if not found:
             asked = f" (asked for a {want} grasp; it has {', '.join(hints.kinds_of(built)) or 'none'})" if want else ""
             why = "; ".join(left) or "it has no grasp a top-down gripper can use"
@@ -2045,6 +2198,7 @@ class BehaviorManager:
             "faces": first.faces,
             "choices": found,
             "built": built,
+            "body": body,
         }
 
     def _place_target(
@@ -2103,7 +2257,8 @@ class BehaviorManager:
             if other != moving and other != name:
                 taken.append(d.xpos[self._body(other)].copy())
         try:
-            place = hints.place_for(m, d, name, built, slot_name, taken)
+            size = self._spread(moving)
+            place = hints.place_for(m, d, name, built, slot_name, taken, size)
         except KeyError as exc:
             raise BehaviorError(exc.args[0]) from exc
         except LookupError as exc:
@@ -2113,6 +2268,14 @@ class BehaviorManager:
                 f"{name} is a {built.shape}: nothing can be put in or on it (a rack, a tray and a box can)"
             )
         return place.point, place.top, place.region
+
+    def _spread(self, name: str | None) -> float:
+        """How much room a generated thing wants round it in a tray: its widest half extent from above, at most the
+        width of a finger's reach (a long tool is not spread like a long box: it is laid, not stood)."""
+        built = hints.built_for(self._object_entry(name)) if name else None
+        if built is None:
+            return 0.0
+        return min(float(max(built.half[0], built.half[1])), SPREAD_MAX)
 
     def _on_shelf(self, name: str, entry: ObjectEntry, slot: str | None) -> tuple[np.ndarray, float, dict[str, Any]]:
         """The top board of a shelf: the only one with nothing over it, so the only one a gripper coming from above
