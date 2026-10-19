@@ -30,6 +30,10 @@ class Reach(Task):
     default_seconds = 4.0
     control_hz = 50.0
     mpc_defaults = {"horizon": 0.4, "knots": 3, "samples": 32, "noise": 0.06}
+    goal_prefixes = (
+        "target",
+        "to target",
+    )  # observation entries that are the goal (kept when only sensors give the rest)
 
     def __init__(self, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None):
         super().__init__(model, robot, params)
