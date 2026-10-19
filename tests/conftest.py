@@ -8,6 +8,9 @@ import pytest
 
 from robotforge.sim.render import render_unavailable_reason
 
+# The tests must not pick up the plugins of whoever runs them (~/.robotforge/plugins): none, unless a test sets some.
+os.environ["ROBOTFORGE_PLUGINS"] = ""
+
 # CI jobs that are meant to cover rendering set this, so a broken GL setup fails instead of skipping.
 REQUIRE_GL_ENV = "ROBOTFORGE_REQUIRE_GL"
 

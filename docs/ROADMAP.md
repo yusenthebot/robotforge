@@ -71,6 +71,9 @@ G8 还开着：
 - 组合存成设计：`mount(on=..., save_as="名字")` 存到 `$ROBOTFORGE_HOME/designs/`，`add_robot(design=...)` 再加一台，`mount("名字", on=...)` 整个装到别的机器人上；`remove("cart/arm")` 连同装在它上面的东西一起拆。
 - 验收：`scripts/combos.py` 里十个一句话组合用真实 Menagerie 模型搭好、移动、干一件小事，十个全部成功（UR5e+LEAP 存成设计后装上轮式底盘、Spot 背两条臂、Go2 上 PiPER 手腕装激光雷达、ANYmal 背 UR5e+Franka Hand、UR5e+Allegro、小车上 PiPER+吸盘、底盘上 UR5e+电磁铁、T1 头上激光雷达胸前深度相机、存成设计的 PiPER+腕部相机装到 Go1、底盘上 Panda+三维激光雷达）。
   截图在 `scripts/screenshots.py` 的 `g10_*`，换手录像在 `scripts/demos.py` 的 `g10_hand_swap`（Robotiq 换 LEAP 再换 Allegro，各放一样东西进盒子）。
+- Z1 和 xArm 7 的 home 姿态不再用 Menagerie 的关键帧（上臂向后折在底座上，排在一起像倒了）：上臂近乎竖直、肘折起、手在前方 0.3 m（伸得更远或笔直向上，Spot 背 Z1 加 PiPER 搬方块会倒），测试 `test_real_arm_home_stands_up_instead_of_folding_back` 守着。
+  另有 `test_real_spot_carries_a_z1_at_home_while_its_piper_moves_a_cube` 守着 Spot 背 Z1 加 PiPER 搬方块不倒；两个测试用旧姿态都会失败（已验证）。
+- 存设计的规矩（2026-10-20 复查后）：`save_as` 在装上之前就检查，被拒时世界原样不动；已有同名设计要 `overwrite=true` 才覆盖，覆盖时说明哪些设计也会跟着变；设计不能存成自己所带设计的名字（循环）；磁盘上已有的循环设计在建造时报出循环路径，不再递归崩溃。`shift` 和 `rotate` 不是有限数或离谱（超过 5 m、720 度）时编译前就拒绝。`shadow_hand` 会说明为什么不支持并指向 `leap_hand` 和 `allegro_hand`。
 - 还没做：Shadow 手（模型自带 40 cm 前臂，没接）；装在胸前、基座水平的臂指向朝下很难，`move_arm` 和 `pick_and_place` 要求夹爪朝下，所以人形胸前挂臂只能装不能用；动态倾翻（PLA 小车上的 Panda 一甩臂就翻）检查只给百分比提示，不拒绝。
 
 ### G11 生成：机器人、环境、任务
@@ -135,6 +138,14 @@ G8 还开着：
 - 软体和绳索：MuJoCo flex 和 composite，绳子、布、软爪。
 
 验收：每个家族一句话加进世界、能遥控、能被 agent 驱动完成一件事；设计库再加五个用到这些家族的异构设计。
+
+### G12 广度和扩展力（2026-10-19 用户要求：自由创造的扩展力、各种技术、传感器、机器人的广度）
+
+- 机器人广度：robot_descriptions 里的开源机器人（上百个 URDF 和 MJCF）按名字就能加进世界，自动诊断修复，按种类归档（机械臂、四足、人形、轮式、手、飞行器），每台都有一句话说明和能做什么。
+- 传感器和感知：更多传感器（双目和鱼眼相机、事件相机、超声波、轮式里程计、触觉皮肤、温度或气体这类场景传感器），深度转点云，激光雷达建占据栅格地图，粒子滤波定位，导航用自己建的图。
+- 自由创造的扩展力：用户在一个文件夹里写自己的零件、传感器、控制器或行为（Python 文件），robotforge 自动发现并加载；世界导出成 MJCF 和 URDF；脚本里统一的机器人接口（robot.sensors、robot.move、robot.arm、每步回调），同一段脚本换个机器人也能跑。
+
+验收：随机抽 20 台 robot_descriptions 的机器人按名字加进来能站能动；Go2 在陌生仓库里自己建图定位走到货架；一个用户写的新传感器和新控制器放进文件夹就能用；导出的 MJCF 用 `python -m mujoco.viewer` 打开一致。
 
 ### G4 感知、建图和定位（全面）
 

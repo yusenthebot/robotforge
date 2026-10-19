@@ -348,6 +348,12 @@ CATALOG: dict[str, LibraryRobot] = {
             "unitree_z1",
             "z1_gripper.xml",
             mass=4.69,
+            # Menagerie's "home" keyframe leans the upper arm 45 degrees back over the base, which reads as fallen
+            # over beside a walker: stand the upper arm up, elbow folded, the claw in front at 0.3 m. Kept this
+            # compact on purpose (centre of mass 0.21 m up): a Z1 reaching out in front or standing straight up
+            # tipped Spot over while its PiPER carried a cube.
+            home_key=None,
+            home=(("joint2", 1.3), ("joint3", 0.0), ("joint4", -1.2)),
             holds_against_gravity=True,  # on its servos alone it sagged 3 to 4 mm 0.33 to 0.45 m out
             # The grasp point is the middle of the fingertip pads (0.172-0.2 m along link06's x), 1 cm above the fixed
             # jaw's pad: a cube rests on that jaw and the moving one closes onto it (at 0 rad; -1.52 is wide open).
@@ -390,6 +396,10 @@ CATALOG: dict[str, LibraryRobot] = {
             "ufactory_xarm7",
             "xarm7.xml",
             mass=12.07,
+            # Menagerie's "home" keyframe tilts the whole arm back (shoulder -0.25 rad); stand the upper arm straight
+            # up with the gripper pointing down in front.
+            home_key=None,
+            home=(("joint2", 0.0), ("joint4", 1.5), ("joint6", 1.5)),
             holds_against_gravity=True,  # on its servos alone it sagged 11 to 17 mm 0.35 to 0.55 m out
             # link_tcp is the fingertips; the pads end 2 mm short of them and reach 3.9 cm up. Grasped at the tips, a
             # 4 cm cube was held by its top 18 mm and slipped out on 4 of 6 carries; 15 mm deeper (sagging 3 mm to the
