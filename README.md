@@ -25,6 +25,7 @@ It runs on macOS, Windows and Linux.
 - **Move things around.** A mobile arm plans its drive and its reach together, fetches the apple from the kitchen island, and puts it on the dining table. Drawers, cabinets, buttons, switches, levers and valves can be operated, and a factory conveyor feeds boxes to a sorting arm.
 - **Generate worlds and tasks.** `load_scene(description=...)` lays out a home, a warehouse or a hillside from one sentence, and `add_task` turns the same sentence into a task with a success check ([scenes](docs/SCENES.md)).
 - **Learn to walk.** Any legged robot, built from parts or imported, learns a rhythm by trial and error in the viewer, keeps it, and then walks and turns with the keyboard or from chat.
+- **Train any robot on any task with any algorithm.** One call trains a robot built from parts, a Go2 or an arm with ARS, CEM, PPO, SAC or an algorithm you wrote, several side by side, or a hyperparameter search that drops the poor trials as it goes; the learner sees what the robot's sensors read, and the viewer's Training panel draws every trial's curve and settings live and plays the best policy ([training](docs/TRAINING.md)).
 - **Go on water, and in the air.** A boat crosses a lake between buoys to a dock, an underwater robot dives, a quadcopter flies a square round a tree.
 - **Extend it with your own code.** Drop a Python file into `~/.robotforge/plugins` to add a part, a sensor, a controller or a behavior that works like the built-in ones; export a world or a robot to MJCF or URDF with meshes for other simulators; write one script that runs on a template dog and on a Go2 ([extending](docs/EXTENDING.md)).
 - **Teach and learn.** The viewer's Learn button opens 13 interactive lessons, 4 benches, 2 face-offs against real robots and 3 challenges, each step "guess first, then try".
@@ -179,6 +180,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Plugins, export to MJCF and URDF, the robot interface in scripts: [docs/EXTENDING.md](docs/EXTENDING.md)
 - Navigation: [docs/NAVIGATION.md](docs/NAVIGATION.md)
 - Algorithm comparisons: [docs/ALGORITHMS.md](docs/ALGORITHMS.md)
+- Training any robot with any algorithm, searches, the training view: [docs/TRAINING.md](docs/TRAINING.md)
 - Learned policies and UniLab training: [docs/UNILAB.md](docs/UNILAB.md)
 - How legged robots read the ground, with measured tables per robot: [docs/LEGGED.md](docs/LEGGED.md)
 - Mobile manipulation: how a base and an arm work together, what the jobs are and how often each robot gets them done: [docs/MOBILE.md](docs/MOBILE.md)

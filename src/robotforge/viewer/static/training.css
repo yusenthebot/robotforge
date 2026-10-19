@@ -22,7 +22,7 @@
   position: fixed;
   top: calc(var(--gutter) + 44px);
   right: var(--gutter);
-  width: 520px;
+  width: 580px;
   max-width: calc(100% - 2 * var(--gutter));
   max-height: calc(100% - 2 * var(--gutter) - 44px - 84px); /* ends above the dock */
   overflow-x: hidden;
@@ -41,7 +41,7 @@
 .training-view[hidden] { display: none; }
 #drawer:not([hidden]) ~ .training-view { right: calc(var(--gutter) + 300px + 10px); }
 .training-view:not([hidden]) ~ .sensor-views { display: none; }
-@media (min-width: 1600px) { .training-view { width: 600px; } }
+@media (min-width: 1600px) { .training-view { width: 640px; } }
 
 .tv-title { display: flex; align-items: center; gap: 10px; }
 .tv-title h2 { margin: 0; font-size: 15px; font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -96,13 +96,14 @@
   font-size: 10.5px;
   font-weight: 600;
   color: var(--muted);
-  padding: 3px 8px 4px 0;
-  white-space: nowrap;
+  padding: 3px 6px 4px 0;
+  white-space: normal;
+  vertical-align: bottom;
   border-bottom: 1px solid var(--line);
 }
-.tv-table td { padding: 4px 8px 4px 0; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.tv-table td { padding: 4px 6px 4px 0; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .tv-table td.num { text-align: right; }
-.tv-table td.state { color: var(--muted); }
+.tv-table .muted { margin-left: 4px; color: var(--muted); font-size: 10.5px; }
 .tv-table tbody tr { cursor: pointer; }
 .tv-table tbody tr:hover { background: var(--hover); }
 .tv-table tr.sel td:first-child { box-shadow: inset 2px 0 0 var(--ink-2); padding-left: 6px; }

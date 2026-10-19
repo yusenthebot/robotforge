@@ -42,6 +42,7 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
 
     def arm_world(pg: Any) -> None:
         pg.open_world(str(copy_world(home / "worlds" / "arm_lab", "arm_film", keep_policies=False)))
+        pg.update_object("target", size=[0.05])  # big enough to see; the training worlds do not hold it
 
     def search_and_wait(pg: Any) -> None:
         world, world_dir = pg.current_world(), pg.store.dir
@@ -62,7 +63,16 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         )
         folder = store.policies_home(world_dir) / "arm_reach"
         start_run(spec, folder, replace=True)
-        JOBS.wait(folder)
+        feed, last = TrainingFeed(pg), 0.0
+        while JOBS.status(folder).get("state") not in store.FINAL_STATES:
+            now = time.monotonic()
+            if now - last > 9.0:  # the arm shows what the leading trial can do so far, as the search goes on
+                try:
+                    feed.play({"run": "arm_reach"})
+                    last = now
+                except Exception:  # no trial has a policy yet
+                    pass
+            time.sleep(0.5)
         time.sleep(2.0)  # the panel shows the finished run for a moment before the policy plays
         state["played"] = time.monotonic()
 
@@ -73,7 +83,7 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         "training_search",
         arm_world,
         seconds=300.0,
-        page=look([0.85, -0.8, 0.5], [0.12, 0.04, 0.16]),
+        page=look([0.7, -0.62, 0.4], [0.14, 0.04, 0.18]),
         settle=2.0,
         timeline=[
             (0.5, D._caption("An arm learns to reach the red ball: nine trials of two algorithms, halved as they go")),

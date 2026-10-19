@@ -29,6 +29,7 @@ const TEXT = {
     progress: "{pct}% of the work",
     eta: "about {time} left",
     elapsed: "{time} so far",
+    took: "took {time}",
     play_best: "Play the best policy",
     play: "Play",
     stop: "Stop",
@@ -60,6 +61,7 @@ const TEXT = {
     progress: "完成 {pct}%",
     eta: "还需约 {time}",
     elapsed: "已用 {time}",
+    took: "用了 {time}",
     play_best: "播放最好的策略",
     play: "播放",
     stop: "停止",
@@ -240,8 +242,10 @@ function render() {
     run.task && run.robot ? `${run.task} · ${run.robot}` : "",
     search.method ? tx("searching", { method: search.method, n: trials.length }) : tx("trials", { n: trials.length }),
   ].filter(Boolean).join(" · ");
-  const time = live && run.eta_s ? tx("eta", { time: formatTime(run.eta_s) }) : tx("elapsed", { time: formatTime(run.elapsed_s) });
-  const playable = trials.some((t) => t.playable) || run.playable;
+  const time = live
+    ? run.eta_s ? tx("eta", { time: formatTime(run.eta_s) }) : tx("elapsed", { time: formatTime(run.elapsed_s) })
+    : tx("took", { time: formatTime(run.elapsed_s) });
+  const playable = run.playable || (lead && lead.playable);
   const columns = settingColumns(trials);
   const dark = isDark();
   const sel = selectedTrial();
@@ -253,13 +257,12 @@ function render() {
       const ok = t.score ? t.score.success_rate : t.success_rate;
       const state = t.state === "pruned" ? tx("pruned") : t.state === "queued" ? tx("queued") : t.state === "failed" ? tx("failed") : "";
       const cells = columns.map((c) => `<td>${esc(formatValue((t.settings || {})[c]))}</td>`).join("");
-      const mark = t.id === run.leader ? `<span class="lead-badge">${esc(tx("leader"))}</span>` : "";
+      const mark = t.id === run.leader ? `<span class="lead-badge">${esc(tx("leader"))}</span>` : state ? `<span class="muted">${esc(state)}</span>` : "";
       return `<tr data-trial="${esc(t.id)}" class="${t.id === run.leader ? "lead" : ""} ${t.id === (sel && sel.id) ? "sel" : ""} ${t.state === "pruned" || t.state === "failed" ? "faded" : ""}">
         <td><span class="swatch" style="background:${trainingColor(i, dark)}"></span>${esc(t.id)} ${mark}</td>
         <td>${esc(t.algo)}</td>${cells}
         <td class="num">${esc(score)}</td><td class="num">${ok === null || ok === undefined ? "-" : Math.round(100 * ok) + "%"}</td>
         <td class="num">${esc(formatSteps(t.steps))}</td>
-        <td class="state">${esc(state)}</td>
         <td><button type="button" class="mini" data-act="play" data-trial="${esc(t.id)}" ${t.playable ? "" : "disabled"} aria-label="${esc(tx("play"))} ${esc(t.id)}">&#9654;</button></td></tr>`;
     })
     .join("");
@@ -284,7 +287,7 @@ function render() {
       <section class="tv-chart"><h3>${esc(tx("metric", { id: sel ? sel.id : "" }))} ${metricPicker}</h3><canvas id="tv-metric" height="110"></canvas></section>
     </div>
     <div class="tv-table"><table>
-      <thead><tr><th>${esc(tx("trial"))}</th><th>${esc(tx("algo"))}</th>${head}<th>${esc(tx("score"))}</th><th>${esc(tx("success"))}</th><th>${esc(tx("steps"))}</th><th></th><th></th></tr></thead>
+      <thead><tr><th>${esc(tx("trial"))}</th><th>${esc(tx("algo"))}</th>${head}<th>${esc(tx("score"))}</th><th>${esc(tx("success"))}</th><th>${esc(tx("steps"))}</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   const legend = $("tv-legend");
   if (legend) {

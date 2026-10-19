@@ -76,6 +76,14 @@ def test_play_runs_the_best_policy_on_its_robot_and_a_trial_on_request(lab):
         feed.play({"run": folder.name, "trial": "t99"})
 
 
+def test_a_run_still_going_plays_the_trial_that_leads(lab):
+    folder = _train(lab)
+    (folder / "policy.npz").unlink()  # the run has no best policy yet: its trials do
+    feed = TrainingFeed(lab)
+    lead = json.loads((folder / "status.json").read_text(encoding="utf-8"))["leader"]
+    assert feed.play({"run": folder.name})["trial"] == lead
+
+
 def test_play_in_a_world_without_the_robot_says_which_world(lab):
     folder = _train(lab)
     lab.remove("pole")

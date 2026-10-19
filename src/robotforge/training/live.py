@@ -89,10 +89,7 @@ class TrainingFeed:
         """Run a policy of the run on its robot in the live world: the best, or the trial `msg["trial"]`."""
         pg = self.pg
         folder = store.find_policy(str(msg["run"]), self._world_dir())
-        policy = TrainedPolicy.load(folder)
-        trial = msg.get("trial") or policy.meta.get("final", {}).get("trial")
-        if msg.get("trial"):
-            policy = _trial_policy(folder, str(msg["trial"]), policy)
+        policy, trial = _policy_to_play(folder, msg.get("trial"))
         spec = play.spec_of(policy.meta)
         if spec is None:
             raise TaskError(
@@ -124,13 +121,19 @@ class TrainingFeed:
         return self.pg.store.dir if self.pg.store is not None else None
 
 
-def _trial_policy(folder: Path, trial: str, whole: TrainedPolicy) -> TrainedPolicy:
+def _policy_to_play(folder: Path, trial: str | None) -> tuple[TrainedPolicy, str | None]:
+    """The policy to play and the trial it came from: the named trial's, else the run's best, else (a run still
+    going) the trial that leads now."""
     from robotforge.control.rl.runtime import MlpPolicy
 
-    path = folder / TRIALS_DIR / trial / POLICY_FILE
-    if not path.exists():
-        raise TaskError(f"trial {trial!r} has no policy yet")
-    return TrainedPolicy(folder, whole.meta, MlpPolicy.load(path))
+    meta = store.read_json(folder / store.POLICY_FILE)
+    if trial is None and (folder / store.WEIGHTS_FILE).exists():
+        return TrainedPolicy.load(folder), (meta.get("final") or {}).get("trial")
+    trial = trial or store.read_json(folder / store.STATUS_FILE).get("leader")
+    path = folder / TRIALS_DIR / str(trial) / POLICY_FILE
+    if not trial or not path.exists():
+        raise TaskError(f"{folder.name!r} has no policy yet" if not trial else f"trial {trial!r} has no policy yet")
+    return TrainedPolicy(folder, meta, MlpPolicy.load(path)), str(trial)
 
 
 def _object_names(model: Any) -> set[str]:
