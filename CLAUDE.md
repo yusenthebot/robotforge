@@ -36,6 +36,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
 - Tests: `uv run pytest -q`; lint: `uv run ruff check . && uv run ruff format --check .`.
   Lesson playthroughs that train for a minute or more are marked `slow` and skipped by default: `uv run pytest -q -m slow` (CI runs them on Ubuntu).
   The sensor views' headless Chrome checks (`tests/test_viewer_sensors_browser.py`, slow) run only on macOS or with `ROBOTFORGE_BROWSER_TESTS=1`: run `uv run pytest -q -m slow tests/test_viewer_sensors_browser.py` before merging a change to the sensor views.
+  After touching the viewer's surfaces (look.js, the asset engine's materials), run `uv run pytest -q -m slow tests/test_viewer_assets_browser.py`: it draws every texture in headless Chrome and fails on a shader error.
   `uv run python scripts/playtest.py` plays every lesson headless and prints which step each one reaches.
   Layout checks in a real browser (`tests/test_viewer_layout.py`, headless Google Chrome) are marked `browser` and kept out of the default run and CI: `uv run pytest -q -m browser`.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.

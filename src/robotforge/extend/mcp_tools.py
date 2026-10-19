@@ -40,7 +40,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         options: dict[str, Any] | None = None,
         seconds: float | None = None,
     ) -> str:
-        """The user's own code that adds parts, sensors, controllers and behaviors. list: what is loaded (each with
+        """The user's own code that adds parts, asset generators (drawn parts with a mass), materials, styles, sensors,
+        controllers and behaviors. list: what is loaded (each with
         what it is for and its options) and every plugin file that failed or was not loaded, with why. reload: read the
         plugin folders again after a file was edited or added (~/.robotforge/plugins, and the open world's plugins/
         folder). show: the source of every file in a world's plugins/ folder (the open world, or world=NAME or a
@@ -51,7 +52,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         here (write_script with plugin=true) or the user approved them: they are Python that runs on this computer
         with the user's rights, so you cannot trust a world's plugins yourself. Read them (show), tell the user what
         they do, and if the user wants them, they run `robotforge plugins trust WORLD` in a terminal; then
-        reload (or open_world). Plugin parts are shapes for add_object, plugin sensors types for add_sensor."""
+        reload (or open_world). Plugin parts are shapes for add_object, plugin sensors types for add_sensor, plugin
+        generators parts for add_robot(template="asset"), and plugin styles and materials work wherever a style does."""
         with _tool_errors():
             store = playground.store
             if action == "trust":

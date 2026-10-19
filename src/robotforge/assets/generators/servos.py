@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
+
 from robotforge.assets.asset import Asset, Collider
-from robotforge.assets.generators.common import Pieces, screw_count
+from robotforge.assets.generators.common import Pieces, groove, screw, screw_count
 from robotforge.assets.registry import Args, Param, generator
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
@@ -50,8 +52,31 @@ def servo_case(a: Args) -> Asset:
             top_cap=False,
         )
         pc.add("trim", band, material="metal")
-    # the gear boss under the horn, a little proud of the +z face
     shaft_x = a.shaft
+    if s.round_joints:  # a round output head round the shaft, with a bright band and a screw circle
+        head_r = min(1.06 * hy, 0.5 * a.length)
+        seg = 20 if head_r > 0.015 else 16
+        pc.add(
+            "structure",
+            M.cylinder(head_r, 2 * hz, segments=seg, bevel=min(0.1 * head_r, 0.003), z0=-hz, arc=1).moved(
+                (shaft_x, 0.0, 0.0)
+            ),
+        )
+        band = groove(head_r, 0.28 * hz, 0.12 * hz, 0.0004, seg)
+        pc.add("trim", band.moved((shaft_x, 0.0, 0.0)), material="metal")
+        n = min(screw_count(s.fasteners, 4), 4)
+        r = max(0.0009, 0.055 * head_r)
+        ring = screw(r, 0.6 * r + 0.0004, s.name == "lab")
+        if n and head_r > horn_r * 1.15:
+            at = 0.5 * (head_r + horn_r * 1.05)
+            heads = [
+                ring[0].moved(
+                    (shaft_x + at * math.cos(2 * math.pi * k / n), at * math.sin(2 * math.pi * k / n), hz - 0.0003)
+                )
+                for k in range(n)
+            ]
+            pc.add("metal", M.merge(heads))
+    # the gear boss under the horn, a little proud of the +z face
     boss = M.cylinder(horn_r * 1.05, hz * 0.12, segments=20, bevel=hz * 0.03, z0=hz - 0.0006, arc=1)
     pc.add("trim", boss.moved((shaft_x, 0.0, 0.0)), material="metal")
     # a label on the top face, toward the end away from the shaft, and a connector on that end

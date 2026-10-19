@@ -678,6 +678,33 @@ def _quadrupeds_walk(pg: Any) -> None:
         pg.behaviors.move(robot, 0.3, 0.0)
 
 
+# The asset engine (G13): a generated arm picks a cube into a bin while the camera circles it close.
+
+
+def _asset_arm(pg: Any) -> None:
+    pg.add_robot("arm", template="arm", params={"dof": 5, "color": "blue"})
+    pg.add_object("cube", shape="box", size=[0.035, 0.035, 0.035], pos=[0.27, 0.13], color="red")
+    pg.add_object("bin", shape="bin", size=[0.13, 0.13, 0.05], pos=[0.22, -0.2], color="gray")
+
+
+ASSET_DEMOS = [
+    Demo(
+        "assets_arm_pick",
+        _asset_arm,
+        24.0,
+        timeline=[
+            (0.3, _caption("A 5-joint arm: every housing, shell and finger pad is generated")),
+            (0.5, _picked("arm", "cube", "bin")),
+            (6.0, _caption("Joint housings with bolt circles, nameplates and glands; shells with parting lines")),
+        ],
+        page="window.__robotforge.select(null);" + _orbit((0.14, -0.04, 0.06), 0.66, 0.32, -70.0, 100.0, 14.0),
+        settle=1.0,
+        until=lambda _pg: "cube" in _PICKED,
+        tail=1.5,
+    ),
+]
+
+
 DEMOS = [
     Demo(  # every library quadruped on the same command (move 0.3 m/s), abreast
         "legged_quadrupeds",
@@ -951,6 +978,7 @@ DEMOS = [
     _mobile("mobile_fetch_anymal", "anymal_ur5e", "fetch", 130.0, (0.4, -2.0, 3.6), ease=0.06),
     _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05, seed=9),
     *G10_DEMOS,
+    *ASSET_DEMOS,
 ]
 
 
@@ -977,6 +1005,9 @@ async def _record(demo: Demo, pg: Any, port: int, chrome_port: int) -> list[tupl
             "Emulation.setDeviceMetricsOverride", width=WIDTH, height=HEIGHT, deviceScaleFactor=SCALE, mobile=False
         )
         await cdp.call("Page.enable")
+        # The viewer follows the system's light or dark setting; a film must not depend on the hour it was made
+        scheme = os.environ.get("ROBOTFORGE_SHOT_THEME", "dark")
+        await cdp.call("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
         await cdp.call("Page.bringToFront")
         await cdp.call("Emulation.setFocusEmulationEnabled", enabled=True)
         stored = {"robotforge.coached": "1", "robotforge.world": "0"}

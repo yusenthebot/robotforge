@@ -26,9 +26,10 @@ from robotforge.sim.session import SimSession
 
 # Mesh triangles a built robot may draw: its base with the base's sensors, plus so many per part. A part
 # with its servo case and horn measured 1.4k to 1.7k (2026-10-17), a wheel with its gear motor about 3k.
-TRIANGLES_BASE, TRIANGLES_PER_PART = 14_000, 1_600
-# The gallery's robots stay under 40k each (the templates' budget is 30k): snake 35k, centaur 33k, spider 32k.
-TRIANGLE_BUDGET_GALLERY = 40_000
+TRIANGLES_BASE, TRIANGLES_PER_PART = 14_000, 1_900  # 1.6k before the asset engine drew servos and limbs (2026-10-20)
+# The gallery's robots stay under 46k each (the templates' budget is 30k): centaur 42k, spider 40k, snake 38k (the
+# viewer's frame time did not move: scripts/bench.py viewer, 3.9 ms at 60 fps).
+TRIANGLE_BUDGET_GALLERY = 46_000
 MESH, BOX, CAPSULE = mujoco.mjtGeom.mjGEOM_MESH, mujoco.mjtGeom.mjGEOM_BOX, mujoco.mjtGeom.mjGEOM_CAPSULE
 
 

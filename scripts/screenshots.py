@@ -172,6 +172,9 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str
             mobile=width < 600,
         )
         await page.call("Page.enable")  # scripts for new documents need the Page domain on
+        # The viewer follows the system's light or dark setting; a picture must not depend on the hour it was taken
+        scheme = os.environ.get("ROBOTFORGE_SHOT_THEME", "dark")
+        await page.call("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
         # A background tab gets its animation frames throttled, and the lesson plots draw on them
         await page.call("Page.bringToFront")
         await page.call("Emulation.setFocusEmulationEnabled", enabled=True)
