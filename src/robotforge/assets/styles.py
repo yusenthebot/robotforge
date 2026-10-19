@@ -54,6 +54,7 @@ class Style:
     bumpers: bool = False  # rubber guards on corners, feet and ends
     light_ring: bool = False  # a thin glowing ring at a joint
     wall: float = 1.0  # how thick-walled and chunky shapes read: scales joint housings and collars
+    round_joints: bool = True  # a servo gets a round output head, like a joint module (hobby keeps the plain case)
     two_tone: bool = True  # neutral shells with the robot's color as a second tone, or all shells in its color
 
     def __post_init__(self) -> None:
@@ -143,6 +144,7 @@ register_style(
         fasteners=1.6,
         panel_lines=False,
         wall=1.15,
+        round_joints=False,
         two_tone=False,
     )
 )

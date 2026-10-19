@@ -35,7 +35,6 @@ def _templates_row(pg: Any) -> None:
     pg.add_robot("dog", template="quadruped", pos=[0.0, 0.7], params={"color": "orange"})
     pg.add_robot("man", template="humanoid", pos=[0.0, 0.2], params={"color": "teal"})
     pg.add_robot("car", template="rover", pos=[0.0, -0.3], params={"color": "red"})
-    pg.add_robot("hand", template="gripper", pos=[0.0, -0.7])
 
 
 def _arm_styles(pg: Any) -> None:
@@ -118,7 +117,7 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
         ),
         Shot(
             "assets_dog_close",
-            lambda pg: pg.add_robot("dog", template="quadruped", params={"color": "orange", "style": "lab"}),
+            lambda pg: pg.add_robot("dog", template="quadruped", params={"color": "orange"}),
             page="window.__robotforge.select(null);" + look((0.62, -0.5, 0.32), (0.0, 0.0, 0.14)),
             size=HD,
             settle=2.5,
