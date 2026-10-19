@@ -947,7 +947,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json({"gripper": state, **run})
 
     @server.tool()
-    async def pick_and_place(robot: str, object: str, target: str | list[float], go: bool = True) -> str:
+    async def pick_and_place(
+        robot: str, object: str, target: str | list[float], go: bool = True, grasp: str | None = None
+    ) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
         it and reports whether the object ended up there. An arm on a robot that drives or walks (a mobile
@@ -961,13 +963,21 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         running conveyor is caught as it goes by, the belt left running: the arm waits over a point on its way, follows
         it down, takes hold and lifts it off ("caught", "caught_at"); a robot that goes first drives to a place beside
         the belt from which its arm reaches ("stood_at"; or, if the box will be at the end of the belt before it can
-        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target."""
+        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target.
+        A modelled object (mug, bottle, hammer, ... see add_object) is taken where its generator says to take it, by
+        the first grasp the arm can reach and carry: a mug by its handle, a bottle round its body, a tool across its
+        shaft; grasp="handle" (or "body", "shaft", "rim", "neck", "edge") asks for one kind, and the answer's "grasp"
+        says which was used and "tilt_deg" how far from upright the object ended. The target may be a slot of a
+        fixture: "rack" fills its first free socket, "rack/2" the second, a tray takes things inside, and a package or
+        a tin takes things stacked on its top."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
             # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
             # take seconds, and the viewer froze meanwhile.
-            motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)
+            motion, info = await asyncio.to_thread(
+                playground.behaviors.pick_and_place, robot, object, target, go, grasp
+            )
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
             caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
@@ -995,6 +1005,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **result,
                     "object": object,
                     "target": target,
+                    **({"grasp": info["grasp"]} if info.get("grasp") else {}),
                     **(errand.result() if errand is not None else {}),
                     **(caught.result() if caught is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),

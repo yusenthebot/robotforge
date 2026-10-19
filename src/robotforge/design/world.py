@@ -219,6 +219,22 @@ class RobotEntry(_Strict):
         return self.file is not None and not importer.is_importable(self.file)
 
 
+def _shape_list() -> str:
+    """The shapes an unknown name is told about: the plain ones and plugins' by name, the modelled objects (mug,
+    bottle, ...) as an example and a count, so the message stays short as they grow in number."""
+    from robotforge.objects.registry import BUILT_IN
+
+    plain = [f"'{s}'" for s in props.SHAPES if s in props.BUILT_IN and s not in BUILT_IN]
+    plugins = [f"'{s}'" for s in props.SHAPES if s not in props.BUILT_IN]
+    modelled = [s for s in props.SHAPES if s in BUILT_IN]
+    named = (
+        [f'\'{modelled[0]}\', ... ({len(modelled)} modelled objects: shape="mug" or describe="a mug")']
+        if modelled
+        else []
+    )
+    return ", ".join([*plain, *named, *plugins])
+
+
 class ObjectEntry(_Strict):
     name: str
     shape: str = "box"  # a built-in shape (ShapeName) or one a plugin added (robotforge.extend)
@@ -273,7 +289,7 @@ class ObjectEntry(_Strict):
         if extend.REGISTRY.untrusted:  # the shape may be one a plugin file would add if it were trusted
             raise ValueError(extend.unknown_part(v, list(props.SHAPES)))
         # The message every unknown name gets, with the shapes there are (plugins' too, once loaded)
-        expected = ", ".join(f"'{s}'" for s in props.SHAPES)
+        expected = _shape_list()
         raise PydanticCustomError("literal_error", "Input should be {expected}", {"expected": expected})
 
     @model_validator(mode="after")

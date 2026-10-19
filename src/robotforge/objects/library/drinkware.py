@@ -50,7 +50,7 @@ def mug(g: Gen) -> None:
     mesh = M.lathe(body, 44, sharp=(1, len(body) - 2))
     # the handle: a tube along a superellipse in the xz plane, joined to the wall at both ends
     style, scale = g.p("handle"), g.p("handle_size")
-    a, b, ex = {"round": (0.030, 0.29, 2.0), "square": (0.029, 0.27, 3.4), "tall": (0.019, 0.38, 2.2)}[style]
+    a, b, ex = {"round": (0.036, 0.29, 2.0), "square": (0.035, 0.27, 3.4), "tall": (0.027, 0.38, 2.2)}[style]
     a, b = a * scale, b * h * scale
     zc = h * 0.53
     wall_x = Rb + (R - Rb) * zc / h - 0.003
@@ -71,8 +71,9 @@ def mug(g: Gen) -> None:
         )
     x_out = wall_x + a
     g.grasp(
-        "handle", (x_out, 0.0, zc), (0.0, 1.0), 0.022, 1.0, "pinch the handle's outer bar from above, jaws across it"
-    )
+        "handle", (x_out, 0.0, zc), (0.0, 1.0), 0.020, 1.0, "pinch the handle's outer bar from above, jaws across it",
+        zc - 0.5 * b, zc + 0.7 * b,
+    )  # fmt: skip
     g.anchor("mouth", (0.0, 0.0, h))
     g.anchor("handle", (x_out, 0.0, zc))
     g.fact(kind="vessel", mouth_r=R - t, floor_z=floor, rim_z=h, handle_x=x_out, inner_r=R - t)
@@ -133,7 +134,7 @@ def cup(g: Gen) -> None:
     if g.p("lid"):
         lid = M.revolve([(0.0, h), (R + 0.002, h), (R + 0.002, h + 0.004), (0.0, h + 0.006)], 40)
         g.part(lid, "plastic", [kit.cylinder(R, 0.003, (0, 0, h + 0.003))], [0.15, 0.15, 0.17, 1.0])
-    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d + 0.004, 1.0, "round the body, any jaw direction")
+    g.grasp("body", (0.0, 0.0, h * 0.5), (0.0, 0.0), d, 1.0, "round the body, any jaw direction", h * 0.3, h - 0.012)
     g.anchor("mouth", (0.0, 0.0, h))
     g.fact(kind="vessel", mouth_r=R - wall, floor_z=floor, rim_z=h, inner_r=R - wall, closed=bool(g.p("lid")))
 
@@ -149,7 +150,8 @@ def cup(g: Gen) -> None:
     keywords=("bowl", "dish", "basin", "salad bowl"),
     params={
         "round": Range(0.4, 1.0, 0.8, "0 flared like a cone, 1 round like half a ball"),
-        "wall": Range(0.0035, 0.0065, 0.005, "wall thickness, m"),
+        "wall": Range(0.0030, 0.0050, 0.0042, "wall thickness, m"),
+        "material": Choice("ceramic", "plastic", doc="what it is made of", vary=False),
     },
     palette=("white", "#e8d8b0", "#6c8ebf", "#c0392b"),
     builtin=True,
@@ -162,9 +164,10 @@ def bowl(g: Gen) -> None:
     outer = [(rf + (R - rf) * math.sin(a), h * ((1 - rnd) * math.sin(a) + rnd * (1 - math.cos(a)))) for a in theta]
     outer = [(rf - 0.004, 0.0), *[(r, max(z, 0.004)) for r, z in outer]]
     body = profiles.hollow(outer, t, 0.008, round_rim=4)
-    g.part(M.lathe(body, 48, sharp=(1,)), "ceramic", _bowl_pieces(outer, t, h))
-    g.grasp("rim", (R - 0.004, 0.0, h - 0.006), (1.0, 0.0), 0.012, 1.0, "pinch the rim: one finger in, one out")
-    g.grasp("rim", (-(R - 0.004), 0.0, h - 0.006), (1.0, 0.0), 0.012, 0.9, "the rim on the far side")
+    g.part(M.lathe(body, 48, sharp=(1,)), g.p("material"), _bowl_pieces(outer, t, h))
+    rim_x, rim_w, lo, hi = R - t / 2, t + 0.002, h - 0.016, h - 0.002
+    g.grasp("rim", (rim_x, 0.0, h - 0.008), (1.0, 0.0), rim_w, 1.0, "pinch the rim: one finger in, one out", lo, hi)
+    g.grasp("rim", (-rim_x, 0.0, h - 0.008), (1.0, 0.0), rim_w, 0.9, "the rim on the far side", lo, hi)
     g.anchor("mouth", (0.0, 0.0, h))
     g.fact(kind="vessel", mouth_r=R - t, floor_z=0.008, rim_z=h, inner_r=R - t, rim_r=R)
 
@@ -183,13 +186,18 @@ def _bowl_pieces(outer: list[tuple[float, float]], wall: float, h: float) -> lis
 @generator(
     "plate",
     size="[diameter, height]",
-    default_size=(0.21, 0.022),
+    default_size=(0.21, 0.03),
     color="white",
     material="ceramic",
     kind="container",
     summary="a plate: flat with a raised rim (pinch the rim, or put things on it)",
     keywords=("plate", "saucer", "platter"),
-    params={"rim": Range(0.2, 0.32, 0.26, "rim width as a share of the diameter")},
+    params={
+        "rim": Range(0.2, 0.32, 0.26, "rim width as a share of the diameter"),
+        "material": Choice(
+            "plastic", "ceramic", doc="what it is made of: a light picnic plate or a heavy china one", vary=False
+        ),
+    },
     palette=("white", "#e8d8b0", "#6c8ebf"),
     builtin=True,
 )
@@ -198,19 +206,27 @@ def plate(g: Gen) -> None:
     R = d / 2
     rim = g.p("rim")
     r_flat = R * (1 - rim)
-    outer = [(r_flat * 0.5, 0.0), (r_flat, 0.0015), (r_flat + (R - r_flat) * 0.45, h * 0.35), (R, h)]
+    bead = 0.0034  # a rolled lip: a pinch below it cannot slide up the rim
+    outer = [(r_flat * 0.5, 0.0), (r_flat, 0.0015), (r_flat + (R - r_flat) * 0.4, h * 0.3), (R - bead, h * 0.82)]
     body = profiles.hollow(outer, 0.0035, 0.0035, round_rim=3)
     pieces = [kit.cylinder(r_flat, 0.0035, (0, 0, 0.0035))]
-    pieces += kit.ring_of_boxes(r_flat, R, 0.0015, h, 0.0055, 16)
-    g.part(M.lathe(body, 48, sharp=()), "ceramic", pieces)
+    pieces += kit.ring_of_boxes(r_flat, R - bead, 0.0015, h * 0.82, 0.0055, 16)
+    ring_r, z_lip = R - bead, h * 0.82 + 0.001
+    around = [(ring_r * math.cos(a), ring_r * math.sin(a), z_lip) for a in np.linspace(0, 2 * math.pi, 17)]
+    pieces += [kit.capsule_between(around[i], around[i + 1], bead) for i in range(16)]
+    g.part(M.lathe(body, 48, sharp=()), g.p("material"), pieces)
+    g.decor(M.torus(ring_r, bead, 48, 8).moved((0, 0, z_lip)), g.rgba, "ceramic")
+    rim_x, lo, hi = R - bead, 0.012, z_lip - bead - 0.0005
     g.grasp(
         "rim",
-        (R - 0.004, 0.0, h * 0.6),
+        (rim_x, 0.0, z_lip - bead - 0.005),
         (1.0, 0.0),
-        0.012,
+        0.007,
         1.0,
-        "pinch the rim: one finger over the plate, one outside",
+        "pinch the rim under its lip: one finger over the plate, one outside",
+        lo,
+        hi,
     )
-    g.grasp("rim", (-(R - 0.004), 0.0, h * 0.6), (1.0, 0.0), 0.012, 0.9, "the rim on the far side")
+    g.grasp("rim", (-rim_x, 0.0, z_lip - bead - 0.005), (1.0, 0.0), 0.007, 0.9, "the rim on the far side", lo, hi)
     g.anchor("top", (0.0, 0.0, 0.0035))
     g.fact(kind="plate", flat_r=r_flat, top_z=0.0035, rim_z=h, rim_r=R)

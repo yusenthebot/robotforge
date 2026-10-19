@@ -278,6 +278,9 @@ class ArmMotion:
         self._last: tuple[float, np.ndarray] | None = None  # (time, q) the servos were last told
         self._settle: tuple[float, float, float] | None = None  # (since, last look, how far off then) while waiting
         self.queue: deque[Waypoint] = deque()
+        # Called once, when the queue has run out and the arm stands idle (or the controller is replaced): what a pick
+        # of something heavy firmed for the load (hints.FirmHold) put back.
+        self.on_idle: list[Callable[[], None]] = []
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._knots: np.ndarray | None = None  # the joint values a path move passes through, from where it started
@@ -1517,6 +1520,16 @@ class ArmMotion:
     def done(self) -> bool:
         return not self.queue and self._segment is None
 
+    def finish(self) -> None:
+        """Run what was to be done when the arm is idle, once."""
+        callbacks, self.on_idle = self.on_idle, []
+        for callback in callbacks:
+            callback()
+
+    def release(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """The controller is replaced (see SimSession.set_controller): put back what it changed."""
+        self.finish()
+
     def status(self) -> dict:
         return {
             "behavior": "arm",
@@ -1564,6 +1577,7 @@ class ArmMotion:
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
+            self.finish()
             self._command(data)
             return
         start, wp, t0 = self._segment

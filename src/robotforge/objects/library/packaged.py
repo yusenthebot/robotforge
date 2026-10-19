@@ -83,7 +83,14 @@ def package(g: Gen) -> None:
     _add(g, seam)
     jaw = (0.0, 1.0)
     g.grasp(
-        "body", (0.0, 0.0, height * 0.5), jaw, width + 0.004, 1.0, "across the narrow side, jaws on the two big faces"
+        "body",
+        (0.0, 0.0, height * 0.5),
+        jaw,
+        width,
+        1.0,
+        "across the narrow side, jaws on the two big faces",
+        height * 0.3,
+        height - 0.012,
     )
     g.anchor("top", (0.0, 0.0, height))
     g.fact(kind="package", top_z=height)
@@ -148,7 +155,14 @@ def book(g: Gen) -> None:
         g.fact(kind="book", lying=True, top_z=thick)
     else:
         g.grasp(
-            "edge", (0.0, 0.0, length - 0.014), (1.0, 0.0), thick + 0.004, 1.0, "across the thickness by the top edge"
+            "edge",
+            (0.0, 0.0, length - 0.014),
+            (1.0, 0.0),
+            thick,
+            1.0,
+            "across the thickness by the top edge",
+            length - 0.04,
+            length - 0.01,
         )
         g.fact(kind="book", lying=False, top_z=length)
     g.anchor("top", pt((0.0, 0.0, thick)))
@@ -187,7 +201,9 @@ def tin(g: Gen) -> None:
         "metal",
     )
     g.decor(M.torus(0.007, 0.0012, 20, 6).moved((hx * 0.5, 0, height + 0.003)), [0.85, 0.86, 0.88, 1.0], "metal")
-    g.grasp("body", (0.0, 0.0, height * 0.5), (0.0, 1.0), width + 0.004, 1.0, "across the narrow side")
+    g.grasp(
+        "body", (0.0, 0.0, height * 0.5), (0.0, 1.0), width, 1.0, "across the narrow side", height * 0.3, height - 0.01
+    )
     g.fact(kind="tin", top_z=height)
 
 
@@ -212,7 +228,9 @@ def brick(g: Gen) -> None:
         0.01,
     )
     g.part(body, "foam", [kit.box(length / 2, width / 2, height / 2, (0, 0, height / 2))], g.rgba)
-    g.grasp("body", (0.0, 0.0, height * 0.5), (0.0, 1.0), width + 0.004, 1.0, "across the narrow side")
+    g.grasp(
+        "body", (0.0, 0.0, height * 0.5), (0.0, 1.0), width, 1.0, "across the narrow side", height * 0.3, height - 0.008
+    )
     g.fact(kind="brick", top_z=height)
 
 
@@ -269,6 +287,18 @@ def squeeze_bottle(g: Gen) -> None:
     front.text(shade(g.rgba, 0.55), word, 0.0, height * 0.33, height * 0.045, "center")
     front.stripes(shade(g.rgba, 0.55), -sx * 0.62, height * 0.23, sx * 0.62, height * 0.29, 2)
     _add(g, front)
-    g.grasp("body", (0.0, 0.0, height * 0.32), (0.0, 1.0), width + 0.004, 1.0, "across the flat sides")
+    g.grasp(
+        "body", (0.0, 0.0, height * 0.32), (0.0, 1.0), width, 1.0, "across the flat sides", height * 0.2, height * 0.6
+    )
+    g.grasp(
+        "neck",
+        (0.0, 0.0, height * 0.93),
+        (0.0, 1.0),
+        2 * sy * 0.27,
+        0.6,
+        "round the cap and neck",
+        height * 0.86,
+        height * 0.97,
+    )
     g.anchor("top", (0.0, 0.0, height))
     g.fact(kind="bottle", closed=True)

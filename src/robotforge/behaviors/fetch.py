@@ -1206,18 +1206,20 @@ class Leg:
     result: dict[str, Any] | None = None
 
 
-def squeeze(model: mujoco.MjModel, actuator: int) -> tuple[np.ndarray, np.ndarray] | None:
-    """Stiffen a gripper's servo to push SQUEEZE newtons a cm short of closed (if it is softer), in place; its gain and
+def squeeze(
+    model: mujoco.MjModel, actuator: int, newtons: float = SQUEEZE, short: float = 0.01
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Stiffen a gripper's servo to push `newtons` (SQUEEZE) `short` (a cm) short of closed (if it is softer), in place; its gain and
     bias before, or None when it is stiff enough already (or no servo). The whole servo scales together, offset
     included: a gripper turned around within its range (library.py, Robotiq's) has one, and without it the jaws
     stop 0.08 rad short of closed and miss what they take."""
     if int(model.actuator_biastype[actuator]) != mujoco.mjtBias.mjBIAS_AFFINE:
         return None
     kp = -float(model.actuator_biasprm[actuator, 1])
-    if not 0 < kp < SQUEEZE / 0.01:
+    if not 0 < kp < newtons / short:
         return None
     before = model.actuator_gainprm[actuator].copy(), model.actuator_biasprm[actuator].copy()
-    scale = SQUEEZE / 0.01 / kp
+    scale = newtons / short / kp
     model.actuator_gainprm[actuator, 0] *= scale
     model.actuator_biasprm[actuator, 0] *= scale
     model.actuator_biasprm[actuator, 1] *= scale

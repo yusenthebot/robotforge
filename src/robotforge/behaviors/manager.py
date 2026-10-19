@@ -25,6 +25,7 @@ from robotforge.behaviors import (
     catch_stand,
     fetch,
     flight,
+    hints,
     humanoid,
     marine,
     nav_map,
@@ -162,6 +163,7 @@ DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for wh
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
 
@@ -1454,12 +1456,14 @@ class BehaviorManager:
         return arm
 
     def pick_and_place(
-        self, robot: str, obj: str, target: str | list[float], go: bool = True
+        self, robot: str, obj: str, target: str | list[float], go: bool = True, grasp: str | None = None
     ) -> tuple[ArmMotion | fetch.Errand, dict[str, Any]]:
         """Pick `obj` up and put it on or in `target`. An arm that rides on a robot that drives or walks, told to fetch
         something out of its reach from where the robot stands, has the robot go over (fetch.Errand): to the object,
         then with it to the place. `go=False` keeps the robot where it is and refuses instead, as before. Returns what
-        does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}."""
+        does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}. A generated object (mug,
+        bottle, hammer, ...) is taken by one of the grasps its generator gives (`grasp` asks for a kind: "handle",
+        "body", "shaft", "rim"), the first the arm can reach and carry; the answer says which."""
         with self.session.lock:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
@@ -1472,7 +1476,7 @@ class BehaviorManager:
             self._check_carrier(name)  # before its motion takes hold of the arm
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
-            pick = self._object_geometry(obj)
+            pick = self._object_geometry(obj, arm, grasp)
             # A suction cup or a magnet picks from where it stands: an errand's grasp and carry are for fingers.
             goes = go and self._goes(arm.robot) and arm.tool is None
             riding = catching.velocity(self.session.model, self.session.data, self._body(obj))
@@ -1482,14 +1486,16 @@ class BehaviorManager:
             if arm.tool == "magnet":
                 self._check_steel(arm.robot, obj)
             try:
-                place, place_top, region = self._place_target(target)
+                place, place_top, region = self._place_target(target, obj)
             except BehaviorError:
                 if not goes or self._place_kind(target) != "terrain":
                     raise
                 place = None  # a terrain patch: only a robot that goes over puts things on one
             if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
                 try:
-                    arm.pick_and_place(pick["center"], pick["half_height"], place, place_top, pick["faces"])
+                    used = self._take(arm, pick, place, place_top)
+                    if pick.get("built") is not None and pick["built"].mass >= HEAVY and used is not None:
+                        hints.FirmHold(self.session, arm, self._body(obj), used.force, used.short).start()
                 except OutOfReach as exc:
                     # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
                     # goes with it wherever it drives, and the refusal names it.
@@ -1505,9 +1511,36 @@ class BehaviorManager:
                 except ValueError as exc:
                     raise BehaviorError(str(exc)) from exc
                 else:
-                    return arm, {"object": obj, "target": target, "region": region}
+                    info = {"object": obj, "target": target, "region": region}
+                    return arm, {**info, **({"grasp": used.describe()} if used is not None else {})}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def _take(self, arm: ArmMotion, pick: dict[str, Any], place: np.ndarray, place_top: float) -> hints.Choice | None:
+        """Queue the pick and place with the first grasp the arm can reach and carry (a generated object has several
+        to try, best first); raises what the best one raised when none works, saying what the others did."""
+        tries = pick.get("choices") or [None]
+        first: OutOfReach | ValueError | None = None
+        others: list[str] = []
+        for choice in tries:
+            point, half, faces = (
+                (pick["center"], pick["half_height"], pick["faces"])
+                if choice is None
+                else (choice.point, choice.half_height, choice.faces)
+            )
+            try:
+                arm.pick_and_place(point, half, place, place_top, faces)
+                return choice
+            except (OutOfReach, ValueError) as exc:
+                if first is None:
+                    first = exc
+                    pick["center"], pick["half_height"] = point, half  # the advice below is for the best grasp
+                elif choice is not None:
+                    others.append(f"{choice.hint.kind if choice.hint else 'body'}: {exc}")
+        assert first is not None
+        if others and isinstance(first, ValueError) and not isinstance(first, OutOfReach):
+            first.args = (f"{first.args[0]} (the other grasps: {'; '.join(others)})",)
+        raise first
 
     def _catch(
         self,
@@ -1873,7 +1906,11 @@ class BehaviorManager:
         center = np.asarray(region["center"])
         half = np.asarray(region["half_xy"])
         inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half) and pos[2] >= region["min_z"])
-        return {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
+        out = {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
+        entry = self._object_entry(obj)
+        if hints.built_for(entry) is not None:  # a generated thing is also judged by how it stands
+            out["tilt_deg"] = round(hints.tilt_deg(self.session.data, body), 1)
+        return out
 
     def _movable(self) -> list[str]:
         """Names of the loose objects: bodies with a free joint that are not part of a robot."""
@@ -1920,8 +1957,11 @@ class BehaviorManager:
             f"material='steel'), or change the tool (update_robot with end_effector='suction')"
         )
 
-    def _object_geometry(self, name: str) -> dict[str, Any]:
+    def _object_geometry(self, name: str, arm: ArmMotion | None = None, grasp: str | None = None) -> dict[str, Any]:
         entry = self._object_entry(name)
+        built = hints.built_for(entry)
+        if built is not None and arm is not None:
+            return self._hinted_geometry(name, entry, built, arm, grasp)
         if entry is not None and entry.shape in mechanisms.MECHANISMS:
             actions = " or ".join(mechanisms.MECHANISMS[entry.shape].actions) or "set its speed"
             raise BehaviorError(f"{name} is a {entry.shape}, built in place: operate can {actions} it")
@@ -1949,7 +1989,41 @@ class BehaviorManager:
                 faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
         return {"center": center, "half_height": half, "faces": faces}
 
-    def _place_target(self, target: str | list[float]) -> tuple[np.ndarray, float, dict[str, Any]]:
+    def _hinted_geometry(
+        self, name: str, entry: ObjectEntry, built: Any, arm: ArmMotion, want: str | None
+    ) -> dict[str, Any]:
+        """Where a generated object is taken hold of: its generator's grasp hints at the pose it has now."""
+        if entry.fixed:
+            raise BehaviorError(f"{name} is fixed in place and cannot be picked up")
+        body = self._body(name)
+        m, d = self.session.model, self.session.data
+        if arm.tool is not None:  # a suction cup or a magnet takes the middle of a flat top
+            if built.facts.get("top_z") is None:
+                raise BehaviorError(
+                    f"{name} is a {entry.shape}: a {arm.tool} needs a flat top to hold by (a package, a tin, a book); "
+                    "change the end effector to fingers (update_robot with end_effector='gripper')"
+                )
+            half = float(built.facts["top_z"]) / 2
+            center = d.xpos[body] + d.xmat[body].reshape(3, 3) @ np.array([0.0, 0.0, half])
+            return {"center": center, "half_height": half, "faces": None, "choices": None}
+        opening = fetch.gripper_opening(m, arm)
+        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want)
+        if not found:
+            asked = f" (asked for a {want} grasp; it has {', '.join(hints.kinds_of(built)) or 'none'})" if want else ""
+            why = "; ".join(left) or "it has no grasp a top-down gripper can use"
+            raise BehaviorError(f"{arm.robot} cannot take hold of {name}, a {entry.shape}{asked}: {why}")
+        first = found[0]
+        return {
+            "center": first.point,
+            "half_height": first.half_height,
+            "faces": first.faces,
+            "choices": found,
+            "built": built,
+        }
+
+    def _place_target(
+        self, target: str | list[float], obj: str | None = None
+    ) -> tuple[np.ndarray, float, dict[str, Any]]:
         """(place point for the object's bottom, highest point around it, success region)."""
         if isinstance(target, str) and NUMBER_LIST.fullmatch(target):  # "0.2, 0.2": a position, not an object
             target = [float(w) for w in re.split(r"[^\d.+-]+", target.strip(" []()")) if w]
@@ -1960,12 +2034,16 @@ class BehaviorManager:
             return p, p[2], {"center": p.tolist(), "half_xy": [0.04, 0.04], "min_z": p[2] - 0.01}
         world = self._world()
         names = [o.name for o in world.objects] if world else []
-        found = wording.match(target, names)
+        base_name, slot_name = hints.parse_target(target, names) if "/" in target else (target, None)
+        found = wording.match(base_name, names)
         entry = self._object_entry(found) if found else None
         if entry is None:
             raise BehaviorError(wording.unknown("object", target, names) + " (or give a position [x, y])")
         target = found
         m, d = self.session.model, self.session.data
+        built = hints.built_for(entry)
+        if built is not None:  # a generated fixture's slot, or the flat top of a generated thing
+            return self._generated_place(target, built, slot_name, obj)
         if entry.shape in mechanisms.CONTAINERS:
             return self._into(target)
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
@@ -1985,6 +2063,28 @@ class BehaviorManager:
         top = base[2] + (entry.size[-1] / 2 if entry.shape != "sphere" else entry.size[0] / 2)
         region = {"center": [base[0], base[1], top], "half_xy": [length / 2, width / 2], "min_z": top - 0.01}
         return np.array([base[0], base[1], top]), top, region
+
+    def _generated_place(
+        self, name: str, built: Any, slot_name: str | None, moving: str | None
+    ) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """Put something in a slot of the generated object `name` (a rack's socket, a tray, a shelf board) or on its
+        flat top: the first free slot unless one is named ("rack/2")."""
+        m, d = self.session.model, self.session.data
+        taken = []
+        for other in self._movable():
+            if other != moving and other != name:
+                taken.append(d.xpos[self._body(other)].copy())
+        try:
+            place = hints.place_for(m, d, name, built, slot_name, taken)
+        except KeyError as exc:
+            raise BehaviorError(exc.args[0]) from exc
+        except LookupError as exc:
+            raise BehaviorError(str(exc)) from exc
+        if place is None:
+            raise BehaviorError(
+                f"{name} is a {built.shape}: nothing can be put in or on it (a rack, a tray and a box can)"
+            )
+        return place.point, place.top, place.region
 
     def _into(self, name: str) -> tuple[np.ndarray, float, dict[str, Any]]:
         """Place point, rim and success region for putting something in drawer `name`, as far open as it is now:
