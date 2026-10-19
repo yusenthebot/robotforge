@@ -16,7 +16,7 @@ const TEXT = {
     title: "Training",
     button: "Training",
     state: { starting: "starting", running: "training", done: "done", stopped: "stopped", failed: "failed", testing: "testing" },
-    reward: "Reward per episode (average of the latest episodes)",
+    reward: "Reward per training episode (not the test return: ARS and CEM try perturbed policies here)",
     returns: "Episode returns, trial {id}",
     metric: "Loss and other numbers, trial {id}",
     none_metric: "this algorithm reports no losses",
@@ -25,6 +25,10 @@ const TEXT = {
     trial: "Trial",
     algo: "Algorithm",
     score: "Test return",
+    winner: "Winner {id}",
+    held_out: "on {n} fresh episodes",
+    ranking: "on the ranking starts",
+    test_score: "test",
     success: "Success",
     progress: "{pct}% of the work",
     eta: "about {time} left",
@@ -48,7 +52,7 @@ const TEXT = {
     title: "训练",
     button: "训练",
     state: { starting: "启动中", running: "训练中", done: "完成", stopped: "已停止", failed: "失败", testing: "测试中" },
-    reward: "每局回报（最近几局的平均）",
+    reward: "训练回合的回报（不是测试回报：ARS 和 CEM 在这里试的是加了扰动的策略）",
     returns: "每局回报，试验 {id}",
     metric: "损失等数值，试验 {id}",
     none_metric: "这个算法没有损失可看",
@@ -57,6 +61,10 @@ const TEXT = {
     trial: "试验",
     algo: "算法",
     score: "测试回报",
+    winner: "获胜者 {id}",
+    held_out: "新的 {n} 局",
+    ranking: "排名用的起点",
+    test_score: "测试",
     success: "成功率",
     progress: "完成 {pct}%",
     eta: "还需约 {time}",
@@ -222,22 +230,112 @@ async function stop() {
 }
 
 function leaderTrial() {
-  return (run.trials || []).find((t) => t.id === run.leader) || (run.trials || [])[0] || null;
+  return (run.trials || []).find((t) => t.id === run.leader) || null; // none until a trial has been tested
 }
 
 function selectedTrial() {
   const trials = run.trials || [];
-  return trials.find((t) => t.id === selected) || leaderTrial();
+  return trials.find((t) => t.id === selected) || leaderTrial() || trials[0] || null;
+}
+
+// The panel is built once per run and then patched in place: replacing it on every message (about twice a second
+// while training) would close an open dropdown, drop the hover and focus of the buttons and rows, and lose a click
+// whose button was rebuilt between press and release. `skeletonKey` names everything that changes the structure.
+const field = (name) => document.querySelector(`#training-view [data-f="${name}"]`);
+
+function put(el, html) {
+  if (el && el.__html !== html) {
+    el.innerHTML = html;
+    el.__html = html;
+  }
+}
+
+function putText(el, text) {
+  if (el && el.__text !== text) {
+    el.textContent = text;
+    el.__text = text;
+  }
+}
+
+function setClass(el, name, on) {
+  if (el) el.classList.toggle(name, !!on);
+}
+
+function skeletonKey(trials, columns, metrics) {
+  return JSON.stringify([run.name, lang(), trials.map((t) => t.id), columns, metrics]);
+}
+
+function skeleton(trials, columns, metrics) {
+  const head = columns.map((c) => `<th>${esc(c.replace(/_/g, " "))}</th>`).join("");
+  const metricPicker = metrics.length
+    ? `<select class="metric" aria-label="metric">${metrics.map((m) => `<option value="${esc(m)}">${esc(m.replace(/_/g, " "))}</option>`).join("")}</select>`
+    : `<span class="hint">${esc(tx("none_metric"))}</span>`;
+  const rows = trials
+    .map(
+      (t) => `<tr data-trial="${esc(t.id)}">
+        <td data-f="id"></td><td>${esc(t.algo)}</td>${columns.map((c) => `<td data-f="set" data-c="${esc(c)}"></td>`).join("")}
+        <td class="num" data-f="score"></td><td class="num" data-f="ok"></td><td class="num" data-f="steps"></td>
+        <td><button type="button" class="mini" data-act="play" data-trial="${esc(t.id)}" aria-label="${esc(tx("play"))} ${esc(t.id)}">&#9654;</button></td></tr>`,
+    )
+    .join("");
+  return `
+    <header class="tv-head">
+      <div class="tv-title"><h2>${esc(tx("title"))}: ${esc(run.name)}</h2><span class="chip" data-f="chip"></span></div>
+      <div class="tv-sub" data-f="sub"></div>
+      <div class="tv-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" data-f="barbox"><span data-f="bar"></span></div>
+      <div class="tv-meta"><span data-f="pct"></span><span data-f="time"></span>
+        <span class="tv-actions">
+          <button type="button" class="pill-button" data-act="stop" data-f="stop">${esc(tx("stop"))}</button>
+          <button type="button" class="primary-button" data-act="play" data-f="playbest">&#9654; ${esc(tx("play_best"))}</button>
+        </span></div>
+      <div class="tv-final" data-f="final"></div>
+      <ul class="tv-notes" data-f="notes"></ul>
+    </header>
+    <section class="tv-chart"><h3>${esc(tx("reward"))}</h3><canvas id="tv-reward" height="170"></canvas><div class="tv-legend" id="tv-legend"></div></section>
+    <div class="tv-two">
+      <section class="tv-chart"><h3 data-f="returns_h"></h3><canvas id="tv-returns" height="110"></canvas></section>
+      <section class="tv-chart"><h3><span data-f="metric_h"></span> ${metricPicker}</h3><canvas id="tv-metric" height="110"></canvas></section>
+    </div>
+    <div class="tv-table"><table>
+      <thead><tr><th>${esc(tx("trial"))}</th><th>${esc(tx("algo"))}</th>${head}<th>${esc(tx("score"))}</th><th>${esc(tx("success"))}</th><th>${esc(tx("steps"))}</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
+function finalHtml() {
+  const final = run.final;
+  if (!final) return "";
+  const held = final.held_out;
+  const parts = [`<b>${esc(tx("winner", { id: final.trial }))}</b> ${esc(final.algo || "")}`];
+  if (held) {
+    parts.push(
+      `${esc(tx("held_out", { n: held.episodes }))}: ${esc(formatValue(held.mean_return))}, ${Math.round(100 * (held.success_rate ?? 0))}%`,
+    );
+    parts.push(`<span class="muted">${esc(tx("ranking"))}: ${esc(formatValue(final.mean_return))}, ${Math.round(100 * (final.success_rate ?? 0))}%</span>`);
+  } else {
+    parts.push(`${esc(tx("test_score"))}: ${esc(formatValue(final.mean_return))}, ${Math.round(100 * (final.success_rate ?? 0))}%`);
+  }
+  return parts.join(" &middot; ");
 }
 
 function render() {
   const panel = $("training-view");
   if (!run || !panel) return;
   const trials = run.trials || [];
-  const lead = leaderTrial();
   const live = run.state === "running" || run.state === "starting" || run.state === "testing";
   const pct = Math.round(100 * (run.progress ?? 0));
   const search = run.search || {};
+  const columns = settingColumns(trials);
+  const dark = isDark();
+  const sel = selectedTrial();
+  const metrics = sel ? Object.keys(sel.metrics || {}) : [];
+  if (metrics.length && !metrics.includes(metric)) metric = metrics.includes("loss") ? "loss" : metrics[0];
+  const key = skeletonKey(trials, columns, metrics);
+  if (panel.dataset.key !== key) {
+    panel.innerHTML = skeleton(trials, columns, metrics);
+    panel.dataset.key = key;
+  }
+  const select = panel.querySelector("select.metric");
+  if (select && select.value !== metric && document.activeElement !== select) select.value = metric;
   const subtitle = [
     run.task && run.robot ? `${run.task} · ${run.robot}` : "",
     search.method ? tx("searching", { method: search.method, n: trials.length }) : tx("trials", { n: trials.length }),
@@ -245,56 +343,54 @@ function render() {
   const time = live
     ? run.eta_s ? tx("eta", { time: formatTime(run.eta_s) }) : tx("elapsed", { time: formatTime(run.elapsed_s) })
     : tx("took", { time: formatTime(run.elapsed_s) });
+  const lead = leaderTrial();
   const playable = run.playable || (lead && lead.playable);
-  const columns = settingColumns(trials);
-  const dark = isDark();
-  const sel = selectedTrial();
-  const metrics = sel ? Object.keys(sel.metrics || {}) : [];
-  if (metrics.length && !metrics.includes(metric)) metric = metrics.includes("loss") ? "loss" : metrics[0];
-  const rows = trials
-    .map((t, i) => {
-      const score = t.score ? formatValue(t.score.mean_return) : formatValue(t.mean_return);
-      const ok = t.score ? t.score.success_rate : t.success_rate;
-      const state = t.state === "pruned" ? tx("pruned") : t.state === "queued" ? tx("queued") : t.state === "failed" ? tx("failed") : "";
-      const cells = columns.map((c) => `<td>${esc(formatValue((t.settings || {})[c]))}</td>`).join("");
-      const mark = t.id === run.leader ? `<span class="lead-badge">${esc(tx("leader"))}</span>` : state ? `<span class="muted">${esc(state)}</span>` : "";
-      return `<tr data-trial="${esc(t.id)}" class="${t.id === run.leader ? "lead" : ""} ${t.id === (sel && sel.id) ? "sel" : ""} ${t.state === "pruned" || t.state === "failed" ? "faded" : ""}">
-        <td><span class="swatch" style="background:${trainingColor(i, dark)}"></span>${esc(t.id)} ${mark}</td>
-        <td>${esc(t.algo)}</td>${cells}
-        <td class="num">${esc(score)}</td><td class="num">${ok === null || ok === undefined ? "-" : Math.round(100 * ok) + "%"}</td>
-        <td class="num">${esc(formatSteps(t.steps))}</td>
-        <td><button type="button" class="mini" data-act="play" data-trial="${esc(t.id)}" ${t.playable ? "" : "disabled"} aria-label="${esc(tx("play"))} ${esc(t.id)}">&#9654;</button></td></tr>`;
-    })
-    .join("");
-  const head = columns.map((c) => `<th>${esc(c.replace(/_/g, " "))}</th>`).join("");
-  const metricPicker = metrics.length
-    ? `<select class="metric" aria-label="metric">${metrics.map((m) => `<option value="${esc(m)}" ${m === metric ? "selected" : ""}>${esc(m.replace(/_/g, " "))}</option>`).join("")}</select>`
-    : `<span class="hint">${esc(tx("none_metric"))}</span>`;
-  panel.innerHTML = `
-    <header class="tv-head">
-      <div class="tv-title"><h2>${esc(tx("title"))}: ${esc(run.name)}</h2><span class="chip" data-state="${esc(run.state)}">${esc(stateText(run.state))}</span></div>
-      <div class="tv-sub">${esc(subtitle)}</div>
-      <div class="tv-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>
-      <div class="tv-meta"><span>${esc(tx("progress", { pct }))}</span><span>${esc(time)}</span>
-        <span class="tv-actions">
-          ${live ? `<button type="button" class="pill-button" data-act="stop">${esc(tx("stop"))}</button>` : ""}
-          <button type="button" class="primary-button" data-act="play" ${playable ? "" : "disabled"} title="${playable ? "" : esc(tx("no_policy"))}">&#9654; ${esc(tx("play_best"))}</button>
-        </span></div>
-    </header>
-    <section class="tv-chart"><h3>${esc(tx("reward"))}</h3><canvas id="tv-reward" height="170"></canvas><div class="tv-legend" id="tv-legend"></div></section>
-    <div class="tv-two">
-      <section class="tv-chart"><h3>${esc(tx("returns", { id: sel ? sel.id : "" }))}</h3><canvas id="tv-returns" height="110"></canvas></section>
-      <section class="tv-chart"><h3>${esc(tx("metric", { id: sel ? sel.id : "" }))} ${metricPicker}</h3><canvas id="tv-metric" height="110"></canvas></section>
-    </div>
-    <div class="tv-table"><table>
-      <thead><tr><th>${esc(tx("trial"))}</th><th>${esc(tx("algo"))}</th>${head}<th>${esc(tx("score"))}</th><th>${esc(tx("success"))}</th><th>${esc(tx("steps"))}</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
-  const legend = $("tv-legend");
-  if (legend) {
-    legend.innerHTML = trials
-      .map((t, i) => `<span class="${t.id === run.leader ? "lead" : ""} ${t.state === "pruned" ? "faded" : ""}"><i style="background:${trainingColor(i, dark)}"></i>${esc(t.id)} ${esc(t.algo)}</span>`)
-      .join("");
+  const chip = field("chip");
+  if (chip) chip.dataset.state = run.state;
+  putText(chip, stateText(run.state));
+  putText(field("sub"), subtitle);
+  const bar = field("bar");
+  if (bar) bar.style.width = `${pct}%`;
+  const barbox = field("barbox");
+  if (barbox) barbox.setAttribute("aria-valuenow", String(pct));
+  putText(field("pct"), tx("progress", { pct }));
+  putText(field("time"), time);
+  const stop = field("stop");
+  if (stop) stop.style.display = live ? "" : "none";
+  const best = field("playbest");
+  if (best) {
+    best.disabled = !playable;
+    best.title = playable ? "" : tx("no_policy");
   }
+  put(field("final"), finalHtml());
+  put(field("notes"), (run.notes || []).map((n) => `<li>${esc(n)}</li>`).join(""));
+  putText(field("returns_h"), tx("returns", { id: sel ? sel.id : "" }));
+  putText(field("metric_h"), tx("metric", { id: sel ? sel.id : "" }));
+  trials.forEach((t, i) => {
+    const row = panel.querySelector(`tr[data-trial="${CSS.escape(t.id)}"]`);
+    if (!row) return;
+    const score = t.score ? formatValue(t.score.mean_return) : "-"; // a training return is not a score: see the chart
+    const ok = t.score ? t.score.success_rate : null;
+    const state = t.state === "pruned" ? tx("pruned") : t.state === "queued" ? tx("queued") : t.state === "failed" ? tx("failed") : "";
+    const mark = t.id === run.leader ? `<span class="lead-badge">${esc(tx("leader"))}</span>` : state ? `<span class="muted">${esc(state)}</span>` : "";
+    setClass(row, "lead", t.id === run.leader);
+    setClass(row, "sel", sel && t.id === sel.id);
+    setClass(row, "faded", t.state === "pruned" || t.state === "failed");
+    put(row.querySelector('[data-f="id"]'), `<span class="swatch" style="background:${trainingColor(i, dark)}"></span>${esc(t.id)} ${mark}`);
+    row.querySelectorAll('[data-f="set"]').forEach((cell) => putText(cell, formatValue((t.settings || {})[cell.dataset.c])));
+    putText(row.querySelector('[data-f="score"]'), score);
+    putText(row.querySelector('[data-f="ok"]'), ok === null || ok === undefined ? "-" : Math.round(100 * ok) + "%");
+    putText(row.querySelector('[data-f="steps"]'), formatSteps(t.steps));
+    const button = row.querySelector("button");
+    if (button) button.disabled = !t.playable;
+  });
+  const legend = $("tv-legend");
+  put(
+    legend,
+    trials
+      .map((t, i) => `<span class="${t.id === run.leader ? "lead" : ""} ${t.state === "pruned" ? "faded" : ""}"><i style="background:${trainingColor(i, dark)}"></i>${esc(t.id)} ${esc(t.algo)}</span>`)
+      .join(""),
+  );
   draw();
 }
 

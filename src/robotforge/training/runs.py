@@ -27,16 +27,18 @@ from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, Thr
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from robotforge.control.rl import store
 from robotforge.control.rl.jobs import JOBS
+from robotforge.control.rl.runtime import MlpPolicy
 from robotforge.control.tasks import TaskError
 from robotforge.control.tasks.base import readable
 from robotforge.training import algorithms, search
-from robotforge.training.envs import build_env, describe
+from robotforge.training.envs import ObservedTask, build_env, describe
 from robotforge.training.search import SearchSpec, TrialPlan
-from robotforge.training.trial import POLICY_FILE, PROGRESS_FILE, thin
+from robotforge.training.trial import HELD_OUT_SEED, POLICY_FILE, PROGRESS_FILE, evaluate_policy, thin
 
 RUN_FILE = "run.json"
 TRIALS_DIR = "trials"
@@ -45,6 +47,7 @@ DEFAULT_STEPS = 60_000
 MAX_STEPS = 20_000_000
 MAX_PARALLEL = 4
 SHOWN = 80
+HELD_OUT_EPISODES = 50  # the winner of several trials is scored again on this many fresh starts
 
 
 class RunSpec(BaseModel):
@@ -60,6 +63,14 @@ class RunSpec(BaseModel):
     seed: int = 0
     parallel: int = Field(1, ge=0, le=MAX_PARALLEL)  # 0: in this process, one at a time (tests)
     eval_episodes: int = Field(5, ge=1, le=50)
+    held_out_episodes: int | None = Field(
+        None,
+        ge=0,
+        le=200,
+        description="episodes the winner is scored on, on starts no trial was ranked on; None: "
+        f"{HELD_OUT_EPISODES} when several trials compete, none for a single trial; 0: never",
+    )
+    notes: list[str] = Field(default_factory=list)  # things the person starting the run should know, kept with it
 
 
 def plan_for(spec: RunSpec) -> list[TrialPlan]:
@@ -89,10 +100,11 @@ def start_run(spec: RunSpec, folder: Path, replace: bool = False) -> dict[str, A
     """Check the request and launch the training process. Returns at once."""
     folder = Path(folder)
     algos = [algorithms.get(n) for n in spec.algos]
+    plans = plan_for(spec)  # checks the settings and the search space: a wrong value is refused here, not later
     for algo in algos:
         algorithms.need(algo)
-    plans = plan_for(spec)  # also checks the settings and the search space
     meta = policy_meta(spec)  # builds the environment once: fails here, readably, if the task does not fit
+    spec = spec.model_copy(update={"notes": [*spec.notes, *speed_notes(spec, meta)]})
     with JOBS._lock:
         busy = JOBS.running([folder.parent, store.policies_home(None)])
         if len(busy) >= 1:
@@ -111,13 +123,45 @@ def start_run(spec: RunSpec, folder: Path, replace: bool = False) -> dict[str, A
         return _launch(spec, folder, plans, meta)
 
 
+def speed_notes(spec: RunSpec, meta: dict[str, Any]) -> list[str]:
+    """A warning when the observation holds a camera: it draws a picture at every step, which is the slow part."""
+    slow, rate = meta.get("slow_sensors"), meta.get("steps_per_second")
+    if not slow:
+        return []
+    names = ", ".join(slow)
+    note = f"the depth camera {names} draws a picture at every step, which makes the simulation many times slower"
+    if rate:
+        minutes = spec.steps / rate / 60.0
+        note += (
+            f" (measured {rate:.0f} steps a second; {spec.steps:,} steps per trial is about {minutes:.0f} min"
+            f"{' per trial' if minutes >= 1 else ''}, trials running side by side share the cores)"
+        )
+    return [note + "; fewer timesteps, a lidar or observation='task' are faster"]
+
+
+def _measured_rate(env: Any, steps: int = 25) -> float:
+    """Environment steps a second, measured with a few idle steps (only worth doing when something is slow)."""
+    env.reset(seed=0)
+    idle = np.zeros(env.action_space.shape[0], dtype=np.float32)
+    started = time.perf_counter()
+    done = 0
+    for _ in range(steps):
+        _, _, terminated, truncated, _ = env.step(idle)
+        done += 1
+        if terminated or truncated:
+            break
+    return done / max(time.perf_counter() - started, 1e-6)
+
+
 def policy_meta(spec: RunSpec) -> dict[str, Any]:
     """What policy.json says about a run before it ends: the environment, its spaces, how to run a policy."""
     env = build_env(spec.env)
     try:
         facts = describe(env)
         task = env.task
+        slow = list(task.sensors.renders) if isinstance(task, ObservedTask) and task.sensors is not None else []
         return {
+            **({"slow_sensors": slow, "steps_per_second": round(_measured_rate(env), 1)} if slow else {}),
             "name": spec.name,
             "robot": spec.env["robot"],
             "task": getattr(task, "name", spec.env["task"]),
@@ -171,7 +215,7 @@ def _launch(spec: RunSpec, folder: Path, plans: list[TrialPlan], meta: dict[str,
         "left_out": meta["left_out"],
     }
     return {"folder": str(folder), "pid": proc.pid, "trials": [vars(p) for p in plans], "observation": observation,
-            "action": meta["action"]}  # fmt: skip
+            "action": meta["action"], "notes": spec.notes}  # fmt: skip
 
 
 def _detached() -> dict[str, Any]:
@@ -236,11 +280,8 @@ class _Trial:
         return out
 
     def standing(self) -> float:
-        """What ranks it now: its last test score, else its running training return."""
-        if self.score is not None:
-            return float(self.score["mean_return"])
-        value = self.live.get("mean_return")
-        return float(value) if value is not None else float("-inf")
+        """What ranks it: its last test return (fixed starts, so trials compare), never a training return."""
+        return float(self.score["mean_return"]) if self.score is not None else float("-inf")
 
 
 class Job:
@@ -272,8 +313,20 @@ class Job:
     # ---- status ----
 
     def leader(self) -> _Trial | None:
-        ranked = [t for t in self.trials if t.state != "failed"]
-        return max(ranked, key=_Trial.standing) if ranked else None
+        """The trial with the best test return among those that went furthest; none before the first test."""
+        scored = [t for t in self.trials if t.score is not None and t.state != "failed"]
+        if not scored:
+            return None
+        furthest = max(t.rung for t in scored)
+        return max(
+            (t for t in scored if t.rung == furthest),
+            key=lambda t: (t.standing(), (t.score or {}).get("success_rate", 0), t.plan.id),
+        )
+
+    def _front(self) -> _Trial | None:
+        """Before any test there is no leader; the trial furthest along stands in for the plain numbers."""
+        live = [t for t in self.trials if t.state != "failed" and t.live.get("mean_return") is not None]
+        return max(live, key=lambda t: float(t.live["mean_return"])) if live else None
 
     def document(self, state: str = "running", **more: Any) -> dict[str, Any]:
         elapsed = time.monotonic() - self.started
@@ -304,8 +357,11 @@ class Job:
         }
         if state == "running" and progress > 0.02:
             doc["eta_s"] = round(elapsed * (1.0 - progress) / progress, 1)
-        if lead is not None:
-            view = lead.view()
+        if self.spec.notes:
+            doc["notes"] = self.spec.notes
+        shown = lead or self._front()
+        if shown is not None:
+            view = shown.view()
             doc["curve"] = view["curve"]  # the same keys control/rl's training_status reads
             if view["mean_return"] is not None:
                 doc["mean_episode_reward"] = view["mean_return"]
@@ -442,6 +498,13 @@ class Job:
             "steps": best.steps,
             **(best.score or {}),
         }
+        held_out = self._held_out(state)
+        if held_out is not None:
+            final["held_out"] = held_out
+            final["ranking_score_note"] = (
+                "mean_return, success_rate and mean_result are the winner's scores on the starts the trials were "
+                "ranked on, which flatters a winner picked out of several; held_out is the fair result"
+            )
         store.write_json(
             self.folder / store.POLICY_FILE,
             {
@@ -454,6 +517,21 @@ class Job:
         )
         self.leader_id = best.plan.id
         return final
+
+    def _held_out(self, state: str) -> dict[str, Any] | None:
+        """The winner scored again on starts no trial was ranked on: picking the best of several trials by one
+        set of test starts makes its score on those starts optimistic, so this is the number to quote."""
+        asked = self.spec.held_out_episodes
+        episodes = (HELD_OUT_EPISODES if len(self.trials) > 1 else 0) if asked is None else asked
+        if episodes <= 0 or state == "stopped":
+            return None
+        self.write("testing", force=True)
+        env = build_env(self.spec.env)
+        try:
+            policy = MlpPolicy.load(self.folder / POLICY_FILE)
+            return {**evaluate_policy(env, policy, episodes, seed=HELD_OUT_SEED), "seed": HELD_OUT_SEED}
+        finally:
+            env.close()
 
     def failed_all(self) -> bool:
         return all(t.state == "failed" for t in self.trials)
