@@ -665,7 +665,7 @@ DEMOS = [
         _generated_three,
         15.0,
         timeline=[(0.5, _move(name, 0.25)) for name, *_ in GENERATED_THREE],
-        page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.15, -1.75, 0.8)),
+        page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.35, -2.4, 1.0)),
         settle=1.0,
     ),
 ]

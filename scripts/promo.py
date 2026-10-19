@@ -46,12 +46,19 @@ CUTS: list[Cut] = [
     Cut("generated_three", 3.0, 6.0, "Robots built from one sentence each: add_robot(describe=...)"),
     Cut("generated_home_bring", 16.0, 6.0, "A home and its task from one sentence: load_scene(description=...)"),
     Cut("splice_walkers", 2.0, 6.0, "Real robots spliced together: Go2 + PiPER, ANYmal C + UR5e, Spot + Z1"),
-    Cut("splice_go2_pick", 29.0, 7.0, "A spliced Go2 carries the cube to the bin", zoom=(320, 40, 1280, 720)),
+    Cut(
+        "splice_go2_pick",
+        29.0,
+        7.0,
+        "A spliced Go2 carries the cube to the bin",
+        corner="tl",
+        zoom=(320, 110, 1280, 720),
+    ),
     Cut("fetch_kitchen_apple", 24.0, 7.0, "Mobile pick and place: the apple goes to the dining table"),
     Cut("sensors_go2_aisle", 3.0, 6.0, "Sensors: 3D lidar rays and a depth camera on a Go2"),
-    Cut("lesson_learn_to_walk", 14.0, 5.0, "Learning to walk by trial and error"),
+    Cut("lesson_learn_to_walk", 14.0, 5.0, "Learning to walk by trial and error", zoom=(380, 60, 1540, 866)),
     Cut("kitchen_drawer", 2.0, 6.0, "Mechanisms: an arm opens a drawer"),
-    Cut("factory_sorting", 0.0, 6.0, "Mechanisms: a conveyor and a sorting arm"),
+    Cut("factory_sorting", 0.0, 6.0, "Mechanisms: a conveyor and a sorting arm", corner="tl"),
     Cut("water_lake", 3.0, 6.0, "Water: a boat crosses the lake to the dock"),
     Cut("water_lake", 20.0, 4.2, card="end"),
 ]
@@ -66,7 +73,7 @@ def _font(size: int, bold: bool = False, mono: bool = False) -> ImageFont.FreeTy
 def caption_png(text: str, corner: str, out: Path) -> None:
     image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    font = _font(38)
+    font = _font(40)
     left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
     pad_x, pad_y = 26, 16
     width, height = right - left + 2 * pad_x, bottom - top + 2 * pad_y
@@ -84,7 +91,7 @@ def card_png(kind: str, out: Path) -> None:
     if kind == "title":
         big, small = _font(168, bold=True), _font(50)
     else:
-        big, small = _font(110, bold=True), _font(40, mono=True)
+        big, small = _font(110, bold=True), _font(36, mono=True)
     for text, font, y, fill in (
         (title, big, H // 2 - 150, (255, 255, 255, 255)),
         (line, small, H // 2 + 60, (214, 224, 236, 255)),
@@ -148,29 +155,50 @@ def build(clips: Path, out_dir: Path) -> Path:
     return out
 
 
+PREVIEW_FPS, PREVIEW_QUALITY = 15, 66
 POSTER_AT = 18.4  # s into the video: the spliced robots, captioned
 
 # Bits of the finished video for the looping preview: (start s, seconds), each inside a captioned cut.
-PREVIEW = [(4.6, 2.0), (11.0, 2.0), (16.6, 2.0), (22.6, 2.0), (30.0, 2.0), (36.4, 2.0), (47.6, 1.6), (54.0, 2.0)]
+PREVIEW = [(4.8, 1.5), (11.5, 1.5), (17.0, 1.5), (30.5, 1.5), (37.0, 1.5), (54.2, 1.5)]
 
 
 def preview(video: Path, out_dir: Path) -> None:
-    """The looping preview (animated WebP, 960 px wide) cut from bits of the video, and the poster (JPEG)."""
+    """The looping preview (animated WebP, 960 px wide) cut from bits of the video, and the poster (JPEG).
+
+    This ffmpeg has no WebP encoder, so it writes the frames and Pillow assembles the animation."""
     inputs: list[str] = []
     parts: list[str] = []
     for i, (start, seconds) in enumerate(PREVIEW):
         inputs += ["-ss", f"{start}", "-t", f"{seconds}", "-i", str(video)]
-        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,fps=15,scale=960:-1:flags=lanczos[p{i}]")
+        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,fps={PREVIEW_FPS},scale=960:-1:flags=lanczos[p{i}]")
     joined = "".join(f"[p{i}]" for i in range(len(PREVIEW)))
     graph = ";".join([*parts, f"{joined}concat=n={len(PREVIEW)}:v=1:a=0[v]"])
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-loglevel", "error", *inputs, "-filter_complex", graph, "-map", "[v]",
-            "-c:v", "libwebp", "-quality", "60", "-compression_level", "6", "-loop", "0",
-            str(out_dir / "promo_preview.webp"),
-        ],
-        check=True,
-    )  # fmt: skip
+    with tempfile.TemporaryDirectory(prefix="rf-preview-") as tmp:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                *inputs,
+                "-filter_complex",
+                graph,
+                "-map",
+                "[v]",
+                f"{tmp}/f%04d.png",
+            ],
+            check=True,
+        )
+        frames = [Image.open(path).convert("RGB") for path in sorted(Path(tmp).glob("f*.png"))]
+    frames[0].save(
+        out_dir / "promo_preview.webp",
+        save_all=True,
+        append_images=frames[1:],
+        duration=round(1000 / PREVIEW_FPS),
+        loop=0,
+        quality=PREVIEW_QUALITY,
+        method=6,
+    )
     subprocess.run(
         [
             "ffmpeg", "-y", "-loglevel", "error", "-ss", f"{POSTER_AT}", "-i", str(video), "-frames:v", "1",
@@ -185,10 +213,13 @@ def main() -> None:
     parser.add_argument("--clips", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=Path("docs/media"))
     parser.add_argument("--no-preview", action="store_true", help="only the video")
+    parser.add_argument(
+        "--preview-only", action="store_true", help="redo the preview and poster from the existing video"
+    )
     args = parser.parse_args()
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg is not on PATH")
-    video = build(args.clips, args.out)
+    video = args.out / "promo.mp4" if args.preview_only else build(args.clips, args.out)
     print(f"{video} ({video.stat().st_size / 1e6:.1f} MB)")
     if not args.no_preview:
         preview(video, args.out)
