@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from robotforge.extend.registry import REGISTRY, Item, PluginError
@@ -209,11 +210,14 @@ def _footprint_of(pieces: list[Any]) -> tuple[float, float]:
 
 def unknown_part(name: str, shapes: list[str]) -> str:
     """The message for a shape no one has added, when plugin files of the world were left unloaded: why."""
-    left = sorted({f"{p.parent.parent.name}/{p.name}" for p in REGISTRY.untrusted})
-    if left:
-        return (
-            f"unknown shape {name!r}: this world has plugin files that were not loaded ({', '.join(left)}) because "
-            "they were not written on this computer or changed since. They are Python that would run with your "
-            'rights: read them (read_script) and, if you trust them, plugins(action="trust")'
-        )
-    return f"unknown shape {name!r}; the shapes are {', '.join(shapes)}; plugins() lists the ones plugins add"
+    left = sorted(REGISTRY.label_of(p) for p in REGISTRY.untrusted)
+    if not left:
+        return f"unknown shape {name!r}; the shapes are {', '.join(shapes)}; plugins() lists the ones plugins add"
+    world = next(iter(REGISTRY.worlds)).parent if REGISTRY.worlds else Path(".")
+    return (
+        f"unknown shape {name!r}: this world has plugin files that were not loaded ({', '.join(left)}) because they "
+        "were not written on this computer or changed since. They are Python that would run with your rights. Read "
+        f'them with plugins(action="show", world="{world}") and tell the user what they do; if the user trusts '
+        f'them, they approve in a terminal with: robotforge plugins trust "{world}" (an agent cannot), then '
+        "open_world again"
+    )

@@ -55,7 +55,13 @@ class ScriptRunner:
         self.sim_budget = 0.0
         self._sim_start = 0.0
 
-    async def run(self, path: Path, max_sim_seconds: float = 60.0, max_wall_seconds: float = 180.0) -> dict[str, Any]:
+    async def run(
+        self,
+        path: Path,
+        max_sim_seconds: float = 60.0,
+        max_wall_seconds: float = 180.0,
+        args: list[str] | None = None,
+    ) -> dict[str, Any]:
         token = secrets.token_hex(16)
         session = self.pg.session
         self.sim_budget = max_sim_seconds
@@ -91,6 +97,7 @@ class ScriptRunner:
             proc = await asyncio.create_subprocess_exec(
                 sys.executable,
                 str(path),
+                *(args or []),
                 cwd=str(path.parent),
                 env=env,
                 stdin=asyncio.subprocess.DEVNULL,
@@ -193,6 +200,32 @@ class ScriptRunner:
         """One sensor's reading by name, the way read_sensors gives it (no pictures: a script reads numbers)."""
         reading, _ = self.pg.read_sensors(str(req["robot"]), [str(req["name"])], full=bool(req.get("full")))
         return next(iter(reading["sensors"].values()))
+
+    def _op_sensor_names(self, req) -> list[str]:
+        return self.pg.sensors.names(self.pg.behaviors.resolve(req["robot"]))
+
+    def _op_robots(self, _req) -> list[str]:
+        return self.pg.behaviors.robot_names()
+
+    def _op_describe(self, req) -> dict[str, Any]:
+        """What a robot is, for the script's Robot: its kind, the arms it carries, how fast it can go."""
+        name = self.pg.behaviors.resolve(req["robot"])
+        for info in self.pg.behaviors.robots():
+            if info["name"] == name:
+                return info
+        raise PlaygroundError(f"no robot named {req['robot']!r}")
+
+    def _op_start_controller(self, req) -> dict:
+        """Hand a robot to a plugin's controller (robotforge.extend.controller)."""
+        from robotforge.extend.routines import start_controller
+
+        robot = self.pg.behaviors.resolve(req["robot"])
+
+        def read(name: str) -> Any:
+            reading, _ = self.pg.read_sensors(robot, [name])
+            return next(iter(reading["sensors"].values()))
+
+        return start_controller(self.pg.session, robot, str(req["name"]), req.get("params"), read)
 
     def _op_set_controls(self, req) -> None:
         self.pg.set_controls({str(k): float(v) for k, v in req["controls"].items()})

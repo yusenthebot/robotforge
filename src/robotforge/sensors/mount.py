@@ -41,6 +41,7 @@ FACES = {
     "right": (0.0, -1.0, 0.0),
 }
 TOUCH_OUTSIDE = 0.01  # m a touch zone reaches out from the surface, so a contact a little off it still counts
+SKIN_DEPTH = 0.015  # m a skin's taxel reaches into the body: thin, so a load on the top does not read on the front
 GEOM_PRIMITIVES = {
     int(mujoco.mjtGeom.mjGEOM_SPHERE),
     int(mujoco.mjtGeom.mjGEOM_CAPSULE),
@@ -116,7 +117,10 @@ def mount(
             place = _place(model, data, target, entry, opts)
             body = _spec_body(spec, model, target.body)
             vis = Visuals(spec, owner=f"{name}_sensor", rays=False)
-            definition = ADD[entry.type](spec, body, name, opts, place, vis, model, target)
+            if entry.type == "skin":
+                definition = _skin(spec, body, name, opts, place, vis, model, target, data, entry)
+            else:
+                definition = ADD[entry.type](spec, body, name, opts, place, vis, model, target)
             vis.finish()
         except ValueError as exc:
             what = entry.name or entry.type
@@ -509,7 +513,7 @@ def _touch(spec, body, name, opts, place: Place, vis: Visuals, model, target) ->
 
     # A little wider than the shape, so a contact at its very edge (a block's corner) is on the pad.
     size = opts.get("size") or [width(t1) + 2 * TOUCH_OUTSIDE, width(t2) + 2 * TOUCH_OUTSIDE]
-    depth = max(0.6 * width(normal) / 2, 0.01)
+    depth = opts.get("depth") or max(0.6 * width(normal) / 2, 0.01)
     rows, cols = int(opts["rows"]), int(opts["cols"])
     cell = [size[0] / rows / 2, size[1] / cols / 2, (TOUCH_OUTSIDE + depth) / 2]
     frame = np.column_stack([t1, t2, normal])
@@ -538,6 +542,140 @@ def _odometry(spec, body, name, opts, place: Place, vis: Visuals, model, target)
     return {"site": _site(body, f"rf_{name}", place.point, place.frame)}
 
 
+def _sonar(spec, body, name, opts, place: Place, vis: Visuals, model, target) -> dict[str, Any]:
+    """An ultrasonic transducer: a site looking along its +z, drawn as the rangefinder's board. It hears with a
+    cone (sensors/ranging.py casts the rays), so there is no MuJoCo sensor behind it."""
+    look, up = place.look, place.up
+    frame = looks.rangefinder_frame(look, up)
+    board = place.point
+    if _looks_along(place):
+        board = board + place.normal * looks.RANGE_HALF * looks.RANGE_ASPECT
+    if _on_face(place):
+        looks.rangefinder(vis, body, board, frame)
+    beam = np.column_stack([place.frame[:, 1], place.frame[:, 2], look])
+    site = _site(body, f"rf_{name}", board + look * 0.004, beam)
+    return {"site": site, "range": opts["range"], "beam": opts["beam"], "min_range": opts["min_range"]}
+
+
+def _wheel_odometry(spec, body, name, opts, place: Place, vis: Visuals, model, target) -> dict[str, Any]:
+    """Dead reckoning from the wheels' own speed: the wheel joints (found by their shape: a hinge about a level axis
+    with a disc or a ball round it, or named in `wheels`), their radii, which way each rolls forward and how far
+    each is from the robot's middle line."""
+    data = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, data)
+    root = int(model.body_rootid[target.body]) if model.body_rootid[target.body] else 1
+    frame = data.xmat[root].reshape(3, 3)
+    left = frame[:, 1]
+    joints = _wheel_joints(model, data, opts.get("wheels"))
+    if len(joints) < 2:
+        raise ValueError(
+            "it has no wheels to read: a wheel is a hinge joint about a level axis with a disc or a ball round it "
+            "(name the wheel joints in wheels=[...]); a walking robot's odometry is the odometry sensor"
+        )
+    names, radii, signs, lateral = [], [], [], []
+    for j, radius in joints:
+        axis = data.xmat[model.jnt_bodyid[j]].reshape(3, 3) @ model.jnt_axis[j]
+        names.append(model.joint(j).name)
+        radii.append(float(opts.get("radius") or radius))
+        signs.append(1.0 if float(axis @ left) >= 0 else -1.0)  # a wheel turning about +left rolls the robot forward
+        lateral.append(float((data.xanchor[j] - data.xpos[root]) @ left))
+    left_side = [y for y in lateral if y > 0]
+    right_side = [y for y in lateral if y <= 0]
+    if not left_side or not right_side:
+        raise ValueError("its wheels are all on one side of the middle: a differential drive has some on each")
+    track = float(np.mean(left_side) - np.mean(right_side))
+    site = _site(body, f"rf_{name}", place.point, place.frame)
+    slip = opts.get("slip")
+    return {
+        "site": site,
+        "joints": names,
+        "radius": radii,
+        "sign": signs,
+        "lateral": lateral,
+        "track": track,
+        **({"slip": slip} if slip else {}),
+    }
+
+
+def _wheel_joints(model: mujoco.MjModel, data: mujoco.MjData, wanted: list[str] | None) -> list[tuple[int, float]]:
+    """(joint, radius) of the robot's wheels."""
+    hinge = int(mujoco.mjtJoint.mjJNT_HINGE)
+    out: list[tuple[int, float]] = []
+    if wanted:
+        names = [model.joint(j).name for j in range(model.njnt) if int(model.jnt_type[j]) == hinge]
+        for given in wanted:
+            found = given if given in names else wording.match(given, names)
+            if found is None:
+                raise ValueError(wording.unknown("joint", given, names, where="on it"))
+            j = mujoco.mj_name2id(model, OBJ.mjOBJ_JOINT, found)
+            out.append((j, _round_radius(model, int(model.jnt_bodyid[j])) or 0.05))
+        return out
+    for j in range(model.njnt):
+        if int(model.jnt_type[j]) != hinge or not model.joint(j).name:
+            continue
+        body = int(model.jnt_bodyid[j])
+        axis = data.xmat[body].reshape(3, 3) @ model.jnt_axis[j]
+        radius = _round_radius(model, body, axis_world=axis, rot=data.xmat[body].reshape(3, 3))
+        if radius and abs(float(axis[2])) < 0.3:  # a level axle
+            out.append((j, radius))
+    return out
+
+
+def _round_radius(
+    model: mujoco.MjModel, body: int, axis_world: np.ndarray | None = None, rot: np.ndarray | None = None
+) -> float:
+    """Radius of the wheel a body is, 0 when it is not one: every shape it collides with is a disc (a cylinder wider
+    than it is thick, turning about the joint's axis) or a ball, and the biggest gives the radius. A leg link with a
+    foot ball on a capsule is not a wheel."""
+    best = 0.0
+    G = mujoco.mjtGeom
+    for g in range(model.ngeom):
+        if int(model.geom_bodyid[g]) != body or not (model.geom_contype[g] or model.geom_conaffinity[g]):
+            continue  # what the body is made of is what collides: the meshes drawn over it do not count
+        kind = int(model.geom_type[g])
+        if kind == int(G.mjGEOM_SPHERE):
+            best = max(best, float(model.geom_size[g][0]))
+        elif kind == int(G.mjGEOM_CYLINDER) and axis_world is not None and rot is not None:
+            quat = np.zeros(9)
+            mujoco.mju_quat2Mat(quat, model.geom_quat[g])
+            along = rot @ (quat.reshape(3, 3)[:, 2])  # the cylinder's own axis, in the world
+            radius, half = float(model.geom_size[g][0]), float(model.geom_size[g][1])
+            if abs(float(along @ axis_world)) < 0.95 or radius <= half:  # a rod, or turned across the axle
+                return 0.0
+            best = max(best, radius)
+        elif kind == int(G.mjGEOM_CYLINDER):
+            best = max(best, float(model.geom_size[g][0]))
+        else:
+            return 0.0  # a link, a casing, a mesh of unknown shape: not a wheel
+    return best
+
+
+def _skin(spec, body, name, opts, place: Place, vis: Visuals, model, target, data=None, entry=None) -> dict[str, Any]:
+    """A skin of taxels: a touch pad on each of the body's faces asked for (`faces`), each rows x cols zones. Each
+    face is laid out as a touch pad of its own (_touch), and the skin reads them together."""
+    pads = []
+    cells: list[str] = []
+    for face in opts["faces"]:
+        face_entry = entry.model_copy(update={"type": "touch", "at": face, "name": f"{name}_{face}"})
+        face_opts = resolved(face_entry)
+        face_opts.update(rows=opts["rows"], cols=opts["cols"], depth=SKIN_DEPTH)
+        solid = Target(target.body, _colliding(model, target), target.point)
+        face_place = _place(model, data, solid, face_entry, face_opts)
+        made = _touch(spec, body, f"{name}_{face}", face_opts, face_place, vis, model, solid)
+        pads.append({"face": face, **made})
+        cells += made["cells"]
+    return {"pads": pads, "cells": cells, "rows": opts["rows"], "cols": opts["cols"]}
+
+
+def _field(spec, body, name, opts, place: Place, vis: Visuals, model, target) -> dict[str, Any]:
+    """A sensor of a quantity that spreads from sources in the world (heat, gas): a site where it sits, drawn as a
+    small probe on the body's face."""
+    out: dict[str, Any] = {"site": _site(body, f"rf_{name}", place.point, place.frame)}
+    if opts.get("response_s"):
+        out["response_s"] = opts["response_s"]
+    return out
+
+
 ADD = {
     "camera": _camera,
     "lidar": _lidar,
@@ -549,4 +687,9 @@ ADD = {
     "touch": _touch,
     "gps": _gps,
     "odometry": _odometry,
+    "wheel_odometry": _wheel_odometry,
+    "sonar": _sonar,
+    "skin": _skin,
+    "temperature": _field,
+    "gas": _field,
 }

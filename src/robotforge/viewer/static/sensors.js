@@ -38,7 +38,7 @@ const POINT_PX = 4.5; // CSS px across a hit point
 const PULL_BACK = 0.02; // m: a point's dot sits this far in front of the surface it hit, not half inside it
 const FRUSTUM_HALF = 0.045; // m: half the height of a camera's frustum where it ends, whatever its field of view
 const ARROW_REACH = 0.22; // m: the arrow of the largest force seen lately
-const ARROW_FLOOR = { touch: 5, force_torque: 2 }; // N: a scale never finer than this, so a whisper stays short
+const ARROW_FLOOR = { touch: 5, force_torque: 2, skin: 5 }; // N: a scale never finer than this, so a whisper stays short
 const PEAK_DECAY = 0.985; // per message: the largest force seen fades with a half-life of about five seconds
 const PLOT_WINDOW = 8; // s of history in a plot
 const SMALL = () => window.innerWidth <= 600 || window.innerHeight <= 560; // one view at a time, in tabs
@@ -168,8 +168,9 @@ export function sensorsUpdate(msg) {
   for (const e of entries.values()) {
     if (e.status === "waiting") continue;
     remember(e);
-    if (e.type === "touch" || e.type === "force_torque") {
-      const force = e.type === "touch" ? Math.max(...e.force_n, 0) : Math.hypot(...e.force_n);
+    if (e.type === "touch" || e.type === "force_torque" || e.type === "skin") {
+      const force =
+        e.type === "touch" ? Math.max(...e.force_n, 0) : e.type === "skin" ? Math.max(0, ...e.pads.flatMap((p) => p.force_n)) : Math.hypot(...e.force_n);
       peaks.set(e.name, Math.max(ARROW_FLOOR[e.type], force, (peaks.get(e.name) ?? 0) * PEAK_DECAY));
     }
     if (shown(e) && !api.inLesson()) drawing(e)?.update(e);
@@ -218,7 +219,7 @@ function remember(e) {
 const TYPE_KEYS = { camera: (e) => `sensor_camera_${e.mode}` };
 
 function typeLabel(e) {
-  return t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`);
+  return e.label ?? t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`); // a plugin's sensor names itself
 }
 
 // A phone's strip of tabs has room for a word each: "Force", not "Force-torque".
@@ -244,11 +245,19 @@ function summary(e) {
       return t("sensor_joints", { n: Object.keys(e.rad ?? {}).length + Object.keys(e.m ?? {}).length });
     case "rangefinder":
       return e.distance_m === null ? t("sensor_nothing", { m: e.range_m }) : `${num(e.distance_m)} m`;
+    case "sonar":
+      return e.distance_m === null ? t("sensor_deaf") : `${num(e.distance_m)} m`;
+    case "skin":
+      return e.total_n > 0.05 ? `${num(e.total_n, 1)} N` : t("sensor_no_contact");
+    case "temperature":
+    case "gas":
+      return `${num(e.value, 1)} ${e.unit}`;
     case "gps":
+    case "wheel_odometry":
     case "odometry":
       return `x ${num(e.position_m[0])}, y ${num(e.position_m[1])} m`;
     default:
-      return "";
+      return e.line ?? ""; // a plugin's sensor sends its reading as a line
   }
 }
 
@@ -278,7 +287,7 @@ export function sensorsSelect() {
     );
     $("sensor-count").textContent = list.length ? String(list.length) : "";
     $("sensor-section").hidden = list.length === 0;
-    $("sensor-arrows").hidden = !list.some((e) => e.type === "touch" || e.type === "force_torque");
+    $("sensor-arrows").hidden = !list.some((e) => ["touch", "force_torque", "skin"].includes(e.type));
   }
   renderSummaries();
   views.build(list.filter(shown));
@@ -643,7 +652,107 @@ function rangeDrawing() {
   };
 }
 
-const MAKERS = { lidar: lidarDrawing, lidar3d: lidarDrawing, camera: cameraDrawing, force_torque: forceDrawing, touch: touchDrawing, rangefinder: rangeDrawing };
+// A sonar hears in a cone: the wedge is drawn out to the first echo (or its range), the echo as a dot on its axis.
+function sonarDrawing() {
+  const group = new THREE.Group();
+  const blue = api.color("--plot-blue");
+  const g = new THREE.ConeGeometry(1, 1, 28, 1, true); // apex up, base down, unit size
+  g.translate(0, -0.5, 0); // the apex at the origin
+  g.rotateX(-Math.PI / 2); // ... the base out along +z, the way a sonar looks
+  const wedge = new THREE.Mesh(
+    g,
+    new THREE.MeshBasicMaterial({ color: blue, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+  );
+  const rim = new THREE.LineSegments(
+    new THREE.EdgesGeometry(g, 40),
+    new THREE.LineBasicMaterial({ color: blue, transparent: true, opacity: 0.5, toneMapped: false })
+  );
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), new THREE.MeshBasicMaterial({ color: blue, toneMapped: false }));
+  const cone = new THREE.Group();
+  cone.add(wedge, rim);
+  group.add(cone, dot);
+  let last = null;
+  const at = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  return {
+    group,
+    update(e) {
+      last = e;
+    },
+    frame() {
+      group.visible = !!last && onBody(last, last.local_pos, last.local_quat, at, q);
+      if (!group.visible) return;
+      const reach = last.distance_m ?? last.range_m;
+      const spread = reach * Math.tan((last.beam_deg * Math.PI) / 360);
+      cone.position.copy(at);
+      cone.quaternion.copy(q);
+      cone.scale.set(spread, spread, reach);
+      wedge.material.opacity = last.distance_m === null ? 0.06 : 0.16;
+      dot.visible = last.distance_m !== null;
+      dot.position.copy(tmp.copy(Z).applyQuaternion(q).multiplyScalar(reach).add(at));
+    },
+  };
+}
+
+// A skin is a touch pad on each of several faces: each is drawn as a pad of its own.
+function skinDrawing(first) {
+  const group = new THREE.Group();
+  const merged = (e, pad) => ({ ...e, ...pad });
+  const parts = first.pads.map((pad) => touchDrawing(merged(first, pad)));
+  group.add(...parts.map((p) => p.group));
+  return {
+    group,
+    update(e) {
+      parts.forEach((p, i) => p.update(merged(e, e.pads[i])));
+    },
+    frame() {
+      parts.forEach((p) => p.frame());
+    },
+  };
+}
+
+// Temperature and gas: a probe on the body whose color and size follow the reading (cool blue to hot red; gas from
+// pale to red).
+const FIELD_COLORS = { heat: ["#3b82f6", "#ef4444"], gas: ["#a3e635", "#dc2626"] };
+function fieldDrawing(first) {
+  const group = new THREE.Group();
+  const [low, high] = (FIELD_COLORS[first.field] ?? FIELD_COLORS.heat).map((c) => new THREE.Color(c));
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshBasicMaterial({ color: low.clone(), transparent: true, opacity: 0.9, toneMapped: false }));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshBasicMaterial({ color: low.clone(), transparent: true, opacity: 0.18, depthWrite: false, toneMapped: false }));
+  group.add(ball, halo);
+  let last = null;
+  const at = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  return {
+    group,
+    update(e) {
+      last = e;
+      ball.material.color.copy(low).lerp(high, e.level);
+      halo.material.color.copy(ball.material.color);
+    },
+    frame() {
+      group.visible = !!last && onBody(last, last.local_pos, last.local_quat, at, q);
+      if (!group.visible) return;
+      ball.position.copy(at);
+      halo.position.copy(at);
+      ball.scale.setScalar(0.025 + 0.02 * last.level);
+      halo.scale.setScalar(0.07 + 0.1 * last.level);
+    },
+  };
+}
+
+const MAKERS = {
+  lidar: lidarDrawing,
+  lidar3d: lidarDrawing,
+  camera: cameraDrawing,
+  force_torque: forceDrawing,
+  touch: touchDrawing,
+  rangefinder: rangeDrawing,
+  sonar: sonarDrawing,
+  skin: skinDrawing,
+  temperature: fieldDrawing,
+  gas: fieldDrawing,
+};
 
 // ---------------------------------------------------------------- the views panel: the picture and the plots
 

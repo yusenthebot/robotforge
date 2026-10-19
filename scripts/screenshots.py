@@ -742,6 +742,34 @@ def _sensing_go2(pos: tuple[float, float] = (-3.2, 2.6)) -> Callable[[Any], None
     return build
 
 
+def _extend_plugins(pg: Any) -> None:
+    """A Go2 among signposts and a red drum, with a Geiger sensor on its back: the signpost and the sensor are
+    plugins, the very files docs/EXTENDING.md shows, trusted in the world's plugins folder as write_script does."""
+    import re
+
+    from robotforge.extend import REGISTRY
+
+    page = (ROOT / "docs" / "EXTENDING.md").read_text(encoding="utf-8")
+    folder = pg.store.dir / "plugins"
+    folder.mkdir(exist_ok=True)
+    for name in ("signpost", "geiger"):
+        code = re.search(rf'```python title="plugins/{name}.py"\n(.*?)```', page, re.S)[1]
+        (folder / f"{name}.py").write_text(code, encoding="utf-8", newline="\n")
+    REGISTRY.trust(pg.store.dir)
+    pg.set_floor("concrete")
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.0])
+    pg.add_object("hot", shape="cylinder", size=[0.4, 0.7], color="red", fixed=True, pos=[1.6, 0.35])
+    for k, (x, y, yaw, height) in enumerate([(0.7, 1.1, 15, 1.0), (2.6, -0.5, -30, 1.4), (1.9, 1.6, 200, 1.2)]):
+        pg.add_object(f"sign{k + 1}", shape="signpost", size=[height], pos=[x, y], yaw=yaw)
+    pg.add_sensor("go2", {"type": "geiger", "source": "hot", "radius": 3.0})
+
+
+EXTEND_VIEW = (
+    'document.getElementById("drawer-toggle").click();'
+    "await new Promise((r) => setTimeout(r, 400));" + "window.__robotforge.lookAt([-0.3, -3.0, 1.2], [1.3, 0.4, 0.5]);"
+)
+
+
 def _panda_wrist(pg: Any) -> None:
     """A Panda with a force-torque sensor at its wrist and a 100 g cube on the floor in front of it."""
     pg.add_robot("panda", library="panda")
@@ -1371,6 +1399,46 @@ def _world_shots() -> list[Shot]:
     ]
 
 
+# ---- G12b: sensors and perception ---------------------------------------------------------------------------------
+# A Go2 enters the warehouse it has never seen, draws its map and finds itself in it (scripts/perception_bench.py has
+# the measured run); the pictures show the map growing over the floor.
+
+
+def _go2_warehouse_start(pg: Any) -> None:
+    pg.load_scene("warehouse", keep_robots=False, starter=False)
+    pg.add_robot("go2", library="go2", pos=[-6.2, 2.6], yaw=0)
+
+
+def _map_for(seconds: float, area: list[float] | None = None) -> Callable[[Any], None]:
+    """Start mapping and explore for `seconds` of simulated time, as fast as the machine runs it."""
+
+    def act(pg: Any) -> None:
+        pg.perception.start("go2", {})
+        trips = pg.perception.explore_trips("go2", seconds, area=area)
+        try:
+            while True:
+                trip, limit = next(trips)
+                pg.run_fast(lambda t=trip: t.done, limit + 1.0)
+        except StopIteration:
+            pass
+
+    return act
+
+
+G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
+G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.5, -5.5, 13.5], [0.5, 1.2, 0]);"
+
+G12_SHOTS = [
+    Shot(
+        "g12_map_overview",
+        _go2_warehouse_start,
+        act=_map_for(60.0, G12_AREA),
+        page=G12_OVERVIEW,
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+]
+
 SHOTS = [
     Shot(
         "hero",
@@ -1569,6 +1637,15 @@ SHOTS = [
     Shot("sensors_go2_cloud", _sensing_go2(), page=SENSOR_CLOUD_VIEW, settle=2.5),
     Shot("sensors_go2_drawer", _sensing_go2(), page=SENSOR_DRAWER_VIEW, settle=2.5),
     Shot("sensors_panda_wrist", _panda_wrist, act=_lift_cube, page=SENSOR_WRIST_VIEW, settle=0.5),
+    # Code a user wrote: a signpost part and a Geiger sensor from plugin files (docs/EXTENDING.md), in the viewer.
+    Shot(
+        "extend_plugins",
+        _extend_plugins,
+        viewer=[_walk("go2", 0.25), {"wait": 2.0}, _walk("go2", 0.0)],
+        page=EXTEND_VIEW,
+        size=(1920, 1080),
+        settle=2.0,
+    ),
     Shot(
         "gallery",
         _gallery_line_up,
@@ -1685,6 +1762,7 @@ SHOTS = [
     ),
     *G3_SHOTS,
     *G8_SHOTS,
+    *G12_SHOTS,
     *GENERATED_SHOTS,
     *_g10_shots(),
     *_g12_shots(),

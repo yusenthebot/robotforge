@@ -44,6 +44,7 @@ from robotforge.design.tasks.spec import TaskEntry
 from robotforge.design.terrain import TerrainPatch
 from robotforge.design.visuals import props as looks
 from robotforge.design.water import WaterEntry
+from robotforge.sensors import fields as source_fields
 from robotforge.sensors.spec import SensorEntry
 from robotforge.sim import water as water_physics
 
@@ -232,6 +233,8 @@ class ObjectEntry(_Strict):
     speed: float | None = Field(
         None, ge=-0.5, le=0.5, description="m/s a conveyor's belt runs at (conveyors only)", exclude_if=_unset
     )
+    # A source's strength: degrees of rise at a heat source, ppm at a gas source (sensors/fields.py)
+    strength: float | None = Field(None, gt=0, le=10000, exclude_if=_unset)
 
     @model_validator(mode="before")
     @classmethod
@@ -283,6 +286,10 @@ class ObjectEntry(_Strict):
         components.color(self.color)
         if self.speed is not None and self.shape != "conveyor":
             raise ValueError(f"object {self.name!r}: speed is a conveyor's belt speed; a {self.shape} has none")
+        if self.strength is not None and self.shape not in props.SOURCES:
+            raise ValueError(
+                f"object {self.name!r}: strength is for a heat_source or gas_source; a {self.shape} has none"
+            )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
         return self
@@ -878,6 +885,10 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
         props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
+        if obj.shape in props.SOURCES:
+            kind, default = props.SOURCES[obj.shape]
+            at = props.source_lift(obj.shape, obj.size[0])
+            source_fields.declare_source(spec, obj.name, kind, obj.strength or default, at)
         return
     if obj.shape == "table":
         _table(spec, obj, rgba, ground_z, quat)

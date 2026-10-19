@@ -78,6 +78,22 @@ SHAPES: dict[str, ShapeInfo] = {
     "pallet": ShapeInfo(
         "[length, width, height]", (3,), (1.2, 0.8, 0.144), tuple(WOOD), False, summary="a wooden pallet (20 kg)"
     ),
+    "heat_source": ShapeInfo(
+        "[diameter]",
+        (1,),
+        (0.3,),
+        (0.95, 0.42, 0.12, 1),
+        True,
+        summary="a heater: temperature sensors read it (strength = degrees at the source); nothing collides with it",
+    ),
+    "gas_source": ShapeInfo(
+        "[diameter]",
+        (1,),
+        (0.3,),
+        (0.42, 0.78, 0.3, 1),
+        True,
+        summary="a gas vent: gas sensors read it (strength = ppm at the source); nothing collides with it",
+    ),
     "tree": ShapeInfo(
         "[crown diameter, height]", (2,), (1.6, 3.0), (0.27, 0.55, 0.25, 1), True, summary="a tree (color is the crown)"
     ),
@@ -190,7 +206,11 @@ PROPS = (
     "marker",
     "buoy",
     "dock",
+    "heat_source",
+    "gas_source",
 )
+# What a source puts into the world (sensors/fields.py reads these): the kind of field and its default strength.
+SOURCES = {"heat_source": ("heat", 80.0), "gas_source": ("gas", 600.0)}
 DEFAULT_MASS = {"pallet": 20.0}
 WATER = 1000.0  # kg/m^3
 
@@ -216,7 +236,7 @@ def footprint(shape: str, size: list[float]) -> tuple[float, float]:
         return size[0] / 2 + 0.02, size[0] / 2 + 0.02
     if shape in ("lever", "rope"):
         return 0.04, 0.04
-    if shape in ("sphere", "pillar", "rock") or (shape == "marker" and len(size) == 1):
+    if shape in ("sphere", "pillar", "rock", "heat_source", "gas_source") or (shape == "marker" and len(size) == 1):
         return size[0] / 2, size[0] / 2
     if shape == "cylinder":
         return size[0] / 2, size[0] / 2
@@ -248,7 +268,7 @@ def build(
         # Wood, plaster and leaves are not glossy; MuJoCo's default specular makes them look like plastic.
         spec.add_material(name=MATTE, specular=0.08, shininess=0.1, reflectance=0.0)
     body = spec.worldbody.add_body(name=name, pos=base, quat=quat)
-    movable = not fixed and shape != "marker"
+    movable = not fixed and shape != "marker" and shape not in SOURCES
     if movable:
         body.add_freejoint(name=name)
     total = mass if mass is not None else _default_mass(shape, size)
@@ -434,6 +454,40 @@ def _marker(size: list[float], rgba: list[float]) -> list[Part]:
     return [_box([size[0] / 2, size[1] / 2, MARK / 2], [0, 0, MARK / 2], rgba, collide=False)]
 
 
+def source_lift(shape: str, diameter: float) -> float:
+    """Height above a source's base of the point it spreads from: its heating element or its vent's mouth."""
+    return (0.5 if shape == "heat_source" else 0.4) * diameter
+
+
+def _heat_source(size: list[float], rgba: list[float]) -> list[Part]:
+    """A radiant heater: a dark casing, a glowing element and three faint shells that say how far it warms."""
+    d = size[0]
+    r = d / 2
+    glow = [min(1.0, rgba[0] * 1.05), min(1.0, rgba[1] * 1.2), min(1.0, rgba[2] * 1.4), 1.0]
+    halo = [rgba[0], rgba[1], rgba[2]]
+    parts = [
+        Part(G.mjGEOM_CYLINDER, [0.62 * r, 0.09 * d, 0], [0, 0, 0.09 * d], DARK, collide=False),
+        Part(G.mjGEOM_SPHERE, [0.42 * r, 0, 0], [0, 0, 0.3 * d + 0.4 * r], glow, collide=False),
+    ]
+    for k, alpha in ((1.6, 0.16), (2.7, 0.09), (4.2, 0.05)):
+        parts.append(Part(G.mjGEOM_SPHERE, [k * r, 0, 0], [0, 0, 0.3 * d + 0.4 * r], [*halo, alpha], collide=False))
+    return parts
+
+
+def _gas_source(size: list[float], rgba: list[float]) -> list[Part]:
+    """A gas vent: a short pipe with a cap and a few faint shells for the plume."""
+    d = size[0]
+    r = d / 2
+    halo = [rgba[0], rgba[1], rgba[2]]
+    parts = [
+        Part(G.mjGEOM_CYLINDER, [0.5 * r, 0.14 * d, 0], [0, 0, 0.14 * d], DARK, collide=False),
+        Part(G.mjGEOM_CYLINDER, [0.7 * r, 0.03 * d, 0], [0, 0, 0.3 * d], rgba, collide=False),
+    ]
+    for k, alpha in ((1.5, 0.16), (2.6, 0.09), (4.0, 0.05)):
+        parts.append(Part(G.mjGEOM_SPHERE, [k * r, 0, 0], [0, 0, 0.3 * d + 0.2 * r], [*halo, alpha], collide=False))
+    return parts
+
+
 BUOY_FLOAT = 0.4  # of a buoy's height: its float; ballast under it, a mast and a top mark over it
 
 
@@ -496,6 +550,8 @@ _PARTS: dict[str, Callable[[list[float], list[float]], list[Part]]] = {
     "marker": _marker,
     "buoy": _buoy,
     "dock": _dock,
+    "heat_source": _heat_source,
+    "gas_source": _gas_source,
 }
 
 

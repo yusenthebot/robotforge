@@ -22,6 +22,11 @@ sim.sensors(robot)  # {sensor: value}, e.g. IMU, foot touch, tool position
 sim.sensor(robot, name)  # one sensor's reading, as read_sensors gives it, e.g. sim.sensor("go2", "lidar")["ahead"]
 sim.sensor(robot, "lidar", full=True)  # plus every range ("ranges_m", ring by ring) and a 3D lidar's points
 
+sim.sensor_names(robot)  # the names of the sensors a robot has
+sim.robots()  # the world's robots
+sim.robot(name)  # one interface to any robot, see below
+sim.on_step(fn, every=0.1)  # fn() is called every 0.1 simulated seconds while step() lets time pass
+
 sim.set_controls({"arm/shoulder": 0.5})  # raw actuator targets (names from describe_model)
 sim.move(robot, speed=0.2, turn=0.0)  # start walking or driving; keeps going until stop()
 sim.stop(robot)
@@ -127,3 +132,23 @@ print(f"cube at x={x:.3f} y={y:.3f} z={z:.3f}")
 Measured output with the cube at [0.25, -0.12] and the tray at [0.05, 0.28]: `cube at x=0.054 y=0.270 z=0.025`, inside the tray.
 
 When the step-by-step version drops the cube, compare with `sim.pick_and_place(ARM, CUBE, TRAY)`, which plans safe arcs and checks reach first, and explain the difference.
+
+## One interface for any robot
+
+`sim.robot(name)` returns a `Robot`, so the same script runs on a template dog and on a Go2, or on a template arm and on a Panda:
+
+```python
+robot = sim.robot("dog")
+robot.on_step(lambda r: print(round(r.time, 1), r.position), every=0.5)
+robot.move(speed=0.25)  # walks or drives until robot.stop()
+robot.run(2.0)  # time passes; the callback is called as it does
+robot.stop()
+
+arm = sim.robot("panda")
+arm.arm.move_to([0.4, 0.0, 0.3], gripper="open")
+arm.gripper.close()
+```
+
+`robot.kind`, `robot.can_move`, `robot.has_arm`, `robot.arms`, `robot.sensors` (`robot.sensors["lidar"]`, `.names()`, `.get(name, default)`), `robot.position`, `robot.heading`, `robot.joints`, `robot.set_controls` (the robot's own names), `robot.pose`, `robot.start(plugin_controller)`.
+What the robot cannot do raises an error that says what it can: a dog has no arm, an arm cannot walk.
+Blocking calls (`arm.move_to`, `pick_and_place`) run to their end without calling the callback.

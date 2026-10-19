@@ -28,7 +28,13 @@ remove("go2/lidar")
 | `rangefinder` | distance along one beam | `range` 4 m | `distance_m` |
 | `gps` | position in the world | | `position_m` |
 | `odometry` | the body's speed and turn rate added up | | `position_m`, `heading_deg`, `traveled_m` |
+| `wheel_odometry` | the wheels' speeds added up | `wheels` (found by their shape), `radius`, `slip` (each wheel reads its radius off by up to this share) | as `odometry` |
+| `sonar` | the nearest echo in a cone | `range` 4 m, `beam` 30 degrees, `min_range` 0.15 m | `distance_m`, `echoes`, `note` |
+| `skin` | normal force on taxels over several faces of a body | `faces` (front, back, left, right, top), `rows`, `cols` (3 x 3 a face) | `total_n`, `contact`, `touched`, `faces`, `loaded_at_m` |
+| `temperature` | the heat of `heat_source` objects at the sensor | `response_s` | `temperature_c` |
+| `gas` | the plume of `gas_source` objects at the sensor | `response_s` | `gas_ppm` |
 
+Sonar, wheel odometry, the skin and the scene fields are described under "More sensors" below.
 Agents' words work as types: "depth camera", "3D lidar", "ft", "encoder", "gnss", "odom", "bumper".
 A type refuses the options that mean nothing for it, and the error lists the ones it has.
 
@@ -42,6 +48,31 @@ Off to the side depth is shorter than distance by the cosine of the angle, so a 
 The camera's own robot is not an obstacle either (a lidar puck beside the lens, its own legs); `own_share` is how much of the picture shows it.
 `payload_kg` is what a force-torque sensor carries beyond the weight of everything hanging below it, so a wrist sensor reads the weight of what the gripper holds.
 Something holding it up from below (a leg on the ground) would make that negative, so then it reports `supported_kg` instead: the weight the ground takes through it beyond its own.
+
+## More sensors
+
+**Sonar.**
+It pings and listens for the first echo, and its beam is wide: it hears the nearest thing anywhere in a 30 degree cone, so a pole 15 degrees off its axis is heard while a rangefinder's line misses it.
+It is deaf to what is nearer than `min_range` (the transducer is still ringing) and to a flat surface turned more than 60 degrees from square to the beam, which sends the sound away: a wall seen edge-on gives no echo (the reading's `note` says which).
+The cone is cast as 19 rays; like a lidar it hears the shapes things collide with and not the robot it rides on.
+
+**Wheel odometry.**
+Each wheel joint's speed times its radius is how fast it rolls; the mean of the two sides is the way forward and their difference over the track is the turn.
+The wheels are found by their shape (a hinge about a level axis whose shapes are all discs or balls) or named in `wheels`; a walking robot has none and is refused.
+`slip` makes each wheel read its radius off by a fixed share, which bends a straight run: on a small rover with a 16 cm track 2 percent is already 4 degrees a second.
+Mapping can use it as its odometry (docs/PERCEPTION.md).
+
+**Tactile skin.**
+A touch pad on each face asked for, rows x cols taxels each, read together: the total force, which faces are touched, the forces on those faces and where the loaded taxels are in the world.
+A taxel reaches 1.5 cm into the body, so a weight on top does not read on the front.
+The viewer lights each pad as a touch sensor's.
+
+**Temperature and gas.**
+`add_object(shape="heat_source", strength=80)` puts a heater in the world and `shape="gas_source", strength=600` a vent; nothing collides with them, and the page draws them with faint shells that say how far they reach.
+A thermometer reads 20 degrees plus, for each heater, its strength over 1 + (d / 0.35 m)^2; a gas sensor reads each vent's strength times exp(-d / 1.2 m).
+Something solid between source and sensor shields it (heat to a fifth, gas to a half, since gas drifts round).
+It is a model of what a sensor reads, not a simulation of air: it does not move with wind and the sources do not run out.
+`response_s` is the sensor's time constant: a gas sensor with 4 s reads 63 percent of a step after 4 s.
 
 ## Where a sensor goes
 
@@ -167,3 +198,9 @@ Cost, as headless physics steps per second of CPU time for a Go2 standing in the
 
 One 16 x 180 scan takes 1.07 ms against 0.23 ms for a physics step: ten scans a second add about 9 % to the 500 steps of each simulated second.
 A scan's cost grows with its rays and with the shapes in the world (the warehouse has 152 that rays can hit).
+
+## Sensors you write
+
+A sensor type of your own (a Geiger counter, a signal strength, a thermometer) is a Python function in a plugin file.
+It sits on any body, has a rate, noise and latency like the sensors above, is read with `read_sensors`, `observe` and `sim.sensor`, and the viewer lists its reading and draws its module on the robot.
+See [EXTENDING.md](EXTENDING.md).
