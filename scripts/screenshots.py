@@ -1476,7 +1476,7 @@ SHOTS = [
     Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
     Shot("splice_barkour_so100", _barkour_so100, page=_framed("barkour", (1.1, -0.9, 0.5), 0.02), settle=3.0),
     Shot("splice_go2_piper_so100", _go2_two_arms, page=_framed("go2", (-0.55, -1.3, 0.55), 0.08), settle=3.0),
-    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (2.0, -1.6, 0.55), 0.22), settle=3.0),
+    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (1.8, -1.45, 0.6), 0.12), settle=3.0),
     Shot("splice_anymal_ur5e_robotiq", _anymal_ur5e, page=_framed("anymal", (2.0, -1.55, 0.85), 0.0), settle=3.0),
     Shot(
         "library_line_up",

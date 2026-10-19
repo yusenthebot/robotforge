@@ -343,10 +343,12 @@ CATALOG: dict[str, LibraryRobot] = {
             "unitree_z1",
             "z1_gripper.xml",
             mass=4.69,
-            # Menagerie's "home" keyframe leans the upper arm 45 degrees back over the base with the claw out at 0.29 m,
-            # which reads as fallen over beside a walker: stand the upper arm up and hold the forearm forward.
+            # Menagerie's "home" keyframe leans the upper arm 45 degrees back over the base, which reads as fallen
+            # over beside a walker: stand the upper arm up, elbow folded, the claw in front at 0.3 m. Kept this
+            # compact on purpose (centre of mass 0.21 m up): a Z1 reaching out in front or standing straight up
+            # tipped Spot over while its PiPER carried a cube.
             home_key=None,
-            home=(("joint2", 1.57), ("joint3", -1.9), ("joint4", 0.35)),
+            home=(("joint2", 1.3), ("joint3", 0.0), ("joint4", -1.2)),
             holds_against_gravity=True,  # on its servos alone it sagged 3 to 4 mm 0.33 to 0.45 m out
             # The grasp point is the middle of the fingertip pads (0.172-0.2 m along link06's x), 1 cm above the fixed
             # jaw's pad: a cube rests on that jaw and the moving one closes onto it (at 0 rad; -1.52 is wide open).

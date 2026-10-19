@@ -615,7 +615,7 @@ def test_real_arm_home_stands_up_instead_of_folding_back(name, elbow, hand):
     top = data.xpos[model.body(f"r/{elbow}").id]
     tip = data.xpos[model.body(f"r/{hand}").id]
     assert top[2] - base[2] > 0.25  # the elbow stands well above the shoulder
-    assert abs(top[0] - base[0]) < 0.08  # over it, not leaning back
+    assert abs(top[0] - base[0]) < 0.12  # over it, not leaning back
     assert tip[0] - base[0] > 0.1  # the hand reaches out in front
 
 
