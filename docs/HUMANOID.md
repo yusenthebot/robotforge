@@ -109,9 +109,32 @@ What the controller cannot do, whatever the robot:
 it does not step, so a push it cannot take by shifting weight knocks it over;
 and the learned G1 policy does not carry a load of a fifth of its mass (it is not whole-body balance).
 
+## Walking: tried, not shipped
+
+`move` still walks these robots only with a gait found from their legs (`humanoid.for_robot`), and says "stands, but no gait fits" when there is none.
+Whole-body balance as a walker was tried and does not work well enough to ship.
+
+What was built: footsteps and a centre of mass path from the preview control of `behaviors/biped.py` (the walk of T1 and OP3), handed to the same balance: the centre of mass follows its path with a spring and damper, the swinging sole follows its own and is kept level, the foot that carries the weight keeps its contact points and the swinging foot's are left out.
+Timing was stretched three times over what a pendulum of that height would take, so that the joints have time to follow (a step takes about 3 s, 0.09 m/s at best).
+
+What was found, in the order it was found:
+
+- The centre of mass follows its path closely (a few millimetres) in every run, so the plan and the balance agree.
+- The swinging foot does not lift as planned.
+  The balance plans the leg's accelerations, the simulation does not deliver them: a servo with a big damper (Talos's knee gives 223 N*m per rad/s, Atlas's 1400) holds the joint back, and cancelling the damper with the velocity of a control period ago makes the loop ring where the joint's inertia is small.
+  Cancelling it with a smoothed velocity (50 ms) instead, a little ahead by the planned acceleration, and only as far as stays stable for that joint's inertia, lets the leg move.
+- With that Talos walks: 1.5 m in 24 s, six steps, the trunk leaning at most 13 degrees, 3 cm off line.
+  It does not turn the way it is told (the turn on the spot came out at 16 degrees for an asked 86) and it is not still after the stop.
+- The same settings drop Atlas and H1 within a second, and Gene01 after seven, of the first step, and without them they fall within 4 to 10 s: none of the 28 standing robots in the bench walked 24 s without them.
+  Joints held at their limit (Atlas's knee, straight, at 0) cannot be bent by a torque command through a servo with 24 000 N*m per rad of stiffness updated 200 times a second; the stiff servos need position commands that follow the plan, not torques.
+- The smoothed cancellation made standing worse for the same robots (H1_2 did not stand, Atlas lost its load), so it would have to apply to a walking robot only.
+
+Where to go from here: command joint positions that integrate the balance's accelerations (a model reference per joint) instead of torques for the stiff servos, a crouched walking stance with the knees bent so that no leg is at a limit, and a swing foot that lifts first and moves after.
+The walker, its bench (`walk_bench.py`) and these runs are not in the repository.
 
 ## Where it is in the code
 
 - `behaviors/whole_body.py`: the controller; `tests/test_whole_body.py`.
 - `behaviors/stance.py`, `behaviors/stance_ik.py`, `design/mjcf_stance.py`: the kind of a robot from its feet, and the stance a keyframe is moved to.
 - `scripts/balance_bench.py`: the table.
+- `scripts/humanoid_grid.py`: a picture of every humanoid that stands, from the bench's JSON.

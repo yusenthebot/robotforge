@@ -32,6 +32,7 @@ from robotforge.behaviors import (
     marine,
     nav_map,
     quadruped,
+    relay,
     robot_kind,
     visit,
     water_nav,
@@ -1080,6 +1081,7 @@ class BehaviorManager:
                 for name in self._names(self._world())
                 if name != robot and "/" not in name
             ],
+            crossings=lambda: self._other_movers(robot),
             pose=own_map.pose if own_map is not None else None,
             watch=planner.blocked_ahead if own_map is not None else None,
         )
@@ -1093,6 +1095,16 @@ class BehaviorManager:
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip
         return trip
+
+    def _other_movers(self, robot: str) -> list[Any]:
+        """The other robots on trips across the floor, for the one named to give way to (traffic.py)."""
+        found = []
+        for name, trip in self._live_trips.items():
+            if name != robot and isinstance(trip, navigation.Navigator):
+                mover = trip.mover()
+                if mover is not None:
+                    found.append(mover)
+        return found
 
     def _dive(self, robot: str, to, pilot: marine.RovPilot, speed, seconds, model, data) -> marine.DiveTrip:
         """move(to=...) for an ROV: straight to a point under water, [x, y, z] ([x, y] keeps the depth it holds), or
@@ -1633,6 +1645,92 @@ class BehaviorManager:
                     return arm, {"object": obj, "target": target, "region": region}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def hand_over(
+        self, giver: str, receiver: str, obj: str, target: str | list[float]
+    ) -> tuple[relay.Relay, dict[str, Any]]:
+        """`giver` picks `obj` up and sets it down at a spot both arms reach and goes home; then `receiver` picks it
+        up from there and puts it on or in `target`. Returns the relay (wait until `done`) and {object, target,
+        region, spot}. Refuses before moving when either arm rides on a robot that drives or walks, either has no
+        gripper, no spot suits both, or the receiver cannot put the object on the target."""
+        with self.session.lock:
+            names = []
+            for who in (giver, receiver):
+                name = self._arm_name(who)
+                if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
+                    raise BehaviorError(f"{name} has no gripper to pick with; {self._gripper_hint(name)}")
+                if self._goes(name):
+                    raise BehaviorError(
+                        f"{name} rides on a robot that moves: hand_over is for arms that stay where they are"
+                    )
+                self._check_carrier(name)
+                names.append(name)
+            if names[0] == names[1]:
+                raise BehaviorError("hand_over needs two different arms")
+            give, take = (self._arm_motion(n) for n in names)
+            obj = self._object_name(obj)
+            pick = self._object_geometry(obj)
+            half = pick["half_height"]
+            if fetch.holding(self.session.data, give, self._body(obj)):
+                raise BehaviorError(f"{names[0]} is already holding {obj}: put it down first")
+            place, place_top, region = self._place_target(target)
+            bottom = float(pick["center"][2]) - half
+            avoid = [self.session.data.xpos[self._body(o)] for o in self._movable() if o != obj]
+            if isinstance(target, list):
+                avoid.append(place)
+            spots = relay.hand_off_spots(self.session.data, give, take, avoid)
+            if not spots:
+                raise BehaviorError(
+                    f"no spot on the floor is in reach of both {names[0]} and {names[1]}: stand them closer"
+                )
+            why = ""
+            for spot in spots:
+                down = np.array([spot[0], spot[1], bottom])
+                try:
+                    give.pick_and_place(pick["center"], half, down, None, pick["faces"])
+                except (OutOfReach, ValueError) as exc:
+                    give.queue.clear()
+                    why = str(exc)
+                    if isinstance(exc, OutOfReach) and "object" in exc.bad:
+                        raise BehaviorError(
+                            self._pick_out_of_reach(give, exc, pick["center"], down, target, obj)
+                        ) from exc
+                    continue
+                saved = list(take.queue)
+                try:
+                    take.pick_and_place(
+                        np.array([spot[0], spot[1], bottom + half]), half, place, place_top, pick["faces"]
+                    )
+                except (OutOfReach, ValueError) as exc:
+                    give.queue.clear()
+                    why = str(exc)
+                    continue
+                finally:
+                    take.queue.clear()
+                    take.queue.extend(saved)
+                give.move_to(relay.parking(give.base_and_reach(self.session.data)[0], np.asarray(spot, float)))
+                break
+            else:
+                raise BehaviorError(
+                    f"{names[0]} and {names[1]} cannot hand {obj} over at any of the {len(spots)} spots in reach of "
+                    f"both: {why}"
+                )
+            body = self._body(obj)
+
+            def arrived() -> bool:
+                return bool(np.linalg.norm(self.session.data.xpos[body][:2] - spot) < relay.ARRIVED)
+
+            def start() -> Any:
+                try:
+                    motion, _ = self.pick_and_place(names[1], obj, target, go=False)
+                except BehaviorError as exc:
+                    return f"{names[0]} set {obj} down, but {names[1]} cannot take it to {target}: {exc}"
+                return motion
+
+            handed = relay.Relay(give, names[1], obj, np.asarray(spot, float), arrived, start)
+            self.session.set_controller(names[0], give)
+            self.session.set_controller(relay.KEY + names[0], handed)
+        return handed, {"object": obj, "target": target, "region": region, "spot": [round(float(v), 3) for v in spot]}
 
     def _catch(
         self,
