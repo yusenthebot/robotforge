@@ -24,6 +24,8 @@ class Hyper:
     choices: instead of a range, the values a search picks from.
     help: one sentence for people and agents.
     search: False keeps it out of a search unless the search names it.
+    minimum, maximum: the limits a value must stay within; low and high are only where a search looks first, so
+        a search may be told to look wider (up to the limits).
     """
 
     default: Any
@@ -33,6 +35,8 @@ class Hyper:
     choices: tuple[Any, ...] | None = None
     help: str = ""
     search: bool = True
+    minimum: float | None = None
+    maximum: float | None = None
 
     def __post_init__(self) -> None:
         if self.choices is not None and self.default not in self.choices:
@@ -94,8 +98,10 @@ class Hyper:
             raise HyperError(f"{name} must be a {kind} (default {self.default!r}), got {value!r}") from None
         if self.choices is not None and out not in self.choices:
             raise HyperError(f"{name} must be one of {list(self.choices)}, got {value!r}")
-        if self.low is not None and not self.low <= out <= self.high:  # type: ignore[operator]
-            raise HyperError(f"{name} must be between {self.low:g} and {self.high:g}, got {value!r}")
+        if (self.minimum is not None and out < self.minimum) or (self.maximum is not None and out > self.maximum):
+            lo = "-inf" if self.minimum is None else f"{self.minimum:g}"
+            hi = "inf" if self.maximum is None else f"{self.maximum:g}"
+            raise HyperError(f"{name} must be between {lo} and {hi}, got {value!r}")
         return out
 
     def describe(self) -> dict[str, Any]:
@@ -104,6 +110,8 @@ class Hyper:
             out["choices"] = list(self.choices)
         if self.low is not None:
             out.update(low=self.low, high=self.high, **({"log": True} if self.log else {}))
+        if self.minimum is not None or self.maximum is not None:
+            out.update(limits=[self.minimum, self.maximum])
         if self.help:
             out["help"] = self.help
         return out

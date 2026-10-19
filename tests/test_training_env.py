@@ -133,3 +133,22 @@ def test_a_task_saved_with_the_world_is_an_environment_of_the_whole_world(tmp_pa
 def test_an_unknown_task_lists_what_exists():
     with pytest.raises(TaskError, match="reach"):
         make_env("fly_to_the_moon", robot=ARM)
+
+
+def test_a_reach_target_with_jitter_moves_around_its_point_each_episode():
+    point = np.array([0.22, 0.08, 0.14])
+    env = make_env("reach", robot=ARM, task_params={"target": point.tolist(), "jitter": 0.04})
+    seen = []
+    for seed in range(6):
+        env.reset(seed=seed)
+        offset = env.task.target - point
+        assert np.all(np.abs(offset) <= 0.04 + 1e-9)
+        seen.append(tuple(np.round(offset, 6)))
+    assert len(set(seen)) == 6  # a different spot each episode
+    env.reset(seed=0)
+    again = env.task.target.copy()
+    env.reset(seed=0)
+    assert np.allclose(env.task.target, again)  # and the same one for the same seed
+    steady = make_env("reach", robot=ARM, task_params={"target": point.tolist()})
+    steady.reset(seed=3)
+    assert np.allclose(steady.task.target, point)

@@ -49,13 +49,14 @@ def test_importing_the_training_package_loads_nothing_heavy():
 
 
 def test_a_hyper_checks_and_draws_values_in_its_range():
-    h = Hyper(0.1, low=0.01, high=1.0, log=True)
+    h = Hyper(0.1, low=0.01, high=1.0, log=True, minimum=0.001, maximum=2.0)
     rng = np.random.default_rng(0)
     draws = [h.sample(rng) for _ in range(200)]
     assert all(0.01 <= d <= 1.0 for d in draws) and min(draws) < 0.05 < 0.5 < max(draws)
     assert h.check("x", 1) == 1.0
     with pytest.raises(HyperError, match="between"):
         h.check("x", 5.0)
+    assert h.check("x", 1.5) == 1.5  # the search range is where a search looks first, not a limit
     with pytest.raises(HyperError, match="int"):
         Hyper(3, 1, 9).check("n", 2.5)
     with pytest.raises(HyperError, match="one of"):

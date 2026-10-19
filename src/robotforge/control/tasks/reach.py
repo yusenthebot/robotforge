@@ -19,6 +19,13 @@ class ReachParams(TaskParams):
         None, description="[x, y, z] in meters, an object name, or empty for a random reachable point"
     )
     tolerance: float = Field(0.01, gt=0, le=0.2, description="success when the tool is this close, meters")
+    jitter: float = Field(
+        0.0,
+        ge=0,
+        le=0.3,
+        description="with a target, each training episode moves it by up to this much (m) in every direction: "
+        "a whole small region to learn, not one point",
+    )
 
 
 class Reach(Task):
@@ -53,6 +60,8 @@ class Reach(Task):
         self.dadr = np.array([model.jnt_dofadr[j] for j in self.joints])
         self._fk = mujoco.MjData(model)  # scratch for forward kinematics, reused to avoid allocations
         self.target = np.zeros(3)
+        self._anchor = np.zeros(3)  # the target as the task states it; episodes with a jitter move around it
+        self._offset = np.zeros(3)  # the current episode's jitter
         self._fresh_target = False  # set by reset(): an episode already drew its random target
         self._resolve_target(home_qpos(model), np.random.default_rng(0))
 
@@ -69,6 +78,7 @@ class Reach(Task):
             self.target = self._object_position(t, qpos)
         else:
             self.target = self.random_target(qpos, rng)
+        self._anchor = self.target.copy()
 
     def _check_distance(self, qpos: np.ndarray) -> None:
         """Refuse a target so far off that the numbers must be in the wrong unit (centimetres for meters)."""
@@ -174,10 +184,14 @@ class Reach(Task):
         if self.params.target is None:
             self.target = self.random_target(data.qpos.copy(), rng)
             self._fresh_target = True
+        elif self.params.jitter > 0:
+            self._offset = rng.uniform(-self.params.jitter, self.params.jitter, 3)
+            self.target = self._anchor + self._offset
 
     def begin(self, data: mujoco.MjData) -> None:
         if isinstance(self.params.target, str):  # the object may have moved since the task was made
-            self.target = self._object_position(self.params.target, data.qpos.copy())
+            self._anchor = self._object_position(self.params.target, data.qpos.copy())
+            self.target = self._anchor + self._offset
         elif self.params.target is None and not self._fresh_target:
             # A live run without a target: pick one reachable from where the arm is now.
             self.target = self.random_target(data.qpos.copy(), np.random.default_rng(0))

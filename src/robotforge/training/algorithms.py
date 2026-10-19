@@ -191,10 +191,16 @@ BUILT_IN: dict[str, Algorithm] = {
         "Augmented Random Search: a linear policy nudged along the random directions that earned the most. numpy only.",
         run_ars,
         {
-            "directions": Hyper(8, 4, 32, help="random directions tried per round (each costs two episodes)"),
-            "top_fraction": Hyper(0.5, 0.25, 1.0, help="the share of directions that count"),
-            "step_size": Hyper(0.1, 0.01, 0.5, log=True, help="how far the policy moves per round"),
-            "noise": Hyper(0.3, 0.05, 0.8, log=True, help="how far each direction nudges the parameters"),
+            "directions": Hyper(
+                8, 4, 32, minimum=1, help="random directions tried per round (each costs two episodes)"
+            ),
+            "top_fraction": Hyper(0.5, 0.25, 1.0, minimum=0.05, maximum=1.0, help="the share of directions that count"),
+            "step_size": Hyper(
+                0.1, 0.01, 0.5, log=True, minimum=1e-4, maximum=5.0, help="how far the policy moves per round"
+            ),
+            "noise": Hyper(
+                0.3, 0.05, 0.8, log=True, minimum=1e-4, maximum=5.0, help="how far each direction nudges the parameters"
+            ),
         },
         explain="Tries nudges in both directions, keeps the best, steps toward them. Fast and simple; a linear policy.",
     ),
@@ -203,13 +209,31 @@ BUILT_IN: dict[str, Algorithm] = {
         "Cross-entropy method: sample policies from a Gaussian, refit it to the best. numpy only.",
         run_cem,
         {
-            "population": Hyper(24, 8, 40, help="policies sampled per round"),
-            "elite_fraction": Hyper(0.25, 0.1, 0.5, help="the share of the population the Gaussian is refit to"),
-            "init_std": Hyper(0.5, 0.1, 1.5, log=True, help="how widely the first round samples"),
-            "noise_floor": Hyper(0.01, 0.001, 0.1, log=True, help="spread added each round so the search never stalls"),
-            "smoothing": Hyper(0.7, 0.3, 1.0, help="how much of the new fit replaces the old (1 = all)"),
-            "episodes": Hyper(1, 1, 3, help="episodes per candidate, on the same starts for every candidate"),
-            "hidden": Hyper(0, 0, 32, search=False, help="neurons in a hidden layer (0 = a linear policy)"),
+            "population": Hyper(24, 8, 40, minimum=4, help="policies sampled per round"),
+            "elite_fraction": Hyper(
+                0.25, 0.1, 0.5, minimum=0.02, maximum=0.9, help="the share of the population the Gaussian is refit to"
+            ),
+            "init_std": Hyper(
+                0.5, 0.1, 1.5, log=True, minimum=1e-3, maximum=10.0, help="how widely the first round samples"
+            ),
+            "noise_floor": Hyper(
+                0.01,
+                0.001,
+                0.1,
+                log=True,
+                minimum=0.0,
+                maximum=1.0,
+                help="spread added each round so the search never stalls",
+            ),
+            "smoothing": Hyper(
+                0.7, 0.3, 1.0, minimum=0.05, maximum=1.0, help="how much of the new fit replaces the old (1 = all)"
+            ),
+            "episodes": Hyper(
+                1, 1, 3, minimum=1, maximum=10, help="episodes per candidate, on the same starts for every candidate"
+            ),
+            "hidden": Hyper(
+                0, 0, 32, search=False, minimum=0, maximum=256, help="neurons in a hidden layer (0 = a linear policy)"
+            ),
         },
         explain="Draws a whole population, keeps the best few and moves the Gaussian onto them.",
     ),
