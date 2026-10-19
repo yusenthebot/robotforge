@@ -29,6 +29,7 @@ def register(server: MCPServer, playground: Playground, run_until: Callable[...,
         action: Literal["open", "close", "press", "turn"],
         amount: float | None = None,
         go: bool = True,
+        force: float | None = None,
     ) -> str:
         """Have an arm work a mechanism: it takes hold of the handle and moves it along the joint's own line or arc.
         drawer: open / close, amount in m (default: all the way). cabinet: open / close the door, amount in degrees
@@ -42,12 +43,16 @@ def register(server: MCPServer, playground: Playground, run_until: Callable[...,
         reach or it would not follow it the whole way: the robot walks or drives to a spot from which the arm does the
         whole job, clear of what moves (a drawer pulled out, a door swung open), stands still while the arm works and
         folds the arm back; the result then also says "went", "stood_at" ([x, y, heading_deg]) and "visit_s".
-        go=false keeps the robot where it stands. Put things in an open drawer with pick_and_place(robot, object,
-        drawer)."""
+        go=false keeps the robot where it stands. force (newtons) makes the hand push the handle with at most that
+        force along its way instead of dragging it with its servos: a handle that takes more stops the hand (the
+        result's "force" says the limit, how hard it pushed and felt, and whether it stalled; for an arm that works
+        the mechanism from where it stands). Put things in an open drawer with pick_and_place(robot, object, drawer)."""
         with _tool_errors():
             behaviors = playground.behaviors
             # Planned off the event loop: looking for where to stand can take seconds, and the viewer froze meanwhile.
-            op, found, shape = await asyncio.to_thread(operating.start, behaviors, robot, target, action, amount, go)
+            op, found, shape = await asyncio.to_thread(
+                operating.start, behaviors, robot, target, action, amount, go, force
+            )
             trip = op if isinstance(op, visiting.Visit) else None
             if trip is None:
                 run = await run_until(lambda: op.done, OPERATE_SECONDS)

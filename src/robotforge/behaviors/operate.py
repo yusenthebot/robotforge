@@ -52,6 +52,9 @@ SUCCESS_FRACTION = 0.8  # of the way asked: less than this, the result says it f
 MAX_JOINT_STEP = 0.35  # rad a joint may move between two points of a way 1 cm apart: more is a jump to another pose
 # This close to where it is going, it is there already: a drawer stopped 3 mm short of its end is open all the way.
 THERE_M, THERE_RAD = 0.004, math.radians(1.5)
+FORCE_TAIL = 1.5  # s a push holds its last pose, to catch up
+FORCE_RATE_HZ = 500.0  # control steps per second when the hand pushes with a force
+STALLED_S = 0.5  # s a hand pushes at its limit, in all, before it counts as having stalled
 HOLD_STARTS = 12  # random starts tried for a hold, besides the arm's pose now and its own solver's answer
 # Of their full opening the fingers open to take a bar: 3.5 cm for our 7 cm gripper, 4 cm on a Panda, or less where
 # that runs a finger into what the bar is on (a Panda's fingers are 1.7 cm thick at the root: open 4 cm round a drawer
@@ -91,6 +94,7 @@ class Leg:
     # operation does `abort` instead of the rest (let go and back off from there).
     check: Callable[[mujoco.MjModel, mujoco.MjData], str | None] | None = None
     abort: list[Leg] = field(default_factory=list)
+    tail: float = 0.0  # s at the end of the leg that the last pose is held for (a hand pushing is allowed to catch up)
 
 
 @dataclass
@@ -172,6 +176,35 @@ class Operation:
         # And their damping, to follow a moving plan without lagging behind it (see arm.servo_targets).
         self._kv = servo_damping(arm.ik.model, arm.actuators)
         self._last: tuple[float, np.ndarray] | None = None  # (time, arm.q) at the last update
+        # With a force given, the hand pushes the handle with at most that force along its way (see PathPush) instead
+        # of dragging it along with the servos: a handle that holds back more stops the hand.
+        self.force: float | None = None
+        self._push: Any = None
+        self.stalled = False
+
+    def push_with(self, newtons: float) -> None:
+        self.force = newtons
+        self.rate_hz = FORCE_RATE_HZ  # a torque-controlled arm needs short steps
+        self._tail(self.legs)
+        if self.more is not None:
+            more = self.more
+            self.more = lambda model, data: self._tail(more(model, data))
+
+    def _tail(self, legs: list[Leg]) -> list[Leg]:
+        """A hand that pushes with a spring lags the handle by the force over the spring's stiffness: the moves hold
+        their last pose a while so that it can catch up."""
+        for leg in legs:
+            if leg.label == "move" and leg.path and leg.tail == 0.0:
+                leg.duration += FORCE_TAIL
+                leg.tail = FORCE_TAIL
+        return legs
+
+    def _pushing(self, model: mujoco.MjModel, data: mujoco.MjData) -> np.ndarray:
+        if self._push is None:
+            from robotforge.control.impedance import PathPush
+
+            self._push = PathPush(model, self.arm, float(self.force))
+        return self._push.command(data, self.arm.q, 1.0 / self.rate_hz)
 
     def _targets(self, data: mujoco.MjData) -> np.ndarray:
         t, q = float(data.time), self.arm.q.copy()
@@ -206,7 +239,8 @@ class Operation:
             return
         leg, t0, q0 = self._leg
         u = min(1.0, (t - t0) / leg.duration)
-        s = u * u * (3 - 2 * u)
+        along = min(1.0, (t - t0) / max(leg.duration - leg.tail, 1e-6))  # the path takes the leg less its tail
+        s = along * along * (3 - 2 * along)
         if leg.q is not None:
             arm.q = q0 + (leg.q - q0) * s
         elif leg.path:
@@ -214,7 +248,12 @@ class Operation:
             i = min(int(k), len(leg.path) - 2) if len(leg.path) > 1 else 0
             f = k - i
             arm.q = leg.path[i] if len(leg.path) == 1 else leg.path[i] + (leg.path[i + 1] - leg.path[i]) * f
-        data.ctrl[arm.actuators] = self._targets(data)
+        if self.force is not None and leg.label == "move" and leg.path:
+            data.ctrl[arm.actuators] = self._pushing(model, data)
+        else:
+            data.ctrl[arm.actuators] = self._targets(data)
+        if u >= 1.0 and self._push is not None and leg.label == "move":
+            self.stalled = self._push.held_at_limit > STALLED_S
         if u >= 1.0:
             self._leg = None
             self._after(leg, model, data)
@@ -245,8 +284,26 @@ def plan(
     shape: str,
     action: str,
     amount: float | None,
+    force: float | None = None,
 ) -> Operation:
-    """The operation that does `action` on mechanism `target` (a world object of `shape`), or OperateError."""
+    """The operation that does `action` on mechanism `target` (a world object of `shape`), or OperateError. With a
+    `force`, the hand pushes the handle along its way with at most that many newtons."""
+    op = _plan(model, data, arm, target, shape, action, amount)
+    if force is not None and action != "press":
+        op.push_with(force)
+    return op
+
+
+def _plan(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    arm: ArmMotion,
+    target: str,
+    shape: str,
+    action: str,
+    amount: float | None,
+) -> Operation:
+    """plan, without the force."""
     info = mechanisms.MECHANISMS[shape]
     if action not in info.actions:
         can = " or ".join(info.actions) or "nothing operate does (set_controls sets a conveyor's speed)"
@@ -1010,7 +1067,13 @@ def _joint_time(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def start(
-    manager: Any, robot: str, target: str, action: str, amount: float | None, go: bool = True
+    manager: Any,
+    robot: str,
+    target: str,
+    action: str,
+    amount: float | None,
+    go: bool = True,
+    force: float | None = None,
 ) -> tuple[Any, str, str]:
     """Plan `action` on `target` for the arm `robot` names and set it going in its place among the controllers:
     (the operation, the target as the world spells it, its shape). An arm that rides on a robot that drives or walks
@@ -1042,7 +1105,7 @@ def start(
         arm.q = session.data.qpos[arm.chain.qpos_adr].copy()
         goes = go and manager._goes(name)
         try:
-            op = plan(session.model, session.data, arm, found, shape, action, amount)
+            op = plan(session.model, session.data, arm, found, shape, action, amount, force)
         except OperateError:
             if not goes:
                 raise
@@ -1090,12 +1153,25 @@ def result(op: Operation, model: mujoco.MjModel, data: mujoco.MjData, state: dic
         if (
             not report["success"]
             and not op.aborted
+            and not (op.force is not None and op.stalled)
             and planned is not None
             and planned_joint >= SUCCESS_FRACTION * abs(can)
         ):
             report["notes"].append(
                 "the hand could not keep hold of the handle on the way (it slipped); try again, or with the other "
                 "end effector"
+            )
+    if op.force is not None and op._push is not None:
+        report["force"] = {
+            "limit_n": op.force,
+            "pushed_n": round(op._push.peak_commanded, 1),
+            "felt_n": round(op._push.peak_felt, 1),
+            "stalled": bool(op.stalled and not report["success"]),
+        }
+        if op.stalled and not report["success"]:
+            report["notes"].append(
+                f"the hand pushed at its limit of {op.force:g} N and the handle still held back: it takes more "
+                "than that (give a larger force), or the hand slipped off it"
             )
     if not report["notes"]:
         report.pop("notes")

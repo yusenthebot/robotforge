@@ -30,7 +30,10 @@ HEIGHT_LEVELS = 9  # heights tried between the thing's lowest and highest point
 BAND = 0.006  # m: the contact faces are looked for within this height of the grasp height
 FACE_DEPTH = 0.002  # m: points this near the extreme along the closing direction make up a contact face
 HOLD_DEPTH = 0.004  # m of the thing above the grasp height, at least
-FINGER_CLEAR = 0.012  # m the grasp keeps above the lowest point: the fingertips reach this far below the tool point
+LINE_STEP = 0.01  # m between the lines across a thing that the jaws could close along
+PALM = 0.035  # m the thing may reach above the grasp height: past that it runs into the hand's palm
+HALF_FINGER = 0.012  # m: half the width of a fingertip, and some
+FINGER_CLEAR = 0.02  # m the grasp keeps above the lowest point: a fingertip reaches about 1 cm below the tool point
 SPARE = 0.006  # m of opening the jaws keep to spare on either side of a grasp, and above it
 FRICTION = 0.6  # the friction of fingertip pads on most things; the friction cone's half angle is atan of it
 SPHERE_POINTS = 120
@@ -46,6 +49,7 @@ class Grasp:
     closing: np.ndarray  # unit, horizontal
     width: float  # m between the contact faces
     below: float  # m from the center down to the thing's lowest point
+    above: float  # m from the center up to the thing's highest point
     score: float
     grip: float  # 0 to 1: how well the contact normals line up with the closing direction
     offset: float  # m from the centre of mass to the grasp's line, sideways
@@ -232,53 +236,59 @@ def plan(
     verts, faces, own, hull_centre = _hulls(parts)
     normals, areas = face_normals(verts, faces)
     com = hull_centre if centre_of_mass is None else np.asarray(centre_of_mass, float)
+    solids = [p for p in parts if len(p)]
     z_low, z_high = float(verts[:, 2].min()), float(verts[:, 2].max())
     cone = math.cos(math.atan(friction))
     first = z_low + FINGER_CLEAR
     top = z_high - HOLD_DEPTH  # the jaws take hold of at least this much of the thing's height
+    first = max(first, z_high - PALM)
     levels = [first] if top - first < 0.003 else list(np.linspace(first, top, HEIGHT_LEVELS))
     levels = [z for z in levels if z <= top + 1e-9]
     found: list[Grasp] = []
     for z in levels:
-        band = verts[np.abs(verts[:, 2] - z) <= BAND]
-        # the hull's own cross-section at z, not only vertices near it: points along the edges that cross the level
-        sections = [_section(v, f, z) for v, f in own]
-        slab = np.vstack([band, *[sec for sec in sections if len(sec)]])
-        if len(slab) < 3:
+        # the thing's cross-section at this height: one convex polygon per shape that reaches it
+        polys = [poly for poly in (_slice(v, f, z) for v, f in own) if len(poly) >= 3]
+        if not polys:
             continue
-        above = verts[verts[:, 2] >= z - BAND]
         for yaw in np.arange(0.0, math.pi, YAW_STEP):
             u = np.array([math.cos(yaw), math.sin(yaw), 0.0])
-            s = slab @ u
-            width = float(s.max() - s.min())
-            if width < 0.004 or width > opening - 2 * SPARE:
-                continue
-            reach = above @ u
-            if float(reach.max() - reach.min()) > opening - 2 * SPARE and z < z_high - BAND:
-                continue  # the fingers cannot come down on either side: the thing gets wider above the grasp
-            a = slab[s <= s.min() + FACE_DEPTH].mean(axis=0)  # the middle of each side the jaws meet
-            b = slab[s >= s.max() - FACE_DEPTH].mean(axis=0)
-            cos_a, area_a = _contact(verts, faces, normals, areas, a, -u, z)
-            cos_b, area_b = _contact(verts, faces, normals, areas, b, u, z)
-            grip = min(cos_a, cos_b)
-            if grip < cone:
-                continue  # the squeeze would slide the thing out
-            mid = (a + b) / 2
             across = np.array([-u[1], u[0], 0.0])
-            side = abs(float((mid - com) @ across))  # the grasp's line passes this far from the centre of mass sideways
-            along = abs(float((mid - com) @ u))
-            high = abs(float(mid[2] - com[2]))
-            flat = min(1.0, (area_a + area_b) / (2 * 0.0006))  # the contact faces: 6 cm2 or more is as good as it gets
-            spare = (opening - width) / opening
-            score = (
-                2.0 * (grip - cone) / (1 - cone)
-                + 2.0 * (1.0 - min(1.0, math.hypot(side, along) / 0.04))
-                + 0.6 * (1.0 - min(1.0, high / 0.05))
-                + 0.8 * flat
-                + 0.5 * min(1.0, spare / 0.4)
-            )
-            center = np.array([mid[0], mid[1], z])
-            found.append(Grasp(center, u, width, z - z_low, score, grip, side, _note(width, opening, grip, flat, side)))
+            for line in _lines(polys, across):
+                # the part of the cross-section the two fingers meet: the strip HALF_FINGER either side of the line
+                # the jaws close along (a T is taken by its stem or its bar, not across both)
+                reach = [clip for clip in (_strip(poly, across, line) for poly in polys) if len(clip)]
+                if not reach:
+                    continue
+                points = np.vstack(reach)
+                s = points @ u
+                width = float(s.max() - s.min())
+                if width < 0.004 or width > opening - 2 * SPARE:
+                    continue
+                a = points[s <= s.min() + FACE_DEPTH].mean(axis=0)  # the middle of each side the jaws meet
+                b = points[s >= s.max() - FACE_DEPTH].mean(axis=0)
+                if _blocked(solids, (a + b) / 2, u, z, opening - 2 * SPARE):
+                    continue  # the fingers cannot come down on either side: the thing gets wider above the grasp
+                cos_a, area_a = _contact(verts, faces, normals, areas, a, -u, z)
+                cos_b, area_b = _contact(verts, faces, normals, areas, b, u, z)
+                grip = min(cos_a, cos_b)
+                if grip < cone:
+                    continue  # the squeeze would slide the thing out
+                mid = (a + b) / 2
+                side = abs(float((mid - com) @ across))  # the grasp's line passes this far from the centre of mass
+                along = abs(float((mid - com) @ u))
+                high = abs(float(mid[2] - com[2]))
+                flat = min(1.0, (area_a + area_b) / (2 * 0.0006))  # contact faces: 6 cm2 or more is as good as it gets
+                spare = (opening - width) / opening
+                score = (
+                    2.0 * (grip - cone) / (1 - cone)
+                    + 2.0 * (1.0 - min(1.0, math.hypot(side, along) / 0.04))
+                    + 0.6 * (1.0 - min(1.0, high / 0.05))
+                    + 0.8 * flat
+                    + 0.5 * min(1.0, spare / 0.4)
+                )
+                center = np.array([mid[0], mid[1], z])
+                note = _note(width, opening, grip, flat, side)
+                found.append(Grasp(center, u, width, z - z_low, z_high - z, score, grip, side, note))
     found.sort(key=lambda g: -g.score)
     out: list[Grasp] = []
     for g in found:  # distinct enough: not the same grasp turned a few degrees
@@ -289,8 +299,68 @@ def plan(
     return out
 
 
+def _blocked(solids: list[np.ndarray], mid: np.ndarray, u: np.ndarray, z: float, room: float) -> bool:
+    """Whether open jaws (`room` m between the fingers, closing along `u` about the point `mid`) cannot come down to
+    the grasp height `z`: some shape of the thing that reaches above it, in the way of the fingers (HALF_FINGER either
+    side of the line the jaws close along), is wider along `u` there than they open."""
+    across = np.array([-u[1], u[0], 0.0])
+    centre = float(mid @ across)
+    reach: list[np.ndarray] = []
+    for verts in solids:
+        if float(verts[:, 2].max()) < z - BAND:
+            continue  # all of it is below the grasp
+        c = verts @ across
+        if float(c.max()) >= centre - HALF_FINGER and float(c.min()) <= centre + HALF_FINGER:
+            reach.append(verts @ u)
+    if not reach:
+        return False
+    allong = np.concatenate(reach)
+    return float(allong.max() - allong.min()) > room
+
+
 def _turn(a: np.ndarray, b: np.ndarray) -> float:
     return math.acos(min(1.0, abs(float(a @ b))))
+
+
+def _slice(verts: np.ndarray, faces: np.ndarray, z: float) -> np.ndarray:
+    """The convex polygon (n x 3, in order round) where a hull meets the horizontal plane at height z."""
+    cut = _section(verts, faces, z)
+    if len(cut) < 3:
+        return np.zeros((0, 3))
+    cut = np.unique(np.round(cut, 7), axis=0)
+    centre = cut.mean(axis=0)
+    order = np.argsort(np.arctan2(cut[:, 1] - centre[1], cut[:, 0] - centre[0]))
+    return cut[order]
+
+
+def _lines(polys: list[np.ndarray], across: np.ndarray) -> list[float]:
+    """Offsets (along `across`) of the lines the jaws could close along: a line through every shape's middle, and
+    lines LINE_STEP apart over the whole cross-section."""
+    spans = [(float((p @ across).min()), float((p @ across).max())) for p in polys]
+    low, high = min(lo for lo, _ in spans), max(hi for _, hi in spans)
+    offsets = [(lo + hi) / 2 for lo, hi in spans]
+    if high - low > 2 * HALF_FINGER:
+        offsets += list(np.arange(low + HALF_FINGER, high - HALF_FINGER + 1e-9, LINE_STEP))
+    return sorted(set(round(o, 5) for o in offsets))
+
+
+def _strip(poly: np.ndarray, across: np.ndarray, centre: float) -> np.ndarray:
+    """`poly` (convex, n x 3) cut to the strip HALF_FINGER either side of the line at offset `centre`."""
+    out = poly
+    for sign, edge in ((1.0, centre - HALF_FINGER), (-1.0, -(centre + HALF_FINGER))):
+        d = sign * (out @ across) - edge  # inside where d >= 0
+        keep: list[np.ndarray] = []
+        for i in range(len(out)):
+            j = (i + 1) % len(out)
+            if d[i] >= 0:
+                keep.append(out[i])
+            if (d[i] >= 0) != (d[j] >= 0):
+                t = d[i] / (d[i] - d[j])
+                keep.append(out[i] + t * (out[j] - out[i]))
+        if not keep:
+            return np.zeros((0, 3))
+        out = np.array(keep)
+    return out
 
 
 def _section(verts: np.ndarray, faces: np.ndarray, z: float) -> np.ndarray:

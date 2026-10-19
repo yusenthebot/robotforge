@@ -242,7 +242,16 @@ def _headline_metric(results: list[RunResult]) -> str | None:
     """The number that best says how well the task went, e.g. distance_m for reach."""
     if not results:
         return None
-    for key in ("distance_m", "pole_angle_deg", "lean_deg", "avg_speed_m_s", "height_m"):
+    for key in (
+        "distance_m",
+        "pole_angle_deg",
+        "lean_deg",
+        "avg_speed_m_s",
+        "height_m",
+        "force_mean_n",  # wipe
+        "settled_n",  # press
+        "depth_mm",  # insert
+    ):
         if key in results[0].report:
             return key
     return None

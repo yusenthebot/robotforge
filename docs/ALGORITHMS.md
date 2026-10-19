@@ -134,6 +134,7 @@ Gym 环境也有同样的叠加模式，见下文的 `action_mode="residual"`。
 | wipe | 在桌面上来回擦几遍，同时保持压力 | `force`（8）、`length` 0.2 米、`width` 0.1 米、`passes` 3、`speed` 0.08 米每秒、`depth`、`center`、`surface` | 同上 |
 
 两个任务都用机械臂末端的 tcp 点，和 reach 一样；机械臂要在一个面（桌子）上方。
+还有第三个触觉任务 `insert`（把夹着的销插进孔里）和抓取规划、用力拧阀门，见 [MANIPULATION.md](MANIPULATION.md)。
 `surface` 写物体的名字，不写就用工具下面的东西；桌子不在手臂够得着的地方时，开始前就会告诉你哪一点够不着。
 
 ### 计划：所有方法拿到同一份
@@ -170,7 +171,7 @@ Gym 环境也有同样的叠加模式，见下文的 `action_mode="residual"`。
 | Panda | pd | 13.6 | 12.1 | 17.3% | 15.9 | 72.9% | no |
 | Panda | joint_impedance | 22.1 | 12.7 | 1.3% | 66.8 | 100% | no |
 | Panda | cartesian_impedance | 9.5 | 1.8 | 0.1% | 5.4 | 100% | yes |
-| Panda | osc | 8.1 | 2.0 | 0.5% | 5.8 | 100% | yes |
+| Panda | osc | 8.1 | 2.1 | 0.5% | 5.7 | 100% | yes |
 | UR5e | ik | 43.9 | 3.4 | 0% | 18.7 | 100% | no |
 | UR5e | pd | 3.6 | 1.7 | 21.5% | 3.3 | 97.1% | no |
 | UR5e | joint_impedance | 11.0 | 1.7 | 0.1% | 24.8 | 100% | no |

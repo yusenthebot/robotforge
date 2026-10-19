@@ -88,12 +88,12 @@ def test_a_thing_that_gets_wider_above_the_grasp_is_taken_where_the_fingers_can_
 
 
 def test_the_planner_keeps_a_grasp_near_the_centre_of_mass():
-    """An L: a 4 x 4 x 4 cm block with a long bar out the side. Taking the block squeezes near the middle of mass less
-    than taking the bar's root does, so with the mass at the root the root wins."""
+    """An L: a 4 x 4 x 4 cm block with a long bar out the side. Taking the block squeezes far from the mass when the
+    mass is out along the bar, so the bar's root wins."""
     block = _box(0.02, 0.02, 0.02, (0, 0, 0.02))
-    bar = _box(0.04, 0.01, 0.01, (0.06, 0, 0.01))
+    bar = _box(0.04, 0.0125, 0.0175, (0.06, 0, 0.0175))
     points = [block, bar]
-    grasps = G.plan(points, OPENING, centre_of_mass=np.array([0.04, 0.0, 0.015]))
+    grasps = G.plan(points, OPENING, centre_of_mass=np.array([0.04, 0.0, 0.02]))
     assert grasps and grasps[0].offset < 0.02
     far = G.plan(points, OPENING, centre_of_mass=np.array([0.2, 0.2, 0.2]))
     assert far[0].score < grasps[0].score
@@ -116,3 +116,20 @@ def test_points_come_from_every_shape_a_body_is_made_of():
     points = np.vstack(parts)
     assert points[:, 2].min() == pytest.approx(0.03, abs=1e-6) and points[:, 2].max() == pytest.approx(0.13, abs=1e-6)
     assert points[:, 0].max() == pytest.approx(0.02, abs=1e-6)  # the ball that collides with nothing is not part of it
+
+
+def test_a_mesh_is_taken_by_the_hull_of_its_vertices():
+    verts = np.array([[0.03, 0, 0], [-0.03, 0, 0], [0, 0.015, 0], [0, -0.015, 0], [0, 0, 0.025], [0, 0, -0.025]])
+    spec = mujoco.MjSpec()
+    spec.add_mesh(name="gem", uservert=verts.flatten().tolist())
+    body = spec.worldbody.add_body(name="gem", pos=[0, 0, 0.05])
+    body.add_freejoint()
+    body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="gem", mass=0.05)
+    model = spec.compile()
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    parts = G.body_parts(model, data, 1)
+    assert len(parts) == 1 and parts[0].shape == (6, 3)
+    grasps = G.plan(parts, OPENING, data.xipos[1].copy())
+    assert grasps and grasps[0].width < 0.03 and grasps[0].center[:2] == pytest.approx([0.0, 0.0], abs=2e-3)
+    assert grasps[0].grip < 0.95  # an octahedron's faces are slanted to any squeeze
