@@ -29,6 +29,8 @@ WALK_S = 6.0
 WALK_SPEED = 0.2  # m/s asked, or the gait's top speed if lower
 STEP_S = 0.25  # how often the walk is looked at
 STANDS_KEPT = 0.7  # share of its home height a robot that stands has kept after the settle
+FELL_SAMPLES = 2  # looks in a row at a robot on its side that make it a fall (one is a stumble)
+GOT_ANYWHERE = 0.3  # share of the distance asked that a walker has to cover to have walked
 LEGGED = ("quadruped", "humanoid")
 WATCHED = ("behaviors", "design/importing")  # folders of code whose change makes an old trial stale
 WATCHED_FILES = ("design/mjcf_doctor.py", "design/mjcf_stance.py", "design/catalogue_inspect.py")
@@ -93,7 +95,8 @@ def run(catalogue_id: str) -> dict[str, Any]:
     """Add the robot alone to a scratch world and watch it: {stands, height_kept, upright, walk, ...}.
 
     walk is "walked" (kept its feet for the whole walk), "fell" (tipped over; fell_after_m says how far it got),
-    "no gait" (the behaviors have no gait that fits its legs) or "not tried" (it did not stand)."""
+    "stalled" (upright but got nowhere), "no gait" (the behaviors have no gait that fits its legs) or "not tried" (it
+    did not stand)."""
     from robotforge.design.store import WorldStore
     from robotforge.playground import Playground
 
@@ -110,7 +113,7 @@ def watch(pg: Any, robot: str) -> dict[str, Any]:
     out: dict[str, Any] = {"settle_s": SETTLE_S}
     start = _span(pg, robot)
     pg.run_fast(lambda: False, SETTLE_S)
-    kept = _span(pg, robot) / start if start > 0.02 else 1.0
+    kept = min(1.0, _span(pg, robot) / start) if start > 0.02 else 1.0  # taller than at the start is standing
     upright = _upright(pg, robot)
     stands = bool(upright and kept >= STANDS_KEPT and _finite(pg))
     out.update(stands=stands, height_kept=round(kept, 2))
@@ -126,18 +129,23 @@ def watch(pg: Any, robot: str) -> dict[str, Any]:
     before = pg.behaviors.pose(robot)["position"]
     pg.behaviors.move(robot, speed, 0.0)
     out["walk_speed"] = round(speed, 2)
-    elapsed = 0.0
-    went = 0.0
+    elapsed, went, down = 0.0, 0.0, 0
     while elapsed < WALK_S:
         pg.run_fast(lambda: False, STEP_S)
         elapsed += STEP_S
         pose = pg.behaviors.pose(robot)
         went = float(((pose["position"][0] - before[0]) ** 2 + (pose["position"][1] - before[1]) ** 2) ** 0.5)
-        if not pose["upright"] or not _finite(pg):
-            out.update(walk="fell", fell_after_m=round(went, 2), fell_after_s=round(elapsed, 1))
+        down = down + 1 if not pose["upright"] or not _finite(pg) else 0
+        if down >= FELL_SAMPLES:
+            out.update(walk="fell", fell_after_m=round(went, 2), fell_after_s=round(elapsed - STEP_S * (down - 1), 1))
             break
     else:
-        out.update(walk="walked", walked_m=round(went, 2), walk_s=WALK_S)
+        if down or went < GOT_ANYWHERE * speed * WALK_S:
+            out.update(walk="fell" if down else "stalled", walked_m=round(went, 2), walk_s=WALK_S)
+            if down:
+                out.update(fell_after_m=round(went, 2), fell_after_s=WALK_S)
+        else:
+            out.update(walk="walked", walked_m=round(went, 2), walk_s=WALK_S)
     pg.behaviors.stop(robot)
     return out
 
@@ -173,6 +181,11 @@ def describe(checked: dict[str, Any]) -> str:
         return f"stood, and walked {checked['walked_m']} m upright at {checked['walk_speed']} m/s"
     if walk == "fell":
         return f"stood, but its gait fell over after {checked['fell_after_m']} m at {checked['walk_speed']} m/s"
+    if walk == "stalled":
+        return (
+            f"stood, but its gait got it only {checked['walked_m']} m in {checked['walk_s']:.0f} s "
+            f"at {checked['walk_speed']} m/s"
+        )
     return "stood; no gait fits it"
 
 

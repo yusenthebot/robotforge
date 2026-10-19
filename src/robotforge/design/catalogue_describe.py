@@ -7,6 +7,7 @@ what its makers tagged it, and says in a line what it is and which of the tools 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,6 +73,14 @@ class Described:
                 else c
                 for c in can
             ]
+        elif checked["walk"] == "stalled":
+            can = [
+                f"{c.split(';')[0]}; in a trial it stood but got only {checked['walked_m']} m in "
+                f"{checked['walk_s']:.0f} s at {checked['walk_speed']} m/s, so do not count on it to travel"
+                if c.startswith("move starts a gait")
+                else c
+                for c in can
+            ]
         elif checked["walk"] == "walked":
             can = [
                 f"{c} (a trial walked {checked['walked_m']} m upright)" if c.startswith("move starts") else c
@@ -92,14 +101,20 @@ def describe(
     joints = sum(1 for b in bodies for j in _joints(model, b) if int(model.jnt_type[j]) in MOVING)
     motors = sum(1 for a in range(model.nu) if _name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a).startswith(f"{robot}/"))
     reach = _reach(model, robot, home_qpos) if kind == "arm" else None
+    chains = _arm_chains(model, robot) if kind == "arm" else []
+    arm = "a rigid arm"
+    if chains:
+        arm = f"a {chains[0]}-joint arm" if len(chains) == 1 else f"two arms of {max(chains)} joints each"
     what = {
-        "arm": f"a {joints}-joint arm" + (f" reaching about {reach:.2f} m" if reach else ""),
+        "arm": arm + (f" reaching about {reach:.2f} m" if reach else ""),
         "quadruped": "a four-legged robot",
         "humanoid": "a walking robot on two legs",
         "wheeled": "a wheeled robot",
         "hand": f"a hand or gripper with {joints} joints",
         "aircraft": "an aircraft",
-        "other": f"a {joints}-joint robot" + (f" with {legs} legs" if legs else ""),
+        "other": "a single rigid body"
+        if not joints
+        else f"a {joints}-joint robot" + (f" with {legs} legs" if legs > 1 else ""),
     }[kind]
     line = f"{entry.title}: {what}, {mass:.1f} kg, {motors} motors ({entry.format.upper()}, {entry.license or '?'})"
     return Described(kind, line, _abilities(model, robot, kind, manager), legs, reach, mass, joints, motors)
@@ -119,15 +134,19 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
         Kind.BALANCER: ("wheeled", 0),
         Kind.HUMANOID: ("humanoid", 2),
     }
+    bodies = _bodies(model, robot)
+    # Wheels as feet make a wheeled robot, however many legs carry them (a wheel-legged robot is no walker)
+    on_wheels = bool(bodies) and kind not in (Kind.ARM, Kind.AIRCRAFT) and _floating(model, bodies)
+    if on_wheels and kind not in (Kind.ROVER, Kind.BALANCER) and _wheels(model, bodies) >= 2:
+        return "wheeled", 0
     if kind in known and not (kind == Kind.ARM and not _moves_a_tool_point(model, robot)):
         return known[kind]
-    bodies = _bodies(model, robot)
     if not bodies:
         return "other", 0
     data = mujoco.MjData(model)
     data.qpos[:] = home_qpos
     mujoco.mj_kinematics(model, data)
-    floating = any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for b in bodies for j in _joints(model, b))
+    floating = _floating(model, bodies)
     feet = _feet(model, data, bodies) if floating else 0
     if feet == 2:
         return "humanoid", 2
@@ -136,6 +155,44 @@ def classify(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[
     if not floating and _is_hand(model, data, bodies):
         return "hand", 0
     return "other", feet
+
+
+GRIPPER_NAME = re.compile(r"gripper|finger|jaw|claw|hand", re.IGNORECASE)
+FULL_TURNS = 2  # a hinge whose range allows this many turns round is a wheel's, not a limb's
+WHEEL_NAME = re.compile(r"wheel|tire|tyre|caster", re.IGNORECASE)
+
+
+def _floating(model: mujoco.MjModel, bodies: list[int]) -> bool:
+    return any(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE for b in bodies for j in _joints(model, b))
+
+
+def _wheels(model: mujoco.MjModel, bodies: list[int]) -> int:
+    """How many wheels the robot has: unlimited hinges at the end of a chain whose joint or body is named for one."""
+    count = 0
+    carriers = {int(model.body_parentid[c]) for c in range(1, model.nbody) if model.body_jntnum[c]}
+    for b in bodies:
+        if b in carriers:
+            continue  # something with joints hangs off it: not the end of a chain
+        for j in _joints(model, b):
+            turns_on = not model.jnt_limited[j] or float(np.ptp(model.jnt_range[j])) >= FULL_TURNS * 2 * np.pi
+            if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_HINGE) and turns_on:
+                names = f"{_name(model, mujoco.mjtObj.mjOBJ_JOINT, j)} {_name(model, mujoco.mjtObj.mjOBJ_BODY, b)}"
+                count += bool(WHEEL_NAME.search(names))
+    return count
+
+
+def _arm_chains(model: mujoco.MjModel, robot: str) -> list[int]:
+    """How many joints each arm of the robot has between its base and its tool point."""
+    from robotforge.behaviors.arm import arm_joints
+
+    prefix = f"{robot}/"
+    sites = [s for s in range(model.nsite) if _name(model, mujoco.mjtObj.mjOBJ_SITE, s).startswith(prefix)]
+    tools = [s for s in sites if _name(model, mujoco.mjtObj.mjOBJ_SITE, s).endswith("tcp")]
+    chains = [list(arm_joints(model, s)) for s in tools]
+    for chain in chains:  # the tool point can sit on a finger: the gripper's joints are not the arm's
+        while chain and GRIPPER_NAME.search(_name(model, mujoco.mjtObj.mjOBJ_JOINT, chain[-1])):
+            chain.pop()
+    return [len(c) for c in chains if c]
 
 
 def _moves_a_tool_point(model: mujoco.MjModel, robot: str) -> bool:
@@ -247,7 +304,13 @@ def _abilities(model: mujoco.MjModel, robot: str, kind: str, manager: Any) -> li
             ]
         return [info.get("walk_hint") or "stands; move cannot walk it and it cannot learn a walk here"]
     if kind == "wheeled":
-        return ["drives with move and navigate"]
+        info = next((r for r in manager.robots() if r["name"] == robot), {}) if manager is not None else {}
+        if info.get("kind") in ("rover", "balancer") or "max_speed" in info:
+            return ["drives with move and navigate"]
+        return [
+            "its wheels and joints move with set_controls and pose; move and navigate need a differential-drive or "
+            "balance controller that fits its wheels, and none does"
+        ]
     if kind == "hand":
         return ["its joints move with set_controls; it is a hand: it grasps once it is on an arm"]
     if kind == "aircraft":
