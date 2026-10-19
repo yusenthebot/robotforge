@@ -1,13 +1,12 @@
 name: CI
 
+# The repo is private (2026-10-19) and Actions minutes cost money there, with Windows at twice the rate.
+# Every landing already runs ruff, the suite and smoke locally (scripts/land.py), so CI runs only when
+# asked: at the end of a milestone, `gh workflow run CI --ref main`, to check Ubuntu and Windows.
 on:
-  push:
-    branches: [main, "feat/**"]
-  pull_request:
+  workflow_dispatch:
 
-# A newer push to the same branch makes the older run pointless.
-# Lanes land on main every few minutes and a run takes about half an hour: a running run finishes,
-# and only the newest waiting push runs after it, so main keeps getting a full result.
+# A running run finishes; only the newest waiting request runs after it.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: false

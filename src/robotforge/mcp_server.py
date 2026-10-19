@@ -86,7 +86,9 @@ builder takes degrees for joints too).
 Scenes and terrain: load_scene fills the world with a ready-made scene (desk_lab, kitchen, home, factory, warehouse,
 park, maze, obstacle_course, and with water: harbor, lake, pool; list_scenes describes them). set_terrain and
 add_terrain shape the ground (hills, rough ground, stairs, ramps, stepping stones, curbs, platforms); robots
-and objects stand on the ground under them. load_scene(description="a flat with a kitchen and a bedroom, three
+and objects stand on the ground under them. Quadrupeds look at the ground as they walk: move takes them up and down
+stairs (8 cm steps), slopes and gravel on their own, straight on and at about 0.3 m/s.
+load_scene(description="a flat with a kitchen and a bedroom, three
 apples") generates a world from a sentence instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
 observe(view="overview").

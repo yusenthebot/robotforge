@@ -1148,7 +1148,11 @@ class GaitTwins(DogTwins):
         if self.base_lift is None:
             self.base_lift = quadruped.for_template(model, twin.name, home).lift
         s = self.settings(twin)
-        return quadruped.for_template(model, twin.name, home, period=s["period"], lift=self.base_lift * s["lift"])
+        gait = quadruped.for_template(model, twin.name, home, period=s["period"], lift=self.base_lift * s["lift"])
+        # The lesson is about how high a blind gait lifts its feet: a gait that looks at the ground (footing.py) lifts
+        # over the curb whatever the lift knob says, and the low-lift twin no longer catches on it.
+        gait.footing = None
+        return gait
 
     def sample(self, model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, float]:
         out = {}

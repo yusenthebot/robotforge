@@ -39,6 +39,7 @@ Plan of record: docs/OVERVIEW.md (Chinese).
   `uv run python scripts/playtest.py` plays every lesson headless and prints which step each one reaches.
   Layout checks in a real browser (`tests/test_viewer_layout.py`, headless Google Chrome) are marked `browser` and kept out of the default run and CI: `uv run pytest -q -m browser`.
 - CI (`.github/workflows/ci.yml`): lint, tests and the headless smoke test on Ubuntu and Windows; macOS is tested locally only.
+  Since the repo went private (2026-10-19) it runs only when started by hand (`gh workflow run CI --ref main`), at the end of each milestone: Actions minutes cost money on private repos.
   Read a failed run with `gh run view <id> --log-failed`.
 - `uv run python scripts/smoke.py` starts the viewer and an MCP stdio session as separate processes and checks both; run it locally before pushing anything that touches startup, the viewer server or the MCP server.
 - `uv run python scripts/bench.py` measures install size, import time, headless physics, the viewer in headless Chrome, MCP latency, memory and idle processor use (one to three minutes), writes `docs/bench/<date>-<sha>.json`, compares with the last complete run and exits 1 over a budget in `docs/bench/budget.json`, even when another part failed (else 2: a part failed or a budget went unchecked; 3: only timings over while the load was above the cores or the MuJoCo-only machine check under its floor, rerun calm).
