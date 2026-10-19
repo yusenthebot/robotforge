@@ -295,3 +295,20 @@ def test_a_dog_of_torque_motors_with_no_standing_pose_stands_and_walks(folders):
     now = pg.behaviors.pose("d")
     assert now["upright"] and start - now["position"][2] < 0.1
     assert result["catalogue"]["kind"] == "quadruped" and result["catalogue"]["legs"] == 4
+
+
+def test_a_humanoid_whose_leg_joint_has_no_motor_gets_an_error_that_says_so(tmp_path, monkeypatch):
+    """Oli and Cassie have linkage legs: a walker looking up the motor of a passive joint failed with a bare "5"."""
+    from robotforge.behaviors import humanoid
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "home"))
+
+    def no_motor(*_args, **_kwargs):
+        raise KeyError(5)
+
+    monkeypatch.setattr(humanoid, "for_template", no_motor)
+    pg = Playground.with_demo()
+    pg.new_world("t")
+    pg.add_robot("h", template="humanoid")
+    with pytest.raises(ValueError, match="no gait fits the body of h.*no motor of its own"):
+        pg.behaviors.move("h", 0.2, 0.0)
