@@ -824,6 +824,9 @@ DEMOS = [
     _mobile("mobile_button_panda", "mobile_panda", "button", 50.0, (1.3, -0.5, 1.4), ease=0.05),
     _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05),
     _mobile("mobile_button_spot", "spot_z1", "button", 60.0, (1.4, -0.6, 1.6), ease=0.05),
+    _mobile("mobile_drawer_panda", "mobile_panda", "drawer", 100.0, (-0.5, -1.7, 2.9), ease=0.06),
+    _mobile("mobile_fetch_anymal", "anymal_ur5e", "fetch", 130.0, (0.4, -2.0, 3.6), ease=0.06),
+    _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05),
     *G10_DEMOS,
 ]
 

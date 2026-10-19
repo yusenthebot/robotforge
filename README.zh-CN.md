@@ -168,5 +168,6 @@ agent 通过 MCP 调用 robotforge 的工具，所有物理都在本地 Python �
 - 插件打包与验证（维护者）：[docs/PLUGINS.md](docs/PLUGINS.md)
 - 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
 - 足式机器人怎么看地面走、每台的实测表：[docs/LEGGED.md](docs/LEGGED.md)
+- 移动操作：底盘和臂怎么一起规划、每台机器人各件活的成功率和失败原因：[docs/MOBILE.md](docs/MOBILE.md)
 - 进度：[STATUS.md](STATUS.md)，[progress.md](progress.md)
 - README 里的截图由 `uv run python scripts/screenshots.py` 生成，用的是真实的查看器和无头 Chrome。
