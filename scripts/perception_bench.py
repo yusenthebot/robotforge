@@ -132,40 +132,91 @@ def search(pg: Any) -> dict[str, Any]:
     return out
 
 
-def go_to(pg: Any, rack: str) -> dict[str, Any]:
-    """Go to the rack on the robot's own map; judge the arrival by the truth."""
+def rack_gap(pg: Any, rack: str) -> float:
+    """How far the robot's middle is from the rack's nearest face (m), from the shapes the simulator has."""
     import mujoco
 
+    from robotforge.behaviors import nav_map
+
+    model, data = pg.session.model, pg.session.data
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, rack)
+    lows, highs = [], []
+    for g in range(model.ngeom):
+        if int(model.geom_bodyid[g]) == body:
+            low, high = nav_map.world_extent(model, data, g)
+            lows.append(low[:2])
+            highs.append(high[:2])
+    low, high = np.min(lows, axis=0), np.max(highs, axis=0)
+    here = data.xpos[nav_map.root_body(model, "go2")][:2]
+    outside = np.maximum(np.maximum(low - here, 0.0), here - high)
+    return float(np.hypot(*outside))
+
+
+def farthest_rack(pg: Any) -> str:
+    """The rack furthest from where the robot is: the task is a name, and which one is the proof's choice."""
+    import mujoco
+
+    model, data = pg.session.model, pg.session.data
+    here = pg.behaviors.pose("go2")["position"][:2]
+    racks = [
+        (math.dist(data.xpos[b][:2], here), mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b))
+        for b in range(model.nbody)
+        if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith("rack_")
+    ]
+    return max(racks)[1]
+
+
+def reference_trip(seed: int, start: dict[str, Any], rack: str) -> dict[str, Any]:
+    """The same trip on the scene's own map and the robot's true pose (what move(to=...) does without map="own"),
+    from the pose the own-map trip started at, in a fresh copy of the world."""
+    ref = build(seed)
+    ref.update_robot("go2", pos=start["position"][:2], yaw=start["heading_deg"])
+    trip = ref.behaviors.navigate("go2", rack, seconds=120)
+    ref.run_fast(lambda: trip.done, 125.0)
+    result = trip.result()
+    return {
+        "arrived": bool(result["arrived"]),
+        "planned_path_m": round(trip.plan.length, 2),
+        "walked_m": result.get("distance_m"),
+        "time_s": result.get("time_s"),
+        "robot_to_rack_face_m": round(rack_gap(ref, rack), 2),
+    }
+
+
+def go_to(pg: Any, rack: str, seed: int) -> dict[str, Any]:
+    """Go to the rack on the robot's own map; judge the arrival by the truth, beside the scene-map trip's."""
     hub = pg.perception
     mapper = hub.mapper("go2")
     mapper.mapping = True  # it maps on the way too
+    start = pg.behaviors.pose("go2")
+    if rack == "farthest":
+        rack = farthest_rack(pg)
     trip = pg.behaviors.navigate("go2", rack, seconds=120, own_map=mapper)
     planned = round(trip.plan.length, 2)
     pg.run_fast(lambda: trip.done, 125.0)
     result = trip.result()
-    model, data = pg.session.model, pg.session.data
-    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, rack)
-    rack_xy = data.xpos[body][:2]
     pose = pg.behaviors.pose("go2")
-    here = np.array(pose["position"][:2])
-    heading = math.radians(pose["heading_deg"])
-    toward = rack_xy - here
-    facing = abs((math.degrees(math.atan2(toward[1], toward[0]) - heading) + 180) % 360 - 180)
-    out = {
+    import mujoco
+
+    body = mujoco.mj_name2id(pg.session.model, mujoco.mjtObj.mjOBJ_BODY, rack)
+    toward = pg.session.data.xpos[body][:2] - np.array(pose["position"][:2])
+    facing = abs((math.degrees(math.atan2(toward[1], toward[0])) - pose["heading_deg"] + 180) % 360 - 180)
+    return {
         "rack": rack,
+        "from": [round(v, 2) for v in start["position"][:2]],
         "arrived": bool(result["arrived"]),
         "why": result.get("why"),
         "planned_path_m": planned,
         "walked_m": result.get("distance_m"),
         "time_s": result.get("time_s"),
         "replans": result.get("replans", 0),
-        "robot_to_rack_centre_m": round(float(np.linalg.norm(toward)), 2),
+        "robot_to_rack_face_m": round(rack_gap(pg, rack), 2),
         "facing_error_deg": round(float(facing), 1),
         "upright": pose["upright"],
         "believed_vs_true": hub.pose_check("go2"),
         "note": result.get("note"),
+        "scene_map_trip": reference_trip(seed, start, rack),
     }
-    return out
 
 
 def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path) -> None:
@@ -233,7 +284,7 @@ def plot(rows: list[dict[str, Any]], search_trace: list[list[float]], out: Path)
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=Path("perception_proof"))
-    parser.add_argument("--rack", default="rack_8")
+    parser.add_argument("--rack", default="farthest", help="a rack's name, or farthest from where it ends exploring")
     parser.add_argument("--seconds", type=float, default=150.0)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
@@ -260,7 +311,7 @@ def main() -> None:
     found = search(pg)
     print("from nowhere:", {k: v for k, v in found.items() if k != "trace"})
     (args.out / "map_after_search.png").write_bytes(picture.map_png(mapper))
-    reached = go_to(pg, args.rack)
+    reached = go_to(pg, args.rack, args.seed)
     print("to the rack:", json.dumps(reached, indent=1))
     final = hub.status("go2")
     result = {

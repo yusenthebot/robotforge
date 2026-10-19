@@ -1375,6 +1375,28 @@ input[type="range"]::-moz-range-thumb {
   .pip:not(.camview) canvas { max-height: 17vh; }
 }
 
+/* ---------------------------------------------------------------- maps */
+
+/* The readout while a robot maps: how far its pose estimate is from the truth, and how far the odometry alone is. */
+.map-hud {
+  position: fixed;
+  left: var(--gutter);
+  top: calc(var(--gutter) + 52px);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+  pointer-events: none;
+}
+.map-hud b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.map-hud .bad { color: var(--ink-2); }
+
 /* ---------------------------------------------------------------- sensors */
 
 /* What the selected robot's sensors sense: the camera's picture and live plots, in a column on the right as the

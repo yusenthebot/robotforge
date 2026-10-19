@@ -245,15 +245,30 @@ class SensorHub:
     def _develop(self, sensor: Any, model: mujoco.MjModel, moment: dict[str, Any]) -> dict[str, Any]:
         from robotforge.sim.render import RenderUnavailable
 
-        scratch = sensor.scene_data(model, moment)
-        try:
+        def render(
+            at: dict[str, Any],
+            view: str | None = None,
+            width: int | None = None,
+            height: int | None = None,
+            geoms: bool | None = None,
+        ) -> Any:
+            """A moment of the world drawn from one of the sensor's cameras (by default its own)."""
+            scratch = sensor.scene_data(model, at)
             with self._render_lock:
-                layers = self.renderer.layers_of(
-                    model, scratch, sensor.view, sensor.width, sensor.height, id(model), geoms=sensor.mode != "rgb"
+                return self.renderer.layers_of(
+                    model,
+                    scratch,
+                    view or sensor.view,
+                    width or sensor.width,
+                    height or sensor.height,
+                    id(model),
+                    geoms=(sensor.mode not in ("rgb", "event")) if geoms is None else geoms,
                 )
+
+        try:
+            return sensor.develop(render, moment)
         except RenderUnavailable as exc:
             return {"note": f"no picture: {exc}"}
-        return sensor.develop(layers, moment)
 
     def _other(self, model: mujoco.MjModel, data: mujoco.MjData, robot: str) -> dict[str, Any]:
         """The robot's MuJoCo sensors no definition reads (a library robot's own IMU), raw."""

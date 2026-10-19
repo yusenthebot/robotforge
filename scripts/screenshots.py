@@ -1160,47 +1160,40 @@ def _g12_pedestal(pg: Any) -> None:
         pg.add_object("stand", shape="box", size=size, pos=pos, color="gray", fixed=True)
 
 
-def _g12_do(pg: Any) -> None:
-    """Start what the robot's kind does, as the bench does: reach, walk, drive, close."""
-    import mujoco
-    import numpy as np
+G12_ROWS: dict[
+    str, dict[str, Any]
+] = {}  # robot -> what the bench behavior did in its picture (for the grid's captions)
 
-    from robotforge.behaviors.manager import BehaviorError
 
-    kind = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)["kind"]
-    d, m = pg.session.data, pg.session.model
-    try:
-        if kind == "arm":
-            arm = pg.behaviors.arms("r")[0]
-            site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{arm}/tcp")
-            home = d.site_xpos[site].copy()
-            for step in ((0.2, 0, 0), (0.15, 0, -0.15), (0.25, 0, 0.1), (0.1, 0.1, 0), (0.1, -0.1, -0.1)):
-                try:
-                    pg.behaviors.move_arm(arm, [float(home[i] + 0.4 * f) for i, f in enumerate(step)])
-                    return
-                except BehaviorError:
-                    continue
-        elif kind in ("quadruped", "humanoid"):
-            pg.behaviors.move("r", 0.25, 0.0)
-        elif kind == "wheeled":
-            pg.behaviors.move("r", 0.3, 0.0)
-        elif kind in ("hand", "other"):
-            for a in range(m.nu):
-                low, high = m.actuator_ctrlrange[a] if m.actuator_ctrllimited[a] else (-1.0, 1.0)
-                d.ctrl[a] = high if abs(high) >= abs(low) else low
-        elif kind == "aircraft":
-            pg.behaviors.heave("r", 0.5)
-    except (BehaviorError, ValueError, np.linalg.LinAlgError):
-        pass  # a robot that cannot do its kind's job stands in the picture, as it does in the bench
+def _g12_do(name: str) -> Callable[[Any], None]:
+    """Run what scripts/catalogue_bench.py runs for the robot's kind (stand six seconds, then reach, walk, drive,
+    close), headless and to its end, then pause: the picture shows the state the table reports, not a moment on
+    the way."""
+    import catalogue_bench
+
+    def act(pg: Any) -> None:
+        pg.control("pause")  # the viewer's own clock must not run the robot while this does
+        about = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)
+        row = catalogue_bench.behave(pg, "r", about, {"name": name, "kind": about["kind"]}, stop=False)
+        G12_ROWS[name] = row
+        pg.control("pause")
+
+    return act
+
+
+def _g12_start(pg: Any) -> None:
+    """The robot as it is added, before anything is asked of it: the small picture in the corner of its tile."""
+    pg.control("pause")
 
 
 def _g12_shots() -> list[Shot]:
     import catalogue_bench
 
-    return [
-        Shot(f"g12_{name}", _g12_world(name), act=_g12_do, page=G12_FRAME, settle=4.0)
-        for name in catalogue_bench.draw(G12_SEED)
-    ]
+    shots = []
+    for name in catalogue_bench.draw(G12_SEED):
+        shots.append(Shot(f"g12_{name}_start", _g12_world(name), act=_g12_start, page=G12_FRAME, settle=1.5))
+        shots.append(Shot(f"g12_{name}", _g12_world(name), act=_g12_do(name), page=G12_FRAME, settle=1.5))
+    return shots
 
 
 G3_SHOTS = [
@@ -1432,8 +1425,83 @@ def _map_for(seconds: float, area: list[float] | None = None) -> Callable[[Any],
     return act
 
 
+SENSOR_DRAWER_VIEW_WIDE = (
+    'document.getElementById("drawer-toggle").click();'
+    "await new Promise((r) => setTimeout(r, 400));" + _look_at(["go2"], (-2.6, -0.2, 1.6))
+)
 G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
 G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.5, -5.5, 13.5], [0.5, 1.2, 0]);"
+
+
+def _sensing(*sensors: dict[str, Any], pos: tuple[float, float] = (-3.6, 2.6), yaw: float = 0.0, extra=None):
+    """A Go2 in the warehouse with these sensors, each added in one call as an agent would (add_sensor)."""
+
+    def build(pg: Any) -> None:
+        pg.load_scene("warehouse", keep_robots=False, starter=False)
+        pg.add_robot("go2", library="go2", pos=list(pos), yaw=yaw)
+        for fields in sensors:
+            pg.add_sensor("go2", fields)
+        if extra is not None:
+            extra(pg)
+
+    return build
+
+
+def _drop_crate(pg: Any) -> None:
+    """A 6 kg crate dropped on the Go2's back, where its tactile skin's top pad lies, and a heavy one pushed against its
+    side: the pads under them light up."""
+    x, y = pg.behaviors.pose("go2")["position"][:2]
+    pg.add_object("crate", shape="box", size=[0.3, 0.2, 0.15], pos=[x, y, 0.75], mass=6.0, color="orange")
+
+
+def _push_crate(pg: Any) -> None:
+    """A heavy crate in the Go2's way, 0.9 m ahead: it walks into it, and the skin on its front feels it."""
+    x, y = pg.behaviors.pose("go2")["position"][:2]
+    pg.add_object("crate", shape="box", size=[0.4, 0.8, 0.4], pos=[x + 0.58, y], mass=80.0, color="orange")
+    pg.behaviors.move("go2", 0.45, 0.0)
+
+
+def _sonar_world(pg: Any) -> None:
+    """A pole 15 degrees off the sonar's axis, 1.3 m ahead, and a pallet-high wall behind it."""
+    pg.add_object("pole", shape="pillar", pos=[-2.1, 2.95], size=[0.16, 1.0], color="white")
+
+
+def _sources(pg: Any) -> None:
+    """A heater by the racks and a gas vent across the aisle, in the Go2's way."""
+    pg.add_object("heater", shape="heat_source", pos=[-1.8, 2.0], strength=90)
+    pg.add_object("vent", shape="gas_source", pos=[-0.8, 3.2], strength=700)
+
+
+G12_SENSOR_VIEWS = {
+    "front": _look_at(["go2"], (-2.3, 0.1, 1.15)),  # from behind, down the aisle it looks along
+    "back": _look_at(["go2"], (-2.3, 0.1, 1.15)),
+    "side": _look_at(["go2"], (-1.9, 0.5, 1.7)),  # from behind and above, the cone and the pole ahead
+    "skin": _look_at(["go2"], (-0.9, -0.8, 1.25)),  # from above its left, its front pad in view
+}
+
+
+def _room_with_rover(pg: Any) -> None:
+    """A 6 m room with a divider and a small rover (7 cm wheels, a 16 cm track) at one corner."""
+    for name, pos, yaw in (
+        ("north", [0, 3.05], 0),
+        ("south", [0, -3.05], 0),
+        ("east", [3.05, 0], 90),
+        ("west", [-3.05, 0], 90),
+    ):
+        pg.add_object(name, shape="wall", pos=pos, yaw=yaw, size=[6.2, 0.1, 1.0])
+    pg.add_object("divider", shape="wall", pos=[0.5, 0.8], yaw=90, size=[3.2, 0.1, 1.0])
+    pg.add_robot("rover", template="rover", pos=[-2.2, -2.0], yaw=0)
+
+
+def _map_with_wheels(pg: Any) -> None:
+    """The rover maps the room on its wheel odometry alone (each wheel reading its radius 1 percent off): a loop and a
+    half, headless, so the page opens on the finished map with the two paths, the filter's and the wheels'."""
+    pg.add_sensor("rover", {"type": "wheel_odometry", "name": "wheels", "slip": 0.01, "seed": 3})
+    pg.perception.start("rover", {"odometry": "wheels", "lidar": {"type": "lidar", "rays": 240, "range": 8.0}})
+    for point in ([2.2, -2.0], [2.2, 2.2], [-2.2, 2.2], [-2.2, -1.0], [2.2, -2.0], [2.2, 2.2]):
+        trip = pg.behaviors.navigate("rover", point, seconds=40)
+        pg.run_fast(lambda t=trip: t.done, 41.0)
+
 
 G12_SHOTS = [
     Shot(
@@ -1443,6 +1511,63 @@ G12_SHOTS = [
         page=G12_OVERVIEW,
         size=(1920, 1080),
         settle=2.5,
+    ),
+    Shot(
+        "g12_wheel_odometry",
+        _room_with_rover,
+        act=_map_with_wheels,
+        page="const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, -5.2, 8.2], [0.0, 0.1, 0]);",
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_stereo",
+        _sensing({"type": "stereo", "name": "pair"}),
+        page=G12_SENSOR_VIEWS["front"],
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_fisheye",
+        _sensing({"type": "fisheye", "name": "wide", "width": 480, "height": 480}),
+        page=G12_SENSOR_VIEWS["back"],
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+    Shot(
+        "g12_event",
+        _sensing({"type": "event", "name": "dvs"}),
+        actions=[(0.5, lambda pg: pg.behaviors.move("go2", 0.5, 0.0))],
+        page=G12_SENSOR_VIEWS["front"],
+        size=(1920, 1080),
+        settle=2.2,
+    ),
+    Shot(
+        "g12_sonar",
+        _sensing({"type": "sonar", "name": "ping", "range": 3.0}, extra=_sonar_world),
+        page=G12_SENSOR_VIEWS["side"],
+        size=(1920, 1080),
+        settle=2.0,
+    ),
+    Shot(
+        "g12_skin",
+        _sensing({"type": "skin", "name": "skin", "rows": 3, "cols": 4, "faces": ["top", "front", "left", "right"]}),
+        actions=[(0.5, _drop_crate)],
+        page=G12_SENSOR_VIEWS["skin"],
+        size=(1920, 1080),
+        settle=2.4,
+    ),
+    Shot(
+        "g12_heat_gas",
+        _sensing(
+            {"type": "temperature", "name": "thermo"},
+            {"type": "gas", "name": "nose", "response_s": 3.0},
+            extra=_sources,
+        ),
+        actions=[(0.5, lambda pg: pg.behaviors.navigate("go2", [-1.8, 2.6]))],
+        page=SENSOR_DRAWER_VIEW_WIDE,
+        size=(1920, 1080),
+        settle=5.0,
     ),
 ]
 
@@ -1793,6 +1918,10 @@ def main() -> None:
         t0 = time.monotonic()
         path = take(shot, args.out, args.lang)
         print(f"{shot.name}: {path} ({time.monotonic() - t0:.0f} s)")
+    if G12_ROWS:
+        report = args.out / "g12_report.json"
+        old = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
+        report.write_text(json.dumps({**old, **G12_ROWS}, indent=1, default=str), encoding="utf-8")
     singles = [args.out / f"gen_{i + 1:02d}.jpg" for i in range(len(GENERATED))]
     if all(p.is_file() for p in singles) and (not args.only or any(n.startswith("gen_") for n in args.only)):
         print(f"generated grid: {generated_grid(singles, args.out / 'generated_grid.jpg')}")

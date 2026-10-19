@@ -71,7 +71,8 @@ robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
 humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
 Unitree Go2, Franka Panda, ...; list_library(kind="arm", search="kinova") also searches over 200 more open robots
-that add_robot(library=<name>) downloads, imports and describes) or imports a file (URDF, xacro, MJCF, or a mesh such as
+that add_robot(library=<name>) downloads, imports and describes; legged ones are tried for a few seconds and the
+answer's catalogue.checked says whether they stand and walk) or imports a file (URDF, xacro, MJCF, or a mesh such as
 .stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
 add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
@@ -139,11 +140,11 @@ state with an image so you can check your work; observe(find="red") locates colo
 and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):
 offer it early; while it is open, actions play out in real time.
 
-Sensors: add_sensor puts a camera (rgb, depth or segmentation), a 2D or 3D lidar, an IMU, joint encoders, a
-force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or odometry, a sonar (a cone, deaf up
-close), wheel odometry, a tactile skin (taxels over faces of a body), a thermometer or a gas sensor (they read the
-heat_source and gas_source objects add_object puts in the world) on any body of any robot,
-ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
+Sensors: add_sensor puts a camera (rgb, depth, segmentation, a stereo pair, a fisheye or an event camera), a 2D or
+3D lidar, an IMU, joint encoders, a force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or
+odometry, a sonar (a cone, deaf up close), wheel odometry, a tactile skin (taxels over faces of a body), a thermometer
+or a gas sensor (they read the heat_source and gas_source objects add_object puts in the world) on any body of any
+robot, ideal by default or with a rate, noise, bias, drift and latency; read_sensors reads them compactly (a lidar's
 nearest obstacle ahead and 36 sector ranges, a depth camera's distances, pictures with image=true), observe lists
 them in one line each, and remove("robot/sensor") takes one off. Scripts read one with sim.sensor(robot, name).
 The viewer draws what they sense (lidar points, camera pictures, IMU and force plots); open_viewer(show=[...]) adds
@@ -406,7 +407,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_library(
-        kind: Literal["arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other"] | None = None,
+        kind: str | None = None,
         search: str | None = None,
         limit: int = 40,
     ) -> str:
@@ -417,12 +418,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         5-30 s) and caches it.
 
         Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
-        open catalogue: kind and search ("ur", "kinova", "unitree": words of the name, maker or tags) list those that
-        match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
-        URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
-        structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
-        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
-        move with set_controls and pose."""
+        open catalogue: kind (arm, quadruped, humanoid, wheeled, hand, aircraft, other; also gripper, dog, drone) and
+        search (words starting the name, maker or a tag: "kinova", "unitree", "ur5") list those that match.
+        add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute,
+        once), runs a URDF through the import doctor and answers with "catalogue": what the robot turned out to be from
+        its structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
+        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs, and the answer's
+        "checked" says what a short trial showed (stands, walked or fell over after how far); the others move with
+        set_controls and pose."""
         from robotforge.design import catalogue
 
         with _tool_errors():

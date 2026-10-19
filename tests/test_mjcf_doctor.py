@@ -78,6 +78,18 @@ def test_torque_motors_on_limited_joints_become_servos(tmp_path):
     assert np.allclose(model.actuator_ctrlrange[knee], [-2.7, -0.9])  # a target is an angle within the joint's range
 
 
+def test_a_leg_joint_with_no_range_is_driven_with_its_neighbours():
+    # unitree_mujoco's Aliengo gives hips and calves a range and the thighs none: a leg of mixed servos and torque
+    # motors, which no walker takes. The thigh carries the calf, so it is a limb joint, not a wheel.
+    spec = mujoco.MjSpec.from_string(_legs().replace(' range="-1 4"', ""))
+    spec.compiler.degree = False
+    assert mjcf_doctor.drive_motors(spec) == 12
+    model = spec.compile()
+    assert set(model.actuator_biastype) == {int(mujoco.mjtBias.mjBIAS_AFFINE)}
+    thigh = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "FR_thigh_j_m")
+    assert np.allclose(model.actuator_ctrlrange[thigh], [-np.pi, np.pi])
+
+
 def test_a_wheel_keeps_its_torque_motor():
     spec = mujoco.MjSpec.from_string(
         '<mujoco><worldbody><body><freejoint/><geom size="0.1" mass="1"/><body pos="0 0.2 0">'

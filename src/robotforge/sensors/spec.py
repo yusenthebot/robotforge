@@ -42,6 +42,16 @@ PLUGIN_PARAMS: dict[str, dict[str, Any]] = {}  # a plugin sensor type -> its opt
 ALIASES: dict[str, tuple[str, dict[str, Any]]] = {
     "depth_camera": ("camera", {"mode": "depth"}),
     "depth": ("camera", {"mode": "depth"}),
+    "stereo": ("camera", {"mode": "stereo"}),
+    "stereo_camera": ("camera", {"mode": "stereo"}),
+    "stereo_pair": ("camera", {"mode": "stereo"}),
+    "event": ("camera", {"mode": "event"}),
+    "event_camera": ("camera", {"mode": "event"}),
+    "dvs": ("camera", {"mode": "event"}),
+    "neuromorphic": ("camera", {"mode": "event"}),
+    "fisheye": ("camera", {"lens": "fisheye"}),
+    "fisheye_camera": ("camera", {"lens": "fisheye"}),
+    "wide_angle": ("camera", {"lens": "fisheye"}),
     "rgb_camera": ("camera", {"mode": "rgb"}),
     "rgbd": ("camera", {"mode": "depth"}),
     "segmentation_camera": ("camera", {"mode": "segmentation"}),
@@ -121,7 +131,7 @@ BIASED: dict[str, tuple[str, ...]] = {"imu": ("accel", "gyro"), "odometry": ("tu
 PLACED = {"name", "on", "at", "direction"}
 KNOBS = {"rate_hz", "latency_s", "noise", "seed"}
 OPTIONS: dict[str, set[str]] = {
-    "camera": PLACED | KNOBS | {"mode", "width", "height", "fov", "range"},
+    "camera": PLACED | KNOBS | {"mode", "width", "height", "fov", "range", "lens", "baseline", "threshold", "window_s"},
     "lidar": PLACED | KNOBS | {"channels", "rays", "vfov", "hfov", "range", "dropout"},
     "lidar3d": PLACED | KNOBS | {"channels", "rays", "vfov", "hfov", "range", "dropout"},
     "rangefinder": PLACED | KNOBS | {"range", "dropout"},
@@ -183,10 +193,18 @@ class SensorEntry(BaseModel):
     at: str | list[float] | None = Field(None, description="anchor (top, front, center, ...) or [x, y, z] m")
     direction: str | list[float] | None = Field(None, description="where it looks, in its body's frame")
     # camera
-    mode: Literal["rgb", "depth", "segmentation"] | None = None
+    mode: Literal["rgb", "depth", "segmentation", "event", "stereo"] | None = None
     width: int | None = Field(None, ge=16, le=1280)
     height: int | None = Field(None, ge=16, le=960)
-    fov: float | None = Field(None, gt=5, lt=170, description="camera vertical field of view, degrees")
+    fov: float | None = Field(
+        None, gt=5, le=200, description="camera vertical field of view, degrees (a fisheye's: across its circle)"
+    )
+    lens: Literal["pinhole", "fisheye"] | None = Field(
+        None, description="camera: a fisheye lens sees up to 200 degrees"
+    )
+    baseline: float | None = Field(None, ge=0.02, le=0.5, description="stereo camera: distance between the lenses, m")
+    threshold: float | None = Field(None, gt=0.01, le=1.0, description="event camera: log brightness change per event")
+    window_s: float | None = Field(None, gt=0.001, le=0.5, description="event camera: time the two frames are apart, s")
     # lidar, rangefinder, depth camera
     channels: int | None = Field(None, ge=1, le=128, description="lidar rings")
     rays: int | None = Field(None, ge=3, le=4096, description="lidar rays per ring")
@@ -336,6 +354,7 @@ class SensorEntry(BaseModel):
                 f"{_a(self.type)} {self.type} sensor takes no {', '.join(map(repr, wrong))}; its options are "
                 f"{', '.join(own)}"
             )
+        self._camera_options()
         if self.type in PLUGIN_PARAMS:
             extra = sorted(set(self.params or {}) - set(PLUGIN_PARAMS[self.type]))
             if extra:
@@ -378,6 +397,21 @@ class SensorEntry(BaseModel):
                     f"{most:.0f} Hz, or fewer rays"
                 )
         return self
+
+    def _camera_options(self) -> None:
+        """The options only some cameras take, and what a lens can see."""
+        if self.type != "camera":
+            return
+        mode = self.mode or "rgb"
+        for option, owner in (("baseline", "stereo"), ("threshold", "event"), ("window_s", "event")):
+            if getattr(self, option) is not None and mode != owner:
+                raise ValueError(f"{option} is for a {owner} camera (mode={owner!r}); this one is {mode!r}")
+        if self.lens == "fisheye" and mode != "rgb":
+            raise ValueError(f"a fisheye lens gives an rgb picture, not {mode!r}")
+        if self.fov is not None and self.fov >= 170 and self.lens != "fisheye":
+            raise ValueError(
+                f"fov {self.fov:g} is wider than a pinhole camera sees; lens='fisheye' reaches 200 degrees"
+            )
 
     @model_serializer(mode="wrap")
     def _compact(self, handler: Any) -> dict[str, Any]:
@@ -461,17 +495,27 @@ def resolved(entry: SensorEntry) -> dict[str, Any]:
     """Every option of the entry with the type's defaults filled in."""
     out = {**DEFAULTS[entry.type], **entry.model_dump()}
     out.setdefault("direction", "forward")
+    if entry.type == "camera":
+        if out.get("lens") == "fisheye" and entry.fov is None:
+            out["fov"] = 180.0
+        if out.get("mode") == "stereo":
+            out.setdefault("baseline", 0.12)
+        if out.get("mode") == "event":
+            out.setdefault("threshold", 0.15)
+            out.setdefault("window_s", 0.03)
     vfov = out.get("vfov")
     if isinstance(vfov, int | float):
         out["vfov"] = [-vfov / 2, vfov / 2]
     return out
 
 
-def base_name(kind: str, mode: str | None = None, on: str | None = None) -> str:
+def base_name(kind: str, mode: str | None = None, on: str | None = None, lens: str | None = None) -> str:
     """The name a sensor gets when none is given: "lidar", "depth_camera", "fl_touch", "hand_ft"."""
     word = BASE_NAMES.get(kind, kind)
     if kind == "camera" and mode not in (None, "rgb"):
         word = f"{mode}_camera"
+    elif kind == "camera" and lens == "fisheye":
+        word = "fisheye_camera"
     if on and kind in ("touch", "force_torque", "camera", "rangefinder", "imu", "sonar", "temperature", "gas"):
         word = f"{on}_{word}"
     word = re.sub(r"[^a-z0-9_]+", "_", wording.squash(word)).strip("_")

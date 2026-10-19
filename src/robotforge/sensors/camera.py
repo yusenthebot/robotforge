@@ -48,6 +48,9 @@ class Camera(Sensor):
         self.width, self.height = int(d.get("width", 320)), int(d.get("height", 240))
         self.fov = float(d.get("fov", model.cam_fovy[self.camera]))
         self.range = float(d.get("range", 10.0))
+        self.lens = d.get("lens", "pinhole")
+        self.baseline = d.get("baseline")  # stereo
+        self.window, self.threshold = d.get("window_s"), d.get("threshold")  # event
         not_colliding = (model.geom_contype == 0) & (model.geom_conaffinity == 0)
         flat = model.geom_aabb[:, 5] < 0.01  # half as thick as a centimetre in its own frame: a mark on the ground
         self.ground = np.isin(model.geom_type, GROUND_TYPES) | (not_colliding & flat)
@@ -72,8 +75,10 @@ class Camera(Sensor):
         mujoco.mj_forward(model, scratch)
         return scratch
 
-    def develop(self, layers: Any, moment: dict[str, Any]) -> dict[str, Any]:
-        """The camera's own reading of a rendered moment: its noise added, the sky beyond its range."""
+    def develop(self, render: Any, moment: dict[str, Any]) -> dict[str, Any]:
+        """The camera's own reading of a moment: `render(moment)` draws it (the hub's renderer), then the noise is
+        added and the sky beyond the range left out."""
+        layers = render(moment)
         out: dict[str, Any] = {"layers": layers}
         rng = np.random.default_rng(moment["noise_seed"])
         if self.mode == "depth":
@@ -96,7 +101,7 @@ class Camera(Sensor):
         out: dict[str, Any] = {"mode": self.mode, "size": [self.width, self.height], "fov_deg": round(self.fov, 1)}
         if value.get("note"):
             return {**out, "note": value["note"]}
-        if self.mode == "depth":
+        if self.mode in ("depth", "stereo"):
             out.update(self._depth_summary(value))
         elif self.mode == "segmentation":
             out["seen"] = self._seen(value["layers"])
@@ -107,7 +112,7 @@ class Camera(Sensor):
         camera's own robot is left out, as in a reading's nearest obstacle."""
         from robotforge.perception import cloud
 
-        if self.mode != "depth" or "depth" not in value:
+        if self.mode not in ("depth", "stereo") or "depth" not in value:
             return None
         depth, layers = value["depth"], value["layers"]
         if layers.geoms is not None:
@@ -187,18 +192,28 @@ class Camera(Sensor):
         return [{"name": name, "share": round(n / total, 3)} for name, n in ranked]
 
     def line(self, value: dict[str, Any]) -> str:
-        what = {"rgb": "camera", "depth": "depth camera", "segmentation": "segmentation camera"}[self.mode]
+        what = {
+            "rgb": "fisheye camera" if self.lens == "fisheye" else "camera",
+            "depth": "depth camera",
+            "segmentation": "segmentation camera",
+            "stereo": "stereo camera",
+            "event": "event camera",
+        }[self.mode]
         return f"{what}: {self.width}x{self.height}, {self.fov:.0f} deg (its picture: read_sensors with image=true)"
 
     def viewer(self, value: dict[str, Any], model: mujoco.MjModel, data: mujoco.MjData) -> dict[str, Any]:
         rot = data.cam_xmat[self.camera].reshape(3, 3)
         return {
             "mode": self.mode,
+            "lens": self.lens,
             "fov_deg": round(self.fov, 1),
             "size": [self.width, self.height],
             "range_m": self.range,
             "forward": [round(float(v), 4) for v in -rot[:, 2]],
             "up": [round(float(v), 4) for v in rot[:, 1]],
+            "baseline_m": self.baseline,
+            "window_s": self.window,
+            "threshold": self.threshold,
         }
 
     def pose(self, data: mujoco.MjData) -> dict[str, list[float]]:

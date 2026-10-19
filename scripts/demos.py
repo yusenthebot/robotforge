@@ -16,6 +16,7 @@ import argparse
 import asyncio
 import base64
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -476,6 +477,79 @@ class _Job:
         return self.over
 
 
+# ---- G12b: the Go2 maps the warehouse it has never seen and goes to a rack by its own map ---------------------------
+
+MAP_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor
+_MAP_DONE = threading.Event()
+
+
+def _wait_for(done: Callable[[], bool], longest: float) -> None:
+    """Wall-clock wait for something the viewer's real-time simulation does (a trip ending)."""
+    end = time.monotonic() + longest
+    while not done() and time.monotonic() < end:
+        time.sleep(0.05)
+
+
+def _map_then_rack(explore_s: float, rack: str) -> Callable[[Any], None]:
+    """Start mapping, explore for `explore_s` s of simulated time, then go to `rack` by the robot's own map."""
+
+    def job(pg: Any) -> None:
+        pg.perception.start("go2", {})
+        trips = pg.perception.explore_trips("go2", explore_s, area=MAP_AREA)
+        try:
+            while True:
+                trip, limit = next(trips)
+                _wait_for(lambda t=trip: t.done, 3 * limit + 10)
+        except StopIteration as done:
+            print(f"explored: {done.value}", flush=True)
+        mapper = pg.perception.mapper("go2")
+        target = _farthest_rack(pg, "go2") if rack == "farthest" else rack
+        print(f"the task: go to {target}", flush=True)
+        trip = pg.behaviors.navigate("go2", target, seconds=90, own_map=mapper)
+        _wait_for(lambda: trip.done, 300)
+        print(f"to {rack}: {trip.result()}", flush=True)
+        print(f"pose check: {pg.perception.pose_check('go2')}", flush=True)
+        _MAP_DONE.set()
+
+    def act(pg: Any) -> None:
+        """Starts the job and returns: the timeline (captions, the camera) goes on while the robot works."""
+        _MAP_DONE.clear()
+        threading.Thread(target=job, args=(pg,), daemon=True).start()
+
+    return act
+
+
+def _farthest_rack(pg: Any, robot: str) -> str:
+    """The rack furthest from where the robot is now (the task is a name; which one is the demo's choice)."""
+    import mujoco
+
+    model, data = pg.session.model, pg.session.data
+    here = pg.behaviors.pose(robot)["position"][:2]
+    racks = [
+        (math.dist(data.xpos[b][:2], here), mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b))
+        for b in range(model.nbody)
+        if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith("rack_")
+    ]
+    return max(racks)[1]
+
+
+def _caption(text: str, hold: float | None = None) -> str:
+    """Page script: a caption along the bottom of the picture (replaced by the next one)."""
+    return f"""
+        let el = document.getElementById("demo-caption");
+        if (!el) {{
+          el = document.createElement("div");
+          el.id = "demo-caption";
+          el.style.cssText = "position:fixed;left:50%;bottom:92px;transform:translateX(-50%);max-width:70vw;"
+            + "padding:12px 22px;border-radius:12px;background:rgba(14,18,24,0.82);color:#fff;"
+            + "font:600 24px/1.35 system-ui,sans-serif;text-align:center;z-index:50;pointer-events:none;"
+            + "box-shadow:0 6px 24px rgba(0,0,0,0.35)";
+          document.body.appendChild(el);
+        }}
+        el.textContent = {json.dumps(text)};
+    """
+
+
 def _bench_world(robot: str, job: str, seed: int = 0) -> Callable[[Any], None]:
     """The world mobile_bench runs `job` in, with `robot` where it starts it with `seed`."""
 
@@ -718,6 +792,31 @@ DEMOS = [
         16.0,
         timeline=[(0.8, _go("go2", [1.6, 2.6]))],
         page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
+    ),
+    Demo(  # an unseen warehouse: the Go2 draws its map, finds itself in it and goes to rack_8 by that map alone
+        "g12_go2_maps_the_warehouse",
+        S._go2_warehouse_start,
+        170.0,
+        timeline=[
+            (
+                0.5,
+                _caption(
+                    "A Go2 enters a warehouse it has never seen. Its only senses: a lidar and a drifting odometry."
+                ),
+            ),
+            (1.0, _map_then_rack(70.0, "farthest")),
+            (2.5, "window.__robotforge.showSensor('go2/map_lidar', false);"),
+            (
+                18.0,
+                _caption("The map grows from its own scans. Blue: where it believes it is. Grey: the odometry alone."),
+            ),
+            (45.0, _caption("The particle filter keeps its pose honest against the odometry's drift.")),
+            (72.0, _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate.")),
+        ],
+        page=_follow("go2", (-1.2, -2.2, 6.2), ease=0.04),
+        settle=2.0,
+        until=lambda pg: _MAP_DONE.is_set(),
+        tail=4.0,
     ),
     Demo(  # code a user wrote: a Geiger sensor on the Go2's back (a plugin) reads higher as it walks up to the drum
         "extend_plugins_walk",

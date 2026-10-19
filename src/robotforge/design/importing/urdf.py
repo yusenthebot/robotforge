@@ -213,6 +213,20 @@ def _fix_materials(robot: ET.Element, report: DoctorReport) -> None:
             material.remove(texture)
     if broken:
         report.fixed("materials", "some colors in the file were malformed", "replaced them with gray", broken[:1])
+    doubled = []
+    for visual in robot.iter("visual"):  # a visual has one material: some exporters write one per mesh colour
+        materials = visual.findall("material")
+        for extra in materials[1:]:
+            visual.remove(extra)
+        if len(materials) > 1:
+            doubled.append(f"{len(materials)} materials in one visual")
+    if doubled:
+        report.fixed(
+            "materials",
+            f"{len(doubled)} visuals had several materials each (MuJoCo accepts one)",
+            "kept the first of each",
+            doubled[:1],
+        )
 
 
 # ---- joints ----------------------------------------------------------------------------------

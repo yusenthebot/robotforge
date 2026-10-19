@@ -20,7 +20,8 @@ It runs on macOS, Windows and Linux.
 - **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence. Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels ([builder guide](docs/BUILDER.md)).
 - **Import your own.** URDF, xacro, MJCF and mesh files go through a health check that repairs the usual problems (mesh formats, inertia, the starting pose).
 - **Use real robots, and splice them.** Nineteen robots and parts from MuJoCo Menagerie load by name: Unitree Go2, Boston Dynamics Spot, ANYmal C, Franka Panda, UR5e, AgileX PiPER, Unitree G1, Booster T1, ALOHA 2 and more. Mount any of them on another: a Go2 with a PiPER on its back, an ANYmal C with a UR5e and a Robotiq gripper, a Spot with a Z1.
-- **Sense.** Cameras (colour, depth, segmentation), 2D and 3D lidar, IMU, joint encoders, force and touch go on any robot, and the viewer draws the rays and the depth picture ([sensors](docs/SENSORS.md)).
+- **Sense.** Cameras (colour, depth, segmentation, stereo, fisheye, event), 2D and 3D lidar, sonar, IMU, joint encoders, wheel odometry, force, touch and tactile skin, temperature and gas go on any robot, and the viewer draws what they sense ([sensors](docs/SENSORS.md)).
+- **Map and find itself.** A robot draws an occupancy map from its lidar and drifting odometry while it moves, a particle filter keeps its pose honest, it explores unseen space and goes to a named place by its own map alone ([perception](docs/PERCEPTION.md)).
 - **Move things around.** A mobile arm plans its drive and its reach together, fetches the apple from the kitchen island, and puts it on the dining table. Drawers, cabinets, buttons, switches, levers and valves can be operated, and a factory conveyor feeds boxes to a sorting arm.
 - **Generate worlds and tasks.** `load_scene(description=...)` lays out a home, a warehouse or a hillside from one sentence, and `add_task` turns the same sentence into a task with a success check ([scenes](docs/SCENES.md)).
 - **Learn to walk.** Any legged robot, built from parts or imported, learns a rhythm by trial and error in the viewer, keeps it, and then walks and turns with the keyboard or from chat.
@@ -174,6 +175,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Building robots from parts: [docs/BUILDER.md](docs/BUILDER.md)
 - Scenes, terrain and generated worlds: [docs/SCENES.md](docs/SCENES.md)
 - Sensors: [docs/SENSORS.md](docs/SENSORS.md)
+- Maps, localization and navigation on the robot's own map: [docs/PERCEPTION.md](docs/PERCEPTION.md)
 - Plugins, export to MJCF and URDF, the robot interface in scripts: [docs/EXTENDING.md](docs/EXTENDING.md)
 - Navigation: [docs/NAVIGATION.md](docs/NAVIGATION.md)
 - Algorithm comparisons: [docs/ALGORITHMS.md](docs/ALGORITHMS.md)

@@ -110,7 +110,7 @@ def mount(
             if entry.type == "touch":  # contacts happen on the shapes that collide, not on the ones drawn over them
                 target = Target(target.body, _colliding(model, target), target.point)
             label = None if target.body == 1 else _label(entry)  # on the base: "imu", not "chassis_imu"
-            name = entry.name or unique_name(base_name(entry.type, opts.get("mode"), label), taken)
+            name = entry.name or unique_name(base_name(entry.type, opts.get("mode"), label, opts.get("lens")), taken)
             if name in taken:
                 raise ValueError(f"it already has a sensor or camera named {name!r}; give another name")
             taken.add(name)
@@ -402,12 +402,52 @@ def _camera(spec, body, name, opts, place: Place, vis: Visuals, model, target) -
     if _looks_along(place):  # a camera on top looking forward stands on the top and sees over it
         seat = seat + place.normal * looks.CAMERA_HALF
     eye = seat + look * CAMERA_FRONT if _on_face(place) else seat
-    if _on_face(place):
-        looks.camera(vis, body, seat, look, up)
     left = place.frame[:, 1]
-    body.add_camera(name=name, pos=[float(v) for v in eye], xyaxes=[*(-left).tolist(), *up.tolist()], fovy=opts["fov"])
+    mode, fisheye = opts.get("mode", "rgb"), opts.get("lens") == "fisheye"
+    extra: dict[str, Any] = {}
+    if mode == "stereo":  # two lenses, the pair centered where one would sit; the first is the camera itself
+        half = -left * float(opts["baseline"]) / 2  # to the right
+        for side in (-1, 1):
+            if _on_face(place):
+                looks.camera(vis, body, seat + side * half, look, up)
+        eye_left = eye - half
+        body.add_camera(
+            name=name, pos=[float(v) for v in eye_left], xyaxes=[*(-left).tolist(), *up.tolist()], fovy=opts["fov"]
+        )
+        body.add_camera(
+            name=f"{name}_right",
+            pos=[float(v) for v in eye + half],
+            xyaxes=[*(-left).tolist(), *up.tolist()],
+            fovy=opts["fov"],
+        )
+        extra = {"right_camera": f"{name}_right", "baseline": opts["baseline"]}
+    else:
+        if _on_face(place):
+            looks.camera(vis, body, seat, look, up)
+        body.add_camera(
+            name=name,
+            pos=[float(v) for v in eye],
+            xyaxes=[*(-left).tolist(), *up.tolist()],
+            fovy=min(opts["fov"], 120.0) if fisheye else opts["fov"],
+        )
+    if fisheye:  # five square views the lens's pixels are looked up in (sensors/optics.py)
+        right = -left
+        faces = {"f": (look, up), "l": (left, up), "r": (right, up), "u": (up, -look), "d": (-up, look)}
+        names = []
+        for key, (face_look, face_up) in faces.items():
+            face_right = np.cross(face_look, face_up)
+            body.add_camera(
+                name=f"{name}_{key}",
+                pos=[float(v) for v in eye],
+                xyaxes=[*face_right.tolist(), *face_up.tolist()],
+                fovy=90.0,
+            )
+            names.append(f"{name}_{key}")
+        extra = {"cube": names, "lens": "fisheye"}
+    if mode == "event":
+        extra |= {"threshold": opts["threshold"], "window_s": opts["window_s"]}
     keys = ("mode", "width", "height", "fov", "range")
-    return {"camera": name, **{k: opts[k] for k in keys}}
+    return {"camera": name, **{k: opts[k] for k in keys}, **extra}
 
 
 def _lidar(spec, body, name, opts, place: Place, vis: Visuals, model, target) -> dict[str, Any]:

@@ -193,7 +193,12 @@ class PerceptionHub:
             usable = [s for s in own if s.type in types and not getattr(s, "native", None)]
             if usable:
                 return usable[0].local
-        fields = {**defaults, **(given or {}), "name": (given or {}).get("name", name)}
+        wanted = dict(given or {})
+        # What mapping would add is the default; asked for another kind (a flat "lidar" for the 3D one it would add),
+        # the options of the default are not carried over to it.
+        base = defaults if wanted.get("type", defaults["type"]) == defaults["type"] else {}
+        fields = {**base, **wanted, "name": wanted.get("name", name)}
+        fields.setdefault("type", defaults["type"])
         taken = {s.local for s in own}
         if fields["name"] in taken:
             fields["name"] = f"{fields['name']}_{len(taken)}"
@@ -370,7 +375,15 @@ class PerceptionHub:
             low, high = mapper.height - SCORE_SLAB, mapper.height + SCORE_SLAB
         wall = truth.scene_occupancy(session.model, session.data, mapper.robot, mapper.grid, low, high)
         body = truth.scene_occupancy(session.model, session.data, mapper.robot, mapper.grid, 0.06, mapper.height + 0.15)
-        return truth.score(mapper.grid, wall, body)
+        out = truth.score(mapper.grid, wall, body)
+        try:  # what matters for going somewhere: do the two maps agree on where the robot can go
+            planner, data = self.pg.behaviors.own_map_planner(mapper.robot, mapper, unknown_blocks=True)
+            own = planner.map(data)
+            start = planner.position(data)
+            out["navigation"] = truth.navigation_agreement(own, self.pg.behaviors.scene_map(mapper.robot), start)
+        except Exception as exc:  # a score that cannot be made is left out, not a reason to refuse the status
+            log.warning("the navigation score of %s could not be made: %s", mapper.robot, exc)
+        return out
 
     def errors(self, robot: str) -> dict[str, np.ndarray]:
         """Pose error over the run, per scan: time, the filter's, the odometry's alone."""
@@ -391,10 +404,17 @@ class PerceptionHub:
             robots = []
             for name, mapper in self.mappers.items():
                 entry: dict[str, Any] = {"robot": name, "mapping": mapper.mapping, "scans": mapper.scan_count}
+                if mapper.grid is not None:
+                    entry["mapped_m2"] = round(float(mapper.grid.seen.sum()) * mapper.grid.res**2, 1)
                 if mapper.estimate_pose is not None:
                     entry["pose"] = [round(float(v), 4) for v in mapper.estimate_pose]
+                    # how far off it is, from the truth the simulator knows (to show, never to steer by)
+                    real = mapper.root_truth(session.data)
+                    entry["error_m"] = round(float(math.hypot(*(mapper.estimate_pose[:2] - real[:2]))), 3)
                 if mapper.odometry_pose is not None:
                     entry["odometry"] = [round(float(v), 4) for v in mapper.odometry_pose]
+                    real = mapper.root_truth(session.data)
+                    entry["odometry_error_m"] = round(float(math.hypot(*(mapper.odometry_pose[:2] - real[:2]))), 3)
                 flt = mapper.filter
                 if mapper.pose_source == "estimate":
                     step = max(1, flt.n // VIEW_PARTICLES)

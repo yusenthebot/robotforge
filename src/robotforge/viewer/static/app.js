@@ -2295,6 +2295,7 @@ initSensors({
 
 initMap({
   scene: scene3,
+  selected: () => selected,
   color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
   inLesson: () => lessonActive(),
   storageGet,

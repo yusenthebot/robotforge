@@ -71,6 +71,39 @@ The message is `{"type": "map", "robots": [...]}` four times a second (viewer/se
 A depth camera or a lidar gives its cloud with `read_sensors(points=N)`: world coordinates, every pixel or hit, thinned by voxel (the mean of the points in a cube) with the smallest cube that leaves at most N.
 The camera's own robot is left out of its cloud.
 
+## Measured: a Go2 in a warehouse it has never seen
+
+`uv run python scripts/perception_bench.py --seed N` (2026-10-20, on the development Mac while other jobs shared it).
+The Go2 starts at the warehouse's west end with a 16-ring 3D lidar (8 Hz, 1 cm noise) and an odometry that reads its turn 0.003 rad/s off (so after a minute it believes it has turned 10 degrees); the filter has 150 particles.
+It explores the warehouse floor for 150 s of simulated time (11 trips, 73 s of computer time), then the map is kept and the robot is asked to find itself from nowhere (2500 particles, walking about 10 m), then goes to the rack furthest from where it stands, by its own map alone.
+Three layouts of the warehouse (the seed moves crates and parcels):
+
+| | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| pose error while exploring, rms (max) | 0.24 (0.43) m | 0.18 (0.33) m | 0.08 (0.21) m |
+| the odometry alone, rms (max) | 1.37 (2.40) m | 1.85 (3.31) m | 1.34 (2.35) m |
+| mapped walls, precision | 0.83 | 0.87 | 1.00 |
+| mapped walls, mean distance to the real one | 5.0 cm | 4.1 cm | 0.9 cm |
+| what the scene lets it reach that its map lets it reach | 81 % | 82 % | not computed |
+| cells it would plan through that the scene says are blocked | 14 % | 12 % | 10 % |
+| found itself from nowhere after walking | 0.4 m | 0.1 m | 3.5 m |
+| error at the end of that search | 0.07 m | 0.18 m | 0.01 m |
+| the rack it went to by its own map | rack_4, arrived | rack_5, arrived | rack_4, arrived |
+| robot's middle to the rack's face, own map (scene map) | 0.65 (0.56) m | 0.50 (0.56) m | 0.58 (0.56) m |
+| where it believed it was, off by, when it stopped | 0.21 m | 0.07 m | 0.05 m |
+
+Reading it:
+
+- The filter keeps the pose within a few decimeters where the odometry alone is 1.3 to 1.9 m off by the end; where the walls are close (the aisle, the pallets) it holds to 2 to 5 cm, and it drifts most on the open floor beside the racks, where the only things to match are far racks' uprights.
+- The map is as good as the pose: 1 cm to 5 cm mean distance to the real wall.
+  When the pose wandered by 0.3 to 0.4 m for a stretch (seed 0), walls it drew then are doubled, which is what the lower precision is.
+- The 10 to 14 percent of cells it would plan through that the scene calls blocked are mostly the inside of the racks: a rack is open shelving, the lidar's rays go in through its open front and stop at its back, so the inside is mapped free and the planner may route into the pocket (it did not in these runs).
+  The loading dock is the other way round: a block to the lidar, a ramp to the scene's planner.
+- Going to the rack, its own map and its own pose took it to within 0.5 to 0.65 m of the rack's face (the scene's planner stops 0.56 m away), in 4.1 to 4.4 m of walking.
+- A search from nowhere in a hall of identical racks holds after 0.1 to 3.5 m of walking, once the robot has seen a wall or a column; a 2.5 m window afterward still shows up to 0.4 m of error.
+
+Point clouds of the same view by a depth camera and by a 6 cm stereo pair (scripts/perception_figs.py): the stereo pair's depth falls in slabs a disparity step apart.
+
 ## Limits
 
 - The mapper is 2D: one floor, no stairs.

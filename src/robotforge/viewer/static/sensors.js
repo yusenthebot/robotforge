@@ -216,7 +216,7 @@ function remember(e) {
 
 // ---------------------------------------------------------------- the robots drawer: the selected robot's sensors
 
-const TYPE_KEYS = { camera: (e) => `sensor_camera_${e.mode}` };
+const TYPE_KEYS = { camera: (e) => `sensor_camera_${e.lens === "fisheye" ? "fisheye" : e.mode}` };
 
 function typeLabel(e) {
   return e.label ?? t(TYPE_KEYS[e.type]?.(e) ?? `sensor_${e.type}`); // a plugin's sensor names itself
@@ -447,8 +447,9 @@ function lidarDrawing(first) {
 function cameraDrawing(first) {
   const group = new THREE.Group();
   // As tall wherever it looks: a wide lens's frustum drawn as deep as a narrow one's reached past a small robot.
-  const depth = FRUSTUM_HALF / Math.tan((first.fov_deg * Math.PI) / 360);
-  const corners = frustumCorners(first.fov_deg, first.size[0] / first.size[1], depth);
+  const fov = Math.min(first.fov_deg, 120); // a fisheye's frustum is drawn as a wide pinhole's
+  const depth = FRUSTUM_HALF / Math.tan((fov * Math.PI) / 360);
+  const corners = frustumCorners(fov, first.size[0] / first.size[1], depth);
   const v = [];
   for (const c of corners) v.push(0, 0, 0, ...c);
   for (let i = 0; i < 4; i++) v.push(...corners[i], ...corners[(i + 1) % 4]);
@@ -563,11 +564,11 @@ function forceDrawing() {
   };
 }
 
-function touchDrawing(first) {
+function touchDrawing(first, idleColor = 0xffffff) {
   const group = new THREE.Group();
   const pad = new THREE.Group(); // in the body's frame
   const green = api.color("--plot-green");
-  const idle = new THREE.Color(0xffffff);
+  const idle = new THREE.Color(idleColor);
   const [hx, hy] = first.cell_half;
   const shape = first.cell_shape === "box" ? new THREE.PlaneGeometry(2 * hx * 0.9, 2 * hy * 0.9) : new THREE.SphereGeometry(hx * 1.15, 16, 10);
   const padQuat = new THREE.Quaternion(first.pad_quat[1], first.pad_quat[2], first.pad_quat[3], first.pad_quat[0]);
@@ -602,7 +603,8 @@ function touchDrawing(first) {
     },
     frame() {
       const node = api.bodyNode(last.body);
-      group.visible = !!node && !behindScenery(last.name, cells[0].getWorldPosition(center));
+      // a skin lies over the robot itself, against what it touches: it is never taken for hidden behind it
+      group.visible = !!node && (last.noHide || !behindScenery(last.sightKey ?? last.name, cells[0].getWorldPosition(center)));
       if (!group.visible) return;
       pad.position.copy(node.position);
       pad.quaternion.copy(node.quaternion);
@@ -697,8 +699,9 @@ function sonarDrawing() {
 // A skin is a touch pad on each of several faces: each is drawn as a pad of its own.
 function skinDrawing(first) {
   const group = new THREE.Group();
-  const merged = (e, pad) => ({ ...e, ...pad });
-  const parts = first.pads.map((pad) => touchDrawing(merged(first, pad)));
+  const merged = (e, pad) => ({ ...e, ...pad, sightKey: `${e.name}#${pad.face}`, noHide: true });
+  // taxels rest blue: white ones vanish on a pale robot
+  const parts = first.pads.map((pad) => touchDrawing(merged(first, pad), 0x4f7be8));
   group.add(...parts.map((p) => p.group));
   return {
     group,

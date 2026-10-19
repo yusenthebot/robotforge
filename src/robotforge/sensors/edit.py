@@ -33,7 +33,9 @@ def add(pg: Any, robot: str, fields: dict[str, Any]) -> dict[str, Any]:
         label = on.rsplit("/", 1)[-1] if on else None
         if label is not None and wording.squash(label) == wording.squash(_base_body(pg, name)):
             label = None  # on the base: "imu", not "chassis_imu"
-        entry = entry.model_copy(update={"name": unique_name(base_name(entry.type, entry.mode, label), taken)})
+        entry = entry.model_copy(
+            update={"name": unique_name(base_name(entry.type, entry.mode, label, entry.lens), taken)}
+        )
     elif entry.name in taken:
         raise PlaygroundError(
             f"{name} already has a sensor or camera named {entry.name!r}: give another name, or remove "
