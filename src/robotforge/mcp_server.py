@@ -83,8 +83,8 @@ sensors) that moves at once; update_robot(describe="make it longer") changes it,
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
-end_effector="suction" (a suction cup: flat things fingers cannot get round) or "magnet" (steel things only), in
-add_robot or later in update_robot.
+end_effector="suction" (a suction cup: flat things fingers cannot get round), "magnet" (steel things only) or
+"wiper" (a flat sponge pad that presses and wipes, it holds nothing), in add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
 end effector on an arm's flange (on="cart/arm": robotiq_2f85, panda_hand, the dexterous leap_hand or allegro_hand,
 suction, magnet; another one swaps it), a sensor on a wrist or any body (at). Its
@@ -181,11 +181,20 @@ flies over or round what is in the way. simulate(seconds, wind=[x, y]) blows a g
 its place; compare_controllers(drone, task="hover", push_at=3) compares its flight controller (cascade) with LQR
 and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E climbs, Q descends (and lands).
 
-Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
+Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, and for
+arms joint_impedance, cartesian_impedance and osc, the compliant ones that give way to touch). Touch tasks for an arm
+over a table: press (stop at a force, or hold one) and wipe (slide a pad over the table at a constant pressure);
+compare_controllers(robot="panda", task="wipe") returns each method's mean force, its spread and how well the path
+was followed. A wiper pad (update_robot end_effector="wiper") is the tool to wipe with.
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
 compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
 robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
 run or compare it as method "policy:<name>".
+
+Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
+interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on
+sensors) and state machines that a script runs with Tree(...).run(sim, robot): the viewer's tree panel shows the
+running node and the attempt a Retry is on.
 
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
@@ -460,7 +469,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         build: dict[str, Any] | None = None,
         design: str | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Add a robot: from a template (list_templates), the robot library (list_library, e.g. library="go2"), a file,
@@ -476,7 +485,8 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
         end_effector (any arm):
         "suction" (a suction cup: picks flat things fingers cannot, a tile or a plate), "magnet" (an electromagnet:
-        steel things only) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
+        steel things only), "wiper" (a flat sponge pad that presses and wipes; it holds nothing, so the arm cannot
+        pick with it) or "gripper" (its fingers); gripper close turns a cup or magnet on, open lets go.
 
         mounts puts whole robots on it: [{"library": "piper"}] is an arm on a Go2's back (then move_arm and
         pick_and_place "go2/arm"); {"library": "robotiq_2f85"} after an arm without a gripper (ur5e) becomes its
@@ -527,7 +537,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         build: dict[str, Any] | None = None,
         mounts: list[dict[str, Any]] | None = None,
-        end_effector: Literal["gripper", "suction", "magnet"] | None = None,
+        end_effector: Literal["gripper", "suction", "magnet", "wiper"] | None = None,
         describe: str | None = None,
     ) -> str:
         """Change a robot's template params (merged), position or heading. describe changes a robot made from a
@@ -539,7 +549,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         stands, if the build carries it as a mounted part or is a robot of the same kind; given only base sensors
         ({"base": {"sensors": ["lidar"]}}) it is carried on a plate with them; any other is refused with the build
         that keeps it. mounts replaces the robots it carries (see add_robot; [] takes them all off). end_effector
-        changes the tool on its arm: "suction" cup, "magnet" or back to its "gripper"."""
+        changes the tool on its arm: "suction" cup, "magnet", "wiper" pad or back to its "gripper"."""
         with _tool_errors():
             for wanted in _mounted_libraries(mounts):
                 await _download_with_progress(wanted, ctx)
@@ -1012,6 +1022,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             # robot.sensors["imu"], robot.move(speed, turn, seconds=2), robot.stop(), robot.arm.move_to([x, y, z]),
             # robot.arm.pick_and_place(obj, target), robot.gripper.close(), robot.start(plugin_controller),
             # robot.on_step(fn, every=0.1) and robot.run(seconds): fn(robot) is called as the time passes
+            # task logic: from robotforge.flow import Tree, Sequence, Fallback, Parallel, Retry, Action, Condition,
+            # WaitFor, StateMachine, State; Tree(Sequence(Action(fn), Retry(Action(fn2), times=3)), name="job")
+            # .run(sim, robot) ticks it (fn(ctx) returns True/False; ctx.robot, ctx.bb) and the viewer shows which
+            # node runs; tree.summary() says what ended how
             print(...)  # output is returned by run_script
 
         Write clear, commented code: the user may read it to learn. Code that does not parse is refused. Then call

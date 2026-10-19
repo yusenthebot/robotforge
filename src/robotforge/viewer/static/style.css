@@ -1474,3 +1474,97 @@ input[type="range"]::-moz-range-thumb {
 
 /* A lesson draws its own rig: the sensor views step aside with the robots drawer. */
 .in-lesson #sensor-views { display: none !important; }
+
+/* ---------------------------------------------------------------- behavior tree */
+
+/* The tree a script runs (flowview.js): bottom left above the dock; the header folds it to the node running now. */
+.flow-panel {
+  position: fixed;
+  left: var(--gutter);
+  bottom: 84px;
+  width: 300px;
+  max-width: calc(100% - 2 * var(--gutter));
+  max-height: min(46%, 420px);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow: hidden;
+}
+.flow-panel[hidden] { display: none; }
+.flow-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.flow-head:hover { background: var(--hover); }
+.flow-caret {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg) translate(-1px, -1px);
+  flex: none;
+}
+.flow-panel.folded .flow-caret { transform: rotate(-45deg); }
+.flow-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.flow-state {
+  margin-left: auto;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-size: 12px;
+}
+.flow-panel[data-state="done"] .flow-state { color: var(--plot-green); }
+.flow-panel[data-state="failed"] .flow-state { color: var(--bad); }
+.flow-rows {
+  list-style: none;
+  margin: 0;
+  padding: 2px 8px 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  border-top: 1px solid var(--line);
+}
+.flow-panel.folded .flow-rows { display: none; }
+.flow-node {
+  display: grid;
+  grid-template-columns: 10px 14px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 6px;
+  padding: 3px 4px 3px calc(4px + var(--depth) * 14px);
+  border-radius: 6px;
+  color: var(--muted);
+}
+.flow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track); }
+.flow-glyph { text-align: center; font-size: 12px; opacity: 0.8; }
+.flow-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-note { font-size: 11px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.flow-node[data-s="r"] { color: var(--ink); }
+.flow-node.now { background: var(--amber-soft); font-weight: 600; }
+.flow-node[data-s="r"] .flow-dot { background: var(--amber); animation: flow-pulse 1.1s ease-in-out infinite; }
+.flow-node[data-s="s"] { color: var(--ink-2); }
+.flow-node[data-s="s"] .flow-dot { background: var(--plot-green); }
+.flow-node[data-s="f"] { color: var(--bad); }
+.flow-node[data-s="f"] .flow-dot { background: var(--bad); }
+@keyframes flow-pulse { 50% { box-shadow: 0 0 0 4px var(--amber-soft); } }
+@media (prefers-reduced-motion: reduce) { .flow-node[data-s="r"] .flow-dot { animation: none; } }
+@media (max-width: 640px) {
+  .flow-panel { width: calc(100% - 2 * var(--gutter)); max-height: 34%; }
+}
