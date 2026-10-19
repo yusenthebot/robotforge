@@ -600,23 +600,61 @@ def test_real_library_robot_loads_and_holds_still(name):
         assert data.xmat[root].reshape(3, 3)[2, 2] > 0.95  # upright
     else:  # a dexterous hand is fixed to the world palm down, pointing the way a flange does: it stays as it was put
         assert np.allclose(data.xmat[root], start_axes, atol=0.05)
+        # and its fingers come to rest inside their ranges, not flung about or wound past a limit
+        low, high = model.jnt_range[:, 0], model.jnt_range[:, 1]
+        assert np.all(data.qpos >= low - 1e-3) and np.all(data.qpos <= high + 1e-3)
+        assert np.abs(data.qvel).max() < 0.5
     assert np.linalg.norm(data.xpos[root] - start) < 0.08  # settles where it was put
 
 
+# Measured on the real models: the elbow's lean from the root (m), the hand's reach in front and height, and the
+# mass-weighted centre of mass height. A Z1 taller or longer than this tipped Spot while its PiPER carried a cube.
+HOMES = [  # (robot, elbow body, hand body, elbow lean, hand reach at least, hand height range, centre of mass top)
+    ("z1", "link03", "link06", 0.10, 0.10, (0.20, 0.30), 0.23),
+    ("xarm7", "link4", "link7", 0.10, 0.35, (0.40, 0.60), 0.50),
+]
+
+
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
-@pytest.mark.parametrize(("name", "elbow", "hand"), [("z1", "link03", "link06"), ("xarm7", "link4", "link7")])
-def test_real_arm_home_stands_up_instead_of_folding_back(name, elbow, hand):
+@pytest.mark.parametrize(("name", "elbow", "hand", "lean", "reach", "height", "com_top"), HOMES)
+def test_real_arm_home_stands_up_instead_of_folding_back(name, elbow, hand, lean, reach, height, com_top):
     # Menagerie's keyframes for these two lean the upper arm back over the base, which reads as fallen over.
     model = compile_world(World.model_validate({"robots": [{"name": "r", "library": name}]})).model
     data = mujoco.MjData(model)
     mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
     mujoco.mj_forward(model, data)
-    base = data.xpos[model.body("r/link1" if name == "xarm7" else "r/link01").id]
-    top = data.xpos[model.body(f"r/{elbow}").id]
-    tip = data.xpos[model.body(f"r/{hand}").id]
-    assert top[2] - base[2] > 0.25  # the elbow stands well above the shoulder
-    assert abs(top[0] - base[0]) < 0.12  # over it, not leaning back
-    assert tip[0] - base[0] > 0.1  # the hand reaches out in front
+    root = next(b for b in range(1, model.nbody) if model.body_parentid[b] == 0)
+    base = data.xpos[root]
+    top = data.xpos[model.body(f"r/{elbow}").id] - base
+    tip = data.xpos[model.body(f"r/{hand}").id] - base
+    mass = model.body_mass[1:]
+    com = (data.xipos[1:] * mass[:, None]).sum(axis=0) / mass.sum() - base
+    assert top[2] > 0.25  # the elbow stands well above the shoulder
+    assert abs(top[0]) < lean  # over it, not leaning back
+    assert tip[0] > reach  # the hand reaches out in front
+    assert height[0] < tip[2] < height[1]  # and sits low and near, under the elbow
+    assert tip[2] < top[2]
+    assert com[2] < com_top  # compact: a taller arm tips the dog that carries it
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+def test_real_spot_carries_a_z1_at_home_while_its_piper_moves_a_cube(pg):
+    pg.add_robot("spot", library="spot")
+    pg.mount("z1", "spot")
+    pg.mount("piper", "spot", name="arm2")
+    pg.add_object("stand", shape="table", size=[0.6, 0.4, 0.3], pos=[1.6, -0.6])
+    pg.add_object("cube", shape="box", size=[0.04] * 3, pos=[1.6, -0.48, 0.32], color="orange")
+    pg.add_object("shelf", shape="table", size=[0.6, 0.4, 0.3], pos=[1.6, 0.6])
+    pg.behaviors.move("spot", 0.3, 0.0)
+    _run(pg, 3.0)
+    pg.behaviors.stop("spot")
+    _run(pg, 1.5)
+    assert pg.behaviors.pose("spot")["upright"]
+    motion, info = pg.behaviors.pick_and_place("spot/arm2", "cube", "shelf", True)
+    pg.run_fast(lambda: motion.done, 120.0)
+    _run(pg, 1.0)
+    assert pg.behaviors.pose("spot")["upright"]
+    assert pg.behaviors.placed(info["object"], info["region"])["success"]
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")

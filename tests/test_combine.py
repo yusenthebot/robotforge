@@ -224,6 +224,70 @@ def test_a_design_name_taken_by_the_library_is_refused(cart):
         cart.mount(None, "cart", save_as="go2")
 
 
+def test_a_refused_save_name_leaves_the_world_as_it_was(cart):
+    # The mount used to go on first and the name was judged after: the refusal read as "nothing happened".
+    with pytest.raises(PlaygroundError, match="taken"):
+        cart.mount("ur5e", "cart", save_as="a1")
+    assert not _entry(cart, "cart").mounts
+    assert cart.mount("ur5e", "cart", save_as="cart_arm")["mounted"] == "cart/arm"
+
+
+def test_a_design_is_not_overwritten_unless_asked(cart):
+    cart.mount("ur5e", "cart", save_as="cart_arm")
+    first = (combine.designs_home() / "cart_arm.yaml").read_text(encoding="utf-8")
+    cart.add_robot("cart2", template="rover", params=BIG_BASE, pos=[3.0, 0.0])
+    with pytest.raises(PlaygroundError, match="overwrite"):
+        cart.mount("panda", "cart2", save_as="cart_arm")
+    assert not _entry(cart, "cart2").mounts
+    assert (combine.designs_home() / "cart_arm.yaml").read_text(encoding="utf-8") == first
+    cart.mount("panda", "cart2", save_as="cart_arm", overwrite=True)
+    assert "panda" in (combine.designs_home() / "cart_arm.yaml").read_text(encoding="utf-8")
+
+
+def test_a_design_cannot_be_saved_under_the_name_of_one_it_carries(cart):
+    cart.mount("ur5e", "cart", save_as="cart_arm")
+    cart.add_robot("cart2", template="rover", params=BIG_BASE, pos=[3.0, 0.0])
+    before = (combine.designs_home() / "cart_arm.yaml").read_text(encoding="utf-8")
+    with pytest.raises(PlaygroundError, match="carries"):
+        cart.mount("cart_arm", "cart2", save_as="cart_arm", overwrite=True)
+    assert not _entry(cart, "cart2").mounts  # refused before anything went on
+    cart.mount("cart_arm", "cart2")
+    with pytest.raises(PlaygroundError, match="carries"):
+        cart.mount(None, "cart2", save_as="cart_arm", overwrite=True)  # and when saving what is already on
+    assert (combine.designs_home() / "cart_arm.yaml").read_text(encoding="utf-8") == before
+
+
+def test_a_design_that_mounts_itself_on_disk_is_named_not_recursed(cart):
+    home = combine.designs_home()
+    home.mkdir(parents=True, exist_ok=True)
+    text = "design: loop\nrobot:\n  template: rover\n  mounts:\n  - name: m\n    design: loop\n"
+    (home / "loop.yaml").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="loop -> loop"):
+        combine.build_design("loop")
+    with pytest.raises(PlaygroundError, match="loop"):
+        cart.mount("loop", "cart")
+
+
+@pytest.mark.parametrize("bad", [[float("nan"), 0.0, 0.0], [1e9, 0.0, 0.0], [0.0, 0.0, -50.0]])
+def test_a_mount_shift_that_is_not_a_place_is_refused_before_compiling(cart, bad):
+    with pytest.raises(PlaygroundError, match="shift"):
+        cart.mount("ur5e", "cart", shift=bad)
+    assert not _entry(cart, "cart").mounts
+
+
+def test_a_mount_rotation_that_is_not_an_angle_is_refused(cart):
+    with pytest.raises(PlaygroundError, match="rotate"):
+        cart.mount("ur5e", "cart", rotate=[0.0, float("inf"), 0.0])
+
+
+def test_the_shadow_hand_is_refused_saying_why_and_what_to_use(cart):
+    with pytest.raises(ValueError, match="forearm.*leap_hand"):
+        combine.classify("shadow_hand")
+    cart.mount("ur5e", "cart")
+    with pytest.raises(PlaygroundError, match="forearm"):
+        cart.mount("shadow_hand", "cart/arm")
+
+
 # ---- the checks ------------------------------------------------------------------------------------------------------
 
 

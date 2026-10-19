@@ -50,7 +50,7 @@ from robotforge.sim import water as water_physics
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 # A hand-written `color: #9c6b3f` parses as no color at all (an unquoted # starts a YAML comment).
 BARE_HEX_COLOR = re.compile(r"(?:^[ \t-]*|[{,][ \t]*)color:[ \t]*(#[0-9a-fA-F]+)(?![\w-])", re.MULTILINE)
-ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, wall, shelf, ...
+ShapeName = Literal[tuple(props.SHAPES)]  # box, sphere, cylinder, table, bin, wall, shelf, ... (built in)
 
 
 class _Strict(BaseModel):
@@ -220,7 +220,7 @@ class RobotEntry(_Strict):
 
 class ObjectEntry(_Strict):
     name: str
-    shape: ShapeName = "box"
+    shape: str = "box"  # a built-in shape (ShapeName) or one a plugin added (robotforge.extend)
     size: list[float] = Field(default_factory=lambda: [0.05, 0.05, 0.05])
     pos: list[float] = Field(default_factory=lambda: [0.3, 0.0])  # x, y (and optional z); z defaults to resting
     yaw: float = 0.0  # degrees, counter-clockwise seen from above
@@ -238,6 +238,9 @@ class ObjectEntry(_Strict):
     def _shape_defaults(cls, data: Any) -> Any:
         """Fields left out take the shape's defaults: a wall is fixed and off-white, a box small and red."""
         if isinstance(data, dict):
+            shape = data.get("shape", "box")
+            if isinstance(shape, str) and shape not in props.SHAPES:
+                data = {**data, "shape": wording.match(shape, props.SHAPES) or shape}  # "Table", "benches"
             info = props.SHAPES.get(data.get("shape", "box"))
             if info is not None:
                 data = {"size": list(info.size), "color": _plain(info.color), "fixed": info.fixed, **data}
@@ -247,6 +250,24 @@ class ObjectEntry(_Strict):
     @classmethod
     def _name(cls, v: str) -> str:
         return _check_name(v)
+
+    @field_validator("shape")
+    @classmethod
+    def _shape(cls, v: str) -> str:
+        if v in props.SHAPES:
+            return v
+        found = wording.match(v, props.SHAPES)
+        if found is not None:
+            return found
+        from pydantic_core import PydanticCustomError
+
+        from robotforge import extend
+
+        if extend.REGISTRY.untrusted:  # the shape may be one a plugin file would add if it were trusted
+            raise ValueError(extend.unknown_part(v, list(props.SHAPES)))
+        # The message every unknown name gets, with the shapes there are (plugins' too, once loaded)
+        expected = ", ".join(f"'{s}'" for s in props.SHAPES)
+        raise PydanticCustomError("literal_error", "Input should be {expected}", {"expected": expected})
 
     @model_validator(mode="after")
     def _sizes(self) -> ObjectEntry:

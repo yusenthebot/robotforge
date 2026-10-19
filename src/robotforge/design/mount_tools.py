@@ -32,6 +32,7 @@ def register(server: MCPServer, playground: Playground) -> None:
         params: dict[str, Any] | None = None,
         adapter: bool = True,
         save_as: str | None = None,
+        overwrite: bool = False,
     ) -> str:
         """Mount anything on anything: a robot (a library arm such as ur5e or piper, a template), an end effector (a
         library gripper or hand: robotiq_2f85, panda_hand, the dexterous leap_hand and allegro_hand; or gripper,
@@ -44,7 +45,8 @@ def register(server: MCPServer, playground: Playground) -> None:
         carrier still stands and how much margin it keeps, each arm's reach from its mount, what it can hit of its
         carrier and whether it can hold its tool stretched out; a robot that would tip or fall, or an arm that cannot
         hold itself, is refused saying what to change. save_as keeps the robot with all it carries as a design
-        (add_robot(design=...) adds it again, mount(what=<design>) mounts it whole); with no what it saves as it is.
+        (add_robot(design=...) adds it again, mount(what=<design>) mounts it whole); with no what it saves as it is. A
+        name already saved is refused unless overwrite=true, and a design cannot be saved under a name it carries.
         remove("rover/arm") takes a mount off with what is on it."""
         with _tool_errors():
             sort = None
@@ -59,6 +61,6 @@ def register(server: MCPServer, playground: Playground) -> None:
             for robot in wanted:
                 await _download_with_progress(robot, ctx)
             options = {"at": at, "shift": shift, "rotate": rotate, "name": name, "params": params}
-            options |= {"adapter": adapter, "save_as": save_as}
+            options |= {"adapter": adapter, "save_as": save_as, "overwrite": overwrite}
             done = await asyncio.to_thread(playground.mount, what, on, **options)
             return _json(done)

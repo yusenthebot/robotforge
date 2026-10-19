@@ -470,3 +470,52 @@ def test_squeezing_a_gripper_turned_around_keeps_where_it_closes():
     assert (closed_at(0.0), closed_at(255.0)) == pytest.approx(before)
     assert before[0] == pytest.approx(0.8)  # closed: the joint's far end
     assert fetch.squeeze(model, 0) is None  # stiff enough now
+
+
+class _Unicycle:
+    """A robot on wheels as a point that turns and drives as it is told (the walker `Footing._creep_in` commands)."""
+
+    max_reverse = 1.0
+
+    def __init__(self, x: float, y: float, yaw: float):
+        self.x, self.y, self.yaw, self.speed, self.turn = x, y, yaw, 0.0, 0.0
+
+    def command(self, speed: float = 0.0, turn: float = 0.0) -> None:
+        self.speed, self.turn = speed, turn
+
+    def step(self, dt: float) -> None:
+        self.yaw += self.turn * dt
+        self.x += self.speed * math.cos(self.yaw) * dt
+        self.y += self.speed * math.sin(self.yaw) * dt
+
+
+@pytest.mark.parametrize("start_yaw", [109.0, 125.0, 95.0])
+def test_creeping_into_a_spot_a_few_cm_off_to_the_side_gets_there_and_faces_its_heading(start_yaw):
+    """6 cm from its spot and 11 degrees off its heading, a mobile Panda turned toward the spot, which put the offset
+    under the limit, turned back toward the heading, which put it over again, and rocked there for the whole 12 s."""
+    walker = _Unicycle(-0.60, 0.43, math.radians(start_yaw))
+    xpos, xmat = np.zeros((1, 3)), np.zeros((1, 9))
+    data = type("Data", (), {"xpos": xpos, "xmat": xmat})()
+    manager = type(
+        "Manager",
+        (),
+        {
+            "session": type("S", (), {"controllers": {"r": walker}})(),
+            "root": lambda self, robot: 0,
+            "kind": lambda self, robot: type("K", (), {"value": "rover"})(),
+        },
+    )()
+    spot = fetch.Spot((-0.582, 0.493), math.radians(120.0), (-0.87, 0.99, 0.04), 0.0)
+    footing = fetch.Footing()
+    footing.manager, footing.robot, footing._creep = manager, "r", (0.0, spot)
+    dt, t, done = 0.02, 0.0, False
+    while t < fetch.CREEP_SECONDS and not done:
+        xpos[0, :2] = walker.x, walker.y
+        c, s = math.cos(walker.yaw), math.sin(walker.yaw)
+        xmat[0] = [c, -s, 0, s, c, 0, 0, 0, 1]
+        done = footing._creep_in(t, data)
+        walker.step(dt)
+        t += dt
+    assert done and t < 6.0, f"still creeping after {t:.1f} s"
+    assert math.degrees(abs(math.remainder(spot.heading - walker.yaw, math.tau))) < 3.0
+    assert math.dist((walker.x, walker.y), spot.xy) < fetch.NEAR_ASIDE + 0.01
