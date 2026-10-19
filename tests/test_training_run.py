@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 
 import numpy as np
 import pytest
@@ -249,3 +250,23 @@ def test_the_training_process_runs_trials_in_parallel_and_keeps_the_status_curre
     json.dumps(status)
     with pytest.raises(TaskError, match="already exists"):
         start_run(spec, folder)
+
+
+def test_stopping_the_training_process_keeps_the_best_policy_so_far(tmp_path, monkeypatch, balance_env):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    folder = tmp_path / "policies" / "long"
+    spec = make_run_spec("long", balance_env, algos=["ars"], steps=5_000_000, parallel=1)
+    start_run(spec, folder)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:  # wait until a trial has really begun
+        trials = JOBS.status(folder).get("trials") or []
+        if trials and trials[0]["steps"] > 0:
+            break
+        time.sleep(0.3)
+    else:
+        pytest.fail("the trial never started")
+    status = JOBS.stop(folder, wait=90)
+    status = JOBS.wait(folder, timeout=90)
+    assert status["state"] == "stopped", status
+    assert (folder / "policy.npz").exists() and status["trials"][0]["state"] == "stopped"
+    assert not (folder / store.STOP_FILE).exists()

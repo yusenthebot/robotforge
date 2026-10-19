@@ -23,12 +23,10 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any
 
-import mujoco
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from robotforge.control.rl import store
@@ -94,21 +92,7 @@ def start_run(spec: RunSpec, folder: Path, replace: bool = False) -> dict[str, A
     for algo in algos:
         algorithms.need(algo)
     plans = plan_for(spec)  # also checks the settings and the search space
-    env = build_env(spec.env)  # fails here, readably, if the task does not fit the robot
-    try:
-        facts = describe(env)
-        task = env.task
-        meta_extra = {
-            "actuators": facts["action"]["actuators"],
-            "control_dt": env.control_dt,
-            "physics_timestep": float(env.model.opt.timestep),
-            "episode_seconds": env.episode_seconds,
-            "base_method": task.methods[0] if env.action_mode == "residual" else None,
-            "observation": task.observation_labels(),
-            "task": getattr(task, "name", spec.env["task"]),
-        }
-    finally:
-        env.close()
+    meta = policy_meta(spec)  # builds the environment once: fails here, readably, if the task does not fit
     with JOBS._lock:
         busy = JOBS.running([folder.parent, store.policies_home(None)])
         if len(busy) >= 1:
@@ -124,32 +108,46 @@ def start_run(spec: RunSpec, folder: Path, replace: bool = False) -> dict[str, A
                 raise TaskError(
                     f"a policy named {folder.name!r} already exists ({state}); pick another name or replace it"
                 )
-        return _launch(spec, folder, plans, facts, meta_extra)
+        return _launch(spec, folder, plans, meta)
 
 
-def _launch(
-    spec: RunSpec, folder: Path, plans: list[TrialPlan], facts: dict[str, Any], extra: dict[str, Any]
-) -> dict[str, Any]:
+def policy_meta(spec: RunSpec) -> dict[str, Any]:
+    """What policy.json says about a run before it ends: the environment, its spaces, how to run a policy."""
+    env = build_env(spec.env)
+    try:
+        facts = describe(env)
+        task = env.task
+        return {
+            "name": spec.name,
+            "robot": spec.env["robot"],
+            "task": getattr(task, "name", spec.env["task"]),
+            "action_mode": spec.env["action_mode"],
+            "residual_scale": spec.env["residual_scale"],
+            "env": spec.env,
+            "observation": task.observation_labels(),
+            "observation_layout": facts["observation"]["sources"],
+            "left_out": facts["observation"].get("left_out", []),
+            "action": facts["action"],
+            "actuators": facts["action"]["actuators"],
+            "control_dt": env.control_dt,
+            "physics_timestep": float(env.model.opt.timestep),
+            "episode_seconds": env.episode_seconds,
+            "base_method": task.methods[0] if env.action_mode == "residual" else None,
+        }
+    finally:
+        env.close()
+
+
+def _launch(spec: RunSpec, folder: Path, plans: list[TrialPlan], meta: dict[str, Any]) -> dict[str, Any]:
     folder.mkdir(parents=True, exist_ok=True)
     for old in (store.STOP_FILE, store.HEARTBEAT_FILE, POLICY_FILE):
         (folder / old).unlink(missing_ok=True)
     shutil.rmtree(folder / TRIALS_DIR, ignore_errors=True)
     store.write_json(folder / RUN_FILE, spec.model_dump(mode="json"))
+    algo = plans[0].algo if len({p.algo for p in plans}) == 1 else "+".join(spec.algos)
     store.write_json(
         folder / store.POLICY_FILE,
-        {
-            "name": spec.name,
-            "robot": spec.env["robot"],
-            "algo": plans[0].algo if len({p.algo for p in plans}) == 1 else "+".join(spec.algos),
-            "action_mode": spec.env["action_mode"],
-            "residual_scale": spec.env["residual_scale"],
-            "env": spec.env,
-            "observation_layout": facts["observation"]["sources"],
-            "action": facts["action"],
-            "trials_planned": len(plans),
-            "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-            **extra,
-        },
+        {**meta, "algo": algo, "trials_planned": len(plans), "created": time.strftime("%Y-%m-%d %H:%M:%S")},
     )
     starting = {"state": "starting", "name": spec.name, "timesteps": 0, "progress": 0.0, "updated": time.time()}
     store.write_json(folder / store.STATUS_FILE, starting)
@@ -167,7 +165,13 @@ def _launch(
         JOBS._mark_failed(folder, starting, f"could not start the training process: {exc}")
         raise TaskError(f"could not start the training process: {exc}") from exc
     JOBS.procs[folder] = proc
-    return {"folder": str(folder), "pid": proc.pid, "trials": [vars(p) for p in plans], **facts}
+    observation = {
+        "size": len(meta["observation"]),
+        "sources": meta["observation_layout"],
+        "left_out": meta["left_out"],
+    }
+    return {"folder": str(folder), "pid": proc.pid, "trials": [vars(p) for p in plans], "observation": observation,
+            "action": meta["action"]}  # fmt: skip
 
 
 def _detached() -> dict[str, Any]:
@@ -500,19 +504,7 @@ def run_inline(spec: RunSpec, folder: Path) -> dict[str, Any]:
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     store.write_json(folder / RUN_FILE, spec.model_dump(mode="json"))
-    env = build_env(spec.env)
-    try:
-        facts = describe(env)
-        store.write_json(
-            folder / store.POLICY_FILE,
-            {"name": spec.name, "robot": spec.env["robot"], "env": spec.env, "action": facts["action"],
-             "observation_layout": facts["observation"]["sources"], "action_mode": spec.env["action_mode"],
-             "residual_scale": spec.env["residual_scale"], "actuators": facts["action"]["actuators"],
-             "control_dt": env.control_dt, "episode_seconds": env.episode_seconds,
-             "task": getattr(env.task, "name", spec.env["task"]), "observation": env.task.observation_labels()},
-        )  # fmt: skip
-    finally:
-        env.close()
+    store.write_json(folder / store.POLICY_FILE, policy_meta(spec))
     job = Job(spec, folder)
     state = job.run()
     final = job.finish(state)
@@ -520,9 +512,4 @@ def run_inline(spec: RunSpec, folder: Path) -> dict[str, Any]:
     return store.read_json(folder / store.STATUS_FILE)
 
 
-Progress = Callable[[dict[str, Any]], None]
-
-# Names used by tests and the mcp tools.
 __all__ = ["Job", "RunSpec", "make_run_spec", "plan_for", "run_inline", "run_job", "start_run"]
-
-_ = mujoco  # the job imports it early so the first worker does not pay for it alone
