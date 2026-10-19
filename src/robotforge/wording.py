@@ -111,6 +111,9 @@ def short(value: Any) -> str:
 TOO_BIG = 5  # a value this many times over its maximum is probably in the wrong unit, not just a little large
 
 
+COUNTS = {"rows", "cols", "points", "particles", "rays", "count", "steps", "width", "height", "limit"}  # not lengths
+
+
 def unit_hint(value: Any, high: float) -> str:
     """Beginners write centimetres or millimetres where the tools take meters: say which number was meant."""
     if isinstance(value, bool) or not isinstance(value, int | float) or high <= 0 or value < TOO_BIG * high:
@@ -174,7 +177,8 @@ def validation_message(
             parts.append(f"{at} {short(value)} is not one of: {', '.join(options)}")
         elif kind in BOUNDS:
             bound = BOUNDS[kind]
-            hint = unit_hint(value, ctx[bound]) if bound in ("le", "lt") else ""
+            counted = bool(loc) and str(loc[-1]) in COUNTS  # 1000 rows is not 1000 mm
+            hint = unit_hint(value, ctx[bound]) if bound in ("le", "lt") and not counted else ""
             parts.append(f"{at} must be {BOUND_TEXT[bound]} {ctx[bound]}, got {value!r}{hint}")
         elif kind.endswith(("_parsing", "_type")) and kind.split("_")[0] in ("float", "int", "decimal"):
             what = "a whole number" if kind.startswith("int") else "a plain number (no units)"

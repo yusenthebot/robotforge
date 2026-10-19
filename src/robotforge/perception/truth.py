@@ -101,6 +101,23 @@ def score(grid: OccupancyGrid, truth: np.ndarray, body: np.ndarray | None = None
     return out
 
 
+SNAP_START_M = 0.8  # how far from a start the own map blocks that the nearest free cell still stands in for it
+
+
+def _free_cell(nav: Any, xy: tuple[float, float]) -> tuple[tuple[int, int] | None, float]:
+    """The cell of `nav` at `xy` if it is free, else the nearest free one within SNAP_START_M (None when none), and how
+    far (m) that cell's center is from `xy`."""
+    cell = nav.grid.cell(*xy)
+    if nav.grid.inside(*cell) and nav.free[cell]:
+        return cell, 0.0
+    xs, ys = nav.grid.centers()
+    dist = np.where(nav.free, np.hypot(xs - xy[0], ys - xy[1]), np.inf)
+    k = np.unravel_index(int(np.argmin(dist)), dist.shape)
+    if dist[k] > SNAP_START_M:
+        return None, float("inf")
+    return (int(k[0]), int(k[1])), float(dist[k])
+
+
 def navigation_agreement(own: Any, scene: Any, start: tuple[float, float]) -> dict[str, Any]:
     """How the robot's own map and the scene's map (behaviors/nav_map.py, from the compiled model) agree on where the
     robot can go. `own` and `scene` are navigation maps (NavMap) on their own grids; the robot is at `start`.
@@ -109,17 +126,25 @@ def navigation_agreement(own: Any, scene: Any, start: tuple[float, float]) -> di
     where it stands) that the scene's map says it cannot stand in (a wall, a rack, a pallet, a step);
     found: the share of the cells the scene's map lets it reach, inside the area its own map covers, that its own map
     lets it reach too (what its map lacks is what it has not seen, or took for an obstacle: a ramp is a block to a
-    lidar)."""
+    lidar).
+
+    A robot that stands in a cell its own map blocks (it sees its own legs or a rack's edge as a wall) is scored from
+    the nearest free cell of its map within SNAP_START_M, as the planner does when it drives out first. When there is
+    none the result says why in "unscored" instead of coming back without the numbers."""
     from robotforge.behaviors import nav_grid
 
     out: dict[str, Any] = {}
-    cell = own.grid.cell(*start)
-    if not own.grid.inside(*cell):
-        return out
+    if not own.grid.inside(*own.grid.cell(*start)):
+        return {"unscored": "the robot stands outside the area its own map covers"}
+    cell, moved = _free_cell(own, start)
+    if cell is None:
+        return {"unscored": f"its own map blocks every cell within {SNAP_START_M} m of the robot"}
+    if moved > own.grid.res:
+        out["start_moved_m"] = round(moved, 3)
     mine = nav_grid.reachable(own.grid, own.free, cell)
     rows, cols = np.nonzero(mine)
     if not len(rows):
-        return out
+        return {"unscored": "the robot reaches no cell of its own map"}
     xs = own.grid.x0 + cols * own.grid.res
     ys = own.grid.y0 + rows * own.grid.res
     sr = np.rint((ys - scene.grid.y0) / scene.grid.res).astype(int)
@@ -137,7 +162,10 @@ def navigation_agreement(own: Any, scene: Any, start: tuple[float, float]) -> di
     x1, y1 = own.grid.x0 + extent_c1 * own.grid.res, own.grid.y0 + extent_r1 * own.grid.res
     sxs, sys_ = scene.grid.centers()
     covered = (sxs >= x0) & (sxs <= x1) & (sys_ >= y0) & (sys_ <= y1)
-    scene_reach = nav_grid.reachable(scene.grid, scene.free, scene.grid.cell(*start)) & covered
+    scene_cell, _ = _free_cell(scene, start)
+    scene_reach = (
+        nav_grid.reachable(scene.grid, scene.free, scene_cell) & covered if scene_cell is not None else covered & False
+    )
     if scene_reach.any():
         orr = np.rint((sys_[scene_reach] - own.grid.y0) / own.grid.res).astype(int)
         occ = np.rint((sxs[scene_reach] - own.grid.x0) / own.grid.res).astype(int)

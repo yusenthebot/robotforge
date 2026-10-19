@@ -4,6 +4,7 @@ robot in a real MuJoCo room that maps it, finds itself in the map and goes somew
 import base64
 import json
 import math
+import time
 import zlib
 
 import numpy as np
@@ -59,6 +60,47 @@ def test_the_grid_grows_to_hold_a_scan_that_reaches_past_its_edge():
     grid.integrate(np.zeros(2), ends, hit)
     assert grid.cell(3.0, 3.0)[0] < grid.rows and grid.x0 < -3.0
     assert grid.state()[grid.cell(-3.0, 1.0)] == OCCUPIED
+
+
+def test_the_likelihood_field_made_in_parts_is_the_one_made_whole():
+    """The field is made again only where walls came or went, and padded when the grid grows: it must equal a field
+    made from scratch after every kind of change."""
+    rng = np.random.default_rng(3)
+    grid = OccupancyGrid(0.1, (0.0, 0.0), reach=1.5)  # small, so scans make it grow
+    shape, grew = None, 0
+    for i in range(14):
+        origin = (rng.uniform(-0.5, 0.5), rng.uniform(-0.5, 0.5))
+        ends, hit = _room_scan(origin, half=1.0 + 0.3 * i, rays=90, half_y=1.0 + 0.2 * i)
+        hit &= rng.random(len(hit)) > 0.15  # some rays only clear, some walls are seen later
+        grid.integrate(np.asarray(origin), ends, hit)
+        incremental = grid.likelihood_field().copy()
+        grew += int(shape is not None and shape != incremental.shape)
+        shape = incremental.shape
+        grid._field = None
+        whole = grid.likelihood_field()
+        assert incremental.shape == whole.shape
+        assert np.abs(incremental - whole).max() < 1e-6, i
+    assert grew > 0, "the grid never grew, so padding was not tried"
+
+
+def test_the_navigation_score_is_made_when_the_robot_stands_in_a_cell_its_own_map_blocks():
+    """It came back empty (no 'found') whenever the believed start cell was blocked on the robot's own map."""
+    from types import SimpleNamespace
+
+    from robotforge.behaviors.nav_grid import Grid
+    from robotforge.perception import truth
+
+    grid = Grid(0.0, 0.0, 0.1, 30, 30)
+    free = np.ones(grid.shape, bool)
+    scene = SimpleNamespace(grid=grid, free=free.copy())
+    own_free = free.copy()
+    own_free[14:17, 14:17] = False  # the cell the robot stands in and its neighbours, seen as a wall
+    own = SimpleNamespace(grid=grid, free=own_free)
+    score = truth.navigation_agreement(own, scene, (1.5, 1.5))
+    assert score["found"] > 0.9 and score["through_blocked"] == 0.0 and 0 < score["start_moved_m"] < 0.3
+    boxed = SimpleNamespace(grid=grid, free=np.zeros(grid.shape, bool))
+    assert "unscored" in truth.navigation_agreement(boxed, scene, (1.5, 1.5))
+    assert "unscored" in truth.navigation_agreement(own, scene, (50.0, 50.0))
 
 
 def test_rays_over_a_low_crate_do_not_clear_it():
@@ -231,6 +273,21 @@ def test_a_cloud_is_thinned_to_the_number_asked_for():
     summary = cloud.summary(points, 200)
     assert summary["total"] == 5000 and summary["shown"] == len(summary["points_m"])
     assert cloud.summary(np.zeros((0, 3)), 10)["shown"] == 0
+
+
+@pytest.mark.parametrize("limit", [1, 2, 7, 50])
+def test_a_cloud_across_the_origin_is_thinned_to_a_small_limit_at_once(limit):
+    """Cubes anchored at the world origin kept -1 and 0 apart: points=1 took 20 s and answered an infinite voxel."""
+    rng = np.random.default_rng(1)
+    points = rng.uniform(-4, 4, (20000, 3))
+    t0 = time.perf_counter()
+    summary = cloud.summary(points, limit)
+    assert time.perf_counter() - t0 < 10  # generous: it takes well under a second
+    assert 1 <= summary["shown"] <= limit
+    assert np.isfinite(summary["voxel_m"])
+    json.dumps(summary, allow_nan=False)  # strict JSON, as the tool reply is
+    if limit >= 7:
+        assert summary["shown"] >= limit // 2  # not a handful when more were asked for
 
 
 # ---- a robot in a real room -------------------------------------------------------------------------------------
@@ -418,6 +475,23 @@ def test_the_viewer_message_carries_the_map_the_pose_and_the_particles(pg):
     json.dumps(message)
 
 
+def test_the_viewer_is_told_once_when_the_last_map_is_gone(pg):
+    """The page drew a dead map for ever: with no mapper the stream sent nothing, and the page drops a map only when a
+    later message leaves its robot out."""
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    _drive(pg, ROUND[:1])
+    assert pg.perception.viewer_message()["robots"]
+    pg.perception.clear("rover")
+    gone = pg.perception.viewer_message()
+    assert gone["type"] == "map" and gone["robots"] == []
+    assert pg.perception.viewer_message() is None  # said once
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    _drive(pg, ROUND[:1])
+    assert "grid" in pg.perception.viewer_message()["robots"][0]  # a new map is sent whole
+    pg.session.reset()
+    assert pg.perception.viewer_message()["robots"] == []  # a reset drops every mapper too
+
+
 def test_the_viewer_stream_sends_a_map_message_while_a_robot_maps(pg):
     from starlette.testclient import TestClient
 
@@ -492,3 +566,86 @@ async def test_read_sensors_gives_a_thinned_point_cloud_when_asked(pg):
         assert 0 < scan["cloud"]["shown"] <= 150 and scan["cloud"]["total"] >= scan["cloud"]["shown"]
         bad = await client.call_tool("read_sensors", {"robot": "rover", "points": 99999})
         assert bad.is_error and "1 to 2000" in bad.content[0].text
+
+
+@pytest.mark.anyio
+async def test_the_mapping_tool_refuses_what_it_cannot_do_and_says_how_the_robot_steered(pg):
+    server = build_server(pg, 0)
+    async with Client(server) as client:
+        for particles in ("many", 2.5, 3):
+            bad = await client.call_tool(
+                "mapping", {"robot": "rover", "action": "start", "options": {"particles": particles, "lidar": LIDAR}}
+            )
+            assert bad.is_error and "particles is how many guesses" in bad.content[0].text, bad.content[0].text
+            assert "int()" not in bad.content[0].text  # not Python's own complaint
+        await client.call_tool(
+            "mapping", {"robot": "rover", "action": "start", "options": {"pose": "truth", "lidar": LIDAR}}
+        )
+        await client.call_tool("mapping", {"robot": "rover", "action": "explore", "options": {"seconds": 120}})
+        moved = await client.call_tool("move", {"robot": "rover", "to": [1.8, 1.8], "map": "own"})
+        said = json.loads(moved.content[0].text)
+        assert "exact pose" in said.get("pose_source", ""), said
+
+
+def test_a_mapper_that_failed_is_told_to_the_agent_not_only_logged(pg, monkeypatch):
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    mapper = pg.perception.mapper("rover")
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("scan lost")
+
+    monkeypatch.setattr(mapper, "tick", broken)
+    pg.run_fast(lambda: False, 0.3)
+    with pytest.raises(PerceptionError) as caught:
+        pg.perception.mapper("rover")
+    assert "scan lost" in str(caught.value) and "action='start'" in str(caught.value)
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})  # starting again clears it
+    assert pg.perception.mapper("rover") is not mapper
+
+
+def test_localizing_from_nowhere_in_a_map_with_too_few_walls_says_it_cannot_match(pg):
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    grid = pg.perception.mapper("rover").grid
+    ends = np.array([[1.0, y] for y in np.linspace(-0.2, 0.2, 5)])
+    grid.integrate(np.zeros(2), ends, np.ones(5, bool))  # a few wall cells, free space in front of them
+    said = pg.perception.localize("rover", "global")
+    assert "walls" in said["warning"] and "map more" in said["warning"]
+    with pytest.raises(PerceptionError, match="particles is how many guesses"):
+        pg.perception.localize("rover", "global", "many")
+
+
+def test_a_rover_in_an_unseen_warehouse_maps_it_and_reaches_a_rack_by_its_own_map(tmp_path, monkeypatch):
+    """The headline claim on a short run (scripts/perception_bench.py is the long one, with the Go2): the robot knows
+    nothing of the warehouse, explores for 40 s of simulated time, keeps its place far better than the odometry
+    alone, and goes to a named rack by its own map and pose. Thresholds are loose: the run is deterministic, but
+    nothing here should sit on a millimetre."""
+    import mujoco
+
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("warehouse_smoke")
+    pg.load_scene("warehouse", seed=1, keep_robots=False, starter=False)
+    pg.add_robot("rover", template="rover", pos=[-6.2, 2.6], yaw=0)
+    hub = pg.perception
+    hub.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
+    trips = hub.explore_trips("rover", 40.0, area=[-7.5, -3.4, 7.5, 5.4])
+    try:
+        while True:
+            trip, limit = next(trips)
+            pg.run_fast(lambda t=trip: t.done, limit + 1.0)
+    except StopIteration:
+        pass
+    errors = hub.errors("rover")
+    rms = {k: float(np.sqrt(np.mean(v**2))) for k, v in errors.items() if k in ("estimate_m", "odometry_m")}
+    assert rms["estimate_m"] < 0.5 * rms["odometry_m"], rms  # the map corrects the odometry's drift
+    accuracy = hub.status("rover")["accuracy"]
+    assert accuracy["precision"] > 0.5 and accuracy["wall_error_m"]["mean"] < 0.15
+    model, data = pg.session.model, pg.session.data
+    here = np.array(pg.behaviors.pose("rover")["position"][:2])
+    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(model.nbody)]
+    racks = [n for n in names if n.startswith("rack_")]
+    near = min(racks, key=lambda n: np.hypot(*(data.xpos[names.index(n)][:2] - here)))
+    trip = pg.behaviors.navigate("rover", near, seconds=60, own_map=hub.mapper("rover"))
+    pg.run_fast(lambda: trip.done, 65.0)
+    assert trip.result()["arrived"], trip.result()
+    assert hub.pose_check("rover")["error_position_m"] < 0.5

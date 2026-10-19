@@ -62,7 +62,13 @@ def register(server: MCPServer, playground: Playground) -> None:
         camera: center_m, min_m and median_m are depths along its axis; nearest is the closest obstacle's straight
         distance from the lens with its bearing (its own robot and the floor left out); segmentation camera: what it
         sees and how much. imu, encoders, force_torque (payload_kg is what it holds; a leg on the ground gives
-        supported_kg), touch, rangefinder, gps, odometry: their values. A robot's own MuJoCo sensors (a G1's IMU) come
+        supported_kg), touch, rangefinder, gps, odometry: their values. sonar: distance_m of the nearest echo in its
+        cone (blind up close, no echo at a grazing angle), echoes. wheel_odometry: pose from the wheels' speeds, as
+        odometry. skin: total_n, contact, touched and faces (normal force on taxels over several faces of a body).
+        temperature (temperature_c) and gas (gas_ppm): what the world's heat_source and gas_source objects make at the
+        sensor, lagging by its response_s. Camera modes: stereo (depth worked out from a disparity, with a baseline),
+        a fisheye lens (rgb through an equidistant lens), event (events: how many pixels got brighter or darker, their
+        rate and centroid, from the picture against 30 ms before). A robot's own MuJoCo sensors (a G1's IMU) come
         as other_sensors. image=true adds each camera's picture; points=N adds each depth camera's and lidar's point
         cloud in world coordinates, thinned (voxel mean) to at most N points (1 to 2000). Readings follow each
         sensor's rate, noise and latency (age_s is how old a sample is)."""
