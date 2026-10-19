@@ -2,6 +2,7 @@
 // this page draws the bodies it streams and sends user input back.
 import * as THREE from "three";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
+import { initMap, mapFrame, mapState, mapUpdate } from "./mapview.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
@@ -1080,6 +1081,7 @@ function connect() {
     else if (msg.type === "reply") onReply(msg);
     else if (msg.type === "lesson") lessonUpdate(msg);
     else if (msg.type === "sensors") sensorsUpdate(msg);
+    else if (msg.type === "map") mapUpdate(msg);
     else if (msg.type === "error") toast(msg.message);
   };
 }
@@ -2205,6 +2207,7 @@ function loop() {
   lessonFrame();
   if (water) waterFrame(water, latestTime, camera, scene3);
   sensorsFrame();
+  mapFrame();
   renderer.render(scene3, camera);
   frames++;
   const now = performance.now();
@@ -2290,6 +2293,14 @@ initSensors({
   storageSet,
 });
 
+initMap({
+  scene: scene3,
+  color: (token) => new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue(token).trim() || "#888"),
+  inLesson: () => lessonActive(),
+  storageGet,
+  storageSet,
+});
+
 connect();
 loop();
 
@@ -2368,5 +2379,6 @@ window.__robotforge = {
   },
   fps: () => fps, // frames drawn a second, counted over the last half second
   sensors: () => sensorsState(), // what the sensor drawings and views show (sensors.js)
+  map: () => mapState(), // the maps robots build: grid, particles, poses (mapview.js)
   showSensor: (name, on = true) => sensorsShow(name, on), // as switching it in the robots drawer
 };

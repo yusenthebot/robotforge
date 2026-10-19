@@ -17,6 +17,8 @@ DEFAULT_DENSITY = 1000.0  # kg/m^3, a light mix of plastic and aluminum
 TINY_MASS = 0.01  # kg, for links that move but have neither shape nor mass
 TINY_INERTIA = 1e-6  # kg m^2
 MIN_VALID_MASS = 1e-6
+# Smallest moment over the largest: below it the tensor is not positive once written with nine digits.
+NEAR_SINGULAR = 1e-8
 # Largest and smallest plausible principal moment, relative to mass * (radius of the link's shapes)^2.
 MAX_INERTIA_RATIO = 25.0
 MIN_INERTIA_RATIO = 1e-4
@@ -107,7 +109,7 @@ def inertia_problem(mass: float, tensor: np.ndarray) -> str:
     if not np.isfinite(tensor).all():
         return "the inertia contains invalid numbers"
     eig = np.linalg.eigvalsh((tensor + tensor.T) / 2)
-    if eig[0] <= 1e-12 * max(eig[-1], 1e-12) or eig[0] <= 0:
+    if eig[0] <= NEAR_SINGULAR * max(eig[-1], 1e-12) or eig[0] <= 0:  # a hair above zero fails once written out
         return "the inertia is zero or not positive"
     if eig[2] > eig[0] + eig[1] + 1e-6 * eig[2]:
         return "the inertia is physically impossible (one axis is heavier than the other two together)"

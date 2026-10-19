@@ -719,6 +719,14 @@ DEMOS = [
         timeline=[(0.8, _go("go2", [1.6, 2.6]))],
         page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
     ),
+    Demo(  # code a user wrote: a Geiger sensor on the Go2's back (a plugin) reads higher as it walks up to the drum
+        "extend_plugins_walk",
+        S._extend_plugins,
+        7.0,
+        timeline=[(0.8, _move("go2", 0.25)), (5.3, _move("go2", 0.0))],
+        page=S.EXTEND_VIEW,
+        settle=1.0,
+    ),
     Demo(  # take off from the path, fly a square round a tree, come back and land where it started
         "drone_park_square",
         S._in_scene("park", {"drone": {"template": "drone"}}),

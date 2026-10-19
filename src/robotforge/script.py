@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+from collections.abc import Callable
 from typing import Any
 
 ENV_PORT = "ROBOTFORGE_SCRIPT_PORT"
@@ -33,6 +34,7 @@ class Sim:
     def __init__(self, sock: socket.socket):
         self._sock = sock
         self._file = sock.makefile("rw", encoding="utf-8", newline="\n")
+        self._callbacks: list[list[Any]] = []  # [function, every, due]: see on_step
 
     def _call(self, op: str, **args: Any) -> Any:
         self._file.write(json.dumps({"op": op, **args}) + "\n")
@@ -52,8 +54,46 @@ class Sim:
         return self._call("time")
 
     def step(self, seconds: float = 0.02) -> float:
-        """Let `seconds` of simulated time pass (physics and running behaviors). Returns the new time."""
-        return self._call("step", seconds=seconds)
+        """Let `seconds` of simulated time pass (physics and running behaviors). Returns the new time. Callbacks from
+        on_step are called as it passes."""
+        if not self._callbacks:
+            return self._call("step", seconds=seconds)
+        now = self.time
+        end = now + seconds
+        while end - now > 1e-9:
+            nearest = min(due for _, _, due in self._callbacks)
+            now = self._call("step", seconds=max(min(nearest, end) - now, 1e-3))
+            for entry in self._callbacks:
+                if now + 1e-9 >= entry[2]:
+                    entry[2] = now + entry[1]
+                    entry[0]()
+        return now
+
+    def on_step(self, callback: Callable[[], Any], every: float = 0.02) -> None:
+        """Call `callback()` every `every` simulated seconds while step() lets time pass (robot.on_step wraps it)."""
+        if every < 0.002:
+            raise ScriptError("on_step(every=...) is at least 0.002 s, one physics step")
+        self._callbacks.append([callback, float(every), self.time + float(every)])
+
+    # ---- robots as one interface ----
+    def sensor_names(self, robot: str) -> list[str]:
+        """The names of the sensors a robot has (add_sensor's, the builder's and the templates')."""
+        return self._call("sensor_names", robot=robot)
+
+    def robots(self) -> list[str]:
+        """The names of the world's robots."""
+        return self._call("robots")
+
+    def robot(self, name: str):
+        """A robot as one interface whatever it is (see robotforge.robot): robot.sensors, robot.move(), robot.arm,
+        robot.gripper, robot.on_step(). The same script runs on a template dog and on a Go2."""
+        from robotforge.robot import Robot
+
+        return Robot(self, name, self._call("describe", robot=name))
+
+    def start_controller(self, robot: str, name: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Hand `robot` to a plugin's controller (see the plugins tool); it runs until stop(robot)."""
+        return self._call("start_controller", robot=robot, name=name, params=params or {})
 
     # ---- reading the world ----
     def position(self, name: str) -> list[float]:

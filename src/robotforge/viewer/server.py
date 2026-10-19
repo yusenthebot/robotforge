@@ -40,6 +40,7 @@ MAX_POSES_AHEAD = 3
 STATE_HZ = 4.0
 LESSON_HZ = 20.0
 SENSOR_HZ = 10.0
+MAP_HZ = 4.0
 REPORT_EVERY = 5.0  # s between log reports of a failing tick
 
 
@@ -133,6 +134,13 @@ class ViewerHub:
         # switch on, applied once a tab. The viewer's sensors.js draws them (sensorkit.js lists the fields it reads,
         # and a test checks they are sent). See docs/SENSORS.md.
         self.sensor_stream: Callable[[], dict[str, Any] | None] | None = None
+        # The maps robots draw while they move: {"type": "map", "version", "robots": [...]}, MAP_HZ times a second
+        # while any robot maps (None otherwise). Each robot entry has "robot", "mapping" (false: the map is kept as
+        # it is), "scans", its estimated "pose" [x, y, heading] and the "odometry" pose alone, its "particles" (flat
+        # x, y list) with their "sigma_m", and now and then its "grid": {"x0", "y0", "res", "rows", "cols", "cells"}
+        # with "cells" a base64 of a zlib-deflated byte per cell (0 unknown, 1 free, 2 occupied), row by row from
+        # row 0 at y0. The viewer's mapview.js draws them. See docs/PERCEPTION.md.
+        self.map_stream: Callable[[], dict[str, Any] | None] | None = None
         self._slow_tasks: set[asyncio.Task] = set()
         # Pose frames sent to each viewer, and how many it said it took in (only viewers that say so are paced).
         self._sent: dict[WebSocket, int] = {}
@@ -295,6 +303,7 @@ class ViewerHub:
         last_state = 0.0
         last_lesson = 0.0
         last_sensors = 0.0
+        last_map = 0.0
         last_report = -math.inf
         while True:
             tick_start = time.perf_counter()
@@ -322,6 +331,11 @@ class ViewerHub:
                     if self.sensor_stream is not None and tick_start - last_sensors > 1.0 / SENSOR_HZ:
                         last_sensors = tick_start
                         update = self.sensor_stream()
+                        if update is not None:
+                            await self._send_all(text=json.dumps(update))
+                    if self.map_stream is not None and tick_start - last_map > 1.0 / MAP_HZ:
+                        last_map = tick_start
+                        update = self.map_stream()
                         if update is not None:
                             await self._send_all(text=json.dumps(update))
             except Exception:

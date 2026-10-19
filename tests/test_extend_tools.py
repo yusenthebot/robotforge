@@ -92,3 +92,29 @@ def test_a_world_that_uses_a_plugin_shape_it_may_not_load_says_why_it_will_not_o
     REGISTRY.reload()
     with pytest.raises(PlaygroundError, match=r"plugins\(action=\"trust\"\)"):
         pg.open_world(str(pg.store.dir))
+
+
+def test_only_the_open_worlds_plugins_are_loaded_so_two_worlds_can_carry_the_same_file(pg, tmp_path):
+    first = pg.store
+    write(first.dir / "plugins", "sign.py", SIGNPOST)
+    REGISTRY.trust(first.dir)
+    other = pg.new_world("second", "checker")
+    assert other["world"] == "second" and "signpost" not in REGISTRY.of(
+        "part"
+    )  # the first world's file is not loaded here
+    write(pg.store.dir / "plugins", "sign.py", SIGNPOST)  # the same file, written into the second world
+    pg.store.load()
+    assert list(REGISTRY.problems()) == ["second/plugins/sign.py"]  # written by hand: waits to be trusted
+    REGISTRY.trust(pg.store.dir)
+    assert "signpost" in REGISTRY.of("part") and not REGISTRY.problems()
+
+
+@pytest.mark.anyio
+async def test_the_template_list_says_what_plugins_add_once_there_are_some(pg):
+    server = build_server(pg, find_free_port(8813))
+    async with Client(server) as client:
+        before = await call(client, "list_templates")
+        assert "plugins" not in before
+        await call(client, "write_script", {"name": "sign", "code": SIGNPOST, "plugin": True})
+        after = await call(client, "list_templates")
+        assert after["plugins"]["parts"][0]["name"] == "signpost"

@@ -13,6 +13,10 @@ export const READS = {
   encoders: ["rad"],
   touch: ["force_n", "total_n", "cells_local", "cell_half", "cell_shape", "pad_quat"],
   rangefinder: ["direction", "distance_m", "range_m"],
+  sonar: ["direction", "distance_m", "range_m", "beam_deg"],
+  skin: ["pads", "total_n"],
+  temperature: ["value", "unit", "level"],
+  gas: ["value", "unit", "level"],
 };
 // Fields read when they are there: a wrist's payload_kg, or a standing leg's supported_kg instead.
 export const READS_WHEN_SENT = { force_torque: ["payload_kg", "supported_kg"] };

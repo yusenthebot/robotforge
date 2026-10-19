@@ -17,7 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 from robotforge import wording
 
-SENSOR_TYPES = (
+# A list, not a tuple: plugins add their types to it (robotforge.extend.sensor) and take them off again.
+SENSOR_TYPES: list[str] = [
     "camera",
     "lidar",
     "lidar3d",
@@ -28,8 +29,14 @@ SENSOR_TYPES = (
     "rangefinder",
     "gps",
     "odometry",
-)
-SensorType = Literal[SENSOR_TYPES]
+    "wheel_odometry",
+    "sonar",
+    "skin",
+    "temperature",
+    "gas",
+]
+BUILT_IN_TYPES = tuple(SENSOR_TYPES)
+PLUGIN_PARAMS: dict[str, dict[str, Any]] = {}  # a plugin sensor type -> its options and their defaults
 
 # The words agents use for a type, and the options they imply ("depth camera" is a camera in depth mode).
 ALIASES: dict[str, tuple[str, dict[str, Any]]] = {
@@ -53,8 +60,18 @@ ALIASES: dict[str, tuple[str, dict[str, Any]]] = {
     "joint_encoders": ("encoders", {}),
     "range": ("rangefinder", {}),
     "range_finder": ("rangefinder", {}),
-    "sonar": ("rangefinder", {}),
-    "ultrasonic": ("rangefinder", {}),
+    "ultrasonic": ("sonar", {}),
+    "ultrasound": ("sonar", {}),
+    "wheel_odom": ("wheel_odometry", {}),
+    "wheel_encoders": ("wheel_odometry", {}),
+    "tactile": ("skin", {}),
+    "tactile_skin": ("skin", {}),
+    "taxels": ("skin", {}),
+    "thermometer": ("temperature", {}),
+    "temp": ("temperature", {}),
+    "thermal": ("temperature", {}),
+    "gas_sensor": ("gas", {}),
+    "chemical": ("gas", {}),
     "gnss": ("gps", {}),
     "odom": ("odometry", {}),
     "contact": ("touch", {}),
@@ -78,6 +95,11 @@ CHANNELS: dict[str, tuple[str, ...]] = {
     "touch": ("force",),
     "gps": ("position",),
     "odometry": ("speed", "turn"),
+    "wheel_odometry": ("speed", "turn"),
+    "sonar": ("range",),
+    "skin": ("force",),
+    "temperature": ("temperature",),
+    "gas": ("concentration",),
 }
 UNITS = {
     "depth": "m",
@@ -91,8 +113,10 @@ UNITS = {
     "torque": "N m",
     "speed": "m/s",
     "turn": "rad/s",
+    "temperature": "deg C",
+    "concentration": "ppm",
 }
-BIASED: dict[str, tuple[str, ...]] = {"imu": ("accel", "gyro"), "odometry": ("turn",)}
+BIASED: dict[str, tuple[str, ...]] = {"imu": ("accel", "gyro"), "odometry": ("turn",), "wheel_odometry": ("turn",)}
 
 PLACED = {"name", "on", "at", "direction"}
 KNOBS = {"rate_hz", "latency_s", "noise", "seed"}
@@ -107,6 +131,11 @@ OPTIONS: dict[str, set[str]] = {
     "touch": {"name", "on", "at"} | KNOBS | {"rows", "cols", "size"},
     "gps": {"name", "on", "at"} | KNOBS,
     "odometry": {"name", "on"} | KNOBS | {"bias", "drift"},
+    "wheel_odometry": {"name", "on"} | KNOBS | {"bias", "drift", "wheels", "radius", "slip"},
+    "sonar": PLACED | KNOBS | {"range", "beam", "min_range", "dropout"},
+    "skin": {"name", "on"} | KNOBS | {"rows", "cols", "faces"},
+    "temperature": {"name", "on", "at"} | KNOBS | {"response_s"},
+    "gas": {"name", "on", "at"} | KNOBS | {"response_s"},
 }
 
 # Defaults filled in at compile time. A 2D lidar is a hobby scanner (one ring, 1 degree, 12 m), a 3D lidar a
@@ -122,13 +151,25 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "touch": {"rows": 1, "cols": 1, "at": "bottom"},
     "gps": {"at": "center"},
     "odometry": {"at": "center"},
+    "wheel_odometry": {"at": "center"},
+    "sonar": {"range": 4.0, "beam": 30.0, "min_range": 0.15, "at": "front"},
+    "skin": {"rows": 3, "cols": 3, "faces": ["front", "back", "left", "right", "top"]},
+    "temperature": {"at": "top"},
+    "gas": {"at": "top"},
 }
 ANCHORS = ("center", "origin", "top", "bottom", "front", "back", "left", "right")
 MAX_RAYS = 8192  # rays in one scan: more slows every step a lidar samples at (multiRay is about 1 us a ray)
 LIDAR_MAX_HZ = 50.0  # scans a second: real spinning lidars turn at 5 to 20 Hz
 LIDAR_MAX_RAYS_S = 200_000  # rays a second (rate_hz x rays a scan): about a fifth of a second of work a second
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-BASE_NAMES = {"lidar3d": "lidar", "rangefinder": "range", "force_torque": "ft", "touch": "touch"}
+BASE_NAMES = {
+    "lidar3d": "lidar",
+    "rangefinder": "range",
+    "force_torque": "ft",
+    "touch": "touch",
+    "wheel_odometry": "wheel_odom",
+    "temperature": "temp",
+}
 
 
 class SensorEntry(BaseModel):
@@ -136,7 +177,7 @@ class SensorEntry(BaseModel):
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
-    type: SensorType
+    type: str
     name: str | None = None
     on: str | None = Field(None, description="body, part, geom, site or joint it sits on; default the base")
     at: str | list[float] | None = Field(None, description="anchor (top, front, center, ...) or [x, y, z] m")
@@ -161,6 +202,17 @@ class SensorEntry(BaseModel):
     resolution: float | None = Field(None, ge=0, le=1, description="smallest step an encoder reads, rad")
     # force_torque
     between: list[str] | None = Field(None, description="two neighboring bodies, parent and child")
+    # sonar
+    beam: float | None = Field(None, gt=1, le=120, description="sonar: the cone's full angle, degrees")
+    min_range: float | None = Field(None, ge=0, le=2, description="sonar: nearer than this it hears nothing, m")
+    # wheel odometry
+    wheels: list[str] | None = Field(None, description="wheel_odometry: the wheel joints, left and right ones")
+    radius: float | None = Field(None, gt=0.005, le=2, description="wheel_odometry: wheel radius, m")
+    slip: float | None = Field(None, ge=0, le=0.5, description="wheel_odometry: each wheel reads this share off")
+    # skin
+    faces: list[str] | None = Field(None, description="skin: which faces of the body carry taxels")
+    # temperature, gas
+    response_s: float | None = Field(None, gt=0, le=300, description="time constant of the sensor's response, s")
     # realism: ideal unless set
     rate_hz: float | None = Field(None, gt=0, le=2000)
     latency_s: float | None = Field(None, ge=0, le=2)
@@ -169,6 +221,8 @@ class SensorEntry(BaseModel):
     drift: float | dict[str, float] | None = None
     dropout: float | None = Field(None, ge=0, lt=1)
     seed: int | None = None
+    # a plugin sensor's own options (robotforge.extend.sensor); the type declares which
+    params: dict[str, Any] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -184,7 +238,24 @@ class SensorEntry(BaseModel):
                 data = {**implied, **data, "type": kind}
             else:
                 data = {**data, "type": kind if kind in SENSOR_TYPES else data["type"]}
+            if data["type"] in PLUGIN_PARAMS:
+                # A plugin sensor's own options are written beside the standard ones, whatever another type calls
+                # them (a plugin's "radius" is not a wheel odometry's): all it takes are the placement and the knobs.
+                allowed = OPTIONS[data["type"]] | {"type"}
+                own = {k: v for k, v in data.items() if k not in allowed}
+                if own:
+                    given = data.get("params") if isinstance(data.get("params"), dict) else {}
+                    data = {**{k: v for k, v in data.items() if k in allowed}, "params": {**given, **own}}
         return data
+
+    @field_validator("type")
+    @classmethod
+    def _type(cls, v: str) -> str:
+        if v not in SENSOR_TYPES:
+            plugin = [t for t in SENSOR_TYPES if t not in BUILT_IN_TYPES]
+            more = f" (and from plugins: {', '.join(plugin)})" if plugin else "; plugins() lists the ones plugins add"
+            raise ValueError(f"unknown sensor type {wording.short(v)}; the types are {', '.join(BUILT_IN_TYPES)}{more}")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -237,6 +308,17 @@ class SensorEntry(BaseModel):
             raise ValueError(f"touch size is [length, width] in meters, each up to 2, got {v!r}")
         return v
 
+    @field_validator("faces")
+    @classmethod
+    def _faces(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        words = [wording.squash(f) for f in v]
+        wrong = [w for w in words if w not in ("top", "bottom", "front", "back", "left", "right")]
+        if wrong or not words:
+            raise ValueError(f"faces are some of top, bottom, front, back, left, right, got {v!r}")
+        return list(dict.fromkeys(words))
+
     @field_validator("between")
     @classmethod
     def _between(cls, v: list[str] | None) -> list[str] | None:
@@ -254,6 +336,13 @@ class SensorEntry(BaseModel):
                 f"{_a(self.type)} {self.type} sensor takes no {', '.join(map(repr, wrong))}; its options are "
                 f"{', '.join(own)}"
             )
+        if self.type in PLUGIN_PARAMS:
+            extra = sorted(set(self.params or {}) - set(PLUGIN_PARAMS[self.type]))
+            if extra:
+                have = ", ".join(PLUGIN_PARAMS[self.type]) or "none"
+                raise ValueError(
+                    f"the {self.type} sensor takes no option {', '.join(map(repr, extra))}; it takes {have}"
+                )
         channels = CHANNELS[self.type]
         if isinstance(self.noise, dict):
             _channels(self.noise, channels, self.type, "noise")
@@ -294,6 +383,25 @@ class SensorEntry(BaseModel):
     def _compact(self, handler: Any) -> dict[str, Any]:
         """Saved as written: the options left out stay out of world.yaml."""
         return {k: v for k, v in handler(self).items() if v is not None}
+
+
+def register_type(name: str, channels: tuple[str, ...], at: str, params: dict[str, Any]) -> None:
+    """Make `name` a sensor type (a plugin's): add_sensor takes it, world.yaml saves it, the tables below know it."""
+    SENSOR_TYPES.append(name)
+    CHANNELS[name] = channels
+    OPTIONS[name] = PLACED | (KNOBS - {"dropout"}) | {"params"}
+    DEFAULTS[name] = {"at": at}
+    BIASED[name] = ()
+    PLUGIN_PARAMS[name] = dict(params)
+
+
+def unregister_type(name: str) -> None:
+    if name in BUILT_IN_TYPES:
+        raise ValueError(f"{name!r} is a built-in sensor type")
+    if name in SENSOR_TYPES:
+        SENSOR_TYPES.remove(name)
+    for table in (CHANNELS, OPTIONS, DEFAULTS, BIASED, PLUGIN_PARAMS):
+        table.pop(name, None)
 
 
 def _a(word: str) -> str:
@@ -364,7 +472,7 @@ def base_name(kind: str, mode: str | None = None, on: str | None = None) -> str:
     word = BASE_NAMES.get(kind, kind)
     if kind == "camera" and mode not in (None, "rgb"):
         word = f"{mode}_camera"
-    if on and kind in ("touch", "force_torque", "camera", "rangefinder", "imu"):
+    if on and kind in ("touch", "force_torque", "camera", "rangefinder", "imu", "sonar", "temperature", "gas"):
         word = f"{on}_{word}"
     word = re.sub(r"[^a-z0-9_]+", "_", wording.squash(word)).strip("_")
     if not word or not word[0].isalpha():

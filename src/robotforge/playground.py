@@ -42,6 +42,7 @@ from robotforge.design.world import (
 )
 from robotforge.extend import plugin_notes
 from robotforge.learn import LESSONS, LessonRunner
+from robotforge.perception.hub import PerceptionHub
 from robotforge.sensors import edit as sensor_edit
 from robotforge.sensors import without_sensors
 from robotforge.sensors.hub import SensorHub
@@ -104,6 +105,7 @@ class Playground:
     modes: dict[str, tuple[str, Any]] = field(default_factory=dict, init=False)  # robot -> (mode, controller)
     lessons: LessonRunner = field(init=False)
     sensors: SensorHub = field(init=False)  # the sensors robots carry, sampled while time passes (sensors/)
+    perception: PerceptionHub = field(init=False)  # the maps robots draw and localize in (perception/)
     _edit_lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _shapes: tuple[int, dict[str, str]] = field(default=(0, {}), init=False, repr=False)  # see _mechanism_shapes
     _soft: tuple[int, set[int]] = field(default=(-1, set()), init=False, repr=False)  # see _soft_bodies
@@ -122,6 +124,7 @@ class Playground:
         self.lessons = LessonRunner(self, LESSONS)
         self.session.reset_hooks.append(self.lessons.after_reset)
         self.sensors = SensorHub(self.session)
+        self.perception = PerceptionHub(self)
         # belts keep running and button presses are counted, through resets
         mechanisms.attach(self.session, self._mechanism_shapes)
         self.session.reset_hooks.append(self._task_starts.clear)  # a reset starts every task's attempt again
@@ -210,6 +213,7 @@ class Playground:
         hub.scene_extras = extras
         hub.state_extras = lambda: {"mode": modes.current(self)}
         hub.sensor_stream = self.sensors.viewer_message
+        hub.map_stream = self.perception.viewer_message
 
     def current_world(self) -> World | None:
         return self.store.load() if self.store is not None else None
@@ -703,12 +707,17 @@ class Playground:
         return sensor_edit.add(self, robot, fields)
 
     def read_sensors(
-        self, robot: str, names: list[str] | None = None, image: bool = False, full: bool = False
+        self,
+        robot: str,
+        names: list[str] | None = None,
+        image: bool = False,
+        full: bool = False,
+        points: int | None = None,
     ) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
         world = self.current_world()
         robots = [r.name for r in world.robots] if world is not None else []
         try:
-            return self.sensors.read(self.sensors.resolve_robot(robot, robots), names, image, full)
+            return self.sensors.read(self.sensors.resolve_robot(robot, robots), names, image, full, points)
         except ValueError as exc:
             raise PlaygroundError(str(exc)) from exc
 
@@ -929,6 +938,7 @@ class Playground:
                 self.behaviors.let_go(hands_off.intersection(carried))  # legs set by hand stay set
                 # First samples from where the robots now are; their sensors' estimates carry on (odometry).
                 self.sensors.rebuild(kept=carried)
+                self.perception.rebuild(carried)
         return result
 
     def _about_catalogue_robot(self, name: str, catalogue_id: str) -> dict[str, Any]:

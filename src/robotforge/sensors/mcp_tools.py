@@ -13,7 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 
-from robotforge.playground import Playground
+from robotforge.playground import Playground, PlaygroundError
 
 PLACEMENT = ("on", "at", "direction", "name")
 
@@ -35,7 +35,10 @@ def register(server: MCPServer, playground: Playground) -> None:
         parts), on any of its bodies. type: camera (options mode rgb, depth or segmentation, width, height, fov),
         lidar (one ring) or lidar3d (options channels, rays per ring, vfov, hfov, range), imu, encoders (joints,
         resolution), force_torque (on a body such as a wrist, e.g. on="hand", or between=[parent, child]), touch
-        (rows and cols make an array; e.g. on a foot), rangefinder, gps, odometry. on: a body, part, geom, site or
+        (rows and cols make an array; e.g. on a foot), rangefinder, gps, odometry, wheel_odometry (a wheeled robot's
+        wheels added up; option slip), sonar (a 30 degree cone, options beam, range, min_range), skin (a tactile skin:
+        taxels on faces of a body, options faces, rows, cols), temperature or gas (what heat_source and gas_source
+        objects put into the world; option response_s, how slowly it follows). on: a body, part, geom, site or
         joint (default the base); at: top, bottom, front, back, left, right, center, origin or [x, y, z] m in that
         body's frame (lidars default to top, cameras to front); direction: where it looks (forward, down,
         [1, 0, -0.3]). Realism goes in options, ideal by default: rate_hz, noise (standard deviation in the reading's
@@ -49,7 +52,9 @@ def register(server: MCPServer, playground: Playground) -> None:
             return _json(await asyncio.to_thread(playground.add_sensor, robot, fields))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
-    def read_sensors(robot: str, names: list[str] | None = None, image: bool = False) -> list:
+    def read_sensors(
+        robot: str, names: list[str] | None = None, image: bool = False, points: int | None = None
+    ) -> list:
         """Read a robot's sensors (all, or those in names) as compact readings with units. lidar and lidar3d:
         nearest obstacle and nearest ahead (distance_m, bearing_deg: 0 is the sensor's forward, +90 its left),
         ranges as the nearest per 10 degree sector (sectors_m); a 3D scan also its point count and bounding box. Depth
@@ -57,10 +62,13 @@ def register(server: MCPServer, playground: Playground) -> None:
         distance from the lens with its bearing (its own robot and the floor left out); segmentation camera: what it
         sees and how much. imu, encoders, force_torque (payload_kg is what it holds; a leg on the ground gives
         supported_kg), touch, rangefinder, gps, odometry: their values. A robot's own MuJoCo sensors (a G1's IMU) come
-        as other_sensors. image=true adds each camera's picture. Readings follow each sensor's rate, noise and latency
-        (age_s is how old a sample is)."""
+        as other_sensors. image=true adds each camera's picture; points=N adds each depth camera's and lidar's point
+        cloud in world coordinates, thinned (voxel mean) to at most N points (1 to 2000). Readings follow each
+        sensor's rate, noise and latency (age_s is how old a sample is)."""
         with _tool_errors():
-            reading, pictures = playground.read_sensors(robot, names, image)
+            if points is not None and not 1 <= points <= 2000:
+                raise PlaygroundError(f"points is how many cloud points to give back, 1 to 2000, got {points}")
+            reading, pictures = playground.read_sensors(robot, names, image, points=points)
             content: list = [_json(reading)]
             content += [Image(data=png, format="png") for _, png in pictures if png]
             return content
