@@ -307,6 +307,17 @@ class QuadrupedGait:
             self._started_at = self._calm_since = self._last_t
             self._settled_at = math.inf
 
+    def limit_slope(self, slope: float) -> None:
+        """Do not walk forward onto ground steeper than this (m/m, stairs measured by their rise over run): stand
+        before it, still able to turn and back off."""
+        if self.footing is not None:
+            self.footing.slope_limit = slope
+
+    @property
+    def blocked(self) -> bool:
+        """Whether it stands before ground too steep for it (see limit_slope)."""
+        return self.footing is not None and self.footing.too_steep
+
     def limit_speed(self, top: float) -> None:
         """Lower the fastest accepted speed to what this robot is known to reach (m/s)."""
         self._top = top
@@ -325,6 +336,7 @@ class QuadrupedGait:
             "speed": round(self.speed, 3),
             "turn": round(self.turn, 3),
             "max_speed": round(self.max_speed, 3),
+            **({"blocked": "the ground ahead is too steep for it"} if self.blocked else {}),
         }
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
@@ -353,9 +365,10 @@ class QuadrupedGait:
         self._last_t = t
         # Smooth command changes so the robot does not stumble on a sudden key press.
         alpha = 1.0 - math.exp(-dt / 0.25)
-        self.speed += alpha * (self.command_speed - self.speed)
+        forward = 0.0 if self.blocked and self.command_speed > 0.0 else self.command_speed
+        self.speed += alpha * (forward - self.speed)
         self.turn += alpha * (self.command_turn - self.turn)
-        moving = abs(self.command_speed) > 1e-3 or abs(self.command_turn) > 1e-3
+        moving = abs(forward) > 1e-3 or abs(self.command_turn) > 1e-3
 
         quat = data.xquat[self.trunk]
         qw, qx, qy, qz = quat.tolist()

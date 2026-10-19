@@ -120,3 +120,63 @@ def test_told_to_walk_straight_it_keeps_its_heading(pg):
     r = pg.session.data.xmat[trunk]
     turned = math.degrees((math.atan2(r[3], r[0]) - start + math.pi) % (2 * math.pi) - math.pi)
     assert abs(turned) < 4.0
+
+
+def test_a_flat_world_with_other_robots_or_loose_things_is_not_scanned(pg):
+    """Only what is fixed in the world is ground: another robot, an arm or a loose box a dog can push aside is not,
+    and a world with only those costs no scans. A Go2 walking into a loose 0.15 m box was deflected off its path when
+    it read the box as a step to climb."""
+    pg.add_robot("go2", library="go2")
+    pg.add_robot("second", library="anymal_c", pos=[3.0, 2.0])
+    pg.add_object("crate", shape="box", size=[0.3, 0.3, 0.15], pos=[1.0, 0.0], mass=0.3)
+    pg.behaviors.move("go2", 0.2, 0.0, walker="gait")
+    assert pg.session.controllers["go2"].footing is None
+    pg.add_object("curb", shape="box", size=[0.3, 0.3, 0.15], pos=[1.5, 1.0], fixed=True)
+    pg.behaviors.move("go2", 0.2, 0.0, walker="gait")
+    assert GroundScan(pg.session.model, _trunk(pg, "go2")).needed  # a fixed box is ground
+
+
+def test_a_loose_box_is_not_ground_to_the_scan(pg):
+    pg.add_terrain("stairs", pos=[1.6, 0.0], params=STAIRS)
+    pg.add_object("crate", shape="box", size=[0.3, 0.3, 0.2], pos=[0.3, 0.0], mass=0.3)
+    pg.add_robot("go2", library="go2")
+    m, d = pg.session.model, pg.session.data
+    scan = GroundScan(m, _trunk(pg, "go2"))
+    assert scan.height(m, d, 0.3, 0.0, 1.0) == pytest.approx(0.0, abs=1e-6)  # the floor under the crate
+    assert scan.height(m, d, 0.75, 0.0, 1.0) == pytest.approx(0.08, abs=1e-6)  # the stairs still count
+
+
+def test_a_robot_limited_in_slope_stands_before_stairs_it_cannot_climb(pg):
+    """Spot falls backwards off 8 cm x 30 cm stairs (library max_slope); told to walk at them it stands upright
+    before them, and backs off when told to."""
+    steep = {"steps": 3, "step_height": 0.08, "step_depth": 0.3, "landing": 0.8}
+    pg.add_terrain("stairs", pos=[1.6, 0.0], params=steep)
+    pg.add_robot("go2", library="go2")
+    pg.behaviors.move("go2", 0.2, 0.0, walker="gait")
+    gait = pg.session.controllers["go2"]
+    gait.limit_slope(0.24)
+    pg.run_fast(lambda: False, 12.0)
+    trunk = _trunk(pg, "go2")
+    assert gait.blocked and gait.status()["blocked"]
+    assert pg.behaviors.pose("go2")["upright"]
+    assert pg.session.data.xpos[trunk][0] < 0.6  # it did not walk up to the first step
+    pg.behaviors.move("go2", -0.2, 0.0, walker="gait")  # backing off is always allowed
+    pg.run_fast(lambda: False, 3.0)
+    assert pg.session.data.xpos[trunk][0] < 0.0
+
+
+def test_the_library_says_what_spot_cannot_climb():
+    from robotforge.design import library
+
+    assert library.get("spot").max_slope == pytest.approx(0.24)
+    assert library.get("go2").max_slope is None
+
+
+def test_tall_humanoids_turn_further_per_step_than_small_ones():
+    """A Booster T1 (0.55 m legs) turned 10 degrees a second at the small robots' 0.2 rad a step."""
+    from robotforge.behaviors.humanoid import MAX_TURN_PER_STEP, turn_per_step
+
+    small = turn_per_step(math.sqrt(0.3 / 0.2), 0.3)
+    tall = turn_per_step(math.sqrt(0.55 / 0.2), 0.55)
+    assert small == 0.2
+    assert 0.2 < tall <= MAX_TURN_PER_STEP

@@ -86,6 +86,8 @@ class LibraryRobot:
     # (N*m*s/rad), keeping their force limits.
     stiffer_servos: tuple[float, float] | None = None
     max_speed: float | None = None  # m/s, for walkers slower than the gait's general estimate
+    # Rise over run of the steepest ground (stairs, ramp) a walker can be sent onto; it stands before steeper.
+    max_slope: float | None = None
     tools: tuple[Tool, ...] = ()  # arms: where each arm holds things (see Tool)
     mass: float = 0.0  # kg, of the model at the pinned commit
     # Degrees to turn a fixed-base model about the vertical so its front faces +x, as every robot here does.
@@ -163,6 +165,9 @@ CATALOG: dict[str, LibraryRobot] = {
             # turning).
             payload=Payload(12.1, 17.5, 0.15),
             max_speed=0.35,  # measured: tops out at 0.36-0.39 m/s however long the stride
+            # Measured on 3-step flights (scripts/legged_bench.py "stairs@HxD"): 5 x 30 cm (0.17) 3/3, 8 x 40 cm
+            # (0.2) 3/3, 6.5 x 30 (0.22) 2/3, 8 x 30 (0.27) 0/3 with every trial falling backwards off the steps.
+            max_slope=0.24,
         ),
         LibraryRobot(
             "panda",

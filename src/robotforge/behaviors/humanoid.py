@@ -140,6 +140,11 @@ class LegRoles:
 TEMPLATE_ROLES = tuple(LegRoles((1, sign), (4, -1.0), (5, sign)) for sign in SIGN)
 
 
+def turn_per_step(scale: float, leg_length: float) -> float:
+    """The most a humanoid turns in one step (rad): 0.2 for small ones, more for tall ones, whose steps take longer."""
+    return min(0.2 * scale, MAX_TURN_PER_STEP) if leg_length >= TALL_LEG else 0.2
+
+
 class HumanoidController:
     """Keeps a two-legged robot balanced while it stands, walks or plays a pose."""
 
@@ -205,7 +210,7 @@ class HumanoidController:
             # A tall robot takes longer steps in time, so at a fixed turn per step it turned slower: a Booster T1
             # (0.55 m legs, 0.8 s a step) managed 10 degrees a second, and A and D hardly turned it. Scaled like the
             # timing, it turns 24 degrees a second. Small ones keep 0.2 rad: an OP3 turning more while walking fell.
-            max_turn=min(0.2 * scale, MAX_TURN_PER_STEP) if self.leg_length >= TALL_LEG else 0.2,
+            max_turn=turn_per_step(scale, self.leg_length),
             zmp_inset=0.35 * self.half_width,  # less sway: wide steps rocked tall robots off their feet
             zmp_roll=0.5,
         )

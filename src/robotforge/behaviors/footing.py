@@ -58,6 +58,13 @@ FOOT_LOOK = 0.25  # leg lengths above a foot that the ground under it is looked 
 # the ground under a foot's middle can be a hollow 3 cm under the stones it stands on, and taken for the ground
 # there it pushed that leg down into the stones until the trunk tipped (Barkour on 3.5 cm gravel).
 FOOTPRINT = 0.07
+# A robot that cannot climb as steeply as the stairs it may meet (Spot, library max_slope) looks AHEAD_LEGS leg
+# lengths past its front feet, along its way, in AHEAD_SAMPLES points: the slope of the line through them is how
+# steep the ground is (stairs, ramps alike; a single riser is not). It is too steep above the limit, and stays so
+# until it is under SLOPE_RELEASE of it.
+AHEAD_LEGS = 2.0
+AHEAD_SAMPLES = 9
+SLOPE_RELEASE = 0.9
 
 
 class Footing:
@@ -78,6 +85,9 @@ class Footing:
         # plane by that much (steps, stones; not a smooth slope), within the last gait cycle.
         self.rough_until = -math.inf
         self.looks = True  # False: a frozen copy (see frozen)
+        self.slope_limit: float | None = None  # m/m: steeper ground ahead is too steep to walk onto (see AHEAD_LEGS)
+        self.ahead = 0.0  # m/m: the slope of the ground ahead at the last look, when a limit is set
+        self.too_steep = False
         n = len(feet)
         self.ground = [0.0] * n  # ground height under each standing foot, or where a swinging one lifted off
         self.land = [0.0] * n  # ...and where a swinging foot will land
@@ -114,6 +124,7 @@ class Footing:
         self.active = False
         self.rough_until = -math.inf
         self.pitch = self.roll = 0.0
+        self.ahead, self.too_steep = 0.0, False
         self._next_look = -math.inf
 
     def start(self, model: mujoco.MjModel, data: mujoco.MjData, swinging: list[bool]) -> None:
@@ -198,7 +209,22 @@ class Footing:
                 lx = landings[i][0] + velocity[0] * remaining
                 ly = landings[i][1] + velocity[1] * remaining
                 self._look_ahead(model, data, i, (tx + c * lx - s * ly, ty + s * lx + c * ly), (c, s), top)
+        if look and self.slope_limit is not None:
+            self._look_far(model, data, (c, s), top)
         self._fit(self._points(swings, landings, stands), dt, period)
+
+    def _look_far(self, model: mujoco.MjModel, data: mujoco.MjData, heading: tuple[float, float], top: float) -> None:
+        """The slope of the ground in front of the front feet, and whether it is too steep (see AHEAD_LEGS)."""
+        c, s = heading
+        lead = max((self._foot(data, i) for i in range(len(self.feet))), key=lambda f: f[0] * c + f[1] * s)
+        ds = np.linspace(0.0, AHEAD_LEGS * self.leg_length, AHEAD_SAMPLES)
+        heights = np.array([self.scan.height(model, data, lead[0] + d * c, lead[1] + d * s, top) for d in ds])
+        seen = ~np.isnan(heights)
+        if seen.sum() < AHEAD_SAMPLES // 2:
+            return
+        self.ahead = float(np.polyfit(ds[seen], heights[seen], 1)[0])
+        limit = self.slope_limit * (SLOPE_RELEASE if self.too_steep else 1.0)
+        self.too_steep = self.ahead > limit
 
     def _plan_blind(self, swings, landings, stands, dt: float, period: float) -> None:
         for i, u in enumerate(swings):

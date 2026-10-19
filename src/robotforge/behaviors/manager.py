@@ -701,6 +701,9 @@ class BehaviorManager:
             top = loaded if top is None else min(top, loaded)
         if top is not None and isinstance(ctrl, (quadruped.QuadrupedGait, humanoid.HumanoidController)):
             ctrl.limit_speed(top)
+        slope = library.get(entry.library).max_slope if entry is not None and entry.library else None
+        if slope is not None and isinstance(ctrl, quadruped.QuadrupedGait):
+            ctrl.limit_slope(slope)
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
