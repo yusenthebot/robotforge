@@ -183,9 +183,13 @@ and MPC. Viewer keys: W S forward and back, A D sideways, arrow keys turn, E cli
 
 Algorithms: one robot and task can be solved by different control methods (IK, PD, LQR, sampling MPC, ...).
 list_algorithms explains them; run_controller drives a robot with one (live in the viewer);
-compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches a
-robot a task by reinforcement learning (PPO, SAC) in the background; follow it with training_status, then
-run or compare it as method "policy:<name>".
+compare_controllers runs several on the same task and returns a table to discuss. train_policy teaches any
+robot of the world a task by trial and error in the background, with any algorithm (ars and cem need nothing
+installed; ppo and sac need the rl extra; plugins add more): algo=["ars", "cem"] runs both side by side, and
+search={"trials": 9} tunes their settings (successive halving). The learner's observation includes whatever the
+robot's sensors read (add_sensor a lidar or an IMU first to give it one). Follow it with training_status (each
+trial's settings, curve and test score side by side); the viewer's Training panel draws it live and plays the
+best policy. Run or compare the result as method "policy:<name>".
 
 Learning path: lessons lists nine short beginner lessons (joints, driving, gaits, inverse kinematics,
 sensors, control, scripts, training, importing a URDF). When the user asks for one ("teach me lesson 3",
