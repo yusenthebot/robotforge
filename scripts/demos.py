@@ -243,7 +243,7 @@ def _dogs(pg: Any) -> None:
 
 
 # Three robots generated from a sentence each, side by side: one drives, two walk (S.GENERATED 1, 0 and 4).
-GENERATED_THREE = [("courier", 1, [0.0, 1.25]), ("mantis", 0, [0.0, 0.0]), ("dog", 4, [0.0, -1.2])]
+GENERATED_THREE = [("courier", 1, [0.0, 1.15]), ("mantis", 0, [0.0, 0.0]), ("dog", 4, [0.0, -1.1])]
 
 
 def _generated_three(pg: Any) -> None:
@@ -273,6 +273,27 @@ def _follow_group(robots: list[str], offset: tuple[float, float, float], ease: f
             }}
         }})();
     """
+
+
+def _spliced_walkers(pg: Any) -> None:
+    """Three real robots each carrying another: a Go2 with a PiPER, an ANYmal C with a UR5e and its Robotiq gripper, and
+    a Spot with a Unitree Z1, in a row."""
+    pg.add_robot("go2", library="go2", pos=[-1.6, 0.0], mounts=[{"library": "piper"}])
+    pg.add_robot(
+        "anymal", library="anymal_c", pos=[0.0, 0.0], mounts=[{"library": "ur5e"}, {"library": "robotiq_2f85"}]
+    )
+    pg.add_robot("spot", library="spot", pos=[1.6, 0.0], mounts=[{"library": "z1"}])
+
+
+def _go2_piper_errand(pg: Any) -> None:
+    """A Go2 carrying a PiPER, a cube and a bin a few metres ahead, and the errand planned; paused until the recording
+    plays it (as for the kitchen's apple)."""
+    pg.add_robot("go2", library="go2", pos=[0.0, 0.0], mounts=[{"library": "piper"}])
+    pg.add_object("cube", shape="box", size=[0.04, 0.04, 0.04], pos=[1.6, 0.8], color="red")
+    pg.add_object("bin", shape="bin", size=[0.18, 0.18, 0.08], pos=[1.6, 0.15], color="blue")
+    pg.run_fast(lambda: False, 1.0)
+    pg.control("pause")
+    pg.behaviors.pick_and_place("go2", "cube", "bin")
 
 
 def _kitchen_fetch(pg: Any) -> None:
@@ -559,6 +580,29 @@ DEMOS = [
         until=lambda pg: pg.behaviors.trip("drone") is None,
         tail=1.2,
     ),
+    Demo(  # the splices walk: three real robots, each wearing another, side by side
+        "splice_walkers",
+        _spliced_walkers,
+        12.0,
+        timeline=[(1.0, _move("go2", 0.25)), (1.0, _move("anymal", 0.25)), (1.0, _move("spot", 0.25))],
+        page="window.__robotforge.select(null);" + _follow_group(["go2", "anymal", "spot"], (0.3, -3.9, 1.1)),
+        settle=1.0,
+    ),
+    Demo(  # a Go2 with a PiPER on its back walks to a cube, picks it and drops it in the bin
+        "splice_go2_pick",
+        _go2_piper_errand,
+        44.0,
+        timeline=[(0.3, _play)],
+        page="window.__robotforge.select(null);" + _follow("go2", (1.3, -2.0, 1.1), ease=0.05),
+    ),
+    Demo(  # the kitchen's arm pulls a drawer open
+        "kitchen_drawer",
+        lambda pg: pg.load_scene("kitchen"),
+        13.0,
+        timeline=[(0.5, S._operate("arm", "drawer", "open", 0.2))],
+        page="window.__robotforge.select(null); window.__robotforge.lookAt([0.12, -0.82, 1.33], [0.26, -0.02, 0.95]);",
+        settle=0.5,
+    ),
     Demo(
         "lesson_learn_to_walk",
         lambda pg: None,
@@ -582,7 +626,7 @@ DEMOS = [
         _generated_three,
         15.0,
         timeline=[(0.5, _move(name, 0.25)) for name, *_ in GENERATED_THREE],
-        page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.45, -2.0, 1.05)),
+        page="window.__robotforge.select(null);" + _follow_group([n for n, *_ in GENERATED_THREE], (1.15, -1.75, 0.8)),
         settle=1.0,
     ),
 ]
@@ -616,7 +660,7 @@ async def _record(demo: Demo, pg: Any, port: int, chrome_port: int) -> list[tupl
         stored = {"robotforge.coached": "1", "robotforge.world": "0"}
         settings = "".join(f"localStorage.setItem({k!r}, {v!r});" for k, v in stored.items())
         await cdp.call("Page.addScriptToEvaluateOnNewDocument", source=f"try {{ {settings} }} catch (e) {{}}")
-        await cdp.call("Page.navigate", url=f"http://{HOST}:{port}/")
+        await cdp.call("Page.navigate", url=f"http://{HOST}:{port}/?lang=en")  # the promo is in English
         end = time.monotonic() + READY_TIMEOUT
         while not await cdp.eval(
             "!!(window.__robotforge && window.__robotforge.scene && window.__robotforge.time > 0)"
