@@ -41,10 +41,29 @@ class ToolTarget:
 
     pos: np.ndarray
     vel: np.ndarray = field(default_factory=lambda: np.zeros(3))
-    rot: np.ndarray | None = None  # the tool's frame, world axes; None leaves the orientation free
+    rot: np.ndarray | None = None  # the tool's whole frame, world axes
+    axis: np.ndarray | None = None  # or only the way the tool points (its z axis); how it spins about it is free
     normal: np.ndarray | None = None  # unit vector from a surface toward the tool, when the tool presses on it
     push: float = 0.0  # N the tool presses against the surface (along -normal)
+    depth: float = 0.0  # m the position target lies below the surface it presses on: for position control, a push
     pressing: bool = False  # True: the normal axis is force controlled where the controller can (position is not)
+
+
+def attitude(current: np.ndarray, target: ToolTarget) -> tuple[np.ndarray, np.ndarray]:
+    """How the tool is to be turned, as (rows, error): `rows` (k x 3) pick the rotation axes that count, in world axes,
+    and `error` (k) is the small turn still needed about each. k is 3 for a whole frame, 2 for a pointing direction
+    (the axes across the tool's own z), 0 when the target leaves the orientation free."""
+    if target.rot is not None:
+        return np.eye(3), rotation_error(current, target.rot)
+    if target.axis is None:
+        return np.zeros((0, 3)), np.zeros(0)
+    z = current[:, 2]
+    helper = np.array([1.0, 0.0, 0.0]) if abs(z[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = np.cross(z, helper)
+    u /= np.linalg.norm(u)
+    rows = np.vstack([u, np.cross(z, u)])
+    wanted = np.asarray(target.axis, float) / np.linalg.norm(target.axis)
+    return rows, rows @ np.cross(z, wanted)
 
 
 class TargetSource(Protocol):
