@@ -69,7 +69,7 @@ def stand(pg: Any, robot: str, floating: bool) -> dict[str, Any]:
     pg.run_fast(lambda: False, SETTLE_S)
     out: dict[str, Any] = {"finite": _finite(pg)}
     if floating:
-        kept = _span(pg, robot) / max(start, 1e-6)
+        kept = _span(pg, robot) / start if start > 0.02 else 1.0  # one rigid body has no height to keep
         out.update(height_kept=round(kept, 2), upright=_upright(pg, robot))
         out["ok"] = out["finite"] and out["upright"] and kept > 0.7
     else:
