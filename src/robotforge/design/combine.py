@@ -18,7 +18,9 @@ where it stood.
 
 from __future__ import annotations
 
+import math
 import os
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,16 @@ TOOL_WORDS = {
     "two_finger_gripper": "gripper",
     "claw": "gripper",
 }
+
+
+# A mount further than this from its place, or turned more than this, is a typo (the units, a missing decimal point).
+MAX_SHIFT_M = 5.0
+MAX_TURN_DEG = 720.0
+
+# The designs being built, outermost first: one that comes round again mounts itself.
+_BUILDING: ContextVar[tuple[str, ...]] = ContextVar("designs_being_built", default=())
+
+SHADOW_WORDS = ("shadow", "shadowhand", "shadow_hand", "shadow_dexterous_hand")
 
 
 def designs_home() -> Path:
@@ -73,6 +85,11 @@ def classify(what: str) -> tuple[str, dict[str, Any]]:
     saved = saved_design(word)
     if saved is not None:
         return "design", {"design": word}
+    if word in SHADOW_WORDS:
+        raise ValueError(
+            "the Shadow hand is not wired: its Menagerie model brings a 40 cm forearm of its own, which sticks out "
+            "past any arm's flange; mount leap_hand or allegro_hand for a dexterous hand"
+        )
     names = [*SENSOR_TYPES, *TOOL_WORDS, *library.CATALOG, *templates.TEMPLATES, *designs()]
     close = wording.near(what, names)
     hint = f"did you mean {', '.join(close)}? " if close else ""
@@ -108,6 +125,7 @@ def mount(
     params: dict[str, Any] | None = None,
     adapter: bool = True,
     save_as: str | None = None,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """See the module notes and the mount tool."""
     from robotforge.playground import PlaygroundError, _find
@@ -118,7 +136,7 @@ def mount(
     if what is None:
         if save_as is None:
             raise PlaygroundError("give what to mount, or save_as to keep the robot as it is as a design")
-        return {"saved": save(_find(world.robots, robot, "robot"), save_as, store.dir)}
+        return {"saved": save(_find(world.robots, robot, "robot"), save_as, store.dir, overwrite)}
     entry = _find(world.robots, robot, "robot")
     if part is not None and part not in [mounting.default_name(m) for m in entry.mounts]:
         mounted = [f"{robot}/{mounting.default_name(m)}" for m in entry.mounts]
@@ -131,13 +149,39 @@ def mount(
         sort, fields = classify(what)
     except ValueError as exc:
         raise PlaygroundError(str(exc)) from None
+    _check_place(shift, rotate)
+    if save_as is not None:  # judged before anything goes on: a refusal must leave the world as it was
+        check_save_name(save_as, entry.mounts, fields.get("design"), overwrite)
     if sort == "sensor":
         result = _sensor(pg, entry, part, at, fields, name, params)
     else:
         result = _robot_mount(pg, entry, part, sort, fields, at, shift, rotate, name, params, adapter)
     if save_as is not None:
-        result["saved"] = save(_find(store.load().robots, robot, "robot"), save_as, store.dir)
+        result["saved"] = save(_find(store.load().robots, robot, "robot"), save_as, store.dir, overwrite)
     return result
+
+
+def _check_place(shift: list[float] | None, rotate: list[float] | None) -> None:
+    """Refuse a shift or turn that is not a finite, sane number before MuJoCo compiles it into a blown-up model."""
+    from robotforge.playground import PlaygroundError
+
+    if shift is not None and not _sane(shift, MAX_SHIFT_M):
+        raise PlaygroundError(
+            f"shift {wording.short(str(shift))} is not a place: give [x, y, z] in metres, each within "
+            f"{MAX_SHIFT_M:g} m of where it mounts (use at to name another body instead of a long shift)"
+        )
+    if rotate is not None and not _sane(rotate, MAX_TURN_DEG):
+        raise PlaygroundError(
+            f"rotate {wording.short(str(rotate))} is not an orientation: give [roll, pitch, yaw] in degrees, each "
+            f"within {MAX_TURN_DEG:g}"
+        )
+
+
+def _sane(values: list[float], bound: float) -> bool:
+    try:
+        return len(values) == 3 and all(math.isfinite(float(v)) and abs(float(v)) <= bound for v in values)
+    except (TypeError, ValueError):
+        return False
 
 
 def _sensor(
@@ -422,16 +466,40 @@ def take_off(pg: Any, robot: str, name: str) -> dict[str, Any]:
     }
 
 
-def libraries(name: str) -> list[str]:
+def libraries(name: str, _seen: tuple[str, ...] = ()) -> list[str]:
     """The library robots a saved design is made of (to download before it is built), its own designs' too."""
     fields = saved_design(name) or {}
     out = [fields["library"]] if fields.get("library") else []
     for m in fields.get("mounts", []):
         if m.get("library"):
             out.append(m["library"])
-        elif m.get("design") and m["design"] != name:
-            out += libraries(m["design"])
+        elif m.get("design") and m["design"] not in (
+            *_seen,
+            name,
+        ):  # a design that comes round is build_design's to name
+            out += libraries(m["design"], (*_seen, name))
     return out
+
+
+def carried_designs(mounts: list[Any], extra: str | None = None) -> list[str]:
+    """Every saved design these mounts carry, nested ones too, each once (a design that comes round again stops it)."""
+    found: list[str] = []
+
+    def walk(names: list[str]) -> None:
+        for name in names:
+            if name in found:
+                continue
+            found.append(name)
+            saved = saved_design(name) or {}
+            walk([m["design"] for m in saved.get("mounts", []) if m.get("design")])
+
+    walk([m.design for m in mounts if getattr(m, "design", None)] + ([extra] if extra else []))
+    return found
+
+
+def used_by(name: str) -> list[str]:
+    """The other saved designs that carry the design `name`, nested or not."""
+    return [other for other in designs() if other != name and name in carried_designs([], other)]
 
 
 # ---- saved designs -----------------------------------------------------------------------------------------------
@@ -454,8 +522,9 @@ def saved_design(name: str) -> dict[str, Any] | None:
     return robot
 
 
-def save(entry: Any, name: str, world_dir: Path) -> dict[str, Any]:
-    """Keep `entry` (a world.yaml robot) as the design `name`: what it is built from and what it carries."""
+def check_save_name(name: str, mounts: list[Any], extra: str | None = None, overwrite: bool = False) -> str:
+    """The design name `name` tidied, or a PlaygroundError saying what to change: a bad or taken name, a design that is
+    already saved (unless `overwrite`), or one that the robot (with `extra`, a design about to go on) carries itself."""
     from robotforge.design.world import NAME_RE
     from robotforge.playground import PlaygroundError
 
@@ -471,6 +540,23 @@ def save(entry: Any, name: str, world_dir: Path) -> dict[str, Any]:
 
     if gallery.canonical(tidy) == tidy:
         raise PlaygroundError(f"save_as {tidy!r} is a design of the gallery: pick another name")
+    if tidy in carried_designs(mounts, extra):
+        raise PlaygroundError(
+            f"save_as {tidy!r}: this robot carries the design {tidy!r} (mounts store a design by name), so the design "
+            "would hold itself; save the combination under another name"
+        )
+    if tidy in designs() and not overwrite:
+        raise PlaygroundError(
+            f"save_as {tidy!r}: a design with that name is already saved; pick another name, or pass overwrite=true "
+            "to replace it"
+        )
+    return tidy
+
+
+def save(entry: Any, name: str, world_dir: Path, overwrite: bool = False) -> dict[str, Any]:
+    """Keep `entry` (a world.yaml robot) as the design `name`: what it is built from and what it carries."""
+    tidy = check_save_name(name, list(entry.mounts), None, overwrite)
+    replaced = tidy in designs()
     robot = entry.model_dump(mode="json", exclude={"name", "pos", "yaw"}, exclude_defaults=True)
     if robot.get("file"):  # a file next to the world: where it is, so the design opens from any world
         path = Path(robot["file"]).expanduser()
@@ -480,7 +566,14 @@ def save(entry: Any, name: str, world_dir: Path) -> dict[str, Any]:
     path = home / f"{tidy}.yaml"
     text = yaml.safe_dump({"design": tidy, "robot": robot}, sort_keys=False, allow_unicode=True)
     path.write_text(text, encoding="utf-8")
-    return {"design": tidy, "file": str(path), "use": f'add_robot(name, design="{tidy}") or mount("{tidy}", on=...)'}
+    saved = {"design": tidy, "file": str(path), "use": f'add_robot(name, design="{tidy}") or mount("{tidy}", on=...)'}
+    if replaced:
+        users = used_by(tidy)
+        saved["replaced"] = tidy
+        saved["note"] = f"the earlier {tidy} is gone" + (
+            f"; designs that mount it change too: {', '.join(users)}" if users else ""
+        )
+    return saved
 
 
 def entry_fields(name: str) -> dict[str, Any]:
@@ -496,15 +589,37 @@ def build_design(name: str) -> BuiltRobot:
     from robotforge.design.world import RobotEntry, _robot_spec
     from robotforge.sensors.mount import mount as put_sensors
 
+    chain = _BUILDING.get()
+    if name in chain:
+        loop = " -> ".join([*chain[chain.index(name) :], name])
+        raise ValueError(
+            f"the saved design {name!r} mounts itself ({loop}); mount it on another robot and save that under a new "
+            "name, or take the mount off and save the design again"
+        )
     fields = entry_fields(name)
     try:
         entry = RobotEntry.model_validate({"name": "design", **fields})
     except ValidationError as exc:
         raise ValueError(f"the saved design {name!r} is not valid: {wording.validation_message(exc)}") from None
-    built = _robot_spec(entry, None)
+    token = _BUILDING.set((*chain, name))
+    try:
+        built = _robot_spec(entry, None)
+    finally:
+        _BUILDING.reset(token)
     if entry.sensors:
         put_sensors(built.spec, entry.sensors, entry.name, built.home_qpos)
     return built
 
 
-__all__ = ["build_design", "classify", "designs", "designs_home", "entry_fields", "mount", "save", "saved_design"]
+__all__ = [
+    "build_design",
+    "carried_designs",
+    "check_save_name",
+    "classify",
+    "designs",
+    "designs_home",
+    "entry_fields",
+    "mount",
+    "save",
+    "saved_design",
+]
