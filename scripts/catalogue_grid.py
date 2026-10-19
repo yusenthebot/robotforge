@@ -32,7 +32,12 @@ def verdict(row: dict[str, Any]) -> str:
         return "its joints move"
     if "moved_m" in move:
         return f"moved {move['moved_m']:.1f} m, then fell"
-    return "stands; " + (move.get("why") or "does not move")[:40]
+    why = move.get("why") or ""
+    if "no known kind" in why:
+        return "stands; no walker fits its body"
+    if "no actuators" in why:
+        return "a rigid body: no motors in the file"
+    return "stands; " + (why[:36] or "does not move")
 
 
 def font(size: int) -> Any:

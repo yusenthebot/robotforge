@@ -1094,8 +1094,42 @@ G12_FRAME = """
 def _g12_world(name: str) -> Callable[[Any], None]:
     def world(pg: Any) -> None:
         pg.add_robot("r", library=name)
+        _g12_pedestal(pg)
 
     return world
+
+
+def _g12_pedestal(pg: Any) -> None:
+    """A hand or finger bolted down by its file hangs where the file has it, its drawn parts above the floor: give it a
+    stand, so the picture does not show something floating."""
+    import mujoco
+    import numpy as np
+
+    m, d = pg.session.model, pg.session.data
+    root = pg.behaviors._root_body("r")
+    if m.body_jntnum[root] and m.jnt_type[m.body_jntadr[root]] == mujoco.mjtJoint.mjJNT_FREE:
+        return  # it stands on its own
+    mujoco.mj_forward(m, d)
+    bodies = {
+        b for b in range(1, m.nbody) if (mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "").startswith("r/")
+    }
+    boxes = []  # (low, high) of each drawn part along x, y and z, from its bounding box in the world
+    for g in range(m.ngeom):
+        if int(m.geom_bodyid[g]) not in bodies or m.geom_rgba[g][3] == 0:
+            continue
+        rot = d.geom_xmat[g].reshape(3, 3)
+        center = d.geom_xpos[g] + rot @ m.geom_aabb[g][:3]
+        half = np.abs(rot) @ m.geom_aabb[g][3:]
+        boxes.append((center - half, center + half))
+    if not boxes:
+        return
+    low = min(float(b[0][2]) for b in boxes)
+    if low > 0.03:
+        lo = [min(float(b[0][i]) for b in boxes) for i in (0, 1)]
+        hi = [max(float(b[1][i]) for b in boxes) for i in (0, 1)]
+        size = [hi[0] - lo[0] + 0.06, hi[1] - lo[1] + 0.06, low]
+        pos = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2]
+        pg.add_object("stand", shape="box", size=size, pos=pos, color="gray", fixed=True)
 
 
 def _g12_do(pg: Any) -> None:
