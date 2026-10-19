@@ -32,7 +32,7 @@ def servo_case(a: Args) -> Asset:
     horn_r = a.horn if a.horn > 0 else 0.78 * min(hx, hy)
     small = min(hx, hy, hz)
     r = small * 0.3 * s.fillet
-    pc.add("structure", M.rounded_box(hx, hy, hz, min(r, small * 0.6), segments=3, corner=min(r * 1.3, hy * 0.6)))
+    pc.add("structure", M.rounded_box(hx, hy, hz, min(r, small * 0.6), segments=2, corner=min(r * 1.3, hy * 0.6)))
     if s.panel_lines and small > 0.006:  # the seam between the two halves of the case
         z = hz * 0.28
         band = M.slab(
@@ -44,7 +44,7 @@ def servo_case(a: Args) -> Asset:
             0.00012,
             min(r * 1.3, hy * 0.6),
             segments=1,
-            per_corner=2,
+            per_corner=1,
             fence=False,
             bottom_cap=False,
             top_cap=False,
@@ -56,7 +56,7 @@ def servo_case(a: Args) -> Asset:
     pc.add("trim", boss.moved((shaft_x, 0.0, 0.0)), material="metal")
     # a label on the top face, toward the end away from the shaft, and a connector on that end
     end = -1.0 if shaft_x > 0 else 1.0
-    if hx > 0.012:
+    if hx > 0.03:  # a label and a plug are a few pixels on a small servo
         label = M.rounded_box(0.3 * hx, 0.55 * hy, 0.0004, 0.0003, segments=1, corner=0.0015)
         pc.add(
             "trim", label.moved((end * 0.45 * hx, 0.0, hz + 0.0002)), material="powder", color=(0.86, 0.87, 0.88, 1.0)

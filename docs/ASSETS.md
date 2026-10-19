@@ -27,6 +27,7 @@ A value outside the range is refused with the range in the message, so an agent 
 | Generator | Makes | Frame |
 |---|---|---|
 | `joint_actuator` | a rotary joint: barrel housing, rear cap with a nameplate, parting grooves, a dark output band, a flange with a bolt circle and a centre boss, a cable gland, a light ring or cooling ribs in some styles | axis z, output face on +z |
+| `servo_case` | the case of a servo: rounded housing split by a parting line, a label, a connector, mounting ears with screws, a gear boss under the horn | centred, shaft on the +z face |
 | `link_shell` | the shell between two joints: a tapered, filleted tube in two halves with a parting line, end plates, optional collars and a cable cover | along z from the root to the tip |
 | `pedestal` | a robot's base: bolted mounting plate, column, groove, gland, light ring | z up from the mounting plane |
 | `chassis` | a body shell: rounded edges, parting line, service hatch, vents, corner screws, rubber guards in rugged styles | centred, x forward |

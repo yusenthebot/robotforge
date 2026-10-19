@@ -80,6 +80,11 @@ update_part / remove_part. add_robot(design=...) adds a ready-made robot from th
 Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
 arms") makes a new robot from one sentence (legs, wheels, a snake, an arm, a humanoid; arms, sizes, colors,
 sensors) that moves at once; update_robot(describe="make it longer") changes it, "another one" is a variation.
+How a robot looks is a style (cobot, lab, hobby, rugged): params={"style": "lab"} on the arm, quadruped, humanoid, rover
+and gripper templates, "style" in a builder spec, or a word in describe ("a rugged robot dog"); it changes the drawing
+(housings, shells, tread, materials), never the physics. list_templates lists the part generators (joint housings,
+link shells, wheels, ...) with their ranges, the styles and the materials; add_robot(template="asset",
+params={"generator": "wheel", "args": {"radius": 0.07}}) shows one on a turntable.
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with

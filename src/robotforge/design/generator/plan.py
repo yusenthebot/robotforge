@@ -80,6 +80,7 @@ class Plan:
     color: str | None = None
     accent: str | None = None
     material: str | None = None
+    style: str | None = None  # how it is drawn (cobot, lab, hobby, rugged): looks only, never how it moves
     seed: int = 0
     sentences: tuple[str, ...] = field(default=())
 
