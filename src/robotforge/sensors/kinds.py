@@ -567,9 +567,9 @@ class Skin(Sensor):
 
 
 def _kinds() -> dict[str, type[Sensor]]:
-    from robotforge.sensors.camera import Camera
     from robotforge.sensors.fields import Field
     from robotforge.sensors.lidar import Lidar
+    from robotforge.sensors.optics import make_camera
     from robotforge.sensors.ranging import Sonar
 
     return {
@@ -587,7 +587,7 @@ def _kinds() -> dict[str, type[Sensor]]:
         "gas": Field,
         "lidar": Lidar,
         "lidar3d": Lidar,
-        "camera": Camera,
+        "camera": make_camera,
     }
 
 

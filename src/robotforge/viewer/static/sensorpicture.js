@@ -6,16 +6,42 @@
 import * as THREE from "three";
 import { depthPicture, spanOf, steadySpan, thingColor, thingName, unpackDepth } from "./sensorkit.js";
 
-const PIP_EVERY_MS = { rgb: 66, depth: 100, segmentation: 100 }; // the picture is drawn again this often
+const PIP_EVERY_MS = { rgb: 66, depth: 100, segmentation: 100, stereo: 120, event: 66, fisheye: 120 }; // the picture is drawn again this often
+const EVENT_LEVELS = 4; // events one pixel gives between two pictures, at most (sensors/optics.py)
+const EVENT_FLOOR = 8; // levels of 255 added before the logarithm
+const CUBE_SIZE = 384; // px: each face of the fisheye's cube
 const PIP_MAX = [640, 480]; // px: a bigger camera is drawn at this size in the browser
 
 // The camera's pose now: its body's pose in this frame, times its place on the body (MuJoCo's cameras and three.js's
 // both look along their -z with +y up, so the quaternion carries over as it is).
-function placeCamera(node, e, cam) {
+function placeCamera(node, e, cam, shift = 0) {
   const [w, x, y, z] = e.local_quat;
   cam.position.fromArray(e.local_pos).applyQuaternion(node.quaternion).add(node.position);
   cam.quaternion.copy(node.quaternion).multiply(new THREE.Quaternion(x, y, z, w));
+  if (shift) cam.position.addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), shift); // its right
 }
+
+// What kind of picture a camera's entry asks for: a fisheye lens is its own, and so is a stereo pair, an event camera.
+const kindOf = (e) => (e.lens === "fisheye" ? "fisheye" : e.mode);
+
+// A fisheye lens (r = f theta, the equidistant one real ones come close to) looked up in a cube map of the scene
+// drawn from the camera's place; `look` turns a ray of the lens into the world's.
+const FISHEYE_VERTEX = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
+const FISHEYE_FRAGMENT = `
+  uniform samplerCube cube;
+  uniform mat3 look;
+  uniform vec2 size;
+  uniform float perRadian;
+  uniform float reach;
+  varying vec2 vUv;
+  void main() {
+    vec2 d = (vUv - 0.5) * size;
+    float theta = length(d) / perRadian;
+    if (theta > reach) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+    float phi = atan(d.y, d.x);
+    vec3 ray = look * vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), -cos(theta));
+    gl_FragColor = vec4(textureCube(cube, ray).rgb, 1.0);
+  }`;
 
 const DEPTH_VERTEX = `
   varying float vDepth;
@@ -83,6 +109,8 @@ export const picture = {
   geoms: null, // geom id -> the scene's geom, for naming what a segmentation picture shows
   depthMaterial: null,
   flat: new Map(), // thing name -> its flat segmentation material
+  lumas: new Map(), // event cameras: the last frame each drew, as brightness
+  left: null, // a stereo pair: the left picture, while the right one is drawn
   tone: null,
   setSize(w, h) {
     if (this.size[0] === w && this.size[1] === h) return;
@@ -138,23 +166,25 @@ export const picture = {
     return this.tone;
   },
   // Draw what camera `e` sees now, into `canvas` (asynchronously read back, so the page never waits on the GPU).
-  draw(e, canvas) {
+  draw(e, canvas, pass = 0) {
     const now = performance.now();
-    if (this.busy || now - this.last < PIP_EVERY_MS[e.mode] || document.hidden) return;
+    const kind = kindOf(e);
+    if (pass === 0 && (this.busy || now - this.last < PIP_EVERY_MS[kind] || document.hidden)) return;
     const node = this.api.bodyNode(e.body);
     if (!node) return;
-    this.last = now;
+    if (pass === 0) this.last = now;
     const t0 = performance.now();
     const w = Math.min(e.size[0], PIP_MAX[0]);
     const h = Math.round((w * e.size[1]) / e.size[0]);
     this.setSize(w, Math.min(h, PIP_MAX[1]));
     const cam = this.cam;
-    cam.fov = e.fov_deg;
-    cam.aspect = e.size[0] / e.size[1];
+    cam.fov = kind === "fisheye" ? 90 : e.fov_deg;
+    cam.aspect = kind === "fisheye" ? 1 : e.size[0] / e.size[1];
     cam.near = 0.01;
-    cam.far = e.mode === "rgb" ? 200 : e.range_m * 1.02;
+    cam.far = e.mode === "rgb" || e.mode === "event" || e.mode === "stereo" ? 200 : e.range_m * 1.02;
     cam.updateProjectionMatrix();
-    placeCamera(node, e, cam);
+    // A stereo pair is drawn twice, from a lens each side of where its camera sits (the right one second).
+    placeCamera(node, e, cam, kind === "stereo" ? (pass === 0 ? -1 : 1) * (e.baseline_m ?? 0.12) / 2 : 0);
     cam.updateMatrixWorld();
     const renderer = this.api.renderer;
     const scene = this.api.scene;
@@ -172,7 +202,14 @@ export const picture = {
     renderer.shadowMap.autoUpdate = false; // the sun's shadows are the view's, drawn already this frame
     const swapped = [];
     try {
-      if (e.mode === "rgb") {
+      if (kind === "fisheye") {
+        scene.fog = null;
+        this.fisheyeInto(e, cam, renderer, scene);
+        const tone = this.toneQuad();
+        tone.material.uniforms.light.value = this.light.texture;
+        renderer.setRenderTarget(this.target);
+        renderer.render(tone.scene, tone.camera);
+      } else if (e.mode === "rgb" || e.mode === "event" || e.mode === "stereo") {
         scene.fog = null; // the view's haze is for its own distances: a camera on a robot saw the far half white
         renderer.setRenderTarget(this.light);
         renderer.render(scene, cam);
@@ -209,8 +246,13 @@ export const picture = {
     this.busy = true;
     const done = () => {
       this.busy = false;
+      if (kind === "stereo" && pass === 0) {
+        this.left = this.bytes.slice(); // the left lens's picture, kept while the right one is drawn
+        this.draw(e, canvas, 1);
+        return;
+      }
       this.renders++;
-      this.develop(e, canvas);
+      this.develop(e, canvas, pass);
       this.ms = performance.now() - t0;
     };
     if (renderer.readRenderTargetPixelsAsync) {
@@ -221,18 +263,27 @@ export const picture = {
     }
   },
   // The bytes read back (bottom row first) as the picture: colors for rgb and segmentation, a colormap for depth.
-  develop(e, canvas) {
+  develop(e, canvas, pass = 0) {
     const [W, H] = this.size;
-    if (canvas.width !== W || canvas.height !== H) {
-      canvas.width = W;
+    const across = kindOf(e) === "stereo" ? 2 * W : W; // a stereo pair side by side
+    if (canvas.width !== across || canvas.height !== H) {
+      canvas.width = across;
       canvas.height = H;
     }
     // Another camera picked builds a new canvas the same size: drawing on with the old one's context left it blank.
     if (this.ctx?.canvas !== canvas) this.ctx = canvas.getContext("2d");
-    if (!this.image || this.image.width !== W || this.image.height !== H) this.image = this.ctx.createImageData(W, H);
+    if (!this.image || this.image.width !== across || this.image.height !== H) this.image = this.ctx.createImageData(across, H);
     const rows = this.image.data;
     const src = this.bytes;
-    if (e.mode === "depth") {
+    if (kindOf(e) === "stereo") {
+      for (let y = 0; y < H; y++) {
+        const from = (H - 1 - y) * W * 4;
+        rows.set(this.left.subarray(from, from + W * 4), y * across * 4);
+        rows.set(src.subarray(from, from + W * 4), (y * across + W) * 4);
+      }
+    } else if (e.mode === "event") {
+      this.events(e, rows, src, W, H);
+    } else if (e.mode === "depth") {
       unpackDepth(src, e.range_m, this.depth);
       this.span = steadySpan(this.span, spanOf(this.depth));
       depthPicture(this.depth, ...(this.span ?? [0, e.range_m]), rows, { width: W, flip: true });
@@ -245,6 +296,71 @@ export const picture = {
     }
     this.ctx.putImageData(this.image, 0, 0);
     this.onPicture?.(e);
+  },
+  // An event camera's picture: this frame against the last one this camera drew, in log brightness. A pixel that
+  // brightened by more than the contrast threshold is an ON event (red), one that darkened an OFF event (blue); the rest
+  // is gray. Paused, the frames are the same and nothing fires, as a real one's would not.
+  events(e, rows, src, W, H) {
+    const threshold = e.threshold ?? 0.15;
+    const luma = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = ((H - 1 - y) * W + x) * 4;
+        luma[y * W + x] = 0.299 * src[i] + 0.587 * src[i + 1] + 0.114 * src[i + 2];
+      }
+    }
+    const before = this.lumas.get(e.name);
+    this.lumas.set(e.name, luma);
+    let on = 0;
+    let off = 0;
+    for (let k = 0; k < W * H; k++) {
+      let color = [122, 122, 122];
+      if (before && before.length === luma.length) {
+        const change = Math.log(luma[k] + EVENT_FLOOR) - Math.log(before[k] + EVENT_FLOOR);
+        const count = Math.min(EVENT_LEVELS, Math.floor(Math.abs(change) / threshold));
+        if (count > 0) {
+          color = change > 0 ? [232, 64, 56] : [56, 112, 236];
+          if (change > 0) on += count;
+          else off += count;
+        }
+      }
+      rows[k * 4] = color[0];
+      rows[k * 4 + 1] = color[1];
+      rows[k * 4 + 2] = color[2];
+      rows[k * 4 + 3] = 255;
+    }
+    this.eventCount = { on, off };
+  },
+  // The scene seen from the lens's place in all directions, then the lens's pixels looked up in it (see FISHEYE_*).
+  fisheyeInto(e, cam, renderer, scene) {
+    if (!this.cubeTarget) {
+      this.cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType });
+      this.cubeCamera = new THREE.CubeCamera(0.01, 200, this.cubeTarget);
+      this.fisheye = new THREE.ShaderMaterial({
+        uniforms: { cube: { value: this.cubeTarget.texture }, look: { value: new THREE.Matrix3() }, size: { value: new THREE.Vector2() }, perRadian: { value: 1 }, reach: { value: 1 } },
+        vertexShader: FISHEYE_VERTEX,
+        fragmentShader: FISHEYE_FRAGMENT,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.fisheye);
+      quad.frustumCulled = false;
+      this.fisheyeScene = new THREE.Scene();
+      this.fisheyeScene.add(quad);
+      this.fisheyeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    }
+    this.cubeCamera.position.copy(cam.position);
+    this.cubeCamera.updateMatrixWorld();
+    this.cubeCamera.update(renderer, scene);
+    const [W, H] = this.size;
+    const half = (e.fov_deg * Math.PI) / 360;
+    const u = this.fisheye.uniforms;
+    u.look.value.setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(cam.quaternion));
+    u.size.value.set(W, H);
+    u.perRadian.value = Math.min(W, H) / 2 / half;
+    u.reach.value = half;
+    renderer.setRenderTarget(this.light);
+    renderer.render(this.fisheyeScene, this.fisheyeCamera);
   },
   // What a segmentation picture shows, the biggest share first (camera.py's "seen").
   census(rgba) {

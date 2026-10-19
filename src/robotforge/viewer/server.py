@@ -137,7 +137,8 @@ class ViewerHub:
         # The maps robots draw while they move: {"type": "map", "version", "robots": [...]}, MAP_HZ times a second
         # while any robot maps (None otherwise). Each robot entry has "robot", "mapping" (false: the map is kept as
         # it is), "scans", its estimated "pose" [x, y, heading] and the "odometry" pose alone, its "particles" (flat
-        # x, y list) with their "sigma_m", and now and then its "grid": {"x0", "y0", "res", "rows", "cols", "cells"}
+        # x, y list) with their "sigma_m", its "error_m" and "odometry_error_m" against the true pose (for the
+        # page's readout), "mapped_m2", and now and then its "grid": {"x0", "y0", "res", "rows", "cols", "cells"}
         # with "cells" a base64 of a zlib-deflated byte per cell (0 unknown, 1 free, 2 occupied), row by row from
         # row 0 at y0. The viewer's mapview.js draws them. See docs/PERCEPTION.md.
         self.map_stream: Callable[[], dict[str, Any] | None] | None = None

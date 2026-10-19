@@ -18,7 +18,7 @@ remove("go2/lidar")
 
 | type | measures | options (defaults) | reading |
 |---|---|---|---|
-| `camera` | a picture, a depth image or a segmentation image | `mode` rgb, depth or segmentation (rgb), `width` 320, `height` 240, `fov` 60 degrees, `range` 10 m | depth: `center_m`, `min_m`, `median_m` (depths along the axis), `beyond_range`, `own_share`, `nearest` (a distance); segmentation: `seen` (what, and how much of the picture); the picture with `image=true` |
+| `camera` | a picture, a depth image, a segmentation image, a stereo pair or events | `mode` rgb, depth, segmentation, stereo or event (rgb), `lens` pinhole or fisheye, `width` 320, `height` 240, `fov` 60 degrees (a fisheye 180, up to 200), `range` 10 m, `baseline` 0.12 m (stereo), `threshold` 0.15 and `window_s` 0.03 (event) | depth: `center_m`, `min_m`, `median_m` (depths along the axis), `beyond_range`, `own_share`, `nearest` (a distance); segmentation: `seen` (what, and how much of the picture); the picture with `image=true` |
 | `lidar` | one ring of laser rays | `rays` 360, `hfov` 360, `range` 12 m, `vfov` tilts the ring | `hits`, `nearest`, `ahead`, `sectors_m` (36 numbers) |
 | `lidar3d` | several rings over a vertical field | `channels` 16, `rays` 180 per ring, `vfov` [-15, 15], `hfov` 360, `range` 30 m | `points`, `ground_points`, `box_m`, `nearest` and `ahead` with `height_m` and `point_m`, `sectors_m` |
 | `imu` | proper acceleration, turn rate, orientation | | `accel_m_s2`, `gyro_rad_s`, `orientation_deg` (roll, pitch, yaw) |
@@ -73,6 +73,32 @@ A thermometer reads 20 degrees plus, for each heater, its strength over 1 + (d /
 Something solid between source and sensor shields it (heat to a fifth, gas to a half, since gas drifts round).
 It is a model of what a sensor reads, not a simulation of air: it does not move with wind and the sources do not run out.
 `response_s` is the sensor's time constant: a gas sensor with 4 s reads 63 percent of a step after 4 s.
+
+## Cameras with other optics
+
+**Stereo.**
+`type="stereo"` (or a camera with `mode="stereo"`) is a left lens and a right one `baseline` meters apart, the pair centered where one camera would sit.
+Its depth is what a stereo matcher can report, not the renderer's exact depth: the true geometry gives a disparity of f B / Z pixels, a matcher finds it to a fraction of a pixel (steps of 1/8, plus the noise given), and Z is worked out from it.
+So the error grows with the square of the distance (a depth error of 2.5 mm at 1 m and 23 mm at 3 m for the default 12 cm pair), nothing is measured beyond f B / 1 px (about 25 m, `reaches_m`) or nearer than 0.15 m, and a short baseline sees less far.
+`noise` is the error in meters at 1 m, which grows with Z squared.
+The reading is a depth camera's (`center_m`, `min_m`, `median_m`, `nearest`) plus `baseline_m`, `focal_px`, `reaches_m` and `depth_error_m`; `read_sensors(points=N)` gives its point cloud; `image=true` gives the left and right pictures side by side.
+There is no block matcher behind it, so it measures plain walls as well as textured ones: a real matcher would not.
+
+**Fisheye.**
+`lens="fisheye"` draws the scene through an equidistant lens (r = f theta), 180 degrees across by default and up to 200, as a circle in the picture.
+MuJoCo draws pinhole views only, so five square 90 degree views (front, left, right, up, down) are drawn from the lens's place and the lens's pixels are looked up in them.
+Its reading is its size and field of view; the product is the picture (`image=true`).
+Only `rgb` goes with a fisheye lens.
+
+**Event camera.**
+`type="event"` reports only that a pixel's brightness changed.
+The picture at the moment a frame is due is compared with the one `window_s` (30 ms) earlier in log brightness: a pixel that rose by more than the contrast `threshold` (0.15) fired an ON event, one that fell an OFF event, and several thresholds crossed give several events (at most four).
+The reading is the number of events, ON and OFF, the rate, the share of pixels that fired, the centroid and the box of the active pixels; a still scene gives none, a moving one gives them along its edges.
+`noise` (levels of 255) is noise in the picture, and gives a still scene the spurious events a real sensor has.
+`image=true` draws ON red and OFF blue on gray.
+It samples at 100 Hz unless given a rate, to know how the world was a window ago; the sample is the state of the world, so it costs a copy of the joint positions.
+
+In the viewer the stereo pair, the fisheye and the event picture are drawn in the browser as the other cameras' are, from the camera's pose: two renders for the pair, a cube map looked up through the lens for the fisheye, and this frame against the last for the events.
 
 ## Where a sensor goes
 

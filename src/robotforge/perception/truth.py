@@ -101,6 +101,53 @@ def score(grid: OccupancyGrid, truth: np.ndarray, body: np.ndarray | None = None
     return out
 
 
+def navigation_agreement(own: Any, scene: Any, start: tuple[float, float]) -> dict[str, Any]:
+    """How the robot's own map and the scene's map (behaviors/nav_map.py, from the compiled model) agree on where the
+    robot can go. `own` and `scene` are navigation maps (NavMap) on their own grids; the robot is at `start`.
+
+    through_blocked: the share of the cells the robot would plan through on its own map (those it can reach from
+    where it stands) that the scene's map says it cannot stand in (a wall, a rack, a pallet, a step);
+    found: the share of the cells the scene's map lets it reach, inside the area its own map covers, that its own map
+    lets it reach too (what its map lacks is what it has not seen, or took for an obstacle: a ramp is a block to a
+    lidar)."""
+    from robotforge.behaviors import nav_grid
+
+    out: dict[str, Any] = {}
+    cell = own.grid.cell(*start)
+    if not own.grid.inside(*cell):
+        return out
+    mine = nav_grid.reachable(own.grid, own.free, cell)
+    rows, cols = np.nonzero(mine)
+    if not len(rows):
+        return out
+    xs = own.grid.x0 + cols * own.grid.res
+    ys = own.grid.y0 + rows * own.grid.res
+    sr = np.rint((ys - scene.grid.y0) / scene.grid.res).astype(int)
+    sc = np.rint((xs - scene.grid.x0) / scene.grid.res).astype(int)
+    inside = (sr >= 0) & (sr < scene.grid.rows) & (sc >= 0) & (sc < scene.grid.cols)
+    if inside.any():
+        blocked = ~scene.free[sr[inside], sc[inside]]
+        out["through_blocked"] = round(float(blocked.mean()), 4)
+        out["reachable_cells"] = int(inside.sum())
+    # the scene's reachable cells within the box the own map has covered
+    covered = np.zeros(scene.grid.shape, bool)
+    extent_r0, extent_r1 = int(rows.min()), int(rows.max())
+    extent_c0, extent_c1 = int(cols.min()), int(cols.max())
+    x0, y0 = own.grid.x0 + extent_c0 * own.grid.res, own.grid.y0 + extent_r0 * own.grid.res
+    x1, y1 = own.grid.x0 + extent_c1 * own.grid.res, own.grid.y0 + extent_r1 * own.grid.res
+    sxs, sys_ = scene.grid.centers()
+    covered = (sxs >= x0) & (sxs <= x1) & (sys_ >= y0) & (sys_ <= y1)
+    scene_reach = nav_grid.reachable(scene.grid, scene.free, scene.grid.cell(*start)) & covered
+    if scene_reach.any():
+        orr = np.rint((sys_[scene_reach] - own.grid.y0) / own.grid.res).astype(int)
+        occ = np.rint((sxs[scene_reach] - own.grid.x0) / own.grid.res).astype(int)
+        ok = (orr >= 0) & (orr < own.grid.rows) & (occ >= 0) & (occ < own.grid.cols)
+        found = np.zeros(len(orr), bool)
+        found[ok] = mine[orr[ok], occ[ok]]
+        out["found"] = round(float(found.mean()), 3)
+    return out
+
+
 def pose_errors(estimate: np.ndarray, truth: np.ndarray) -> dict[str, float]:
     """Position error (m) and heading error (deg) of an estimated pose against the true one."""
     return {

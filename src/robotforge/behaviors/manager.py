@@ -1679,6 +1679,14 @@ class BehaviorManager:
         plan = planner.plan(data)
         return plan, planner.last_map
 
+    def scene_map(self, robot: str) -> nav_map.NavMap:
+        """The map of where the robot's center may go, computed from the scene as it stands (what `move(to=...)`
+        plans on without `map="own"`): for judging a robot's own map against it."""
+        robot = self.resolve(robot)
+        with self.session.lock:
+            data = copy.copy(self.session.data)
+        return self._fetch_planner(robot, data, None, None).map(data)
+
     def own_map_planner(self, robot: str, mapper: Any, unknown_blocks: bool = False) -> tuple[Any, mujoco.MjData]:
         """A planner on `mapper`'s grid for the robot where it stands (for exploring: what it can reach on its map,
         unknown space counting as open), and the data it is planned on."""
