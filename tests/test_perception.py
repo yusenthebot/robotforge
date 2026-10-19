@@ -83,6 +83,26 @@ def test_the_likelihood_field_made_in_parts_is_the_one_made_whole():
     assert grew > 0, "the grid never grew, so padding was not tried"
 
 
+def test_the_navigation_score_is_made_when_the_robot_stands_in_a_cell_its_own_map_blocks():
+    """It came back empty (no 'found') whenever the believed start cell was blocked on the robot's own map."""
+    from types import SimpleNamespace
+
+    from robotforge.behaviors.nav_grid import Grid
+    from robotforge.perception import truth
+
+    grid = Grid(0.0, 0.0, 0.1, 30, 30)
+    free = np.ones(grid.shape, bool)
+    scene = SimpleNamespace(grid=grid, free=free.copy())
+    own_free = free.copy()
+    own_free[14:17, 14:17] = False  # the cell the robot stands in and its neighbours, seen as a wall
+    own = SimpleNamespace(grid=grid, free=own_free)
+    score = truth.navigation_agreement(own, scene, (1.5, 1.5))
+    assert score["found"] > 0.9 and score["through_blocked"] == 0.0 and 0 < score["start_moved_m"] < 0.3
+    boxed = SimpleNamespace(grid=grid, free=np.zeros(grid.shape, bool))
+    assert "unscored" in truth.navigation_agreement(boxed, scene, (1.5, 1.5))
+    assert "unscored" in truth.navigation_agreement(own, scene, (50.0, 50.0))
+
+
 def test_rays_over_a_low_crate_do_not_clear_it():
     """A 3D lidar's level ray passes over a crate; it must not undo what a steeper ray saw."""
     grid = OccupancyGrid(0.1, (0.0, 0.0), reach=4.0)
