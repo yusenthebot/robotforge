@@ -38,6 +38,14 @@ def _templates_row(pg: Any) -> None:
     pg.add_robot("hand", template="gripper", pos=[0.0, -0.7])
 
 
+def _arm_styles(pg: Any) -> None:
+    """The same 3-joint arm in each style, side by side."""
+    colors = {"cobot": "blue", "lab": "orange", "hobby": "teal", "rugged": "yellow"}
+    for i, style in enumerate(STYLES):
+        params = {"dof": 3, "style": style, "color": colors[style]}
+        pg.add_robot(f"arm_{style}", template="arm", params=params, pos=[0.0, 0.34 * (i - 1.5)])
+
+
 def _describe(sentence: str) -> Callable[[Any], None]:
     def world(pg: Any) -> None:
         pg.add_robot("bot", describe=sentence)
@@ -101,6 +109,27 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             size=HD,
             settle=3.0,
         ),
+        Shot(
+            "assets_styles",
+            _arm_styles,
+            page="window.__robotforge.select(null);" + look((1.15, -0.04, 0.48), (0.05, -0.02, 0.2)),
+            size=HD,
+            settle=3.0,
+        ),
+        Shot(
+            "assets_dog_close",
+            lambda pg: pg.add_robot("dog", template="quadruped", params={"color": "orange", "style": "lab"}),
+            page="window.__robotforge.select(null);" + look((0.62, -0.5, 0.32), (0.0, 0.0, 0.14)),
+            size=HD,
+            settle=2.5,
+        ),
+        Shot(
+            "assets_humanoid_close",
+            lambda pg: pg.add_robot("man", template="humanoid", params={"color": "teal"}),
+            page="window.__robotforge.select(null);" + look((0.9, -0.55, 0.45), (0.0, 0.0, 0.22)),
+            size=HD,
+            settle=2.5,
+        ),
         Shot("assets_arm6", _arm(6), page=arm_view, size=HD, settle=2.5),
         Shot(
             "assets_hexapod",
@@ -117,6 +146,6 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             size=HD,
             settle=3.0,
         ),
-        Shot("assets_gallery", gallery_world, page=look((3.5, -3.2, 1.9), (-0.3, 0.2, 0.3)), size=HD, settle=3.0),
+        Shot("assets_gallery", gallery_world, page=look((1.7, -3.2, 1.7), (-0.7, 0.2, 0.3)), size=HD, settle=3.0),
         Shot("assets_described", _described_row, page=look((2.5, -0.3, 0.75), (0.0, 0.0, 0.3)), size=HD, settle=3.0),
     ]
