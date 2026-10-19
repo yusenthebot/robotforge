@@ -592,11 +592,31 @@ def test_real_library_robot_loads_and_holds_still(name):
     mujoco.mj_forward(model, data)
     root = model.body(next(b for b in range(1, model.nbody) if model.body_parentid[b] == 0)).id
     start = data.xpos[root].copy()
+    start_axes = data.xmat[root].copy()
     for _ in range(int(3.0 / model.opt.timestep)):
         mujoco.mj_step(model, data)
     assert np.isfinite(data.qpos).all()
-    assert data.xmat[root].reshape(3, 3)[2, 2] > 0.95  # upright
+    if library.CATALOG[name].hand is None:
+        assert data.xmat[root].reshape(3, 3)[2, 2] > 0.95  # upright
+    else:  # a dexterous hand is fixed to the world palm down, pointing the way a flange does: it stays as it was put
+        assert np.allclose(data.xmat[root], start_axes, atol=0.05)
     assert np.linalg.norm(data.xpos[root] - start) < 0.08  # settles where it was put
+
+
+@pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")
+@pytest.mark.parametrize(("name", "elbow", "hand"), [("z1", "link03", "link06"), ("xarm7", "link4", "link7")])
+def test_real_arm_home_stands_up_instead_of_folding_back(name, elbow, hand):
+    # Menagerie's keyframes for these two lean the upper arm back over the base, which reads as fallen over.
+    model = compile_world(World.model_validate({"robots": [{"name": "r", "library": name}]})).model
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("home").id)
+    mujoco.mj_forward(model, data)
+    base = data.xpos[model.body("r/link1" if name == "xarm7" else "r/link01").id]
+    top = data.xpos[model.body(f"r/{elbow}").id]
+    tip = data.xpos[model.body(f"r/{hand}").id]
+    assert top[2] - base[2] > 0.25  # the elbow stands well above the shoulder
+    assert abs(top[0] - base[0]) < 0.08  # over it, not leaning back
+    assert tip[0] - base[0] > 0.1  # the hand reaches out in front
 
 
 @pytest.mark.skipif(not NETWORK, reason="set ROBOTFORGE_NETWORK_TESTS=1 to download real robots from Menagerie")

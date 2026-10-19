@@ -65,6 +65,7 @@
 - 组合存成设计：`mount(on=..., save_as="名字")` 存到 `$ROBOTFORGE_HOME/designs/`，`add_robot(design=...)` 再加一台，`mount("名字", on=...)` 整个装到别的机器人上；`remove("cart/arm")` 连同装在它上面的东西一起拆。
 - 验收：`scripts/combos.py` 里十个一句话组合用真实 Menagerie 模型搭好、移动、干一件小事，十个全部成功（UR5e+LEAP 存成设计后装上轮式底盘、Spot 背两条臂、Go2 上 PiPER 手腕装激光雷达、ANYmal 背 UR5e+Franka Hand、UR5e+Allegro、小车上 PiPER+吸盘、底盘上 UR5e+电磁铁、T1 头上激光雷达胸前深度相机、存成设计的 PiPER+腕部相机装到 Go1、底盘上 Panda+三维激光雷达）。
   截图在 `scripts/screenshots.py` 的 `g10_*`，换手录像在 `scripts/demos.py` 的 `g10_hand_swap`（Robotiq 换 LEAP 再换 Allegro，各放一样东西进盒子）。
+- Z1 和 xArm 7 的 home 姿态不再用 Menagerie 的关键帧（上臂向后折在底座上，排在一起像倒了）：上臂竖直，前臂或手朝前，测试 `test_real_arm_home_stands_up_instead_of_folding_back` 守着。
 - 还没做：Shadow 手（模型自带 40 cm 前臂，没接）；装在胸前、基座水平的臂指向朝下很难，`move_arm` 和 `pick_and_place` 要求夹爪朝下，所以人形胸前挂臂只能装不能用；动态倾翻（PLA 小车上的 Panda 一甩臂就翻）检查只给百分比提示，不拒绝。
 
 ### G11 生成：机器人、环境、任务

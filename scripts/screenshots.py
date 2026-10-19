@@ -895,20 +895,6 @@ LINE_UP = [
 ]
 
 
-# Arms in the line-up stand up straight, as their makers show them: their Menagerie home poses are working poses,
-# and beside the walkers a Z1 folded back over its base and an xArm 7 leaning back read as fallen over. Joint servo
-# targets (rad) by actuator; the joints not named keep their home.
-LINE_UP_POSES = {
-    "z1": {"motor2": 1.57, "motor3": 0.0, "motor4": 0.0},  # standing straight up, as a Z1 is shown
-    "xarm7": {"act2": 0.0, "act4": 1.3, "act6": 1.3},  # upper arm up, the hand pointing down in front
-}
-
-
-def _pose(robot: str, targets: dict[str, float]) -> list[dict[str, Any]]:
-    """Viewer messages that set the servo targets of `robot`'s actuators by name."""
-    return [{"actuator": f"{robot}/{name}", "value": value} for name, value in targets.items()]
-
-
 def _line_up(pg: Any) -> None:
     """The library's newer robots standing in two rows: walkers in front, arms behind."""
     for name, model, mounts, pos in LINE_UP:
@@ -1490,12 +1476,12 @@ SHOTS = [
     Shot("splice_complex", _complex_splices, page=_look((3.4, -1.6, 1.7), (0.0, 0.2, 0.5)), settle=3.0),
     Shot("splice_barkour_so100", _barkour_so100, page=_framed("barkour", (1.1, -0.9, 0.5), 0.02), settle=3.0),
     Shot("splice_go2_piper_so100", _go2_two_arms, page=_framed("go2", (-0.55, -1.3, 0.55), 0.08), settle=3.0),
-    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (1.6, -1.3, 0.75), -0.02), settle=3.0),
+    Shot("splice_spot_z1", _spot_z1, page=_framed("spot", (2.0, -1.6, 0.55), 0.22), settle=3.0),
     Shot("splice_anymal_ur5e_robotiq", _anymal_ur5e, page=_framed("anymal", (2.0, -1.55, 0.85), 0.0), settle=3.0),
     Shot(
         "library_line_up",
         _line_up,
-        viewer=[msg for robot, targets in LINE_UP_POSES.items() for msg in _pose(robot, targets)] + [{"wait": 2.0}],
+        viewer=[{"wait": 2.0}],
         page="window.__robotforge.select(null); " + _look((4.9, 0.3, 1.75), (-0.1, 0.3, 0.42)),
         settle=3.0,
     ),
