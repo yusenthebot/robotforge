@@ -32,10 +32,12 @@ import dataclasses
 import json
 import math
 import os
+import shutil
 import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 ROBOTS = ("go2", "go1", "a1", "anymal_c", "spot", "barkour", "g1", "t1", "op3")
 # (Unitree H1 is not in the library: docs/LEGGED.md says why)
@@ -51,6 +53,19 @@ PATCHES: dict[str, dict] = {
     "gravel": {"type": "rough", "size": [3.0, 2.0], "height": 0.035, "scale": 0.06, "seed": 3, "style": "rock"},
     "grass": {"type": "rough", "size": [3.0, 2.0], "height": 0.02, "scale": 0.3, "seed": 5, "style": "grass"},
 }
+
+
+def patch_of(case: str) -> dict | None:
+    """The ground patch of a case. "stairs@8x30x3" is a flight of 3 steps 8 cm high and 30 cm deep (stairs at other
+    sizes, to find what a robot can and cannot climb)."""
+    name, _, size = case.partition("@")
+    patch = PATCHES.get(name)
+    if patch is None or not size:
+        return patch
+    height, depth, steps = (float(v) for v in size.split("x"))
+    return {**patch, "steps": int(steps), "step_height": height / 100, "step_depth": depth / 100}
+
+
 CASES = ("flat", *PATCHES, "turn", "shove", "drag", "payload")
 # The heaviest arm each robot carries at full speed (library.Payload), by the arms' masses.
 PAYLOADS = {
@@ -61,7 +76,6 @@ PAYLOADS = {
     "spot": "xarm7",
     "barkour": "piper",
     "g1": "piper",
-    "h1": "piper",
     "t1": "so_arm100",
 }
 SHOVE = 0.5  # m/s
@@ -105,7 +119,7 @@ def _setup(robot: str, case: str, trial: int = 0):
     mounts = [{"library": PAYLOADS[robot]}] if case == "payload" and robot in PAYLOADS else None
     pos, yaw = _start(trial)
     pg.add_robot(robot, library=robot, mounts=mounts, pos=pos, yaw=yaw)
-    patch = PATCHES.get(case)
+    patch = patch_of(case)
     if patch is not None:
         rest = {k: v for k, v in patch.items() if k not in ("type", "style")}
         from robotforge.design import terrain
@@ -134,6 +148,16 @@ def _walker(pg, robot: str) -> str:
 
 
 def run(robot: str, case: str, trial: int = 0, share: float = SPEED_SHARE, walker: str | None = None) -> Result:
+    """One measured run; the scratch home it made is removed again."""
+    try:
+        return _measure(robot, case, trial, share, walker)
+    finally:
+        home = os.environ.get("ROBOTFORGE_HOME", "")
+        if Path(home).name.startswith("rf_legged_"):
+            shutil.rmtree(home, ignore_errors=True)
+
+
+def _measure(robot: str, case: str, trial: int, share: float, walker: str | None) -> Result:
     import numpy as np
 
     if case == "payload" and robot not in PAYLOADS:
@@ -193,7 +217,7 @@ def run(robot: str, case: str, trial: int = 0, share: float = SPEED_SHARE, walke
     speed = share * top
     behaviors.move(robot, speed, 0.0, walker=walker)
     walker = _walker(pg, robot)
-    patch = PATCHES.get(case)
+    patch = patch_of(case)
     end, half_width, length = FLAT_RUN, math.inf, 0.0
     if patch is not None:
         from robotforge.design import terrain
@@ -271,6 +295,11 @@ def _run(args: tuple) -> Result:
         return Result(args[0], args[1], False, 0.0, False, 0.0, 0.0, 0.0, note=note, trial=args[2])
 
 
+def skipped(r: Result) -> bool:
+    """A case the robot cannot be given (no library arm to carry), not one it failed."""
+    return r.note.startswith("skipped")
+
+
 def summary(results: list[Result]) -> str:
     """One line per robot and case over its trials: how many succeeded, mean speed, falls, mean |drift|."""
     groups: dict[tuple[str, str], list[Result]] = {}
@@ -278,6 +307,9 @@ def summary(results: list[Result]) -> str:
         groups.setdefault((r.robot, r.case), []).append(r)
     lines = [f"{'robot':<9} {'case':<8} success  speed m/s  falls  |drift| deg  walker"]
     for (robot, case), rs in groups.items():
+        if all(skipped(r) for r in rs):
+            lines.append(f"{robot:<9} {case:<8}   -        -          -        -     {rs[0].note}")
+            continue
         ok = sum(r.success for r in rs)
         speed = sum(r.speed for r in rs) / len(rs)
         falls = sum(r.fell for r in rs)
@@ -287,8 +319,9 @@ def summary(results: list[Result]) -> str:
             f"{robot:<9} {case:<8} {ok:>2}/{len(rs):<2}    {speed:5.2f}     {falls:>3}    {drift:6.1f}{unit:<5}  "
             f"{rs[0].walker}"
         )
-    total = sum(r.success for r in results)
-    lines.append(f"{total} of {len(results)} runs passed")
+    ran = [r for r in results if not skipped(r)]
+    total = sum(r.success for r in ran)
+    lines.append(f"{total} of {len(ran)} runs passed ({len(results) - len(ran)} skipped)")
     return "\n".join(lines)
 
 
@@ -301,8 +334,9 @@ def table(results: list[Result]) -> str:
             f"{r.robot:<9} {r.case:<8} {ok:<4} {r.speed:5.2f}  {fell:<4} {r.drift:6.1f}  {r.off:6.2f}  "
             f"{r.seconds:5.1f}  {r.walker:<18}  {r.note}"
         )
-    passed = sum(r.success for r in results)
-    lines.append(f"{passed} of {len(results)} passed")
+    ran = [r for r in results if not skipped(r)]
+    passed = sum(r.success for r in ran)
+    lines.append(f"{passed} of {len(ran)} passed ({len(results) - len(ran)} skipped)")
     return "\n".join(lines)
 
 
