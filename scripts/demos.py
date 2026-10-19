@@ -642,12 +642,12 @@ DEMOS = [
     # Mobile manipulation (scripts/mobile_bench.py's jobs in real time; the robot is "mm"). In the home: "go to the
     # kitchen and bring the apple to the living-room table" through the swing door; the drawer pulled out from beside
     # it and the block taken out; the button pressed. In the factory: a box caught off the running belt.
-    _mobile("mobile_fetch_go2", "go2_arm", "fetch", 110.0, (0.5, -2.2, 2.3)),
-    _mobile("mobile_drawer_go2", "go2_arm", "drawer", 120.0, (-0.6, -1.8, 1.7)),
+    _mobile("mobile_fetch_go2", "go2_arm", "fetch", 110.0, (0.4, -1.9, 3.3), ease=0.06),
+    _mobile("mobile_drawer_go2", "go2_arm", "drawer", 120.0, (-0.5, -1.7, 2.9), ease=0.06),
     _mobile("mobile_button_go2", "go2_arm", "button", 50.0, (1.3, -0.5, 1.3), ease=0.05),
-    _mobile("mobile_door_go2", "go2_arm", "door", 40.0, (0.3, -2.4, 2.0)),
-    _mobile("mobile_door_anymal", "anymal_ur5e", "door", 60.0, (0.2, -2.6, 2.2)),
-    _mobile("mobile_fetch_panda", "mobile_panda", "fetch", 90.0, (0.5, -2.2, 2.3)),
+    _mobile("mobile_door_go2", "go2_arm", "door", 40.0, (0.3, -1.9, 3.2), ease=0.06),
+    _mobile("mobile_door_anymal", "anymal_ur5e", "door", 60.0, (0.2, -2.0, 3.5), ease=0.06),
+    _mobile("mobile_fetch_panda", "mobile_panda", "fetch", 90.0, (0.4, -1.9, 3.3), ease=0.06),
     _mobile("mobile_button_panda", "mobile_panda", "button", 50.0, (1.3, -0.5, 1.4), ease=0.05),
     _mobile("mobile_conveyor_panda", "mobile_panda", "conveyor", 60.0, (0.2, -2.0, 1.6), ease=0.05),
     _mobile("mobile_button_spot", "spot_z1", "button", 60.0, (1.4, -0.6, 1.6), ease=0.05),

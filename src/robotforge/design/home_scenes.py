@@ -20,7 +20,7 @@ WALL = [0.88, 0.86, 0.82, 1]
 WOOD = [0.62, 0.48, 0.34, 1]
 LIGHT_WOOD = [0.78, 0.64, 0.46, 1]
 WHITE = [0.92, 0.92, 0.9, 1]
-KITCHEN_RUG = [0.8, 0.79, 0.74, 1]
+KITCHEN_RUG = [0.7, 0.7, 0.66, 1]
 LIVING_RUG = [0.64, 0.56, 0.5, 1]
 SOFA = [0.42, 0.5, 0.58, 1]
 WALL_HEIGHT = 2.1
@@ -93,8 +93,8 @@ def home(rng: random.Random, opts: dict[str, float]) -> Content:
     c.add("sofa", "box", [2.2, HALF_Y - 0.45, 0.21], size=[1.8, 0.75, 0.42], color=SOFA, fixed=True)
     c.add("sofa_back", "box", [2.2, HALF_Y - 0.12, 0.42], size=[1.8, 0.18, 0.84], color=SOFA, fixed=True)
     c.add("living_table", "table", [2.2, 0.5], size=[1.0, 0.6, LOW_TABLE], color=LIGHT_WOOD)
-    c.add("side_table", "table", [1.0, 1.5], size=[0.45, 0.4, 0.3], color=WOOD)
-    c.add("button", "button", [1.0, 1.5 - 0.1, 0.3], size=[0.05, 0.04], color="red")  # near its front edge
+    c.add("side_table", "table", [1.0, 1.5], size=[0.36, 0.34, 0.3], color=WOOD)
+    c.add("button", "button", [1.0, 1.5 - 0.11, 0.3], size=[0.05, 0.04], color="red")  # 6 cm in from its front
 
     c.ground_slots = [Slot((2.4, -1.5), 180), Slot((1.2, -1.6), 180), Slot((-2.2, -1.5), 0)]
     from robotforge.design import gallery

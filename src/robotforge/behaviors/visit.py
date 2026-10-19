@@ -40,6 +40,11 @@ KEEP_CLEAR = 0.03
 WAY_SHARES = (0.5, 1.0)  # of the move, the mechanism's poses checked against the robot's
 REPLANS = 2  # spots looked for again from where the robot stopped
 STAND_TRIES = 1  # times a rover creeps into its spot again before it looks for another
+# The robot under the arm moved this far (m) or turned this much (rad) since the operation was planned, once the arm
+# is over the handle: the operation is planned again from there (Visit._swayed), at most REPLANS_SWAY times.
+SWAY_M, SWAY_RAD = 0.008, np.radians(1.0)
+REPLANS_SWAY = 2
+WALK_TURN = np.radians(8.0)  # rad either way a spot for a robot that walks must work from as well
 FULL = 0.97  # share of the move the arm must be planned to follow from a spot for the spot to count
 # Spots checked by IK in one search: a quick check of the handle's whole way passes over most, and the spots beside
 # a drawer from which a Go2 works it came after 40 nearer the robot's start that do not.
@@ -93,7 +98,9 @@ def plan(manager: BehaviorManager, arm: ArmMotion, target: str, shape: str, acti
         stand,
         nav,
         [middle],
-        operate.ABOVE + 0.03 if action == "press" else LIFT,  # a press comes down from over the cap
+        # A press comes down from ABOVE over the cap with the fingertips, which reach past the tool point: checked
+        # 9 cm over the cap, a Go2's PiPER stopped where it reached 9 cm over it and not the 11 the press starts at.
+        operate.ABOVE + operate._tip_reach(model, data, arm) + 0.01 if action == "press" else LIFT,
         start,
         reach,
         _under(model, data, target),
@@ -182,7 +189,13 @@ def _rehearsal(stand: fetch.Stand, job: Job):
     """For spots_for: whether, from (xy, heading), the robot keeps clear of what moves and the arm does it all."""
 
     def works(xy: np.ndarray, heading: float, point: np.ndarray, tilt: float) -> bool:
-        return _full(_plan_from(stand, xy, heading, job))
+        if not _full(_plan_from(stand, xy, heading, job)):
+            return False
+        if not stand.walks:
+            return True
+        # A robot that walks stops some degrees off: a Go2 sent to press a button stopped 8 to 10 degrees turned from
+        # its spot three times, and its arm reached the button from none of them.
+        return all(_full(_plan_from(stand, xy, heading + turn, job)) for turn in (WALK_TURN, -WALK_TURN))
 
     return works
 
@@ -292,6 +305,8 @@ class Visit(fetch.Footing):
     _replans: int = 0
     _creep: tuple[float, fetch.Spot] | None = None
     _stance: tuple[np.ndarray, float] | None = None
+    _base: tuple[np.ndarray, np.ndarray] | None = None  # where the robot's root body was as the operation was planned
+    _replanned: int = 0
 
     @property
     def done(self) -> bool:
@@ -355,6 +370,9 @@ class Visit(fetch.Footing):
 
     def _on_working(self, t: float, data: mujoco.MjData) -> None:
         self._hold_still(data)
+        if self.op is not None and not self.op.done and self._swayed(data):
+            self._plan_again(data)
+            return
         if self.op is None or not self.op.done:
             return
         self._stand_free()
@@ -365,6 +383,46 @@ class Visit(fetch.Footing):
             self._finish(data)
 
     # -- helpers --
+
+    def _swayed(self, data: mujoco.MjData) -> bool:
+        """Whether, its arm over the handle and coming down to it (the reach or the press), the robot stands further
+        than SWAY off how it stood when the operation was planned: ANYmal leaned under a UR5e reaching out (20 kg),
+        and the hand came down 5 cm beside the button, on the table."""
+        if self._base is None or self.op.current_label not in ("reach", "press") or self._replanned >= REPLANS_SWAY:
+            return False
+        pos, rot = self._base
+        body = self.manager.root(self.robot)
+        off = float(np.linalg.norm(data.xpos[body] - pos))
+        turn = float(np.arccos(np.clip((np.trace(rot.T @ data.xmat[body].reshape(3, 3)) - 1) / 2, -1.0, 1.0)))
+        if off <= SWAY_M and turn <= SWAY_RAD:
+            self._base = None  # stood still: no need to look again for this operation
+            return False
+        return True
+
+    def _chassis(self, data: mujoco.MjData) -> tuple[np.ndarray, np.ndarray]:
+        """Where the robot's root body is and how it is turned (the arm's mount moves on a lift, the root does not)."""
+        root = self.manager.root(self.robot)
+        return data.xpos[root].copy(), data.xmat[root].reshape(3, 3).copy()
+
+    def _plan_again(self, data: mujoco.MjData) -> None:
+        """Plan the operation again from the arm over the handle and the robot as it stands now (see _swayed)."""
+        self._replanned += 1
+        session, name = self.manager.session, self.arm.robot
+        arm = ArmMotion(session.model, name, self.manager.home_qpos())
+        arm.sync(data)
+        arm.q = data.qpos[arm.chain.qpos_adr].copy()
+        try:
+            op = _plan(session.model, data, arm, self.job)
+        except operate.OperateError as exc:
+            log.info("%s: no new plan from where it leans (%s); on with the first", self.robot, exc)
+            self._base = None
+            return
+        if not op.legs or not _full(op):  # no better from here: on with the first plan
+            self._base = None
+            return
+        self.op = op
+        self._base = self._chassis(data)
+        session.set_controller(name, op)
 
     def _tuck(self, data: mujoco.MjData, step: str) -> None:
         """Fold the arm over the robot for the way (hold_q), joint by joint: the arm's own motion takes it back from
@@ -411,16 +469,17 @@ class Visit(fetch.Footing):
             self._fail(data, "out_of_reach", f"from where it stopped: {why}")
             return
         self.op = op
+        self._base = self._chassis(data)
         self._stance = self._pose(data)
         self.stood_at = [round(float(v), 3) for v in self._stance[0]] + [round(math.degrees(self._stance[1]), 1)]
         session.set_controller(name, op)
         self.step = "working"
 
     def _again(self, t: float, data: mujoco.MjData) -> bool:
-        """Creep into the spot once more (a rover), or look for another spot from where it stands and go there; True
-        if it does either."""
-        walks = self.manager.kind(self.robot).value in fetch.WALKERS
-        if self._tries < STAND_TRIES and not walks:
+        """Creep into the spot once more, or look for another spot from where it stands and go there; True if it does
+        either. A robot that walks creeps too (within fetch.WALK_SHIFT and half fetch.WALK_TWIST): a Go2 that stopped
+        14 cm and 8 degrees off its spot by a button found two more spots from there and stopped as far off each."""
+        if self._tries < STAND_TRIES:
             self._tries += 1
             self._creep = (t, self.spot)
             self.step = "creeping"

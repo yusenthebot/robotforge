@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 
+import mujoco
 import numpy as np
 import pytest
 from mcp import Client
@@ -63,6 +64,24 @@ def test_a_lift_picker_goes_over_to_a_drawer_out_of_reach_and_opens_it(pg):
     # Folded back over the robot for the way, the arm's own motion in charge of it again.
     arm_motion = pg.behaviors._arm_motion(trip.arm.robot)
     assert np.max(np.abs(arm_motion.q - trip.hold_q)) < 0.1
+
+
+def test_a_robot_pushed_off_its_spot_as_the_hand_comes_down_plans_again_from_there(pg):
+    """The base shifting under the arm (a legged robot leaning under a heavy arm) is looked at once the hand is over
+    the handle: the operation is planned again from where the robot stands, and the handle is still taken hold of."""
+    _drawer_world(pg)
+    arm = pg.behaviors.resolve("picker", arm=True)
+    trip, _, _ = operate.start(pg.behaviors, arm, "chest", "open", None)
+    s = pg.session
+    pg.run_fast(lambda: trip.op is not None and trip.op.current_label == "approach", visit.TIME_LIMIT)
+    root = pg.behaviors.root("picker")
+    joint = s.model.body_jntadr[root]
+    assert joint >= 0 and s.model.jnt_type[joint] == mujoco.mjtJoint.mjJNT_FREE
+    s.data.qpos[s.model.jnt_qposadr[joint] + 1] -= 0.03  # 3 cm toward the chest's pull side
+    mujoco.mj_forward(s.model, s.data)
+    result = _run(pg, trip)
+    assert trip._replanned >= 1
+    assert result["success"], result
 
 
 def test_a_robot_that_goes_is_kept_where_it_stands_with_go_false(pg):
