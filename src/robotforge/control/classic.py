@@ -20,12 +20,7 @@ from robotforge.behaviors.ik import Chain, IKSolver
 from robotforge.control.actuation import ActionScale, TorqueMap
 from robotforge.control.tasks import Task, TaskError
 from robotforge.control.tasks.base import home_qpos
-
-
-def min_jerk(s: float) -> tuple[float, float]:
-    """Smooth 0 -> 1 profile (position, and its rate per unit s) with zero speed at both ends."""
-    s = min(max(s, 0.0), 1.0)
-    return 10 * s**3 - 15 * s**4 + 6 * s**5, 30 * s**2 - 60 * s**3 + 30 * s**4
+from robotforge.control.tasks.tool import min_jerk
 
 
 def physics_rate(model: mujoco.MjModel) -> float:

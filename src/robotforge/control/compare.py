@@ -45,6 +45,7 @@ class EpisodeMonitor:
         self._divergences = divergences(data)
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        self.task.observe(data)
         cost = self.task.step_cost(data)
         self.cost += cost * self.dt
         self.reward += (self.task.alive_bonus - cost) * self.dt

@@ -287,6 +287,10 @@ class Task(ABC):
         remember where the robot started or where a target object is right now."""
         return None
 
+    def observe(self, data: mujoco.MjData) -> None:
+        """Called after every physics step of a scored run, for tasks that keep their own tally (a force held)."""
+        return None
+
     def push(self, data: mujoco.MjData, strength: float = 1.0) -> str:
         """Disturb the robot (a sudden shove) to test recovery; returns what was done."""
         raise TaskError(f"task {self.name!r} has no push test")

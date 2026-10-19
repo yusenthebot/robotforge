@@ -26,6 +26,7 @@ from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from robotforge.flow_board import FlowBoard
 from robotforge.sim.session import SimSession
 from robotforge.viewer import scene
 
@@ -142,6 +143,9 @@ class ViewerHub:
         # with "cells" a base64 of a zlib-deflated byte per cell (0 unknown, 1 free, 2 occupied), row by row from
         # row 0 at y0. The viewer's mapview.js draws them. See docs/PERCEPTION.md.
         self.map_stream: Callable[[], dict[str, Any] | None] | None = None
+        # The behavior tree a script shows (flow_board.FlowBoard): {"type": "flow", "name", "nodes", "status",
+        # "notes"} sent when it changes, and to a viewer that connects while one is up. No nodes: no panel.
+        self.flow: FlowBoard | None = None
         self._slow_tasks: set[asyncio.Task] = set()
         # Pose frames sent to each viewer, and how many it said it took in (only viewers that say so are paced).
         self._sent: dict[WebSocket, int] = {}
@@ -305,6 +309,7 @@ class ViewerHub:
         last_lesson = 0.0
         last_sensors = 0.0
         last_map = 0.0
+        last_flow = 0
         last_report = -math.inf
         while True:
             tick_start = time.perf_counter()
@@ -334,6 +339,9 @@ class ViewerHub:
                         update = self.sensor_stream()
                         if update is not None:
                             await self._send_all(text=json.dumps(update))
+                    if self.flow is not None and self.flow.rev != last_flow:
+                        last_flow = self.flow.rev
+                        await self._send_all(text=json.dumps(self.flow.message()))
                     if self.map_stream is not None and tick_start - last_map > 1.0 / MAP_HZ:
                         last_map = tick_start
                         update = self.map_stream()
@@ -367,6 +375,8 @@ def create_app(hub: ViewerHub) -> Starlette:
         try:
             await ws.send_text(json.dumps(hub.scene_message()))
             await ws.send_text(json.dumps(hub.state_message()))
+            if hub.flow is not None and hub.flow.nodes:
+                await ws.send_text(json.dumps(hub.flow.message()))
             while True:
                 raw = await ws.receive_text()
                 try:

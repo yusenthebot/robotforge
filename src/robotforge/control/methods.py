@@ -9,7 +9,7 @@ import numpy as np
 from pydantic import ValidationError
 
 from robotforge import wording
-from robotforge.control import classic
+from robotforge.control import classic, impedance
 from robotforge.control.mpc import MPCConfig, SamplingMPC
 from robotforge.control.tasks import Task, TaskError
 from robotforge.control.tasks.base import home_ctrl, readable
@@ -22,6 +22,12 @@ METHODS: dict[str, str] = {
     "ik": "Inverse kinematics + servo position control: solve for joint angles once and send them to the servos.",
     "pd": "PD feedback: push back in proportion to the error and its rate (with gravity compensation for arms).",
     "cartesian": "Operational-space control: a virtual spring pulls the tool straight to the target, no IK needed.",
+    "joint_impedance": "Joint impedance: a soft spring and damper in every joint toward the IK answer, with gravity "
+    "held up; the arm gives way when it touches something.",
+    "cartesian_impedance": "Cartesian impedance: the tool is a mass on a spring and damper toward the target "
+    "(torque = J^T F + gravity), so it gives way like a spring in space.",
+    "osc": "Operational-space control: the tool answers like a unit mass in every pose (tool inertia, Coriolis and "
+    "gravity cancelled), and along a surface it closes a force loop on the touch it feels.",
     "lqr": "Linear-quadratic regulator: the optimal feedback gains for a model linearized around balance.",
     "mpc": "Predictive sampling MPC: simulate many possible futures every 20 ms and follow the best one.",
     "mppi": "MPPI: like predictive sampling, but blends all futures weighted by how good they are.",
@@ -90,6 +96,8 @@ def make_controller(
             base_name = cfg.pop("base", None)
             base = _base(base_name, task, model, params) if base_name else None
             return SamplingMPC(task, model, MPCConfig.model_validate(cfg), base=base)
+        if method in impedance.IMPEDANCE_METHODS or (method in impedance.PATH_CONTROLLERS and hasattr(task, "contact")):
+            return impedance.make_arm_controller(method, task, model, data, params)
         if method == "ik":
             return classic.ServoIK(task, model, data)
         if method == "cartesian":

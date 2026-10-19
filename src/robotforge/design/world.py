@@ -659,7 +659,7 @@ def _held_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRobot
     """The robot as its source builds it, holding with the end effector it was given: our arm template builds it
     in place of its fingers, any other arm gets it in front of them (see end_effectors.fit)."""
     tool = entry.end_effector
-    if tool is not None and entry.template is not None and templates.canonical(entry.template) == "arm":
+    if tool in end_effectors.KINDS and entry.template is not None and templates.canonical(entry.template) == "arm":
         native = entry.model_copy(update={"params": {**entry.params, "end_effector": tool}, "end_effector": None})
         return _source_spec(native, base_dir)
     built = _source_spec(entry, base_dir)
