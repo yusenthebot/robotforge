@@ -81,8 +81,6 @@ A hand-over goes through the table: two grippers cannot share a shaft, so the fi
 ### How often the scripted expert does them
 
 `scripts/objects_tasks.py` plays each task as an agent would, with the real Menagerie models (a Franka Panda, and a UR5e with a Robotiq 2F-85) over seeds, and writes every failure with its cause (refused, never lifted, slipped, tipped over, landed outside, knocked something over, spilled).
-The tables below are from the last run; rerun the script to see yours.
-
-RATES
+Run it to see the rates on your machine.
 
 The grip is where the arms differ: the Panda's pads have torsional friction, the Robotiq pads in the Menagerie have none, so a firm hold (pad torsion, squeeze, force range raised) is switched on while an object is carried and put back after.
