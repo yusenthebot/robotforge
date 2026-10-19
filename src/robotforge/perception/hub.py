@@ -156,7 +156,9 @@ class PerceptionHub:
             existing.note = "mapping"
             return self.status(robot)
         lidar = self._sensor(robot, wanted_lidar, ("lidar", "lidar3d"), LIDAR_NAME, LIDAR_DEFAULTS)
-        odometry = self._sensor(robot, wanted_odometry, ("odometry",), ODOMETRY_NAME, ODOMETRY_DEFAULTS)
+        odometry = self._sensor(
+            robot, wanted_odometry, ("odometry", "wheel_odometry"), ODOMETRY_NAME, ODOMETRY_DEFAULTS
+        )
         session = self.pg.session
         with session.lock:
             mapper = Mapper(

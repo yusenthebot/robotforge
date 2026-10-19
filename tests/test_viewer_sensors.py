@@ -64,6 +64,10 @@ def test_every_field_the_viewer_reads_is_sent(pg):
         {"type": "imu"},
         {"type": "rangefinder"},
         {"type": "touch", "rows": 2, "cols": 2},
+        {"type": "sonar"},
+        {"type": "skin", "rows": 2, "cols": 2, "faces": ["front", "top"]},
+        {"type": "temperature"},
+        {"type": "gas"},
     ):
         pg.add_sensor("post", fields)
     pg.add_sensor("panda", {"type": "force_torque", "on": "hand"})

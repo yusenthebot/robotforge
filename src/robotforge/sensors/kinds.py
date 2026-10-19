@@ -443,9 +443,134 @@ class Odometry(Sensor):
         return {"position_m": _r(value[:2], 3), "heading_deg": round(math.degrees(value[2]), 2)}
 
 
+class WheelOdometry(Odometry):
+    """Dead reckoning from the wheels: each wheel joint's speed times its radius is how fast it rolls along the ground,
+    the mean of the two sides is the way forward and their difference over the track is the turn. A wheel that
+    reads its radius a little off (`slip`, fixed per wheel by the seed) bends a straight run, as real ones do."""
+
+    kind = "wheel_odometry"
+
+    def __init__(self, model, decl):
+        super().__init__(model, decl)
+        d = decl.data
+        joints = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, decl.full(j)) for j in d["joints"]]
+        if min(joints) < 0:
+            raise ValueError(f"the wheel joints {d['joints']} are not all in the model")
+        self.dofs = [int(model.jnt_dofadr[j]) for j in joints]
+        self.radius = np.array(d["radius"], float)
+        self.sign = np.array(d["sign"], float)
+        self.left = np.array(d["lateral"], float) > 0
+        self.track = float(d["track"])
+        slip = float(d.get("slip") or 0.0)
+        self.scale = 1.0 + np.random.default_rng(self.knobs.seed + 7).uniform(-slip, slip, len(joints))
+
+    def measure(self, model, data):
+        value = super().measure(model, data)
+        value["wheels"] = np.array(data.qvel[self.dofs])
+        return value
+
+    def corrupt(self, value, dt):
+        rolled = value["wheels"] * self.sign * self.radius * self.scale  # m/s along the ground, each wheel
+        left, right = float(rolled[self.left].mean()), float(rolled[~self.left].mean())
+        read = {**value, "speed": np.array([(left + right) / 2, 0.0]), "turn": (right - left) / self.track}
+        return super().corrupt(read, dt)
+
+    def line(self, value):
+        heading = (math.degrees(value[2]) + 180.0) % 360.0 - 180.0
+        return f"wheel_odometry: x {value[0]:.2f}, y {value[1]:.2f} m, heading {heading:.1f} deg"
+
+
+class Skin(Sensor):
+    """A tactile skin: touch pads on several faces of a body, rows x cols taxels each, read together. The reading is
+    the total force, which faces are touched, the taxels' forces on those faces and where the loaded ones are."""
+
+    kind = "skin"
+    SHOWN = 6  # loaded taxels whose place a reading lists
+
+    def __init__(self, model, decl):
+        super().__init__(model, decl)
+        self.pads = []
+        for pad in decl.data["pads"]:
+            cells = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, decl.full(c)) for c in pad["cells"]]
+            self.pads.append(
+                {
+                    "face": pad["face"],
+                    "cells": cells,
+                    "slices": [native_slice(model, decl, c) for c in pad["cells"]],
+                    "rows": int(pad["rows"]),
+                    "cols": int(pad["cols"]),
+                    "shape": pad_shape(model, cells),
+                }
+            )
+
+    def measure(self, model, data):
+        return [
+            {
+                "force": np.array([float(data.sensordata[s][0]) for s in pad["slices"]]),
+                "at": np.array([data.site_xpos[c] for c in pad["cells"]]),
+            }
+            for pad in self.pads
+        ]
+
+    def corrupt(self, value, dt):
+        return [{**v, "force": np.maximum(v["force"] + self.noise("force", len(v["force"])), 0.0)} for v in value]
+
+    def _threshold(self) -> float:
+        return max(0.05, 3 * self.knobs.noise.get("force", 0.0))
+
+    def reading(self, value, full=False):
+        floor = self._threshold()
+        total = float(sum(v["force"].sum() for v in value))
+        faces: dict[str, Any] = {}
+        loaded: list[tuple[float, np.ndarray]] = []
+        for pad, v in zip(self.pads, value, strict=True):
+            force = float(v["force"].sum())
+            if force <= floor:
+                continue
+            faces[pad["face"]] = {
+                "force_n": round(force, 2),
+                "cells_n": [[round(float(x), 2) for x in row] for row in v["force"].reshape(pad["rows"], pad["cols"])],
+            }
+            loaded += [(float(f), p) for f, p in zip(v["force"], v["at"], strict=True) if f > floor]
+        loaded.sort(key=lambda fp: -fp[0])
+        out: dict[str, Any] = {
+            "total_n": round(total, 2),
+            "contact": bool(faces),
+            "taxels": int(sum(len(v["force"]) for v in value)),
+        }
+        if faces:
+            out["touched"] = list(faces)
+            out["peak_n"] = round(loaded[0][0], 2)
+            out["loaded_at_m"] = [{"n": round(f, 2), "at": _r(p, 3)} for f, p in loaded[: self.SHOWN]]
+            out["faces"] = faces
+        return out
+
+    def line(self, value):
+        touched = [p["face"] for p, v in zip(self.pads, value, strict=True) if v["force"].sum() > self._threshold()]
+        total = float(sum(v["force"].sum() for v in value))
+        where = f" on {', '.join(touched)}" if touched else ""
+        return f"skin: {'in contact' + where if touched else 'no contact'}, {total:.1f} N"
+
+    def viewer(self, value, model, data):
+        pads = []
+        for pad, v in zip(self.pads, value, strict=True):
+            pads.append(
+                {
+                    "face": pad["face"],
+                    "cells_m": _r(v["at"].ravel(), 4),
+                    "force_n": _r(v["force"], 2),
+                    "total_n": round(float(v["force"].sum()), 2),
+                    **pad["shape"],
+                }
+            )
+        return {"pads": pads, "total_n": round(float(sum(p["total_n"] for p in pads)), 2)}
+
+
 def _kinds() -> dict[str, type[Sensor]]:
     from robotforge.sensors.camera import Camera
+    from robotforge.sensors.fields import Field
     from robotforge.sensors.lidar import Lidar
+    from robotforge.sensors.ranging import Sonar
 
     return {
         "imu": Imu,
@@ -455,6 +580,11 @@ def _kinds() -> dict[str, type[Sensor]]:
         "rangefinder": Rangefinder,
         "gps": Gps,
         "odometry": Odometry,
+        "wheel_odometry": WheelOdometry,
+        "sonar": Sonar,
+        "skin": Skin,
+        "temperature": Field,
+        "gas": Field,
         "lidar": Lidar,
         "lidar3d": Lidar,
         "camera": Camera,

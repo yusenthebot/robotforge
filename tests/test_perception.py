@@ -307,6 +307,17 @@ def test_mapping_with_the_true_pose_is_exact_to_a_cell(pg):
     assert accuracy["precision"] > 0.97 and accuracy["wall_error_m"]["mean"] < 0.03
 
 
+def test_mapping_runs_on_a_wheel_odometry_too(pg):
+    """The rover's wheels, each reading its radius a few percent off, are the odometry the filter corrects."""
+    pg.add_sensor("rover", {"type": "wheel_odometry", "name": "wheels", "slip": 0.01, "seed": 3})
+    pg.perception.start("rover", {"lidar": LIDAR, "odometry": "wheels"})
+    _drive(pg, ROUND + ROUND)
+    status = pg.perception.status("rover")
+    assert status["odometry"] == "wheels"
+    assert status["pose_error"]["position_m"] < 0.25
+    assert status["accuracy"]["precision"] > 0.85
+
+
 def test_a_robot_goes_to_a_point_on_its_own_map_and_pose(pg):
     pg.perception.start("rover", {"lidar": LIDAR, "odometry": ODOMETRY})
     _drive(pg, ROUND)

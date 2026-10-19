@@ -525,6 +525,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float = 0.0,
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
+        strength: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -539,10 +540,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         what an electromagnet holds). With a moving part (operate works them; front toward -y): drawer, cabinet
         [length, depth, height]; button [diameter, height]; switch [length, width, height]; lever [length]; valve
         [wheel diameter, height]; conveyor [length, width, height], belt along +x at speed m/s (default 0.1). Soft:
-        rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes)."""
+        rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes).
+        Sources for temperature and gas sensors (add_sensor): heat_source [diameter] (strength = degrees of rise at the
+        source, default 80) and gas_source [diameter] (strength = ppm at the source, default 600); nothing collides
+        with them."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
-            fields |= {"material": material, "speed": speed}
+            fields |= {"material": material, "speed": speed, "strength": strength}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -556,12 +560,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         yaw: float | None = None,
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
+        strength: float | None = None,
     ) -> str:
-        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material or a
-        conveyor's belt speed (m/s, 0 stops it)."""
+        """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material, a
+        conveyor's belt speed (m/s, 0 stops it) or a heat or gas source's strength."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
-            fields |= {"material": material, "speed": speed}
+            fields |= {"material": material, "speed": speed, "strength": strength}
             return _json(playground.update_object(name, **fields))
 
     @server.tool()

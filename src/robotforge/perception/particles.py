@@ -19,15 +19,27 @@ from robotforge.perception.grid import FREE, OccupancyGrid
 BEAMS = 60  # scan ends used to weigh a particle: more cost time and add little
 Z_HIT, Z_RANDOM = 0.9, 0.1  # a scan end is on the map, or a stray one (a person, a crate that moved)
 MOVE_TRANS, MOVE_ROT = 0.03, 0.02  # odometry noise: m per m moved, rad per rad turned
-CROSS_TRANS, CROSS_ROT = 0.02, 0.01  # ... and m per rad turned, rad per m moved
-FLOOR_TRANS, FLOOR_ROT = 0.002, 0.002  # noise even for a robot that barely moved (m, rad)
+CROSS_TRANS, CROSS_ROT = 0.02, 0.05  # ... and m per rad turned, rad per m moved
+FLOOR_TRANS, FLOOR_ROT = 0.002, 0.004  # noise even for a robot that barely moved (m, rad)
 MIN_MOVE, MIN_TURN = 0.02, math.radians(1.5)  # a scan is weighed once the robot moved this much since the last
 MIN_OCCUPIED = 30  # occupied cells the map needs before scans can be matched to it
 # Looking for itself on the whole map, the filter is not yet sure: it softens the scans' say (a scan taken in a room
 # like several others) and sprinkles new guesses over the map while the robot has traveled less than SEARCH_M.
+# The odometry's turn may read off by a constant (wheels of unequal radius, a bent gait): the scans keep pulling the
+# heading back by the same amount, and the filter learns that pull (BIAS_GAIN of each correction, at most BIAS_MAX
+# rad per scan) and turns by it in advance, so a drift too fast to follow by noise alone is followed.
+BIAS_GAIN = 0.15
+BIAS_MAX = 0.03
 SEARCH_M = 6.0
 SEARCH_TEMPER = 0.25  # weight exponent at the start of a search, rising to 1 as it travels
 SEARCH_INJECT = 0.03  # share of the particles replaced by new guesses at each resampling during a search
+# The first scan of a search from nowhere is tried at every place and heading on a coarse lattice (what a filter
+# cannot do with a few thousand random guesses over a big map), and the filter starts from the best-fitting ones.
+LATTICE_M = 0.2  # m between the places tried
+LATTICE_HEADINGS = 72  # headings tried at each (5 degrees apart)
+NEAR_WALLS_M = 9.0  # places further than this from every mapped obstacle are not tried: a scan there sees nothing
+SEED_TEMPER = 0.5  # weight exponent when the best-fitting hypotheses are drawn
+SEED_CHUNK = 4_000_000  # lookups in one numpy step, at most
 
 
 def wrap(angle: np.ndarray | float) -> np.ndarray | float:
@@ -70,8 +82,11 @@ class ParticleFilter:
         self.converged = True
         self._weighed_at: np.ndarray | None = None  # the pose estimate when a scan was last weighed
         self.neff = float(self.n)
+        self.turn_bias = 0.0  # rad a scan that the odometry's turn reads off by, as learned from the corrections
+        self._predicts = 0  # steps taken since a scan was last weighed
         self.searched = math.inf  # meters traveled since a search from nowhere began (inf: not searching)
         self.free_cells: np.ndarray | None = None
+        self.seeding = False  # a search from nowhere has not had its first scan yet
         self.cell_size = 0.05
         self.origin = (0.0, 0.0)
 
@@ -85,6 +100,8 @@ class ParticleFilter:
         self.converged = True
         self._weighed_at = None
         self.searched = math.inf
+        self.seeding = False
+        self.turn_bias = 0.0
 
     def start_anywhere(self, grid: OccupancyGrid, count: int | None = None) -> bool:
         """Spread over the map's free cells, any heading (the robot does not know where it is). False when the map
@@ -103,6 +120,56 @@ class ParticleFilter:
         self._weighed_at = None
         self.searched = 0.0
         self.free_cells, self.cell_size, self.origin = free, grid.res, (grid.x0, grid.y0)
+        self.seeding = True  # the next scan picks where the guesses start (see seed_from_scan)
+        return True
+
+    def seed_from_scan(self, grid: OccupancyGrid, ends: np.ndarray, mount: np.ndarray) -> bool:
+        """Try the scan at every place of a coarse lattice over the free cells near mapped walls, at every heading,
+        and start the particles where it fits best (drawn in proportion to how well, softened). False when the scan
+        or the map is too bare to try."""
+        from robotforge.behaviors.nav_grid import clearance
+
+        occupied = grid.occupied()
+        if len(ends) < 8 or int(occupied.sum()) < MIN_OCCUPIED:
+            return False
+        if len(ends) > BEAMS:
+            ends = spread(ends, BEAMS)
+        field = grid.likelihood_field()
+        near = clearance(occupied, grid.res, NEAR_WALLS_M) < NEAR_WALLS_M - 1e-6
+        step = max(1, round(LATTICE_M / grid.res))
+        rows, cols = np.nonzero((grid.state() == FREE) & near)
+        keep = (rows % step == 0) & (cols % step == 0)
+        rows, cols = rows[keep], cols[keep]
+        if not len(rows):
+            return False
+        cx = grid.x0 + cols * grid.res
+        cy = grid.y0 + rows * grid.res
+        headings = np.linspace(-math.pi, math.pi, LATTICE_HEADINGS, endpoint=False)
+        cm, sm = math.cos(mount[2]), math.sin(mount[2])
+        px = mount[0] + cm * ends[:, 0] - sm * ends[:, 1]
+        py = mount[1] + sm * ends[:, 0] + cm * ends[:, 1]
+        per = len(headings) * len(ends)
+        chunk = max(1, SEED_CHUNK // per)
+        score = np.empty((len(rows), len(headings)))
+        for start in range(0, len(rows), chunk):
+            sel = slice(start, start + chunk)
+            c, s = np.cos(headings)[None, :, None], np.sin(headings)[None, :, None]
+            wx = cx[sel][:, None, None] + c * px[None, None, :] - s * py[None, None, :]
+            wy = cy[sel][:, None, None] + s * px[None, None, :] + c * py[None, None, :]
+            ci = np.rint((wx - grid.x0) / grid.res).astype(np.int64)
+            ri = np.rint((wy - grid.y0) / grid.res).astype(np.int64)
+            inside = (ri >= 0) & (ri < grid.rows) & (ci >= 0) & (ci < grid.cols)
+            like = np.where(inside, field[np.clip(ri, 0, grid.rows - 1), np.clip(ci, 0, grid.cols - 1)], 0.0)
+            score[sel] = np.log(Z_HIT * like + Z_RANDOM).sum(axis=2)
+        flat = score.ravel()
+        weight = np.exp(SEED_TEMPER * (flat - flat.max()))
+        weight /= weight.sum()
+        pick = self.rng.choice(len(flat), size=self.n, p=weight)
+        place, turn = np.divmod(pick, len(headings))
+        self.x = cx[place] + self.rng.uniform(-0.5, 0.5, self.n) * LATTICE_M
+        self.y = cy[place] + self.rng.uniform(-0.5, 0.5, self.n) * LATTICE_M
+        self.th = wrap(headings[turn] + self.rng.uniform(-0.5, 0.5, self.n) * (2 * math.pi / LATTICE_HEADINGS))
+        self.w[:] = 1.0 / self.n
         return True
 
     def resize(self, count: int) -> None:
@@ -114,6 +181,8 @@ class ParticleFilter:
 
     def predict(self, forward: float, sideways: float, turn: float) -> None:
         """Move every particle by the odometry's step, in the robot's own frame, each with its own noise."""
+        self._predicts += 1
+        turn += self.turn_bias
         trans = math.hypot(forward, sideways)
         rot = abs(turn)
         if self.searched < SEARCH_M:
@@ -143,6 +212,8 @@ class ParticleFilter:
         too bare to match, or no end is usable."""
         if len(ends) < 8 or int(grid.occupied().sum()) < MIN_OCCUPIED:
             return False
+        if self.seeding and self.seed_from_scan(grid, ends, mount):
+            self.seeding = False
         if len(ends) > BEAMS:
             ends = spread(ends, BEAMS)
         field = grid.likelihood_field()
@@ -165,9 +236,14 @@ class ParticleFilter:
         total = weight.sum()
         if not np.isfinite(total) or total <= 0:
             return False
+        before = self.mean()
         self.w = weight / total
         self.neff = float(1.0 / np.sum(self.w**2))
         self._weighed_at = self.mean()
+        if self.searched >= SEARCH_M:  # what the scans moved the heading by, per step: the odometry's turn is off
+            pull = float(wrap(self._weighed_at[2] - before[2])) / max(self._predicts, 1)
+            self.turn_bias = float(np.clip(self.turn_bias + BIAS_GAIN * pull, -BIAS_MAX, BIAS_MAX))
+        self._predicts = 0
         if self.neff < 0.5 * self.n:
             self.resample()
         return True
