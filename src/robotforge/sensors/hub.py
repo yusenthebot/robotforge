@@ -183,9 +183,15 @@ class SensorHub:
     # ---- reading ---------------------------------------------------------------------------------------------
 
     def read(
-        self, robot: str, names: list[str] | None = None, image: bool = False, full: bool = False
+        self,
+        robot: str,
+        names: list[str] | None = None,
+        image: bool = False,
+        full: bool = False,
+        points: int | None = None,
     ) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
-        """Readings of a robot's sensors (all, or those named), and the cameras' pictures when `image`."""
+        """Readings of a robot's sensors (all, or those named), and the cameras' pictures when `image`. `points`:
+        a depth camera or lidar also gives its point cloud, thinned to that many points (perception/cloud.py)."""
         session = self.session
         out: dict[str, Any] = {}
         later: list[tuple[Sensor, float, Any]] = []
@@ -203,12 +209,16 @@ class SensorHub:
                     out[sensor.local] = None  # keeps the order
                     continue
                 out[sensor.local] = {"type": sensor.type, **sensor.reading(value, full), **_age(sensor, stamp, now)}
+                if points and hasattr(sensor, "cloud"):
+                    out[sensor.local]["cloud"] = sensor.cloud(value, points)
             other = self._other(model, data, robot) if not names else {}
             broken = self._broken(robot) if not names else []
         pictures: list[tuple[str, bytes]] = []
         for sensor, stamp, moment in later:  # drawn with the session unlocked: the simulation keeps running
             value = self._develop(sensor, model, moment)
             out[sensor.local] = {"type": sensor.type, **sensor.reading(value, full), **_age(sensor, stamp, now)}
+            if points and "depth" in value and (cloud := sensor.cloud(value, points)) is not None:
+                out[sensor.local]["cloud"] = cloud
             if image and "layers" in value:
                 pictures.append((sensor.name, sensor.png(value)))
         result: dict[str, Any] = {"robot": robot, "time": round(now, 4), "sensors": out}

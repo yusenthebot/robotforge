@@ -73,6 +73,9 @@ MIN_SPEED_SHARE = 0.3  # of the top speed, at the least, until it is there
 PROGRESS = 0.05  # m of headway that counts as getting on
 STUCK_TIME = 3.0  # s without headway (plus a half turn's time) that counts as stuck
 MAX_REPLANS = 4  # plans after the first before it gives up
+# On its own map, the path ahead (MAP_LOOK m of it) is checked against the map every MAP_WATCH s: what it mapped since
+# the plan may lie across it. Such plans are not counted toward giving up, but there are at most MAX_MAP_REPLANS.
+MAP_WATCH, MAP_LOOK, MAX_MAP_REPLANS = 1.0, 4.0, 40
 # Another robot that moved onto the path since it was planned (by more than MOVED m): one this close to the path
 # (beyond both robots' half widths) within AHEAD m in front is in the way. The robot whose name comes first plans
 # around it after YIELD_FIRST s, the other after YIELD_SECOND s, so two that meet do not swerve the same way at
@@ -247,9 +250,14 @@ class Planner:
             self._own = layer
         return layer
 
+    def position(self, data: mujoco.MjData) -> tuple[float, float]:
+        """Where the robot's center is, for planning from: its true place (a planner on the robot's own map says
+        where its own estimate puts it)."""
+        return float(data.xpos[self.root][0]), float(data.xpos[self.root][1])
+
     def map(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> NavMap:
         """The map of where the robot's center may go, as things stand now (it is kept as last_map)."""
-        start_xy = (float(data.xpos[self.root][0]), float(data.xpos[self.root][1]))
+        start_xy = self.position(data)
         layer = self._layer(data, start_xy)
         grid = layer.grid
         names = list(layer.names)  # moving things add their names for this plan only
@@ -264,7 +272,7 @@ class Planner:
 
     def plan(self, data: mujoco.MjData, blockers: list[tuple[float, float, float]] = ()) -> Plan:
         """A path from where the robot is now. Raises NoWay, saying why, when there is none."""
-        start_xy = (float(data.xpos[self.root][0]), float(data.xpos[self.root][1]))
+        start_xy = self.position(data)
         nav = self.map(data, blockers)
         grid = nav.grid
         first, escape = self._start(nav, grid.cell(*start_xy), start_xy)
@@ -669,6 +677,10 @@ class Navigator:
     ready: Callable[[], bool] = lambda: True  # False while it waits to set off (its arm folding over it)
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
+    # A robot that finds its way on its own map follows its own pose estimate (x, y, heading), not the true one, and
+    # plans again when what it has mapped since the plan lies across the path (`watch` says so for the path left).
+    pose: Callable[[], np.ndarray | None] | None = None
+    watch: Callable[[np.ndarray], bool] | None = None
     backs_up: bool = False  # its walker walks backwards (not a snake, nor a learned walk that only goes forward)
     # Its walker turns as it walks. A learned walk turns only on the spot (any turn asked stops the walk) and keeps to
     # its line as it walks, so it is only sent straight ahead, and turns on the spot past TURN_ON_SPOT: steered as the
@@ -700,6 +712,8 @@ class Navigator:
     _others_at: dict[str, np.ndarray] = field(default_factory=dict, init=False)  # where they were for the plan
     _retried: bool = field(default=False, init=False)  # planned again at the end of a path to a taken point
     _lined_up: int = field(default=-1, init=False)  # the last pivot (plan point) it lined up at
+    _watched: float = field(default=-math.inf, init=False)  # when the map was last checked against the path
+    _map_replans: int = field(default=0, init=False)
 
     def __post_init__(self) -> None:
         self.first_length = self.plan.length
@@ -746,6 +760,9 @@ class Navigator:
         xy = data.xpos[root][:2].copy()
         rot = data.xmat[root]
         yaw = math.atan2(rot[3], rot[0])
+        believed = self.pose() if self.pose is not None else None
+        if believed is not None:  # on its own map it goes by where it thinks it is
+            xy, yaw = np.array(believed[:2], float), float(believed[2])
         # Distance counted in steps of at least 5 cm, so a humanoid's sway from foot to foot is not counted as travel
         if self._counted is None or float(np.linalg.norm(xy - self._counted)) >= 0.05:
             self.traveled += float(np.linalg.norm(xy - self._counted)) if self._counted is not None else 0.0
@@ -809,6 +826,12 @@ class Navigator:
             return
         if self._make_way(t, xy, s, data):
             return
+        if self.watch is not None and t - self._watched >= MAP_WATCH:
+            self._watched = t
+            if self._map_replans < MAX_MAP_REPLANS and self.watch(self._path_ahead(s, MAP_LOOK)):
+                self._map_replans += 1
+                self._replan(t, data, "the map showed something across its path", count=False)
+                return
         left = self._after[self._seg] - s
         if left < self._best_left - PROGRESS:
             self._best_left = left

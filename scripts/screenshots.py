@@ -1286,6 +1286,46 @@ def _world_shots() -> list[Shot]:
     ]
 
 
+# ---- G12b: sensors and perception ---------------------------------------------------------------------------------
+# A Go2 enters the warehouse it has never seen, draws its map and finds itself in it (scripts/perception_bench.py has
+# the measured run); the pictures show the map growing over the floor.
+
+
+def _go2_warehouse_start(pg: Any) -> None:
+    pg.load_scene("warehouse", keep_robots=False, starter=False)
+    pg.add_robot("go2", library="go2", pos=[-6.2, 2.6], yaw=0)
+
+
+def _map_for(seconds: float, area: list[float] | None = None) -> Callable[[Any], None]:
+    """Start mapping and explore for `seconds` of simulated time, as fast as the machine runs it."""
+
+    def act(pg: Any) -> None:
+        pg.perception.start("go2", {})
+        trips = pg.perception.explore_trips("go2", seconds, area=area)
+        try:
+            while True:
+                trip, limit = next(trips)
+                pg.run_fast(lambda t=trip: t.done, limit + 1.0)
+        except StopIteration:
+            pass
+
+    return act
+
+
+G12_AREA = [-7.5, -3.4, 7.5, 5.4]  # the warehouse's floor: the open sides beyond it are left unexplored
+G12_OVERVIEW = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.5, -5.5, 13.5], [0.5, 1.2, 0]);"
+
+G12_SHOTS = [
+    Shot(
+        "g12_map_overview",
+        _go2_warehouse_start,
+        act=_map_for(60.0, G12_AREA),
+        page=G12_OVERVIEW,
+        size=(1920, 1080),
+        settle=2.5,
+    ),
+]
+
 SHOTS = [
     Shot(
         "hero",
@@ -1600,6 +1640,7 @@ SHOTS = [
     ),
     *G3_SHOTS,
     *G8_SHOTS,
+    *G12_SHOTS,
     *GENERATED_SHOTS,
     *_g10_shots(),
     *_world_shots(),

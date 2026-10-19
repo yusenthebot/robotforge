@@ -873,13 +873,17 @@ class BehaviorManager:
         *,
         face: tuple[float, float] | None = None,
         carrying: str | None = None,
+        own_map: Any = None,
+        unknown_blocks: bool = True,
     ) -> navigation.Navigator:
         """Send a robot that moves to `to`: a point [x, y] (m) or the name of an object or another robot. It plans
         a path around what is in the way and follows it with its own walker (`walker` as for move) at up to
         `speed` m/s, for at most `seconds` of sim time (None: until it gets there). Raises navigation.NoWay, saying
         why, when there is no way; the Navigator returned says how the trip goes (`done`, `result()`).
         A trip to a point can end turned to `face` a point; `carrying` names a loose object the robot holds in its
-        gripper, which goes with it: not in its way, and part of its footprint (see fetch.Errand)."""
+        gripper, which goes with it: not in its way, and part of its footprint (see fetch.Errand).
+        `own_map` (a perception Mapper) plans on the robot's own occupancy grid and follows its own pose estimate
+        instead of the scene's truth (map_nav.py); unknown cells block unless `unknown_blocks` is False."""
         if speed is not None and not math.isfinite(speed):
             raise BehaviorError(f"speed must be a finite number, got {speed}")
         if speed is not None and abs(speed) < MIN_TRIP_SPEED:
@@ -933,7 +937,14 @@ class BehaviorManager:
                 load = self._body(carrying)
                 body = nav_map.with_load(model, data, robot, body, load)
             arm = self._carried_arm(robot, data)
-            planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version), carried=load)
+            if own_map is not None:
+                from robotforge.behaviors import map_nav  # here: only a trip on its own map needs the perception code
+
+                planner = map_nav.MapPlanner(
+                    model, robot, body, destination, own_map, arm, carried=load, unknown_blocks=unknown_blocks
+                )
+            else:
+                planner = navigation.Planner(model, robot, body, destination, arm, self._layers(version), carried=load)
         try:
             plan = planner.plan(data)
         except navigation.NoWay as exc:
@@ -971,6 +982,8 @@ class BehaviorManager:
                 for name in self._names(self._world())
                 if name != robot and "/" not in name
             ],
+            pose=own_map.pose if own_map is not None else None,
+            watch=planner.blocked_ahead if own_map is not None else None,
         )
         with self.session.lock:
             if self.session.version != version or self.session.controllers.get(robot) is not ctrl:
@@ -1657,6 +1670,20 @@ class BehaviorManager:
         planner = self._fetch_planner(robot, data, carrying, to)
         plan = planner.plan(data)
         return plan, planner.last_map
+
+    def own_map_planner(self, robot: str, mapper: Any, unknown_blocks: bool = False) -> tuple[Any, mujoco.MjData]:
+        """A planner on `mapper`'s grid for the robot where it stands (for exploring: what it can reach on its map,
+        unknown space counting as open), and the data it is planned on."""
+        from robotforge.behaviors import map_nav
+
+        robot = self.resolve(robot)
+        with self.session.lock:
+            data = copy.copy(self.session.data)
+        base = self._fetch_planner(robot, data, None, None)
+        planner = map_nav.MapPlanner(
+            self.session.model, robot, base.body, base.destination, mapper, unknown_blocks=unknown_blocks
+        )
+        return planner, data
 
     def _fetch_planner(
         self, robot: str, data: mujoco.MjData, carrying: str | None, to: str | list[float] | None
