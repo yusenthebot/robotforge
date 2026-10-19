@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,32 @@ class Exported:
             "meshes": sum(1 for f in self.files if f.suffix == ".obj"),
             "notes": self.notes,
         }
+
+
+def target_folder(to: str | Path | None, default: Path, world_dir: Path, overwrite: bool = False) -> tuple[Path, bool]:
+    """The folder an export goes to and whether the export owns it (may empty an earlier export out of it first).
+
+    No `to`: the world's own exports/ folder, owned. A `to` must lie under the world's folder, the home folder or the
+    temporary folder (an agent must not be able to write meshes/ and an XML anywhere the user can), must not be the
+    home folder itself, and must be empty or missing unless overwrite=True, which replaces an earlier export in it
+    (only the XML, URDF and meshes/ an export writes)."""
+    if to is None:
+        return default, True
+    folder = Path(to).expanduser().resolve()
+    roots = [Path(r).resolve() for r in (world_dir, Path.home(), tempfile.gettempdir())]
+    home = Path.home().resolve()
+    if folder == home or not any(folder == r or r in folder.parents for r in roots):
+        raise ExportError(
+            f"{folder} is outside the places an export may go (the world's folder, a folder in your home folder, "
+            "or the temporary folder): pick a folder there"
+        )
+    if folder.exists() and not folder.is_dir():
+        raise ExportError(f"{folder} is a file: give a folder")
+    if folder.is_dir() and any(folder.iterdir()) and not overwrite:
+        raise ExportError(
+            f"{folder} is not empty: pick an empty or new folder, or overwrite=true to replace an earlier export in it"
+        )
+    return folder, overwrite
 
 
 def export_world(
@@ -488,12 +515,43 @@ def check_mjcf(path: Path, model: mujoco.MjModel) -> dict[str, Any]:
         out["height_field_error_m"] = (
             float(np.abs(model.hfield_data - again.hfield_data).max()) if again.nhfield == model.nhfield else None
         )
+    out["joint_range_error"] = _joint_range_error(model, again)
     ok = all(v["same_names"] for k, v in out.items() if isinstance(v, dict) and "same_names" in v)
     ground = out.get("height_field_error_m", 0.0)
+    mass, mass_again = out["mass_kg"]["world"], out["mass_kg"]["export"]
+    vertices = out["vertex_error_m"]
     out["same"] = bool(
-        ok and out["body_position_error_m"] is not None and out["body_position_error_m"] < 1e-5 and ground is not None
+        ok
+        and out["body_position_error_m"] is not None
+        and out["body_position_error_m"] < 1e-5
+        and ground is not None
+        and ground < 1e-5
+        and abs(mass - mass_again) <= 1e-3 * max(mass, 1.0)
+        and (vertices is None and not _mesh_geoms(model) or vertices is not None and vertices < 1e-5)
+        and out["joint_range_error"] is not None
+        and out["joint_range_error"] < 1e-5
     )
     return out
+
+
+def _mesh_geoms(model: mujoco.MjModel) -> bool:
+    return bool((model.geom_type == int(G.mjGEOM_MESH)).any())
+
+
+def _joint_range_error(model: mujoco.MjModel, again: mujoco.MjModel) -> float | None:
+    """Largest gap between a limited joint's range in the world and in the reloaded export, by joint name; None when
+    a joint is missing or its limit was lost."""
+    worst = 0.0
+    for j in range(model.njnt):
+        name = _name(model, OBJ.mjOBJ_JOINT, j)
+        if not name:
+            continue
+        k = mujoco.mj_name2id(again, OBJ.mjOBJ_JOINT, name)
+        if k < 0 or bool(model.jnt_limited[j]) != bool(again.jnt_limited[k]):
+            return None
+        if model.jnt_limited[j]:
+            worst = max(worst, float(np.abs(model.jnt_range[j] - again.jnt_range[k]).max()))
+    return worst
 
 
 def check_urdf(path: Path, model: mujoco.MjModel, robot: str) -> dict[str, Any]:

@@ -176,6 +176,45 @@ async def test_an_agent_runs_a_behavior_on_a_dog(folder, tmp_path):
     assert "RESULT" not in out["output"]
 
 
+INNER = """
+from robotforge.extend import behavior
+
+@behavior("inner", summary="a short step forward")
+def inner(robot):
+    robot.move(speed=0.1, seconds=0.3)
+    return 7
+"""
+
+OUTER = """
+from robotforge.extend import behavior, call
+
+@behavior("outer", summary="runs inner from another file")
+def outer(robot):
+    return {"inner_said": call("inner", robot)}
+"""
+
+
+@pytest.mark.anyio
+async def test_a_behavior_started_by_an_agent_can_call_a_behavior_from_another_file(folder):
+    (folder / "a_inner.py").write_text(INNER, encoding="utf-8", newline="\n")
+    plugin(folder, "b_outer.py", OUTER)
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("lab", "checker")
+    pg.add_robot("dog", template="quadruped")
+    server = build_server(pg, find_free_port(8834))
+    async with Client(server) as client:
+        result = await client.call_tool("plugins", {"action": "run", "name": "outer", "robot": "dog", "seconds": 20})
+        assert not result.is_error, result.content[0].text
+        out = json.loads(result.content[0].text)
+    assert out["ok"] and out["result"] == {"inner_said": 7}, out
+
+
+def test_a_behavior_gets_a_wall_clock_limit_as_well_as_simulated_seconds():
+    assert routines.wall_limit(1) == routines.MIN_WALL_SECONDS
+    assert routines.wall_limit(60) == 180.0
+    assert routines.wall_limit(300) == routines.MAX_WALL_SECONDS
+
+
 @pytest.mark.anyio
 async def test_a_behavior_that_does_not_exist_says_which_there_are(pg, folder):
     plugin(folder, "square.py", SQUARE)

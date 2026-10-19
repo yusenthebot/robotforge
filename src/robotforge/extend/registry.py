@@ -7,8 +7,11 @@ robotforge.extend. Files are looked for in two places:
   put on this computer: loaded when robotforge starts and on request;
 - a world's `plugins/` folder, which travels with the world. A world can come from somebody else, and plugin code is
   ordinary Python that runs with the user's rights, so these files load only once they have been trusted: written
-  here by write_script(plugin=True), or approved with plugins(action="trust") after the user has seen them. A world
-  copied or downloaded to another place, or a file changed since, is not trusted again.
+  here by write_script(plugin=True), or approved by the user in a terminal with `robotforge plugins trust WORLD`
+  after they have seen them (an agent cannot approve: it is a decision about what runs on this computer). Trust covers
+  every file under the folder, helpers and subfolders included, as one set: a plugin may import what sits beside
+  it, so one file nobody looked at would be code that runs. A world copied or downloaded to another place, or
+  any file added or changed since, is not trusted again.
 
 Nothing here imports mujoco or the design layer: a plugin's decorators do that when they register something, so
 importing robotforge does not pay for plugins nobody has.
@@ -35,6 +38,12 @@ NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 ENV_FOLDERS = "ROBOTFORGE_PLUGINS"
 WORLD_FOLDER = "plugins"
 TRUST_FILE = "plugins_trusted.json"
+_HOW = (
+    'Plugin files are Python that would run with your rights. Read them (plugins(action="show")); only if the user '
+    'trusts them, they approve them in a terminal: robotforge plugins trust "{world}"'
+)
+MAX_TREE_FILES = 300  # more than a person reads before trusting
+MAX_SHOWN_BYTES = 200_000
 
 
 class PluginError(ValueError):
@@ -66,6 +75,8 @@ class Loaded:
     signature: tuple[int, int]  # mtime_ns, size: loaded again when it changes
     items: list[tuple[Kind, str]] = field(default_factory=list)
     error: str | None = None
+    module: str = ""  # its name in sys.modules while it is loaded (a dataclass or pickle looks it up there)
+    imported: list[str] = field(default_factory=list)  # helper modules from its folder it imported, dropped with it
 
 
 class Registry:
@@ -74,6 +85,7 @@ class Registry:
         self.files: dict[Path, Loaded] = {}
         self.untrusted: dict[Path, str] = {}  # world plugin file -> why it was not loaded
         self.worlds: set[Path] = set()  # plugins/ folders of worlds that were opened, for a reload
+        self.folder_state: dict[Path, tuple] = {}  # a folder's files (name, mtime, size) as last loaded
         self.user_loaded = False
         self._loading: Loaded | None = None
 
@@ -118,7 +130,8 @@ class Registry:
             self._load_folder(folder, "user", str(folder.name))
 
     def load_world(self, world_dir: Path) -> None:
-        """A world's plugins/ folder: the trusted files load, the others are listed as not loaded."""
+        """A world's plugins/ folder: when every file in it is trusted they load, otherwise none do and the files
+        that are not trusted are listed."""
         self.load_user()
         folder = (world_dir / WORLD_FOLDER).resolve()
         for other in [w for w in self.worlds if w != folder]:  # one world's plugins at a time: the open world's
@@ -128,27 +141,44 @@ class Registry:
                 self._forget_folder(folder)
             return
         self.worlds.add(folder)
-        self._load_folder(folder, "world", f"{world_dir.name}/{WORLD_FOLDER}", trusted=_trusted(folder))
+        self._load_folder(folder, "world", f"{world_dir.name}/{WORLD_FOLDER}")
 
     def trust(self, world_dir: Path) -> list[str]:
-        """Approve every file now in the world's plugins/ folder and load it. Returns the file names."""
+        """Approve every file now under the world's plugins/ folder as one set and load it. Returns the file names.
+        Only for the user's own decision (robotforge plugins trust): robotforge's tools do not call it."""
         folder = (world_dir / WORLD_FOLDER).resolve()
-        files = _py_files(folder)
-        _record_trust(folder, {p.name: _digest(p) for p in files})
+        tree = read_tree(folder)
+        if tree.flaws:
+            raise PluginError(f"{folder} cannot be trusted: {'; '.join(tree.flaws)}")
+        _record_trust(folder, tree.files)
         self.load_world(world_dir)
-        return [p.name for p in files]
+        return sorted(tree.files)
 
     def written(self, world_dir: Path, path: Path) -> dict[str, Any]:
-        """A plugin file just written here (write_script): trusted, loaded, and what came of it."""
+        """A plugin file just written here (write_script): trusted when the rest of the folder is, loaded, and what
+        came of it. Beside files nobody approved it waits with them."""
         folder = (world_dir / WORLD_FOLDER).resolve()
-        _record_trust(folder, {path.name: _digest(path)})
+        tree = read_tree(folder)
+        rel = path.resolve().relative_to(folder).as_posix()
+        record = _trusted(folder)
+        rest = {k: v for k, v in tree.files.items() if k != rel}
+        waiting = sorted(k for k, v in rest.items() if record.get(k) != v)
+        if not tree.flaws and not waiting:
+            _record_trust(folder, {**record, rel: tree.files[rel]})
         self.load_world(world_dir)
-        label = next((s.label for p, s in self.files.items() if p == path.resolve()), path.name)
         state = self.files.get(path.resolve())
-        if state is None or state.error:
-            return {"loaded": False, "error": state.error if state else "not loaded"}
+        if state is None:
+            if waiting:
+                return {
+                    "loaded": False,
+                    "error": "saved, but not loaded: the folder loads as one set and these files in it are not "
+                    f"trusted yet ({', '.join(waiting)}). {_HOW.format(world=world_dir)}",
+                }
+            return {"loaded": False, "error": self.untrusted.get(path.resolve(), "not loaded")}
+        if state.error:
+            return {"loaded": False, "error": state.error}
         added = [{"kind": k, "name": n} for k, n in state.items]
-        return {"loaded": True, "file": label, "adds": added}
+        return {"loaded": True, "file": state.label, "adds": added}
 
     def reload(self) -> None:
         """Forget every plugin and read the folders again (a file edited, added or removed)."""
@@ -156,6 +186,7 @@ class Registry:
         for path in list(self.files):
             self._unload(path)
         self.untrusted.clear()
+        self.folder_state.clear()
         self.user_loaded = False
         self.worlds = set()
         self.load_user()
@@ -166,13 +197,21 @@ class Registry:
         """Run one plugin file. Whatever it registered is taken back out if it fails, and the error is kept."""
         path = path.resolve()
         self._unload(path)
-        state = Loaded(path, label, origin, _signature(path))
+        state = Loaded(path, label, origin, _signature(path), module=self._module_name(path))
         self.files[path] = state
         previous, self._loading = self._loading, state
-        sys.path.insert(0, str(path.parent))  # a plugin may import a helper that sits beside it
+        folder = str(path.parent)
+        known = set(sys.modules)
+        # A user's folder comes first, as it would on any python path; a world's last, so that its files can never
+        # stand in for a module of the standard library or of robotforge that something else imports.
+        if origin == "user":
+            sys.path.insert(0, folder)
+        else:
+            sys.path.append(folder)
         try:
-            module = types.ModuleType(f"robotforge_plugin_{path.stem}")
+            module = types.ModuleType(state.module)
             module.__file__ = str(path)
+            sys.modules[state.module] = module  # before it runs: a @dataclass and pickle look the module up by name
             code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
             exec(code, module.__dict__)  # noqa: S102 (the user's own code, run by their choice)
         except KeyboardInterrupt:
@@ -185,37 +224,69 @@ class Registry:
         finally:
             self._loading = previous
             with contextlib.suppress(ValueError):
-                sys.path.remove(str(path.parent))
+                sys.path.remove(folder)
+            state.imported = [m for m in sys.modules if m not in known and _comes_from(sys.modules[m], path.parent)]
+            if state.error:
+                self._drop_modules(state)
         return state
 
-    def _load_folder(
-        self, folder: Path, origin: Literal["user", "world"], label: str, trusted: dict[str, str] | None = None
-    ) -> None:
+    def _module_name(self, path: Path) -> str:
+        name = f"robotforge_plugin_{path.stem}"
+        taken = next((s for s in self.files.values() if s.module == name and s.path != path), None)
+        return name if taken is None else f"{name}_{hashlib.sha256(str(path).encode()).hexdigest()[:8]}"
+
+    def _load_folder(self, folder: Path, origin: Literal["user", "world"], label: str) -> None:
         here = folder.resolve()
         files = [p.resolve() for p in _py_files(here)]
-        for path in [p for p in self.files if p.parent == here and p not in files]:
+
+        def inside(p: Path) -> bool:
+            return here in p.parents
+
+        for path in [p for p in self.files if inside(p) and p not in files]:
             self._unload(path)  # the file was deleted
-        for path in [p for p in self.untrusted if p.parent == here and p not in files]:
+        for path in [p for p in self.untrusted if inside(p)]:
             del self.untrusted[path]
-        for path in files:
-            if origin == "world" and (trusted or {}).get(path.name) != _digest(path):
+        state = _folder_state(here)
+        if self.folder_state.get(here) != state:  # a file anywhere in it changed: a helper too is read again
+            for path in [p for p in self.files if inside(p)]:
                 self._unload(path)
-                self.untrusted[path] = (
-                    "not loaded: this plugin file was not written on this computer or has changed since, and it is "
-                    "Python that would run with your rights. Read it (read_script), and if you trust it, "
-                    'plugins(action="trust")'
-                )
-                continue
-            self.untrusted.pop(path, None)
+            self.folder_state[here] = state
+        if origin == "world":
+            tree = read_tree(here)
+            why = self._untrusted_reasons(here, tree, files)
+            if why:
+                for path in [p for p in self.files if inside(p)]:
+                    self._unload(path)
+                self.untrusted.update(why)
+                return
+        for path in files:
             have = self.files.get(path)
             if have is None or have.signature != _signature(path):
                 self.load_file(path, origin, f"{label}/{path.name}")
 
+    def _untrusted_reasons(self, folder: Path, tree: Tree, entries: list[Path]) -> dict[Path, str]:
+        """Why the folder does not load, by file (empty when every file in it is trusted)."""
+        record = _trusted(folder)
+        bad = sorted(rel for rel, digest in tree.files.items() if record.get(rel) != digest)
+        if not bad and not tree.flaws:
+            return {}
+        how = _HOW.format(world=folder.parent)
+        if tree.flaws:
+            return {p: f"not loaded: {'; '.join(tree.flaws)}, so the folder cannot be trusted" for p in entries}
+        out = {}
+        for rel in bad:
+            out[folder / rel] = f"not loaded: this file was not written on this computer or has changed since. {how}"
+        others = ", ".join(bad)
+        for path in entries:
+            out.setdefault(path, f"not loaded: the files beside it are not trusted yet ({others}). {how}")
+        return out
+
     def _forget_folder(self, folder: Path) -> None:
-        for path in [p for p in self.files if p.parent == folder]:
+        for path in [p for p in self.files if folder in p.parents]:
             self._unload(path)
-        for path in [p for p in self.untrusted if p.parent == folder]:
+        for path in [p for p in self.untrusted if folder in p.parents]:
             del self.untrusted[path]
+        self.folder_state.pop(folder, None)
         self.worlds.discard(folder)
 
     def _unload(self, path: Path) -> None:
@@ -223,6 +294,22 @@ class Registry:
         if state is not None:
             for kind, name in reversed(state.items):
                 self.remove(kind, name)
+            self._drop_modules(state)
+
+    @staticmethod
+    def _drop_modules(state: Loaded) -> None:
+        """The plugin's module and the helpers it imported from its folder leave sys.modules, so that the next load
+        reads them again (an edited helper, or another world's helper of the same name)."""
+        for name in [state.module, *state.imported]:
+            sys.modules.pop(name, None)
+        state.imported = []
+
+    def label_of(self, path: Path) -> str:
+        """`world/plugins/file.py` for a file in a world's plugins/ folder."""
+        for folder in self.worlds:
+            if folder in path.parents:
+                return f"{folder.parent.name}/{WORLD_FOLDER}/{path.relative_to(folder).as_posix()}"
+        return path.name
 
     def world_notes(self, world_dir: Path) -> list[str]:
         """What to tell the user when a world opens: its own Python that runs, and its files that do not."""
@@ -237,9 +324,33 @@ class Registry:
                 what = ", ".join(f"{k} {n}" for k, n in state.items)
                 notes.append(f"this world runs its own Python plugin {path.name} (adds {what})")
         for path, why in self.untrusted.items():
-            if path.parent == folder:
-                notes.append(f"plugin {path.name} {why}")
+            if folder in path.parents:
+                notes.append(f"plugin {path.relative_to(folder).as_posix()} {why}")
         return notes
+
+    def show(self, world_dir: Path) -> dict[str, Any]:
+        """The files of a world's plugins/ folder as text, for the user (or an agent for the user) to read before
+        trusting them: the source of every Python file and the names and sizes of the rest."""
+        folder = (world_dir / WORLD_FOLDER).resolve()
+        tree = read_tree(folder)
+        record = _trusted(folder)
+        out: dict[str, Any] = {
+            "folder": str(folder),
+            "trusted": bool(tree.files) and not tree.flaws and all(record.get(k) == v for k, v in tree.files.items()),
+            "files": {},
+        }
+        left = MAX_SHOWN_BYTES
+        for rel in sorted(tree.files):
+            path = folder / rel
+            size = path.stat().st_size
+            if rel.endswith(".py") and size <= left:
+                out["files"][rel] = path.read_text(encoding="utf-8", errors="replace")
+                left -= size
+            else:
+                out["files"][rel] = f"(not shown: {size} bytes)"
+        if tree.flaws:
+            out["cannot_be_trusted"] = tree.flaws
+        return out
 
     # ---- reporting -----------------------------------------------------------------------------------------
 
@@ -260,7 +371,7 @@ class Registry:
         """Plugin files that did not load, by label, with why."""
         out = {state.label: state.error for state in self.files.values() if state.error}
         for path, why in self.untrusted.items():
-            out[f"{path.parent.parent.name}/{WORLD_FOLDER}/{path.name}"] = why
+            out[self.label_of(path)] = why
         return out
 
 
@@ -290,6 +401,64 @@ def _py_files(folder: Path) -> list[Path]:
     return sorted(p for p in folder.glob("*.py") if p.is_file() and not p.name.startswith("_"))
 
 
+@dataclass
+class Tree:
+    """Every file under a plugins/ folder, by path inside it, with its digest; flaws say why it cannot be trusted."""
+
+    files: dict[str, str] = field(default_factory=dict)
+    flaws: list[str] = field(default_factory=list)
+
+
+def read_tree(folder: Path) -> Tree:
+    tree = Tree()
+    if not folder.is_dir():
+        return tree
+    for here, dirs, names in os.walk(folder, followlinks=False):
+        base = Path(here)
+        for d in list(dirs):
+            if d == "__pycache__":
+                dirs.remove(d)
+            elif (base / d).is_symlink():  # an import would follow it into files nobody hashed
+                tree.flaws.append(f"{(base / d).relative_to(folder).as_posix()} is a link to a folder")
+                dirs.remove(d)
+        for name in names:
+            if name.endswith(".pyc") or name == ".DS_Store":
+                continue
+            path = base / name
+            rel = path.relative_to(folder).as_posix()
+            try:
+                tree.files[rel] = _digest(path)
+            except OSError as exc:
+                tree.flaws.append(f"{rel} cannot be read ({exc.strerror or exc})")
+        if len(tree.files) > MAX_TREE_FILES:
+            tree.flaws.append(f"it has more than {MAX_TREE_FILES} files, more than anyone reviews")
+            break
+    return tree
+
+
+def _folder_state(folder: Path) -> tuple:
+    """(path, mtime, size) of every file under a folder, to see that something changed."""
+    out = []
+    for here, dirs, names in os.walk(folder, followlinks=False):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in names:
+            if not name.endswith(".pyc"):
+                with contextlib.suppress(OSError):
+                    stat = (Path(here) / name).stat()
+                    out.append((os.path.join(here, name), stat.st_mtime_ns, stat.st_size))
+    return tuple(sorted(out))
+
+
+def _comes_from(module: Any, folder: Path) -> bool:
+    file = getattr(module, "__file__", None)
+    if not file:
+        return False
+    try:
+        return folder in Path(file).resolve().parents
+    except (OSError, ValueError):
+        return False
+
+
 def _signature(path: Path) -> tuple[int, int]:
     stat = path.stat()
     return stat.st_mtime_ns, stat.st_size
@@ -314,7 +483,7 @@ def _trusted(folder: Path) -> dict[str, str]:
 
 def _record_trust(folder: Path, files: dict[str, str]) -> None:
     record = _read_trust()
-    record[str(folder)] = {**_trusted(folder), **files}
+    record[str(folder)] = dict(files)
     path = trust_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as f:
@@ -340,11 +509,15 @@ def isolated() -> Iterator[Registry]:
     """For tests and examples: whatever is added inside the block is taken out again at its end, and the files and
     folders the registry knew before are as they were."""
     before = (dict(REGISTRY.items), dict(REGISTRY.files), dict(REGISTRY.untrusted), set(REGISTRY.worlds))
+    states = dict(REGISTRY.folder_state)
     loaded = REGISTRY.user_loaded
     try:
         yield REGISTRY
     finally:
         for key in [k for k in REGISTRY.items if k not in before[0]]:
             REGISTRY.remove(*key)
+        for path in [p for p in REGISTRY.files if p not in before[1]]:
+            REGISTRY._unload(path)
         REGISTRY.files, REGISTRY.untrusted, REGISTRY.worlds = before[1], before[2], before[3]
+        REGISTRY.folder_state = states
         REGISTRY.user_loaded = loaded

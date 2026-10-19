@@ -52,3 +52,19 @@ def test_formulas_with_string_methods_comprehensions_and_dicts(tmp_path):
     )
     assert robot.find("joint").get("name") == "R"  # type: ignore[union-attr]
     assert robot.find("link").get("name") == "ARM"  # type: ignore[union-attr]
+
+
+def test_nested_loops_are_bounded_by_their_passes_not_only_their_length(tmp_path):
+    """The files come from third-party repositories: [[a for a in X] for b in X] over 100000 items is 1e10 passes."""
+    import pytest
+
+    from robotforge.design.importing.xacro import XacroError
+
+    with pytest.raises(XacroError, match="loops too long"):
+        _expand(
+            tmp_path,
+            """
+            <xacro:property name="items" value="${[0] * 50000}"/>
+            <link name="${len([[a for a in items] for b in items])}"/>
+            """,
+        )

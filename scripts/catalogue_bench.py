@@ -25,6 +25,8 @@ import numpy as np
 
 QUOTAS = (("arm", 5), ("quadruped", 3), ("humanoid", 4), ("wheeled", 3), ("hand", 3), ("aircraft", 1), ("other", 1))
 SETTLE_S = 6.0
+ARM_TOLERANCE = 0.03  # m: an arm has reached a point within this
+GOT_ANYWHERE = 0.3  # share of the distance asked that a walker or a wheeled base has to cover
 
 
 def draw(seed: int, quotas=QUOTAS) -> list[str]:
@@ -63,14 +65,40 @@ def _span(pg: Any, robot: str) -> float:
     return max(zs) - min(zs)
 
 
+def advance(pg: Any, seconds: float, stop: Any = None, step: float = 0.25) -> tuple[float, bool]:
+    """Run `seconds` of simulation in short pieces; (seconds run, whether the simulation blew up). MuJoCo resets a
+    diverged simulation to its start, which would show a robot that collapsed as standing: the last good state is put
+    back instead. `stop()` ends the run early."""
+    m, d = pg.session.model, pg.session.data
+    backup = mujoco.MjData(m)
+    ran = 0.0
+    while ran < seconds - 1e-9 and not (stop is not None and stop()):
+        piece = min(step, seconds - ran)
+        mujoco.mj_copyData(backup, m, d)
+        got = pg.run_fast(lambda: False, piece)
+        if got < piece - 1e-6:
+            mujoco.mj_copyData(d, m, backup)
+            return ran, True
+        ran += got
+    return ran, False
+
+
 def stand(pg: Any, robot: str, floating: bool) -> dict[str, Any]:
     start = _span(pg, robot)
     q0 = pg.session.data.qpos.copy()
-    pg.run_fast(lambda: False, SETTLE_S)
-    out: dict[str, Any] = {"finite": _finite(pg)}
+
+    def collapsed() -> bool:  # a robot on its side stays there: no need to wait for the rest of the time
+        return floating and (not _upright(pg, robot) or _span(pg, robot) < 0.5 * start)
+
+    ran, blew_up = advance(pg, SETTLE_S, collapsed if floating else None)
+    out: dict[str, Any] = {"finite": _finite(pg) and not blew_up}
+    if blew_up:
+        out["blew_up_at_s"] = round(ran, 2)
     if floating:
         kept = _span(pg, robot) / start if start > 0.02 else 1.0  # one rigid body has no height to keep
         out.update(height_kept=round(kept, 2), upright=_upright(pg, robot))
+        if ran < SETTLE_S - 1e-6 and not blew_up:
+            out["fell_at_s"] = round(ran, 2)
         out["ok"] = out["finite"] and out["upright"] and kept > 0.7
     else:
         drift = float(np.max(np.abs(pg.session.data.qpos - q0))) if q0.size else 0.0
@@ -99,7 +127,7 @@ def move_arm(pg: Any, robot: str, about: dict[str, Any]) -> dict[str, Any]:
         [float(base[0] + x), float(home[1]), float(base[2] + z)] for x, z in ((0.6, 0.5), (0.4, 0.3), (0.3, 0.2))
     ]
     last = ""
-    for target in targets:
+    for tries, target in enumerate(targets, start=1):
         try:
             motion = pg.behaviors.move_arm(arm, target)
         except BehaviorError as exc:
@@ -108,13 +136,14 @@ def move_arm(pg: Any, robot: str, about: dict[str, Any]) -> dict[str, Any]:
         pg.run_fast(lambda m=motion: m.done, 30.0)
         pg.run_fast(lambda: False, 0.5)
         err = float(np.linalg.norm(d.site_xpos[site] - target))
-        if err < 0.03:
-            return {"ok": True, "target": [round(v, 3) for v in target], "error_m": round(err, 4)}
+        if err < ARM_TOLERANCE:
+            # The first point of a list that lands counts: "tries" says how many were asked for (the doc's table)
+            return {"ok": True, "target": [round(v, 3) for v in target], "error_m": round(err, 4), "tries": tries}
         last = f"stopped {err:.2f} m short of {[round(v, 2) for v in target]}"
-    return {"ok": False, "why": last or "no reachable point found"}
+    return {"ok": False, "why": last or "no reachable point found", "tries": len(targets)}
 
 
-def move_walker(pg: Any, robot: str, speed: float, seconds: float, kind: str) -> dict[str, Any]:
+def move_walker(pg: Any, robot: str, speed: float, seconds: float, kind: str, stop: bool = True) -> dict[str, Any]:
     from robotforge.behaviors.manager import BehaviorError
 
     before = pg.behaviors.pose(robot)["position"]
@@ -124,14 +153,21 @@ def move_walker(pg: Any, robot: str, speed: float, seconds: float, kind: str) ->
         return {"ok": False, "why": str(exc)[:200]}
     except ValueError as exc:
         return {"ok": False, "why": str(exc)[:200]}
-    pg.run_fast(lambda: False, seconds)
+    _, blew_up = advance(pg, seconds)
     after = pg.behaviors.pose(robot)
-    pg.behaviors.stop(robot)
+    if stop:
+        pg.behaviors.stop(robot)
     went = float(np.hypot(after["position"][0] - before[0], after["position"][1] - before[1]))
     return {
-        "ok": bool(after["upright"]) and went > 0.3 * speed * seconds,
+        "ok": bool(after["upright"]) and went > GOT_ANYWHERE * speed * seconds,
         "moved_m": round(went, 2),
+        "asked_m": round(
+            speed * seconds, 2
+        ),  # the speed asked for, over the time: a base that reaches 0.1 of it passes none
+        "speed_asked": speed,
+        "speed_got": round(went / seconds, 3),
         "upright": after["upright"],
+        **({"blew_up": True} if blew_up else {}),
     }
 
 
@@ -180,30 +216,48 @@ def try_robot(name: str, home: str) -> dict[str, Any]:
     row["add_s"] = round(time.time() - t, 1)
     about = added["catalogue"]
     row.update(load="ok", kind=about["kind"], about=about["about"], can=about["can"])
+    if "checked" in about:
+        row["checked"] = about["checked"]
     doctor = added.get("doctor") or {}
     unfixed = [f"{f['topic']}: {f['problem']}" for f in doctor.get("findings", []) if f.get("status") != "fixed"]
     if unfixed:
         row["doctor_unfixed"] = unfixed
-    root = pg.behaviors._root_body("r")
+    behave(pg, "r", about, row)
+    return row
+
+
+def behave(
+    pg: Any, robot: str, about: dict[str, Any], row: dict[str, Any] | None = None, stop: bool = True
+) -> dict[str, Any]:
+    """Stand `robot` for SETTLE_S, then do what its kind does (reach, walk, drive, close, climb); the outcome as a row.
+    The pictures of scripts/screenshots.py run this too, so they show the end of what the table says (`stop=False`
+    leaves a walker walking)."""
+    row = row if row is not None else {}
+    root = pg.behaviors._root_body(robot)
     first = int(pg.session.model.body_jntadr[root])
     floating = pg.session.model.body_jntnum[root] > 0 and pg.session.model.jnt_type[first] == mujoco.mjtJoint.mjJNT_FREE
-    row["stand"] = stand(pg, "r", floating)
+    row["stand"] = stand(pg, robot, floating)
     kind = about["kind"]
     try:
-        if kind == "arm":
-            row["move"] = move_arm(pg, "r", about)
+        if floating and not row["stand"]["ok"]:  # a robot that fell over at home is not sent to walk
+            row["move"] = {"ok": False, "why": "it falls over at home, so it was not asked to move"}
+        elif kind == "arm":
+            row["move"] = move_arm(pg, robot, about)
         elif kind in ("quadruped", "humanoid"):
-            row["move"] = move_walker(pg, "r", 0.2, 6.0, kind) if floating else {"ok": False, "why": "fixed base"}
+            row["move"] = (
+                move_walker(pg, robot, 0.2, 6.0, kind, stop) if floating else {"ok": False, "why": "fixed base"}
+            )
         elif kind == "wheeled":
-            row["move"] = move_walker(pg, "r", 0.3, 4.0, kind)
+            row["move"] = move_walker(pg, robot, 0.3, 4.0, kind, stop)
         elif kind == "hand":
-            row["move"] = move_hand(pg, "r")
+            row["move"] = move_hand(pg, robot)
         elif kind == "aircraft":
-            row["move"] = move_aircraft(pg, "r")
+            row["move"] = move_aircraft(pg, robot)
         else:
-            row["move"] = move_hand(pg, "r")
+            row["move"] = move_hand(pg, robot)
     except Exception as exc:  # a bench reports what broke and goes on to the next robot
         row["move"] = {"ok": False, "why": f"{type(exc).__name__}: {exc}"[:200], "trace": traceback.format_exc()[-400:]}
+    row["t_end"] = round(float(pg.session.data.time), 1)
     return row
 
 

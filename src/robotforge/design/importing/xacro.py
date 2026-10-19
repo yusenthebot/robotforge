@@ -37,6 +37,8 @@ _MAX_OUTPUT_CHARS = 5_000_000
 _MAX_SECONDS = 15.0
 # What a single `${...}` formula may produce.
 _MAX_SEQ = 100_000  # characters in a string, items in a list
+_MAX_LOOP_STEPS = 200_000  # passes through the loops of one formula, however they are nested
+_BUDGET = "\0loop steps left"  # where a formula's remaining passes are kept (not a name a formula can write)
 _MAX_INT_BITS = 8192
 _MAX_FORMULA_NODES = 2000
 _MAX_YAML_NODES = 500_000
@@ -249,7 +251,7 @@ def _evaluate(expr: str, lookup, extra: dict[str, Any] | None = None) -> Any:
     if sum(1 for _ in ast.walk(tree)) > _MAX_FORMULA_NODES:
         raise XacroError(f"the formula '${{{expr.strip()[:60]}...}}' is too long")
     try:
-        return _eval_node(tree.body, lookup, expr, extra or {})
+        return _eval_node(tree.body, lookup, expr, {**(extra or {}), _BUDGET: [_MAX_LOOP_STEPS]})
     except XacroError:
         raise
     except RecursionError as exc:
@@ -387,6 +389,11 @@ def _comprehension(node: ast.ListComp | ast.GeneratorExp, lookup, expr: str, ext
 
     out = []
     for item in list(_eval_node(gen.iter, lookup, expr, extra))[:_MAX_SEQ]:
+        extra[_BUDGET][0] -= 1  # [[a for a in X] for b in X] with a long X is a hang, not a formula
+        if extra[_BUDGET][0] < 0:
+            raise XacroError(
+                f"the formula '${{{expr.strip()[:60]}...}}' loops too long (over {_MAX_LOOP_STEPS} passes)"
+            )
         bound[gen.target.id] = item
         if all(_eval_node(c, inner, expr, extra) for c in gen.ifs):
             out.append(_eval_node(node.elt, inner, expr, extra))

@@ -8,7 +8,7 @@ A plugin is a Python file that registers things with `robotforge.extend`.
 Where it lives:
 
 - `~/.robotforge/plugins/` (or the folders in `ROBOTFORGE_PLUGINS`): the user's own, loaded when robotforge starts.
-- `<world>/plugins/`: travels with the world. `write_script(name, code, plugin=true)` writes one there and loads it. A file that was not written on this computer does not load until `plugins(action="trust")`: read it first (`read_script`) and tell the user what it does.
+- `<world>/plugins/`: travels with the world. `write_script(name, code, plugin=true)` writes one there and loads it. Trust covers every file under the folder as one set (helpers and subfolders too). Files that were not written on this computer do not load until the user approves them in a terminal with `robotforge plugins trust WORLD`; you cannot. Read them with `plugins(action="show", world=NAME)` (it works before the world is open) and tell the user what they do.
 
 ```python
 import math
@@ -57,9 +57,9 @@ After editing the file, `plugins(action="reload")`.
 
 ## Export
 
-`export_model()` is the open world as MJCF in the world's `exports/` folder; `robot="go2"` just that robot; `format="urdf"` (needs `robot`) as URDF; `to=` a folder.
+`export_model()` is the open world as MJCF in the world's `exports/` folder; `robot="go2"` just that robot; `format="urdf"` (needs `robot`) as URDF; `to=` a new or empty folder (in the world, the home folder or the temp folder; `overwrite=true` to replace an earlier export).
 Meshes are OBJ files in `meshes/`.
-`check` says the file was loaded again in MuJoCo and compared (bodies, joints, masses, every mesh vertex for MJCF; bodies, joints and limits for URDF).
+`check` says the file was loaded again in MuJoCo and compared (`same` is false if bodies, joints, masses, joint limits or any mesh vertex differ for MJCF; bodies, joints and limits for URDF).
 URDF cannot say a floating base, closed loops, capsules or ball joints: `notes` lists what changed.
 `python -m mujoco.viewer --mjcf=<file>` opens an MJCF.
 

@@ -320,7 +320,9 @@ class Playground:
         # Only now: a world that did not open used to become the one edits went to while the simulation still
         # ran the last one, so robots listed the broken file's dog and add_object failed on its template.
         self.store = store
-        return self._load_world(compiled)
+        opened = self._load_world(compiled)
+        opened["notes"].extend(plugin_notes(store.dir))  # said once, as the world opens, not with every edit after
+        return opened
 
     @_one_edit_at_a_time
     def add_robot(
@@ -943,12 +945,16 @@ class Playground:
 
     def _about_catalogue_robot(self, name: str, catalogue_id: str) -> dict[str, Any]:
         """What an open catalogue robot turned out to be, from its structure, and which tools work on it."""
-        from robotforge.design import catalogue_describe
+        from robotforge.design import catalogue_describe, catalogue_probe
 
         entry = catalogue.get(catalogue_id)
         described = catalogue_describe.describe(
             self.session.model, name, self.behaviors.home_qpos(), entry, self.behaviors
         )
+        if described.kind in catalogue_probe.LEGGED and described.legs:  # the gait is generic: try it, once
+            checked = catalogue_probe.trial(entry)
+            if checked is not None:
+                described = described.with_trial(checked)
         return {"name": entry.id, **described.to_dict()}
 
     def _unchanged(self, note: str) -> dict[str, Any]:
@@ -984,7 +990,7 @@ class Playground:
             "robots": [r.name for r in world.robots],
             "objects": _limit([o.name for o in world.objects]),
             **({"terrain": [t.name for t in world.terrain]} if world.terrain else {}),
-            "notes": [*compiled.notes, *self.behaviors.walk_notes(), *plugin_notes(store.dir)],
+            "notes": [*compiled.notes, *self.behaviors.walk_notes()],
             "actuators": summary["actuators"],
             "viewer_url": self.viewer_url,
         }
@@ -1321,12 +1327,17 @@ class Playground:
         return result
 
     def run_fast(self, until: Callable[[], bool], max_seconds: float) -> float:
-        """Step as fast as possible until `until()` or `max_seconds` of sim time; returns sim seconds run."""
+        """Step as fast as possible until `until()` or `max_seconds` of sim time; returns sim seconds run. A simulation
+        that blows up is reset to its start by MuJoCo (its clock goes back to 0): the run ends there, and the seconds
+        returned are then short of `max_seconds` (it used to wait forever for a clock that kept starting over)."""
         with self.session.lock:
-            start = self.session.data.time
+            start = last = self.session.data.time
             chunk = max(1, round(0.02 / self.session.model.opt.timestep))
             while not until() and self.session.data.time - start < max_seconds:
                 self.session.step(chunk)
+                if self.session.data.time < last:
+                    return max(0.0, float(last - start))
+                last = self.session.data.time
             return float(self.session.data.time - start)
 
     def control(self, action: str) -> dict[str, Any]:

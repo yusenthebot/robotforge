@@ -1160,47 +1160,40 @@ def _g12_pedestal(pg: Any) -> None:
         pg.add_object("stand", shape="box", size=size, pos=pos, color="gray", fixed=True)
 
 
-def _g12_do(pg: Any) -> None:
-    """Start what the robot's kind does, as the bench does: reach, walk, drive, close."""
-    import mujoco
-    import numpy as np
+G12_ROWS: dict[
+    str, dict[str, Any]
+] = {}  # robot -> what the bench behavior did in its picture (for the grid's captions)
 
-    from robotforge.behaviors.manager import BehaviorError
 
-    kind = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)["kind"]
-    d, m = pg.session.data, pg.session.model
-    try:
-        if kind == "arm":
-            arm = pg.behaviors.arms("r")[0]
-            site = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_SITE, f"{arm}/tcp")
-            home = d.site_xpos[site].copy()
-            for step in ((0.2, 0, 0), (0.15, 0, -0.15), (0.25, 0, 0.1), (0.1, 0.1, 0), (0.1, -0.1, -0.1)):
-                try:
-                    pg.behaviors.move_arm(arm, [float(home[i] + 0.4 * f) for i, f in enumerate(step)])
-                    return
-                except BehaviorError:
-                    continue
-        elif kind in ("quadruped", "humanoid"):
-            pg.behaviors.move("r", 0.25, 0.0)
-        elif kind == "wheeled":
-            pg.behaviors.move("r", 0.3, 0.0)
-        elif kind in ("hand", "other"):
-            for a in range(m.nu):
-                low, high = m.actuator_ctrlrange[a] if m.actuator_ctrllimited[a] else (-1.0, 1.0)
-                d.ctrl[a] = high if abs(high) >= abs(low) else low
-        elif kind == "aircraft":
-            pg.behaviors.heave("r", 0.5)
-    except (BehaviorError, ValueError, np.linalg.LinAlgError):
-        pass  # a robot that cannot do its kind's job stands in the picture, as it does in the bench
+def _g12_do(name: str) -> Callable[[Any], None]:
+    """Run what scripts/catalogue_bench.py runs for the robot's kind (stand six seconds, then reach, walk, drive,
+    close), headless and to its end, then pause: the picture shows the state the table reports, not a moment on
+    the way."""
+    import catalogue_bench
+
+    def act(pg: Any) -> None:
+        pg.control("pause")  # the viewer's own clock must not run the robot while this does
+        about = pg._about_catalogue_robot("r", pg.current_world().robots[0].catalogue)
+        row = catalogue_bench.behave(pg, "r", about, {"name": name, "kind": about["kind"]}, stop=False)
+        G12_ROWS[name] = row
+        pg.control("pause")
+
+    return act
+
+
+def _g12_start(pg: Any) -> None:
+    """The robot as it is added, before anything is asked of it: the small picture in the corner of its tile."""
+    pg.control("pause")
 
 
 def _g12_shots() -> list[Shot]:
     import catalogue_bench
 
-    return [
-        Shot(f"g12_{name}", _g12_world(name), act=_g12_do, page=G12_FRAME, settle=4.0)
-        for name in catalogue_bench.draw(G12_SEED)
-    ]
+    shots = []
+    for name in catalogue_bench.draw(G12_SEED):
+        shots.append(Shot(f"g12_{name}_start", _g12_world(name), act=_g12_start, page=G12_FRAME, settle=1.5))
+        shots.append(Shot(f"g12_{name}", _g12_world(name), act=_g12_do(name), page=G12_FRAME, settle=1.5))
+    return shots
 
 
 G3_SHOTS = [
@@ -1925,6 +1918,10 @@ def main() -> None:
         t0 = time.monotonic()
         path = take(shot, args.out, args.lang)
         print(f"{shot.name}: {path} ({time.monotonic() - t0:.0f} s)")
+    if G12_ROWS:
+        report = args.out / "g12_report.json"
+        old = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
+        report.write_text(json.dumps({**old, **G12_ROWS}, indent=1, default=str), encoding="utf-8")
     singles = [args.out / f"gen_{i + 1:02d}.jpg" for i in range(len(GENERATED))]
     if all(p.is_file() for p in singles) and (not args.only or any(n.startswith("gen_") for n in args.only)):
         print(f"generated grid: {generated_grid(singles, args.out / 'generated_grid.jpg')}")

@@ -71,7 +71,8 @@ robotforge is a beginner-friendly robot playground on the MuJoCo physics engine.
 Design: new_world creates a world (saved as world.yaml). add_robot builds a robot from a template (arm, quadruped,
 humanoid, rover, cartpole, gripper, boat, rov, drone; list_templates), takes a real one from the library (list_library:
 Unitree Go2, Franka Panda, ...; list_library(kind="arm", search="kinova") also searches over 200 more open robots
-that add_robot(library=<name>) downloads, imports and describes) or imports a file (URDF, xacro, MJCF, or a mesh such as
+that add_robot(library=<name>) downloads, imports and describes; legged ones are tried for a few seconds and the
+answer's catalogue.checked says whether they stand and walk) or imports a file (URDF, xacro, MJCF, or a mesh such as
 .stl/.obj/.dae/.glb; the import doctor repairs URDFs and meshes and reports in the result's "doctor" field).
 add_robot(build=...) builds any
 robot from parts (hexapod, snake, self-balancing robot, arm on a rover): read builder_guide, then edit with add_part /
@@ -162,8 +163,9 @@ world's plugins/ folder): new parts for add_object (shape="their_name"), new sen
 (feedback inside the simulation) and behaviors (routines for any robot). write_script(name, code, plugin=true) writes
 one for the user and loads it; plugins() lists what plugins added and which files failed to load, with the reason,
 plugins(action="reload") reads the folders again, plugins(action="run", name=..., robot=...) starts a controller or
-behavior. A world's plugin files that were not written here do not load until you have read them, told the user what
-they do and called plugins(action="trust"): they are code that runs on this computer.
+behavior. A world's plugin files that were not written here do not load until the user has approved them: read them
+(plugins(action="show", world=...)), tell the user what they do, and if the user wants them they run
+`robotforge plugins trust WORLD` in a terminal (you cannot: it is code that runs on this computer).
 
 Export: export_model() writes the open world as MJCF for other simulators, export_model(robot="go2") one robot,
 format="urdf" a robot as URDF, with the meshes as OBJ files; it loads the file again and its "check" says whether
@@ -404,7 +406,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     def list_library(
-        kind: Literal["arm", "quadruped", "humanoid", "wheeled", "hand", "aircraft", "other"] | None = None,
+        kind: str | None = None,
         search: str | None = None,
         limit: int = 40,
     ) -> str:
@@ -415,12 +417,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         5-30 s) and caches it.
 
         Over 200 more open robots (arms, dogs, humanoids, wheeled bases, hands, drones from many makers) are in the
-        open catalogue: kind and search ("ur", "kinova", "unitree": words of the name, maker or tags) list those that
-        match. add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute, once), runs a
-        URDF through the import doctor and answers with "catalogue": what the robot turned out to be from its
-        structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
-        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs; the others
-        move with set_controls and pose."""
+        open catalogue: kind (arm, quadruped, humanoid, wheeled, hand, aircraft, other; also gripper, dog, drone) and
+        search (words starting the name, maker or a tag: "kinova", "unitree", "ur5") list those that match.
+        add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute,
+        once), runs a URDF through the import doctor and answers with "catalogue": what the robot turned out to be from
+        its structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
+        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs, and the answer's
+        "checked" says what a short trial showed (stands, walked or fell over after how far); the others move with
+        set_controls and pose."""
         from robotforge.design import catalogue
 
         with _tool_errors():
@@ -859,9 +863,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     sensor_tools.register(server, playground)
     perception_tools.register(server, playground, run_until)
 
-    async def run_file(path: Path, max_sim_seconds: float, args: list[str]) -> dict[str, Any]:
+    async def run_file(path: Path, max_sim_seconds: float, args: list[str], max_wall_seconds: float) -> dict[str, Any]:
         runner = ScriptRunner(playground, lambda: bool(hub.clients) and not playground.session.paused)
-        return await runner.run(path, max_sim_seconds=max_sim_seconds, args=args)
+        return await runner.run(path, max_sim_seconds=max_sim_seconds, max_wall_seconds=max_wall_seconds, args=args)
 
     plugin_tools.register(server, playground, run_until, run_file)
     mount_tools.register(server, playground)

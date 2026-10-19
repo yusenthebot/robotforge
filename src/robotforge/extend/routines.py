@@ -297,24 +297,35 @@ def start_controller(
 BEHAVIOR_SCRIPT = """\
 import json
 import sys
+from pathlib import Path
 
 from robotforge.extend.registry import REGISTRY
 from robotforge.script import connect
 
-plugin_file, name, robot, params = sys.argv[1], sys.argv[2], sys.argv[3], json.loads(sys.argv[4])
-state = REGISTRY.load_file(__import__("pathlib").Path(plugin_file), "user", plugin_file)
-if state.error:
-    raise SystemExit(f"the plugin file did not load: {state.error}")
+# The same plugins as the server has: the user's, and the world's own when they are trusted, so that a behavior
+# can call another one that is defined in another file with call().
+name, robot, params, world = sys.argv[1], sys.argv[2], json.loads(sys.argv[3]), Path(sys.argv[4])
+REGISTRY.load_world(world)
 item = REGISTRY.get("behavior", name)
 if item is None:
-    raise SystemExit(f"{plugin_file} no longer defines the behavior {name!r}")
+    raise SystemExit(f"the behavior {name!r} did not load: {json.dumps(REGISTRY.problems())}")
 sim = connect()
 result = item.obj(sim.robot(robot), **params)
 print("RESULT " + json.dumps(result, default=str))
 """
 
+WALL_FACTOR, MIN_WALL_SECONDS, MAX_WALL_SECONDS = 3.0, 20.0, 600.0
 
-def behavior_command(name: str, robot: str, params: dict[str, Any] | None) -> tuple[Path, list[str], dict[str, Any]]:
+
+def wall_limit(sim_seconds: float) -> float:
+    """How long a behavior may run on the clock: `seconds` limits simulated time, which a loop that never steps the
+    simulation does not use up."""
+    return min(MAX_WALL_SECONDS, max(MIN_WALL_SECONDS, WALL_FACTOR * sim_seconds))
+
+
+def behavior_command(
+    name: str, robot: str, params: dict[str, Any] | None, world_dir: Path
+) -> tuple[Path, list[str], dict[str, Any]]:
     """The plugin file that defines behavior `name`, the arguments the runner script takes, and the options."""
     item = REGISTRY.get("behavior", name)
     if item is None:
@@ -324,7 +335,7 @@ def behavior_command(name: str, robot: str, params: dict[str, Any] | None) -> tu
     path = item.path
     if path is None:
         raise PluginError(f"behavior {name!r} was not defined in a plugin file, so it cannot be run as a script")
-    return path, [str(path), name, robot, json.dumps(options)], options
+    return path, [name, robot, json.dumps(options), str(world_dir)], options
 
 
 def parse_result(output: str) -> tuple[Any, str]:
@@ -347,7 +358,8 @@ def call(name: str, robot: Any, **params: Any) -> Any:
     item = REGISTRY.get("behavior", name)
     if item is None:
         REGISTRY.load_user()
-        REGISTRY.load_world(Path.cwd().parent)  # a script runs in <world>/behaviors
+        if not REGISTRY.worlds:  # a script of the world runs in <world>/behaviors; a behavior's runner loaded it
+            REGISTRY.load_world(Path.cwd().parent)
         item = REGISTRY.get("behavior", name)
     if item is None:
         known = ", ".join(REGISTRY.of("behavior")) or "none loaded"
