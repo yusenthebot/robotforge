@@ -146,5 +146,11 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             settle=3.0,
         ),
         Shot("assets_gallery", gallery_world, page=look((1.7, -3.2, 1.7), (-0.7, 0.2, 0.3)), size=HD, settle=3.0),
-        Shot("assets_described", _described_row, page=look((2.5, -0.3, 0.75), (0.0, 0.0, 0.3)), size=HD, settle=3.0),
+        Shot(
+            "assets_described",
+            _described_row,
+            page="window.__robotforge.select(null);" + look((2.0, -0.25, 0.6), (0.0, 0.0, 0.3)),
+            size=HD,
+            settle=3.0,
+        ),
     ]
