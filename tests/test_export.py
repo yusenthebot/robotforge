@@ -133,6 +133,7 @@ def test_what_a_urdf_cannot_say_is_listed(tmp_path):
     assert any("capsules" in n for n in kid.notes) and any("floats" in n for n in kid.notes)
     panda = export.export_urdf(c.model, "panda", tmp_path / "panda")
     assert any("equality constraints" in n for n in panda.notes)
+    assert any("a URDF has no motors" in n and "mjcf" in n for n in kid.notes)  # reloaded, it gets weaker new servos
 
 
 def test_a_joint_limit_and_a_slide_survive_the_trip(tmp_path):

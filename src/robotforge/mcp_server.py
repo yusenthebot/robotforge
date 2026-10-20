@@ -193,7 +193,8 @@ behavior. A world's plugin files that were not written here do not load until th
 
 Export: export_model() writes the open world as MJCF for other simulators, export_model(robot="go2") one robot,
 format="urdf" a robot as URDF, with the meshes as OBJ files; it loads the file again and its "check" says whether
-bodies, joints, masses and meshes match the world.
+bodies, joints, masses and meshes match the world (not the motors: a URDF has none, so a reloaded URDF robot gets
+new weaker servos and walks differently; export mjcf to keep them).
 
 Flying: a drone (add_robot template="drone", 4, 6 or 8 rotors; the library's Skydio X2 and Crazyflie; or rotor
 parts in a build) has a flight controller. move(drone, to=[x, y, z]) takes off and flies there and hovers; a list

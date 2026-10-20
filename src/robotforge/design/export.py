@@ -478,6 +478,14 @@ class _Urdf:
         ]
         if mine:
             self.notes.append(f"{len(mine)} equality constraints (closed loops, couplings) cannot be written in URDF")
+        motors = sum(1 for a in range(m.nu) if _name(m, OBJ.mjOBJ_ACTUATOR, a).startswith(f"{self.robot}/"))
+        if motors:
+            self.notes.append(
+                f"a URDF has no motors: the {motors} actuators (their gains, force limits and what they track) are not "
+                "written, only each joint's effort limit. Loading this file again gives the robot new position servos "
+                "sized by the import doctor, weaker than these, so its gaits and tuned motions will not match the "
+                "original; export mjcf to keep the motors"
+            )
         if any(int(m.jnt_type[j]) == int(J.mjJNT_FREE) for j in range(m.njnt) if int(m.jnt_bodyid[j]) == self.root):
             self.notes.append("the base floats: it is the URDF's root link with no joint; fix or float it in your tool")
 

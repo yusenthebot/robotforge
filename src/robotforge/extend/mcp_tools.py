@@ -150,7 +150,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         the temporary folder (default exports/ in the world's folder; overwrite=true replaces an earlier export in a
         folder that is not empty). The file is
         loaded again in MuJoCo and compared with the world (same bodies, joints, masses, vertices): "check" says
-        so. URDF cannot say free joints, loops, capsules or ball joints; "notes" lists what changed. Open the result
+        so; that is geometry and mass only. URDF cannot say free joints, loops, capsules, ball joints or motors: a URDF
+        loaded again gets new, weaker position servos, so its gaits and tuned motions do not match the original
+        (export mjcf keeps the motors); "notes" lists what changed. Open the result
         with python -m mujoco.viewer --mjcf=FILE (an MJCF) or any URDF tool."""
         with _tool_errors():
             store = playground._require_store()
