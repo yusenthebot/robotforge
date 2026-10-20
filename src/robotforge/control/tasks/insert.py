@@ -67,6 +67,7 @@ class Insert(ContactTask):
     summary = "Push a peg the gripper holds into a socket whose place the robot knows only to a few millimetres."
     Params = InsertParams
     gains: ClassVar[dict[str, dict[str, Any]]] = INSERT_GAINS
+    jitter_start: ClassVar[bool] = False  # the peg is already in the hand over the hole: a moved hand would not match
     default_seconds = 14.0
 
     def __init__(self, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None):

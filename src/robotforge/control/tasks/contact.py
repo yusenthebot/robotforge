@@ -154,6 +154,7 @@ class ContactTask(ArmTask):
     """Base of the tasks that press on a surface: finds the surface, owns the force sense and the bookkeeping."""
 
     contact: ClassVar[bool] = True
+    jitter_start: ClassVar[bool] = True  # a seeded start moves the tool a little (reset)
     methods: ClassVar[tuple[str, ...]] = CONTROL_METHODS
     control_hz: ClassVar[float] = 50.0
     gains: ClassVar[dict[str, dict[str, Any]]] = SLIDING_GAINS
@@ -205,6 +206,8 @@ class ContactTask(ArmTask):
     def reset(self, data: mujoco.MjData, rng: np.random.Generator) -> None:
         """A start that differs from run to run (a seeded comparison): the tool a few cm to the side and higher or
         lower, found by inverse kinematics from where the arm is. The job is the same; only where it begins varies."""
+        if not self.jitter_start:
+            return
         jitter = rng.uniform(-1.0, 1.0, 3) * np.array([JITTER_XY, JITTER_XY, JITTER_Z])
         q, err = self._ik.solve(
             self._chain, data.site_xpos[self.site] + jitter, data.qpos[self.qadr], iterations=200, damping=1e-3
