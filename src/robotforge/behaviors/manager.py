@@ -257,6 +257,7 @@ DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for wh
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+TOUCH_DEPTH = 0.001  # m two robots' shapes must overlap to count as touching (see _refuse_if_touching_another_robot)
 PLACE_TOL = 0.015  # m sideways that still counts as on the target (see placed)
 CLUTTER_MARGIN = 0.05  # m more over what the load is carried over: a small arm sags 4 to 9 cm under it on the way
 CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
@@ -2225,6 +2226,8 @@ class BehaviorManager:
             return (body.split("/", 1)[0] if "/" in body else ""), body
 
         for c in range(d.ncon):
+            if d.contact[c].dist > -TOUCH_DEPTH:  # near each other is not touching
+                continue
             (a, a_body), (b, b_body) = owner(d.contact[c].geom1), owner(d.contact[c].geom2)
             if a and b and a != b and mine in (a, b):
                 other = b_body if a == mine else a_body
