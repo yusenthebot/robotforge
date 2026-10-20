@@ -98,7 +98,7 @@ uvx --from git+https://github.com/yusenthebot/robotforge robotforge demo
 - 我导入的机器人没有现成的走法，怎么让它自己学会走？
 - 教我第 1 课。
 
-agent 会尽早打开 3D 查看器：你可以拖动机器人、拉滑条控制每个电机、用 W A S D 遥控会走的机器人。
+agent 会尽早打开 3D 查看器：你可以拖动机器人、拉滑条控制每个电机、用 W A S D（或手柄）遥控会走的机器人，手柄摇杆还能移动机械臂、开合夹爪。
 所有世界都保存在 `~/robotforge/worlds/` 里，agent 写的脚本在每个世界的 `behaviors/` 文件夹里，可以自己改、反复运行。
 改动世界（加个箱子、换地板）时，机器人和物体留在原地，不会跳回起点。
 

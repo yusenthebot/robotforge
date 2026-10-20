@@ -15,6 +15,8 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+SPAWN_CLEARANCE = 0.002  # m between the lowest point and the floor at the start (as in library.py)
+
 GRID = 36  # angles tried per joint
 MAX_SLIP = 0.04  # m the feet may be ahead of or behind their hips
 STANCE_SHARE = 0.78  # of the tallest stance with the feet under the hips: the legs stay bent
@@ -76,3 +78,82 @@ def _range(model: mujoco.MjModel, joint: int) -> tuple[float, float]:
     if model.jnt_limited[joint]:
         return float(model.jnt_range[joint][0]), float(model.jnt_range[joint][1])
     return -np.pi, np.pi
+
+
+def balance(
+    child: mujoco.MjSpec, home_qpos: dict[str, float], spawn_height: float
+) -> tuple[dict[str, float], dict[str, float], float] | None:
+    """A home pose for a two-legged robot whose keyframe leaves its feet off the floor or its weight on the edge of
+    them, or None when it is no such robot or the pose stands balanced already: (the joint angles that changed, the
+    servo targets that follow, the height of the base above the floor).
+
+    Menagerie's H1 stands with its centre of mass 13 cm behind the middle of its feet, over the heels, and GR1's zero
+    pose has its toes up; the pose is kept as near the keyframe as it can be with the feet flat and the centre of mass
+    over them (behaviors/stance_ik.py)."""
+    from robotforge.behaviors import stance, stance_ik  # lazy: they import the behaviors
+    from robotforge.sim.actuators import is_position_servo
+    from robotforge.sim.geometry import collides, lowest_point
+
+    try:
+        model = child.copy().compile()
+    except ValueError as exc:
+        log.debug("balance: the robot does not compile on its own: %s", exc)
+        return None
+    bodies = list(range(1, model.nbody))  # on its own, everything in the model is the robot
+    if not bodies or not stance.is_floating(model, bodies) or stance.count_wheels(model, bodies) >= 2:
+        return None
+    data = mujoco.MjData(model)
+    for name, value in home_qpos.items():
+        joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
+        if joint >= 0:
+            data.qpos[model.jnt_qposadr[joint]] = value
+    root = int(model.body_rootid[bodies[0]])
+    free = next(
+        (
+            j
+            for j in range(model.body_jntadr[root], model.body_jntadr[root] + model.body_jntnum[root])
+            if model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE
+        ),
+        None,
+    )
+    if free is None:
+        return None
+    adr = int(model.jnt_qposadr[free])
+    data.qpos[adr : adr + 3] = [0.0, 0.0, spawn_height]
+    data.qpos[adr + 3 : adr + 7] = model.qpos0[adr + 3 : adr + 7]
+    mujoco.mj_forward(model, data)
+    tree = np.isin(model.body_rootid, [root])
+    feet = stance_ik.plan_feet(model, data, tree)
+    if len(feet) < 2 or stance.count_feet(model, data, bodies) != 2:
+        return None
+    if not stance_ik.needs_balancing(data.subtree_com[root], feet, data):
+        return None
+    level = data.xmat[root].reshape(3, 3).copy()
+    moved = stance_ik.balanced_pose(model, data.qpos, root, tree, feet, data.qpos.copy(), level)
+    changed: dict[str, float] = {}
+    for j in range(model.njnt):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+        if tree[model.jnt_bodyid[j]] and name and int(model.jnt_type[j]) in stance_ik.JOINTS:
+            value = float(moved[model.jnt_qposadr[j]])
+            if abs(value - float(data.qpos[model.jnt_qposadr[j]])) > 1e-6:
+                changed[name] = value
+    servos: dict[str, float] = {}
+    for a in range(model.nu):
+        joint = int(model.actuator_trnid[a, 0])
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint) or ""
+        if (
+            int(model.actuator_trntype[a]) == int(mujoco.mjtTrn.mjTRN_JOINT)
+            and is_position_servo(model, a)
+            and name in changed
+        ):
+            servos[mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a) or ""] = changed[name]
+    # The base is where the feet are on the floor; the height that puts the new pose on it, as for any home pose.
+    data.qpos[:] = moved
+    data.qpos[adr : adr + 3] = 0.0
+    mujoco.mj_kinematics(model, data)
+    lowest = min(
+        float(lowest_point(model, data, g)[2])
+        for g in range(model.ngeom)
+        if tree[model.geom_bodyid[g]] and collides(model, g)
+    )
+    return changed, servos, -lowest + SPAWN_CLEARANCE

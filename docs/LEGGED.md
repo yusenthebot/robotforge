@@ -88,6 +88,8 @@ Spot 在三级台阶上的结果（每格三次）：5x30 3/3，8x40 3/3，6.5x3
 
 这些里 ANYmal B 和 Barkour v0 是最便宜的下一步，人形要等有地形策略的方案。
 
+2026-10-20 起，目录里读作人形的机器人（含上表里的 H1、Talos、N1、Adam Lite、ToddlerBot；Berkeley Humanoid 站不住）由全身平衡控制站着，能背负重、挨推；走路仍按上面。站得住的名单和原因见 [docs/HUMANOID.md](HUMANOID.md)。
+
 ## 视频和图
 
 - `legged_quadrupeds.mp4`：六台四足同一条命令（0.3 m/s）并排走。

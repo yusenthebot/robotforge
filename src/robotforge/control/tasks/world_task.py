@@ -33,6 +33,7 @@ class WorldTask(Task):
     methods: ClassVar[tuple[str, ...]] = ()
     Params: ClassVar[type[TaskParams]] = TaskParams
     control_hz: ClassVar[float] = 25.0
+    goal_prefixes: ClassVar[tuple[str, ...]] = ("hand_", "thing_", "place_")  # the goal (kept with sensors only)
 
     def __init__(self, model: mujoco.MjModel, entry: TaskEntry, world: Any):
         super().__init__(model, entry.robot, None)

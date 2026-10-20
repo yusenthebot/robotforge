@@ -26,6 +26,7 @@ import numpy as np
 from robotforge.behaviors import nav_grid, nav_map
 from robotforge.behaviors.nav_grid import Grid, astar, clearance, pull_string
 from robotforge.behaviors.nav_map import OBSTACLE, SLOPE, STEP, Body, NavMap, StaticLayer
+from robotforge.behaviors.traffic import Mover, conflict, holds_at, must_wait
 from robotforge.sim.geometry import collides
 
 log = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ AHEAD = 1.0  # m
 MARGIN_AROUND = 0.05  # m
 MOVED = 0.1  # m
 YIELD_FIRST, YIELD_SECOND = 0.3, 2.5  # s
+GIVE_WAY_LIMIT = 25.0  # s a robot holds for another at a crossing, then goes on and leaves it to making way
 MAX_YIELDS = 6
 FALLEN = math.cos(math.radians(60.0))  # its up axis this far from up: it has fallen over
 # Turn rate the follower asks for, rad/s, by walker: wheels turn fast, gaits trot round at about 1 rad/s
@@ -677,6 +679,7 @@ class Navigator:
     ready: Callable[[], bool] = lambda: True  # False while it waits to set off (its arm folding over it)
     on_finish: Callable[[Navigator], None] = lambda nav: None
     others: list[Other] = field(default_factory=list)  # the other robots, to make way for when they move
+    crossings: Callable[[], list[Mover]] | None = None  # the other robots on trips, for right of way (traffic.py)
     # A robot that finds its way on its own map follows its own pose estimate (x, y, heading), not the true one, and
     # plans again when what it has mapped since the plan lies across the path (`watch` says so for the path left).
     pose: Callable[[], np.ndarray | None] | None = None
@@ -710,6 +713,12 @@ class Navigator:
     _waiting: tuple[str, float] | None = field(default=None, init=False)  # (robot in the way, since when)
     _yields: int = field(default=0, init=False)
     _others_at: dict[str, np.ndarray] = field(default_factory=dict, init=False)  # where they were for the plan
+    _holding: bool = field(default=False, init=False)  # stopped short of a crossing for another robot
+    _held_since: float = field(default=0.0, init=False)
+    _last_hold: float | None = field(default=None, init=False)
+    _ignore_traffic_until: float = field(default=-math.inf, init=False)
+    held_s: float = field(default=0.0, init=False)  # s spent holding at crossings
+    gave_way_to: list[str] = field(default_factory=list, init=False)
     _retried: bool = field(default=False, init=False)  # planned again at the end of a path to a taken point
     _lined_up: int = field(default=-1, init=False)  # the last pivot (plan point) it lined up at
     _watched: float = field(default=-math.inf, init=False)  # when the map was last checked against the path
@@ -824,6 +833,8 @@ class Navigator:
         if off > max(0.3, 2.0 * self.planner.body.radius):
             self._replan(t, data, "it was pushed off its path")
             return
+        if self._give_way(t, s):
+            return
         if self._make_way(t, xy, s, data):
             return
         if self.watch is not None and t - self._watched >= MAP_WATCH:
@@ -868,6 +879,48 @@ class Navigator:
         slow = max(MIN_SPEED_SHARE * self.cruise, SLOW_GAIN * min(left, corner_left))
         turn = float(np.clip(TURN_GAIN * alpha, -self.turn_rate, self.turn_rate)) if self.turns_walking else 0.0
         self.walker.command(min(speed, slow), turn)
+
+    def mover(self) -> Mover | None:
+        """What other trips need to know to cross this one: the path left, how fast it keeps to it, its size and
+        whether it is holding for someone. None before it has set off and once it is done."""
+        if self.done or self._last_xy is None or not self.ready():
+            return None
+        path = np.array([point[:2] for point in self._remaining_path()], float)
+        return Mover(self.robot, path, self.cruise, self.planner.body.radius, self.start_time, self._holding)
+
+    def _give_way(self, t: float, s: float) -> bool:
+        """Short of a place where its path crosses another trip's that the other gets to first: stop and wait there
+        until it has gone by (traffic.py). True while it holds. After GIVE_WAY_LIMIT seconds it goes on regardless
+        and leaves the meeting to making way."""
+        if self.crossings is None or t < self._ignore_traffic_until:
+            return False
+        me = self.mover()
+        blocker = None
+        if me is not None:
+            for other in self.crossings():
+                c = conflict(me, other)
+                if c is not None and must_wait(me, other, c) and holds_at(me, c):
+                    blocker = other
+                    break
+        if blocker is None:
+            self._holding = False
+            self._last_hold = None
+            return False
+        if not self._holding:
+            self._holding, self._held_since = True, t
+        elif t - self._held_since > GIVE_WAY_LIMIT:
+            self._holding = False
+            self._last_hold = None
+            self._ignore_traffic_until = t + GIVE_WAY_LIMIT
+            return False
+        if blocker.name not in self.gave_way_to:
+            self.gave_way_to.append(blocker.name)
+        if self._last_hold is not None:
+            self.held_s += t - self._last_hold
+        self._last_hold = t
+        self.walker.command(0.0, 0.0)
+        self._since = t  # waiting is not being stuck
+        return True
 
     def _make_way(self, t: float, xy: np.ndarray, s: float, data: mujoco.MjData) -> bool:
         """Another robot on the path just ahead (it moved there after the plan): stop, and after a moment plan
@@ -1128,6 +1181,9 @@ class Navigator:
             out["replans"] = self.replans
         if self._yields:
             out["made_way"] = self._yields  # times it planned again around another robot in its way
+        if self.gave_way_to:
+            out["gave_way_to"] = list(self.gave_way_to)  # robots it held short of a crossing for
+            out["waited_s"] = round(self.held_s, 1)
         reach = self.plan.within_reach
         if reach is not None and self._last_xy is not None:  # from where it really stopped, as it faces
             reach = self.planner._reaches(self._last_xy, self._last_yaw)

@@ -27,6 +27,7 @@ import numpy as np
 
 import robotforge
 from robotforge.behaviors.manager import BehaviorError
+from robotforge.demonstrations import RATE_HZ
 from robotforge.playground import Playground, PlaygroundError
 from robotforge.script import ENV_PORT, ENV_TOKEN
 
@@ -234,6 +235,36 @@ class ScriptRunner:
             str(req.get("name", "tree")), req.get("nodes"), str(req.get("status", "")), req.get("notes")
         )
 
+    # ---- demonstrations (demonstrations.py) ----
+
+    def _op_demo_start(self, req) -> dict:
+        return self.pg.demonstrations.start(
+            str(req["robot"]),
+            req.get("name"),
+            float(req.get("rate_hz", RATE_HZ)),
+            req.get("sensors"),
+            bool(req.get("overwrite")),
+        )
+
+    def _op_demo_stop(self, req) -> dict:
+        return self.pg.demonstrations.stop(req.get("name"))
+
+    async def _op_demo_replay(self, req) -> dict:
+        replay = self.pg.demonstrations.replay(str(req["name"]), req.get("robot"), str(req.get("mode", "commands")))
+        if req.get("wait", True):
+            try:
+                await self._advance(lambda: replay.done, replay.demo.seconds + 3.0)
+            finally:
+                if not replay.done:
+                    replay.cancel()  # out of time, or the script is over: it does not play on by itself
+        return replay.status()
+
+    def _op_demo_export(self, req) -> dict:
+        return self.pg.demonstrations.export(str(req["name"]), str(req.get("format", "json")), req.get("to"))
+
+    def _op_demo_list(self, _req) -> dict:
+        return self.pg.demonstrations.listing()
+
     def _op_set_controls(self, req) -> None:
         self.pg.set_controls({str(k): float(v) for k, v in req["controls"].items()})
 
@@ -267,7 +298,9 @@ class ScriptRunner:
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
         await self._carrier_stands(req["robot"])
-        motion, info = self.pg.behaviors.pick_and_place(req["robot"], req["object"], target)
+        # Planned off the event loop: working out a trip and a grasp takes seconds, and the viewer's stream (and the
+        # tree panel a script shows) stood still for that long
+        motion, info = await asyncio.to_thread(self.pg.behaviors.pick_and_place, req["robot"], req["object"], target)
         await self._advance(lambda: motion.done, getattr(motion, "time_limit", 40.0))  # an errand goes over first
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])

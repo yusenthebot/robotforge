@@ -8,6 +8,7 @@
   <!-- Inline, so the browser does not ask the server for /favicon.ico and log a 404. -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='26' height='18' rx='6' fill='%23f2a900'/%3E%3Ccircle cx='11.5' cy='18' r='3' fill='%231b2027'/%3E%3Ccircle cx='20.5' cy='18' r='3' fill='%231b2027'/%3E%3Crect x='15' y='3' width='2' height='6' fill='%23f2a900'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="static/style.css">
+  <link rel="stylesheet" href="static/training.css">
   <script type="importmap">
     { "imports": { "three": "./static/vendor/three/three.module.min.js" } }
   </script>
@@ -32,6 +33,10 @@
       </button>
     </div>
     <div class="top-actions">
+      <button class="pill" id="training-toggle" type="button" aria-expanded="false" aria-controls="training-view" hidden>
+        <span class="dot" aria-hidden="true"></span>
+        <span data-i18n="training_button">Training</span>
+      </button>
       <button class="pill" id="drawer-toggle" type="button" aria-expanded="false" aria-controls="drawer">
         <span id="drawer-label" data-i18n="robots">Robots</span>
         <span class="count" id="drawer-count"></span>
@@ -85,7 +90,7 @@
       <div class="formula-rows" id="lesson-formula-rows"></div>
     </section>
     <p class="lesson-drive" id="lesson-drive" hidden>
-      <span class="keys" aria-hidden="true"><kbd data-key="fwd">W</kbd><kbd data-key="left">A</kbd><kbd data-key="back">S</kbd><kbd data-key="right">D</kbd></span>
+      <span class="keys" id="drive-wasd" aria-hidden="true"><kbd data-key="fwd">W</kbd><kbd data-key="left">A</kbd><kbd data-key="back">S</kbd><kbd data-key="right">D</kbd></span>
       <span data-i18n="lesson_drive">Drive the robot</span>
     </p>
     <section id="lesson-controls-wrap" hidden>
@@ -153,6 +158,7 @@
     </section>
   </aside>
 
+  <aside class="training-view" id="training-view" hidden aria-live="off"></aside>
   <aside class="sensor-views" id="sensor-views" hidden></aside>
   <aside class="map-hud" id="map-hud" hidden></aside>
   <aside class="flow-panel" id="flow-panel" hidden aria-live="off">
@@ -172,6 +178,7 @@
       <dt data-i18n="mouse_right_drag">Right-drag</dt><dd data-i18n="mouse_pan">Slide the view</dd>
       <dt data-i18n="mouse_scroll">Scroll</dt><dd data-i18n="mouse_zoom">Zoom</dd>
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="key_drive">Drive the selected robot</dd>
+      <dt data-i18n="pad_help_title">Gamepad</dt><dd data-i18n="pad_help">Left stick drives or jogs the arm, right stick turns or raises it, A closes and B opens the gripper, Y switches a robot with an arm</dd>
       <dt><kbd>E</kbd><kbd>Q</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dt><dd data-i18n="key_fly">Aircraft: up, down, turn</dd>
       <dt><kbd>A</kbd><kbd>D</kbd></dt><dd data-i18n="key_side">Aircraft: sideways</dd>
       <dt data-i18n="mouse_double_ground">Double-click</dt><dd data-i18n="mouse_go">Send the robot there</dd>
@@ -196,6 +203,7 @@
     <span class="keys" id="fly-keys" aria-hidden="true" hidden><kbd data-key="up">E</kbd><kbd data-key="down">Q</kbd><kbd data-key="left">&larr;</kbd><kbd data-key="right">&rarr;</kbd></span>
     <span class="drive-text" id="drive-text"></span>
     <span class="drive-speed" id="drive-speed"></span>
+    <span class="pad-chip" id="drive-pad" hidden title="Gamepad"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10a4.5 4.5 0 0 1 4.4 5.4l-.9 4.2a2.2 2.2 0 0 1-3.8 1l-1.9-2.1H9.2L7.3 17.6a2.2 2.2 0 0 1-3.8-1l-.9-4.2A4.5 4.5 0 0 1 7 7z"/><path d="M8 10v3M6.5 11.5h3"/><circle cx="15.5" cy="10.5" r=".6"/><circle cx="17.5" cy="12.5" r=".6"/></svg><span data-i18n="pad_chip">Gamepad</span></span>
   </div>
 
   <footer class="dock">
@@ -222,6 +230,7 @@
       <span id="record-label" data-i18n="record">Record</span>
     </button>
     <span class="rule" aria-hidden="true"></span>
+    <span class="demo-chip" id="demo-chip" hidden><span class="demo-dot" aria-hidden="true"></span><span id="demo-text"></span></span>
     <span class="clock" id="clock">0.0 s</span>
   </footer>
 
