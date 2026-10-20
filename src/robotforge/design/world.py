@@ -714,8 +714,6 @@ def _source_spec(entry: RobotEntry, base_dir: Path | None) -> templates.BuiltRob
 def _catalogue_robot(entry: RobotEntry) -> templates.BuiltRobot:
     """An open catalogue robot: its folder is fetched on first use, then its file is read like any other and
     catalogue_inspect.py makes it ready (an arm's tool point, its description)."""
-    from robotforge.design import catalogue_inspect  # lazy: it needs the behaviors
-
     try:
         robot = catalogue.get(entry.catalogue)
         path = catalogue.model_path(robot.id)
@@ -734,7 +732,7 @@ def _catalogue_robot(entry: RobotEntry) -> templates.BuiltRobot:
             built = _file_robot(entry.name, path, params, drive=True)
         elif built is None:
             raise ValueError(f"{problem}; it needs a package from elsewhere in {robot.repo}") from problem
-        return catalogue_inspect.finish(built, robot)
+        return built  # (_file_robot has put the arm's tool point on it)
     except ValueError as exc:
         raise ValueError(f"robot {entry.name!r}: {exc}") from exc
 
@@ -751,7 +749,9 @@ log = logging.getLogger(__name__)
 def _file_robot(name: str, path: Path, params: dict[str, Any], drive: bool = False) -> templates.BuiltRobot:
     """A robot from a file: MJCF as it is (with `drive`, its torque motors become position servos), URDF, xacro and
     meshes through the import doctor."""
-    return _balanced(_read_file_robot(name, path, params, drive))
+    from robotforge.design import catalogue_inspect  # lazy: it needs the behaviors
+
+    return catalogue_inspect.finish(_balanced(_read_file_robot(name, path, params, drive)), path.name)
 
 
 def _balanced(built: templates.BuiltRobot) -> templates.BuiltRobot:

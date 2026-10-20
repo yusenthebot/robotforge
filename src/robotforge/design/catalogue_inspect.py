@@ -34,14 +34,16 @@ class Flange:
     base_y: float  # sideways position of the arm's first body, to name two arms left and right
 
 
-def finish(built: BuiltRobot, robot: catalogue.Entry) -> BuiltRobot:
-    """Give a fixed-base arm the tool point and flange the arm tools steer by."""
-    if built.floating:
+def finish(built: BuiltRobot, robot: catalogue.Entry | str) -> BuiltRobot:
+    """Give a fixed-base arm the tool point and flange the arm tools steer by (a robot from any file: `robot` is the
+    catalogue entry or just a name for the log). One that has a tool point already is left as its file draws it."""
+    if built.floating or any(site.name.endswith("tcp") for site in built.spec.sites):
         return built
+    name = robot if isinstance(robot, str) else robot.id
     try:
         model = built.spec.compile()
     except ValueError as exc:  # the file itself is checked by the world's compile, which says what is wrong
-        log.debug("catalogue: %s not compiled for its tool point: %s", robot.id, exc)
+        log.debug("catalogue: %s not compiled for its tool point: %s", name, exc)
         return built
     flanges = arm_flanges(model, qpos=model.qpos0)
     if not flanges or len(flanges) > MAX_ARMS:  # three or more reaching chains are fingers or legs, not arms
