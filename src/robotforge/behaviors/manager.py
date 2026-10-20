@@ -470,9 +470,9 @@ class BehaviorManager:
                 info["flight"] = self.flight_info(name)
             if isinstance(self.session.controllers.get(name), whole_body.WholeBodyBalancer):
                 info["balance"] = "whole-body balance: stands on its feet, holds a load, takes a push"
-                if "max_speed" not in info:
-                    info["walk_hint"] = "no gait fits its legs, so move cannot walk it; it stands on its own"
             walk = self._kept_walk_or_none(name)
+            if walk is None and "balance" in info and "max_speed" not in info:
+                info["walk_hint"] = "no walk has been shown to carry it, so move cannot walk it; it stands on its own"
             if walk is not None:
                 info["learned_walk"] = walk.describe()
                 info.setdefault("max_speed", round(walk.speed, 3))  # robots no gait code knows drive with it
@@ -740,12 +740,21 @@ class BehaviorManager:
         if walker == RHYTHM or kind not in MOBILE:
             return self._rhythm_walker(robot, existing, create)
         entry = _entry(robot, world)
-        if stand and kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+        if stand and kind == Kind.HUMANOID and _stands_by_balance(entry):
             return self._stander(robot, existing, create)
         if walker not in (None, "gait") and kind in LEGGED:
             return self._policy_walker(robot, walker, existing, create, entry)
         if isinstance(existing, WALKERS):
             return existing
+        if kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+            # A gait found from the legs of a file, catalogue or built humanoid is not known to walk it: every one
+            # tried fell within seconds (docs/HUMANOID.md), so it stays on its feet by balance and move says so.
+            if walker is None and self._kept_walk_or_none(robot) is not None:
+                return self._rhythm_walker(robot, existing, create)
+            raise BehaviorError(
+                f"{robot} stands on its feet by whole-body balance, which holds a load and takes a push, but no "
+                "walk has been shown to carry it: move, pose and go_to cannot walk it"
+            )
         m = self.session.model
         try:
             if kind == Kind.HUMANOID and _learned_humanoid(entry):
@@ -770,11 +779,6 @@ class BehaviorManager:
         except (ValueError, KeyError) as exc:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
-            if kind == Kind.HUMANOID and isinstance(existing, whole_body.WholeBodyBalancer):
-                raise BehaviorError(
-                    f"{robot} stands on its feet by whole-body balance, but no gait fits its legs ({exc}); it holds a "
-                    "load and takes a push, move cannot walk it"
-                ) from exc
             if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
                 raise BehaviorError(
                     f"no gait fits the body of {robot}: a joint of its legs has no motor of its own (a linkage?), "
@@ -1668,6 +1672,14 @@ class BehaviorManager:
             if names[0] == names[1]:
                 raise BehaviorError("hand_over needs two different arms")
             give, take = (self._arm_motion(n) for n in names)
+            for name, motion in zip(names, (give, take), strict=True):
+                if not motion.done or any(
+                    isinstance(c, relay.Relay) and not c.done and name in (c.giver.robot, c.receiver)
+                    for c in self.session.controllers.values()
+                ):
+                    raise BehaviorError(
+                        f"{name} is still busy with a motion or a hand-over: wait for it to finish, or stop it first"
+                    )
             obj = self._object_name(obj)
             pick = self._object_geometry(obj)
             half = pick["half_height"]
@@ -1727,10 +1739,17 @@ class BehaviorManager:
                     return f"{names[0]} set {obj} down, but {names[1]} cannot take it to {target}: {exc}"
                 return motion
 
-            handed = relay.Relay(give, names[1], obj, np.asarray(spot, float), arrived, start)
+            key = relay.KEY + names[0]
+            handed = relay.Relay(
+                give, names[1], obj, np.asarray(spot, float), arrived, start, on_done=lambda: self._drop_relay(key)
+            )
             self.session.set_controller(names[0], give)
-            self.session.set_controller(relay.KEY + names[0], handed)
+            self.session.set_controller(key, handed)
         return handed, {"object": obj, "target": target, "region": region, "spot": [round(float(v), 3) for v in spot]}
+
+    def _drop_relay(self, key: str) -> None:
+        with self.session.lock:
+            self.session.set_controller(key, None)
 
     def _catch(
         self,
@@ -2260,6 +2279,17 @@ def _tuned_humanoid(entry: RobotEntry | None) -> bool:
     """A humanoid whose walking gait was tuned for it: our template's and the library's (G1 learned, T1 and OP3 on
     the balance gait). Files, catalogue robots and robots built from parts are not: they stand by whole-body balance."""
     return entry is None or not (entry.file or entry.catalogue or entry.build)
+
+
+def _stands_by_balance(entry: RobotEntry | None) -> bool:
+    """A humanoid that whole-body balance keeps up while nothing moves it: every one without a gait tuned for it,
+    and the library's learned walkers (G1), whose policy takes a push but falls under a load of a fifth of its own
+    mass. Not one with something mounted on it: the mounted arm's controller and the balance would both drive its
+    joints. The first move hands a tuned one over to its walk; for the others move refuses (see
+    _mobile_controller)."""
+    if not _tuned_humanoid(entry):
+        return True
+    return _learned_humanoid(entry) and not entry.mounts
 
 
 def _learned_humanoid(entry: RobotEntry | None) -> bool:

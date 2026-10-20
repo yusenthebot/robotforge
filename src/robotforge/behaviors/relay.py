@@ -81,6 +81,7 @@ class Relay:
     hidden: bool = True
     after: Any = None
     note: str | None = None
+    on_done: Callable[[], None] | None = None  # takes the finished relay out of the session's controllers
 
     @property
     def time_limit(self) -> float:
@@ -98,6 +99,11 @@ class Relay:
         }
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        if self.done:
+            if self.on_done is not None:  # a finished relay does not stay behind among the controllers
+                on_done, self.on_done = self.on_done, None
+                on_done()
+            return
         if self.after is not None or self.note is not None or not self.giver.done:
             return
         if not self.arrived():

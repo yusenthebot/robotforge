@@ -39,6 +39,10 @@ from robotforge.sim.geometry import lowest_point
 
 RATE_HZ = 200.0
 FALLEN_UP = 0.5  # trunk up-axis z below this means the robot is lying down
+# A fallen robot stood back up (by hand in the viewer) is held again once its trunk has been upright (up-axis above
+# RECOVER_UP) and still (under RECOVER_SPEED m/s) for RECOVER_REST_S. A robot that only bobs on its servos after a
+# fall does not qualify.
+RECOVER_UP, RECOVER_SPEED, RECOVER_REST_S = 0.9, 0.05, 1.0
 # Spring and damper on the centre of mass (rad/s natural frequency, damping ratio), on the trunk's tilt, on the joints.
 COM_XY_OMEGA, COM_XY_ZETA = 5.0, 1.2
 COM_Z_OMEGA, COM_Z_ZETA = 8.0, 1.2
@@ -185,10 +189,11 @@ class WholeBodyBalancer:
         self._scratch: mujoco.MjData | None = None
         self._t0: float | None = None
         self.fallen = False
+        self.falls = 0  # how many times it has fallen (and perhaps been stood up again)
+        self._rest_since: float | None = None
         self.ground_z: float | None = None
         self._support = np.zeros(3)
         self.contacts = 0
-        self.last_error = 0.0
 
     # ---- set-up ------------------------------------------------------------------------
 
@@ -270,7 +275,11 @@ class WholeBodyBalancer:
         if self._t0 is None:
             self._t0 = data.time
         up = float(data.xmat[self.trunk][8])
-        self.fallen = self.fallen or up < FALLEN_UP
+        if self.fallen and self._rested(data, up):  # picked up and stood on its feet again: balance once more
+            self.fallen = False  # with the stance it first stood in, which is relative to its own feet
+        if up < FALLEN_UP and not self.fallen:
+            self.fallen = True
+            self.falls += 1
         points = self._stance_points(data, self._contact_points(model, data))
         self.contacts = len(points)
         if self.fallen or not points or data.time - self._t0 < SETTLE_S:
@@ -282,6 +291,16 @@ class WholeBodyBalancer:
             self._hold_home(data)
             return
         self._apply(data, torque)
+
+    def _rested(self, data: mujoco.MjData, up: float) -> bool:
+        """Whether a fallen robot has been standing upright and still for long enough to be balanced again."""
+        speed = float(np.linalg.norm(data.qvel[self.root_dof : self.root_dof + 3]))
+        if up < RECOVER_UP or speed > RECOVER_SPEED:
+            self._rest_since = None
+            return False
+        if self._rest_since is None:
+            self._rest_since = data.time
+        return data.time - self._rest_since >= RECOVER_REST_S
 
     # ---- contacts -----------------------------------------------------------------------
 
@@ -353,6 +372,7 @@ class WholeBodyBalancer:
     def _torques(self, model: mujoco.MjModel, data: mujoco.MjData, points) -> np.ndarray:
         idx = self.dofs
         nv = self.nv
+        self.mass = float(model.body_subtreemass[self.trunk])  # a load put on later (mj_setConst) counts at once
         mujoco.mj_fullM(model, data, self._mass_matrix)
         mass = self._mass_matrix[np.ix_(idx, idx)]
         bias = data.qfrc_bias[idx] - data.qfrc_passive[idx]
@@ -399,33 +419,12 @@ class WholeBodyBalancer:
         null = np.eye(nv) - jc_pinv @ jc  # accelerations that leave the touching points where they are
         # Touching points that move (a foot rocking on the soft floor) are slowed down, not just left alone.
         qdd_c = -CONTACT_DAMPING * (jc_pinv @ (jc @ qd))
-        foot_rows, foot_goal = [], []
-        for body, flat in self._feet.items():
-            mujoco.mj_jacBody(model, data, self._jacp, self._jacr, body)
-            j_foot = self._jacr[:, idx].copy()
-            foot_rows.append(j_foot)
-            foot_goal.append(
-                FOOT_OMEGA**2 * stance_ik.rotation_error(flat, data.xmat[body].reshape(3, 3))
-                - 2 * FOOT_ZETA * FOOT_OMEGA * (j_foot @ qd)
-            )
-        post_rows = np.zeros((len(self.drives), nv))
-        post_goal = np.zeros(len(self.drives))
-        for n, drive in enumerate(self.drives):
-            i = self.local[drive.dof]
-            post_rows[n, i] = 1.0
-            post_goal[n] = (
-                POSTURE_OMEGA**2 * (self._posture(drive.qpos, ease) - data.qpos[drive.qpos])
-                - 2 * POSTURE_ZETA * POSTURE_OMEGA * qd[i]
-            )
+        foot_rows, foot_goal = self._foot_tasks(model, data, qd)
+        post_rows, post_goal = self._posture_tasks(data, qd, ease)
 
         # The contact forces are non-negative combinations of friction pyramid edges at every contact point: they
         # push, never pull, never slip. Written as columns that turn a weight into a generalized force.
-        edges = np.zeros((3 * len(points), 4 * len(points)))
-        for k, (_, _, frame, mu) in enumerate(points):
-            normal, t1, t2 = frame[0:3], frame[3:6], frame[6:9]
-            share = FRICTION_SHARE * max(mu, 0.1)
-            for e, tangent in enumerate((t1, -t1, t2, -t2)):
-                edges[3 * k : 3 * k + 3, 4 * k + e] = normal + share * tangent
+        edges = self._friction_edges(points)
         cols = jc.T @ edges  # (nv, edges)
 
         # Accelerations (inside the null space of the feet, which do not move) and edge weights together, so that
@@ -457,54 +456,75 @@ class WholeBodyBalancer:
         ]
         task_a = np.vstack([w * (r @ null) for w, r in zip(weights, raw, strict=True)])
         task_b = np.concatenate([w * (g - r @ qdd_c) for w, r, g in zip(weights, raw, goals, strict=True)])
-        k_mat = dyn_a.T @ dyn_a + task_a.T @ task_a + RIDGE * np.eye(nv)
-        k_inv_ab = np.linalg.solve(k_mat, dyn_a.T @ dyn_b)
-        k_inv_h = np.linalg.solve(k_mat, -dyn_a.T @ dyn_c + task_a.T @ task_b)
-        p_dyn, q_dyn = dyn_a @ k_inv_ab - dyn_b, dyn_a @ k_inv_h + dyn_c
-        p_task, q_task = task_a @ k_inv_ab, task_a @ k_inv_h - task_b
-        ridge = math.sqrt(FORCE_RIDGE) / (self.mass * self.gravity) * np.eye(cols.shape[1])
-        # Every contact point carries a share of the weight at least (CONTACT_MARGIN_SHARE of an even one): a
-        # centre of pressure at the very edge of a foot is a foot about to tip, and a real foot tips where a
-        # glued one in the model does not.
-        floor_load = np.full(cols.shape[1], CONTACT_LOAD_SHARE * self.mass * self.gravity / (4 * len(points)))
-        extra = _nnls(
-            np.vstack([p_dyn, p_task, ridge]),
-            np.concatenate([-q_dyn - p_dyn @ floor_load, -q_task - p_task @ floor_load, -ridge @ floor_load]),
-        )
-        beta = extra + floor_load
+        k_inv_h, k_inv_ab, beta = self._solve_forces(dyn_a, dyn_b, dyn_c, task_a, task_b, cols, len(points))
         qdd = qdd_c + null @ (k_inv_h + k_inv_ab @ beta)
 
         # The torques: what the dynamics ask for beyond what the contacts give.
         f_torque = cols @ beta
         tau = mass @ qdd + bias - f_torque
-        self.last_error = float(np.linalg.norm(tau[rows])) if rows.size else 0.0
         self._inertia = np.diag(mass).copy()
         self._qdd = qdd
-        self.debug = dict(
-            a_want=a_want,
-            a_pred=j_com @ qdd + jdot_com,
-            v_com=v_com,
-            qdd=qdd,
-            tau=tau,
-            ease=ease,
-            com=com,
-            target=target,
-            ang=ang,
-            post=post_goal,
-            beta=beta,
-        )
         return tau
 
+    def _foot_tasks(self, model: mujoco.MjModel, data: mujoco.MjData, qd: np.ndarray) -> tuple[list, list]:
+        """Every foot level, as it first stood: (angular Jacobians, wished angular accelerations)."""
+        rows, goals = [], []
+        for body, flat in self._feet.items():
+            mujoco.mj_jacBody(model, data, self._jacp, self._jacr, body)
+            j_foot = self._jacr[:, self.dofs].copy()
+            rows.append(j_foot)
+            goals.append(
+                FOOT_OMEGA**2 * stance_ik.rotation_error(flat, data.xmat[body].reshape(3, 3))
+                - 2 * FOOT_ZETA * FOOT_OMEGA * (j_foot @ qd)
+            )
+        return rows, goals
+
+    def _posture_tasks(self, data: mujoco.MjData, qd: np.ndarray, ease: float) -> tuple[np.ndarray, np.ndarray]:
+        """Every driven joint near its stance: (selection rows, wished joint accelerations)."""
+        rows = np.zeros((len(self.drives), self.nv))
+        goal = np.zeros(len(self.drives))
+        for n, drive in enumerate(self.drives):
+            i = self.local[drive.dof]
+            rows[n, i] = 1.0
+            goal[n] = (
+                POSTURE_OMEGA**2 * (self._posture(drive.qpos, ease) - data.qpos[drive.qpos])
+                - 2 * POSTURE_ZETA * POSTURE_OMEGA * qd[i]
+            )
+        return rows, goal
+
     @staticmethod
-    def _edge_forces(points, beta: np.ndarray) -> np.ndarray:
-        """The contact forces (3 a point, world frame) that the friction pyramid weights `beta` stand for."""
-        out = np.zeros(3 * len(points))
+    def _friction_edges(points) -> np.ndarray:
+        """Columns of the friction pyramid at every contact point (4 edges a point, 3 rows a point, world frame):
+        a contact force is a non-negative combination of them, so it pushes, never pulls and never slips."""
+        edges = np.zeros((3 * len(points), 4 * len(points)))
         for k, (_, _, frame, mu) in enumerate(points):
             normal, t1, t2 = frame[0:3], frame[3:6], frame[6:9]
-            m = FRICTION_SHARE * max(mu, 0.1)
+            share = FRICTION_SHARE * max(mu, 0.1)
             for e, tangent in enumerate((t1, -t1, t2, -t2)):
-                out[3 * k : 3 * k + 3] += beta[4 * k + e] * (normal + m * tangent)
-        return out
+                edges[3 * k : 3 * k + 3, 4 * k + e] = normal + share * tangent
+        return edges
+
+    def _solve_forces(
+        self, dyn_a, dyn_b, dyn_c, task_a, task_b, cols: np.ndarray, n_points: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The edge weights that fit the dynamics of the undriven joints and meet the wishes best, by non-negative
+        least squares. For given weights the best accelerations follow in closed form as k_inv_h + k_inv_ab @ beta;
+        returns (k_inv_h, k_inv_ab, beta)."""
+        k_mat = dyn_a.T @ dyn_a + task_a.T @ task_a + RIDGE * np.eye(self.nv)
+        k_inv_ab = np.linalg.solve(k_mat, dyn_a.T @ dyn_b)
+        k_inv_h = np.linalg.solve(k_mat, -dyn_a.T @ dyn_c + task_a.T @ task_b)
+        p_dyn, q_dyn = dyn_a @ k_inv_ab - dyn_b, dyn_a @ k_inv_h + dyn_c
+        p_task, q_task = task_a @ k_inv_ab, task_a @ k_inv_h - task_b
+        ridge = math.sqrt(FORCE_RIDGE) / (self.mass * self.gravity) * np.eye(cols.shape[1])
+        # Every contact point carries a share of the weight at least (CONTACT_LOAD_SHARE of an even one): a
+        # centre of pressure at the very edge of a foot is a foot about to tip, and a real foot tips where a
+        # glued one in the model does not.
+        floor_load = np.full(cols.shape[1], CONTACT_LOAD_SHARE * self.mass * self.gravity / (4 * n_points))
+        extra = _nnls(
+            np.vstack([p_dyn, p_task, ridge]),
+            np.concatenate([-q_dyn - p_dyn @ floor_load, -q_task - p_task @ floor_load, -ridge @ floor_load]),
+        )
+        return k_inv_h, k_inv_ab, extra + floor_load
 
     def _momentum_jacobians(self, model: mujoco.MjModel, data: mujoco.MjData) -> tuple[np.ndarray, np.ndarray]:
         """(centre of mass Jacobian, angular momentum matrix about it) over this robot's dofs."""

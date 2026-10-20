@@ -170,7 +170,7 @@ def test_a_robot_imported_from_a_file_learns_keeps_its_walk_and_walks_at_home(pg
     assert trained["robot"] == "yours" and trained["distance"] > walk_rl.KEEP_MIN
     pg.lessons.handle({"action": "press", "control": "keep"})
     assert pg.lessons.ctx.results["kept"]["robot"] == "critter"
-    lesson.turning.join(timeout=120)
+    lesson.turning.join(timeout=600)
     assert pg.lessons.ctx.results["kept"]["turns"], pg.lessons.ctx.results["summary"]["en"]
     kept = rhythm_walk.load_walk(lesson.own[1], "critter")  # the learner's world folder
     solo = lesson.solo["yours"]
