@@ -29,6 +29,9 @@ SPEED = 0.18  # m/s tool speed
 APPROACH = 0.07  # m above a grasp or place point
 RISE_MIN = 0.05  # m: a tool this far below the carrying height rises straight up before it moves across
 REACH_TOL = 0.008  # m: an IK answer further than this from the target means "cannot reach"
+JOG_MAX_SPEED = 0.4  # m/s the tool may be jogged at (a gamepad's full stick asks for far less)
+JOG_FLOOR = 0.02  # m: a jogged tool keeps this far above the floor
+JOG_STALE = 0.5  # s without a jog command after which the tool is held: a gamepad that went quiet must not keep going
 RESTARTS = 24  # extra IK starts, from fixed random joint settings, when the nearest start gets stuck
 JOINT_SPEED = 0.6  # rad/s, fastest joint during a move into another elbow or wrist branch
 PATH_GAP = 0.02  # rad: an arm further than this from where a path starts moves there first
@@ -287,6 +290,11 @@ class ArmMotion:
         self._turn: float | None = None  # how far the current move turns about the base, rad
         self._reposed: Waypoint | None = None  # the move the arm last changed its pose for (once is enough)
         self.current_label = "idle"
+        self._jog: np.ndarray | None = None  # m/s the tool is jogged at (teleoperation), None when not
+        self._jog_target = np.zeros(3)
+        self._jog_time = 0.0  # when the tool was last moved, and when it was last told to (_jog_told)
+        self._jog_told = 0.0
+        self._jog_grip: float | None = None  # a gripper value not yet written
         self.log: list[str] = []
         self._warm: np.ndarray | None = None  # the last answer quick_error found (or warm_up)
 
@@ -755,6 +763,49 @@ class ArmMotion:
 
     def set_gripper(self, state: str, wait: float = 0.5) -> None:
         self.queue.append(Waypoint(None, self._grip(state), wait, f"gripper {state}"))
+
+    def jog(self, velocity: np.ndarray | None, data: mujoco.MjData, gripper: str | None = None) -> None:
+        """Teleoperation, as the viewer's gamepad does it: move the tool at `velocity` (m/s in the world, pointing down)
+        until told otherwise or `JOG_STALE` s pass without being told again; zero or None holds it where it is. It
+        ends a move in progress. A move told to the arm after (move_to, pick_and_place) takes over from a jog. The tool
+        goes where the arm's IK can put it with the arm clear of itself, and stops at the edge of what it reaches."""
+        if gripper is not None and self.gripper >= 0:
+            self._jog_grip = self._grip(gripper)
+        speed = float(np.linalg.norm(velocity)) if velocity is not None else 0.0
+        if speed < 1e-6 and self._jog is None:
+            return
+        v = np.zeros(3) if velocity is None else np.asarray(velocity, float)
+        if speed > JOG_MAX_SPEED:
+            v = v * (JOG_MAX_SPEED / speed)
+        if self._jog is None:  # taking over from whatever was queued: from where the tool is told to be
+            self.queue.clear()
+            self._segment = None
+            self._jog_target = self.ik.point(self.chain, self.q)
+            self._jog_time = float(data.time)
+        self._jog = v
+        self._jog_told = float(data.time)
+
+    @property
+    def jogging(self) -> bool:
+        return self._jog is not None
+
+    def _jog_step(self, data: mujoco.MjData) -> None:
+        t = float(data.time)
+        dt = min(max(t - self._jog_time, 0.0), 0.05)
+        self._jog_time = t
+        if t - self._jog_told > JOG_STALE:
+            self._jog = np.zeros(3)  # the pad went quiet: hold
+        if self._jog_grip is not None and self.gripper >= 0:
+            data.ctrl[self.gripper] = self._jog_grip
+            self._jog_grip = None
+        v = self._jog if self._jog is not None else np.zeros(3)
+        if v.any():
+            goal = self._jog_target + v * dt
+            goal[2] = max(goal[2], JOG_FLOOR)
+            q, err = self.ik.solve(self.chain, goal, self.q, iterations=6, axis=(self.tool_axis, DOWN))
+            if err <= REACH_TOL and not self._collides(q):
+                self.q, self._jog_target = q, goal
+        self._command(data)
 
     def go_home(self) -> None:
         """Back to the home pose joint by joint, e.g. so every run of a test starts from the same place."""
@@ -1532,6 +1583,12 @@ class ArmMotion:
 
     def update(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         self.sync(data)
+        if self._jog is not None:
+            if self.queue:  # something was told to the arm after the jog: it takes over
+                self._jog = None
+            else:
+                self._jog_step(data)
+                return
         t = data.time
         if self._segment is None and self.queue and self._settling(data):
             self._command(data)

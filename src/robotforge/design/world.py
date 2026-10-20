@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import math
 import os
 import re
@@ -708,9 +709,37 @@ def _lost_meshes(built: templates.BuiltRobot) -> bool:
     return any(f["topic"] == "meshes" and f["status"] == "unfixed" and "not be found" in f["problem"] for f in findings)
 
 
+log = logging.getLogger(__name__)
+
+
 def _file_robot(name: str, path: Path, params: dict[str, Any], drive: bool = False) -> templates.BuiltRobot:
     """A robot from a file: MJCF as it is (with `drive`, its torque motors become position servos), URDF, xacro and
     meshes through the import doctor."""
+    return _balanced(_read_file_robot(name, path, params, drive))
+
+
+def _balanced(built: templates.BuiltRobot) -> templates.BuiltRobot:
+    """A two-legged robot whose file draws it with its weight on the edge of its feet starts in a balanced pose."""
+    if not built.floating:
+        return built
+    try:
+        moved = mjcf_stance.balance(built.spec, built.home_qpos, built.spawn_height)
+    except (ValueError, RuntimeError) as exc:  # a courtesy: a file the check cannot read keeps its own pose
+        log.debug("balance: %s", exc)
+        return built
+    if moved is not None:
+        joints, servos, spawn = moved
+        built.home_qpos.update(joints)
+        built.home_ctrl.update(servos)
+        built.spawn_height = spawn
+        built.notes.append(
+            f"its keyframe left the weight on the edge of the feet; moved {len(joints)} joints to balance"
+        )
+    return built
+
+
+def _read_file_robot(name: str, path: Path, params: dict[str, Any], drive: bool = False) -> templates.BuiltRobot:
+    """The robot of a file as it draws it (see _file_robot)."""
     if importer.is_importable(path):  # URDF, xacro and plain meshes go through the import doctor
         try:
             result = importer.import_file(path, params)

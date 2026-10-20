@@ -88,6 +88,7 @@ class SimSession:
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _next_update: dict[str, float] = field(default_factory=dict, repr=False)
     _sim_debt: float = 0.0
+    _controller_thread: int | None = field(default=None, repr=False)
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
     # Buoyancy and drag for a model that has water (sim/water.py); it comes with the model, so None for the rest.
     water: water_model.Hydro | None = field(default=None, repr=False)
@@ -224,13 +225,25 @@ class SimSession:
         d.xfrc_applied[:] = pushes
 
     def _run_controllers(self) -> None:
+        if not self.controllers:
+            return
         t = self.data.time
-        for name, controller in list(self.controllers.items()):
-            due = self._next_update.get(name, 0.0)
-            # Due, or the clock was turned back under it (data reset without reset()): it would sit idle until then.
-            if t + 1e-9 >= due or t < due - 2.0 / controller.rate_hz:
-                controller.update(self.model, self.data)
-                self._next_update[name] = t + 1.0 / controller.rate_hz
+        self._controller_thread = threading.get_ident()
+        try:
+            for name, controller in list(self.controllers.items()):
+                due = self._next_update.get(name, 0.0)
+                # Due, or the clock was turned back under it (data reset without reset()): it would sit idle until then.
+                if t + 1e-9 >= due or t < due - 2.0 / controller.rate_hz:
+                    controller.update(self.model, self.data)
+                    self._next_update[name] = t + 1.0 / controller.rate_hz
+        finally:
+            self._controller_thread = None
+
+    @property
+    def in_controller(self) -> bool:
+        """Whether the calling thread is inside a controller's update: what a controller asks of the robots' behaviors
+        is part of its own work, not a command someone gave (a demonstration records only the commands)."""
+        return self._controller_thread == threading.get_ident()
 
     def advance(self, wall_dt: float) -> int:
         """Advance by `wall_dt` seconds of wall time scaled by `speed`. Returns steps taken."""

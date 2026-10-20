@@ -27,6 +27,7 @@ class DriveTo(Task):
     default_seconds = 6.0
     control_hz = 20.0
     mpc_defaults = {"horizon": 1.0, "knots": 4, "samples": 32, "noise": 0.25, "plan_dt": 0.02}
+    goal_prefixes = ("goal",)  # observation entries that are the goal (kept when only sensors give the rest)
 
     def __init__(self, model: mujoco.MjModel, robot: str, params: dict[str, Any] | None = None):
         super().__init__(model, robot, params)

@@ -286,6 +286,11 @@ class SensorHub:
             out[name[len(prefix) :]] = values[0] if dim == 1 else values
         return out
 
+    def raw(self, robot: str) -> dict[str, Any]:
+        """The robot's own MuJoCo sensors that no definition reads (a library robot's IMU), raw, as they read now."""
+        with self.session.lock:
+            return self._other(self.session.model, self.session.data, robot)
+
     def lines(self) -> dict[str, str]:
         """One line per sensor in the world, for observe (and one per definition that did not load)."""
         out: dict[str, str] = {name: f"not set up: {why}" for name, why in self.suite.broken.items()}

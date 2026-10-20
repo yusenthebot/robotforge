@@ -157,6 +157,7 @@ The eight were: four xacro files that needed a sibling package or the block scop
 ## Limits
 
 - Legged robots outside the library walk with a gait found from their legs (`quadruped.for_robot`, `humanoid.for_robot`); it is tuned for the library's robots and falls over for about half of the catalogue's dogs, so `add_robot` runs a trial and says what happened.
-- Humanoids with linkage legs, wheel-legged robots and robots whose file has no motors do not stand or move by themselves.
+- Humanoids from the catalogue stand by whole-body balance (36 of the 50 read as humanoids stand, with a load and a push: [HUMANOID.md](HUMANOID.md)); they do not walk unless a gait fits their legs, and `move` says so.
+- Humanoids with linkage legs or point feet, wheel-legged robots and robots whose file has no motors do not stand or move by themselves.
 - Arms with few joints reach only some points: the planner keeps the tool pointing down.
 - The gripper of a catalogue arm is not wired to `gripper` and `pick_and_place`: mount one on the flange.
