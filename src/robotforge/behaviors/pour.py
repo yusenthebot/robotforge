@@ -23,6 +23,7 @@ ABOVE = 0.03  # m the upright cup's base is held over the target's rim
 HOLD = 2.4  # s held tilted, shaking
 KNOT_TIME = 0.5  # s per knot of the tilt: slow enough for what is in the cup to roll out and not be thrown
 SIDES = 12  # directions tried to pour toward
+JAW_ACROSS = 0.5  # cos of the angle between the jaws' closing and the stream: at most this, 60 degrees off
 JUMP = 0.7  # rad a joint may change between two knots: more is a jump from one branch of the arm to another
 
 
@@ -87,6 +88,18 @@ def tilt_knots(arm: ArmMotion, q0: np.ndarray, pour: Pour, d: np.ndarray) -> lis
     return knots
 
 
+def jaws_across(arm: ArmMotion, q: np.ndarray, d: np.ndarray) -> bool:
+    """Whether, with the arm at `q`, the fingers hold the cup on its two sides as seen from the lip (the jaws close
+    across the stream toward `d`): a finger on the lip side meets what runs out and balls catch on it."""
+    if arm.closing is None:
+        return True
+    arm.ik.point(arm.chain, q)
+    closing = arm.ik.data.xmat[arm.chain.body].reshape(3, 3) @ arm.closing
+    flat = np.array([closing[0], closing[1]])
+    norm = float(np.linalg.norm(flat))
+    return norm < 1e-6 or abs(float(flat @ d[:2])) / norm < JAW_ACROSS
+
+
 def pick_and_pour(
     arm: ArmMotion,
     grasp: np.ndarray,
@@ -109,9 +122,12 @@ def pick_and_pour(
         if err > REACH_TOL:
             continue
         knots = tilt_knots(arm, arm._unwound(q0), pour, d)
-        if knots is not None:
+        if knots is None:
+            continue
+        if jaws_across(arm, knots[-1], d):
             chosen = (d, tool0, knots)
             break
+        chosen = chosen or (d, tool0, knots)  # the jaws along the stream: a finger on the lip, the way if no other
     if chosen is None:
         raise ValueError(
             f"{arm.robot} cannot tilt the cup over there: no way of turning it that its joints allow from any side; "

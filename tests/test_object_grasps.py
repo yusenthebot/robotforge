@@ -177,7 +177,7 @@ def test_the_first_free_socket_of_a_rack_is_taken_and_a_named_one_by_its_number(
     pg.run_fast(lambda: False, 0.8)
     info1, one = _pick(pg, "b1", "rack")
     info2, two = _pick(pg, "b2", "rack/3")
-    assert one["success"] and two["success"]
+    assert one["success"] and two["success"], (one, two)
     d, m = pg.session.data, pg.session.model
     x1, x2 = d.xpos[m.body("b1").id][0], d.xpos[m.body("b2").id][0]
     assert x2 - x1 == pytest.approx(0.2, abs=0.02)  # sockets 1 and 3 of a rack 30 cm long

@@ -195,10 +195,11 @@ def test_an_insert_is_judged_by_the_socket_it_stands_in_down_to_its_floor():
     rack = {"name": "rack", "shape": "rack", "pos": [0.5, 0.3, Z]}
     world = _world(rack, {"name": "bottle", "shape": "bottle", "pos": [0.4, 0.0, Z]})
     task = _task("insert", object="bottle", target="rack/2")
-    floor = Z + 0.07 - 0.045
+    height, depth = 0.10, 0.085  # the rack's defaults
+    floor = Z + height - depth
     inside = judge(task, world, _state({"bottle": (0.5, 0.3, floor)}))
     assert inside.done and "socket 2" in inside.why
-    resting_on_top = judge(task, world, _state({"bottle": (0.5, 0.3, Z + 0.07)}))
+    resting_on_top = judge(task, world, _state({"bottle": (0.5, 0.3, Z + height)}))
     assert not resting_on_top.done and "over the bottom of the socket" in resting_on_top.why
     next_socket = judge(task, world, _state({"bottle": (0.6, 0.3, floor)}))
     assert not next_socket.done and "from the middle" in next_socket.why

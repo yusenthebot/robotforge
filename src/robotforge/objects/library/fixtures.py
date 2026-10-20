@@ -19,6 +19,15 @@ from robotforge.objects.registry import generator
 TAGS = ("none", "fruit", "cans", "tools", "bottles", "books", "boxes", "mugs")
 
 
+FLARE = 0.008  # m a rack's sockets are wider at the rim than inside: a bottle put down 8 mm off still goes in
+FLARE_WALL = 0.006  # m thick the flared wall is
+
+
+def outer_room(cell: float, width: float) -> float:
+    """The radius a socket's mouth may reach: its cell's half width."""
+    return min(cell, width) / 2
+
+
 def _rect_ray(a: float, hx: float, hy: float) -> tuple[float, float]:
     """Where the ray from the middle at angle `a` meets a rectangle of half extents (hx, hy)."""
     c, s = math.cos(a), math.sin(a)
@@ -42,7 +51,7 @@ def _plate_with_hole(cx: float, hx: float, hy: float, r: float, z: float, n: int
 @generator(
     "rack",
     size="[length, width, height]",
-    default_size=(0.30, 0.11, 0.07),
+    default_size=(0.30, 0.11, 0.10),
     color="#b5835a",
     material="wood",
     kind="fixture",
@@ -53,8 +62,8 @@ def _plate_with_hole(cx: float, hx: float, hy: float, r: float, z: float, n: int
     params={
         "slots": Range(2.0, 4.0, 3.0, "how many sockets"),
         "bottle": Range(0.03, 0.09, 0.066, "diameter of the bottle it takes, m"),
-        "clearance": Range(0.006, 0.014, 0.010, "how much wider a socket is than the bottle, m"),
-        "depth": Range(0.03, 0.06, 0.045, "how deep a socket is, m"),
+        "clearance": Range(0.005, 0.014, 0.007, "how much wider a socket is than the bottle, m"),
+        "depth": Range(0.03, 0.09, 0.085, "how deep a socket is, m"),
     },
     builtin=True,
 )
@@ -70,18 +79,44 @@ def rack(g: Gen) -> None:
     # how it looks: the block, a top with round holes, each socket's wall and floor
     rings = [M.at_z(M.rounded_rect(hx, hy, 0.004, 3), z) for z in (0.0, height)]
     shell = M.loft(rings, cap_start=True, cap_end=False)  # open at the top: the plate over it has the holes
-    top = M.merge([_plate_with_hole(-hx + cell * (i + 0.5), cell / 2, hy, r, height + 0.0004) for i in range(n)])
+    flare = min(FLARE, outer_room(cell, width) - r - 0.004)  # how much wider the mouth is than the socket
+    lip = 0.012  # m of wall the mouth flares over
+    top = M.merge(
+        [_plate_with_hole(-hx + cell * (i + 0.5), cell / 2, hy, r + flare, height + 0.0004) for i in range(n)]
+    )
     inside = []
     pieces = [kit.box(hx, hy, floor / 2, (0, 0, floor / 2))]
     outer = min(cell, width) / 2
     for i in range(n):
         cx = -hx + cell * (i + 0.5)
-        wall = [(r - 0.0005, floor), (r + 0.002, floor), (r + 0.002, height + 0.0004), (r - 0.0005, height + 0.0004)]
+        wall = [
+            (r - 0.0005, floor),
+            (r + 0.002, floor),
+            (r + 0.002, height - lip),
+            (r + flare + 0.002, height + 0.0004),
+            (r + flare - 0.0005, height + 0.0004),
+            (r - 0.0005, height - lip),
+        ]
         inside.append(M.revolve(wall, 32, sharp=()).moved((cx, 0, 0)))
         inside.append(M.cylinder(r, 0.001, 32, z0=floor).moved((cx, 0, 0)))
         pieces += [
-            p.moved((cx, 0, 0)) for p in kit.ring_of_boxes(outer, outer, floor, height, outer - r, 8, math.pi / 8)
+            p.moved((cx, 0, 0)) for p in kit.ring_of_boxes(outer, outer, floor, height - lip, outer - r, 8, math.pi / 8)
         ]
+        if flare > 0.001:  # a mouth that guides a bottle in: an inner wall leaning out toward the rim
+            beta = math.atan2(flare, lip)
+            shift = (FLARE_WALL * math.cos(beta), FLARE_WALL * math.sin(beta))
+            pieces += [
+                p.moved((cx, 0, 0))
+                for p in kit.ring_of_boxes(
+                    r + shift[0],
+                    r + flare + shift[0],
+                    height - lip - shift[1],
+                    height - shift[1],
+                    FLARE_WALL,
+                    8,
+                    math.pi / 8,
+                )
+            ]
         g.slot(f"{i + 1}", (cx, 0.0, floor), "socket", radius=r, rim=height, depth=depth)
     g.part(M.merge([shell, top]), "wood", pieces, g.rgba)
     g.decor(M.merge(inside), shade(g.rgba, 0.55), "wood")

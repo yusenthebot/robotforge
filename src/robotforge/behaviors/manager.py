@@ -232,6 +232,7 @@ TURN_STEP = 15.0  # degrees between the directions around the base tried when no
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
 CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
 POUR_FORCE = 40.0  # N a cup is squeezed with while it is tipped
+LINK_CLEAR = 0.02  # m a pour wants between the top of the finger links and the rim it lets balls run over
 HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
@@ -2410,9 +2411,18 @@ class BehaviorManager:
         )
         base = d.xpos[pick["body"]].copy()
         first: Exception | None = None
-        on_axis = [
-            c for c in pick.get("choices") or [] if float(np.hypot(*(np.asarray(c.point[:2]) - base[:2]))) < 0.015
+        # A hand whose finger links reach above the cup's rim (a Robotiq's) holds it by the rim instead: balls caught
+        # between a link and the mouth, upside down, and stayed in the cup.
+        m = self.session.model
+        palm = hints.palm_of(m, arm)
+        rim = float(built.facts["rim_z"])
+        high, _ = hints.choices(d, pick["body"], built, fetch.gripper_opening(m, arm), palm, None, m, True)
+        by_rim = {id(c.hint): c for c in high}
+        chosen = [
+            by_rim.get(id(c.hint), c) if palm.links > rim - c.half_height + LINK_CLEAR else c
+            for c in pick.get("choices") or []
         ]
+        on_axis = [c for c in chosen if float(np.hypot(*(np.asarray(c.point[:2]) - base[:2]))) < 0.015]
         if not on_axis:
             raise BehaviorError(
                 f"{obj} has no grip on its own axis (a body, a rim) to pour from: a handle would swing it"

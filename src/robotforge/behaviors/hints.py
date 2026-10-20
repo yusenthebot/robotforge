@@ -81,6 +81,7 @@ class Palm:
     tip: float  # m the fingertips reach below the tool point (the floor must be this far under it)
     half_jaw: float  # half the width of the hand along the way the jaws close
     half_across: float  # half its width across that
+    links: float = 0.0  # m the parts that move with the jaws (a Robotiq's links and springs) reach above the tool point
 
 
 DEFAULT_PALM = Palm(0.03, 0.01, 0.1, 0.03)  # a Panda's hand, when the model cannot be measured
@@ -109,7 +110,7 @@ def _measure_palm(model: mujoco.MjModel, arm: ArmMotion) -> Palm | None:
     across = np.cross(axis, jaw)
     across /= np.linalg.norm(across) or 1.0
     tcp = d.site_xpos[arm.site]
-    palm_front, palm_jaw, palm_across, tip = -math.inf, 0.0, 0.0, -math.inf
+    palm_front, palm_jaw, palm_across, tip, links = -math.inf, 0.0, 0.0, -math.inf, 0.0
     found = False
     for g in range(model.ngeom):
         if not collides(model, g):
@@ -128,6 +129,7 @@ def _measure_palm(model: mujoco.MjModel, arm: ArmMotion) -> Palm | None:
             palm_across = max(palm_across, abs(float((c - tcp) @ across)) + _reach(r, h, across))
         else:
             tip = max(tip, front)
+            links = max(links, _reach(r, h, axis) - float((c - tcp) @ axis))
     if not found:
         return None
     return Palm(
@@ -135,6 +137,7 @@ def _measure_palm(model: mujoco.MjModel, arm: ArmMotion) -> Palm | None:
         tip=max(tip, 0.0),
         half_jaw=palm_jaw,
         half_across=palm_across,
+        links=links,
     )
 
 
@@ -182,8 +185,11 @@ def choices(
     palm: Palm,
     want: str | None = None,
     model: mujoco.MjModel | None = None,
+    high: bool = False,
 ) -> tuple[list[Choice], list[str]]:
-    """The tool points to try for `built` as it lies now, best first, and why the others were left out. With the
+    """The tool points to try for `built` as it lies now, best first, and why the others were left out. With `high`
+    each is taken as near the top of what its hint allows as the hint allows (a cup to pour from is held by its rim, so
+    that the fingers' upper links are not round its mouth). With the
     `model`, a grasp that may close its jaws in any direction (a round thing) closes them where there is room for the
     open fingers: not through the wall of the bin it lies in or the neighbour beside it."""
     rot = data.xmat[body].reshape(3, 3)
@@ -203,7 +209,7 @@ def choices(
         if opening is not None and hint.opening > opening - OPEN_MARGIN:
             left.append(f"{hint.kind}: needs {hint.opening * 100:.1f} cm, the gripper opens {opening * 100:.1f} cm")
             continue
-        z, why = _height(hint, built, palm)
+        z, why = _height(hint, built, palm, high)
         if z is None:
             left.append(f"{hint.kind}: {why}")
             continue
@@ -279,7 +285,7 @@ def _squeeze_for(
     return float(max(TURN_SAFETY * turn, ROLL_SAFETY * roll, FORCE_MIN))
 
 
-def _height(hint: Grasp, built: Built, palm: Palm) -> tuple[float | None, str]:
+def _height(hint: Grasp, built: Built, palm: Palm, high: bool = False) -> tuple[float | None, str]:
     """The height (object frame) the tool point goes to for a hint: where it asks, raised until the hand's underside
     clears what is under it, and no lower than the fingertips allow. None, and why, when that is not within the hint."""
     lo = hint.lo if hint.lo is not None else hint.pos[2]
@@ -294,7 +300,7 @@ def _height(hint: Grasp, built: Built, palm: Palm) -> tuple[float | None, str]:
                 f"it at {need * 100:.1f} cm, above the {hi * 100:.1f} cm that grasp reaches"
             )
         return None, f"the fingertips would reach below the floor at {hi * 100:.1f} cm"
-    z = min(max(hint.pos[2], need), hi)
+    z = hi if high else min(max(hint.pos[2], need), hi)
     return z, ("" if abs(z - hint.pos[2]) < 1e-9 else f"held at {z * 100:.1f} cm so the palm clears the top")
 
 
