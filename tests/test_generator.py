@@ -490,6 +490,13 @@ def test_a_stubby_chain_of_eight_segments_is_lengthened_with_a_note():
         ("一只越野机器狗", "rugged"),
         ("a small orange robot dog", None),
         ("a wheeled robot, not rugged", None),
+        # a word that only turns up in what the robot is for is not a request for a look
+        ("a robot arm to help with research papers", None),
+        ("a drink maker arm", None),
+        ("an arm for the maker space", None),
+        ("an arm with a laboratory sample tray", None),
+        ("a robot arm that picks up toys", None),
+        ("a toy cobot", "cobot"),
     ],
 )
 def test_a_style_word_draws_the_robot_in_that_style(sentence, style):
