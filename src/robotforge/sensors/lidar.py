@@ -116,8 +116,10 @@ class Lidar(Sensor):
             self.range,
         )
         geom = self._geom.copy()
-        dist = np.where(geom >= 0, self._dist, np.nan)
-        hit = geom >= 0
+        # A ray almost parallel to the ground meets it hundreds of metres away, past the cutoff MuJoCo was given: a
+        # return beyond the range is no return (a 3D lidar's box_m reached 1300 m and its cloud's voxel went with it).
+        hit = (geom >= 0) & (self._dist <= self.range)
+        dist = np.where(hit, self._dist, np.nan)
         own = np.zeros(self.rays, bool)
         own[hit] = self.own[geom[hit]]
         dist[own] = np.nan  # the robot's own legs and body: masked as a real lidar's self filter does

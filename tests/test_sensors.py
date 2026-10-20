@@ -668,3 +668,17 @@ async def test_a_script_reads_a_sensor_by_name(post):
     assert ran["ok"], ran["output"]
     distance, count = ran["output"].split("ahead ")[1].split()
     assert float(distance) == pytest.approx(2.0, abs=0.05) and int(count) == 360
+
+
+def test_a_lidar_ray_almost_level_with_the_floor_returns_nothing_past_its_range(pg):
+    """Regression: rays a fraction of a degree below level met the floor hundreds of metres away, past the 30 m range,
+    so box_m spanned 1300 m and the cloud's voxel grew until read_sensors(points=N) returned one point."""
+    pg.add_robot("dog", template="quadruped")
+    pg.add_sensor("dog", {"type": "lidar3d", "name": "flat", "vfov": [-0.4, 0.4], "channels": 16})
+    scan = _read(pg, "dog", "flat")
+    assert scan["points"] == 0 and "box_m" not in scan
+    pg.add_sensor("dog", {"type": "lidar3d", "name": "wide", "vfov": [-30, 5]})
+    low, high = _read(pg, "dog", "wide")["box_m"]
+    assert max(abs(v) for v in (*low, *high)) <= 30.0 + 0.5
+    reading, _ = pg.read_sensors("dog", ["wide"], points=50)
+    assert len(reading["sensors"]["wide"]["cloud"]["points_m"]) >= 10
