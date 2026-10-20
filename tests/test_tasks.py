@@ -259,3 +259,16 @@ def test_a_robot_sent_to_a_room_goes_onto_its_floor_though_a_table_stands_at_its
     assert 1.0 < x < 6.0 and -2.0 < y < 2.0, (x, y)
     pg.add_task("go to the dining room", robot="rover")
     assert pg.task_status()["go_to_dining_room"]["done"]
+
+
+def test_add_task_in_the_kitchen_preset_without_a_robot_adds_one_and_does_not_raise(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("kitchen_task")
+    pg.load_scene(preset="kitchen")
+    result = pg.add_task("bring the apple to the dining_table")
+    task = result["task"]
+    assert task["kind"] == "bring" and task["object"] == "apple" and task["robot"]
+    saved = pg.current_world().tasks[0]
+    assert saved.start.robot is not None
+    assert any(r.name == task["robot"] for r in pg.current_world().robots)

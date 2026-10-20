@@ -131,7 +131,8 @@ def plan(
         robot=[*map(float, entry.pos[:2]), float(entry.yaw)] if entry is not None else None,
         objects={thing: _pos_of(objects, out.add_objects, thing)} if thing and kind not in MECHANISM_KINDS else {},
     )
-    if start.robot is None and out.add_robot is not None:
+    if start.robot is None and out.add_robot is not None and out.add_robot.get("pos") is not None:
+        # a robot added without a spot (a lift picker): add_task reads where it landed from the world once it exists
         start.robot = [*map(float, out.add_robot["pos"][:2]), float(out.add_robot.get("yaw", 0.0))]
     fixed = _fixed(chosen, robots, out)
     task = TaskEntry(
