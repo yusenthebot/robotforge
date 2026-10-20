@@ -24,6 +24,7 @@ from robotforge.training.envs import TrainingEnv, build_env
 from robotforge.training.policy import RunningStats, Shape
 
 EVAL_SEED = 10_000  # test episodes use these seeds, so every trial is scored on the same starts
+HELD_OUT_SEED = 500_000  # the final winner is scored again on starts no trial was ranked on (runs.Job.finish)
 MAX_POINTS = 4000  # points kept per series in memory; more are thinned
 SHOWN_POINTS = 80  # points per series written for the viewer and the agent
 STOP_POLL_SECONDS = 0.5

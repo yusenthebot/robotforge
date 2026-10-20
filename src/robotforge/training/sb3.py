@@ -8,9 +8,11 @@ folder. The result is exported to plain numpy arrays (control/rl/runtime.MlpPoli
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import gymnasium
+import numpy as np
 import torch
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.callbacks import BaseCallback
@@ -22,6 +24,9 @@ from robotforge.control.rl.train import export_policy
 
 MODEL_FILE = "model.zip"
 NORM_FILE = "vecnormalize.pkl"
+MEMORY_FILE = "replay.npz"  # SAC's replay memory, kept so a trial that goes on does not start learning from nothing
+MEMORY_KEPT = 100_000  # the newest experiences kept (a whole 1M-step buffer would be gigabytes on disk)
+MEMORY_FIELDS = ("observations", "next_observations", "actions", "rewards", "dones", "timeouts")
 LOSS_KEYS = ("loss", "value_loss", "policy_gradient_loss", "entropy_loss", "actor_loss", "critic_loss", "ent_coef")
 
 
@@ -64,6 +69,33 @@ class Progress(BaseCallback):
             self.ctx.log(**found)
 
 
+def save_memory(model: Any, path: Path) -> int:
+    """Write the newest experiences of the model's replay buffer to `path`; returns how many."""
+    buffer = model.replay_buffer
+    filled = buffer.buffer_size if buffer.full else buffer.pos
+    if filled == 0:
+        return 0
+    # the ring buffer's order does not matter to uniform sampling: keep the most recently written slots
+    order = (np.arange(filled) + (buffer.pos if buffer.full else 0)) % buffer.buffer_size
+    order = order[-MEMORY_KEPT:]
+    np.savez(path, **{name: getattr(buffer, name)[order] for name in MEMORY_FIELDS if hasattr(buffer, name)})
+    return len(order)
+
+
+def load_memory(model: Any, path: Path) -> int:
+    """Refill the model's replay buffer from `path` (what save_memory wrote); returns how many experiences."""
+    if not path.exists():
+        return 0
+    buffer = model.replay_buffer
+    with np.load(path, allow_pickle=False) as saved:
+        count = min(len(saved["observations"]), buffer.buffer_size)
+        for name in saved.files:
+            getattr(buffer, name)[:count] = saved[name][:count]
+    buffer.pos = count % buffer.buffer_size
+    buffer.full = count == buffer.buffer_size
+    return count
+
+
 def run(ctx: Any, algo: str):
     torch.set_num_threads(1)  # small networks: one thread is fastest, and a search runs several trials at once
     p = ctx.params
@@ -80,6 +112,8 @@ def run(ctx: Any, algo: str):
     if model_path.exists() and norm_path.exists():
         norm = VecNormalize.load(str(norm_path), venv)
         model = (PPO if algo == "ppo" else SAC).load(str(model_path), env=norm, device="cpu")
+        if algo == "sac":
+            load_memory(model, folder / MEMORY_FILE)
     else:
         norm = VecNormalize(venv, norm_obs=True, norm_reward=algo == "ppo", gamma=settings.get("gamma", 0.99))
         if algo == "ppo":
@@ -94,6 +128,8 @@ def run(ctx: Any, algo: str):
         model.learn(total_timesteps=max(1, ctx.budget), callback=Progress(ctx), reset_num_timesteps=False)
         model.save(str(model_path))
         norm.save(str(norm_path))
+        if algo == "sac":
+            save_memory(model, folder / MEMORY_FILE)
         policy = export_policy(model, norm)
     finally:
         venv.close()
