@@ -202,8 +202,8 @@ OFFERED = {
     "skydio_x2": "0 servo joints",
     "anybotics_anymal_c": None,  # 12 position servos
     "robotis_op3": None,  # 20 position servos
-    "universal_robots_ur5e": "no built-in way to move",  # an arm the file does not fix to the world
-    "aloha": "no built-in way to move",
+    "universal_robots_ur5e": "it is an arm",  # fixed in the file, its tool point found like a catalogue arm's
+    "aloha": "it is an arm",  # fixed to the world: its two arms are found like a catalogue arm's
     "robotiq_2f85": "no built-in way to move",  # a gripper on its own
     "leap_hand": "fixed to the world",  # hands: the file fixes the palm where it is
     "wonik_allegro": "fixed to the world",
