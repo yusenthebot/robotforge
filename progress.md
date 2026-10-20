@@ -473,9 +473,21 @@ Rounds 1-3 done, 2026-10-14.
   - iCloud keeps copying ref files ("main 3") and sources ("manager 2.py"); land.py sets the refs aside, .gitignore hides the copies; moving the repo out of iCloud is the real cure (the user's call).
   - Humanoids beyond flat walking, the wheeled drawer take and ANYmal fetching through narrow gaps stay unreliable.
 
+## Rounds 39 and 40 (2026-10-20): G5, G6, humanoids, G13, and version 0.0.1
+
+- Landed: G6 control depth (joint and Cartesian impedance, operational space, press and wipe at a force, peg in hole, grasp planning from hulls); G5 flexible interfaces (behavior trees and state machines with a tree panel, gamepad, record, replay and export as JSON and NPZ); humanoids standing by whole-body balance, arm handover, rovers taking turns; G13 asset engine (parametric generators, four styles, physical materials), 24 generated objects with grasp hints and harder tasks (mug on shelf, stack, rack, sort, pour, hand a tool), any-algorithm training with a live tuning view (ARS, CEM, PPO, SAC, plugins; held-out scoring).
+- scripts/land.py: first come first served, takes over a lock whose holder died, runs the suite in parallel shards balanced by recorded times, reruns files that fail only beside others, and skips tests over 90 s the branch does not touch.
+- iCloud deleted .git/refs/heads/main mid-landing and resurrected deleted refs and worktrees; the repo moved to ~/dev/robotforge (fresh clone; the old folder is kept as a backup).
+- Version 0.0.1 (user, 2026-10-20: wrap up as a closed loop): a review round tried 39 abilities for real (26 PASS, 12 PARTIAL, 1 FAIL) and ran 8 codex sessions; a fixer landed all 17 high and medium findings (ANYmal + UR5e + Robotiq mount, imported arms recognised, wheeled URDFs, stretched-servo check, the README bedroom-desk example, kitchen apple, lidar box, G1 dead zone and others). docs/RELEASE_0.0.1.md lists what works, how it was verified and the known limits.
+- What did NOT work:
+  - GitHub Actions refused to start the 0.0.1 CI run (account billing), so Ubuntu and Windows are unverified for 0.0.1.
+  - Network drops killed whole workflows twice more; resuming in the same worktrees recovered everything.
+  - The machine ran at load 20 to 70 with six lanes, so the suite took 18 to 38 minutes per landing until heavy tests were skipped when untouched.
+  - Still unreliable: humanoids off flat ground, some catalogue robots, URDF round trip (motors lost), wheeled drawer take and ANYmal fetch (about a third), handover mid-way collisions.
+
 ## Next-round seed
 
-Round 39 is running (wf_92345c88-f5a, Sonnet): G6 control depth (impedance, operational space, grasp planning, force in the loop), G5 flexible interfaces (behavior trees, gamepad, record and replay, demonstration export), humanoids standing and multi-robot handover. Then a review round (G2, G4 and G6 done): adversarially verify the claimed abilities, run CI by hand, refresh README pictures.
+Version 0.0.1 is the closed loop the user asked for. Before more work: GitHub Actions billing, then a CI run on Ubuntu and Windows and the v0.0.1 tag. Next frontiers when the user resumes: the known limits in docs/RELEASE_0.0.1.md, publishing (PyPI, .mcpb) and a licence (the user's call).
 
 ## Frontier
 

@@ -97,7 +97,9 @@ Real agent sessions ran Codex with the plugin mounted from a git archive of the 
 The suite has 3055 tests (2992 run by default, 63 marked slow or browser, run by hand at milestones); `scripts/smoke.py` starts the viewer and an MCP session as separate processes.
 The cold-install start-up of the plugins (the first dependency download) was not measured in this round.
 
-CI: see below.
+CI: GitHub Actions did not start on 2026-10-20 (the account's Actions billing refused the job: "recent account payments have failed or your spending limit needs to be increased"), so Ubuntu and Windows are not checked for this tag yet.
+The last complete Ubuntu and Windows runs were on 2026-10-19 (e8f482c); their five failures were fixed in f7033ed, which no CI run has confirmed.
+Locally on macOS (arm64): the whole suite passed in the new checkout (2819 passed, 114 skipped), every landing since passed ruff, the suite and the smoke test, and the smoke test passes on the tagged commit.
 
 ## Known limits
 
@@ -159,7 +161,7 @@ robotforge 是一个用话来驱动的机器人游乐场：在 Claude 或 GPT �
 怎么验证的：发版前做了一轮评审，每项能力都在真实查看器和真实 MCP 会话里试着弄坏它。
 结果 26 项通过、12 项部分通过、1 项失败，发现的 17 个问题都已在 `main` 上修好并配了测试。
 8 个真实的 Codex 会话里 6 个完全通过，2 个（厨房取苹果）结果正确但先撞上一个已修好的错误。
-测试共 3055 个。CI 结果见上面的 "CI: see below"，稍后补上。
+测试共 3055 个。GitHub Actions 因账户账单问题没有启动，这个版本还没有在 Ubuntu 和 Windows 上验证；macOS 上全部测试通过。
 
 已知的限制：
 
