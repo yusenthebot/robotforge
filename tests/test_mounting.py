@@ -943,3 +943,16 @@ def test_real_a_go2_carries_two_arms_side_by_side_and_walks(pg):
     pg.behaviors.move("go2", 0.3, 0.0)
     _run(pg, 6.0)
     assert pg.behaviors.pose("go2")["upright"] and pg.behaviors.pose("go2")["position"][0] > 1.5
+
+
+def test_an_anymal_takes_a_ur5e_and_a_robotiq_through_the_mount_tool_with_their_adapter_plates(pg):
+    """Regression: the adapter plates (0.1 to 0.6 kg each) counted against ANYmal's 22.1 kg, which is a UR5e and a
+    Robotiq, so the README's ANYmal C with a UR5e and a gripper was refused by mount and by the pick_and_place hint."""
+    pg.add_robot("anymal", library="anymal_c")
+    pg.mount("ur5e", "anymal")
+    result = pg.mount("robotiq_2f85", "anymal/arm")
+    assert result["mounted"] == "anymal/gripper"
+    model = pg.session.model
+    plate = sum(model.body_mass[b] for b in range(model.nbody) if model.body(b).name.endswith("adapter_plate"))
+    assert plate > 0.1  # the plates are still part of the robot: the stability checks carry them
+    pg.update_robot("anymal", mounts=[{"library": "ur5e", "adapter": True}, {"library": "robotiq_2f85"}])

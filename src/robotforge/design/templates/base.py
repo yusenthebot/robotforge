@@ -45,6 +45,7 @@ class BuiltRobot:
     floating: bool = False  # True when the root body has a free joint
     notes: list[str] = field(default_factory=list)
     doctor: dict | None = None  # import doctor report (imported files only)
+    plate_kg: float = 0.0  # the adapter plate it stands on (mounting.with_adapter), left out of a carrier's payload
 
 
 class Template:

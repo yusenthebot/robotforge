@@ -181,7 +181,9 @@ def with_adapter(child: BuiltRobot, on_top: bool, on_flange: bool = False) -> Bu
     spec.attach(child.spec, prefix="", frame=frame)
     vis.finish()  # after the child: its materials are the plate's too (two of one name do not compile)
     notes = [*child.notes, f"on a {radius * 2000:.0f} mm adapter plate ({mass * 1000:.0f} g)"]
-    return BuiltRobot(spec=spec, home_qpos=dict(child.home_qpos), home_ctrl=dict(child.home_ctrl), notes=notes)
+    return BuiltRobot(
+        spec=spec, home_qpos=dict(child.home_qpos), home_ctrl=dict(child.home_ctrl), notes=notes, plate_kg=mass
+    )
 
 
 def _base_radius(child: BuiltRobot) -> float:
@@ -283,7 +285,9 @@ def attach(
             radius, mass = _footprint(child)
             body, pos, quat, where = _place(spec, home_qpos, at, robot, name, placed, radius)
         spots.append((radius, mass, body.name, tuple(map(float, pos)), tuple(map(float, quat)), where))
-        carried.append((what(mount), mass))
+        # the plate is real mass (the stability checks carry it) but not part of the payload a carrier was rated for:
+        # an ANYmal's 22.1 kg is a UR5e and a Robotiq, which the plates under them would have pushed over
+        carried.append((what(mount), mass - child.plate_kg))
         rot = np.zeros(4)
         mujoco.mju_mat2Quat(rot, _euler(mount.rotate).ravel())
         turned = np.zeros(4)
