@@ -23,6 +23,9 @@ SPAWN_CLEARANCE = 0.002  # m between the lowest point and the floor
 OVERLAP_ERROR = 0.004  # m: deeper than this, two parts are inside each other
 SETTLE_SECONDS = 1.0
 WEAK = 0.95  # share of an actuator's force limit used just to hold still: it cannot hold its pose
+REACH_POSES = 300  # poses within the joint limits tried for the arm stretched out
+STRETCH_WEAK = 1.0  # an arm whose servo needs more than it has at some pose sags there when asked to go
+STRETCH_STRAINED = 0.85
 STRAINED = 0.6  # little headroom left for walking or lifting (the humanoid tests fall from about 67 %)
 # The same for a robot on four or more feet: a walk holds it on half of them, about twice the load. A 3.2 kg hexapod
 # with roll-pitch-pitch legs built in the agent eval, sent forwards for 5 s, made 82 % of the way at 36 % standing,
@@ -68,7 +71,74 @@ def check(assembly: Assembly) -> Report:
     _overlaps(model, data)
     strain: dict[str, float] = {}
     notes = _settle(model, data, assembly, strain)
+    if not assembly.floating:
+        notes += _stretched(model, assembly, strain)
     return Report(spawn_height=spawn, mass=mass, notes=notes, strain=strain)
+
+
+def _stretched(model: mujoco.MjModel, assembly: Assembly, at_home: dict[str, float]) -> list[str]:
+    """The servos of a bolted-down arm against the worst pose within its joint limits: held at home it may need
+    nothing (straight up), and sag as soon as it is told to reach out. The torque to hold a pose still is the
+    gravity load on each joint (qfrc_bias with nothing moving); what a servo gives is its force limit times its gear."""
+    servos = [
+        a
+        for a in range(model.nu)
+        if is_position_servo(model, a)
+        and model.actuator_forcelimited[a]
+        and int(model.actuator_trntype[a]) == int(mujoco.mjtTrn.mjTRN_JOINT)
+    ]
+    if not servos:
+        return []
+    joints = [
+        j
+        for j in range(model.njnt)
+        if int(model.jnt_type[j]) in (int(mujoco.mjtJoint.mjJNT_HINGE), int(mujoco.mjtJoint.mjJNT_SLIDE))
+    ]
+    data = mujoco.MjData(model)
+    _home(model, data, assembly)
+    rng = np.random.default_rng(0)
+    base = data.qpos.copy()
+    need = np.zeros(model.nu)
+    for i in range(REACH_POSES):
+        data.qpos[:] = base
+        for j in joints:
+            low, high = model.jnt_range[j] if model.jnt_limited[j] else (-np.pi, np.pi)
+            adr = model.jnt_qposadr[j]
+            # the first poses are the extremes of every joint (an arm out straight is at one), then at random
+            data.qpos[adr] = (low, high)[i % 2] if i < 2 else rng.uniform(low, high)
+        mujoco.mj_forward(model, data)
+        for a in servos:
+            dof = int(model.jnt_dofadr[int(model.actuator_trnid[a, 0])])
+            need[a] = max(need[a], abs(float(data.qfrc_bias[dof])))
+    weak, strained = [], []
+    for a in servos:
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, a)
+        capacity = float(model.actuator_forcerange[a][1]) * abs(float(model.actuator_gear[a][0]))
+        if capacity <= 0 or at_home.get(name, 0.0) >= WEAK:
+            continue  # (too weak at home is said already)
+        share = need[a] / capacity
+        if share >= STRETCH_WEAK:
+            weak.append((name, need[a], capacity))
+        elif share >= STRETCH_STRAINED:
+            strained.append((name, need[a], capacity))
+    stronger = ", ".join(
+        f"{a.name} ({a.stall_torque} N*m)"
+        for a in sorted((a for a in components.ACTUATORS.values() if a.kind == "servo"), key=lambda a: a.stall_torque)
+    )
+    notes = []
+    if weak:
+        names = ", ".join(f"{n} (needs {w:.2f} of {c:.2f} N*m)" for n, w, c in weak[:4])
+        notes.append(
+            f"warning: too weak stretched out: {names} at the worst pose within the joint limits. It holds its home "
+            "pose but sags or stops short when asked to reach out. Use stronger servos (by strength: "
+            f"{stronger}), add gear: 2 to those parts, shorten the links or make them lighter."
+        )
+    elif strained:
+        names = ", ".join(f"{n} ({w / c:.0%})" for n, w, c in strained[:4])
+        notes.append(
+            f"note: little headroom stretched out: {names} of their force holds the arm out at its worst pose."
+        )
+    return notes
 
 
 def _compile(spec: mujoco.MjSpec) -> mujoco.MjModel:

@@ -1120,3 +1120,28 @@ def test_a_walker_whose_servos_work_hard_standing_is_told_it_may_not_walk(pg):
     assert "standing on all 6 feet" in note and "slide backwards" in note and "sts3215" in note
     stronger = pg.add_robot("strong", build={**SPIDER, "servo": "sts3215"}, pos=[0, 1.5])
     assert not [n for n in stronger["notes"] if n.startswith("strong:") and "headroom" in n], stronger["notes"]
+
+
+def _straight_up_arm(servo: str) -> dict:
+    link = 0.25
+    return {
+        "servo": servo,
+        "base": {"shape": "cylinder", "size": [0.12, 0.04], "fixed": True},
+        "parts": [
+            {"name": "shoulder", "at": [0, 0, 0.035], "joint": {"axis": "y", "range": [-90, 90]},
+             "size": [0.03, link], "direction": "up", "material": "aluminum"},
+            {"name": "elbow", "parent": "shoulder", "at": "end", "joint": {"axis": "y", "range": [-120, 120]},
+             "size": [0.03, link], "direction": "up", "material": "aluminum"},
+            {"name": "wrist", "parent": "elbow", "at": "end", "joint": {"axis": "y", "range": [-120, 120]},
+             "size": [0.025, link * 0.6], "direction": "up", "material": "aluminum"},
+        ],
+    }  # fmt: skip
+
+
+def test_servos_too_weak_to_reach_out_are_flagged_though_a_straight_up_arm_holds_at_home():
+    """Regression: a straight-up aluminium arm on sts3215 or sg90 servos passed with no warning, then sagged to its
+    joint limit when told to reach; bldc_joint held it."""
+    for servo in ("sts3215", "sg90"):
+        notes = builder.build_robot(_straight_up_arm(servo)).notes
+        assert any("too weak stretched out" in n and "shoulder" in n for n in notes), (servo, notes)
+    assert not any("stretched out" in n for n in builder.build_robot(_straight_up_arm("bldc_joint")).notes)
