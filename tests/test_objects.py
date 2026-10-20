@@ -20,7 +20,7 @@ from robotforge.sim.session import SimSession
 NAMES = sorted(objects.GENERATORS)
 EXPECTED = {
     "apple", "banana", "book", "bottle", "bowl", "brick", "cable", "can", "cup", "hammer", "mug", "orange", "package",
-    "pear", "plate", "screwdriver", "squeeze_bottle", "tin", "wrench",
+    "pear", "pen", "pitcher", "plate", "screwdriver", "spatula", "sponge", "squeeze_bottle", "tape", "tin", "wrench",
 }  # fmt: skip
 
 
@@ -377,3 +377,38 @@ def test_the_objects_page_lists_every_shipped_generator_and_follows_the_house_st
     for name in sorted(EXPECTED):
         assert name.replace("_", " ") in text.replace("_", " "), name
     assert chr(0x2014) not in text and chr(0x2013) not in text
+
+
+def test_the_household_things_are_read_from_a_description():
+    for text, shape, params in (
+        ("a plastic pitcher", "pitcher", {"material": "plastic"}),
+        ("a milk jug", "pitcher", {}),
+        ("a roll of duct tape", "tape", {"style": "duct"}),
+        ("a red felt pen", "pen", {}),
+        ("a yellow sponge", "sponge", {}),
+        ("a pancake spatula", "spatula", {}),
+    ):
+        read = describe.interpret(text)
+        assert read.shape == shape and all(read.params.get(k) == v for k, v in params.items()), text
+
+
+def test_a_pen_lying_on_a_flat_may_roll_and_is_not_tipped_over_and_is_held_firmly():
+    # Regression: a round pen under a plain squeeze popped out of the fingers, and one that rolled a quarter turn in
+    # a tray counted as tipped over.
+    from robotforge.behaviors import hints
+    from robotforge.behaviors.manager import _firm
+
+    pen = objects.object_for("pen")
+    assert pen.facts["roll_free"] and _firm(pen) and pen.mass < 0.05
+    assert not _firm(objects.object_for("sponge"))
+    data = mujoco.MjData(
+        mujoco.MjModel.from_xml_string(
+            "<mujoco><worldbody><body name='b'><freejoint/>"
+            "<geom size='.1 .1 .1' type='box'/></body></worldbody></mujoco>"
+        )
+    )
+    body = 1
+    quarter = np.array([[1.0, 0, 0], [0, 0.0, -1.0], [0, 1.0, 0]])  # rolled a quarter turn about its own x axis
+    data.xmat[body] = quarter.ravel()
+    assert hints.tilt_deg(data, body) == pytest.approx(90.0)  # a bottle on its side is tipped over
+    assert hints.tilt_deg(data, body, pen) == pytest.approx(0.0)  # a pen on its side is not

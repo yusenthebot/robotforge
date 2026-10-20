@@ -99,14 +99,17 @@ def test_an_object_that_is_tipped_over_has_no_hints_and_says_why(pg):
 
 @pytest.mark.parametrize(
     ("shape", "kind"),
-    [("mug", "handle"), ("can", "body"), ("bottle", "neck"), ("hammer", "shaft"), ("tin", "body"), ("apple", "body")],
-)
+    [
+        ("mug", "handle"), ("can", "body"), ("bottle", "neck"), ("hammer", "shaft"), ("tin", "body"), ("apple", "body"),
+        ("pitcher", "handle"), ("spatula", "handle"), ("tape", "body"), ("pen", "body"), ("sponge", "body"),
+    ],
+)  # fmt: skip
 def test_each_kind_of_thing_is_taken_where_its_generator_says_and_ends_up_in_the_tray(pg, shape, kind):
     pg.add_object("thing", shape=shape, pos=[0.45, -0.22, TABLE])
     pg.run_fast(lambda: False, 0.8)
     info, result = _pick(pg, "thing", "tray")
     assert info["grasp"]["kind"] == kind
-    assert result["success"] and result["tilt_deg"] < 30
+    assert result["success"] and result["tilt_deg"] < 30, result
     d = pg.session.data
     assert d.xpos[pg.session.model.body("thing").id][2] < TABLE + 0.09  # on the tray's floor, not held in the air
 

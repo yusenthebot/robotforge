@@ -131,6 +131,12 @@ SPREAD_MAX = 0.04  # m: the most a thing's own width keeps its neighbours in a t
 HOLD_LIFT = 0.04  # m a held thing must be above where it lay for the hold to count
 
 
+def _firm(built: Any) -> bool:
+    """Whether a generated thing is held with the firm hold: a heavy one, or a light one that slips out of a plain
+    squeeze (a pen, thin and round)."""
+    return bool(built.mass >= HEAVY or built.facts.get("firm"))
+
+
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
 
@@ -233,7 +239,7 @@ FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get rou
 CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
 POUR_FORCE = 40.0  # N a cup is squeezed with while it is tipped
 LINK_CLEAR = 0.02  # m a pour wants between the top of the finger links and the rim it lets balls run over
-HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
+HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold), as is one whose facts say `firm`
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
 
@@ -1661,7 +1667,7 @@ class BehaviorManager:
             if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
                 try:
                     used = self._take(arm, pick, place, place_top)
-                    if pick.get("built") is not None and pick["built"].mass >= HEAVY and used is not None:
+                    if pick.get("built") is not None and _firm(pick["built"]) and used is not None:
                         hints.FirmHold(self.session, arm, self._body(obj), used.force, used.short).start()
                 except OutOfReach as exc:
                     # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
@@ -2179,8 +2185,9 @@ class BehaviorManager:
         inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half) and pos[2] >= region["min_z"])
         out = {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
         entry = self._object_entry(obj)
-        if hints.built_for(entry) is not None:  # a generated thing is also judged by how it stands
-            out["tilt_deg"] = round(hints.tilt_deg(self.session.data, body), 1)
+        built = hints.built_for(entry)
+        if built is not None:  # a generated thing is also judged by how it stands
+            out["tilt_deg"] = round(hints.tilt_deg(self.session.data, body, built), 1)
         return out
 
     def _movable(self) -> list[str]:
@@ -2363,7 +2370,7 @@ class BehaviorManager:
                 ) from first
             raise BehaviorError(str(first)) from first
         built = pick.get("built")
-        if built is not None and built.mass >= HEAVY and used is not None:
+        if built is not None and _firm(built) and used is not None:
             hints.FirmHold(self.session, arm, body, used.force, used.short).start(keep=True)
         return {
             "object": obj,

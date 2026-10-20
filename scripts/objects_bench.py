@@ -44,6 +44,11 @@ OBJECTS = [
     "hammer",
     "wrench",
     "cable",
+    "pitcher",
+    "sponge",
+    "tape",
+    "spatula",
+    "pen",
 ]
 TABLE_Z = 0.4
 PICK = (0.45, -0.22)

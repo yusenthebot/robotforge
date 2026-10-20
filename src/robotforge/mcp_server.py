@@ -639,10 +639,10 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         with them. resist (drawer, cabinet, switch, lever, valve) is the force at the handle in newtons it takes to move
         it besides its own friction: a rusty valve, a stiff latch; operate with force=... pushes with at most that.
         Real things (each with a modelled mesh, convex collision, mass and friction from its material, and grasp hints
-        the arm planner uses: a mug's handle, a bottle's body, a tool's shaft): mug, cup, bowl, plate, bottle, can
-        [diameter, height]; apple, orange, pear, cable (a coil with a plug) [diameter]; banana, screwdriver, hammer,
-        wrench [length];
-        package, tin, brick, squeeze_bottle [length, width, height]; book [length, width, thickness]. Add one by name
+        the arm planner uses: a mug's handle, a bottle's body, a tool's shaft): mug, cup, bowl, plate, bottle, can,
+        pitcher [diameter, height]; apple, orange, pear, tape, cable (a coil with a plug) [diameter]; banana,
+        screwdriver, hammer, wrench, spatula, pen [length]; package, tin, brick, squeeze_bottle [length, width,
+        height]; book, sponge [length, width, thickness]. Add one by name
         (shape="mug"), by description (describe="a tall blue mug with a big handle"; "a wine bottle"; "a fruit"; a
         description sets the shape, size, color and parameters, and the answer says how it was read), and vary it with
         seed (the same seed always builds the same object; a seed also picks a color when none is given). params sets

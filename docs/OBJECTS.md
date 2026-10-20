@@ -1,7 +1,7 @@
 # Objects: real things to pick up, and tasks that are hard
 
 A cube is a fine first thing to pick up, and a poor last one.
-robotforge ships generators for things people actually handle: a mug with a handle, a bottle with a cap and a label, a can, a bowl, fruit, a cereal box, a book, a screwdriver, a hammer, a wrench, a coil of cable.
+robotforge ships generators for things people actually handle: a mug with a handle, a bottle with a cap and a label, a can, a bowl, fruit, a cereal box, a book, a screwdriver, a hammer, a wrench, a spatula, a pen, a roll of tape, a sponge, a pitcher, a coil of cable.
 Each is parametric and seeded, with a modelled mesh, convex collision pieces, a mass and friction from what it is made of, and grasp hints that the arm planner uses.
 
 ## Adding one
@@ -26,6 +26,7 @@ An object's frame has its origin at the middle of its base and z up, resting as 
 | mug | [diameter, height] | ceramic | handle round, square, tall; handle_size; taper; wall; stripe |
 | cup | [diameter, height] | plastic, paper or glass | style tumbler, paper, glass; lid; taper |
 | bowl | [diameter, height] | ceramic | round; wall |
+| pitcher | [diameter, height] | plastic or ceramic | material; handle round, tall; wall; stripe |
 | plate | [diameter, height] | ceramic | rim |
 | bottle | [diameter, height] | plastic or glass, with water | style water, soda, wine; fill; label; cap |
 | can | [diameter, height] | aluminium, with drink | style soda, soup, tuna; fill |
@@ -35,10 +36,14 @@ An object's frame has its origin at the middle of its base and z up, resting as 
 | package | [length, width, height] | cardboard | style cereal, tea, parcel; density |
 | tin | [length, width, height] | steel | |
 | brick | [length, width, height] | foam | |
+| sponge | [length, width, thickness] | foam | scour green, blue, white |
+| tape | [diameter] | paper | width; style masking, duct, painter |
 | book | [length, width, thickness] | paper | lying (flat) or standing |
 | screwdriver | [length] | plastic and steel | tip flat, phillips; grip |
 | hammer | [length] | steel head, wooden or rubber shaft | handle; head (mass) |
 | wrench | [length] | steel | finish chrome, black; size_mm |
+| spatula | [length] | plastic blade, wooden or plastic handle | handle; blade_width; slots; grip |
+| pen | [length] | plastic | radius |
 | cable | [coil diameter] | rubber, steel plug | turns; gauge; plug usb, barrel |
 
 `objects.catalogue()` lists the same from the code, with each parameter's range or choices.

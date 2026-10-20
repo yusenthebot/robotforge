@@ -1592,23 +1592,35 @@ G12_SHOTS = [
 
 # G13: the generated objects on a shelf, three boards of them, each with its own seed.
 G13_ROWS = (
-    ("mug", "cup", "bowl", "plate", "bottle", "can", "squeeze_bottle"),
-    ("apple", "orange", "pear", "banana", "package", "tin", "brick"),
-    ("book", "screwdriver", "hammer", "wrench", "cable", "bottle", "can"),
+    ("mug", "cup", "bowl", "plate", "bottle", "can", "pitcher", "squeeze_bottle"),
+    ("apple", "orange", "pear", "banana", "package", "tin", "brick", "sponge"),
+    ("book", "screwdriver", "hammer", "wrench", "spatula", "pen", "tape", "cable"),
 )
+G13_TOOLS = ("screwdriver", "hammer", "wrench", "spatula", "pen")
 
 
 def _g13_objects(pg: Any) -> None:
     from robotforge.design.props import shelf_levels
 
-    size = [1.5, 0.42, 1.25]
+    size = [1.8, 0.42, 1.25]
     pg.add_object("shelf", shape="shelf", size=size, pos=[0.0, 0.0, 0.0], color="#8a6a48")
     for r, (top, row) in enumerate(zip(shelf_levels(size)[:3], G13_ROWS, strict=True)):
         for i, shape in enumerate(row):
             x = (i - (len(row) - 1) / 2) * 0.2
-            tool = shape in ("screwdriver", "hammer", "wrench")
+            tool = shape in G13_TOOLS
             yaw = 90 if tool else -12 + 6 * i % 30  # tools lie front to back, so three of them fit side by side
             pg.add_object(f"{shape}_{r}{i}", shape=shape, seed=r * 10 + i + 1, pos=[x, -0.02, top], yaw=yaw)
+
+
+def _g13_household(pg: Any) -> None:
+    """The kitchen-drawer things close up on a table: two seeds of each."""
+    pg.add_object("table", shape="table", size=[1.3, 0.5, 0.05], pos=[0.0, 0.0, 0.0], fixed=True, color="#d9d2c5")
+    things = ("pitcher", "sponge", "tape", "spatula", "pen")
+    xs = (-0.5, -0.27, -0.06, 0.2, 0.46)
+    for i, (shape, x) in enumerate(zip(things, xs, strict=True)):
+        yaw = 90 if shape in G13_TOOLS else -15
+        pg.add_object(f"{shape}_a", shape=shape, seed=3, pos=[x, 0.09, 0.05], yaw=yaw)
+        pg.add_object(f"{shape}_b", shape=shape, seed=11 + i, pos=[x, -0.12, 0.05], yaw=yaw + 25)
 
 
 G13_SHOTS = [
@@ -1616,7 +1628,14 @@ G13_SHOTS = [
         "g13_objects",
         _g13_objects,
         page='document.getElementById("empty").style.display = "none"; window.__robotforge.select(null);'
-        " window.__robotforge.lookAt([0.35, -1.75, 1.15], [0.0, 0.0, 0.62]);",
+        " window.__robotforge.lookAt([0.4, -2.05, 1.15], [0.0, 0.0, 0.62]);",
+        settle=2.5,
+    ),
+    Shot(
+        "g13_household",
+        _g13_household,
+        page='document.getElementById("empty").style.display = "none"; window.__robotforge.select(null);'
+        " window.__robotforge.lookAt([0.0, -0.85, 0.5], [0.0, 0.0, 0.1]);",
         settle=2.5,
     ),
 ]

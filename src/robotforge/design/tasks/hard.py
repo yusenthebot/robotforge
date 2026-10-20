@@ -29,7 +29,8 @@ ARMS: dict[str, dict[str, Any]] = {
 SORT_CLASS = {
     "apple": "fruit", "orange": "fruit", "pear": "fruit", "banana": "fruit",
     "can": "cans", "tin": "boxes", "brick": "boxes", "package": "boxes",
-    "hammer": "tools", "screwdriver": "tools", "wrench": "tools",
+    "hammer": "tools", "screwdriver": "tools", "wrench": "tools", "spatula": "tools", "pen": "tools", "tape": "tools",
+    "sponge": "boxes", "pitcher": "mugs",
     "bottle": "bottles", "squeeze_bottle": "bottles",
     "mug": "mugs", "cup": "mugs", "bowl": "dishes", "plate": "dishes", "book": "books",
 }  # fmt: skip

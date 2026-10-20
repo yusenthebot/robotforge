@@ -544,6 +544,10 @@ def _free_spot(
     return best
 
 
-def tilt_deg(data: mujoco.MjData, body: int) -> float:
-    """How far a body's z axis is from the world's up, in degrees."""
+def tilt_deg(data: mujoco.MjData, body: int, built: Built | None = None) -> float:
+    """How far a body's z axis is from the world's up, in degrees. For a thing that lies on its side and may roll (a
+    pen: `roll_free` in its facts) it is how far its long axis is from level: rolling about it is not tipping over."""
+    if built is not None and built.facts.get("roll_free"):
+        axis = data.xmat[body].reshape(3, 3) @ np.asarray(built.facts.get("axis", (1.0, 0.0, 0.0)), float)
+        return float(math.degrees(math.asin(max(-1.0, min(1.0, float(axis[2]))))))
     return float(math.degrees(math.acos(max(-1.0, min(1.0, float(data.xmat[body][8]))))))
