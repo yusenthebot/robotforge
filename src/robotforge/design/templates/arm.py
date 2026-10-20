@@ -8,6 +8,7 @@ from typing import Literal
 import mujoco
 from pydantic import Field
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components, end_effectors
 from robotforge.design.templates.base import (
     DARK,
@@ -38,6 +39,9 @@ class ArmParams(TemplateParams):
         "gripper",
         description="what the hand holds with: two fingers, a suction cup (flat things) or an electromagnet (steel)",
     )
+    style: str | None = Field(
+        None, description="how it is drawn, not how it moves: cobot (default), lab, hobby, rugged (see list_templates)"
+    )
 
 
 class Arm(Template):
@@ -49,6 +53,7 @@ class Arm(Template):
         part = components.actuator(p.servo)
         density = components.MATERIALS[p.material]
         accent = components.color(p.color)
+        dress = Dress(p.style, p.material, color=accent)
         spec = new_spec()
         radius = max(0.012, 0.035 * p.reach)
         upper, fore = 0.45 * p.reach, 0.35 * p.reach
@@ -59,6 +64,7 @@ class Arm(Template):
         hand = 0.2 * p.reach - (tool_length if holder else 0.0)
 
         vis = Visuals(spec)
+        dress.attach(vis)
         base = spec.worldbody.add_body(name="base")
         pedestal = base.add_geom(
             type=GEOM.mjGEOM_CYLINDER,
@@ -80,7 +86,7 @@ class Arm(Template):
         shoulder_servo = servo_case(turret, part, [0, 0, p.base_height / 2])
         for geom in (pedestal, column, shoulder_servo):
             vis.hide(geom)
-        _dress_base(vis, base, turret, p.base_height, 2.2 * radius + 0.02, 2 * radius + 0.01)
+        _dress_base(vis, base, turret, p.base_height, 2.2 * radius + 0.02, 2 * radius + 0.01, dress)
 
         links = [("shoulder", upper), ("elbow", fore)]
         if p.dof >= 4:
@@ -109,7 +115,7 @@ class Arm(Template):
             vis.hide(drum)
             vis.hide(tube)
             link_r = radius * (0.8 if is_last else 1.0)
-            _dress_link(vis, body, length, radius * 1.25, part.size[1] / 2 + 0.004, link_r, rgba, is_last)
+            _dress_link(vis, body, length, radius * 1.25, part.size[1] / 2 + 0.004, link_r, i == 0, is_last, dress)
             parent, z = body, length
 
         if p.dof >= 5:
@@ -125,7 +131,7 @@ class Arm(Template):
                 mass=part.mass,
             )
             vis.hide(wrist)
-            _dress_wrist(vis, roll, radius * 1.1, 0.024)
+            _dress_wrist(vis, roll, radius * 1.1, 0.024, dress)
             parent, z = roll, 0.024
 
         tool = parent.add_body(name="hand", pos=[0, 0, z])
@@ -135,7 +141,7 @@ class Arm(Template):
         declare_camera(spec, tool, "wrist_cam", 70)
         tcp_z = 0.0
         if holder == "gripper":
-            tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis)
+            tcp_z = add_gripper(spec, tool, p.gripper_opening, accent, vis, dress)
         elif holder is not None:  # a suction cup or an electromagnet where the fingers would be
             tcp_z = end_effectors.add_tool(spec, tool, holder, vis, holder)
         _dress_wrist_camera(vis, tool, holder == "gripper")
@@ -165,7 +171,14 @@ class Arm(Template):
         return BuiltRobot(spec=spec, home_qpos=home, home_ctrl=ctrl, spawn_height=0.0, floating=False, notes=notes)
 
 
-def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accent, vis: Visuals | None = None) -> float:
+def add_gripper(
+    spec: mujoco.MjSpec,
+    tool: mujoco.MjsBody,
+    opening: float,
+    accent,
+    vis: Visuals | None = None,
+    dress: Dress | None = None,
+) -> float:
     """A parallel two-finger gripper on `tool`, opening along its y axis, fingers along +z.
 
     Adds the coupled finger joints, the `gripper` actuator (its control is one finger's travel)
@@ -173,7 +186,10 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
     into `vis` (or into its own Visuals, finished here, when none is given).
     """
     own = vis is None
-    vis = vis or Visuals(spec)
+    dress = dress or Dress(color=accent)
+    if vis is None:
+        vis = Visuals(spec)
+        dress.attach(vis)
     palm_h = 0.02
     half_w = opening / 2 + 0.012
     palm = tool.add_geom(
@@ -207,9 +223,9 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
             mass=0.012,
         )
         vis.hide(pad)
-        _dress_finger(vis, finger, sign, finger_len, accent)
+        _dress_finger(vis, finger, sign, finger_len, dress)
     vis.hide(palm)
-    _dress_palm(vis, tool, half_w, palm_h, travel)
+    _dress_palm(vis, tool, half_w, palm_h, dress)
     if own:
         vis.finish()
     spec.add_equality(
@@ -227,44 +243,49 @@ def add_gripper(spec: mujoco.MjSpec, tool: mujoco.MjsBody, opening: float, accen
 # ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
 
 
-def _dress_base(vis: Visuals, base, turret, height: float, base_r: float, turret_r: float) -> None:
-    """A dark pedestal with a bolted flange and a light ring, under a light turret column."""
+def _dress_base(vis: Visuals, base, turret, height: float, base_r: float, turret_r: float, dress: Dress) -> None:
+    """A bolted mounting plate and column under a turret joint (a rotary housing turning about the vertical)."""
     h = height / 2
-    bevel = min(0.005, h * 0.2)
-    vis.add(base, "dark", DARK, M.cylinder(base_r, h, segments=48, bevel=bevel, z0=0.0))
-    vis.add(base, "metal", P.METAL, M.cylinder(base_r * 1.015, h * 0.1, segments=48, bevel=h * 0.03, z0=0.0))
-    bolts = P.bolt_circle(base_r * 0.86, 6, base_r * 0.055, 0.0025, start=math.pi / 6)
-    vis.add(base, "metal", P.METAL, bolts, (0, 0, h - 0.0005))
-    ring = M.torus(turret_r * 1.06, 0.0018, segments=48, sides=8)
-    vis.add(base, "led", P.LED_CYAN, ring, (0, 0, h + 0.0005))
-    column = M.cylinder(turret_r, h, segments=48, bevel=min(0.006, h * 0.25), z0=0.0)
-    vis.add(turret, "shell", SHELL, column)
-    seam = M.cylinder(turret_r * 1.004, 0.0012, segments=48, z0=h * 0.32)
-    vis.add(turret, "dark", DARK, seam)
+    column = min(0.95, max(0.3, 0.97 * turret_r / base_r))
+    dress.draw(vis, base, "pedestal", radius=base_r, height=h, column=column)
+    dress.draw(vis, turret, "joint_actuator", pos=(0.0, 0.0, h / 2), radius=turret_r, length=h, gland=False)
 
 
 def _dress_link(
-    vis: Visuals, body, length: float, drum_r: float, drum_half: float, link_r: float, rgba, is_last: bool
+    vis: Visuals,
+    body,
+    length: float,
+    drum_r: float,
+    drum_half: float,
+    link_r: float,
+    first: bool,
+    is_last: bool,
+    dress: Dress,
 ) -> None:
-    """A joint drum on the pitch axis (y) and a tapered rounded limb up to the next joint."""
-    half_y = link_r * 1.02
-    drum_half = max(drum_half, half_y + 0.003)
-    for preset, mesh in P.drum(drum_r, drum_half, drum_r * 0.72).items():
-        vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), M.Z_TO_Y)
-    if is_last:  # the short wrist link: a straight round neck out of the drum
-        start = end = (link_r * 1.02, half_y)
-    else:
-        start, end = (drum_r * 0.98, half_y), (link_r * 0.95, half_y * 0.95)
-    limb = M.link(length, start, end, roundness=0.85, rounding=(1.0, 1.0), stations=8)
-    vis.add(body, "shell", rgba, limb)
+    """A joint housing on the pitch axis (y) and a tapered shell up to the next joint."""
+    half_y = max(drum_half, link_r * 1.02 + 0.003)
+    palette = dress.colored if first else dress.shell
+    dress.draw(vis, body, "joint_actuator", rot=M.Z_TO_Y, radius=1.18 * drum_r, length=2 * half_y, gland_angle=180.0)
+    if length < 0.004:  # a hand shorter than its own tool leaves no link to draw
+        return
+    root = link_r * (0.95 if is_last else 1.0)
+    width = min(2.2, max(0.5, 0.92 * half_y / root))
+    dress.draw(
+        vis,
+        body,
+        "link_shell",
+        palette,
+        length=length,
+        radius=root,
+        width=width,
+        tip=1.0 if is_last else 0.86,
+        waist=0.0 if is_last else 0.07,
+    )
 
 
-def _dress_wrist(vis: Visuals, roll, r: float, height: float) -> None:
-    """The wrist roll unit: a dark drum ending in a metal tool flange with bolts."""
-    vis.add(roll, "dark", DARK, M.cylinder(r, height * 0.8, segments=36, bevel=0.002, z0=0.0))
-    flange = M.cylinder(r * 0.92, height * 0.2, segments=36, bevel=0.0008, z0=height * 0.8)
-    vis.add(roll, "metal", P.METAL, flange)
-    vis.add(roll, "dark", DARK, P.bolt_circle(r * 0.7, 4, r * 0.08, 0.0012, math.pi / 4), (0, 0, height - 0.0003))
+def _dress_wrist(vis: Visuals, roll, r: float, height: float, dress: Dress) -> None:
+    """The wrist roll unit: a small rotary housing that ends in the tool flange."""
+    dress.draw(vis, roll, "joint_actuator", pos=(0.0, 0.0, height / 2), radius=r, length=height, gland=False, bolts=4)
 
 
 def _dress_wrist_camera(vis: Visuals, tool, gripper: bool) -> None:
@@ -280,26 +301,20 @@ def _dress_wrist_camera(vis: Visuals, tool, gripper: bool) -> None:
     vis.add(tool, "led", P.LED_GREEN, P.led(0.0012, 0.0008)["led"], (x, 0.009, 0.0075))
 
 
-def _dress_palm(vis: Visuals, tool, half_w: float, palm_h: float, travel: float) -> None:
-    """The gripper body: a dark housing with light side covers and the metal rails the fingers ride on."""
-    body = M.rounded_box(0.018, half_w, palm_h / 2, 0.004, segments=3, corner=0.005)
-    vis.add(tool, "dark", DARK, body, (0, 0, palm_h / 2))
-    for side in (1, -1):
-        cover = M.rounded_box(0.0012, half_w * 0.86, palm_h * 0.32, 0.001, segments=2, corner=0.004)
-        vis.add(tool, "shell", SHELL, cover, (side * 0.0185, 0, palm_h * 0.5))
-    for x in (0.009, -0.009):
-        rail = M.cylinder(0.0022, 2 * half_w * 0.92, segments=12).moved(rot=M.Z_TO_Y)
-        vis.add(tool, "metal", P.METAL, rail, (x, 0, palm_h + 0.0008))
+def _dress_palm(vis: Visuals, tool, half_w: float, palm_h: float, dress: Dress) -> None:
+    """The gripper body: a housing with side covers and the rails the fingers ride on, on a bolted flange."""
+    dress.draw(vis, tool, "gripper_body", width=2 * half_w, depth=0.036, height=palm_h)
 
 
-def _dress_finger(vis: Visuals, finger, sign: int, length: float, accent) -> None:
-    """An accent finger with a rubber grip pad flush with its inner (closing) face."""
-    t = 0.005  # half thickness of the collision box along y
-    pad_t = 0.0009
-    body_t = t - pad_t
-    body = M.rounded_box(0.012, body_t, length / 2, 0.0025, segments=2, corner=0.003)
-    vis.add(finger, "shell", accent, body, (0, sign * pad_t, length / 2))
-    pad = M.rounded_box(0.0112, pad_t, length * 0.4, 0.0008, segments=2, corner=0.002)
-    vis.add(finger, "rubber", P.RUBBER, pad, (0, -sign * (t - pad_t), length * 0.56))
-    screw = P.bolt(0.0016, 0.0008).moved(rot=M.rot_x(-sign * math.pi / 2))
-    vis.add(finger, "metal", P.METAL, screw, (0, sign * t, length * 0.18))
+def _dress_finger(vis: Visuals, finger, sign: int, length: float, dress: Dress) -> None:
+    """A finger in the accent color with a ridged rubber grip pad on its inner (closing) face."""
+    dress.draw(
+        vis,
+        finger,
+        "grip_pad",
+        dress.colored,
+        rot=M.rot_z(-sign * math.pi / 2),
+        length=length,
+        width=0.024,
+        thickness=0.01,
+    )

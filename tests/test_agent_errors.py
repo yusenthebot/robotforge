@@ -194,7 +194,7 @@ async def test_a_value_the_robot_cannot_do_is_clamped_and_said(lab):
             {"world_name": "w"},
             ["no parameter 'world_name'", "did you mean name", "parameters: name, floor"],
         ),
-        ("list_templates", {"kind": "arm"}, ["takes no parameters", "'kind'"]),
+        ("list_templates", {"kind": "arm"}, ["no parameter 'kind'", "parameters: detail"]),
         (
             "add_robot",
             {"name": "p", "template": "", "library": "", "build": {}},

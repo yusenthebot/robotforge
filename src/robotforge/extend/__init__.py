@@ -18,6 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from robotforge.extend.algorithms import algorithm, task
+from robotforge.extend.assets import generator, material, style
 from robotforge.extend.parts import Box, Cylinder, Sphere, part, unknown_part
 from robotforge.extend.registry import REGISTRY, PluginError
 from robotforge.extend.routines import behavior, call, controller
@@ -36,14 +37,26 @@ __all__ = [
     "call",
     "controller",
     "ensure_user_plugins",
+    "generator",
     "load_world_plugins",
     "look",
+    "material",
     "part",
     "plugin_notes",
     "sensor",
+    "style",
     "task",
     "unknown_part",
 ]
+
+
+def __getattr__(name: str):
+    # What a generator is written with, loaded when asked for (robotforge.assets imports mujoco).
+    if name in ("Param", "Asset", "Piece", "Collider", "Style", "Material"):
+        from robotforge import assets
+
+        return getattr(assets, name)
+    raise AttributeError(f"module 'robotforge.extend' has no attribute {name!r}")
 
 
 def ensure_user_plugins() -> None:

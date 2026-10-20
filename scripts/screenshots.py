@@ -172,6 +172,9 @@ async def _capture(chrome_port: int, port: int, shot: Shot, out: Path, lang: str
             mobile=width < 600,
         )
         await page.call("Page.enable")  # scripts for new documents need the Page domain on
+        # The viewer follows the system's light or dark setting; a picture must not depend on the hour it was taken
+        scheme = os.environ.get("ROBOTFORGE_SHOT_THEME", "dark")
+        await page.call("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
         # A background tab gets its animation frames throttled, and the lesson plots draw on them
         await page.call("Page.bringToFront")
         await page.call("Emulation.setFocusEmulationEnabled", enabled=True)
@@ -1619,6 +1622,10 @@ G13_SHOTS = [
 ]
 
 
+import assets_shots  # noqa: E402  (scripts/assets_shots.py)
+
+ASSET_SHOTS = assets_shots.shots(Shot, _look, _frame_robot, _gallery_line_up)
+
 SHOTS = [
     Shot(
         "hero",
@@ -1945,6 +1952,7 @@ SHOTS = [
     *G12_SHOTS,
     *G13_SHOTS,
     *GENERATED_SHOTS,
+    *ASSET_SHOTS,
     *_g10_shots(),
     *_g12_shots(),
     *_world_shots(),

@@ -80,8 +80,27 @@ export function presetFor(materialName) {
   return DEFAULT;
 }
 
-export function surfaceMaterial(materialName, color, opacity) {
-  const p = presetFor(materialName);
+// A material the scene description carries (`surfaces`, from the asset engine) is turned into the same shape as a
+// preset above, so a plugin's new material reaches the browser without a change here.
+function presetFromSurface(t) {
+  const texture = t.texture && t.texture !== "none" ? t.texture : null;
+  return {
+    physical: (t.clearcoat ?? 0) > 0 || (t.sheen ?? 0) > 0,
+    roughness: t.roughness,
+    metalness: t.metalness,
+    clearcoat: t.clearcoat ?? 0,
+    clearcoatRoughness: t.clearcoatRoughness ?? 0,
+    sheen: t.sheen ?? 0,
+    glow: t.glow ?? 0,
+    env: t.env ?? 1,
+    texture,
+    textureScale: t.textureScale ?? 1,
+    textureStrength: t.textureStrength ?? 1,
+  };
+}
+
+export function surfaceMaterial(materialName, color, opacity, surfaces) {
+  const p = surfaces && surfaces[materialName] ? presetFromSurface(surfaces[materialName]) : presetFor(materialName);
   const transparent = opacity < 1;
   const common = {
     color,
@@ -105,8 +124,83 @@ export function surfaceMaterial(materialName, color, opacity) {
     mat.emissive = color.clone();
     mat.emissiveIntensity = p.glow;
   }
-  if (p.weave) addWeave(mat);
+  if (p.weave || p.texture === "weave") addWeave(mat);
+  else if (p.texture) addGrain(mat, p.texture, p.textureScale, p.textureStrength);
   return mat;
+}
+
+// Procedural surface grain, drawn from the mesh's own coordinates like the weave: no UVs and no image. Each kind
+// gives a small height field; its slope tilts the normal (a bump) and a little of it darkens and roughens the
+// valleys. Where one feature is smaller than a pixel the effect fades out instead of shimmering.
+//   brushed: fine streaks along the part's z axis.   speckle: orange peel or micro-blasting.
+//   rubber: coarser grain.                           knurl: a diamond cross-hatch round the z axis.
+const GRAIN_PITCH = { brushed: 0.00045, speckle: 0.0012, rubber: 0.0007, knurl: 0.0016 }; // m, one feature
+const GRAIN_BUMP = { brushed: 0.16, speckle: 0.5, rubber: 0.9, knurl: 1.4 }; // normal tilt at strength 1
+const GRAIN_HEIGHT = {
+  brushed: "float h = rfNoise(vec3(q.x, q.y, q.z * 0.03)) * 0.7 + rfNoise(vec3(q.x * 2.3, q.y * 2.3, q.z * 0.07)) * 0.3;",
+  speckle: "float h = rfNoise(q) * 0.65 + rfNoise(q * 2.7) * 0.35;",
+  rubber: "float h = rfNoise(q) * 0.5 + rfNoise(q * 2.1) * 0.3 + rfNoise(q * 4.4) * 0.2;",
+  knurl:
+    "float ang = atan(vGrainPos.y, vGrainPos.x) * length(vGrainPos.xy) / pitch;" +
+    "float zz = vGrainPos.z / pitch; float h = 0.5 + 0.5 * sin(ang + zz) * sin(ang - zz);",
+};
+
+function addGrain(mat, kind, scale, strength) {
+  if (!GRAIN_PITCH[kind]) return;
+  const pitch = (GRAIN_PITCH[kind] * scale).toFixed(6);
+  const bump = (GRAIN_BUMP[kind] * strength).toFixed(4);
+  const shade = (0.22 * strength).toFixed(4);
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vGrainPos;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGrainPos = position;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+varying vec3 vGrainPos;
+uint rfPcg(uint v) { uint state = v * 747796405u + 2891336453u; uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u; return (word >> 22u) ^ word; }
+float rfHash(vec3 p) { uvec3 q = uvec3(ivec3(floor(p + 0.5)) + 32768); return float(rfPcg(q.x + rfPcg(q.y + rfPcg(q.z)))) / 4294967295.0; }
+float rfNoise(vec3 x) {
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(rfHash(i), rfHash(i + vec3(1, 0, 0)), f.x), mix(rfHash(i + vec3(0, 1, 0)), rfHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(rfHash(i + vec3(0, 0, 1)), rfHash(i + vec3(1, 0, 1)), f.x), mix(rfHash(i + vec3(0, 1, 1)), rfHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+vec3 rfBump(vec3 pos, vec3 n, vec2 dH, float faceDir) {
+  vec3 sx = normalize(dFdx(pos)), sy = normalize(dFdy(pos));
+  vec3 r1 = cross(sy, n), r2 = cross(n, sx);
+  float det = dot(sx, r1) * faceDir;
+  vec3 grad = sign(det) * (dH.x * r1 + dH.y * r2);
+  return normalize(abs(det) * n - grad);
+}
+float grainH;
+float grainFade;`
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+{
+  const float pitch = ${pitch};
+  vec3 q = vGrainPos / pitch;
+  ${GRAIN_HEIGHT[kind]}
+  grainFade = clamp((0.55 - max(max(fwidth(q.x), fwidth(q.y)), fwidth(q.z))) / 0.3, 0.0, 1.0);
+  grainH = h;
+  diffuseColor.rgb *= 1.0 - ${shade} * grainFade * (1.0 - h);
+}`
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * 0.3 * grainFade, 0.04, 1.0);`
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+normal = rfBump(-vViewPosition, normal, vec2(dFdx(grainH), dFdy(grainH)) * ${bump} * grainFade, faceDirection);`
+      );
+  };
+  mat.customProgramCacheKey = () => `rf-grain-${kind}-${pitch}-${bump}-${shade}`;
 }
 
 // A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few

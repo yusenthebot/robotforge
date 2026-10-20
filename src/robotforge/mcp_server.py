@@ -80,6 +80,11 @@ update_part / remove_part. add_robot(design=...) adds a ready-made robot from th
 Mars rover, centaur, ...; list_templates), saved as its parts. add_robot(describe="a six-legged robot with two
 arms") makes a new robot from one sentence (legs, wheels, a snake, an arm, a humanoid; arms, sizes, colors,
 sensors) that moves at once; update_robot(describe="make it longer") changes it, "another one" is a variation.
+How a robot looks is a style (cobot, lab, hobby, rugged): params={"style": "lab"} on the arm, quadruped, humanoid, rover
+and gripper templates, "style" in a builder spec, or a word in describe ("a rugged robot dog"); it changes the drawing
+(housings, shells, tread, materials), never the physics. list_templates lists the part generators (joint housings,
+link shells, wheels, ...), the styles and the materials (detail="assets": with their ranges);
+add_robot(template="asset", params={"generator": "wheel", "args": {"radius": 0.07}}) shows one on a turntable.
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
 button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Real things (mug, cup, bowl, plate, bottle,
@@ -425,10 +430,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     _plain_tools(server)
 
     @server.tool()
-    def list_templates() -> str:
-        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov, drone) with
-        parameters, defaults and limits, the gallery's ready-made designs (add_robot(design=...)) and the parts
-        catalog (servos, motors, linear actuators). For other robots build from parts (builder_guide)."""
+    def list_templates(detail: Literal["assets"] | None = None) -> str:
+        """List robot templates (arm, quadruped, humanoid, rover, cartpole, gripper, boat, rov, drone, asset) with
+        parameters, defaults and limits, the gallery's ready-made designs (add_robot(design=...)), the parts
+        catalog (servos, motors, linear actuators) and the asset engine's part generators (joint housings, link
+        shells, wheels, ...), styles (cobot, lab, hobby, rugged) and surface materials; detail="assets" adds every
+        generator's parameters with their ranges. For other robots build from parts (builder_guide)."""
+        from robotforge import assets
         from robotforge.design import components, gallery, templates
 
         parts = {
@@ -440,6 +448,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             "designs": gallery.catalog(),
             "parts": parts,
             "colors": list(components.COLORS),
+            "assets": assets.overview(full=detail == "assets"),
         }
         if REGISTRY.items:  # what the user's plugins add: shapes for add_object, sensor types, controllers, behaviors
             listing["plugins"] = REGISTRY.report()

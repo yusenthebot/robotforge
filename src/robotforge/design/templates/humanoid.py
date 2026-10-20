@@ -14,6 +14,7 @@ from typing import Literal
 import mujoco
 from pydantic import Field
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components
 from robotforge.design.templates.base import (
     DARK,
@@ -54,6 +55,9 @@ class HumanoidParams(TemplateParams):
     material: Literal["pla", "aluminum", "carbon"] = "pla"
     arms: bool = Field(True, description="add two 3-joint arms")
     head: bool = Field(True, description="add a 2-joint head with a camera")
+    style: str | None = Field(
+        None, description="how it is drawn, not how it moves: cobot (default), lab, hobby, rugged (list_templates)"
+    )
 
 
 class Dims:
@@ -74,6 +78,7 @@ class Dims:
         self.upper_arm = 0.075 * s
         self.forearm = 0.065 * s
         self.head = (0.038 * s, 0.042 * s, 0.034 * s)  # ellipsoid radii
+        self.dress: Dress = Dress()  # replaced by the template's own (its style and color)
 
     def stand_height(self, bend: float = HOME_BEND) -> float:
         """Torso origin above the soles with hips, knees and ankles at `bend`."""
@@ -93,10 +98,12 @@ class Humanoid(Template):
         density = components.MATERIALS[p.material]
         accent = components.color(p.color)
         d = Dims(p.height)
+        d.dress = Dress(p.style, p.material, color=accent)  # how it is drawn: the dress functions below read it
         spec = new_spec()
         depth, width, tall = d.torso
 
         vis = Visuals(spec)
+        d.dress.attach(vis)
         torso = spec.worldbody.add_body(name="torso")
         torso.add_freejoint(name="root")
         # Printed torsos are hollow shells; ~25 % of a solid block is a fair mass estimate.
@@ -398,17 +405,18 @@ def _hidden_mass(body, mass: float, pos: list[float], size: list[float]) -> mujo
 # ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
 
 
-def _drum(vis: Visuals, body, r: float, half: float, cap_r: float, pos=(0.0, 0.0, 0.0)) -> None:
-    for preset, mesh in P.drum(r, half, cap_r).items():
-        vis.add(body, preset, DARK if preset == "dark" else P.METAL, mesh, pos, M.Z_TO_Y)
+def _drum(vis: Visuals, body, dress: Dress, r: float, half: float, pos=(0.0, 0.0, 0.0)) -> None:
+    """A joint housing about the y axis."""
+    dress.draw(vis, body, "joint_actuator", pos=pos, rot=M.Z_TO_Y, radius=r, length=2 * half, gland=False)
 
 
 def _dress_torso(vis: Visuals, torso, d: Dims, accent, pelvis_h: float) -> None:
     depth, width, tall = d.torso
     s = d.scale
     hx, hy, hz = depth / 2, width / 2, tall / 2
-    shell = M.rounded_box(hx, hy, hz, 0.012 * s, segments=4, corner=0.018 * s)
-    vis.add(torso, "shell", accent, shell)
+    d.dress.draw(
+        vis, torso, "chassis", d.dress.colored, length=depth, width=width, height=tall, hatch=False, vents=False
+    )
     plate = M.rounded_box(0.004 * s, hy * 0.72, hz * 0.62, 0.0035 * s, segments=3, corner=0.02 * s)
     vis.add(torso, "shell", SHELL, plate, (hx + 0.002 * s, 0, tall * 0.06))
     # A fine dark gap around the chest plate, so it reads as a fitted cover rather than a sticker.
@@ -437,15 +445,15 @@ def _dress_leg(vis: Visuals, thigh, shin, foot, sy: int, d: Dims, part, case_z: 
     s = d.scale
     down = M.rot_x(math.pi)
     hip_half = part.size[1] / 2 + 0.006 * s
-    _drum(vis, thigh, d.leg_r * 1.3, hip_half, d.leg_r * 0.95)
-    limb = M.link(d.thigh, (d.leg_r * 1.15, d.leg_r * 1.02), (d.leg_r * 1.02, d.leg_r * 0.98), roundness=0.8)
-    vis.add(thigh, "shell", SHELL, limb, (0, 0, 0), down)
-    _drum(vis, shin, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s, d.leg_r * 0.85)
+    _drum(vis, thigh, d.dress, d.leg_r * 1.3, hip_half)
+    d.dress.limb(vis, thigh, d.thigh, (d.leg_r * 1.15, d.leg_r * 1.02), (d.leg_r * 1.02, d.leg_r * 0.98), rot=down)
+    _drum(vis, shin, d.dress, d.leg_r * 1.2, part.size[1] / 2 + 0.004 * s)
     reach = d.shin - 0.012 * s
-    limb = M.link(reach, (d.leg_r * 1.02, d.leg_r * 0.92), (d.leg_r * 0.9, d.leg_r * 0.86), roundness=0.8)
-    vis.add(shin, "shell", accent, limb, (0, 0, 0), down)
+    d.dress.limb(
+        vis, shin, reach, (d.leg_r * 1.02, d.leg_r * 0.92), (d.leg_r * 0.9, d.leg_r * 0.86), d.dress.colored, rot=down
+    )
     # Ankle: the pitch servo with its horn facing out, above a layered foot.
-    dress_servo(vis, foot, part, [0, 0, case_z], horn=(1, sy))
+    dress_servo(vis, foot, part, [0, 0, case_z], horn=(1, sy), dress=d.dress)
     length, wide, plate = d.foot
     x, y, z = sole
     rubber = 0.004 * s
@@ -476,12 +484,18 @@ def _dress_arm(vis: Visuals, torso, upper, fore, sy: int, d: Dims, shoulder_z: f
     out = M.Z_TO_Y if sy > 0 else M.rot_x(math.pi / 2)
     for preset, mesh in P.horn(d.arm_r * 1.05, 0.0022 * s, screws=4).items():
         vis.add(torso, preset, DARK if preset == "dark" else P.METAL, mesh, (0, sy * width / 2, shoulder_z), out)
-    _drum(vis, upper, d.arm_r * 1.45, d.arm_r * 1.2, d.arm_r * 1.0)
-    limb = M.link(d.upper_arm, (d.arm_r * 1.12, d.arm_r * 1.02), (d.arm_r * 1.0, d.arm_r * 0.98), roundness=0.8)
-    vis.add(upper, "shell", SHELL, limb, (0, 0, 0), down)
-    _drum(vis, fore, d.arm_r * 1.3, d.arm_r * 1.1, d.arm_r * 0.9)
-    limb = M.link(d.forearm, (d.arm_r * 0.98, d.arm_r * 0.92), (d.arm_r * 0.92, d.arm_r * 0.88), roundness=0.8)
-    vis.add(fore, "shell", accent, limb, (0, 0, 0), down)
+    _drum(vis, upper, d.dress, d.arm_r * 1.45, d.arm_r * 1.2)
+    d.dress.limb(vis, upper, d.upper_arm, (d.arm_r * 1.12, d.arm_r * 1.02), (d.arm_r * 1.0, d.arm_r * 0.98), rot=down)
+    _drum(vis, fore, d.dress, d.arm_r * 1.3, d.arm_r * 1.1)
+    d.dress.limb(
+        vis,
+        fore,
+        d.forearm,
+        (d.arm_r * 0.98, d.arm_r * 0.92),
+        (d.arm_r * 0.92, d.arm_r * 0.88),
+        d.dress.colored,
+        rot=down,
+    )
     r = d.arm_r * 1.25
     mitt = M.rounded_box(r * 1.0, r * 0.82, r * 1.2, r * 0.7, segments=4, corner=r * 0.75)
     vis.add(fore, "dark", DARK, mitt, (0, 0, -d.forearm - d.arm_r * 0.6))
@@ -494,7 +508,7 @@ def _dress_head(vis: Visuals, torso, head, d: Dims, center) -> None:
     # A short neck column rising from the shoulders.
     neck = M.cylinder(0.013 * s, 0.016 * s, segments=28, bevel=0.002 * s, z0=tall / 2 - 0.004 * s)
     vis.add(torso, "dark", DARK, neck)
-    _drum(vis, head, 0.009 * s, 0.0124 * s, 0.006 * s)
+    _drum(vis, head, d.dress, 0.009 * s, 0.0124 * s)
     skull = M.rounded_box(rx, ry, rz, rz * 0.62, segments=5, corner=ry * 0.62)
     vis.add(head, "shell", SHELL, skull, center)
     cx, _, cz = center

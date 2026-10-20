@@ -17,7 +17,7 @@ It runs on macOS, Windows and Linux.
 
 ## What you can do
 
-- **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence. Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels ([builder guide](docs/BUILDER.md)).
+- **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence. Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels ([builder guide](docs/BUILDER.md)). Every part is generated, in a style you choose (cobot, lab, hobby, rugged): joint housings with bolt circles, shells with parting lines, tread, brushed or cast surfaces ([asset engine](docs/ASSETS.md)).
 - **Import your own.** URDF, xacro, MJCF and mesh files go through a health check that repairs the usual problems (mesh formats, inertia, the starting pose).
 - **Use real robots, and splice them.** Nineteen robots and parts from MuJoCo Menagerie load by name: Unitree Go2, Boston Dynamics Spot, ANYmal C, Franka Panda, UR5e, AgileX PiPER, Unitree G1, Booster T1, ALOHA 2 and more. Mount any of them on another: a Go2 with a PiPER on its back, an ANYmal C with a UR5e and a Robotiq gripper, a Spot with a Z1.
 - **Sense.** Cameras (colour, depth, segmentation, stereo, fisheye, event), 2D and 3D lidar, sonar, IMU, joint encoders, wheel odometry, force, touch and tactile skin, temperature and gas go on any robot, and the viewer draws what they sense ([sensors](docs/SENSORS.md)).
@@ -174,6 +174,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Plan: [docs/OVERVIEW.md](docs/OVERVIEW.md) (Chinese)
 - Goals and acceptance: [docs/GOAL.md](docs/GOAL.md)
 - Building robots from parts: [docs/BUILDER.md](docs/BUILDER.md)
+- The asset engine (generated parts, four styles, surfaces, mass from density, plugin generators): [docs/ASSETS.md](docs/ASSETS.md)
 - Scenes, terrain and generated worlds: [docs/SCENES.md](docs/SCENES.md)
 - Sensors: [docs/SENSORS.md](docs/SENSORS.md)
 - Maps, localization and navigation on the robot's own map: [docs/PERCEPTION.md](docs/PERCEPTION.md)

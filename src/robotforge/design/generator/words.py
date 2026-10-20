@@ -49,6 +49,32 @@ STYLES = {
     "太空": ("#e4e0d6", "#c8a043"), "工业": ("#f2b134", "#1d2026"),
 }  # fmt: skip
 
+# How a robot is drawn (assets styles): "a rugged robot dog", "a lab-grade arm", "a cobot", "a hobby servo robot".
+# An English style word counts when it describes a robot ("lab robot", "rugged six-legged robot", "lab-grade"), not
+# when it merely turns up in a use ("research papers", "a laboratory sample tray", "a drink maker").
+_ROBOT = (
+    r"(?:robots?|bots?|arms?|manipulators?|grippers?|hands?|cobots?|dogs?|quadrupeds?|hexapods?|humanoids?|rovers?|"
+    r"walkers?|spiders?|snakes?|legged|machines?|vehicles?|build|design)"
+)
+
+
+def _describing(words: str) -> str:
+    """The style word before a robot noun ("rugged six-legged robot"), as a grade ("lab-grade") or as the change
+    asked for ("make it rugged")."""
+    return (
+        rf"\b(?:{words})(?:[ -]\w+){{0,2}}[ -]{_ROBOT}\b"
+        rf"|\b(?:{words})[ -](?:grade|class|style|look|finish)\b"
+        rf"|\b(?:make|turn|restyle|redo)\s+(?:it|them|this|the robot)\s+(?:more\s+|a bit more\s+)?(?:{words})\b"
+    )
+
+
+LOOK_STYLES = {
+    "rugged": _describing(r"rugged|ruggedi[sz]ed|tough|all[ -]terrain|heavy[ -]duty|outdoor") + r"|越野|野外|坚固",
+    "lab": _describing(r"lab|laboratory|research") + r"|实验室|科研",
+    "hobby": _describing(r"hobby|hobbyist|diy") + r"|玩具|创客",
+    "cobot": r"\b(cobots?|collaborative)\b|协作",
+}
+
 # Body words, strongest first: "a snake with a gripper" is a snake, "a dog with an arm" a walker.
 NOT_BUILT = (
     (r"\b(fly|flying|flies|drone|quadcopter|copter|propellers?|plane|aircraft)\b|飞|无人机",
@@ -69,7 +95,7 @@ BODY_WORDS: tuple[tuple[str, str], ...] = (
      r"insect|ant|beetle|bug|crab|mantis|centaur|scorpion|cockroach|critter|animal)\b|腿|足|狗|猫|马|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|"
      r"半人马|蝎子|甲虫"),
     ("wheeled", WHEELED),
-    ("arm", r"\b(arms?|manipulator|tentacle|gripper|claw)\b|机械臂|手臂|触手|夹爪"),
+    ("arm", r"\b(arms?|cobots?|manipulator|tentacle|gripper|claw)\b|机械臂|手臂|触手|夹爪"),
 )  # fmt: skip
 SIX_LEGS = (
     r"\b(hexapod|spider|insect|ant|beetle|bug|crab|mantis|scorpion|cockroach)\b|蜘蛛|昆虫|蚂蚁|螃蟹|螳螂|蝎子|甲虫|六足"
@@ -390,6 +416,12 @@ def _looks(text: str) -> dict[str, Any]:
     for word, material in MATERIALS.items():
         if re.search(rf"\b{word}\b" if word.isascii() else word, text):
             out["material"] = material
+            break
+    for style, pattern in LOOK_STYLES.items():
+        if re.search(pattern, text) and not re.search(
+            NEGATION + NEGATED + r"$", text[: re.search(pattern, text).start()][-24:]
+        ):
+            out["style"] = style
             break
     return out
 

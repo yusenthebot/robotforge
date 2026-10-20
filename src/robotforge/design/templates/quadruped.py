@@ -8,6 +8,7 @@ from typing import Literal
 import mujoco
 from pydantic import Field
 
+from robotforge.assets.bridge import Dress
 from robotforge.design import components
 from robotforge.design.templates.base import (
     DARK,
@@ -41,6 +42,9 @@ class QuadrupedParams(TemplateParams):
     servo: str = Field("sts3215", description="joint actuator from the parts catalog")
     material: Literal["pla", "aluminum", "carbon"] = "pla"
     face: bool = Field(True, description="add a friendly face panel on the front")
+    style: str | None = Field(
+        None, description="how it is drawn, not how it moves: cobot (default), lab, hobby, rugged (list_templates)"
+    )
 
 
 class Quadruped(Template):
@@ -52,6 +56,7 @@ class Quadruped(Template):
         part = components.actuator(p.servo)
         density = components.MATERIALS[p.material]
         accent = components.color(p.color)
+        dress = Dress(p.style, p.material, color=accent)
         spec = new_spec()
         L, W, H = p.body_length, p.body_width, p.body_height
         thigh = shin = p.leg_length / 2
@@ -59,6 +64,7 @@ class Quadruped(Template):
         foot_r = max(0.01, 0.09 * shin)
 
         vis = Visuals(spec)
+        dress.attach(vis)
         trunk = spec.worldbody.add_body(name="trunk")
         trunk.add_freejoint(name="root")
         # Printed trunks are hollow shells; ~25 % of a solid block is a fair mass estimate.
@@ -93,7 +99,7 @@ class Quadruped(Template):
                 covered.append(eye)
         for geom in covered:
             vis.hide(geom)
-        _dress_trunk(vis, trunk, L, W, H, accent, p.face)
+        _dress_trunk(vis, trunk, L, W, H, accent, p.face, dress)
         trunk.add_camera(name="front_cam", pos=[L / 2 + 0.01, 0, 0], xyaxes=[0, -1, 0, 0, 0, 1], fovy=75)
         declare_camera(spec, trunk, "front_cam", 75)
         imu(spec, trunk)
@@ -104,7 +110,7 @@ class Quadruped(Template):
             hip = trunk.add_body(name=f"{leg}_hip", pos=[sx * hip_x, sy * hip_y, 0])
             servo_joint(spec, hip, f"{leg}_hip", [1, 0, 0], (-0.6, 0.6), part)
             vis.hide(servo_case(hip, part, [0, sy * part.size[1] / 2, 0]))
-            dress_servo(vis, hip, part, [0, sy * part.size[1] / 2, 0], horn=(0, sx))
+            dress_servo(vis, hip, part, [0, sy * part.size[1] / 2, 0], horn=(0, sx), dress=dress)
 
             upper = hip.add_body(name=f"{leg}_thigh", pos=[0, sy * (part.size[1] + leg_r), 0])
             servo_joint(spec, upper, f"{leg}_thigh", [0, 1, 0], (-1.2, 2.4), part)
@@ -151,7 +157,7 @@ class Quadruped(Template):
             home.update({f"{leg}_hip": 0.0, f"{leg}_thigh": HOME_THIGH, f"{leg}_knee": HOME_KNEE})
             for geom in (drum, thigh_link, shin_link, foot):
                 vis.hide(geom)
-            _dress_leg(vis, upper, lower, sy, thigh, shin, leg_r, foot_r, accent)
+            _dress_leg(vis, upper, lower, sy, thigh, shin, leg_r, foot_r, accent, dress)
         vis.finish()
 
         stand = (thigh + shin) * math.cos(HOME_THIGH) + foot_r
@@ -168,21 +174,13 @@ class Quadruped(Template):
 # ---- looks: visual-only meshes (no mass, no contacts) over the collision primitives above ----------
 
 
-def _dress_trunk(vis: Visuals, trunk, L: float, W: float, H: float, accent, face: bool) -> None:
+def _dress_trunk(vis: Visuals, trunk, L: float, W: float, H: float, accent, face: bool, dress: Dress) -> None:
     hx, hy, hz = L / 2, W / 2, H / 2
-    corner = min(hy * 0.4, hx * 0.25)
-    # Two-tone hull: a glossy upper shell over a dark chassis pan, meeting in a crisp step.
-    upper_h = hz * 0.64
-    shell = M.rounded_box(hx, hy, upper_h, min(hz * 0.42, corner), segments=4, corner=corner)
-    vis.add(trunk, "shell", accent, shell, (0, 0, hz - upper_h))
-    pan_h = hz * 0.46
-    pan = M.rounded_box(hx - 0.003, hy - 0.003, pan_h, pan_h * 0.6, segments=3, corner=corner - 0.003)
-    vis.add(trunk, "dark", DARK, pan, (0, 0, -hz + pan_h))
+    # The body shell: rounded edges, a parting line over a dark pan, a service hatch, vents at the back, a status light.
+    dress.draw(vis, trunk, "chassis", dress.colored, length=L, width=W, height=H, hatch=False, vents=False)
     # The light top cover sits exactly where the collision plate is.
     lid = M.rounded_box(hx * 0.7, hy * 0.8, 0.004, 0.0032, segments=3, corner=min(hy * 0.3, 0.02))
     vis.add(trunk, "shell", SHELL, lid, (0, 0, hz + 0.004))
-    # Status light at the back of the cover and a vent grille on the rear face.
-    vis.add(trunk, "led", P.LED_GREEN, P.led(0.0035)["led"], (-hx * 0.62, 0, hz + 0.008))
     grille = P.slats(hy * 0.5, hz * 0.32, 4, 0.0016)
     vis.add(trunk, "dark", DARK, grille, (-hx - 0.0002, 0, hz * 0.18), M.rot_z(math.pi / 2))
     front = hx + 0.008 if face else hx
@@ -197,19 +195,15 @@ def _dress_trunk(vis: Visuals, trunk, L: float, W: float, H: float, accent, face
         vis.add(trunk, preset, color, mesh, (front, 0, -H * 0.12), M.Z_TO_X)
 
 
-def _dress_leg(vis: Visuals, upper, lower, sy: int, thigh: float, shin: float, leg_r: float, foot_r: float, accent):
+def _dress_leg(
+    vis: Visuals, upper, lower, sy: int, thigh: float, shin: float, leg_r: float, foot_r: float, accent, dress: Dress
+):
     down = M.rot_x(math.pi)  # links are built along +z; legs hang along -z
-    side = M.Z_TO_Y if sy > 0 else M.rot_x(math.pi / 2)  # drums face outward
-    for preset, mesh in P.drum(leg_r * 1.6, leg_r, leg_r * 1.05).items():
-        vis.add(upper, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), side)
+    side = M.Z_TO_Y if sy > 0 else M.rot_x(math.pi / 2)  # housings face outward
+    dress.draw(vis, upper, "joint_actuator", rot=side, radius=leg_r * 1.7, length=2 * leg_r * 1.1, gland=False)
     width = max(leg_r * 1.55, 0.011)
-    link = M.link(thigh, (width, leg_r * 0.82), (leg_r * 1.12, leg_r * 0.78), roundness=0.85, rounding=(0.9, 0.9))
-    vis.add(upper, "shell", accent, link, (0, 0, 0), down)
-    knee_r = leg_r * 1.22
-    for preset, mesh in P.drum(knee_r, leg_r * 0.95, leg_r * 0.8).items():
-        vis.add(lower, preset, DARK if preset == "dark" else P.METAL, mesh, (0, 0, 0), side)
+    dress.limb(vis, upper, thigh, (width, leg_r * 0.82), (leg_r * 1.12, leg_r * 0.78), dress.colored, rot=down)
+    dress.draw(vis, lower, "joint_actuator", rot=side, radius=leg_r * 1.25, length=2 * leg_r * 0.95, gland=False)
     reach = shin - foot_r * 0.8
-    shin_link = M.link(reach, (leg_r * 1.08, leg_r * 0.74), (leg_r * 0.78, leg_r * 0.68), roundness=0.9)
-    vis.add(lower, "dark", DARK, shin_link, (0, 0, 0), down)
-    for preset, mesh in P.ball_foot(foot_r, leg_r * 0.72).items():
-        vis.add(lower, preset, P.RUBBER if preset == "rubber" else P.METAL, mesh, (0, 0, -shin))
+    dress.limb(vis, lower, reach, (leg_r * 1.08, leg_r * 0.74), (leg_r * 0.78, leg_r * 0.68), dress.dark, rot=down)
+    dress.draw(vis, lower, "foot", pos=(0, 0, -shin), radius=foot_r, shin=leg_r * 0.72)

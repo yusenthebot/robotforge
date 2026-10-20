@@ -122,7 +122,7 @@ def test_a_robot_driven_by_a_controller_is_followed_through_its_results(ev):
     assert outcome.passed, outcome.criteria
     assert "run_controller" in outcome.tools and "move" not in outcome.tools
     near = next(c for c in outcome.criteria if c["name"].startswith("ended within"))
-    assert near["observed"] == "0.16 m from its outline (0.42 m from its center)"
+    assert near["observed"] == "0.17 m from its outline (0.42 m from its center)"
     # observe's orientation sensor says it is upright; before, only move and robots did, and this read None.
     assert next(c for c in outcome.criteria if c["name"] == "upright at the end")["observed"] == "True"
 
@@ -133,7 +133,7 @@ def test_how_near_the_rock_is_measured_from_the_rovers_outline(ev):
     outcome = ev.score(ev.TASKS["rover_rock"], FIXTURES / "rover_rock_long_rover")
     assert outcome.passed, outcome.criteria
     near = next(c for c in outcome.criteria if c["name"].startswith("ended within"))
-    assert near["observed"] == "0.38 m from its outline (0.64 m from its center)"
+    assert near["observed"] == "0.39 m from its outline (0.64 m from its center)"
 
 
 def test_a_session_is_read_into_calls_tokens_and_messages(ev):

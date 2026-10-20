@@ -698,6 +698,31 @@ def test_two_arms_on_top_of_a_dog_stand_apart(pg):
     assert apart > 0.08
 
 
+def test_where_a_second_arm_stands_does_not_depend_on_how_the_arms_are_drawn(pg):
+    """A style changes the drawing only: the arms are measured and cleared on what collides, so the shift is the same,
+    and the two bases do not overlap as they collide."""
+    moved = {}
+    for style in ("cobot", "rugged", "hobby", "lab"):
+        arm = {"template": "arm", "params": {"reach": 0.3, "style": style}}
+        pg.new_world(f"w_{style}", "checker")
+        result = pg.add_robot("go2", library="go2", mounts=[arm, {**arm, "name": "arm2"}])
+        moved[style] = [n for n in result["notes"] if "moved" in n]
+        model, data = pg.session.model, pg.session.data
+        mujoco.mj_forward(model, data)
+        solids = [
+            [
+                g
+                for g in range(model.ngeom)
+                if model.body(model.geom_bodyid[g]).name == f"go2/{a}/base" and model.geom_contype[g]
+            ]
+            for a in ("arm", "arm2")
+        ]
+        gap = min(mujoco.mj_geomDistance(model, data, one, two, 0.1, None) for one in solids[0] for two in solids[1])
+        assert gap > -0.004, (style, gap)
+    assert moved["cobot"] == ["go2: arm2: moved 18 cm back to clear arm"]
+    assert all(found == moved["cobot"] for found in moved.values()), moved
+
+
 def test_a_second_arm_is_moved_clear_of_the_first_or_told_where_it_fits(pg):
     """Two arms reach out from their bases, so on a Go2 the second's arm ran into the first's whatever spot its base
     took. Put on top without being told exactly, it is moved clear along or across the dog; told to stand on top as it

@@ -480,13 +480,14 @@ def _on_top(
 
 def _footprint(child: BuiltRobot) -> tuple[float, float]:
     """The radius (m) of the disk a robot's base stands on: how far its fixed shapes reach from its origin, sideways,
-    in the narrower direction (see FOOTPRINT_RANGE); and the robot's mass (kg)."""
+    in the narrower direction (see FOOTPRINT_RANGE); and the robot's mass (kg). Measured on the shapes that collide
+    when it has any, so how it is drawn (its style) does not decide where a second mount stands."""
     model = child.spec.compile()
     mass = float(model.body_subtreemass[0])
     data = _posed(model, child.home_qpos)
     root = 1
     welded = [b for b in range(1, model.nbody) if model.body_weldid[b] == model.body_weldid[root]]
-    shapes = _surface(model, welded)
+    shapes = _solid(model, welded) or _surface(model, welded)
     if not shapes:
         return FOOTPRINT_RANGE[0], mass
     rot = data.xmat[root].reshape(3, 3)
@@ -560,6 +561,11 @@ def _surface(model: mujoco.MjModel, bodies: Sequence[int]) -> list[int]:
         shown = [g for g in geoms if visible(model, g)]
         out += shown or [g for g in geoms if collides(model, g)]
     return out
+
+
+def _solid(model: mujoco.MjModel, bodies: Sequence[int]) -> list[int]:
+    """The shapes of these bodies that collide."""
+    return [g for g in range(model.ngeom) if int(model.geom_bodyid[g]) in bodies and collides(model, g)]
 
 
 def _corners(model: mujoco.MjModel, data: mujoco.MjData, g: int) -> np.ndarray:
@@ -681,13 +687,21 @@ def _overlaps(
     for i, mount in enumerate(placed):
         weld = int(model.body_weldid[model.body(mount.body).id])
         welded = [b for b in range(1, model.nbody) if int(model.body_weldid[b]) == weld]
-        mine = _surface(model, [b for b in welded if owner(b) == mount.name])
+        mine_bodies = [b for b in welded if owner(b) == mount.name]
+        mine = _surface(model, mine_bodies)
         body = model.body(mount.body).id
         rot = data.xmat[body].reshape(3, 3)
         origin, up = data.xpos[body] + rot @ np.array(mount.frame.pos, float), rot @ mount.up
         for other in [robot, *names[:i]]:
-            theirs = _surface(model, [b for b in welded if owner(b) == other])
-            depth, geom = _sunk(model, data, mine, theirs, origin, up, mount.radius)
+            other_bodies = [b for b in welded if owner(b) == other]
+            depth, geom = _sunk(model, data, mine, _surface(model, other_bodies), origin, up, mount.radius)
+            if other != robot:
+                # Two mounts must also clear each other as they collide, not only as they look: how an arm is drawn
+                # (its style) must not decide how close a second one stands. The carrier is judged by its looks alone.
+                solid = _sunk(
+                    model, data, _solid(model, mine_bodies), _solid(model, other_bodies), origin, up, mount.radius
+                )
+                depth, geom = max((depth, geom), solid, key=lambda found: found[0])
             if geom >= 0:
                 note(mount.name, other, depth, int(model.geom_bodyid[geom]))
     return worst

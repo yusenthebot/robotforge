@@ -46,6 +46,7 @@ agent 先调用 `builder_guide` 读速查表，再用 `add_robot(name, build={..
 | 手臂 | `arm`、`gripper`、`claw` 加一只，`two arms`、`dual arm`、双臂加两只；`suction` 吸盘，`magnet` 电磁铁，蛇头和触手的末端也换成吸盘或电磁铁；蛇的手臂是头上的夹爪 |
 | 尺寸 | `tall`、`long`、`wide`（`fat`、粗）、`small`、`big`，前面加 `very` 更多；`long legs`、`long-legged`、“make the legs longer” 只改腿；也可以写米：“0.5 m long”“高 60 厘米”，和 `small` 这类词一起说时以米为准 |
 | 外观 | 颜色名（两个时第二个是点缀色）、`carbon`、`aluminum`、`plastic`，风格词 `military`、`space`、`industrial` |
+| 外形风格 | `cobot`（协作臂：白色亮面）、`lab`（实验室：拉丝铝和可见螺丝）、`hobby`（舵机和支架）、`rugged`（野外：铸件、散热筋、橡胶护套）；“a rugged robot dog”“a lab-grade arm”；只换外观，质量、关节和碰撞形状不变，见 [ASSETS.md](ASSETS.md) |
 | 装备 | `lidar`、`camera`、`head`、`cargo`；“no camera”“headless” 去掉 |
 
 同一句话总是生成同一个机器人（种子由句子决定）；`params={"seed": 3}` 换一个变体：颜色方案、材料和细节（天线、保险杠、头的形状）跟着种子变，比例也差几个百分点。
