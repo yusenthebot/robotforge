@@ -678,6 +678,41 @@ def _quadrupeds_walk(pg: Any) -> None:
         pg.behaviors.move(robot, 0.3, 0.0)
 
 
+# Two robots in one world (G4): a cube handed from one Panda to the other, and rovers crossing each other's way.
+
+
+def _handover_world(pg: Any) -> None:
+    pg.add_robot("left", library="panda", pos=[-0.65, 0.0], yaw=0)
+    pg.add_robot("right", library="panda", pos=[0.65, 0.0], yaw=180)
+    pg.add_object("cube", shape="box", size=[0.05, 0.05, 0.05], pos=[-0.34, 0.12], color="red", mass=0.1)
+    pg.add_object("pad", shape="box", size=[0.2, 0.2, 0.01], pos=[0.3, -0.2], color="blue", fixed=True)
+
+
+def _hand_over(giver: str, receiver: str, obj: str, target: str) -> Callable[[Any], None]:
+    def act(pg: Any) -> None:
+        relay, _ = pg.behaviors.hand_over(giver, receiver, obj, target)
+        end = time.monotonic() + 80.0
+        while not relay.done and time.monotonic() < end:
+            time.sleep(0.1)
+
+    return act
+
+
+def _on_pad(pg: Any) -> bool:
+    region = {"center": [0.3, -0.2, 0.01], "half_xy": [0.1, 0.1], "min_z": 0.0}
+    return bool(pg.behaviors.placed("cube", region)["success"])
+
+
+def _crossing_world(pg: Any) -> None:
+    for name, (x, y, yaw) in {"red": (-1.5, 0.0, 0), "green": (0.75, -1.3, 120), "blue": (0.75, 1.3, -120)}.items():
+        pg.add_robot(name, template="rover", pos=[x, y], yaw=yaw)
+
+
+def _cross(pg: Any) -> None:
+    for name, goal in {"red": [1.6, 0.0], "green": [-0.8, 1.4], "blue": [-0.8, -1.4]}.items():
+        pg.behaviors.navigate(name, goal, seconds=60)
+
+
 DEMOS = [
     Demo(  # every library quadruped on the same command (move 0.3 m/s), abreast
         "legged_quadrupeds",
@@ -712,6 +747,22 @@ DEMOS = [
         20.0,
         timeline=[(1.0, _pick("picker", "cube", "high"))],
         page=_orbit((0.3, 0.0, 0.45), 2.0, 0.9, -55.0, 45.0, 20.0),
+    ),
+    Demo(  # two arms that cannot reach each other's side: one sets the cube down in the middle, the other takes it on
+        "handover_panda",
+        _handover_world,
+        32.0,
+        timeline=[(1.0, _hand_over("left", "right", "cube", "pad"))],
+        page=_orbit((0.0, 0.0, 0.3), 1.6, 0.9, -75.0, 55.0, 30.0),
+        until=_on_pad,
+        tail=3.0,
+    ),
+    Demo(  # three rovers sent across each other's way at once: the last to the crossing waits for the others
+        "rovers_cross",
+        _crossing_world,
+        18.0,
+        timeline=[(1.0, _cross)],
+        page=_orbit((0.0, 0.0, 0.0), 2.6, 3.0, -80.0, 30.0, 17.0),
     ),
     Demo(
         "mobile_panda_pick",
