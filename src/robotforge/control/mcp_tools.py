@@ -43,16 +43,24 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         """List the control tasks (reach, press, wipe, balance, stand, walk, drive_to, hover) with the robots,
         algorithms and
         parameters that fit each, a one-line explanation of every algorithm (ik, pd, cartesian, joint_impedance,
-        cartesian_impedance, osc, lqr, mpc, mppi, hold, gait, cascade, none), reinforcement learning (ppo, sac:
-        train_policy first) and the trained policies. Use it to
-        explain the options."""
+        cartesian_impedance, osc, lqr, mpc, mppi, hold, gait, cascade, none), the learning algorithms train_policy
+        takes (ars, cem, ppo, sac and those of plugins, with their settings and the ranges a search draws from) and
+        the trained policies. Use it to explain the options."""
         from robotforge.control.rl.mcp_tools import ALGOS
         from robotforge.control.rl.store import list_policies
 
         trained = [f"policy:{p['name']} ({p['task']}, {p['state']})" for p in list_policies(world_dir())]
+        from robotforge.training.mcp_tools import algorithm_catalog
+
         learning = {**ALGOS, "how": "train_policy(task, robot) in the background, then method='policy:<name>'"}
         return _json(
-            {"tasks": task_catalog.catalog(), "algorithms": METHODS, "learning": learning, "trained_policies": trained}
+            {
+                "tasks": task_catalog.catalog(),
+                "algorithms": METHODS,
+                "learning": learning,
+                "training_algorithms": algorithm_catalog(),
+                "trained_policies": trained,
+            }
         )
 
     @server.tool()

@@ -1,7 +1,7 @@
 """What plugins have added, where it came from, and loading plugin files.
 
-A plugin is a Python file that registers new parts, sensors, controllers or behaviors with the decorators in
-robotforge.extend. Files are looked for in two places:
+A plugin is a Python file that registers new parts, sensors, controllers, behaviors, training algorithms or tasks
+with the decorators in robotforge.extend. Files are looked for in two places:
 
 - the user's own folder (`~/.robotforge/plugins`, or the folders `ROBOTFORGE_PLUGINS` lists), which is code the user
   put on this computer: loaded when robotforge starts and on request;
@@ -32,8 +32,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-Kind = Literal["part", "sensor", "controller", "behavior", "generator", "material", "style"]
-KINDS: tuple[Kind, ...] = ("part", "sensor", "controller", "behavior", "generator", "material", "style")
+Kind = Literal["part", "sensor", "controller", "behavior", "algorithm", "task", "generator", "material", "style"]
+KINDS: tuple[Kind, ...] = (
+    "part",
+    "sensor",
+    "controller",
+    "behavior",
+    "algorithm",
+    "task",
+    "generator",
+    "material",
+    "style",
+)
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 ENV_FOLDERS = "ROBOTFORGE_PLUGINS"
 WORLD_FOLDER = "plugins"

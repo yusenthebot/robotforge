@@ -52,6 +52,9 @@ def square(robot, side_s, speed):
 - Controller: `plugins(action="run", name="sweep", robot="arm", options={"amplitude": 0.6}, seconds=5)`; it keeps running until `stop(robot)`. `ctx` has `ctx.joint(name)`, `ctx.velocity(name)`, `ctx.joints()`, `ctx.set(actuator, value)`, `position`, `heading_deg`, `ctx.position_of(body)`, `ctx.sensor(name)`, `time`, `dt`, `params`; names are the robot's own, without the `robot/` prefix. A controller that raises stops itself and says why in its status.
 - Behavior: a function `def run(robot, **options)` written with the script robot interface, run as a script (`plugins(action="run", name="square", robot="dog")`); what it returns is the result.
 
+- Training algorithm: `@algorithm("hill_climb", hyper={"sigma": Hyper(0.2, low=0.05, high=0.5, log=True)})` on a function `def run(ctx)` that loops `while ctx.has_budget()`, tries policies with `ctx.evaluate(theta)` or `ctx.rollout(act)`, reports with `ctx.log(name=value)` and returns the flat parameter vector (shape set by `ctx.new_shape(hidden)`); `ctx.state` keeps arrays between a search's stretches. Then `train_policy(algo="hill_climb")` or `algo=["ars", "hill_climb"]` to compare, and a `search` draws from its `Hyper` ranges. `list_algorithms` shows it. The training process loads it from the plugin folders, so write it with `plugin=true` (docs/TRAINING.md has the contract).
+- Training task: `@task("stay_upright")` on `def build(model, robot, params)` returning the result of `reward_task` (`from robotforge.training.custom import reward_task`; pass it `model, robot, params` and `reward=lambda ctx: ...`, `failed=`, `success=`, `reset=`, `seconds=`); `ctx.joint(name)`, `ctx.body(name)`, `ctx.base_velocity()`, `ctx.height()`, `ctx.up()`, `ctx.effort()`. Then `train_policy(task="stay_upright", robot=...)` on any robot.
+
 When a plugin file fails, `plugins()` shows `not_loaded` with the file and line.
 After editing the file, `plugins(action="reload")`.
 
@@ -80,6 +83,26 @@ arm.gripper.close()
 `robot.kind`, `robot.sensors[name]` (also `.names()`, `.get(name, default)`, `.imu`), `robot.move(speed, turn, seconds=None)`, `robot.stop()`, `robot.pose(name)`, `robot.arm` / `robot.arms` (`move_to`, `pick_and_place`), `robot.gripper` (`open`, `close`), `robot.position`, `robot.heading`, `robot.joints`, `robot.set_controls`, `robot.start(controller, **options)`, `robot.on_step(fn, every)`, `robot.run(seconds)`.
 A robot that cannot do something raises an error that says what it can do instead (a dog has no arm).
 Blocking calls (`arm.move_to`, `pick_and_place`) do not call the per-step callback.
+
+## Recording and replaying demonstrations
+
+```python
+from robotforge.script import connect
+
+sim = connect()
+dog = sim.robot("dog")
+with dog.record("square_walk") as demo:  # keeps joints, actuator targets, base pose, sensors and commands
+    dog.move(speed=0.25, seconds=2.0)
+    dog.move(speed=0.0, turn=1.2, seconds=1.0)
+print(demo.result["command_counts"])  # {"move": 2, "stop": 2}
+sim.robot("go2").replay("square_walk")  # the same commands on another quadruped
+sim.export_demo("square_walk", "npz")  # demonstrations/square_walk.npz
+```
+
+The same from an agent: `demonstration(action="start", robot="dog", name="square_walk")`, act, `demonstration(action="stop")`, `demonstration(action="replay", name="square_walk", robot="go2")`, `demonstration(action="export", name="square_walk", format="npz")`.
+`mode="commands"` (default) gives the recorded commands again at their times; arm targets are kept relative to the arm's base, so an arm standing elsewhere reaches the same place relative to itself.
+`mode="joints"` puts the robot in the first pose and plays the actuator targets back as recorded: exact, open loop, for arms and hands on the same actuators.
+The NPZ has `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text).
 
 ## Behavior trees and state machines
 

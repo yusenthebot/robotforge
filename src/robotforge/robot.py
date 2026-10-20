@@ -90,6 +90,29 @@ class Arm:
         return self._robot.sim.pick_and_place(self.name, obj, target)
 
 
+class DemoRecording:
+    """A demonstration being recorded (see Robot.record): `stop()` ends it, and so does leaving a `with` block."""
+
+    def __init__(self, robot: Robot, started: dict[str, Any]) -> None:
+        self._robot = robot
+        self.name: str = started["recording"]
+        self.started = started
+        self.result: dict[str, Any] | None = None
+
+    def stop(self) -> dict[str, Any]:
+        """End the recording; returns what it holds (seconds, frames, commands) and where it was saved."""
+        if self.result is None:
+            self.result = self._robot.sim.stop_recording(self.name)
+        return self.result
+
+    def __enter__(self) -> DemoRecording:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        if self.result is None:
+            self.stop()
+
+
 class Robot:
     """A robot of the world as a script sees it. Make one with `sim.robot(name)`."""
 
@@ -174,6 +197,22 @@ class Robot:
     @property
     def has_arm(self) -> bool:
         return bool(self.arms)
+
+    # ---- demonstrations --------------------------------------------------------------------------------------------
+
+    def record(
+        self, name: str | None = None, rate_hz: float = 20.0, sensors: list[str] | None = None, overwrite: bool = False
+    ) -> DemoRecording:
+        """Start keeping what this robot does (joints, actuator targets, base pose, sensors and every command it is
+        given, from a script, a key or a gamepad): `with robot.record("pick") as demo: ...`, or demo = robot.record(),
+        then demo.stop(). The result is saved in the world's demonstrations folder."""
+        return DemoRecording(self, self.sim.start_recording(self.name, name, rate_hz, sensors, overwrite))
+
+    def replay(self, name: str, mode: str = "commands", wait: bool = True) -> dict[str, Any]:
+        """Play a demonstration on this robot, which may be another one than recorded it, if it is of the same kind:
+        "commands" gives the recorded commands again, "joints" the recorded actuator targets (same actuators). With
+        wait=True it returns when the replay is over."""
+        return self.sim.replay(name, self.name, mode, wait)
 
     # ---- plugin controllers ----------------------------------------------------------------------------------------
 

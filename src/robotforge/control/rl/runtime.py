@@ -153,6 +153,10 @@ class TrainedPolicy:
 
     def check_fits(self, task: Task) -> None:
         """Refuse a task or robot the policy was not trained for, saying what it was trained for."""
+        if self.meta.get("env"):  # trained by robotforge.training: judged on the observation it was trained on
+            from robotforge.training.play import fit
+
+            task = fit(self.meta, task, task.model)
         meta = self.meta
         if meta.get("task") != task.name:
             raise TaskError(f"policy {self.name!r} was trained for the {meta.get('task')} task, not {task.name}")
@@ -171,6 +175,10 @@ class TrainedPolicy:
             )
 
     def controller(self, task: Task, model: mujoco.MjModel, data: mujoco.MjData) -> LearnedPolicyController:
+        if self.meta.get("env"):  # trained by robotforge.training: on the sensors it was trained on
+            from robotforge.training.play import fit
+
+            task = fit(self.meta, task, model)
         self.check_fits(task)
         return LearnedPolicyController(task, model, data, self)
 
