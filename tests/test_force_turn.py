@@ -97,3 +97,16 @@ async def test_mcp_operate_takes_a_force(pg):
         )
         out = json.loads(done.content[0].text)
         assert out["success"] and out["force"]["limit_n"] == 15
+
+
+@pytest.mark.parametrize("force", [float("nan"), float("inf"), 0.0, -5.0, 5000.0])
+def test_a_force_that_is_not_a_sensible_number_of_newtons_is_refused(pg, force):
+    pg.add_object("lv", shape="lever", pos=[0.45, 0.0])
+    with pytest.raises(operate.OperateError, match="newtons"):
+        operate.start(pg.behaviors, "arm", "lv", "turn", 30, True, force)
+
+
+def test_a_force_with_press_is_refused_instead_of_ignored(pg):
+    pg.add_object("btn", shape="button", pos=[0.45, 0.0])
+    with pytest.raises(operate.OperateError, match="press"):
+        operate.start(pg.behaviors, "arm", "btn", "press", None, True, 5.0)

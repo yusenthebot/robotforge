@@ -27,7 +27,7 @@ from robotforge import wording
 from robotforge.control.actuation import ActionScale
 from robotforge.control.methods import make_controller
 from robotforge.control.spaces import Box
-from robotforge.control.tasks import TASKS, Task, TaskError, make_task
+from robotforge.control.tasks import Task, TaskError, make_task
 from robotforge.control.tasks.base import divergences, readable
 from robotforge.sim.session import SimSession
 
@@ -44,6 +44,9 @@ DEFAULT_ROBOTS: dict[str, tuple[str, str]] = {
 # Tasks that need something to work on: a table in front of the arm (the template arm reaches about 0.35 m).
 WORK_SURFACE = {"name": "table", "shape": "table", "size": [0.3, 0.3, 0.06], "pos": [0.2, 0.0]}
 SURFACE_TASKS = ("press", "wipe")
+# Tasks whose force comes from a controller driving a plan (down to the surface, along it, up again): a policy that
+# only writes actuator commands never moves the plan on, so a gym env of them would pay out nothing, whatever it does.
+CONTACT_TASKS = ("press", "wipe", "insert")
 MARKER = "goal_marker"
 UNSTABLE_PENALTY = 10.0  # reward lost when the simulation diverges (ends the episode)
 
@@ -227,7 +230,7 @@ def task_world(task: str, robot_template: str | None = None, robot_params: dict[
     Returns (model, robot name)."""
     from robotforge.design.world import World
 
-    if task in TASKS and task not in DEFAULT_ROBOTS:  # insert: a peg held over a socket, which only a world has
+    if task == "insert":  # a peg held over a socket, which only a world has
         raise TaskError(
             f"{task} has no stand-alone world (it needs a peg in the gripper and a socket): use run_controller"
         )
@@ -272,6 +275,15 @@ def compile_task_world(task: str, world, base_dir=None) -> mujoco.MjModel:
     return spec.compile()
 
 
+def refuse_contact_task(task: str) -> None:
+    """Raise TaskError for the tasks that have no gym env (CONTACT_TASKS), saying where they do run."""
+    if task in CONTACT_TASKS:
+        raise TaskError(
+            f"{task} has no gym env or training: its force comes from a controller driving a plan, and a policy "
+            "alone would get no reward. Run it with run_controller, and compare controllers with compare_controllers"
+        )
+
+
 def make_env(
     task: str,
     *,
@@ -288,6 +300,7 @@ def make_env(
     quadruped for stand and walk, rover for drive_to). Pass `model` and `robot` to use any
     compiled world instead. Extra keywords go to RobotEnv (control_hz, episode_seconds,
     action_mode, residual_scale, render_mode)."""
+    refuse_contact_task(task)
     if model is None:
         model, default_robot = task_world(task, robot_template, robot_params)
         robot = robot or default_robot

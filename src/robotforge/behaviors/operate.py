@@ -53,6 +53,7 @@ MAX_JOINT_STEP = 0.35  # rad a joint may move between two points of a way 1 cm a
 # This close to where it is going, it is there already: a drawer stopped 3 mm short of its end is open all the way.
 THERE_M, THERE_RAD = 0.004, math.radians(1.5)
 FORCE_TAIL = 1.5  # s a push holds its last pose, to catch up
+MAX_FORCE = 1000.0  # N: the most a hand is told to push with (control.impedance.PathPush takes no more)
 FORCE_RATE_HZ = 500.0  # control steps per second when the hand pushes with a force
 STALLED_S = 0.5  # s a hand pushes at its limit, in all, before it counts as having stalled
 HOLD_STARTS = 12  # random starts tried for a hold, besides the arm's pose now and its own solver's answer
@@ -288,8 +289,18 @@ def plan(
 ) -> Operation:
     """The operation that does `action` on mechanism `target` (a world object of `shape`), or OperateError. With a
     `force`, the hand pushes the handle along its way with at most that many newtons."""
+    if force is not None:
+        if not (math.isfinite(force) and 0 < force <= MAX_FORCE):
+            raise OperateError(
+                f"force is the most newtons the hand pushes with, above 0 and up to {MAX_FORCE:g}, got {force}"
+            )
+        if action == "press":
+            raise OperateError(
+                "force does not apply to press (it goes the whole way); a lever or switch tips by force with "
+                "action='turn', and a drawer, door or valve with open or close"
+            )
     op = _plan(model, data, arm, target, shape, action, amount)
-    if force is not None and action != "press":
+    if force is not None:
         op.push_with(force)
     return op
 

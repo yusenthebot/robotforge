@@ -133,3 +133,62 @@ def test_a_mesh_is_taken_by_the_hull_of_its_vertices():
     grasps = G.plan(parts, OPENING, data.xipos[1].copy())
     assert grasps and grasps[0].width < 0.03 and grasps[0].center[:2] == pytest.approx([0.0, 0.0], abs=2e-3)
     assert grasps[0].grip < 0.95  # an octahedron's faces are slanted to any squeeze
+
+
+def _dense_ellipsoid(count, radii=(0.03, 0.02, 0.025), centre=(0.0, 0.0, 0.03)):
+    return G._sphere_points(count) * np.array(radii) + np.array(centre)
+
+
+def test_a_dense_mesh_is_cut_down_to_its_extremes_and_planned_in_bounded_time():
+    # A scanned mesh has thousands of vertices; the hull used to be cubic in them (minutes at 2500 points).
+    import time
+
+    points = _dense_ellipsoid(2500)
+    assert len(G.extremes(points)) <= 2 * G.HULL_DIRECTIONS + 6
+    started = time.monotonic()
+    grasps = G.plan([points], OPENING, np.array([0.0, 0.0, 0.03]))
+    assert time.monotonic() - started < 60.0  # generous: the point is minutes, not seconds
+    assert grasps and grasps[0].width == pytest.approx(0.04, abs=0.004)  # across the 2 cm half axis, to a few mm
+
+
+def test_cutting_a_mesh_down_keeps_its_hull_to_a_millimetre_or_two():
+    points = _dense_ellipsoid(2500)
+    full_verts, full_faces = G.convex_hull(points[::5])  # 500 points: affordable to hull whole now
+    vol_full, _ = G.hull_volume_centroid(full_verts, full_faces)
+    cut_verts, cut_faces = G.convex_hull(G.extremes(points))
+    vol_cut, _ = G.hull_volume_centroid(cut_verts, cut_faces)
+    assert cut_verts[:, 0].max() == pytest.approx(0.03, abs=0.0015)
+    assert vol_cut == pytest.approx(4 / 3 * math.pi * 0.03 * 0.02 * 0.025, rel=0.04)
+    assert vol_full > 0
+
+
+def test_a_repeated_plan_is_remembered():
+    parts = [_box(0.02, 0.015, 0.03, centre=(0.0, 0.0, 0.03))]
+    first = G.plan_cached(parts, OPENING, np.array([0.0, 0.0, 0.03]))
+    again = G.plan_cached([p.copy() for p in parts], OPENING, np.array([0.0, 0.0, 0.03]))
+    assert again is first
+    moved = G.plan_cached([parts[0] + [0.1, 0.0, 0.0]], OPENING, np.array([0.1, 0.0, 0.03]))
+    assert moved is not first
+
+
+@pytest.mark.parametrize("shape", ["cloud", "grid", "cylinder"])
+def test_the_hull_is_a_closed_surface_with_every_point_inside(shape):
+    rng = np.random.default_rng(3)
+    if shape == "cloud":
+        points = rng.normal(size=(300, 3))
+    elif shape == "grid":  # many coplanar and collinear points: the awkward case for a hull
+        points = np.array([[x, y, z] for x in range(4) for y in range(4) for z in range(3)], float)
+    else:
+        ring = np.linspace(0, 2 * math.pi, 40, endpoint=False)
+        disc = np.column_stack([np.cos(ring), np.sin(ring), np.zeros(40)])
+        points = np.vstack([disc, disc + [0, 0, 2]])
+    verts, faces = G.convex_hull(points)
+    edges = {}
+    for a, b, c in faces:
+        for e in ((a, b), (b, c), (c, a)):
+            edges[e] = edges.get(e, 0) + 1
+    assert all(n == 1 and (e[1], e[0]) in edges for e, n in edges.items())  # each edge once, its twin the other way
+    assert len(verts) - len(edges) // 2 + len(faces) == 2  # Euler: a sphere
+    normals, _ = G.face_normals(verts, faces)
+    base = verts[faces[:, 0]]
+    assert ((points @ normals.T - np.einsum("ij,ij->i", normals, base)) <= 1e-7).all()

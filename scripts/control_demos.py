@@ -130,7 +130,7 @@ def build(Demo: type, caption: Callable[..., str]) -> list:
         "const rf = window.__robotforge; rf.select('panda');"
         "await new Promise((r) => setTimeout(r, 600));"
         "document.getElementById('sensor-views').style.zoom = '1.9';"
-        "rf.lookAt([1.25, -0.9, 0.7], [0.36, 0.0, 0.33]);"
+        "rf.lookAt([1.45, -1.05, 0.85], [0.3, 0.0, 0.45]);"
     )
     peg_cam = (
         "const rf = window.__robotforge; rf.select('arm');"
@@ -146,7 +146,10 @@ def build(Demo: type, caption: Callable[..., str]) -> list:
             _wipe_world,
             70.0,
             timeline=[
-                (0.4, caption("Wiping at a constant 4 N; the plot is the wrist force sensor")),
+                (
+                    0.4,
+                    caption("Wiping at a constant 4 N; the plot is the raw wrist sensor, in the hand's own axes"),
+                ),
                 (0.8, _run_task("panda", "wipe", "osc", {"force": 4.0, "speed": 0.05}, phase("done"))),
             ],
             page=wipe_cam,

@@ -18,7 +18,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import wording
-from robotforge.control.env import DEFAULT_ROBOTS
+from robotforge.control.env import DEFAULT_ROBOTS, refuse_contact_task
 from robotforge.control.mcp_tools import _tool_errors as _task_errors
 from robotforge.control.rl import store
 from robotforge.control.rl.api import unused_name
@@ -214,6 +214,7 @@ def _tool_errors() -> Iterator[None]:
 
 def _robot_spec(playground: Playground, task: str, robot: str | None) -> tuple[dict[str, Any], dict, list[str]]:
     """The robot as world.yaml describes it (template, library or file, params, pose) and the floor."""
+    refuse_contact_task(task)
     if task not in DEFAULT_ROBOTS:
         raise TaskError(f"unknown task {wording.short(task)}; choose one of: {', '.join(DEFAULT_ROBOTS)}")
     template, default_name = DEFAULT_ROBOTS[task]

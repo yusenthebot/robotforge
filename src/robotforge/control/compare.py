@@ -314,6 +314,8 @@ def compare_methods(
             mujoco.mj_resetDataKeyframe(model, data, key)
         mujoco.mj_forward(model, data)
     probe = make_task(task, model, robot, task_params)
+    if not seconds and getattr(probe, "contact", False):
+        probe.begin(data)  # how long a contact task needs depends on how high the tool starts above its surface
     methods = list(methods or probe.methods)
     seconds = float(seconds or probe.default_seconds)
     results = compare(

@@ -2110,7 +2110,7 @@ class BehaviorManager:
         opening = fetch.gripper_opening(model, arm) or GRASP_OPENING
         parts = grasping.body_parts(model, data, body)
         try:
-            grasps = grasping.plan(parts, opening, data.xipos[body].copy()) if parts else []
+            grasps = grasping.plan_cached(parts, opening, data.xipos[body].copy()) if parts else []
         except ValueError:
             grasps = []
         if not grasps:
@@ -2136,7 +2136,8 @@ class BehaviorManager:
 
     def plan_grasps(self, robot: str, obj: str) -> dict[str, Any]:
         """The ways `robot`'s gripper can take hold of `obj`, best first, worked out from the thing's shape: where the
-        tool goes, which way the jaws close, how wide the thing is there and why it holds."""
+        tool goes, which way the jaws close, how wide the thing is there and why it holds. The search runs outside the
+        session lock (a dense mesh is cut down to its extremes first, a repeat is remembered), so the sim goes on."""
         with self.session.lock:
             name = self._arm_name(robot)
             arm = self._arm_motion(name)
@@ -2145,18 +2146,19 @@ class BehaviorManager:
             model, data = self.session.model, self.session.data
             opening = fetch.gripper_opening(model, arm) or GRASP_OPENING
             parts = grasping.body_parts(model, data, body)
-            try:
-                grasps = grasping.plan(parts, opening, data.xipos[body].copy()) if parts else []
-            except ValueError:
-                grasps = []
-            return {
-                "object": obj,
-                "robot": name,
-                "jaws_open_m": round(float(opening), 3),
-                "grasps": [g.as_dict() for g in grasps],
-                "best": grasps[0].as_dict() if grasps else None,
-                "why_none": None if grasps else "too wide across for the jaws, or too flat for fingers to get under",
-            }
+            com = data.xipos[body].copy()
+        try:
+            grasps = grasping.plan_cached(parts, opening, com) if parts else []
+        except ValueError:
+            grasps = []
+        return {
+            "object": obj,
+            "robot": name,
+            "jaws_open_m": round(float(opening), 3),
+            "grasps": [g.as_dict() for g in grasps],
+            "best": grasps[0].as_dict() if grasps else None,
+            "why_none": None if grasps else "too wide across for the jaws, or too flat for fingers to get under",
+        }
 
     def _place_target(self, target: str | list[float]) -> tuple[np.ndarray, float, dict[str, Any]]:
         """(place point for the object's bottom, highest point around it, success region)."""

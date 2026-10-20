@@ -42,6 +42,8 @@ CORNER_SPEED = 0.35  # of the path speed, at a corner
 BIN = 0.01  # m of path: a wiped path is judged in bins this long
 TRACE_S = 0.01  # s between the points of a force trace
 LOST = 0.3  # of the wanted force: below this the tool has lost touch
+JITTER_XY = 0.03  # m: a seeded start puts the tool up to this far to either side of where it is (reset)
+JITTER_Z = 0.04  # m: and up to this much higher or lower
 WIPED = 0.5  # of the wanted force: a bin counts as wiped if the tool pressed at least this hard
 CONTROL_METHODS = ("ik", "pd", "joint_impedance", "cartesian_impedance", "osc")
 # Settings that suit sliding on a surface, per method: stiff along the surface (friction drags the tool, and the path
@@ -122,11 +124,13 @@ class Tally:
     """What a run measures while the tool presses on a surface: the force it presses with, sample by sample."""
 
     def __init__(self) -> None:
-        self.force: list[float] = []
+        self.force: list[float] = []  # through the sensor's low-pass filter: what the run is judged by
+        self.raw: list[float] = []  # the same steps, unfiltered: what the wrist sensor reads step by step
         self.trace: list[tuple[float, float]] = []  # (seconds into the run, newtons) at about 100 per second
 
-    def add(self, newtons: float, seconds: float = 0.0) -> None:
+    def add(self, newtons: float, seconds: float = 0.0, raw: float | None = None) -> None:
         self.force.append(newtons)
+        self.raw.append(newtons if raw is None else raw)
         if not self.trace or seconds - self.trace[-1][0] >= TRACE_S:
             self.trace.append((seconds, newtons))
 
@@ -141,6 +145,8 @@ class Tally:
             "force_peak_n": float(f.max()),
             "force_p95_n": float(np.percentile(f, 95)),
             "lost_contact_pct": float(100.0 * np.mean(f < LOST * wanted)),
+            # the same count on the unfiltered sensor: a pad that skips off the table for a step or two shows here
+            "raw_dropout_pct": float(100.0 * np.mean(np.asarray(self.raw) < LOST * wanted)),
         }
 
 
@@ -161,6 +167,7 @@ class ContactTask(ArmTask):
         self.tally = Tally()
         self.plan: Any = None
         self.sensed = 0.0
+        self.raw_now = 0.0
         self._alpha = 1.0 - math.exp(-2 * math.pi * SENSE_HZ * model.opt.timestep)
         self._sense = ToolForce.of_arm(model, self)
         self._chain = Chain.from_joints(
@@ -184,6 +191,43 @@ class ContactTask(ArmTask):
         self.surface = self._look(data)
         self.plane = PathPlane(self.surface.point, self.surface.normal)
         self.plan = self._plan(data, self.plane)
+        self.default_seconds = self._duration()  # type: ignore[misc]
+
+    def _duration(self) -> float:
+        """How long a run needs from where the tool is now: the class default unless the task knows better."""
+        return type(self).default_seconds
+
+    def _descent_seconds(self, height: float) -> float:
+        """Time to come down `height` m onto the surface: fast, then slowly over the last SLOW_ZONE."""
+        height = max(0.0, height)
+        return max(0.0, height - SLOW_ZONE) / FAST_DESCENT + min(height, SLOW_ZONE) / DESCENT_SPEED
+
+    def reset(self, data: mujoco.MjData, rng: np.random.Generator) -> None:
+        """A start that differs from run to run (a seeded comparison): the tool a few cm to the side and higher or
+        lower, found by inverse kinematics from where the arm is. The job is the same; only where it begins varies."""
+        jitter = rng.uniform(-1.0, 1.0, 3) * np.array([JITTER_XY, JITTER_XY, JITTER_Z])
+        q, err = self._ik.solve(
+            self._chain, data.site_xpos[self.site] + jitter, data.qpos[self.qadr], iterations=200, damping=1e-3
+        )
+        if err < 0.003:  # a start the arm cannot take is left as it was
+            data.qpos[self.qadr] = q
+            mujoco.mj_forward(self.model, data)
+
+    def surface_report(self) -> dict[str, Any]:
+        """Which surface the job is on and how high it is: a tool over the floor wipes the floor, and says so."""
+        if self.surface is None:
+            return {}
+        floor = self.surface.name in ("", "world")
+        out: dict[str, Any] = {
+            "surface": "floor" if floor else self.surface.name,
+            "surface_z_m": round(float(self.surface.point[2]), 3),
+        }
+        if floor:
+            out["note"] = (
+                "working on the floor, not on a table: the arm is not over a table, or the table is out of the way; "
+                "give surface='<object>' (it checks the tool is over it) or move the arm over the table first"
+            )
+        return out
 
     def _close_gripper(self, data: mujoco.MjData) -> None:
         """Fingers shut, so that the two finger pads press as one flat tool: apart, the hand rocks from pad to pad
@@ -243,7 +287,8 @@ class ContactTask(ArmTask):
     def feel_step(self, data: mujoco.MjData) -> float:
         """What a force sensor reads now: the pressing force through the same low-pass filter the controllers use
         (a sensor does not report the 2 ms spike of an impact), updated once per physics step."""
-        self.sensed += self._alpha * (self.pressing(data) - self.sensed)
+        self.raw_now = self.pressing(data)
+        self.sensed += self._alpha * (self.raw_now - self.sensed)
         return self.sensed
 
     def observation(self, data: mujoco.MjData) -> np.ndarray:
@@ -293,6 +338,10 @@ class Press(ContactTask):
     def _plan(self, data: mujoco.MjData, plane: PathPlane) -> PressPlan:
         return PressPlan(self, data, plane)
 
+    def _duration(self) -> float:
+        height = float(self.plane.coords(self.plan.top)[2]) if self.plane is not None else 0.0
+        return round(max(type(self).default_seconds, self._descent_seconds(height) + SETTLE_S + 4.0), 1)
+
     # ---- the task interface ----
 
     def step_cost(self, data: mujoco.MjData) -> float:
@@ -306,7 +355,7 @@ class Press(ContactTask):
         felt = self.feel_step(data)
         plan = self.plan
         if plan is not None and plan.tripped_at is not None:
-            self.tally.add(felt, float(data.time) - self.plan.t0)
+            self.tally.add(felt, float(data.time) - self.plan.t0, self.raw_now)
 
     def success(self, data: mujoco.MjData) -> bool:
         wanted, f = self.params.force, self.tally.force
@@ -320,7 +369,7 @@ class Press(ContactTask):
 
     def report(self, data: mujoco.MjData) -> dict[str, Any]:
         wanted, f = self.params.force, self.tally.force
-        out: dict[str, Any] = {"wanted_n": wanted, "pressing_n": round(self.sensed, 2)}
+        out: dict[str, Any] = {"wanted_n": wanted, "pressing_n": round(self.sensed, 2), **self.surface_report()}
         if self.plan is not None and self.plan.tripped_at is not None and f:
             peak = float(np.max(f))
             out |= {
@@ -398,11 +447,18 @@ class Wipe(ContactTask):
         super().__init__(model, robot, params)
         self.params: WipeParams
         p = self.params
-        path = p.length * p.passes + p.width * (1 if p.passes > 1 else 0)
-        self.default_seconds = round(5.0 + path / p.speed + 2.5, 1)  # type: ignore[misc]
+        self.path_m = p.length * p.passes + p.width * (1 if p.passes > 1 else 0)
+        self.default_seconds = round(5.0 + self.path_m / p.speed + 2.5, 1)  # type: ignore[misc]
         self.lateral = 0.0
         self.lateral_n = 0
         self.wiped = np.zeros(1, dtype=bool)
+
+    def _duration(self) -> float:
+        """Over the start, down from where the tool is, settle, the passes (corners slow them), lift, some to spare."""
+        plan = self.plan
+        work = self.path_m / self.params.speed * 1.15
+        total = plan.above_s + self._descent_seconds(plan.height) + SETTLE_S + work + LIFT_S + 2.0
+        return round(max(total, 5.0 + self.path_m / self.params.speed + 2.5), 1)
 
     def _plan(self, data: mujoco.MjData, plane: PathPlane) -> WipePlan:
         plan = WipePlan(self, data, plane)
@@ -416,7 +472,7 @@ class Wipe(ContactTask):
         plan = self.plan
         if plan is None or plan.phase != "work":
             return
-        self.tally.add(f, float(data.time) - plan.t0)
+        self.tally.add(f, float(data.time) - plan.t0, self.raw_now)
         b = min(plan.bins - 1, int(plan.s / BIN))
         if f >= WIPED * self.params.force:
             self.wiped[b] = True
@@ -447,7 +503,7 @@ class Wipe(ContactTask):
 
     def report(self, data: mujoco.MjData) -> dict[str, Any]:
         wanted = self.params.force
-        out: dict[str, Any] = {"wanted_n": wanted, "pressing_n": round(self.sensed, 2)}
+        out: dict[str, Any] = {"wanted_n": wanted, "pressing_n": round(self.sensed, 2), **self.surface_report()}
         out |= {k: round(v, 2) for k, v in self.tally.summary(wanted).items()}
         if self.lateral_n:
             out["track_rms_mm"] = round(1000.0 * math.sqrt(self.lateral / self.lateral_n), 2)
