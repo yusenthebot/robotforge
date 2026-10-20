@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from robotforge.assets.asset import Asset, Collider
-from robotforge.assets.generators.common import Pieces, screw_count, screw_ring
+from robotforge.assets.generators.common import COLLIDER_PARAM, Pieces, hull_colliders, screw_count, screw_ring
 from robotforge.assets.registry import Args, Param, generator
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
@@ -62,6 +62,7 @@ def grip_pad(a: Args) -> Asset:
         Param("width", 0.07, 0.03, 0.25, "across the closing direction (y), fingers included when open"),
         Param("depth", 0.036, 0.02, 0.12, "front to back (x)"),
         Param("height", 0.04, 0.015, 0.12, "from the flange to the finger roots (z)"),
+        COLLIDER_PARAM,
     ],
     category="tool",
     anchor="flange on z = 0 (the arm's tool plate), fingers' roots on the +z face; the closing direction is y",
@@ -104,4 +105,7 @@ def gripper_body(a: Args) -> Asset:
             M.cylinder(0.0022, 2 * hy * 0.92, segments=12).moved((x, 0, H + 0.0008), M.rot_x(math.pi / 2)),
             material="metal",
         )
-    return Asset("gripper_body", pc.done(), (Collider("box", (hx, hy, H / 2), (0.0, 0.0, H / 2)),))
+    drawn = pc.done()
+    if a.collider == "hulls":
+        return Asset("gripper_body", drawn, hull_colliders(drawn))
+    return Asset("gripper_body", drawn, (Collider("box", (hx, hy, H / 2), (0.0, 0.0, H / 2)),))

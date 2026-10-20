@@ -38,7 +38,7 @@ A value outside the range is refused with the range in the message, so an agent 
 | `gripper_body` | the palm of a parallel gripper with side covers and guide rails on a bolted flange | flange on z = 0, closing along y |
 
 `add_robot(name, template="asset", params={"generator": "wheel", "args": {"radius": 0.07}, "style": "rugged", "seed": 2})` puts one on a turntable in the viewer (the `turn` slider spins it), so what a generator makes can be looked at before a robot uses it.
-`list_templates` lists the generators, their ranges, the styles and the materials.
+`list_templates` lists the generators (a sentence each), the styles and the materials; `list_templates(detail="assets")` adds every generator's parameters with their ranges.
 
 ![Every generator in every style: a pedestal, a joint housing, a link shell, a chassis, a wheel, a foot, a camera, a lidar and a grip pad, one row per style](images/assets_sheet.jpg)
 
@@ -100,6 +100,10 @@ Textures are drawn from the mesh's own coordinates: no image files and no UVs, t
 `asset.mass_properties(density)` adds up the colliders with the parallel-axis rule: a box, cylinder, capsule or sphere analytically, a closed mesh by the divergence theorem.
 `assets.collide(spec, body, asset, density)` gives a MuJoCo body the asset's colliders at that density, and `tests/test_assets.py` checks that MuJoCo computes the same mass, centre and inertia for the body.
 A concave part is split into convex pieces with `assets.hulls_of(mesh)` (CoACD, loaded only when asked).
+The `chassis` and `gripper_body` generators take `collider="hulls"`: their collision shapes are then convex pieces cut from the drawn shell (the housing, not the screws or trim), instead of one box.
+
+The robots the builder and the templates make keep their own collision primitives, so what a generator says about collision shapes and mass reaches plugins, `assets.collide` and the `asset` turntable, not those robots.
+That is why dressing a robot in a style cannot change how it moves; a plugin that wants a part to weigh and collide as its generator says builds the body with `assets.collide`.
 
 ## Drawing into a model
 

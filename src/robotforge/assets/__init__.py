@@ -69,10 +69,11 @@ def catalog() -> list[dict[str, Any]]:
     return [g.describe() for g in registry.iter_generators()]
 
 
-def overview() -> dict[str, Any]:
-    """Generators with their parameters, the styles and the materials, for list_templates."""
-    return {
-        "generators": catalog(),
+def overview(full: bool = True) -> dict[str, Any]:
+    """The generators, the styles and the materials, for list_templates. `full` carries every generator's
+    parameters with their ranges (about 11 KB); without it, a generator is a name and a sentence."""
+    view: dict[str, Any] = {
+        "generators": catalog() if full else {g.name: g.summary for g in registry.iter_generators()},
         "styles": {name: s.summary for name, s in STYLES.items()},
         "materials": {name: m.summary for name, m in MATERIALS.items() if m.summary},
         "how": (
@@ -81,6 +82,9 @@ def overview() -> dict[str, Any]:
             "(build={'style': ...}) and a word in describe ('a rugged robot dog', 'a lab-grade arm')"
         ),
     }
+    if not full:
+        view["more"] = "list_templates(detail='assets') adds every generator's parameters with their ranges"
+    return view
 
 
 def __getattr__(name: str) -> Any:

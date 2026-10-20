@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 
-from robotforge.assets.asset import Piece
-from robotforge.assets.registry import Args
+from robotforge.assets.asset import Collider, Piece, hulls_of
+from robotforge.assets.registry import Args, Param
 from robotforge.design.visuals import mesh as M
 from robotforge.design.visuals import parts as P
 
@@ -46,6 +46,22 @@ class Pieces:
 
     def done(self) -> tuple[Piece, ...]:
         return tuple(self.items)
+
+
+COLLIDER_PARAM = Param(
+    "collider",
+    "primitive",
+    doc="primitive: boxes and cylinders; hulls: convex pieces cut from the drawn shell by CoACD (slower to build)",
+    kind="choice",
+    choices=("primitive", "hulls"),
+)
+
+
+def hull_colliders(pieces: tuple[Piece, ...], roles: tuple[str, ...] = ("body", "structure")) -> tuple[Collider, ...]:
+    """Convex collision pieces that follow the drawn shell: the meshes of the pieces with these roles (not screws,
+    lights or trim) are joined and split by CoACD. A mesh collider is touched as a convex hull of each piece."""
+    shell = M.merge(p.mesh for p in pieces if p.role in roles)
+    return tuple(Collider("mesh", mesh=h) for h in hulls_of(shell, max_pieces=4))
 
 
 def segments(r: float, step: float = 0.004, low: int = 20, high: int = 64) -> int:

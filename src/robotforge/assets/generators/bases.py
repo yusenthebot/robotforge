@@ -6,10 +6,12 @@ import math
 
 from robotforge.assets.asset import Asset, Collider
 from robotforge.assets.generators.common import (
+    COLLIDER_PARAM,
     CYAN,
     GREEN,
     Pieces,
     groove,
+    hull_colliders,
     ring_led,
     screw_count,
     screw_ring,
@@ -93,6 +95,7 @@ def pedestal(a: Args) -> Asset:
         Param("height", 0.08, 0.015, 0.8, "top to bottom (z)"),
         Param("hatch", True, doc="a service hatch panel on the top", kind="bool"),
         Param("vents", True, doc="vent slots on the back", kind="bool"),
+        COLLIDER_PARAM,
     ],
     category="body",
     anchor="centred on the origin; x forward, y left, z up",
@@ -186,4 +189,7 @@ def chassis(a: Args) -> Asset:
         )
     if hx > 0.04:
         pc.add("led", P.led(0.0028, underside=False)["led"].moved((-0.5 * hx, 0.55 * hy, hz)), color=GREEN)
-    return Asset("chassis", pc.done(), (Collider("box", (hx, hy, hz)),))
+    drawn = pc.done()
+    if a.collider == "hulls":
+        return Asset("chassis", drawn, hull_colliders(drawn))
+    return Asset("chassis", drawn, (Collider("box", (hx, hy, hz)),))

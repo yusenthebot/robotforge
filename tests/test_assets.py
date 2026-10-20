@@ -233,6 +233,24 @@ def test_an_asset_can_be_moved_and_its_colliders_move_with_it():
     assert np.allclose(axle, [0, -1, 0], atol=1e-12)
 
 
+@pytest.mark.parametrize("name", ["chassis", "gripper_body"])
+def test_a_generator_can_collide_as_convex_pieces_cut_from_its_drawn_shell(name):
+    """collider="hulls" gives mesh colliders that follow the shell; MuJoCo weighs them as this module does, and the
+    mass stays near the primitive's (the shell's rim makes the chassis a little bigger, the hull leaves out the
+    gripper's trim and screws)."""
+    pytest.importorskip("coacd")
+    plain = assets.generate(name)
+    hulls = assets.generate(name, collider="hulls")
+    assert hulls.colliders and all(c.kind == "mesh" for c in hulls.colliders)
+    assert hulls.params["collider"] == "hulls" and plain.params["collider"] == "primitive"
+    model, b = _compiled_body(hulls)
+    mine = hulls.mass_properties(DENSITY)
+    assert math.isclose(model.body_mass[b], mine.mass, rel_tol=2e-3)
+    assert 0.75 * plain.mass_properties(DENSITY).mass < mine.mass <= 1.1 * plain.mass_properties(DENSITY).mass
+    with pytest.raises(assets.AssetError, match="one of primitive, hulls"):
+        assets.generate(name, collider="voxels")
+
+
 @pytest.mark.slow
 def test_a_concave_mesh_splits_into_convex_pieces():
     pytest.importorskip("coacd")
@@ -472,6 +490,7 @@ def test_the_overview_an_agent_reads_lists_generators_styles_and_materials():
 
 
 def test_list_templates_carries_the_asset_listing():
+    """By default a sentence per generator (an agent pays for every token); detail="assets" adds the ranges."""
     import asyncio
     import json
 
@@ -484,9 +503,15 @@ def test_list_templates_carries_the_asset_listing():
     async def run():
         server = build_server(Playground(session=SimSession.from_xml("<mujoco/>")), 8899)
         async with Client(server) as client:
-            result = await client.call_tool("list_templates", {})
-            return json.loads(result.content[0].text)
+            return [(await client.call_tool("list_templates", a)).content[0].text for a in ({}, {"detail": "assets"})]
 
-    listing = asyncio.run(run())
-    assert "asset" in {t["name"] for t in listing["templates"]}
-    assert {g["name"] for g in listing["assets"]["generators"]} >= {"joint_actuator", "link_shell"}
+    short_text, full_text = asyncio.run(run())
+    short = json.loads(short_text)
+    assert "asset" in {t["name"] for t in short["templates"]}
+    assert set(short["assets"]["generators"]) >= {"joint_actuator", "link_shell"}
+    assert all(isinstance(v, str) for v in short["assets"]["generators"].values())
+    assert "detail='assets'" in short["assets"]["more"]
+    full = json.loads(full_text)
+    assert {g["name"] for g in full["assets"]["generators"]} >= {"joint_actuator", "link_shell"}
+    assert all(g["params"] for g in full["assets"]["generators"] if g["name"] == "wheel")
+    assert len(full_text) - len(short_text) > 5000  # the parameter tables are what the short listing leaves out
