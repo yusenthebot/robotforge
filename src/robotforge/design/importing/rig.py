@@ -49,6 +49,23 @@ _PASSIVE = re.compile(r"caster|castor", re.IGNORECASE)
 _FINGER = re.compile(r"finger|gripper|claw|thumb|jaw", re.IGNORECASE)
 
 
+def wheel_joints(staged: StagedUrdf) -> set[str]:
+    """The continuous joints that are wheels: those the file names so (a joint or its link called wheel, tire), else
+    two or more continuous joints on one link that turn nothing else (a rover chassis and its two drive wheels with
+    joints called "left_motor" and "right_motor"). An arm's continuous joints carry the links after them, so they are
+    not."""
+    free = [j for j in staged.joints if j.type == "continuous" and not j.mimic_of]
+    named = {j.name for j in free if (_WHEEL.search(j.name) or _WHEEL.search(j.child)) and not _PASSIVE.search(j.name)}
+    if named:
+        return named
+    carries = {j.parent for j in staged.joints}  # a link that is some joint's parent turns something
+    byparent: dict[str, list[JointInfo]] = {}
+    for j in free:
+        if j.child not in carries and not _PASSIVE.search(j.name + j.child) and not _FINGER.search(j.name + j.child):
+            byparent.setdefault(j.parent, []).append(j)
+    return {j.name for group in byparent.values() if len(group) >= 2 for j in group}
+
+
 @dataclass
 class _Draft:
     """A plan plus the observations needed to explain it to the user."""
@@ -158,7 +175,8 @@ def _draft(
 def _friction(staged: StagedUrdf) -> dict[str, float]:
     """Sliding friction per link: the author's Gazebo values, and slippery casters and skids."""
     out = {link: CASTER_FRICTION for link in staged.links if _PASSIVE.search(link)}
-    wheels = [j for j in staged.joints if j.type == "continuous" and _WHEEL.search(j.name)]
+    named = wheel_joints(staged)
+    wheels = [j for j in staged.joints if j.name in named]
     if len(wheels) >= 3 and not out:  # skid steering
         out.update({j.child: SKID_STEER_FRICTION for j in wheels})
     out.update(staged.link_friction)
@@ -209,9 +227,8 @@ def _choose_base(
     root = staged.root
     if root.lower() in ("world", "map", "odom"):
         return "fixed", f"the root link is called '{root}', the usual sign of a robot bolted to the world"
-    wheels = [
-        j.name for j in movable if j.type == "continuous" and _WHEEL.search(j.name) and not _PASSIVE.search(j.name)
-    ]
+    named = wheel_joints(staged)
+    wheels = [j.name for j in movable if j.name in named]
     if wheels:
         return "floating", f"it has wheels ({', '.join(wheels[:3])}), so it can drive around"
 
@@ -258,6 +275,7 @@ def _spawn_height(base: str, geo: Geometry) -> tuple[float, float]:
 def _plan_actuators(staged: StagedUrdf, geo: Geometry, draft: _Draft, movable: list[JointInfo]) -> None:
     plan = draft.plan
     support = _support_share(staged, geo, plan)
+    wheels = wheel_joints(staged)
     for j in movable:
         jid = geo.joint_id(j.name)
         if jid < 0:
@@ -265,8 +283,8 @@ def _plan_actuators(staged: StagedUrdf, geo: Geometry, draft: _Draft, movable: l
         if _PASSIVE.search(j.name):
             draft.passive.append(j.name)
             continue
-        if j.type == "continuous" and _WHEEL.search(j.name):
-            plan.actuators.append(_wheel_actuator(staged, geo, j))
+        if j.name in wheels:
+            plan.actuators.append(_wheel_actuator(staged, geo, j, len(wheels)))
             continue
         inertia, mass, torque = geo.joint_load(jid)
         actuator = _position_actuator(j, inertia, mass, torque, plan, geo, jid, support)
@@ -348,13 +366,13 @@ def _share_body_weight(
     return max(effective, share * reach * reach), torque + share * GRAVITY * reach
 
 
-def _wheel_actuator(staged: StagedUrdf, geo: Geometry, j: JointInfo) -> ActuatorPlan:
+def _wheel_actuator(staged: StagedUrdf, geo: Geometry, j: JointInfo, n_wheels: int) -> ActuatorPlan:
     """A speed motor: full torque once the wheel is 0.5 rad/s off its command, so rolling resistance barely shows."""
     shapes = staged.link_shapes.get(j.child, [])
     radius = max(shapes_radius(shapes, np.zeros(3)) if shapes else 0.0, 0.02)
-    n_wheels = max(1, sum(1 for x in staged.joints if x.type == "continuous" and _WHEEL.search(x.name)))
+    n_wheels = max(1, n_wheels)
     load = geo.total_mass / n_wheels
-    skid = sum(1 for x in staged.joints if x.type == "continuous" and _WHEEL.search(x.name)) >= 3
+    skid = n_wheels >= 3
     force = j.effort if j.effort else load * radius * WHEEL_GRIP_ACCELERATION * (3.0 if skid else 1.0)
     kv = max(force / WHEEL_FULL_TORQUE_ERROR, load * radius * radius / WHEEL_TIME_CONSTANT, 1e-4)
     speed = max(j.velocity or 0.0, WHEEL_DEFAULT_SPEED)
