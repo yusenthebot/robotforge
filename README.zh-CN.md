@@ -13,16 +13,40 @@
 新手入门具身智能的机器人游乐场。
 在 Claude 或 GPT 里用一句话描述你想要的机器人，agent 帮你搭出来、让它动起来、在 3D 查看器里实时演示，并顺手讲清楚背后的道理。
 
-- 搭：`add_robot(describe="一台带激光雷达的高个子轮式快递车")` 一句话生成机器人；或者从模板（机械臂、机器狗、小车、人形、倒立摆、小船、水下机器人、无人机）、十个现成的奇特设计、一块一块的零件开始（见 [零件拼装](docs/BUILDER.md)）。每个零件都是生成的，外形风格可选（cobot、lab、hobby、rugged）：带螺丝圈的关节壳、有分模线的外壳、胎纹、拉丝和铸造表面（见 [资产引擎](docs/ASSETS.md)，英文）。
-- 开：导入你自己的 URDF、xacro、MJCF 或网格文件，自动体检修复。
-- 用真机，还能拼：MuJoCo Menagerie 的 19 台真实机器人和零件按名字加载（宇树 Go2、波士顿动力 Spot、ANYmal C、Franka Panda、UR5e、AgileX PiPER、宇树 G1、Booster T1、ALOHA 2 等），再把一台装到另一台上，比如 Go2 背 PiPER、ANYmal C 背 UR5e 加 Robotiq 夹爪、Spot 背 Z1。
-- 感知：相机（彩色、深度、分割）、二维和三维激光雷达、IMU、关节编码器、力和触觉都能装在任何机器人上，查看器里实时画出射线和深度图。
-- 搬东西：带轮子的机械臂把行走和够取一起规划，从厨房岛台取苹果放到餐桌上；抽屉、柜子、按钮、开关、拉杆、阀门都能操作，工厂传送带把箱子送给分拣臂。
-- 生成世界和任务：`load_scene(description=...)` 一句话生成一个家、仓库或山坡，`add_task` 把同一句话变成带成功判定的任务。
-- 学走路：任何有腿的机器人（拼出来的或导入的）在查看器里靠试错学出一种节奏，存下来之后用键盘或在聊天里叫它走和转。
+- 搭：`add_robot(describe="一台带激光雷达的高个子轮式快递车")` 一句话生成机器人，`update_robot` 再用一句话改它（“六条腿”“改成红色”）；或者从模板（机械臂、机器狗、小车、人形、倒立摆、小船、水下机器人、无人机）、十个现成的奇特设计、一块一块的零件开始（见 [零件拼装](docs/BUILDER.md)），做不成的设计会被检查拦下并说明原因。每个零件都是生成的，外形风格可选（cobot、lab、hobby、rugged）：带螺丝圈的关节壳、有分模线的外壳、胎纹、拉丝和铸造表面（见 [资产引擎](docs/ASSETS.md)，英文）。
+- 导入和导出：导入你自己的 URDF、xacro、MJCF 或网格文件，自动体检修复；`export_model` 把机器人或整个世界导出成带网格的 MJCF 或 URDF。URDF 不带电机，要保留电机请用 MJCF。
+- 用约 200 台真机，还能拼：22 台调好的真实机器人（宇树 Go2、波士顿动力 Spot、ANYmal C、Franka Panda、UR5e、AgileX PiPER、宇树 G1、Booster T1、ALOHA 2 等）加 175 台开源机器人目录里的，按名字加载（见 [目录](docs/CATALOGUE.md)，英文）。`mount` 把一台装到另一台上，比如 Go2 背 PiPER、ANYmal C 背 UR5e 加 Robotiq 夹爪、Spot 背 Z1、手腕上装激光雷达，并检查质量、平衡和够取范围，会倒的组合直接拒绝。
+- 生成世界、物体和任务：`load_scene(description=...)` 一句话生成一个家、仓库、公园或山坡，`add_task` 把同一句话变成带成功判定的任务，中英文都行。24 种生成的物体（杯子、瓶子、碗、工具、水果、带标签的箱子）自带抓取提示，任务套件涵盖取送、堆叠、插入、倒东西和递物。
+- 走地形：腿足机器人读地面，过斜坡、台阶、碎石和踏石；人形机器人能站稳、经得起一推，在平地上能走。
+- 搬东西：带轮子的机械臂把行走和够取一起规划，从厨房岛台取苹果放到餐桌上；`plan_grasp` 选抓取方式（杯子抓把手）；`operate` 操作抽屉、柜子、按钮、开关、拉杆、阀门，还能限制用力；工厂传送带把箱子送给分拣臂。
+- 随你的方式操控：W A S D 或手柄驱动任何会走会滚的机器人，也能点动机械臂；任务逻辑可以写成行为树或状态机；示范可以录下来，在同类的另一台机器人上回放。
+- 感知：相机（彩色、深度、分割、双目、鱼眼、事件）、二维和三维激光雷达、声呐、IMU、关节编码器、轮式里程计、力、触觉皮肤、温度和气体都能装在任何机器人上，查看器里实时画出来。
+- 建图和定位：机器人边走边用激光雷达和有漂移的里程计画占据栅格地图，粒子滤波校正位姿，自己探索陌生空间，只靠自己的地图走到指定地点。
+- 任意算法训练任意机器人：一次调用就能用 ARS、CEM、PPO、SAC 或你自己写的算法训练，几个算法并排跑，或者做设置搜索，边跑边淘汰差的试验；查看器的训练面板实时画出每个试验的曲线和设置，并播放最好的策略。
+- 学走路，也学模仿：任何有腿的机器人（拼出来的或导入的）在查看器里靠试错学出一种节奏，存下来之后用键盘或在聊天里叫它走和转；模仿学习课里你示范抓取，小神经网络照着学。
 - 水上和空中：小船在浮标之间开到码头，水下机器人下潜，四旋翼绕着树飞一个方形。
-- 自己扩展：把 Python 文件放进 `~/.robotforge/plugins`，就多出一个零件、传感器、控制器或行为，用起来和内置的一样；世界或单个机器人可以导出成带网格的 MJCF 或 URDF；一段脚本既能控制模板狗也能控制 Go2（见 [docs/EXTENDING.md](docs/EXTENDING.md)，英文）。
+- 自己扩展：把 Python 文件放进 `~/.robotforge/plugins`，就多出一个零件、传感器、控制器或行为，用起来和内置的一样；一段脚本既能控制模板狗也能控制 Go2（见 [docs/EXTENDING.md](docs/EXTENDING.md)，英文）。
 - 教学：查看器里有 13 节互动课、4 个调参台、2 场真机对比和 3 个挑战，每一步先猜再试。
+- 给 Claude 和 GPT 用：60 个 MCP 工具、一个教 agent 的 skill，还有 Claude Code 和 Codex 插件。
+
+版本 0.0.1：第一个打标记的快照，能做什么、怎么验证的、还有哪些做不到，见 [发布说明](docs/RELEASE_0.0.1.md)（英文，末尾有中文摘要）。
+
+### 0.0.1 新能力
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/objects_shelf.jpg" alt="货架上的 24 种生成物体"><br><sub><b>物体。</b>杯子、瓶子、碗、工具、水果和带标签的箱子，都是生成的，自带抓取提示。</sub></td>
+    <td width="33%"><img src="docs/images/training_view.jpg" alt="九个试验的搜索进行到一半时的训练面板"><br><sub><b>训练面板。</b>机械臂学着够红球：两种算法九个试验，边跑边淘汰。</sub></td>
+    <td width="33%"><img src="docs/images/map_warehouse.jpg" alt="Go2 在陌生仓库里画的占据地图"><br><sub><b>建图。</b>Go2 给陌生仓库建图，位姿误差 0.12 米，只靠里程计是 1.96 米。</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="docs/images/catalogue_grid.jpg" alt="从目录里随机抽出的 20 台开源机器人"><br><sub><b>按名字加载的开源机器人。</b>随机抽 20 台，都是查看器里的真实画面；有的会摔倒，图里也如实标了。</sub></td>
+    <td width="33%"><img src="docs/images/generated_worlds.jpg" alt="20 句话生成的 20 个世界和任务"><br><sub><b>一句话生成世界。</b>20 句话、20 个世界和任务，判定结果 19 个完成。</sub></td>
+    <td width="33%"><img src="docs/images/assets_arm3_before_after.jpg" alt="同一个三关节机械臂，资产引擎之前和之后"><br><sub><b>资产引擎。</b>同一个三关节机械臂前后对比：圆角底座、螺丝圈、关节壳和外壳。</sub></td>
+  </tr>
+</table>
+
+![十种装配：轮式底座上的 UR5e 加 LEAP 手、Spot 背两条臂、Go2 背着的 PiPER 手腕上装激光雷达、ANYmal C 背 UR5e 加 Franka 手等](docs/images/mount_ten.jpg)
 
 物理引擎是 MuJoCo，轻量，支持 macOS、Windows 和 Linux。
 英文版的图集和更完整的提问示例见 [README.md](README.md)。
@@ -68,11 +92,11 @@ codex plugin add robotforge@robotforge
 
 ### Claude Desktop
 
-双击 `robotforge-0.1.0.mcpb`，在弹出的窗口里点“安装”，Claude Desktop 会自己用 uv 准备好环境。
+双击 `robotforge-0.0.1.mcpb`，在弹出的窗口里点“安装”，Claude Desktop 会自己用 uv 准备好环境。
 目前还没有发布版本，安装包需要在本地构建：
 
 ```bash
-uv run python scripts/build_desktop.py   # 生成 dist/robotforge-0.1.0.mcpb 和 dist/robotforge-skill.zip
+uv run python scripts/build_desktop.py   # 生成 dist/robotforge-0.0.1.mcpb 和 dist/robotforge-skill.zip
 ```
 
 想让 Claude Desktop 也学会教学技能，在“设置 > 功能 > 技能”里上传 `dist/robotforge-skill.zip`。

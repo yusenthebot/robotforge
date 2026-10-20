@@ -15,20 +15,44 @@ Tell Claude or GPT what you want, and it builds the robot, puts it in a world, m
 The physics is [MuJoCo](https://mujoco.org/), the viewer is a thin three.js page, and the agent talks to it through an MCP server, so there is nothing to configure and nothing heavy to install.
 It runs on macOS, Windows and Linux.
 
+Version 0.0.1: the first tagged snapshot, with what it can do, how it was checked and what it cannot do yet in the [release notes](docs/RELEASE_0.0.1.md).
+
 ## What you can do
 
-- **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence. Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels ([builder guide](docs/BUILDER.md)). Every part is generated, in a style you choose (cobot, lab, hobby, rugged): joint housings with bolt circles, shells with parting lines, tread, brushed or cast surfaces ([asset engine](docs/ASSETS.md)).
-- **Import your own.** URDF, xacro, MJCF and mesh files go through a health check that repairs the usual problems (mesh formats, inertia, the starting pose).
-- **Use real robots, and splice them.** Nineteen robots and parts from MuJoCo Menagerie load by name: Unitree Go2, Boston Dynamics Spot, ANYmal C, Franka Panda, UR5e, AgileX PiPER, Unitree G1, Booster T1, ALOHA 2 and more. Mount any of them on another: a Go2 with a PiPER on its back, an ANYmal C with a UR5e and a Robotiq gripper, a Spot with a Z1.
+- **Build any robot from words or parts.** `add_robot(describe="a tall wheeled courier with a lidar")` assembles one from a sentence, and `update_robot` changes it by another ("six legs instead of four", "make it red"). Or start from a template (arm, quadruped, rover, humanoid, cart-pole, boat, underwater robot, drone), pick one of ten ready-made odd designs, or put it together part by part from servos, links and wheels with checks that say why a design cannot work ([builder guide](docs/BUILDER.md)). Every part is generated, in a style you choose (cobot, lab, hobby, rugged): filleted bases with bolt circles, joint housings, shells with parting lines, tread, brushed or cast surfaces ([asset engine](docs/ASSETS.md)).
+- **Import and export.** URDF, xacro, MJCF and mesh files go through a health check that repairs the usual problems (mesh formats, inertia, the starting pose); `export_model` writes a robot or a world as MJCF or URDF with meshes. A URDF carries no motors, so MJCF is the round trip that keeps them.
+- **Use about 200 real robots, and splice them.** 22 tuned robots (Unitree Go2, Boston Dynamics Spot, ANYmal C, Franka Panda, UR5e, AgileX PiPER, Unitree G1, Booster T1, ALOHA 2 and more) and 175 more from the open robot catalogue load by name ([catalogue](docs/CATALOGUE.md)). `mount` puts one on another: a Go2 with a PiPER on its back, an ANYmal C with a UR5e and a Robotiq gripper, a Spot with a Z1, a lidar on a wrist; it checks mass, balance and reach and refuses what would tip over.
+- **Generate worlds, objects and tasks.** `load_scene(description=...)` lays out a home, a warehouse, a park or a hillside from one sentence, and `add_task` turns a sentence into a task with a success check, in English or Chinese ([scenes](docs/SCENES.md)). 24 generated objects (mugs, bottles, bowls, tools, fruit, labelled boxes) come with grasp hints, and task suites cover bring, put, stack, insert, pour and hand over ([objects](docs/OBJECTS.md)).
+- **Walk on terrain.** Legged robots read the ground and cross slopes, stairs, gravel and stepping stones; humanoids stand and take a push, and walk on flat ground ([legged](docs/LEGGED.md), [humanoids](docs/HUMANOID.md)).
+- **Move things around.** A mobile arm plans its drive and its reach together, fetches the apple from the kitchen island and puts it on the dining table; `plan_grasp` picks a grasp (a mug is taken by its handle). `operate` opens drawers and cabinets and presses buttons, switches, levers and valves, with a force limit if you ask, and a factory conveyor feeds boxes to a sorting arm ([mobile](docs/MOBILE.md), [manipulation](docs/MANIPULATION.md)).
+- **Drive it your way.** W A S D or a gamepad drives anything that walks or rolls and jogs an arm; task logic can be a behavior tree or a state machine; a demonstration is recorded and replayed on another robot of the same kind ([flexible interfaces](docs/FLEXIBLE.md)).
 - **Sense.** Cameras (colour, depth, segmentation, stereo, fisheye, event), 2D and 3D lidar, sonar, IMU, joint encoders, wheel odometry, force, touch and tactile skin, temperature and gas go on any robot, and the viewer draws what they sense ([sensors](docs/SENSORS.md)).
 - **Map and find itself.** A robot draws an occupancy map from its lidar and drifting odometry while it moves, a particle filter keeps its pose honest, it explores unseen space and goes to a named place by its own map alone ([perception](docs/PERCEPTION.md)).
-- **Move things around.** A mobile arm plans its drive and its reach together, fetches the apple from the kitchen island, and puts it on the dining table. Drawers, cabinets, buttons, switches, levers and valves can be operated, and a factory conveyor feeds boxes to a sorting arm.
-- **Generate worlds and tasks.** `load_scene(description=...)` lays out a home, a warehouse or a hillside from one sentence, and `add_task` turns the same sentence into a task with a success check ([scenes](docs/SCENES.md)).
-- **Learn to walk.** Any legged robot, built from parts or imported, learns a rhythm by trial and error in the viewer, keeps it, and then walks and turns with the keyboard or from chat.
-- **Train any robot on any task with any algorithm.** One call trains a robot built from parts, a Go2 or an arm with ARS, CEM, PPO, SAC or an algorithm you wrote, several side by side, or a hyperparameter search that drops the poor trials as it goes; the learner sees what the robot's sensors read, and the viewer's Training panel draws every trial's curve and settings live and plays the best policy ([training](docs/TRAINING.md)).
+- **Train any robot on any task with any algorithm.** One call trains a robot built from parts, a Go2 or an arm with ARS, CEM, PPO, SAC or an algorithm you wrote, several side by side, or a settings search that drops the poor trials as it goes; the learner sees what the robot's sensors read, and the viewer's Training panel draws every trial's curve and settings live and plays the best policy ([training](docs/TRAINING.md)).
+- **Learn to walk, and to copy you.** Any legged robot, built from parts or imported, learns a rhythm by trial and error in the viewer, keeps it, and then walks and turns with the keyboard or from chat. Imitation lessons let you demonstrate a grasp and watch a small network copy it.
 - **Go on water, and in the air.** A boat crosses a lake between buoys to a dock, an underwater robot dives, a quadcopter flies a square round a tree.
-- **Extend it with your own code.** Drop a Python file into `~/.robotforge/plugins` to add a part, a sensor, a controller or a behavior that works like the built-in ones; export a world or a robot to MJCF or URDF with meshes for other simulators; write one script that runs on a template dog and on a Go2 ([extending](docs/EXTENDING.md)).
+- **Extend it with your own code.** Drop a Python file into `~/.robotforge/plugins` to add a part, a sensor, a controller or a behavior that works like the built-in ones; write one script that runs on a template dog and on a Go2 ([extending](docs/EXTENDING.md)).
 - **Teach and learn.** The viewer's Learn button opens 13 interactive lessons, 4 benches, 2 face-offs against real robots and 3 challenges, each step "guess first, then try".
+- **Use it from Claude or GPT.** 60 MCP tools, a skill that teaches the agent, and plugins for Claude Code and Codex.
+
+### New in 0.0.1
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/objects_shelf.jpg" alt="Twenty-four generated objects on a shelf: tools, fruit, boxes, cups, bottles"><br><sub><b>Objects.</b> Mugs, bottles, bowls, tools, fruit and labelled boxes, each generated with grasp hints.</sub></td>
+    <td width="33%"><img src="docs/images/training_view.jpg" alt="The Training panel in the middle of a nine-trial search: curves, a trial table and a leading trial"><br><sub><b>Training view.</b> An arm learns to reach the red ball: nine trials of two algorithms, halved as they go.</sub></td>
+    <td width="33%"><img src="docs/images/map_warehouse.jpg" alt="A Go2's occupancy map of a warehouse drawn over the scene, with the pose error"><br><sub><b>Maps.</b> A Go2 maps an unseen warehouse; the pose error is 0.12 m against 1.96 m for odometry alone.</sub></td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="docs/images/catalogue_grid.jpg" alt="Twenty open robots drawn at random from the catalogue"><br><sub><b>Open robots by name.</b> Twenty drawn at random from the catalogue, each as the viewer shows it; some fall, and the grid says so.</sub></td>
+    <td width="33%"><img src="docs/images/generated_worlds.jpg" alt="Twenty worlds, each generated from one sentence with its task"><br><sub><b>Worlds from sentences.</b> Twenty sentences, twenty worlds and tasks; the check says done in 19.</sub></td>
+    <td width="33%"><img src="docs/images/assets_arm3_before_after.jpg" alt="The same three-joint arm before and after the asset engine"><br><sub><b>Asset engine.</b> The same three-joint arm before and after: filleted base, bolt ring, joint housings and a shell.</sub></td>
+  </tr>
+</table>
+
+![Ten mounted combinations: a UR5e with a LEAP hand on a wheeled base, two arms on a Spot, a lidar on a PiPER's wrist on a Go2, a UR5e with a Franka hand on an ANYmal C, and more](docs/images/mount_ten.jpg)
+
+*Ten mounts, each with its own check; the viewer shows them as built.*
 
 ## Quick start
 
@@ -75,11 +99,11 @@ The plugin marks robotforge's tools as pre-approved, so non-interactive runs suc
 
 ### Claude Desktop
 
-Double-click `robotforge-0.1.0.mcpb` and press Install; Claude Desktop prepares the environment with uv.
+Double-click `robotforge-0.0.1.mcpb` and press Install; Claude Desktop prepares the environment with uv.
 There is no published release yet, so build the bundle locally:
 
 ```bash
-uv run python scripts/build_desktop.py   # writes dist/robotforge-0.1.0.mcpb and dist/robotforge-skill.zip
+uv run python scripts/build_desktop.py   # writes dist/robotforge-0.0.1.mcpb and dist/robotforge-skill.zip
 ```
 
 To teach Claude Desktop the teaching skill too, upload `dist/robotforge-skill.zip` under Settings > Capabilities > Skills.
