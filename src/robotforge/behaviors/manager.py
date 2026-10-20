@@ -137,6 +137,27 @@ def _firm(built: Any) -> bool:
     return bool(built.mass >= HEAVY or built.facts.get("firm"))
 
 
+def _why_not_placed(
+    obj: str, pos: np.ndarray, center: np.ndarray, half: np.ndarray, min_z: float, start: np.ndarray | None
+) -> str:
+    """Why `obj` at `pos` is not in the region: never taken, dropped on the way, or put down beside or below it."""
+    if start is not None and float(np.linalg.norm(pos - start)) < 0.08:
+        return (
+            f"{obj} was never lifted: it is within {100 * float(np.linalg.norm(pos - start)):.0f} cm of where it "
+            "started (the arm did not get hold of it, or only knocked it); look at the arm's pose and what stands near"
+        )
+    miss = float(np.hypot(*np.maximum(np.abs(pos[:2] - center[:2]) - half, 0.0)))
+    if pos[2] < min_z - 0.15 or (pos[2] < 0.1 and center[2] > 0.2):
+        return (
+            f"{obj} was dropped or fell: it ended at height {pos[2] * 100:.0f} cm, {miss * 100:.0f} cm sideways from "
+            "the target (slipped out of the grip, knocked by something on the way, or rolled off after it was let go)"
+        )
+    if miss > 0.0:
+        return f"{obj} was put down {miss * 100:.0f} cm beside the target"
+    low = max(min_z - float(pos[2]), 0.0) * 100
+    return f"{obj} is {low:.0f} cm below the target's top: it sank in or is not standing on it"
+
+
 class BehaviorError(ValueError):
     """User-facing: says what to do instead."""
 
@@ -236,6 +257,8 @@ DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for wh
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+PLACE_TOL = 0.015  # m sideways that still counts as on the target (see placed)
+CLUTTER_MARGIN = 0.05  # m more over what the load is carried over: a small arm sags 4 to 9 cm under it on the way
 CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
 POUR_FORCE = 40.0  # N a cup is squeezed with while it is tipped
 LINK_CLEAR = 0.02  # m a pour wants between the top of the finger links and the rim it lets balls run over
@@ -1633,6 +1656,7 @@ class BehaviorManager:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
                 raise BehaviorError(f"{name} has no gripper to pick with; {self._gripper_hint(name)}")
+            self._refuse_if_touching_another_robot(name)
             model, tool = self._library_tool(name)
             if tool is not None and tool.cannot_pick:
                 raise BehaviorError(
@@ -1662,13 +1686,17 @@ class BehaviorManager:
                 if not goes or self._place_kind(target) != "terrain":
                     raise
                 place = None  # a terrain patch: only a robot that goes over puts things on one
-            if place is not None and pick.get("built") is not None:
+            if place is not None:  # (a plain sphere too: an apple carried into the cup beside the bowl was knocked out)
                 place_top = max(place_top, self._tallest_between(obj, pick["center"], place))
             if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
                 try:
                     used = self._take(arm, pick, place, place_top)
                     if pick.get("built") is not None and _firm(pick["built"]) and used is not None:
                         hints.FirmHold(self.session, arm, self._body(obj), used.force, used.short).start()
+                    elif pick.get("built") is None and self._is_ball(
+                        obj
+                    ):  # round all over: slips out of a plain squeeze
+                        hints.FirmHold(self.session, arm, self._body(obj), hints.FORCE_MIN).start()
                 except OutOfReach as exc:
                     # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
                     # goes with it wherever it drives, and the refusal names it.
@@ -1690,6 +1718,10 @@ class BehaviorManager:
                     return arm, {**info, **({"grasp": pick["grasp"]} if "grasp" in pick else {})}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def _is_ball(self, obj: str) -> bool:
+        entry = self._object_entry(obj)
+        return entry is not None and entry.shape == "sphere"
 
     def _take(self, arm: ArmMotion, pick: dict[str, Any], place: np.ndarray, place_top: float) -> hints.Choice | None:
         """Queue the pick and place with the first grasp the arm can reach and carry (a generated object has several
@@ -2176,14 +2208,42 @@ class BehaviorManager:
             text += wording.in_meters(target_at[:2], float(np.linalg.norm(target_at - base)), reach)
         return text
 
-    def placed(self, obj: str, region: dict[str, Any]) -> dict[str, Any]:
-        """Check whether `obj` ended up inside the target region."""
+    def _refuse_if_touching_another_robot(self, arm: str) -> None:
+        """A robot whose parts press on another robot's cannot do a pick: it would push against it and fail without a
+        word (two Pandas a metre apart whose hands meet at home)."""
+        m, d = self.session.model, self.session.data
+        mine = arm.split("/", 1)[0]
+
+        def owner(geom: int) -> tuple[str, str]:
+            body = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, int(m.geom_bodyid[geom])) or ""
+            return (body.split("/", 1)[0] if "/" in body else ""), body
+
+        for c in range(d.ncon):
+            (a, a_body), (b, b_body) = owner(d.contact[c].geom1), owner(d.contact[c].geom2)
+            if a and b and a != b and mine in (a, b):
+                other = b_body if a == mine else a_body
+                here = a_body if a == mine else b_body
+                raise BehaviorError(
+                    f"{arm} touches another robot already ({here} against {other}): they start in each other's way "
+                    f"and the arm would only push against it; move one of them with update_robot(pos=...) or turn it"
+                )
+
+    def position_of(self, obj: str) -> np.ndarray:
+        """Where `obj` is now (m), to tell afterwards whether it moved."""
+        return self.session.data.xpos[self._body(obj)].copy()
+
+    def placed(self, obj: str, region: dict[str, Any], start: np.ndarray | None = None) -> dict[str, Any]:
+        """Check whether `obj` ended up inside the target region (PLACE_TOL m of slack sideways: the task check judges
+        by the target's whole top, and a mug 2 mm off a shelf slot stands on the shelf). When it did not, "why" says
+        how it went wrong; `start`, where it was before the arm began, tells a pick that never lifted it."""
         body = self._body(obj)
         pos = self.session.data.xpos[body]
         center = np.asarray(region["center"])
         half = np.asarray(region["half_xy"])
-        inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half) and pos[2] >= region["min_z"])
+        inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half + PLACE_TOL) and pos[2] >= region["min_z"])
         out = {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
+        if not inside:
+            out["why"] = _why_not_placed(obj, pos, center, half, float(region["min_z"]), start)
         entry = self._object_entry(obj)
         built = hints.built_for(entry)
         if built is not None:  # a generated thing is also judged by how it stands
@@ -2506,7 +2566,7 @@ class BehaviorManager:
             if np.any(centre[:2] + half[:2] < lo) or np.any(centre[:2] - half[:2] > hi):
                 continue
             top = max(top, float(centre[2] + half[2]))
-        return top if top > floor else -math.inf
+        return top + CLUTTER_MARGIN if top > floor else -math.inf
 
     def _hinted_geometry(
         self, name: str, entry: ObjectEntry, built: Any, arm: ArmMotion, want: str | None
@@ -2574,6 +2634,8 @@ class BehaviorManager:
         else:  # fixed objects are plain geoms
             base = d.geom_xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, target)].copy()
         length, width = entry.size[0], entry.size[1] if len(entry.size) > 1 else entry.size[0]
+        if entry.shape in ("cylinder", "sphere"):  # [diameter, height]: round, as wide each way
+            width = length
         if entry.shape == "bin":
             floor_z = base[2] + 0.005
             region = {"center": base.tolist(), "half_xy": [length / 2, width / 2], "min_z": floor_z - 0.01}

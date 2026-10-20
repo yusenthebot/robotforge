@@ -1066,6 +1066,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 playground.behaviors.pick_and_place, robot, object, target, go, grasp, pour
             )
             object = info["object"]  # as the world spells it
+            started_at = playground.behaviors.position_of(object)
             errand = motion if isinstance(motion, fetch.Errand) else None
             caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
             if caught is not None:  # caught off a moving belt, then put down or carried there
@@ -1086,7 +1087,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     errand.why = "out_of_time"
             settle = await run_until(lambda: False, 0.5)
             region = info["region"] if caught is None or caught.region is None else caught.region
-            result = playground.behaviors.placed(object, region) if region is not None else {"success": False}
+            result = (
+                playground.behaviors.placed(object, region, started_at) if region is not None else {"success": False}
+            )
             if info.get("pour"):
                 result = playground.behaviors.poured(info)
             if info.get("hold"):

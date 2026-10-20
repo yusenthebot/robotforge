@@ -992,8 +992,15 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         return
     body = spec.worldbody.add_body(name=obj.name, pos=[x, y, z], quat=quat)
     body.add_freejoint(name=obj.name)
-    g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=[1.0, 0.02, 0.002], condim=4, **geom)
+    # A ball needs rolling friction (condim 6) or it rolls on for ever once let go, off a plate, a counter and the
+    # island: the kitchen's apple put on a plate ended on the floor.
+    rolls = obj.shape == "sphere"
+    friction = [1.0, 0.02, BALL_ROLLING if rolls else 0.002]
+    g = body.add_geom(name=obj.name, rgba=rgba, mass=mass, friction=friction, condim=6 if rolls else 4, **geom)
     looks.dress(spec, body, obj.shape, obj.size, rgba, obj.name, [g])
+
+
+BALL_ROLLING = 0.005  # m: a ball's rolling friction coefficient (about a hard ball on a wooden top)
 
 
 def _table(spec: mujoco.MjSpec, obj: ObjectEntry, rgba: list[float], ground_z: float, quat: list[float]) -> None:
