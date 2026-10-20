@@ -161,7 +161,11 @@ def test_a_fisheye_sees_what_a_pinhole_cannot(post, needs_gl):
 
 def test_an_event_camera_fires_where_things_move_and_is_silent_when_nothing_does(pg, needs_gl):
     pg.add_robot("rover", template="rover", pos=[0.0, 0.0], yaw=0)
-    pg.add_object("pole", shape="pillar", pos=[1.2, 0.0], size=[0.2, 0.8], color="white")
+    # Three tall white posts cross the view: their edges are long, so what a move fires is in the thousands and
+    # does not hang on where a one-pixel horizon line falls (how the rover is drawn moves its camera by a fraction
+    # of a millimetre; a scene of a thin line flips between none and dozens with that).
+    for name, at, width in (("pole", [1.2, 0.0], 0.2), ("left", [1.0, 0.35], 0.16), ("right", [1.0, -0.35], 0.16)):
+        pg.add_object(name, shape="pillar", pos=at, size=[width, 0.8], color="white")
     pg.add_sensor("rover", {"type": "event", "name": "dvs", "width": 160, "height": 120})
     pg.run_fast(lambda: False, 0.3)
     _read(pg, "rover", "dvs")  # events are changes since the last reading: the first follows the rover settling
@@ -171,8 +175,8 @@ def test_an_event_camera_fires_where_things_move_and_is_silent_when_nothing_does
     pg.behaviors.move("rover", 0.4, 0.8)
     pg.run_fast(lambda: False, 1.0)
     moving, pictures = _read(pg, "rover", "dvs", image=True)
-    assert moving["events"] > 40 and moving["on"] > 0 and moving["off"] > 0  # silent: 0, and a moving view: dozens
-    assert moving["rate_ev_s"] > 1000 and "centroid_px" in moving
+    assert moving["events"] > 800 and moving["on"] > 200 and moving["off"] > 200  # silent: 0, and a moving view
+    assert moving["rate_ev_s"] > 10000 and "centroid_px" in moving
     image = _picture(pictures[0][1])
     assert (image[..., 0] > image[..., 2] + 60).any() and (image[..., 2] > image[..., 0] + 60).any()  # red and blue
 

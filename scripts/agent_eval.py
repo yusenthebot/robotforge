@@ -293,8 +293,8 @@ class World:
 
     def outline(self, robot: str) -> tuple[float, float, float, float] | None:
         """The robot seen from above at its start, in its own frame (front +x, left +y): (back, front, right, left)
-        in meters from its root body, the box around all its geoms (wheels included). None when it does not
-        compile."""
+        in meters from its root body, the box around the geoms that collide (wheels included; what a robot is
+        drawn with, its style, does not move it). None when it does not compile."""
         import mujoco
         import numpy as np
 
@@ -310,8 +310,10 @@ class World:
         if not bodies:
             return None
         frame, origin = d.xmat[bodies[0]].reshape(3, 3), d.xpos[bodies[0]]
+        own = [g for g in range(m.ngeom) if m.geom_bodyid[g] in bodies]
+        solid = [g for g in own if m.geom_contype[g] or m.geom_conaffinity[g]]  # the drawn meshes have neither
         corners = []
-        for g in (g for g in range(m.ngeom) if m.geom_bodyid[g] in bodies):
+        for g in solid or own:
             center, half = m.geom_aabb[g][:3], m.geom_aabb[g][3:]
             for sign in itertools.product((-1, 1), repeat=3):
                 world = d.geom_xpos[g] + d.geom_xmat[g].reshape(3, 3) @ (center + np.multiply(sign, half))
