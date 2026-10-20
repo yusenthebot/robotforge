@@ -549,3 +549,21 @@ def test_a_custom_task_folder_is_checked_before_anything_starts(tmp_path, monkey
     assert unilab._custom_task(tmp_path, "my_dog") == "RobotforgeMyDog"
     with pytest.raises(unilab.UniLabError, match="task names"):
         unilab.start_training("../my_dog", 10, "my_dog_walk", conf_dir=tmp_path)
+
+
+def test_a_speed_inside_the_policys_dead_zone_is_raised_to_one_that_walks(pg, card):
+    """Regression: the G1 walker stands still under 0.2 m/s, and move's default 0.2 ended 0.16 m backwards and 0.5 m
+    sideways with a note blaming a wall."""
+    spec = card.model_copy(deep=True)
+    spec.commands.planar_dead_zone = 0.2
+    walker = PolicyWalker(pg.session.model, "go2", spec, ConstantPolicy(np.zeros(12)))
+    walker.command(0.2, 0.0)
+    assert walker.command_speed == pytest.approx(0.25)
+    walker.command(0.5, 0.0)
+    assert walker.command_speed == pytest.approx(0.5)
+    walker.command(0.0, 0.0)
+    assert walker.command_speed == 0.0
+    from robotforge.behaviors.manager import _clamp_notes
+
+    walker.command(0.1, 0.0)
+    assert "below the slowest this walker walks" in _clamp_notes(walker, 0.1, 0.0)[0]

@@ -129,6 +129,9 @@ def load_onnx(spec: PolicySpec, directory: Path) -> OnnxPolicy:
     return policy
 
 
+DEAD_ZONE_MARGIN = 0.05  # m/s past the policy's planar dead zone: the slowest walk asked of it
+
+
 class PolicyWalker:
     """Walks a robot with a learned velocity-tracking policy. Same interface as the trot gait:
     `command(speed, turn)`, `max_speed`, `status()`, so move/stop/WASD work unchanged."""
@@ -190,6 +193,12 @@ class PolicyWalker:
         """speed in m/s (negative = backwards), turn in rad/s (positive = left), clipped to what it learned."""
         r = self.spec.commands
         self.command_speed = float(np.clip(speed, max(r.lin_vel_x[0], -self.max_reverse), self.max_speed))
+        floor = r.planar_dead_zone + DEAD_ZONE_MARGIN
+        reach = self.max_speed if self.command_speed > 0 else self.max_reverse
+        if 0.0 < abs(self.command_speed) < floor <= reach:
+            # Inside the dead zone the policy was trained to stand, and a standing G1 drifted 0.5 m sideways: the
+            # slowest walk it can be asked for is just past it.
+            self.command_speed = math.copysign(floor, self.command_speed)
         self.command_turn = float(np.clip(turn, r.ang_vel_z[0], r.ang_vel_z[1]))
         if self.command_turn != 0.0:
             self.heading = None  # turning on purpose; a new heading is taken when the turn stops

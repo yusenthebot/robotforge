@@ -401,6 +401,11 @@ def _clamp_notes(ctrl: Any, speed: float, turn: float) -> list[str]:
     notes = []
     if top is not None and abs(speed) > top + 1e-9 and abs(got_speed - speed) > 1e-9:
         notes.append(f"speed {speed:g} m/s is above max_speed {top:.3g}, so it moves at {got_speed:.3g}")
+    elif speed != 0.0 and abs(got_speed - speed) > 1e-9 and abs(got_speed) > abs(speed):
+        notes.append(
+            f"speed {speed:g} m/s is below the slowest this walker walks (its policy stands still under about "
+            f"{abs(got_speed) - 0.05:g} m/s), so it moves at {got_speed:g}"
+        )
     if abs(got_turn - turn) > 1e-9:
         note = f"turn {turn:g} rad/s is above the limit for this robot, so it turns at {got_turn:g}"
         if abs(turn) > 2 * math.pi:
