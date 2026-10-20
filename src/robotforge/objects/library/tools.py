@@ -157,6 +157,12 @@ def hammer(g: Gen) -> None:
     g.fact(kind="tool", handle_x=x0 + shaft_len * 0.5, head_x=hx, axis=(1.0, 0.0, 0.0))
 
 
+def _area(poly: np.ndarray) -> float:
+    """The area of a polygon (shoelace)."""
+    x, y = poly[:, 0], poly[:, 1]
+    return abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1)))) / 2
+
+
 @generator(
     "wrench",
     size="[length]",
@@ -171,7 +177,7 @@ def hammer(g: Gen) -> None:
 )
 def wrench(g: Gen) -> None:
     length = g.size[0]
-    t = 0.011
+    t = 0.016  # thick enough for pads to take hold of its edges: a 1 cm strip of steel slipped out of a Robotiq
     x0, x1 = -length / 2, length / 2
     mm = g.p("size_mm") / 1000.0
     color = STEEL if g.p("finish") == "chrome" else DARK_STEEL
@@ -204,15 +210,20 @@ def wrench(g: Gen) -> None:
     stamp.text(shade(color, 0.5), f"{round(g.p('size_mm')):d}", (sx0 + sx1) / 2, -0.0035, 0.007, "center")
     for rgba, mesh in stamp.patches:
         g.decor(mesh, rgba, "metal")
+    # the heads are heavier than the shaft: the pads take it where its mass is, so it does not turn between them
+    areas = [(float(_area(poly)), float(poly[:, 0].mean())) for poly in polys.values()]
+    areas.append((math.pi * ring_r**2, rx))
+    com_x = sum(a * x for a, x in areas) / sum(a for a, _ in areas)
+    grip_x = min(max(com_x, sx0 + 0.015), sx1 - 0.015)
     g.grasp(
         "shaft",
-        ((sx0 + sx1) / 2, 0.0, 0.0085),
+        (grip_x, 0.0, 0.0085),
         (0.0, 1.0),
         2 * 0.0102,
         1.0,
         "across the shaft, jaws on its edges",
         0.0075,
-        0.011,
+        0.016,
     )
     g.anchor("ring", (rx, 0.0, t))
     g.anchor("jaw", (x1, 0.0, t / 2))
