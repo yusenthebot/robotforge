@@ -18,7 +18,9 @@ The same environment, the same algorithm interface and the same view serve a qua
 From Claude or GPT:
 
 - "Train the dog to walk at 0.4 m/s with ARS and CEM and tell me which is better" is `train_policy(task="walk", robot="dog", algo=["ars", "cem"], task_params={"speed": 0.4})`.
-- "Tune ARS for the arm" is `train_policy(task="reach", robot="arm", algo="ars", search={"trials": 9})`.
+- "Tune ARS to reach the red ball" is `train_policy(task="reach", robot="arm", algo="ars", task_params={"target": "ball", "jitter": 0.04}, search={"trials": 9})`.
+  An object's name as the target is turned into the point it stands at, and the arm is trained to reach that point.
+  Without a `target`, `reach` draws a random point every episode, which the linear policies of ARS and CEM do not learn in these budgets; the response and the finished run's summary say so.
 - `training_status(name)` says how each trial is going, side by side; the viewer's Training panel draws it.
 - `run_controller(robot, task, method="policy:<name>")` and `compare_controllers(...)` use the result like any other algorithm.
 
@@ -40,6 +42,7 @@ policy = train(
 print(policy.meta["final"])  # the best trial: algorithm, settings, test return, the task's own numbers
 ```
 
+Without `algo` the task's usual one runs (PPO or SAC, like the plain trainer), and ARS when the `rl` extra is not installed; the response says which and why, in `notes`.
 `start(...)` has the same arguments and returns at once.
 Training runs in a process of its own, trials side by side (up to four), and keeps `status.json` in the policy's folder.
 Closing the agent does not stop it; `stop_training(name)` does, and keeps the best policy so far.
@@ -132,8 +135,13 @@ A ball named `target` in the world is where a reach policy aims when the viewer 
   Settings left out are drawn from their own ranges; `"all_settings": false` searches only the ones named.
 - With several algorithms the trials take them in turn, so the search also compares the algorithms.
 
-Trials are ranked on test episodes that every trial shares (the same start seeds, calm), never on their noisy training episodes.
+Trials are ranked on test episodes that every trial shares (the same start seeds, calm), never on their noisy training episodes, and the leader is the trial with the best test return, so nobody leads before the first test.
 `timesteps` is the environment steps each trial may use at most; a halving search spends a fraction of that on most of them.
+
+The score a winner won on is optimistic: it was picked out of several trials because it did well on exactly those starts.
+So when several trials compete, the winner is scored again on 50 fresh starts that no trial was ranked on (`held_out_episodes`, 0 turns it off) and the result is kept next to the ranking score: `final.held_out` in `policy.json`, `winner.held_out` in `training_status`, a "Winner" line in the panel.
+Quote the held-out number.
+A single trial has nothing to be flattered by and is not scored again.
 
 ## The training view
 
@@ -141,13 +149,17 @@ Trials are ranked on test episodes that every trial shares (the same start seeds
 
 The viewer shows a Training button once a run exists (top right) and opens the panel by itself when a run starts.
 
-- One chart with the learning curve of every trial: the leader bold, the dropped trials faded.
+- One chart with the training-episode reward of every trial: the leader (best test return so far) bold, the dropped trials faded.
+  These are training episodes, and ARS and CEM try perturbed policies in them, so their curves sit lower and noisier than the policy's own test return and do not compare across algorithms; the test return column does.
 - The leader's episode returns, one dot per episode, and a loss or other series the algorithm reports (the selector lists them), for the trial you click in the table.
 - A table with the settings of the trials side by side (the ones that differ, or all of them for a single trial), their test return and success rate, steps and state, and a play button on each row.
+- When the run ends, the winner and its held-out result; notes about the run (a random-target reach, a slow camera) sit under the progress bar.
 - Progress, time left, a Stop button, and "Play the best policy": the policy runs on its robot in the world.
   Open the world the robot was trained in first; a reset starts it again.
 
-Agents get the same facts in `training_status`: each trial's settings, state, steps, latest losses, a handful of curve points and its test return, and which trial leads.
+The panel updates in place while a run goes on, so an open selector and the hover or focus of a button survive the updates.
+
+Agents get the same facts in `training_status`: each trial's settings, state, steps, latest losses, a handful of curve points and its test return, which trial leads, the notes, and the winner with its held-out result.
 
 ## Writing your own algorithm
 
@@ -157,52 +169,65 @@ It registers with `@algorithm(name, hyper={...})` in a plugin file, appears in `
 
 ## What was measured
 
-Real simulations on a MacBook with a loaded machine (other work was running), `scripts/training_media.py` reproduces them.
+Real simulations on a MacBook with a loaded machine (other work was running); `scripts/training_media.py` reproduces them.
+Every score below is on **held-out starts**: 50 episodes with seeds no trial was ranked on, calm (no shoves).
+A trial's own score, the one a search ranks by, is on 10 or 20 other starts and is shown where it matters, because the winner of a search is flattered by it.
 
 ### A quadruped built from parts learns to walk faster
 
 The robot is `add_robot("dog", describe="a robot dog")`: 15 generated parts, 13 actuators, with its own IMU and touch pads, and `add_sensor("dog", {"type": "encoders"})` on top.
-Its observation is 68 numbers: the task's 38, the IMU's 9 (two of them), the touch pads' 8 and the encoders' 13.
-The task is `walk` at 0.4 m/s, as corrections on the built-in gait, 4 s episodes with shoves, 700k steps per trial, two trials side by side (7 min 8 s in all on a loaded machine).
-Scores are 10 test episodes on the same starts, no shoves.
+The task is `walk` at 0.4 m/s, as corrections on the built-in gait, 4 s episodes with shoves, 700k steps per trial, two trials side by side (11 min 48 s in all on a loaded machine).
+"Success" is the task's own: upright and close to the commanded speed.
 
-| | test return | speed | success | settings |
+| | observation | return | speed | success |
 |---|---|---|---|---|
-| built-in gait alone (the do-nothing correction) | 5.404 | 0.20 m/s | 90% | |
-| ARS | 7.311 | 0.29 m/s | 100% | defaults: directions 8, step_size 0.1, noise 0.3 |
-| CEM | 7.178 | 0.35 m/s | 100% | defaults: population 24, init_std 0.5 |
+| built-in gait alone (the do-nothing correction) | | 5.37 | 0.20 m/s | 54% |
+| ARS, defaults | task's 38 numbers plus the dog's sensors (68) | 7.305 | 0.29 m/s | 100% |
+| CEM, defaults | the same 68 | 7.224 | 0.36 m/s | 100% |
+| ARS, defaults | `observation="sensors"`: the speed command plus the sensors only (32) | 7.549 | 0.41 m/s | 100% |
+| CEM, defaults | the same 32 | 7.038 | 0.38 m/s | 98% |
 
-Both beat the gait it started from by 45 to 75 percent in speed and stay upright.
-CEM walks faster, ARS earns the slightly higher return; the panel shows the two side by side.
+Both algorithms beat the gait they started from and stay upright; CEM walks faster than ARS on the full observation, ARS is best with sensors only.
+The sensors-only policy never sees the trunk height, the gravity vector or the joint angles the task would give it: it walks on the IMU, the touch pads and the encoders alone, and reaches the commanded speed.
+So the sensors a robot carries change what is learned, and a policy can be trained on only what it can sense.
+(The 0.29 m/s first reported for the default ARS reproduces: 0.293 here; the gait-alone success was 90% on the 10 ranking starts and is 54% on 50 held-out ones.)
 
 ### An arm learns to reach, and a search makes the difference
 
-The robot is the arm template with encoders; the task is `reach` a red ball, 22, 8 and 14 cm from the base, which moves up to 4 cm every episode (`jitter`); success is the tool within 3 cm; 2 s episodes, direct actions, 200k steps per trial.
+The robot is the arm template with encoders; the task is `reach` a red ball, 22, 8 and 14 cm from the base, which moves up to 4 cm every episode (`task_params={"target": [0.22, 0.08, 0.14], "jitter": 0.04}`); success is the tool within 3 cm; 2 s episodes, direct actions, 200k steps per trial.
 
-| | test return | tool to ball | within 3 cm |
+| | return | tool to ball | within 3 cm |
 |---|---|---|---|
-| doing nothing | -8.655 | 48 cm | 0% |
-| ARS, default settings | -3.086 | 15.8 cm | 0% |
-| CEM, default settings | -2.366 | 10.5 cm | 5% |
-| best of a search (trial t05, ARS: step size 0.26, noise 0.12) | -1.087 | 2.3 cm | 80% |
+| doing nothing | -8.695 | 48 cm | 0% |
+| ARS, default settings | -3.177 | 16.3 cm | 0% |
+| CEM, default settings | -2.590 | 10.7 cm | 0% |
+| best of a 9-trial search (t05, ARS: step size 0.26, noise 0.12, 18 directions) | -1.192 | 2.9 cm | 58% |
+| the same winner, on the starts it was ranked on | -1.087 | 2.3 cm | 80% |
+| ARS, defaults, `observation="sensors"` | -1.494 | 4.1 cm | 40% |
+| CEM, defaults, `observation="sensors"` | -2.948 | 14.3 cm | 0% |
 
-The default settings, taken as they are, get close and no further.
-The search is successive halving over nine trials of ARS and CEM, `eta` 3, drawing the noise, the step size and CEM's starting spread from log ranges:
+The default settings, taken as they are, get close and no further; a search finds settings that reach.
+The search's winner shows the bias that held-out scoring removes: it scored 80% within 3 cm on the 20 starts it was chosen on and 58% on 50 fresh ones.
+A reviewer's re-score of the same saved policy on 100 other fresh starts gave about 50% (3.1 cm), so the honest figure is "around half the time within 3 cm, and about 3 cm on average", not 80%.
+The search is successive halving over nine trials of ARS and CEM, `eta` 3, drawing the noise, the step size and CEM's starting spread from log ranges; each trial's last policy, on the held-out starts:
 
-| trial | algorithm | step size | noise or spread | steps run | test return | tool to ball | fate |
+| trial | algorithm | step size | noise or spread | steps run | held-out return | tool to ball | fate |
 |---|---|---|---|---|---|---|---|
-| t01 | ars | 0.016 | 0.252 | 25k | -5.703 | 32.0 cm | dropped |
-| t02 | cem | - | 0.075 | 26k | -7.8 | 43.5 cm | dropped |
-| t03 | ars | 0.146 | 0.028 | 22k | -4.124 | 18.7 cm | dropped |
-| t04 | cem | - | 0.038 | 69k | -2.606 | 13.4 cm | dropped |
-| t05 | ars | 0.263 | 0.118 | 208k | -1.087 | 2.3 cm | went on to the full budget |
-| t06 | cem | - | 0.454 | 23k | -6.849 | 31.1 cm | dropped |
-| t07 | ars | 0.226 | 0.011 | 72k | -2.446 | 5.1 cm | dropped |
-| t08 | cem | - | 0.158 | 23k | -4.02 | 11.8 cm | dropped |
-| t09 | ars | 0.057 | 0.130 | 22k | -4.2 | 21.1 cm | dropped |
+| t01 | ars | 0.016 | 0.252 | 25k | -5.676 | 31.9 cm | dropped |
+| t02 | cem | - | 0.075 | 26k | -7.441 | 41.3 cm | dropped |
+| t03 | ars | 0.146 | 0.028 | 23k | -4.234 | 19.3 cm | dropped |
+| t04 | cem | - | 0.038 | 70k | -2.642 | 13.4 cm | dropped |
+| t05 | ars | 0.263 | 0.118 | 209k | -1.192 | 2.9 cm | went on to the full budget |
+| t06 | cem | - | 0.454 | 24k | -6.705 | 34.7 cm | dropped |
+| t07 | ars | 0.226 | 0.011 | 73k | -2.571 | 5.8 cm | dropped |
+| t08 | cem | - | 0.158 | 23k | -4.527 | 18.3 cm | dropped |
+| t09 | ars | 0.057 | 0.130 | 22k | -4.104 | 20.6 cm | dropped |
 
-The whole search, trials side by side three at a time, took 33 s with three side by side.
-The poorest trials are dropped after about 25k steps; the leader's number of directions, large step and moderate noise are not what the defaults chose, which is what a search is for.
+The whole search, trials side by side three at a time, took 86 s on this loaded machine.
+The poorest trials are dropped after about 25k steps; the leader's large step and moderate noise are not what the defaults chose, which is what a search is for.
+
+A reach with no target (a random point every episode) is a different problem: ARS with a 9-trial search on it ended at -27.5 and 31 cm, no better than doing nothing, and the call now says so up front.
+Left to the default algorithm, the same random-target reach goes to SAC and reaches within 7 cm on average after 150k steps (return -8.5 on its 20 test starts, against -27.5 for the ARS search).
 
 ### PPO and SAC through the same call
 
@@ -212,10 +237,16 @@ On the same arm task, 30k steps each (far too few to converge, only to show the 
 
 The dog's environment, with its sensors read at every step, runs about 1,700 steps a second in one process; the two 700k-step trials above took 7 minutes together on a machine that was busy with other work.
 
+A depth camera in the observation changes this a great deal, because it draws a picture at every step.
+Measured on a rover (`drive_to`) on one core: no sensors 2,886 steps a second, a lidar 2,599, an IMU and a lidar 2,372, a depth camera 110.
+The default 100k steps per trial then take about 15 minutes instead of 35 seconds.
+`train_policy` measures the rate when the observation has a depth camera and puts the estimate in its `notes`; fewer `timesteps`, a lidar or `observation="task"` are the way out.
+
 ## Limits
 
 - Trials are trained on the robot's world as `scope` says; a task that depends on other robots moving is trained with them standing still.
 - PPO and SAC train one simulation per trial (a search runs trials side by side instead), so a single PPO run is slower than control/rl's eight-process trainer, which `train_policy` still uses for plain `algo="ppo"` or `"sac"` on a robot without sensors and without a search.
 - Cameras other than depth are not part of an observation.
+- A continued SAC trial gets back the newest 100k experiences of its replay memory (`replay.npz` in its folder); older ones are not kept.
 - `halving` needs `timesteps` per trial; with only `minutes` a search is refused.
 - A plugin algorithm or task is code: it runs in the training process with your rights, like any plugin ([EXTENDING.md](EXTENDING.md#where-plugins-live)).

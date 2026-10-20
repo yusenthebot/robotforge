@@ -78,8 +78,10 @@ def register(server: MCPServer, playground: Playground) -> None:
         task: reach, balance, stand, walk, drive_to, a task saved with the world (add_task), or one from a plugin.
         robot: any robot of this world, whatever it is built from. algo: ppo or sac (neural networks, the optional
         rl extra), ars or cem (numpy, nothing to install), a plugin's algorithm, or a list of names to run side by
-        side and compare; list_algorithms shows them with their settings. timesteps is the environment steps each
-        trial may use (or minutes, a time budget). settings: fixed settings per algorithm, {"ars": {"noise": 0.2}}.
+        side and compare; list_algorithms shows them with their settings. Left out, it is the task's usual one (ppo
+        or sac; ars when the rl extra is missing), and the response says which and why. timesteps is the
+        environment steps each trial may use (or minutes, a time budget). settings: fixed settings per algorithm,
+        {"ars": {"noise": 0.2}}.
         search: tunes the settings by running several trials, {"method": "halving" (default, drops the poor early
         and gives the rest more steps) or "random", "trials": 9, "space": {"noise": [0.1, 0.3], "step_size":
         {"low": 0.02, "high": 0.4, "log": true}}}; settings left out of space are drawn from their own ranges.
@@ -87,12 +89,18 @@ def register(server: MCPServer, playground: Playground) -> None:
         a lidar or an IMU and the observation grows), "sensors" the goal plus the sensors only, "task" the task's
         own. parallel: trials running at once (at most 4).
 
+        When several trials compete, the winner is scored again on fresh starts (training_status winner.held_out):
+        quote that, the score it won on is optimistic. reach with ars or cem needs a target: without one it draws a
+        random point every episode, which linear policies do not learn (the response says so).
+
         Examples: task="balance", robot="pole" (about a minute); task="walk", robot="dog", algo=["ars", "cem"],
         task_params={"speed": 0.4} (two algorithms compared); task="reach", robot="arm", algo="ars",
-        search={"trials": 9}; task="walk", robot="dog", algo="ppo", minutes=5. Defaults need no tuning. shoves sets
-        how hard the robot is pushed now and then while it learns (0 = never). The robot is rebuilt from this
-        world's description and trained on its floor and terrain (a saved task: the whole world). Then
-        run_controller(method="policy:<name>") or compare_controllers(methods=["lqr", "mpc", "policy:<name>"])."""
+        task_params={"target": [0.22, 0.08, 0.14], "jitter": 0.04}, search={"trials": 9} (a ball that moves about
+        a little; target="ball" names an object of the world); task="walk", robot="dog", algo="ppo", minutes=5.
+        Defaults need no tuning. shoves sets how hard the robot is pushed now and then while it learns (0 = never).
+        The robot is rebuilt from this world's description and trained on its floor and terrain (a saved task: the
+        whole world). Then run_controller(method="policy:<name>") or
+        compare_controllers(methods=["lqr", "mpc", "policy:<name>"])."""
         with _tool_errors():
             if _new_pipeline(playground, task, robot, algo, search, settings, observation, parallel):
                 return _json(

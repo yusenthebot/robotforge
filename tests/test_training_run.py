@@ -172,6 +172,68 @@ def test_halving_continues_the_survivors_from_where_they_were(tmp_path, balance_
     assert doc["search"]["method"] == "halving" and len(doc["search"]["rungs"]) == 2
 
 
+def test_the_winner_of_several_trials_is_scored_again_on_starts_nobody_was_ranked_on(tmp_path, balance_env):
+    # picking the best of several trials by one set of test starts flatters it; the quoted number is held out
+    from robotforge.training.trial import EVAL_SEED, HELD_OUT_SEED
+
+    spec = make_run_spec(
+        "held", balance_env, algos=["ars", "cem"], steps=4_000, parallel=0, eval_episodes=3, held_out_episodes=4
+    )
+    doc = run_inline(spec, tmp_path / "held")
+    held = doc["final"]["held_out"]
+    assert held["episodes"] == 4 and held["seed"] == HELD_OUT_SEED
+    assert HELD_OUT_SEED > EVAL_SEED + 50  # no overlap with any ranking start (at most 50 of them)
+    assert "success_rate" in held and "mean_result" in held and "ranking_score_note" in doc["final"]
+    meta = TrainedPolicy.load(tmp_path / "held").meta
+    assert meta["final"]["held_out"]["episodes"] == 4  # kept with the policy, for the agent and the panel
+    from robotforge.training.summary import run_view
+
+    assert run_view(doc)["winner"]["held_out"]["episodes"] == 4
+    single = make_run_spec("one", balance_env, algos=["ars"], steps=2_000, parallel=0, eval_episodes=2)
+    assert "held_out" not in run_inline(single, tmp_path / "one")["final"]  # nothing was picked, nothing to correct
+
+
+def test_the_leader_is_the_best_test_return_never_a_training_return(tmp_path, balance_env):
+    from robotforge.training.runs import Job
+
+    spec = make_run_spec("lead", balance_env, algos=["ars", "cem"], steps=1_000, parallel=0)
+    job = Job(spec, tmp_path / "lead")
+    a, b = job.trials
+    a.live = {"mean_return": 100.0}  # a lucky run of perturbed training episodes
+    assert job.leader() is None  # no trial has been tested: nobody leads, whatever the training episodes say
+    assert job.document()["leader"] is None
+    a.score = {"mean_return": -5.0, "success_rate": 0.0}
+    b.score = {"mean_return": -2.0, "success_rate": 0.0}
+    assert job.leader() is b
+    b.state = "failed"
+    assert job.leader() is a
+
+
+def test_wrong_ppo_and_sac_settings_are_refused_when_the_run_starts(tmp_path, balance_env):
+    bad = [
+        ("ppo", {"learning_rate": -1}, "learning_rate"),
+        ("ppo", {"gamma": 5}, "gamma"),
+        ("ppo", {"n_epochs": 0}, "n_epochs"),
+        ("sac", {"tau": 0}, "tau"),
+        ("sac", {"gamma": 1.0}, "gamma"),
+    ]
+    for algo, params, word in bad:
+        spec = make_run_spec("bad", balance_env, algos=[algo], params={algo: params}, parallel=0)
+        folder = tmp_path / f"bad_{algo}_{word}"
+        with pytest.raises(TaskError, match=word):  # by start_run itself, with or without the rl extra installed
+            start_run(spec, folder)
+        assert not (folder / "run.json").exists()  # nothing was launched
+
+
+def test_a_depth_camera_in_the_observation_comes_with_a_speed_note(balance_env):
+    from robotforge.training.runs import speed_notes
+
+    spec = make_run_spec("slow", balance_env, algos=["ars"], steps=100_000, parallel=0)
+    assert speed_notes(spec, {}) == []
+    note = speed_notes(spec, {"slow_sensors": ["cam"], "steps_per_second": 110.0})[0]
+    assert "'cam'" in note and "110 steps a second" in note and "15 min" in note and "lidar" in note
+
+
 def test_a_stop_request_ends_the_run_with_the_policy_so_far(tmp_path, balance_env):
     spec = make_run_spec("quick", balance_env, algos=["ars"], steps=5_000_000, parallel=0)
     folder = tmp_path / "quick"
@@ -270,3 +332,28 @@ def test_stopping_the_training_process_keeps_the_best_policy_so_far(tmp_path, mo
     assert status["state"] == "stopped", status
     assert (folder / "policy.npz").exists() and status["trials"][0]["state"] == "stopped"
     assert not (folder / store.STOP_FILE).exists()
+
+
+def test_no_algo_means_the_tasks_usual_one_on_both_pipelines_and_the_response_says_so(monkeypatch):
+    from robotforge.training import api
+
+    monkeypatch.setattr(api, "rl_installed", lambda: True)
+    spec = api.build_spec("reach", name="r", robot="arm", task_params={"target": [0.2, 0.0, 0.2]})
+    assert spec.algos == ["sac"] and spec.steps == 150_000  # what the plain trainer would pick, with its budget
+    assert any("sac is the usual choice for reach" in n for n in spec.notes)
+    monkeypatch.setattr(api, "rl_installed", lambda: False)
+    spec = api.build_spec("reach", name="r", robot="arm", task_params={"target": [0.2, 0.0, 0.2]})
+    assert spec.algos == ["ars"] and any("not installed" in n and "ars" in n for n in spec.notes)
+    spec = api.build_spec("reach", name="r", robot="arm", algo="cem", task_params={"target": [0.2, 0.0, 0.2]})
+    assert not spec.notes  # an algorithm that was asked for needs no explaining
+
+
+def test_a_numpy_algorithm_on_reach_with_random_targets_is_warned_about():
+    from robotforge.training import api
+
+    random_targets = api.build_spec("reach", name="r", robot="arm", algo="ars")
+    assert any("random point" in n and "jitter" in n for n in random_targets.notes)
+    assert not api.build_spec("reach", name="r", robot="arm", algo="ars", task_params={"target": [0.2, 0, 0.2]}).notes
+    assert not api.build_spec("balance", name="b", robot="cartpole", algo="ars").notes
+    # the warning travels with the run: it is in the status an agent reads when the run is over
+    assert random_targets.model_dump()["notes"]

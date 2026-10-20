@@ -165,8 +165,46 @@ def test_a_depth_camera_is_a_few_cells_of_the_nearest_thing_in_view(needs_gl):
     env.close()
 
 
+def test_a_run_with_a_depth_camera_measures_its_speed_and_says_it_is_slow(needs_gl):
+    from robotforge.training import api
+    from robotforge.training.runs import policy_meta, speed_notes
+
+    robot = _arm_with({"type": "depth_camera", "width": 32, "height": 24, "range": 3.0})
+    spec = api.build_spec("reach", name="slow", robot=robot, algo="ars", steps=50_000, parallel=0)
+    meta = policy_meta(spec)
+    assert meta["slow_sensors"] and meta["steps_per_second"] > 0  # measured, never assumed
+    note = speed_notes(spec, meta)[0]
+    assert "draws a picture at every step" in note and "steps a second" in note
+    plain = api.build_spec("reach", name="fast", robot=_arm_with({"type": "encoders"}), algo="ars", parallel=0)
+    assert "slow_sensors" not in policy_meta(plain)  # nothing to measure, so no delay at the start
+
+
 def test_a_color_camera_is_left_out_and_said_so():
     env = make_env("reach", robot=_arm_with({"type": "encoders"}, {"type": "camera"}))
     assert [b["source"] for b in env.layout] == ["task", "encoders"]
     left_out = describe(env)["observation"]["left_out"]
     assert "camera" in {x["sensor"] for x in left_out} and all("picture" in x["why"] for x in left_out)
+
+
+def test_an_object_named_as_a_target_becomes_the_point_it_stands_at():
+    from robotforge.design.world import World
+
+    world = World.model_validate(
+        {
+            "name": "lab",
+            "robots": [{"name": "arm", "template": "arm"}],
+            "objects": [{"name": "cube", "shape": "box", "size": [0.04, 0.04, 0.04], "pos": [0.25, 0.1, 0.2]}],
+        }
+    )
+    spec = env_spec("reach", world=world, robot="arm", task_params={"target": "cube"})
+    assert spec.scope == "robot"
+    point = spec.task_params["target"]
+    assert point == pytest.approx([0.25, 0.1, 0.2], abs=0.02)
+    env = build_env(spec)
+    try:
+        assert env.task.target == pytest.approx(point, abs=1e-6)
+    finally:
+        env.close()
+    # a name that is no object of the world is left for the task to explain
+    unknown = env_spec("reach", world=world, robot="arm", task_params={"target": "mug"})
+    assert unknown.task_params["target"] == "mug"

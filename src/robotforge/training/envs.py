@@ -226,6 +226,47 @@ def _scoped(world: Any, robot: str, scope: str) -> Any:
     return world.model_copy(update={"robots": _carried(world, robot), "objects": [], "tasks": []})
 
 
+POINT_PARAMS = {"target": 3, "goal": 2}  # task settings that take an object's name or its point (x, y, z)
+
+
+def _object_point(world: Any, name: str, base: Path | None, size: int) -> list[float] | None:
+    """Where the world's object `name` stands (x, y[, z]), or None when it has no object of that name."""
+    from robotforge.design.world import compile_world
+
+    names = [o.name for o in world.objects]
+    found = wording.match(name, names)
+    if found is None:
+        return None
+    try:
+        model = compile_world(world, base).model
+    except (ValidationError, ValueError) as exc:
+        raise TaskError(f"could not place the object {found!r} to train on it: {exc}") from exc
+    data = mujoco.MjData(model)
+    mujoco.mj_kinematics(model, data)
+    for obj, table in (
+        (mujoco.mjtObj.mjOBJ_BODY, data.xpos),
+        (mujoco.mjtObj.mjOBJ_GEOM, data.geom_xpos),
+        (mujoco.mjtObj.mjOBJ_SITE, data.site_xpos),
+    ):
+        idx = mujoco.mj_name2id(model, obj, found)
+        if idx >= 0:
+            return [round(float(v), 4) for v in table[idx][:size]]
+    return None
+
+
+def _with_object_points(world: Any, task_params: dict[str, Any], base: Path | None) -> dict[str, Any]:
+    """The task settings with an object's name turned into the point it stands at. A robot is trained alone
+    (scope 'robot'), without the world's objects, so the name could not be found there; the policy is trained to
+    reach that point."""
+    params = dict(task_params)
+    for key, size in POINT_PARAMS.items():
+        value = params.get(key)
+        point = _object_point(world, value, base, size) if isinstance(value, str) else None
+        if point is not None:
+            params[key] = point
+    return params
+
+
 def env_spec(
     task: str,
     *,
@@ -247,6 +288,7 @@ def env_spec(
     refuse_contact_task(task)
     if observation not in OBSERVATIONS:
         raise TaskError(f"observation is one of {', '.join(OBSERVATIONS)}, not {wording.short(observation)}")
+    found = None
     if world is None:
         data, name = _default_world(task, robot)
     else:
@@ -269,6 +311,8 @@ def env_spec(
     chosen = scope or ("world" if task in saved else "robot")
     if task in saved and chosen != "world":
         raise TaskError(f"task {task!r} is saved with the world and judges its objects, so it needs scope='world'")
+    if chosen == "robot" and found is not None and task_params:
+        task_params = _with_object_points(found, task_params, Path(world_dir) if world_dir else None)
     try:
         return EnvSpec(
             task=task,
