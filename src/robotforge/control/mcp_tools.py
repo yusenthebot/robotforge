@@ -92,9 +92,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
             with session.lock:
                 model, snapshot, version = session.model, copy.copy(session.data), session.version
             bound = make_task(task, model, robot, task_params)
-            seconds = seconds or bound.default_seconds
-            check_push(push_at, seconds)
             bound.begin(snapshot)
+            seconds = seconds or bound.default_seconds  # after begin: a contact task needs longer from a higher start
+            check_push(push_at, seconds)
             method_params = policy_params(method, method_params, world_dir(), bound)
             # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
             controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)

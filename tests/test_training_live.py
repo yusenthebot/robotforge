@@ -76,6 +76,17 @@ def test_play_runs_the_best_policy_on_its_robot_and_a_trial_on_request(lab):
         feed.play({"run": folder.name, "trial": "t99"})
 
 
+def test_a_trial_id_from_the_socket_cannot_leave_the_run_folder(lab, tmp_path):
+    folder = _train(lab)
+    feed = TrainingFeed(lab)
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "policy.npz").write_bytes((folder / "trials" / "t01" / "policy.npz").read_bytes())
+    for sneaky in (f"../../../{tmp_path.name}/elsewhere", "../t01", "t01/..", "/etc", "t1"):
+        with pytest.raises(TaskError, match="not one of this run's trials"):
+            feed.play({"run": folder.name, "trial": sneaky})
+    assert feed.play({"run": folder.name, "trial": "t01"})["trial"] == "t01"
+
+
 def test_a_run_still_going_plays_the_trial_that_leads(lab):
     folder = _train(lab)
     (folder / "policy.npz").unlink()  # the run has no best policy yet: its trials do

@@ -180,6 +180,7 @@ The diagram's source is a single HTML file, [docs/diagrams/architecture.html](do
 - Plugins, export to MJCF and URDF, the robot interface in scripts: [docs/EXTENDING.md](docs/EXTENDING.md)
 - Navigation: [docs/NAVIGATION.md](docs/NAVIGATION.md)
 - Algorithm comparisons: [docs/ALGORITHMS.md](docs/ALGORITHMS.md)
+- Manipulation and touch (grasp planning, peg in hole, force-limited turning): [docs/MANIPULATION.md](docs/MANIPULATION.md)
 - Training any robot with any algorithm, searches, the training view: [docs/TRAINING.md](docs/TRAINING.md)
 - Learned policies and UniLab training: [docs/UNILAB.md](docs/UNILAB.md)
 - How legged robots read the ground, with measured tables per robot: [docs/LEGGED.md](docs/LEGGED.md)
