@@ -105,7 +105,9 @@ and objects stand on the ground under them. Go2, A1, ANYmal C and Barkour look a
 takes them up and down stairs (about 8 cm steps, 30 cm deep; 10 cm ones and long flights can still topple them),
 slopes and gravel on their own, straight on; over rough ground they slow to 60 percent of top speed by themselves.
 Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
-off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain.
+off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain. A humanoid from
+the catalogue or a file stands on its own by whole-body balance (`robots` says "balance"): it holds a load and takes
+a push of a few tenths of a m/s; move walks it only if a gait fits its legs (else `walk_hint` says so).
 load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
 instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
@@ -131,7 +133,10 @@ the fridge"); pose makes a humanoid wave, squat, bow or cheer; pick_and_place, m
 arms (an arm mounted on a robot is "robot/part", e.g. "rover/arm"; on a robot that drives or walks,
 pick_and_place fetches: it goes to the object and carries it to the target, "bring the apple to the table";
 a box riding on a running conveyor is caught as it goes by, the robot first driving beside the belt if its arm
-does not reach it from where it stands);
+does not reach it from where it stands; with hand_to="other_arm", two arms that stand apart hand it over: the
+first sets it down where both reach and goes aside, the second takes it to the target);
+rovers sent across each other's way at the same time do not meet in the middle: the one that gets to the crossing
+second holds until the first is through (the trip's result says gave_way_to and waited_s);
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
 handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
 drawer"); robots lists robots with kind, arms and positions. For anything custom,
@@ -956,7 +961,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json({"gripper": state, **run})
 
     @server.tool()
-    async def pick_and_place(robot: str, object: str, target: str | list[float], go: bool = True) -> str:
+    async def pick_and_place(
+        robot: str, object: str, target: str | list[float], go: bool = True, hand_to: str | None = None
+    ) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
         it and reports whether the object ended up there. An arm on a robot that drives or walks (a mobile
@@ -970,10 +977,29 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         running conveyor is caught as it goes by, the belt left running: the arm waits over a point on its way, follows
         it down, takes hold and lifts it off ("caught", "caught_at"); a robot that goes first drives to a place beside
         the belt from which its arm reaches ("stood_at"; or, if the box will be at the end of the belt before it can
-        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target."""
+        be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target.
+        hand_to="b" has the two arms hand it over: `robot` picks it up and sets it down at a spot both reach (it goes
+        home out of the way), then arm "b" picks it up from there and puts it on the target ("handed_over": from, to,
+        at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
+            if hand_to is not None:
+                hand_to = playground.behaviors.resolve(hand_to, arm=True)
+                relayed, info = await asyncio.to_thread(playground.behaviors.hand_over, robot, hand_to, object, target)
+                run = await run_until(lambda: relayed.done, relayed.time_limit)
+                settle = await run_until(lambda: False, 0.5)
+                return _json(
+                    {
+                        **playground.behaviors.placed(info["object"], info["region"]),
+                        "object": info["object"],
+                        "target": target,
+                        **relayed.result(),
+                        "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
+                        "shown_live": run["shown_live"],
+                        **stopped,
+                    }
+                )
             # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
             # take seconds, and the viewer froze meanwhile.
             motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)

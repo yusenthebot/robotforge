@@ -32,9 +32,11 @@ from robotforge.behaviors import (
     marine,
     nav_map,
     quadruped,
+    relay,
     robot_kind,
     visit,
     water_nav,
+    whole_body,
 )
 from robotforge.behaviors import catch as catching
 from robotforge.behaviors import navigate as navigation
@@ -403,7 +405,7 @@ class BehaviorManager:
                 kind = robot_kind(self.session.model, name, told.get(name))
                 if kind in SELF_BALANCING:
                     with contextlib.suppress(BehaviorError):
-                        self._mobile_controller(name, kind, world, create=True)
+                        self._mobile_controller(name, kind, world, create=True, stand=True)
                     if kind == Kind.AIRCRAFT:
                         air.attach_air(self.session, name)  # drag and wind, whatever flies it (behaviors/air.py)
                 elif kind in STEPPING and in_world:
@@ -466,6 +468,10 @@ class BehaviorManager:
                     info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)
             if kind == Kind.AIRCRAFT:
                 info["flight"] = self.flight_info(name)
+            if isinstance(self.session.controllers.get(name), whole_body.WholeBodyBalancer):
+                info["balance"] = "whole-body balance: stands on its feet, holds a load, takes a push"
+                if "max_speed" not in info:
+                    info["walk_hint"] = "no gait fits its legs, so move cannot walk it; it stands on its own"
             walk = self._kept_walk_or_none(name)
             if walk is not None:
                 info["learned_walk"] = walk.describe()
@@ -721,15 +727,21 @@ class BehaviorManager:
             return self.session.model.qpos0.copy()
         return self.home_qpos()
 
-    def _mobile_controller(self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None):
+    def _mobile_controller(
+        self, robot: str, kind: Kind, world: World | None, create: bool, walker: str | None = None, stand: bool = False
+    ):
         """The controller that walks or drives a robot: the one it has, or a new one (see MOBILE). `world` is the
-        open world as the caller read it."""
+        open world as the caller read it. `stand`: it is only to keep the robot up (a humanoid nobody tuned a gait
+        to stands by whole-body balance, which holds a load and takes a push; the first move gives it a gait if one
+        fits its legs)."""
         existing = self.session.controllers.get(robot)
         if walker is None and _is_mover(existing):  # keep whatever walks it now, e.g. for WASD driving
             return existing
         if walker == RHYTHM or kind not in MOBILE:
             return self._rhythm_walker(robot, existing, create)
         entry = _entry(robot, world)
+        if stand and kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+            return self._stander(robot, existing, create)
         if walker not in (None, "gait") and kind in LEGGED:
             return self._policy_walker(robot, walker, existing, create, entry)
         if isinstance(existing, WALKERS):
@@ -758,6 +770,11 @@ class BehaviorManager:
         except (ValueError, KeyError) as exc:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
+            if kind == Kind.HUMANOID and isinstance(existing, whole_body.WholeBodyBalancer):
+                raise BehaviorError(
+                    f"{robot} stands on its feet by whole-body balance, but no gait fits its legs ({exc}); it holds a "
+                    "load and takes a push, move cannot walk it"
+                ) from exc
             if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
                 raise BehaviorError(
                     f"no gait fits the body of {robot}: a joint of its legs has no motor of its own (a linkage?), "
@@ -773,6 +790,18 @@ class BehaviorManager:
         slope = library.get(entry.library).max_slope if entry is not None and entry.library else None
         if slope is not None and isinstance(ctrl, quadruped.QuadrupedGait):
             ctrl.limit_slope(slope)
+        if create:
+            self.session.set_controller(robot, ctrl)
+        return ctrl
+
+    def _stander(self, robot: str, existing: Any, create: bool) -> whole_body.WholeBodyBalancer:
+        """Whole-body balance for a humanoid with no gait of its own: the one it has, or a new one."""
+        if isinstance(existing, whole_body.WholeBodyBalancer):
+            return existing
+        try:
+            ctrl = whole_body.WholeBodyBalancer(self.session.model, robot, self.home_qpos())
+        except whole_body.BalanceError as exc:
+            raise BehaviorError(str(exc)) from exc
         if create:
             self.session.set_controller(robot, ctrl)
         return ctrl
@@ -1052,6 +1081,7 @@ class BehaviorManager:
                 for name in self._names(self._world())
                 if name != robot and "/" not in name
             ],
+            crossings=lambda: self._other_movers(robot),
             pose=own_map.pose if own_map is not None else None,
             watch=planner.blocked_ahead if own_map is not None else None,
         )
@@ -1065,6 +1095,16 @@ class BehaviorManager:
             self.session.set_controller(key, trip)
             self._live_trips[robot] = trip
         return trip
+
+    def _other_movers(self, robot: str) -> list[Any]:
+        """The other robots on trips across the floor, for the one named to give way to (traffic.py)."""
+        found = []
+        for name, trip in self._live_trips.items():
+            if name != robot and isinstance(trip, navigation.Navigator):
+                mover = trip.mover()
+                if mover is not None:
+                    found.append(mover)
+        return found
 
     def _dive(self, robot: str, to, pilot: marine.RovPilot, speed, seconds, model, data) -> marine.DiveTrip:
         """move(to=...) for an ROV: straight to a point under water, [x, y, z] ([x, y] keeps the depth it holds), or
@@ -1606,6 +1646,92 @@ class BehaviorManager:
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
 
+    def hand_over(
+        self, giver: str, receiver: str, obj: str, target: str | list[float]
+    ) -> tuple[relay.Relay, dict[str, Any]]:
+        """`giver` picks `obj` up and sets it down at a spot both arms reach and goes home; then `receiver` picks it
+        up from there and puts it on or in `target`. Returns the relay (wait until `done`) and {object, target,
+        region, spot}. Refuses before moving when either arm rides on a robot that drives or walks, either has no
+        gripper, no spot suits both, or the receiver cannot put the object on the target."""
+        with self.session.lock:
+            names = []
+            for who in (giver, receiver):
+                name = self._arm_name(who)
+                if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
+                    raise BehaviorError(f"{name} has no gripper to pick with; {self._gripper_hint(name)}")
+                if self._goes(name):
+                    raise BehaviorError(
+                        f"{name} rides on a robot that moves: hand_over is for arms that stay where they are"
+                    )
+                self._check_carrier(name)
+                names.append(name)
+            if names[0] == names[1]:
+                raise BehaviorError("hand_over needs two different arms")
+            give, take = (self._arm_motion(n) for n in names)
+            obj = self._object_name(obj)
+            pick = self._object_geometry(obj)
+            half = pick["half_height"]
+            if fetch.holding(self.session.data, give, self._body(obj)):
+                raise BehaviorError(f"{names[0]} is already holding {obj}: put it down first")
+            place, place_top, region = self._place_target(target)
+            bottom = float(pick["center"][2]) - half
+            avoid = [self.session.data.xpos[self._body(o)] for o in self._movable() if o != obj]
+            if isinstance(target, list):
+                avoid.append(place)
+            spots = relay.hand_off_spots(self.session.data, give, take, avoid)
+            if not spots:
+                raise BehaviorError(
+                    f"no spot on the floor is in reach of both {names[0]} and {names[1]}: stand them closer"
+                )
+            why = ""
+            for spot in spots:
+                down = np.array([spot[0], spot[1], bottom])
+                try:
+                    give.pick_and_place(pick["center"], half, down, None, pick["faces"])
+                except (OutOfReach, ValueError) as exc:
+                    give.queue.clear()
+                    why = str(exc)
+                    if isinstance(exc, OutOfReach) and "object" in exc.bad:
+                        raise BehaviorError(
+                            self._pick_out_of_reach(give, exc, pick["center"], down, target, obj)
+                        ) from exc
+                    continue
+                saved = list(take.queue)
+                try:
+                    take.pick_and_place(
+                        np.array([spot[0], spot[1], bottom + half]), half, place, place_top, pick["faces"]
+                    )
+                except (OutOfReach, ValueError) as exc:
+                    give.queue.clear()
+                    why = str(exc)
+                    continue
+                finally:
+                    take.queue.clear()
+                    take.queue.extend(saved)
+                give.move_to(relay.parking(give.base_and_reach(self.session.data)[0], np.asarray(spot, float)))
+                break
+            else:
+                raise BehaviorError(
+                    f"{names[0]} and {names[1]} cannot hand {obj} over at any of the {len(spots)} spots in reach of "
+                    f"both: {why}"
+                )
+            body = self._body(obj)
+
+            def arrived() -> bool:
+                return bool(np.linalg.norm(self.session.data.xpos[body][:2] - spot) < relay.ARRIVED)
+
+            def start() -> Any:
+                try:
+                    motion, _ = self.pick_and_place(names[1], obj, target, go=False)
+                except BehaviorError as exc:
+                    return f"{names[0]} set {obj} down, but {names[1]} cannot take it to {target}: {exc}"
+                return motion
+
+            handed = relay.Relay(give, names[1], obj, np.asarray(spot, float), arrived, start)
+            self.session.set_controller(names[0], give)
+            self.session.set_controller(relay.KEY + names[0], handed)
+        return handed, {"object": obj, "target": target, "region": region, "spot": [round(float(v), 3) for v in spot]}
+
     def _catch(
         self,
         arm: ArmMotion,
@@ -2128,6 +2254,12 @@ def _told_kind(entry: Any) -> str | None:
 
 def _entry(robot: str, world: World | None) -> RobotEntry | None:
     return next((r for r in world.robots if r.name == robot), None) if world else None
+
+
+def _tuned_humanoid(entry: RobotEntry | None) -> bool:
+    """A humanoid whose walking gait was tuned for it: our template's and the library's (G1 learned, T1 and OP3 on
+    the balance gait). Files, catalogue robots and robots built from parts are not: they stand by whole-body balance."""
+    return entry is None or not (entry.file or entry.catalogue or entry.build)
 
 
 def _learned_humanoid(entry: RobotEntry | None) -> bool:
