@@ -185,8 +185,12 @@ def _home(path: Path) -> Iterator[None]:
             os.environ["ROBOTFORGE_HOME"] = before
 
 
-def make_suite(count: int, seed: int = 0, out: str | Path = "suite", zh_share: float = 0.3) -> list[Case]:
-    """`count` cases into `out` (worlds under out/worlds, the list in out/suite.json)."""
+def make_suite(
+    count: int, seed: int = 0, out: str | Path = "suite", zh_share: float = 0.3, verify: bool = True
+) -> list[Case]:
+    """`count` cases into `out` (worlds under out/worlds, the list in out/suite.json). With `verify` a bring or put
+    case goes in only if pick_and_place gets it done from the start (a minute or two for a suite of eight); without,
+    only the cheap checks (not done at the start, planned without refusal) are made."""
     from robotforge.playground import Playground
     from robotforge.sim.session import SimSession
 
@@ -207,13 +211,16 @@ def make_suite(count: int, seed: int = 0, out: str | Path = "suite", zh_share: f
             name = f"case_{i + 1:02d}"
             pg.new_world(name)
             made = pg.load_scene(description=text, seed=wseed)["scene"]["generated"]
-            loose = [n for n in made["things_to_pick_up"] if n != "..."]
+            held = {o.name: o for o in pg.current_world().objects}
+            loose = [n for n in made["things_to_pick_up"] if n != "..." and not _container(held.get(n))]
             sentence = task_sentence(rng, kind, pg.current_world(), loose, lang)
             if sentence is None:
                 continue
             try:
                 task = pg.add_task(sentence, name="task")["task"]
             except ValueError:
+                continue
+            if _unfit(pg, task, verify) is not None:  # a suite of tasks nobody can do measures nothing
                 continue
             cases.append(Case(name, text, wseed, sentence, task["kind"], task["robot"], task["object"],
                               task["target"], lang))  # fmt: skip
@@ -222,6 +229,35 @@ def make_suite(count: int, seed: int = 0, out: str | Path = "suite", zh_share: f
         encoding="utf-8",
     )
     return cases
+
+
+def _container(o: Any) -> bool:
+    """A bin or a bowl: something to put things in, not a thing to bring."""
+    return o is not None and (o.shape == "bin" or re.sub(r"_\d+$", "", o.name).endswith(("bowl", "bin", "basket")))
+
+
+ATTEMPT_S = 150.0  # simulated seconds the check gives pick_and_place to do a case (an errand takes 15 to 60)
+
+
+def _unfit(pg: Any, task: dict[str, Any], verify: bool = True) -> str | None:
+    """Why a task just added should not go in a suite, or None: it is done before it starts, or what an agent's
+    pick_and_place would do (the arm's own planner, then the sim) does not get it done. Run on the open world, which
+    is already saved: nothing here reaches the file."""
+    status = task.get("status") or {}
+    if status.get("done") and task["kind"] != "go_to":
+        return "done before it starts"
+    if task["kind"] in ("bring", "put") and task.get("object") and task.get("target"):
+        try:
+            motion, _ = pg.behaviors.pick_and_place(task["robot"], task["object"], task["target"])
+        except Exception as exc:  # the planner's refusal is the answer: the arm cannot reach, cannot hold, ...
+            return str(exc)
+        if not verify:
+            return None
+        pg.run_fast(lambda: motion.done, ATTEMPT_S)
+        pg.run_fast(lambda: False, 1.0)
+        if not pg.task_status().get(task["name"], {}).get("done"):
+            return "pick_and_place does not get it done"
+    return None
 
 
 def make_hard_suite(

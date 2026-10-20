@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -22,7 +23,7 @@ SCRIPT = Path(__file__).parents[1] / "scripts" / "agent_eval.py"
 @pytest.fixture(scope="module")
 def suite(tmp_path_factory):
     out = tmp_path_factory.mktemp("suite")
-    cases = make_suite(5, seed=3, out=out)
+    cases = make_suite(5, seed=3, out=out, verify=False)
     return out, cases
 
 
@@ -40,7 +41,7 @@ def test_a_suite_is_varied_and_every_world_on_disk_has_its_task(suite):
 
 def test_the_same_count_and_seed_make_the_same_suite(suite, tmp_path):
     out, cases = suite
-    again = make_suite(5, seed=3, out=tmp_path)
+    again = make_suite(5, seed=3, out=tmp_path, verify=False)
     assert again == cases
     for case in cases:
         a = (out / "worlds" / case.name / "world.yaml").read_text(encoding="utf-8")
@@ -108,3 +109,38 @@ def test_the_eval_judges_a_case_by_its_own_check_on_what_the_session_reported(su
     cheated = task.check(ev.Evidence(session(edit, done), worlds, tmp_path, home))
     assert cheated[0].ok and not cheated[1].ok
     shutil.rmtree(home)
+
+
+def test_a_task_done_before_it_starts_or_asking_for_a_bowl_does_not_go_in_a_suite():
+    """Regression: 'bring the bowl to the counter' was in a suite done at step 0, a bowl the arm refuses."""
+    from types import SimpleNamespace
+
+    from robotforge.design.tasks import suite
+
+    assert suite._unfit(None, {"kind": "bring", "status": {"done": True}}) == "done before it starts"
+    assert suite._unfit(None, {"kind": "go_to", "status": {"done": True}}) is None
+    for name, shape in (("bowl", "bin"), ("kitchen_bowl_2", "bin"), ("office_bin", "bin"), ("basket", "box")):
+        assert suite._container(SimpleNamespace(name=name, shape=shape))
+    assert not suite._container(SimpleNamespace(name="red_cup", shape="cylinder"))
+    assert not suite._container(None)
+
+
+@pytest.mark.slow
+def test_every_bring_case_of_a_verified_suite_is_done_by_pick_and_place(tmp_path):
+    """Regression: of the four bring cases of suite --count 8 --seed 0 one could be done; one was done at step 0, one
+    knocked its cup to the floor, one had its book out of reach."""
+    from robotforge.playground import Playground
+    from robotforge.sim.session import SimSession
+
+    cases = make_suite(8, seed=0, out=tmp_path)
+    brings = [c for c in cases if c.kind == "bring"]
+    assert brings
+    for c in brings:
+        os.environ["ROBOTFORGE_HOME"] = str(tmp_path)
+        pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+        pg.open_world(c.name)
+        assert pg.task_status()["task"]["done"] is False
+        motion, _ = pg.behaviors.pick_and_place(c.robot, c.object, c.target)
+        pg.run_fast(lambda m=motion: m.done, 150)
+        pg.run_fast(lambda: False, 1.0)
+        assert pg.task_status()["task"]["done"] is True, c
