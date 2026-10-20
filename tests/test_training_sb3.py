@@ -50,3 +50,47 @@ def test_a_halving_search_continues_a_ppo_trial_from_its_saved_model(tmp_path):
     assert len(done) == 1 and len(pruned) == 2
     assert done[0]["steps"] > 2 * max(p["steps"] for p in pruned)  # it went on from where it stopped
     assert (tmp_path / "nn_search" / "trials" / done[0]["id"] / "model.zip").exists()
+
+
+def test_a_continued_sac_trial_keeps_its_replay_memory(tmp_path):
+    # without it a trial that survives a halving rung would learn from an empty memory again
+    from robotforge.training import sb3
+
+    spec = make_run_spec(
+        "sac_search",
+        _env(),
+        algos=["sac"],
+        steps=1_500,
+        parallel=0,
+        eval_episodes=1,
+        params={"sac": {"learning_starts": 200}},
+        search=SearchSpec(method="halving", trials=3, eta=3, seed=0, space={"learning_rate": [3e-4]}),
+    )
+    doc = run_inline(spec, tmp_path / "sac_search")
+    kept = [t for t in doc["trials"] if t["state"] == "done"]
+    assert len(kept) == 1
+    memory = tmp_path / "sac_search" / "trials" / kept[0]["id"] / sb3.MEMORY_FILE
+    with np.load(memory) as saved:
+        # the survivor ran two stretches; its memory holds both, not only the last one
+        assert len(saved["observations"]) > kept[0]["steps"] * 0.9
+        assert len(saved["observations"]) == len(saved["rewards"]) == len(saved["actions"])
+
+
+def test_the_replay_memory_round_trips(tmp_path):
+    from stable_baselines3 import SAC
+    from stable_baselines3.common.vec_env import DummyVecEnv
+
+    from robotforge.control.gym_compat import as_gymnasium
+    from robotforge.training import sb3
+
+    def make():
+        return SAC("MlpPolicy", DummyVecEnv([lambda: as_gymnasium(build_env(_env()))]), buffer_size=2_000,
+                   learning_starts=100, device="cpu", seed=0)  # fmt: skip
+
+    model = make()
+    model.learn(total_timesteps=300)
+    assert sb3.save_memory(model, tmp_path / "m.npz") == 300
+    fresh = make()
+    assert sb3.load_memory(fresh, tmp_path / "m.npz") == 300 and fresh.replay_buffer.size() == 300
+    assert np.array_equal(fresh.replay_buffer.rewards[:300], model.replay_buffer.rewards[:300])
+    assert sb3.load_memory(make(), tmp_path / "missing.npz") == 0

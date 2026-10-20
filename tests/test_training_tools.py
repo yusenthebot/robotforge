@@ -96,3 +96,31 @@ async def test_a_search_and_its_mistakes_are_explained(tmp_path, monkeypatch):
         assert bad.is_error and "noise" in bad.content[0].text
         bad = await _call(client, "train_policy", {"task": "balance", "robot": "ghost", "algo": "ars"})
         assert bad.is_error and "ghost" in bad.content[0].text
+
+
+@pytest.mark.anyio
+async def test_a_reach_target_named_after_an_object_trains_on_the_point_it_stands_at(tmp_path, monkeypatch):
+    # scope 'robot' trains the arm alone, so an object named as the target used to be "not found" and the agent
+    # had no way to fix it; the name now turns into the object's point, and the response says so
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("lab")
+    pg.add_robot("arm", template="arm")
+    pg.add_object("cube", shape="box", size=[0.04], pos=[0.25, 0.1, 0.2], fixed=True)
+    async with Client(build_server(pg, 0)) as client:
+        started = await _call(
+            client,
+            "train_policy",
+            {
+                "task": "reach",
+                "robot": "arm",
+                "algo": "ars",
+                "timesteps": 400,
+                "task_params": {"target": "cube", "jitter": 0.02},
+                "parallel": 1,
+            },
+        )
+        assert not started.is_error, started.content[0].text
+        info = json.loads(started.content[0].text)
+        assert any("'cube'" in n and "0.25" in n for n in info["notes"]), info["notes"]
+        await _call(client, "stop_training", {"name": info["started"]})

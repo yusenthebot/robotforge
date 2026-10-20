@@ -99,9 +99,16 @@ def start(
     )
     meta = store.read_json(Path(started["folder"]) / store.POLICY_FILE)
     sources = [{"source": s["source"], "numbers": len(s["labels"])} for s in meta.get("observation_layout", [])]
-    notes = []
+    notes = [*started.get("notes", [])]
     if world is None:
         notes.append("no world is open, so it trains a default robot alone on a floor")
+    for key in ("target", "goal"):
+        asked = (task_params or {}).get(key)
+        if isinstance(asked, str) and isinstance(spec.env["task_params"].get(key), list):
+            notes.append(
+                f"{key} {asked!r} is at {spec.env['task_params'][key]} in this world; the robot trains alone, so the "
+                "policy is trained to reach that point"
+            )
     return {
         "started": spec.name,
         "task": task,
@@ -115,6 +122,7 @@ def start(
         "action_mode": spec.env["action_mode"],
         "observation": {"numbers": started["observation"]["size"], "from": sources},
         "left_out": started["observation"].get("left_out", []),
+        "held_out": "the winner is scored again on fresh starts at the end (training_status winner.held_out)",
         "notes": notes,
         "folder": started["folder"],
         "next": f"training_status(name={spec.name!r}, wait_seconds=60); the viewer's Training panel draws it",

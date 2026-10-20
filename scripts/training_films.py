@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -100,7 +101,8 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
 
     walk = numbers["walk"]
     gait = walk["gait_alone"]["mean_result"]["avg_speed_m_s"]
-    learned = walk["final"]["mean_result"]["avg_speed_m_s"]
+    scored = walk["final"].get("held_out") or walk["final"]  # the held-out episodes are the fair ones to quote
+    learned = scored["mean_result"]["avg_speed_m_s"]
     marks: dict[str, float] = {}
 
     def quad_world(pg: Any) -> None:
@@ -112,14 +114,23 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         time.sleep(10.0)
         pg.behaviors.stop("dog")
 
-    def policy_walk(pg: Any) -> None:
-        pg.session.reset()
-        TrainingFeed(pg).play({"run": "dog_walk"})
-        marks["played"] = time.monotonic()
+    def play_run(name: str) -> Callable[[Any], None]:
+        def play(pg: Any) -> None:
+            folder = store.policies_home(pg.store.dir) / name
+            os.utime(folder / "status.json")  # the panel shows the run that changed last: the one that plays
+            time.sleep(1.5)
+            pg.session.reset()
+            TrainingFeed(pg).play({"run": name})
+            marks["played"] = time.monotonic()
+            time.sleep(11.0)
+
+        return play
 
     def quad_done(_pg: Any) -> bool:
-        return "played" in marks and time.monotonic() - marks["played"] > 11.5
+        return "played" in marks and time.monotonic() - marks["played"] > 11.0
 
+    sensed_run = numbers["walk_sensors"]["final"]
+    sensed = (sensed_run.get("held_out") or sensed_run)["mean_result"]["avg_speed_m_s"]
     ask = consts["walk_speed"]
     algo = walk["final"]["algo"].upper()
     quad = D.Demo(
@@ -131,8 +142,15 @@ def demos(home: Path, consts: dict[str, Any]) -> list[D.Demo]:
         timeline=[
             (0.3, D._caption(f"The built-in gait, asked for {ask} m/s, manages {gait:.2f} m/s")),
             (0.5, gait_walk),
-            (1.0, D._caption(f"A policy trained by {algo} on the dog's own sensors: {learned:.2f} m/s")),
-            (1.2, policy_walk),
+            (
+                1.0,
+                D._caption(
+                    f"A policy trained by {algo} on the task's numbers plus the dog's sensors: {learned:.2f} m/s"
+                ),
+            ),
+            (1.2, play_run("dog_walk")),
+            (1.5, D._caption(f"Trained on the dog's sensors only, no body numbers from the task: {sensed:.2f} m/s")),
+            (1.7, play_run("dog_walk_sensors")),
         ],
         until=quad_done,
         tail=1.0,

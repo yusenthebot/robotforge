@@ -242,13 +242,17 @@ BUILT_IN: dict[str, Algorithm] = {
         "PPO (Stable-Baselines3): a neural network policy improved in small safe steps from batches of experience.",
         run_ppo,
         {
-            "learning_rate": Hyper(3e-4, 1e-4, 3e-3, log=True, help="size of each network update"),
-            "gamma": Hyper(0.99, 0.95, 0.999, help="how far ahead rewards count"),
+            "learning_rate": Hyper(
+                3e-4, 1e-4, 3e-3, log=True, minimum=1e-6, maximum=1.0, help="size of each network update"
+            ),
+            "gamma": Hyper(0.99, 0.95, 0.999, minimum=0.5, maximum=0.9999, help="how far ahead rewards count"),
             "n_steps": Hyper(256, choices=(128, 256, 512, 1024), help="steps collected before each update"),
             "batch_size": Hyper(128, choices=(64, 128, 256), help="minibatch size of an update"),
-            "n_epochs": Hyper(10, 4, 20, help="passes over a batch per update"),
-            "ent_coef": Hyper(0.0, 0.0, 0.02, help="reward for staying random (exploration)"),
-            "clip_range": Hyper(0.2, 0.1, 0.4, help="how far one update may change the policy"),
+            "n_epochs": Hyper(10, 4, 20, minimum=1, maximum=100, help="passes over a batch per update"),
+            "ent_coef": Hyper(0.0, 0.0, 0.02, minimum=0.0, maximum=1.0, help="reward for staying random (exploration)"),
+            "clip_range": Hyper(
+                0.2, 0.1, 0.4, minimum=0.01, maximum=1.0, help="how far one update may change the policy"
+            ),
             "width": Hyper(64, choices=(32, 64, 128), help="neurons per hidden layer (two layers)"),
         },
         needs=_RL,
@@ -259,11 +263,17 @@ BUILT_IN: dict[str, Algorithm] = {
         "SAC (Stable-Baselines3): an actor and a critic learning from a replay memory of everything tried.",
         run_sac,
         {
-            "learning_rate": Hyper(3e-4, 1e-4, 3e-3, log=True, help="size of each network update"),
-            "gamma": Hyper(0.99, 0.95, 0.999, help="how far ahead rewards count"),
+            "learning_rate": Hyper(
+                3e-4, 1e-4, 3e-3, log=True, minimum=1e-6, maximum=1.0, help="size of each network update"
+            ),
+            "gamma": Hyper(0.99, 0.95, 0.999, minimum=0.5, maximum=0.9999, help="how far ahead rewards count"),
             "batch_size": Hyper(256, choices=(128, 256, 512), help="minibatch size of an update"),
-            "tau": Hyper(0.005, 0.001, 0.05, log=True, help="how fast the target networks follow"),
-            "learning_starts": Hyper(1000, 200, 5000, search=False, help="random steps before learning begins"),
+            "tau": Hyper(
+                0.005, 0.001, 0.05, log=True, minimum=1e-5, maximum=1.0, help="how fast the target networks follow"
+            ),
+            "learning_starts": Hyper(
+                1000, 200, 5000, search=False, minimum=0, maximum=1_000_000, help="random steps before learning begins"
+            ),
             "width": Hyper(128, choices=(64, 128, 256), help="neurons per hidden layer (two layers)"),
         },
         needs=_RL,
