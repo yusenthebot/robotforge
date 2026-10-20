@@ -201,6 +201,8 @@ def test_move_does_not_swap_the_balance_of_a_file_humanoid_for_a_gait_that_drops
         pg.behaviors.move("bot", 0.2, 0.0)
     with pytest.raises(BehaviorError, match="whole-body balance"):
         pg.behaviors.strike_pose("bot", "wave")
+    with pytest.raises(BehaviorError, match="whole-body balance"):
+        pg.behaviors.navigate("bot", [1.0, 0.0])
     assert isinstance(pg.session.controllers["bot"], WholeBodyBalancer)
     pg.run_fast(lambda: False, 3.0)
     assert pg.behaviors.pose("bot")["upright"]

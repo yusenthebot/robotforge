@@ -101,7 +101,7 @@ All 20 load; 17 stand; 13 move in the picture run (14 in the table run: anymal_d
 | a1_mj | quadruped | yes | yes | walks 1.2 m upright | needed the stance search and servos |
 | anymal_d | quadruped | yes | yes | walks 1.9 m, then falls (1.4 m upright in another run) | |
 | oli_mj | humanoid | yes | no | no | linkage legs with passive joints: no balance controller fits, it falls over after 2.9 s |
-| h1_2 | humanoid | yes | no | no | falls over after 4.9 s (the picture shows it on its side; an earlier picture showed it standing because MuJoCo had reset its diverged simulation) |
+| h1_2 | humanoid | yes | no | no | with the gait found from its legs, which is no longer handed to a balance-held humanoid, falls over after 4.9 s (the picture shows it on its side; an earlier picture showed it standing because MuJoCo had reset its diverged simulation) |
 | toddlerbot_2xm_mj | humanoid | yes | yes | no | stands on its servos; no gait fits its body (RL II can learn one) |
 | tron2_wf_tron2a_mj | wheeled (wheel-legged) | yes | no | no | needs a balance controller for a wheel-legged biped; falls after 1.8 s |
 | stretch_3_mj | wheeled | yes | yes | drives 0.39 m of 1.2 m | slow: 0.10 m/s achieved of the 0.3 m/s asked |
@@ -120,7 +120,7 @@ A second draw (`--seed 99`, the failures are not the same ones): 20 load, 17 sta
 | anymal_b, aliengo_mj | quadruped | yes | walk 1.5 m and 1.2 m upright | aliengo_mj did not move at all before the thigh fix |
 | solo | quadruped | yes | walks 0.6 m upright | slow: 0.11 m/s of 0.2 |
 | bolt | humanoid | no | no | collapses at home |
-| h1 | humanoid | yes | no | stands; no gait fits it (H1_2 gets a gait that falls, H1 none: the generic search finds H1_2's legs and not H1's) |
+| h1 | humanoid | yes | no | stands by whole-body balance; no walk is known for it (H1_2 used to be given a gait that fell, H1 none: the generic search finds H1_2's legs and not H1's) |
 | tron1_wf_tron1a_mj | wheeled (wheel-legged) | no | no | collapses at home; no balance controller |
 | stretch_mj | wheeled | yes | no | its drive is two abstract actuators (`forward`, `turn`), no wheel motors for the drive code |
 | stretch_se3 | wheeled | yes | no | drove 0.2 m of 1.2 m: 0.05 m/s |
@@ -156,8 +156,8 @@ The eight were: four xacro files that needed a sibling package or the block scop
 
 ## Limits
 
-- Legged robots outside the library walk with a gait found from their legs (`quadruped.for_robot`, `humanoid.for_robot`); it is tuned for the library's robots and falls over for about half of the catalogue's dogs, so `add_robot` runs a trial and says what happened.
-- Humanoids from the catalogue stand by whole-body balance (36 of the 50 read as humanoids stand, with a load and a push: [HUMANOID.md](HUMANOID.md)); they do not walk unless a gait fits their legs, and `move` says so.
+- Quadrupeds outside the library walk with a gait found from their legs (`quadruped.for_robot`); it is tuned for the library's robots and falls over for about half of the catalogue's dogs, so `add_robot` runs a trial and says what happened.
+- Humanoids from the catalogue stand by whole-body balance (37 of the 51 read as humanoids stand, 23 of the 32 held by balance also with a load; a push here is a velocity impulse on the trunk: [HUMANOID.md](HUMANOID.md)); they do not walk, and `move` says so: the gait found from their legs was dropping every one of them, so it is no longer handed over.
 - Humanoids with linkage legs or point feet, wheel-legged robots and robots whose file has no motors do not stand or move by themselves.
 - Arms with few joints reach only some points: the planner keeps the tool pointing down.
 - The gripper of a catalogue arm is not wired to `gripper` and `pick_and_place`: mount one on the flange.

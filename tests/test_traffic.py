@@ -107,3 +107,25 @@ def test_the_same_crossing_without_right_of_way_is_slower_and_closer(tmp_path, m
     far, (c, d) = _crossing_rovers(tmp_path, monkeypatch, traffic=True)
     assert near < far
     assert max(c["time_s"], d["time_s"]) < max(a["time_s"], b["time_s"])
+
+
+def test_four_rovers_from_four_sides_all_arrive_and_do_not_touch(tmp_path, monkeypatch):
+    """Two head-on pairs and a crossing in the middle: the right of way is no faster here than making way alone
+    (docs/MULTI.md), but nobody may be pressed into anybody (a rover is 0.25 m across)."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground.with_demo()
+    pg.new_world("four", "wood")
+    starts = {"a": (-1.5, 0.0, 0), "b": (1.5, 0.0, 180), "c": (0.0, -1.5, 90), "d": (0.0, 1.5, -90)}
+    goals = {"a": [1.6, 0.0], "b": [-1.6, 0.0], "c": [0.0, 1.6], "d": [0.0, -1.6]}
+    for name, (x, y, yaw) in starts.items():
+        pg.add_robot(name, template="rover", pos=[x, y], yaw=yaw)
+    pg.run_fast(lambda: False, 0.5)
+    trips = [pg.behaviors.navigate(name, goal, seconds=60) for name, goal in goals.items()]
+    closest, t0 = 9.0, pg.session.data.time
+    while not all(t.done for t in trips) and pg.session.data.time - t0 < 61:
+        pg.run_fast(lambda: False, 0.1)
+        at = [pg.behaviors.pose(n)["position"][:2] for n in goals]
+        closest = min(closest, *(math.dist(p, q) for i, p in enumerate(at) for q in at[i + 1 :]))
+    results = [t.result() for t in trips]
+    assert all(r["arrived"] for r in results), results
+    assert closest > 0.27, closest
