@@ -272,3 +272,36 @@ def test_add_task_in_the_kitchen_preset_without_a_robot_adds_one_and_does_not_ra
     saved = pg.current_world().tasks[0]
     assert saved.start.robot is not None
     assert any(r.name == task["robot"] for r in pg.current_world().robots)
+
+
+def test_a_task_that_names_the_bedroom_desk_adds_it_when_the_flat_has_none(tmp_path, monkeypatch):
+    """Regression: the README's flat with a kitchen and a bedroom had a bedroom desk in a quarter of the seeds, and
+    add_task('... to the bedroom desk') errored in the rest."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("flat")
+    pg.load_scene(description="a small flat with a kitchen and a bedroom", seed=1)
+
+    def drop(w: World) -> None:
+        w.objects = [o for o in w.objects if "desk" not in o.name]
+
+    pg._edit(drop)
+    assert not any("desk" in o.name for o in pg.current_world().objects)
+    result = pg.add_task("bring the red cup from the kitchen to the bedroom desk")
+    assert result["task"]["target"] == "bedroom_desk"
+    assert any("added bedroom_desk" in n for n in result["notes"])
+    desk = next(o for o in pg.current_world().objects if o.name == "bedroom_desk")
+    bedroom = next(o for o in pg.current_world().objects if o.name == "bedroom")
+    assert (
+        abs(desk.pos[0] - bedroom.pos[0]) < bedroom.size[0] / 2
+        and abs(desk.pos[1] - bedroom.pos[1]) < bedroom.size[1] / 2
+    )
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_a_generated_bedroom_has_a_desk(tmp_path, monkeypatch, seed):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("flat")
+    pg.load_scene(description="a small flat with a kitchen and a bedroom", seed=seed)
+    assert any(o.name == "bedroom_desk" for o in pg.current_world().objects)

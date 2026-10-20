@@ -16,7 +16,7 @@ from typing import Any
 
 from robotforge.design import props
 from robotforge.design.generate import things
-from robotforge.design.generate.draft import WALK_GAP, Draft
+from robotforge.design.generate.draft import FRONT, WALK_GAP, Draft
 from robotforge.design.generate.space import Footprint, Surface
 from robotforge.design.generate.words import Wish
 
@@ -277,10 +277,11 @@ def _table(
     name: str = "table",
     color: list[float] | None = None,
     gap: float = WALK_GAP,
+    front: float = FRONT,
 ) -> str | None:
     length, depth, height = size
     if wall:
-        spot = draft.against_wall(rect, length, depth)
+        spot = draft.against_wall(rect, length, depth, front=front)
         fp = spot[0] if spot else None
     else:
         fp = draft.in_middle(rect, length, depth, gap)
@@ -444,10 +445,35 @@ def _living_room(draft: Draft, room: str, rect: Footprint) -> None:
 
 def _bedroom(draft: Draft, room: str, rect: Footprint) -> None:
     _bed(draft, room, rect)
+    _bedroom_desk(draft, room, rect)  # before the nightstand, which takes the floor a small room's desk needs
     _chest(draft, room, rect, (0.45, 0.4, 0.5), name="nightstand")
-    _table(draft, room, rect, (1.0, 0.55, 0.75), wall=True, name="desk")
     if draft.rng.random() < 0.6:
         _shelf(draft, room, rect, 0.8, 0.32, 1.2)
+
+
+DESK_SIZES = (  # (length, depth, height) m, against a wall?, walking gap, floor kept before it: roomiest first
+    ((1.0, 0.55, 0.75), True, WALK_GAP, FRONT),
+    ((0.8, 0.5, 0.75), True, WALK_GAP, FRONT),
+    ((0.8, 0.5, 0.75), False, WALK_GAP, FRONT),
+    ((0.8, 0.5, 0.75), True, WALK_GAP * 0.6, 0.5),
+    ((0.7, 0.45, 0.75), True, WALK_GAP * 0.6, 0.45),
+    ((0.7, 0.45, 0.75), False, WALK_GAP * 0.6, 0.45),
+)
+
+
+def put_desk(draft: Draft, room: str, rect: Footprint, name: str = "desk") -> str | None:
+    """A desk (or a table of that size) in a room, against a wall, then smaller, then standing free; None when the room
+    has no floor for any."""
+    for size, wall, gap, front in DESK_SIZES:
+        placed = _table(draft, room, rect, size, wall=wall, name=name, gap=gap, front=front)
+        if placed is not None:
+            return placed
+    return None
+
+
+def _bedroom_desk(draft: Draft, room: str, rect: Footprint) -> None:
+    """A bedroom always gets a desk ("bring the cup to the bedroom desk" is the beginner's sentence)."""
+    put_desk(draft, room, rect)
 
 
 def _office(draft: Draft, room: str, rect: Footprint) -> None:

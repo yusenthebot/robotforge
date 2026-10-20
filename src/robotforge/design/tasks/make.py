@@ -115,6 +115,8 @@ def plan(
         place = _find_place(objects, world, asked.place, notes)
         if place is None and asked.place.concept in ("bin", "bowl"):
             place = _add_bin(world, objects, asked.place, rng, out, robots)
+        if place is None and asked.place.concept in ("desk", "table") and asked.place.room is not None:
+            place = _add_desk(world, objects, asked.place, rng, out, robots)
         if place is None:
             raise TaskProblem(_missing(asked.place, objects, world))
     if kind != "go_to":
@@ -370,6 +372,27 @@ def _add_bin(world: Any, objects: list[dict[str, Any]], ref: Ref, rng: random.Ra
     out.add_objects.append(new)
     objects.append(new)
     out.notes.append(f"added {placed}: the world had no {ref.text.strip()!r}")
+    return placed
+
+
+def _add_desk(world: Any, objects: list[dict[str, Any]], ref: Ref, rng: random.Random, out: Plan,
+              robots: list[RobotInfo]) -> str | None:  # fmt: skip
+    """A desk or table the sentence names in a room that has none ("the bedroom desk"), put there as a generated home
+    would; None when the room does not exist or has no floor left."""
+    from robotforge.design.generate.house import put_desk
+
+    rooms = [n for n in _room_of(objects, ref.room or "") if n in _rooms(objects)]
+    if not rooms:
+        return None
+    draft = _draft(world, objects, rng, _mover(robots))
+    draft.rooms = _rooms(objects)
+    before = len(draft.content.objects)
+    placed = put_desk(draft, rooms[0], draft.rooms[rooms[0]], name=ref.concept or "desk")
+    if placed is None:
+        return None
+    out.add_objects += draft.content.objects[before:]
+    objects += draft.content.objects[before:]
+    out.notes.append(f"added {placed}: the {ref.room.replace('_', ' ')} had no {ref.concept}")
     return placed
 
 
