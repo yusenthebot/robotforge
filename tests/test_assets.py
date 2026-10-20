@@ -95,6 +95,16 @@ def test_a_wrong_value_names_the_range_and_a_wrong_name_lists_what_exists():
         assets.generate("joint_actuator", gland="yes")
     with pytest.raises(assets.AssetError, match="seed is a whole number"):
         assets.generate("wheel", seed=1.5)
+    with pytest.raises(assets.AssetError, match="seed is a whole number from 0 up"):
+        assets.generate("wheel", seed=-1)
+
+
+@pytest.mark.parametrize("name", ["rng", "values", "style", "seed", "_hidden"])
+def test_a_parameter_cannot_take_the_name_of_something_the_generator_receives(name):
+    """A parameter called rng would be replaced by the random generator without a word."""
+    gen = assets.Generator("probe", "a probe", (assets.Param(name, 0.1, 0.0, 1.0, "x"),), lambda a: None)
+    with pytest.raises(assets.AssetError, match="taken or reserved"):
+        assets.register_generator(gen)
 
 
 def test_a_material_changes_the_shell_a_part_is_made_of():

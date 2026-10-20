@@ -127,6 +127,7 @@ class Generator:
 
 
 GENERATORS: dict[str, Generator] = {}
+RESERVED_PARAMS = ("style", "seed", "rng", "values")  # attributes of Args, which a parameter would silently replace
 
 
 def register_generator(gen: Generator, *, replace: bool = False) -> Generator:
@@ -139,7 +140,7 @@ def register_generator(gen: Generator, *, replace: bool = False) -> Generator:
         raise AssetError(f"generator {gen.name!r} already exists; pick another name")
     seen = set()
     for p in gen.params:
-        if p.name in seen or p.name in ("style", "seed"):
+        if p.name in seen or p.name in RESERVED_PARAMS or p.name.startswith("_"):
             raise AssetError(f"generator {gen.name!r}: parameter name {p.name!r} is taken or reserved")
         seen.add(p.name)
     GENERATORS[gen.name] = gen
@@ -219,6 +220,8 @@ def generate(name: str, *, style: str | Style | None = None, seed: int = 0, **pa
     chosen = get_style(style)
     if not isinstance(seed, int) or isinstance(seed, bool):
         raise AssetError(f"{name}: seed is a whole number, got {seed!r}")
+    if seed < 0:
+        raise AssetError(f"{name}: seed is a whole number from 0 up, got {seed}")
     return _make(gen, tuple(sorted(values.items())), chosen, seed)
 
 
