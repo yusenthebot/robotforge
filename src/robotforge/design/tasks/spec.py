@@ -21,10 +21,21 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from robotforge import wording
 
 KINDS = ("go_to", "bring", "put", "pick_up", "push", "open", "close", "press", "switch_on")
-Kind = Literal["go_to", "bring", "put", "pick_up", "push", "open", "close", "press", "switch_on"]
+# The harder ones (hard.py): things that have to end up a certain way, not just somewhere
+HARD_KINDS = ("upright", "stack", "insert", "sort", "pour", "hand_over")
+Kind = Literal[
+    "go_to", "bring", "put", "pick_up", "push", "open", "close", "press", "switch_on",
+    "upright", "stack", "insert", "sort", "pour", "hand_over",
+]  # fmt: skip
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 DEFAULT_SECONDS = {"go_to": 60.0, "bring": 180.0, "put": 90.0, "pick_up": 60.0, "push": 90.0, "open": 60.0,
-                   "close": 60.0, "press": 45.0, "switch_on": 45.0}  # fmt: skip
+                   "close": 60.0, "press": 45.0, "switch_on": 45.0, "upright": 90.0, "stack": 240.0, "insert": 120.0,
+                   "sort": 420.0, "pour": 150.0, "hand_over": 150.0}  # fmt: skip
+
+
+def _unset(value: object) -> bool:
+    """For fields added after worlds were first saved: left out of a world.yaml while unset."""
+    return value is None
 
 
 class Randomize(BaseModel):
@@ -58,6 +69,11 @@ class TaskEntry(BaseModel):
     target: str | None = None  # where it goes: an object, a room or a mark (pick_up, open, ...: none)
     radius: float = Field(0.5, gt=0, le=5, description="m: go_to counts within this of the target")
     seconds: float = Field(60.0, gt=0, le=600, description="time an attempt may take")
+    # The harder kinds (hard.py): the things a stack is made of, bottom first, the things a sort puts away and the
+    # balls a pour moves (`items`), where each of them goes (`into`), and how far from upright a thing may stand.
+    items: list[str] | None = Field(None, exclude_if=_unset)
+    into: dict[str, str] | None = Field(None, exclude_if=_unset)
+    tilt: float | None = Field(None, gt=0, le=90, exclude_if=_unset)
     start: Start = Field(default_factory=Start)
     randomize: Randomize = Field(default_factory=Randomize)
 
@@ -71,9 +87,15 @@ class TaskEntry(BaseModel):
     def describe(self) -> str:
         """The goal in a few words, for answers: "red_cup in bedroom_desk"."""
         verb = {"go_to": "robot at", "bring": "in or on", "put": "in or on", "push": "onto", "pick_up": "lifted",
-                "open": "open", "close": "closed", "press": "pressed", "switch_on": "on"}[self.kind]  # fmt: skip
+                "open": "open", "close": "closed", "press": "pressed", "switch_on": "on", "upright": "upright on",
+                "stack": "stacked on", "insert": "in", "sort": "put away", "pour": "poured into",
+                "hand_over": "handed to"}[self.kind]  # fmt: skip
         if self.kind == "go_to":
             return f"{self.robot} at {self.target}"
+        if self.kind == "stack" and self.items:
+            return " on ".join(reversed(self.items))
+        if self.kind == "sort" and self.items:
+            return f"{len(self.items)} things sorted into {len(set((self.into or {}).values()))} trays"
         if self.target:
             return f"{self.object} {verb} {self.target}"
         return f"{self.object} {verb}"

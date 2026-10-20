@@ -88,6 +88,7 @@ LINK_CLEARANCE = 0.03
 # refused 6 of 14 floor picks that it made without touching the dog; a PiPER on a Go2, held to it unfolding from its
 # home pose, unfolded into another pose and came down on the cube's top instead of round it.
 NEAR_CLEARANCE = 0.01
+HOLD_UP = 0.16  # m above the grasp that a hand-over's receiving arm holds the thing up
 CARRY_STEP = 0.01
 CARRY_ARC_STEPS = 8  # points along the way round between two of a carry's checked points, for what lies under it
 # Pointing down leaves the turn of the jaws about the tool's axis free, and the IK left it wherever: beside an SO-100
@@ -281,6 +282,12 @@ class ArmMotion:
         self._last: tuple[float, np.ndarray] | None = None  # (time, q) the servos were last told
         self._settle: tuple[float, float, float] | None = None  # (since, last look, how far off then) while waiting
         self.queue: deque[Waypoint] = deque()
+        # Called once, when the queue has run out and the arm stands idle (or the controller is replaced): what a pick
+        # of something heavy firmed for the load (hints.FirmHold) put back.
+        self.on_idle: list[Callable[[], None]] = []
+        self.on_open: list[Callable[[], None]] = []  # called once, as the jaws are told to open what they hold
+        self.on_lift: list[Callable[[], None]] = []  # called once, as the arm begins to lift what the jaws closed on
+        self._gripping = False  # the jaws were told to close and have not been told to open since
         self._segment: tuple[np.ndarray, Waypoint, float] | None = None  # (start, waypoint, t0)
         self._branch: tuple[np.ndarray, np.ndarray] | None = None  # (q at the start, q at the goal)
         self._knots: np.ndarray | None = None  # the joint values a path move passes through, from where it started
@@ -857,6 +864,21 @@ class ArmMotion:
             raise ValueError(self._no_way_down("place", travel_z))
         self.queue.extend(taking)
         self._putting(above_drop, drop, pose)
+
+    def pick_and_hold(self, obj_pos: np.ndarray, obj_half_height: float, faces: np.ndarray | None = None) -> None:
+        """Queue taking the object and lifting it straight up, to stay held there (a hand-over, a show): the same moves
+        as pick_and_place up to the carry, with the place right over the object. Raises what pick_and_place raises."""
+        grasp = obj_pos.copy()
+        below = obj_half_height
+        travel_z = max(float(grasp[2]) + HOLD_UP, float(grasp[2]) + 2 * obj_half_height + 0.03)
+        above = np.array([grasp[0], grasp[1], travel_z])
+        points = {"object": grasp, "above object": above}
+        bad = self._out_of_reach(points)
+        if bad:
+            raise OutOfReach(self.robot, bad, points)
+        across = self._across(grasp, grasp, travel_z, below, points, "up from the object")
+        above[2] = across.z
+        self.queue.extend(self._taking(grasp, above, above, across, below, faces))
 
     def _across(
         self,
@@ -1570,6 +1592,16 @@ class ArmMotion:
     def done(self) -> bool:
         return not self.queue and self._segment is None
 
+    def finish(self) -> None:
+        """Run what was to be done when the arm is idle, once."""
+        callbacks, self.on_idle = self.on_idle, []
+        for callback in callbacks:
+            callback()
+
+    def release(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+        """The controller is replaced (see SimSession.set_controller): put back what it changed."""
+        self.finish()
+
     def status(self) -> dict:
         return {
             "behavior": "arm",
@@ -1619,10 +1651,23 @@ class ArmMotion:
                 self._branch = (self.q.copy(), wp.joints)
             self._segment = (start, wp, t)
             self.current_label = wp.label
+            if wp.label == "lift" and self._gripping and self.on_lift:
+                callbacks, self.on_lift = self.on_lift, []
+                for callback in callbacks:
+                    callback()
             if wp.gripper is not None and self.gripper >= 0:
+                if wp.gripper == self.gripper_closed:
+                    self._gripping = True
+                elif wp.gripper == self.gripper_open:
+                    if self._gripping and self.on_open:
+                        callbacks, self.on_open = self.on_open, []
+                        for callback in callbacks:  # a firm squeeze lets go before the jaws are told to let go
+                            callback()
+                    self._gripping = False  # whether or not anything was firm: the next pick starts from open
                 data.ctrl[self.gripper] = wp.gripper
         if self._segment is None:
             self.current_label = "idle"
+            self.finish()
             self._command(data)
             return
         start, wp, t0 = self._segment

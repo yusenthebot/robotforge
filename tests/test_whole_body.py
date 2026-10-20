@@ -166,6 +166,20 @@ def test_a_biped_takes_a_shove_and_a_load(pg, tmp_path):
     assert _tilt(pg) < 8.0 and d.xpos[pelvis][2] > 0.7
 
 
+def test_a_fallen_biped_stood_back_up_by_hand_is_held_again(pg, tmp_path):
+    _biped(pg, tmp_path)
+    ctrl = pg.session.controllers["bot"]
+    m, d = pg.session.model, pg.session.data
+    pg.run_fast(lambda: False, 3.0)
+    _shove(pg, 3.0, (1, 0))  # far more than its feet can take
+    pg.run_fast(lambda: False, 4.0)
+    assert ctrl.fallen and ctrl.status()["behavior"] == "fallen"
+    mujoco.mj_resetDataKeyframe(m, d, 0)  # stood up by hand: the controller is kept, the robot is put back
+    mujoco.mj_forward(m, d)
+    pg.run_fast(lambda: False, 4.0)
+    assert not ctrl.fallen and _tilt(pg) < 8.0 and d.xpos[_trunk(pg)][2] > 0.7
+
+
 def test_a_standing_humanoid_says_what_holds_it_up_and_that_it_has_no_gait(pg, tmp_path):
     _biped(pg, tmp_path, roll=False)
     ctrl = pg.session.controllers["bot"]
@@ -174,6 +188,24 @@ def test_a_standing_humanoid_says_what_holds_it_up_and_that_it_has_no_gait(pg, t
     assert pg.behaviors.pose("bot")["upright"]
     with pytest.raises(BehaviorError, match="stand"):
         pg.behaviors.move("bot", 0.2, 0.0)
+
+
+def test_move_does_not_swap_the_balance_of_a_file_humanoid_for_a_gait_that_drops_it(pg, tmp_path):
+    """The legs of this biped fit the gait search (hip roll, hip pitch, knee, ankle), but nobody has shown that gait to
+    walk a robot of a file: every real one tried fell within seconds. So move refuses and the robot stays up."""
+    _biped(pg, tmp_path, roll=True)
+    assert isinstance(pg.session.controllers["bot"], WholeBodyBalancer)
+    info = next(r for r in pg.behaviors.robots() if r["name"] == "bot")
+    assert "max_speed" not in info and "move cannot walk" in info["walk_hint"]
+    with pytest.raises(BehaviorError, match="whole-body balance"):
+        pg.behaviors.move("bot", 0.2, 0.0)
+    with pytest.raises(BehaviorError, match="whole-body balance"):
+        pg.behaviors.strike_pose("bot", "wave")
+    with pytest.raises(BehaviorError, match="whole-body balance"):
+        pg.behaviors.navigate("bot", [1.0, 0.0])
+    assert isinstance(pg.session.controllers["bot"], WholeBodyBalancer)
+    pg.run_fast(lambda: False, 3.0)
+    assert pg.behaviors.pose("bot")["upright"]
 
 
 # ---- the parts -------------------------------------------------------------------------------------------
@@ -210,3 +242,30 @@ def test_the_tuned_humanoids_keep_their_walking_gait(pg):
     pg.add_robot("op3", library="op3", pos=[2.0, 0.0])
     ctrl = pg.session.controllers["op3"]
     assert not isinstance(ctrl, WholeBodyBalancer)
+
+
+def test_a_learned_walker_stands_by_balance_under_a_load_and_walks_on_the_first_move(pg):
+    """G1's policy falls under a fifth of its own mass; whole-body balance holds that, and the first move gives the
+    robot back to its policy."""
+    pg.add_robot("g1", library="g1")
+    m, d = pg.session.model, pg.session.data
+    assert isinstance(pg.session.controllers["g1"], WholeBodyBalancer)
+    trunk = int(m.body("g1/pelvis").id)
+    pg.run_fast(lambda: False, 2.0)
+    was = float(m.body_mass[trunk])
+    for step in range(1, 11):  # taken up over a second, as a hand puts a load on
+        m.body_mass[trunk] = was + 0.2 * float(m.body_subtreemass[trunk]) * step / 10
+        mujoco.mj_setConst(m, d)
+        pg.run_fast(lambda: False, 0.1)
+    pg.run_fast(lambda: False, 3.0)
+    assert math.degrees(math.acos(float(d.xmat[trunk][8]))) < 15.0 and d.xpos[trunk][2] > 0.6
+    m.body_mass[trunk] = was
+    mujoco.mj_setConst(m, d)
+    pg.behaviors.move("g1", 0.3, 0.0)
+    assert not isinstance(pg.session.controllers["g1"], WholeBodyBalancer)
+
+
+def test_a_learned_walker_with_an_arm_on_it_stays_on_its_policy(pg):
+    """The arm's controller and the balance would both drive the joints of one tree."""
+    pg.add_robot("g1", library="g1", mounts=[{"library": "piper"}])
+    assert not isinstance(pg.session.controllers["g1"], WholeBodyBalancer)

@@ -29,6 +29,7 @@ from robotforge.behaviors import (
     fetch,
     flight,
     grasping,
+    hints,
     humanoid,
     marine,
     nav_map,
@@ -124,6 +125,10 @@ NUMBER_LIST = re.compile(r"\s*[\[(]?\s*-?\d+(?:\.\d*)?(?:[\s,;]+-?\d+(?:\.\d*)?)
 TRIP = "__navigate__"  # session controller key of a robot's trip to a destination: TRIP + robot (see navigate)
 MAX_DESTINATION = 100.0  # m; the largest scene is 20 m across (see playground.MAX_POSITION)
 MIN_TRIP_SPEED = 0.02  # m/s; slower, a trip would not get anywhere (a humanoid walks at 0.09)
+
+
+SPREAD_MAX = 0.04  # m: the most a thing's own width keeps its neighbours in a tray away
+HOLD_LIFT = 0.04  # m a held thing must be above where it lay for the hold to count
 
 
 class BehaviorError(ValueError):
@@ -225,6 +230,9 @@ DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for wh
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
 FLAT = 0.02  # m: a thing thinner than this lies too flat for fingers to get round it (a tile, a plate)
+CORRIDOR = 0.12  # m either side of the way between the pick and the place that what is tall counts
+POUR_FORCE = 40.0  # N a cup is squeezed with while it is tipped
+HEAVY = 0.08  # kg: a generated thing this heavy is held firmly (hints.FirmHold)
 OPEN_ENOUGH = 0.05  # m a drawer is pulled out before pick_and_place puts things in it
 
 
@@ -473,9 +481,9 @@ class BehaviorManager:
                 info["flight"] = self.flight_info(name)
             if isinstance(self.session.controllers.get(name), whole_body.WholeBodyBalancer):
                 info["balance"] = "whole-body balance: stands on its feet, holds a load, takes a push"
-                if "max_speed" not in info:
-                    info["walk_hint"] = "no gait fits its legs, so move cannot walk it; it stands on its own"
             walk = self._kept_walk_or_none(name)
+            if walk is None and "balance" in info and "max_speed" not in info:
+                info["walk_hint"] = "no walk has been shown to carry it, so move cannot walk it; it stands on its own"
             if walk is not None:
                 info["learned_walk"] = walk.describe()
                 info.setdefault("max_speed", round(walk.speed, 3))  # robots no gait code knows drive with it
@@ -743,12 +751,21 @@ class BehaviorManager:
         if walker == RHYTHM or kind not in MOBILE:
             return self._rhythm_walker(robot, existing, create)
         entry = _entry(robot, world)
-        if stand and kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+        if stand and kind == Kind.HUMANOID and _stands_by_balance(entry):
             return self._stander(robot, existing, create)
         if walker not in (None, "gait") and kind in LEGGED:
             return self._policy_walker(robot, walker, existing, create, entry)
         if isinstance(existing, WALKERS):
             return existing
+        if kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+            # A gait found from the legs of a file, catalogue or built humanoid is not known to walk it: every one
+            # tried fell within seconds (docs/HUMANOID.md), so it stays on its feet by balance and move says so.
+            if walker is None and self._kept_walk_or_none(robot) is not None:
+                return self._rhythm_walker(robot, existing, create)
+            raise BehaviorError(
+                f"{robot} stands on its feet by whole-body balance, which holds a load and takes a push, but no "
+                "walk has been shown to carry it: move, pose and go_to cannot walk it"
+            )
         m = self.session.model
         try:
             if kind == Kind.HUMANOID and _learned_humanoid(entry):
@@ -773,11 +790,6 @@ class BehaviorManager:
         except (ValueError, KeyError) as exc:
             if walker is None and self._kept_walk_or_none(robot) is not None:  # a body the gait code cannot walk
                 return self._rhythm_walker(robot, existing, create)
-            if kind == Kind.HUMANOID and isinstance(existing, whole_body.WholeBodyBalancer):
-                raise BehaviorError(
-                    f"{robot} stands on its feet by whole-body balance, but no gait fits its legs ({exc}); it holds a "
-                    "load and takes a push, move cannot walk it"
-                ) from exc
             if isinstance(exc, KeyError):  # a leg joint no motor drives: a linkage, as in Oli or Cassie
                 raise BehaviorError(
                     f"no gait fits the body of {robot}: a joint of its legs has no motor of its own (a linkage?), "
@@ -1594,12 +1606,22 @@ class BehaviorManager:
         ),
     )
     def pick_and_place(
-        self, robot: str, obj: str, target: str | list[float], go: bool = True
+        self,
+        robot: str,
+        obj: str,
+        target: str | list[float],
+        go: bool = True,
+        grasp: str | None = None,
+        pour: bool = False,
     ) -> tuple[ArmMotion | fetch.Errand, dict[str, Any]]:
         """Pick `obj` up and put it on or in `target`. An arm that rides on a robot that drives or walks, told to fetch
         something out of its reach from where the robot stands, has the robot go over (fetch.Errand): to the object,
         then with it to the place. `go=False` keeps the robot where it is and refuses instead, as before. Returns what
-        does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}."""
+        does it (an ArmMotion or an Errand: wait until `done`) and {object, target, region}. A generated object (mug,
+        bottle, hammer, ...) is taken by one of the grasps its generator gives (`grasp` asks for a kind: "handle",
+        "body", "shaft", "rim"), the first the arm can reach and carry; the answer says which. With `pour` the
+        thing is a cup or a bowl with something in it: the arm carries it over the target container, tilts it about
+        its lip until what is in it has run out, tips it back and puts it down where it stood."""
         with self.session.lock:
             name = self._arm_name(robot)
             if mujoco.mj_name2id(self.session.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}/gripper") < 0:
@@ -1612,7 +1634,7 @@ class BehaviorManager:
             self._check_carrier(name)  # before its motion takes hold of the arm
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
-            pick = self._object_geometry(obj)
+            pick = self._object_geometry(obj, arm, grasp)
             if pick.get("irregular") and arm.tool is None:  # fingers: where and which way to take hold, from its shape
                 pick = self._planned_pick(arm, obj, pick)
             # A suction cup or a magnet picks from where it stands: an errand's grasp and carry are for fingers.
@@ -1623,22 +1645,23 @@ class BehaviorManager:
                 return caught, {"object": obj, "target": target, "region": caught.region}
             if arm.tool == "magnet":
                 self._check_steel(arm.robot, obj)
+            if pour:
+                return arm, self._pour(arm, obj, target, pick)
+            if isinstance(target, str) and target.strip().lower() == "hold" and not self._named("hold"):
+                return arm, self._hold(arm, obj, pick)
             try:
-                place, place_top, region = self._place_target(target)
+                place, place_top, region = self._place_target(target, obj)
             except BehaviorError:
                 if not goes or self._place_kind(target) != "terrain":
                     raise
                 place = None  # a terrain patch: only a robot that goes over puts things on one
+            if place is not None and pick.get("built") is not None:
+                place_top = max(place_top, self._tallest_between(obj, pick["center"], place))
             if place is not None and not (goes and fetch.holding(self.session.data, arm, self._body(obj))):
                 try:
-                    arm.pick_and_place(
-                        pick["center"],
-                        pick["half_height"],
-                        place,
-                        place_top,
-                        pick["faces"],
-                        pick.get("reach_above", 0.0),
-                    )
+                    used = self._take(arm, pick, place, place_top)
+                    if pick.get("built") is not None and pick["built"].mass >= HEAVY and used is not None:
+                        hints.FirmHold(self.session, arm, self._body(obj), used.force, used.short).start()
                 except OutOfReach as exc:
                     # Out of reach only for a part of its own robot in the way of the carry (exc.over): that part
                     # goes with it wherever it drives, and the refusal names it.
@@ -1654,10 +1677,39 @@ class BehaviorManager:
                 except ValueError as exc:
                     raise BehaviorError(str(exc)) from exc
                 else:
-                    taken = {"grasp": pick["grasp"]} if "grasp" in pick else {}
-                    return arm, {"object": obj, "target": target, "region": region, **taken}
+                    info = {"object": obj, "target": target, "region": region}
+                    if used is not None:
+                        return arm, {**info, "grasp": used.describe()}
+                    return arm, {**info, **({"grasp": pick["grasp"]} if "grasp" in pick else {})}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
+
+    def _take(self, arm: ArmMotion, pick: dict[str, Any], place: np.ndarray, place_top: float) -> hints.Choice | None:
+        """Queue the pick and place with the first grasp the arm can reach and carry (a generated object has several
+        to try, best first); raises what the best one raised when none works, saying what the others did."""
+        tries = pick.get("choices") or [None]
+        first: OutOfReach | ValueError | None = None
+        others: list[str] = []
+        for choice in tries:
+            point, half, faces = (
+                (pick["center"], pick["half_height"], pick["faces"])
+                if choice is None
+                else (choice.point, choice.half_height, choice.faces)
+            )
+            try:
+                reach = pick.get("reach_above", 0.0) if choice is None else 0.0
+                arm.pick_and_place(point, half, place, place_top, faces, reach)
+                return choice
+            except (OutOfReach, ValueError) as exc:
+                if first is None:
+                    first = exc
+                    pick["center"], pick["half_height"] = point, half  # the advice below is for the best grasp
+                elif choice is not None:
+                    others.append(f"{choice.hint.kind if choice.hint else 'body'}: {exc}")
+        assert first is not None
+        if others and isinstance(first, ValueError) and not isinstance(first, OutOfReach):
+            first.args = (f"{first.args[0]} (the other grasps: {'; '.join(others)})",)
+        raise first
 
     def hand_over(
         self, giver: str, receiver: str, obj: str, target: str | list[float]
@@ -1681,8 +1733,16 @@ class BehaviorManager:
             if names[0] == names[1]:
                 raise BehaviorError("hand_over needs two different arms")
             give, take = (self._arm_motion(n) for n in names)
+            for name, motion in zip(names, (give, take), strict=True):
+                if not motion.done or any(
+                    isinstance(c, relay.Relay) and not c.done and name in (c.giver.robot, c.receiver)
+                    for c in self.session.controllers.values()
+                ):
+                    raise BehaviorError(
+                        f"{name} is still busy with a motion or a hand-over: wait for it to finish, or stop it first"
+                    )
             obj = self._object_name(obj)
-            pick = self._object_geometry(obj)
+            pick = self._object_geometry(obj, give)  # a modelled object is taken by its hints
             half = pick["half_height"]
             if fetch.holding(self.session.data, give, self._body(obj)):
                 raise BehaviorError(f"{names[0]} is already holding {obj}: put it down first")
@@ -1740,10 +1800,17 @@ class BehaviorManager:
                     return f"{names[0]} set {obj} down, but {names[1]} cannot take it to {target}: {exc}"
                 return motion
 
-            handed = relay.Relay(give, names[1], obj, np.asarray(spot, float), arrived, start)
+            key = relay.KEY + names[0]
+            handed = relay.Relay(
+                give, names[1], obj, np.asarray(spot, float), arrived, start, on_done=lambda: self._drop_relay(key)
+            )
             self.session.set_controller(names[0], give)
-            self.session.set_controller(relay.KEY + names[0], handed)
+            self.session.set_controller(key, handed)
         return handed, {"object": obj, "target": target, "region": region, "spot": [round(float(v), 3) for v in spot]}
+
+    def _drop_relay(self, key: str) -> None:
+        with self.session.lock:
+            self.session.set_controller(key, None)
 
     def _catch(
         self,
@@ -2109,7 +2176,11 @@ class BehaviorManager:
         center = np.asarray(region["center"])
         half = np.asarray(region["half_xy"])
         inside = bool(np.all(np.abs(pos[:2] - center[:2]) <= half) and pos[2] >= region["min_z"])
-        return {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
+        out = {"success": inside, "object_position": [round(float(v), 3) for v in pos]}
+        entry = self._object_entry(obj)
+        if hints.built_for(entry) is not None:  # a generated thing is also judged by how it stands
+            out["tilt_deg"] = round(hints.tilt_deg(self.session.data, body), 1)
+        return out
 
     def _movable(self) -> list[str]:
         """Names of the loose objects: bodies with a free joint that are not part of a robot."""
@@ -2156,8 +2227,11 @@ class BehaviorManager:
             f"material='steel'), or change the tool (update_robot with end_effector='suction')"
         )
 
-    def _object_geometry(self, name: str) -> dict[str, Any]:
+    def _object_geometry(self, name: str, arm: ArmMotion | None = None, grasp: str | None = None) -> dict[str, Any]:
         entry = self._object_entry(name)
+        built = hints.built_for(entry)
+        if built is not None and arm is not None:
+            return self._hinted_geometry(name, entry, built, arm, grasp)
         if entry is not None and entry.shape in mechanisms.MECHANISMS:
             actions = " or ".join(mechanisms.MECHANISMS[entry.shape].actions) or "set its speed"
             raise BehaviorError(f"{name} is a {entry.shape}, built in place: operate can {actions} it")
@@ -2258,7 +2332,201 @@ class BehaviorManager:
             "why_none": None if grasps else "too wide across for the jaws, or too flat for fingers to get under",
         }
 
-    def _place_target(self, target: str | list[float]) -> tuple[np.ndarray, float, dict[str, Any]]:
+    def _named(self, name: str) -> bool:
+        """Whether the world has an object called `name` (a target called "hold" is that object, not the keyword)."""
+        world = self._world()
+        return world is not None and any(o.name == name for o in world.objects)
+
+    def _hold(self, arm: ArmMotion, obj: str, pick: dict[str, Any]) -> dict[str, Any]:
+        """Queue taking `obj` and lifting it to stay held (target "hold": the receiving half of a hand-over)."""
+        body = self._body(obj)
+        began = float(self.session.data.xpos[body][2])
+        first: Exception | None = None
+        used = None
+        for choice in pick.get("choices") or [None]:
+            point, half, faces = (
+                (pick["center"], pick["half_height"], pick["faces"])
+                if choice is None
+                else (choice.point, choice.half_height, choice.faces)
+            )
+            try:
+                arm.pick_and_hold(point, half, faces)
+                used = choice
+                break
+            except (OutOfReach, ValueError) as exc:
+                first = first or exc
+        else:
+            if isinstance(first, OutOfReach):
+                raise BehaviorError(
+                    self._pick_out_of_reach(arm, first, pick["center"], pick["center"], "hold", obj)
+                ) from first
+            raise BehaviorError(str(first)) from first
+        built = pick.get("built")
+        if built is not None and built.mass >= HEAVY and used is not None:
+            hints.FirmHold(self.session, arm, body, used.force, used.short).start(keep=True)
+        return {
+            "object": obj,
+            "target": "hold",
+            "region": None,
+            "hold": {"robot": arm.robot, "began_z": began},
+            **({"grasp": used.describe()} if used is not None else {}),
+        }
+
+    def held(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Whether the arm that was told to hold a thing has it lifted in its fingers."""
+        hold = info["hold"]
+        arm = self._arm_motion(hold["robot"])
+        body = self._body(info["object"])
+        up = float(self.session.data.xpos[body][2]) - hold["began_z"]
+        holding = fetch.holding(self.session.data, arm, body)
+        return {"success": bool(holding and up >= HOLD_LIFT), "held": bool(holding), "lifted_cm": round(up * 100, 1)}
+
+    def _pour(self, arm: ArmMotion, obj: str, target: Any, pick: dict[str, Any]) -> dict[str, Any]:
+        """Queue taking `obj` (a cup, a mug, a bowl), pouring it into `target` and putting it back (pour.py)."""
+        from robotforge.behaviors import pour as pouring
+
+        built = pick.get("built")
+        if built is None or "mouth_r" not in built.facts or built.facts.get("closed"):
+            raise BehaviorError(f"{obj} has no open mouth to pour from: pour takes a cup, a mug or a bowl")
+        if not isinstance(target, str):
+            raise BehaviorError("pour into an object: give its name (a bowl, a cup)")
+        world = self._world()
+        names = [o.name for o in world.objects] if world else []
+        found = wording.match(target, names)
+        entry = self._object_entry(found) if found else None
+        into = hints.built_for(entry)
+        if entry is None or into is None or "mouth_r" not in into.facts:
+            raise BehaviorError(f"{target} cannot be poured into: it needs an open mouth (a cup, a mug, a bowl)")
+        d = self.session.data
+        mouth = d.xpos[self._body(found)] + np.array([0.0, 0.0, float(into.facts["rim_z"])])
+        cup = d.xpos[pick["body"]]
+        balls = [
+            o.name
+            for o in world.objects
+            if o.shape == "sphere" and not o.fixed and self._inside(d.xpos[self._body(o.name)], cup, built)
+        ]
+        spec = pouring.Pour(
+            float(built.facts["rim_z"]), float(built.facts["mouth_r"]), 0.0, mouth, float(into.facts["mouth_r"])
+        )
+        base = d.xpos[pick["body"]].copy()
+        first: Exception | None = None
+        on_axis = [
+            c for c in pick.get("choices") or [] if float(np.hypot(*(np.asarray(c.point[:2]) - base[:2]))) < 0.015
+        ]
+        if not on_axis:
+            raise BehaviorError(
+                f"{obj} has no grip on its own axis (a body, a rim) to pour from: a handle would swing it"
+            )
+        for choice in on_axis:
+            spec.held_at = choice.half_height
+            try:
+                toward = pouring.pick_and_pour(arm, choice.point, choice.half_height, choice.faces, spec, base)
+                # tipped over, a cup turns in the fingers: held as firmly as a heavy thing is
+                hints.FirmHold(self.session, arm, pick["body"], max(choice.force, POUR_FORCE), choice.short).start()
+                break
+            except (OutOfReach, ValueError) as exc:
+                first = first or exc
+        else:
+            if isinstance(first, OutOfReach):
+                raise BehaviorError(self._pick_out_of_reach(arm, first, pick["center"], base, target, obj)) from first
+            raise BehaviorError(str(first)) from first
+        return {
+            "object": obj,
+            "target": found,
+            "pour": {
+                "into": found,
+                "toward_deg": round(math.degrees(math.atan2(toward[1], toward[0])), 1),
+                "balls": balls,
+                "mouth": [round(float(v), 3) for v in mouth],
+            },
+            "region": None,
+        }
+
+    @staticmethod
+    def _inside(ball: np.ndarray, cup: np.ndarray, built: Any) -> bool:
+        """Whether a ball lies in a cup's mouth, as the world has them."""
+        reach = float(built.facts["mouth_r"]) + 0.01
+        return bool(
+            np.hypot(*(ball[:2] - cup[:2])) <= reach and -0.01 <= ball[2] - cup[2] <= float(built.facts["rim_z"]) + 0.02
+        )
+
+    def poured(self, info: dict[str, Any]) -> dict[str, Any]:
+        """How a pour went: how many of the balls that were in the cup lie in the target now."""
+        pour = info["pour"]
+        d = self.session.data
+        into = self._body(pour["into"])
+        entry = self._object_entry(pour["into"])
+        built = hints.built_for(entry)
+        inside = sum(
+            1 for n in pour["balls"] if built is not None and self._inside(d.xpos[self._body(n)], d.xpos[into], built)
+        )
+        total = len(pour["balls"])
+        return {
+            "success": total > 0 and inside >= math.ceil(0.75 * total),
+            "balls_in_target": inside,
+            "balls": total,
+            "poured_toward_deg": pour["toward_deg"],
+        }
+
+    def _tallest_between(self, obj: str, start: np.ndarray, end: np.ndarray) -> float:
+        """The height of the tallest thing in the corridor between two points (the things it carries over: a tray with
+        cans in it, a shelf), beside what stands under the load's path, so that it is carried over them: the arm's
+        planner knows only the place's own rim. Things no higher than the work surface do not count."""
+        m, d = self.session.model, self.session.data
+        me = self._body(obj)
+        lo = np.minimum(start[:2], end[:2]) - CORRIDOR
+        hi = np.maximum(start[:2], end[:2]) + CORRIDOR
+        floor = float(min(start[2], end[2])) + 0.02
+        top = -math.inf
+        for g in range(m.ngeom):
+            b = int(m.geom_bodyid[g])
+            name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or ""
+            if b == 0 or b == me or "/" in name or not m.geom_contype[g]:
+                continue
+            rot = d.geom_xmat[g].reshape(3, 3)
+            centre = d.geom_xpos[g] + rot @ m.geom_aabb[g][:3]
+            half = np.abs(rot) @ m.geom_aabb[g][3:]
+            if np.any(centre[:2] + half[:2] < lo) or np.any(centre[:2] - half[:2] > hi):
+                continue
+            top = max(top, float(centre[2] + half[2]))
+        return top if top > floor else -math.inf
+
+    def _hinted_geometry(
+        self, name: str, entry: ObjectEntry, built: Any, arm: ArmMotion, want: str | None
+    ) -> dict[str, Any]:
+        """Where a generated object is taken hold of: its generator's grasp hints at the pose it has now."""
+        if entry.fixed:
+            raise BehaviorError(f"{name} is fixed in place and cannot be picked up")
+        body = self._body(name)
+        m, d = self.session.model, self.session.data
+        if arm.tool is not None:  # a suction cup or a magnet takes the middle of a flat top
+            if built.facts.get("top_z") is None:
+                raise BehaviorError(
+                    f"{name} is a {entry.shape}: a {arm.tool} needs a flat top to hold by (a package, a tin, a book); "
+                    "change the end effector to fingers (update_robot with end_effector='gripper')"
+                )
+            half = float(built.facts["top_z"]) / 2
+            center = d.xpos[body] + d.xmat[body].reshape(3, 3) @ np.array([0.0, 0.0, half])
+            return {"center": center, "half_height": half, "faces": None, "choices": None}
+        opening = fetch.gripper_opening(m, arm)
+        found, left = hints.choices(d, body, built, opening, hints.palm_of(m, arm), want, m)
+        if not found:
+            asked = f" (asked for a {want} grasp; it has {', '.join(hints.kinds_of(built)) or 'none'})" if want else ""
+            why = "; ".join(left) or "it has no grasp a top-down gripper can use"
+            raise BehaviorError(f"{arm.robot} cannot take hold of {name}, a {entry.shape}{asked}: {why}")
+        first = found[0]
+        return {
+            "center": first.point,
+            "half_height": first.half_height,
+            "faces": first.faces,
+            "choices": found,
+            "built": built,
+            "body": body,
+        }
+
+    def _place_target(
+        self, target: str | list[float], obj: str | None = None
+    ) -> tuple[np.ndarray, float, dict[str, Any]]:
         """(place point for the object's bottom, highest point around it, success region)."""
         if isinstance(target, str) and NUMBER_LIST.fullmatch(target):  # "0.2, 0.2": a position, not an object
             target = [float(w) for w in re.split(r"[^\d.+-]+", target.strip(" []()")) if w]
@@ -2269,12 +2537,18 @@ class BehaviorManager:
             return p, p[2], {"center": p.tolist(), "half_xy": [0.04, 0.04], "min_z": p[2] - 0.01}
         world = self._world()
         names = [o.name for o in world.objects] if world else []
-        found = wording.match(target, names)
+        base_name, slot_name = hints.parse_target(target, names) if "/" in target else (target, None)
+        found = wording.match(base_name, names)
         entry = self._object_entry(found) if found else None
         if entry is None:
             raise BehaviorError(wording.unknown("object", target, names) + " (or give a position [x, y])")
         target = found
         m, d = self.session.model, self.session.data
+        built = hints.built_for(entry)
+        if built is not None:  # a generated fixture's slot, or the flat top of a generated thing
+            return self._generated_place(target, built, slot_name, obj)
+        if entry.shape == "shelf":
+            return self._on_shelf(target, entry, slot_name)
         if entry.shape in mechanisms.CONTAINERS:
             return self._into(target)
         b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, target)
@@ -2294,6 +2568,61 @@ class BehaviorManager:
         top = base[2] + (entry.size[-1] / 2 if entry.shape != "sphere" else entry.size[0] / 2)
         region = {"center": [base[0], base[1], top], "half_xy": [length / 2, width / 2], "min_z": top - 0.01}
         return np.array([base[0], base[1], top]), top, region
+
+    def _generated_place(
+        self, name: str, built: Any, slot_name: str | None, moving: str | None
+    ) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """Put something in a slot of the generated object `name` (a rack's socket, a tray, a shelf board) or on its
+        flat top: the first free slot unless one is named ("rack/2")."""
+        m, d = self.session.model, self.session.data
+        taken = []
+        for other in self._movable():
+            if other != moving and other != name:
+                taken.append(d.xpos[self._body(other)].copy())
+        try:
+            size = self._spread(moving)
+            place = hints.place_for(m, d, name, built, slot_name, taken, size)
+        except KeyError as exc:
+            raise BehaviorError(exc.args[0]) from exc
+        except LookupError as exc:
+            raise BehaviorError(str(exc)) from exc
+        if place is None:
+            raise BehaviorError(
+                f"{name} is a {built.shape}: nothing can be put in or on it (a rack, a tray and a box can)"
+            )
+        return place.point, place.top, place.region
+
+    def _spread(self, name: str | None) -> float:
+        """How much room a generated thing wants round it in a tray: its widest half extent from above, at most the
+        width of a finger's reach (a long tool is not spread like a long box: it is laid, not stood)."""
+        built = hints.built_for(self._object_entry(name)) if name else None
+        if built is None:
+            return 0.0
+        return min(float(max(built.half[0], built.half[1])), SPREAD_MAX)
+
+    def _on_shelf(self, name: str, entry: ObjectEntry, slot: str | None) -> tuple[np.ndarray, float, dict[str, Any]]:
+        """The top board of a shelf: the only one with nothing over it, so the only one a gripper coming from above
+        reaches (`name/2` asks for the second board counting from the bottom, refused unless it is the top)."""
+        from robotforge.design import props
+
+        m, d = self.session.model, self.session.data
+        levels = props.shelf_levels(entry.size)
+        want = len(levels) if slot is None else int(slot) if slot.isdigit() else 0
+        if not 1 <= want <= len(levels):
+            raise BehaviorError(f"{name} has boards 1 to {len(levels)}, counted from the bottom")
+        if want != len(levels):
+            raise BehaviorError(
+                f"board {want} of {name} has another board over it: a gripper coming from above cannot get a thing in; "
+                f"the top board ({len(levels)}) can take it"
+            )
+        b = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, name)
+        base = d.xpos[b].copy() if b >= 0 else d.geom_xpos[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, name)].copy()
+        rot = d.xmat[b].reshape(3, 3) if b >= 0 else np.eye(3)
+        top = float(base[2] + levels[-1])
+        half = np.abs(rot[:2, :2]) @ np.array([entry.size[0] / 2 - 0.04, entry.size[1] / 2 - 0.04])
+        spot = np.array([base[0], base[1], top])
+        region = {"center": spot.tolist(), "half_xy": [float(half[0]), float(half[1])], "min_z": top - 0.012}
+        return spot, top, region
 
     def _into(self, name: str) -> tuple[np.ndarray, float, dict[str, Any]]:
         """Place point, rim and success region for putting something in drawer `name`, as far open as it is now:
@@ -2346,6 +2675,17 @@ def _tuned_humanoid(entry: RobotEntry | None) -> bool:
     """A humanoid whose walking gait was tuned for it: our template's and the library's (G1 learned, T1 and OP3 on
     the balance gait). Files, catalogue robots and robots built from parts are not: they stand by whole-body balance."""
     return entry is None or not (entry.file or entry.catalogue or entry.build)
+
+
+def _stands_by_balance(entry: RobotEntry | None) -> bool:
+    """A humanoid that whole-body balance keeps up while nothing moves it: every one without a gait tuned for it,
+    and the library's learned walkers (G1), whose policy takes a push but falls under a load of a fifth of its own
+    mass. Not one with something mounted on it: the mounted arm's controller and the balance would both drive its
+    joints. The first move hands a tuned one over to its walk; for the others move refuses (see
+    _mobile_controller)."""
+    if not _tuned_humanoid(entry):
+        return True
+    return _learned_humanoid(entry) and not entry.mounts
 
 
 def _learned_humanoid(entry: RobotEntry | None) -> bool:

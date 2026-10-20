@@ -1590,6 +1590,38 @@ G12_SHOTS = [
     ),
 ]
 
+# G13: the generated objects on a shelf, three boards of them, each with its own seed.
+G13_ROWS = (
+    ("mug", "cup", "bowl", "plate", "bottle", "can", "squeeze_bottle"),
+    ("apple", "orange", "pear", "banana", "package", "tin", "brick"),
+    ("book", "screwdriver", "hammer", "wrench", "cable", "bottle", "can"),
+)
+
+
+def _g13_objects(pg: Any) -> None:
+    from robotforge.design.props import shelf_levels
+
+    size = [1.5, 0.42, 1.25]
+    pg.add_object("shelf", shape="shelf", size=size, pos=[0.0, 0.0, 0.0], color="#8a6a48")
+    for r, (top, row) in enumerate(zip(shelf_levels(size)[:3], G13_ROWS, strict=True)):
+        for i, shape in enumerate(row):
+            x = (i - (len(row) - 1) / 2) * 0.2
+            tool = shape in ("screwdriver", "hammer", "wrench")
+            yaw = 90 if tool else -12 + 6 * i % 30  # tools lie front to back, so three of them fit side by side
+            pg.add_object(f"{shape}_{r}{i}", shape=shape, seed=r * 10 + i + 1, pos=[x, -0.02, top], yaw=yaw)
+
+
+G13_SHOTS = [
+    Shot(
+        "g13_objects",
+        _g13_objects,
+        page='document.getElementById("empty").style.display = "none"; window.__robotforge.select(null);'
+        " window.__robotforge.lookAt([0.35, -1.75, 1.15], [0.0, 0.0, 0.62]);",
+        settle=2.5,
+    ),
+]
+
+
 import assets_shots  # noqa: E402  (scripts/assets_shots.py)
 
 ASSET_SHOTS = assets_shots.shots(Shot, _look, _frame_robot, _gallery_line_up)
@@ -1918,6 +1950,7 @@ SHOTS = [
     *G3_SHOTS,
     *G8_SHOTS,
     *G12_SHOTS,
+    *G13_SHOTS,
     *GENERATED_SHOTS,
     *ASSET_SHOTS,
     *_g10_shots(),

@@ -7,7 +7,8 @@ Handover: two Pandas 1.3 m apart, a cube somewhere on the left arm's side of the
 side; the left arm hands it to the right one (`pick_and_place(..., hand_to=...)`). It counts the cube lying on the
 pad, and the closest the two arms came (a contact deeper than 5 mm is a collision).
 Crossing: two rovers sent across each other's way so that they get to the middle together, a T meeting, and three
-rovers meeting from three sides; it counts arrivals, the closest the robots came and the time against the same run
+rovers meeting from three sides, and four from four sides (two head-on pairs, which making way handles and the
+right of way leaves alone); it counts arrivals, the closest the robots came and the time against the same run
 with no right of way.
 """
 
@@ -76,11 +77,13 @@ def crossing(kind: str, traffic: bool) -> dict:
         "cross": [(-1.5, 0.0, 0), (0.0, -1.5, 90)],
         "tee": [(-1.5, 0.0, 0), (0.1, -1.5, 90)],
         "three": [(-1.5, 0.0, 0), (0.75, -1.3, 120), (0.75, 1.3, -120)],
+        "four": [(-1.5, 0.0, 0), (1.5, 0.0, 180), (0.0, -1.5, 90), (0.0, 1.5, -90)],
     }[kind]
     goals = {
         "cross": [(1.6, 0.0), (0.0, 1.6)],
         "tee": [(1.6, 0.0), (0.1, 0.0)],
         "three": [(1.6, 0.0), (-0.8, 1.4), (-0.8, -1.4)],
+        "four": [(1.6, 0.0), (-1.6, 0.0), (0.0, 1.6), (0.0, -1.6)],
     }[kind]
     names = [f"r{i}" for i in range(len(starts))]
     for name, (x, y, yaw) in zip(names, starts, strict=True):
@@ -128,7 +131,7 @@ def main() -> int:
             f"{r.get('seconds', '')}s pressed {r.get('arms_pressed_mm', '-')} mm {r['why']}",
             flush=True,
         )
-    for kind in ("cross", "tee", "three"):
+    for kind in ("cross", "tee", "three", "four"):
         for _ in range(args.crossings):
             on, off = crossing(kind, True), crossing(kind, False)
             report["crossing"].setdefault(kind, []).append({"right_of_way": on, "reactive_only": off})

@@ -50,6 +50,22 @@ def test_one_arm_hands_the_cube_to_the_other_which_puts_it_on_the_pad(tmp_path, 
     assert handed.note is None
 
 
+def test_a_second_hand_over_on_busy_arms_is_refused_and_a_finished_relay_leaves_no_controller(tmp_path, monkeypatch):
+    pg = two_arms(tmp_path, monkeypatch)
+    pg.add_object("cube2", shape="box", size=[0.05, 0.05, 0.05], pos=[-0.4, -0.2], color="green", mass=0.1)
+    handed, _ = pg.behaviors.hand_over("left", "right", "cube", "pad")
+    for giver, receiver in (("left", "right"), ("right", "left"), ("left", "right")):
+        with pytest.raises(BehaviorError, match="busy"):
+            pg.behaviors.hand_over(giver, receiver, "cube2", "pad")
+    t0 = pg.session.data.time
+    while not handed.done and pg.session.data.time - t0 < handed.time_limit:
+        pg.run_fast(lambda: False, 0.25)
+    pg.run_fast(lambda: False, 0.5)
+    assert handed.done and handed.note is None
+    assert not [k for k in pg.session.controllers if k.startswith(relay.KEY)]
+    pg.behaviors.hand_over("left", "right", "cube2", "pad")  # free again
+
+
 def test_the_giving_arm_waits_clear_of_the_receiving_one(tmp_path, monkeypatch):
     pg = two_arms(tmp_path, monkeypatch)
     handed, _ = pg.behaviors.hand_over("left", "right", "cube", "pad")

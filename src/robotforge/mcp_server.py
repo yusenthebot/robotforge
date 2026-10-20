@@ -87,7 +87,9 @@ link shells, wheels, ...) with their ranges, the styles and the materials; add_r
 params={"generator": "wheel", "args": {"radius": 0.07}}) shows one on a turntable.
 add_object places boxes, balls, cylinders, tables, bins, furniture and architecture (walls, shelves, counters,
 pallets, trees, benches, rocks, flat ground markers), things with a moving part (drawer, cabinet with a door,
-button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Any arm can hold with
+button, switch, lever, valve, conveyor belt) and soft things (rope, cloth). Real things (mug, cup, bowl, plate, bottle,
+can, fruit, packages, books, tools) are modelled objects with grasp hints: add_object(shape="mug", seed=3) or
+add_object(describe="a tall blue mug with a big handle"). Any arm can hold with
 end_effector="suction" (a suction cup: flat things fingers cannot get round), "magnet" (steel things only) or
 "wiper" (a flat sponge pad that presses and wipes, it holds nothing), in add_robot or later in update_robot.
 mount(what, on) puts anything on anything in one call, on an adapter plate: an arm on a base ("ur5e" on "cart"), an
@@ -112,7 +114,8 @@ slopes and gravel on their own, straight on; over rough ground they slow to 60 p
 Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
 off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain. A humanoid from
 the catalogue or a file stands on its own by whole-body balance (`robots` says "balance"): it holds a load and takes
-a push of a few tenths of a m/s; move walks it only if a gait fits its legs (else `walk_hint` says so).
+a push of a few tenths of a m/s; move does not walk it (no gait has been shown to carry such a robot; `walk_hint`
+says so). G1 stands that way too until its first move, then walks on its learned policy.
 load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
 instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
@@ -121,6 +124,12 @@ add_task("bring the red cup from the kitchen to the bedroom desk") turns a sente
 a goal with a success check, a reward and randomized starts (go to, bring, put, pick up, push, open, close, press,
 switch on); it adds the thing or the robot the task needs. observe lists each task under "tasks" with done and
 distance_m: check it after acting, and say the task is done only when observe says so.
+Harder sentences with modelled objects are tasks too: "put the mug on the shelf upright", "stack the brick on the
+tin on the book", "insert the bottle into the rack", "sort the things in the bin into the trays by kind" (trays
+carry a name: shape="tray" with params={"tag": "fruit"}), "pour the balls from the cup into the bowl", "hand the
+hammer to the other arm" (two arms side by side). Do them with pick_and_place (pour=true for the pour; for the
+hand-over the first arm puts the tool down at a spot both arms reach, moves out of the way, and the second takes it
+with target="hold"); the check judges how things ended up, not how they got there.
 
 Water: set_floor(water=1.2) fills the world with water 1.2 m deep (the floor is its bottom, higher terrain is
 dry land), with waves, a current or only inside an area if asked. Things float or sink by their weight and
@@ -463,9 +472,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute,
         once), runs a URDF through the import doctor and answers with "catalogue": what the robot turned out to be from
         its structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
-        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs, and the answer's
-        "checked" says what a short trial showed (stands, walked or fell over after how far); the others move with
-        set_controls and pose."""
+        tool point (move_arm) and a flange; quadrupeds walk with move when a gait fits their legs, and the answer's
+        "checked" says what a short trial showed (stands, walked or fell over after how far); humanoids stand by
+        whole-body balance and move does not walk them; the others move with set_controls and pose."""
         from robotforge.design import catalogue
 
         with _tool_errors():
@@ -606,6 +615,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
         strength: float | None = None,
+        describe: str | None = None,
+        seed: int | None = None,
+        params: dict[str, Any] | None = None,
         resist: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
@@ -625,10 +637,21 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         Sources for temperature and gas sensors (add_sensor): heat_source [diameter] (strength = degrees of rise at the
         source, default 80) and gas_source [diameter] (strength = ppm at the source, default 600); nothing collides
         with them. resist (drawer, cabinet, switch, lever, valve) is the force at the handle in newtons it takes to move
-        it besides its own friction: a rusty valve, a stiff latch; operate with force=... pushes with at most that."""
+        it besides its own friction: a rusty valve, a stiff latch; operate with force=... pushes with at most that.
+        Real things (each with a modelled mesh, convex collision, mass and friction from its material, and grasp hints
+        the arm planner uses: a mug's handle, a bottle's body, a tool's shaft): mug, cup, bowl, plate, bottle, can
+        [diameter, height]; apple, orange, pear, cable (a coil with a plug) [diameter]; banana, screwdriver, hammer,
+        wrench [length];
+        package, tin, brick, squeeze_bottle [length, width, height]; book [length, width, thickness]. Add one by name
+        (shape="mug"), by description (describe="a tall blue mug with a big handle"; "a wine bottle"; "a fruit"; a
+        description sets the shape, size, color and parameters, and the answer says how it was read), and vary it with
+        seed (the same seed always builds the same object; a seed also picks a color when none is given). params sets
+        what a shape lets vary, e.g. {"handle": "square"} for a mug, {"fill": 0.3} for a bottle, {"style": "paper"}
+        for a cup; plugins() lists generators plugins add."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
             fields |= {"material": material, "speed": speed, "strength": strength, "resist": resist}
+            fields |= {"describe": describe, "seed": seed, "params": params}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -979,7 +1002,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
 
     @server.tool()
     async def pick_and_place(
-        robot: str, object: str, target: str | list[float], go: bool = True, hand_to: str | None = None
+        robot: str,
+        object: str,
+        target: str | list[float],
+        go: bool = True,
+        grasp: str | None = None,
+        pour: bool = False,
+        hand_to: str | None = None,
     ) -> str:
         """Have an arm pick up a small object and put it on/in a target: another object's name (bin, table, box), a
         position [x, y] or, for a robot that goes, a terrain patch ("dock"). Plans the motion, checks reach first, runs
@@ -995,9 +1024,23 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         it down, takes hold and lifts it off ("caught", "caught_at"); a robot that goes first drives to a place beside
         the belt from which its arm reaches ("stood_at"; or, if the box will be at the end of the belt before it can
         be there, waits for it to lie still there and fetches it as it lies), and then carries it to the target.
+        A modelled object (mug, bottle, hammer, ... see add_object) is taken where its generator says to take it, by
+        the first grasp the arm can reach and carry: a mug by its handle, a bottle round its body, a tool across its
+        shaft; grasp="handle" (or "body", "shaft", "rim", "neck", "edge") asks for one kind, and the answer's "grasp"
+        says which was used and "tilt_deg" how far from upright the object ended. The target may be a slot of a
+        fixture: "rack" fills its first free socket, "rack/2" the second, a tray takes things inside, and a package or
+        a tin takes things stacked on its top. pour=true pours instead: the object is a cup, a mug or a bowl with
+        balls (or anything small) in it and the target a container with an open mouth; the arm carries it over the
+        target, tilts it about its lip until what is in it has run out, tips it back and puts it down where it stood.
+        The answer says how many of the balls are in the target now ("balls_in_target", "balls"). target="hold" takes
+        the object and keeps it lifted in the fingers ("held", "lifted_cm"): the receiving half of a hand-over from one
+        arm to another, which goes through the table, since two grippers cannot share a shaft: the first arm puts the
+        tool down at a spot both reach, the second takes it from there and holds it up.
         hand_to="b" has the two arms hand it over: `robot` picks it up and sets it down at a spot both reach (it goes
         home out of the way), then arm "b" picks it up from there and puts it on the target ("handed_over": from, to,
-        at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are."""
+        at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are (go is
+        not used, and an arm riding on a robot that moves is refused); both must be free, no motion or hand-over
+        running on either."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)
@@ -1019,14 +1062,16 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 )
             # Planned off the event loop: on a carrier, an errand, or advising where a refused pick works, that can
             # take seconds, and the viewer froze meanwhile.
-            motion, info = await asyncio.to_thread(playground.behaviors.pick_and_place, robot, object, target, go)
+            motion, info = await asyncio.to_thread(
+                playground.behaviors.pick_and_place, robot, object, target, go, grasp, pour
+            )
             object = info["object"]  # as the world spells it
             errand = motion if isinstance(motion, fetch.Errand) else None
             caught = motion if isinstance(motion, (catching.Catch, catch_stand.Approach)) else None
             if caught is not None:  # caught off a moving belt, then put down or carried there
                 run = await run_until(lambda: motion.done, caught.time_limit)
             elif errand is None:
-                run = await run_until(lambda: motion.done, 40.0)
+                run = await run_until(lambda: motion.done, 100.0 if pour else 40.0)
             else:  # a reset or a world edit ends it; one no longer attached is waited for no more
                 robot_name = errand.robot
                 run = await run_until(
@@ -1042,12 +1087,16 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             settle = await run_until(lambda: False, 0.5)
             region = info["region"] if caught is None or caught.region is None else caught.region
             result = playground.behaviors.placed(object, region) if region is not None else {"success": False}
+            if info.get("pour"):
+                result = playground.behaviors.poured(info)
+            if info.get("hold"):
+                result = playground.behaviors.held(info)
             return _json(
                 {
                     **result,
                     "object": object,
                     "target": target,
-                    **({"grasp": info["grasp"]} if "grasp" in info else {}),
+                    **({"grasp": info["grasp"]} if info.get("grasp") else {}),
                     **(errand.result() if errand is not None else {}),
                     **(caught.result() if caught is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),

@@ -84,7 +84,7 @@ def test_a_shape_that_is_not_loaded_is_unknown_like_any_other_and_loaded_it_is_l
     write(folders, "sign.py", SIGNPOST)
     REGISTRY.load_user()
     assert World.from_yaml(yaml_text).objects[0].shape == "signpost"
-    with pytest.raises(ValueError, match=r"is not one of: box.*cloth, signpost"):
+    with pytest.raises(ValueError, match=r"is not one of: box.*cloth.*signpost"):
         World.from_yaml(yaml_text.replace("signpost", "pyramid"))
 
 

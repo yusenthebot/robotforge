@@ -220,6 +220,22 @@ class RobotEntry(_Strict):
         return self.file is not None and not importer.is_importable(self.file)
 
 
+def _shape_list() -> str:
+    """The shapes an unknown name is told about: the plain ones and plugins' by name, the modelled objects (mug,
+    bottle, ...) as an example and a count, so the message stays short as they grow in number."""
+    from robotforge.objects.registry import BUILT_IN
+
+    plain = [f"'{s}'" for s in props.SHAPES if s in props.BUILT_IN and s not in BUILT_IN]
+    plugins = [f"'{s}'" for s in props.SHAPES if s not in props.BUILT_IN]
+    modelled = [s for s in props.SHAPES if s in BUILT_IN]
+    named = (
+        [f'\'{modelled[0]}\', ... ({len(modelled)} modelled objects: shape="mug" or describe="a mug")']
+        if modelled
+        else []
+    )
+    return ", ".join([*plain, *named, *plugins])
+
+
 RESISTING = ("drawer", "cabinet", "switch", "lever", "valve")  # what ObjectEntry.resist applies to
 
 
@@ -239,6 +255,10 @@ class ObjectEntry(_Strict):
     )
     # A source's strength: degrees of rise at a heat source, ppm at a gas source (sensors/fields.py)
     strength: float | None = Field(None, gt=0, le=10000, exclude_if=_unset)
+    # A generated object (mug, bottle, hammer, ...: robotforge.objects) varies with its seed, and the caller may fix
+    # some of what varies (params, e.g. {"handle": "d"}); the same shape, size, seed and params build the same object.
+    seed: int | None = Field(None, ge=0, le=2**31 - 1, exclude_if=_unset)
+    params: dict[str, Any] | None = Field(None, exclude_if=_unset)
     # What a drawer, door, lever, switch or valve takes to move besides its own friction: N at its handle (rust)
     resist: float | None = Field(None, gt=0, le=500, exclude_if=_unset)
 
@@ -275,7 +295,7 @@ class ObjectEntry(_Strict):
         if extend.REGISTRY.untrusted:  # the shape may be one a plugin file would add if it were trusted
             raise ValueError(extend.unknown_part(v, list(props.SHAPES)))
         # The message every unknown name gets, with the shapes there are (plugins' too, once loaded)
-        expected = ", ".join(f"'{s}'" for s in props.SHAPES)
+        expected = _shape_list()
         raise PydanticCustomError("literal_error", "Input should be {expected}", {"expected": expected})
 
     @model_validator(mode="after")
@@ -302,7 +322,23 @@ class ObjectEntry(_Strict):
             )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
+        if self.seed is not None or self.params:
+            self._generated_fields()
         return self
+
+    def _generated_fields(self) -> None:
+        from robotforge.objects.registry import GENERATORS
+
+        gen = GENERATORS.get(self.shape)
+        if gen is None:
+            raise ValueError(
+                f"object {self.name!r}: seed and params are for generated objects ({', '.join(sorted(GENERATORS))}); "
+                f"a {self.shape} has none"
+            )
+        try:
+            self.params = gen.check_params(self.params) or None
+        except ValueError as exc:
+            raise ValueError(f"object {self.name!r}: {exc}") from exc
 
 
 class World(_Strict):
@@ -922,7 +958,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         return
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]
-        props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass)
+        props.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.mass, obj.seed, obj.params)
         if obj.shape in props.SOURCES:
             kind, default = props.SOURCES[obj.shape]
             at = props.source_lift(obj.shape, obj.size[0])

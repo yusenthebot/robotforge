@@ -94,6 +94,14 @@ def plan(
 ) -> Plan:
     """The task `sentence` asks for in `world`, and what has to be added for it. `spawn_height(entry)` is how high a
     robot's base sits over what it stands on (to put an arm on a top)."""
+    from robotforge.design.tasks import hard
+
+    hard_kind = hard.recognizes(sentence)
+    if hard_kind is not None:  # stack, sort, pour, ...: judged by how things end up, see hard.py
+        try:
+            return hard.plan(world, sentence, robots, robot, name, seed, hard_kind)
+        except hard.TaskProblem as exc:
+            raise TaskProblem(str(exc)) from exc
     asked = reading.read(sentence)
     rng = random.Random(f"{seed}:{sentence.strip().lower()}")
     objects = [o.model_dump(mode="json") for o in world.objects]

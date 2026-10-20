@@ -29,7 +29,7 @@ from typing import Any
 from robotforge.design import mechanisms as mechanism_design
 from robotforge.design import props
 from robotforge.design.generate.space import Footprint
-from robotforge.design.tasks.spec import TaskEntry
+from robotforge.design.tasks.spec import HARD_KINDS, TaskEntry
 
 SUCCESS_REWARD = 2.0
 LIFTED = 0.05  # m above its start that counts as picked up
@@ -54,6 +54,12 @@ class State:
     hand: tuple[float, float, float] | None = None
     things: dict[str, tuple[float, float, float]] = field(default_factory=dict)
     mechanisms: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # For the harder kinds: how far each thing is from upright (degrees), how fast it moves (m/s) and which robots
+    # touch it (a hand-over is judged by who holds the thing)
+    yaws: dict[str, float] = field(default_factory=dict)  # degrees, where a thing's x axis points
+    tilts: dict[str, float] = field(default_factory=dict)
+    speeds: dict[str, float] = field(default_factory=dict)
+    touching: dict[str, set[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -187,6 +193,10 @@ def judge(task: TaskEntry, world: Any, state: State, start: State | None = None)
     """The verdict on `task` in `state`. `start` is the state the attempt began in (pick_up and press compare with
     it; without it, the task's own start)."""
     kind = task.kind
+    if kind in HARD_KINDS:
+        from robotforge.design.tasks import hard_check
+
+        return hard_check.judge(task, world, state, start)
     if kind == "go_to":
         return _go_to(task, world, state)
     if kind in ("bring", "put", "push"):

@@ -816,6 +816,14 @@ class Playground:
     @_one_edit_at_a_time
     def add_object(self, name: str, **fields: Any) -> dict[str, Any]:
         given, name = name, tidy_name(name)
+        described, said = fields.pop("describe", None), []
+        if described is not None or fields.get("seed") is not None or fields.get("params"):
+            from robotforge.objects import describe as describing
+
+            try:
+                fields, said = describing.resolve(fields, described)
+            except ValueError as exc:
+                raise PlaygroundError(str(exc)) from exc
         _check_meters("pos", fields.get("pos"), MAX_POSITION)
         _check_meters("size", fields.get("size"), MAX_OBJECT_SIZE)
         size, cube = fields.get("size"), None
@@ -830,7 +838,7 @@ class Playground:
         def change(w: World) -> None:
             w.objects.append(entry)
 
-        return _noted(_renamed(self._edit(change), given, name), cube, _yaw_note(fields.get("yaw")))
+        return _noted(_renamed(self._edit(change), given, name), cube, _yaw_note(fields.get("yaw")), *said)
 
     @_one_edit_at_a_time
     def update_object(self, name: str, **fields: Any) -> dict[str, Any]:
