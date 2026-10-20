@@ -7,6 +7,7 @@ the force on the hand and what it holds, as a wrist force-torque sensor would re
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -46,7 +47,26 @@ class ToolTarget:
     normal: np.ndarray | None = None  # unit vector from a surface toward the tool, when the tool presses on it
     push: float = 0.0  # N the tool presses against the surface (along -normal)
     depth: float = 0.0  # m the position target lies below the surface it presses on: for position control, a push
+    compliance: float = 0.0  # 0 to 1: how far the controller goes from its approach stiffness to its soft one
+    anchored: bool = True  # False: along the normal only the force counts (the hole's depth is not known)
     pressing: bool = False  # True: the normal axis is force controlled where the controller can (position is not)
+
+
+def blend_rotation(start: np.ndarray, end: np.ndarray, s: float) -> np.ndarray:
+    """The frame a fraction `s` of the way from frame `start` to frame `end`, turning about one axis steadily."""
+    rel = end @ start.T
+    angle = math.acos(min(1.0, max(-1.0, (float(np.trace(rel)) - 1.0) / 2.0)))
+    if angle < 1e-9:
+        return end.copy()
+    axis = np.array([rel[2, 1] - rel[1, 2], rel[0, 2] - rel[2, 0], rel[1, 0] - rel[0, 1]])
+    norm = float(np.linalg.norm(axis))
+    if norm < 1e-9:  # half a turn: any axis across the frame will do
+        axis = np.cross(start[:, 0], start[:, 2])
+        norm = float(np.linalg.norm(axis))
+    axis = axis / norm
+    a = angle * s
+    k = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    return (np.eye(3) + math.sin(a) * k + (1 - math.cos(a)) * (k @ k)) @ start
 
 
 def attitude(current: np.ndarray, target: ToolTarget) -> tuple[np.ndarray, np.ndarray]:

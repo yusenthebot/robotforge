@@ -45,6 +45,28 @@ SHAPES: dict[str, ShapeInfo] = {
     "box": ShapeInfo("[length, width, height]", (3,), (0.05, 0.05, 0.05), pickable=True, summary="a block"),
     "sphere": ShapeInfo("[diameter]", (1,), (0.05,), pickable=True, summary="a ball"),
     "cylinder": ShapeInfo("[diameter, height]", (2,), (0.05, 0.08), pickable=True, summary="a can or cup"),
+    "tee": ShapeInfo(
+        "[bar length, width, height]",
+        (3,),
+        (0.09, 0.03, 0.03),
+        "blue",
+        pickable=True,
+        summary="a T-shaped block lying flat: a bar with a stem out of its middle",
+    ),
+    "bottle": ShapeInfo(
+        "[diameter, height]", (2,), (0.05, 0.1), "green", pickable=True, summary="a bottle: a body, a neck and a cap"
+    ),
+    "stone": ShapeInfo(
+        "[diameter, height]", (2,), (0.06, 0.05), (0.55, 0.52, 0.48, 1), pickable=True, summary="a lumpy stone"
+    ),
+    "socket": ShapeInfo(
+        "[hole width, block width, height]",
+        (3,),
+        (0.027, 0.12, 0.04),
+        (0.45, 0.47, 0.5, 1),
+        True,
+        summary="a block with a square hole for a peg (a box as wide as the hole less its clearance), chamfered",
+    ),
     "table": ShapeInfo("[length, width, height]", (3,), (0.8, 0.5, 0.4), summary="a table (never moves)"),
     "bin": ShapeInfo("[length, width, height]", (3,), (0.2, 0.15, 0.08), summary="an open-top container"),
     "wall": ShapeInfo(
@@ -194,6 +216,10 @@ SHAPES: dict[str, ShapeInfo] = {
     ),
 }
 PROPS = (
+    "socket",
+    "tee",
+    "bottle",
+    "stone",
     "wall",
     "pillar",
     "shelf",
@@ -211,7 +237,7 @@ PROPS = (
 )
 # What a source puts into the world (sensors/fields.py reads these): the kind of field and its default strength.
 SOURCES = {"heat_source": ("heat", 80.0), "gas_source": ("gas", 600.0)}
-DEFAULT_MASS = {"pallet": 20.0}
+DEFAULT_MASS = {"pallet": 20.0, "tee": 0.05, "bottle": 0.06, "stone": 0.06}
 WATER = 1000.0  # kg/m^3
 
 
@@ -224,6 +250,7 @@ class Part:
     collide: bool = True
     quat: list[float] = field(default_factory=lambda: [1.0, 0.0, 0.0, 0.0])
     weight: float | None = None  # share of the prop's mass (a buoy's ballast); None: by volume among the rest
+    slippery: float | None = None  # sliding friction that wins against whatever touches it (polished metal)
 
 
 def footprint(shape: str, size: list[float]) -> tuple[float, float]:
@@ -236,7 +263,9 @@ def footprint(shape: str, size: list[float]) -> tuple[float, float]:
         return size[0] / 2 + 0.02, size[0] / 2 + 0.02
     if shape in ("lever", "rope"):
         return 0.04, 0.04
-    if shape in ("sphere", "pillar", "rock", "heat_source", "gas_source") or (shape == "marker" and len(size) == 1):
+    if shape in ("sphere", "pillar", "rock", "bottle", "stone", "heat_source", "gas_source") or (
+        shape == "marker" and len(size) == 1
+    ):
         return size[0] / 2, size[0] / 2
     if shape == "cylinder":
         return size[0] / 2, size[0] / 2
@@ -284,6 +313,8 @@ def build(
             kwargs["mass"] = total * share
         if not part.collide:
             kwargs.update(contype=0, conaffinity=0)
+        if part.slippery is not None:  # a contact takes the friction of the geom with the higher priority
+            kwargs.update(friction=[part.slippery, 0.005, 0.0001], priority=1)
         geom = body.add_geom(
             name=name if i == 0 else f"{name}/{i}",
             type=part.type,
@@ -448,6 +479,98 @@ def _rock(size: list[float], rgba: list[float]) -> list[Part]:
     return parts
 
 
+def _tee(size: list[float], rgba: list[float]) -> list[Part]:
+    """A T lying flat on the ground: a crossbar along x and a stem out of its middle toward -y, one height."""
+    length, width, height = size
+    stem = 0.6 * length
+    return [
+        _box([length / 2, width / 2, height / 2], [0, 0, height / 2], rgba),
+        _box([width / 2, stem / 2, height / 2], [0, -(width + stem) / 2, height / 2], _shade(rgba, 0.85)),
+    ]
+
+
+def _bottle(size: list[float], rgba: list[float]) -> list[Part]:
+    """A body, a neck and a cap, standing."""
+    d, h = size
+    body, neck = 0.6 * h, 0.34 * h
+    return [
+        Part(G.mjGEOM_CYLINDER, [d / 2, body / 2, 0], [0, 0, body / 2], rgba),
+        Part(G.mjGEOM_CYLINDER, [0.2 * d, neck / 2, 0], [0, 0, body + neck / 2], _shade(rgba, 0.9)),
+        Part(G.mjGEOM_CYLINDER, [0.23 * d, 0.03 * h, 0], [0, 0, body + neck + 0.03 * h], _shade(rgba, 0.55)),
+    ]
+
+
+# A stone is four overlapping lumps: offset x, y (fractions of the radius), width and height factors, and a shade.
+STONE_LUMPS = (
+    (0.0, 0.0, 0.8, 0.9, 1.0),
+    (0.45, 0.2, 0.55, 0.7, 0.93),
+    (-0.4, -0.3, 0.5, 0.6, 0.88),
+    (0.1, -0.5, 0.45, 0.55, 0.96),
+)
+
+
+def _stone(size: list[float], rgba: list[float]) -> list[Part]:
+    d, h = size
+    r = d / 2
+    parts = []
+    for dx, dy, kxy, kz, shade in STONE_LUMPS:
+        half = [r * kxy, r * kxy * 0.8, h * kz / 2]
+        parts.append(Part(G.mjGEOM_ELLIPSOID, half, [dx * r, dy * r, h * kz / 2], _shade(rgba, shade)))
+    return parts
+
+
+SOCKET_CHAMFER = 0.006  # m: the hole's lead-in, 45 degrees
+SOCKET_FLOOR = 0.008  # m of block under the hole
+SOCKET_FRICTION = 0.3  # a pin slides in a polished hole
+
+
+def _socket(size: list[float], rgba: list[float]) -> list[Part]:
+    """A block with a square hole through its top, a lead-in chamfer round the mouth and a floor. Each of the four sides
+    is a low wall at the hole, a high wall behind it and a square turned on its edge that cuts the 45 degree slope."""
+    hole, block, height = size
+    a, b, c = hole / 2, block / 2, min(SOCKET_CHAMFER, hole / 2, height / 2)
+    parts = [_box([b, b, SOCKET_FLOOR / 2], [0, 0, SOCKET_FLOOR / 2], _shade(rgba, 0.8))]
+    parts[0].slippery = SOCKET_FRICTION
+    tilt = [math.cos(math.pi / 8), 0.0, math.sin(math.pi / 8), 0.0]  # 45 degrees about y
+    for k in range(4):
+        lows = [
+            Part(G.mjGEOM_BOX, [c / 2, b, (height - c) / 2], [a + c / 2, 0, (height - c) / 2], rgba),
+            Part(G.mjGEOM_BOX, [(b - a - c) / 2, b, height / 2], [(b + a + c) / 2, 0, height / 2], rgba),
+            Part(
+                G.mjGEOM_BOX,
+                [c / math.sqrt(2), b, c / math.sqrt(2)],
+                [a + c, 0, height - c],
+                _shade(rgba, 1.1),
+                quat=tilt,
+            ),
+        ]
+        for part in lows:
+            part.slippery = SOCKET_FRICTION
+            x, y, z = part.pos
+            ca, sa = math.cos(k * math.pi / 2), math.sin(k * math.pi / 2)
+            part.pos = [ca * x - sa * y, sa * x + ca * y, z]
+            part.quat = _quat_mul(turn_quat(k), part.quat)
+            parts.append(part)
+    return parts
+
+
+def turn_quat(k: int) -> list[float]:
+    """k quarter turns about z."""
+    half = k * math.pi / 4
+    return [math.cos(half), 0.0, 0.0, math.sin(half)]
+
+
+def _quat_mul(a: list[float], b: list[float]) -> list[float]:
+    w1, x1, y1, z1 = a
+    w2, x2, y2, z2 = b
+    return [
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+    ]
+
+
 def _marker(size: list[float], rgba: list[float]) -> list[Part]:
     if len(size) == 1:
         return [Part(G.mjGEOM_CYLINDER, [size[0] / 2, MARK / 2, 0], [0, 0, MARK / 2], rgba, collide=False)]
@@ -538,6 +661,10 @@ def _shade(rgba: list[float], k: float) -> list[float]:
 
 
 _PARTS: dict[str, Callable[[list[float], list[float]], list[Part]]] = {
+    "socket": _socket,
+    "tee": _tee,
+    "bottle": _bottle,
+    "stone": _stone,
     "wall": _wall,
     "pillar": _pillar,
     "shelf": _shelf,

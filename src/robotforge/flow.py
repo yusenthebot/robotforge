@@ -20,8 +20,16 @@ A tree is ticked every `tick` simulated seconds until it stops running. Every no
   such as arm.move_to, simply blocks inside the tick), `Condition(fn)` tests something (a sensor, say), `Wait(seconds)`,
   `WaitFor(test, timeout)`.
 - Composites: `Sequence` (all, in order), `Fallback` (the first that works), `Parallel` (all at once). The first two
-  carry on from the child that was running; `reactive=True` re-checks the earlier children every tick.
+  carry on from the child that was running; `reactive=True` re-checks the earlier children every tick, and stops
+  (halts) the later ones when an earlier one decides.
 - Decorators: `Retry(child, times)`, `Repeat(child, times)`, `Inverter`, `Timeout(child, seconds)`.
+
+What a blocking call means for the nodes: the clock only runs between ticks, so a node whose fn blocks (arm.move_to,
+arm.pick_and_place, robot.pose: they wait until they are done) holds the whole tree while it does. Two blocking actions
+in a `Parallel` therefore run one after the other, not together (Parallel is for conditions, waits, state machines and
+the calls that only start something: move, stop, jog). `Timeout` cannot interrupt such a call, but it notices: a child
+that ends after more than its `seconds` have gone by, inside that one tick, fails with a note saying how long it took.
+`max_seconds` of Tree.run is likewise checked between ticks.
 - `StateMachine` with `State`s and transitions is a node too, so the two nest.
 
 The context `ctx` (what fn gets) has ctx.sim, ctx.robot, ctx.time, ctx.bb (a dict nodes share) and ctx.log(text).
@@ -30,12 +38,14 @@ Needs only what scripts have (a Sim), so it imports nothing heavy; tests use any
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import re
 from collections.abc import Callable, Iterator
 from collections.abc import Sequence as Seq
 from typing import Any
 
+from robotforge.flow_board import MAX_NODES
 from robotforge.script import ScriptError, ScriptTimeLimit
 
 __all__ = [
@@ -190,7 +200,9 @@ class Action(Node):
 
 
 class Condition(Node):
-    """Test something: fn(ctx) true is success, false failure. Never runs for more than a tick."""
+    """Test something: fn(ctx) true is success, false failure. Never runs for more than a tick. A ScriptError (the
+    playground refused), or a sensor or key that is not there (KeyError, IndexError), is a failed test with the reason
+    as the node's note, not an error that ends the script."""
 
     kind = "condition"
 
@@ -199,7 +211,15 @@ class Condition(Node):
         self.fn = fn
 
     def run(self, ctx: Context) -> Status:
-        return SUCCESS if self.fn(ctx) else FAILURE
+        self.note = ""
+        try:
+            return SUCCESS if self.fn(ctx) else FAILURE
+        except ScriptTimeLimit:
+            raise
+        except (ScriptError, KeyError, IndexError) as exc:  # a sensor the robot lacks, a reading not there yet
+            self.note = f"{type(exc).__name__}: {exc}"[:NOTE_LIMIT]
+            ctx.log(f"{self.name}: {self.note}")
+            return FAILURE
 
 
 _COMPARE: dict[str, Callable[[Any, Any], bool]] = {
@@ -291,16 +311,22 @@ class Sequence(Node):
         for i in range(start, len(self.children)):
             status = self.children[i].tick(ctx)
             if status is RUNNING:
-                if self.reactive:
-                    for later in self.children[i + 1 :]:
-                        later.halt()
+                self._halt_after(i)
                 self._at = i
                 return RUNNING
             if status is FAILURE:
+                self._halt_after(i)
                 self._finish()
                 return FAILURE
         self._finish()
         return SUCCESS
+
+    def _halt_after(self, i: int) -> None:
+        """A reactive sequence started again from the first child: one that decides ends what the later ones were
+        doing (a wait, a counter, a state's exit)."""
+        if self.reactive:
+            for later in self.children[i + 1 :]:
+                later.halt()
 
     def _finish(self) -> None:
         self._at = 0
@@ -326,21 +352,28 @@ class Fallback(Node):
         for i in range(start, len(self.children)):
             status = self.children[i].tick(ctx)
             if status is RUNNING:
-                if self.reactive:
-                    for later in self.children[i + 1 :]:
-                        later.halt()
+                self._halt_after(i)
                 self._at = i
                 return RUNNING
             if status is SUCCESS:
+                self._halt_after(i)
                 self._at = 0
                 return SUCCESS
         self._at = 0
         return FAILURE
 
+    def _halt_after(self, i: int) -> None:
+        """A reactive fallback started again from the first child: one that decides ends what the later ones were
+        doing."""
+        if self.reactive:
+            for later in self.children[i + 1 :]:
+                later.halt()
+
 
 class Parallel(Node):
     """Run all the children at once. success="all" (default), "any" or a number of children that must succeed; it fails
-    as soon as that can no longer happen. Children still running when it ends are stopped."""
+    as soon as that can no longer happen. Children still running when it ends are stopped. The children are ticked one
+    after the other, so blocking calls in them do not overlap (see the module's notes)."""
 
     kind = "parallel"
 
@@ -476,7 +509,9 @@ class Inverter(_Decorator):
 
 
 class Timeout(_Decorator):
-    """Fail, and stop the child, if it is still running after `seconds` of simulated time."""
+    """Fail, and stop the child, if it is still running after `seconds` of simulated time. A child that blocks (an arm
+    call) cannot be stopped in the middle: if it ends after more than `seconds` have gone by, inside one tick, the
+    Timeout fails with a note saying how long it took (what it did stays done)."""
 
     kind = "timeout"
 
@@ -486,10 +521,16 @@ class Timeout(_Decorator):
 
     def run(self, ctx: Context) -> Status:
         assert self.entered is not None
+        before = ctx.time
         status = self.child.tick(ctx)
-        if status is RUNNING and ctx.time - self.entered >= self.seconds - 1e-9:
+        spent = ctx.time - self.entered
+        if status is RUNNING and spent >= self.seconds - 1e-9:
             self.child.halt()
             self.note = f"over {self.seconds:g} s"
+            return FAILURE
+        if status is not RUNNING and ctx.time > before + 1e-9 and spent > self.seconds + 1e-9:  # it blocked, too long
+            self.note = f"took {spent:.1f} s, over {self.seconds:g} s"
+            ctx.log(f"{self.name}: {self.note}")
             return FAILURE
         return status
 
@@ -545,6 +586,7 @@ class StateMachine(Node):
         super().__init__(name)
         self.start = start
         self.current: State | None = None
+        self._ctx: Context | None = None  # the last context it ran in, for the exit of a state it is stopped in
         self._transitions: dict[str, list[tuple[Callable[[Context], Any] | Status, str]]] = {}
         for state in states:
             self.add(state)
@@ -568,7 +610,12 @@ class StateMachine(Node):
         self._transitions.setdefault(source, []).append((when, target))
 
     def halt(self) -> None:
+        """Stopped from outside (preempted, timed out): the state it is in is left through its exit, as when it moves
+        on (a machine that has ended already left its last state)."""
+        state, ctx = self.current, self._ctx
         self.current = None
+        if state is not None and state.result is None and state.exit is not None and ctx is not None:
+            state.exit(ctx)
         super().halt()
 
     def _go(self, name: str, ctx: Context) -> State:
@@ -589,6 +636,7 @@ class StateMachine(Node):
     def run(self, ctx: Context) -> Status:
         if self.start not in self.states:
             raise FlowError(f"{self.name} starts in {self.start!r}, which is not one of its states")
+        self._ctx = ctx
         if self.current is None:
             self._go(self.start, ctx)
         state = self.current
@@ -681,10 +729,10 @@ class Tree:
             if now == sent["statuses"] and sent["structure"]:
                 return
             publish(
-                name=self.name,
-                nodes=None if sent["structure"] else self.structure(),
-                status=now[0],
-                notes=now[1],
+                name=self.name if len(self.nodes) <= MAX_NODES else f"{self.name} (first {MAX_NODES} nodes)",
+                nodes=None if sent["structure"] else self.structure()[:MAX_NODES],  # parents come first: a cut is whole
+                status=now[0][:MAX_NODES],
+                notes={k: v for k, v in now[1].items() if int(k) < MAX_NODES},
             )
             sent["statuses"], sent["structure"] = now, True
 
@@ -695,18 +743,26 @@ class Tree:
         previous = self.statuses()
         push()
         status = RUNNING
-        while status is RUNNING:
-            if ctx.time - start >= max_seconds - 1e-9:
-                self.root.halt()
-                ctx.log(f"stopped after {max_seconds:g} s")
-                status = FAILURE
-                break
-            status = self.tick_once(ctx)
-            self._trace_changes(ctx, previous)
-            previous = self.statuses()
-            push()
-            if status is RUNNING:
-                sim.step(tick)
+        try:
+            while status is RUNNING:
+                if ctx.time - start >= max_seconds - 1e-9:
+                    self.root.halt()
+                    ctx.log(f"stopped after {max_seconds:g} s")
+                    status = FAILURE
+                    break
+                status = self.tick_once(ctx)
+                self._trace_changes(ctx, previous)
+                previous = self.statuses()
+                push()
+                if status is RUNNING:
+                    sim.step(tick)
+        finally:  # an error or the end of the script's time must not leave the panel showing a node still running
+            if status is RUNNING:  # it did not end by itself
+                for node in self.nodes:
+                    if node.status is RUNNING:
+                        node.status = FAILURE
+            with contextlib.suppress(Exception):  # the error that got us here matters more than a panel that is lost
+                push()
         return status
 
     def _trace_changes(self, ctx: Context, previous: str) -> None:

@@ -171,8 +171,19 @@ def test_tasks_explain_what_does_not_fit():
 # ---- Gym-style environment contract -------------------------------------------------------------
 
 
+@pytest.mark.parametrize("task", ["press", "wipe", "insert"])
+def test_contact_tasks_have_no_gym_env_and_no_training(task):
+    # Their reward needs a controller driving the plan: stepped with actions alone, an env would pay out zero for ever.
+    with pytest.raises(TaskError, match="run_controller"):
+        make_env(task)
+    from robotforge.training import envs
+
+    with pytest.raises(TaskError, match="run_controller"):
+        envs.env_spec(task)
+
+
 @pytest.mark.parametrize("mode", ["direct", "residual"])
-@pytest.mark.parametrize("task", list(TASKS))
+@pytest.mark.parametrize("task", [t for t in TASKS if t not in ("press", "wipe", "insert")])
 def test_env_passes_the_gym_contract_check(task, mode):
     env = make_env(task, episode_seconds=0.6, action_mode=mode)
     check_env(env, steps=80)

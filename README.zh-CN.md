@@ -166,6 +166,7 @@ agent 通过 MCP 调用 robotforge 的工具，所有物理都在本地 Python �
 - 方案：[docs/OVERVIEW.md](docs/OVERVIEW.md)
 - 目标与验收：[docs/GOAL.md](docs/GOAL.md)
 - 算法对比：[docs/ALGORITHMS.md](docs/ALGORITHMS.md)
+- 操作和触觉（抓取规划、插孔、用力拧）：[docs/MANIPULATION.md](docs/MANIPULATION.md)
 - 插件打包与验证（维护者）：[docs/PLUGINS.md](docs/PLUGINS.md)
 - 学习型策略和 UniLab 训练：[docs/UNILAB.md](docs/UNILAB.md)
 - 足式机器人怎么看地面走、每台的实测表：[docs/LEGGED.md](docs/LEGGED.md)

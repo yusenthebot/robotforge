@@ -362,3 +362,188 @@ async def test_the_tool_records_replays_and_exports(pg):
     listing = await call(action="list")
     assert [d["name"] for d in listing["demonstrations"]] == ["tool_walk"]
     assert math.isclose(listing["demonstrations"][0]["seconds"], stopped["seconds"])
+
+
+# ---- review fixes: a recording stopped at once, strict JSON, exports that overwrite, places in the robot's frame ----
+
+
+def test_a_recording_stopped_at_once_does_not_lock_its_robot(pg):
+    demos = pg.demonstrations
+    demos.start("dog", "quick")
+    with pytest.raises(DemonstrationError, match="nothing was recorded"):
+        demos.stop("quick")
+    assert not demos.recordings and "recording" not in demos.viewer_state()
+    with pytest.raises(DemonstrationError, match="not being recorded"):  # not stuck: it is simply over
+        demos.stop("quick")
+    demos.start("dog", "quick")  # the same robot and the same name can start again
+    pg.run_fast(lambda: False, 0.5)
+    assert demos.stop("quick")["frames"] >= 2
+
+
+def test_leaving_an_empty_with_block_ends_the_recording_and_a_failing_body_keeps_its_own_error(pg):
+    from robotforge.robot import DemoRecording, Robot
+
+    class Sim:
+        def start_recording(self, robot, name, rate_hz, sensors, overwrite):
+            return pg.demonstrations.start(robot, name, rate_hz, sensors, overwrite)
+
+        def stop_recording(self, name):
+            try:
+                return pg.demonstrations.stop(name)
+            except DemonstrationError as exc:
+                raise RuntimeError(str(exc)) from exc  # what a script sees
+
+    robot = Robot(Sim(), "dog", {"kind": "quadruped"})
+    with pytest.raises(RuntimeError, match="nothing was recorded"), robot.record("empty"):
+        pass
+    assert not pg.demonstrations.recordings
+    with pytest.raises(ZeroDivisionError), robot.record("broken"):
+        1 / 0  # noqa: B018
+    assert not pg.demonstrations.recordings
+    assert isinstance(robot.record("again"), DemoRecording)
+
+
+def test_an_ended_recording_no_longer_shows_the_rec_chip(pg):
+    pg.demonstrations.start("dog", "cut")
+    pg.run_fast(lambda: False, 0.5)
+    assert "recording" in pg.demonstrations.viewer_state()
+    pg.session.reset()
+    pg.run_fast(lambda: False, 0.1)
+    assert "recording" not in pg.demonstrations.viewer_state()  # it ended itself; stop() still hands over its data
+    assert "reset" in pg.demonstrations.stop("cut")["note"]
+
+
+def strict_json(path):
+    def refuse(token):
+        raise AssertionError(f"{token} is not JSON")
+
+    return json.loads(path.read_text(encoding="utf-8"), parse_constant=refuse)
+
+
+def test_a_reading_missing_in_some_frames_is_null_in_the_json_and_nan_in_the_npz(pg):
+    pg.add_sensor("dog", {"type": "imu", "name": "body_imu"})
+    demos = pg.demonstrations
+    demos.start("dog", "holes")
+    pg.behaviors.move("dog", 0.2, 0.0)
+    pg.run_fast(lambda: False, 1.0)
+    rec = demos.recordings["holes"]
+    rec._readings[0] = {k: v for k, v in rec._readings[0].items() if not k.endswith(".roll")}  # a reading that failed
+    rec._readings[2] = {**rec._readings[2], "late.value": 1.5}  # one that appeared later
+    demos.stop("holes")
+    demo = demos.get("holes")
+    assert "late.value" in demo.sensor_names and np.isnan(demo.sensors).any()
+    raw = strict_json(pg.store.dir / "demonstrations" / "holes.json")  # a strict parser reads it
+    assert any(None in row for row in raw["sensors"])
+    again = Demonstration.load(pg.store.dir / "demonstrations" / "holes.json")
+    assert np.array_equal(np.isnan(again.sensors), np.isnan(demo.sensors))
+    out = demos.export("holes", "npz")
+    with np.load(out["path"], allow_pickle=False) as z:
+        assert np.isnan(z["sensors"]).any()
+
+
+def test_sensor_columns_come_in_the_order_they_first_appear(pg):
+    demos = pg.demonstrations
+    demos.start("dog", "ordered")
+    pg.run_fast(lambda: False, 0.5)
+    rec = demos.recordings["ordered"]
+    rec._readings = [{"zeta.v": 1.0, "alpha.v": 2.0, "mid.v": 3.0} for _ in rec._times]
+    demos.stop("ordered")
+    assert demos.get("ordered").sensor_names == ["zeta.v", "alpha.v", "mid.v"]  # not sorted, not by a set's whim
+
+
+def test_an_export_never_takes_the_place_of_a_file_or_another_demonstration(pg):
+    record_walk(pg, "alpha")
+    pg.demonstrations.start("pup", "beta")
+    pg.behaviors.move("pup", 0.2, 0.0)
+    pg.run_fast(lambda: False, 1.0)
+    pg.demonstrations.stop("beta")
+    folder = pg.store.dir / "demonstrations"
+    before = (folder / "beta.json").read_bytes()
+    with pytest.raises(DemonstrationError, match="another demonstration"):
+        pg.demonstrations.export("alpha", "json", to="beta.json")
+    with pytest.raises(DemonstrationError, match="another demonstration"):
+        pg.demonstrations.export("alpha", "npz", to="beta")
+    assert (folder / "beta.json").read_bytes() == before
+    first = pg.demonstrations.export("alpha", to="copy.json")
+    assert first["format"] == "json"
+    with pytest.raises(DemonstrationError, match="exists"):
+        pg.demonstrations.export("alpha", to="copy.json")
+    assert pg.demonstrations.export("alpha", to="copy.json", overwrite=True)["path"].endswith("copy.json")
+    again = pg.demonstrations.export("alpha")  # its own default file is its own to rewrite
+    assert again["path"].endswith("alpha.json")
+
+
+def test_the_exported_format_is_the_one_written(pg):
+    record_walk(pg)
+    out = pg.demonstrations.export("walk", to="x.npz")  # the suffix says npz
+    assert out["format"] == "npz" and out["path"].endswith("x.npz")
+    with np.load(out["path"], allow_pickle=False) as z:
+        assert "joint_pos" in z.files
+    with pytest.raises(DemonstrationError, match="npz and format is json"):
+        pg.demonstrations.export("walk", "json", to="y.npz")
+    named = pg.demonstrations.export("walk", "npz", to="z")
+    assert named["path"].endswith("z.npz") and named["format"] == "npz"
+    listed = {d["name"] for d in pg.demonstrations.listing()["demonstrations"]}
+    assert {"walk", "x", "z"} <= listed
+    assert pg.demonstrations.get("x").name == "x"  # known by its file, whatever it was called inside
+
+
+def test_names_windows_keeps_for_devices_are_refused():
+    for name in ("con", "NUL", "aux", "com1", "lpt9"):
+        with pytest.raises(DemonstrationError, match="Windows"):
+            clean_name(name)
+    assert clean_name("console") == "console"
+
+
+def test_the_demonstrations_of_another_world_are_not_listed_or_exported_here(pg):
+    record_walk(pg)
+    assert "walk" in pg.demonstrations.names()
+    pg.new_world("elsewhere")
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 0.0])
+    assert pg.demonstrations.names() == []
+    with pytest.raises(DemonstrationError, match="no demonstration called walk"):
+        pg.demonstrations.export("walk")
+
+
+def test_go_replays_toward_a_place_in_the_robots_own_frame(pg):
+    demos = pg.demonstrations
+    demos.start("dog", "errand")
+    pg.behaviors.navigate("dog", [2.0, 0.0])
+    pg.run_fast(lambda: np.linalg.norm(displacement(pg, "dog") - [2.0, 0.0]) < 0.35, 40.0)
+    pg.run_fast(lambda: False, 0.5)
+    demos.stop("errand")
+    go = next(c for c in demos.get("errand").commands if c["op"] == "go")
+    assert go["frame"] == "robot" and go["to"] == pytest.approx([2.0, 0.0], abs=1e-3)
+    seconds = demos.get("errand").seconds
+    replay = demos.replay("errand", "pup")  # the pup stands at (0, 2) facing +y: two metres ahead of it is (0, 4)
+    pg.run_fast(lambda: replay.done, seconds + 3.0)
+    assert not replay.problems
+    here = displacement(pg, "pup")
+    assert np.linalg.norm(here - [0.0, 4.0]) < 0.8, here  # not toward the dog's world point (2, 0)
+
+
+def test_a_go_saved_without_a_frame_stays_in_world_coordinates():
+    assert Replay_place({"to": [2.0, 0.0]}, "to") == [2.0, 0.0]
+    placed = Replay_place({"to": [2.0, 0.0], "frame": "robot"}, "to", yaw=math.pi / 2, pos=(0.0, 2.0, 0.3))
+    assert placed == pytest.approx([0.0, 4.0], abs=1e-6)
+    assert Replay_place({"to": "cube"}, "to") == "cube"
+
+
+def Replay_place(command, key, yaw=0.0, pos=(0.0, 0.0, 0.0)):  # noqa: N802
+    from robotforge.demonstrations import Replay
+
+    return Replay._place(command, key, np.array(pos), yaw)
+
+
+def test_a_second_replay_takes_over_from_the_first_and_joints_replay_is_for_arms(pg):
+    record_walk(pg)
+    demos = pg.demonstrations
+    first = demos.replay("walk", "pup")
+    pg.run_fast(lambda: False, 0.5)
+    second = demos.replay("walk", "pup")
+    assert first.done and first.stopped_by == "stopped" and not second.done
+    assert demos.replays["pup"] is second
+    steps = pg.session.step_hooks
+    assert sum(1 for h in steps if getattr(h, "__self__", None) in (first, second)) == 1
+    with pytest.raises(DemonstrationError, match="open loop"):
+        demos.replay("walk", "dog", mode="joints")

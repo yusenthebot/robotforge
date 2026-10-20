@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import control_demos  # noqa: E402  (the arm force demos)
 import screenshots as S  # noqa: E402  (the world helpers and Chrome finder the screenshots use)
 
 HOST = "127.0.0.1"
@@ -1030,6 +1031,7 @@ DEMOS = [
     _mobile("mobile_conveyor_anymal", "anymal_ur5e", "conveyor", 60.0, (0.2, -2.2, 1.8), ease=0.05, seed=9),
     *G10_DEMOS,
     *ASSET_DEMOS,
+    *control_demos.build(Demo, _caption),
 ]
 
 
