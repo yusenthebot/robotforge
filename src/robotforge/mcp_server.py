@@ -109,7 +109,8 @@ slopes and gravel on their own, straight on; over rough ground they slow to 60 p
 Go1 is unsteady on stairs. Spot stands upright before stairs steeper than 8 x 40 cm (pose says "blocked") and backs
 off when told to. Humanoids walk flat ground only. Check pose "upright" after a move over terrain. A humanoid from
 the catalogue or a file stands on its own by whole-body balance (`robots` says "balance"): it holds a load and takes
-a push of a few tenths of a m/s; move walks it only if a gait fits its legs (else `walk_hint` says so).
+a push of a few tenths of a m/s; move does not walk it (no gait has been shown to carry such a robot; `walk_hint`
+says so). G1 stands that way too until its first move, then walks on its learned policy.
 load_scene(description="a flat with a kitchen and a bedroom, three apples") generates a world from a sentence
 instead: rooms with doorways and furniture, a warehouse or an outdoor place
 with terrain, things placed on tops within reach and steady; edit it like any world and check it with
@@ -462,9 +463,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         add_robot(library=<name>) loads one: it downloads just its folder (seconds to a minute,
         once), runs a URDF through the import doctor and answers with "catalogue": what the robot turned out to be from
         its structure (arm, quadruped, humanoid, wheeled, hand, aircraft, other) and which tools work on it. Arms get a
-        tool point (move_arm) and a flange; legged robots walk with move when a gait fits their legs, and the answer's
-        "checked" says what a short trial showed (stands, walked or fell over after how far); the others move with
-        set_controls and pose."""
+        tool point (move_arm) and a flange; quadrupeds walk with move when a gait fits their legs, and the answer's
+        "checked" says what a short trial showed (stands, walked or fell over after how far); humanoids stand by
+        whole-body balance and move does not walk them; the others move with set_controls and pose."""
         from robotforge.design import catalogue
 
         with _tool_errors():
@@ -1028,7 +1029,9 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         tool down at a spot both reach, the second takes it from there and holds it up.
         hand_to="b" has the two arms hand it over: `robot` picks it up and sets it down at a spot both reach (it goes
         home out of the way), then arm "b" picks it up from there and puts it on the target ("handed_over": from, to,
-        at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are."""
+        at). For two arms that stand apart, each out of reach of the other's side; both must stay where they are (go is
+        not used, and an arm riding on a robot that moves is refused); both must be free, no motion or hand-over
+        running on either."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot, arm=True)
             stopped = await carrier_stands(robot)

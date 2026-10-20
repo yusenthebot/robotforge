@@ -1,6 +1,6 @@
 # Two robots in one world
 
-Two robots in the same world can pass a thing from one to the other, and rovers that go different ways at the same time do not meet in the middle.
+Two robots in the same world can pass a thing from one to the other, and rovers whose paths cross at one place, two or three of them, take turns there instead of meeting in the middle.
 
 ## Handing an object from one arm to another
 
@@ -22,7 +22,9 @@ For two arms that stand apart, each out of reach of the other's side of the tabl
 - **The waiting pose.**
   At its home pose a Panda holds its hand over the middle of the room, which is where the spot is; the receiving arm's hand met its forearm and stalled.
   The giver now goes to a point on the line from its base to the spot, 0.55 of the way, 0.45 m up, the tool pointing down.
-- Both arms must stay where they are: an arm on a robot that drives or walks is refused (`pick_and_place` with `go` does the fetching for those).
+- Both arms must stay where they are: an arm on a robot that drives or walks is refused (`pick_and_place` with `go` does the fetching for those), so a handover between mobile manipulators is open (G9).
+  `go` is not used with `hand_to`.
+  Both arms must be free: a hand-over or any motion still running on either is refused with "busy", and a finished hand-over leaves nothing behind in the session.
   The call refuses before moving when the giving arm cannot reach the object (with the usual advice on where it can), when no spot suits both arms, when the receiving arm cannot put the cube on the target from any spot, or when the two arms are the same.
 
 ## Right of way at a crossing
@@ -62,8 +64,12 @@ Crossing: rovers sent across each other's way to get to the middle together.
 | two rovers crossing | 0.71 m | 0.26 m | 9.1 s | 15.6 s |
 | a T (one ends in the other's line) | 0.68 m | 0.25 m | 7.0 s | 10.6 s |
 | three rovers from three sides | 0.56 m | 0.26 m | 11.7 s | 12.3 s |
+| four rovers from four sides (two head-on pairs and a crossing) | 0.31 m | 0.23 m | 17.1 s | 16.4 s |
 
 Centres, 0.25 m being the rovers' touching distance.
+The rule helps with crossings of two or three paths.
+With four it is no faster (17.1 s against 16.4 s), and the two head-on pairs still go through making way.
+The rovers stay a little further apart (0.31 m against 0.23 m, which is touching), at the price of 9.7 s of waiting added up over the four.
 One run each: they are deterministic, but start positions that change who gets there first change who waits.
 
 ## What it does not do

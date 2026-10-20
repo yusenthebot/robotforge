@@ -491,11 +491,6 @@ def _wait_for(done: Callable[[], bool], longest: float) -> None:
         time.sleep(0.05)
 
 
-# straight down over the whole warehouse floor, so the map grows in one frame (the viewer draws the map over shelves
-# when seen from above)
-OVERHEAD = "const rf = window.__robotforge; rf.select(null); rf.lookAt([0.0, 2.2, 16.0], [0.0, 2.3, 0]);"
-
-
 def _map_then_rack(explore_s: float, rack: str) -> Callable[[Any], None]:
     """Start mapping, explore for `explore_s` s of simulated time, then go to `rack` by the robot's own map."""
 
@@ -810,6 +805,31 @@ def _cross(pg: Any) -> None:
         pg.behaviors.navigate(name, goal, seconds=60)
 
 
+# Humanoids standing by whole-body balance, shoved (G8): four catalogue robots abreast, each pushed at once.
+STANDERS = ("h1_2", "talos", "atlas_drc", "n1")
+
+
+def _standers(pg: Any) -> None:
+    for i, robot in enumerate(STANDERS):
+        pg.add_robot(robot, library=robot, pos=[0.0, (i - 1.5) * 1.9])
+
+
+def _shove(speed: float, heading: tuple[float, float]) -> Callable[[Any], None]:
+    """Add `speed` m/s along `heading` to every robot's trunk at once (the bench's shove, scripts/balance_bench.py)."""
+
+    def act(pg: Any) -> None:
+        model, data = pg.session.model, pg.session.data
+        with pg.session.lock:
+            for robot in STANDERS:
+                root = next(b for b in range(1, model.nbody) if (model.body(b).name or "").startswith(robot + "/"))
+                root = int(model.body_rootid[root])
+                dof = int(model.jnt_dofadr[model.body_jntadr[root]])
+                data.qvel[dof] += speed * heading[0]
+                data.qvel[dof + 1] += speed * heading[1]
+
+    return act
+
+
 DEMOS = [
     Demo(  # every library quadruped on the same command (move 0.3 m/s), abreast
         "legged_quadrupeds",
@@ -860,6 +880,14 @@ DEMOS = [
         18.0,
         timeline=[(1.0, _cross)],
         page=_orbit((0.0, 0.0, 0.0), 2.6, 3.0, -80.0, 30.0, 17.0),
+    ),
+    Demo(  # four humanoids that stand on their own, pushed forwards and then backwards at 0.2 m/s
+        "humanoids_stand_push",
+        _standers,
+        20.0,
+        timeline=[(4.0, _shove(0.2, (1.0, 0.0))), (10.0, _shove(0.2, (-1.0, 0.0)))],
+        page="window.__robotforge.select(null);" + _follow_group(list(STANDERS), (5.5, 0.0, 1.5), ease=0.05),
+        settle=1.0,
     ),
     Demo(
         "mobile_panda_pick",
@@ -948,10 +976,10 @@ DEMOS = [
         timeline=[(0.8, _go("go2", [1.6, 2.6]))],
         page=_follow("go2", (-1.55, -0.3, 0.95), ease=0.05),
     ),
-    Demo(  # an unseen warehouse: the Go2 draws its map, finds itself in it and goes to a rack by that map alone
+    Demo(  # an unseen warehouse: the Go2 draws its map, finds itself in it and goes to rack_8 by that map alone
         "g12_go2_maps_the_warehouse",
         S._go2_warehouse_start,
-        230.0,
+        170.0,
         timeline=[
             (
                 0.5,
@@ -959,25 +987,16 @@ DEMOS = [
                     "A Go2 enters a warehouse it has never seen. Its only senses: a lidar and a drifting odometry."
                 ),
             ),
-            (1.0, _map_then_rack(100.0, "farthest")),
-            (4.0, "window.__robotforge.showSensor('go2/map_lidar', false);"),
-            (8.0, "window.__robotforge.showSensor('go2/map_lidar', false);"),
+            (1.0, _map_then_rack(70.0, "farthest")),
+            (2.5, "window.__robotforge.showSensor('go2/map_lidar', false);"),
             (
-                14.0,
-                _caption(
-                    "Teal: floor it has seen free. Pink: what it found in the way. Blue arrow: where it believes it is."
-                ),
+                18.0,
+                _caption("The map grows from its own scans. Blue: where it believes it is. Grey: the odometry alone."),
             ),
-            (
-                45.0,
-                _caption("Grey arrow: the odometry alone, drifting. The particle filter keeps the blue one honest."),
-            ),
-            (
-                103.0,
-                _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate."),
-            ),
+            (45.0, _caption("The particle filter keeps its pose honest against the odometry's drift.")),
+            (72.0, _caption("Now: to the farthest rack, planned on its own map and steered by its own pose estimate.")),
         ],
-        page=OVERHEAD,
+        page=_follow("go2", (-1.2, -2.2, 6.2), ease=0.04),
         settle=2.0,
         until=lambda pg: _MAP_DONE.is_set(),
         tail=4.0,
