@@ -195,3 +195,34 @@ def test_a_robot_said_in_the_sentence_is_the_one_the_world_starts_with(pg):
     assert result["robots"] == ["dog"]
     assert pg.current_world().robots[0].template == "quadruped"
     assert math.isclose(pg.current_world().robots[0].yaw, 0.0)
+
+
+def test_a_thing_said_to_be_on_furniture_is_read_as_standing_on_it():
+    wish = words.read(
+        "a flat with a kitchen, a living room and a bedroom, a green apple on the coffee table and a bowl on the bedroom desk"
+    )
+    assert wish.on_of == {"apple": "coffee_table", "bowl": "desk"}
+    assert wish.rooms_of["desk"] == "bedroom"
+    assert words.read("a kitchen with an apple and a desk").on_of == {}
+
+
+def test_the_green_apple_is_on_the_coffee_table_and_the_bowl_on_the_bedroom_desk(tmp_path, monkeypatch):
+    """Regression: placement words were ignored and both went on kitchen counters."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("flat")
+    pg.load_scene(
+        description="a flat with a kitchen, a living room and a bedroom, a green apple on the coffee table "
+        "and a bowl on the bedroom desk",
+        seed=2,
+    )
+    objects = {o.name: o for o in pg.current_world().objects}
+
+    def on(thing: str, furniture: str) -> bool:
+        a, f = objects[thing], objects[furniture]
+        hx, hy = props.footprint(f.shape, f.size)
+        near = abs(a.pos[0] - f.pos[0]) <= max(hx, hy) + 0.05 and abs(a.pos[1] - f.pos[1]) <= max(hx, hy) + 0.05
+        return near and a.pos[2] > 0.3
+
+    assert on("green_apple", "living_room_coffee_table")
+    assert on("bowl", "bedroom_desk")

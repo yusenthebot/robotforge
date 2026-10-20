@@ -685,6 +685,26 @@ def _mechanism(draft: Draft, concept: str, room: str) -> bool:
     return any(_on_top(draft, room, top, concept, MECHANISM_SIZES[concept], concept, color="red") for top in tops)
 
 
+def _put_on(draft: Draft, wish: Wish, item: Any, names: list[str], kinds: list[str]) -> bool:
+    """Put a thing on the furniture the sentence said it is on (in the furniture's room, if one was said); False, and a
+    note, when there is none with room on top."""
+    furniture = wish.on_of[item.concept]
+    room_kind = wish.rooms_of.get(furniture)
+    rooms = {n for n, k in zip(names, kinds, strict=True) if room_kind is None or k == room_kind}
+    tops = [
+        s
+        for s in draft.surfaces
+        if s.room in rooms
+        and re.sub(r"_\d+$", "", s.owner).endswith(furniture)
+        and s.kind in ("table", "counter", "shelf")
+    ]
+    if tops and draft.place(item, tops) is not None:
+        return True
+    where = f"{room_kind.replace('_', ' ')} " if room_kind else ""
+    draft.notes.append(f"no room on the {where}{furniture.replace('_', ' ')} for the {item.concept}: put elsewhere")
+    return False
+
+
 def _things(draft: Draft, wish: Wish, names: list[str], kinds: list[str]) -> None:
     """The small things: those the sentence asked for, in the rooms they belong in, and each room's usual ones."""
     from robotforge.design.generate.words import ITEMS
@@ -717,6 +737,10 @@ def _things(draft: Draft, wish: Wish, names: list[str], kinds: list[str]) -> Non
             by_room[name].append(item)
     for name, items in by_room.items():
         tops = [s for s in draft.surfaces if s.room == name]
+        for item in [i for i in items if i.concept in wish.on_of]:  # "an apple on the coffee table" goes first
+            items.remove(item)
+            if not _put_on(draft, wish, item, names, kinds):
+                items.append(item)
         for item in items:
             if draft.place(item, tops) is None and draft.place(item, draft.surfaces) is None:
                 draft.notes.append(f"no room was left for a {item.concept}")

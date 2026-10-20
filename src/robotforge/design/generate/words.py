@@ -262,6 +262,7 @@ class Wish:
     robot: str | None = None
     understood: list[str] = field(default_factory=list)  # the words it acted on, for the summary
     rooms_of: dict[str, str] = field(default_factory=dict)  # THINGS concept -> the room said with it ("bedroom desk")
+    on_of: dict[str, str] = field(default_factory=dict)  # THINGS concept -> the furniture it was said to be on
 
     def summary(self) -> str:
         parts = [self.kind]
@@ -438,6 +439,9 @@ def read(text: str) -> Wish:
         color = _color_before(low, hit.start)
         if color:
             wish.colors.setdefault(hit.concept, color)
+        furniture = _stands_on(low, hit, things, rooms)
+        if furniture is not None:
+            wish.on_of.setdefault(hit.concept, furniture)
         wish.understood.append(low[hit.start : hit.end])
     for hit in terrain:
         if hit.concept not in wish.terrain:
@@ -454,6 +458,25 @@ def read(text: str) -> Wish:
     if wish.kind != "warehouse" and "dock" in wish.terrain:
         wish.terrain[wish.terrain.index("dock")] = "platform"  # a loading dock belongs to a warehouse
     return wish
+
+
+SUPPORTS = ("table", "coffee_table", "desk", "shelf", "counter")  # furniture a small thing is said to be on
+_ON = re.compile(r"\s*(?:on|onto|on top of)\s+(?:the|a|an|my)?\s*")
+
+
+def _stands_on(text: str, thing: Hit, hits: list[Hit], rooms: list[Hit]) -> str | None:
+    """The furniture a thing is said to be on: "a green apple on the coffee table", "a bowl on the bedroom desk" (a
+    room name just before the furniture is allowed). Only English; None when it is not said."""
+    for other in hits:
+        if other.concept not in SUPPORTS or other.start < thing.end:
+            continue
+        between = text[thing.end : other.start]
+        for r in rooms:  # the room said with the furniture is not a word between
+            if thing.end <= r.start and r.end <= other.start:
+                between = text[thing.end : r.start] + text[r.end : other.start]
+        if _ON.fullmatch(between):
+            return other.concept
+    return None
 
 
 def _room_with(text: str, thing: Hit, rooms: list[Hit]) -> str | None:
