@@ -27,7 +27,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from robotforge import wording
-from robotforge.control.env import DEFAULT_ROBOTS, RobotEnv, compile_task_world
+from robotforge.control.env import DEFAULT_ROBOTS, RobotEnv, compile_task_world, refuse_contact_task
 from robotforge.control.tasks import TASKS, Task, TaskError, make_task
 from robotforge.control.tasks.base import readable
 from robotforge.training.obs import DEPTH_SIZE, LIDAR_BINS, Block, SensorObservation
@@ -285,6 +285,7 @@ def env_spec(
     push: float = 0.0,
 ) -> EnvSpec:
     """The plain-data description of an environment (see make_env for the arguments)."""
+    refuse_contact_task(task)
     if observation not in OBSERVATIONS:
         raise TaskError(f"observation is one of {', '.join(OBSERVATIONS)}, not {wording.short(observation)}")
     found = None

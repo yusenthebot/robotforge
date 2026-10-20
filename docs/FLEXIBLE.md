@@ -43,7 +43,7 @@ A pad that goes away, a tab that is hidden and a robot that is deselected each s
 Checked three ways:
 
 - `tests/test_viewer_padmap.py` runs the mapping table in Node.
-- `tests/test_viewer_gamepad.py` replaces `navigator.getGamepads` in headless Chrome with a pad the test moves and watches the simulation: the dog walks forward, stops when the stick is let go, turns with the right stick, the arm's tool follows the stick, A closes and B opens the gripper, an unplugged pad stops the dog, the keyboard still drives, a phone layout.
+- `tests/test_viewer_gamepad.py` replaces `navigator.getGamepads` in headless Chrome with a pad the test moves and watches the simulation: the dog walks forward, stops when the stick is let go, turns with the right stick, the arm's tool follows the stick, A closes and B opens the gripper, an unplugged pad stops the dog, the keyboard still drives, a phone layout, a wheeled rover drives and turns, and Y switches a rover with an arm between driving and the arm.
 - A film of the same events (not committed) shows the pad driving the Go2.
 
 No physical pad was used: the events are simulated through the browser's own Gamepad API.
@@ -54,18 +54,22 @@ No physical pad was used: the events are simulated through the browser's own Gam
 A recording keeps, at 20 frames a simulated second, the joint positions, the actuator targets, the base pose and the sensor readings, and the commands that steered the robot (keyboard, gamepad, `move`, `move_arm`, a script), each with its time.
 A fetch's own steps inside the simulation are not recorded as commands: only what was asked from outside.
 
-- Replay `commands` (default) gives the commands again on any robot of the same kind; speeds are scaled for a slower robot and arm targets are kept relative to the arm's base.
-- Replay `joints` puts the robot in the first pose and plays the actuator targets back, for the same actuators.
-- Export writes JSON or NPZ; LeRobot's parquet format needs `pyarrow`, which robotforge does not install (a gate).
+- Replay `commands` (default) gives the commands again on any robot of the same kind; speeds are scaled for a slower robot, and arm targets and the places of `go` and `pick_and_place` are kept relative to the robot's own frame, so another robot goes the same way from where it stands.
+- Replay `joints` puts the robot in the first pose and plays the actuator targets back, for the same actuators; it is open loop, so a robot that walks, drives or flies is refused.
+- A second replay on a robot takes over from the first.
+- Export writes JSON or NPZ (never over a file that exists or another demonstration, unless `overwrite=true`; a reading missing in some frames is `null` in the JSON and NaN in the NPZ); LeRobot's parquet format needs `pyarrow`, which robotforge does not install (a gate).
 
-Real models:
+Real models. The first four rows were driven by `move` and `jog_arm` calls from a script, not by a person or a pad, and have no sensor columns (those robots carried no sensor of their own); the last row was driven by the simulated pad and carries an IMU:
 
 | Run | Result |
 |---|---|
-| Go2 driven 5.5 s with `move`, recorded | 112 frames, 12 joints, 4 commands, walked (1.12, 0.54) m |
+| Go2 driven 5.5 s with `move`, recorded (`go2_square`) | 112 frames, 12 joints, 4 commands, no sensors; walked (1.12, 0.54) m |
 | replayed on an A1 (a quarter turn to its left) | moved (-0.61, 1.17) m, which is the Go2's walk turned 90 degrees, upright |
 | replayed on a template dog | speeds scaled to 0.61 (it is slower), moved (0.72, 0.39) m, upright |
-| Panda reach, jogged 0.14 m, gripper closed, recorded | 75 frames, 12 commands; replayed in `joints` mode from a reset the tool ends at (3.398, 0.142, 0.296) m, where the jog left it |
-| Go2 driven by simulated pad events 11.6 s, replayed on an A1 | 232 frames, 4 commands; JSON 64.6 kB, NPZ 57.2 kB |
+| Panda reach, jogged 0.14 m, gripper closed, recorded (`panda_pick`) | 75 frames, 12 commands, no sensors; replayed in `joints` mode from a reset the tool ends at (3.398, 0.142, 0.296) m, where the jog left it |
+| Go2 with an IMU, driven 11.6 s by simulated pad events, replayed on an A1 (`go2_pad_lap`) | 232 frames, 12 joints, 9 sensor columns (`body_imu.accel_m_s2`, `gyro_rad_s`, `orientation_deg`), 4 commands; JSON 77.9 kB, NPZ 65.0 kB; the Go2 moved (0.90, 1.10) m |
 
-The film of the last row (not committed) shows: the pad drives the Go2 while the page says "Recording pad_lap", then the A1 replays it ("Replaying pad_lap").
+A `go` replayed on another robot goes to the same place relative to where that robot stands: a dog that went 2 m ahead of itself, replayed on a pup standing at (0, 5), ends at (1.84, 5.00), where before it set off for the dog's own goal point and was cut off partway.
+The JSON export of a template dog with a rangefinder and two IMUs (125 frames, 23 sensor columns) has `null` for the 73 cells where a reading was missing and no `NaN` token, so a strict parser reads it.
+
+The film of the last row (not committed) shows: the pad drives the Go2 while the page says "Recording pad_lap" and the sensor panel plots its IMU, then the A1 replays it ("Replaying pad_lap").

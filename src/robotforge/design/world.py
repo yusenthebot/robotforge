@@ -236,6 +236,9 @@ def _shape_list() -> str:
     return ", ".join([*plain, *named, *plugins])
 
 
+RESISTING = ("drawer", "cabinet", "switch", "lever", "valve")  # what ObjectEntry.resist applies to
+
+
 class ObjectEntry(_Strict):
     name: str
     shape: str = "box"  # a built-in shape (ShapeName) or one a plugin added (robotforge.extend)
@@ -256,6 +259,8 @@ class ObjectEntry(_Strict):
     # some of what varies (params, e.g. {"handle": "d"}); the same shape, size, seed and params build the same object.
     seed: int | None = Field(None, ge=0, le=2**31 - 1, exclude_if=_unset)
     params: dict[str, Any] | None = Field(None, exclude_if=_unset)
+    # What a drawer, door, lever, switch or valve takes to move besides its own friction: N at its handle (rust)
+    resist: float | None = Field(None, gt=0, le=500, exclude_if=_unset)
 
     @model_validator(mode="before")
     @classmethod
@@ -310,6 +315,10 @@ class ObjectEntry(_Strict):
         if self.strength is not None and self.shape not in props.SOURCES:
             raise ValueError(
                 f"object {self.name!r}: strength is for a heat_source or gas_source; a {self.shape} has none"
+            )
+        if self.resist is not None and self.shape not in RESISTING:
+            raise ValueError(
+                f"object {self.name!r}: resist is how hard a {', '.join(RESISTING)} is to move; a {self.shape} has none"
             )
         if self.material is not None and self.shape not in ("box", "sphere", "cylinder"):
             raise ValueError(f"object {self.name!r}: material is for loose boxes, balls and cylinders")
@@ -945,7 +954,7 @@ def _object(spec: mujoco.MjSpec, obj: ObjectEntry, ground: terrain.Ground) -> No
         # A rope with no height given hangs from a hook its length and 20 cm above the ground.
         hang = obj.size[0] + 0.2 if obj.shape == "rope" and obj.fixed else 0.0
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z + hang]
-        mechanisms.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed)
+        mechanisms.build(spec, obj.name, obj.shape, obj.size, rgba, base, quat, obj.fixed, obj.resist)
         return
     if obj.shape in props.PROPS:
         base = [x, y, obj.pos[2] if len(obj.pos) == 3 else ground_z]

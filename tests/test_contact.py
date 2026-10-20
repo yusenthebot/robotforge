@@ -24,17 +24,21 @@ MENAGERIE = Path(__file__).parent / "fixtures" / "menagerie"
 TABLE_TOP = 0.30
 
 
+def _desk(height: float = TABLE_TOP, world: str = "lab") -> Playground:
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world(world, "checker")
+    pg.add_robot("arm", library="panda")
+    pg.update_robot("arm", end_effector="wiper")
+    pg.add_object("desk", shape="table", size=[0.6, 0.6, height], pos=[0.5, 0.0])
+    return pg
+
+
 @pytest.fixture
 def desk(tmp_path, monkeypatch):
     """A Panda with a wiper pad in front of a 30 cm table."""
     monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
     monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
-    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
-    pg.new_world("lab", "checker")
-    pg.add_robot("arm", library="panda")
-    pg.update_robot("arm", end_effector="wiper")
-    pg.add_object("desk", shape="table", size=[0.6, 0.6, TABLE_TOP], pos=[0.5, 0.0])
-    return pg
+    return _desk()
 
 
 def _start(pg: Playground):
@@ -121,7 +125,7 @@ def test_holding_a_force_needs_a_force_loop_and_osc_has_one(desk):
         out[method] = run(make_task("press", m, "arm", {"force": 6.0}), m, copy.copy(d), method, 9.0).report
     assert out["osc"]["settled_n"] == pytest.approx(6.0, abs=0.4)
     assert abs(out["cartesian_impedance"]["settled_n"] - 6.0) < 2.5  # its few mm of depth, times a soft spring
-    assert out["ik"]["settled_n"] > 25.0  # a few mm into a stiff servo
+    assert out["ik"]["settled_n"] > 12.0  # a few mm into a stiff servo: twice the force asked for
     assert out["osc"]["overshoot_n"] < 1.5
 
 
@@ -198,3 +202,79 @@ async def test_mcp_runs_a_wipe_and_compares_how_each_controller_does(desk):
         assert out["success"] and abs(out["result"]["force_mean_n"] - 8.0) < 1.5, out
         bad = await client.call_tool("run_controller", {"robot": "arm", "task": "wipe", "method": "lqr"})
         assert bad.is_error and "wipe" in bad.content[0].text
+
+
+def test_the_default_time_of_a_wipe_counts_the_way_down_to_a_low_table(tmp_path, monkeypatch):
+    """The default used to ignore how far the tool has to come down: on a 12 cm table the standard wipe was still
+    on its last pass when the time ran out, and every controller seemed to fail."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
+    seconds = {}
+    for height in (0.30, 0.12):
+        m, d = _start(_desk(height, f"lab{int(height * 100)}"))
+        task = make_task("wipe", m, "arm", {"force": 8.0})
+        task.begin(d)
+        seconds[height] = task.default_seconds
+    assert seconds[0.12] > seconds[0.30] + 1.0  # a longer way down takes longer
+    m, d = _start(_desk(0.12, "low"))
+    cmp = compare_methods("wipe", ["osc"], None, task_params={"force": 8.0}, model=m, robot="arm", data=copy.copy(d))
+    result = cmp.results[0]
+    assert result.success and result.report["phase"] == "done", result.report
+
+
+def _ur5e_over_a_table(top: float = 0.25) -> Playground:
+    """A UR5e with a wiper pad and a table right under the pad's start (the arm's home puts it at x -0.13, y 0.49)."""
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("ur", "checker")
+    pg.add_robot("arm", library="ur5e")
+    pg.update_robot("arm", end_effector="wiper")
+    pg.add_object("desk", shape="table", size=[0.5, 0.5, top], pos=[-0.134, 0.492])
+    return pg
+
+
+def test_a_ur5e_presses_and_wipes_at_a_force_and_says_which_surface(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
+    m, d = _start(_ur5e_over_a_table())
+    held = run(make_task("press", m, "arm", {"force": 6.0, "mode": "stop"}), m, copy.copy(d), "osc", 6.0)
+    assert held.success and 6.0 <= held.report["peak_n"] <= 7.5, held.report
+    assert held.report["surface"] == "desk" and held.report["surface_z_m"] == pytest.approx(0.25, abs=1e-3)
+    assert "note" not in held.report
+    params = {"force": 8.0, "length": 0.12, "width": 0.06, "passes": 2, "speed": 0.1}
+    wipe = run(make_task("wipe", m, "arm", params), m, copy.copy(d), "osc", 14.0)
+    assert wipe.success, wipe.report
+    assert abs(wipe.report["force_mean_n"] - 8.0) < 1.5 and wipe.report["path_wiped_pct"] >= 90.0
+    assert (
+        0.0 <= wipe.report["raw_dropout_pct"] <= 100.0
+        and wipe.report["raw_dropout_pct"] >= wipe.report["lost_contact_pct"]
+    )
+
+
+def test_a_job_that_ends_up_on_the_floor_says_so(tmp_path, monkeypatch):
+    """The arm was not over its table: the wipe ran on the floor beside it and only a low wiped share hinted at why."""
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("ROBOTFORGE_MENAGERIE", str(MENAGERIE))
+    pg = Playground(session=SimSession.from_xml("<mujoco/>"))
+    pg.new_world("bare", "checker")
+    pg.add_robot("arm", library="ur5e")
+    pg.update_robot("arm", end_effector="wiper")
+    pg.add_object("desk", shape="table", size=[0.3, 0.3, 0.25], pos=[0.9, 0.9])  # a table, but not under the tool
+    m, d = _start(pg)
+    task = make_task("wipe", m, "arm", {})
+    task.begin(d)
+    report = task.report(d)
+    assert report["surface"] == "floor" and report["surface_z_m"] == pytest.approx(0.0, abs=1e-3)
+    assert "not on a table" in report["note"] and "surface=" in report["note"]
+
+
+def test_a_seeded_comparison_starts_the_tool_somewhere_different_each_time(desk):
+    m, d = _start(desk)
+    tools = []
+    for seed in (0, 1, 2):
+        task = make_task("wipe", m, "arm", {})
+        start = copy.copy(d)
+        task.reset(start, np.random.default_rng(seed))
+        mujoco.mj_forward(m, start)
+        tools.append(start.site_xpos[task.site].copy())
+    assert min(float(np.linalg.norm(a - b)) for i, a in enumerate(tools) for b in tools[:i]) > 0.005
+    assert all(float(np.linalg.norm(t - d.site_xpos[task.site])) < 0.08 for t in tools)

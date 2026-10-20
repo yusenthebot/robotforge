@@ -832,12 +832,14 @@ class ArmMotion:
         place: np.ndarray,
         place_top: float | None = None,
         faces: np.ndarray | None = None,
+        reach_above: float = 0.0,
     ) -> None:
         """Queue a full pick-and-place. Raises OutOfReach if any key point is out of reach.
 
         `place` is where the object's bottom should end up; `place_top` is the highest point
         around it (e.g. a bin's rim), which the carried object must clear. `faces` are a box's two horizontal
-        side normals, to grasp it square to them (see SQUARE_TOL).
+        side normals, to grasp it square to them (see SQUARE_TOL). `reach_above` is how far the object reaches above
+        the grasp point: the jaws come down over it from higher than that.
         """
         grasp = obj_pos.copy()
         below = obj_half_height  # how far the load reaches below the tool point: fingers hold it by the middle
@@ -846,7 +848,7 @@ class ArmMotion:
             below = 2 * obj_half_height
         drop = place + [0, 0, below + 0.01]
         rim = max(place_top if place_top is not None else place[2], grasp[2] - below)
-        travel_z = max(grasp[2], drop[2]) + APPROACH
+        travel_z = max(grasp[2] + reach_above, drop[2]) + APPROACH
         travel_z = max(travel_z, rim + 2 * obj_half_height + 0.03)
         above = np.array([grasp[0], grasp[1], travel_z])
         above_drop = np.array([drop[0], drop[1], travel_z])

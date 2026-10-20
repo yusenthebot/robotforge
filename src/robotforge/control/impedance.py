@@ -13,9 +13,13 @@ torques, which `TorqueMap` converts to whatever the arm's actuators take (positi
 - "osc": operational-space control (Khatib). The target's error is turned into the acceleration the tool should have,
   the tool-space inertia, the arm's Coriolis and gravity torques are cancelled exactly, so the tool answers like a
   unit mass in every pose, and the leftover joints are steered in the null space of the task. Along a surface normal
-  it closes a force loop on the measured contact force (hybrid force and motion control).
+  it does not use the tool-space inertia: a soft spring keeps the tool at the surface, a damper (the most one control
+  step can carry) calms the contact, and a PI loop closes the commanded push on the measured contact force (hybrid
+  force and motion control).
 - "ik" and "pd" on a contact task: the same differential inverse kinematics, then the arm's own position servos, or a
   stiff joint PD with gravity compensation. They know nothing of force, which is what the comparison is for.
+
+`PathPush` is the force-limited Cartesian impedance behind `operate(..., force=...)`.
 
 The force the tool feels is measured the way a wrist force-torque sensor would: the contact forces on the hand and what
 it holds (`ToolForce`), low-pass filtered. Forces here are the force the tool exerts on its surroundings, in newtons,
@@ -25,6 +29,7 @@ unless a name says otherwise.
 from __future__ import annotations
 
 import math
+import types
 from typing import Any
 
 import mujoco
@@ -34,7 +39,7 @@ from robotforge.control.actuation import TorqueMap
 from robotforge.control.classic import positive
 from robotforge.control.tasks import Task, TaskError
 from robotforge.control.tasks.base import home_qpos
-from robotforge.control.tasks.tool import TargetSource, ToolForce, ToolTarget, attitude
+from robotforge.control.tasks.tool import TargetSource, ToolForce, ToolTarget, attitude, rotation_error
 
 IK_DAMPING = 0.05  # damped least squares: keeps the joint answers sane near a singular pose
 IK_SPEED = 2.0  # rad/s: the fastest a reference joint moves toward an inverse-kinematics answer
@@ -270,12 +275,14 @@ class CartesianImpedance(_Controller):
         model: mujoco.MjModel,
         data: mujoco.MjData,
         stiffness: float | list[float] = 500.0,
+        soft_stiffness: float | list[float] | None = None,
         rot_stiffness: float = 30.0,
         zeta: float = 1.0,
         normal_damping: float = 0.6,
     ) -> None:
         self.normal_damping = positive("normal_damping", normal_damping, 0.95)
         self.K = per_axis("stiffness", stiffness, 3)
+        self.K_soft = self.K if soft_stiffness is None else per_axis("soft_stiffness", soft_stiffness, 3)
         self.K_rot = positive("rot_stiffness", rot_stiffness)
         self.zeta = positive("zeta", zeta, 10.0)
 
@@ -285,7 +292,8 @@ class CartesianImpedance(_Controller):
         rows, turn = attitude(R, target)
         J = a.jacobian(model, data, rows)
         M = a.mass(model, data)
-        K = np.concatenate([self.K, np.full(len(turn), self.K_rot)])
+        linear = (1 - target.compliance) * self.K + target.compliance * self.K_soft
+        K = np.concatenate([linear, np.full(len(turn), self.K_rot)])
         vel = np.concatenate([target.vel, np.zeros(len(turn))])
         err = np.concatenate([target.pos - data.site_xpos[a.site], turn])
         Minv = np.linalg.inv(M)
@@ -317,6 +325,7 @@ class OperationalSpace(_Controller):
         data: mujoco.MjData,
         omega: float = 14.0,
         zeta: float = 1.0,
+        soft_omega: float | None = None,
         rot_omega: float = 10.0,
         normal_omega: float = 30.0,
         force_gain: float = 0.6,
@@ -324,6 +333,7 @@ class OperationalSpace(_Controller):
         normal_damping: float = 0.6,
     ) -> None:
         self.omega, self.zeta = positive("omega", omega, 200.0), positive("zeta", zeta, 10.0)
+        self.soft_omega = self.omega if soft_omega is None else positive("soft_omega", soft_omega, 200.0)
         self.rot_omega = positive("rot_omega", rot_omega, 200.0)
         self.normal_omega = positive("normal_omega", normal_omega, 200.0)  # the soft spring that keeps the pad down
         self.force_gain = positive("force_gain", force_gain, 20.0)  # N commanded per N of force error
@@ -339,33 +349,35 @@ class OperationalSpace(_Controller):
         M = a.mass(model, data)
         v = J @ data.qvel[a.d]
         w, z, wr = self.omega, self.zeta, self.rot_omega
+        w = (1 - target.compliance) * w + target.compliance * self.soft_omega
         normal = None if target.normal is None else np.asarray(target.normal, float)
         err_p = target.pos - data.site_xpos[a.site]
         vel_err = target.vel - v[:3]
         pressing = target.pressing and normal is not None
+        err_n = vel_n = 0.0
+        if pressing:  # the error along the normal is the normal channel's, not the tool-space inertia's
+            err_n, vel_n = float(normal @ err_p), float(normal @ vel_err)
+            err_p, vel_err = err_p - normal * err_n, vel_err - normal * vel_n
         accel = np.concatenate([w * w * err_p + 2 * z * w * vel_err, wr * wr * turn - 2 * z * wr * v[3:]])
         Minv = np.linalg.inv(M)
         lam = np.linalg.inv(J @ Minv @ J.T + TOOL_REGULARIZE * np.eye(len(accel)))
-        import os
-
-        drift = 0.0 if os.environ.get("NO_JDOT") else a.accel_drift(model, data, rows)
-        force = lam @ (accel - drift)
+        force = lam @ (accel - a.accel_drift(model, data, rows))
         if pressing:
             # Along the normal only the force loop and a soft spring act: the push the tool-space inertia would add for
             # the sideways errors (it couples the axes) is taken out, or the force would swing with every sideways step.
             force[:3] -= normal * float(normal @ force[:3])
             mass = 1.0 / max(float(normal @ (J[:3] @ Minv @ J[:3].T) @ normal), 1e-6)
             wn = self.normal_omega
-            at_surface = float(normal @ err_p) + target.depth  # the target's depth is a position controller's push
-            spring = mass * (wn * wn * at_surface + 2 * z * wn * float(normal @ vel_err))
+            at_surface = err_n + target.depth  # the target's depth is a position controller's push
+            hold = wn * wn * at_surface if target.anchored else 0.0
+            spring = mass * (hold + 2 * z * wn * vel_n)
             force[:3] += normal * spring + self._press(normal, target.push)
             force[:3] -= normal * self.normal_damper(J, Minv, normal) * float(normal @ v[:3])
         else:
             self.wound = 0.0
             force[:3] += self.feedforward(target)
         null = np.eye(a.n) - J.T @ (lam @ J @ Minv)  # dynamically consistent: the spare joints cannot move the tool
-        post = 0.0 if os.environ.get("NO_POSTURE") else null @ self.posture(M, data)
-        return J.T @ force + post + a.bias(data)
+        return J.T @ force + null @ self.posture(M, data) + a.bias(data)
 
     def _press(self, normal: np.ndarray, wanted: float) -> np.ndarray:
         """The force on the tool along the normal: the wanted push, plus a correction from the measured push."""
@@ -376,6 +388,73 @@ class OperationalSpace(_Controller):
 
     def status(self) -> dict[str, Any]:
         return {**super().status(), "omega": self.omega, "force_gain": self.force_gain}
+
+
+class PathPush:
+    """Cartesian impedance that follows a moving pose (the joint values of a path, worked out beforehand) and pushes
+    with at most `limit` newtons: operate's way of turning a valve or tipping a lever by force. The tool is a mass on a
+    spring and damper toward where the path says it should be, the spring's pull is cut off at the limit, so a handle
+    that holds back more than that stops the hand, which then stands pushing at the limit."""
+
+    LEVER = 0.12  # m: the limit on the turning torque is the limit on the force at this arm
+
+    def __init__(self, model: mujoco.MjModel, arm: Any, limit: float, stiffness: float = 3000.0, zeta: float = 1.0):
+        owner = arm.robot.split("/", 1)[0] + "/"
+        self.task = types.SimpleNamespace(
+            site=arm.site,
+            joints=list(arm.joints),
+            qadr=np.asarray(arm.chain.qpos_adr),
+            dadr=np.asarray(arm.chain.dof_adr),
+            actuators=np.asarray(arm.actuators),
+            robot=types.SimpleNamespace(prefix=owner, name=arm.robot),
+        )
+        self.arm = _Arm(model, self.task)
+        self.torque = TorqueMap(model, self.task.actuators)
+        self.limit = positive("force", limit, 1000.0)
+        self.K, self.K_rot, self.zeta = positive("stiffness", stiffness), 60.0, zeta
+        self.scratch = mujoco.MjData(model)
+        self.model = model
+        self.sense = ToolForce.of_arm(model, self.task)
+        self.rest = home_qpos(model)[self.task.qadr]
+        self.error = 0.0  # m: how far the tool is from where the path puts it
+        self.peak_commanded = 0.0  # N: the most the spring asked for, after the limit
+        self.peak_felt = 0.0  # N: the most the hand's contacts pushed back with
+        self.held_at_limit = 0.0  # s spent pushing at the limit
+
+    def command(self, data: mujoco.MjData, q_path: np.ndarray, dt: float) -> np.ndarray:
+        """The actuators' commands that push the hand toward the pose the path has at joint values `q_path`."""
+        model, a = self.model, self.arm
+        s = self.scratch
+        s.qpos[:] = data.qpos
+        s.qpos[self.task.qadr] = q_path
+        mujoco.mj_kinematics(model, s)
+        x_ref, R_ref = s.site_xpos[a.site].copy(), s.site_xmat[a.site].reshape(3, 3).copy()
+        J = a.jacobian(model, data, np.eye(3))
+        M = a.mass(model, data)
+        v = J @ data.qvel[a.d]
+        x, R = data.site_xpos[a.site], data.site_xmat[a.site].reshape(3, 3)
+        err = np.concatenate([x_ref - x, rotation_error(R, R_ref)])
+        lam = np.linalg.inv(J @ np.linalg.inv(M) @ J.T + TOOL_REGULARIZE * np.eye(6))
+        K = np.concatenate([np.full(3, self.K), np.full(3, self.K_rot)])
+        force = K * err - 2 * self.zeta * np.sqrt(K * np.diag(lam)) * v
+        push = float(np.linalg.norm(force[:3]))
+        if push > self.limit:
+            force[:3] *= self.limit / push
+            self.held_at_limit += dt
+        turn = float(np.linalg.norm(force[3:]))
+        if turn > self.limit * self.LEVER:
+            force[3:] *= self.limit * self.LEVER / turn
+        self.error = float(np.linalg.norm(err[:3]))
+        self.peak_commanded = max(self.peak_commanded, min(push, self.limit))
+        self.peak_felt = max(self.peak_felt, float(np.linalg.norm(self.sense.read(model, data))))
+        null = np.eye(a.n) - J.T @ np.linalg.pinv(J.T)
+        tau = J.T @ force + null @ _posture(M, data, a, self.rest) + a.bias(data)
+        return self.torque.ctrl(data, tau)
+
+
+def _posture(M: np.ndarray, data: mujoco.MjData, arm: _Arm, rest: np.ndarray) -> np.ndarray:
+    w = POSTURE_OMEGA
+    return np.diag(M) * (w * w * (rest - data.qpos[arm.q]) - 2 * w * data.qvel[arm.d])
 
 
 # ---- wiring -----------------------------------------------------------------------------------------------

@@ -28,6 +28,7 @@ from robotforge.behaviors import (
     catch_stand,
     fetch,
     flight,
+    grasping,
     hints,
     humanoid,
     marine,
@@ -50,6 +51,7 @@ from robotforge.behaviors.rhythm_walk import RhythmWalker, SavedWalk, load_walk
 from robotforge.behaviors.snake import SnakeGait
 from robotforge.design import end_effectors, library, mechanisms, mounting
 from robotforge.design.world import ObjectEntry, RobotEntry, World
+from robotforge.sim.geometry import collides
 from robotforge.sim.session import SimSession
 
 MOBILE = (
@@ -223,6 +225,7 @@ def _how_to_move(kind: Kind) -> str:
     return "robots lists what each robot can do"
 
 
+GRASP_OPENING = 0.07  # m the jaws open when the arm's gripper does not tell
 DOWN_BAND_STEP = 0.02  # m between the distances from an arm's base tried for where its gripper points down
 CLEARANCE = 0.01  # m kept between a thing the advice moves and the arm's base or the other thing of the pick
 TURN_STEP = 15.0  # degrees between the directions around the base tried when nothing fits on the thing's own line
@@ -1628,6 +1631,8 @@ class BehaviorManager:
             arm = self._arm_motion(name)
             obj = self._object_name(obj)
             pick = self._object_geometry(obj, arm, grasp)
+            if pick.get("irregular") and arm.tool is None:  # fingers: where and which way to take hold, from its shape
+                pick = self._planned_pick(arm, obj, pick)
             # A suction cup or a magnet picks from where it stands: an errand's grasp and carry are for fingers.
             goes = go and self._goes(arm.robot) and arm.tool is None
             riding = catching.velocity(self.session.model, self.session.data, self._body(obj))
@@ -1669,7 +1674,9 @@ class BehaviorManager:
                     raise BehaviorError(str(exc)) from exc
                 else:
                     info = {"object": obj, "target": target, "region": region}
-                    return arm, {**info, **({"grasp": used.describe()} if used is not None else {})}
+                    if used is not None:
+                        return arm, {**info, "grasp": used.describe()}
+                    return arm, {**info, **({"grasp": pick["grasp"]} if "grasp" in pick else {})}
             errand = self._fetch(arm, obj, target)
         return errand, {"object": obj, "target": target, "region": errand.place.region}
 
@@ -1686,7 +1693,8 @@ class BehaviorManager:
                 else (choice.point, choice.half_height, choice.faces)
             )
             try:
-                arm.pick_and_place(point, half, place, place_top, faces)
+                reach = pick.get("reach_above", 0.0) if choice is None else 0.0
+                arm.pick_and_place(point, half, place, place_top, faces, reach)
                 return choice
             except (OutOfReach, ValueError) as exc:
                 if first is None:
@@ -2219,18 +2227,91 @@ class BehaviorManager:
         if entry is not None and entry.shape in ("table", "bin"):
             raise BehaviorError(f"{name} is a {entry.shape}; pick up something small like a box or ball")
         center = self.session.data.xpos[body].copy()
-        if entry is not None:
+        irregular = False
+        if entry is not None and entry.shape in ("box", "sphere", "cylinder"):
             half = {"box": entry.size[-1] / 2, "sphere": entry.size[0] / 2, "cylinder": entry.size[-1] / 2}[entry.shape]
         else:
-            g = next(i for i in range(self.session.model.ngeom) if self.session.model.geom_bodyid[i] == body)
-            half = float(self.session.model.geom_rbound[g])
+            model = self.session.model
+            geoms = [i for i in range(model.ngeom) if model.geom_bodyid[i] == body and collides(model, i)]
+            half = float(model.geom_rbound[geoms[0] if geoms else 0])
+            # A thing made of several shapes, or of a shape that is no box, can or ball (a mesh, a T, a bottle): its
+            # grasp is worked out from its shape (grasping.py).
+            kinds = {int(model.geom_type[i]) for i in geoms}
+            primitive = {int(mujoco.mjtGeom.mjGEOM_BOX), int(mujoco.mjtGeom.mjGEOM_SPHERE)}
+            primitive |= {int(mujoco.mjtGeom.mjGEOM_CYLINDER)}
+            irregular = len(geoms) > 1 or not kinds <= primitive
         faces = None  # a box's sides, for jaws closing square to them (see arm.SQUARE_TOL)
         if entry is not None and entry.shape == "box":
             sides = self.session.data.xmat[body].reshape(3, 3)[:, :2].T.copy()
             sides[:, 2] = 0.0
             if np.all(np.linalg.norm(sides, axis=1) > 0.5):  # standing upright, not on an edge
                 faces = sides / np.linalg.norm(sides, axis=1, keepdims=True)
-        return {"center": center, "half_height": half, "faces": faces}
+        return {
+            "center": center,
+            "half_height": half,
+            "faces": faces,
+            "irregular": irregular,
+            "named": entry is not None,
+        }
+
+    def _planned_pick(self, arm: ArmMotion, obj: str, pick: dict[str, Any]) -> dict[str, Any]:
+        """`pick` for a thing of no simple shape: where the tool goes, how far the load reaches below it and which
+        way the jaws close, from the best grasp of its shape. A thing the world made (add_object) that no grasp holds
+        is refused with why; an imported thing that no grasp holds is picked as it always was."""
+        body = self._body(obj)
+        model, data = self.session.model, self.session.data
+        opening = fetch.gripper_opening(model, arm) or GRASP_OPENING
+        parts = grasping.body_parts(model, data, body)
+        try:
+            grasps = grasping.plan_cached(parts, opening, data.xipos[body].copy()) if parts else []
+        except ValueError:
+            grasps = []
+        if not grasps:
+            if not pick["named"]:
+                return pick
+            points = np.vstack(parts) if parts else np.zeros((1, 3))
+            sizes = ", ".join(f"{100 * float(v):.0f}" for v in points.max(axis=0) - points.min(axis=0))
+            raise BehaviorError(
+                f"{arm.robot} cannot take hold of {obj}: no way to close its {1000 * opening:.0f} mm jaws on its "
+                f"{sizes} cm (x, y, z) that holds it, too wide across or too flat for fingers to get under; "
+                "a suction cup may hold it (update_robot with end_effector='suction')"
+            )
+        best = grasps[0]
+        faces = np.array([[best.closing[0], best.closing[1], 0.0]])
+        return {
+            **pick,
+            "center": best.center,
+            "half_height": best.below,
+            "faces": faces,
+            "reach_above": best.above,
+            "grasp": best.as_dict(),
+        }
+
+    def plan_grasps(self, robot: str, obj: str) -> dict[str, Any]:
+        """The ways `robot`'s gripper can take hold of `obj`, best first, worked out from the thing's shape: where the
+        tool goes, which way the jaws close, how wide the thing is there and why it holds. The search runs outside the
+        session lock (a dense mesh is cut down to its extremes first, a repeat is remembered), so the sim goes on."""
+        with self.session.lock:
+            name = self._arm_name(robot)
+            arm = self._arm_motion(name)
+            obj = self._object_name(obj)
+            body = self._body(obj)
+            model, data = self.session.model, self.session.data
+            opening = fetch.gripper_opening(model, arm) or GRASP_OPENING
+            parts = grasping.body_parts(model, data, body)
+            com = data.xipos[body].copy()
+        try:
+            grasps = grasping.plan_cached(parts, opening, com) if parts else []
+        except ValueError:
+            grasps = []
+        return {
+            "object": obj,
+            "robot": name,
+            "jaws_open_m": round(float(opening), 3),
+            "grasps": [g.as_dict() for g in grasps],
+            "best": grasps[0].as_dict() if grasps else None,
+            "why_none": None if grasps else "too wide across for the jaws, or too flat for fingers to get under",
+        }
 
     def _named(self, name: str) -> bool:
         """Whether the world has an object called `name` (a target called "hold" is that object, not the keyword)."""

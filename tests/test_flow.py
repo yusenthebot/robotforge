@@ -48,6 +48,9 @@ class FakeSensors:
     def get(self, name, default=None):
         return self.readings.get(name, default)
 
+    def __getitem__(self, name):
+        return self.readings[name]
+
 
 class FakeRobot:
     def __init__(self, **readings):
@@ -311,3 +314,110 @@ def test_a_state_machine_in_a_tree_and_its_mistakes():
     end = StateMachine("n", start="a", states=[State("a", result=SUCCESS)])
     with pytest.raises(FlowError, match="ends the machine"):
         end.transition("a", "a", when=lambda c: True)
+
+
+# ---- a reactive composite stops what its earlier children preempt; blocking calls; failures of a condition ----
+
+
+def test_a_reactive_sequence_halts_the_child_that_was_running_when_an_earlier_one_fails():
+    sim = FakeSim()
+    tree = Tree(
+        Sequence(Condition(lambda c: c.time < 0.5, name="early"), Wait(10.0, name="long wait"), reactive=True),
+        name="t",
+    )
+    assert tree.run(sim, None, max_seconds=5.0) is FAILURE
+    assert tree.statuses() == "ff."  # the wait is not left marked as running under a finished tree
+    assert "r" not in sim.shown[-1]["status"]
+    # a node inside the preempted branch starts again from its beginning next time
+    retry = Retry(Action(lambda c: False, name="try"), times=5, wait=1.0)
+    seq = Sequence(Condition(lambda c: c.time < 0.35, name="early"), retry, reactive=True)
+    assert Tree(seq).run(FakeSim(), None, max_seconds=5.0) is FAILURE
+    assert retry.attempt == 1 and retry.status is None
+
+
+def test_a_reactive_fallback_halts_the_later_child_when_an_earlier_one_succeeds():
+    sim = FakeSim()
+    tree = Tree(Fallback(Condition(lambda c: c.time >= 0.5, name="ready"), Wait(10.0, name="long wait"), reactive=True))
+    assert tree.run(sim, None, max_seconds=5.0) is SUCCESS
+    assert tree.statuses() == "ss."
+    assert "r" not in sim.shown[-1]["status"]
+
+
+def test_a_state_machine_in_a_preempted_branch_runs_its_exit():
+    exits = []
+    machine = StateMachine("m", start="a")
+    machine.add(State("a", do=lambda c: None, exit=lambda c: exits.append(c.time)))
+    machine.add(State("b", result=SUCCESS))
+    machine.transition("a", "b", when=lambda c: False)
+    tree = Tree(Sequence(Condition(lambda c: c.time < 0.25), machine, reactive=True))
+    assert tree.run(FakeSim(), None, max_seconds=5.0) is FAILURE
+    assert machine.current is None  # halted: it will start from "a" again
+    assert len(exits) == 1 and exits[0] >= 0.25  # and its state left through its exit
+
+
+def test_a_timeout_fails_a_blocking_child_that_overran_and_notes_how_long():
+    sim = FakeSim()
+    tree = Tree(Timeout(Action(lambda c: c.sim.step(10.0), name="block"), seconds=2.0))
+    assert tree.run(sim, None) is FAILURE
+    assert sim.time == pytest.approx(10.0, abs=0.2)  # a call that blocks cannot be cut short
+    assert "took 10.0 s, over 2 s" in tree.notes()["0"]
+    ok = Tree(Timeout(Action(lambda c: c.sim.step(1.0), name="block"), seconds=2.0))
+    assert ok.run(FakeSim(), None) is SUCCESS
+    waited = Tree(Timeout(Wait(1.0), seconds=1.0))  # the clock between ticks is not a blocking call
+    assert waited.run(FakeSim(), None) is SUCCESS
+
+
+def test_parallel_blocking_actions_run_one_after_the_other():
+    sim = FakeSim()
+    tree = Tree(Parallel(Action(lambda c: c.sim.step(5.0)), Action(lambda c: c.sim.step(5.0))))
+    assert tree.run(sim, None) is SUCCESS
+    assert sim.time == pytest.approx(10.0, abs=0.2)  # as the docs say: blocking calls do not overlap
+
+
+def test_a_condition_that_the_playground_refuses_or_cannot_read_is_a_failed_test():
+    def lidar(c):
+        return c.robot.sensors["lidar"]["ahead"] > 0.5  # a robot without a lidar: KeyError
+
+    def refused(c):
+        raise ScriptError("no sensor called lidar")
+
+    robot = FakeRobot()
+    for fn in (lidar, refused):
+        tree = Tree(Fallback(Condition(fn, name="path clear"), Action(lambda c: None, name="go round")))
+        sim = FakeSim()
+        assert tree.run(sim, robot) is SUCCESS
+        assert tree.statuses() == "sfs"
+        assert "path clear" in tree.summary()
+    with pytest.raises(ScriptTimeLimit):
+        Tree(Condition(lambda c: (_ for _ in ()).throw(ScriptTimeLimit("out of time")))).run(FakeSim(), None)
+
+
+def test_an_error_in_a_node_leaves_no_node_marked_running_in_the_panel():
+    sim = FakeSim()
+
+    def boom(c):
+        raise ZeroDivisionError("bug in the script")
+
+    tree = Tree(Sequence(Action(lambda c: None), Action(boom, name="boom")))
+    with pytest.raises(ZeroDivisionError):
+        tree.run(sim, None)
+    assert "r" not in sim.shown[-1]["status"]
+    assert sim.shown[-1]["status"][1:] == "sf"  # the one that ran, and the one that was running when it broke
+
+
+def test_a_tree_stopped_at_its_time_limit_shows_that_in_the_panel():
+    sim = FakeSim()
+    tree = Tree(Wait(100.0))
+    assert tree.run(sim, None, max_seconds=1.0) is FAILURE
+    assert sim.shown[-1]["status"] == "."
+
+
+def test_a_big_tree_is_shown_cut_short_instead_of_failing_the_run():
+    from robotforge.flow_board import MAX_NODES
+
+    sim = FakeSim()
+    tree = Tree(Sequence(*[Action(lambda c: None, name=f"step {i}") for i in range(MAX_NODES + 50)]))
+    assert tree.run(sim, None) is SUCCESS
+    first = sim.shown[0]
+    assert len(first["nodes"]) == MAX_NODES and len(first["status"]) == MAX_NODES
+    assert str(MAX_NODES) in first["name"]
