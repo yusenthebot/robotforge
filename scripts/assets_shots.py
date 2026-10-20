@@ -58,6 +58,8 @@ def _described_row(pg: Any) -> None:
 
 
 STYLES = ("cobot", "lab", "hobby", "rugged")
+# Designs and sentences shown one by one and close, so what the engine adds (shells, housings, treads) shows in a crop.
+CLOSE_DESIGNS = ("centaur", "scorpion", "mars_rover", "wheel_dog", "go2_arm", "lift_picker")
 # One part per column, one style per row: what the same generator makes in each style.
 SHEET = [
     ("pedestal", {"radius": 0.06, "height": 0.07}),
@@ -150,6 +152,26 @@ def shots(Shot: Any, look: Callable, frame_robot: Callable, gallery_world: Calla
             page="window.__robotforge.select(null);" + look((0.42, -0.02, 0.2), (0.0, 0.0, 0.03)),
             size=HD,
             settle=3.0,
+        ),
+        *(
+            Shot(
+                f"assets_gallery_{name}",
+                lambda pg, name=name: pg.add_robot("bot", design=name),
+                page=frame_robot("bot", direction=(1.0, -0.85, 0.5), scale=1.35, least=0.5),
+                size=HD,
+                settle=2.5,
+            )
+            for name in CLOSE_DESIGNS
+        ),
+        *(
+            Shot(
+                f"assets_described_{i + 1}",
+                _describe(sentence),
+                page=frame_robot("bot", direction=(1.0, -0.85, 0.5), scale=1.35, least=0.5),
+                size=HD,
+                settle=2.5,
+            )
+            for i, sentence in enumerate(DESCRIBED)
         ),
         Shot("assets_gallery", gallery_world, page=look((1.7, -3.2, 1.7), (-0.7, 0.2, 0.3)), size=HD, settle=3.0),
         Shot(

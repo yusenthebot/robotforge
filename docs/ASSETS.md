@@ -127,7 +127,11 @@ A generator is built once with its defaults when it is registered, so a mistake 
 ## The viewer
 
 The viewer draws every `rf_*` surface as a physically based material (`MeshPhysicalMaterial` where there is a clear coat or sheen), lit by a generated studio environment map, with soft shadows and neutral tone mapping.
+The physically based materials, the environment map, the soft shadows and the tone mapping were in the viewer before the asset engine; the engine added the procedural grain shaders (brushed, speckle, rubber, knurl) and the `surfaces` table that carries a material to the viewer.
 `tests/test_viewer_js.py` parses the viewer's scripts and `scripts/bench.py` holds its frame time to a budget.
+The bench draws two scenes: the warehouse with a Go2 (a few detailed meshes) and a scene of the engine's robots (`viewer.assets_fps`, `viewer.assets_frame_ms`: a centaur, a 6-joint arm, a humanoid, a dog and a rover).
+Drawn by the engine, those five robots take 358 draw calls and 127k triangles where the same robots drawn before took 234 calls and 104k triangles; both hold 60 fps.
+The frame times were measured on a machine at load 25 to 40, where the two scenes read alike within the noise (9 to 17.6 ms against 11 to 14.7 ms), so the engine's extra draw calls are not shown to cost more than the noise; the budget holds the scene to 12 ms and a busy machine reads inconclusive.
 
 ## Pictures
 

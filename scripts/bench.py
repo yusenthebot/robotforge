@@ -101,7 +101,7 @@ MACHINE = "physics.machine.steps_per_s"
 INSTALL_METRICS = ("wheel_kb", "installed_mb", "packages", "download_mb")
 IMPORT_METRICS = ("ms", "cpu_ms", "heavy")  # per import target, e.g. imports.cli_cpu_ms
 PHYSICS_METRICS = ("steps_per_s", "controllers_share", "peak_mb")  # per world, e.g. physics.dog_idle.peak_mb
-VIEWER_METRICS = ("cold_start_s", "fps", "frame_ms", "server_peak_mb", "idle_cpu_pct")
+VIEWER_METRICS = ("cold_start_s", "fps", "frame_ms", "assets_fps", "assets_frame_ms", "server_peak_mb", "idle_cpu_pct")
 MCP_CALLS = ("new_world", "add_robot", "move", "observe")
 MCP_METRICS = ("start_s", *(f"{call}_ms" for call in MCP_CALLS), "server_rss_mb", "idle_cpu_pct")
 
@@ -789,6 +789,15 @@ def _warehouse_start(pg: Any) -> Any:
     return pg.behaviors.pose("go2")["position"]
 
 
+def _assets(pg: Any) -> None:
+    """Robots drawn by the asset engine, a lot of them: a centaur, a 6-joint arm, a humanoid, a dog and a rover."""
+    pg.add_robot("centaur", design="centaur", pos=[0.0, 0.0])
+    pg.add_robot("arm", template="arm", params={"dof": 6}, pos=[1.2, 0.0])
+    pg.add_robot("man", template="humanoid", pos=[-1.2, 0.0])
+    pg.add_robot("dog", template="quadruped", pos=[0.0, 1.2])
+    pg.add_robot("car", template="rover", pos=[0.0, -1.2])
+
+
 def _objects(pg: Any) -> None:
     """20 objects on and above a table: ten on its top, ten dropped onto them, so they collide and settle."""
     pg.add_object("table", shape="table", size=[0.9, 0.6, 0.4], pos=[0.0, 0.0])
@@ -1176,15 +1185,25 @@ def bench_viewer(quick: bool, shots: Path | None = None) -> dict[str, Any]:
         home = Path(tmp)
         dog = _make_world(home, "bench_dog", _dog)
         warehouse = _make_world(home, "bench_warehouse", _warehouse)
+        assets = _make_world(home, "bench_assets", _assets)
         with _chrome(home) as chrome_port:
             starts = [asyncio.run(_cold_start(chrome_port, dog, home, IDLE_SECONDS * (k == 0))) for k in range(runs)]
             rate = asyncio.run(_frame_rate(chrome_port, warehouse, home, shots))
+            drawn = asyncio.run(_frame_rate(chrome_port, assets, home, None))
     best = min(starts[1:] or starts, key=lambda r: r["first_frame_s"])  # the first run also warms the disk cache
     peaks = [r["server_peak_mb"] for r in starts if r["server_peak_mb"] is not None]
     return {
         "cold_start_s": metric(best["first_frame_s"], "s", "lower", served_s=round(best["served_s"], 3)),
         "fps": metric(rate["fps"], "fps", "higher", world="warehouse + go2", size=[VIEW_W, VIEW_H, VIEW_SCALE]),
         "frame_ms": metric(rate["frame"]["median"], "ms", "lower", **{k: rate["frame"][k] for k in rate["frame"]}),
+        # A scene of the asset engine's robots (about 270k triangles, 700 draw calls): its shaders and meshes are what
+        # the look costs, which the warehouse with a Go2 (a few detailed meshes) does not show.
+        "assets_fps": metric(
+            drawn["fps"], "fps", "higher", world="centaur, arm, humanoid, dog, rover", size=[VIEW_W, VIEW_H, VIEW_SCALE]
+        ),
+        "assets_frame_ms": metric(
+            drawn["frame"]["median"], "ms", "lower", **{k: drawn["frame"][k] for k in drawn["frame"]}
+        ),
         "server_peak_mb": metric(
             max(peaks) if peaks else None, "MB", "lower", noise=MEMORY_NOISE, warehouse=rate["server_peak_mb"]
         ),

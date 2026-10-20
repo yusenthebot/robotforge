@@ -31,6 +31,8 @@
     "viewer.cold_start_s": {"max": 2.0, "why": "1.14 s from the command to the first frame with the dog (best of 3; A/B at load 20: 1.22 s before lazy imports, 0.85 s after); wall clock, so a loaded machine needs the margin"},
     "viewer.fps": {"min": 50, "why": "60 fps in headless Chrome, the display rate, on the warehouse with a Go2 at 2560 x 1600"},
     "viewer.frame_ms": {"max": 8, "why": "2.7 to 3.1 ms to draw that frame; 13 ms measured at load 30 with other GPU work"},
+    "viewer.assets_fps": {"min": 50, "why": "60 fps (the display rate) on a scene of the asset engine's robots: a centaur, a 6-joint arm, a humanoid, a dog and a rover, 358 draw calls and 127k triangles (a Go2 on the warehouse: 234 calls, 104k)"},
+    "viewer.assets_frame_ms": {"max": 12, "why": "measured only at load 25 to 42, where the same scene took 9 to 17.6 ms and the base commit's 11 to 14.7 ms for 234 calls; a calm machine is not measured yet, so this limit catches a gross regression and a busy machine reads inconclusive"},
     "viewer.server_peak_mb": {"max": 160, "why": "128 MB for the viewer server with a dog world"},
     "viewer.idle_cpu_pct": {"max": 6, "why": "2.6 percent of one core to simulate a standing dog in real time for an open page"},
     "mcp.start_s": {"max": 2.5, "why": "1.38 s from starting robotforge mcp to its tools listed"},
