@@ -282,3 +282,39 @@ def test_two_wide_things_in_a_tray_are_left_a_finger_apart_not_a_fixed_distance(
     wide = hints.place_for(m, d, "hold", built, None, [first], 0.033).point
     assert float(np.hypot(*(narrow[:2] - first[:2]))) < 0.066  # a thing with no width: the old fixed room
     assert float(np.hypot(*(wide[:2] - first[:2]))) >= 2 * 0.033 + 0.02  # a can: its width and a finger's gap
+
+
+def test_the_palm_clears_a_tall_neighbour_beyond_the_reach_of_the_open_fingers(pg):
+    # Regression: the jaws were turned only for the open fingers, and a Panda's 21 cm wide hand came down on a can that
+    # stood 12 cm from the apple along the jaws, and pushed the apple away.
+    pg.add_object("apple", shape="apple", pos=[0.5, 0.0, TABLE + 0.006])
+    pg.add_object("can", shape="can", pos=[0.62, 0.0, TABLE])
+    pg.run_fast(lambda: False, 0.8)
+    m, d = pg.session.model, pg.session.data
+    apple = m.body("apple").id
+    point = d.xpos[apple] + [0, 0, 0.03]
+    palm = hints.Palm(gap=0.03, tip=0.01, half_jaw=0.105, half_across=0.03)
+    assert hints.free_jaw(m, d, apple, point, 0.08) is None  # the fingers alone have room everywhere
+    jaw = hints.free_jaw(m, d, apple, point, 0.08, palm)
+    assert jaw is not None and abs(float(jaw[0])) < 0.9  # the hand turned off the can's line (not along x)
+
+
+def test_a_wrench_is_taken_where_its_mass_is_and_thick_enough_for_the_pads(pg):
+    # Regression: a 1 cm strip of steel, taken a centimetre from its mass, slipped out of a Robotiq's pads.
+    wrench = objects.object_for("wrench")
+    com = kit.center_of_mass(wrench)
+    assert abs(wrench.grasps[0].pos[0] - float(com[0])) < 0.005
+    assert wrench.grasps[0].hi >= 0.014
+
+
+def test_a_rack_socket_flares_at_its_mouth_and_takes_a_bottle_put_down_off_centre(pg):
+    pg.add_object("rack", shape="rack", pos=[0.5, 0.3, TABLE])
+    built = hints.built_for(pg.behaviors._object_entry("rack"))
+    slot = built.slots[0]
+    # a bottle let go 8 mm off the socket's middle, just above the rim, slides down the flare to the floor
+    x, y = 0.5 + slot.pos[0] + 0.008, 0.3
+    pg.add_object("b", shape="bottle", pos=[x, y, TABLE + built.facts["rim_z"] + 0.012])
+    pg.run_fast(lambda: False, 1.5)
+    d, m = pg.session.data, pg.session.model
+    base = d.xpos[m.body("b").id]
+    assert base[2] - (TABLE + slot.pos[2]) < 0.012 and abs(float(d.xmat[m.body("b").id][8])) > 0.95

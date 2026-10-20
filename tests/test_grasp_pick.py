@@ -101,3 +101,21 @@ async def test_mcp_plans_a_grasp_and_reports_the_one_it_took(cell):
         assert done["success"] and done["grasp"]["closing_deg"] == planned["best"]["closing_deg"]
         missing = await client.call_tool("plan_grasp", {"robot": "arm", "object": "nothing"})
         assert missing.is_error
+
+
+def test_a_pour_keeps_the_jaws_across_the_stream_and_knows_how_high_the_finger_links_reach(cell):
+    # Regression: with a finger on the lip side, or finger links round the mouth, balls caught on the hand and stayed
+    # in the cup (a UR5e with a Robotiq poured 7 of 12 trials).
+    import numpy as np
+
+    from robotforge.behaviors import hints, pour
+
+    arm = cell.behaviors._arm_motion("arm")
+    assert hints.palm_of(cell.session.model, arm).links > 0.0
+    arm.ik.point(arm.chain, arm.q)
+    closing = arm.ik.data.xmat[arm.chain.body].reshape(3, 3) @ arm.closing
+    along = np.array([closing[0], closing[1], 0.0])
+    along /= np.linalg.norm(along)
+    across = np.array([-along[1], along[0], 0.0])
+    assert not pour.jaws_across(arm, arm.q, along)
+    assert pour.jaws_across(arm, arm.q, across)

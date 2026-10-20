@@ -222,7 +222,7 @@ def choices(
             unit = flat / np.linalg.norm(flat)
             faces = np.array([unit, unit])  # the jaws close along it, either way round
         elif model is not None and opening is not None:
-            free = free_jaw(model, data, body, point, opening)
+            free = free_jaw(model, data, body, point, opening, palm)
             if free is not None:
                 faces = np.array([free, free])
         force = _squeeze_for(built, hint, point, base, rot, faces)
@@ -237,27 +237,38 @@ def choices(
 
 
 def free_jaw(
-    model: mujoco.MjModel, data: mujoco.MjData, body: int, point: np.ndarray, opening: float
+    model: mujoco.MjModel, data: mujoco.MjData, body: int, point: np.ndarray, opening: float, palm: Palm | None = None
 ) -> np.ndarray | None:
     """The horizontal direction (unit) the jaws should close along at `point` so that the open fingers, `opening` apart,
-    have room: the one whose two sides are clear the farthest of the JAW_ANGLES tried, found by rays along it at the
-    height of the fingertips. None when every direction is clear (nothing to avoid: the arm turns its hand as it
-    likes)."""
+    have room, and the hand's palm (as wide along the jaws as `palm` says, at its height over the grasp) clears the
+    neighbours too: the one whose two sides are clear the farthest of the JAW_ANGLES tried, found by rays along it at
+    the height of the fingertips and of the palm. None when every direction is clear (nothing to avoid: the arm turns
+    its hand as it likes)."""
     reach = opening / 2 + PAD_ROOM
     ids = np.zeros(1, dtype=np.int32)
+    point = np.asarray(point, float)
     clear: list[float] = []
     for k in range(JAW_ANGLES):
         a = math.pi * k / JAW_ANGLES
         direction = np.array([math.cos(a), math.sin(a), 0.0])
-        room = reach + 0.05
+        across = np.array([-direction[1], direction[0], 0.0])
+        room = (
+            1.0 + 0.05 / reach
+        )  # as a share of what the open fingers need, and a little more to tell clear ways apart
         for sign in (1.0, -1.0):
             for dz in (-0.015, 0.005):  # the pads' lower and upper edge
-                origin = np.asarray(point, float) + np.array([0.0, 0.0, dz])
-                hit = mujoco.mj_ray(model, data, origin, sign * direction, None, 1, body, ids)
+                hit = mujoco.mj_ray(model, data, point + [0.0, 0.0, dz], sign * direction, None, 1, body, ids)
                 if hit >= 0:
-                    room = min(room, float(hit))
+                    room = min(room, float(hit) / reach)
+            if palm is None or palm.half_jaw <= reach:
+                continue
+            for side in (-palm.half_across, 0.0, palm.half_across):  # the hand's underside, edge to edge
+                origin = point + across * side + np.array([0.0, 0.0, palm.gap + 0.01])
+                hit = mujoco.mj_ray(model, data, origin, sign * direction, None, 1, body, ids)
+                if hit >= 0 and hit < palm.half_jaw:
+                    room = min(room, float(hit) / palm.half_jaw)
         clear.append(room)
-    if min(clear) >= reach:
+    if min(clear) >= 1.0:
         return None
     best = int(np.argmax(clear))
     a = math.pi * best / JAW_ANGLES

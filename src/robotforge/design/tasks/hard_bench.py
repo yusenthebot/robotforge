@@ -148,7 +148,7 @@ WALL_ROOM = 0.075  # m from the bin's wall to the middle of a thing in it: the o
 def _sort(pg: Any, rng: random.Random, seed: int) -> str:
     colors = {"fruit": "#7cb342", "cans": "#3b82c4", "boxes": "#c0852b"}
     for (tag, _), (x, y, yaw) in zip(SORT_KINDS, TRAY_SPOTS, strict=True):
-        pg.add_object(f"{tag}_tray", shape="tray", size=[0.20, 0.16, 0.05], pos=[x, y, TABLE_Z], yaw=yaw,
+        pg.add_object(f"{tag}_tray", shape="tray", size=[0.22, 0.17, 0.05], pos=[x, y, TABLE_Z], yaw=yaw,
                       color=colors[tag], params={"tag": tag})  # fmt: skip
     bx, by, bl, bw = BIN
     pg.add_object(
