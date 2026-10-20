@@ -199,7 +199,8 @@ def test_a_robot_said_in_the_sentence_is_the_one_the_world_starts_with(pg):
 
 def test_a_thing_said_to_be_on_furniture_is_read_as_standing_on_it():
     wish = words.read(
-        "a flat with a kitchen, a living room and a bedroom, a green apple on the coffee table and a bowl on the bedroom desk"
+        "a flat with a kitchen, a living room and a bedroom, a green apple on the coffee table "
+        "and a bowl on the bedroom desk"
     )
     assert wish.on_of == {"apple": "coffee_table", "bowl": "desk"}
     assert wish.rooms_of["desk"] == "bedroom"
