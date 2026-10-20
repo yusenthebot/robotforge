@@ -84,8 +84,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         method="lqr", push_at=2 (an aircraft; cascade is its own flight controller). list_algorithms says which
         methods fit which task; method="policy:<name>" runs a policy from train_policy. Plays in real time when the
         viewer is open. The controller stays attached afterwards (e.g. keeps the pole balanced; keeps_running says
-        so) until stop(robot). Returns reward, success, effort (joules), the task's own numbers and, for MPC,
-        planning speed."""
+        so) until stop(robot); the next run starts from where the arm was left (reset with sim_control to repeat a
+        measurement from the usual start; compare_controllers gives every method the same start). Returns reward,
+        success, effort (joules), the task's own numbers and, for MPC, planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
             robot, task, method = _robot(playground, robot), _task(task), _method(method)
@@ -103,9 +104,17 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 _same_world(session, version)
                 bound.begin(session.data)
                 monitor = EpisodeMonitor(bound, model, session.data)
+                if session.controllers.get(robot) is not None:  # the numbers of a repeat depend on where it left off
+                    carried_on = (
+                        f"{robot} was still under the controller of an earlier run, and this run starts from where "
+                        "that left it, not from the usual start, so its numbers can differ from the first run's; "
+                        "sim_control(action='reset') restores the start"
+                    )
+                else:
+                    carried_on = None
                 session.set_controller(robot, controller)
                 session.set_controller(monitor_key, monitor)
-            events: list[str] = []
+            events: list[str] = [carried_on] if carried_on else []
             runs: list[dict[str, Any]] = []
             try:
                 if push_at is not None:

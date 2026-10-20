@@ -389,6 +389,11 @@ async def test_mcp_tools_run_and_compare_controllers(tmp_path, monkeypatch):
         assert out["success"] and out["failed_at"] is None and out["shown_live"] is False
         assert "shoved the pole" in out["events"][0]
         assert pg.session.controllers.keys() == {"pole"}  # keeps balancing, scoring removed
+        assert not any("earlier run" in e for e in out["events"])
+        again = await client.call_tool(
+            "run_controller", {"robot": "pole", "task": "balance", "method": "lqr", "seconds": 1}
+        )
+        assert any("starts from where" in e for e in json.loads(again.content[0].text)["events"])
 
         reach = await client.call_tool(
             "run_controller",
