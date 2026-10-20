@@ -1773,6 +1773,7 @@ class BehaviorManager:
                         f"{name} rides on a robot that moves: hand_over is for arms that stay where they are"
                     )
                 self._check_carrier(name)
+                self._refuse_if_touching_another_robot(name)
                 names.append(name)
             if names[0] == names[1]:
                 raise BehaviorError("hand_over needs two different arms")

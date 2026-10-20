@@ -79,3 +79,19 @@ def test_two_arms_whose_hands_meet_at_home_refuse_the_pick_before_moving(pg):
     pg.add_robot("arm2", library="panda", pos=[1.0, 0, TABLE_Z], yaw=180)
     with pytest.raises(BehaviorError, match="touches another robot already"):
         pg.behaviors.pick_and_place("arm", "mug", "shelf")
+
+
+def test_a_handover_between_arms_that_meet_in_the_middle_says_why_it_failed(pg):
+    """Regression: two template arms 0.7 m apart handed a cube over, the receiver could not take it and the answer was
+    success false with the cube on the floor between them and no word why."""
+    pg.add_robot("left", template="arm", params={"reach": 0.6}, pos=[-0.35, 0], yaw=0)
+    pg.add_robot("right", template="arm", params={"reach": 0.6}, pos=[0.35, 0], yaw=180)
+    pg.add_object("cube", shape="box", size=[0.05, 0.05, 0.05], pos=[-0.3, 0.1], mass=0.1)
+    pg.add_object("pad", shape="box", size=[0.2, 0.2, 0.01], pos=[0.3, -0.1], fixed=True)
+    start = pg.behaviors.position_of("cube")
+    relay, info = pg.behaviors.hand_over("left", "right", "cube", "pad")
+    pg.run_fast(lambda: relay.done, 120)
+    pg.run_fast(lambda: False, 1.0)
+    placed = pg.behaviors.placed("cube", info["region"], start)
+    assert placed["success"] is False and placed["why"]
+    assert "touches another robot" in relay.result()["note"] or "cannot" in relay.result()["note"]
