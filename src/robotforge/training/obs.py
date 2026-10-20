@@ -208,6 +208,11 @@ class SensorObservation:
         return _Reading(sensor, value)
 
     @property
+    def renders(self) -> list[str]:
+        """The sensors that draw a picture every step (depth cameras): they make the environment far slower."""
+        return [e.sensor.local for e in self._extractors if e.sensor.renders]
+
+    @property
     def labels(self) -> list[str]:
         return [f"{b.source}: {label}" for b in self.blocks for label in b.labels]
 

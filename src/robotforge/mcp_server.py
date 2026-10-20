@@ -198,7 +198,10 @@ installed; ppo and sac need the rl extra; plugins add more): algo=["ars", "cem"]
 search={"trials": 9} tunes their settings (successive halving). The learner's observation includes whatever the
 robot's sensors read (add_sensor a lidar or an IMU first to give it one). Follow it with training_status (each
 trial's settings, curve and test score side by side); the viewer's Training panel draws it live and plays the
-best policy. Run or compare the result as method "policy:<name>".
+best policy. A search picks its winner on the starts it ranked trials on, so that score flatters it: quote
+training_status winner.held_out (the winner scored again on fresh starts). reach with ars or cem needs a target (and
+a small jitter) to learn; without one it draws a random point every episode and they do not. Run or compare the
+result as method "policy:<name>".
 
 Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
 interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on

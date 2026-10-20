@@ -68,3 +68,32 @@ def test_the_table_shows_the_settings_that_differ_and_all_of_one_trials_when_not
 def test_trials_get_different_colors_however_many_there_are():
     colors = js("return Array.from({length: 24}, (_, i) => tv.trainingColor(i, false));")
     assert len(set(colors)) == 24
+
+
+@needs_node
+def test_a_chart_keeps_its_height_however_often_it_is_redrawn_on_a_sharp_screen():
+    # the canvas's height attribute is its pixel height: redrawing from it multiplied the height by the pixel ratio
+    # every time, once the panel stopped being rebuilt on each update (it patched itself into a 16-million-pixel
+    # canvas after a minute of training)
+    assert js(
+        """
+        globalThis.window = { devicePixelRatio: 2, addEventListener() {} };
+        globalThis.document = { documentElement: {}, getElementById: () => null };
+        globalThis.getComputedStyle = () => ({ getPropertyValue: () => "#888", colorScheme: "dark" });
+        const calls = [];
+        const g = new Proxy({}, { get: (_, k) => (k === "measureText" ? () => ({ width: 1 }) : () => calls.push(k)),
+                                  set: () => true });
+        const canvas = {
+          attrs: { height: "110" }, dataset: {}, style: {}, width: 0,
+          parentElement: { clientWidth: 300 },
+          getAttribute(name) { return this.attrs[name] ?? null; },
+          set height(v) { this.attrs.height = String(v); },
+          get height() { return Number(this.attrs.height); },
+          getContext: () => g,
+        };
+        const series = [{ points: [[0, 1], [10, 2]], color: "#000" }];
+        const heights = [];
+        for (let i = 0; i < 4; i++) { tv.plotSeries(canvas, series); heights.push(canvas.height); }
+        return { heights, css: canvas.style.height };
+        """
+    ) == {"heights": [220, 220, 220, 220], "css": "110px"}

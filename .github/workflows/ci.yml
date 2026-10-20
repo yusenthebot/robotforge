@@ -79,3 +79,16 @@ jobs:
       - name: Learned policies (extra policy = onnxruntime)
         if: success() || failure()  # independent of the main test run's result
         run: uv run --extra policy pytest -q -ra tests/test_onnx_policy.py
+
+      # PPO and SAC need the optional rl extra (PyTorch); their adapter tests skip without it. Linux gets the CPU-only
+      # build (PyPI's default there is the CUDA one, several GB); the other runners' default is already CPU.
+      - name: PPO and SAC adapters (extra rl = PyTorch, CPU build)
+        if: runner.os == 'Linux' && (success() || failure())
+        run: |
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install "gymnasium>=1.0" "stable-baselines3>=2.4,<3"
+          uv run --no-sync pytest -q -ra tests/test_training_sb3.py
+
+      - name: PPO and SAC adapters (extra rl = PyTorch)
+        if: runner.os != 'Linux' && (success() || failure())
+        run: uv run --extra rl pytest -q -ra tests/test_training_sb3.py
