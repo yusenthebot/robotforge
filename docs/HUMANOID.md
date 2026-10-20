@@ -138,3 +138,4 @@ The walker, its bench (`walk_bench.py`) and these runs are not in the repository
 - `behaviors/stance.py`, `behaviors/stance_ik.py`, `design/mjcf_stance.py`: the kind of a robot from its feet, and the stance a keyframe is moved to.
 - `scripts/balance_bench.py`: the table.
 - `scripts/humanoid_grid.py`: a picture of every humanoid that stands, from the bench's JSON.
+- `scripts/demos.py --only humanoids_stand_push`: four humanoids pushed at 0.2 m/s forwards and backwards; `handover_panda` and `rovers_cross` are the films of docs/MULTI.md.
