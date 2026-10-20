@@ -8,10 +8,12 @@ robot in the live world) and "training_stop".
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any
 
+from robotforge import wording
 from robotforge.control.rl import store
 from robotforge.control.rl.jobs import JOBS
 from robotforge.control.rl.runtime import TrainedPolicy
@@ -21,6 +23,7 @@ from robotforge.training.runs import RUN_FILE, TRIALS_DIR
 from robotforge.training.trial import POLICY_FILE
 
 SHOW_FOR_S = 12 * 3600  # a finished run older than this is no longer offered
+TRIAL_ID = re.compile(r"t\d{2,}")  # what the search names its trials; nothing else is a folder under trials/
 TARGET_NAME = "target"  # an object of this name is where a reach policy reaches to when it plays
 
 
@@ -70,7 +73,10 @@ class TrainingFeed:
         for trial in status.get("trials", []):
             ready = (folder / TRIALS_DIR / trial["id"] / POLICY_FILE).exists()
             trials.append({**trial, "playable": ready})
-        keep = ("state", "name", "task", "robot", "algo", "progress", "elapsed_s", "eta_s", "leader", "search", "error")
+        keep = (
+            *("state", "name", "task", "robot", "algo", "progress", "elapsed_s", "eta_s", "leader", "search", "error"),
+            *("notes", "final"),
+        )
         return {
             "type": "training",
             **{k: status[k] for k in keep if k in status},
@@ -130,6 +136,8 @@ def _policy_to_play(folder: Path, trial: str | None) -> tuple[TrainedPolicy, str
     if trial is None and (folder / store.WEIGHTS_FILE).exists():
         return TrainedPolicy.load(folder), (meta.get("final") or {}).get("trial")
     trial = trial or store.read_json(folder / store.STATUS_FILE).get("leader")
+    if trial and not TRIAL_ID.fullmatch(str(trial)):  # the id comes from the viewer's socket: it stays in the run
+        raise TaskError(f"trial {wording.short(trial)} is not one of this run's trials (they are named t01, t02 ...)")
     path = folder / TRIALS_DIR / str(trial) / POLICY_FILE
     if not trial or not path.exists():
         raise TaskError(f"{folder.name!r} has no policy yet" if not trial else f"trial {trial!r} has no policy yet")

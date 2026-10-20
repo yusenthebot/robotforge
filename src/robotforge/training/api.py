@@ -3,8 +3,9 @@
     from robotforge.training.api import train
 
     policy = train("walk", world=world, robot="dog", algo=["ars", "cem"], steps=150_000)       # two algorithms
-    policy = train("reach", robot="arm", algo="ars", search={"method": "halving", "trials": 9})  # a search
-    print(policy.meta["final"])                          # the best trial: algorithm, settings, test return
+    policy = train("reach", robot="arm", algo="ars", search={"trials": 9},
+                   task_params={"target": [0.22, 0.08, 0.14], "jitter": 0.04})                  # a search
+    print(policy.meta["final"])        # the best trial: algorithm, settings, test return, and "held_out": the fair one
 
 `start` returns at once (the training runs in a process of its own and writes status.json for the viewer and the
 agent); `train` waits for it and loads the best policy.
@@ -41,9 +42,25 @@ def rl_installed() -> bool:
     return all(importlib.util.find_spec(m) is not None for m in RL_MODULES)
 
 
-def algo_names(algo: str | list[str] | None) -> list[str]:
-    """The algorithms asked for, spelled as the registry knows them; numpy's ARS when none is named."""
-    names = [algo] if isinstance(algo, str) else list(algo or ["ars"])
+def default_algo(task: str) -> tuple[str, str]:
+    """The algorithm used when none is named, and why: the task's usual one (the same as the plain trainer's) when
+    the rl extra is installed, else numpy's ARS."""
+    usual = DEFAULTS.get(task)
+    if usual is None:
+        return "ars", f"no algo given and {task!r} has no usual one, so ars (numpy, nothing to install)"
+    if rl_installed():
+        return usual.algo, f"no algo given: {usual.algo} is the usual choice for {task}"
+    return "ars", (
+        f"no algo given: {usual.algo} is the usual choice for {task} but needs the rl extra, which is not "
+        "installed, so ars (numpy)"
+    )
+
+
+def algo_names(algo: str | list[str] | None, task: str | None = None) -> list[str]:
+    """The algorithms asked for, spelled as the registry knows them; the task's default when none is named."""
+    if algo is None:
+        return [default_algo(task)[0] if task else "ars"]
+    names = [algo] if isinstance(algo, str) else list(algo)
     if not names:
         raise TaskError("algo is a name or a list of names; list_algorithms shows them")
     return list(dict.fromkeys(algorithms.get(n).name for n in names))
@@ -86,7 +103,10 @@ def build_spec(
     eval_episodes: int = 5,
 ) -> RunSpec:
     """A complete RunSpec from what was asked plus defaults that work without tuning."""
-    names = algo_names(algo)
+    names = algo_names(algo, task)
+    notes = []
+    if algo is None:
+        notes.append(default_algo(task)[1])
     sweep = search_spec(search, seed)
     if minutes is not None and not 0 < minutes <= MAX_MINUTES:
         raise TaskError(f"minutes must be in (0, {MAX_MINUTES:.0f}]")
@@ -109,19 +129,35 @@ def build_spec(
         "push": push if push is not None else (d.push if d else 0.0),
     }
     spec = env_spec(task, **given_env)
+    notes += random_target_notes(task, spec, names)
     plans = sweep.trials if sweep else len(names)
+    neural = d is not None and all(n in ("ppo", "sac") for n in names)
     return make_run_spec(
         name,
         spec.model_dump(mode="json"),
         algos=names,
         params={n: dict(v) for n, v in (settings or {}).items()},
-        steps=steps or STEPS.get(task, DEFAULT_STEPS),
+        steps=steps or (d.timesteps if neural else STEPS.get(task, DEFAULT_STEPS)),
         minutes=minutes,
         search=sweep,
         seed=seed,
         parallel=default_parallel(plans) if parallel is None else parallel,
         eval_episodes=eval_episodes,
+        notes=notes,
     )
+
+
+def random_target_notes(task: str, spec: Any, names: list[str]) -> list[str]:
+    """ARS and CEM train a linear policy; one that must reach a different random point every episode is beyond it
+    in these budgets, and the run would end 'done' with a policy no better than doing nothing."""
+    params = spec.task_params
+    if task != "reach" or params.get("target") is not None or not {"ars", "cem"} & set(names):
+        return []
+    return [
+        "reach with no target draws a random point every episode, which the linear policies of ars and cem do not "
+        "learn in these budgets; give task_params={'target': [x, y, z], 'jitter': 0.04} (a small region to learn) "
+        "or an object's name, or use ppo or sac"
+    ]
 
 
 def start(

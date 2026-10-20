@@ -57,11 +57,38 @@ def run_view(status: dict[str, Any]) -> dict[str, Any]:
     }
     if status.get("search", {}).get("method"):
         out["search"] = status["search"]
+    if status.get("notes"):
+        out["notes"] = status["notes"]
+    final = status.get("final")
+    if final:
+        out["winner"] = winner_view(final)
     out["read_me"] = (
-        "Each trial is one algorithm with one set of settings. recent_return averages its latest training "
-        "episodes; test_return and test_success come from fixed test starts at the end of a stretch of training "
-        "(only these compare trials fairly). In a halving search, state 'pruned' trials were dropped for trailing "
-        "and the best go on with more steps. The viewer's Training panel draws the curves and plays the best "
-        "policy."
+        "Each trial is one algorithm with one set of settings. test_return and test_success come from the same "
+        "fixed test starts for every trial, so only these compare trials fairly; recent_return averages the "
+        "latest training episodes (ARS and CEM try perturbed policies there, so those sit lower and noisier than "
+        "the policy's own test return) and does not rank anything. In a halving search, state 'pruned' trials "
+        "were dropped for trailing and the best go on with more steps. The winner's test numbers are optimistic "
+        "(it was picked for them); its held_out numbers are scored again on starts no trial was ranked on and are "
+        "the ones to quote. The viewer's Training panel draws the curves and plays the best policy."
     )
+    return out
+
+
+def winner_view(final: dict[str, Any]) -> dict[str, Any]:
+    """The winning trial: its settings, its score on the ranking starts and its score on held-out starts."""
+    out: dict[str, Any] = {
+        "trial": final.get("trial"),
+        "algo": final.get("algo"),
+        "settings": final.get("settings", {}),
+        "ranking_return": final.get("mean_return"),
+        "ranking_success": final.get("success_rate"),
+    }
+    held = final.get("held_out")
+    if held:
+        out["held_out"] = {
+            "episodes": held.get("episodes"),
+            "return": held.get("mean_return"),
+            "success": held.get("success_rate"),
+            "result": held.get("mean_result", {}),
+        }
     return out

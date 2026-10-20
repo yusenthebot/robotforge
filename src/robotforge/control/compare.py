@@ -242,7 +242,16 @@ def _headline_metric(results: list[RunResult]) -> str | None:
     """The number that best says how well the task went, e.g. distance_m for reach."""
     if not results:
         return None
-    for key in ("distance_m", "pole_angle_deg", "lean_deg", "avg_speed_m_s", "height_m"):
+    for key in (
+        "distance_m",
+        "pole_angle_deg",
+        "lean_deg",
+        "avg_speed_m_s",
+        "height_m",
+        "force_mean_n",  # wipe
+        "settled_n",  # press
+        "depth_mm",  # insert
+    ):
         if key in results[0].report:
             return key
     return None
@@ -305,6 +314,8 @@ def compare_methods(
             mujoco.mj_resetDataKeyframe(model, data, key)
         mujoco.mj_forward(model, data)
     probe = make_task(task, model, robot, task_params)
+    if not seconds and getattr(probe, "contact", False):
+        probe.begin(data)  # how long a contact task needs depends on how high the tool starts above its surface
     methods = list(methods or probe.methods)
     seconds = float(seconds or probe.default_seconds)
     results = compare(

@@ -159,8 +159,10 @@ def build(
     base: list[float],
     quat: list[float],
     fixed: bool,
+    resist: float | None = None,
 ) -> None:
-    """Add mechanism or soft thing `shape` called `name` at `base` (on the ground there), turned by `quat`."""
+    """Add mechanism or soft thing `shape` called `name` at `base` (on the ground there), turned by `quat`. `resist` is
+    the force at the handle (N) that moving it takes besides its own friction: a rusty valve, a stiff latch."""
     if shape in SOFT:
         _SOFT[shape](spec, name, size, rgba, base, quat, fixed)
         return
@@ -168,9 +170,32 @@ def build(
         spec.add_material(name=MATTE, specular=0.08, shininess=0.1, reflectance=0.0)
     carcass = spec.worldbody.add_body(name=name, pos=base, quat=quat)
     _BUILDERS[shape](spec, carcass, name, size, rgba)
+    if resist:
+        _resist(spec, name, shape, resist)
     # MuJoCo leaves out contacts between a body and its parent, but not when the parent is welded to the world, as
     # a carcass is: a button's cap sat on its own collar and a 5 N push moved it 1 mm.
     spec.add_exclude(bodyname1=name, bodyname2=f"{name}/{MECHANISMS[shape].part}")
+
+
+def _resist(spec: mujoco.MjSpec, name: str, shape: str, newtons: float) -> None:
+    """Make the moving part take `newtons` at its handle to move: dry friction in its joint, torque for a hinge
+    (the force times the handle's distance from the axis)."""
+    joint = spec.joint(f"{name}/{MECHANISMS[shape].part}")
+    # Stuck, not creeping: the joint's dry friction is a soft constraint, and at the default it lets a push well under
+    # the friction move a drawer centimetres. Stiffened, a push under it moves nothing.
+    joint.solref_friction = [0.004, 1.0]
+    joint.solimp_friction = [0.99, 0.999, 0.001, 0.5, 2.0]
+    if int(joint.type) == int(J.mjJNT_SLIDE):
+        joint.frictionloss = joint.frictionloss + newtons
+        return
+    handle = spec.site(f"{name}/handle")
+    axis = np.asarray(joint.axis, float)
+    lever = float(
+        np.linalg.norm(
+            np.cross(axis / np.linalg.norm(axis), np.asarray(handle.pos, float) - np.asarray(joint.pos, float))
+        )
+    )
+    joint.frictionloss = joint.frictionloss + newtons * lever
 
 
 # ---- helpers ------------------------------------------------------------------------------------------

@@ -131,9 +131,13 @@ class Sim:
         when it is over (time passes meanwhile), else it plays as time passes through step()."""
         return self._call("demo_replay", name=name, robot=robot, mode=mode, wait=wait)
 
-    def export_demo(self, name: str, format: str = "json", to: str | None = None) -> dict[str, Any]:
-        """Write a demonstration as "json" or "npz" in the world's demonstrations folder; the result has the path."""
-        return self._call("demo_export", name=name, format=format, to=to)
+    def export_demo(
+        self, name: str, format: str | None = None, to: str | None = None, overwrite: bool = False
+    ) -> dict[str, Any]:
+        """Write a demonstration as "json" or "npz" (a `to` with that suffix says it too) in the world's
+        demonstrations folder; the result has the path. A file name that exists, or is another demonstration's, is
+        refused (overwrite=True replaces a file)."""
+        return self._call("demo_export", name=name, format=format, to=to, overwrite=overwrite)
 
     def demos(self) -> dict[str, Any]:
         """The demonstrations kept and what is being recorded or replayed."""

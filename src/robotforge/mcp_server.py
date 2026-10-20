@@ -140,11 +140,15 @@ rovers sent across each other's way at the same time do not meet in the middle: 
 second holds until the first is through (the trip's result says gave_way_to and waited_s);
 operate has an arm open or close a drawer or a door, press a button, flip a switch or turn a valve, holding its
 handle along the joint's own path (an arm on a robot that drives or walks goes over to it by itself, "open the
-drawer"); robots lists robots with kind, arms and positions. For anything custom,
+drawer"; operate(force=15) pushes with at most 15 N and says whether the handle stalled it, and add_object(resist=60)
+makes a mechanism take 60 N). plan_grasp(robot, object) shows how a gripper can take hold of an odd shape (tee,
+bottle, stone, a mesh) and pick_and_place takes the best grasp by itself. run_controller and compare_controllers also
+put an arm through press, wipe and insert (a peg into a socket) with joint_impedance, cartesian_impedance and osc,
+compliant controllers that give way to touch; robots lists robots with kind, arms and positions. For anything custom,
 set_controls / simulate drive actuators directly (names from describe_model, prefixed "<robot>/"). observe reports
-state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture
-and names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD):
-offer it early; while it is open, actions play out in real time.
+state with an image so you can check your work; observe(find="red") locates colored objects in a camera's picture and
+names them ("pick the red one"). open_viewer gives the user a live 3D view (they can also drive with WASD): offer it
+early; while it is open, actions play out in real time.
 
 Sensors: add_sensor puts a camera (rgb, depth, segmentation, a stereo pair, a fisheye or an event camera), a 2D or
 3D lidar, an IMU, joint encoders, a force-torque sensor (a wrist), touch pads or arrays (feet), a rangefinder, GPS or
@@ -199,7 +203,10 @@ installed; ppo and sac need the rl extra; plugins add more): algo=["ars", "cem"]
 search={"trials": 9} tunes their settings (successive halving). The learner's observation includes whatever the
 robot's sensors read (add_sensor a lidar or an IMU first to give it one). Follow it with training_status (each
 trial's settings, curve and test score side by side); the viewer's Training panel draws it live and plays the
-best policy. Run or compare the result as method "policy:<name>".
+best policy. A search picks its winner on the starts it ranked trials on, so that score flatters it: quote
+training_status winner.held_out (the winner scored again on fresh starts). reach with ars or cem needs a target (and
+a small jitter) to learn; without one it draws a random point every episode and they do not. Run or compare the
+result as method "policy:<name>".
 
 Scripts and task logic: write_script / run_script run Python against the live world; sim.robot(name) is one
 interface to any robot, and robotforge.flow gives behavior trees (Sequence, Fallback, Parallel, Retry, conditions on
@@ -591,6 +598,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
         strength: float | None = None,
+        resist: float | None = None,
     ) -> str:
         """Add an object. size in meters: box/table/bin [length, width, height]; sphere [diameter]; cylinder, pillar,
         rock [diameter, height]; wall [length, thickness, height]; shelf, counter, bench [length, depth, height];
@@ -608,10 +616,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         rope [length, diameter] (hangs from pos, or lies loose with fixed=false); cloth [length, width] (drapes).
         Sources for temperature and gas sensors (add_sensor): heat_source [diameter] (strength = degrees of rise at the
         source, default 80) and gas_source [diameter] (strength = ppm at the source, default 600); nothing collides
-        with them."""
+        with them. resist (drawer, cabinet, switch, lever, valve) is the force at the handle in newtons it takes to move
+        it besides its own friction: a rusty valve, a stiff latch; operate with force=... pushes with at most that."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed}
-            fields |= {"material": material, "speed": speed, "strength": strength}
+            fields |= {"material": material, "speed": speed, "strength": strength, "resist": resist}
             return _json(playground.add_object(name, shape=shape, yaw=yaw, **fields))
 
     @server.tool()
@@ -626,12 +635,14 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         material: Literal["plastic", "wood", "steel"] | None = None,
         speed: float | None = None,
         strength: float | None = None,
+        resist: float | None = None,
     ) -> str:
         """Change an object's size, position, heading (yaw, degrees), color, mass, fixed flag, material, a
-        conveyor's belt speed (m/s, 0 stops it) or a heat or gas source's strength."""
+        conveyor's belt speed (m/s, 0 stops it), a heat or gas source's strength or the force a mechanism takes
+        to move (resist, N)."""
         with _tool_errors():
             fields = {"size": size, "pos": pos, "color": color, "mass": mass, "fixed": fixed, "yaw": yaw}
-            fields |= {"material": material, "speed": speed, "strength": strength}
+            fields |= {"material": material, "speed": speed, "strength": strength, "resist": resist}
             return _json(playground.update_object(name, **fields))
 
     @server.tool()
@@ -1030,6 +1041,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **result,
                     "object": object,
                     "target": target,
+                    **({"grasp": info["grasp"]} if "grasp" in info else {}),
                     **(errand.result() if errand is not None else {}),
                     **(caught.result() if caught is not None else {}),
                     "sim_seconds": round(run["sim_seconds"] + settle["sim_seconds"], 2),
@@ -1037,6 +1049,18 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                     **stopped,
                 }
             )
+
+    @server.tool()
+    def plan_grasp(robot: str, object: str) -> str:
+        """Show how an arm's gripper can take hold of an object, from the object's shape: the best grasps first, each
+        with where the tool goes, which way the jaws close (degrees from +x), how wide the object is there, how square
+        the faces are to the squeeze and how far the grasp is from the object's centre of mass. Works for boxes, cans,
+        balls, bottles, T-blocks, stones, meshes and anything made of several shapes; it says why when no grasp holds
+        (wider than the jaws open, or too flat for fingers). pick_and_place takes the best one by itself for a thing of
+        no simple shape and reports it as "grasp"."""
+        with _tool_errors():
+            robot = playground.behaviors.resolve(robot, arm=True)
+            return _json(playground.behaviors.plan_grasps(robot, object))
 
     @server.tool()
     def write_script(name: str, code: str, plugin: bool = False) -> str:

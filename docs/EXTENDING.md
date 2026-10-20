@@ -345,11 +345,11 @@ An agent does the same with the `demonstration` tool: `start` (robot, name), act
 | | |
 |---|---|
 | What is kept | `time`, `joint_pos` (rad or m), `ctrl` (the actuator targets), `base_pos` and `base_quat` (world frame), the numbers of the sensors the robot carries (not cameras and lidars unless named with `sensors=[...]`), and the commands, each with the time it was given |
-| `mode="commands"` (default) | gives the recorded commands again at their times; the robot's own controllers do the rest, so it works on any robot of the same kind. A slower robot gets the speeds scaled down (`speed_scale`) and a command it cannot do (out of reach) is listed under `refused`. Arm targets are kept relative to the arm's base |
-| `mode="joints"` | puts the robot in the first pose and plays the actuator targets back as recorded: exact for the same robot or one with the same actuators, open loop, so for arms and hands, not for walking |
-| Files | `stop` saves `demonstrations/<name>.json` in the world; `export` writes `json` or `npz` there (`to=` a file name). The NPZ holds `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text); LeRobot's parquet needs a library robotforge does not install |
+| `mode="commands"` (default) | gives the recorded commands again at their times; the robot's own controllers do the rest, so it works on any robot of the same kind. A slower robot gets the speeds scaled down (`speed_scale`) and a command it cannot do (out of reach) is listed under `refused`. Arm targets, and the places of `go` and `pick_and_place`, are kept relative to the robot's own frame, so another robot goes the same way from where it stands (a saved file without `"frame": "robot"` on its `go` is read as world coordinates). A second replay on a robot takes over from the first |
+| `mode="joints"` | puts the robot in the first pose and plays the actuator targets back as recorded: exact for the same robot or one with the same actuators, open loop, so for arms and hands: a walking, driving or flying robot is refused |
+| Files | `stop` saves `demonstrations/<name>.json` in the world; `export` writes `json` or `npz` there (`to=` a file name; its `.json` or `.npz` suffix sets the format). An export never replaces a file that exists or another demonstration unless `overwrite=true`. A reading missing in some frames is `null` in the JSON (strict parsers read it) and NaN in the NPZ. The NPZ holds `time`, `joint_pos`, `joint_names`, `ctrl`, `ctrl_names`, `base_pos`, `base_quat`, `sensors`, `sensor_names`, `command_t`, `command_op` and `commands` (JSON text); LeRobot's parquet needs a library robotforge does not install |
 
-A recording ends on its own when the world is edited or reset, and says so.
+A recording ends on its own when the world is edited or reset, and says so. Stopping one that holds nothing (no time passed) is an error that also ends it, so the robot can be recorded again. Demonstrations belong to the world: opening another world lists that world's.
 What an errand does inside the simulation (a fetch driving the robot over and stopping it) is part of the command that started it and is not recorded twice.
 
 ```python title="behaviors/record_reach.py" robots="arm,panda"
@@ -408,13 +408,17 @@ Every node answers success, failure or running, and the tree is ticked every 0.1
 
 | Node | What it does |
 |---|---|
-| `Action(fn)` | `fn(ctx)`: `True` or `None` is success, `False` failure, or return `SUCCESS`, `FAILURE`, `RUNNING`. A call that blocks (`arm.move_to`, `pick_and_place`) blocks inside the tick. A call the playground refuses (out of reach) is a failure, with its message as the node's note |
+| `Action(fn)` | `fn(ctx)`: `True` or `None` is success, `False` failure, or return `SUCCESS`, `FAILURE`, `RUNNING`. A call that blocks (`arm.move_to`, `pick_and_place`) blocks inside the tick. A call the playground refuses (out of reach) is a failure, with its message as the node's note (in a `Condition` too, and a sensor the robot lacks) |
 | `Condition(fn)`, `sensor_is("lidar", "ahead.distance_m", ">", 0.5)` | success when it holds; a sensor the robot lacks is a failed condition, not an error |
 | `Wait(seconds)`, `WaitFor(test, timeout)` | running until the time has passed, or the test holds (failure at the timeout) |
-| `Sequence(*nodes)`, `Fallback(*nodes)` | all in order, or the first that works; they carry on from the child that was running, `reactive=True` re-checks the earlier ones every tick |
-| `Parallel(*nodes, success="all")` | all at once; `"any"` or a number of successes needed |
-| `Retry(node, times=3, wait=0)`, `Repeat(node, times=None)`, `Inverter(node)`, `Timeout(node, seconds)` | decorators |
+| `Sequence(*nodes)`, `Fallback(*nodes)` | all in order, or the first that works; they carry on from the child that was running, `reactive=True` re-checks the earlier ones every tick and stops (halts) the later ones when an earlier one decides |
+| `Parallel(*nodes, success="all")` | all in the same tick; `"any"` or a number of successes needed. Children that block (arm calls) run one after the other, not together |
+| `Retry(node, times=3, wait=0)`, `Repeat(node, times=None)`, `Inverter(node)`, `Timeout(node, seconds)` | decorators. `Timeout` stops a child that keeps running too long; a child that blocks cannot be stopped in the middle, so a child that ends after more than `seconds` inside one tick fails with a note (`took 10.0 s, over 2 s`) |
 | `StateMachine(name, start)` with `State(name, do, enter, exit, result)` | states and `transition(source, target, when)`; a state with `result=SUCCESS` or `FAILURE` ends it; `do` may be a node and `when` may be `SUCCESS` or `FAILURE` of it |
+
+A call that blocks (`arm.move_to`, `arm.pick_and_place`, `robot.pose`) holds the whole tree until it is done, because the clock only runs between ticks.
+So two blocking actions in a `Parallel` do not overlap, a `Timeout` around one cannot cut it short, and `max_seconds` of `Tree.run` is checked between ticks.
+`Parallel` is for conditions, waits, state machines and calls that only start something (`move`, `stop`, `jog`).
 
 The context `ctx` has `ctx.sim`, `ctx.robot`, `ctx.time`, `ctx.bb` (a dictionary the nodes share) and `ctx.log(text)`, which goes into `tree.summary()` with when each node ended and how.
 A tree is a node too, so a state machine goes inside a tree and the other way round:

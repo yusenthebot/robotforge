@@ -44,8 +44,8 @@ SUFFIXES = (".json", ".npz")
 FOLDER = "demonstrations"
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
-# What a command's time and numbers look like in a file: seconds from the start, the operation, its values.
-OPS = ("move", "stop", "heave", "move_arm", "gripper", "pose", "go", "pick_and_place")
+# Names Windows cannot make a file of, whatever the suffix
+RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 
 
 class DemonstrationError(ValueError):
@@ -60,6 +60,8 @@ def clean_name(name: str) -> str:
             f"{wording.short(str(name))!r} is not a name for a demonstration: use lowercase letters, digits and "
             'underscores, starting with a letter ("pick_cube")'
         )
+    if given in RESERVED:
+        raise DemonstrationError(f"{given} is a name Windows keeps for devices, so no file can have it: choose another")
     return given
 
 
@@ -137,8 +139,9 @@ class Demonstration:
         }
 
     def to_json(self) -> dict[str, Any]:
-        def rows(a: np.ndarray, digits: int = 5) -> list[list[float]]:
-            return [[round(float(v), digits) for v in row] for row in a]
+        def rows(a: np.ndarray, digits: int = 5) -> list[list[float | None]]:
+            # a reading that was missing in a frame is null: a bare NaN is not JSON and strict parsers refuse it
+            return [[round(float(v), digits) if math.isfinite(v) else None for v in row] for row in a]
 
         return {
             **self.meta(),
@@ -159,8 +162,9 @@ class Demonstration:
         path.parent.mkdir(parents=True, exist_ok=True)
         suffix = path.suffix.lower()
         if suffix == ".json":
+            text = json.dumps(self.to_json(), separators=(",", ":"), allow_nan=False)  # whole, before a file is touched
             with path.open("w", encoding="utf-8", newline="\n") as f:
-                json.dump(self.to_json(), f, separators=(",", ":"))
+                f.write(text)
         elif suffix == ".npz":
             np.savez_compressed(
                 path,

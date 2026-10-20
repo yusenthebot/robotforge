@@ -68,6 +68,7 @@ class Recording:
         self.owner = pg.behaviors.resolve(robot).split("/", 1)[0]
         self.stopped_by: str | None = None
         self.active = False
+        self.home: Path | None = None  # the world's demonstrations folder when it began
         self._model: mujoco.MjModel | None = None
         self._version = 0
         self._t0 = 0.0
@@ -199,9 +200,13 @@ class Recording:
         root = d.xpos[self._root]
         yaw = _yaw(d.xmat[self._root].reshape(3, 3))
         event = dict(event)
-        for key in ("position",):  # targets in the robot's own frame
-            if key in event:
-                event[key] = _to_robot(root, yaw, np.asarray(event[key], float))
+        if "position" in event:  # targets in the robot's own frame
+            event["position"] = _to_robot(root, yaw, np.asarray(event["position"], float))
+        for key in ("to", "target"):  # a place to go or to put something at: [x, y(, z)] in the robot's frame too
+            place = event.get(key)
+            if isinstance(place, list) and len(place) in (2, 3):
+                event[key] = _to_robot(root, yaw, np.asarray([*place, 0.0][: max(3, len(place))], float))[: len(place)]
+                event["frame"] = "robot"
         if "velocity" in event:
             event["velocity"] = _to_robot(root, yaw, np.asarray(event["velocity"], float), vector=True)
         if "/" in robot:
@@ -215,10 +220,7 @@ class Recording:
             raise DemonstrationError(
                 f"{self.name}: nothing was recorded (no time passed): let the robot act, then stop the recording"
             )
-        keys = sorted(
-            {k for r in self._readings for k in r},
-            key=lambda k: next(i for i, r in enumerate(self._readings) if k in r),
-        )
+        keys = list(dict.fromkeys(k for r in self._readings for k in r))  # in order of first appearance
         sensors = np.array([[r.get(k, math.nan) for k in keys] for r in self._readings], dtype=float)
         prefix = f"{self.owner}/"
         m = self._model
@@ -294,6 +296,11 @@ class Replay:
         if arm_ops and not b.arms(self.robot):
             raise DemonstrationError(f"{demo.name} works an arm ({', '.join(sorted(arm_ops))}); {self.robot} has none")
         if self.mode == "joints":
+            if b.kind(self.robot) in MOBILE:
+                raise DemonstrationError(
+                    f'mode "joints" plays targets back open loop, which an arm or a hand can do and {_a(kind)} '
+                    'cannot (it would fall or drift): use mode "commands" for it'
+                )
             m = self.pg.session.model
             wanted = [f"{self.robot}/{n}" for n in demo.actuator_names]
             self._ctrl_adr = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, n) for n in wanted]
@@ -400,15 +407,24 @@ class Replay:
             elif op == "pose":
                 b.strike_pose(owner, c["name"])
             elif op == "go":
-                b.navigate(owner, c["to"], None, None)
+                b.navigate(owner, self._place(c, "to", pos, yaw), None, None)
             elif op == "pick_and_place":
-                b.pick_and_place(arm, c["object"], c["target"])
+                b.pick_and_place(arm, c["object"], self._place(c, "target", pos, yaw))
             else:
                 raise DemonstrationError(f"a command {op!r} that this robotforge does not know")
             self.issued += 1
         except (BehaviorError, DemonstrationError, ValueError, KeyError) as exc:
             if len(self.problems) < PROBLEMS_SHOWN:
                 self.problems.append(f"{c.get('t', 0):.2f} s {c.get('op')}: {exc}")
+
+    @staticmethod
+    def _place(c: dict[str, Any], key: str, pos: np.ndarray, yaw: float) -> Any:
+        """A recorded place to go to: [x, y] in the frame of the robot that was recorded is turned into the world, from
+        where the robot stands now (a demonstration saved before this was kept, with no "frame", is already world)."""
+        place = c[key]
+        if c.get("frame") == "robot" and isinstance(place, list):
+            return _to_world(pos, yaw, [*place, 0.0][: max(3, len(place))])[: len(place)]
+        return place
 
     def _finish(self) -> None:
         if self.done:
@@ -460,7 +476,8 @@ class Demonstrations:
         self.pg = pg
         self.recordings: dict[str, Recording] = {}
         self.replays: dict[str, Replay] = {}  # robot -> its latest replay
-        self.kept: dict[str, Demonstration] = {}
+        self.kept: dict[str, Demonstration] = {}  # of the world in `_kept_in` (a switch of world starts it again)
+        self._kept_in: Path | None = None
 
     # ---- where they live ----
 
@@ -471,8 +488,17 @@ class Demonstrations:
     def _path(self, name: str, suffix: str = ".json") -> Path:
         return self.folder() / f"{name}{suffix}"
 
-    def target(self, to: str, name: str, fmt: str) -> Path:
-        """Where an export goes: always in the demonstrations folder (a name or a relative path with no ..)."""
+    def _keep(self) -> dict[str, Demonstration]:
+        """The demonstrations held in memory, for the world that is open now."""
+        here = self.folder()
+        if self._kept_in != here:
+            self.kept.clear()
+            self._kept_in = here
+        return self.kept
+
+    def target(self, to: str, name: str, fmt: str | None) -> Path:
+        """Where an export goes: always in the demonstrations folder (a name or a relative path with no ..). A suffix
+        decides the format; without one the file gets `fmt`'s."""
         given = str(to).strip()
         ways = (PurePosixPath(given), PureWindowsPath(given))
         if given.startswith("~") or any(w.anchor or ".." in w.parts for w in ways):
@@ -482,7 +508,12 @@ class Demonstrations:
             )
         path = self.folder() / given
         if path.suffix.lower() not in SUFFIXES:
-            path = path.with_suffix(f".{fmt}")
+            path = path.with_name(f"{path.name}.{fmt or 'json'}")  # "run.1" is a name, not a suffix to swap
+        elif fmt and path.suffix.lower() != f".{fmt}":
+            raise DemonstrationError(
+                f"to {wording.short(given)} is {path.suffix.lower()[1:]} and format is {fmt}: give one of them, or "
+                "the same in both"
+            )
         if not path.resolve().is_relative_to(self.folder().resolve()):
             raise DemonstrationError(f"to {wording.short(given)} leads out of the {FOLDER} folder; give a file name")
         return path
@@ -512,18 +543,22 @@ class Demonstrations:
         if busy:
             raise DemonstrationError(f"{owner} is already being recorded as {busy[0]}: stop that one first")
         rec = Recording(self.pg, owner, called, float(rate_hz), sensors).start()
+        rec.home = self.folder()
         self.recordings[called] = rec
         return {"recording": called, "robot": owner, "kind": rec._kind, "rate_hz": rec.rate_hz,
                 "sensors": rec._sensors, "note": "act (keys, a gamepad, move, a script), then stop it"}  # fmt: skip
 
     def stop(self, name: str | None = None) -> dict[str, Any]:
         rec = self._recording(name)
-        demo = rec.stop()
-        self.recordings.pop(rec.name, None)
-        self.kept[demo.name] = demo
+        try:
+            demo = rec.stop()
+        finally:  # a recording that holds nothing (stopped at once) is over too, not stuck on its robot
+            self.recordings.pop(rec.name, None)
+        if rec.home == self.folder():
+            self._keep()[demo.name] = demo
         out = demo.summary()
         try:
-            path = demo.save(self._path(demo.name))
+            path = demo.save((rec.home or self.folder()) / f"{demo.name}.json")  # where the world was when it began
             out["path"] = str(path)
         except OSError as exc:
             out["note"] = f"kept in memory only: it could not be written ({exc})"
@@ -548,18 +583,20 @@ class Demonstrations:
 
     def get(self, name: str) -> Demonstration:
         called = clean_name(name)
-        if called in self.kept:
-            return self.kept[called]
+        kept = self._keep()
+        if called in kept:
+            return kept[called]
         for suffix in SUFFIXES:
             path = self._path(called, suffix)
             if path.is_file():
-                self.kept[called] = Demonstration.load(path)
-                return self.kept[called]
+                kept[called] = demo = Demonstration.load(path)
+                demo.name = called  # a file is known by its name, whatever it says inside (a copy under a new name)
+                return demo
         have = ", ".join(self.names()) or "none yet"
         raise DemonstrationError(f"no demonstration called {called} (saved: {have}); record one first")
 
     def names(self) -> list[str]:
-        found = set(self.kept)
+        found = set(self._keep())
         folder = self.folder()
         if folder.is_dir():
             found |= {p.stem for p in folder.iterdir() if p.suffix.lower() in SUFFIXES}
@@ -571,20 +608,51 @@ class Demonstrations:
                                      'or "joints" (the recorded actuator targets, the same robot)')  # fmt: skip
         demo = self.get(name)
         target = robot or demo.robot
-        replay = Replay(self.pg, demo, target, mode).start()
-        self.replays[replay.robot] = replay
+        replay = Replay(self.pg, demo, target, mode)
+        replay.check()
+        earlier = self.replays.get(replay.robot)
+        if earlier is not None and not earlier.done:  # one replay at a time on a robot: the new one takes over
+            earlier.cancel()
+        self.replays[replay.robot] = replay.start()
         return replay
 
-    def export(self, name: str, fmt: str = "json", to: str | None = None) -> dict[str, Any]:
-        fmt = fmt.lower().lstrip(".")
-        if fmt not in ("json", "npz"):
+    def export(
+        self, name: str, fmt: str | None = None, to: str | None = None, overwrite: bool = False
+    ) -> dict[str, Any]:
+        """Write a demonstration as json or npz. A new file name never takes the place of another file or of another
+        demonstration (overwrite=True replaces a file that is not a demonstration's own)."""
+        fmt = fmt.lower().lstrip(".") if fmt else None
+        if fmt not in (None, "json", "npz"):
             raise DemonstrationError(
                 f"format is json or npz, not {fmt!r}; LeRobot's parquet needs a library robotforge does not install"
             )
         demo = self.get(name)
-        path = self.target(to, demo.name, fmt) if to else self._path(demo.name, f".{fmt}")
+        path = self.target(to, demo.name, fmt) if to else self._path(demo.name, f".{fmt or 'json'}")
+        if path.stem != demo.name:
+            if path.stem in self.names() and self._stored_as(path.stem) != demo.name:
+                raise DemonstrationError(
+                    f"{path.stem} is the name of another demonstration: export to another file name"
+                )
+            if path.exists() and not overwrite:
+                raise DemonstrationError(f"{path.name} exists: choose another file name, or overwrite=true")
         demo.save(path)
-        return {**demo.summary(), "path": str(path), "format": fmt, "size_kb": round(path.stat().st_size / 1e3, 1)}
+        return {
+            **demo.summary(),
+            "path": str(path),
+            "format": path.suffix.lower()[1:],
+            "size_kb": round(path.stat().st_size / 1e3, 1),
+        }
+
+    def _stored_as(self, stem: str) -> str | None:
+        """The name written inside the file(s) called `stem`: an export of demonstration X is a copy that says X."""
+        for suffix in SUFFIXES:
+            path = self._path(stem, suffix)
+            if path.is_file():
+                try:
+                    return Demonstration.load(path).name
+                except DemonstrationError:
+                    return None
+        return stem if stem in self._keep() else None
 
     def listing(self) -> dict[str, Any]:
         out: dict[str, Any] = {"demonstrations": [], "recording": [r.status() for r in self.recordings.values()]}
@@ -600,10 +668,11 @@ class Demonstrations:
     def viewer_state(self) -> dict[str, Any]:
         """What the viewer's state message says: what is being recorded and replayed (for its REC chip)."""
         out: dict[str, Any] = {}
-        if self.recordings:
+        going = [r for r in self.recordings.values() if r.active]  # one that ended itself shows no more
+        if going:
             out["recording"] = [
                 {"name": r.name, "robot": r.owner, "seconds": round(r._times[-1], 1) if r._times else 0.0}
-                for r in self.recordings.values()
+                for r in going
             ]
         playing = [r for r in self.replays.values() if not r.done]
         if playing:
