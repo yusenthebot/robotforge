@@ -2,6 +2,7 @@
 only by the user (the command line), never by an agent, and the module machinery a plugin leans on."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -125,7 +126,10 @@ def test_helpers_are_read_again_and_do_not_leak_between_worlds(home):
     write(first / "plugins" / "_shared.py", "SIZE = 1\n")
     REGISTRY.trust(first)
     assert sys.modules["_shared"].SIZE == 1
+    stamp = (first / "plugins" / "_shared.py").stat().st_mtime
     write(first / "plugins" / "_shared.py", "SIZE = 2\n")  # an edit that touches only the helper
+    # within the same second and of the same length: a cached .pyc would still look fresh
+    os.utime(first / "plugins" / "_shared.py", (stamp, stamp))
     REGISTRY.trust(first)
     assert sys.modules["_shared"].SIZE == 2
     second = home / "second"

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -218,6 +219,13 @@ class Registry:
             sys.path.insert(0, folder)
         else:
             sys.path.append(folder)
+        # Helpers are read from source every time: a cached .pyc is trusted by its source's mtime in whole seconds and
+        # its size, so an edit within the same second that keeps the length ("SIZE = 1" to "SIZE = 2") would be missed.
+        writes_bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+        for stale in (path.parent / "__pycache__").glob("*.pyc"):
+            with contextlib.suppress(OSError):
+                stale.unlink()
+        importlib.invalidate_caches()
         try:
             module = types.ModuleType(state.module)
             module.__file__ = str(path)
@@ -233,6 +241,7 @@ class Registry:
             state.items = []
         finally:
             self._loading = previous
+            sys.dont_write_bytecode = writes_bytecode
             with contextlib.suppress(ValueError):
                 sys.path.remove(folder)
             state.imported = [m for m in sys.modules if m not in known and _comes_from(sys.modules[m], path.parent)]
