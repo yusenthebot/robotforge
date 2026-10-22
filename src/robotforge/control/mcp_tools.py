@@ -17,11 +17,11 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import wording
-from robotforge.control import tasks as task_catalog
 from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
-from robotforge.control.methods import LEARNED, LONG_NAMES, METHODS, explain, make_controller
-from robotforge.control.rl.runtime import policy_params
-from robotforge.control.tasks import TaskError, make_task
+from robotforge.control.methods import explain, make_controller, resolve_method
+from robotforge.control.runtime import bind_control, contract_catalog
+from robotforge.control.task_registry import describe_task, resolve_task
+from robotforge.control.tasks import TaskError
 from robotforge.playground import Playground
 
 MAX_SECONDS = 60.0
@@ -50,15 +50,11 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         from robotforge.control.rl.store import list_policies
 
         trained = [f"policy:{p['name']} ({p['task']}, {p['state']})" for p in list_policies(world_dir())]
-        from robotforge.training.mcp_tools import algorithm_catalog
-
         learning = {**ALGOS, "how": "train_policy(task, robot) in the background, then method='policy:<name>'"}
         return _json(
             {
-                "tasks": task_catalog.catalog(),
-                "algorithms": METHODS,
+                **contract_catalog(playground.current_world()),
                 "learning": learning,
-                "training_algorithms": algorithm_catalog(),
                 "trained_policies": trained,
             }
         )
@@ -89,19 +85,31 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         success, effort (joules), the task's own numbers and, for MPC, planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
-            robot, task, method = _robot(playground, robot), _task(task), _method(method)
+            robot, task, method = _robot(playground, robot), _task(task, playground.current_world()), _method(method)
             with session.lock:
                 model, snapshot, version = session.model, copy.copy(session.data), session.version
-            bound = make_task(task, model, robot, task_params)
-            bound.begin(snapshot)
+                generation = session.generation
+            request = bind_control(
+                model,
+                snapshot,
+                robot,
+                task,
+                method,
+                task_params,
+                method_params,
+                world=playground.current_world(),
+                world_dir=world_dir(),
+            )
+            bound, method, method_params = request.task, request.method, request.params
             seconds = seconds or bound.default_seconds  # after begin: a contact task needs longer from a higher start
             check_push(push_at, seconds)
-            method_params = policy_params(method, method_params, world_dir(), bound)
             # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
             controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)
             monitor_key = f"{MONITOR}{robot}/{uuid.uuid4().hex[:8]}"  # one per call: runs may overlap
             with session.lock:
                 _same_world(session, version)
+                if session.generation != generation:
+                    raise TaskError("the world was reset while the controller was being prepared; run it again")
                 bound.begin(session.data)
                 monitor = EpisodeMonitor(bound, model, session.data)
                 if session.controllers.get(robot) is not None:  # the numbers of a repeat depend on where it left off
@@ -136,7 +144,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     events.append(f"something else took over {robot} during the run (e.g. keyboard driving)")
                 result = {
                     "robot": robot,
-                    "task": bound.describe(),
+                    "task": describe_task(bound),
                     "method": method,
                     "explain": explain(method),
                     "reward": round(monitor.reward, 3),
@@ -175,7 +183,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         method does and why it won or lost."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_COMPARE_SECONDS)
-            robot, task = _robot(playground, robot), _task(task)
+            robot, task = _robot(playground, robot), _task(task, playground.current_world())
             if methods is not None:
                 methods = [_method(m) for m in methods]
             if methods is not None and not 1 <= len(methods) <= MAX_METHODS:
@@ -184,11 +192,6 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 )
             with session.lock:
                 model, start = session.model, copy.copy(session.data)
-            method_params = dict(method_params or {})
-            if methods is not None and any(m.startswith("policy:") for m in methods):
-                probe = make_task(task, model, robot, task_params)  # check each policy fits before running any
-                for m in methods:
-                    method_params[m] = policy_params(m, method_params.get(m), world_dir(), probe)
             comparison = await asyncio.to_thread(
                 compare_methods,
                 task,
@@ -202,6 +205,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 data=start,
                 seed=None,
                 wall_budget=COMPARE_WALL_SECONDS,
+                world=playground.current_world(),
+                world_dir=world_dir(),
             )
             # Best = did not fail, then met the goal, then highest reward.
             best = max(comparison.results, key=lambda r: (not r.failed, r.success, r.reward))
@@ -232,16 +237,12 @@ def _robot(playground: Playground, robot: str) -> str:
     return playground.behaviors.resolve(robot) if names else robot
 
 
-def _task(task: str) -> str:
-    return wording.match(task, task_catalog.TASKS) or task
+def _task(task: str, world: Any = None) -> str:
+    return resolve_task(task, world).name
 
 
 def _method(method: str) -> str:
-    """ "IK" is ik; a policy is "policy:<name>"."""
-    prefix, colon, rest = method.partition(":")
-    if colon:
-        return f"{prefix.lower()}:{rest}"
-    return wording.match(method, [*METHODS, *LEARNED], LONG_NAMES) or method  # "PPO" is ppo
+    return resolve_method(method)
 
 
 def _same_world(session, version: int) -> None:

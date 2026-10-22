@@ -523,11 +523,45 @@ class ScriptRunner:
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
 
+    def _op_task_catalog(self, _req) -> dict[str, Any]:
+        from robotforge.control.runtime import contract_catalog
+
+        return contract_catalog(self.pg.current_world())
+
+    async def _op_run_controller(self, req) -> dict[str, Any]:
+        from robotforge.control.runtime import start_control
+
+        if self._execution is None:
+            raise PlaygroundError("the script has no active execution")
+
+        def attach() -> dict[str, Any]:
+            result = start_control(
+                self.pg,
+                req["robot"],
+                req["task"],
+                req["method"],
+                req.get("task_params"),
+                req.get("method_params"),
+            )
+            # A cancelled dispatch may never resume; cleanup still owns a controller attached by its worker.
+            self._remember_command(result["robot"])
+            self._remember_controllers()
+            return result
+
+        return await self._execution.call_thread(attach)
+
     def _op_run_policy(self, req) -> dict:
         from robotforge.control.rl.runtime import attach_policy
 
         world_dir = self.pg.store.dir if self.pg.store is not None else None
-        return attach_policy(self.pg.session, req["robot"], req["name"], world_dir, req.get("task_params"))
+        return attach_policy(
+            self.pg.session,
+            req["robot"],
+            req["name"],
+            world_dir,
+            req.get("task_params"),
+            world=self.pg.current_world(),
+        )
 
     async def _advance(self, done: Callable[[], bool], max_seconds: float) -> None:
         """Use the same clock driver as move, keeping the script's public limit errors."""

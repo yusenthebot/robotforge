@@ -20,6 +20,7 @@ import numpy as np
 from robotforge.control.actuation import ActionScale
 from robotforge.control.ars import PolicyController
 from robotforge.control.rl import store
+from robotforge.control.task_registry import registered_task_name
 from robotforge.control.tasks import Task, TaskError
 
 ACTIVATIONS = {
@@ -158,8 +159,11 @@ class TrainedPolicy:
 
             task = fit(self.meta, task, task.model)
         meta = self.meta
-        if meta.get("task") != task.name:
-            raise TaskError(f"policy {self.name!r} was trained for the {meta.get('task')} task, not {task.name}")
+        env = meta.get("env")
+        expected = env.get("task", meta.get("task")) if isinstance(env, dict) else meta.get("task")
+        actual = registered_task_name(task)
+        if expected != actual:
+            raise TaskError(f"policy {self.name!r} was trained for the {expected} task, not {actual}")
         want = meta.get("actuators") or []
         have = actuator_names(task)
         if want and want != have:
@@ -210,10 +214,14 @@ class LearnedPolicyController(PolicyController):
         self.residual = meta.get("action_mode") == "residual"
         self.base = None
         if self.residual:
-            from robotforge.control.methods import make_controller
+            from robotforge.control.methods import POLICY_PREFIX, base_method, make_controller, resolve_method
 
-            self.base_method = meta.get("base_method") or task.methods[0]
-            if self.base_method not in task.methods:  # never another policy: that could loop forever
+            self.base_method = resolve_method(meta["base_method"]) if meta.get("base_method") else base_method(task)
+            if (
+                self.base_method not in task.methods
+                or self.base_method == "ars"
+                or self.base_method.startswith(POLICY_PREFIX)
+            ):  # never another policy: that could loop forever
                 raise TaskError(f"policy {policy.name!r} names an unknown base controller {self.base_method!r}")
             self.base = make_controller(self.base_method, task, model, data)
             self.residual_scale = float(meta.get("residual_scale", 0.2))
@@ -278,7 +286,13 @@ def policy_params(
 
 
 def attach_policy(
-    session, robot: str, name: str, world_dir: Path | None = None, task_params: dict[str, Any] | None = None
+    session,
+    robot: str,
+    name: str,
+    world_dir: Path | None = None,
+    task_params: dict[str, Any] | None = None,
+    *,
+    world: Any = None,
 ) -> dict[str, Any]:
     """Let a trained policy drive `robot` in the live world until something else takes over (scripts' run_policy)."""
     from robotforge.control.tasks import make_task
@@ -286,8 +300,16 @@ def attach_policy(
     policy = TrainedPolicy.load(store.find_policy(name, world_dir))
     params = {**(policy.meta.get("task_params") or {}), **(task_params or {})}
     with session.lock:
-        task = make_task(policy.meta["task"], session.model, robot, params)
-        task.begin(session.data)
-        controller = policy.controller(task, session.model, session.data)
+        if isinstance(policy.meta.get("env"), dict):
+            from robotforge.training.play import controller as training_controller
+
+            controller = training_controller(policy, session.model, session.data, robot, world, task_params)
+            task = controller.task
+        else:
+            task = make_task(policy.meta["task"], session.model, robot, params)
+            task.begin(session.data)
+            controller = policy.controller(task, session.model, session.data)
         session.set_controller(robot, controller)
-    return {"robot": robot, "policy": name, "task": task.describe(), **controller.status()}
+    from robotforge.control.task_registry import describe_task
+
+    return {"robot": robot, "policy": name, "task": describe_task(task), **controller.status()}

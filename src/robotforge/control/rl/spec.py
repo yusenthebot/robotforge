@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from robotforge import wording
 from robotforge.control.env import RobotEnv, compile_task_world
+from robotforge.control.methods import base_method
 from robotforge.control.tasks import TASKS, Task, TaskError, make_task
 from robotforge.control.tasks.base import readable
 
@@ -214,12 +215,15 @@ def describe_env(spec: TrainSpec) -> dict[str, Any]:
     from robotforge.control.rl.runtime import actuator_names
 
     env = build_env(spec)
-    task = env.task
-    return {
-        "observation": task.observation_labels(),
-        "actuators": actuator_names(task),
-        "control_dt": env.control_dt,
-        "physics_timestep": float(env.model.opt.timestep),
-        "episode_seconds": env.episode_seconds,
-        "base_method": task.methods[0] if spec.action_mode == "residual" else None,
-    }
+    try:
+        task = env.task
+        return {
+            "observation": task.observation_labels(),
+            "actuators": actuator_names(task),
+            "control_dt": env.control_dt,
+            "physics_timestep": float(env.model.opt.timestep),
+            "episode_seconds": env.episode_seconds,
+            "base_method": base_method(task) if spec.action_mode == "residual" else None,
+        }
+    finally:
+        env.close()

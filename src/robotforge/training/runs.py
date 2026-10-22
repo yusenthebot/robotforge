@@ -30,9 +30,11 @@ from typing import Any
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from robotforge.control.methods import base_method
 from robotforge.control.rl import store
 from robotforge.control.rl.jobs import JOBS
 from robotforge.control.rl.runtime import MlpPolicy
+from robotforge.control.task_registry import registered_task_name
 from robotforge.control.tasks import TaskError
 from robotforge.control.tasks.base import readable
 from robotforge.training import algorithms, search
@@ -82,11 +84,19 @@ class RunSpec(BaseModel):
 
 
 def plan_for(spec: RunSpec) -> list[TrialPlan]:
+    names = [algorithms.get(name).name for name in spec.algos]
+    fixed = {}
+    for given, params in spec.params.items():
+        algo = algorithms.get(given)
+        if algo.name not in names:
+            raise TaskError(f"settings for {given!r} have no chosen algorithm; choose one of: {', '.join(names)}")
+        if algo.name in fixed:
+            raise TaskError(f"settings for {algo.name!r} were supplied more than once through aliases")
+        checked = algo.params(params)
+        fixed[algo.name] = {key: checked[key] for key in params}
     if spec.search is not None:
-        return search.plan_trials(spec.search, spec.algos, spec.params)
-    plans = []
-    for i, name in enumerate(spec.algos):
-        plans.append(search.single_trial(name, spec.params.get(name), spec.seed + i)[0])
+        return search.plan_trials(spec.search, names, fixed)
+    plans = [search.single_trial(name, fixed.get(name), spec.seed + i)[0] for i, name in enumerate(names)]
     return [TrialPlan(f"t{i + 1:02d}", p.algo, p.params, p.seed) for i, p in enumerate(plans)]
 
 
@@ -172,10 +182,11 @@ def policy_meta(spec: RunSpec) -> dict[str, Any]:
             **({"slow_sensors": slow, "steps_per_second": round(_measured_rate(env), 1)} if slow else {}),
             "name": spec.name,
             "robot": spec.env["robot"],
-            "task": getattr(task, "name", spec.env["task"]),
+            "task": registered_task_name(task),
+            **({"implementation_task": task.name} if registered_task_name(task) != task.name else {}),
             "action_mode": spec.env["action_mode"],
             "residual_scale": spec.env["residual_scale"],
-            "env": spec.env,
+            "env": {**spec.env, "task": registered_task_name(task)},
             "observation": task.observation_labels(),
             "observation_layout": facts["observation"]["sources"],
             "left_out": facts["observation"].get("left_out", []),
@@ -184,7 +195,7 @@ def policy_meta(spec: RunSpec) -> dict[str, Any]:
             "control_dt": env.control_dt,
             "physics_timestep": float(env.model.opt.timestep),
             "episode_seconds": env.episode_seconds,
-            "base_method": task.methods[0] if env.action_mode == "residual" else None,
+            "base_method": base_method(task) if env.action_mode == "residual" else None,
         }
     finally:
         env.close()

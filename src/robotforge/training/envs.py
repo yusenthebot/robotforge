@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from robotforge import wording
 from robotforge.control.env import DEFAULT_ROBOTS, RobotEnv, compile_task_world, refuse_contact_task
-from robotforge.control.tasks import TASKS, Task, TaskError, make_task
+from robotforge.control.tasks import TASKS, Task, TaskError
 from robotforge.control.tasks.base import readable
 from robotforge.training.obs import DEPTH_SIZE, LIDAR_BINS, Block, SensorObservation
 
@@ -285,11 +285,14 @@ def env_spec(
     push: float = 0.0,
 ) -> EnvSpec:
     """The plain-data description of an environment (see make_env for the arguments)."""
-    refuse_contact_task(task)
     if observation not in OBSERVATIONS:
         raise TaskError(f"observation is one of {', '.join(OBSERVATIONS)}, not {wording.short(observation)}")
     found = None
     if world is None:
+        from robotforge.control.task_registry import resolve_task
+
+        task = resolve_task(task).name
+        refuse_contact_task(task)
         data, name = _default_world(task, robot)
     else:
         found, opened = _as_world(world)
@@ -307,6 +310,10 @@ def env_spec(
             raise TaskError(
                 f"say which robot to train; robots in this world: {', '.join(r.name for r in found.robots)}"
             )
+    from robotforge.control.task_registry import resolve_task
+
+    task = resolve_task(task, found).name
+    refuse_contact_task(task)
     saved = {t["name"] for t in data.get("tasks", [])}
     chosen = scope or ("world" if task in saved else "robot")
     if task in saved and chosen != "world":
@@ -336,21 +343,11 @@ def env_spec(
 
 def task_on(spec: EnvSpec, model: mujoco.MjModel, world: Any = None) -> Task:
     """The spec's task on `model`: a built-in one, a task saved with `world`, or a plugin's."""
-    if spec.task in TASKS:
-        return make_task(spec.task, model, spec.robot, spec.task_params)
-    entry = next((t for t in getattr(world, "tasks", []) if t.name == spec.task), None)
-    if entry is not None:
-        from robotforge.control.tasks.world_task import WorldTask
+    from robotforge.control.task_registry import bind_task, check_training_task
 
-        return WorldTask(model, entry, world)
-    from robotforge.extend import REGISTRY, ensure_user_plugins
-
-    ensure_user_plugins()
-    plugin = REGISTRY.get("task", spec.task)
-    if plugin is not None:
-        return plugin.meta["build"](model, spec.robot, {**plugin.meta["params"], **spec.task_params})
-    known = [*TASKS, *(t.name for t in getattr(world, "tasks", [])), *REGISTRY.of("task")]
-    raise TaskError(wording.unknown("task", spec.task, known, where="built in, saved with the world or from plugins"))
+    task = bind_task(spec.task, model, spec.robot, spec.task_params, world=world)
+    check_training_task(task)
+    return task
 
 
 def _build_task(spec: EnvSpec) -> Task:
@@ -393,14 +390,20 @@ def build_env(spec: EnvSpec | dict[str, Any]) -> TrainingEnv:
             spec = EnvSpec.model_validate(spec)
         except ValidationError as exc:
             raise TaskError(readable(exc, "environment settings")) from exc
-    return TrainingEnv(
-        observed(_build_task(spec), spec),
-        push=spec.push,
-        control_hz=spec.control_hz,
-        episode_seconds=spec.episode_seconds,
-        action_mode=spec.action_mode,
-        residual_scale=spec.residual_scale,
-    )
+    task = observed(_build_task(spec), spec)
+    try:
+        return TrainingEnv(
+            task,
+            push=spec.push,
+            control_hz=spec.control_hz,
+            episode_seconds=spec.episode_seconds,
+            action_mode=spec.action_mode,
+            residual_scale=spec.residual_scale,
+        )
+    except BaseException:
+        if isinstance(task, ObservedTask) and task.sensors is not None:
+            task.sensors.close()
+        raise
 
 
 def make_env(task: str, **kwargs: Any) -> TrainingEnv:
@@ -427,12 +430,13 @@ def make_env(task: str, **kwargs: Any) -> TrainingEnv:
 def describe(env: TrainingEnv) -> dict[str, Any]:
     """Both spaces in words: what each number is, where it sits, and how actions are scaled."""
     from robotforge.control.rl.runtime import actuator_names
+    from robotforge.control.task_registry import registered_task_name
 
     task = env.task
     names = actuator_names(task)
     sensors = getattr(task, "sensors", None)
     return {
-        "task": getattr(task, "name", type(task).__name__),
+        "task": registered_task_name(task),
         "robot": task.robot.name,
         "observation": {
             "size": int(env.observation_space.shape[0]),

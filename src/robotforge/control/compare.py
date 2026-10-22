@@ -14,6 +14,7 @@ import copy
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
 import mujoco
@@ -293,6 +294,8 @@ def compare_methods(
     data: mujoco.MjData | None = None,
     seed: int | None = 0,
     wall_budget: float | None = None,
+    world: Any = None,
+    world_dir: Path | None = None,
 ) -> Comparison:
     """Run several methods on the same task from the same start and tabulate the results.
 
@@ -300,8 +303,11 @@ def compare_methods(
     and `robot`, starts from `data` (e.g. the live world's current state; it is not modified).
     `seed` randomizes the start the same way for every method (None = start exactly from `data`)."""
     from robotforge.control.env import task_world
-    from robotforge.control.tasks import make_task
+    from robotforge.control.methods import resolve_method
+    from robotforge.control.runtime import bind_control, effective_task_params
+    from robotforge.control.task_registry import bind_task, describe_task, resolve_task
 
+    task = resolve_task(task, world).name
     if model is None:
         model, default_robot = task_world(task)
         robot = robot or default_robot
@@ -313,13 +319,38 @@ def compare_methods(
         if key >= 0:
             mujoco.mj_resetDataKeyframe(model, data, key)
         mujoco.mj_forward(model, data)
-    probe = make_task(task, model, robot, task_params)
+    probe = bind_task(task, model, robot, task_params, world=world)
+    methods = [resolve_method(m) for m in (methods if methods is not None else probe.methods)]
+    if not methods:
+        raise TaskError(f"{task} has no live control methods; choose a trained policy")
+    settings = [effective_task_params(task, m, task_params, world_dir) for m in methods if m.startswith("policy:")]
+    if settings:
+        # Compare controllers on the stored goal too; multiple policies must agree.
+        canonical = []
+        for values in settings:
+            candidate = bind_task(task, model, robot, values, world=world)
+            canonical.append(getattr(candidate, "settings", candidate.params.model_dump()))
+        if any(value != canonical[0] for value in canonical[1:]):
+            raise TaskError(
+                "policies have different saved task settings; give explicit task_params for a fair comparison"
+            )
+        task_params = settings[0]
+    probe = bind_task(task, model, robot, task_params, world=world)
     if not seconds and getattr(probe, "contact", False):
-        probe.begin(data)  # how long a contact task needs depends on how high the tool starts above its surface
-    methods = list(methods or probe.methods)
+        probe.begin(data)  # adaptive duration depends on the actual starting height
+    given = {resolve_method(m): p for m, p in (method_params or {}).items()}
+    unknown = set(given) - set(methods)
+    if unknown:
+        raise TaskError(f"method_params names methods not selected: {', '.join(sorted(unknown))}")
+    method_params = {
+        m: bind_control(
+            model, copy.copy(data), robot, task, m, task_params, given.get(m), world=world, world_dir=world_dir
+        ).params
+        for m in methods
+    }
     seconds = float(seconds or probe.default_seconds)
     results = compare(
-        lambda: make_task(task, model, robot, task_params),
+        lambda: bind_task(task, model, robot, task_params, world=world),
         model,
         data,
         methods,
@@ -331,4 +362,4 @@ def compare_methods(
         wall_budget,
     )
     done = {r.method for r in results}
-    return Comparison(task=probe.describe(), results=results, skipped=[m for m in methods if m not in done])
+    return Comparison(task=describe_task(probe), results=results, skipped=[m for m in methods if m not in done])

@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from robotforge import wording
 from robotforge.control.actuation import ActionScale
-from robotforge.control.methods import make_controller
+from robotforge.control.methods import base_method, make_controller
 from robotforge.control.spaces import Box
 from robotforge.control.tasks import Task, TaskError, make_task
 from robotforge.control.tasks.base import divergences, readable
@@ -92,6 +92,7 @@ class RobotEnv:
             raise TaskError("action_mode is 'direct' (actions are the commands) or 'residual' (corrections)")
         if render_mode not in (None, "rgb_array"):
             raise TaskError("render_mode can only be 'rgb_array' (or None)")
+        self.base_method = base_method(task) if action_mode == "residual" else None
         self.task = task
         self.model = task.model
         self.data = mujoco.MjData(self.model)
@@ -136,7 +137,7 @@ class RobotEnv:
             self.session.set_controller(name, None)
         self._residual = None
         if self.action_mode == "residual":
-            base = make_controller(self.task.methods[0], self.task, self.model, self.data)
+            base = make_controller(self.base_method, self.task, self.model, self.data)
             self._residual = _Residual(base, self.task, self.scale)
             self.session.set_controller("base", self._residual)
         self._steps = 0

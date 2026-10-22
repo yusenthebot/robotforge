@@ -1355,7 +1355,7 @@ function applyRobotInfo() {
   robots = pendingRobotInfo.robots;
   learnedWalkers = pendingRobotInfo.learned;
   robotModes = pendingRobotInfo.modes;
-  Object.assign(sceneDesc, { robots, learned: learnedWalkers, modes: robotModes });
+  Object.assign(sceneDesc, { robots, learned: learnedWalkers, modes: robotModes, task_contracts: pendingRobotInfo.task_contracts });
   pendingRobotInfo = null;
   renderRobotList();
   renderModes();

@@ -327,27 +327,28 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
     folder.mkdir(parents=True, exist_ok=True)
     _load_plugins(job)
     algo = algorithms.get(job["algo"])
-    env = build_env(job["env"])
-    state = load_arrays(folder / STATE_FILE) if job.get("resume") else {}
-    stop_file = Path(job["stop_file"]) if job.get("stop_file") else None
-    budget = int(job["budget"])
-    sink = Sink(folder, budget, offset=int(state["steps"]) if "steps" in state else 0)
-    sink.extra = {"id": job.get("id"), "algo": job["algo"], "budget": budget + sink.steps}
-    ctx = TrainContext(
-        env,
-        algo.params(job.get("params")),
-        seed=int(job.get("seed", 0)),
-        budget=budget,
-        state=state,
-        sink=sink,
-        folder=folder,
-        stop_file=stop_file,
-        max_seconds=job.get("max_seconds"),
-        deadline=job.get("deadline"),
-    )
-    started = time.monotonic()
+    params = algo.params(job.get("params"))
     algorithms.need(algo)
+    env = build_env(job["env"])
+    started = time.monotonic()
     try:
+        state = load_arrays(folder / STATE_FILE) if job.get("resume") else {}
+        stop_file = Path(job["stop_file"]) if job.get("stop_file") else None
+        budget = int(job["budget"])
+        sink = Sink(folder, budget, offset=int(state["steps"]) if "steps" in state else 0)
+        sink.extra = {"id": job.get("id"), "algo": job["algo"], "budget": budget + sink.steps}
+        ctx = TrainContext(
+            env,
+            params,
+            seed=int(job.get("seed", 0)),
+            budget=budget,
+            state=state,
+            sink=sink,
+            folder=folder,
+            stop_file=stop_file,
+            max_seconds=job.get("max_seconds"),
+            deadline=job.get("deadline"),
+        )
         policy = final_policy(ctx, algo.run(ctx))
         policy.save(folder / POLICY_FILE)
         save_arrays(folder / STATE_FILE, ctx.arrays())
