@@ -18,16 +18,21 @@ arrays, read without pickle) and the JSON files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from robotforge import wording
 from robotforge.control.tasks import TaskError
+
+if TYPE_CHECKING:
+    from robotforge.control.rl.spec import TrainSpec
+    from robotforge.experiments import ExperimentHandle, ExperimentStore
 
 POLICY_FILE = "policy.json"
 STATUS_FILE = "status.json"
@@ -168,3 +173,123 @@ def list_policies(world_dir: Path | None = None) -> list[dict[str, Any]]:
                 seen.add(item["name"])
                 out.append({**item, "where": "world" if world_dir is not None and place == places[0] else "shared"})
     return out
+
+
+# Records live beside policies, so replacing a policy never erases its provenance.
+def experiment_store(folder: Path) -> ExperimentStore:
+    from robotforge.experiments import ExperimentStore
+
+    return ExperimentStore(Path(folder).resolve().parent.parent / "experiments")
+
+
+def policy_experiment_for(folder: Path, weights_path: Path, refs: list[dict[str, Any]]) -> dict[str, str] | None:
+    """Find a segment that actually archived these weights; invalid evidence means unknown provenance."""
+    from robotforge.experiments import artifact_path
+
+    try:
+        content = Path(weights_path).read_bytes()
+    except OSError:
+        return None
+    sha, size = hashlib.sha256(content).hexdigest(), len(content)
+    ledger = experiment_store(folder)
+    for reference in reversed(refs):
+        if not isinstance(reference, dict):
+            continue
+        try:
+            # Open by a validated id inside this policy's store, never by a supplied arbitrary path.
+            handle = ledger.open(reference["id"])
+            if (
+                Path(reference["path"]).resolve() != handle.path.resolve()
+                or handle.record.id != reference["id"]
+                or reference.get("kind") != handle.record.kind
+                or handle.record.kind != "training_segment"
+            ):
+                continue
+            for artifact in handle.record.artifacts:
+                if artifact.role == "policy" and artifact.sha256 == sha and artifact.size == size:
+                    artifact_path(handle.path, artifact)  # verify immutable archived bytes as well as metadata
+                    return handle.reference()
+        except (KeyError, TypeError, ValueError, OSError):
+            # Stale/copied/corrupt references cannot justify attribution; an older valid segment still may.
+            continue
+    return None
+
+
+def open_experiment(reference: dict[str, Any]) -> ExperimentHandle:
+    from robotforge.experiments import ExperimentStore
+
+    return ExperimentStore(Path(reference["path"]).parent.parent).open(reference["id"])
+
+
+def training_experiment(folder: Path) -> ExperimentHandle | None:
+    """Resume a verified parent inside this policy's store; copied/untrusted references remain unknown."""
+    reference = read_json(Path(folder) / POLICY_FILE).get("experiment")
+    if not isinstance(reference, dict):
+        return None
+    try:
+        handle = experiment_store(folder).open(reference["id"])
+        if (
+            Path(reference["path"]).resolve() != handle.path.resolve()
+            or handle.record.id != reference["id"]
+            or reference.get("kind") != handle.record.kind
+            or handle.record.kind != "training_run"
+        ):
+            return None
+        return handle
+    except (KeyError, TypeError, ValueError, OSError):
+        # A status check may finalize this handle, so its location and identity must both be trusted.
+        return None
+
+
+def finish_experiment(folder: Path, status: dict[str, Any]) -> None:
+    """A coordinator or confirmed-dead process monitor finalizes its own parent only."""
+    handle = training_experiment(folder)
+    if handle is None or handle.record.status != "running":
+        return
+    state = status.get("state")
+    terminal = {"done": "completed", "stopped": "stopped", "failed": "failed"}.get(state)
+    if terminal is None:
+        return
+    reason = "timeout" if status.get("timed_out") else status.get("stopped_early") or state
+    handle.update(
+        metrics={"phase": state, "final": status.get("final"), "trials": status.get("trials", [])},
+        budget_used={
+            "training_steps": status.get("timesteps", 0),
+            "wall_seconds": status.get("elapsed_s", 0),
+            "measurement": "latest coordinator observation; failed workers may have unreported steps"
+            if state == "failed"
+            else "completed coordinator observation",
+        },
+    )
+    handle.finish(terminal, reason=reason, error=status.get("error"))
+
+
+def legacy_experiment(folder: Path, spec: TrainSpec) -> ExperimentHandle:
+    """The direct SB3 entry point uses the same record protocol without importing torch here."""
+    from robotforge.control.rl.spec import algo_settings
+
+    data = spec.model_dump(mode="json")
+    handle = experiment_store(folder).begin(
+        "training_run",
+        environment={"train_spec": data, "scope": "robot", "robot": spec.robot.name},
+        task={"registered_name": spec.task, "implementation_name": spec.task, "params": spec.task_params},
+        algorithm={
+            "domain": "training",
+            "name": spec.algo,
+            "params": algo_settings(spec),
+            "settings_source": "TrainSpec",
+        },
+        seeds={
+            "training": spec.seed,
+            "worker_protocol": "training + rank",
+            "ranking": {"base": 10_000, "protocol": "base + episode"},
+            "final_evaluation": {"base": 20_000, "protocol": "base + episode"},
+        },
+        budget={
+            "training_steps": spec.timesteps,
+            "requested_wall_seconds": spec.max_minutes * 60 if spec.max_minutes else None,
+            "semantics": "SB3 batch budget may overshoot; evaluation steps excluded; wall includes evaluation",
+        },
+    )
+    handle.update(metrics={"phase": "queued"})
+    return handle

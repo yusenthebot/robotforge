@@ -523,6 +523,18 @@ class ScriptRunner:
         await self._advance(lambda: False, 0.5)
         return bool(self.pg.behaviors.placed(req["object"], info["region"])["success"])
 
+    def _op_experiments(self, req) -> dict[str, Any]:
+        from robotforge.experiments.live import history
+
+        return history(self.pg.session, self.pg.store.dir if self.pg.store is not None else None, req.get("limit", 20))
+
+    def _op_experiment(self, req) -> dict[str, Any]:
+        from robotforge.experiments import ExperimentStore
+        from robotforge.experiments.live import experiment_home
+
+        home = experiment_home(self.pg.store.dir if self.pg.store is not None else None)
+        return ExperimentStore(home).open(req["experiment_id"]).record.model_dump(mode="json")
+
     def _op_task_catalog(self, _req) -> dict[str, Any]:
         from robotforge.control.runtime import contract_catalog
 

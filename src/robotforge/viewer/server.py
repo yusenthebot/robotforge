@@ -435,6 +435,7 @@ def create_app(hub: ViewerHub) -> Starlette:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+            hub.session.finish_controller_observations("viewer_shutdown")
 
     return Starlette(
         routes=[

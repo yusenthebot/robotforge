@@ -5,6 +5,7 @@ Physics is authoritative here; viewers only render the poses we publish.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -96,6 +97,9 @@ class SimSession:
     _sim_debt: float = 0.0
     _controller_thread: int | None = field(default=None, repr=False)
     _rtf_window: list[tuple[float, float]] = field(default_factory=list, repr=False)
+    controller_hooks: list[Callable[[str, Controller | None, Controller | None, str], None]] = field(
+        default_factory=list, repr=False
+    )
     # Buoyancy and drag for a model that has water (sim/water.py); it comes with the model, so None for the rest.
     water: water_model.Hydro | None = field(default=None, repr=False)
 
@@ -127,6 +131,7 @@ class SimSession:
 
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
+            self.finish_controller_observations("model_changed")
             self.generation += 1
             self.model = model
             self.data = fresh_data(model)
@@ -142,6 +147,7 @@ class SimSession:
 
     def reset(self) -> None:
         with self.lock:
+            self.finish_controller_observations("reset")
             self.generation += 1
             mujoco.mj_resetData(self.model, self.data)
             if self.model.nkey > 0:
@@ -196,6 +202,8 @@ class SimSession:
         with outside forces (a flight controller's air) has a `release` that lets go of them when it is replaced."""
         with self.lock:
             old = self.controllers.get(name)
+            if old is not controller:
+                self._controller_event(name, old, controller, "stopped" if controller is None else "replaced")
             if old is not None and old is not controller and hasattr(old, "release"):
                 old.release(self.model, self.data)
             if controller is None:
@@ -203,6 +211,20 @@ class SimSession:
                 return
             self.controllers[name] = controller
             self._next_update[name] = self.data.time
+
+    def _controller_event(self, name: str, old: Controller | None, new: Controller | None, reason: str) -> None:
+        for hook in tuple(self.controller_hooks):
+            try:
+                hook(name, old, new, reason)
+            except Exception:
+                # Observation failures must never prevent a robot being stopped or reset.
+                logging.getLogger(__name__).exception("controller observation failed for %s (%s)", name, reason)
+
+    def finish_controller_observations(self, reason: str = "shutdown") -> None:
+        """Close attached observations before state is discarded, without changing controllers."""
+        with self.lock:
+            for name, controller in tuple(self.controllers.items()):
+                self._controller_event(name, controller, None, reason)
 
     def step(self, n: int = 1, *, owner: ExecutionRun | None = None) -> None:
         with self.lock:

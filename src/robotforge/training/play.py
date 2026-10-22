@@ -70,5 +70,17 @@ def attach(
         policy = TrainedPolicy.load(store.find_policy(policy, world_dir))
     with session.lock:
         ctl = controller(policy, session.model, session.data, robot, world, task_params)
-        session.set_controller(robot, ctl)
-    return {"robot": robot, "policy": policy.name, **ctl.status()}
+        from robotforge.experiments.live import attach_record
+
+        experiment = attach_record(
+            session,
+            robot,
+            ctl,
+            ctl.task,
+            "policy:" + policy.name,
+            world=world,
+            world_dir=world_dir,
+            entrypoint="policy_playback",
+            overrides=task_params,
+        )
+    return {"robot": robot, "policy": policy.name, **ctl.status(), "experiment": experiment}

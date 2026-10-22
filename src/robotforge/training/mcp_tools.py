@@ -113,6 +113,7 @@ def start(
             )
     return {
         "started": spec.name,
+        "experiment": started.get("experiment"),
         "task": task,
         "robot": spec.env["robot"],
         "algorithms": spec.algos,
@@ -134,7 +135,14 @@ def start(
 
 def status_extra(status: dict[str, Any]) -> dict[str, Any]:
     """The trials of a run for training_status (nothing for a run of the original trainer)."""
-    return run_view(status)
+    view = run_view(status)
+    if status.get("experiment"):
+        view["experiment"] = status["experiment"]
+    by_id = {t["id"]: t for t in status.get("trials", [])}
+    for trial in view.get("trials", []):
+        if by_id[trial["id"]].get("experiments"):
+            trial["experiments"] = by_id[trial["id"]]["experiments"]
+    return view
 
 
 def algorithm_catalog() -> dict[str, Any]:

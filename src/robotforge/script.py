@@ -200,6 +200,14 @@ class Sim:
         """Pick `obj` up and put it on/in `target` (object name or [x, y]); waits. True if it landed there."""
         return self._call("pick_and_place", robot=robot, object=obj, target=target)
 
+    def experiments(self, limit: int = 20) -> dict[str, Any]:
+        """Recent experiment references for the current world, including active attachments."""
+        return self._call("experiments", limit=limit)
+
+    def experiment(self, experiment_id: str) -> dict[str, Any]:
+        """Read a saved experiment by its UUID, including parameters, metrics and artifact hashes."""
+        return self._call("experiment", experiment_id=experiment_id)
+
     def task_catalog(self) -> dict[str, Any]:
         """Task definitions and method parameter schemas for the current world."""
         return self._call("task_catalog")

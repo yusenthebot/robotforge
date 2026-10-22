@@ -132,6 +132,8 @@ class TrainedPolicy:
     folder: Path
     meta: dict[str, Any]
     net: MlpPolicy
+    weights_path: Path | None = None
+    trial_id: str | None = None
 
     @classmethod
     def load(cls, folder: Path) -> TrainedPolicy:
@@ -146,7 +148,7 @@ class TrainedPolicy:
                 f"policy {folder.name!r} has no trained network yet (training is {state}); "
                 "wait for it with training_status, or train again"
             )
-        return cls(folder, meta, MlpPolicy.load(weights))
+        return cls(folder, meta, MlpPolicy.load(weights), weights_path=weights)
 
     @property
     def name(self) -> str:
@@ -201,6 +203,7 @@ class LearnedPolicyController(PolicyController):
     its own rate and the network adds a correction, as in RobotEnv(action_mode="residual")."""
 
     def __init__(self, task: Task, model: mujoco.MjModel, data: mujoco.MjData, policy: TrainedPolicy):
+        self.trained_policy = policy
         meta = policy.meta
         algo = str(meta.get("algo", "rl")).upper()
         info = {
@@ -309,7 +312,25 @@ def attach_policy(
             task = make_task(policy.meta["task"], session.model, robot, params)
             task.begin(session.data)
             controller = policy.controller(task, session.model, session.data)
-        session.set_controller(robot, controller)
+        from robotforge.experiments.live import attach_record
+
+        experiment = attach_record(
+            session,
+            robot,
+            controller,
+            task,
+            "policy:" + name,
+            world=world,
+            world_dir=world_dir,
+            entrypoint="script_run_policy",
+            overrides=task_params,
+        )
     from robotforge.control.task_registry import describe_task
 
-    return {"robot": robot, "policy": name, "task": describe_task(task), **controller.status()}
+    return {
+        "robot": robot,
+        "policy": name,
+        "task": describe_task(task),
+        **controller.status(),
+        "experiment": experiment,
+    }

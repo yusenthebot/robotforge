@@ -100,12 +100,14 @@ class Jobs:
         folder.mkdir(parents=True, exist_ok=True)
         for old in (store.WEIGHTS_FILE, store.MODEL_FILE, store.NORM_FILE, store.STOP_FILE, store.HEARTBEAT_FILE):
             (folder / old).unlink(missing_ok=True)
+        experiment = store.legacy_experiment(folder, spec)
         estimate = estimate_seconds(spec)
         store.write_json(folder / store.SPEC_FILE, spec.model_dump())
         store.write_json(
             folder / store.POLICY_FILE,
             {
                 "name": spec.name,
+                "experiment": experiment.reference(),
                 "task": spec.task,
                 "task_params": spec.task_params,
                 "robot": spec.robot.name,
@@ -124,6 +126,7 @@ class Jobs:
             },
         )
         starting = {"state": "starting", "name": spec.name, "timesteps": 0, "progress": 0.0, "updated": time.time()}
+        starting["experiment"] = experiment.reference()
         store.write_json(folder / store.STATUS_FILE, starting)
         try:
             with (folder / store.LOG_FILE).open("w", encoding="utf-8") as log:  # the child keeps its own handle
@@ -139,7 +142,13 @@ class Jobs:
             self._mark_failed(folder, starting, f"could not start the training process: {exc}")
             raise TaskError(f"could not start the training process: {exc}") from exc
         self.procs[folder] = proc
-        return {"folder": str(folder), "pid": proc.pid, "estimate_seconds": round(estimate), **env_facts}
+        return {
+            "folder": str(folder),
+            "pid": proc.pid,
+            "estimate_seconds": round(estimate),
+            "experiment": experiment.reference(),
+            **env_facts,
+        }
 
     def status(self, folder: Path) -> dict[str, Any]:
         """status.json, corrected when the process died without saying so."""
@@ -166,6 +175,7 @@ class Jobs:
     def _mark_failed(self, folder: Path, status: dict[str, Any], why: str) -> dict[str, Any]:
         status = {**status, "state": "failed", "error": why, "traceback_tail": log_tail(folder), "updated": time.time()}
         store.write_json(folder / store.STATUS_FILE, status)
+        store.finish_experiment(folder, status)
         return status
 
     def stop(self, folder: Path, wait: float = 20.0) -> dict[str, Any]:
@@ -189,6 +199,9 @@ class Jobs:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=10)
+            handle = store.training_experiment(folder)
+            if handle is not None and handle.record.status == "running":
+                handle.finish("cancelled", reason="stopped before it had learned anything")
             return self._mark_failed(folder, status, "stopped before it had learned anything")
         return {**status, "note": "stopping: it is saving the best policy so far and running its final test"}
 

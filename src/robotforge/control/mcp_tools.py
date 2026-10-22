@@ -38,6 +38,11 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
     def world_dir():
         return playground.store.dir if playground.store is not None else None
 
+    def experiment_dir():
+        from robotforge.control.rl.store import robotforge_home
+
+        return (world_dir() or robotforge_home()) / "experiments"
+
     @server.tool()
     def list_algorithms() -> str:
         """List the control tasks (reach, press, wipe, balance, stand, walk, drive_to, hover) with the robots,
@@ -85,7 +90,8 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         success, effort (joules), the task's own numbers and, for MPC, planning speed."""
         with _tool_errors():
             seconds = _seconds(seconds, MAX_SECONDS)
-            robot, task, method = _robot(playground, robot), _task(task, playground.current_world()), _method(method)
+            world = playground.current_world()
+            robot, task, method = _robot(playground, robot), _task(task, world), _method(method)
             with session.lock:
                 model, snapshot, version = session.model, copy.copy(session.data), session.version
                 generation = session.generation
@@ -120,7 +126,26 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     )
                 else:
                     carried_on = None
-                session.set_controller(robot, controller)
+                from robotforge.experiments.live import attach_record, finish_record, ledger
+
+                experiment = attach_record(
+                    session,
+                    robot,
+                    controller,
+                    getattr(controller, "task", bound),
+                    method,
+                    world=world,
+                    world_dir=world_dir(),
+                    method_params=method_params,
+                    requested_seconds=seconds,
+                    entrypoint="mcp_run_controller",
+                    overrides=task_params,
+                )
+                observation = ledger(session).active.get(id(controller))
+                if observation is not None:
+                    observation.handle.update(
+                        algorithm={"push": {"at": push_at, "strength": 1.0} if push_at is not None else None}
+                    )
                 session.set_controller(monitor_key, monitor)
             events: list[str] = [carried_on] if carried_on else []
             runs: list[dict[str, Any]] = []
@@ -130,11 +155,28 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     _still_running(session, version, monitor_key)
                     if "stopped_early" not in runs[-1]:
                         with session.lock:
+                            observation = ledger(session).active.get(id(controller))
+                            if observation is not None:
+                                observation.handle.update(
+                                    algorithm={
+                                        "push": {
+                                            "at": push_at,
+                                            "strength": 1.0,
+                                            "physics_step": session.steps_taken - observation.steps,
+                                        }
+                                    }
+                                )
                             events.append(f"t={push_at:.1f}s: {bound.push(session.data)}")
                         runs.append(await run_until(lambda: False, seconds - push_at))
                 else:
                     runs.append(await run_until(lambda: False, seconds))
                 _still_running(session, version, monitor_key)
+            except BaseException as exc:
+                with session.lock:
+                    finish_record(
+                        session, controller, status="failed", reason="run_failed", metrics={"error": str(exc)}
+                    )
+                raise
             finally:
                 session.set_controller(monitor_key, None)
             run = {"sim_seconds": round(sum(r["sim_seconds"] for r in runs), 2), "shown_live": runs[-1]["shown_live"]}
@@ -144,6 +186,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     events.append(f"something else took over {robot} during the run (e.g. keyboard driving)")
                 result = {
                     "robot": robot,
+                    "experiment": experiment,
                     "task": describe_task(bound),
                     "method": method,
                     "explain": explain(method),
@@ -161,6 +204,20 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 }
                 if stopped:
                     result["stopped_early"] = stopped
+                finish_record(
+                    session,
+                    controller,
+                    status="stopped" if stopped else "completed",
+                    reason=stopped or "measurement_completed_controller_remains_attached",
+                    metrics={
+                        "namespace": "control_episode",
+                        "task_observation": "episode_monitor",
+                        "reward": result["reward"],
+                        "effort_j": result["effort_j"],
+                        "result": result["result"],
+                        "events": result["events"],
+                    },
+                )
                 return _json(result)
 
     @server.tool()
@@ -207,15 +264,20 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                 wall_budget=COMPARE_WALL_SECONDS,
                 world=playground.current_world(),
                 world_dir=world_dir(),
+                record_dir=experiment_dir(),
             )
             # Best = did not fail, then met the goal, then highest reward.
-            best = max(comparison.results, key=lambda r: (not r.failed, r.success, r.reward))
+            best = max(comparison.results, key=lambda r: (not r.failed, r.success, r.reward), default=None)
             return _json(
                 {
                     **comparison.to_dict(),
-                    "best": best.method,
+                    "best": best.method if best else None,
                     "explain": {r.method: explain(r.method) for r in comparison.results},
-                    "next": f"run_controller(robot={robot!r}, task={task!r}, method={best.method!r}) shows it live",
+                    "next": (
+                        f"run_controller(robot={robot!r}, task={task!r}, method={best.method!r}) shows it live"
+                        if best
+                        else "no methods ran: the comparison exhausted its computer-time budget"
+                    ),
                 }
             )
 
