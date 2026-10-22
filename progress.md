@@ -518,9 +518,20 @@ Rounds 1-3 done, 2026-10-14.
 - Full default selection: 2965 passed, 127 skipped, zero failures (3092 cases, 666.1 s). Both shards green, with source and tests unchanged throughout. Existing real-Chrome gamepad regression: 8 passed in 33.84 s, using injected Gamepad API input and actual browser/physics behavior.
 - Evidence and boundaries: docs/CAPABILITIES.md and docs/bench/2026-10-21-capabilities.md; raw source, tool, trajectory, script, model, screenshot and test evidence in ../robotforge-evidence/2026-10-21-capabilities/. No dependencies, commits, pushes or release. Native Windows and unavailable static/security package checks remain unverified.
 
+## Round 44 (2026-10-22): shared task and algorithm contracts
+
+- Built-in, saved-world and plugin tasks share discovery, schema validation and model/robot/actuator binding across MCP, scripts, viewer and training. Legacy TASKS, decorators, public calls and all 60 MCP definitions stay compatible.
+- Registered task identity stays separate from Task.name dispatch. Stored policy parameters and new/legacy metadata rebuild consistently, including Reach wrappers and default-named RewardTask implementations.
+- Control methods share aliases, signatures/schemas, finite settings and structural adapters. Training keeps the existing Algorithm/Hyper registry, rejects unselected/duplicate settings, checks dependencies before allocation and closes environments on setup failure.
+- Script controller attachment shares execution budgets and cancellation ownership; viewer metadata refresh covers task and algorithm reload/removal, without executing factories to list them. Saved-world wrong-robot playback is refused.
+- Real verification: isolated installed CLI/MCP, script process, separate training coordinator/workers and rendered Chrome; plugin algorithm plus ARS runs saved and replayed policies, nondefault goal/tolerance survived all entry points, actual Training Play resumed a paused world, viewer task_run policy reply matched, no JS errors.
+- Behavior: 14 built-in scenarios and all 280 physics hash markers match b0522a0; no control/reward/manipulation success-rate tuning.
+- Validation: 3072 passed, 127 skipped, zero failures in the complete 3199-case default selection (718.1 s); 107 new contract tests; 8 real Chrome gamepad cases (33.03 s); wheel, Ruff, JS syntax, smoke and independent final review passed. Source/tests frozen throughout.
+- Evidence: docs/TASK_CONTRACTS.md, docs/bench/2026-10-22-task-contracts.md/.json and ../robotforge-evidence/2026-10-22-task-contract/. Foundation checkpoint b0522a0 and contract checkpoint 7508d34 were pushed after verification at the user's request. No dependency or release added; native Windows and unavailable type/security tooling remain unverified.
+
 ## Next-round seed
 
-Continue framework convergence with common task/algorithm resolution and experiment records, building on the shared execution kernel and robot capability descriptions. Migrate remaining execution adapters incrementally when needed. Keep manipulation success-rate work paused. Native Windows cleanup and the known conveyor failure remain unverified here; publishing and licensing remain separate user decisions.
+Continue framework convergence with reproducible experiment records: shared environment/task/algorithm identifiers, seeds, budgets, source versions, metrics and artifacts across comparisons, training and playback. Build on the existing execution kernel, capability metadata and task contracts. Migrate remaining execution adapters incrementally when needed. Manipulation success-rate work stays paused. Native Windows cleanup and the prior conveyor failure remain pending; publishing and licensing are separate decisions.
 
 ## Frontier
 
