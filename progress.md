@@ -549,3 +549,34 @@ Continue framework convergence with reproducible experiment records: shared envi
 - Next frontiers: behaviors (round 4), import doctor + robot library (round 5), real-agent evals once CLIs work, MCP App embed in Claude Desktop (needs user to add the server to Claude Desktop).
 - Radical ideas weighed: physics in browser via MuJoCo WASM (kept for sharing only).
 - Escalation ladder: open-loop gaits -> CPU RL for custom morphologies -> GPU backends (MuJoCo Warp on NVIDIA) -> sim2real.
+
+
+## Round 45 (2026-10-22): shared experiment records
+
+- Common schema/store across control comparison, training run/segment and live control/policy playback.
+  UUID execution identities, semantic fingerprints, environment/task/algorithm/seeds/budgets/version/metrics and relative SHA256 artifact manifests are retained together.
+  MJB + complete integration state preserve compiled assets, controls, external forces, mocap and warm starts.
+- Existing 60 MCP definitions remain byte-for-byte equal to the previous tool snapshot; result references are additive.
+  Low-level Python comparisons remain opt-in; MCP and script/viewer adapters record automatically.
+  Scripts can query bounded history and inspect a canonical UUID in the current world.
+- Training artifacts survive named-policy replacement and halving rungs.
+  Actual weight hashes select winning/trial lineage, including after a later segment fails; unknown legacy sources remain unknown.
+  Checkpoint input SHA participates in the specification identity.
+  Worker, submission and cancellation failures close the appropriate records without concurrent parent writers.
+- Stop/replacement/reset/model load/shutdown finalize live observations before discarding state.
+  Controllers and scheduling remain unchanged; unavailable contact/plugin observations are null rather than fabricated scores.
+  Corrupt/path-traversing artifacts, unsafe policy names, foreign parent writes, hidden physics dependencies and unknown callbacks have regression coverage.
+- Real installed MCP comparison reproduced in a separate process.
+  A detached ARS worker trained Reach from seed 0: 64 requested steps, 800 actually consumed, preserving existing whole-iteration semantics.
+  Repeating its recorded RunSpec in a fresh process yielded identical policy SHA256.
+  Real Chrome Training Play and a token-authenticated script replay retained both training run and segment origins.
+  The 28-second 1920x1080/30fps MP4 is an actual viewer capture with verification-only labels populated from results, not generated animation.
+- Real live IK replay did not match bit-for-bit: maximum qpos error 3.875e-10, qvel 6.116e-10, ctrl 0.
+  The record exposes strict equality separately from per-field absolute errors and a 1e-8 numerical check.
+  Prepared controller state, recomputed derived fields, interactive changes and external runtime state limit generic live reproduction.
+- Current checks: wheel, Ruff, independent review, 128 targeted tests and standard smoke pass.
+  Full default regression passed all 3297 selected cases: 3170 passed, 127 skipped, zero failures/errors in 599.6 seconds.
+  All 8 real Chrome gamepad cases passed in 33.71 seconds, and 280 physics markers in 14 scenarios match bcf2cf7.
+  Source, scripts and tests stayed unchanged across final verification.
+- Next seed: common-record framework acceptance comparisons and incremental execution adapter migration.
+  Keep manipulation success-rate tuning paused; current Windows and optional runtime validation remain separate.

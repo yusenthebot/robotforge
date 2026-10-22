@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-22",
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "tested_commit": "d0f317e74b474e0064528dd0cfd59187c1fbaec3",
+  "source_fingerprint": "b519a9eede156c606126cefdac4e1e5200a5bf0ba7c098a1e247d6c2dfd4ea36",
+  "source_unchanged_during_suite": true,
+  "dependencies": {
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "pydantic": "2.14.1",
+    "mcp": "2.3.0"
+  },
+  "default_suite": {
+    "tests": 3297,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 3170,
+    "wall_seconds": 599.6,
+    "shards": [
+      1648,
+      1649
+    ],
+    "exit_codes": [
+      0,
+      0
+    ]
+  },
+  "focused_tests": 128,
+  "new_tests": 98,
+  "build": "passed",
+  "ruff": "passed",
+  "smoke_seconds": 3.1,
+  "real": {
+    "unchanged_mcp_tools": 60,
+    "comparison_reproduced": true,
+    "training": {
+      "parent": {
+        "id": "b5ad9b16-6725-4237-9db3-501b3e803fc9",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/b5ad9b16-6725-4237-9db3-501b3e803fc9/experiment.json",
+        "kind": "training_run"
+      },
+      "segment": {
+        "id": "f7ac44a5-05ae-488e-ae47-716d84560712",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/f7ac44a5-05ae-488e-ae47-716d84560712/experiment.json",
+        "kind": "training_segment"
+      },
+      "requested": 64,
+      "used": 800,
+      "seeds": {
+        "ranking": {
+          "base": 10000,
+          "episodes": 5,
+          "protocol": "base + episode"
+        },
+        "training": 0,
+        "training_protocol": "default_rng(training) restarts each segment; algorithm draws reset seeds"
+      }
+    },
+    "repeat_training": {
+      "sha256": "cd8881fe0a926ba34856714278bf651cdd5b29d2bf9d80927442b2bce8065797",
+      "experiment": {
+        "id": "981c3e6f-0a93-4253-9262-0cbc16fbdbda",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/repeat/experiments/981c3e6f-0a93-4253-9262-0cbc16fbdbda/experiment.json",
+        "kind": "training_run"
+      }
+    },
+    "script": {
+      "reference": {
+        "id": "7cd19322-8017-436c-a071-3eeec34545df",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/7cd19322-8017-436c-a071-3eeec34545df/experiment.json",
+        "kind": "replay"
+      },
+      "status": "stopped",
+      "task": "reach",
+      "origins": [
+        {
+          "id": "b5ad9b16-6725-4237-9db3-501b3e803fc9",
+          "kind": "training_run",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/b5ad9b16-6725-4237-9db3-501b3e803fc9/experiment.json"
+        },
+        {
+          "id": "f7ac44a5-05ae-488e-ae47-716d84560712",
+          "kind": "training_segment",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/f7ac44a5-05ae-488e-ae47-716d84560712/experiment.json"
+        }
+      ],
+      "history": 8
+    },
+    "browser_errors": [],
+    "browser_scene_contracts": true,
+    "video": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/experiment-validation.mp4",
+      "captured_frames": 1612,
+      "captured_seconds": 27.99857187271118
+    }
+  },
+  "live_replay": {
+    "origin": {
+      "id": "b2e3535f-b3be-44da-892d-75cd731fd971",
+      "kind": "control",
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-experiments/live/home/worlds/experiment_records/experiments/b2e3535f-b3be-44da-892d-75cd731fd971/experiment.json"
+    },
+    "physics_steps": 515,
+    "sim_seconds": 1.0299999999998866,
+    "matches_recorded_final_state": false,
+    "max_absolute_error": {
+      "qpos": 3.874768561562547e-10,
+      "qvel": 6.116300059737928e-10,
+      "ctrl": 0.0
+    },
+    "within_absolute_tolerance": true,
+    "absolute_tolerance": 1e-08
+  },
+  "video_probe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "avg_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "28.133333",
+      "size": "1916936"
+    }
+  },
+  "video_decode": "passed",
+  "browser_gamepad": {
+    "passed": 8,
+    "seconds": 33.71
+  },
+  "behavior": {
+    "baseline": "bcf2cf7",
+    "identical": true,
+    "scenarios": 14,
+    "markers": 280
+  },
+  "review": "independent review; no remaining concrete P1/P2 after corrections",
+  "unavailable_tools": [
+    "mypy",
+    "pyright",
+    "bandit",
+    "pip-audit"
+  ],
+  "limitations": [
+    "native Windows unverified",
+    "optional RL backends unavailable",
+    "no paid Actions run",
+    "training/replay checks verify contracts and reproducibility, not learned task quality",
+    "live exact equality false in recorded IK run; absolute errors and 1e-8 result reported separately",
+    "external callbacks, interactive changes, unknown controller/plugin runtime state are not serialized"
+  ],
+  "scope": "common experiment framework; no control/reward/manipulation success-rate tuning; no dependencies or release",
+  "raw_evidence": "../robotforge-evidence/2026-10-22-experiments/"
+}
