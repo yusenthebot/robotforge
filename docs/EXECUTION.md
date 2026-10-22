@@ -1,6 +1,6 @@
 # Shared execution kernel
 
-The migrated paths cover MCP `move`, `ScriptRunner` (including plugin behaviors) and MCP `run_controller`.
+The migrated paths cover MCP `move`, `ScriptRunner` (including plugin behaviors), MCP `run_controller`, MCP `pose` and MCP `gripper`.
 Their public tool names, parameters and existing result fields are unchanged.
 This is an internal execution contract; it does not declare the MCP interface or world format stable.
 Robot control, motion planning and task success checks remain in their existing modules.
@@ -17,6 +17,7 @@ flowchart TD
     M[MCP move] --> E[ExecutionRun]
     S[Script RPC] --> E
     R[MCP run_controller] --> E
+    B[MCP pose and gripper] --> E
     E --> P[SimSession.step]
     P --> C[Existing controllers and step hooks]
     P --> V[Viewer pose stream]
@@ -73,7 +74,7 @@ It prevents the old worker from silently attaching controls after the next run s
 The generic `run_until` adapters have not all migrated to this driver.
 Legacy controller commands use admission tokens while retaining their existing viewer-driven clocks.
 New owned runs refuse to start while admitted work is outstanding, including work whose requesting client has cancelled.
-The remaining legacy paths include simulate, direct controls, pose, arm/gripper work, pick/place, operate, demonstration replay, mapping exploration and plugin controllers.
+The remaining legacy paths include simulate, direct controls, arm planning, pick/place, operate, demonstration replay, mapping exploration and plugin controllers.
 Plugin behaviors use `ScriptRunner` directly so they do not acquire a conflicting legacy token.
 Viewer teleoperation and manual stepping refuse competing changes; queued viewer navigation acquires admission inside its actual worker.
 Reset and world editing remain explicit invalidation paths.
@@ -88,6 +89,33 @@ Existing navigation, recording, plugins and perception tests cover compatibility
 The first implementation was also driven through the installed CLI and official MCP client, with actual Chrome, live physics, recording, viewer disconnection and a real script invalidated by reset.
 Measured results are in [2026-10-21-execution-kernel.md](bench/2026-10-21-execution-kernel.md).
 The next migrations can reuse this driver without changing robot controllers, adding another behavior-tree system or introducing a new physics backend.
+
+## Pose and gripper migration
+
+MCP `pose` and `gripper` share the recorded ownership lifecycle with `run_controller` through `RecordedExecution`.
+Their complete tool definitions and existing response fields are unchanged; the execution record reference is additive.
+Pose retains its 20-second simulation cap and gripper its five-second cap.
+Watching uses the existing `3 * simulation cap + 5` wall allowance, while headless execution uses `FAST_WALL_LIMIT`.
+Snapshot preparation and metadata consume the same deadline, checked under the session lock immediately before a behavior is issued.
+
+The existing behavior factories still choose and configure controllers.
+Gripper commands append to a reused arm's queue rather than replacing earlier motion.
+Completion, the simulation cap and wall exhaustion leave the controller attached, including any work still queued at the cap.
+The execution record's `behavior_done` metric distinguishes a finished behavior from a bounded observation that ended with queued work.
+Final metric or artifact persistence failures preserve an applied result and report `execution.recording_error` separately.
+
+Cancellation uses the existing stop behavior only on the exact controller endpoint owned by the request.
+An arm-only cancellation removes its ArmMotion and retains position-servo targets without taking over a moving carrier.
+Humanoid stop keeps its zero-speed balancing controller and intentionally retains any pending or current pose.
+Cancelling a pose request ends its owned measurement; it does not introduce a new pose-abort algorithm, and later stepping can continue the retained pose.
+The existing root-robot stop matching remains: stopping a valid endpoint on the same carrier interrupts its owned run, while cleanup still targets only the commanded endpoint.
+Invalid or unrelated stop targets do not interrupt it.
+
+Scripts retain one cumulative lease and their bool/None results for pose/gripper calls.
+Captured-controller identity checks now reject replacement before testing completion, and a read-only RPC cannot adopt that replacement for later cleanup.
+Viewer arm jogging, demonstration replay, `move_arm` and multi-phase manipulation retain their existing entry paths.
+The seven-case committed framework baseline remains unchanged; ten additional old/new MCP captures cover six poses, gripper open/close/queue and a gripper on a moving carrier.
+Boundary tests and actual installed MCP/Chrome evidence are in [the pose/gripper report](bench/2026-10-22-pose-gripper.md).
 
 
 ## Controller measurement migration
