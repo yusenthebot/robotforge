@@ -290,7 +290,6 @@ class _Server(MCPServer):
                     "move_arm",
                     "pick_and_place",
                     "operate",
-                    "run_controller",
                     "pose",
                     "gripper",
                 }
@@ -1016,7 +1015,13 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             **({"note": why} if why else {}),
         }
 
-    control_tools.register(server, playground, run_until)
+    control_tools.register(
+        server,
+        playground,
+        run_until,
+        watched=lambda: bool(hub.clients) and not playground.session.paused,
+        wall_limit=lambda: FAST_WALL_LIMIT,
+    )
     operate_tools.register(server, playground, run_until)
     scene_tools.register(server, playground)
     builder_tools.register(server, playground)

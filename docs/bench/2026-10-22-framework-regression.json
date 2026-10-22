@@ -1,0 +1,278 @@
+{
+  "date": "2026-10-22",
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "tested_commit": "62557d2533ea458687c3c93c0e765a9c71485cc1",
+  "source_fingerprint": "68f1341b91f4277286e6e5ba78d3fd94f4cf6c949d0c5076b140ad270e00aa5a",
+  "source_unchanged_during_suite": true,
+  "dependencies": {
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "pydantic": "2.14.1",
+    "mcp": "2.3.0"
+  },
+  "default_suite": {
+    "tests": 3348,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 3221,
+    "wall_seconds": 1020.7,
+    "shards": [
+      1674,
+      1674
+    ],
+    "exit_codes": [
+      0,
+      0
+    ]
+  },
+  "focused_tests": 79,
+  "new_tests": 51,
+  "build": "passed",
+  "ruff": "passed",
+  "smoke_seconds": 3.4,
+  "baseline": {
+    "core_commit": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+    "dirty_harness_files": true,
+    "active_source_sha256": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+    "manifest_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b",
+    "cases": {
+      "balance_compare": "pass",
+      "reach_control": "pass",
+      "reach_replay": "pass",
+      "ars_training": "pass",
+      "policy_lineage": "pass",
+      "snapshot_restore": "pass",
+      "mcp_run_controller": "pass"
+    },
+    "independent_fresh_repeat": "passed"
+  },
+  "candidate": {
+    "source": {
+      "active_source_sha256": "8b3a0326fa163502bf8012f23bd10392bb9c801f570395043b13ec92d0b47b43",
+      "git_commit": "62557d2533ea458687c3c93c0e765a9c71485cc1",
+      "git_dirty": false,
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+      "plugins": [],
+      "python": "3.12.13"
+    },
+    "comparison": {
+      "issues": [],
+      "mode": "compare",
+      "source_changed": {
+        "active_source_sha256": {
+          "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+          "candidate": "8b3a0326fa163502bf8012f23bd10392bb9c801f570395043b13ec92d0b47b43"
+        },
+        "git_commit": {
+          "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+          "candidate": "62557d2533ea458687c3c93c0e765a9c71485cc1"
+        },
+        "git_dirty": {
+          "baseline": true,
+          "candidate": false
+        }
+      },
+      "status": "pass"
+    },
+    "cases": {
+      "balance_compare": "pass",
+      "reach_control": "pass",
+      "reach_replay": "pass",
+      "ars_training": "pass",
+      "policy_lineage": "pass",
+      "snapshot_restore": "pass",
+      "mcp_run_controller": "pass"
+    }
+  },
+  "real": {
+    "variants": {
+      "headless": {
+        "execution": {
+          "id": "cc2fedca-291b-4468-bfa8-f1c758658534",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/cc2fedca-291b-4468-bfa8-f1c758658534/experiment.json",
+          "kind": "execution"
+        },
+        "experiment": {
+          "id": "5a07d395-7428-4fa8-97fa-db8fc17508cc",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/5a07d395-7428-4fa8-97fa-db8fc17508cc/experiment.json",
+          "kind": "control"
+        },
+        "steps": 400,
+        "push_step": 100,
+        "shown_live": false,
+        "final_arrays": {
+          "qpos": "df9ca11d2250f43e46c78db676d50eb52706d5d2ba8afddca6e27deea39b1f42",
+          "qvel": "452c71d0a951bf5c648f4894e62605c83312e8894126bee3dc6f4c422658f448",
+          "ctrl": "a4a8c7dcff90c088bc38fec1d322c1aa9831ed73c2c53b212f607b741002ebdc"
+        }
+      },
+      "playing": {
+        "execution": {
+          "id": "86078896-89b6-4848-a079-322e6d1a6d64",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/86078896-89b6-4848-a079-322e6d1a6d64/experiment.json",
+          "kind": "execution"
+        },
+        "experiment": {
+          "id": "897b8ef6-f32b-493a-898a-b6cf9cb16b7d",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/897b8ef6-f32b-493a-898a-b6cf9cb16b7d/experiment.json",
+          "kind": "control"
+        },
+        "steps": 400,
+        "push_step": 100,
+        "shown_live": true,
+        "final_arrays": {
+          "qpos": "df9ca11d2250f43e46c78db676d50eb52706d5d2ba8afddca6e27deea39b1f42",
+          "qvel": "452c71d0a951bf5c648f4894e62605c83312e8894126bee3dc6f4c422658f448",
+          "ctrl": "a4a8c7dcff90c088bc38fec1d322c1aa9831ed73c2c53b212f607b741002ebdc"
+        }
+      },
+      "paused": {
+        "execution": {
+          "id": "9bff2d52-5051-426b-9110-a4f3b851b5c7",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/9bff2d52-5051-426b-9110-a4f3b851b5c7/experiment.json",
+          "kind": "execution"
+        },
+        "experiment": {
+          "id": "17d6b489-2ca2-4a11-80e0-fc82320bef53",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/17d6b489-2ca2-4a11-80e0-fc82320bef53/experiment.json",
+          "kind": "control"
+        },
+        "steps": 400,
+        "push_step": 100,
+        "shown_live": false,
+        "final_arrays": {
+          "qpos": "df9ca11d2250f43e46c78db676d50eb52706d5d2ba8afddca6e27deea39b1f42",
+          "qvel": "452c71d0a951bf5c648f4894e62605c83312e8894126bee3dc6f4c422658f448",
+          "ctrl": "a4a8c7dcff90c088bc38fec1d322c1aa9831ed73c2c53b212f607b741002ebdc"
+        }
+      },
+      "disconnect": {
+        "execution": {
+          "id": "ef530539-25e4-4f14-af38-17e24193496c",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/ef530539-25e4-4f14-af38-17e24193496c/experiment.json",
+          "kind": "execution"
+        },
+        "experiment": {
+          "id": "96151920-4b07-4d4c-bd5d-f10886552b57",
+          "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/96151920-4b07-4d4c-bd5d-f10886552b57/experiment.json",
+          "kind": "control"
+        },
+        "steps": 400,
+        "push_step": 100,
+        "shown_live": true,
+        "final_arrays": {
+          "qpos": "df9ca11d2250f43e46c78db676d50eb52706d5d2ba8afddca6e27deea39b1f42",
+          "qvel": "452c71d0a951bf5c648f4894e62605c83312e8894126bee3dc6f4c422658f448",
+          "ctrl": "a4a8c7dcff90c088bc38fec1d322c1aa9831ed73c2c53b212f607b741002ebdc"
+        }
+      }
+    },
+    "unchanged_mcp_tools": 60,
+    "stop": {
+      "execution": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/dadb5236-fdb5-4146-8b49-1a56c0163ba8/experiment.json",
+      "status": "cancelled",
+      "reason": "cancelled"
+    },
+    "reset": {
+      "execution": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/home/worlds/owned_execution/experiments/548da471-11c3-4ddc-8c28-43f1a5dd672e/experiment.json",
+      "status": "failed",
+      "reason": "invalidated"
+    },
+    "script": {
+      "status": "stopped",
+      "steps": 60,
+      "time": 2.242
+    },
+    "move": {
+      "from": {
+        "robot": "rover",
+        "position": [
+          1,
+          0,
+          0.037
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "to": {
+        "robot": "rover",
+        "position": [
+          1.161,
+          0,
+          0.035
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "distance_m": 0.161,
+      "turned_deg": 0,
+      "stopped": true,
+      "sim_seconds": 0.6,
+      "shown_live": true,
+      "behavior": {
+        "behavior": "drive",
+        "robot": "rover",
+        "speed": 0.3,
+        "turn": 0,
+        "max_speed": 0.7
+      }
+    },
+    "browser_errors": [],
+    "video": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-framework-regression/live/framework-validation.mp4",
+      "frames": 1099,
+      "seconds": 19.112473964691162
+    }
+  },
+  "video_probe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "avg_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "19.233008",
+      "size": "977456"
+    }
+  },
+  "video_decode": "passed",
+  "browser_gamepad": {
+    "passed": 8,
+    "seconds": 47.596
+  },
+  "behavior": {
+    "baseline": "aae9283",
+    "identical": true,
+    "scenarios": 14,
+    "markers": 280
+  },
+  "review": "independent Python reviews approved baseline harness and owned migration after corrections",
+  "unavailable_tools": [
+    "mypy",
+    "pyright",
+    "bandit",
+    "pip-audit"
+  ],
+  "scope": "MCP run_controller migration plus common-record regression baseline; other legacy adapters retained; no algorithm/reward/success-rate tuning",
+  "limitations": [
+    "macOS-only actual verification; native Windows not rerun",
+    "optional RL backends not tested",
+    "blocking native/plugin work remains cooperatively cancellable",
+    "runtime-specific baseline requires separate reviewed profiles on other platforms",
+    "transport Task.cancel and repeated cancellation covered by unit/boundary checks; video demonstrates actual MCP stop interruption",
+    "no paid Actions, new dependencies, release or deployment"
+  ],
+  "raw_evidence": "../robotforge-evidence/2026-10-22-framework-regression/"
+}

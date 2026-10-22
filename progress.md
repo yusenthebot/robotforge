@@ -531,7 +531,7 @@ Rounds 1-3 done, 2026-10-14.
 
 ## Next-round seed
 
-Continue framework convergence with reproducible experiment records: shared environment/task/algorithm identifiers, seeds, budgets, source versions, metrics and artifacts across comparisons, training and playback. Build on the existing execution kernel, capability metadata and task contracts. Migrate remaining execution adapters incrementally when needed. Manipulation success-rate work stays paused. Native Windows cleanup and the prior conveyor failure remain pending; publishing and licensing are separate decisions.
+Continue incremental execution migration against the seven-case common-record framework baseline. MCP run_controller now shares the execution kernel with move and ScriptRunner. Next admit pose/gripper and arm families separately, preserving multi-phase budgets and wind/fast-only simulation semantics. Manipulation success-rate work stays paused. Native Windows cleanup and the prior conveyor failure remain pending; publishing and licensing are separate decisions.
 
 ## Frontier
 
@@ -580,3 +580,24 @@ Continue framework convergence with reproducible experiment records: shared envi
   Source, scripts and tests stayed unchanged across final verification.
 - Next seed: common-record framework acceptance comparisons and incremental execution adapter migration.
   Keep manipulation success-rate tuning paused; current Windows and optional runtime validation remain separate.
+
+
+## Round 46 (2026-10-22): framework regression baseline and controller execution
+
+- Added a fixed seven-case acceptance suite using common records and verified artifacts.
+  Captured against old core aae9283 with only the new harness untracked, repeated independently, then compared the migrated candidate without replacing the baseline.
+  Runtime mismatch is unsupported; missing cases, unavailable/nonfinite metrics, changed inputs or physics and corrupt artifacts fail closed.
+- Migrated MCP run_controller to shared ownership, cumulative preparation/stepping deadlines and reset generations.
+  Snapshot workers leave the pose lock free; repeated cancellation drains real work before lease release, and existing stop behavior clears only owned controllers.
+  Execution parent records link original controller observations and preserve actual reasons without masking cancellation on recording errors.
+- All 60 MCP definitions stay identical and existing response fields remain, with an additive execution reference.
+  Real Chrome headless/playing/paused/disconnect checks have identical final arrays, 400 steps and push at step 100.
+  Actual stop/reset, later requests, old script controller flow and rover move pass with no browser errors.
+  The real 19.23-second 1080p/30fps test MP4 was decoded, inspected and shown to the user.
+- Checks: 3221 passed, 127 skipped, zero failures/errors in the complete 3348-case selection (1020.7 s); 79 final focused tests including 51 new cases; 8 real Chrome gamepad tests (47.60 s).
+  Wheel, Ruff, installed smoke (3.4 s) and independent Python reviews pass; 14 scenarios and all 280 physics markers match aae9283.
+  Source/scripts/tests/dependencies stayed frozen throughout final verification.
+- Evidence: docs/FRAMEWORK_REGRESSION.md and docs/bench/2026-10-22-framework-regression.md/.json; raw logs, records, hashes and MP4 in ../robotforge-evidence/2026-10-22-framework-regression/.
+  Implementation checkpoint 62557d2 was pushed before full regression; no control/reward/success-rate tuning, new dependencies, release or paid Actions.
+  Native Windows, optional RL backends and unavailable type/security packages remain unverified.
+- Next: migrate remaining pose/gripper and arm families separately against this baseline; explicitly preserve multi-phase and fast-only/wind lifecycle behavior.
