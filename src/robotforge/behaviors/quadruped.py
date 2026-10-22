@@ -190,6 +190,41 @@ class MotorDrive:
     upper: np.ndarray
 
 
+def bind_legs(
+    model: mujoco.MjModel, robot: str, legs: list[LegSpec], root_joint: int, home_qpos: np.ndarray
+) -> tuple[np.ndarray, list[Leg], MotorDrive | None]:
+    """Leg chains and standing geometry, measured on private kinematics without constructing IK."""
+    root_qpos = model.jnt_qposadr[root_joint]
+    base = home_qpos.copy()
+    base[root_qpos : root_qpos + 7] = [0, 0, 0, 1, 0, 0, 0]  # trunk frame == world frame
+    data = mujoco.MjData(model)
+    data.qpos[:] = base
+    mujoco.mj_kinematics(model, data)
+    joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
+
+    bound: list[Leg] = []
+    for name, joints, body, point, offset in legs:
+        missing = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in joints if j not in joint_to_act]
+        if missing:
+            raise ValueError(f"robot {robot!r} has no actuator on {', '.join(missing)}, so it cannot walk")
+        q0 = base[model.jnt_qposadr[joints]].copy()
+        chain = _keep_branch(Chain.from_joints(model, joints, body, point), q0)
+        foot = data.xpos[body] + data.xmat[body].reshape(3, 3) @ point
+        hip = data.xpos[model.jnt_bodyid[joints[0]]].copy()
+        acts = np.array([joint_to_act[j] for j in joints])
+        bound.append(Leg(name, chain, acts, offset, hip, foot, q0, tuple(foot.tolist())))
+    motors = _motor_drive(model, np.concatenate([leg.actuators for leg in bound]))
+    return base, bound, motors
+
+
+def gait_period(leg_length: float) -> float:
+    return float(np.clip(REFERENCE_PERIOD * leg_length / REFERENCE_LEG, 0.3, 0.7))
+
+
+def stride_speed(max_stride: float, period: float, duty: float = 0.5) -> float:
+    return SPEED_MARGIN * (max_stride / (period * duty))
+
+
 class QuadrupedGait:
     rate_hz = PLAN_HZ
 
@@ -213,26 +248,12 @@ class QuadrupedGait:
         self.root_qpos = model.jnt_qposadr[root_joint]
         self.root_dof = model.jnt_dofadr[root_joint]
         self.trunk = model.jnt_bodyid[root_joint]
-        base = home_qpos.copy()
-        base[self.root_qpos : self.root_qpos + 7] = [0, 0, 0, 1, 0, 0, 0]  # trunk frame == world frame
+        base, self.legs, self.motors = bind_legs(model, robot, legs, root_joint, home_qpos)
         self.ik = IKSolver(model, base)
-        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
-
-        self.legs: list[Leg] = []
-        for name, joints, body, point, offset in legs:
-            missing = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in joints if j not in joint_to_act]
-            if missing:
-                raise ValueError(f"robot {robot!r} has no actuator on {', '.join(missing)}, so it cannot walk")
-            q0 = base[model.jnt_qposadr[joints]].copy()
-            chain = _keep_branch(Chain.from_joints(model, joints, body, point), q0)
-            foot = self.ik.point(chain, q0)
-            hip = self.ik.data.xpos[model.jnt_bodyid[joints[0]]].copy()
-            acts = np.array([joint_to_act[j] for j in joints])
-            self.legs.append(Leg(name, chain, acts, offset, hip, foot, q0, tuple(foot.tolist())))
+        self.ik.point(self.legs[-1].chain, self.legs[-1].q)
         self._actuators = np.concatenate([leg.actuators for leg in self.legs])
         self._targets = np.concatenate([leg.q for leg in self.legs])
         self._targets_from = [leg.q for leg in self.legs]  # the solutions _targets holds (rebuilt when one changes)
-        self.motors = _motor_drive(model, self._actuators)
         if self.motors is not None:
             # Torque motors need their PD loop at physics rate; IK still runs at PLAN_HZ.
             self.rate_hz = 1.0 / model.opt.timestep
@@ -242,7 +263,7 @@ class QuadrupedGait:
         footing = Footing(model, self.trunk, [(leg.chain.body, leg.chain.local_point) for leg in self.legs], leg_len)
         self.footing: Footing | None = footing if footing.needed else None
         if period is None:
-            period = float(np.clip(REFERENCE_PERIOD * leg_len / REFERENCE_LEG, 0.3, 0.7))
+            period = gait_period(leg_len)
         self.leg_length = leg_len
         self.lift = lift if lift is not None else 0.25 * leg_len
         # Stride is limited to what the legs can reach comfortably.
@@ -287,7 +308,7 @@ class QuadrupedGait:
         """Seconds per gait cycle; the fastest accepted speed follows from it and the longest stride."""
         self.period = period
         self._stride_speed = self.max_stride / (self.period * self.duty)  # body speed at the longest stride
-        self.max_speed = SPEED_MARGIN * self._stride_speed
+        self.max_speed = stride_speed(self.max_stride, self.period, self.duty)
         if self._top is not None:
             self.max_speed = min(self.max_speed, self._top)
 
@@ -755,15 +776,7 @@ def _apply_pd(drive: MotorDrive, data: mujoco.MjData, targets: np.ndarray) -> No
 # ---- finding the legs -----------------------------------------------------------------------
 
 
-def for_template(
-    model: mujoco.MjModel,
-    robot: str,
-    home_qpos: np.ndarray,
-    period: float = TEMPLATE_PERIOD,
-    lift: float | None = None,
-) -> QuadrupedGait:
-    """Build a gait for a robot made from the quadruped template (period: s per cycle, lift: m)."""
-
+def template_binding(model: mujoco.MjModel, robot: str) -> tuple[int, list[LegSpec]]:
     def jid(name: str) -> int:
         j = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"{robot}/{name}")
         if j < 0:
@@ -775,13 +788,25 @@ def for_template(
         site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/{leg}_foot")
         joints = [jid(f"{leg}_hip"), jid(f"{leg}_thigh"), jid(f"{leg}_knee")]
         legs.append((leg, joints, int(model.site_bodyid[site]), model.site_pos[site].copy(), offset))
-    return QuadrupedGait(model, robot, legs, jid("root"), home_qpos, period=period, lift=lift)
+    return jid("root"), legs
 
 
-def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> QuadrupedGait:
-    """Build a gait for any four- or six-legged robot: our template by name, others by their kinematic tree."""
+def for_template(
+    model: mujoco.MjModel,
+    robot: str,
+    home_qpos: np.ndarray,
+    period: float = TEMPLATE_PERIOD,
+    lift: float | None = None,
+) -> QuadrupedGait:
+    """Build a gait for a robot made from the quadruped template (period: s per cycle, lift: m)."""
+
+    root, legs = template_binding(model, robot)
+    return QuadrupedGait(model, robot, legs, root, home_qpos, period=period, lift=lift)
+
+
+def robot_binding(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple[int, list[LegSpec], float | None]:
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{robot}/front_left_foot") >= 0:
-        return for_template(model, robot, home_qpos)
+        return (*template_binding(model, robot), TEMPLATE_PERIOD)
     found = discover_legs(model, robot, home_qpos)
     if found is None:
         raise ValueError(
@@ -789,7 +814,13 @@ def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Quadr
             "(expected a floating trunk with four or six legs of three hinge joints each)"
         )
     root, legs = found
-    return QuadrupedGait(model, robot, legs, root, home_qpos)
+    return root, legs, None
+
+
+def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> QuadrupedGait:
+    """Build a gait for any four- or six-legged robot: our template by name, others by their kinematic tree."""
+    root, legs, period = robot_binding(model, robot, home_qpos)
+    return QuadrupedGait(model, robot, legs, root, home_qpos, period=period)
 
 
 def discover_legs(

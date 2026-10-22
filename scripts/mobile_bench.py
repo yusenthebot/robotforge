@@ -22,16 +22,21 @@ part of robotforge.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
 import math
 import os
+import platform
 import random
+import subprocess
 import tempfile
 import time
 import traceback
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 from typing import Any
 
 ROBOTS: dict[str, dict[str, Any]] = {
@@ -147,7 +152,7 @@ def job_door(pg: Any, wait: Wait) -> dict[str, Any]:
 
 def job_fetch(pg: Any, wait: Wait) -> dict[str, Any]:
     out = pick_and_place(pg, "apple", "living_table", wait)
-    return {k: out[k] for k in ("success", "why", "note", "errand_s", "driven_m") if k in out}
+    return out
 
 
 def job_drawer(pg: Any, wait: Wait) -> dict[str, Any]:
@@ -155,7 +160,7 @@ def job_drawer(pg: Any, wait: Wait) -> dict[str, Any]:
     if not opened.get("success"):
         return {"success": False, "why": f"open:{opened.get('why', 'short')}", "note": opened.get("note")}
     out = pick_and_place(pg, "block", "kitchen_table", wait)
-    res = {k: out[k] for k in ("success", "why", "note") if k in out}
+    res = dict(out)
     res["opened_m"] = opened.get("moved")
     if not out.get("success"):
         res["why"] = f"take:{out.get('why', 'not_there')}"
@@ -225,19 +230,64 @@ def cause(text: str) -> str:
     return "refused:other"
 
 
-def run_one(robot: str, job: str, seed: int) -> dict[str, Any]:
-    os.environ["ROBOTFORGE_HOME"] = tempfile.mkdtemp(prefix="rf-mobile-")
+def run_one(robot: str, job: str, seed: int, artifacts: str | None = None) -> dict[str, Any]:
+    """Run an isolated case, retaining its world, stage trace and final physics state when requested."""
+    previous_home = os.environ.get("ROBOTFORGE_HOME")
+    temporary = tempfile.TemporaryDirectory(prefix="rf-mobile-") if artifacts is None else None
+    home = Path(temporary.name) if temporary else Path(artifacts) / f"{robot}-{job}-{seed}"
+    if artifacts is not None:
+        home.mkdir(parents=True, exist_ok=False)
+    os.environ["ROBOTFORGE_HOME"] = str(home)
     from robotforge.playground import Playground
     from robotforge.sim.session import SimSession
 
     t0 = time.monotonic()
     out: dict[str, Any] = {"robot": robot, "job": job, "seed": seed}
+    pg = None
+    stages: list[dict[str, Any]] = []
+    last = None
+
+    def record() -> None:
+        nonlocal last
+        from dataclasses import asdict
+
+        from robotforge.behaviors.fetch import Errand
+
+        for controller in pg.session.controllers.values():
+            if not isinstance(controller, Errand):
+                continue
+            key = (controller.step, controller.state, controller._replans, controller._tries)
+            if key == last:
+                continue
+            last = key
+            stages.append(
+                {
+                    "time": round(float(pg.session.data.time), 3),
+                    "step": controller.step,
+                    "state": controller.state,
+                    "replans": controller._replans,
+                    "tries": controller._tries,
+                    "base": list(controller._pose(pg.session.data)[0]),
+                    "heading": controller._pose(pg.session.data)[1],
+                    "pick": asdict(controller.pick) if controller.pick else None,
+                    "drop": asdict(controller.drop),
+                }
+            )
+
+    def wait(until: Callable[[], bool], seconds: float) -> None:
+        def observe() -> bool:
+            record()
+            return until()
+
+        pg.run_fast(observe, seconds)
+        record()
+
     try:
         pg = Playground(session=SimSession.from_xml("<mujoco/>"))
         pg.new_world(f"{robot}_{job}_{seed}")
         build(pg, robot, seed, job)
         pg.run_fast(lambda: False, 1.0)
-        out.update(JOB_FUNCS[job](pg, lambda until, seconds: pg.run_fast(until, seconds)))
+        out.update(JOB_FUNCS[job](pg, wait))
         out["sim_s"] = round(float(pg.session.data.time), 1)
         if not pg.behaviors.pose(NAME)["upright"]:
             out.update(success=False, why="fell")
@@ -247,8 +297,87 @@ def run_one(robot: str, job: str, seed: int) -> dict[str, Any]:
         out.update(success=False, why=cause(text) if known else f"error:{type(exc).__name__}", note=text[:300])
         if not known:
             out["trace"] = traceback.format_exc()[-800:]
-    out["wall_s"] = round(time.monotonic() - t0, 1)
+    finally:
+        try:
+            out["wall_s"] = round(time.monotonic() - t0, 1)
+            out["stages"] = stages
+            if artifacts is not None:
+                import numpy as np
+
+                out["artifacts"] = str(home.resolve())
+                if pg is not None:
+                    data = pg.session.data
+                    np.savez_compressed(
+                        home / "final-state.npz", qpos=data.qpos, qvel=data.qvel, ctrl=data.ctrl, time=data.time
+                    )
+                (home / "result.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+        finally:
+            if previous_home is None:
+                os.environ.pop("ROBOTFORGE_HOME", None)
+            else:
+                os.environ["ROBOTFORGE_HOME"] = previous_home
+            if temporary:
+                temporary.cleanup()
     return out
+
+
+def read_cases(path: Path) -> list[tuple[str, str, int]]:
+    """Validate a frozen case list before starting any worker or simulation."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise ValueError("case manifest must have version 1")
+    rows = payload.get("cases")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("case manifest must have a nonempty cases list")
+    cases = []
+    for row in rows:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("robot"), str)
+            or not isinstance(row.get("job"), str)
+            or row.get("robot") not in ROBOTS
+            or row.get("job") not in JOBS
+            or type(row.get("seed")) is not int
+            or row["seed"] < 0
+        ):
+            raise ValueError(f"invalid mobile case: {row!r}")
+        case = (row["robot"], row["job"], row["seed"])
+        if case in cases:
+            raise ValueError(f"duplicate mobile case: {case!r}")
+        cases.append(case)
+    return cases
+
+
+def provenance(runs: list[tuple[str, str, int]]) -> dict[str, Any]:
+    """Identify the exact source, model pin and environment, including uncommitted source edits."""
+    from robotforge.design.menagerie import COMMIT
+
+    root = Path(__file__).resolve().parents[1]
+    source = hashlib.sha256()
+    inputs = sorted(p for p in (root / "src").rglob("*") if p.suffix in {".py", ".json", ".yaml", ".xml", ".onnx"})
+    for path in inputs + [Path(__file__).resolve(), root / "uv.lock"]:
+        source.update(str(path.relative_to(root)).encode())
+        source.update(path.read_bytes())
+
+    def git(*args: str) -> str:
+        return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+    return {
+        "version": 1,
+        "revision": git("rev-parse", "HEAD"),
+        "dirty": bool(git("status", "--porcelain")),
+        "source_sha256": source.hexdigest(),
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "packages": {name: importlib.metadata.version(name) for name in ("mujoco", "numpy", "robotforge")},
+        "menagerie_commit": COMMIT,
+        "menagerie_override": os.environ.get("ROBOTFORGE_MENAGERIE"),
+        "plugins": os.environ.get("ROBOTFORGE_PLUGINS"),
+        "standard_models_and_plugins": not os.environ.get("ROBOTFORGE_MENAGERIE")
+        and os.environ.get("ROBOTFORGE_PLUGINS") == "",
+        "limits_sim_s": {"operate": OPERATE_S, "errand": ERRAND_S, "trip": TRIP_S},
+        "cases": [{"robot": r, "job": j, "seed": s} for r, j, s in runs],
+    }
 
 
 def unsupported(row: dict[str, Any]) -> bool:
@@ -277,26 +406,52 @@ def report(results: list[dict[str, Any]]) -> str:
         text = ", ".join(f"{c} x{n}" for c, n in causes.most_common()) or "-"
         lines.append(f"{robot:14} {job:8} {good}/{len(rows):<6} {text}")
     lines.append(f"measured cells: {won}/{ran} runs succeeded (not-supported cells left out)")
+    lines.append(
+        f"all attempts: {sum(bool(r.get('success')) for r in results)}/{len(results)} succeeded; "
+        f"{sum(str(r.get('why', '')).startswith('refused:') for r in results)} refused"
+    )
     return "\n".join(lines)
 
 
 def main() -> None:
+    # Benchmarks should not accidentally load a developer's personal plugins.
+    os.environ.setdefault("ROBOTFORGE_PLUGINS", "")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--robots", nargs="*", default=list(ROBOTS))
-    parser.add_argument("--jobs", nargs="*", default=list(JOBS))
+    parser.add_argument("--robots", nargs="+", choices=list(ROBOTS), default=list(ROBOTS))
+    parser.add_argument("--jobs", nargs="+", choices=list(JOBS), default=list(JOBS))
     parser.add_argument("--seeds", type=int, default=8)
     parser.add_argument("--seed-start", type=int, default=0, help="the first seed (seeds 0-7 are the tuning ones)")
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--json", help="write each run as a line of JSON here")
+    parser.add_argument("--cases", type=Path, help="frozen JSON case list, overriding robots/jobs/seeds")
+    parser.add_argument("--artifacts", type=Path, help="new directory for manifest, worlds and diagnostics")
     args = parser.parse_args()
+    if args.workers < 1 or args.seeds < 1 or args.seed_start < 0:
+        parser.error("workers and seeds must be positive; seed-start must be nonnegative")
     seeds = range(args.seed_start, args.seed_start + args.seeds)
     runs = [(r, j, s) for r in args.robots for j in args.jobs for s in seeds]
+    if args.cases:
+        try:
+            runs = read_cases(args.cases)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+    metadata = provenance(runs)
+    if args.artifacts:
+        args.artifacts.mkdir(parents=True, exist_ok=False)
+        (args.artifacts / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        patch = subprocess.check_output(["git", "diff", "--binary", "HEAD"], cwd=root)
+        (args.artifacts / "source.patch").write_bytes(patch)
+    if args.json:
+        Path(args.json + ".manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     results = []
     sink = open(args.json, "w", encoding="utf-8") if args.json else None  # noqa: SIM115
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        for result in pool.map(run_one, *zip(*runs, strict=True)):
+        for result in pool.map(
+            run_one, *zip(*runs, strict=True), [str(args.artifacts) if args.artifacts else None] * len(runs)
+        ):
             results.append(result)
-            print(json.dumps({k: v for k, v in result.items() if k != "trace"}), flush=True)
+            print(json.dumps({k: v for k, v in result.items() if k not in ("trace", "stages")}), flush=True)
             if sink:
                 sink.write(json.dumps(result) + "\n")
                 sink.flush()

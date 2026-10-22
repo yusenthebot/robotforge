@@ -432,6 +432,9 @@ class BehaviorManager:
         # What a demonstration listens to: (robot, {"op": "move", ...}) after each command given from outside
         self.command_hooks: list[Callable[[str, dict[str, Any]], None]] = []
         self._issuing = threading.local()
+        self._capability_model: mujoco.MjModel | None = None
+        self._capability_structures: dict[tuple[str, str], Any] = {}
+        self._mobility_limits: dict[tuple[str, Kind], tuple[float | None, str | None]] = {}
         session.reset_hooks.append(self._trips_after_reset)
         session.reset_hooks.append(self.start_balancing)
         session.ctrl_hooks.append(self._set_by_hand)
@@ -488,13 +491,30 @@ class BehaviorManager:
     # ---- robots in the session -------------------------------------------------------
 
     def robots(self) -> list[dict[str, Any]]:
+        # World/lesson reads must precede the simulation lock (the viewer follows
+        # the same lock order). Retry if a model was replaced during that read.
+        while True:
+            version = self.session.version
+            world = self._world()
+            with self.session.lock:
+                if version == self.session.version:
+                    return self._describe_robots(world)
+
+    def _describe_robots(self, world: World | None) -> list[dict[str, Any]]:
+        from robotforge import capabilities
+
         m = self.session.model
-        world = self._world()
+        if self._capability_model is not m:
+            self._capability_model = m
+            self._capability_structures.clear()
+            self._mobility_limits.clear()
         names = self._names(world)
         told = {r.name: _told_kind(r) for r in world.robots} if world else {}
         models = {r.name: library.get(r.library).title for r in world.robots if r.library} if world else {}
+        learned_walkers = self._learned_walkers(world)
         out = []
         for name in names:
+            move_reason = None
             kind = robot_kind(m, name, told.get(name))
             # A gripper on its own has a tool point like an arm, but nothing to move it (see _arm_name).
             info: dict[str, Any] = {"name": name, "kind": "gripper" if told.get(name) == "gripper" else kind.value}
@@ -505,19 +525,31 @@ class BehaviorManager:
                 info["arms"] = arms
             entry = _entry(name, world)
             if kind in MOBILE and _learned_humanoid(entry):  # its policy's card says, without loading it
-                learned = self._learned_walkers(world).get(name)
+                learned = learned_walkers.get(name)
                 if learned is not None:
                     loaded = self._loaded_speed(name, entry)  # slower when it carries much (see library.Payload)
                     top = learned["max_speed"] if loaded is None else min(learned["max_speed"], loaded)
                     info["max_speed"] = round(top, 3)
             elif kind in MOBILE:
-                with contextlib.suppress(BehaviorError):
-                    info["max_speed"] = round(self._mobile_controller(name, kind, world, create=False).max_speed, 3)
+                top, move_reason = self._described_speed(name, kind, entry)
+                if top is not None:
+                    info["max_speed"] = round(top, 3)
             if kind == Kind.AIRCRAFT:
                 info["flight"] = self.flight_info(name)
             if isinstance(self.session.controllers.get(name), whole_body.WholeBodyBalancer):
                 info["balance"] = "whole-body balance: stands on its feet, holds a load, takes a push"
             walk = self._kept_walk_or_none(name)
+            walk_fits = False
+            if walk is not None:
+                from robotforge.behaviors.rhythm_walk import saved_walk_binding
+
+                try:
+                    saved_walk_binding(m, name, walk)
+                    walk_fits = True
+                except ValueError as exc:
+                    if "max_speed" not in info:
+                        move_reason = str(exc)
+            can_move = "max_speed" in info or walk_fits
             if walk is None and "balance" in info and "max_speed" not in info:
                 info["walk_hint"] = "no walk has been shown to carry it, so move cannot walk it; it stands on its own"
             if walk is not None:
@@ -525,8 +557,48 @@ class BehaviorManager:
                 info.setdefault("max_speed", round(walk.speed, 3))  # robots no gait code knows drive with it
             elif kind not in MOBILE and self._can_learn_walk(name):
                 info["walk_hint"] = f"no gait code knows this body, so move cannot walk it yet; {LEARN_A_WALK}"
+            key = (name, info["kind"])
+            if key not in self._capability_structures:
+                self._capability_structures[key] = capabilities.inspect_robot(m, name, info["kind"])
+            info["capabilities"] = capabilities.describe(
+                self._capability_structures[key],
+                info,
+                capabilities.source_of(entry),
+                move_reason,
+                name in learned_walkers,
+                move_supported=can_move,
+                kept_walk_supported=walk_fits,
+            )
             out.append(info)
         return out
+
+    def _described_speed(self, name: str, kind: Kind, entry: RobotEntry | None) -> tuple[float | None, str | None]:
+        """Share runtime bindings, with no controller, solver or policy model initialization."""
+        from robotforge.behaviors.mobility import describe_mobility
+
+        active = self.session.controllers.get(name)
+        if _is_mover(active):
+            return float(active.max_speed), None
+        if kind == Kind.HUMANOID and not _tuned_humanoid(entry):
+            return None, "no walk has been shown to carry this humanoid; it stands by whole-body balance"
+        key = (name, kind)
+        # Marine drag depends on immersion in the current water, unlike geometry limits.
+        if key not in self._mobility_limits or kind in (Kind.BOAT, Kind.ROV):
+            try:
+                top = describe_mobility(
+                    self.session.model, name, kind, self.home_qpos(), self.session.water, self.session.data
+                )
+                self._mobility_limits[key] = top, None
+            except ValueError as exc:
+                self._mobility_limits[key] = None, str(exc)
+        top, reason = self._mobility_limits[key]
+        if top is not None and kind in (Kind.QUADRUPED, Kind.HEXAPOD, Kind.HUMANOID):
+            limit = library.get(entry.library).max_speed if entry is not None and entry.library else None
+            loaded = self._loaded_speed(name, entry)
+            for cap in (limit, loaded):
+                if cap is not None:
+                    top = min(top, cap)
+        return top, reason
 
     def flight_info(self, robot: str) -> dict[str, Any]:
         """An aircraft's rotors, how hard they lift, what flies it and what it is doing (or why it cannot fly).
@@ -1268,6 +1340,10 @@ class BehaviorManager:
                 trip.state, trip.cause, trip.note = "stopped", "interrupted", "it was moved or stopped on the way"
                 trip.end_time = float(self.session.data.time)
                 self._last_trips[robot] = trip.result()
+
+    def last_trip(self, robot: str) -> dict[str, Any] | None:
+        """A finished trip's saved report, safe to read after its model was reset or replaced."""
+        return self._last_trips.get(robot)
 
     def _trips_after_reset(self) -> None:
         """A reset or a change to the world clears every controller, trips among them, before this runs. A trip under

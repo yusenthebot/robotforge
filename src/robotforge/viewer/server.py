@@ -117,6 +117,7 @@ class ViewerHub:
         self.slow_handlers: dict[str, Callable[[dict[str, Any]], Any]] = {}
         self.scene_extras: Callable[[], dict[str, Any]] | None = None
         self.state_extras: Callable[[], dict[str, Any]] | None = None
+        self.robot_stream: Callable[[], dict[str, Any] | None] | None = None
         # While a lesson runs: its live update (step, plots, overlay numbers), sent LESSON_HZ times a second.
         self.lesson_stream: Callable[[], dict[str, Any] | None] | None = None
         # What the robots' sensors measure, sent SENSOR_HZ times a second while the world has any (None when it
@@ -210,6 +211,12 @@ class ViewerHub:
     # ---- client messages ------------------------------------------------------------
 
     def handle(self, msg: dict[str, Any]) -> None:
+        with self.session.lock:
+            if msg.get("type") in {"ctrl", "teleop", "teleop_arm"}:
+                self.session.execution.require_idle()
+            self._handle(msg)
+
+    def _handle(self, msg: dict[str, Any]) -> None:
         s = self.session
         kind = msg.get("type")
         if kind == "cmd":
@@ -221,6 +228,7 @@ class ViewerHub:
             elif cmd == "reset":
                 s.reset()
             elif cmd == "step":
+                s.execution.require_idle()
                 s.paused = True
                 s.step(1)
             else:
@@ -255,7 +263,14 @@ class ViewerHub:
     async def _run_slow(self, ws: WebSocket, msg: dict[str, Any], handler: Callable[[dict[str, Any]], Any]) -> None:
         reply: dict[str, Any] = {"type": "reply", "id": msg.get("id")}
         try:
-            reply.update(ok=True, data=await asyncio.to_thread(handler, msg))
+
+            def admitted() -> Any:
+                if msg.get("type") in {"go_to", "mode", "pick_and_place"}:
+                    with self.session.execution.command(str(msg["type"])):
+                        return handler(msg)
+                return handler(msg)
+
+            reply.update(ok=True, data=await asyncio.to_thread(admitted))
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             reply.update(ok=False, message=str(exc))
         except Exception as exc:  # a bug: log it in full, and still tell the page so it does not wait forever
@@ -316,6 +331,7 @@ class ViewerHub:
         last_map = 0.0
         last_training = 0.0
         last_flow = 0
+        last_robots = 0.0
         last_report = -math.inf
         while True:
             tick_start = time.perf_counter()
@@ -335,6 +351,11 @@ class ViewerHub:
                     if tick_start - last_state > 1.0 / STATE_HZ:
                         last_state = tick_start
                         await self._send_all(text=json.dumps(self.state_message()))
+                    if self.robot_stream is not None and tick_start - last_robots >= 1.0:
+                        last_robots = tick_start
+                        update = self.robot_stream()
+                        if update is not None:
+                            await self._send_all(text=json.dumps(update))
                     if self.lesson_stream is not None and tick_start - last_lesson > 1.0 / LESSON_HZ:
                         last_lesson = tick_start
                         update = self.lesson_stream()

@@ -38,7 +38,15 @@ from robotforge.control.tasks.base import readable
 from robotforge.training import algorithms, search
 from robotforge.training.envs import ObservedTask, build_env, describe
 from robotforge.training.search import SearchSpec, TrialPlan
-from robotforge.training.trial import HELD_OUT_SEED, POLICY_FILE, PROGRESS_FILE, evaluate_policy, thin
+from robotforge.training.trial import (
+    HELD_OUT_SEED,
+    POLICY_FILE,
+    PROGRESS_FILE,
+    Stopped,
+    _load_plugins,
+    evaluate_policy,
+    thin,
+)
 
 RUN_FILE = "run.json"
 TRIALS_DIR = "trials"
@@ -238,6 +246,7 @@ class _Trial:
         self.steps = 0
         self.score: dict[str, Any] | None = None
         self.error: str | None = None
+        self.timed_out = False
         self.seconds = 0.0
         self.live: dict[str, Any] = {}
         self.history: dict[str, Any] = {"curve": [], "returns": [], "metrics": {}}
@@ -277,6 +286,8 @@ class _Trial:
             out["score"] = self.score
         if self.error:
             out["error"] = self.error
+        if self.timed_out:
+            out["timed_out"] = True
         return out
 
     def standing(self) -> float:
@@ -299,6 +310,7 @@ class Job:
         self.stop_file = folder / store.STOP_FILE
         self.last_write = 0.0
         self.stop_seen = False
+        self.timed_out = False
         self.planned = self._planned_steps()
         self.rung_now = 0
         self.facts = store.read_json(folder / store.POLICY_FILE)
@@ -357,8 +369,12 @@ class Job:
         }
         if state == "running" and progress > 0.02:
             doc["eta_s"] = round(elapsed * (1.0 - progress) / progress, 1)
-        if self.spec.notes:
-            doc["notes"] = self.spec.notes
+        notes = list(self.spec.notes)
+        if self.timed_out:
+            doc["timed_out"] = True
+            notes.append("time budget reached; queued trials were cancelled and active trials stopped cooperatively")
+        if notes:
+            doc["notes"] = notes
         shown = lead or self._front()
         if shown is not None:
             view = shown.view()
@@ -383,7 +399,6 @@ class Job:
         return self.folder / TRIALS_DIR / trial.plan.id
 
     def job_for(self, trial: _Trial, budget: int, resume: bool) -> dict[str, Any]:
-        remaining = None if self.deadline is None else max(0.5, self.deadline - time.monotonic())
         return {
             "id": trial.plan.id,
             "algo": trial.plan.algo,
@@ -396,16 +411,24 @@ class Job:
             "trial_dir": str(self.trial_dir(trial)),
             "stop_file": str(self.stop_file),
             "eval_episodes": self.spec.eval_episodes,
-            "max_seconds": remaining,
+            "deadline": self.deadline,
         }
+
+    def should_stop(self) -> bool:
+        """Notice the shared time budget while waiting, between rungs and during final testing."""
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            self.timed_out = True
+            self.stop_file.touch()
+        if self.stop_file.exists():
+            self.stop_seen = True
+        return self.stop_seen
 
     def poll(self, active: list[_Trial]) -> None:
         for t in active:
             progress = store.read_json(self.trial_dir(t) / PROGRESS_FILE)
             if progress and progress.get("state") == "running":
                 t.live = progress
-        if self.stop_file.exists():
-            self.stop_seen = True
+        self.should_stop()
         self.write()
 
     def run(self) -> str:
@@ -430,7 +453,7 @@ class Job:
                     futures[pool.submit(_segment, self.job_for(t, max(increment, 1), resume=r > 0))] = t
                 self._wait(futures)
                 self._collect(alive)
-                if self.stop_seen or (self.deadline and time.monotonic() > self.deadline) or r == len(self.rungs) - 1:
+                if self.should_stop() or r == len(self.rungs) - 1:
                     break
                 keep = self.rungs[r + 1][1]
                 ranked = search.survivors(
@@ -454,6 +477,14 @@ class Job:
     def _wait(self, futures: dict[Future, _Trial]) -> None:
         pending = set(futures)
         while pending:
+            if self.should_stop() and self.timed_out:
+                for f in list(pending):
+                    if f.cancel():
+                        t = futures[f]
+                        t.state, t.timed_out = "stopped", self.timed_out
+                        pending.remove(f)
+                if not pending:
+                    break
             done, pending = wait(pending, timeout=0.8, return_when=FIRST_COMPLETED)
             for f in done:
                 t = futures[f]
@@ -464,7 +495,8 @@ class Job:
                     t.error = f"{type(exc).__name__}: {exc}"
                     print(f"trial {t.plan.id} failed:\n{''.join(traceback.format_exception(exc)[-6:])}", flush=True)
                 else:
-                    t.state = "stopped" if out["stopped"] else "done"
+                    t.timed_out = out.get("timed_out", False)
+                    t.state = "stopped" if out["stopped"] or t.timed_out else "done"
                     t.steps, t.score, t.seconds = out["steps"], out["score"], out["seconds"]
             running = [t for f, t in futures.items() if f in pending]
             for t in running:
@@ -483,8 +515,14 @@ class Job:
     def finish(self, state: str) -> dict[str, Any]:
         ranked = [t for t in self.trials if t.score is not None and (self.trial_dir(t) / POLICY_FILE).exists()]
         if not ranked:
-            errors = "; ".join(f"{t.plan.id}: {t.error}" for t in self.trials if t.error) or "no trial finished"
-            raise TaskError(f"training produced no policy ({errors})")
+            if state == "stopped":
+                # Keep a policy interrupted before its first complete test, without inventing a ranking score.
+                ranked = [t for t in self.trials if (self.trial_dir(t) / POLICY_FILE).exists()]
+                if not ranked:
+                    return {"note": "stopped before a policy could be saved"}
+            else:
+                errors = "; ".join(f"{t.plan.id}: {t.error}" for t in self.trials if t.error) or "no trial finished"
+                raise TaskError(f"training produced no policy ({errors})")
         last = max(t.rung for t in ranked)
         ranked = [t for t in ranked if t.rung == last]  # the trials that went furthest
         best = max(ranked, key=lambda t: (t.standing(), (t.score or {}).get("success_rate", 0), t.plan.id))
@@ -498,6 +536,8 @@ class Job:
             "steps": best.steps,
             **(best.score or {}),
         }
+        if best.score is None:
+            final["score_note"] = "policy saved before a complete ranking evaluation; its quality is unmeasured"
         held_out = self._held_out(state)
         if held_out is not None:
             final["held_out"] = held_out
@@ -523,13 +563,18 @@ class Job:
         set of test starts makes its score on those starts optimistic, so this is the number to quote."""
         asked = self.spec.held_out_episodes
         episodes = (HELD_OUT_EPISODES if len(self.trials) > 1 else 0) if asked is None else asked
-        if episodes <= 0 or state == "stopped":
+        if episodes <= 0 or state == "stopped" or self.should_stop():
             return None
         self.write("testing", force=True)
         env = build_env(self.spec.env)
         try:
             policy = MlpPolicy.load(self.folder / POLICY_FILE)
-            return {**evaluate_policy(env, policy, episodes, seed=HELD_OUT_SEED), "seed": HELD_OUT_SEED}
+            return {
+                **evaluate_policy(env, policy, episodes, seed=HELD_OUT_SEED, should_stop=self.should_stop),
+                "seed": HELD_OUT_SEED,
+            }
+        except Stopped:
+            return None
         finally:
             env.close()
 
@@ -548,21 +593,35 @@ def run_job(folder: Path) -> int:
     folder = Path(folder)
     if hasattr(os, "nice"):
         os.nice(5)  # training must never make the viewer or the agent stutter
-    spec = RunSpec.model_validate(store.read_json(folder / RUN_FILE))
-    threading.Thread(target=_heartbeat, args=(folder,), daemon=True).start()
-    job = Job(spec, folder)
+    job = None
     try:
+        spec = RunSpec.model_validate(store.read_json(folder / RUN_FILE))
+        threading.Thread(target=_heartbeat, args=(folder,), daemon=True).start()
+        _load_plugins({"world_dir": spec.env.get("world_dir")})
+        job = Job(spec, folder)
         job.write("running", force=True)
         state = job.run()
         final = job.finish(state)
+        if job.should_stop():
+            state = "stopped"
     except Exception as exc:
         tail = traceback.format_exc().strip().splitlines()[-25:]
         store.write_json(
             folder / store.STATUS_FILE,
-            {**job.document("failed"), "error": f"{type(exc).__name__}: {exc}", "traceback_tail": tail},
+            {
+                **(job.document("failed") if job is not None else {"state": "failed", "updated": time.time()}),
+                "error": f"{type(exc).__name__}: {exc}",
+                "traceback_tail": tail,
+            },
         )
         raise
-    job.write(state, force=True, final=final, leader=job.leader_id, progress=1.0 if state == "done" else None)
+    job.write(
+        state,
+        force=True,
+        final=final,
+        leader=getattr(job, "leader_id", None),
+        progress=1.0 if state == "done" else None,
+    )
     (folder / store.STOP_FILE).unlink(missing_ok=True)
     print(f"{state}: {final}", flush=True)
     return 0
@@ -586,7 +645,9 @@ def run_inline(spec: RunSpec, folder: Path) -> dict[str, Any]:
     job = Job(spec, folder)
     state = job.run()
     final = job.finish(state)
-    job.write(state, force=True, final=final, leader=job.leader_id)
+    if job.should_stop():
+        state = "stopped"
+    job.write(state, force=True, final=final, leader=getattr(job, "leader_id", None))
     return store.read_json(folder / store.STATUS_FILE)
 
 

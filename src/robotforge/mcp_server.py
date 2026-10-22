@@ -53,6 +53,7 @@ from robotforge.playground import MAX_SIM_SECONDS, Playground, PlaygroundError, 
 from robotforge.script_runner import ScriptRunner
 from robotforge.sensors import mcp_tools as sensor_tools
 from robotforge.sim import recording
+from robotforge.sim.execution import EndReason, ExecutionError, ExecutionKernel, ExecutionRun, RunLimits
 from robotforge.sim.render import RenderUnavailable
 from robotforge.sim.session import ModelLoadError, SimSession
 from robotforge.viewer.server import ViewerHub, create_app
@@ -265,6 +266,8 @@ control): the user may be new to robotics. Check results (numbers, observe) befo
 class _Server(MCPServer):
     """An MCPServer that reads a call forgivingly and answers a failed one briefly (see tool_input)."""
 
+    execution: ExecutionKernel | None = None
+
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Context | None = None):
         names = [t.name for t in self._tool_manager.list_tools()]
         name = name if name in names else tool_input.tool_name(name, names) or name
@@ -272,12 +275,34 @@ class _Server(MCPServer):
         if tool is None:
             raise ToolError(tool_input.unknown_tool(name, names))
         arguments = tool_input.tidy(name, tool.parameters, arguments)
+        # Legacy controller tools are not migrated yet. Refuse known competing commands before they install
+        # a controller; actual stepping is also guarded by SimSession under its lock.
         if name == "move" and arguments.get("to") is not None:
             # A trip goes on until it gets there: left out, its time limit is the longest a call may run, not a
             # plain move's 3 s, which would stop it on the way; and it goes at its own pace, not a plain move's speed.
             arguments = {"seconds": MAX_SIM_SECONDS, "speed": None, **arguments}
         try:
+            legacy_command = (
+                name
+                in {
+                    "simulate",
+                    "set_controls",
+                    "move_arm",
+                    "pick_and_place",
+                    "operate",
+                    "run_controller",
+                    "pose",
+                    "gripper",
+                }
+                or name in {"demonstration", "mapping"}
+                and arguments.get("action") in {"replay", "explore"}
+            )
+            if self.execution is not None and legacy_command:
+                call = super().call_tool
+                return await self.execution.call_command(name, lambda: call(name, arguments, context))
             return await super().call_tool(name, arguments, context)
+        except ExecutionError as exc:
+            raise ToolError(str(exc)) from exc
         except UnexpectedToolError:
             raise
         except ToolError as exc:
@@ -426,6 +451,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         extensions=[apps],
         lifespan=lifespan,
     )
+    server.execution = playground.session.execution
     if held is not None:
         weakref.finalize(server, lambda: held.close())  # the port is let go with the server (Windows: the newest)
     _plain_tools(server)
@@ -709,6 +735,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
     async def run_until(done, max_seconds: float) -> dict[str, Any]:
         """Let time pass until `done()`: in real time if someone is watching, else as fast as possible."""
         session = playground.session
+        session.execution.require_idle()
         start = session.data.time
         watched = bool(hub.clients) and not session.paused
         if watched:
@@ -731,7 +758,36 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 await asyncio.sleep(0)
         return {"sim_seconds": round(float(session.data.time - start), 2), "shown_live": watched, **result}
 
+    async def move_until(
+        execution: ExecutionRun, robot: str, done: Callable[[], bool], seconds: float
+    ) -> dict[str, Any]:
+        """Translate the shared clock result to move's existing response fields."""
+        session = playground.session
+        controller = session.controllers.get(robot)
+
+        def checked_done() -> bool:
+            if session.controllers.get(robot) is not controller:
+                raise ExecutionError(EndReason.INVALIDATED, "the robot's controller changed; this move was interrupted")
+            return done()
+
+        try:
+            result = await execution.advance(checked_done, seconds)
+        except BaseException:
+            # Cancellation stops our own command, never a replacement installed by reset or another input.
+            with session.lock:
+                if execution.current and session.controllers.get(robot) is controller:
+                    playground.behaviors.stop(robot)
+            raise
+        out: dict[str, Any] = {"sim_seconds": round(result.sim_seconds, 2), "shown_live": result.shown_live}
+        if result.reason == EndReason.WALL_LIMIT:
+            out["stopped_early"] = (
+                f"stopped after {execution.limits.wall_seconds:.0f} s of computer time; the controller is too slow "
+                "for this machine (for MPC use fewer samples or a shorter horizon)"
+            )
+        return out
+
     async def go_to(
+        execution: ExecutionRun,
         robot: str,
         to: str | list[float],
         speed: float | None,
@@ -766,7 +822,22 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             started = {k: v for k, v in trip.status().items() if k != "path"}
             return {"started": started, "path_m": round(trip.plan.length, 2), "from": before}
         # A reset or a world edit ends the trip (it is done, interrupted); one no longer attached is waited for no more.
-        run = await run_until(lambda: trip.done or playground.behaviors.trip(robot) is not trip, seconds + 1.0)
+        last_pose = before
+
+        def trip_done() -> bool:
+            nonlocal last_pose
+            last_pose = playground.behaviors.pose(robot)
+            return trip.done or playground.behaviors.trip(robot) is not trip
+
+        try:
+            run = await move_until(execution, robot, trip_done, seconds + 1.0)
+        except ExecutionError as exc:
+            previous = playground.behaviors.last_trip(robot)
+            if exc.reason not in (EndReason.INVALIDATED, EndReason.CANCELLED) or not previous:
+                raise
+            # The manager saved this before clearing the old trip. Reading its report must not look up old
+            # IDs, stop a new controller or try to settle the replacement world.
+            return {**previous, "stopped": True, "from": before, "to": last_pose, "shown_live": execution.shown_live}
         # Standing now, not at its walker's next tick (and a trip the viewer's lagging clock left going ends here):
         # an observe right after a trip showed the rover's wheels still driven at 3.4 rad/s, and the agent called
         # stop. A trip sent since (a double-click in the viewer) is left to go on. An aircraft whose trip is over
@@ -776,7 +847,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
         if settled is not None:  # a humanoid finishes its step first; report where it really stops
-            await run_until(settled, 3.0)
+            await move_until(execution, robot, settled, 3.0)
         extra = {k: run[k] for k in ("shown_live", "stopped_early") if k in run}
         result = trip.result()
         if result.get("why") == "out_of_time":  # a long way for a slow robot: it goes on from where it stopped
@@ -872,17 +943,28 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             if map is not None and to is None:
                 raise PlaygroundError('map="own" is for going somewhere: give to=[x, y] or the name of what to go to')
             path = video_path(record, robot, seconds)
-            with recorded(path) as rec:
+
+            def watched() -> bool:
+                return bool(hub.clients) and not playground.session.paused
+
+            # One cumulative budget includes stopping/settling; acquire before any controller or recording.
+            duration = None if seconds is None else seconds + (4.0 if to is not None else 3.0)
+            wall = (seconds * 3 + 5 if seconds is not None else FAST_WALL_LIMIT) if watched() else FAST_WALL_LIMIT
+            with (
+                playground.session.execution.run("move", RunLimits(duration, wall), watched) as execution,
+                recorded(path) as rec,
+            ):
+                execution.resources.add(f"robot:{robot.split('/', 1)[0]}")
                 if to is not None:
-                    out = await go_to(robot, to, speed, turn, seconds, walker, own=map == "own")
+                    out = await go_to(execution, robot, to, speed, turn, seconds, walker, own=map == "own")
                 else:
-                    out = await timed_move(robot, speed, turn, seconds, walker)
+                    out = await timed_move(execution, robot, speed, turn, seconds, walker)
             if rec is not None and out.get("stopped"):  # it went (a trip that found no way did not)
                 out["video"] = await video(rec, path, robot)
             return _json(out)
 
     async def timed_move(
-        robot: str, speed: float | None, turn: float, seconds: float | None, walker: str | None
+        execution: ExecutionRun, robot: str, speed: float | None, turn: float, seconds: float | None, walker: str | None
     ) -> dict[str, Any]:
         """move without a destination: at a speed and turn for `seconds`, or on until stop when seconds is None."""
         speed = MOVE_SPEED if speed is None else speed
@@ -904,7 +986,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             heading["last"] = now
             return False
 
-        run = await run_until(track, seconds)
+        run = await move_until(execution, robot, track, seconds)
         why = playground.behaviors.shortfall(robot, seconds, before["position"], before["heading_deg"])
         moving = playground.session.controllers.get(robot)
         # As the controller reports it at the end of the move (the start showed a gait still at 0 m/s), with
@@ -913,7 +995,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         playground.behaviors.stop(robot)
         settled = playground.behaviors.settled(robot)
         if settled is not None:  # a humanoid finishes its step first; measure where it really stops
-            extra = await run_until(lambda: track() or settled(), 3.0)
+            extra = await move_until(execution, robot, lambda: track() or settled(), 3.0)
             run["settle_seconds"] = extra["sim_seconds"]
             run["sim_seconds"] = round(run["sim_seconds"] + extra["sim_seconds"], 2)
         track()
@@ -964,7 +1046,11 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
         walking controller at speed 0, so it still steps along with a push; an aircraft hovers where it is: land it
         with move(to=[x, y, 0]))."""
         with _tool_errors():
-            return _json(playground.behaviors.stop(playground.behaviors.resolve(robot)))
+            robot = playground.behaviors.resolve(robot)
+            execution = playground.session.execution.active
+            if execution is not None and f"robot:{robot.split('/', 1)[0]}" in execution.resources:
+                execution.interrupt()
+            return _json(playground.behaviors.stop(robot))
 
     @server.tool()
     async def pose(robot: str, name: Literal["wave", "squat", "arms_up", "bow", "look_around", "stand"]) -> str:

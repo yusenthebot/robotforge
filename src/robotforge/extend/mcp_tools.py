@@ -88,7 +88,9 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil, run
         name = wording.squash(name)
         robot = playground.behaviors.resolve(robot)
         if REGISTRY.get("controller", name) is not None:
-            return await _run_controller(name, robot, options, seconds)
+            return await playground.session.execution.call_command(
+                "plugin controller", lambda: _run_controller(name, robot, options, seconds)
+            )
         if REGISTRY.get("behavior", name) is not None:
             return await _run_behavior(name, robot, options, seconds)
         known = [*REGISTRY.of("controller"), *REGISTRY.of("behavior")]

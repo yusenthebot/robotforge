@@ -87,13 +87,22 @@ def _name(model: mujoco.MjModel, body: int) -> str:
     return mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body) or ""
 
 
+def spine_binding(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> list[int]:
+    joints = find_spine(model, robot, home_qpos)
+    if joints is None:
+        raise ValueError(f"robot {robot!r} is not a snake (a chain of at least {MIN_SEGMENTS} side-to-side servos)")
+    return joints
+
+
+def spine_speed_per_hz(model: mujoco.MjModel, joints: list[int], home_qpos: np.ndarray) -> float:
+    return SPEED_PER_HZ * _spine_length(model, joints, home_qpos) / TUNED_SPINE
+
+
 class SnakeGait:
     rate_hz = 50.0
 
     def __init__(self, model: mujoco.MjModel, robot: str, home_qpos: np.ndarray):
-        joints = find_spine(model, robot, home_qpos)
-        if joints is None:
-            raise ValueError(f"robot {robot!r} is not a snake (a chain of at least {MIN_SEGMENTS} side-to-side servos)")
+        joints = spine_binding(model, robot, home_qpos)
         self.robot = robot
         joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu) if drives_joint(model, a)}
         self.actuators = np.array([joint_to_act[j] for j in joints])
@@ -110,7 +119,7 @@ class SnakeGait:
         self.offsets = -2 * math.pi * WAVES * np.arange(len(joints)) / len(joints)
         # One wave runs along the whole body, so each wave carries a snake about a share of its own length: a
         # 0.6-size snake went a third as far as asked and a 12-segment one up to three times (2026-10-19 sweep).
-        self.speed_per_hz = SPEED_PER_HZ * _spine_length(model, joints, home_qpos) / TUNED_SPINE
+        self.speed_per_hz = spine_speed_per_hz(model, joints, home_qpos)
         self.max_speed = self.speed_per_hz * MAX_HZ
         self.command_speed = self.command_turn = 0.0
         self.speed = self.turn = 0.0

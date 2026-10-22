@@ -166,7 +166,7 @@ def test_an_arm_without_a_tool_point_says_so_rather_than_that_it_is_not_an_arm(p
 
 def test_go2_stands_walks_turns_and_settles(pg):
     pg.add_robot("go2", library="go2")
-    assert pg.behaviors.robots() == [
+    assert [{k: v for k, v in r.items() if k != "capabilities"} for r in pg.behaviors.robots()] == [
         {"name": "go2", "kind": "quadruped", "model": "Unitree Go2", "max_speed": pytest.approx(0.6, abs=0.03)}
     ]
     pg.behaviors.move("go2", 0.0, 0.0)  # gait running at zero command

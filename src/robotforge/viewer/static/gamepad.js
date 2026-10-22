@@ -10,7 +10,7 @@
 // and a robot that is deselected each stop what they were driving.
 
 import { t } from "./i18n.js";
-import { ARM_SPEED, active, commandFor, profileFor, read } from "./padmap.js";
+import { ARM_SPEED, active, armEndpoint, commandFor, profileFor, read } from "./padmap.js";
 
 const RESEND_MS = 250; // a jogged arm holds still when it is not told again within half a second (the server's own limit)
 
@@ -124,8 +124,9 @@ function armFrame(robot, cmd) {
   const key = `${robot.name}:${x}:${y}:${z}`;
   const now = performance.now();
   const moving = x || y || z;
-  const grip = cmd.gripper;
-  const message = { type: "teleop_arm", robot: robot.name };
+  const endpoint = armEndpoint(robot);
+  const grip = !robot.capabilities || robot.capabilities.gripper.endpoints.includes(endpoint) ? cmd.gripper : null;
+  const message = { type: "teleop_arm", robot: endpoint };
   let send = false;
   if (moving && (key !== armSent.key || now - armSent.at > RESEND_MS)) {
     const [wx, wy] = api.screenToWorld(y, -x); // x to the right on screen, y away from the camera
@@ -145,5 +146,5 @@ function armFrame(robot, cmd) {
   api.send(message);
   last.arm = message;
   if (grip) last.gripper = grip;
-  armSent = { key: moving ? key : `${robot.name}:0:0:0`, at: now, robot: robot.name };
+  armSent = { key: moving ? key : `${robot.name}:0:0:0`, at: now, robot: endpoint };
 }

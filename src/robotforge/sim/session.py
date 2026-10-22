@@ -10,12 +10,15 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import mujoco
 import numpy as np
 
 from robotforge.sim import water as water_model
+
+if TYPE_CHECKING:
+    from robotforge.sim.execution import ExecutionKernel, ExecutionRun
 
 # Spring used when the user drags a body: natural frequency (rad/s) and damping ratio.
 _DRAG_OMEGA = 12.0
@@ -77,6 +80,9 @@ class SimSession:
     drag: Drag | None = None
     controllers: dict[str, Controller] = field(default_factory=dict)
     clock_owner: str | None = None  # set while e.g. a script advances time itself
+    generation: int = 0  # resets invalidate runs too, without forcing the viewer to rebuild the same scene
+    steps_taken: int = 0  # lifetime counter, including steps before a reset or clock rewind
+    execution: ExecutionKernel = field(init=False, repr=False)
     # Run after a reset or a model swap clears the controllers, e.g. so humanoids keep their balance.
     reset_hooks: list[Callable[[], None]] = field(default_factory=list, repr=False)
     # Run with the actuator's id after set_ctrl sets it by hand (a viewer slider, set_controls), e.g. so a robot
@@ -94,6 +100,9 @@ class SimSession:
     water: water_model.Hydro | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        from robotforge.sim.execution import ExecutionKernel
+
+        self.execution = ExecutionKernel(self)
         if self.water is None:
             self.water = water_model.hydro_for(self.model)
 
@@ -118,6 +127,7 @@ class SimSession:
 
     def _swap(self, model: mujoco.MjModel, source: str) -> None:
         with self.lock:
+            self.generation += 1
             self.model = model
             self.data = fresh_data(model)
             self.source = source
@@ -132,6 +142,7 @@ class SimSession:
 
     def reset(self) -> None:
         with self.lock:
+            self.generation += 1
             mujoco.mj_resetData(self.model, self.data)
             if self.model.nkey > 0:
                 mujoco.mj_resetDataKeyframe(self.model, self.data, 0)
@@ -193,15 +204,19 @@ class SimSession:
             self.controllers[name] = controller
             self._next_update[name] = self.data.time
 
-    def step(self, n: int = 1) -> None:
+    def step(self, n: int = 1, *, owner: ExecutionRun | None = None) -> None:
         with self.lock:
             for _ in range(n):
+                self.execution.check_step(owner)
                 self._run_controllers()
+                if owner is not None:
+                    self.execution.check_step(owner)
                 self._apply_drag()
                 if self.water is None:
                     mujoco.mj_step(self.model, self.data)
                 else:
                     self._step_in_water()
+                self.steps_taken += 1
                 for hook in tuple(self.step_hooks):  # a hook may take itself off (a recording that ends)
                     hook()
 
@@ -248,7 +263,7 @@ class SimSession:
     def advance(self, wall_dt: float) -> int:
         """Advance by `wall_dt` seconds of wall time scaled by `speed`. Returns steps taken."""
         with self.lock:
-            if self.paused:
+            if self.paused or self.clock_owner is not None:
                 return 0
             self._sim_debt += min(wall_dt, _MAX_TICK_SECONDS) * self.speed
             n = int(self._sim_debt / self.model.opt.timestep)

@@ -43,6 +43,8 @@ def trial_view(t: dict[str, Any]) -> dict[str, Any]:
         out["latest"] = losses
     if t.get("error"):
         out["error"] = t["error"]
+    if t.get("timed_out"):
+        out["timed_out"] = True
     return out
 
 
@@ -59,6 +61,8 @@ def run_view(status: dict[str, Any]) -> dict[str, Any]:
         out["search"] = status["search"]
     if status.get("notes"):
         out["notes"] = status["notes"]
+    if status.get("timed_out"):
+        out["timed_out"] = True
     final = status.get("final")
     if final:
         out["winner"] = winner_view(final)
@@ -84,6 +88,8 @@ def winner_view(final: dict[str, Any]) -> dict[str, Any]:
         "ranking_success": final.get("success_rate"),
     }
     held = final.get("held_out")
+    if final.get("score_note"):
+        out["score_note"] = final["score_note"]
     if held:
         out["held_out"] = {
             "episodes": held.get("episodes"),

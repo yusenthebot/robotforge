@@ -225,6 +225,29 @@ class Playground:
         hub.slow_handlers["world"] = world_request
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
+        last_description: dict[str, Any] | None = None
+
+        def robot_update() -> dict[str, Any] | None:
+            nonlocal last_description
+            # Called only by the broadcast loop: a joining client's welcome must
+            # never consume an update intended for the other viewers.
+            version = self.session.version
+            rows = self.behaviors.robots()
+            rows = [{k: v for k, v in r.items() if k not in ("flight", "balance")} for r in rows]
+            learned = self.behaviors.learned_walkers()
+            description = {
+                "type": "robot_info",
+                "version": version,
+                "robots": rows,
+                "learned": learned,
+                "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in rows},
+            }
+            if self.session.version != version or description == last_description:
+                return None
+            last_description = description
+            return description
+
+        hub.robot_stream = robot_update
         hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
         hub.flow = self.flow
         hub.sensor_stream = self.sensors.viewer_message
@@ -270,7 +293,12 @@ class Playground:
             raise PlaygroundError(f"{p.name} is a folder; give a file: {importer.formats_hint()}")
         if p.suffix.lower() not in {".xml", ".mjcf"}:
             raise PlaygroundError(f"{p.name}: expected {importer.formats_hint()}")
-        self.session.load_path(p.resolve())
+        # Compile before detaching the saved world: a bad file must leave it editable.
+        loaded = SimSession.from_path(p.resolve())
+        self.store = None
+        self.last_doctor = {}
+        self._places = None
+        self.session.load_model(loaded.model, loaded.source)
         return self.describe()
 
     def describe(self) -> dict[str, Any]:
@@ -1319,6 +1347,7 @@ class Playground:
         notes: list[str] = []
         blown: dict[str, Any] | None = None
         with self.session.lock:
+            self.session.execution.require_idle()
             if controls:
                 _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))

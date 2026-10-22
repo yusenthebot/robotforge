@@ -68,7 +68,7 @@ def _arm_done(pg: Playground, arm: str, limit: float = 40.0) -> None:
 def test_an_arm_rides_on_top_of_a_dogs_back(pg):
     result = pg.add_robot("go2", library="go2", mounts=[{"library": "piper"}])
     assert "go2: arm: AgileX PiPER mounted on top of base" in result["notes"]
-    assert pg.behaviors.robots() == [
+    assert [{k: v for k, v in r.items() if k != "capabilities"} for r in pg.behaviors.robots()] == [
         {
             "name": "go2",
             "kind": "quadruped",

@@ -777,6 +777,22 @@ def joint_names(model: mujoco.MjModel, body: Body) -> list[str]:
     return [n.removeprefix(prefix) for n in names]
 
 
+def saved_walk_binding(model: mujoco.MjModel, robot: str, walk: SavedWalk) -> tuple[Body, np.ndarray]:
+    """Validate a kept walk against this robot without starting its controller."""
+    try:
+        body = Body.find(model, robot)
+    except CPGError as exc:
+        raise ValueError(str(exc)) from exc
+    names = joint_names(model, body)
+    if sorted(names) != sorted(walk.joints):
+        raise ValueError(
+            f"{robot}'s walk was learned for the joints {', '.join(walk.joints)}, but {robot} now has "
+            f"{', '.join(names)}; learn the walk again in the RL II lesson"
+        )
+    order = np.array([names.index(j) for j in walk.joints])
+    return body, order
+
+
 class RhythmWalker:
     """Drives a robot with a kept walk: forward plays the walk (keeping to the line it started on, if it learned to
     steer), a turn plays a turn (once learned), each from its start as in training, standing still at home; stop goes
@@ -785,17 +801,7 @@ class RhythmWalker:
     rate_hz = CONTROL_HZ
 
     def __init__(self, model: mujoco.MjModel, robot: str, walk: SavedWalk, home_qpos: np.ndarray) -> None:
-        try:
-            body = Body.find(model, robot)
-        except CPGError as exc:
-            raise ValueError(str(exc)) from exc
-        names = joint_names(model, body)
-        if sorted(names) != sorted(walk.joints):
-            raise ValueError(
-                f"{robot}'s walk was learned for the joints {', '.join(walk.joints)}, but {robot} now has "
-                f"{', '.join(names)}; learn the walk again in the RL II lesson"
-            )
-        order = np.array([names.index(j) for j in walk.joints])
+        body, order = saved_walk_binding(model, robot, walk)
         self.robot = robot
         self.body = body
         self.walk = walk

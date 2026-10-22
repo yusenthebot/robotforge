@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import mujoco
 import numpy as np
@@ -17,6 +18,45 @@ from robotforge.playground import Playground
 from robotforge.sim.session import SimSession
 
 FIXTURES = Path(__file__).parent / "fixtures" / "menagerie"
+
+
+def test_failed_grasp_orientation_does_not_seed_the_next_attempt():
+    arm = SimpleNamespace(_warm="prior search", queue=[])
+    errand = SimpleNamespace(arm=arm, hand=SimpleNamespace(tilts=(0.5,)), tilts={})
+    starts = []
+
+    def queue(tilt):
+        starts.append(arm._warm)
+        if tilt == 0.0:
+            arm._warm = "unreachable branch"
+            arm.queue.append("partial approach")
+            raise ValueError("carry path blocked")
+        assert not arm.queue
+        arm.queue.append("successful approach")
+
+    assert fetch.Errand._first_tilt(errand, None, queue, "pick") is None
+    assert starts == [None, None]
+    assert errand.tilts == {"pick": 0.5}
+    assert arm.queue == ["successful approach"]
+
+
+def test_reachable_perturbation_is_not_robust_when_the_full_loaded_path_fails():
+    stand = SimpleNamespace(walks=False, grip=lambda *args: 0.0)
+    planned = []
+
+    def rehearse(xy, heading, target, tilt):
+        planned.append(xy.copy())
+        return xy[0] <= 0.0  # the hand reaches, but the retreat with its load is blocked here
+
+    assert not fetch._robust(stand, np.zeros(2), 0.0, np.zeros(3), 0.1, (0.0,), rehearse)
+    assert len(planned) == 1 and planned[0][0] > 0.0
+
+
+def test_robustness_tries_other_grasp_orientations_after_a_blocked_path():
+    stand = SimpleNamespace(walks=False, grip=lambda *args: args[-1][0])
+    assert fetch._robust(
+        stand, np.zeros(2), 0.0, np.zeros(3), 0.1, (0.0, 0.5), lambda xy, heading, target, tilt: tilt == 0.5
+    )
 
 
 @pytest.fixture

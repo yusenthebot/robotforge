@@ -52,13 +52,25 @@ export function read(pad) {
   };
 }
 
-// Which set of controls a robot gets: from what the viewer knows of it (kind, max_speed for the ones that go, arms).
+// Older servers send only kind/arms/max_speed; current servers supply the shared capability description.
+export const canMove = (robot) => robot?.capabilities ? robot.capabilities.move.supported : Boolean(robot?.max_speed);
+export const moveSpeed = (robot) => robot?.capabilities?.move.max_speed ?? robot?.max_speed;
+export const moveAxes = (robot) => robot?.capabilities?.move.axes
+  ?? (robot?.kind === "aircraft" ? ["slide", "climb"] : robot?.kind === "rov" ? ["heave"] : []);
+export function armEndpoint(robot) {
+  if (robot?.capabilities) {
+    const arms = robot.capabilities.move_arm.endpoints;
+    return arms.length === 1 ? arms[0] : null;
+  }
+  return robot && (robot.kind === "arm" || (robot.arms?.length ?? 0) > 0) ? robot.name : null;
+}
+
 export function profileFor(robot) {
   if (!robot) return null;
-  const goes = Boolean(robot.max_speed);
-  const arm = robot.kind === "arm" || (robot.arms?.length ?? 0) > 0;
-  if (robot.kind === "aircraft") return "fly";
-  if (robot.kind === "rov") return "rov";
+  const goes = canMove(robot);
+  const arm = Boolean(armEndpoint(robot));
+  if (goes && moveAxes(robot).includes("climb")) return "fly";
+  if (goes && moveAxes(robot).includes("heave")) return "rov";
   if (goes && arm) return "both";
   if (goes) return "drive";
   if (arm) return "arm";

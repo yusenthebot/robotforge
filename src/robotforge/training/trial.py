@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -140,6 +141,7 @@ class TrainContext:
         folder: Path | None = None,
         stop_file: Path | None = None,
         max_seconds: float | None = None,
+        deadline: float | None = None,
     ) -> None:
         self.env = env
         self.params = params
@@ -163,7 +165,11 @@ class TrainContext:
         self._stop_file = stop_file
         self._stop_checked = 0.0
         self._stopped = False
-        self._deadline = time.monotonic() + max_seconds if max_seconds else None
+        # Spawned workers share this host's monotonic clock; queueing must spend the run's budget too.
+        self._deadline = deadline
+        if max_seconds is not None:
+            relative = time.monotonic() + max_seconds
+            self._deadline = relative if deadline is None else min(relative, deadline)
 
     # ---- budget and stopping ----
 
@@ -208,10 +214,12 @@ class TrainContext:
 
     def rollout(self, act, seed: int | None = None) -> Episode:
         """One episode with `act(obs) -> action`; counted in the budget and shown in the episode returns."""
+        if self.expired():
+            return Episode(0.0, 0, False)
         env = self.env
         obs, _ = env.reset(seed=seed)
         total, n, info = 0.0, 0, {}
-        while True:
+        while not self.expired():
             self.stats.push(np.asarray(obs, dtype=np.float64))
             obs, reward, terminated, truncated, info = env.step(act(obs))
             total += reward
@@ -263,15 +271,21 @@ def load_arrays(path: Path) -> dict[str, np.ndarray]:
         return {}
 
 
-def evaluate_policy(env: TrainingEnv, policy, episodes: int, seed: int = EVAL_SEED) -> dict[str, Any]:
+def evaluate_policy(
+    env: TrainingEnv, policy, episodes: int, seed: int = EVAL_SEED, *, should_stop: Callable[[], bool] | None = None
+) -> dict[str, Any]:
     """Test a policy on fixed starts, calm (no shoves): mean return, success rate and the task's own numbers."""
     push, env.push = env.push, 0.0
     try:
         returns, successes, reports = [], [], []
         for i in range(episodes):
+            if should_stop is not None and should_stop():
+                raise Stopped("evaluation interrupted")
             obs, _ = env.reset(seed=seed + i)
             total, info = 0.0, {}
             while True:
+                if should_stop is not None and should_stop():
+                    raise Stopped("evaluation interrupted")
                 obs, reward, terminated, truncated, info = env.step(policy(obs))
                 total += reward
                 if terminated or truncated:
@@ -329,6 +343,7 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
         folder=folder,
         stop_file=stop_file,
         max_seconds=job.get("max_seconds"),
+        deadline=job.get("deadline"),
     )
     started = time.monotonic()
     algorithms.need(algo)
@@ -336,7 +351,10 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
         policy = final_policy(ctx, algo.run(ctx))
         policy.save(folder / POLICY_FILE)
         save_arrays(folder / STATE_FILE, ctx.arrays())
-        score = evaluate_policy(env, policy, int(job.get("eval_episodes", 5)))
+        try:
+            score = evaluate_policy(env, policy, int(job.get("eval_episodes", 5)), should_stop=ctx.expired)
+        except Stopped:
+            score = None  # an incomplete test must not rank against complete tests
     finally:
         env.close()
     out = {
@@ -346,9 +364,16 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
         "seconds": round(time.monotonic() - started, 2),
         "score": score,
         "stopped": ctx.stopped(),
+        "timed_out": ctx._deadline is not None and time.monotonic() >= ctx._deadline,
     }
     sink.steps = ctx.steps
-    sink.flush(force=True, state="stopped" if out["stopped"] else "done", score=score, seconds=out["seconds"])
+    sink.flush(
+        force=True,
+        state="stopped" if out["stopped"] or out["timed_out"] else "done",
+        score=score,
+        seconds=out["seconds"],
+        timed_out=out["timed_out"],
+    )
     (folder / "segment.json").write_text(json.dumps(out), encoding="utf-8")
     return out
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -49,6 +51,41 @@ def test_a_refusal_names_its_cause(bench):
         "refused:too_late"
     )
     assert bench.cause("nowhere mm can stand") == "refused:nowhere_to_stand"
+
+
+def test_frozen_cases_reject_duplicates_and_unknown_robots(bench, tmp_path):
+    path = tmp_path / "cases.json"
+    case = _run("mobile_panda", "drawer", 8)
+    path.write_text(json.dumps({"version": 1, "cases": [case]}), encoding="utf-8")
+    assert bench.read_cases(path) == [("mobile_panda", "drawer", 8)]
+    for cases in (
+        [case, case],
+        [_run("unknown", "drawer", 8)],
+        [_run([], "drawer", 8)],
+        [_run("mobile_panda", "drawer", True)],
+        [],
+    ):
+        path.write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
+        with pytest.raises(ValueError):
+            bench.read_cases(path)
+
+
+def test_case_failure_preserves_diagnostics_and_restores_user_home(bench, monkeypatch, tmp_path):
+    monkeypatch.setenv("ROBOTFORGE_HOME", str(tmp_path / "user-home"))
+
+    def refuse(*args):
+        raise ValueError("fixture build failed")
+
+    monkeypatch.setattr(bench, "build", refuse)
+    result = bench.run_one("mobile_panda", "drawer", 8, str(tmp_path / "evidence"))
+    folder = Path(result["artifacts"])
+    assert result["success"] is False and result["why"] == "error:ValueError"
+    assert json.loads((folder / "result.json").read_text(encoding="utf-8"))["note"] == "fixture build failed"
+    assert (folder / "final-state.npz").exists()
+    assert os.environ["ROBOTFORGE_HOME"] == str(tmp_path / "user-home")
+    with pytest.raises(FileExistsError):
+        bench.run_one("mobile_panda", "drawer", 8, str(tmp_path / "evidence"))
+    assert "all attempts: 0/1 succeeded" in bench.report([result])
 
 
 @pytest.mark.slow

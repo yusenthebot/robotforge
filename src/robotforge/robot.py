@@ -60,16 +60,17 @@ class Sensors:
 class Gripper:
     """The hand of an arm: fingers, a suction cup or a magnet."""
 
-    def __init__(self, robot: Robot) -> None:
+    def __init__(self, robot: Robot, name: str | None = None) -> None:
         self._robot = robot
+        self.name = name or robot.name
 
     def open(self) -> None:
         """Open the fingers (suction or magnet off); returns when it is done."""
-        self._robot.sim.gripper(self._robot.name, "open")
+        self._robot.sim.gripper(self.name, "open")
 
     def close(self) -> None:
         """Close the fingers (suction or magnet on); returns when it is done."""
-        self._robot.sim.gripper(self._robot.name, "close")
+        self._robot.sim.gripper(self.name, "close")
 
 
 class Arm:
@@ -83,6 +84,14 @@ class Arm:
         """Move the tool to [x, y, z] m in the world, pointing down; returns when it is there (the tool position).
         gripper="open" or "close" also sets the hand."""
         return self._robot.sim.move_arm(self.name, list(position), gripper=gripper)
+
+    @property
+    def gripper(self) -> Gripper:
+        """This arm's hand, including when the robot carries several arms."""
+        caps = self._robot.capabilities
+        if caps is not None and self.name not in caps["gripper"]["endpoints"]:
+            raise self._robot._cannot("hold things", "arm")
+        return Gripper(self._robot, self.name)
 
     def pick_and_place(self, obj: str, target: str | list[float]) -> bool:
         """Pick the object up and put it on or in `target` (an object's name or [x, y]); True if it landed there.
@@ -127,8 +136,10 @@ class Robot:
         self.info = info
         self.kind: str = info.get("kind", "other")
         self.sensors = Sensors(self)
-        self.arms: list[Arm] = [Arm(self, a) for a in info.get("arms", [])]
-        if not self.arms and self.kind == "arm":
+        caps = self.capabilities
+        arms = caps["move_arm"]["endpoints"] if caps is not None else info.get("arms", [])
+        self.arms: list[Arm] = [Arm(self, a) for a in arms]
+        if caps is None and not self.arms and self.kind == "arm":
             self.arms = [Arm(self, name)]
         self._gripper = Gripper(self)
 
@@ -165,7 +176,20 @@ class Robot:
 
     @property
     def can_move(self) -> bool:
+        if self.capabilities is not None:
+            return self.capabilities["move"]["supported"]
         return self.kind in MOBILE_KINDS or "max_speed" in self.info
+
+    @property
+    def capabilities(self) -> dict[str, Any] | None:
+        """The server's capability snapshot; None when connected to an older server."""
+        return self.info.get("capabilities")
+
+    def refresh(self) -> Robot:
+        """Read a new snapshot, for example after keeping or removing a learned walk."""
+        fresh = self.sim.robot(self.name)
+        self.__init__(self.sim, fresh.name, fresh.info)
+        return self
 
     def move(self, speed: float = 0.2, turn: float = 0.0, seconds: float | None = None) -> None:
         """Walk, drive or swim at `speed` m/s turning `turn` rad/s (left is positive); keeps going until stop().
@@ -195,6 +219,15 @@ class Robot:
 
     @property
     def gripper(self) -> Gripper:
+        if self.capabilities is not None:
+            endpoints = self.capabilities["gripper"]["endpoints"]
+            if len(endpoints) == 1:
+                return Gripper(self, endpoints[0])
+            if len(endpoints) > 1:
+                from robotforge.script import ScriptError
+
+                raise ScriptError(f"{self.name} has several grippers; choose robot.arms[i].gripper")
+            raise self._cannot("hold things", "move" if self.can_move else None)
         if not self.arms:
             raise self._cannot("hold things", "move" if self.can_move else None)
         return self._gripper

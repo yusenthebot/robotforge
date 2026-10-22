@@ -304,6 +304,11 @@ def lqr_gains(A: np.ndarray, B: np.ndarray, q: tuple[float, ...] = Q_WEIGHTS, r:
 # ---- the controller ------------------------------------------------------------------------------------
 
 
+def balance_speed(balancer: Balancer) -> float:
+    """The command speed cap, independent of equilibrium and LQR construction."""
+    return MAX_LEAN_SPEED * balancer.top_speed * balancer.radius
+
+
 class WheelBalancer:
     """Keeps a two-wheeled robot upright and drives it: move(speed, turn) like any rover."""
 
@@ -329,7 +334,7 @@ class WheelBalancer:
             self.K = lqr_gains(self.A, self.B, q_weights, r_weight)
         except ValueError as exc:
             raise ValueError(f"robot {robot!r}: {exc}") from None
-        self.max_speed = MAX_LEAN_SPEED * b.top_speed * b.radius
+        self.max_speed = balance_speed(b)
         self.command_speed = self.command_turn = 0.0
         self.speed = self.turn = 0.0
         self._ref: np.ndarray | None = None  # where the axle should be (it moves along with speed commands)

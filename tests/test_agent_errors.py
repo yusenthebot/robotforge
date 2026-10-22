@@ -622,11 +622,14 @@ async def test_a_wrong_file_says_what_kind_it_wants(lab, tmp_path):
 async def test_a_failing_script_shows_its_own_lines_only(lab):
     code = "from robotforge.script import connect\nconnect().move('cat', 1)\n"
     await lab.accepted("write_script", name="Boom", code=code)
-    out = json.loads(await lab.accepted("run_script", name="boom"))
-    assert not out["ok"]
-    assert 'File "boom.py", line 2' in out["output"] and "no robot named 'cat'" in out["output"]
-    assert "script.py" not in out["output"] and "robotforge/" not in out["output"]
-    await lab.restore()
+    try:
+        out = json.loads(await lab.accepted("run_script", name="boom"))
+        assert not out["ok"]
+        assert 'File "boom.py", line 2' in out["output"] and "no robot named 'cat'" in out["output"]
+        assert "script.py" not in out["output"] and "robotforge/" not in out["output"]
+    finally:
+        (lab.playground.store.dir / "behaviors" / "boom.py").unlink(missing_ok=True)
+        await lab.restore()
 
 
 # ---- answers are compact -----------------------------------------------------------------------------

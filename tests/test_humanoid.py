@@ -87,7 +87,9 @@ def test_weak_servos_and_very_tall_humanoids_come_with_a_warning():
 def test_humanoid_is_recognized_with_and_without_its_template_name(pg):
     pg.add_robot("bot", template="humanoid")
     listed = pg.behaviors.robots()
-    assert listed == [{"name": "bot", "kind": "humanoid", "max_speed": pytest.approx(0.1, abs=0.03)}]
+    assert [{k: v for k, v in r.items() if k != "capabilities"} for r in listed] == [
+        {"name": "bot", "kind": "humanoid", "max_speed": pytest.approx(0.1, abs=0.03)}
+    ]
     from robotforge.behaviors import robot_kind
 
     assert robot_kind(pg.session.model, "bot") == Kind.HUMANOID

@@ -154,3 +154,26 @@ def test_something_that_neither_goes_nor_reaches_gets_no_command_and_values_come
     }
     fwd = got["step"]["drive"]["fwd"]
     assert fwd * 20 == pytest.approx(round(fwd * 20))
+
+
+def test_shared_capabilities_override_legacy_kind_and_speed_guesses():
+    caps = {"move": {"supported": False, "axes": []}, "move_arm": {"endpoints": []}}
+    got = evaluate(
+        {
+            "standing": {"robot": {**DOG, "capabilities": caps}, "axes": [0, -1, 0, 0]},
+            "bare": {"robot": {**ARM, "capabilities": caps}, "axes": [0, -1, 0, 0]},
+            "multi": {
+                "robot": {
+                    **DOG_WITH_ARM,
+                    "capabilities": {
+                        "move": {"supported": True, "axes": ["forward", "turn"]},
+                        "move_arm": {"endpoints": ["go2/left", "go2/right"]},
+                    },
+                },
+                "axes": [0, -1, 0, 0],
+                "mode": "arm",
+            },
+        }
+    )
+    assert got["standing"]["drive"]["fwd"] == got["bare"]["arm"]["y"] == 0
+    assert got["multi"]["arm"]["y"] == 0  # no unqualified arm command to an ambiguous root
