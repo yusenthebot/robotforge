@@ -1,0 +1,483 @@
+{
+  "date": "2026-10-22",
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "tested_commit": "86c939b17277e050ba010a002acf21ca1b84cd76",
+  "source_inventory_sha256": "51d09128bd2e4a020b447afcead9fd0cff10546fbee641a2a25d7c671cb90cb5",
+  "source_unchanged_during_suite": true,
+  "dependencies": {
+    "numpy": "2.5.4",
+    "mujoco": "3.15.0",
+    "mcp": "2.3.0",
+    "pydantic": "2.14.1"
+  },
+  "default_suite": {
+    "tests": 3375,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 3248,
+    "seconds": 720.5,
+    "shards": [
+      1687,
+      1688
+    ],
+    "exit_codes": [
+      0,
+      0
+    ]
+  },
+  "focused_tests": 166,
+  "new_tests": 27,
+  "extraction_controller_tests": 12,
+  "build": "passed",
+  "ruff": "passed",
+  "smoke_seconds": 3.7,
+  "baseline": {
+    "suite": "framework-regression-v1",
+    "core_commit": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+    "manifest_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b",
+    "unchanged": true,
+    "cases": 7
+  },
+  "candidate": {
+    "source": {
+      "active_source_sha256": "e73ed7e7e65482a115e312475356dd331aaf05723aac083d4e241bc66b7fcd74",
+      "git_commit": "86c939b17277e050ba010a002acf21ca1b84cd76",
+      "git_dirty": false,
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state",
+      "plugins": [],
+      "python": "3.12.13"
+    },
+    "comparison": {
+      "issues": [],
+      "mode": "compare",
+      "source_changed": {
+        "active_source_sha256": {
+          "baseline": "258196f0c8df72d146af35b410c79bb0ec72e6fef6112e237572cee9fff0e7af",
+          "candidate": "e73ed7e7e65482a115e312475356dd331aaf05723aac083d4e241bc66b7fcd74"
+        },
+        "git_commit": {
+          "baseline": "aae92839f5a8c91f4e143d4c90e893fa808309a2",
+          "candidate": "86c939b17277e050ba010a002acf21ca1b84cd76"
+        },
+        "git_dirty": {
+          "baseline": true,
+          "candidate": false
+        }
+      },
+      "status": "pass"
+    }
+  },
+  "entry_compatibility": {
+    "previous_core": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "fac7d71e3eb904c5ae19fab2257b30dba80918d2",
+      "git_dirty": false,
+      "active_source_sha256": "8b3a0326fa163502bf8012f23bd10392bb9c801f570395043b13ec92d0b47b43",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "current_core": {
+      "package": "robotforge",
+      "package_version": "0.0.1",
+      "python": "3.12.13",
+      "platform": "macOS-26.3.2-arm64-arm-64bit",
+      "mujoco": "3.15.0",
+      "numpy": "2.5.4",
+      "git_commit": "86c939b17277e050ba010a002acf21ca1b84cd76",
+      "git_dirty": false,
+      "active_source_sha256": "e73ed7e7e65482a115e312475356dd331aaf05723aac083d4e241bc66b7fcd74",
+      "plugins": [],
+      "plugin_dependencies": "external; source hashes describe current files, not captured runtime state"
+    },
+    "harness_sha256": "c0176965b05b345e06efa7ede46d6775eaa05436da78cafd06db8d5617a9938f",
+    "all_60_definitions_identical": true,
+    "all_10_cases_identical": true,
+    "cases": {
+      "pose_wave": {
+        "public": {
+          "robot": "kid",
+          "pose": "wave",
+          "upright": true,
+          "sim_seconds": 4.52
+        },
+        "steps": 2260,
+        "arrays": {
+          "qpos": "c6ae22f1be0a6a79bad0e922c97a0c9aaacb94fc7365fbfa376af503cc01d512",
+          "qvel": "348af810a3780f76748f851d8f32019c949a9c29d0dbc4902b10b62db0679683",
+          "ctrl": "d07ab485bd91a0a1e49c2bbf2d005c5a11b0e91ac5787104c332203f250bdd0c"
+        }
+      },
+      "pose_squat": {
+        "public": {
+          "robot": "kid",
+          "pose": "squat",
+          "upright": true,
+          "sim_seconds": 3.82
+        },
+        "steps": 1910,
+        "arrays": {
+          "qpos": "b52f6d5c6536e2216d4f652552aae1e1b449195a1695eab6334c59f3da31ec54",
+          "qvel": "3cb3f9a50e241de00956abc6557c5bbab8673b8f07d1125815e207be864e2dca",
+          "ctrl": "fd9289e845a311974cbe044661eaa39ae7a39cae818b4c7ebb6968600ae0f724"
+        }
+      },
+      "pose_arms_up": {
+        "public": {
+          "robot": "kid",
+          "pose": "arms_up",
+          "upright": true,
+          "sim_seconds": 2.92
+        },
+        "steps": 1460,
+        "arrays": {
+          "qpos": "eeaed3463ee3e85d66b999e7d28fc2f4ff911cb541bfa3c747f177ac7ae88dc9",
+          "qvel": "db3f91f84411b7dd6bf6b8888cc96ee8f49d615833c63074d572f2f08f2b10a2",
+          "ctrl": "3d19be3471cbbf73d214840ad0015b1f18bb70d9a9a4dd6f95b654e1ca870f76"
+        }
+      },
+      "pose_bow": {
+        "public": {
+          "robot": "kid",
+          "pose": "bow",
+          "upright": true,
+          "sim_seconds": 3.22
+        },
+        "steps": 1610,
+        "arrays": {
+          "qpos": "9e545b05e2ea69142c1079c338811f37348ebe82aebc15544645da18c20aa482",
+          "qvel": "68788544b4e896b8ed5fffe88e60641a344b63bbcdfb0703ddb94ebef60e45dc",
+          "ctrl": "c23fa1d927381930fcbc3d360af09990578cf104c205d43f9f9d3e57bacdeb61"
+        }
+      },
+      "pose_look_around": {
+        "public": {
+          "robot": "kid",
+          "pose": "look_around",
+          "upright": true,
+          "sim_seconds": 4.32
+        },
+        "steps": 2160,
+        "arrays": {
+          "qpos": "cf8dbca23e4f4189d11891760a222905e43fb779572a70a1ebbbb73953b89005",
+          "qvel": "07fd61588bd8777aff0e0635520e35cabcabf11f2162f0722b68313fa26f68e5",
+          "ctrl": "426ae8a690f65c97d1f3c240637e2df412243e0e0b1759785bdf68e94272a2d6"
+        }
+      },
+      "pose_stand": {
+        "public": {
+          "robot": "kid",
+          "pose": "stand",
+          "upright": true,
+          "sim_seconds": 1.02
+        },
+        "steps": 510,
+        "arrays": {
+          "qpos": "ecadf99c65e7f8dad122c233b0cf5cb377b003bc869007a08269717dc897649d",
+          "qvel": "3a234f6f6016a3cd17b43264b1551d5adafb120976616997e0545f0adda6053f",
+          "ctrl": "95737added316ed80fc0ced10daa2cca716f6bd2bbd2c7d980a051c8f7d32fae"
+        }
+      },
+      "gripper_open": {
+        "public": {
+          "gripper": "open",
+          "sim_seconds": 0.52
+        },
+        "steps": 260,
+        "arrays": {
+          "qpos": "70f492c7aeece394410ada935cf4f953431aeb3178229e413c1e1e729c80fb37",
+          "qvel": "0d27fb27ea343df6ab13b93bb6f2e65eabce4afd664d005a0a594567814b1e99",
+          "ctrl": "88de420f4d0f2c7e5db7c424a4e9ae1001bfa5d5032e4cf0498a185879eab021"
+        }
+      },
+      "gripper_close": {
+        "public": {
+          "gripper": "close",
+          "sim_seconds": 0.52
+        },
+        "steps": 260,
+        "arrays": {
+          "qpos": "92e9fafc87b14df89f5fb41990b4f8c5b4d376d20af9720b45504f6d45543d8c",
+          "qvel": "0c6bd82e0802b7f4e277fd5d969dfaa8cb020f45dcf9a8a671cbab5220210585",
+          "ctrl": "20a496e700851c03b2e451e2fabae87bce61472e26add3be2869f9d547a3a32e"
+        }
+      },
+      "gripper_queue": {
+        "public": {
+          "gripper": "close",
+          "sim_seconds": 1.08
+        },
+        "steps": 540,
+        "arrays": {
+          "qpos": "d25ceb76fd350a8e534d6d910a8bfa338a5a51264d483375e8dfa139b44a71e8",
+          "qvel": "42e3ca1e9043f88703655a41715d90655313c65f5d176917909d7b4bee9b62e8",
+          "ctrl": "20a496e700851c03b2e451e2fabae87bce61472e26add3be2869f9d547a3a32e"
+        }
+      },
+      "mounted_moving_gripper": {
+        "public": {
+          "gripper": "close",
+          "sim_seconds": 0.52
+        },
+        "steps": 260,
+        "arrays": {
+          "qpos": "4ea203a9256fc5b76c6b6e32de4b4d200eda82f189c7a1895cd9e6de20e3b09a",
+          "qvel": "a621bc4b3a8ff94aa16debde641b500ad590f7ceabc311eba3d00b493df39d3c",
+          "ctrl": "3ef226e5f593e7fef35eb57c4956ddc60ae0f2758d1cc6c3b7196e2715a18698"
+        },
+        "carrier_speed": 0.2
+      }
+    }
+  },
+  "real": {
+    "variants": {
+      "pose": {
+        "headless": {
+          "execution": {
+            "id": "4df33757-e75d-45eb-8ff9-b20456159178",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/4df33757-e75d-45eb-8ff9-b20456159178/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 2260,
+          "sim_seconds": 4.519999999999992,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "f9b069d126bc93fc996e8c3cc86ec539291625bbcf2f9c927a65f3dcc541d1b0",
+            "qvel": "b91ba3d36483d9ec4d72be3fa226c091475f79f2abd4c4cef7f483fddc594fab",
+            "ctrl": "e8f21fc86229ead3eb574ecbc45f4aa9e13c7075ed6fbecff8fba840a9b90081"
+          }
+        },
+        "playing": {
+          "execution": {
+            "id": "cd2a3b27-2570-45e3-ae21-d1d509f9f1a1",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/cd2a3b27-2570-45e3-ae21-d1d509f9f1a1/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 2260,
+          "sim_seconds": 4.519999999999992,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "f9b069d126bc93fc996e8c3cc86ec539291625bbcf2f9c927a65f3dcc541d1b0",
+            "qvel": "b91ba3d36483d9ec4d72be3fa226c091475f79f2abd4c4cef7f483fddc594fab",
+            "ctrl": "e8f21fc86229ead3eb574ecbc45f4aa9e13c7075ed6fbecff8fba840a9b90081"
+          }
+        },
+        "paused": {
+          "execution": {
+            "id": "165c34c4-4a28-4d90-bdf4-90284a471eb2",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/165c34c4-4a28-4d90-bdf4-90284a471eb2/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 2260,
+          "sim_seconds": 4.519999999999992,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "f9b069d126bc93fc996e8c3cc86ec539291625bbcf2f9c927a65f3dcc541d1b0",
+            "qvel": "b91ba3d36483d9ec4d72be3fa226c091475f79f2abd4c4cef7f483fddc594fab",
+            "ctrl": "e8f21fc86229ead3eb574ecbc45f4aa9e13c7075ed6fbecff8fba840a9b90081"
+          }
+        },
+        "disconnect": {
+          "execution": {
+            "id": "ed5814d8-0edd-4475-b6a9-5e0335df9045",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/ed5814d8-0edd-4475-b6a9-5e0335df9045/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 2260,
+          "sim_seconds": 4.519999999999992,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "f9b069d126bc93fc996e8c3cc86ec539291625bbcf2f9c927a65f3dcc541d1b0",
+            "qvel": "b91ba3d36483d9ec4d72be3fa226c091475f79f2abd4c4cef7f483fddc594fab",
+            "ctrl": "e8f21fc86229ead3eb574ecbc45f4aa9e13c7075ed6fbecff8fba840a9b90081"
+          }
+        }
+      },
+      "gripper": {
+        "headless": {
+          "execution": {
+            "id": "ba2aa2c6-640f-4e94-8bcb-5872936fbe9b",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/ba2aa2c6-640f-4e94-8bcb-5872936fbe9b/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 260,
+          "sim_seconds": 0.5200000000000001,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "9df6564ff6ca5e03da955cebc19b3df5a72863ec141b845e10b41116861d9993",
+            "qvel": "813183364a5d021f5162ee25b1821e821ecae9ea1093a7e718c73c3b031b38a6",
+            "ctrl": "0ce6f17f024dff0269c9d2c89981ca9911b42f2d682dc3dc4f17e083d97924db"
+          }
+        },
+        "playing": {
+          "execution": {
+            "id": "dca5d2db-7046-4013-83b4-a08266e09256",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/dca5d2db-7046-4013-83b4-a08266e09256/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 260,
+          "sim_seconds": 0.5200000000000001,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "9df6564ff6ca5e03da955cebc19b3df5a72863ec141b845e10b41116861d9993",
+            "qvel": "813183364a5d021f5162ee25b1821e821ecae9ea1093a7e718c73c3b031b38a6",
+            "ctrl": "0ce6f17f024dff0269c9d2c89981ca9911b42f2d682dc3dc4f17e083d97924db"
+          }
+        },
+        "paused": {
+          "execution": {
+            "id": "d775a4d5-0093-45fe-a30d-837e015c575f",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/d775a4d5-0093-45fe-a30d-837e015c575f/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 260,
+          "sim_seconds": 0.5200000000000001,
+          "shown_live": false,
+          "final_arrays": {
+            "qpos": "9df6564ff6ca5e03da955cebc19b3df5a72863ec141b845e10b41116861d9993",
+            "qvel": "813183364a5d021f5162ee25b1821e821ecae9ea1093a7e718c73c3b031b38a6",
+            "ctrl": "0ce6f17f024dff0269c9d2c89981ca9911b42f2d682dc3dc4f17e083d97924db"
+          }
+        },
+        "disconnect": {
+          "execution": {
+            "id": "970117f0-502e-49b6-982e-51606e1178c9",
+            "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/970117f0-502e-49b6-982e-51606e1178c9/experiment.json",
+            "kind": "execution"
+          },
+          "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+          "steps": 260,
+          "sim_seconds": 0.5200000000000001,
+          "shown_live": true,
+          "final_arrays": {
+            "qpos": "9df6564ff6ca5e03da955cebc19b3df5a72863ec141b845e10b41116861d9993",
+            "qvel": "813183364a5d021f5162ee25b1821e821ecae9ea1093a7e718c73c3b031b38a6",
+            "ctrl": "0ce6f17f024dff0269c9d2c89981ca9911b42f2d682dc3dc4f17e083d97924db"
+          }
+        }
+      }
+    },
+    "unchanged_mcp_tools": 60,
+    "pose_stop": {
+      "execution": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/10f3523b-a1e4-4e8d-a4cf-c0688732a5db/experiment.json",
+      "status": "cancelled",
+      "reason": "cancelled"
+    },
+    "gripper_stop": {
+      "execution": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/20063a05-2e7d-446b-88a2-f51c9e3398c9/experiment.json",
+      "status": "cancelled",
+      "reason": "cancelled"
+    },
+    "gripper_reset": {
+      "execution": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/15de7b2e-d5fe-46c2-85b4-5cd1f8e79394/experiment.json",
+      "status": "failed",
+      "reason": "invalidated"
+    },
+    "recovery": {
+      "execution": {
+        "id": "3ff9d148-1327-4f1f-a5e5-5eee896ec933",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/3ff9d148-1327-4f1f-a5e5-5eee896ec933/experiment.json",
+        "kind": "execution"
+      },
+      "initial_state": "813e9f019baf5e7a663b1a15c006b9b6805f6c245a67c8714298b207d039bd43",
+      "steps": 260,
+      "sim_seconds": 0.5200000000000001,
+      "shown_live": false,
+      "final_arrays": {
+        "qpos": "443fc8dd38b694adefcaca14182c76f689977490a35f473533a2cfa7f64cd3b0",
+        "qvel": "1d81f3e6354ebb1e334ea18249f14cd5de94b1bb7f8edb62add0158710ac769a",
+        "ctrl": "60abd4b1c97feb95783f16ef73a93444a544473bd02ac153cdb4a28a4f9ad928"
+      }
+    },
+    "script": {
+      "pose_type": "bool",
+      "gripper_none": true
+    },
+    "mounted": {
+      "execution": {
+        "id": "2e29e9b6-0355-4f5d-9408-a2e9c619b7d6",
+        "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/home/worlds/owned_behaviors/experiments/2e29e9b6-0355-4f5d-9408-a2e9c619b7d6/experiment.json",
+        "kind": "execution"
+      },
+      "carrier_velocity_commands": [
+        5.714285714285714,
+        5.714285714285714
+      ],
+      "arm_endpoint": "rover/arm"
+    },
+    "browser_errors": [],
+    "video": {
+      "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-22-pose-gripper/live/pose-gripper-validation.mp4",
+      "frames": 2648,
+      "seconds": 44.49721598625183
+    }
+  },
+  "browser_gamepad": {
+    "passed": 8,
+    "seconds": 34.46
+  },
+  "behavior": {
+    "baseline": "fac7d71",
+    "identical": true,
+    "scenarios": 14,
+    "markers": 280
+  },
+  "video": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "avg_frame_rate": "30/1"
+      }
+    ],
+    "format": {
+      "duration": "44.600000",
+      "size": "1954399"
+    }
+  },
+  "video_full_decode": "passed",
+  "review": "independent Python review approved after fixing expired preamble admission and final metric failure handling",
+  "unavailable_tools": [
+    "mypy",
+    "pyright",
+    "bandit",
+    "pip-audit"
+  ],
+  "compatibility": [
+    "MCP parameter schemas and complete tool definitions unchanged; execution reference is additive",
+    "queued/reused ArmMotion retained, including five-second cap and position servo hold",
+    "normal or wall-limited completion leaves controllers attached",
+    "pose interruption preserves existing zero-speed balance and pending/current pose; later stepping can continue it",
+    "script bool/None results and cumulative lease retained; read-only calls do not adopt replacement controllers"
+  ],
+  "scope": "MCP pose/gripper plus shared recorded lifecycle extraction and script identity safety; no controller/reward/success-rate tuning",
+  "limits": [
+    "macOS arm64 actual verification only; native Windows not rerun",
+    "optional RL backends and unavailable type/security tooling unverified",
+    "blocking native/plugin work remains cooperatively cancellable",
+    "recorded snapshots do not capture arbitrary Python controller or RNG runtime state",
+    "no new dependencies, release, deployment or paid Actions"
+  ],
+  "raw_evidence": "../robotforge-evidence/2026-10-22-pose-gripper/"
+}
