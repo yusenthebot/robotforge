@@ -25,7 +25,7 @@ import time
 import traceback
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -49,6 +49,9 @@ from robotforge.training.trial import (
     evaluate_policy,
     thin,
 )
+
+if TYPE_CHECKING:
+    from robotforge.experiments import ExperimentHandle
 
 RUN_FILE = "run.json"
 TRIALS_DIR = "trials"
@@ -201,18 +204,67 @@ def policy_meta(spec: RunSpec) -> dict[str, Any]:
         env.close()
 
 
+def _begin_experiment(spec: RunSpec, folder: Path) -> ExperimentHandle:
+    handle = store.experiment_store(folder).begin(
+        "training_run",
+        environment={"env_spec": spec.env, "scope": spec.env.get("scope"), "robot": spec.env["robot"]},
+        task={
+            "registered_name": spec.env["task"],
+            "implementation_name": None,
+            "params": spec.env.get("task_params", {}),
+        },
+        algorithm={
+            "domain": "training",
+            "name": spec.algos,
+            "params": spec.params,
+            "run_spec": spec.model_dump(mode="json"),
+            "settings_source": "RunSpec",
+        },
+        seeds={
+            "run": spec.seed,
+            "search": spec.search.seed if spec.search else None,
+            "ranking": {"base": 10_000, "episodes": spec.eval_episodes, "protocol": "base + episode"},
+            "held_out": {
+                "base": HELD_OUT_SEED,
+                "episodes": spec.held_out_episodes
+                if spec.held_out_episodes is not None
+                else (HELD_OUT_EPISODES if len(plan_for(spec)) > 1 else 0),
+                "protocol": "base + episode",
+            },
+        },
+        budget={
+            "steps_per_trial": spec.steps,
+            "requested_wall_seconds": spec.minutes * 60 if spec.minutes else None,
+            "semantics": (
+                "whole algorithm iterations may overshoot; training steps exclude ranking and held-out "
+                "evaluation; wall includes queue and evaluation"
+            ),
+        },
+    )
+    handle.update(metrics={"phase": "queued"})
+    return handle
+
+
 def _launch(spec: RunSpec, folder: Path, plans: list[TrialPlan], meta: dict[str, Any]) -> dict[str, Any]:
     folder.mkdir(parents=True, exist_ok=True)
     for old in (store.STOP_FILE, store.HEARTBEAT_FILE, POLICY_FILE):
         (folder / old).unlink(missing_ok=True)
     shutil.rmtree(folder / TRIALS_DIR, ignore_errors=True)
     store.write_json(folder / RUN_FILE, spec.model_dump(mode="json"))
+    experiment = _begin_experiment(spec, folder)
     algo = plans[0].algo if len({p.algo for p in plans}) == 1 else "+".join(spec.algos)
     store.write_json(
         folder / store.POLICY_FILE,
-        {**meta, "algo": algo, "trials_planned": len(plans), "created": time.strftime("%Y-%m-%d %H:%M:%S")},
+        {
+            **meta,
+            "algo": algo,
+            "trials_planned": len(plans),
+            "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "experiment": experiment.reference(),
+        },
     )
     starting = {"state": "starting", "name": spec.name, "timesteps": 0, "progress": 0.0, "updated": time.time()}
+    starting["experiment"] = experiment.reference()
     store.write_json(folder / store.STATUS_FILE, starting)
     try:
         with (folder / store.LOG_FILE).open("w", encoding="utf-8") as log:
@@ -234,7 +286,7 @@ def _launch(spec: RunSpec, folder: Path, plans: list[TrialPlan], meta: dict[str,
         "left_out": meta["left_out"],
     }
     return {"folder": str(folder), "pid": proc.pid, "trials": [vars(p) for p in plans], "observation": observation,
-            "action": meta["action"], "notes": spec.notes}  # fmt: skip
+            "action": meta["action"], "notes": spec.notes, "experiment": experiment.reference()}  # fmt: skip
 
 
 def _detached() -> dict[str, Any]:
@@ -259,6 +311,7 @@ class _Trial:
         self.error: str | None = None
         self.timed_out = False
         self.seconds = 0.0
+        self.experiments: list[dict[str, Any]] = []
         self.live: dict[str, Any] = {}
         self.history: dict[str, Any] = {"curve": [], "returns": [], "metrics": {}}
 
@@ -280,6 +333,7 @@ class _Trial:
         }
         out: dict[str, Any] = {
             "id": self.plan.id,
+            "experiments": self.experiments,
             "algo": self.plan.algo,
             "settings": self.plan.params,
             "seed": self.plan.seed,
@@ -325,6 +379,13 @@ class Job:
         self.planned = self._planned_steps()
         self.rung_now = 0
         self.facts = store.read_json(folder / store.POLICY_FILE)
+        self.experiment = store.training_experiment(folder)
+        if self.experiment is None or self.experiment.record.status != "running":
+            folder.mkdir(parents=True, exist_ok=True)
+            self.experiment = _begin_experiment(spec, folder)
+            self.facts["experiment"] = self.experiment.reference()
+            store.write_json(folder / store.POLICY_FILE, self.facts)
+        self.experiment.update(metrics={"phase": "running"}, budget={"planned_training_steps": self.planned})
 
     def _planned_steps(self) -> int:
         total, before = 0, 0.0
@@ -359,6 +420,7 @@ class Job:
         doc: dict[str, Any] = {
             "state": state,
             "name": self.spec.name,
+            "experiment": self.experiment.reference(),
             "task": self.spec.env["task"],
             "robot": self.spec.env["robot"],
             "algo": self.facts.get("algo"),
@@ -402,7 +464,10 @@ class Job:
         if not force and now - self.last_write < 0.8:
             return
         self.last_write = now
-        store.write_json(self.folder / store.STATUS_FILE, self.document(state, **more))
+        document = self.document(state, **more)
+        store.write_json(self.folder / store.STATUS_FILE, document)
+        if state in store.FINAL_STATES:
+            store.finish_experiment(self.folder, document)
 
     # ---- running ----
 
@@ -410,7 +475,42 @@ class Job:
         return self.folder / TRIALS_DIR / trial.plan.id
 
     def job_for(self, trial: _Trial, budget: int, resume: bool) -> dict[str, Any]:
+        algo = algorithms.get(trial.plan.algo)
+        child = store.experiment_store(self.folder).begin(
+            "training_segment",
+            parent=self.experiment.reference(),
+            origins=[trial.experiments[-1]] if resume and trial.experiments else [],
+            environment={"env_spec": self.spec.env},
+            task={
+                "registered_name": self.spec.env["task"],
+                "implementation_name": None,
+                "params": self.spec.env.get("task_params", {}),
+            },
+            algorithm={
+                "name": algo.name,
+                "domain": "training",
+                "params": trial.plan.params,
+                "source": algo.source,
+                "settings_source": "search" if self.spec.search else "RunSpec.params and defaults",
+                "trial": trial.plan.id,
+                "rung": trial.rung,
+                "resume": resume,
+            },
+            seeds={
+                "training": trial.plan.seed,
+                "ranking": {"base": 10_000, "episodes": self.spec.eval_episodes, "protocol": "base + episode"},
+            },
+            budget={
+                "training_steps": budget,
+                "requested_run_wall_seconds": self.spec.minutes * 60 if self.spec.minutes else None,
+                "semantics": "incremental whole-iteration training budget; evaluation steps excluded",
+            },
+        )
+        child.update(metrics={"phase": "queued"})
+        trial.experiments.append(child.reference())
         return {
+            "experiment": child.reference(),
+            "parent_experiment": self.experiment.reference(),
             "id": trial.plan.id,
             "algo": trial.plan.algo,
             "params": trial.plan.params,
@@ -461,7 +561,14 @@ class Job:
                 futures: dict[Future, _Trial] = {}
                 for t in alive:
                     t.rung, t.state = r, "queued"
-                    futures[pool.submit(_segment, self.job_for(t, max(increment, 1), resume=r > 0))] = t
+                    payload = self.job_for(t, max(increment, 1), resume=r > 0)
+                    try:
+                        future = pool.submit(_segment, payload)
+                    except Exception as exc:
+                        child = store.open_experiment(payload["experiment"])
+                        child.finish("failed", reason="segment submission failed", error=f"{type(exc).__name__}: {exc}")
+                        raise
+                    futures[future] = t
                 self._wait(futures)
                 self._collect(alive)
                 if self.should_stop() or r == len(self.rungs) - 1:
@@ -483,6 +590,14 @@ class Job:
                     break
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
+            # Only after every worker has exited may the coordinator repair orphaned child records.
+            for t in self.trials:
+                if not t.experiments:
+                    continue
+                child = store.open_experiment(t.experiments[-1])
+                if child.record.status == "running":
+                    queued = child.record.metrics.get("phase") == "queued"
+                    child.finish("cancelled" if queued else "failed", reason="coordinator closed the worker pool")
         return "stopped" if self.stop_seen else "done"
 
     def _wait(self, futures: dict[Future, _Trial]) -> None:
@@ -493,6 +608,18 @@ class Job:
                     if f.cancel():
                         t = futures[f]
                         t.state, t.timed_out = "stopped", self.timed_out
+                        if t.experiments:
+                            child = store.open_experiment(t.experiments[-1])
+                            child.update(
+                                metrics={"phase": "cancelled", "started": False},
+                                budget_used={"training_steps": 0, "wall_seconds": 0},
+                            )
+                            child.finish(
+                                "cancelled",
+                                reason="timeout before worker started"
+                                if self.timed_out
+                                else "stop requested before worker started",
+                            )
                         pending.remove(f)
                 if not pending:
                     break
@@ -504,6 +631,12 @@ class Job:
                 except Exception as exc:  # one trial failing must not end the others
                     t.state = "failed"
                     t.error = f"{type(exc).__name__}: {exc}"
+                    # The future is finished: the coordinator can safely repair a worker that died.
+                    if t.experiments:
+                        child = store.open_experiment(t.experiments[-1])
+                        if child.record.status == "running":
+                            child.finish("failed", reason="worker failed", error=t.error)
+                        t.steps = max(t.steps, int(child.record.budget_used.get("cumulative_training_steps", 0)))
                     print(f"trial {t.plan.id} failed:\n{''.join(traceback.format_exception(exc)[-6:])}", flush=True)
                 else:
                     t.timed_out = out.get("timed_out", False)
@@ -566,6 +699,22 @@ class Job:
                 "train_seconds": round(time.monotonic() - self.started, 1),
             },
         )
+        self.experiment.artifact(self.folder / POLICY_FILE, "winning_policy")
+        origin = store.policy_experiment_for(self.folder, self.folder / POLICY_FILE, best.experiments)
+        self.experiment.update(
+            origins=[origin] if origin else [],
+            metrics={"winner": best.plan.id, "policy_origin_status": "verified" if origin else "unknown"},
+        )
+        if origin:
+            self.experiment.update(task=store.open_experiment(origin).record.task)
+        meta = store.read_json(self.folder / store.POLICY_FILE)
+        meta.pop("policy_experiment", None)
+        meta.pop("policy_origin_note", None)
+        if origin:
+            meta["policy_experiment"] = origin
+        else:
+            meta["policy_origin_note"] = "unknown: no verified segment policy artifact matches the saved weights"
+        store.write_json(self.folder / store.POLICY_FILE, {**meta, "experiment": self.experiment.reference()})
         self.leader_id = best.plan.id
         return final
 
@@ -625,6 +774,7 @@ def run_job(folder: Path) -> int:
                 "traceback_tail": tail,
             },
         )
+        store.finish_experiment(folder, store.read_json(folder / store.STATUS_FILE))
         raise
     job.write(
         state,
@@ -651,14 +801,31 @@ def run_inline(spec: RunSpec, folder: Path) -> dict[str, Any]:
     scripts that want the result without a process of their own."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
+    plan_for(spec)
+    for name in spec.algos:
+        algorithms.need(algorithms.get(name))
+    meta = policy_meta(spec)
+    if (folder / RUN_FILE).exists():
+        (folder / store.STOP_FILE).unlink(missing_ok=True)
+    (folder / POLICY_FILE).unlink(missing_ok=True)
+    shutil.rmtree(folder / TRIALS_DIR, ignore_errors=True)
+    experiment = _begin_experiment(spec, folder)
     store.write_json(folder / RUN_FILE, spec.model_dump(mode="json"))
-    store.write_json(folder / store.POLICY_FILE, policy_meta(spec))
-    job = Job(spec, folder)
-    state = job.run()
-    final = job.finish(state)
-    if job.should_stop():
-        state = "stopped"
-    job.write(state, force=True, final=final, leader=getattr(job, "leader_id", None))
+    store.write_json(folder / store.POLICY_FILE, {**meta, "experiment": experiment.reference()})
+    job = None
+    try:
+        job = Job(spec, folder)
+        state = job.run()
+        final = job.finish(state)
+        if job.should_stop():
+            state = "stopped"
+        job.write(state, force=True, final=final, leader=getattr(job, "leader_id", None))
+    except Exception as exc:
+        document = job.document("failed") if job else {"state": "failed"}
+        document["error"] = f"{type(exc).__name__}: {exc}"
+        store.write_json(folder / store.STATUS_FILE, document)
+        store.finish_experiment(folder, document)
+        raise
     return store.read_json(folder / store.STATUS_FILE)
 
 

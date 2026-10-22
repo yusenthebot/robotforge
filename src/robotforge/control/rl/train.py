@@ -163,6 +163,12 @@ class Trainer:
         self.best: dict[str, Any] | None = None
         self.model: PPO | SAC | None = None
         self.norm: VecNormalize | None = None
+        self.experiment = store.training_experiment(folder)
+        if self.experiment is None or self.experiment.record.status != "running":
+            self.experiment = store.legacy_experiment(folder, spec)
+            meta = store.read_json(folder / store.POLICY_FILE)
+            store.write_json(folder / store.POLICY_FILE, {**meta, "experiment": self.experiment.reference()})
+        self.segment = None
         self.evaluator = Evaluator(spec)
 
     # ---- progress ----
@@ -182,6 +188,7 @@ class Trainer:
         status: dict[str, Any] = {
             "state": state,
             "name": self.spec.name,
+            "experiment": self.experiment.reference(),
             "task": self.spec.task,
             "algo": self.spec.algo,
             "timesteps": int(steps),
@@ -254,6 +261,78 @@ class Trainer:
         return SAC("MlpPolicy", self.norm, policy_kwargs=kwargs, seed=spec.seed, device="cpu", **settings)
 
     def run(self) -> dict[str, Any]:
+        """Record the direct legacy trainer as one independently owned segment."""
+        self.segment = store.experiment_store(self.folder).begin(
+            "training_segment",
+            parent=self.experiment.reference(),
+            environment=self.experiment.record.environment,
+            task=self.experiment.record.task,
+            algorithm=self.experiment.record.algorithm,
+            seeds=self.experiment.record.seeds,
+            budget=self.experiment.record.budget,
+        )
+        try:
+            inner = self.evaluator.inner
+            self.segment.update(task={"implementation_name": inner.task.name})
+            self.segment.snapshot_environment(inner.model, inner.data, scope="robot", robot=self.spec.robot.name)
+            result = self._run()
+            self.segment.artifact(self.folder / store.WEIGHTS_FILE, "policy")
+            self.experiment.artifact(self.folder / store.WEIGHTS_FILE, "winning_policy")
+            self.experiment.update(origins=[self.segment.reference()])
+            self.segment.update(
+                metrics={"final": result["final"]},
+                budget_used={
+                    "training_steps": result["timesteps"],
+                    "wall_seconds": result["train_seconds"],
+                },
+            )
+            timeout = result["stopped_early"] == "time budget used up"
+            self.segment.finish(
+                "stopped" if timeout or result["state"] == "stopped" else "completed",
+                reason="timeout" if timeout else result["stopped_early"] or "complete",
+            )
+            result.update(
+                experiment=self.experiment.reference(), policy_experiment=self.segment.reference(), timed_out=timeout
+            )
+            meta = store.read_json(self.folder / store.POLICY_FILE)
+            store.write_json(
+                self.folder / store.POLICY_FILE,
+                {
+                    **meta,
+                    "experiment": self.experiment.reference(),
+                    "policy_experiment": self.segment.reference(),
+                },
+            )
+            # Direct Trainer callers also receive a terminal parent; run_job writes the legacy files afterwards.
+            store.finish_experiment(
+                self.folder,
+                {**result, "elapsed_s": result["train_seconds"], "state": "stopped" if timeout else result["state"]},
+            )
+            return result
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            if self.segment.record.status == "running":
+                self.segment.update(
+                    budget_used={
+                        "training_steps": int(self.model.num_timesteps) if self.model else 0,
+                        "wall_seconds": time.monotonic() - self.started,
+                    }
+                )
+                self.segment.finish("failed", reason="worker exception", error=error)
+            store.finish_experiment(
+                self.folder,
+                {
+                    "state": "failed",
+                    "error": error,
+                    "elapsed_s": time.monotonic() - self.started,
+                    "timesteps": int(self.model.num_timesteps) if self.model else 0,
+                },
+            )
+            raise
+        finally:
+            self.evaluator.env.close()
+
+    def _run(self) -> dict[str, Any]:
         spec = self.spec
         print(f"training {spec.algo.upper()} on {spec.task} with {spec.n_envs} simulation processes", flush=True)
         self.write_status("starting", 0)
@@ -272,7 +351,11 @@ class Trainer:
         final = {"kept_from_timesteps": self.best["timesteps"], **self.evaluator.run(net, FINAL_EPISODES, seed=20_000)}
         if spec.push > 0:
             calm = TrainSpec.model_validate({**spec.model_dump(), "push": 0.0})
-            final["without_shoves"] = Evaluator(calm).run(net, FINAL_EPISODES, seed=20_000)
+            evaluator = Evaluator(calm)
+            try:
+                final["without_shoves"] = evaluator.run(net, FINAL_EPISODES, seed=20_000)
+            finally:
+                evaluator.env.close()
         stopped = callback.stop_reason == "stopped on request"
         return {
             "final": final,
@@ -327,6 +410,7 @@ def run_job(folder: Path) -> int:
                 "updated": time.time(),
             },
         )
+        store.finish_experiment(folder, store.read_json(folder / store.STATUS_FILE))
         raise
     state = result.pop("state")
     store.write_json(folder / store.POLICY_FILE, {**meta, **result, "versions": versions()})
@@ -339,6 +423,7 @@ def run_job(folder: Path) -> int:
             "elapsed_s": result["train_seconds"],
             "final": result["final"],
             "stopped_early": result["stopped_early"],
+            "timed_out": result.get("timed_out", False),
             "updated": time.time(),
         },
     )

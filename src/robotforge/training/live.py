@@ -9,6 +9,7 @@ robot in the live world) and "training_stop".
 from __future__ import annotations
 
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -119,9 +120,11 @@ class TrainingFeed:
         ):
             params["target"] = TARGET_NAME
         world = pg.current_world()
-        play.attach(session, spec.robot, policy, world=world, task_params=params)
+        attached = play.attach(
+            session, spec.robot, policy, world_dir=self._world_dir(), world=world, task_params=params
+        )
         session.paused = False
-        return {"trial": trial, "robot": spec.robot}
+        return {"trial": trial, "robot": spec.robot, "experiment": attached["experiment"]}
 
     def _world_dir(self) -> Path | None:
         return self.pg.store.dir if self.pg.store is not None else None
@@ -141,7 +144,23 @@ def _policy_to_play(folder: Path, trial: str | None) -> tuple[TrainedPolicy, str
     path = folder / TRIALS_DIR / str(trial) / POLICY_FILE
     if not trial or not path.exists():
         raise TaskError(f"{folder.name!r} has no policy yet" if not trial else f"trial {trial!r} has no policy yet")
-    return TrainedPolicy(folder, meta, MlpPolicy.load(path)), str(trial)
+    status = store.read_json(folder / store.STATUS_FILE)
+    row = next((item for item in status.get("trials", []) if item.get("id") == trial), {})
+    refs = list(row.get("experiments") or [])
+    for name in ("segment.json", "progress.json"):
+        ref = store.read_json(path.parent / name).get("experiment")
+        if isinstance(ref, dict):
+            refs.append(ref)
+    # Resolve lineage against the exact bytes loaded, even if a training worker replaces the live file.
+    with tempfile.TemporaryDirectory(prefix="robotforge-selected-policy-") as temporary:
+        frozen = Path(temporary) / POLICY_FILE
+        frozen.write_bytes(path.read_bytes())
+        net = MlpPolicy.load(frozen)
+        origin = store.policy_experiment_for(folder, frozen, refs)
+    meta.pop("policy_experiment", None)
+    if origin is not None:
+        meta["policy_experiment"] = origin
+    return TrainedPolicy(folder, meta, net, weights_path=path, trial_id=str(trial)), str(trial)
 
 
 def _object_names(model: Any) -> set[str]:

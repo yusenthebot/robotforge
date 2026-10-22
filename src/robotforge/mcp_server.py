@@ -441,6 +441,7 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             viewer.should_exit = True
             with contextlib.suppress(Exception):
                 await task
+            playground.session.finish_controller_observations("mcp_shutdown")
             playground.renderer.close()
 
     ensure_user_plugins()  # the user's own parts and sensors, ready before any world is read

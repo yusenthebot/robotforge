@@ -106,6 +106,7 @@ def start_control(
     """
     from robotforge.control.methods import make_controller
     from robotforge.control.task_registry import describe_task
+    from robotforge.experiments.live import attach_record
 
     session = playground.session
     with session.lock:
@@ -126,5 +127,22 @@ def start_control(
         if session.generation != generation:
             raise TaskError("the world was reset or changed while the controller was being prepared; run it again")
         request.task.begin(session.data)
-        session.set_controller(robot, ctl)
-    return {"robot": robot, "task": describe_task(request.task), "method": request.method, "controller": ctl.status()}
+        experiment = attach_record(
+            session,
+            robot,
+            ctl,
+            getattr(ctl, "task", request.task),
+            request.method,
+            world=world,
+            world_dir=directory,
+            method_params=request.params,
+            entrypoint="script_or_viewer_control",
+            overrides=task_params,
+        )
+    return {
+        "robot": robot,
+        "task": describe_task(request.task),
+        "method": request.method,
+        "controller": ctl.status(),
+        "experiment": experiment,
+    }

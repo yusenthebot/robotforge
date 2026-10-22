@@ -8,7 +8,6 @@ function a worker process runs; it saves the policy, the state and a progress fi
 
 from __future__ import annotations
 
-import json
 import time
 from collections import deque
 from collections.abc import Callable
@@ -325,22 +324,65 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
     state to continue from and the progress are in the trial's folder."""
     folder = Path(job["trial_dir"])
     folder.mkdir(parents=True, exist_ok=True)
-    _load_plugins(job)
-    algo = algorithms.get(job["algo"])
-    params = algo.params(job.get("params"))
-    algorithms.need(algo)
-    env = build_env(job["env"])
+    experiment = store.open_experiment(job["experiment"]) if job.get("experiment") else None
+    env = ctx = sink = None
     started = time.monotonic()
     try:
-        state = load_arrays(folder / STATE_FILE) if job.get("resume") else {}
-        stop_file = Path(job["stop_file"]) if job.get("stop_file") else None
+        _load_plugins(job)
+        algo = algorithms.get(job["algo"])
+        params = algo.params(job.get("params"))
+        algorithms.need(algo)  # preflight before allocating simulation or rendering resources
         budget = int(job["budget"])
+        seed = int(job.get("seed", 0))
+        episodes = int(job.get("eval_episodes", 5))
+        if budget <= 0 or episodes <= 0:
+            raise TaskError("segment budget and evaluation episodes must be positive")
+        if experiment is None:
+            experiment = store.experiment_store(folder).begin(
+                "training_segment",
+                parent=job.get("parent_experiment"),
+                environment={"env_spec": job["env"]},
+                task={
+                    "registered_name": job["env"].get("task"),
+                    "implementation_name": None,
+                    "params": job["env"].get("task_params", {}),
+                },
+                algorithm={
+                    "name": algo.name,
+                    "domain": "training",
+                    "params": params,
+                    "source": algo.source,
+                    "settings_source": "direct segment request and defaults",
+                    "resume": bool(job.get("resume")),
+                },
+                seeds={
+                    "training": seed,
+                    "ranking": {"base": EVAL_SEED, "episodes": episodes, "protocol": "base + episode"},
+                },
+                budget={
+                    "training_steps": budget,
+                    "requested_wall_seconds": job.get("max_seconds"),
+                    "semantics": "whole iterations may overshoot; evaluation steps excluded",
+                },
+            )
+        experiment.update(metrics={"phase": "running"})
+        env = build_env(job["env"])
+        state = load_arrays(folder / STATE_FILE) if job.get("resume") else {}
+        if job.get("resume") and (folder / STATE_FILE).exists():
+            resume_artifact = experiment.artifact(folder / STATE_FILE, "resume_state")
+            experiment.update(algorithm={"resume_state_sha256": resume_artifact.sha256})
+        stop_file = Path(job["stop_file"]) if job.get("stop_file") else None
         sink = Sink(folder, budget, offset=int(state["steps"]) if "steps" in state else 0)
-        sink.extra = {"id": job.get("id"), "algo": job["algo"], "budget": budget + sink.steps}
+        sink.extra = {
+            "id": job.get("id"),
+            "algo": job["algo"],
+            "budget": budget + sink.steps,
+            "experiment": experiment.reference(),
+        }
         ctx = TrainContext(
             env,
             params,
-            seed=int(job.get("seed", 0)),
+            seed=seed,
             budget=budget,
             state=state,
             sink=sink,
@@ -349,34 +391,74 @@ def run_segment(job: dict[str, Any]) -> dict[str, Any]:
             max_seconds=job.get("max_seconds"),
             deadline=job.get("deadline"),
         )
+        experiment.update(
+            task={"implementation_name": env.task.name},
+            seeds={"training_protocol": "default_rng(training) restarts each segment; algorithm draws reset seeds"},
+        )
+        experiment.snapshot_environment(
+            env.model,
+            env.data,
+            world=job["env"].get("world"),
+            scope=job["env"].get("scope"),
+            robot=job["env"].get("robot"),
+        )
         policy = final_policy(ctx, algo.run(ctx))
         policy.save(folder / POLICY_FILE)
         save_arrays(folder / STATE_FILE, ctx.arrays())
+        experiment.artifact(folder / POLICY_FILE, "policy")
+        experiment.artifact(folder / STATE_FILE, "training_state")
         try:
-            score = evaluate_policy(env, policy, int(job.get("eval_episodes", 5)), should_stop=ctx.expired)
+            score = evaluate_policy(env, policy, episodes, should_stop=ctx.expired)
         except Stopped:
             score = None  # an incomplete test must not rank against complete tests
+        out = {
+            "id": job.get("id"),
+            "steps": ctx.steps,
+            "segment_steps": ctx.steps_used,
+            "seconds": round(time.monotonic() - started, 2),
+            "score": score,
+            "stopped": ctx.stopped(),
+            "timed_out": ctx._deadline is not None and time.monotonic() >= ctx._deadline,
+            "experiment": experiment.reference(),
+        }
+        sink.steps = ctx.steps
+        sink.flush(
+            force=True,
+            state="stopped" if out["stopped"] or out["timed_out"] else "done",
+            score=score,
+            seconds=out["seconds"],
+            timed_out=out["timed_out"],
+        )
+        store.write_json(folder / "segment.json", out)
+        experiment.artifact(folder / PROGRESS_FILE, "progress")
+        experiment.update(
+            metrics={"phase": "finished", "score": score},
+            budget_used={
+                "training_steps": ctx.steps_used,
+                "cumulative_training_steps": ctx.steps,
+                "wall_seconds": out["seconds"],
+            },
+        )
+        reason = "timeout" if out["timed_out"] else "stop requested" if out["stopped"] else "segment complete"
+        experiment.finish("stopped" if out["stopped"] or out["timed_out"] else "completed", reason=reason)
+        return out
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        if experiment is not None and experiment.record.status == "running":
+            experiment.update(
+                budget_used={
+                    "training_steps": ctx.steps_used if ctx else 0,
+                    "cumulative_training_steps": ctx.steps if ctx else 0,
+                    "wall_seconds": time.monotonic() - started,
+                }
+            )
+            experiment.finish("failed", reason="worker exception", error=error)
+        if sink is not None:
+            sink.flush(force=True, state="failed", error=error)
+        raise
     finally:
-        env.close()
-    out = {
-        "id": job.get("id"),
-        "steps": ctx.steps,
-        "segment_steps": ctx.steps_used,
-        "seconds": round(time.monotonic() - started, 2),
-        "score": score,
-        "stopped": ctx.stopped(),
-        "timed_out": ctx._deadline is not None and time.monotonic() >= ctx._deadline,
-    }
-    sink.steps = ctx.steps
-    sink.flush(
-        force=True,
-        state="stopped" if out["stopped"] or out["timed_out"] else "done",
-        score=score,
-        seconds=out["seconds"],
-        timed_out=out["timed_out"],
-    )
-    (folder / "segment.json").write_text(json.dumps(out), encoding="utf-8")
-    return out
+        if env is not None:
+            env.close()
 
 
 def _load_plugins(job: dict[str, Any]) -> None:
