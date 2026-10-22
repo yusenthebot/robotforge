@@ -624,7 +624,7 @@ async def test_mcp_run_controller_survives_resets_and_slow_machines(tmp_path, mo
         async def reset_mid_run():
             while not any(k.startswith("__monitor__") for k in pg.session.controllers):
                 await asyncio.sleep(0)
-            for _ in range(3):
+            while pg.session.steps_taken == 0:
                 await asyncio.sleep(0)
             pg.session.reset()
 
@@ -633,7 +633,17 @@ async def test_mcp_run_controller_survives_resets_and_slow_machines(tmp_path, mo
         await resetter
         assert reset.is_error and "reset during the run" in reset.content[0].text
 
-        monkeypatch.setattr(mcp_server, "FAST_WALL_LIMIT", 0.0)
+        # Owned execution also budgets preparation; expire during real physics rather than before attach.
+        import time
+
+        original_step = pg.session.step
+
+        def slow_step(n, **kwargs):
+            time.sleep(0.05)
+            return original_step(n, **kwargs)
+
+        monkeypatch.setattr(pg.session, "step", slow_step)
+        monkeypatch.setattr(mcp_server, "FAST_WALL_LIMIT", 0.3)
         slow = await client.call_tool("run_controller", {**lqr, "seconds": 5})
         out = json.loads(slow.content[0].text)
         assert "computer time" in out["stopped_early"] and out["sim_seconds"] < 5

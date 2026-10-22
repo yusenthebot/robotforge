@@ -91,3 +91,12 @@ repeated = reproduce_comparison(comparison.experiment["path"])
 
 There is no new dependency, training backend, MCP tool or release in this change.
 See the [verification report](bench/2026-10-22-experiments.md) for the actual executed checks and video.
+
+
+## Owned executions and regression
+
+MCP `run_controller` also returns an additive `execution` reference.
+That execution record links its original control/replay attachment through origins and records cumulative preparation/measurement budgets and terminal reason.
+A reset can close the attachment before the execution reports invalidation; the execution never copies a replacement world's state as its old final state.
+The fixed [framework regression suite](FRAMEWORK_REGRESSION.md) validates the common records and compares versioned inputs and physical outputs across source revisions.
+Source differences remain visible; incompatible runtime or incomplete evidence cannot be counted as a pass.

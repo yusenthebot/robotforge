@@ -18,11 +18,13 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from robotforge import wording
 from robotforge.control.compare import MONITOR, EpisodeMonitor, check_push, compare_methods
+from robotforge.control.execution import ControllerExecution
 from robotforge.control.methods import explain, make_controller, resolve_method
 from robotforge.control.runtime import bind_control, contract_catalog
 from robotforge.control.task_registry import describe_task, resolve_task
 from robotforge.control.tasks import TaskError
 from robotforge.playground import Playground
+from robotforge.sim.execution import EndReason, ExecutionError
 
 MAX_SECONDS = 60.0
 MAX_COMPARE_SECONDS = 30.0
@@ -32,8 +34,16 @@ COMPARE_WALL_SECONDS = 60.0  # computer time for a whole comparison; slower meth
 RunUntil = Callable[[Callable[[], bool], float], Awaitable[dict[str, Any]]]
 
 
-def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> None:
+def register(
+    server: MCPServer,
+    playground: Playground,
+    run_until: RunUntil,
+    *,
+    watched: Callable[[], bool] = lambda: False,
+    wall_limit: Callable[[], float] = lambda: 60.0,
+) -> None:
     session = playground.session
+    execution = ControllerExecution(playground, watched, wall_limit)
 
     def world_dir():
         return playground.store.dir if playground.store is not None else None
@@ -65,6 +75,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
         )
 
     @server.tool()
+    @execution.owned
     async def run_controller(
         robot: str,
         task: str,
@@ -109,10 +120,12 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
             bound, method, method_params = request.task, request.method, request.params
             seconds = seconds or bound.default_seconds  # after begin: a contact task needs longer from a higher start
             check_push(push_at, seconds)
+            execution.configure(bound, method, method_params, seconds)
             # Building can take a while (ars trains first), so do it off the event loop the viewer runs on.
-            controller = await asyncio.to_thread(make_controller, method, bound, model, snapshot, method_params)
+            controller = await execution.prepare(make_controller, method, bound, model, snapshot, method_params)
             monitor_key = f"{MONITOR}{robot}/{uuid.uuid4().hex[:8]}"  # one per call: runs may overlap
             with session.lock:
+                execution.call.run.check()
                 _same_world(session, version)
                 if session.generation != generation:
                     raise TaskError("the world was reset while the controller was being prepared; run it again")
@@ -141,6 +154,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     entrypoint="mcp_run_controller",
                     overrides=task_params,
                 )
+                execution.attached(robot, controller, experiment)
                 observation = ledger(session).active.get(id(controller))
                 if observation is not None:
                     observation.handle.update(
@@ -151,7 +165,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
             runs: list[dict[str, Any]] = []
             try:
                 if push_at is not None:
-                    runs.append(await run_until(lambda: False, push_at))
+                    runs.append(await execution.advance(lambda: False, push_at))
                     _still_running(session, version, monitor_key)
                     if "stopped_early" not in runs[-1]:
                         with session.lock:
@@ -167,26 +181,41 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                                     }
                                 )
                             events.append(f"t={push_at:.1f}s: {bound.push(session.data)}")
-                        runs.append(await run_until(lambda: False, seconds - push_at))
+                        runs.append(await execution.advance(lambda: False, seconds - push_at))
                 else:
-                    runs.append(await run_until(lambda: False, seconds))
+                    runs.append(await execution.advance(lambda: False, seconds))
                 _still_running(session, version, monitor_key)
             except BaseException as exc:
+                reason = (
+                    EndReason.CANCELLED
+                    if isinstance(exc, asyncio.CancelledError)
+                    else exc.reason
+                    if isinstance(exc, ExecutionError)
+                    else EndReason.FAILED
+                )
                 with session.lock:
                     finish_record(
-                        session, controller, status="failed", reason="run_failed", metrics={"error": str(exc)}
+                        session,
+                        controller,
+                        status="cancelled" if reason == EndReason.CANCELLED else "failed",
+                        reason=reason.value,
+                        metrics={"error": str(exc), "execution": execution.reference()},
                     )
                 raise
             finally:
-                session.set_controller(monitor_key, None)
+                with session.lock:
+                    if session.controllers.get(monitor_key) is monitor:
+                        session.set_controller(monitor_key, None)
             run = {"sim_seconds": round(sum(r["sim_seconds"] for r in runs), 2), "shown_live": runs[-1]["shown_live"]}
             stopped = next((r["stopped_early"] for r in runs if "stopped_early" in r), None)
             with session.lock:
+                execution.call.run.check_valid()
                 if session.controllers.get(robot) is not controller:
                     events.append(f"something else took over {robot} during the run (e.g. keyboard driving)")
                 result = {
                     "robot": robot,
                     "experiment": experiment,
+                    "execution": execution.reference(),
                     "task": describe_task(bound),
                     "method": method,
                     "explain": explain(method),
@@ -211,6 +240,7 @@ def register(server: MCPServer, playground: Playground, run_until: RunUntil) -> 
                     reason=stopped or "measurement_completed_controller_remains_attached",
                     metrics={
                         "namespace": "control_episode",
+                        "execution": execution.reference(),
                         "task_observation": "episode_monitor",
                         "reward": result["reward"],
                         "effort_j": result["effort_j"],
@@ -323,6 +353,8 @@ def _tool_errors() -> Iterator[None]:
     """Anticipated failures become ToolError so the agent sees the actual message."""
     try:
         yield
+    except ExecutionError:
+        raise  # The owned adapter must retain its reason before _Server translates the tool error.
     except (TaskError, ValueError, KeyError) as exc:
         raise ToolError(str(exc)) from exc
 

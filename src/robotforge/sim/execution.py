@@ -248,6 +248,25 @@ class ExecutionRun:
                 self.check()
                 return fn(*args)
 
+        return await self._thread(guarded)
+
+    async def call_snapshot_thread(self, fn: Callable[..., T], *args: Any) -> T:
+        """Prepare from caller-captured inputs without holding the viewer's pose lock for the whole worker.
+
+        Unlike call_thread planners, this callback must not attach controllers or edit the live session.
+        Validate again before using its result; a reset can occur after its brief admission check.
+        """
+
+        def guarded() -> T:
+            with self.session.lock:
+                if self._workers_stopping:
+                    raise ExecutionError(EndReason.CANCELLED, "execution ended before snapshot preparation started")
+                self.check()
+            return fn(*args)
+
+        return await self._thread(guarded)
+
+    async def _thread(self, guarded: Callable[[], T]) -> T:
         worker = asyncio.create_task(asyncio.to_thread(guarded))
         self._workers.add(worker)
 
@@ -264,7 +283,7 @@ class ExecutionRun:
     async def drain_workers(self, cancel_pending: bool = False) -> None:
         self._workers_stopping |= cancel_pending
         if self._workers:
-            await asyncio.gather(*tuple(self._workers), return_exceptions=True)
+            await asyncio.shield(asyncio.gather(*tuple(self._workers), return_exceptions=True))
 
     async def advance(self, done: Callable[[], bool], max_seconds: float) -> RunResult:
         """Run one phase. Limits accumulate across phases; phase results count only this phase's work."""

@@ -1,6 +1,6 @@
 # Shared execution kernel
 
-The first migration covers the MCP `move` command and `ScriptRunner`, including scripts launched by plugin behaviors.
+The migrated paths cover MCP `move`, `ScriptRunner` (including plugin behaviors) and MCP `run_controller`.
 Their public tool names, parameters and existing result fields are unchanged.
 This is an internal execution contract; it does not declare the MCP interface or world format stable.
 Robot control, motion planning and task success checks remain in their existing modules.
@@ -16,6 +16,7 @@ The viewer keeps streaming while a run owns the clock, but does not advance it a
 flowchart TD
     M[MCP move] --> E[ExecutionRun]
     S[Script RPC] --> E
+    R[MCP run_controller] --> E
     E --> P[SimSession.step]
     P --> C[Existing controllers and step hooks]
     P --> V[Viewer pose stream]
@@ -72,7 +73,7 @@ It prevents the old worker from silently attaching controls after the next run s
 The generic `run_until` adapters have not all migrated to this driver.
 Legacy controller commands use admission tokens while retaining their existing viewer-driven clocks.
 New owned runs refuse to start while admitted work is outstanding, including work whose requesting client has cancelled.
-The covered paths include simulate, direct controls, pose, arm/gripper work, pick/place, operate, run_controller, demonstration replay, mapping exploration and plugin controllers.
+The remaining legacy paths include simulate, direct controls, pose, arm/gripper work, pick/place, operate, demonstration replay, mapping exploration and plugin controllers.
 Plugin behaviors use `ScriptRunner` directly so they do not acquire a conflicting legacy token.
 Viewer teleoperation and manual stepping refuse competing changes; queued viewer navigation acquires admission inside its actual worker.
 Reset and world editing remain explicit invalidation paths.
@@ -87,3 +88,30 @@ Existing navigation, recording, plugins and perception tests cover compatibility
 The first implementation was also driven through the installed CLI and official MCP client, with actual Chrome, live physics, recording, viewer disconnection and a real script invalidated by reset.
 Measured results are in [2026-10-21-execution-kernel.md](bench/2026-10-21-execution-kernel.md).
 The next migrations can reuse this driver without changing robot controllers, adding another behavior-tree system or introducing a new physics backend.
+
+
+## Controller measurement migration
+
+MCP `run_controller` acquires its lease before controller preparation and retains its established tool signature, descriptions and result fields.
+An additive `execution` reference identifies the common execution record, separate from its existing `experiment` attachment record.
+The execution record links the attachment and records requested/used budgets, actual steps, termination reason and viewing status.
+Normal bounded completion and measurement wall exhaustion preserve the attached controller, matching existing behavior.
+
+Preparation and both sides of `push_at` share the original wall deadline and simulation budget.
+Controller preparation uses tracked snapshot-input work with a short admission lock; it never holds the viewer's pose lock for the full calculation.
+Returned preparation is checked again before attachment, so reset or cancellation cannot attach a stale result.
+Existing live planners keep their original fully locked `call_thread` contract.
+Draining shields actual workers from repeated task cancellation and retains the lease until they have really exited.
+Native/plugin calculations remain cooperative and cannot be forcibly preempted.
+
+Headless, playing, paused and disconnected viewing use identical physics batches.
+External stop interrupts the owned robot; cancellation cleans up only the same controller in the same generation using existing stop semantics, including resting velocity/force actuators and aircraft hover behavior.
+Position servos retain their existing holding behavior.
+Reset/model replacement invalidates the execution before another task predicate/report is read, and stale cleanup preserves replacement controls.
+Controller observation records close before reset; an invalidated execution does not label the replacement world's state as its final state.
+
+Execution reason distinguishes cancellation, invalidation, instability, failure and budget exhaustion.
+Preparation and measurement wall exhaustion both use stopped records; cancellation uses cancelled records.
+Storage errors during final recording are logged and exposed without replacing an original cancellation; a successfully applied command returns its normal result with an explicit execution recording error.
+Budget tests check both push phases, and real viewer checks require exact physical step and final-array equality.
+The [framework baseline](FRAMEWORK_REGRESSION.md) compares the new path with an independently captured old-core run.
