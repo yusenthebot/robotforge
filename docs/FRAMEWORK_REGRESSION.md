@@ -67,3 +67,8 @@ Those live checks and the actual test video are documented in the [verification 
 The default test suite, existing browser regressions and installed CLI smoke remain required checks for changes to execution adapters.
 This small acceptance suite supplements them; it does not establish Windows or optional backend compatibility.
 Remaining legacy adapters retain admission protection and should migrate in separate increments.
+
+The next increment migrates MCP pose and gripper without changing this suite or its committed capture.
+It also compares ten fixed headless MCP scenarios against the preceding `fac7d71` core and tests the new ownership boundaries.
+Those additional captures supplement the seven-case baseline rather than silently changing its inventory.
+Actual Chrome and script checks, including the test video, are recorded in [the pose/gripper report](bench/2026-10-22-pose-gripper.md).

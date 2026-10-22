@@ -531,7 +531,11 @@ Rounds 1-3 done, 2026-10-14.
 
 ## Next-round seed
 
-Continue incremental execution migration against the seven-case common-record framework baseline. MCP run_controller now shares the execution kernel with move and ScriptRunner. Next admit pose/gripper and arm families separately, preserving multi-phase budgets and wind/fast-only simulation semantics. Manipulation success-rate work stays paused. Native Windows cleanup and the prior conveyor failure remain pending; publishing and licensing are separate decisions.
+Continue incremental arm-planning and multi-phase execution migration against the unchanged seven-case common-record framework baseline.
+MCP pose and gripper now share the recorded execution lifecycle with run_controller; move and ScriptRunner retain their shared kernel.
+Preserve carrier settling, queued work, phase budgets and wind/fast-only simulation semantics.
+Manipulation success-rate work stays paused.
+Native Windows and the prior conveyor failure remain pending; publishing/licensing are separate decisions.
 
 ## Frontier
 
@@ -601,3 +605,24 @@ Continue incremental execution migration against the seven-case common-record fr
   Implementation checkpoint 62557d2 was pushed before full regression; no control/reward/success-rate tuning, new dependencies, release or paid Actions.
   Native Windows, optional RL backends and unavailable type/security packages remain unverified.
 - Next: migrate remaining pose/gripper and arm families separately against this baseline; explicitly preserve multi-phase and fast-only/wind lifecycle behavior.
+
+
+## Round 47 (2026-10-22): pose and gripper execution
+
+- Extracted RecordedExecution from the controller adapter and migrated MCP pose/gripper to its lease, cumulative preamble deadlines, generation checks and common terminal records.
+  Tool definitions and existing fields remain compatible, with an additive execution reference; the controller adapter remains a task-specific subclass.
+- Preserved reused ArmMotion queues, five-second gripper cap, controller attachment and position-servo targets.
+  Cancellation only cleans the exact endpoint; a moving carrier remains owned by its previous caller.
+  Humanoid stop retains zero-speed balance and any pending/current pose; later stepping may continue that pose.
+  Script bool/None wrappers and cumulative lease remain; read-only polling cannot adopt replacement controllers for cleanup.
+- The seven-case committed framework golden remains byte-for-byte unchanged and passes.
+  Ten additional actual MCP cases and all 60 complete tool definitions match clean old core fac7d71 exactly; 14 control scenarios retain all 280 physics markers.
+  Actual installed MCP/Chrome verifies identical initial and final arrays across four viewing states for pose (2260 steps) and gripper (260 steps), stop/reset/recovery, real scripts and a mounted-arm moving rover.
+  Browser errors are empty; the actual decoded/inspected 44.6-second 1080p/30fps MP4 was shown to the user.
+- Verification: 3248 passed, 127 skipped, zero failures/errors in the complete 3375-case default selection (720.5 s); 166 focused tests with 27 new cases, 8 real Chrome gamepad cases (34.46 s), wheel, Ruff and installed smoke (3.7 s).
+  Independent Python review approved after fixing preamble-timeout mutation and final metric persistence failure; both tools have regressions.
+  Source/tests/scripts/dependencies remained unchanged during final verification.
+- Implementation checkpoint 86c939b was pushed after focused, baseline and real Chrome verification.
+  Evidence: docs/bench/2026-10-22-pose-gripper.md/.json and ../robotforge-evidence/2026-10-22-pose-gripper/.
+  No controller/reward/success-rate tuning, dependencies, release or paid Actions; native Windows, optional RL and unavailable type/security tools remain unverified.
+- Next: arm planning and multi-phase adapters in separate increments, preserving carrier settling and phase budgets.

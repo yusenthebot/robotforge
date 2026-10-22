@@ -45,6 +45,7 @@ from robotforge.design.builder import mcp_tools as builder_tools
 from robotforge.design.store import worlds_home
 from robotforge.design.terrain import StyleName
 from robotforge.design.world import ShapeName
+from robotforge.experiments.execution import RecordedExecution
 from robotforge.extend import ensure_user_plugins
 from robotforge.extend import mcp_tools as plugin_tools
 from robotforge.extend.registry import REGISTRY, WORLD_FOLDER
@@ -290,8 +291,6 @@ class _Server(MCPServer):
                     "move_arm",
                     "pick_and_place",
                     "operate",
-                    "pose",
-                    "gripper",
                 }
                 or name in {"demonstration", "mapping"}
                 and arguments.get("action") in {"replay", "explore"}
@@ -1058,17 +1057,54 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
                 execution.interrupt()
             return _json(playground.behaviors.stop(robot))
 
+    pose_execution = RecordedExecution(
+        playground,
+        lambda: bool(hub.clients) and not playground.session.paused,
+        lambda: FAST_WALL_LIMIT,
+        owner="pose",
+        sim_seconds=20.0,
+    )
+    gripper_execution = RecordedExecution(
+        playground,
+        lambda: bool(hub.clients) and not playground.session.paused,
+        lambda: FAST_WALL_LIMIT,
+        owner="gripper",
+        sim_seconds=5.0,
+    )
+
     @server.tool()
+    @pose_execution.owned
     async def pose(robot: str, name: Literal["wave", "squat", "arms_up", "bow", "look_around", "stand"]) -> str:
         """Make a humanoid strike a pose: wave, squat (deep knee bend), arms_up (cheer), bow, look_around (turns its
         head) or stand (neutral). A walking humanoid stops first; it keeps its balance. Waits until the pose is done
         and reports whether it stayed up."""
         with _tool_errors():
             robot = playground.behaviors.resolve(robot)
-            ctrl = playground.behaviors.strike_pose(robot, name)
-            run = await run_until(lambda: ctrl.done, 20.0)
+            pose_execution.call.record.update(
+                task={"domain": "behavior", "robot": robot, "name": "pose"},
+                algorithm={"domain": "behavior", "name": "pose", "params": {"name": name}},
+                seeds={"mode": "current_state"},
+            )
+        with playground.session.lock:
+            pose_execution.call.run.check()
+            with _tool_errors():
+                ctrl = playground.behaviors.strike_pose(robot, name)
+                pose_execution.attached(robot, ctrl)
+        run = await pose_execution.advance(lambda: ctrl.done, 20.0)
+        pose_execution.call.run.check_valid()
+        with _tool_errors():
             after = playground.behaviors.pose(robot)
-            return _json({"robot": robot, "pose": name, "upright": after["upright"], **run})
+            pose_execution.call.metrics.update(behavior_done=bool(ctrl.done), upright=after["upright"])
+            run["sim_seconds"] = round(run["sim_seconds"], 2)
+            return _json(
+                {
+                    "robot": robot,
+                    "pose": name,
+                    "upright": after["upright"],
+                    **run,
+                    "execution": pose_execution.reference(),
+                }
+            )
 
     @server.tool()
     async def move_arm(robot: str, position: list[float], gripper: Literal["open", "close"] | None = None) -> str:
@@ -1085,13 +1121,28 @@ def build_server(playground: Playground, port: int, viewer_socket: socket.socket
             return _json({"tool_position": [round(float(v), 3) for v in tcp], **run, **stopped})
 
     @server.tool()
+    @gripper_execution.owned
     async def gripper(robot: str, state: Literal["open", "close"]) -> str:
         """Open or close an arm's gripper; on an arm with a suction cup or an electromagnet, close turns it on (it
         holds what its face touches) and open turns it off."""
         with _tool_errors():
-            arm = playground.behaviors.set_gripper(playground.behaviors.resolve(robot, arm=True), state)
-            run = await run_until(lambda: arm.done, 5.0)
-            return _json({"gripper": state, **run})
+            robot = playground.behaviors.resolve(robot, arm=True)
+            gripper_execution.call.record.update(
+                task={"domain": "behavior", "robot": robot, "name": "gripper"},
+                algorithm={"domain": "behavior", "name": "gripper", "params": {"state": state}},
+                seeds={"mode": "current_state"},
+            )
+        with playground.session.lock:
+            gripper_execution.call.run.check()
+            with _tool_errors():
+                arm = playground.behaviors.set_gripper(robot, state)
+                gripper_execution.attached(arm.robot, arm)
+                gripper_execution.call.record.update(task={"robot": arm.robot})
+        run = await gripper_execution.advance(lambda: arm.done, 5.0)
+        gripper_execution.call.run.check_valid()
+        gripper_execution.call.metrics.update(behavior_done=bool(arm.done))
+        run["sim_seconds"] = round(run["sim_seconds"], 2)
+        return _json({"gripper": state, **run, "execution": gripper_execution.reference()})
 
     @server.tool()
     async def pick_and_place(

@@ -100,3 +100,8 @@ That execution record links its original control/replay attachment through origi
 A reset can close the attachment before the execution reports invalidation; the execution never copies a replacement world's state as its old final state.
 The fixed [framework regression suite](FRAMEWORK_REGRESSION.md) validates the common records and compares versioned inputs and physical outputs across source revisions.
 Source differences remain visible; incompatible runtime or incomplete evidence cannot be counted as a pass.
+
+MCP `pose` and `gripper` use the same recorded execution lifecycle and return the same additive reference.
+Their records retain the requested behavior settings, resolved endpoint, captured initial integration state, actual steps, final arrays and terminal reason.
+`behavior_done` reports whether the existing controller finished its behavior; a bounded five-second gripper observation can leave earlier work queued.
+Position-servo hold, mounted-carrier ownership and the humanoid's existing zero-speed stop semantics are preserved, as described in [EXECUTION.md](EXECUTION.md).

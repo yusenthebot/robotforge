@@ -483,8 +483,9 @@ class ScriptRunner:
 
     async def _op_pose(self, req) -> bool:
         ctrl = self.pg.behaviors.strike_pose(req["robot"], str(req["name"]))
-        self._remember_command(self.pg.behaviors.resolve(req["robot"]))
-        await self._advance(lambda: ctrl.done, 20.0)
+        robot = self.pg.behaviors.resolve(req["robot"])
+        self._remember_command(robot)
+        await self._advance_controller(robot, ctrl, 20.0)
         return bool(self.pg.behaviors.pose(req["robot"])["upright"])
 
     async def _carrier_stands(self, robot: str) -> None:
@@ -504,7 +505,15 @@ class ScriptRunner:
     async def _op_gripper(self, req) -> None:
         arm = self.pg.behaviors.set_gripper(req["robot"], req["state"])
         self._remember_command(arm.robot)
-        await self._advance(lambda: arm.done, 5.0)
+        await self._advance_controller(arm.robot, arm, 5.0)
+
+    async def _advance_controller(self, robot: str, controller: Any, seconds: float) -> None:
+        def done() -> bool:
+            if self.pg.session.controllers.get(robot) is not controller:
+                raise ExecutionError(EndReason.INVALIDATED, "the robot's controller changed during the script")
+            return bool(controller.done)
+
+        await self._advance(done, seconds)
 
     async def _op_pick_and_place(self, req) -> bool:
         target = req["target"]
@@ -593,11 +602,15 @@ class ScriptRunner:
         with self.pg.session.lock:
             for name in self._command_robots:
                 controller = self.pg.session.controllers.get(name)
-                if controller is not None:
+                if controller is not None and name not in self._controlled:
                     self._controlled[name] = controller
 
     def _remember_command(self, robot: str) -> None:
         self._command_robots.add(robot)
         if self._execution is not None:
             self._execution.resources.add(f"robot:{robot.split('/', 1)[0]}")
+        # Only an explicit successful command may adopt a replacement controller. Polling must not claim it.
+        controller = self.pg.session.controllers.get(robot)
+        if controller is not None:
+            self._controlled[robot] = controller
         self._remember_controllers()
