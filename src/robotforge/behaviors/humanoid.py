@@ -145,6 +145,43 @@ def turn_per_step(scale: float, leg_length: float) -> float:
     return min(0.2 * scale, MAX_TURN_PER_STEP) if leg_length >= TALL_LEG else 0.2
 
 
+def leg_actuators(model: mujoco.MjModel, legs: list[list[int]]) -> dict[int, int]:
+    mapping = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu)}
+    for leg in legs:
+        for joint in leg:
+            mapping[joint]  # Preserve the runtime binding error for a leg without an actuator.
+    return mapping
+
+
+def standing_geometry(
+    model: mujoco.MjModel, data: mujoco.MjData, legs: list[list[int]], soles: list[np.ndarray]
+) -> tuple[float, float, float]:
+    stand_z = -float(np.mean([s[2] for s in soles]))
+    hip = data.xpos[model.jnt_bodyid[legs[LEFT][0]]]
+    return stand_z, float(hip[2] + stand_z), float(np.mean([abs(s[1]) for s in soles]))
+
+
+def default_gait(leg_length: float, half_width: float) -> GaitParams:
+    """Default gait limits from standing geometry, independent of preview control."""
+    scale = math.sqrt(leg_length / 0.2)
+    return GaitParams(
+        single=0.36 * scale,
+        double=0.12 * scale,
+        start=0.4 * scale,
+        settle=0.4 * scale,
+        lift=0.12 * leg_length,
+        half_width=half_width,
+        min_width=1.6 * half_width,
+        max_stride=0.25 * leg_length,
+        # A tall robot takes longer steps in time, so at a fixed turn per step it turned slower: a Booster T1
+        # (0.55 m legs, 0.8 s a step) managed 10 degrees a second, and A and D hardly turned it. Scaled like the
+        # timing, it turns 24 degrees a second. Small ones keep 0.2 rad: an OP3 turning more while walking fell.
+        max_turn=turn_per_step(scale, leg_length),
+        zmp_inset=0.35 * half_width,  # less sway: wide steps rocked tall robots off their feet
+        zmp_roll=0.5,
+    )
+
+
 class HumanoidController:
     """Keeps a two-legged robot balanced while it stands, walks or plays a pose."""
 
@@ -178,7 +215,7 @@ class HumanoidController:
         base = home_qpos.copy()
         base[root_adr : root_adr + 7] = [0, 0, 0, 1, 0, 0, 0]  # torso frame == IK base frame
         self.ik = IKSolver(model, base)
-        joint_to_act = {int(model.actuator_trnid[a, 0]): a for a in range(model.nu)}
+        joint_to_act = leg_actuators(model, legs)
         self.chains = [Chain.from_joints(model, legs[s], feet[s][0], feet[s][1]) for s in (LEFT, RIGHT)]
         self.leg_acts = [np.array([joint_to_act[j] for j in legs[s]]) for s in (LEFT, RIGHT)]
         self.leg_q = [base[c.qpos_adr].copy() for c in self.chains]
@@ -190,30 +227,12 @@ class HumanoidController:
 
         # Standing geometry from the home pose.
         soles = [self.ik.point(c, q) for c, q in zip(self.chains, self.leg_q, strict=True)]
-        self.stand_z = -float(np.mean([s[2] for s in soles]))  # torso above the soles
-        hip = self.ik.data.xpos[model.jnt_bodyid[legs[LEFT][0]]]
-        self.leg_length = float(hip[2] + self.stand_z)
-        self.half_width = float(np.mean([abs(s[1]) for s in soles]))
+        self.stand_z, self.leg_length, self.half_width = standing_geometry(model, self.ik.data, legs, soles)
         self.com_local = self._com_local()
         com_height = self.stand_z + float(self.com_local[2])
         scale = math.sqrt(self.leg_length / 0.2)  # pendulum timing scales with the square root of size
         self.replan_notice = round(REPLAN_NOTICE * scale / DT)
-        self.gait = gait or GaitParams(
-            single=0.36 * scale,
-            double=0.12 * scale,
-            start=0.4 * scale,
-            settle=0.4 * scale,
-            lift=0.12 * self.leg_length,
-            half_width=self.half_width,
-            min_width=1.6 * self.half_width,
-            max_stride=0.25 * self.leg_length,
-            # A tall robot takes longer steps in time, so at a fixed turn per step it turned slower: a Booster T1
-            # (0.55 m legs, 0.8 s a step) managed 10 degrees a second, and A and D hardly turned it. Scaled like the
-            # timing, it turns 24 degrees a second. Small ones keep 0.2 rad: an OP3 turning more while walking fell.
-            max_turn=turn_per_step(scale, self.leg_length),
-            zmp_inset=0.35 * self.half_width,  # less sway: wide steps rocked tall robots off their feet
-            zmp_roll=0.5,
-        )
+        self.gait = gait or default_gait(self.leg_length, self.half_width)
         self.gains = gains or BalanceGains()
         self.preview = PreviewControl(DT, com_height, round(PREVIEW / DT))
         self.max_speed = self.gait.max_stride / self.gait.step_time
@@ -503,8 +522,8 @@ def _wrap(angle: float) -> float:
     return (angle + math.pi) % (2 * math.pi) - math.pi
 
 
-def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> HumanoidController:
-    """Build the controller for a robot made from the humanoid template."""
+def template_binding(model: mujoco.MjModel, robot: str) -> tuple:
+    """Resolve a template humanoid's joints, soles, and sensors."""
 
     def find(obj: mujoco.mjtObj, name: str, what: str) -> int:
         i = mujoco.mj_name2id(model, obj, f"{robot}/{name}")
@@ -526,7 +545,11 @@ def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Hu
     gyro = find(mujoco.mjtObj.mjOBJ_SENSOR, "gyro", "sensor")
     imu = (int(model.sensor_adr[quat]), int(model.sensor_adr[gyro]))
     root = find(mujoco.mjtObj.mjOBJ_JOINT, "root", "joint")
-    return HumanoidController(model, robot, home_qpos, legs, feet, upper, root, imu)
+    return legs, feet, upper, root, imu
+
+
+def for_template(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> HumanoidController:
+    return HumanoidController(model, robot, home_qpos, *template_binding(model, robot))
 
 
 AXIS_ALIGNED = 0.7  # |cos| between a joint axis and a trunk axis for the joint to count as turning about it
@@ -534,7 +557,7 @@ TEMPLATE_LEG = 0.2  # m, the leg length the balance gains and gait timing were t
 LEG_REACH = 0.2  # m: feet are at least this far below the trunk at home
 
 
-def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> HumanoidController:
+def robot_binding(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> tuple:
     """The controller for any two-legged robot (a real humanoid from the library, an imported one), its legs found
     in its kinematic tree: the two branches below the floating trunk that reach the floor, with 5 or 6 hinges each.
     Its arms and head hold their home pose; poses that move them are for robots built from our template."""
@@ -562,8 +585,13 @@ def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> Human
         legs.append(joints)
         soles.append((foot, _sole(model, data, foot)))
         flats.append(data.xmat[foot].reshape(3, 3).copy())  # the trunk frame is the world frame here
+    return legs, soles, {}, root_joint, None, tuple(roles), tuple(flats)
+
+
+def for_robot(model: mujoco.MjModel, robot: str, home_qpos: np.ndarray) -> HumanoidController:
+    legs, soles, upper, root_joint, imu, roles, flats = robot_binding(model, robot, home_qpos)
     ctrl = HumanoidController(
-        model, robot, home_qpos, legs, soles, {}, root_joint, None, roles=tuple(roles), foot_rotations=tuple(flats)
+        model, robot, home_qpos, legs, soles, upper, root_joint, imu, roles=roles, foot_rotations=flats
     )
     # A taller robot topples slower but needs more ankle per degree of tilt: Booster T1 (0.55 m legs) leaned 7 degrees
     # and wobbled on our template's gains, and stands within 2 degrees with them scaled like the gait's timing. Sideways

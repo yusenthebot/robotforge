@@ -150,6 +150,38 @@ def _fit(steer: np.ndarray, drive: np.ndarray) -> np.ndarray:
     return steer + s * drive
 
 
+def marine_binding(model: mujoco.MjModel, robot: str, kind: str) -> list[Thruster]:
+    """Validate the thrusters needed by a pilot without allocating its mixer."""
+    found = thrusters(model, robot)
+    if kind == "rov":
+        if not any(abs(t.direction[2]) > 0.7 for t in found):
+            raise ValueError(f"robot {robot!r} has no thrusters that push it up and down; is it an ROV?")
+    else:
+        found = [t for t in found if abs(t.direction[2]) < 0.5]
+        if not found:
+            raise ValueError(f"robot {robot!r} has no thrusters that push it along the water; is it a boat?")
+    root_body(model, robot)
+    return found
+
+
+def surge_drag(
+    kind: str, hydro: water_model.Hydro | None, data: mujoco.MjData | None, root: int
+) -> tuple[float, float]:
+    if hydro is None or data is None:
+        return 0.0, 0.0
+    rot = data.xmat[root].reshape(3, 3)
+    under = np.full(len(hydro.bodies), -2.0 * hydro.water.level) if kind == "rov" else None
+    return hydro.resistance(data, root, along=rot[:, 0], lift=under)
+
+
+def marine_speed(kind: str, max_push: float, drag: tuple[float, float]) -> float:
+    if not drag[0] + drag[1] > 0:
+        return DEFAULT_SPEED
+    if kind == "rov":
+        return min(_speed_for(0.6 * max_push, *drag), 1.5)
+    return _speed_for(TOP_SHARE * max_push, *drag)
+
+
 class _Pilot:
     """What both pilots share: the robot's thrusters, its mass and inertia, its velocity in its own frame."""
 
@@ -194,9 +226,7 @@ class BoatPilot(_Pilot):
         hydro: water_model.Hydro | None = None,
         data: mujoco.MjData | None = None,
     ) -> None:
-        found = [t for t in thrusters(model, robot) if abs(t.direction[2]) < 0.5]
-        if not found:
-            raise ValueError(f"robot {robot!r} has no thrusters that push it along the water; is it a boat?")
+        found = marine_binding(model, robot, "boat")
         super().__init__(model, robot, found)
         self._pinv = _allocation(found, [0, 5])  # surge force and yaw moment
         self.max_push = sum(t.push * abs(t.direction[0]) for t in found)
@@ -204,11 +234,10 @@ class BoatPilot(_Pilot):
         self.drag = (0.0, 0.0)
         self.turn_drag = (0.0, 0.0)
         if hydro is not None and data is not None:
-            rot = data.xmat[self.root].reshape(3, 3)
-            self.drag = hydro.resistance(data, self.root, along=rot[:, 0])
+            self.drag = surge_drag("boat", hydro, data, self.root)
             self.turn_drag = hydro.resistance(data, self.root, about=np.array([0.0, 0.0, 1.0]))
         wet = self.drag[0] + self.drag[1] > 0
-        self.max_speed = _speed_for(TOP_SHARE * self.max_push, *self.drag) if wet else DEFAULT_SPEED
+        self.max_speed = marine_speed("boat", self.max_push, self.drag)
         self.max_turn = min(_speed_for(TOP_SHARE * arm, *self.turn_drag), 1.5) if wet else 0.8
         self.max_reverse = 0.5 * self.max_speed
         self.cruise = 0.6 * self.max_speed  # move(to=...)'s pace: a boat carries way, it slows for the corners
@@ -259,9 +288,7 @@ class RovPilot(_Pilot):
         hydro: water_model.Hydro | None = None,
         data: mujoco.MjData | None = None,
     ) -> None:
-        found = thrusters(model, robot)
-        if not any(abs(t.direction[2]) > 0.7 for t in found):
-            raise ValueError(f"robot {robot!r} has no thrusters that push it up and down; is it an ROV?")
+        found = marine_binding(model, robot, "rov")
         super().__init__(model, robot, found)
         self._pinv = _allocation(found, [0, 1, 2, 3, 4, 5])
         self.water = hydro.water if hydro is not None else None
@@ -278,13 +305,12 @@ class RovPilot(_Pilot):
             # Its drag as it would be fully under water: it is pulled along at the surface where it starts.
             rot = data.xmat[self.root].reshape(3, 3)
             under = np.full(len(hydro.bodies), -2.0 * hydro.water.level)
-            self.drag = hydro.resistance(data, self.root, along=rot[:, 0], lift=under)
+            self.drag = surge_drag("rov", hydro, data, self.root)
             self.sway_drag = hydro.resistance(data, self.root, along=rot[:, 1], lift=under)
             self.heave_drag = hydro.resistance(data, self.root, along=np.array([0.0, 0.0, 1.0]), lift=under)
             self.turn_drag = hydro.resistance(data, self.root, about=np.array([0.0, 0.0, 1.0]), lift=under)
-        wet = self.drag[0] + self.drag[1] > 0
         # Its share of the most forward push, with a good part kept for depth and heading.
-        self.max_speed = min(_speed_for(0.6 * self.max_push, *self.drag), 1.5) if wet else DEFAULT_SPEED
+        self.max_speed = marine_speed("rov", self.max_push, self.drag)
         self.max_turn = 1.0
         self.max_reverse = 0.6 * self.max_speed
         self.max_heave = 0.4

@@ -1,0 +1,2191 @@
+{
+  "date": "2026-10-21",
+  "note": "Real pinned Menagerie models; all attempts included. Before uses unchanged behavior code from 96763e0. Holdout seeds were frozen before development; no tuning on these cases. Wall times are descriptive, not controlled performance comparisons.",
+  "runs": {
+    "before-regression": {
+      "provenance": {
+        "version": 1,
+        "revision": "96763e058d87c8821d3b00a41c061f32ad9cc38d",
+        "dirty": true,
+        "source_sha256": "de19690f33dec48b925796d52830b347887e4f9f8e0efc84d1912495a26c9ecf",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "packages": {
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "robotforge": "0.0.1"
+        },
+        "menagerie_commit": "feadf76d42f8a2162426f7d226a3b539556b3bf5",
+        "menagerie_override": null,
+        "plugins": "",
+        "limits_sim_s": {
+          "operate": 150.0,
+          "errand": 200.0,
+          "trip": 90.0
+        },
+        "cases": [
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 8
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 9
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 10
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 11
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "fetch",
+            "seed": 8
+          },
+          {
+            "robot": "anymal_ur5e",
+            "job": "fetch",
+            "seed": 8
+          },
+          {
+            "robot": "go2_arm",
+            "job": "drawer",
+            "seed": 8
+          }
+        ]
+      },
+      "raw_jsonl_sha256": "56f03c63c5c3c80fc0faae329bcdf1e5325ad22f70cb85eaf07a19b0b9814a12",
+      "summary": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "successes": 0,
+          "attempts": 4,
+          "failures": {
+            "take:out_of_reach": 3,
+            "take:stuck": 1
+          },
+          "wall_median_s": 23.65,
+          "wall_max_s": 60.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "successes": 1,
+          "attempts": 1,
+          "failures": {},
+          "wall_median_s": 23.4,
+          "wall_max_s": 23.4
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "successes": 0,
+          "attempts": 1,
+          "failures": {
+            "fell": 1
+          },
+          "wall_median_s": 11.0,
+          "wall_max_s": 11.0
+        },
+        {
+          "robot": "go2_arm",
+          "job": "drawer",
+          "successes": 1,
+          "attempts": 1,
+          "failures": {},
+          "wall_median_s": 38.1,
+          "wall_max_s": 38.1
+        }
+      ],
+      "results": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 8,
+          "success": false,
+          "object_position": [
+            -0.882,
+            1.008,
+            0.041
+          ],
+          "why": "take:out_of_reach",
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.13,
+              "distance_m": 0.21,
+              "time_s": 4.85
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.04,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.04,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            }
+          ],
+          "driven_m": 0.21,
+          "errand_s": 12.7,
+          "step": "settle_object",
+          "note": "from where it stopped its arm could not pick up the block: mm/arm cannot reach the tilted with its gripper pointing down",
+          "opened_m": 0.327,
+          "sim_s": 51.8,
+          "wall_s": 23.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 9,
+          "success": false,
+          "object_position": [
+            -0.885,
+            1.029,
+            0.041
+          ],
+          "why": "take:out_of_reach",
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.12,
+              "distance_m": 0.21,
+              "time_s": 4.3
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.02,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.02,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            }
+          ],
+          "driven_m": 0.21,
+          "errand_s": 12.05,
+          "step": "settle_object",
+          "note": "from where it stopped its arm could not pick up the block: mm/arm cannot reach the tilted with its gripper pointing down",
+          "opened_m": 0.324,
+          "sim_s": 49.3,
+          "wall_s": 23.3
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 10,
+          "success": false,
+          "object_position": [
+            -0.511,
+            0.795,
+            0.622
+          ],
+          "why": "take:stuck",
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.08,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.03,
+              "distance_m": 0.0,
+              "time_s": 3.1
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": false,
+              "path_m": 0.69,
+              "distance_m": 0.0,
+              "time_s": 15.45
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": false,
+              "path_m": 0.71,
+              "distance_m": 0.0,
+              "time_s": 15.45
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": false,
+              "path_m": 0.74,
+              "distance_m": 0.0,
+              "time_s": 15.25
+            }
+          ],
+          "driven_m": 0.0,
+          "picked_up_at": [
+            -0.861,
+            1.031,
+            0.041
+          ],
+          "hand_tilt_deg": {
+            "pick": 0
+          },
+          "errand_s": 103.1,
+          "step": "to_place",
+          "note": "on its way to the kitchen_table: it got stuck near [-0.45, 0.58]: it had no room to turn on the spot there",
+          "opened_m": 0.327,
+          "sim_s": 140.7,
+          "wall_s": 60.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 11,
+          "success": false,
+          "object_position": [
+            -0.87,
+            1.017,
+            0.041
+          ],
+          "why": "take:out_of_reach",
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.12,
+              "distance_m": 0.21,
+              "time_s": 5.1
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.04,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.04,
+              "distance_m": 0.0,
+              "time_s": 0.05
+            }
+          ],
+          "driven_m": 0.21,
+          "errand_s": 12.7,
+          "step": "settle_object",
+          "note": "from where it stopped its arm could not pick up the block: mm/arm cannot reach the tilted with its gripper pointing down",
+          "opened_m": 0.325,
+          "sim_s": 51.6,
+          "wall_s": 23.6
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "seed": 8,
+          "success": true,
+          "object_position": [
+            1.872,
+            0.492,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 5.2,
+              "distance_m": 5.1,
+              "time_s": 14.2
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 3.99,
+              "distance_m": 4.0,
+              "time_s": 15.7
+            }
+          ],
+          "driven_m": 9.1,
+          "picked_up_at": [
+            -2.544,
+            0.468,
+            0.39
+          ],
+          "put_down_at": [
+            1.872,
+            0.492,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 58.6,
+          "sim_s": 60.1,
+          "wall_s": 23.4
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "seed": 8,
+          "success": false,
+          "object_position": [
+            -2.544,
+            0.468,
+            0.39
+          ],
+          "why": "fell",
+          "went": [
+            {
+              "to": "apple",
+              "arrived": false,
+              "path_m": 5.5,
+              "distance_m": 4.76,
+              "time_s": 23.2
+            }
+          ],
+          "driven_m": 4.76,
+          "errand_s": 24.85,
+          "step": "to_object",
+          "note": "it fell over",
+          "sim_s": 26.4,
+          "wall_s": 11.0
+        },
+        {
+          "robot": "go2_arm",
+          "job": "drawer",
+          "seed": 8,
+          "success": true,
+          "object_position": [
+            -1.955,
+            0.59,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 1.33,
+              "distance_m": 1.4,
+              "time_s": 9.75
+            }
+          ],
+          "driven_m": 1.4,
+          "picked_up_at": [
+            -0.882,
+            0.998,
+            0.041
+          ],
+          "put_down_at": [
+            -1.955,
+            0.59,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 35
+          },
+          "errand_s": 41.1,
+          "opened_m": 0.315,
+          "sim_s": 78.5,
+          "wall_s": 38.1
+        }
+      ]
+    },
+    "regression": {
+      "provenance": {
+        "version": 1,
+        "revision": "96763e058d87c8821d3b00a41c061f32ad9cc38d",
+        "dirty": true,
+        "source_sha256": "185fbf8de2868d40965b47e3a9fa498cd9a56b3b20c0841df409950f4200706a",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "packages": {
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "robotforge": "0.0.1"
+        },
+        "menagerie_commit": "feadf76d42f8a2162426f7d226a3b539556b3bf5",
+        "menagerie_override": null,
+        "plugins": "",
+        "standard_models_and_plugins": true,
+        "limits_sim_s": {
+          "operate": 150.0,
+          "errand": 200.0,
+          "trip": 90.0
+        },
+        "cases": [
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 8
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 9
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 10
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 11
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "fetch",
+            "seed": 8
+          },
+          {
+            "robot": "anymal_ur5e",
+            "job": "fetch",
+            "seed": 8
+          },
+          {
+            "robot": "go2_arm",
+            "job": "drawer",
+            "seed": 8
+          }
+        ]
+      },
+      "raw_jsonl_sha256": "f814d524e7a9e5716dcae4379d384b3eaef6e47114daa96fe8805651b120b995",
+      "summary": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "successes": 4,
+          "attempts": 4,
+          "failures": {},
+          "wall_median_s": 34.1,
+          "wall_max_s": 39.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "successes": 1,
+          "attempts": 1,
+          "failures": {},
+          "wall_median_s": 18.7,
+          "wall_max_s": 18.7
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "successes": 0,
+          "attempts": 1,
+          "failures": {
+            "fell": 1
+          },
+          "wall_median_s": 10.1,
+          "wall_max_s": 10.1
+        },
+        {
+          "robot": "go2_arm",
+          "job": "drawer",
+          "successes": 1,
+          "attempts": 1,
+          "failures": {},
+          "wall_median_s": 30.1,
+          "wall_max_s": 30.1
+        }
+      ],
+      "results": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 8,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.587,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.3,
+              "distance_m": 0.32,
+              "time_s": 3.05
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.48,
+              "distance_m": 0.39,
+              "time_s": 2.0
+            }
+          ],
+          "driven_m": 0.71,
+          "picked_up_at": [
+            -0.882,
+            0.985,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.587,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 38.45,
+          "opened_m": 0.327,
+          "sim_s": 77.5,
+          "wall_s": 39.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 9,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.63,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.3,
+              "distance_m": 0.22,
+              "time_s": 2.85
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.48,
+              "distance_m": 0.4,
+              "time_s": 2.25
+            }
+          ],
+          "driven_m": 0.62,
+          "picked_up_at": [
+            -0.885,
+            0.993,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.63,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 34.1,
+          "opened_m": 0.324,
+          "sim_s": 71.4,
+          "wall_s": 38.7
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 10,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.625,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.13,
+              "distance_m": 0.1,
+              "time_s": 2.65
+            },
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.4,
+              "distance_m": 0.45,
+              "time_s": 4.35
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.16,
+              "distance_m": 0.1,
+              "time_s": 2.9
+            }
+          ],
+          "driven_m": 0.65,
+          "picked_up_at": [
+            -0.861,
+            1.099,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.625,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 42.0,
+          "opened_m": 0.327,
+          "sim_s": 79.7,
+          "wall_s": 29.5
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 11,
+          "success": true,
+          "object_position": [
+            -1.953,
+            0.623,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.28,
+              "distance_m": 0.26,
+              "time_s": 3.0
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.5,
+              "distance_m": 0.44,
+              "time_s": 2.4
+            }
+          ],
+          "driven_m": 0.7,
+          "picked_up_at": [
+            -0.87,
+            0.995,
+            0.041
+          ],
+          "put_down_at": [
+            -1.953,
+            0.623,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 31.8,
+          "opened_m": 0.325,
+          "sim_s": 70.8,
+          "wall_s": 27.5
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "seed": 8,
+          "success": true,
+          "object_position": [
+            1.872,
+            0.492,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 5.2,
+              "distance_m": 5.1,
+              "time_s": 14.2
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 3.99,
+              "distance_m": 4.0,
+              "time_s": 15.7
+            }
+          ],
+          "driven_m": 9.1,
+          "picked_up_at": [
+            -2.544,
+            0.468,
+            0.39
+          ],
+          "put_down_at": [
+            1.872,
+            0.492,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 58.6,
+          "sim_s": 60.1,
+          "wall_s": 18.7
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "seed": 8,
+          "success": false,
+          "object_position": [
+            -2.544,
+            0.468,
+            0.39
+          ],
+          "why": "fell",
+          "went": [
+            {
+              "to": "apple",
+              "arrived": false,
+              "path_m": 5.5,
+              "distance_m": 4.76,
+              "time_s": 23.2
+            }
+          ],
+          "driven_m": 4.76,
+          "errand_s": 24.85,
+          "step": "to_object",
+          "note": "it fell over",
+          "sim_s": 26.4,
+          "wall_s": 10.1
+        },
+        {
+          "robot": "go2_arm",
+          "job": "drawer",
+          "seed": 8,
+          "success": true,
+          "object_position": [
+            -1.954,
+            0.585,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 1.42,
+              "distance_m": 1.49,
+              "time_s": 9.85
+            }
+          ],
+          "driven_m": 1.49,
+          "picked_up_at": [
+            -0.882,
+            0.998,
+            0.041
+          ],
+          "put_down_at": [
+            -1.954,
+            0.585,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 35
+          },
+          "errand_s": 40.3,
+          "opened_m": 0.315,
+          "sim_s": 77.7,
+          "wall_s": 30.1
+        }
+      ]
+    },
+    "holdout": {
+      "provenance": {
+        "version": 1,
+        "revision": "96763e058d87c8821d3b00a41c061f32ad9cc38d",
+        "dirty": true,
+        "source_sha256": "185fbf8de2868d40965b47e3a9fa498cd9a56b3b20c0841df409950f4200706a",
+        "python": "3.12.13",
+        "platform": "macOS-26.3.2-arm64-arm-64bit",
+        "packages": {
+          "mujoco": "3.15.0",
+          "numpy": "2.5.4",
+          "robotforge": "0.0.1"
+        },
+        "menagerie_commit": "feadf76d42f8a2162426f7d226a3b539556b3bf5",
+        "menagerie_override": null,
+        "plugins": "",
+        "standard_models_and_plugins": true,
+        "limits_sim_s": {
+          "operate": 150.0,
+          "errand": 200.0,
+          "trip": 90.0
+        },
+        "cases": [
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 40
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 41
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 42
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 43
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 44
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 45
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 46
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 47
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 48
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 49
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 50
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 51
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 52
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 53
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 54
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 55
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 56
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 57
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 58
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "drawer",
+            "seed": 59
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "fetch",
+            "seed": 40
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "fetch",
+            "seed": 41
+          },
+          {
+            "robot": "mobile_panda",
+            "job": "fetch",
+            "seed": 42
+          },
+          {
+            "robot": "anymal_ur5e",
+            "job": "fetch",
+            "seed": 40
+          },
+          {
+            "robot": "anymal_ur5e",
+            "job": "fetch",
+            "seed": 41
+          },
+          {
+            "robot": "anymal_ur5e",
+            "job": "fetch",
+            "seed": 42
+          }
+        ]
+      },
+      "raw_jsonl_sha256": "2e261534a573427944162ba9fb498257574bc4483767c424cfe7dd88e4645760",
+      "summary": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "successes": 19,
+          "attempts": 20,
+          "failures": {
+            "take:missed": 1
+          },
+          "wall_median_s": 38.599999999999994,
+          "wall_max_s": 62.0
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "successes": 3,
+          "attempts": 3,
+          "failures": {},
+          "wall_median_s": 17.9,
+          "wall_max_s": 18.0
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "successes": 3,
+          "attempts": 3,
+          "failures": {},
+          "wall_median_s": 33.1,
+          "wall_max_s": 38.0
+        }
+      ],
+      "results": [
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 40,
+          "success": true,
+          "object_position": [
+            -1.951,
+            0.59,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.26,
+              "distance_m": 0.27,
+              "time_s": 2.9
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.51,
+              "distance_m": 0.45,
+              "time_s": 2.0
+            }
+          ],
+          "driven_m": 0.72,
+          "picked_up_at": [
+            -0.856,
+            0.997,
+            0.041
+          ],
+          "put_down_at": [
+            -1.951,
+            0.591,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 34.2,
+          "opened_m": 0.325,
+          "sim_s": 71.6,
+          "wall_s": 37.4
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 41,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.627,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.28,
+              "distance_m": 0.17,
+              "time_s": 2.75
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.5,
+              "distance_m": 0.44,
+              "time_s": 2.2
+            }
+          ],
+          "driven_m": 0.61,
+          "picked_up_at": [
+            -0.868,
+            0.998,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.626,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 33.95,
+          "opened_m": 0.325,
+          "sim_s": 72.8,
+          "wall_s": 37.1
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 42,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.624,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.28,
+              "distance_m": 0.28,
+              "time_s": 3.0
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.5,
+              "distance_m": 0.44,
+              "time_s": 2.3
+            }
+          ],
+          "driven_m": 0.72,
+          "picked_up_at": [
+            -0.863,
+            0.998,
+            0.041
+          ],
+          "put_down_at": [
+            -1.953,
+            0.624,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 29.85,
+          "opened_m": 0.325,
+          "sim_s": 66.7,
+          "wall_s": 36.2
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 43,
+          "success": true,
+          "object_position": [
+            -1.951,
+            0.632,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.27,
+              "distance_m": 0.28,
+              "time_s": 2.95
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.51,
+              "distance_m": 0.44,
+              "time_s": 2.15
+            }
+          ],
+          "driven_m": 0.72,
+          "picked_up_at": [
+            -0.865,
+            1.001,
+            0.041
+          ],
+          "put_down_at": [
+            -1.95,
+            0.633,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 34.4,
+          "opened_m": 0.325,
+          "sim_s": 71.3,
+          "wall_s": 39.6
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 44,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.629,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.3,
+              "distance_m": 0.31,
+              "time_s": 3.1
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.49,
+              "distance_m": 0.44,
+              "time_s": 2.55
+            }
+          ],
+          "driven_m": 0.75,
+          "picked_up_at": [
+            -0.878,
+            0.978,
+            0.041
+          ],
+          "put_down_at": [
+            -1.951,
+            0.628,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 36.0,
+          "opened_m": 0.325,
+          "sim_s": 74.8,
+          "wall_s": 39.0
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 45,
+          "success": true,
+          "object_position": [
+            -1.957,
+            0.589,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.3,
+              "distance_m": 0.31,
+              "time_s": 3.0
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.48,
+              "distance_m": 0.4,
+              "time_s": 2.1
+            }
+          ],
+          "driven_m": 0.71,
+          "picked_up_at": [
+            -0.883,
+            0.978,
+            0.041
+          ],
+          "put_down_at": [
+            -1.956,
+            0.589,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 35.85,
+          "opened_m": 0.325,
+          "sim_s": 73.5,
+          "wall_s": 39.5
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 46,
+          "success": true,
+          "object_position": [
+            -1.949,
+            0.636,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.18,
+              "distance_m": 0.11,
+              "time_s": 2.45
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.51,
+              "distance_m": 0.45,
+              "time_s": 2.0
+            }
+          ],
+          "driven_m": 0.56,
+          "picked_up_at": [
+            -0.878,
+            1.007,
+            0.041
+          ],
+          "put_down_at": [
+            -1.95,
+            0.635,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 45.0,
+          "opened_m": 0.327,
+          "sim_s": 82.7,
+          "wall_s": 42.0
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 47,
+          "success": true,
+          "object_position": [
+            -1.955,
+            0.626,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.19,
+              "distance_m": 0.11,
+              "time_s": 2.5
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.57,
+              "distance_m": 0.5,
+              "time_s": 3.05
+            }
+          ],
+          "driven_m": 0.61,
+          "picked_up_at": [
+            -0.87,
+            0.992,
+            0.041
+          ],
+          "put_down_at": [
+            -1.955,
+            0.626,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 38.15,
+          "opened_m": 0.327,
+          "sim_s": 75.1,
+          "wall_s": 40.3
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 48,
+          "success": true,
+          "object_position": [
+            -1.953,
+            0.624,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.18,
+              "distance_m": 0.11,
+              "time_s": 2.45
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.53,
+              "distance_m": 0.46,
+              "time_s": 2.1
+            }
+          ],
+          "driven_m": 0.57,
+          "picked_up_at": [
+            -0.857,
+            0.983,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.624,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 37.05,
+          "opened_m": 0.327,
+          "sim_s": 74.0,
+          "wall_s": 38.2
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 49,
+          "success": true,
+          "object_position": [
+            -1.954,
+            0.621,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.28,
+              "distance_m": 0.27,
+              "time_s": 3.0
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.46,
+              "distance_m": 0.39,
+              "time_s": 2.2
+            }
+          ],
+          "driven_m": 0.66,
+          "picked_up_at": [
+            -0.87,
+            0.979,
+            0.041
+          ],
+          "put_down_at": [
+            -1.953,
+            0.621,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 33.8,
+          "opened_m": 0.325,
+          "sim_s": 71.1,
+          "wall_s": 38.1
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 50,
+          "success": false,
+          "object_position": [
+            -0.831,
+            1.173,
+            0.041
+          ],
+          "why": "take:missed",
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.2,
+              "distance_m": 0.16,
+              "time_s": 2.7
+            }
+          ],
+          "driven_m": 0.16,
+          "hand_tilt_deg": {
+            "pick": 0
+          },
+          "errand_s": 18.4,
+          "step": "picking",
+          "note": "its gripper closed but did not hold the block",
+          "opened_m": 0.327,
+          "sim_s": 55.5,
+          "wall_s": 32.3
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 51,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.625,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.29,
+              "distance_m": 0.28,
+              "time_s": 3.0
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.49,
+              "distance_m": 0.45,
+              "time_s": 2.3
+            }
+          ],
+          "driven_m": 0.73,
+          "picked_up_at": [
+            -0.878,
+            0.994,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.625,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 29.9,
+          "opened_m": 0.325,
+          "sim_s": 67.0,
+          "wall_s": 36.4
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 52,
+          "success": true,
+          "object_position": [
+            -1.95,
+            0.633,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.16,
+              "distance_m": 0.1,
+              "time_s": 2.35
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.53,
+              "distance_m": 0.41,
+              "time_s": 1.95
+            }
+          ],
+          "driven_m": 0.51,
+          "picked_up_at": [
+            -0.857,
+            0.992,
+            0.041
+          ],
+          "put_down_at": [
+            -1.95,
+            0.633,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 34.25,
+          "opened_m": 0.327,
+          "sim_s": 72.7,
+          "wall_s": 37.9
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 53,
+          "success": true,
+          "object_position": [
+            -1.949,
+            0.635,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.18,
+              "distance_m": 0.11,
+              "time_s": 2.4
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.52,
+              "distance_m": 0.41,
+              "time_s": 1.95
+            }
+          ],
+          "driven_m": 0.52,
+          "picked_up_at": [
+            -0.857,
+            1.009,
+            0.041
+          ],
+          "put_down_at": [
+            -1.95,
+            0.635,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 44.7,
+          "opened_m": 0.327,
+          "sim_s": 81.8,
+          "wall_s": 39.5
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 54,
+          "success": true,
+          "object_position": [
+            -1.953,
+            0.63,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.17,
+              "distance_m": 0.11,
+              "time_s": 2.5
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.56,
+              "distance_m": 0.44,
+              "time_s": 2.25
+            }
+          ],
+          "driven_m": 0.55,
+          "picked_up_at": [
+            -0.856,
+            0.988,
+            0.041
+          ],
+          "put_down_at": [
+            -1.953,
+            0.63,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 36.05,
+          "opened_m": 0.327,
+          "sim_s": 72.4,
+          "wall_s": 39.1
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 55,
+          "success": true,
+          "object_position": [
+            -1.965,
+            0.62,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.15,
+              "distance_m": 0.0,
+              "time_s": 5.15
+            },
+            {
+              "to": "block",
+              "arrived": false,
+              "path_m": 0.26,
+              "distance_m": 0.0,
+              "time_s": 5.15
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.51,
+              "distance_m": 0.43,
+              "time_s": 2.8
+            }
+          ],
+          "driven_m": 0.43,
+          "picked_up_at": [
+            -0.86,
+            1.067,
+            0.041
+          ],
+          "put_down_at": [
+            -1.965,
+            0.62,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 100.25,
+          "opened_m": 0.325,
+          "sim_s": 137.0,
+          "wall_s": 62.0
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 56,
+          "success": true,
+          "object_position": [
+            -1.95,
+            0.595,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.19,
+              "distance_m": 0.15,
+              "time_s": 2.6
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.46,
+              "distance_m": 0.39,
+              "time_s": 1.85
+            }
+          ],
+          "driven_m": 0.54,
+          "picked_up_at": [
+            -0.862,
+            1.039,
+            0.041
+          ],
+          "put_down_at": [
+            -1.95,
+            0.595,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 42.2,
+          "opened_m": 0.325,
+          "sim_s": 79.7,
+          "wall_s": 37.9
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 57,
+          "success": true,
+          "object_position": [
+            -1.953,
+            0.625,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.27,
+              "distance_m": 0.16,
+              "time_s": 2.85
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.52,
+              "distance_m": 0.45,
+              "time_s": 2.5
+            }
+          ],
+          "driven_m": 0.61,
+          "picked_up_at": [
+            -0.856,
+            0.986,
+            0.041
+          ],
+          "put_down_at": [
+            -1.953,
+            0.625,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 42.0,
+          "opened_m": 0.325,
+          "sim_s": 79.8,
+          "wall_s": 40.1
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 58,
+          "success": true,
+          "object_position": [
+            -1.952,
+            0.625,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.18,
+              "distance_m": 0.11,
+              "time_s": 2.3
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.48,
+              "distance_m": 0.4,
+              "time_s": 1.85
+            }
+          ],
+          "driven_m": 0.51,
+          "picked_up_at": [
+            -0.884,
+            1.005,
+            0.041
+          ],
+          "put_down_at": [
+            -1.952,
+            0.624,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 37.3,
+          "opened_m": 0.327,
+          "sim_s": 75.5,
+          "wall_s": 38.9
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "drawer",
+          "seed": 59,
+          "success": true,
+          "object_position": [
+            -1.957,
+            0.582,
+            0.38
+          ],
+          "went": [
+            {
+              "to": "block",
+              "arrived": true,
+              "path_m": 0.27,
+              "distance_m": 0.16,
+              "time_s": 2.75
+            },
+            {
+              "to": "kitchen_table",
+              "arrived": true,
+              "path_m": 0.5,
+              "distance_m": 0.39,
+              "time_s": 2.0
+            }
+          ],
+          "driven_m": 0.55,
+          "picked_up_at": [
+            -0.86,
+            0.999,
+            0.041
+          ],
+          "put_down_at": [
+            -1.957,
+            0.582,
+            0.38
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 37.1,
+          "opened_m": 0.325,
+          "sim_s": 76.1,
+          "wall_s": 38.3
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "seed": 40,
+          "success": true,
+          "object_position": [
+            1.872,
+            0.493,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 3.83,
+              "distance_m": 3.77,
+              "time_s": 11.35
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 4.1,
+              "distance_m": 4.12,
+              "time_s": 16.6
+            }
+          ],
+          "driven_m": 7.89,
+          "picked_up_at": [
+            -2.507,
+            0.464,
+            0.39
+          ],
+          "put_down_at": [
+            1.872,
+            0.493,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 56.15,
+          "sim_s": 57.7,
+          "wall_s": 18.0
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "seed": 41,
+          "success": true,
+          "object_position": [
+            1.872,
+            0.493,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 5.17,
+              "distance_m": 5.1,
+              "time_s": 13.9
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 3.95,
+              "distance_m": 3.95,
+              "time_s": 15.7
+            }
+          ],
+          "driven_m": 9.05,
+          "picked_up_at": [
+            -2.519,
+            0.431,
+            0.39
+          ],
+          "put_down_at": [
+            1.872,
+            0.493,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 58.25,
+          "sim_s": 59.8,
+          "wall_s": 17.9
+        },
+        {
+          "robot": "mobile_panda",
+          "job": "fetch",
+          "seed": 42,
+          "success": true,
+          "object_position": [
+            1.873,
+            0.492,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 4.68,
+              "distance_m": 4.58,
+              "time_s": 11.75
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 3.81,
+              "distance_m": 3.77,
+              "time_s": 14.85
+            }
+          ],
+          "driven_m": 8.35,
+          "picked_up_at": [
+            -2.478,
+            0.421,
+            0.39
+          ],
+          "put_down_at": [
+            1.873,
+            0.492,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 53.9,
+          "sim_s": 55.4,
+          "wall_s": 17.9
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "seed": 40,
+          "success": true,
+          "object_position": [
+            1.871,
+            0.489,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 4.12,
+              "distance_m": 4.71,
+              "time_s": 28.7
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 4.23,
+              "distance_m": 4.88,
+              "time_s": 40.5
+            }
+          ],
+          "driven_m": 9.59,
+          "picked_up_at": [
+            -2.507,
+            0.464,
+            0.39
+          ],
+          "put_down_at": [
+            1.871,
+            0.489,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 110.65,
+          "sim_s": 112.2,
+          "wall_s": 33.1
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "seed": 41,
+          "success": true,
+          "object_position": [
+            1.871,
+            0.49,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 5.47,
+              "distance_m": 6.08,
+              "time_s": 35.9
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 4.23,
+              "distance_m": 4.59,
+              "time_s": 38.0
+            }
+          ],
+          "driven_m": 10.67,
+          "picked_up_at": [
+            -2.519,
+            0.431,
+            0.39
+          ],
+          "put_down_at": [
+            1.871,
+            0.49,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 127.7,
+          "sim_s": 129.2,
+          "wall_s": 38.0
+        },
+        {
+          "robot": "anymal_ur5e",
+          "job": "fetch",
+          "seed": 42,
+          "success": true,
+          "object_position": [
+            1.951,
+            0.37,
+            0.39
+          ],
+          "went": [
+            {
+              "to": "apple",
+              "arrived": true,
+              "path_m": 4.98,
+              "distance_m": 5.48,
+              "time_s": 32.1
+            },
+            {
+              "to": "living_table",
+              "arrived": true,
+              "path_m": 4.09,
+              "distance_m": 5.04,
+              "time_s": 34.35
+            }
+          ],
+          "driven_m": 10.52,
+          "picked_up_at": [
+            -2.478,
+            0.421,
+            0.39
+          ],
+          "put_down_at": [
+            1.951,
+            0.37,
+            0.39
+          ],
+          "hand_tilt_deg": {
+            "pick": 0,
+            "put": 0
+          },
+          "errand_s": 105.05,
+          "sim_s": 106.6,
+          "wall_s": 30.4
+        }
+      ]
+    }
+  }
+}

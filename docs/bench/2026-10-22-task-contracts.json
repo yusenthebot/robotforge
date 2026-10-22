@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-22",
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "tested_commit": "7508d34216013e75cb247f074a3a0e29b6780715",
+  "source_fingerprint": "e41e1615fa47eeb596003f63d8f176bed894e3ad670e4cc70d70a5adb83f49f3",
+  "source_unchanged_during_suite": true,
+  "dependencies": {
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "pydantic": "2.14.1",
+    "mcp": "2.3.0"
+  },
+  "default_suite": {
+    "tests": 3199,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 3072,
+    "wall_seconds": 718.1,
+    "shards": [
+      1599,
+      1600
+    ],
+    "exit_codes": [
+      0,
+      0
+    ]
+  },
+  "new_contract_tests": 107,
+  "build": "passed",
+  "ruff": "passed",
+  "javascript_syntax": "passed",
+  "smoke_seconds": 3.5,
+  "real": {
+    "tool_definitions_unchanged": 60,
+    "invalid_task_refused": true,
+    "browser_time_before_play": 0.3400000035762787,
+    "browser_policy_time": 0.656000018119812,
+    "browser_control_reply": {
+      "type": "reply",
+      "id": "contract-check",
+      "ok": true,
+      "data": {
+        "robot": "arm",
+        "task": {
+          "task": "contract_reach",
+          "robot": "arm",
+          "params": {
+            "target": [
+              0.19,
+              0.09,
+              0.24
+            ],
+            "tolerance": 0.035,
+            "jitter": 0
+          },
+          "target": [
+            0.19,
+            0.09,
+            0.24
+          ],
+          "implementation_task": "reach"
+        },
+        "method": "policy:contract_arm",
+        "controller": {
+          "controller": "policy",
+          "learned": "CONTRACT_PROBE neural network (direct mode)",
+          "policy": "contract_arm",
+          "train_seconds": 0.5,
+          "train_timesteps": 400
+        }
+      }
+    },
+    "browser_errors": [],
+    "reload_checked": true
+  },
+  "policies": [
+    {
+      "name": "contract_arm",
+      "task": "contract_reach",
+      "implementation_task": "reach",
+      "algo": "contract_probe",
+      "timesteps": 400
+    },
+    {
+      "name": "contract_pole",
+      "task": "contract_reward",
+      "implementation_task": "custom",
+      "algo": "ars",
+      "timesteps": 241
+    }
+  ],
+  "behavior": {
+    "baseline": "b0522a0",
+    "identical": true,
+    "scenarios": 14,
+    "markers": 280
+  },
+  "review": "approved after corrections; no remaining concrete P1/P2 findings",
+  "unavailable_tools": [
+    "mypy",
+    "pyright",
+    "bandit",
+    "pip-audit"
+  ],
+  "limitations": [
+    "native Windows unverified",
+    "optional RL runtime checks skipped when unavailable",
+    "no paid Actions run",
+    "short policy runs verify contracts, not learned quality"
+  ],
+  "scope": "shared framework contracts; no algorithm, reward, or manipulation success-rate tuning in this round",
+  "raw_evidence": "../robotforge-evidence/2026-10-22-task-contract/",
+  "browser_gamepad": {
+    "passed": 8,
+    "seconds": 33.03
+  }
+}

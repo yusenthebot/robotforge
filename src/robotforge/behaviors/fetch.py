@@ -345,7 +345,7 @@ def spots_for(
             spot = Spot((float(xy[0]), float(xy[1])), float(heading), tuple(float(v) for v in target), tilt)
             # Navigation stops within 8 cm and 12 degrees, and creeping in gets within 2.5 cm and 3 degrees: a spot
             # on the edge of where the arm reaches is reached in the plan and missed from where it really stops.
-            if _robust(stand, xy, heading, target, lift, tilts):
+            if _robust(stand, xy, heading, target, lift, tilts, rehearse):
                 return spot, checked + checks
             fallback = fallback or spot
         checked += checks
@@ -353,7 +353,13 @@ def spots_for(
 
 
 def _robust(
-    stand: Stand, xy: np.ndarray, heading: float, target: np.ndarray, lift: float, tilts: tuple[float, ...]
+    stand: Stand,
+    xy: np.ndarray,
+    heading: float,
+    target: np.ndarray,
+    lift: float,
+    tilts: tuple[float, ...],
+    rehearse: Callable[[np.ndarray, float, np.ndarray, float], bool] | None = None,
 ) -> bool:
     c, s = math.cos(heading), math.sin(heading)
     shift, twist = (WALK_SHIFT, WALK_TWIST) if stand.walks else (SHIFT, TWIST)
@@ -364,7 +370,14 @@ def _robust(
         np.array([s, -c]) * shift,
     ]
     poses = [(xy + d, heading) for d in shifts] + [(xy, heading + twist), (xy, heading - twist)]
-    return all(stand.grip(p, h, target, lift, tilts) is not None for p, h in poses)
+    for p, h in poses:
+        tilt = stand.grip(p, h, target, lift, tilts)
+        while tilt is not None and rehearse is not None and not rehearse(p, h, target, tilt):
+            rest = tilts[tilts.index(tilt) + 1 :]
+            tilt = stand.grip(p, h, target, lift, rest) if rest else None
+        if tilt is None:
+            return False
+    return True
 
 
 def _candidates(
@@ -722,7 +735,16 @@ def plan(manager: BehaviorManager, arm: ArmMotion, obj: str, target: str | list[
         return False
 
     here = None if holds else stand.grip(start, heading, center, APPROACH_UP, (0.0, *stand.hand.tilts))
-    if not holds and (here is None or not pick_from(start, heading, center, here)):
+    if not holds and (
+        here is None
+        or not pick_from(start, heading, center, here)
+        # Wheeled bases can repeat their stationary pose. A walker's larger sway envelope at its current
+        # stance otherwise rejects a working pick and triggers an expensive, unnecessary spot search.
+        or (
+            not stand.walks
+            and not _robust(stand, start, heading, center, APPROACH_UP, (0.0, *stand.hand.tilts), pick_from)
+        )
+    ):
         nav = manager.floor_map(robot, tucked)
         reach = _reachable_cells(nav, start)
         supports = _supports(model, data, body)
@@ -1758,9 +1780,9 @@ class Errand(Footing):
         if spot is not None and spot.tilt in tilts:
             tilts.remove(spot.tilt)
             tilts.insert(0, spot.tilt)
-        self.arm._warm = None  # as it was rehearsed (Stand.rehearse)
         failed: Exception | None = None
         for tilt in tilts:
+            self.arm._warm = None  # each candidate was rehearsed independently (Stand.rehearse)
             try:
                 queue(tilt)
             except (OutOfReach, ValueError) as exc:

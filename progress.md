@@ -485,9 +485,53 @@ Rounds 1-3 done, 2026-10-14.
   - The machine ran at load 20 to 70 with six lanes, so the suite took 18 to 38 minutes per landing until heavy tests were skipped when untouched.
   - Still unreliable: humanoids off flat ground, some catalogue robots, URDF round trip (motors lost), wheeled drawer take and ANYmal fetch (about a third), handover mid-way collisions.
 
+## Round 41 (2026-10-21): runtime boundaries and measured mobile manipulation
+
+- Local changes, not committed or pushed: MJCF metadata detachment, complete script joint reads, exclusive script clock ownership, bounded cancellation/output cleanup, POSIX process groups and Windows Job Objects; default ARS routing, coordinator plugin initialization and shared queued/active/evaluation deadlines.
+- Mobile planning now rehearses complete grasp, fold and loaded departure paths at perturbed poses, with independent IK warm starts. A real Go2 regression caught during development led to keeping walker current-stance behavior unchanged; newly searched poses still rehearse complete paths.
+- Frozen regression improved from 2/7 to 6/7: Panda drawer seeds 8–11 from 0/4 to 4/4, Panda fetch and Go2 drawer still pass, ANYmal fetch seed 8 still falls before grasping.
+- Untuned holdout: 25/26, including Panda drawers 19/20, Panda cross-room fetch 3/3 and ANYmal + UR5e cross-room fetch 3/3. Seed 50 misses the drawer grasp. Three ANYmal successes do not establish broad stability.
+- Saved every attempt's generated world, stage trace, physics state and source/model/dependency provenance. Report: docs/bench/2026-10-21-mobile-boundaries.md; raw local evidence: ../robotforge-evidence/2026-10-21/.
+- Verification: wheel and Ruff passed; complete default selection ran 3020 cases (2891 passed, 127 skipped, two test expectation/isolation failures). Both test issues corrected, affected files 188 passed/3 skipped, deliberate reordering 87 passed. No full rerun after test-only corrections. Production and final test diffs reviewed. Real installed CLI/MCP smoke passed, omitted algorithm trained through ARS without RL extras, and Chrome final-state screenshots were inspected with zero JS errors.
+- Remaining boundaries: native Windows untested here; deliberately detached POSIX descendants and blocking threads/plugins need separate treatment. ARS checks step budgets between whole iterations (64 requested, 815 used in the smoke), while wall deadlines are checked inside rollouts. Static type and Bandit/pip-audit tools were unavailable.
+- Corrected stale release context: v0.0.1 tag exists at e418898; the latest pre-edit CI passed Ubuntu but Windows had a conveyor-test failure. No paid CI run started this round.
+
+## Round 42 (2026-10-21): shared execution kernel, first two adapters
+
+- User direction: framework optimization first; pause drawer and other individual success-rate tuning. Approved sequence: execution kernel, capability descriptions, task/algorithm contracts, common experiment records.
+- Added session-scoped ExecutionKernel/ExecutionRun with synchronous ownership admission, shared watched/headless stepping, cumulative simulation/wall/optional-step budgets, reset generation invalidation and measured run outcomes. move and ScriptRunner use it; robot algorithms are unchanged.
+- Preserved MCP definitions and existing response fields, continuous moves, recording, heading tracking, settling and interrupted navigation reports. Legacy controller commands use admission tokens; plugin behaviors still use scripts. Viewer teleop/manual steps cannot steal an owned clock.
+- Cancellation tracks actual commanded controllers: an arm-only or refused command does not claim an existing base. Replacement/reset controllers are preserved. Script cleanup reaps the child first, cancels owned replays and retains the lease until cooperative planning threads finish; queued threads recheck validity before mutation.
+- Real installed CLI/MCP before/after turning move: 0.559 m both times, exact advertised move/run_script tool definition match. Chrome observed live move and script, saved a WebP, disconnected mid-run without preventing completion, and recorded no JS errors. A real waiting script was reaped 0.016 s after reset; another move then succeeded. Standard smoke passed in 2.9 s.
+- Verification: wheel and Ruff passed; scoped adversarial review approved after fixing legacy admission, controller ownership and per-step deadline cases. Full default selection: 2920 passed, 127 skipped, zero failures, both shards green in 590.2 s; source fingerprint unchanged. Expanded selection 273 passed/1 skipped and final kernel/process selection 45 passed.
+- Evidence: docs/EXECUTION.md and docs/bench/2026-10-21-execution-kernel.md; raw local logs, before/after requests, live screenshots and source snapshots in ../robotforge-evidence/2026-10-21-execution-kernel/.
+- Limits: this migrates two adapters, not every legacy lifecycle. Blocking threads/plugins/native calls remain cooperative, native Windows is unverified here, and type/security package checks were unavailable. No dependencies added, no commit or push.
+
+## Round 43 (2026-10-21): one robot capability description
+
+- Templates, imported models, library robots and compositions now share a compiled-model capability description across MCP, script Robot objects and the viewer. Existing tool signatures and legacy fields are preserved; missing TCPs, unpowered tools, standalone grippers and untuned humanoids no longer gain capabilities from their kind alone.
+- Extracted shared read-only bindings and speed formulas from the runtime controllers, without constructing controllers, solvers or ONNX models on discovery. Active limits and current marine drag are refreshed; structural discovery is cached per model. Saved walks must match the current joints before establishing support.
+- Script snapshots can refresh, each arm exposes its gripper, and multiple endpoints require an explicit choice. The viewer shares drive/profile/mode decisions and broadcasts changed descriptions at 1 Hz, with model-version buffering during mesh loads and no update consumed by a joining client.
+- Real installed CLI/MCP/HTTP/script values agree for six source/body cases, with a cached Panda added in Chrome. Imported rover displacement was 0.176 m; a JGA25-equipped mounted-arm rover moved 0.137 m and reached its arm target within 10.7 mm per coordinate. Delayed-mesh and two-viewer refresh checks passed, with no JS errors.
+- A default small rover carrying an arm did not meet the early short-run displacement threshold; that attempt is retained and no production controller or success-rate tuning followed. Capability support describes an interface and binding, not arbitrary configuration performance.
+- Compatibility: move/run_script definitions and legacy result fields matched; turning displacement remained 0.559 m. All 320 physics markers in 14 affected controller scenarios matched 96763e0. Final focused tests 60 passed; standard smoke passed in 3.4 s. Independent review approved after fixing explicit learned-mode compatibility and two viewer update races.
+- Full default selection: 2965 passed, 127 skipped, zero failures (3092 cases, 666.1 s). Both shards green, with source and tests unchanged throughout. Existing real-Chrome gamepad regression: 8 passed in 33.84 s, using injected Gamepad API input and actual browser/physics behavior.
+- Evidence and boundaries: docs/CAPABILITIES.md and docs/bench/2026-10-21-capabilities.md; raw source, tool, trajectory, script, model, screenshot and test evidence in ../robotforge-evidence/2026-10-21-capabilities/. No dependencies, commits, pushes or release. Native Windows and unavailable static/security package checks remain unverified.
+
+## Round 44 (2026-10-22): shared task and algorithm contracts
+
+- Built-in, saved-world and plugin tasks share discovery, schema validation and model/robot/actuator binding across MCP, scripts, viewer and training. Legacy TASKS, decorators, public calls and all 60 MCP definitions stay compatible.
+- Registered task identity stays separate from Task.name dispatch. Stored policy parameters and new/legacy metadata rebuild consistently, including Reach wrappers and default-named RewardTask implementations.
+- Control methods share aliases, signatures/schemas, finite settings and structural adapters. Training keeps the existing Algorithm/Hyper registry, rejects unselected/duplicate settings, checks dependencies before allocation and closes environments on setup failure.
+- Script controller attachment shares execution budgets and cancellation ownership; viewer metadata refresh covers task and algorithm reload/removal, without executing factories to list them. Saved-world wrong-robot playback is refused.
+- Real verification: isolated installed CLI/MCP, script process, separate training coordinator/workers and rendered Chrome; plugin algorithm plus ARS runs saved and replayed policies, nondefault goal/tolerance survived all entry points, actual Training Play resumed a paused world, viewer task_run policy reply matched, no JS errors.
+- Behavior: 14 built-in scenarios and all 280 physics hash markers match b0522a0; no control/reward/manipulation success-rate tuning.
+- Validation: 3072 passed, 127 skipped, zero failures in the complete 3199-case default selection (718.1 s); 107 new contract tests; 8 real Chrome gamepad cases (33.03 s); wheel, Ruff, JS syntax, smoke and independent final review passed. Source/tests frozen throughout.
+- Evidence: docs/TASK_CONTRACTS.md, docs/bench/2026-10-22-task-contracts.md/.json and ../robotforge-evidence/2026-10-22-task-contract/. Foundation checkpoint b0522a0 and contract checkpoint 7508d34 were pushed after verification at the user's request. No dependency or release added; native Windows and unavailable type/security tooling remain unverified.
+
 ## Next-round seed
 
-Version 0.0.1 is the closed loop the user asked for. Before more work: GitHub Actions billing, then a CI run on Ubuntu and Windows and the v0.0.1 tag. Next frontiers when the user resumes: the known limits in docs/RELEASE_0.0.1.md, publishing (PyPI, .mcpb) and a licence (the user's call).
+Continue framework convergence with reproducible experiment records: shared environment/task/algorithm identifiers, seeds, budgets, source versions, metrics and artifacts across comparisons, training and playback. Build on the existing execution kernel, capability metadata and task contracts. Migrate remaining execution adapters incrementally when needed. Manipulation success-rate work stays paused. Native Windows cleanup and the prior conveyor failure remain pending; publishing and licensing are separate decisions.
 
 ## Frontier
 

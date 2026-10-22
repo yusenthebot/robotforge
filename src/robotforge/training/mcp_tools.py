@@ -35,6 +35,8 @@ def new_pipeline(
         return True
     if task not in DEFAULTS:
         return True
+    if algo is None and api.default_algo(task)[0] == "ars":
+        return True  # the original trainer requires the optional rl extra
     world = playground.current_world()
     if world is not None and robot:
         entry = next((r for r in world.robots if r.name == wording.match(robot, [r.name for r in world.robots])), None)

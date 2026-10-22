@@ -9,9 +9,12 @@ hyperparameter search can draw from an algorithm's `Hyper` ranges.
 
 from __future__ import annotations
 
+import copy
 import inspect
 from collections.abc import Callable
 from typing import Any
+
+from pydantic import BaseModel
 
 from robotforge.extend.registry import REGISTRY, Item, PluginError
 
@@ -76,8 +79,20 @@ def algorithm(
     return register
 
 
-def task(name: str, *, summary: str = "", params: dict[str, Any] | None = None) -> Callable[[Any], Any]:
-    """Register a task for training, used as `train_policy(task=name)` on any robot.
+def task(
+    name: str,
+    *,
+    summary: str = "",
+    params: dict[str, Any] | None = None,
+    schema: type[BaseModel] | None = None,
+    methods: tuple[str, ...] | None = None,
+    robot_hint: str = "",
+) -> Callable[[Any], Any]:
+    """Register a task for control, scripts, the viewer and training.
+
+    ``schema`` validates parameters with the model's own strictness and extra-field policy.
+    Without one, JSON options and unknown keys pass through, preserving legacy plugins.
+    ``methods=None`` leaves controller support to the bound task; listing never runs a factory.
 
     The decorated function `build(model, robot, params)` returns a robotforge Task for `robot` in the compiled
     `model` (robotforge.training.custom.RewardTask turns a reward function into one)."""
@@ -89,14 +104,33 @@ def task(name: str, *, summary: str = "", params: dict[str, Any] | None = None) 
             raise PluginError(f"task {name!r}: decorate a function build(model, robot, params)")
         if name in TASKS:
             raise PluginError(f"task {name!r}: robotforge already has a task of that name; pick another")
-        defaults = dict(params or {})
+        from robotforge.control.task_registry import _finite_params
+        from robotforge.control.tasks.base import TaskError
+
+        if schema is not None and (not inspect.isclass(schema) or not issubclass(schema, BaseModel)):
+            raise PluginError(f"task {name!r}: schema must be a Pydantic BaseModel class")
+        if methods is not None and (not isinstance(methods, tuple) or not all(isinstance(m, str) for m in methods)):
+            raise PluginError(f"task {name!r}: methods must be a tuple of controller names")
+        if not isinstance(robot_hint, str):
+            raise PluginError(f"task {name!r}: robot_hint must be a string")
+        try:
+            defaults = _finite_params(params, name)
+        except TaskError as exc:
+            raise PluginError(str(exc)) from exc
         REGISTRY.add(
             Item(
                 "task",
                 name,
                 summary or f"the {name} task (from a plugin)",
                 fn,
-                meta={"build": fn, "params": defaults, "describe": {"options": defaults}},
+                meta={
+                    "build": fn,
+                    "params": defaults,
+                    "schema": schema,
+                    "methods": methods,
+                    "robot_hint": robot_hint or "the robot accepted by the task factory",
+                    "describe": {"options": copy.deepcopy(defaults)},
+                },
             )
         )
         return fn

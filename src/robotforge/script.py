@@ -200,6 +200,28 @@ class Sim:
         """Pick `obj` up and put it on/in `target` (object name or [x, y]); waits. True if it landed there."""
         return self._call("pick_and_place", robot=robot, object=obj, target=target)
 
+    def task_catalog(self) -> dict[str, Any]:
+        """Task definitions and method parameter schemas for the current world."""
+        return self._call("task_catalog")
+
+    def run_controller(
+        self,
+        robot: str,
+        task: str,
+        method: str,
+        task_params: dict[str, Any] | None = None,
+        method_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Attach a validated task controller; call step() to advance its simulation."""
+        return self._call(
+            "run_controller",
+            robot=robot,
+            task=task,
+            method=method,
+            task_params=task_params,
+            method_params=method_params,
+        )
+
     def run_policy(self, robot: str, name: str, task_params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Hand `robot` to a trained policy (see list_policies); it keeps driving while time passes, until
         stop(robot). task_params changes the goal, e.g. {"target": "cube"} for a reach policy."""

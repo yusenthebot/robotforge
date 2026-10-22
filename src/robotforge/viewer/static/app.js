@@ -13,6 +13,7 @@ import { studioEnvironment, surfaceMaterial } from "./look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
 import { buildRotors, rotorCommands, spinRotors } from "./rotors.js";
+import { canMove, moveAxes, moveSpeed } from "./padmap.js";
 
 const $ = (id) => document.getElementById(id);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -422,13 +423,21 @@ function disposeWorld() {
   worldRoot = null;
 }
 
+let sceneRequest = 0;
+let loadingScene = false;
+let pendingRobotInfo = null;
+
 async function applyScene(desc) {
+  const request = ++sceneRequest;
+  loadingScene = true;
+  if (pendingRobotInfo?.version <= desc.version) pendingRobotInfo = null;
   let buffer = new ArrayBuffer(0);
   if (desc.meshes.length > 0 || (desc.hfields || []).length > 0) {
     const res = await fetch(`mesh/${desc.version}.bin`);
     if (!res.ok) return; // a newer scene is already on its way
     buffer = await res.arrayBuffer();
   }
+  if (request !== sceneRequest) return; // another scene or connection superseded this mesh fetch
   const meshGeometries = buildMeshGeometries(desc, buffer);
   const floats = new Float32Array(buffer);
   const grounds = desc.grounds || {};
@@ -507,6 +516,8 @@ async function applyScene(desc) {
   tween = null;
   fitWhenPosed = refitRig = null; // asked for the scene this one replaces
   onScene(desc);
+  loadingScene = false;
+  applyRobotInfo();
 }
 
 // A cloth (a MuJoCo flex) is a triangle mesh whose corners ride on bodies: one per vertex, or a point on one for a
@@ -880,7 +891,7 @@ function robotMeshes(name) {
 function updateRing() {
   const robot = robotByName(selected);
   // A robot that drives is ringed whole; one bolted down (an arm) is ringed at its base, however far it reaches.
-  const box = selected ? robotBox(selected, { baseOnly: !robot?.max_speed }) : null;
+  const box = selected ? robotBox(selected, { baseOnly: !canMove(robot) }) : null;
   // In a lesson the ring marks only a robot you drive; next to twins or rigs it would just be noise, and so it is
   // when the keys steer something else (a gripper's target: the drive spec says robot: false).
   if (!box || (lessonActive() && (!lessonDriveSpec() || lessonDriveSpec().robot === false))) {
@@ -891,17 +902,17 @@ function updateRing() {
   const now = performance.now();
   if (!ringState) {
     const size = box.getSize(new THREE.Vector3());
-    const pad = robot?.max_speed ? 1.05 : 1.6;
+    const pad = canMove(robot) ? 1.05 : 1.6;
     ringState = { radius: Math.max(0.12, Math.hypot(size.x, size.y) * 0.5 * pad), center: center.clone(), t: now };
   }
   // Smooth out the swing of legs and arms, by time so a throttled tab does not leave the ring behind.
   ringState.center.lerp(center, 1 - Math.exp(-(now - ringState.t) / 80));
   ringState.t = now;
-  const whole = robot?.max_speed ? box : robotBox(selected);
+  const whole = canMove(robot) ? box : robotBox(selected);
   const z = groundHeight(ringState.center.x, ringState.center.y, whole.max.z + 0.05, whole.min.z);
   ring.position.set(ringState.center.x, ringState.center.y, z + 0.006);
   ring.scale.setScalar(ringState.radius);
-  ringNotch.visible = !!robot?.max_speed;
+  ringNotch.visible = !!canMove(robot);
   const root = bodyNodes[robotBodies.get(selected)[0]];
   if (root) {
     const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(root.quaternion);
@@ -1063,9 +1074,12 @@ function connect() {
   ws.binaryType = "arraybuffer";
   ws.onopen = () => {
     retryMs = 500;
+    pendingRobotInfo = null;
     setConnected(true);
   };
   ws.onclose = () => {
+    sceneRequest++;
+    loadingScene = true;
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
@@ -1080,6 +1094,7 @@ function connect() {
     }
     const msg = JSON.parse(ev.data);
     if (msg.type === "scene") applyScene(msg);
+    else if (msg.type === "robot_info") receiveRobotInfo(msg);
     else if (msg.type === "state") applyState(msg);
     else if (msg.type === "reply") onReply(msg);
     else if (msg.type === "lesson") lessonUpdate(msg);
@@ -1093,7 +1108,7 @@ function connect() {
 
 // ---------------------------------------------------------------- robots and selection
 
-let robots = []; // [{name, kind, model?, arms?, max_speed?}] from the server
+let robots = []; // Robot descriptions with shared capabilities and legacy fields from the server
 let learnedWalkers = {}; // robot -> {policy, max_speed}: robots that can walk with a learned policy
 let robotModes = {}; // robot -> the mode keys it offers (see modes.py)
 let currentModes = {}; // robot -> the mode running now, as the server reports it
@@ -1133,7 +1148,7 @@ function onScene(desc) {
     const body = o.userData.body;
     if (o.isMesh && body !== undefined && !desc.bodies[body]?.dynamic && !robotOfBody.has(body)) groundMeshes.push(o);
   });
-  if (!robotByName(selected)) selected = (robots.find((r) => r.max_speed) ?? robots[0])?.name ?? null;
+  if (!robotByName(selected)) selected = (robots.find(canMove) ?? robots[0])?.name ?? null;
   ringState = null;
   worldName = desc.world || worldName;
   renderTitle();
@@ -1335,6 +1350,25 @@ function renderJoints() {
 let paused = false;
 let rtf = 1;
 
+function applyRobotInfo() {
+  if (!pendingRobotInfo || loadingScene || pendingRobotInfo.version !== sceneDesc?.version) return;
+  robots = pendingRobotInfo.robots;
+  learnedWalkers = pendingRobotInfo.learned;
+  robotModes = pendingRobotInfo.modes;
+  Object.assign(sceneDesc, { robots, learned: learnedWalkers, modes: robotModes, task_contracts: pendingRobotInfo.task_contracts });
+  pendingRobotInfo = null;
+  renderRobotList();
+  renderModes();
+  renderDrive();
+}
+
+function receiveRobotInfo(info) {
+  if (!pendingRobotInfo || info.version >= pendingRobotInfo.version) {
+    pendingRobotInfo = info;
+    applyRobotInfo();
+  }
+}
+
 function applyState(s) {
   paused = s.paused;
   rtf = s.rtf;
@@ -1379,8 +1413,8 @@ const DRIVE_KEYS = {
 };
 // Aircraft: A and D fly sideways (a rover can only turn), the arrow keys turn, E climbs and Q descends (and lands).
 const FLY_KEYS = { ...DRIVE_KEYS, a: "slide_left", d: "slide_right", e: "up", q: "down" };
-const isAircraft = (robot) => robot?.kind === "aircraft";
-const RISES = new Set(["rov", "aircraft"]); // kinds that E and Q take up and down
+const isAircraft = (robot) => moveAxes(robot).includes("climb");
+const canRise = (robot) => moveAxes(robot).some((axis) => ["heave", "climb"].includes(axis));
 // rad/s at full key; walkers turn at 1.0
 const TURN_RATE = { rover: 2.0, balancer: 1.5, boat: 0.8, rov: 0.8, aircraft: 1.2 };
 const HEAVE = 0.3; // m/s up or down for an underwater robot at full key
@@ -1390,7 +1424,7 @@ let lastDrive = "";
 
 function driveTarget() {
   const robot = robotByName(selected);
-  return robot?.max_speed ? robot : null;
+  return canMove(robot) ? robot : null;
 }
 
 function renderDrive() {
@@ -1399,10 +1433,10 @@ function renderDrive() {
   const shown = robotByName(selected);
   $("drive").hidden = !robot && !jog;
   $("drive-wasd").hidden = jog;
-  $("drive-heave").hidden = robot?.kind !== "rov";
+  $("drive-heave").hidden = !moveAxes(robot).includes("heave");
   $("fly-keys").hidden = !isAircraft(robot) || jog;
   $("drive-pad").hidden = !(padConnected() && padProfile());
-  const say = jog ? "drive_arm" : isAircraft(robot) ? "fly" : robot?.kind === "rov" ? "drive_rov" : "drive";
+  const say = jog ? "drive_arm" : isAircraft(robot) ? "fly" : moveAxes(robot).includes("heave") ? "drive_rov" : "drive";
   const named = robot || shown;
   if (named) $("drive-text").innerHTML = t(say, { name: escapeHtml(named.name) });
   lastDrive = "";
@@ -1425,9 +1459,9 @@ function driveAxes() {
 function driveCommand(robot) {
   const { fwd, left, slide, up } = driveAxes();
   const learned = learnedWalkers[robot.name];
-  const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : robot.max_speed) ?? 0.3;
+  const top = (currentModes[robot.name] === "learned" ? learned?.max_speed : moveSpeed(robot)) ?? 0.3;
   const cmd = { type: "teleop", robot: robot.name, speed: fwd * top * 0.6, turn: left * (TURN_RATE[robot.kind] ?? 1.0) };
-  if (robot.kind === "rov") cmd.heave = up * HEAVE;
+  if (moveAxes(robot).includes("heave")) cmd.heave = up * HEAVE;
   if (isAircraft(robot)) {
     cmd.speed = fwd * top * 0.5;
     cmd.side = slide * top * 0.5;
@@ -1531,7 +1565,7 @@ function driveKey(e, down) {
   if (!driveTarget() && !lessonDrive) return false;
   const dir = (isAircraft(driveTarget()) && !lessonDrive ? FLY_KEYS : DRIVE_KEYS)[e.key.toLowerCase()];
   if (!dir) return false;
-  if ((dir === "up" || dir === "down") && !RISES.has(driveTarget()?.kind)) return false;
+  if ((dir === "up" || dir === "down") && !canRise(driveTarget())) return false;
   e.preventDefault();
   if (down) {
     if (!lessonDrive) startFollow();
@@ -2005,7 +2039,7 @@ function renderModes() {
   }
   $("mode-lead").textContent = t("modes_lead", { name: selected });
   const robot = robotByName(selected);
-  const now = currentModes[selected] ?? (robot?.max_speed ? "drive" : "manual");
+  const now = currentModes[selected] ?? (canMove(robot) ? "drive" : "manual");
   $("mode-list").replaceChildren(
     ...(robotModes[selected] || []).map((key) =>
       choice({

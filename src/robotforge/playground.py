@@ -163,12 +163,50 @@ class Playground:
             trip = self.behaviors.navigate(str(msg["robot"]), to, speed, str(walker) if walker else None)
             return {"path_m": round(trip.plan.length, 2)}
 
+        contract_key: tuple | None = None
+        contracts: dict[str, Any] = {}
+
+        def task_contracts(world: World | None) -> dict[str, Any]:
+            from robotforge.control.runtime import contract_catalog
+            from robotforge.control.task_registry import task_registry_revision
+            from robotforge.extend import REGISTRY
+
+            nonlocal contract_key, contracts
+            key = (
+                self.session.version,
+                task_registry_revision(),
+                tuple(
+                    (name, id(item), id(item.obj), item.summary, item.plugin, repr(item.meta))
+                    for name, item in REGISTRY.of("algorithm").items()
+                ),
+                tuple(entry.model_dump_json() for entry in world.tasks) if world is not None else (),
+            )
+            if key != contract_key:
+                contracts = contract_catalog(world)
+                contract_key = key
+            return copy.deepcopy(contracts)
+
+        def task_run(msg: dict[str, Any]) -> dict[str, Any]:
+            from robotforge.control.runtime import start_control
+
+            # Admission belongs inside this worker so queued requests cannot outlive their lease.
+            with self.session.execution.command("task_run"):
+                return start_control(
+                    self,
+                    msg["robot"],
+                    msg["task"],
+                    msg["method"],
+                    msg.get("task_params"),
+                    msg.get("method_params"),
+                )
+
         def extras() -> dict[str, Any]:
             world = self.current_world()
             robots = self.behaviors.robots()
             learned = self.behaviors.learned_walkers()
             return {
                 "robots": robots,
+                "task_contracts": task_contracts(world),
                 "learned": learned,
                 "world": world.name if world is not None else None,  # the page title; None for a loaded file
                 "floor": world.floor.style if world is not None else None,
@@ -223,8 +261,33 @@ class Playground:
         hub.slow_handlers["lesson_bench"] = lesson_bench
         hub.lesson_stream = self.lessons.tick
         hub.slow_handlers["world"] = world_request
+        hub.slow_handlers["task_run"] = task_run
         hub.slow_handlers["mode"] = lambda msg: modes.apply(self, str(msg["robot"]), str(msg["mode"]))
         hub.scene_extras = extras
+        last_description: dict[str, Any] | None = None
+
+        def robot_update() -> dict[str, Any] | None:
+            nonlocal last_description
+            # Called only by the broadcast loop: a joining client's welcome must
+            # never consume an update intended for the other viewers.
+            version = self.session.version
+            rows = self.behaviors.robots()
+            rows = [{k: v for k, v in r.items() if k not in ("flight", "balance")} for r in rows]
+            learned = self.behaviors.learned_walkers()
+            description = {
+                "type": "robot_info",
+                "version": version,
+                "robots": rows,
+                "task_contracts": task_contracts(self.current_world()),
+                "learned": learned,
+                "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in rows},
+            }
+            if self.session.version != version or description == last_description:
+                return None
+            last_description = description
+            return description
+
+        hub.robot_stream = robot_update
         hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
         hub.flow = self.flow
         hub.sensor_stream = self.sensors.viewer_message
@@ -270,7 +333,12 @@ class Playground:
             raise PlaygroundError(f"{p.name} is a folder; give a file: {importer.formats_hint()}")
         if p.suffix.lower() not in {".xml", ".mjcf"}:
             raise PlaygroundError(f"{p.name}: expected {importer.formats_hint()}")
-        self.session.load_path(p.resolve())
+        # Compile before detaching the saved world: a bad file must leave it editable.
+        loaded = SimSession.from_path(p.resolve())
+        self.store = None
+        self.last_doctor = {}
+        self._places = None
+        self.session.load_model(loaded.model, loaded.source)
         return self.describe()
 
     def describe(self) -> dict[str, Any]:
@@ -1319,6 +1387,7 @@ class Playground:
         notes: list[str] = []
         blown: dict[str, Any] | None = None
         with self.session.lock:
+            self.session.execution.require_idle()
             if controls:
                 _, notes = self._apply_controls(controls)
             steps = max(1, round(seconds / self.session.model.opt.timestep))

@@ -50,6 +50,8 @@ def controller(
         )
     spec = spec.model_copy(update={"robot": robot, "task_params": {**spec.task_params, **(task_params or {})}})
     task = task_on(spec, model, world)
+    if task.robot.name != robot and not task.robot.name.startswith(f"{robot}/"):
+        raise TaskError(f"task {spec.task!r} belongs to robot {task.robot.name!r}, not requested robot {robot!r}")
     task.begin(data)
     return policy.controller(task, model, data)  # TrainedPolicy.controller fits the observation (see fit)
 

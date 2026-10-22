@@ -248,7 +248,7 @@ async def test_mcp_runs_a_trained_policy_and_explains_missing_extras(tmp_path, m
         assert (await client.call_tool("run_controller", wrong)).is_error
 
         monkeypatch.setattr(jobs, "missing_rl_modules", lambda: ["stable_baselines3"])
-        missing = await client.call_tool("train_policy", {"task": "balance", "robot": "pole"})
+        missing = await client.call_tool("train_policy", {"task": "balance", "robot": "pole", "algo": "ppo"})
         assert missing.is_error and "uv sync --extra rl" in missing.content[0].text
         nobody = await client.call_tool("train_policy", {"task": "balance", "robot": "ghost"})
         assert nobody.is_error and "no robot named 'ghost'" in nobody.content[0].text

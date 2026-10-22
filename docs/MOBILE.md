@@ -35,6 +35,34 @@
 
 ## 实测
 
+### 固定案例与复跑（2026-10-21）
+
+后续开发使用 `docs/bench/mobile-regression-v1.json` 固定七个回归案例。
+其中 Panda 抽屉种子 8 到 11 是调试案例，不再称为未见种子。
+`docs/bench/mobile-holdout-v1.json` 在本轮修改前冻结，包含 Panda 抽屉种子 40 到 59，以及 Panda、ANYmal 携物过门各三个案例。
+不要针对预留案例改参数后，继续把同一批结果称为泛化验证。
+
+```sh
+uv run python scripts/mobile_bench.py --cases docs/bench/mobile-regression-v1.json --workers 1 --json regression.jsonl --artifacts regression-evidence
+uv run python scripts/mobile_bench.py --cases docs/bench/mobile-holdout-v1.json --workers 1 --json holdout.jsonl --artifacts holdout-evidence
+```
+
+证据目录必须是新目录，避免覆盖上一次结果。
+目录保存 Git 修订、源码摘要及未提交差异、依赖版本、Menagerie 固定版本、完整案例列表、生成的世界、阶段记录和末态 `final-state.npz`。
+阶段记录包含底盘实际位置、规划站位和重试次数，结果保留抓取位置、放置位置、行驶距离与每段导航结果。
+末态用于检查和绘图，不包含控制器内部状态，不能作为继续执行的检查点。
+复跑应从保存的版本和案例重新开始。
+默认关闭个人插件；显式设置插件或模型覆盖目录时，清单会标记为非标准配置，覆盖目录内容没有纳入版本保证。
+无证据目录的运行会清理临时世界并恢复原来的 `ROBOTFORGE_HOME`。
+汇总同时显示全部尝试的分母与拒绝次数，避免把不支持案例隐藏在成功率之外。
+
+站位容错现在预演完整抓取、收臂和携物离开，而不只检查末端可达。
+轮式底盘原地取物与重新选站位使用相同检查；每个手腕角度独立重置 IK 初值，失败后会继续尝试其他可达角度。
+步行机器人（四足、六足、人形）的当前站位保留原有完整抓取检查，避免把行走时的较大摆动范围套到已站稳的位置，触发不必要的重新选位。
+搜索仍有候选数上限；没有完整容错站位时保留原有回退机制，因此通过预演不等于保证动态执行成功。
+
+### 早期版本记录
+
 `uv run python scripts/mobile_bench.py --seed-start 8 --seeds 20` 在两居室的家（客厅、厨房、中间一扇摆门）和工厂里，把每台机器人放在不同位置、不同朝向，跑每件活。
 种子改变桌上东西的摆放和机器人的起点；真实的 Menagerie 模型，无头仿真。
 传送带那件活里机器人从离传送带 0.45 到 1.3 m、沿传送带 1.5 m 的范围里随机出发，朝向在正对传送带的 40 度以内。

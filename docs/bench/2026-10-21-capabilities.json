@@ -1,0 +1,1045 @@
+{
+  "platform": "macOS-26.3.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "dependencies": {
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "mcp": "2.3.0",
+    "pydantic": "2.14.1",
+    "uvicorn": "0.54.0",
+    "starlette": "1.8.0"
+  },
+  "source": "da45c3b6cbc59fcac06979bc7da436a2075bce917ad3be500717bea36ee6a4f6",
+  "tools_unchanged": [
+    "move",
+    "run_script"
+  ],
+  "before_after_turning_distance_m": [
+    0.559,
+    0.559
+  ],
+  "real": {
+    "headless_equal": [
+      "arm",
+      "imported",
+      "imported_arm",
+      "carrier",
+      "hand",
+      "crab"
+    ],
+    "imported_drive": {
+      "from": {
+        "robot": "imported",
+        "position": [
+          0,
+          1.8,
+          0.1
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "to": {
+        "robot": "imported",
+        "position": [
+          0.176,
+          1.8,
+          0.05
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "distance_m": 0.176,
+      "turned_deg": 0,
+      "stopped": true,
+      "sim_seconds": 1,
+      "shown_live": false,
+      "behavior": {
+        "behavior": "drive",
+        "robot": "imported",
+        "speed": 0.2,
+        "turn": 0,
+        "max_speed": 0.5
+      }
+    },
+    "composite_script": {
+      "script": "operate.py",
+      "exit_code": 0,
+      "ok": true,
+      "output": "{\"distance\": 0.137, \"start\": [-1.8, -0.0, 0.08], \"end\": [-1.663, -0.0, 0.08], \"endpoint\": \"carrier/arm\", \"tool\": [-1.4531, -0.0, 0.3193], \"target\": [-1.454, -0.0, 0.33]}\n",
+      "sim_seconds": 2.08,
+      "wall_seconds": 0.13,
+      "shown_live": false
+    },
+    "imported_reach": {
+      "tool_position": [
+        2.098,
+        1.8,
+        0.382
+      ],
+      "sim_seconds": 2.92,
+      "shown_live": false
+    },
+    "watched_move": {
+      "from": {
+        "robot": "carrier",
+        "position": [
+          -1.654,
+          0,
+          0.08
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "to": {
+        "robot": "carrier",
+        "position": [
+          -1.518,
+          0,
+          0.08
+        ],
+        "heading_deg": 0,
+        "upright": true
+      },
+      "distance_m": 0.136,
+      "turned_deg": 0,
+      "stopped": true,
+      "sim_seconds": 1,
+      "shown_live": true,
+      "behavior": {
+        "behavior": "drive",
+        "robot": "carrier",
+        "speed": 0.15,
+        "turn": 0,
+        "max_speed": 2.32
+      }
+    },
+    "real_library": {
+      "world": "unified",
+      "world_dir": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-21-capabilities/live-checked/home/worlds/unified",
+      "created": false,
+      "robots": [
+        "arm",
+        "imported",
+        "imported_arm",
+        "carrier",
+        "hand",
+        "crab",
+        "panda"
+      ],
+      "objects": [],
+      "notes": [
+        "arm: 5-joint arm, reach 0.45 m, sts3215 servos (1.91 N*m)",
+        "imported: imported rover.urdf. The doctor fixed 1 problem.",
+        "imported_arm: imported arm.urdf. The doctor fixed 2 problems.",
+        "imported_arm: found its arm: tool point 'tcp' and mounting 'flange' added at the wrist",
+        "carrier: rover, wheels r=0.080 m, jga25 motors; controls are wheel speeds in rad/s (max 29.0)",
+        "carrier: arm: arm template mounted on top of chassis",
+        "carrier: arm: 5-joint arm, reach 0.45 m, sts3215 servos (1.91 N*m)",
+        "hand: gripper, opening 0.07 m",
+        "crab: built from 7 parts (6 joints, 6 actuators), 1.24 kg",
+        "panda: Franka Emika Panda from MuJoCo Menagerie (Apache-2.0, Franka Robotics)",
+        "crab: no gait code knows this body, so move cannot walk it yet; it can learn one: open the viewer, press Learn, pick 'RL II: any body can learn to walk', choose your robot, press Learn, then 'Keep this walk for my robot'"
+      ],
+      "actuators": [
+        {
+          "name": "arm/yaw",
+          "range": [
+            -3.1416,
+            3.1416
+          ],
+          "joint": "arm/yaw"
+        },
+        {
+          "name": "arm/shoulder",
+          "range": [
+            -1.9,
+            1.9
+          ],
+          "joint": "arm/shoulder"
+        },
+        {
+          "name": "arm/elbow",
+          "range": [
+            -2.6,
+            2.6
+          ],
+          "joint": "arm/elbow"
+        },
+        {
+          "name": "arm/wrist_pitch",
+          "range": [
+            -2.6,
+            2.6
+          ],
+          "joint": "arm/wrist_pitch"
+        },
+        {
+          "name": "arm/wrist_roll",
+          "range": [
+            -3.1416,
+            3.1416
+          ],
+          "joint": "arm/wrist_roll"
+        },
+        {
+          "name": "arm/gripper",
+          "range": [
+            0,
+            0.035
+          ],
+          "joint": "arm/finger_left"
+        },
+        {
+          "name": "imported/left_wheel_joint",
+          "range": [
+            -10,
+            10
+          ],
+          "joint": "imported/left_wheel_joint"
+        },
+        {
+          "name": "imported/right_wheel_joint",
+          "range": [
+            -10,
+            10
+          ],
+          "joint": "imported/right_wheel_joint"
+        },
+        {
+          "name": "imported_arm/j1",
+          "range": [
+            -2,
+            2
+          ],
+          "joint": "imported_arm/j1"
+        },
+        {
+          "name": "imported_arm/j2",
+          "range": [
+            -2,
+            2
+          ],
+          "joint": "imported_arm/j2"
+        },
+        {
+          "name": "imported_arm/j3",
+          "range": [
+            -2,
+            2
+          ],
+          "joint": "imported_arm/j3"
+        },
+        {
+          "name": "carrier/left_wheel",
+          "range": [
+            -29,
+            29
+          ],
+          "joint": "carrier/left_wheel"
+        },
+        {
+          "name": "carrier/right_wheel",
+          "range": [
+            -29,
+            29
+          ],
+          "joint": "carrier/right_wheel"
+        },
+        {
+          "name": "carrier/arm/yaw",
+          "range": [
+            -3.1416,
+            3.1416
+          ],
+          "joint": "carrier/arm/yaw"
+        },
+        {
+          "name": "carrier/arm/shoulder",
+          "range": [
+            -1.9,
+            1.9
+          ],
+          "joint": "carrier/arm/shoulder"
+        },
+        {
+          "name": "carrier/arm/elbow",
+          "range": [
+            -2.6,
+            2.6
+          ],
+          "joint": "carrier/arm/elbow"
+        },
+        {
+          "name": "carrier/arm/wrist_pitch",
+          "range": [
+            -2.6,
+            2.6
+          ],
+          "joint": "carrier/arm/wrist_pitch"
+        },
+        {
+          "name": "carrier/arm/wrist_roll",
+          "range": [
+            -3.1416,
+            3.1416
+          ],
+          "joint": "carrier/arm/wrist_roll"
+        },
+        {
+          "name": "carrier/arm/gripper",
+          "range": [
+            0,
+            0.035
+          ],
+          "joint": "carrier/arm/finger_left"
+        },
+        {
+          "name": "hand/gripper",
+          "range": [
+            0,
+            0.035
+          ],
+          "joint": "hand/finger_left"
+        },
+        {
+          "name": "crab/hip_1",
+          "range": [
+            -0.6981,
+            0.6981
+          ],
+          "joint": "crab/hip_1"
+        },
+        {
+          "name": "crab/leg_1",
+          "range": [
+            -1.0472,
+            1.5708
+          ],
+          "joint": "crab/leg_1"
+        },
+        {
+          "name": "crab/hip_2",
+          "range": [
+            -0.6981,
+            0.6981
+          ],
+          "joint": "crab/hip_2"
+        },
+        {
+          "name": "crab/leg_2",
+          "range": [
+            -1.0472,
+            1.5708
+          ],
+          "joint": "crab/leg_2"
+        },
+        {
+          "name": "crab/hip_3",
+          "range": [
+            -0.6981,
+            0.6981
+          ],
+          "joint": "crab/hip_3"
+        },
+        {
+          "name": "crab/leg_3",
+          "range": [
+            -1.0472,
+            1.5708
+          ],
+          "joint": "crab/leg_3"
+        },
+        {
+          "name": "panda/actuator1",
+          "range": [
+            -2.8973,
+            2.8973
+          ],
+          "joint": "panda/joint1"
+        },
+        {
+          "name": "panda/actuator2",
+          "range": [
+            -1.7628,
+            1.7628
+          ],
+          "joint": "panda/joint2"
+        },
+        {
+          "name": "panda/actuator3",
+          "range": [
+            -2.8973,
+            2.8973
+          ],
+          "joint": "panda/joint3"
+        },
+        {
+          "name": "panda/actuator4",
+          "range": [
+            -3.0718,
+            -0.0698
+          ],
+          "joint": "panda/joint4"
+        },
+        {
+          "name": "panda/actuator5",
+          "range": [
+            -2.8973,
+            2.8973
+          ],
+          "joint": "panda/joint5"
+        },
+        {
+          "name": "panda/actuator6",
+          "range": [
+            -0.0175,
+            3.7525
+          ],
+          "joint": "panda/joint6"
+        },
+        {
+          "name": "panda/actuator7",
+          "range": [
+            -2.8973,
+            2.8973
+          ],
+          "joint": "panda/joint7"
+        },
+        {
+          "name": "panda/gripper",
+          "range": [
+            0,
+            255
+          ]
+        }
+      ],
+      "viewer_url": "http://127.0.0.1:8737/"
+    },
+    "browser": {
+      "javascript_errors": [],
+      "profiles": {
+        "carrier": "both"
+      },
+      "mesh_load_update_preserved": true,
+      "two_viewers_refreshed": true
+    },
+    "capabilities": {
+      "arm": {
+        "schema_version": 1,
+        "source": {
+          "kind": "template",
+          "composed": false,
+          "components": [],
+          "id": "arm"
+        },
+        "move": {
+          "supported": false,
+          "reason": "no movement provider fits this body",
+          "axes": []
+        },
+        "move_arm": {
+          "supported": true,
+          "endpoints": [
+            "arm"
+          ]
+        },
+        "gripper": {
+          "supported": true,
+          "endpoints": [
+            "arm"
+          ]
+        },
+        "arms": [
+          {
+            "name": "arm",
+            "tcp": "arm/tcp",
+            "move": {
+              "supported": true,
+              "endpoint": "arm"
+            },
+            "gripper": {
+              "supported": true,
+              "endpoint": "arm"
+            }
+          }
+        ],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "arm/yaw",
+            "arm/shoulder",
+            "arm/elbow",
+            "arm/wrist_pitch",
+            "arm/wrist_roll",
+            "arm/gripper"
+          ]
+        },
+        "sensors": [
+          "arm/tcp_pos"
+        ],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": true,
+            "endpoint": "arm"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "manual"
+        ]
+      },
+      "imported": {
+        "schema_version": 1,
+        "source": {
+          "kind": "file",
+          "composed": false,
+          "components": [],
+          "id": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-21-capabilities/live-checked/rover.urdf"
+        },
+        "move": {
+          "supported": true,
+          "axes": [
+            "forward",
+            "turn"
+          ],
+          "max_speed": 0.5
+        },
+        "move_arm": {
+          "supported": false,
+          "reason": "no movable arm with a tool point",
+          "endpoints": []
+        },
+        "gripper": {
+          "supported": false,
+          "reason": "no movable arm with a gripper actuator",
+          "endpoints": []
+        },
+        "arms": [],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "imported/left_wheel_joint",
+            "imported/right_wheel_joint"
+          ]
+        },
+        "sensors": [],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": false,
+            "reason": "no movable arm with a tool point"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "robot 'imported' has no left_wheel/right_wheel motors; drive_to needs a wheeled robot that moves freely, e.g. one from the rover template"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "drive"
+        ]
+      },
+      "imported_arm": {
+        "schema_version": 1,
+        "source": {
+          "kind": "file",
+          "composed": false,
+          "components": [],
+          "id": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-21-capabilities/live-checked/arm.urdf"
+        },
+        "move": {
+          "supported": false,
+          "reason": "no movement provider fits this body",
+          "axes": []
+        },
+        "move_arm": {
+          "supported": true,
+          "endpoints": [
+            "imported_arm"
+          ]
+        },
+        "gripper": {
+          "supported": false,
+          "reason": "no movable arm with a gripper actuator",
+          "endpoints": []
+        },
+        "arms": [
+          {
+            "name": "imported_arm",
+            "tcp": "imported_arm/tcp",
+            "move": {
+              "supported": true,
+              "endpoint": "imported_arm"
+            },
+            "gripper": {
+              "supported": false,
+              "reason": "the arm has no gripper actuator",
+              "endpoint": "imported_arm"
+            }
+          }
+        ],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "imported_arm/j1",
+            "imported_arm/j2",
+            "imported_arm/j3"
+          ]
+        },
+        "sensors": [],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": true,
+            "endpoint": "imported_arm"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "manual"
+        ]
+      },
+      "carrier": {
+        "schema_version": 1,
+        "source": {
+          "kind": "template",
+          "composed": true,
+          "components": [
+            {
+              "template": "arm"
+            }
+          ],
+          "id": "rover"
+        },
+        "move": {
+          "supported": true,
+          "axes": [
+            "forward",
+            "turn"
+          ],
+          "max_speed": 2.32
+        },
+        "move_arm": {
+          "supported": true,
+          "endpoints": [
+            "carrier/arm"
+          ]
+        },
+        "gripper": {
+          "supported": true,
+          "endpoints": [
+            "carrier/arm"
+          ]
+        },
+        "arms": [
+          {
+            "name": "carrier/arm",
+            "tcp": "carrier/arm/tcp",
+            "move": {
+              "supported": true,
+              "endpoint": "carrier/arm"
+            },
+            "gripper": {
+              "supported": true,
+              "endpoint": "carrier/arm"
+            }
+          }
+        ],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "carrier/left_wheel",
+            "carrier/right_wheel",
+            "carrier/arm/yaw",
+            "carrier/arm/shoulder",
+            "carrier/arm/elbow",
+            "carrier/arm/wrist_pitch",
+            "carrier/arm/wrist_roll",
+            "carrier/arm/gripper"
+          ]
+        },
+        "sensors": [
+          "carrier/accel",
+          "carrier/gyro",
+          "carrier/orientation",
+          "carrier/arm/tcp_pos"
+        ],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "drive_to": {
+            "supported": true,
+            "endpoint": "carrier"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "drive"
+        ]
+      },
+      "hand": {
+        "schema_version": 1,
+        "source": {
+          "kind": "template",
+          "composed": false,
+          "components": [],
+          "id": "gripper"
+        },
+        "move": {
+          "supported": false,
+          "reason": "no movement provider fits this body",
+          "axes": []
+        },
+        "move_arm": {
+          "supported": false,
+          "reason": "no movable arm with a tool point",
+          "endpoints": []
+        },
+        "gripper": {
+          "supported": false,
+          "reason": "no movable arm with a gripper actuator",
+          "endpoints": []
+        },
+        "arms": [
+          {
+            "name": "hand",
+            "tcp": "hand/tcp",
+            "move": {
+              "supported": false,
+              "reason": "a standalone gripper has no arm to move it; use its raw actuator controls or mount it on an arm",
+              "endpoint": "hand"
+            },
+            "gripper": {
+              "supported": false,
+              "reason": "a standalone gripper has no arm to move it; use its raw actuator controls or mount it on an arm",
+              "endpoint": "hand"
+            }
+          }
+        ],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "hand/gripper"
+          ]
+        },
+        "sensors": [
+          "hand/tcp_pos"
+        ],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": false,
+            "reason": "no movable arm with a tool point"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "manual"
+        ]
+      },
+      "crab": {
+        "schema_version": 1,
+        "source": {
+          "kind": "build",
+          "composed": true,
+          "components": []
+        },
+        "move": {
+          "supported": false,
+          "reason": "no gait code knows this body, so move cannot walk it yet; it can learn one: open the viewer, press Learn, pick 'RL II: any body can learn to walk', choose your robot, press Learn, then 'Keep this walk for my robot'",
+          "axes": []
+        },
+        "move_arm": {
+          "supported": false,
+          "reason": "no movable arm with a tool point",
+          "endpoints": []
+        },
+        "gripper": {
+          "supported": false,
+          "reason": "no movable arm with a gripper actuator",
+          "endpoints": []
+        },
+        "arms": [],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "crab/hip_1",
+            "crab/leg_1",
+            "crab/hip_2",
+            "crab/leg_2",
+            "crab/hip_3",
+            "crab/leg_3"
+          ]
+        },
+        "sensors": [
+          "crab/accel",
+          "crab/gyro",
+          "crab/orientation"
+        ],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "robot 'crab' has no 'slider', so it does not fit this task, which needs a cart-pole (add_robot with template 'cartpole'), or a two-wheeled balancing robot built from parts (methods lqr, mpc, mppi, none); robots shows each robot's kind"
+          },
+          "reach": {
+            "supported": false,
+            "reason": "no movable arm with a tool point"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "manual"
+        ]
+      },
+      "panda": {
+        "schema_version": 1,
+        "source": {
+          "kind": "library",
+          "composed": false,
+          "components": [],
+          "id": "panda"
+        },
+        "move": {
+          "supported": false,
+          "reason": "no movement provider fits this body",
+          "axes": []
+        },
+        "move_arm": {
+          "supported": true,
+          "endpoints": [
+            "panda"
+          ]
+        },
+        "gripper": {
+          "supported": true,
+          "endpoints": [
+            "panda"
+          ]
+        },
+        "arms": [
+          {
+            "name": "panda",
+            "tcp": "panda/tcp",
+            "move": {
+              "supported": true,
+              "endpoint": "panda"
+            },
+            "gripper": {
+              "supported": true,
+              "endpoint": "panda"
+            }
+          }
+        ],
+        "manual": {
+          "supported": true,
+          "actuators": [
+            "panda/actuator1",
+            "panda/actuator2",
+            "panda/actuator3",
+            "panda/actuator4",
+            "panda/actuator5",
+            "panda/actuator6",
+            "panda/actuator7",
+            "panda/gripper"
+          ]
+        },
+        "sensors": [],
+        "tasks": {
+          "stand": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "walk": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "balance": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "reach": {
+            "supported": true,
+            "endpoint": "panda"
+          },
+          "drive_to": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          },
+          "hover": {
+            "supported": false,
+            "reason": "this mode is not offered for this robot's body"
+          }
+        },
+        "drive_modes": [
+          "manual"
+        ]
+      }
+    }
+  },
+  "artifact_sha256": {
+    "live-checked/home/worlds/unified/.history/1792597129610361000.yaml": "db601be98f1396f3d6ab23e4be6941f6bd0ef2339b9d002fa9d0237b4371c8ce",
+    "live-checked/home/worlds/unified/.history/1792597129692430000.yaml": "9ab09ef718595ce9f463bf9fea2de26b4236dce85b7d88251981c81b43b5e7af",
+    "live-checked/home/worlds/unified/.history/1792597129777433000.yaml": "990d6cba1c5b5a528bc8fa585a268b3b8b7bbe123305bf482fac1210169a9015",
+    "live-checked/home/worlds/unified/.history/1792597129903895000.yaml": "5d42dc9399452bc3a9596e8a26c54ad03a66481aae704765b7c3bae3237c8180",
+    "live-checked/home/worlds/unified/.history/1792597130059247000.yaml": "6db3fd0ca52e6cfe69420cfd06db415c3724608b279e507163e3b4c89dde6545",
+    "live-checked/home/worlds/unified/.history/1792597130275265000.yaml": "98552b6ab0063cb4809a5975a93aa0357f746ca18562cb7328a5905ff91616ed",
+    "live-checked/home/worlds/unified/.history/1792597133590851000.yaml": "78e5e7c849d330ddbeb33c439d4b8cef9ba98ed384242df2e8d13cdcc6b0f61c",
+    "live-checked/home/worlds/unified/behaviors/capabilities.py": "f2e487bd0d478bbd84cdbb80defcdceb3dcbeb53029d185f69e50c90eba7cea5",
+    "live-checked/home/worlds/unified/behaviors/operate.py": "79a3bd14ea2745fcf34056e03ec602a61f8e0ab8b3f0bb9f43f3ab8bea39aa24",
+    "live-checked/home/worlds/unified/build/world.xml": "043282b88d275c53f6e3a1b663f33e6fcc4e94bd9f9e4d78c04170e95ff77d1f",
+    "live-checked/home/worlds/unified/world.yaml": "abc92b77c1b5c1952f2143d6a863941473ef80ff5896e82b7aa037579b070b3f"
+  },
+  "review": "approved; three review findings corrected and re-reviewed",
+  "type_security_packages": {
+    "mypy": false,
+    "pyright": false,
+    "bandit": false,
+    "pip_audit": false
+  },
+  "focused": {
+    "passed": 60,
+    "seconds": 12.52
+  },
+  "expanded_before_last_viewer_fix": {
+    "passed": 113,
+    "seconds": 194.59
+  },
+  "smoke_seconds": 3.4,
+  "same_behavior": {
+    "scenarios": 14,
+    "all_identical": true,
+    "baseline": "96763e058d87c8821d3b00a41c061f32ad9cc38d",
+    "marks": 320,
+    "no_error_or_skip_markers": true
+  },
+  "scope": "capability framework; no manipulation algorithm or success-rate tuning; no commit/push",
+  "browser_screenshots": {
+    "carrier-live.jpg": "0b280567871141637b21c9efef95c14748636f3ed2d373562024c8add3cba005",
+    "library-and-composite.jpg": "cfbf87d07389e120a9f5e39d9a63a5bf6abe98251ca4b0dd9b29304be600dbc1"
+  },
+  "default_suite": {
+    "tests": 3092,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 2965,
+    "selected": 3092,
+    "shard_counts": [
+      1546,
+      1546
+    ],
+    "exit_codes": [
+      0,
+      0
+    ],
+    "wall_s": 666.1,
+    "source_unchanged": true
+  },
+  "gamepad_browser": {
+    "tests": 8,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "description": "Frozen before changes; report all attempts, do not tune on these cases",
+  "cases": [
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 40
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 41
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 42
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 43
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 44
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 45
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 46
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 47
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 48
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 49
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 50
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 51
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 52
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 53
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 54
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 55
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 56
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 57
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 58
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 59
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "fetch",
+      "seed": 40
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "fetch",
+      "seed": 41
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "fetch",
+      "seed": 42
+    },
+    {
+      "robot": "anymal_ur5e",
+      "job": "fetch",
+      "seed": 40
+    },
+    {
+      "robot": "anymal_ur5e",
+      "job": "fetch",
+      "seed": 41
+    },
+    {
+      "robot": "anymal_ur5e",
+      "job": "fetch",
+      "seed": 42
+    }
+  ]
+}

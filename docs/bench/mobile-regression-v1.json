@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "description": "Development regressions; previously observed seeds",
+  "cases": [
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 8
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 9
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 10
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "drawer",
+      "seed": 11
+    },
+    {
+      "robot": "mobile_panda",
+      "job": "fetch",
+      "seed": 8
+    },
+    {
+      "robot": "anymal_ur5e",
+      "job": "fetch",
+      "seed": 8
+    },
+    {
+      "robot": "go2_arm",
+      "job": "drawer",
+      "seed": 8
+    }
+  ]
+}

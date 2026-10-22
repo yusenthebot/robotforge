@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-21",
+  "scope": "execution kernel, move and run_script migration",
+  "source": {
+    "base_revision": "96763e058d87c8821d3b00a41c061f32ad9cc38d",
+    "branch": "codex/runtime-mobile-baseline",
+    "source_files": [
+      "src/robotforge/sim/execution.py",
+      "src/robotforge/sim/session.py",
+      "src/robotforge/script_runner.py",
+      "src/robotforge/mcp_server.py",
+      "src/robotforge/playground.py",
+      "src/robotforge/viewer/server.py",
+      "src/robotforge/behaviors/manager.py",
+      "src/robotforge/extend/mcp_tools.py",
+      "tests/test_execution.py",
+      "tests/test_execution_tools.py",
+      "tests/test_runtime_boundaries.py",
+      "uv.lock"
+    ],
+    "source_sha256": "9f6416b653af67bb9b71300fc0bd2a3d90d71cc5fdfd84394a9b4fa21fac29e4",
+    "existing_round41_preserved": true,
+    "uncommitted": true
+  },
+  "interface_compatibility": {
+    "advertised_definitions_identical": true,
+    "legacy_result_fields_retained": true,
+    "turning_move_before_m": 0.559,
+    "turning_move_after_m": 0.559
+  },
+  "real_execution": {
+    "headless_move_m": 0.278,
+    "live_move_m": 0.574,
+    "live_script_ok": true,
+    "live_recording_frames": 41,
+    "disconnect_move_sim_seconds": 3,
+    "child_reaped": true,
+    "reset_cleanup_wall_s": 0.016,
+    "reset_script_sim_seconds": 0.2,
+    "browser_js_errors": [],
+    "next_move_m": 0.187
+  },
+  "default_suite": {
+    "selected": 3047,
+    "shard_counts": [
+      1523,
+      1524
+    ],
+    "exit_codes": [
+      0,
+      0
+    ],
+    "wall_s": 590.2,
+    "tests": 3047,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 127,
+    "passed": 2920
+  },
+  "other_checks": {
+    "expanded_selection_passed": 273,
+    "expanded_selection_skipped": 1,
+    "final_kernel_selection_passed": 45,
+    "wheel_build": "passed",
+    "ruff_lint_and_format": "passed",
+    "smoke": "passed, 2.9 s, 60 tools",
+    "scoped_review": "approved, no remaining critical/high/medium finding"
+  },
+  "versions": {
+    "mujoco": "3.15.0",
+    "numpy": "2.5.4",
+    "mcp": "2.3.0"
+  },
+  "limits": [
+    "Native Windows not executed here",
+    "Slow/browser cases excluded by default are not counted as passed",
+    "Blocking planner/plugin/native calls remain cooperative",
+    "mypy/pyright and bandit/pip-audit unavailable"
+  ],
+  "manipulation_and_training_policy_tuning": false,
+  "new_dependencies": false,
+  "committed_or_pushed": false
+}

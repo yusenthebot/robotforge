@@ -47,6 +47,14 @@ Without `algo` the task's usual one runs (PPO or SAC, like the plain trainer), a
 Training runs in a process of its own, trials side by side (up to four), and keeps `status.json` in the policy's folder.
 Closing the agent does not stop it; `stop_training(name)` does, and keeps the best policy so far.
 
+`minutes` is one shared budget for the scheduled trials, including queue time and their ranking and held-out evaluations.
+Queued trials do not receive a fresh budget when a worker becomes available.
+At the deadline, queued work is cancelled and active work stops cooperatively; status reports `state="stopped"` and `timed_out=true`.
+An interrupted evaluation is not given a comparable score.
+If only an unscored policy was saved, the result retains it with a `score_note` explaining that its quality is unmeasured.
+Plugin initialization happens before the training budget starts; a blocking plugin, environment step or algorithm that does not check its training context cannot be forcibly interrupted by this cooperative deadline.
+Trusted world plugins are loaded in the coordinator before trial planning, as well as in each worker; initialization failures are recorded in the run's status.
+
 ## The environment
 
 `make_env(task, robot=..., world=...)` builds one environment for any robot and task (`robotforge.training`):
@@ -250,3 +258,7 @@ The default 100k steps per trial then take about 15 minutes instead of 35 second
 - A continued SAC trial gets back the newest 100k experiences of its replay memory (`replay.npz` in its folder); older ones are not kept.
 - `halving` needs `timesteps` per trial; with only `minutes` a search is refused.
 - A plugin algorithm or task is code: it runs in the training process with your rights, like any plugin ([EXTENDING.md](EXTENDING.md#where-plugins-live)).
+
+## Step-budget granularity
+
+The ARS step budget is checked between training iterations. A complete round of positive and negative perturbation episodes can exceed a small `timesteps` request substantially (a real MCP smoke requested 64 and used 815). Treat this as an iteration budget, not a strict environment-step cap. The shared `minutes` deadline is checked inside rollouts and evaluation, subject to the cooperative blocking-call limits described above.

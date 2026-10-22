@@ -17,6 +17,7 @@ import numpy as np
 
 from robotforge.behaviors import Kind
 from robotforge.behaviors.manager import MOBILE, BehaviorError
+from robotforge.capabilities import TASK_KINDS as TASK_KINDS  # compatibility for callers importing the old constant
 
 if TYPE_CHECKING:
     from robotforge.playground import Playground
@@ -58,16 +59,6 @@ MODES: dict[str, Mode] = {m.key: m for m in (DRIVE, LEARNED, RHYTHM, MANUAL, *CO
 
 # Robots each task is offered for. A task's own check is looser (stand fits anything that moves freely,
 # a rover included), so the viewer only lists pairs that make sense and have been tried.
-TASK_KINDS: dict[str, frozenset[Kind]] = {
-    "stand": frozenset({Kind.QUADRUPED}),
-    "walk": frozenset({Kind.QUADRUPED}),
-    "balance": frozenset({Kind.BALANCER, Kind.OTHER}),
-    "reach": frozenset({Kind.ARM}),
-    "drive_to": frozenset({Kind.ROVER}),
-    "hover": frozenset({Kind.AIRCRAFT}),
-}
-
-
 RANDOM_POINT = {"reach": "target", "drive_to": "goal"}  # tasks that aim at a random point when given none
 
 
@@ -77,32 +68,13 @@ class ModeError(ValueError):
 
 def available(playground: Playground, robot: dict[str, Any], learned: bool) -> list[str]:
     """Mode keys for one robot from `BehaviorManager.robots()`: built-in behaviors first, then algorithms."""
-    from robotforge.control.tasks import TaskError, make_task
-
-    try:
-        kind = Kind(robot["kind"])
-    except ValueError:  # a gripper on its own is told as "gripper": it has sliders, no behavior
-        kind = Kind.OTHER
-    kept = "learned_walk" in robot  # robots no gait code knows drive with their kept walk
-    keys = ["drive"] if (kind in MOBILE or kept) and robot.get("max_speed") else ["manual"]
+    caps = robot.get("capabilities")
+    if caps is None:  # keep accepting the old dictionary-shaped argument
+        caps = next(r["capabilities"] for r in playground.behaviors.robots() if r["name"] == robot["name"])
+    keys = [key for key in caps["drive_modes"] if key != "learned"]
     if learned:
-        keys.append("learned")
-    if kept and kind in MOBILE:
-        keys.append("rhythm")
-    model = playground.session.model
-    fits: dict[str, bool] = {}
-    for mode in CONTROL:
-        if kind not in TASK_KINDS[mode.task]:
-            continue
-        if mode.task not in fits:
-            try:
-                make_task(mode.task, model, robot["name"])
-                fits[mode.task] = True
-            except TaskError:
-                fits[mode.task] = False
-        if fits[mode.task]:
-            keys.append(mode.key)
-    return keys
+        keys.insert(1, "learned")
+    return keys + [mode.key for mode in CONTROL if caps["tasks"][mode.task]["supported"]]
 
 
 def apply(playground: Playground, robot: str, key: str) -> dict[str, Any]:

@@ -7,7 +7,33 @@ import math
 import mujoco
 import numpy as np
 
-from robotforge.behaviors import find_wheels
+from robotforge.behaviors import WheelSet, find_wheels
+
+
+def drive_binding(model: mujoco.MjModel, robot: str) -> WheelSet:
+    """Resolve the same wheel geometry used by the differential drive, without creating it."""
+    has_template_wheels = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/left_wheel") >= 0
+    if not has_template_wheels:
+        wheels = find_wheels(model, robot)
+        if wheels is None:
+            raise ValueError(f"robot {robot!r} has no driven wheels on both sides; is it a rover?")
+        return wheels
+    actuators = []
+    for name in ("left_wheel", "right_wheel"):
+        a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/{name}")
+        if a < 0:
+            raise ValueError(f"robot {robot!r} has no actuator {name!r}; is it a rover?")
+        actuators.append(a)
+    left_body = model.body(f"{robot}/left_wheel").id
+    right_body = model.body(f"{robot}/right_wheel").id
+    track = float(np.linalg.norm(model.body_pos[left_body] - model.body_pos[right_body]))
+    wheel_geom = next(g for g in range(model.ngeom) if model.geom_bodyid[g] == left_body)
+    radius = float(model.geom_size[wheel_geom][0])
+    return WheelSet((actuators[0],), (actuators[1],), (1.0,), (1.0,), track, radius)
+
+
+def drive_speed(model: mujoco.MjModel, wheels: WheelSet) -> float:
+    return float(model.actuator_ctrlrange[wheels.left[0]][1]) * wheels.radius
 
 
 class DiffDrive:
@@ -15,32 +41,14 @@ class DiffDrive:
 
     def __init__(self, model: mujoco.MjModel, robot: str):
         self.robot = robot
-        has_template_wheels = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{robot}/left_wheel") >= 0
-        if has_template_wheels:
-            self.left, self.right = (self._actuator(model, "left_wheel"),), (self._actuator(model, "right_wheel"),)
-            self.left_signs = self.right_signs = (1.0,)
-            left_body = model.body(f"{robot}/left_wheel").id
-            right_body = model.body(f"{robot}/right_wheel").id
-            self.track = float(np.linalg.norm(model.body_pos[left_body] - model.body_pos[right_body]))
-            wheel_geom = next(g for g in range(model.ngeom) if model.geom_bodyid[g] == left_body)
-            self.radius = float(model.geom_size[wheel_geom][0])
-        else:  # imported or hand-built robots: any speed-controlled wheels on both sides
-            wheels = find_wheels(model, robot)
-            if wheels is None:
-                raise ValueError(f"robot {robot!r} has no driven wheels on both sides; is it a rover?")
-            self.left, self.right = wheels.left, wheels.right
-            self.left_signs, self.right_signs = wheels.left_signs, wheels.right_signs
-            self.track, self.radius = wheels.track, wheels.radius
+        wheels = drive_binding(model, robot)
+        self.left, self.right = wheels.left, wheels.right
+        self.left_signs, self.right_signs = wheels.left_signs, wheels.right_signs
+        self.track, self.radius = wheels.track, wheels.radius
         self.max_wheel = float(model.actuator_ctrlrange[self.left[0]][1])
-        self.max_speed = self.max_wheel * self.radius
+        self.max_speed = drive_speed(model, wheels)
         self.speed = 0.0
         self.turn = 0.0
-
-    def _actuator(self, model: mujoco.MjModel, name: str) -> int:
-        a = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{self.robot}/{name}")
-        if a < 0:
-            raise ValueError(f"robot {self.robot!r} has no actuator {name!r}; is it a rover?")
-        return a
 
     def command(self, speed: float = 0.0, turn: float = 0.0) -> None:
         self.speed = float(np.clip(speed, -self.max_speed, self.max_speed))
