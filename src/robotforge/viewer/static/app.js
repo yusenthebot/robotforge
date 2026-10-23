@@ -9,7 +9,8 @@ import { initTraining, trainingState, trainingUpdate } from "./training.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
-import { studioEnvironment, surfaceMaterial } from "./look.js";
+import { surfaceMaterial } from "./look.js";
+import { createLighting } from "./lighting.js";
 import { groundMaterial, groundPreview, groundStyle } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
 import { clothGeometry, shapeCloth } from "./cloth.js";
@@ -43,20 +44,8 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.12;
 
-// Most light comes from the studio environment (soft, reflected in every surface); the sun adds
-// direction and shadows, and a faint sky/ground fill keeps shadowed sides from going black.
-scene3.environment = studioEnvironment(renderer);
-scene3.environmentIntensity = 0.85;
-const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3328, 0.35);
-hemi.position.set(0, 0, 1);
-scene3.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff6ec, 1.9);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.radius = 3;
-sun.shadow.bias = -0.0004;
-sun.shadow.normalBias = 0.02;
-scene3.add(sun, sun.target);
+const lighting = createLighting(scene3, renderer);
+const { sun } = lighting;
 
 function makeGradientTexture(top, bottom) {
   const c = document.createElement("canvas");
@@ -352,6 +341,7 @@ function disposeWorld() {
     }
   });
   scene3.remove(worldRoot);
+  lighting.bind(null);
   worldRoot = null;
 }
 
@@ -439,6 +429,7 @@ async function applyScene(desc) {
   for (const flex of flexMeshes) worldRoot.add(flex.mesh);
   buildRotors(desc.rotors, bodyNodes); // aircraft: propellers the page turns (rotors.js)
   scene3.add(worldRoot);
+  lighting.bind(worldRoot, bodyNodes, desc);
 
   // Lights and (first time) camera are fitted once real poses arrive, see applyPoses.
   pendingFit = firstScene || wantFrame ? "camera" : "lights";
@@ -538,19 +529,9 @@ function contentSphere() {
   return box.getBoundingSphere(new THREE.Sphere());
 }
 
-function fitLights(sphere) {
-  const c = sphere.center;
+function fitFog(sphere) {
   const r = Math.max(sphere.radius, 0.2) * 1.5;
-  // Fade the (often infinite) floor into the background instead of a hard horizon.
   scene3.fog = new THREE.Fog(theme.fog, r * 5, r * 18);
-  sun.position.copy(c).add(new THREE.Vector3(0.6, -0.8, 1.6).multiplyScalar(r * 1.5));
-  sun.target.position.copy(c);
-  const cam = sun.shadow.camera;
-  cam.left = cam.bottom = -r;
-  cam.right = cam.top = r;
-  cam.near = 0.01;
-  cam.far = r * 6;
-  cam.updateProjectionMatrix();
 }
 
 // Distance at which a sphere of radius r fills the view.
@@ -671,6 +652,7 @@ function applyPoses(buffer) {
   const f = new Float32Array(buffer);
   const nb = sceneDesc.nbody;
   if (f.length !== 1 + 7 * nb) return; // frame from a different model version
+  const resetLights = f[0] < latestTime;
   latestTime = f[0];
   const qOff = 1 + 3 * nb;
   for (let b = 0; b < nb; b++) {
@@ -679,9 +661,10 @@ function applyPoses(buffer) {
     node.quaternion.set(f[qOff + 4 * b + 1], f[qOff + 4 * b + 2], f[qOff + 4 * b + 3], f[qOff + 4 * b]);
   }
   if (flexMeshes.length) updateFlexes();
+  lighting.update(resetLights);
   if (pendingFit) {
     const sphere = contentSphere();
-    fitLights(sphere);
+    fitFog(sphere);
     // Reloaded mid-lesson: aim at the lesson's rig, not the whole scene (its animated move may have been
     // cut short by the scene arriving again).
     const own = lessonCamera();
@@ -1793,6 +1776,8 @@ $("show-collision").addEventListener("change", (e) => {
       o.visible = o.userData.group < sceneDesc.visibleGroupLimit || showCollision;
     }
   });
+  lighting.bind(worldRoot, bodyNodes, sceneDesc);
+  lighting.update(true);
 });
 $("show-shadows").addEventListener("change", (e) => {
   sun.castShadow = e.target.checked;
@@ -2451,7 +2436,7 @@ window.__robotforge = {
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
     return { w, h, data };
   },
-  three: () => ({ scene: scene3, camera, renderer, sun }), // for experiments in scripted checks
+  three: () => ({ scene: scene3, camera, renderer, sun, lighting }), // for experiments in scripted checks
   // Flicker check: slide the camera `steps` times by `step` m along `dir` and count pixels whose brightness
   // flips there and back (A, B, A) by more than `threshold`. Steady motion shifts edges one way; depth
   // fighting and texture shimmer flip back. Pause the simulation first so only the camera moves.
