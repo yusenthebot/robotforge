@@ -805,3 +805,15 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - 五段正式 H264 实录完整解码并抽帧查看：前后桌面/手机各约 24 秒，实际驾驶推球 13.9 秒。检测到 219 条接触观察，小车移动 0.69833 m，球移动 0.45289 m；控制和物理参数不变。
 - 保留了相机浮点逐字节比较过严、漏掉无名称碰撞几何的接触观察器和首帧 794/后续 800 高度导致的视频格式问题；最终视频从原始帧等比补边导出，没有裁剪或重演物理。
 - 本轮统一验证记录 5d63c2be-a90b-49f0-879d-40cff03c9ad5 已完成，134 项不可变产物通过校验；主进程独立重验 8197 个原始文件（1,236,680,437 B），原始帧和失败尝试保留在 Git 外。
+
+
+## Round 57 — resolution-stable surface relief (2026-10-24)
+
+- Shared metric bump gradients retain height/position units for seven procedural material kinds and textured ground/terrain; source-texel central differences replace ground's screen-pixel forward difference. Colors, roughness settings, weave/cloth, geometry, physics, controls and interfaces remain unchanged.
+- 63 nonflat real GPU plane cases bring 128/512 normal-strength ratios from about four to about one. All seven changed procedural kinds improve complete-shading resolution error; six ground styles have small absolute-image-error regressions. Actual full-scene changes are subtle; wood-floor flicker barely changes and is not claimed solved.
+- All 91 browser cases, eight slow assets/sensors cases and 300 focused default cases pass (399 distinct, six new normal cases). Seven unchanged framework cases, actual CLI/MCP/script smoke and a fresh locked-wheel installation smoke pass. Wheel/Ruff/21 JS parser checks and independent source/Python/evidence reviews pass; full default suite not rerun.
+- All 11 existing install/viewer budgets pass without relaxation: 3645 KB wheel, 163 MB install, 42 packages, 0.51 s CLI frame, 60.1/60.2 FPS, 2.20/3.50 ms render, 132 MB server peak and 5.60% idle CPU. Wheel +693 B; fresh HTTP +1610 B; still 28 requests and no new textures, passes or dependencies.
+- Four serial frozen-world comparisons pass 87 source/scene/physics/resource/GL checks. Candidate first gallery/kitchen samples are slower (1123/733 ms); gallery near draw median rises 3.425 to 4.425 ms. These costs remain visible alongside the consistency benefit.
+- Actual before/after camera-motion videos each decode 427 frames at 1280x800/30 FPS for 14.233 s, with paused physics. Literal checker raw-float equality fails by at most one float32 epsilon; complete PNG and physics controls stay exact, with separate accepted numerical controls recorded.
+- Report: docs/bench/2026-10-24-surface-normals.md/.json; evidence: ../robotforge-evidence/2026-10-24-surface-normals/. Completed scoped record f82e3f76-a885-473b-a3f7-0f75e8695e40 verifies 51 artifacts and 4653 raw files (1,125,306,260 B). Runtime SHA256 3519db85aac71b55fdc983870e9ca57044339f07f0976b2b996b6ba672a4f605.
+- Broad goal stays active. First-use shader cost, temporal behavior, broader visual art direction and creative/mobile editing remain follow-ups; individual action success tuning remains deferred.
