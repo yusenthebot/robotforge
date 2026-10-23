@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import textwrap
@@ -69,6 +70,56 @@ def test_catalog_parity_is_lazy_and_cached(pg, monkeypatch):
     assert pg.session.data.time == 0
     hub.scene_extras()["task_contracts"]["tasks"].clear()
     assert hub.scene_extras()["task_contracts"] == expected
+
+
+def test_unchanged_robot_poll_does_not_copy_the_task_catalog(pg, monkeypatch):
+    hub = attach(pg)
+    hub.robot_stream()
+    deepcopy = copy.deepcopy
+    catalog_copies = []
+
+    def inspect(value, *args, **kwargs):
+        if isinstance(value, dict) and ("method_schemas" in value or "task_contracts" in value):
+            catalog_copies.append(value)
+        return deepcopy(value, *args, **kwargs)
+
+    monkeypatch.setattr(copy, "deepcopy", inspect)
+    assert hub.robot_stream() is None
+    assert not catalog_copies
+
+
+def test_viewer_messages_do_not_expose_private_broadcast_snapshot(pg):
+    hub = attach(pg)
+    first = hub.robot_stream()
+    expected = copy.deepcopy(first)
+    first["task_contracts"]["tasks"][0]["params"].clear()
+    first["robots"][0]["capabilities"]["manual"]["actuators"].clear()
+    first["modes"]["arm"].clear()
+    assert hub.robot_stream() is None
+    scene = hub.scene_extras()
+    assert scene["task_contracts"] == expected["task_contracts"]
+    assert scene["robots"][0]["capabilities"] == expected["robots"][0]["capabilities"]
+    assert scene["modes"] == expected["modes"]
+    scene["task_contracts"]["tasks"].clear()
+    assert hub.robot_stream() is None
+    assert hub.scene_extras()["task_contracts"] == expected["task_contracts"]
+
+
+def test_failed_message_copy_keeps_pending_broadcast(pg, monkeypatch):
+    hub = attach(pg)
+    deepcopy = copy.deepcopy
+
+    def refuse_message(value, *args, **kwargs):
+        if isinstance(value, dict) and value.get("type") == "robot_info":
+            raise ValueError("cannot detach message")
+        return deepcopy(value, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(copy, "deepcopy", refuse_message)
+        with pytest.raises(ValueError, match="cannot detach message"):
+            hub.robot_stream()
+    assert hub.robot_stream()["task_contracts"] == contract_catalog(pg.current_world())
+    assert hub.robot_stream() is None
 
 
 def test_metadata_replacement_refreshes_existing_viewers_without_consuming_update(pg):

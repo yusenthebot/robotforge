@@ -181,7 +181,7 @@ class Playground:
         contract_key: tuple | None = None
         contracts: dict[str, Any] = {}
 
-        def task_contracts(world: World | None) -> dict[str, Any]:
+        def task_contracts(world: World | None, *, copy_result: bool = True) -> dict[str, Any]:
             from robotforge.control.runtime import contract_catalog
             from robotforge.control.task_registry import task_registry_revision
             from robotforge.extend import REGISTRY
@@ -199,7 +199,7 @@ class Playground:
             if key != contract_key:
                 contracts = contract_catalog(world)
                 contract_key = key
-            return copy.deepcopy(contracts)
+            return copy.deepcopy(contracts) if copy_result else contracts
 
         def task_run(msg: dict[str, Any]) -> dict[str, Any]:
             from robotforge.control.runtime import start_control
@@ -302,14 +302,16 @@ class Playground:
                 "type": "robot_info",
                 "version": version,
                 "robots": rows,
-                "task_contracts": task_contracts(self.current_world()),
+                "task_contracts": task_contracts(self.current_world(), copy_result=False),
                 "learned": learned,
                 "modes": {r["name"]: modes.available(self, r, r["name"] in learned) for r in rows},
             }
             if self.session.version != version or description == last_description:
                 return None
+            # Keep the cached catalog private, but copy only a message we actually send.
+            emitted = copy.deepcopy(description)
             last_description = description
-            return description
+            return emitted
 
         hub.robot_stream = robot_update
         hub.state_extras = lambda: {"mode": modes.current(self), **self.demonstrations.viewer_state()}
