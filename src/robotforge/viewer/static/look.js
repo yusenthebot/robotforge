@@ -51,11 +51,11 @@ const PRESETS = {
   rf_rubber: { roughness: 0.92, metalness: 0 },
   rf_glass: { physical: true, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04 },
   rf_led: { roughness: 0.3, metalness: 0, glow: 2.2 },
-  rf_wood: { roughness: 0.72, metalness: 0 },
-  rf_bark: { roughness: 0.96, metalness: 0 },
+  rf_wood: { roughness: 0.58, metalness: 0, texture: "wood", textureStrength: 0.65 },
+  rf_bark: { roughness: 0.96, metalness: 0, texture: "bark", textureStrength: 0.65 },
   rf_foliage: { physical: true, roughness: 0.78, metalness: 0, sheen: 0.35 },
-  rf_stone: { roughness: 0.9, metalness: 0 },
-  rf_fabric: { physical: true, roughness: 0.95, metalness: 0, sheen: 0.6 },
+  rf_stone: { roughness: 0.9, metalness: 0, texture: "stone", textureStrength: 0.45 },
+  rf_fabric: { physical: true, roughness: 0.95, metalness: 0, sheen: 0.6, texture: "cloth" },
   rf_ceramic: { physical: true, roughness: 0.18, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.15 },
   rf_paint: { roughness: 0.6, metalness: 0 },
 };
@@ -124,7 +124,7 @@ export function surfaceMaterial(materialName, color, opacity, surfaces) {
     mat.emissive = color.clone();
     mat.emissiveIntensity = p.glow;
   }
-  if (p.weave || p.texture === "weave") addWeave(mat);
+  if (p.weave || p.texture === "weave" || p.texture === "cloth") addWeave(mat, p.textureScale, p.textureStrength, p.texture === "cloth");
   else if (p.texture) addGrain(mat, p.texture, p.textureScale, p.textureStrength);
   return mat;
 }
@@ -134,19 +134,22 @@ export function surfaceMaterial(materialName, color, opacity, surfaces) {
 // valleys. Where one feature is smaller than a pixel the effect fades out instead of shimmering.
 //   brushed: fine streaks along the part's z axis.   speckle: orange peel or micro-blasting.
 //   rubber: coarser grain.                           knurl: a diamond cross-hatch round the z axis.
-const GRAIN_PITCH = { brushed: 0.00045, speckle: 0.0012, rubber: 0.0007, knurl: 0.0016 }; // m, one feature
-const GRAIN_BUMP = { brushed: 0.16, speckle: 0.5, rubber: 0.9, knurl: 1.4 }; // normal tilt at strength 1
+const GRAIN_PITCH = { brushed: 0.00045, speckle: 0.0012, rubber: 0.0007, knurl: 0.0016, wood: 0.012, bark: 0.018, stone: 0.025 }; // m, one feature
+const GRAIN_BUMP = { brushed: 0.16, speckle: 0.5, rubber: 0.9, knurl: 1.4, wood: 0.18, bark: 0.65, stone: 0.45 }; // normal tilt at strength 1
 const GRAIN_HEIGHT = {
   brushed: "float h = rfNoise(vec3(q.x, q.y, q.z * 0.03)) * 0.7 + rfNoise(vec3(q.x * 2.3, q.y * 2.3, q.z * 0.07)) * 0.3;",
   speckle: "float h = rfNoise(q) * 0.65 + rfNoise(q * 2.7) * 0.35;",
   rubber: "float h = rfNoise(q) * 0.5 + rfNoise(q * 2.1) * 0.3 + rfNoise(q * 4.4) * 0.2;",
+  wood: "float h = 0.5 + 0.3 * sin(q.y * 6.28318 + 2.0 * rfNoise(vec3(q.x * 0.12, q.y * 0.5, q.z * 0.3))) + 0.15 * rfNoise(q);",
+  bark: "float h = rfNoise(vec3(q.xy, q.z * 0.08)) * 0.7 + rfNoise(q * 2.0) * 0.3;",
+  stone: "float h = rfNoise(q) * 0.8 + rfNoise(q * 3.0) * 0.2;",
   knurl:
     "float ang = atan(vGrainPos.y, vGrainPos.x) * length(vGrainPos.xy) / pitch;" +
     "float zz = vGrainPos.z / pitch; float h = 0.5 + 0.5 * sin(ang + zz) * sin(ang - zz);",
 };
 
-function addGrain(mat, kind, scale, strength) {
-  if (!GRAIN_PITCH[kind]) return;
+function addGrain(mat, kind, scale = 1, strength = 1) {
+  if (!GRAIN_PITCH[kind] || strength === 0) return;
   const pitch = (GRAIN_PITCH[kind] * scale).toFixed(6);
   const bump = (GRAIN_BUMP[kind] * strength).toFixed(4);
   const shade = (0.22 * strength).toFixed(4);
@@ -192,7 +195,7 @@ float grainFade;`
       .replace(
         "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
-roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * 0.3 * grainFade, 0.04, 1.0);`
+roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * ${(0.3 * strength).toFixed(4)} * grainFade, 0.04, 1.0);`
       )
       .replace(
         "#include <normal_fragment_maps>",
@@ -208,7 +211,9 @@ normal = rfBump(-vViewPosition, normal, vec2(dFdx(grainH), dFdy(grainH)) * ${bum
 // smaller than a pixel the weave fades to its average instead of shimmering.
 const WEAVE_PITCH = 0.004; // m, the width of one tow (a 12K carbon twill, the coarse weave robot plates show)
 
-function addWeave(mat) {
+function addWeave(mat, scale = 1, strength = 1, cloth = false) {
+  if (strength === 0) return;
+  const pitch = ((cloth ? 0.0015 : WEAVE_PITCH) * scale).toFixed(6);
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vWeavePos;\nvarying vec3 vWeaveNormal;")
@@ -228,22 +233,22 @@ float weaveFade;`
 {
   vec3 an = abs(vWeaveNormal);
   vec2 plane = an.x > an.y && an.x > an.z ? vWeavePos.yz : (an.y > an.z ? vWeavePos.xz : vWeavePos.xy);
-  vec2 p = plane / ${WEAVE_PITCH.toFixed(5)};
+  vec2 p = plane / ${pitch};
   vec2 cell = floor(p);
   vec2 f = fract(p);
-  bool alongX = mod(cell.x + cell.y, 4.0) < 2.0; // the tow on top steps one cell per row: a twill
+  bool alongX = ${cloth ? "mod(cell.x + cell.y, 2.0) < 1.0" : "mod(cell.x + cell.y, 4.0) < 2.0"};
   float across = alongX ? f.y : f.x;
   float ridge = sin(3.14159265 * across); // a tow is a flat ridge with a dark gap to the next one
   weaveFade = clamp((0.4 - max(fwidth(p.x), fwidth(p.y))) / 0.23, 0.0, 1.0); // full at 6 px a tow, gone at 2.5
   weaveTow = alongX ? 1.0 : 0.0;
-  diffuseColor.rgb *= mix(0.86, mix(0.68, 1.04, ridge), weaveFade);
+  diffuseColor.rgb *= mix(1.0, mix(${cloth ? "0.98, mix(0.88, 1.0, ridge)" : "0.86, mix(0.68, 1.04, ridge)"}, weaveFade), ${strength.toFixed(4)});
 }`
       )
       .replace(
         "#include <roughnessmap_fragment>",
         `#include <roughnessmap_fragment>
-roughnessFactor *= mix(1.0, weaveTow > 0.5 ? 0.82 : 1.18, weaveFade); // tows at right angles catch light differently`
+roughnessFactor = clamp(roughnessFactor * mix(1.0, weaveTow > 0.5 ? 0.82 : 1.18, weaveFade * ${(strength * (cloth ? 0.25 : 1)).toFixed(4)}), 0.04, 1.0);`
       );
   };
-  mat.customProgramCacheKey = () => "rf-weave";
+  mat.customProgramCacheKey = () => `rf-weave-${pitch}-${strength}-${cloth}`;
 }
