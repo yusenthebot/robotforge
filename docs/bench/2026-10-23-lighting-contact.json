@@ -1,0 +1,1828 @@
+{
+  "baseline_commit": "714806452a8f3b8b61c6ccdf39793a4dc302d099",
+  "baseline_source_sha256": "55a07c1465a1bfca77322195ef4072cae93c4bf364ea325c42cefcf972d910e8",
+  "final_source_sha256": "3d820d1407dab3407a5108d64396bd4b714a7b0df20553729a18cb70ce69920d",
+  "scope": "shared direct/reflected light and moving world-fitted contact shadows",
+  "evidence_root": "../robotforge-evidence/2026-10-23-lighting-contact",
+  "comparison": {
+    "matched_files": {
+      "gallery": {
+        "world": true,
+        "initial": true,
+        "scene": true
+      },
+      "kitchen": {
+        "world": true,
+        "initial": true,
+        "scene": true
+      },
+      "park": {
+        "world": true,
+        "initial": true,
+        "scene": true
+      },
+      "contact": {
+        "world": true,
+        "initial": true,
+        "scene": true
+      }
+    },
+    "performance": {
+      "gallery": {
+        "before": {
+          "fresh_ms": [
+            428.89999997615814,
+            423.80000001192093
+          ],
+          "warm_ms": [
+            177.30000001192093,
+            200.90000000596046
+          ],
+          "render_median_ms": [
+            4.200000002980232,
+            4.200000017881393
+          ],
+          "render_p95_ms": [
+            5.4000000059604645,
+            6.0999999940395355
+          ],
+          "http_bytes": [
+            30441409,
+            30441409
+          ],
+          "http_resources": [
+            25,
+            25
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                2.651362372566503,
+                -3.2108716304338896,
+                6.854837515698968
+              ],
+              "target": [
+                0.21946439676583784,
+                0.031659003966998334,
+                0.3697762468971925
+              ],
+              "normalBias": 0.02,
+              "bias": -0.0004,
+              "width": 5.404217724001478,
+              "height": 5.404217724001478,
+              "near": 0.01,
+              "far": 16.212653172004437,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 246,
+            "triangles": 606010,
+            "textures": 5,
+            "geometries": 225,
+            "programs": 12
+          }
+        },
+        "after": {
+          "fresh_ms": [
+            440.09999999403954,
+            429
+          ],
+          "warm_ms": [
+            249.90000000596046,
+            267.59999999403954
+          ],
+          "render_median_ms": [
+            4.200000002980232,
+            4.0999999940395355
+          ],
+          "render_p95_ms": [
+            5.300000011920929,
+            5.699999988079071
+          ],
+          "http_bytes": [
+            30449250,
+            30449250
+          ],
+          "http_resources": [
+            27,
+            27
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                -0.46156031162093514,
+                -0.8085266152069988,
+                1.1276787368521042
+              ],
+              "target": [
+                -0.019724229452472847,
+                -0.2404516524189758,
+                0.4333648934445206
+              ],
+              "normalBias": 0.0007454642703766409,
+              "bias": -0.00010859528773029097,
+              "width": 4.362030930661031,
+              "height": 3.0844216508158815,
+              "near": 0.06257891353809104,
+              "far": 3.00455451838894,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 246,
+            "triangles": 606010,
+            "textures": 5,
+            "geometries": 225,
+            "programs": 22
+          }
+        }
+      },
+      "kitchen": {
+        "before": {
+          "fresh_ms": [
+            409.09999999403954,
+            420.10000002384186
+          ],
+          "warm_ms": [
+            277.59999999403954,
+            279.80000001192093
+          ],
+          "render_median_ms": [
+            2.2999999821186066,
+            2.5
+          ],
+          "render_p95_ms": [
+            2.7000000178813934,
+            3
+          ],
+          "http_bytes": [
+            4051536,
+            4051536
+          ],
+          "http_resources": [
+            25,
+            25
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                5.138058570052768,
+                -6.6514113884517965,
+                14.809822781310231
+              ],
+              "target": [
+                -0.001999961140248585,
+                0.20199998647222528,
+                1.1030000314621868
+              ],
+              "normalBias": 0.02,
+              "bias": -0.0004,
+              "width": 11.422352291540037,
+              "height": 11.422352291540037,
+              "near": 0.01,
+              "far": 34.26705687462011,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 123,
+            "triangles": 39752,
+            "textures": 5,
+            "geometries": 122,
+            "programs": 26
+          }
+        },
+        "after": {
+          "fresh_ms": [
+            397.30000001192093,
+            421.40000000596046
+          ],
+          "warm_ms": [
+            283.60000002384186,
+            258.59999999403954
+          ],
+          "render_median_ms": [
+            2.300000011920929,
+            2.2000000178813934
+          ],
+          "render_p95_ms": [
+            2.800000011920929,
+            2.899999976158142
+          ],
+          "http_bytes": [
+            4059377,
+            4059377
+          ],
+          "http_resources": [
+            27,
+            27
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                -2.677793277268794,
+                -1.393721430042289,
+                3.9012758217702297
+              ],
+              "target": [
+                -2.2359571951003314,
+                -0.8256464672542658,
+                3.2069619783626457
+              ],
+              "normalBias": 0.0013671875,
+              "bias": -6.164717704784627e-05,
+              "width": 6.727171322029716,
+              "height": 8,
+              "near": 0.20218562905099793,
+              "far": 9.706878756284315,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 123,
+            "triangles": 39752,
+            "textures": 5,
+            "geometries": 122,
+            "programs": 26
+          }
+        }
+      },
+      "park": {
+        "before": {
+          "fresh_ms": [
+            486.80000001192093,
+            460.19999998807907
+          ],
+          "warm_ms": [
+            298.7000000178814,
+            304.30000001192093
+          ],
+          "render_median_ms": [
+            3.5499999970197678,
+            2.4000000059604645
+          ],
+          "render_p95_ms": [
+            4.0999999940395355,
+            3.5
+          ],
+          "http_bytes": [
+            18652093,
+            18652093
+          ],
+          "http_resources": [
+            25,
+            25
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                16.776765765450392,
+                -19.900746791421295,
+                43.81495067932642
+              ],
+              "target": [
+                1.0603793926341485,
+                1.0544350390003672,
+                1.904587018483102
+              ],
+              "normalBias": 0.02,
+              "bias": -0.0004,
+              "width": 34.925303050702766,
+              "height": 34.925303050702766,
+              "near": 0.01,
+              "far": 104.7759091521083,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 109,
+            "triangles": 442218,
+            "textures": 7,
+            "geometries": 113,
+            "programs": 27
+          }
+        },
+        "after": {
+          "fresh_ms": [
+            473.69999998807907,
+            494
+          ],
+          "warm_ms": [
+            229.89999997615814,
+            244.19999998807907
+          ],
+          "render_median_ms": [
+            3,
+            3.0499999970197678
+          ],
+          "render_p95_ms": [
+            3.9000000059604645,
+            4
+          ],
+          "http_bytes": [
+            18659934,
+            18659934
+          ],
+          "http_resources": [
+            27,
+            27
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                -3.4675276854218975,
+                -3.944623402117666,
+                8.834463421318823
+              ],
+              "target": [
+                -3.0256916032534353,
+                -3.376548439329643,
+                8.140149577911238
+              ],
+              "normalBias": 0.004,
+              "bias": -4.472190279734967e-05,
+              "width": 26.908685288118864,
+              "height": 22.627416997969522,
+              "near": 0.47556646605976205,
+              "far": 22.835974620680197,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 109,
+            "triangles": 442218,
+            "textures": 7,
+            "geometries": 113,
+            "programs": 15
+          }
+        }
+      },
+      "contact": {
+        "before": {
+          "fresh_ms": [
+            325.59999999403954,
+            345.5
+          ],
+          "warm_ms": [
+            216.90000000596046,
+            200.19999998807907
+          ],
+          "render_median_ms": [
+            3.199999988079071,
+            3.25
+          ],
+          "render_p95_ms": [
+            3.9000000059604645,
+            3.899999976158142
+          ],
+          "http_bytes": [
+            17250865,
+            17250865
+          ],
+          "http_resources": [
+            25,
+            25
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                2.1099690973430665,
+                -2.434192628658483,
+                5.336969363018973
+              ],
+              "target": [
+                0.28432462584920415,
+                0,
+                0.4685841057020073
+              ],
+              "normalBias": 0.02,
+              "bias": -0.0004,
+              "width": 4.056987714430805,
+              "height": 4.056987714430805,
+              "near": 0.01,
+              "far": 12.170963143292415,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 62,
+            "triangles": 409862,
+            "textures": 5,
+            "geometries": 79,
+            "programs": 18
+          }
+        },
+        "after": {
+          "fresh_ms": [
+            292.40000000596046,
+            291.2999999821186
+          ],
+          "warm_ms": [
+            179.09999999403954,
+            180.5
+          ],
+          "render_median_ms": [
+            3.4000000059604645,
+            3.25
+          ],
+          "render_p95_ms": [
+            4.300000011920929,
+            3.699999988079071
+          ],
+          "http_bytes": [
+            17258706,
+            17258706
+          ],
+          "http_resources": [
+            27,
+            27
+          ],
+          "frame": {
+            "light": {
+              "position": [
+                0.08401067665654766,
+                -0.38013078497416686,
+                0.8125874479978481
+              ],
+              "target": [
+                0.52584675882501,
+                0.18794417781385614,
+                0.11827360459026448
+              ],
+              "normalBias": 0.0004833737762017415,
+              "bias": -9.3455317659015e-05,
+              "width": 2.8284271247461903,
+              "height": 2.378414230005442,
+              "near": 0.047137087230378044,
+              "far": 2.2638134090272795,
+              "mapSize": [
+                2048,
+                2048
+              ],
+              "intensity": 1.9,
+              "environmentIntensity": 0.85
+            },
+            "calls": 62,
+            "triangles": 409862,
+            "textures": 5,
+            "geometries": 79,
+            "programs": 10
+          }
+        }
+      }
+    },
+    "flicker": {
+      "before": {
+        "kitchen_wood_low": {
+          "flips": 8516,
+          "perMegapixel": 594,
+          "camera": {
+            "eye": [
+              0,
+              -4,
+              0.24
+            ],
+            "target": [
+              0,
+              -0.7,
+              0.01
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "park_grass_hfield_boundary": {
+          "flips": 429,
+          "perMegapixel": 30,
+          "camera": {
+            "eye": [
+              7.5,
+              -2,
+              0.22
+            ],
+            "target": [
+              7.5,
+              2,
+              0.12
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "park_stairs_faces": {
+          "flips": 3255,
+          "perMegapixel": 227,
+          "camera": {
+            "eye": [
+              1.9,
+              -4,
+              0.28
+            ],
+            "target": [
+              -0.5,
+              -2.5,
+              0.2
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "gallery_gallery_wood_low": {
+          "flips": 12863,
+          "perMegapixel": 897,
+          "camera": {
+            "eye": [
+              0,
+              -3,
+              0.22
+            ],
+            "target": [
+              0,
+              0,
+              0.03
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        }
+      },
+      "after": {
+        "kitchen_wood_low": {
+          "flips": 9197,
+          "perMegapixel": 642,
+          "camera": {
+            "eye": [
+              0,
+              -4,
+              0.24
+            ],
+            "target": [
+              0,
+              -0.7,
+              0.01
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "park_grass_hfield_boundary": {
+          "flips": 614,
+          "perMegapixel": 43,
+          "camera": {
+            "eye": [
+              7.5,
+              -2,
+              0.22
+            ],
+            "target": [
+              7.5,
+              2,
+              0.12
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "park_stairs_faces": {
+          "flips": 3352,
+          "perMegapixel": 234,
+          "camera": {
+            "eye": [
+              1.9,
+              -4,
+              0.28
+            ],
+            "target": [
+              -0.5,
+              -2.5,
+              0.2
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        },
+        "gallery_gallery_wood_low": {
+          "flips": 11778,
+          "perMegapixel": 822,
+          "camera": {
+            "eye": [
+              0,
+              -3,
+              0.22
+            ],
+            "target": [
+              0,
+              0,
+              0.03
+            ],
+            "direction": [
+              1,
+              0,
+              0
+            ]
+          },
+          "options": {
+            "step": 0.005,
+            "steps": 16,
+            "threshold": 5
+          }
+        }
+      }
+    }
+  },
+  "verification": {
+    "focused": {
+      "passed": 186,
+      "seconds": 6.05,
+      "deselected": 1
+    },
+    "browser": {
+      "passed": 16,
+      "seconds": 71.0
+    },
+    "gpu_sensors": {
+      "passed": 8,
+      "seconds": 31.38
+    },
+    "framework": {
+      "passed": 7,
+      "canonical_sha256": "e6c82b5c364b47273a8c45ee85441f37b50e1676ecd7cff5bbf2f72d4f88852b"
+    },
+    "smoke": {
+      "status": "pass",
+      "tools": 60,
+      "seconds": 3.0
+    },
+    "full_default_suite": "not rerun for this viewer-only increment",
+    "independent_review": "final source and acceptance evidence approved",
+    "build": "before/after wheels passed; new lighting modules packaged",
+    "lint": "Ruff check/format, JS module parser and git diff check passed",
+    "optional_tools": {
+      "mypy": "unavailable",
+      "pyright": "unavailable",
+      "bandit": "unavailable",
+      "pip_audit": "unavailable"
+    }
+  },
+  "budgets": {
+    "partial": true,
+    "scope": [
+      "install",
+      "viewer"
+    ],
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3636.5156,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.1337,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.0
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.5081,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.318
+        },
+        "fps": {
+          "value": 60.1069,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 2.5,
+          "unit": "ms",
+          "better": "lower",
+          "median": 2.5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.0571,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 3.4,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.4000000059604645,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 132.2,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 558.0
+        },
+        "idle_cpu_pct": {
+          "value": 5.2,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    }
+  },
+  "wheel_bytes": {
+    "before": 3720613,
+    "after": 3723792,
+    "delta": 3179
+  },
+  "video": {
+    "path": "video-final/desktop.mp4",
+    "sha256": "6032e9d90e4fd219cbb0bd4a69c7df4f5d03ca74d0fdb0c597644d364848e07c",
+    "duration_seconds": 39.766667,
+    "size": [
+      1280,
+      800
+    ],
+    "fps": 30,
+    "fully_decoded": true,
+    "inspected": true,
+    "drive_displacement_m": 2.3757039403944957,
+    "active_fps": {
+      "elapsed_ms": 2016.6000000000004,
+      "intervals_ms": [
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.700000000000728,
+        16.599999999999454,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.800000000000182,
+        16.599999999999454,
+        16.699999999999818,
+        16.700000000000728,
+        16.599999999999454,
+        16.699999999999818,
+        16.700000000000728,
+        16.599999999999454,
+        16.699999999999818,
+        16.600000000000364,
+        16.600000000000364,
+        16.799999999999272,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.799999999999272,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.700000000000728,
+        16.599999999999454,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.799999999999272,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.799999999999272,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.599999999999454,
+        16.800000000000182,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.799999999999272,
+        16.600000000000364,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.599999999999454,
+        16.800000000000182,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.599999999999454,
+        16.700000000000728,
+        16.699999999999818,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.600000000000364,
+        16.699999999999818,
+        16.599999999999454,
+        16.800000000000182,
+        16.600000000000364,
+        16.699999999999818,
+        16.699999999999818,
+        16.5,
+        16.800000000000182
+      ],
+      "fps": 60.00198353664583
+    }
+  },
+  "limits": [
+    "warm gallery about 69.7 ms slower in two-sample averages",
+    "mixed temporal probe; no blanket shimmer or startup improvement",
+    "full default suite, native Windows and unavailable optional tools not run"
+  ],
+  "artifacts": {
+    "comparison.json": {
+      "sha256": "1add9f8900995a9068716ba09fe987a7e8f71350cb4e26682a26fdfa8a805150",
+      "size": 15372
+    },
+    "FINAL-RESULTS.md": {
+      "sha256": "5947a49a2391a0a8241ee3c7bc6de7ef6bb6e4612a913046096d6d6f2c75c2cd",
+      "size": 6806
+    },
+    "RESULTS.md": {
+      "sha256": "968cf0f35da56adb02ababa0018bff16cdf9c06a4626c12f1b9d75005520705b",
+      "size": 4386
+    },
+    "check_lighting.py": {
+      "sha256": "0fb5f60d77571e387c041ce18d0efcca636c08a47ad710947fba46b89eaef9c4",
+      "size": 8016
+    },
+    "accept_lighting.py": {
+      "sha256": "5e0064d1d720abc730e929a5bc8cffe02e76b1fbee3cc79cad7756a3611e892c",
+      "size": 1762
+    },
+    "accept_surfaces.py": {
+      "sha256": "0d332ee33fa0a028ee68f65c3aa2115a6c78d03a6c791e464b78408b991f7575",
+      "size": 330
+    },
+    "lighting_journey.py": {
+      "sha256": "77626694dbaa6bd2fa12499554639557771a4180654107c1bfc66c31d65ffad4",
+      "size": 18826
+    },
+    "run_pairs.py": {
+      "sha256": "384ff35492d9d1f2db7493bf1c09d68427970b8fe1860554c36e9c121c56cfac",
+      "size": 768
+    },
+    "finalize_record.py": {
+      "sha256": "f47cfb85fb4aa889d7b273adcc06e5a104de834f5ecc4c47303ecd94a4f78d71",
+      "size": 7100
+    },
+    "/Users/yusenthebot/dev/robotforge-evidence/2026-10-23-visual-playability/visual_baseline.py": {
+      "sha256": "0e60186728bab7ffc982eece4d6a3baf729491d2838903155995b2460f8d98e6",
+      "size": 14039
+    },
+    "before/kitchen_far.png": {
+      "sha256": "799e04a21ff0a20844c05cbca3f2a311a1ad9b66189f45f63f666978d9a4480d",
+      "size": 801600
+    },
+    "before/contact.initial.json": {
+      "sha256": "b5fecf9029556b6f58b6da0aba740d8c59907620925ab170a440223570392542",
+      "size": 1935
+    },
+    "before/contact.chrome.log": {
+      "sha256": "7d3dc06c70f34e37ac2c9c94c026b3a8705a9a2efc801d1793d6d6f273c0b7af",
+      "size": 5426
+    },
+    "before/gallery_near.png": {
+      "sha256": "8b71b729641367aea2f8eeb2a753a89c2a0018798a37e90a0895801b948b1425",
+      "size": 910864
+    },
+    "before/park_near.png": {
+      "sha256": "4655e4127d33049f9b512caab0776f488f874872201be3e4bae2bdf81d5a8538",
+      "size": 685218
+    },
+    "before/contact.scene.json": {
+      "sha256": "9f0281dfc783a14807177b870c950ae43d270ba48a32f087662c437e35280fd9",
+      "size": 325856
+    },
+    "before/park.scene.json": {
+      "sha256": "e98790d7a949870378aa7578a28f42a8ef101dcc64c85c7dbb0fc4b2679c838e",
+      "size": 386978
+    },
+    "before/gallery.chrome.log": {
+      "sha256": "ee93fae21d5b29c27c95293a76ec30c0b443b742f5a8594d364a689f0af164d8",
+      "size": 5113
+    },
+    "before/gallery.scene.json": {
+      "sha256": "9d18a49311d5f13693dee6313211f55a37820ed9a7507450b874bb857dad0d05",
+      "size": 458722
+    },
+    "before/park.chrome.log": {
+      "sha256": "1e82883e2d14d812934e70fd52ac0625264284f07cf951367b83562e310272fd",
+      "size": 5707
+    },
+    "before/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "before/gallery_far.png": {
+      "sha256": "1a435941da7b4df5d6b62abbe3adfa50418dbdc0bd9b154cd04fce9b7a43ca60",
+      "size": 846252
+    },
+    "before/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "before/contact.world.json": {
+      "sha256": "84f7e90415acabd61cf17927619857a852a43101d268c4b3f16c841c0d536b0c",
+      "size": 1223
+    },
+    "before/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "before/contact_dog.png": {
+      "sha256": "6481029d799ae90090dff0591e9fdf88797bfb68010d6e9096c5e4ece1263fa4",
+      "size": 360553
+    },
+    "before/park_far.png": {
+      "sha256": "3508df5afd1d2dd0a3fa31346d4a14fae13c2b7863ffe4756d96f10f16a8010a",
+      "size": 927155
+    },
+    "before/kitchen_near.png": {
+      "sha256": "4ae85f8416ebf0dcc089cf54d3857413bd0e733da3a8b1449c059ef9654bcaa5",
+      "size": 480033
+    },
+    "before/manifest.json": {
+      "sha256": "65a4f15cfaa59018c8793e47518df8351f42be3916d883764af70f57919d10ce",
+      "size": 137283
+    },
+    "before/contact_arm_table.png": {
+      "sha256": "ff2dd80f249c2059a7d719da30e838797c6222dc47cc21222660cd859692b0ee",
+      "size": 433865
+    },
+    "before/kitchen.scene.json": {
+      "sha256": "b7f19831ed799b2a2b9c50ad800df811b2789dec9a6870468054cedb44d8263a",
+      "size": 340157
+    },
+    "before/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "before/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "before/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "before/contact_rover.png": {
+      "sha256": "ec4028e393c3978594e4130ccde98750f6d33b6ed6512438c9b8ccc9367627b9",
+      "size": 281588
+    },
+    "before/kitchen.chrome.log": {
+      "sha256": "8c4ab936bca509a68290ce08f489bd8e7f1a97d90be80de60936187404092d44",
+      "size": 5426
+    },
+    "after/kitchen_far.png": {
+      "sha256": "38ce9705bcb160d2909cc7cfeaa40f263926a5215335b6486df1c434956eb86d",
+      "size": 810917
+    },
+    "after/contact.initial.json": {
+      "sha256": "b5fecf9029556b6f58b6da0aba740d8c59907620925ab170a440223570392542",
+      "size": 1935
+    },
+    "after/contact.chrome.log": {
+      "sha256": "57d9f4c4c10303fbae2f50846bc4c3574517960c2a296d3019d347b1660790a4",
+      "size": 5707
+    },
+    "after/gallery_near.png": {
+      "sha256": "dd169774502b105ebe969ac7adaf2dc81d517dfea69ab017d039a665bfe3952e",
+      "size": 911795
+    },
+    "after/park_near.png": {
+      "sha256": "39de84fb3ce378b6cd93dbf93759b12bf9b88eaf8eb079ea9d04c77faaccbf36",
+      "size": 736909
+    },
+    "after/contact.scene.json": {
+      "sha256": "9f0281dfc783a14807177b870c950ae43d270ba48a32f087662c437e35280fd9",
+      "size": 325856
+    },
+    "after/park.scene.json": {
+      "sha256": "e98790d7a949870378aa7578a28f42a8ef101dcc64c85c7dbb0fc4b2679c838e",
+      "size": 386978
+    },
+    "after/gallery.chrome.log": {
+      "sha256": "8b087e9619362d3e3c41164b12df8eb2af1a257b117d4fab0c281fc094feaeeb",
+      "size": 5426
+    },
+    "after/gallery.scene.json": {
+      "sha256": "9d18a49311d5f13693dee6313211f55a37820ed9a7507450b874bb857dad0d05",
+      "size": 458722
+    },
+    "after/park.chrome.log": {
+      "sha256": "98a2c58c62601e0161e92ae2e7fc7d5ef39a7dcae7b8baabb40882bc5c920920",
+      "size": 5707
+    },
+    "after/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "after/gallery_far.png": {
+      "sha256": "c180ee1cdf5bb8b25ee98a3fa4472b7065f85ce7aa8ae656b01603ad678958a5",
+      "size": 846781
+    },
+    "after/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "after/contact.world.json": {
+      "sha256": "84f7e90415acabd61cf17927619857a852a43101d268c4b3f16c841c0d536b0c",
+      "size": 1223
+    },
+    "after/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "after/contact_dog.png": {
+      "sha256": "d1649058b1ec9c3c083cf0e5f487515ef6edaa84ba18be0b39830f0016a515c7",
+      "size": 359960
+    },
+    "after/park_far.png": {
+      "sha256": "b194c60993f16629a94a1fb1d5aad72062a092e15494abf06d479113e1bee4ed",
+      "size": 948695
+    },
+    "after/kitchen_near.png": {
+      "sha256": "f5ef7a5997b57e03faf301cc786630ed8da78d34c9c3df7af4e52764ca284bf6",
+      "size": 497954
+    },
+    "after/manifest.json": {
+      "sha256": "23f3c55bfe2602008560981d4f0eea294b493f591d2acb4768ac91f275e149de",
+      "size": 145698
+    },
+    "after/contact_arm_table.png": {
+      "sha256": "c05cbc13c5d08c9d174bf7d2d9cd7fcee8f4184fe0823b6bb74919041ab5d4f9",
+      "size": 447282
+    },
+    "after/kitchen.scene.json": {
+      "sha256": "b7f19831ed799b2a2b9c50ad800df811b2789dec9a6870468054cedb44d8263a",
+      "size": 340157
+    },
+    "after/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "after/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "after/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "after/contact_rover.png": {
+      "sha256": "19cbc641bd00adb6b9473357974935976a6de60f63273bacdf3a1bd0c6fa8901",
+      "size": 287191
+    },
+    "after/kitchen.chrome.log": {
+      "sha256": "11fa7c0dc7ca6fbcd9aa8aa1617c59a4f3555febf36ae49da66d1002b1927b42",
+      "size": 5409
+    },
+    "before2/kitchen_far.png": {
+      "sha256": "799e04a21ff0a20844c05cbca3f2a311a1ad9b66189f45f63f666978d9a4480d",
+      "size": 801600
+    },
+    "before2/contact.initial.json": {
+      "sha256": "b5fecf9029556b6f58b6da0aba740d8c59907620925ab170a440223570392542",
+      "size": 1935
+    },
+    "before2/contact.chrome.log": {
+      "sha256": "02bf9ed068a53a1c743ed2f63492c4ff34419c934209c9c221e3fcb352cd515c",
+      "size": 5707
+    },
+    "before2/gallery_near.png": {
+      "sha256": "8b71b729641367aea2f8eeb2a753a89c2a0018798a37e90a0895801b948b1425",
+      "size": 910864
+    },
+    "before2/park_near.png": {
+      "sha256": "4655e4127d33049f9b512caab0776f488f874872201be3e4bae2bdf81d5a8538",
+      "size": 685218
+    },
+    "before2/contact.scene.json": {
+      "sha256": "9f0281dfc783a14807177b870c950ae43d270ba48a32f087662c437e35280fd9",
+      "size": 325856
+    },
+    "before2/park.scene.json": {
+      "sha256": "e98790d7a949870378aa7578a28f42a8ef101dcc64c85c7dbb0fc4b2679c838e",
+      "size": 386978
+    },
+    "before2/gallery.chrome.log": {
+      "sha256": "c81af0c847551f2c3102e92de2536b54586ac0f0f329b90d7987679143da35b3",
+      "size": 5707
+    },
+    "before2/gallery.scene.json": {
+      "sha256": "9d18a49311d5f13693dee6313211f55a37820ed9a7507450b874bb857dad0d05",
+      "size": 458722
+    },
+    "before2/park.chrome.log": {
+      "sha256": "4625fa7161153534b540e85f955619a4ac300cbf44d7a7af6e3fc1cae757cbe5",
+      "size": 5426
+    },
+    "before2/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "before2/gallery_far.png": {
+      "sha256": "1a435941da7b4df5d6b62abbe3adfa50418dbdc0bd9b154cd04fce9b7a43ca60",
+      "size": 846252
+    },
+    "before2/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "before2/contact.world.json": {
+      "sha256": "84f7e90415acabd61cf17927619857a852a43101d268c4b3f16c841c0d536b0c",
+      "size": 1223
+    },
+    "before2/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "before2/contact_dog.png": {
+      "sha256": "6481029d799ae90090dff0591e9fdf88797bfb68010d6e9096c5e4ece1263fa4",
+      "size": 360553
+    },
+    "before2/park_far.png": {
+      "sha256": "3508df5afd1d2dd0a3fa31346d4a14fae13c2b7863ffe4756d96f10f16a8010a",
+      "size": 927155
+    },
+    "before2/kitchen_near.png": {
+      "sha256": "4ae85f8416ebf0dcc089cf54d3857413bd0e733da3a8b1449c059ef9654bcaa5",
+      "size": 480033
+    },
+    "before2/manifest.json": {
+      "sha256": "c0ffb18629a1531c865c9a1ddd980eeae9742c0bbed6e98083578e89ca2e7daa",
+      "size": 136938
+    },
+    "before2/contact_arm_table.png": {
+      "sha256": "ff2dd80f249c2059a7d719da30e838797c6222dc47cc21222660cd859692b0ee",
+      "size": 433865
+    },
+    "before2/kitchen.scene.json": {
+      "sha256": "b7f19831ed799b2a2b9c50ad800df811b2789dec9a6870468054cedb44d8263a",
+      "size": 340157
+    },
+    "before2/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "before2/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "before2/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "before2/contact_rover.png": {
+      "sha256": "ec4028e393c3978594e4130ccde98750f6d33b6ed6512438c9b8ccc9367627b9",
+      "size": 281588
+    },
+    "before2/kitchen.chrome.log": {
+      "sha256": "afb5e66c170b3c672263e27edf97109daa4022c98dac2a55676038d2e9e38d66",
+      "size": 5707
+    },
+    "after2/kitchen_far.png": {
+      "sha256": "38ce9705bcb160d2909cc7cfeaa40f263926a5215335b6486df1c434956eb86d",
+      "size": 810917
+    },
+    "after2/contact.initial.json": {
+      "sha256": "b5fecf9029556b6f58b6da0aba740d8c59907620925ab170a440223570392542",
+      "size": 1935
+    },
+    "after2/contact.chrome.log": {
+      "sha256": "f044e734cf1074711a8e51a0c38fac345f6e592ecaa6cae04993efd7df6f3665",
+      "size": 5707
+    },
+    "after2/gallery_near.png": {
+      "sha256": "dd169774502b105ebe969ac7adaf2dc81d517dfea69ab017d039a665bfe3952e",
+      "size": 911795
+    },
+    "after2/park_near.png": {
+      "sha256": "39de84fb3ce378b6cd93dbf93759b12bf9b88eaf8eb079ea9d04c77faaccbf36",
+      "size": 736909
+    },
+    "after2/contact.scene.json": {
+      "sha256": "9f0281dfc783a14807177b870c950ae43d270ba48a32f087662c437e35280fd9",
+      "size": 325856
+    },
+    "after2/park.scene.json": {
+      "sha256": "e98790d7a949870378aa7578a28f42a8ef101dcc64c85c7dbb0fc4b2679c838e",
+      "size": 386978
+    },
+    "after2/gallery.chrome.log": {
+      "sha256": "25a72f77e549cb246b2bd009b216c8b77a924f5d6a10b4dc04294a9cf6cf94f2",
+      "size": 5707
+    },
+    "after2/gallery.scene.json": {
+      "sha256": "9d18a49311d5f13693dee6313211f55a37820ed9a7507450b874bb857dad0d05",
+      "size": 458722
+    },
+    "after2/park.chrome.log": {
+      "sha256": "99f3cebb2130f97c92f33eb81ea30ad591c6025f26348d5bf4faaf5f03f1656d",
+      "size": 5707
+    },
+    "after2/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "after2/gallery_far.png": {
+      "sha256": "c180ee1cdf5bb8b25ee98a3fa4472b7065f85ce7aa8ae656b01603ad678958a5",
+      "size": 846781
+    },
+    "after2/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "after2/contact.world.json": {
+      "sha256": "84f7e90415acabd61cf17927619857a852a43101d268c4b3f16c841c0d536b0c",
+      "size": 1223
+    },
+    "after2/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "after2/contact_dog.png": {
+      "sha256": "d1649058b1ec9c3c083cf0e5f487515ef6edaa84ba18be0b39830f0016a515c7",
+      "size": 359960
+    },
+    "after2/park_far.png": {
+      "sha256": "b194c60993f16629a94a1fb1d5aad72062a092e15494abf06d479113e1bee4ed",
+      "size": 948695
+    },
+    "after2/kitchen_near.png": {
+      "sha256": "f5ef7a5997b57e03faf301cc786630ed8da78d34c9c3df7af4e52764ca284bf6",
+      "size": 497954
+    },
+    "after2/manifest.json": {
+      "sha256": "1403adb5b49a417c74f1ada826bb9a33993f286d2b92b7036d7b0c5db2dd3df3",
+      "size": 146252
+    },
+    "after2/contact_arm_table.png": {
+      "sha256": "c05cbc13c5d08c9d174bf7d2d9cd7fcee8f4184fe0823b6bb74919041ab5d4f9",
+      "size": 447282
+    },
+    "after2/kitchen.scene.json": {
+      "sha256": "b7f19831ed799b2a2b9c50ad800df811b2789dec9a6870468054cedb44d8263a",
+      "size": 340157
+    },
+    "after2/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "after2/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "after2/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "after2/contact_rover.png": {
+      "sha256": "19cbc641bd00adb6b9473357974935976a6de60f63273bacdf3a1bd0c6fa8901",
+      "size": 287191
+    },
+    "after2/kitchen.chrome.log": {
+      "sha256": "9792ddc586548d6868648d8c0cad5a9b406d51813aac9d46bc72bab3feab03b7",
+      "size": 5918
+    },
+    "surfaces-before/metrics.json": {
+      "sha256": "15695e038b19b060e810d5bcbadcdcb2667818ca1beeec95683ae80753f4190e",
+      "size": 4339
+    },
+    "surfaces-before/grass_hfield_boundary_start.png": {
+      "sha256": "19afb56a437892fabeb6028a29e10c049b145d479ea2965fe0eb46116d97f17f",
+      "size": 258173
+    },
+    "surfaces-before/gallery_wood_low_end.png": {
+      "sha256": "35b92defd00a8685b60ffee3ceda4f2c1b4d0b76142c187ef27701bd3e8cbfe7",
+      "size": 331595
+    },
+    "surfaces-before/stairs_faces_end.png": {
+      "sha256": "af294cad10c401dc1cbfa4680587ea989bff61604a51e8b8a5189d99faf4b0f7",
+      "size": 372106
+    },
+    "surfaces-before/gallery.chrome.log": {
+      "sha256": "8395bc6ee3615ef3493304512a96eaca3e29b5eb769815976b15b971ca300874",
+      "size": 6198
+    },
+    "surfaces-before/kitchen_light.png": {
+      "sha256": "818c42dc80b4fed2ed845b3541c2560a5da44c32297bbfa359a3e1e864f27e50",
+      "size": 476791
+    },
+    "surfaces-before/gallery_wood_low_start.png": {
+      "sha256": "7fbdc5b2f18ff1df5e191e9fbeb2c8c243321322138df689641df1b9c15f1d96",
+      "size": 329755
+    },
+    "surfaces-before/park.chrome.log": {
+      "sha256": "c3a7d65330d9d47e2ad70353674b1592bbebeedbceb0c05f6a1245f21a16fbcf",
+      "size": 6302
+    },
+    "surfaces-before/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "surfaces-before/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "surfaces-before/wood_low_end.png": {
+      "sha256": "3a8f99b58d9ba819c6be1944b222b2afaa304e3c9d8555acc64d3909dee2ce48",
+      "size": 302058
+    },
+    "surfaces-before/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "surfaces-before/park_light.png": {
+      "sha256": "1e9f1ffd9741ea668c65b4a2a7d0648d86df9f53eda116bd6c6d4015457ff91c",
+      "size": 680236
+    },
+    "surfaces-before/wood_low_start.png": {
+      "sha256": "6fe692f5a324cc1958f475939500a3a6a4f76737325d0003029c7336b1ae8b46",
+      "size": 300741
+    },
+    "surfaces-before/gallery_light.png": {
+      "sha256": "c5808e8cd7fabeb79f247d66567d14cc354805a025874d0946faaff417be4f80",
+      "size": 909480
+    },
+    "surfaces-before/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "surfaces-before/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "surfaces-before/grass_hfield_boundary_end.png": {
+      "sha256": "4b85e9ca7d280a40fc096ddd4c70c2e2ca41287ba9a883dfcb1463010a33ed46",
+      "size": 263289
+    },
+    "surfaces-before/stairs_faces_start.png": {
+      "sha256": "dcec8ce104c85482b0829c8fb5686d0ebe14ce40f2ee9e36521dab03587fcd0c",
+      "size": 371732
+    },
+    "surfaces-before/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "surfaces-before/kitchen.chrome.log": {
+      "sha256": "fa48cebb73156a3533939fa512828228333250430b6664669d281b01af0d4e72",
+      "size": 7005
+    },
+    "surfaces-after/metrics.json": {
+      "sha256": "eb14a396e5d942fcb1376a28a3fb34a097b136a444d7decb50db3dfd727fd41f",
+      "size": 4337
+    },
+    "surfaces-after/grass_hfield_boundary_start.png": {
+      "sha256": "1fde691e5276324c9eafffce52686198aa49a96a83baf3a9d5f83646d34cc06c",
+      "size": 329671
+    },
+    "surfaces-after/gallery_wood_low_end.png": {
+      "sha256": "7295e2ed067cf4a6e380be7e913a5c0e2bea9acbb5b22958089476d061ee58ec",
+      "size": 334261
+    },
+    "surfaces-after/stairs_faces_end.png": {
+      "sha256": "f35af69ba21d25c5e6b2cd3d74ed299b7f77f5b9438774efce5a4d50b4ecdff1",
+      "size": 377977
+    },
+    "surfaces-after/gallery.chrome.log": {
+      "sha256": "7e5b08b4cc458e76464fff0324915c958af42af489af1617f4576d3739fae857",
+      "size": 6794
+    },
+    "surfaces-after/kitchen_light.png": {
+      "sha256": "55a0b1d458b36bbe08b0d3298087df1c9a04b7f0fc739003cebbe3934bf16ebb",
+      "size": 493999
+    },
+    "surfaces-after/gallery_wood_low_start.png": {
+      "sha256": "ae3c3bb0a39acc1c8dd9ee6d2a2c75bd72017f3ca62547d65e6e6a4a49374015",
+      "size": 331621
+    },
+    "surfaces-after/park.chrome.log": {
+      "sha256": "11bb02aaa4c6159851dc98f3993aaade897219c778aefb6c011b8106f9fa107e",
+      "size": 6583
+    },
+    "surfaces-after/kitchen.world.json": {
+      "sha256": "931e17813664ace1dd855b68292d9d8a1640d50ec96dc13d6568f2202328e063",
+      "size": 7539
+    },
+    "surfaces-after/gallery.initial.json": {
+      "sha256": "626775114efb2aa2b1acfbb4609c0946b4ae7fe93b305875227fb2c088113811",
+      "size": 3357
+    },
+    "surfaces-after/wood_low_end.png": {
+      "sha256": "c9e92137e730097ebf5d24249976e7c664b79f6efd8963aba74157857d41c042",
+      "size": 322818
+    },
+    "surfaces-after/kitchen.initial.json": {
+      "sha256": "96dc49e40a53f54228e55b4ed1737b48da7e4707b2d2d429861ebdce3d5afd07",
+      "size": 4318
+    },
+    "surfaces-after/park_light.png": {
+      "sha256": "fd02f8595097b9cfa076a92eaa7af4035758f6b4c2294fc8d95b8126d0505cfd",
+      "size": 733327
+    },
+    "surfaces-after/wood_low_start.png": {
+      "sha256": "b17ab495c93780f63ec62407237f4160ebb0308e0945224ec045d7abaeaa6c5b",
+      "size": 321172
+    },
+    "surfaces-after/gallery_light.png": {
+      "sha256": "3f895662f4d5476dfbe6d4804ff21dc6dbe7e505e525df020911554e66bd9e46",
+      "size": 909253
+    },
+    "surfaces-after/gallery.world.json": {
+      "sha256": "1e0f53258c019c58c58cc9ee2fecdf98c71e73cb3e2917284f0c885fcc0b8217",
+      "size": 2153
+    },
+    "surfaces-after/park.initial.json": {
+      "sha256": "a94752d2d30fa7fd1dbc9ce777c2b85317c678964cb9ac82279a38ae6dbb01e3",
+      "size": 1769
+    },
+    "surfaces-after/grass_hfield_boundary_end.png": {
+      "sha256": "663115423ede076bfa2a585108501a4a4f85f26afab730341ef632c8429c5551",
+      "size": 331164
+    },
+    "surfaces-after/stairs_faces_start.png": {
+      "sha256": "bc9d27277d7e2d399cd8f1a9c93b9551aadeec2d749b50800d2a8deb21e488d3",
+      "size": 376952
+    },
+    "surfaces-after/park.world.json": {
+      "sha256": "5163a4212570e66308a2997b0d8d88f7e8f3e000b73ce12daa541fd6b03dbea1",
+      "size": 7056
+    },
+    "surfaces-after/kitchen.chrome.log": {
+      "sha256": "85ecd5797ecbd27eaa76ce646dce48ae21386817c01213f06771e10b303929b9",
+      "size": 5989
+    },
+    "park_near_AB.png": {
+      "sha256": "dc8d7fd3d6710a26bd5d6ba40c05d407ca3e789177a6ddd7b047454fea4ab672",
+      "size": 476887
+    },
+    "kitchen_near_AB.png": {
+      "sha256": "9e128ddc53acee8ec7212402e2e6a929c2717c6c18984870437333e0214e448a",
+      "size": 313478
+    },
+    "contact_arm_table_AB.png": {
+      "sha256": "386f4439b3157decb44db800420af8f9c0c241d73b5204e9eeae186d35181d42",
+      "size": 312377
+    },
+    "gallery_near_AB.png": {
+      "sha256": "83d6a585e956062556d7003bfc6286bcfc5183997685ae17042562443bb99b1f",
+      "size": 503854
+    },
+    "contact_dog_AB.png": {
+      "sha256": "0e018c0004f8b4dd2b4636c3c0266f625534e64b38d729d007e60346ea36d532",
+      "size": 269082
+    },
+    "contact_rover_AB.png": {
+      "sha256": "0df839751ffed0eb9b20395e98039cb8a685def20e3247cbf0a3ec885847286a",
+      "size": 218139
+    },
+    "video-final/metrics.json": {
+      "sha256": "1495fdd09edaf916be0be90eb9422b618b0701bb2bad34e0a5856303ee5818e9",
+      "size": 449023
+    },
+    "video-final/desktop.mp4": {
+      "sha256": "6032e9d90e4fd219cbb0bd4a69c7df4f5d03ca74d0fdb0c597644d364848e07c",
+      "size": 5383636
+    },
+    "video-final/contact.png": {
+      "sha256": "2c4c3d93844228001edad8eff0813c8824e1a8daf27383cf2d44b111e1cc5e55",
+      "size": 564111
+    },
+    "video-final/ffprobe.json": {
+      "sha256": "b5bfc67fb7b836f3ef281f1baa53e77e4f82b7885c23af7de845cbfb42707827",
+      "size": 2803
+    },
+    "video-final/decode.log": {
+      "sha256": "b37cd9ca025bd499551a61adc6c2ca724dbeed79fcc8b3d99732d44634f9c855",
+      "size": 34
+    },
+    "verification-logs/browser.log": {
+      "sha256": "0da5d2f38e60bad21cff415ef905613b8c8edb4ffce56bf82bdcd606d63a7c40",
+      "size": 110
+    },
+    "verification-logs/framework.log": {
+      "sha256": "25eb8891ef49a70c066cbab58af6ac583303e6238ddaa0bbf31ad5641f6606da",
+      "size": 446
+    },
+    "verification-logs/budget.log": {
+      "sha256": "8d6b48799327eb4a0b3a292c7227b55aeaa36932bfe44d98a57c8e075e034f1d",
+      "size": 1398
+    },
+    "verification-logs/smoke.log": {
+      "sha256": "7ac9249efe1c243c511fa9d0946852a85e24a0acbe9a1254b91de33e396ad8d0",
+      "size": 772
+    },
+    "verification-logs/gpu-sensors.log": {
+      "sha256": "db7dadbc9694a0ba6fd0196459ef8811a16149d39131287e46c224a238690493",
+      "size": 99
+    },
+    "verification-logs/focused.log": {
+      "sha256": "e1c27a27e0a35a84d5e6ff5299a6ddd1ecea303bf8297e78afc4c0ddea131b14",
+      "size": 274
+    },
+    "budget-final/2026-10-23-7148064-dirty-partial.json": {
+      "sha256": "e1f38ab775644b78f6719e7d3b79b1c9cb9c7d941b5c2b9e69ac46bd794b3b7e",
+      "size": 5045
+    },
+    "framework-final/report.json": {
+      "sha256": "bb2d344a612d5696c373f2c5811b4db863a9df2f0edbc623a6bfc9ea8297fc67",
+      "size": 371
+    },
+    "framework-final/manifest.json": {
+      "sha256": "8141a1340a0b71e4274871c0adc7a73f68c2a7ffc789494590cc290b0be48cc6",
+      "size": 21018
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/app.js": {
+      "sha256": "f9df96f72605d08960212c67c77ef349cc38289d7eda0b3968f63483964ba6be",
+      "size": 103358
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/look.js": {
+      "sha256": "59ef61f0aa6837dd0277acb8b744514161d1ec21a086f707c8ee95bc0108d101",
+      "size": 12445
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/lighting.js": {
+      "sha256": "3782f6c6f9b164d136121b77f2d14a8e4be96af0bf3de0f07849af13f4e79c4c",
+      "size": 5987
+    },
+    "/Users/yusenthebot/dev/robotforge/src/robotforge/viewer/static/lighting-fit.js": {
+      "sha256": "3f802d81f86e4436569baaba619cab833bab1427093f6dc98ccf21155e52634b",
+      "size": 1926
+    },
+    "/Users/yusenthebot/dev/robotforge/tests/test_viewer_lighting.py": {
+      "sha256": "b5a78eeca1d79509e22f08a63de56bcbe97d2aefdf4e5d6e4eed6a4596de7872",
+      "size": 3352
+    },
+    "/Users/yusenthebot/dev/robotforge/tests/test_viewer_lighting_browser.py": {
+      "sha256": "6e7a8d72377c2ac1c4e4d2fd4653f647be476f2fea61d18c31ead5b0c42f7f47",
+      "size": 8151
+    },
+    "/Users/yusenthebot/dev/robotforge/docs/bench/2026-10-23-lighting-contact.md": {
+      "sha256": "dbd6b60d7181b193cdf7a4c2d769b88bc406e8be76c3e315d56468dcded48426",
+      "size": 8018
+    }
+  },
+  "verification_record": {
+    "path": "verification/c4a4bfc5-3a1f-469a-929f-b984a09b5d08/experiment.json",
+    "id": "c4a4bfc5-3a1f-469a-929f-b984a09b5d08",
+    "status": "completed",
+    "artifacts_verified": 183,
+    "sha256": "b146b12cbd075464aae6b9ac5b93247d92c327d5552d8d00eff7ae4b5bf36f43"
+  }
+}

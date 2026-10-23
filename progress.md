@@ -700,3 +700,28 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - Evidence: docs/bench/2026-10-23-direct-playground.md/.json and ../robotforge-evidence/2026-10-23-playground-entry/; unified completed verification record 5eb68fd7-4bf4-4642-a4e1-60dba2ed12ff verifies all 34 immutable artifacts.
 - Next: continue shared visual/contact readability and creative editing/exploration within the same lightweight budgets.
   The broad visual/playability goal remains active; single-action success-rate tuning remains deferred.
+
+
+## Round 52: shared lighting and moving contact shadows (2026-10-23)
+
+- Aligned direct sunlight with the studio's existing brightest reflection panel and replaced the 20 mm normal bias with bounded texel-scale bias.
+  Kept one 2048-square map, existing light intensities and unchanged materials/physics/interfaces.
+  Body-local cached bounds, guard bands, texel snapping and an idle shortcut fit moving casters and ground receivers beneath tabletop/airborne bodies.
+- Review caught empty-world sun orientation, a floor plane treated as world-local and movable imported mocap bodies cached as fixed.
+  Fixed key initialization, transformed floor planes after streamed poses and fixed-body matrix invalidation.
+  Real GPU regressions also cover rotor envelopes, flex deformation, camera invariance, shadow raster contrast and drive/reset beyond initial coverage.
+  Test harness fixes update the probe camera matrix and pause before reset so the brief reset-time state is observable.
+- Final runtime stayed 3d820d1407dab3407a5108d64396bd4b714a7b0df20553729a18cb70ce69920d throughout accepted A/B, video and verification.
+  Four serial alternating old/current runs retain exact scene/world/initial arrays, all timing samples and zero browser/runtime/GL errors.
+  Observed stronger shelf/table shadows and clearer contact, with unchanged corresponding draw/triangle/texture counts.
+- Validation: 186 focused, 16 real Chrome lighting/creation/gamepad, eight GPU/asset/sensor and seven unchanged canonical framework cases pass; wheel, Ruff, JS syntax and actual CLI/viewer/MCP smoke pass.
+  Independent source and acceptance-evidence review approved.
+  The complete default suite was not rerun; unavailable optional type/security tools and native Windows remain unverified.
+- All 11 existing install/viewer budgets pass: 3637 KB wheel, 163 MB install, 42 packages, 0.51 s CLI first frame, about 60 FPS at DPR 2, 2.50/3.40 ms standard/asset frame time, 132 MB server peak and 5.20% idle CPU.
+  HTTP grows by 7841 B/two resources and wheel by 3179 B.
+  Warm gallery loading is 69.7 ms slower between two-sample averages; temporal flips/Mpix change kitchen wood 594 to 642, grass boundary 30 to 43, stairs 227 to 234 and gallery wood 897 to 822.
+  No overall speed or flicker improvement claim; wood temporal stability remains open.
+- The actual 39.766667 s 1280 x 800/30 FPS video is fully decoded and inspected: six placements, tabletop arm, native 2.375704 m drive/stop beyond initial shadow bounds, joints, shadows off/on, terrain/map/floor and reset.
+  Evidence and immutable verification record: ../robotforge-evidence/2026-10-23-lighting-contact/; report: docs/bench/2026-10-23-lighting-contact.md/.json.
+- Next: creative scene editing/exploration and targeted temporal stability within the same budgets.
+  No individual success-rate tuning, new dependencies, paid Actions, release or deployment; the broader goal remains active.

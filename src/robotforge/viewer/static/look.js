@@ -1,6 +1,7 @@
 // How things look: a studio light environment that every surface reflects, and the surface
 // presets behind the `rf_*` material names the robot and prop builders give their parts.
 import * as THREE from "three";
+import { KEY_POSITION } from "./lighting-fit.js";
 
 // A soft photo studio, built from glowing panels and prefiltered once into an environment map.
 // MuJoCo is Z-up, so "overhead" is +Z here.
@@ -24,7 +25,7 @@ export function studioEnvironment(renderer) {
     mesh.lookAt(0.001, 0.001, 0);
     env.add(mesh);
   };
-  panel(12, 7, [-7, -9, 11], 9, [1, 0.97, 0.92]); // key softbox, front left, warm
+  panel(12, 7, KEY_POSITION, 9, [1, 0.97, 0.92]); // key softbox, front left, warm
   panel(10, 10, [1, 1, 16], 3.2); // overhead fill
   panel(7, 4, [10, 6, 6], 5, [0.9, 0.95, 1]); // rim light, back right, cool
   panel(16, 2.5, [0, 14, 4], 1.6); // a long strip behind, for a clean edge highlight
