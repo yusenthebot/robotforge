@@ -131,6 +131,13 @@ The physically based materials, the environment map, the soft shadows and the to
 Procedural grain and tiled ground use a shared surface gradient that preserves physical distance when drawing resolution changes.
 Grain height scales with feature pitch; ground height uses the existing metre-scale bump setting and a symmetric source-texel gradient.
 This affects shading only, with no extra texture or rendering pass; weave/cloth and the physics geometry remain unchanged.
+Wood uses irregular longitudinal figure and fibres instead of regularly spaced sine bands.
+Generated floors retain the same 256-square tile, eight-board layout and two shared texture channels; source-texel coverage represents narrow two-millimetre joints without snapping them to a wide dark line.
+Object wood follows the longest axis of each mesh's cached local bounding box, including meshes MuJoCo has rotated into a principal-axis frame.
+The direction is a material uniform, so differently oriented boards reuse the same shader program.
+This is one direction per mesh: merged, diagonal or symmetric parts do not gain individual board directions or end-grain semantics.
+Colour detail has more contrast than the smooth height/roughness variation, while the filtered distant wood mean stays at 0.575.
+The wood tile generates two temporary directional noise fields once; it adds no GPU textures, geometry or render passes.
 `tests/test_viewer_js.py` parses the viewer's scripts and `scripts/bench.py` holds its frame time to a budget.
 The bench draws two scenes: the warehouse with a Go2 (a few detailed meshes) and a scene of the engine's robots (`viewer.assets_fps`, `viewer.assets_frame_ms`: a centaur, a 6-joint arm, a humanoid, a dog and a rover).
 Drawn by the engine, those five robots take 358 draw calls and 127k triangles where the same robots drawn before took 234 calls and 104k triangles; both hold 60 fps.

@@ -130,6 +130,18 @@ export function surfaceMaterial(materialName, color, opacity, surfaces) {
   return mat;
 }
 
+// MuJoCo may rotate mesh vertices into a principal-axis frame. Keep fibres along the
+// visible board's length, rather than assuming that its local X is still the long axis.
+export function orientWoodGrain(material, geometry) {
+  const axis = material.userData.woodGrainAxis;
+  if (!axis) return;
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox;
+  const lengths = [max.x - min.x, max.y - min.y, max.z - min.z];
+  const longest = lengths.indexOf(Math.max(...lengths));
+  axis.set(0, 0, 0).setComponent(longest, 1);
+}
+
 // Procedural surface grain, drawn from the mesh's own coordinates like the weave: no UVs and no image. Each kind
 // gives a small height field; its slope tilts the normal (a bump) and a little of it darkens and roughens the
 // valleys. Where one feature is smaller than a pixel the effect fades out instead of shimmering.
@@ -141,7 +153,7 @@ const GRAIN_HEIGHT = {
   brushed: "vec3 grain = rfNoiseSample(vec3(q.x, q.y, q.z * 0.03)) * 0.7 + rfNoiseSample(vec3(q.x * 2.3, q.y * 2.3, q.z * 0.07)) * 0.3;",
   speckle: "vec3 grain = rfNoiseSample(q) * 0.65 + rfNoiseSample(q * 2.7) * 0.35;",
   rubber: "vec3 grain = rfNoiseSample(q) * 0.5 + rfNoiseSample(q * 2.1) * 0.3 + rfNoiseSample(q * 4.4) * 0.2;",
-  wood: "vec3 grain = vec3(0.5, 0.0, 0.0) + 0.3 * rfWaveSample(q.y * 6.28318 + 2.0 * rfNoise(vec3(q.x * 0.12, q.y * 0.5, q.z * 0.3))) + 0.15 * rfNoiseSample(q);",
+  wood: "vec3 along = rfWoodAxis * dot(q, rfWoodAxis), across = q - along; vec3 grain = vec3(0.15, 0.0, 0.0) + 0.6 * rfNoiseSample(along * 0.025 + across * 0.75) + 0.25 * rfNoiseSample(along * 0.1 + across * 2.8);",
   bark: "vec3 grain = rfNoiseSample(vec3(q.xy, q.z * 0.08)) * 0.7 + rfNoiseSample(q * 2.0) * 0.3;",
   stone: "vec3 grain = rfNoiseSample(q) * 0.8 + rfNoiseSample(q * 3.0) * 0.2;",
   knurl:
@@ -171,7 +183,9 @@ function addGrain(mat, kind, scale = 1, strength = 1) {
   const pitch = (GRAIN_PITCH[kind] * scale).toFixed(6);
   const bump = (GRAIN_BUMP[kind] * strength).toFixed(4);
   const shade = (0.22 * strength).toFixed(4);
+  if (kind === "wood") mat.userData.woodGrainAxis = new THREE.Vector3(1, 0, 0);
   mat.onBeforeCompile = (shader) => {
+    if (kind === "wood") shader.uniforms.rfWoodAxis = { value: mat.userData.woodGrainAxis };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vGrainPos;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGrainPos = position;");
@@ -180,6 +194,7 @@ function addGrain(mat, kind, scale = 1, strength = 1) {
         "#include <common>",
         `#include <common>
 varying vec3 vGrainPos;
+${kind === "wood" ? "uniform vec3 rfWoodAxis;" : ""}
 uint rfPcg(uint v) { uint state = v * 747796405u + 2891336453u; uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u; return (word >> 22u) ^ word; }
 float rfHash(vec3 p) { uvec3 q = uvec3(ivec3(floor(p + 0.5)) + 32768); return float(rfPcg(q.x + rfPcg(q.y + rfPcg(q.z)))) / 4294967295.0; }
 float rfNoise(vec3 x) {
@@ -216,7 +231,9 @@ vec2 grainSlope;`
   grainH = grain.x;
   grainSlope = grain.yz;
   // Keep the filtered mean tone at a distance instead of brightening back to the base color.
-  diffuseColor.rgb *= 1.0 - ${shade} * (1.0 - grainH);
+  ${kind === "wood"
+    ? `diffuseColor.rgb *= 1.0 - ${shade} * 0.425 + ${(0.55 * strength).toFixed(4)} * (grainH - 0.575);`
+    : `diffuseColor.rgb *= 1.0 - ${shade} * (1.0 - grainH);`}
 }`
       )
       .replace(
@@ -231,7 +248,7 @@ roughnessFactor = clamp(roughnessFactor + (0.5 - grainH) * ${(0.3 * strength).to
 normal = rfMetricBump(-vViewPosition, normal, grainSlope * ${pitch} * ${bump} * 0.08, faceDirection);`
       );
   };
-  mat.customProgramCacheKey = () => `rf-grain-metric-${kind}-${pitch}-${bump}-${shade}`;
+  mat.customProgramCacheKey = () => `rf-grain-metric-${kind}-${pitch}-${bump}-${shade}${kind === "wood" ? "-fibres-v3" : ""}`;
 }
 
 // A 2x2 twill drawn from the mesh's own coordinates: no UVs and no texture, so it costs a few

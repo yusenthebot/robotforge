@@ -9,7 +9,7 @@ import { initTraining, trainingState, trainingUpdate } from "./training.js";
 import { initSensors, sensorsFrame, sensorsScene, sensorsSelect, sensorsShow, sensorsState, sensorsUpdate } from "./sensors.js";
 import { escapeHtml, t, tOr, translatePage } from "./i18n.js";
 import { initLessons, lessonActive, lessonDriveSpec, lessonCamera, lessonFrame, lessonPlotAxes, lessonScene, lessonState, lessonTitle, lessonUpdate } from "./lesson.js";
-import { surfaceMaterial } from "./look.js";
+import { orientWoodGrain, surfaceMaterial } from "./look.js";
 import { createLighting } from "./lighting.js";
 import { groundMaterial, groundPreview, groundStyle } from "./ground-look.js";
 import { SURFACE_GEOM, leaveWater, makeWater, stillLevel, waterFrame, waterLook } from "./water.js";
@@ -422,6 +422,7 @@ async function installScene(desc, request) {
       const mat = look
         ? groundLook(geom, look)
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces);
+      orientWoodGrain(mat, g);
       if (g.userData.vertexColors) mat.vertexColors = true;
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
