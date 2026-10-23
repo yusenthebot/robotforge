@@ -679,3 +679,24 @@ Native Windows and the prior conveyor failure remain pending; publishing/licensi
 - Evidence: docs/bench/2026-10-23-visual-playability.md/.json and ../robotforge-evidence/2026-10-23-visual-playability/.
   No new dependencies, physics/controller/interface changes, individual manipulation tuning, release or paid Actions.
   Next: coherent lighting/contact readability, temporal stability and a complete easy-to-start scene play loop against this baseline.
+
+
+## Round 51: directly create, place and play (2026-10-23)
+
+- Empty worlds and the Robots drawer now offer four illustrated local starters, with click/touch placement on ground or a tabletop, automatic selection after reply/scene/poses, existing control/map/terrain/reset reuse and EN/ZH copy.
+- The viewer action validates an allowlist, finite bounded surface coordinates and version; blocks lessons/plain models/owned execution; serializes unique naming; checks saved and current occupancy atomically before committing through the existing world edit path.
+- What failed during verification: raw surface Z embedded mobile roots; stale preflight poses could allow a moving robot into the target; entering placement suppressed the stop message and let arm pad jogging resume; XYZ positions broke feature terrain and stopped following new ground; far placement targets left the tight initial view.
+  Fixed support offsets, final live-state collision checks and store/generation guards, selected-robot stopping and pad suppression, ground XY/table XYZ classification, XY feature extraction and retained wheel/right-drag camera input.
+  The first keyboard test also omitted CDP Enter text, so it generated key events without native button activation; corrected the input harness and retained native focus/activation checks.
+- Final verification: 184 focused tests including 40 new boundary/terrain/tabletop cases; 22 actual Chrome EN/ZH creation, keyboard/gamepad and framing/layout cases; seven unchanged canonical framework cases; wheel, Ruff, JS syntax and actual CLI/viewer/MCP smoke pass.
+  Independent Python/source/security review approved.
+  The complete default suite was not rerun; prior full-suite results remain historical.
+- All 11 existing install/viewer budgets pass without relaxation: 3633 KB wheel, 163 MB runtime, 42 packages, 0.56 s CLI start-to-frame and about 60 FPS at DPR 2.
+  Wheel grows by 6,112 B; fresh empty HTTP by 12,674 B and one request.
+  Single fresh-profile timing observations and the laptop p95 increase remain in the report, without claiming general speed improvement.
+- Actual native videos: desktop 33.20 s and phone 11.333 s, fully decoded and contact-sheet/full-frame inspected; eight placements including a real tabletop arm, rover drive/stop over 1.15 m, joint control, stairs/hills/flat, desk map, floor and reset; no JS/runtime/GL errors.
+  Frozen baseline/current empty world and streamed scenes match except the additive template catalog.
+  Source stayed 55a07c1465a1bfca77322195ef4072cae93c4bf364ea325c42cefcf972d910e8 throughout accepted final runs.
+- Evidence: docs/bench/2026-10-23-direct-playground.md/.json and ../robotforge-evidence/2026-10-23-playground-entry/; unified completed verification record 5eb68fd7-4bf4-4642-a4e1-60dba2ed12ff verifies all 34 immutable artifacts.
+- Next: continue shared visual/contact readability and creative editing/exploration within the same lightweight budgets.
+  The broad visual/playability goal remains active; single-action success-rate tuning remains deferred.

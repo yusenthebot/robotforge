@@ -220,6 +220,8 @@ class Playground:
 
         def world_request(msg: dict[str, Any]) -> dict[str, Any]:
             action = msg.get("action")
+            if action == "add_robot":
+                return self.add_robot_for_play(msg)
             if action == "scene":
                 if msg.get("preset") == "empty":
                     return _short(self.clear_scene())
@@ -409,6 +411,13 @@ class Playground:
         opened = self._load_world(compiled)
         opened["notes"].extend(plugin_notes(store.dir))  # said once, as the world opens, not with every edit after
         return opened
+
+    @_one_edit_at_a_time
+    def add_robot_for_play(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Place an allowlisted local starter from the viewer without overwriting an existing robot."""
+        from robotforge.viewer.creation import place
+
+        return place(self, message)
 
     @_one_edit_at_a_time
     def add_robot(
@@ -1294,7 +1303,7 @@ class Playground:
             raise PlaygroundError(str(exc)) from exc
         world = self._require_store().load()
         entry = next((r for r in world.robots if r.name == robot), None)
-        x, y = entry.pos if entry is not None else (0.0, 0.0)
+        x, y = entry.pos[:2] if entry is not None else (0.0, 0.0)
         yaw = entry.yaw if entry is not None else 0.0
         ahead = FEATURE_GAP + length / 2
         heading = np.radians(yaw)
@@ -1857,7 +1866,10 @@ def _limit_dict(d: dict) -> dict:
 
 def viewer_catalog() -> dict[str, Any]:
     """What the viewer's World panel offers: scene presets, ground styles with their colors, terrain types."""
+    from robotforge.viewer.creation import catalog
+
     return {
+        "robot_templates": catalog(),
         "scenes": [{"name": s["name"], "title": s["title"], "summary": s["summary"]} for s in scenes.catalog()],
         "grounds": {name: [round(c, 3) for c in style.rgba[:3]] for name, style in terrain.STYLES.items()},
         "terrains": ["flat", *(t for t in terrain.TYPES if t != "basin")],  # a hollow needs water: the lake scene
