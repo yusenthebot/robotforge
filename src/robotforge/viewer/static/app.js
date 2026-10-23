@@ -115,6 +115,7 @@ let bodyNodes = []; // THREE.Group per body, index = MuJoCo body id
 let worldRoot = null;
 let firstScene = true;
 let posedVersion = 0;
+let renderedVersion = 0; // submitted by the normal main-view render, not a presentation/GPU-completion signal
 let pendingFit = null; // "camera" | "lights" | null
 let showCollision = false;
 let water = null; // the scene's water (water.js), or null
@@ -355,11 +356,31 @@ async function applyScene(desc) {
   const request = ++sceneRequest;
   loadingScene = true;
   posedVersion = 0;
+  renderedVersion = 0;
+  $("loading").hidden = false;
+  $("loading").querySelector(".spinner").hidden = false;
+  $("loading").querySelector("span[data-i18n]").textContent = t("loading_scene");
+  $("scene-retry").hidden = true;
+  $("scene-retry").disabled = false;
+  updateEmpty();
   if (pendingRobotInfo?.version <= desc.version) pendingRobotInfo = null;
+  try {
+    await installScene(desc, request);
+  } catch (err) {
+    if (request !== sceneRequest) return;
+    loadingScene = true;
+    console.warn("robotforge: scene load failed", err);
+    $("loading").querySelector(".spinner").hidden = true;
+    $("loading").querySelector("span[data-i18n]").textContent = t("scene_load_failed");
+    $("scene-retry").hidden = false;
+  }
+}
+
+async function installScene(desc, request) {
   let buffer = new ArrayBuffer(0);
   if (desc.meshes.length > 0 || (desc.hfields || []).length > 0) {
     const res = await fetch(`mesh/${desc.version}.bin`);
-    if (!res.ok) return; // a newer scene is already on its way
+    if (!res.ok) throw new Error(`mesh request returned ${res.status}`);
     buffer = await res.arrayBuffer();
   }
   if (request !== sceneRequest) return; // another scene or connection superseded this mesh fetch
@@ -650,7 +671,7 @@ function refitSettledRig() {
 }
 
 function applyPoses(buffer) {
-  if (!sceneDesc) return;
+  if (!sceneDesc || loadingScene) return; // still acknowledge frames while a newer mesh is being fetched
   const f = new Float32Array(buffer);
   const nb = sceneDesc.nbody;
   if (f.length !== 1 + 7 * nb) return; // frame from a different model version
@@ -684,10 +705,13 @@ function applyPoses(buffer) {
     }
     fitWhenPosed = null;
     pendingFit = null;
-    $("loading").hidden = true;
   }
   posedVersion = sceneDesc.version;
   resolveCreatedRobot();
+}
+
+function sceneReadyToDraw() {
+  return sceneDesc && !loadingScene && posedVersion === sceneDesc.version;
 }
 
 // ---------------------------------------------------------------- camera moves
@@ -873,7 +897,7 @@ function setPointer(e) {
 }
 
 function pickBody(e) {
-  if (!worldRoot || !sceneDesc) return null;
+  if (!worldRoot || !sceneReadyToDraw() || renderedVersion !== sceneDesc.version) return null;
   setPointer(e);
   const hits = raycaster.intersectObjects(worldRoot.children, true);
   for (const h of hits) {
@@ -949,6 +973,7 @@ canvas.addEventListener("pointercancel", endDrag);
 // so is a wall's side: only a face that looks up (the floor, a ramp, a table top) is.
 canvas.addEventListener("dblclick", (e) => {
   if (creator.active() || performance.now() < creationClickUntil) return;
+  if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) return;
   const robot = driveTarget();
   if (!robot || lessonActive() || !worldRoot || !sceneDesc) return;
   setPointer(e);
@@ -1010,6 +1035,7 @@ function connect() {
   ws.onclose = () => {
     sceneRequest++;
     loadingScene = true;
+    renderedVersion = 0;
     setConnected(false);
     for (const p of pending.values()) p.reject(new Error(t("disconnected")));
     pending.clear();
@@ -1038,6 +1064,12 @@ function connect() {
     else if (msg.type === "error") toast(msg.message);
   };
 }
+
+// Reconnect on explicit retry so the server sends its latest scene, not a possibly expired mesh version.
+$("scene-retry").addEventListener("click", () => {
+  $("scene-retry").disabled = true;
+  if (ws?.readyState === WebSocket.OPEN) ws.close();
+});
 
 // ---------------------------------------------------------------- robots and selection
 
@@ -1888,7 +1920,7 @@ scene3.add(creationMarker);
 
 function updateEmpty() {
   $("empty").hidden = !(sceneDesc?.world && robots.length === 0) || creator.active()
-    || !$("world-panel").hidden || !$("drawer").hidden || lessonActive();
+    || !$("loading").hidden || !$("world-panel").hidden || !$("drawer").hidden || lessonActive();
 }
 
 $("empty-add").addEventListener("click", () => { setDrawer(true); creator.open(); });
@@ -1914,6 +1946,10 @@ function cancelCreation(force = false) {
 }
 
 function creationPoint(e) {
+  if (!sceneReadyToDraw() || renderedVersion !== sceneDesc.version) {
+    creator.point(null); creationSurface = null; creationMarker.visible = false;
+    updateCreationPreview(); return;
+  }
   setPointer(e);
   const hit = worldRoot && raycaster.intersectObjects(worldRoot.children, true).find((h) => h.object.visible);
   const body = hit?.object.userData.body;
@@ -2340,22 +2376,35 @@ function healCamera() {
 
 function loop() {
   requestAnimationFrame(loop);
-  healCamera();
+  const ready = sceneReadyToDraw();
   updateViewShift();
-  refitSettledRig();
-  updateTween();
-  updateFollow();
+  if (ready) {
+    healCamera();
+    refitSettledRig();
+    updateTween();
+    updateFollow();
+  }
   controls.update();
-  updateRing();
-  updatePathWidths();
-  spinRotors();
-  refreshDragVisual();
-  lessonFrame();
-  if (water) waterFrame(water, latestTime, camera, scene3);
-  sensorsFrame();
+  if (ready) {
+    updateRing();
+    updatePathWidths();
+    spinRotors();
+    refreshDragVisual();
+    lessonFrame();
+    if (water) waterFrame(water, latestTime, camera, scene3);
+    sensorsFrame();
+  }
   mapFrame();
   padFrame();
+  // Before poses, fog/light/camera variants are still provisional. Drawing them compiles work twice.
+  // Keep the initial background and UI alive, then draw the complete posed scene once it is available.
+  if (sceneDesc && (!ready || !hasSize())) return;
   renderer.render(scene3, camera);
+  if (ready && renderedVersion !== sceneDesc.version && !renderer.getContext().isContextLost()) {
+    renderedVersion = sceneDesc.version;
+    $("loading").hidden = true;
+    updateEmpty();
+  }
   frames++;
   const now = performance.now();
   if (now - fpsT0 > 500) {
@@ -2365,6 +2414,12 @@ function loop() {
     fpsT0 = now;
   }
 }
+
+canvas.addEventListener("webglcontextlost", () => {
+  renderedVersion = 0;
+  $("loading").hidden = false;
+  updateEmpty();
+});
 
 initLessons({
   scene: scene3,
@@ -2472,6 +2527,7 @@ loop();
 window.__robotforge = {
   get scene() { return sceneDesc; },
   get time() { return latestTime; },
+  get renderedVersion() { return renderedVersion; },
   bodyPosition: (id) => bodyNodes[id]?.position.toArray(),
   pick: (clientX, clientY) => pickBody({ clientX, clientY })?.body ?? null,
   cameraTarget: () => controls.target.toArray(),
@@ -2481,8 +2537,10 @@ window.__robotforge = {
   },
   // Render now and read the frame back (RGBA, bottom row first), for scripted image checks.
   pixels: () => {
-    controls.update();
-    renderer.render(scene3, camera);
+    if (sceneReadyToDraw() && hasSize()) {
+      controls.update();
+      renderer.render(scene3, camera);
+    }
     const gl = renderer.getContext();
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;

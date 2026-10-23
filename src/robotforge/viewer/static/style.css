@@ -739,6 +739,8 @@ input[type="range"]::-moz-range-thumb {
   top: 40%;
 }
 
+#scene-retry { pointer-events: auto; white-space: nowrap; }
+
 .center-note.empty strong { color: var(--ink); font-size: 14px; }
 
 .center-note.empty .primary-button { margin-top: 10px; }
