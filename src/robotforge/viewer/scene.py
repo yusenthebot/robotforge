@@ -13,6 +13,7 @@ import numpy as np
 
 from robotforge.design.terrain import STYLES, material_name
 from robotforge.sim import water as water_model
+from robotforge.viewer import textures as model_textures
 
 # MuJoCo's default geom rgba; when a geom keeps it and has a material, the material color wins.
 _DEFAULT_RGBA = np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32)
@@ -42,6 +43,8 @@ class MeshPayload:
     blob: bytes
     entries: list[dict]  # per mesh: {"id", "offset", "count"} in float32 units, count = vertices
     hfields: list[dict] = field(default_factory=list)  # per hfield: {"id", "offset", "nrow", "ncol", "size"}
+    textures: list[dict] = field(default_factory=list)
+    texture_blob: bytes = b""
 
 
 def _name(model: mujoco.MjModel, obj: mujoco.mjtObj, idx: int) -> str:
@@ -71,6 +74,8 @@ def _material_colors(model: mujoco.MjModel) -> dict[int, np.ndarray]:
         if tex < 0 or int(model.tex_type[tex]) != int(mujoco.mjtTexture.mjTEXTURE_2D):
             continue
         adr, channels = int(model.tex_adr[tex]), int(model.tex_nchannel[tex])
+        if channels not in (3, 4):
+            continue  # encoded texture formats are not RGB pixels
         size = int(model.tex_width[tex]) * int(model.tex_height[tex]) * channels
         pixels = model.tex_data[adr : adr + size].reshape(-1, channels)[::TEXTURE_SAMPLE, :3]
         colors[mat] = pixels.mean(axis=0) / 255.0
@@ -86,20 +91,51 @@ def _mesh_textures(model: mujoco.MjModel) -> dict[int, int]:
         if int(model.geom_type[g]) != mujoco.mjtGeom.mjGEOM_MESH or mat < 0:
             continue
         tex = int(model.mat_texid[mat, role])
-        if tex >= 0 and int(model.tex_type[tex]) == mujoco.mjtTexture.mjTEXTURE_2D:
+        if (
+            tex >= 0
+            and int(model.tex_type[tex]) == mujoco.mjtTexture.mjTEXTURE_2D
+            and int(model.tex_nchannel[tex]) in (3, 4)
+        ):
             found.setdefault(int(model.geom_dataid[g]), tex)
     return found
 
 
-def _texture_colors(model: mujoco.MjModel, mesh_id: int, tex: int) -> np.ndarray | None:
-    """Linear RGB per expanded vertex, read from the texture at each vertex's texture coordinate, or None when the
-    mesh has none. The browser draws no textures, so a textured model (Skydio X2) showed as one flat white shape."""
+def _mesh_uvs(model: mujoco.MjModel, mesh_id: int) -> np.ndarray | None:
     count = int(model.mesh_texcoordnum[mesh_id])
     if count == 0:
         return None
     f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
-    uv = model.mesh_texcoord[model.mesh_texcoordadr[mesh_id] + model.mesh_facetexcoord[f0 : f0 + nf].ravel()]
+    indices = model.mesh_facetexcoord[f0 : f0 + nf].ravel()
+    if np.any(indices < 0) or np.any(indices >= count):
+        return None
+    uv = model.mesh_texcoord[model.mesh_texcoordadr[mesh_id] + indices]
+    return uv if np.isfinite(uv).all() else None
+
+
+def _geom_texture(model: mujoco.MjModel, geom: int) -> int:
+    mat = int(model.geom_matid[geom])
+    if mat < 0:
+        return -1
+    return int(model.mat_texid[mat, int(mujoco.mjtTextureRole.mjTEXROLE_RGB)])
+
+
+def _texture_repeat(model: mujoco.MjModel, geom: int) -> list[float]:
+    mat = int(model.geom_matid[geom])
+    repeat = np.where(model.mat_texrepeat[mat] > 0, model.mat_texrepeat[mat], 1.0)
+    # Match MuJoCo 3.15's explicit-UV texture matrix, including its size-relative option.
+    if model.mat_texuniform[mat]:
+        repeat *= np.where(model.geom_size[geom, :2] > 0, model.geom_size[geom, :2], 1.0)
+    return [float(v) for v in repeat]
+
+
+def _texture_colors(model: mujoco.MjModel, mesh_id: int, tex: int) -> np.ndarray | None:
+    """Approximate linear RGB per expanded vertex for legacy clients or unsupported native image bindings."""
+    uv = _mesh_uvs(model, mesh_id)
+    if uv is None:
+        return None
     w, h, ch = int(model.tex_width[tex]), int(model.tex_height[tex]), int(model.tex_nchannel[tex])
+    if ch not in (3, 4):
+        return None
     image = model.tex_data[model.tex_adr[tex] : model.tex_adr[tex] + w * h * ch].reshape(h, w, ch)
     cols = np.clip(np.rint(np.mod(uv[:, 0], 1.0) * (w - 1)), 0, w - 1).astype(int)
     rows = np.clip(np.rint(np.mod(uv[:, 1], 1.0) * (h - 1)), 0, h - 1).astype(int)
@@ -114,6 +150,16 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
     entries: list[dict] = []
     offset = 0
     textures = _mesh_textures(model)
+    uvs = {mesh: uv for mesh in textures if (uv := _mesh_uvs(model, mesh)) is not None}
+    native = model_textures.build(
+        model,
+        {
+            tex
+            for g in range(model.ngeom)
+            if int(model.geom_type[g]) == mujoco.mjtGeom.mjGEOM_MESH and int(model.geom_dataid[g]) in uvs
+            if (tex := _geom_texture(model, g)) >= 0
+        },
+    )
     for mesh_id in range(model.nmesh):
         v0, nv = model.mesh_vertadr[mesh_id], model.mesh_vertnum[mesh_id]
         f0, nf = model.mesh_faceadr[mesh_id], model.mesh_facenum[mesh_id]
@@ -135,6 +181,11 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
             entries[-1]["colors"] = offset
             chunks.append(colors.ravel())
             offset += colors.size
+        if native.entries and mesh_id in uvs:
+            uv = uvs[mesh_id].astype(np.float32)
+            entries[-1]["uv"] = offset
+            chunks.append(uv.ravel())
+            offset += uv.size
     hfields = []
     for h in range(model.nhfield):
         nrow, ncol = int(model.hfield_nrow[h]), int(model.hfield_ncol[h])
@@ -145,15 +196,21 @@ def build_mesh_payload(model: mujoco.MjModel) -> MeshPayload:
         chunks.append(grid)
         offset += grid.size
     blob = np.concatenate(chunks).tobytes() if chunks else b""
-    return MeshPayload(blob=blob, entries=entries, hfields=hfields)
+    return MeshPayload(blob=blob, entries=entries, hfields=hfields, textures=native.entries, texture_blob=native.blob)
 
 
 def describe(
-    model: mujoco.MjModel, version: int, mesh_entries: list[dict], hfield_entries: list[dict] | None = None
+    model: mujoco.MjModel,
+    version: int,
+    mesh_entries: list[dict],
+    hfield_entries: list[dict] | None = None,
+    texture_entries: list[dict] | None = None,
 ) -> dict:
     """JSON-ready scene description for the viewer."""
     textured = _material_colors(model)
     painted = {int(entry["id"]) for entry in mesh_entries if "colors" in entry}  # colored per vertex already
+    uv_meshes = {int(entry["id"]) for entry in mesh_entries if "uv" in entry}
+    texture_ids = {alias: entry["id"] for entry in texture_entries or [] for alias in entry["aliases"]}
     geoms = []
     for g in range(model.ngeom):
         gtype = _GEOM_TYPE_NAMES.get(int(model.geom_type[g]))
@@ -178,6 +235,15 @@ def describe(
                 "group": int(model.geom_group[g]),
             }
         )
+        if texture_entries and gtype == "mesh":
+            tex = _geom_texture(model, g)
+            native_id = texture_ids.get(tex) if int(model.geom_dataid[g]) in uv_meshes else None
+            geoms[-1]["vertex_colors"] = int(model.geom_dataid[g]) in painted and tex >= 0 and native_id is None
+            if native_id is not None:
+                geoms[-1]["texture"] = {
+                    "id": native_id,
+                    "repeat": _texture_repeat(model, g),
+                }
 
     actuators = []
     for a in range(model.nu):
@@ -213,6 +279,7 @@ def describe(
         "flexes": _flexes(model),
         "meshes": mesh_entries,
         "hfields": hfield_entries or [],
+        **({"textures": texture_entries} if texture_entries else {}),
         "grounds": _ground_looks(model),
         "surfaces": _surfaces(model),
         "water": water.describe() if (water := water_model.decode(model)) is not None else None,

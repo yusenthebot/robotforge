@@ -326,9 +326,12 @@ function buildMeshGeometries(desc, buffer) {
     if (hasNormals) g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
     else g.computeVertexNormals();
     if (entry.colors !== undefined) {
-      // A textured mesh: its texture's colors per vertex (the page draws no textures; see scene.py)
+      // Retain approximate vertex colors for legacy or unsupported image bindings.
       g.setAttribute("color", new THREE.BufferAttribute(floats.subarray(entry.colors, entry.colors + 3 * n), 3));
       g.userData.vertexColors = true;
+    }
+    if (entry.uv !== undefined) {
+      g.setAttribute("uv", new THREE.BufferAttribute(floats.subarray(entry.uv, entry.uv + 2 * n), 2));
     }
     out.set(entry.id, g);
   }
@@ -337,13 +340,15 @@ function buildMeshGeometries(desc, buffer) {
 
 function disposeWorld() {
   if (!worldRoot) return;
+  const textures = new Set();
   worldRoot.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
-      for (const tex of new Set([o.material.map, o.material.bumpMap, o.material.roughnessMap])) tex?.dispose();
+      for (const tex of [o.material.map, o.material.bumpMap, o.material.roughnessMap]) if (tex) textures.add(tex);
       o.material.dispose();
     }
   });
+  for (const tex of textures) tex.dispose();
   scene3.remove(worldRoot);
   lighting.bind(null);
   worldRoot = null;
@@ -378,13 +383,25 @@ async function applyScene(desc) {
 }
 
 async function installScene(desc, request) {
+  const textureLoad = desc.textures?.length ? Promise.all([
+    import("./model-textures.js"),
+    fetch(`texture/${desc.version}.bin`).then(async (res) => {
+      if (!res.ok) throw new Error(`texture request returned ${res.status}`);
+      return res.arrayBuffer();
+    }),
+  ]) : Promise.resolve(null);
   let buffer = new ArrayBuffer(0);
-  if (desc.meshes.length > 0 || (desc.hfields || []).length > 0) {
-    const res = await fetch(`mesh/${desc.version}.bin`);
-    if (!res.ok) throw new Error(`mesh request returned ${res.status}`);
-    buffer = await res.arrayBuffer();
-  }
+  const meshLoad = desc.meshes.length > 0 || (desc.hfields || []).length > 0
+    ? fetch(`mesh/${desc.version}.bin`).then(async (res) => {
+      if (!res.ok) throw new Error(`mesh request returned ${res.status}`);
+      return res.arrayBuffer();
+    }) : Promise.resolve(buffer);
+  const [meshBuffer, textureData] = await Promise.all([meshLoad, textureLoad]);
+  buffer = meshBuffer;
   if (request !== sceneRequest) return; // another scene or connection superseded this mesh fetch
+  const textureFor = textureData ? textureData[0].modelTextures(desc.textures, textureData[1], renderer.capabilities.getMaxAnisotropy()) : () => null;
+  // Validate all bindings before releasing the current world, so a failed load remains retryable.
+  for (const geom of desc.geoms) if (geom.texture) textureFor(geom.texture);
   const meshGeometries = buildMeshGeometries(desc, buffer);
   const floats = new Float32Array(buffer);
   const grounds = desc.grounds || {};
@@ -423,7 +440,12 @@ async function installScene(desc, request) {
         ? groundLook(geom, look)
         : surfaceMaterial(geom.material, rgbaColor(geom.rgba), geom.rgba[3], desc.surfaces);
       orientWoodGrain(mat, g);
-      if (g.userData.vertexColors) mat.vertexColors = true;
+      const texture = textureFor(geom.texture);
+      if (texture) {
+        mat.map = texture;
+        if (texture.userData.modelAlpha) { mat.transparent = true; mat.depthWrite = false; }
+      }
+      mat.vertexColors = !texture && (geom.vertex_colors ?? g.userData.vertexColors ?? false);
       if (look && geom.type === "box") {
         // Terrain blocks (stairs, ramps, stones) share the ground's surface, tiled in meters on every face:
         // one repeat for the whole box squeezed the pattern on thin faces (risers, sides) into shimmer.

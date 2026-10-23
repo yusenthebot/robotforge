@@ -1,0 +1,2056 @@
+{
+  "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+  "baseline_commit": "e6d0fc2cb9a4c9853bfccb412939a6ee325490bc",
+  "baseline_runtime_sha256": "ee36b9a8de315fb9debe8fbfb8b070a59bc0720fec145796cfb0d3558ffc4799",
+  "counts": {
+    "focused-default": {
+      "passed": 486,
+      "skipped": 0
+    },
+    "browser-full": {
+      "passed": 113,
+      "skipped": 0
+    },
+    "slow-assets-sensors": {
+      "passed": 8,
+      "skipped": 0
+    },
+    "framework": 7
+  },
+  "distinct_pytest_cases": 607,
+  "package": {
+    "baseline_wheel_sha256": "c185bf2cca693e607965a645b2489978df07a8ffcf48f9d46da5a17b22fba05a",
+    "wheel_sha256": "2c435b52a0e4e039f95a7cdee85a27d4f2a7f9709d68084314248ff0797ee9bb",
+    "baseline_bytes": 3741757,
+    "bytes": 3745663,
+    "delta_bytes": 3906,
+    "changed_runtime_members": [
+      "viewer/scene.py",
+      "viewer/server.py",
+      "viewer/static/app.js",
+      "viewer/static/model-textures.js",
+      "viewer/textures.py"
+    ],
+    "package_source_equality": true,
+    "optional_unavailable": [
+      "mypy",
+      "pyright",
+      "bandit",
+      "pip-audit"
+    ]
+  },
+  "static": {
+    "runtime": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+    "snapshot_files": 559,
+    "source_snapshot_equality": true,
+    "js_modules": [
+      "src/robotforge/viewer/static/app.js",
+      "src/robotforge/viewer/static/cloth.js",
+      "src/robotforge/viewer/static/creation.js",
+      "src/robotforge/viewer/static/flowview.js",
+      "src/robotforge/viewer/static/gamepad.js",
+      "src/robotforge/viewer/static/ground-look.js",
+      "src/robotforge/viewer/static/i18n.js",
+      "src/robotforge/viewer/static/lesson.js",
+      "src/robotforge/viewer/static/lighting-fit.js",
+      "src/robotforge/viewer/static/lighting.js",
+      "src/robotforge/viewer/static/look.js",
+      "src/robotforge/viewer/static/mapview.js",
+      "src/robotforge/viewer/static/model-textures.js",
+      "src/robotforge/viewer/static/padmap.js",
+      "src/robotforge/viewer/static/placement-preview.js",
+      "src/robotforge/viewer/static/plot.js",
+      "src/robotforge/viewer/static/rotors.js",
+      "src/robotforge/viewer/static/sensorkit.js",
+      "src/robotforge/viewer/static/sensorpicture.js",
+      "src/robotforge/viewer/static/sensors.js",
+      "src/robotforge/viewer/static/training.js",
+      "src/robotforge/viewer/static/water.js"
+    ],
+    "diff_check": true,
+    "scoped_secret_debug_audit": {
+      "secret": [],
+      "debug": []
+    },
+    "type_and_security_tools": "mypy, pyright, bandit, pip-audit unavailable; not installed or run"
+  },
+  "stages": [
+    {
+      "name": "build",
+      "command": [
+        "uv",
+        "build",
+        "--wheel",
+        "--out-dir",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/wheel"
+      ],
+      "exit_code": 0,
+      "seconds": 0.14561933401273564,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "ruff-check",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "ruff",
+        "check",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.06911024998407811,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "ruff-format",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.06822350001311861,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "focused-default",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "tests/test_capabilities.py",
+        "tests/test_import_arm.py",
+        "tests/test_importer.py",
+        "tests/test_importer_parts.py",
+        "tests/test_importer_tools.py",
+        "tests/test_method_contracts.py",
+        "tests/test_modes.py",
+        "tests/test_scene.py",
+        "tests/test_script_viewer_contracts.py",
+        "tests/test_task_contracts.py",
+        "tests/test_training_contracts.py",
+        "tests/test_viewer_assets_browser.py",
+        "tests/test_viewer_build_flow_browser.py",
+        "tests/test_viewer_creation.py",
+        "tests/test_viewer_creation_browser.py",
+        "tests/test_viewer_fog_browser.py",
+        "tests/test_viewer_gamepad.py",
+        "tests/test_viewer_js.py",
+        "tests/test_viewer_layout.py",
+        "tests/test_viewer_lighting.py",
+        "tests/test_viewer_lighting_browser.py",
+        "tests/test_viewer_material_filtering_browser.py",
+        "tests/test_viewer_native_textures_browser.py",
+        "tests/test_viewer_object_edit.py",
+        "tests/test_viewer_object_edit_browser.py",
+        "tests/test_viewer_objects.py",
+        "tests/test_viewer_objects_browser.py",
+        "tests/test_viewer_padmap.py",
+        "tests/test_viewer_sensors.py",
+        "tests/test_viewer_sensors_browser.py",
+        "tests/test_viewer_server.py",
+        "tests/test_viewer_startup_browser.py",
+        "tests/test_viewer_surface_normals_browser.py",
+        "tests/test_viewer_textures.py",
+        "tests/test_viewer_touch_build_browser.py",
+        "tests/test_viewer_training.py",
+        "tests/test_viewer_wood_browser.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/verification-logs/focused-default.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 37.96393412500038,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "browser-full",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "browser",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/verification-logs/browser-full.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 438.182791374973,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "slow-assets-sensors",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "-q",
+        "-m",
+        "slow",
+        "tests/test_viewer_assets_browser.py",
+        "tests/test_viewer_sensors_browser.py",
+        "--junitxml=/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/verification-logs/slow-assets-sensors.xml"
+      ],
+      "exit_code": 0,
+      "seconds": 30.11253316697548,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "framework",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/framework_regression.py",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/framework",
+        "--baseline",
+        "docs/bench/framework-regression-v1.json"
+      ],
+      "exit_code": 0,
+      "seconds": 1.6258025410061236,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "smoke",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/smoke.py"
+      ],
+      "exit_code": 0,
+      "seconds": 3.505405125004472,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "installed-smoke",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/install_smoke.py"
+      ],
+      "exit_code": 0,
+      "seconds": 21.600805416004732,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "budget",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "scripts/bench.py",
+        "--only",
+        "install",
+        "viewer",
+        "--save",
+        "--out",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/budget",
+        "--shots",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/budget-shots"
+      ],
+      "exit_code": 0,
+      "seconds": 26.358753541018814,
+      "runtime_sha256": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "frozen_inputs_unchanged": true
+    }
+  ],
+  "native_scene_measurements": {
+    "x2": [
+      {
+        "label": "A1",
+        "first_fresh_ms": 219.40000000596046,
+        "first_warm_ms": 125.80000001192093,
+        "first_interaction_ms": 31.19999998807907,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.0024243750085588545,
+            "process_cpu_seconds": 0.0020200000000000218
+          }
+        ],
+        "warm_rebuild_seconds": 0.04025416600052267,
+        "mesh_bytes": 275832,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 1562062,
+            "resource_encoded": 1535087,
+            "resource_decoded": 1535087
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 299528,
+            "resource_encoded": 275832,
+            "resource_decoded": 275832
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.5,
+          "top": 1.199999988079071,
+          "low": 1.399999976158142
+        },
+        "draw_p95_ms": {
+          "wide": 2,
+          "top": 1.600000023841858,
+          "low": 2
+        },
+        "raf_fps": {
+          "wide": 60,
+          "top": 60,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "top": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          }
+        },
+        "chrome_tree_rss_kib": 1862288,
+        "harness_tree_rss_kib": 2010672
+      },
+      {
+        "label": "B1",
+        "first_fresh_ms": 188.90000000596046,
+        "first_warm_ms": 120,
+        "first_interaction_ms": 30.400000005960464,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.010262916999636218,
+            "process_cpu_seconds": 0.009871999999999992
+          }
+        ],
+        "warm_rebuild_seconds": 0.05342054201173596,
+        "mesh_bytes": 337128,
+        "image_gzip_bytes": 126978,
+        "image_decoded_bytes": 1048576,
+        "images": 1,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 1754153,
+            "resource_encoded": 1726716,
+            "resource_decoded": 2648314
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 488138,
+            "resource_encoded": 464106,
+            "resource_decoded": 1385704
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.5,
+          "top": 1.2000000029802322,
+          "low": 1.4000000059604645
+        },
+        "draw_p95_ms": {
+          "wide": 2.0999999940395355,
+          "top": 1.5999999940395355,
+          "low": 2.0999999940395355
+        },
+        "raf_fps": {
+          "wide": 60.00393468424159,
+          "top": 60.00393468424159,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "top": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "low": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          }
+        },
+        "chrome_tree_rss_kib": 1876528,
+        "harness_tree_rss_kib": 2027504
+      },
+      {
+        "label": "A2",
+        "first_fresh_ms": 210.69999998807907,
+        "first_warm_ms": 122.09999999403954,
+        "first_interaction_ms": 31.400000005960464,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.00256829199497588,
+            "process_cpu_seconds": 0.002071000000000045
+          }
+        ],
+        "warm_rebuild_seconds": 0.045923792000394315,
+        "mesh_bytes": 275832,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 1562062,
+            "resource_encoded": 1535087,
+            "resource_decoded": 1535087
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 299528,
+            "resource_encoded": 275832,
+            "resource_decoded": 275832
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.5999999940395355,
+          "top": 1.5999999940395355,
+          "low": 1.4000000059604645
+        },
+        "draw_p95_ms": {
+          "wide": 2.2000000178813934,
+          "top": 2,
+          "low": 2.2000000178813934
+        },
+        "raf_fps": {
+          "wide": 60.00393468424158,
+          "top": 60.00393468424159,
+          "low": 60.00983767830792
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "top": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          }
+        },
+        "chrome_tree_rss_kib": 1865504,
+        "harness_tree_rss_kib": 2015104
+      },
+      {
+        "label": "B2",
+        "first_fresh_ms": 203.69999998807907,
+        "first_warm_ms": 120.5,
+        "first_interaction_ms": 32.400000005960464,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.009908500011079013,
+            "process_cpu_seconds": 0.009919000000000011
+          }
+        ],
+        "warm_rebuild_seconds": 0.039090042002499104,
+        "mesh_bytes": 337128,
+        "image_gzip_bytes": 126978,
+        "image_decoded_bytes": 1048576,
+        "images": 1,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 1754153,
+            "resource_encoded": 1726716,
+            "resource_decoded": 2648314
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 488138,
+            "resource_encoded": 464106,
+            "resource_decoded": 1385704
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.5,
+          "top": 1.0999999940395355,
+          "low": 1.4000000059604645
+        },
+        "draw_p95_ms": {
+          "wide": 2,
+          "top": 1.600000023841858,
+          "low": 2.0999999940395355
+        },
+        "raf_fps": {
+          "wide": 60.00393468424159,
+          "top": 60,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "top": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          },
+          "low": {
+            "textures": 6,
+            "geometries": 7,
+            "programs": 7,
+            "calls": 4,
+            "triangles": 3518
+          }
+        },
+        "chrome_tree_rss_kib": 1869760,
+        "harness_tree_rss_kib": 2021200
+      }
+    ],
+    "anymal": [
+      {
+        "label": "A1",
+        "first_fresh_ms": 211.5,
+        "first_warm_ms": 151.2999999821186,
+        "first_interaction_ms": 30.100000023841858,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.021904124994762242,
+            "process_cpu_seconds": 0.021441000000000265
+          }
+        ],
+        "warm_rebuild_seconds": 0.055282709014136344,
+        "mesh_bytes": 3974580,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 5260811,
+            "resource_encoded": 5233835,
+            "resource_decoded": 5233835
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 3998277,
+            "resource_encoded": 3974580,
+            "resource_decoded": 3974580
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.899999976158142,
+          "side": 1.8499999940395355,
+          "low": 2.4000000059604645
+        },
+        "draw_p95_ms": {
+          "wide": 2.5,
+          "side": 2.699999988079071,
+          "low": 3
+        },
+        "raf_fps": {
+          "wide": 60,
+          "side": 60,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "side": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          }
+        },
+        "chrome_tree_rss_kib": 1888880,
+        "harness_tree_rss_kib": 3296672
+      },
+      {
+        "label": "B1",
+        "first_fresh_ms": 334,
+        "first_warm_ms": 136.40000000596046,
+        "first_interaction_ms": 32.19999998807907,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.15565624998998828,
+            "process_cpu_seconds": 0.155192
+          }
+        ],
+        "warm_rebuild_seconds": 0.19298175000585616,
+        "mesh_bytes": 4793148,
+        "image_gzip_bytes": 149100,
+        "image_decoded_bytes": 1045568,
+        "images": 17,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 6232296,
+            "resource_encoded": 6204858,
+            "resource_decoded": 7101326
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 4966281,
+            "resource_encoded": 4942248,
+            "resource_decoded": 5838716
+          }
+        },
+        "draw_median_ms": {
+          "wide": 0.9000000059604645,
+          "side": 1.9000000059604645,
+          "low": 2.600000023841858
+        },
+        "draw_p95_ms": {
+          "wide": 2.300000011920929,
+          "side": 2.5,
+          "low": 3.4000000059604645
+        },
+        "raf_fps": {
+          "wide": 60,
+          "side": 59.99803285138191,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "side": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "low": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          }
+        },
+        "chrome_tree_rss_kib": 1915568,
+        "harness_tree_rss_kib": 3354016
+      },
+      {
+        "label": "A2",
+        "first_fresh_ms": 234.30000001192093,
+        "first_warm_ms": 108.89999997615814,
+        "first_interaction_ms": 31.5,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.02227954100817442,
+            "process_cpu_seconds": 0.02181500000000014
+          }
+        ],
+        "warm_rebuild_seconds": 0.054815166018670425,
+        "mesh_bytes": 3974580,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 5260811,
+            "resource_encoded": 5233835,
+            "resource_decoded": 5233835
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 3998277,
+            "resource_encoded": 3974580,
+            "resource_decoded": 3974580
+          }
+        },
+        "draw_median_ms": {
+          "wide": 2,
+          "side": 2.0999999940395355,
+          "low": 2.2999999970197678
+        },
+        "draw_p95_ms": {
+          "wide": 2.300000011920929,
+          "side": 2.7000000178813934,
+          "low": 2.800000011920929
+        },
+        "raf_fps": {
+          "wide": 59.99803285138192,
+          "side": 60,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "side": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          }
+        },
+        "chrome_tree_rss_kib": 1893152,
+        "harness_tree_rss_kib": 3298912
+      },
+      {
+        "label": "B2",
+        "first_fresh_ms": 365.7999999821186,
+        "first_warm_ms": 104.30000001192093,
+        "first_interaction_ms": 30.5,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.1571614170097746,
+            "process_cpu_seconds": 0.15689999999999982
+          }
+        ],
+        "warm_rebuild_seconds": 0.19478691602125764,
+        "mesh_bytes": 4793148,
+        "image_gzip_bytes": 149100,
+        "image_decoded_bytes": 1045568,
+        "images": 17,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 6232296,
+            "resource_encoded": 6204858,
+            "resource_decoded": 7101326
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 4966281,
+            "resource_encoded": 4942248,
+            "resource_decoded": 5838716
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.9000000059604645,
+          "side": 1.9000000059604645,
+          "low": 2.300000011920929
+        },
+        "draw_p95_ms": {
+          "wide": 2.4000000059604645,
+          "side": 2.5,
+          "low": 3.5
+        },
+        "raf_fps": {
+          "wide": 60.00393468424158,
+          "side": 60,
+          "low": 60.00983767830792
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "side": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          },
+          "low": {
+            "textures": 22,
+            "geometries": 29,
+            "programs": 8,
+            "calls": 52,
+            "triangles": 58322
+          }
+        },
+        "chrome_tree_rss_kib": 1911504,
+        "harness_tree_rss_kib": 3329760
+      }
+    ],
+    "composite": [
+      {
+        "label": "A1",
+        "first_fresh_ms": 253.40000000596046,
+        "first_warm_ms": 157.89999997615814,
+        "first_interaction_ms": 31.099999994039536,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.004462459008209407,
+            "process_cpu_seconds": 0.004508999999999652
+          }
+        ],
+        "warm_rebuild_seconds": 0.044134249998023733,
+        "mesh_bytes": 2457072,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 3743303,
+            "resource_encoded": 3716327,
+            "resource_decoded": 3716327
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 2480769,
+            "resource_encoded": 2457072,
+            "resource_decoded": 2457072
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.7000000178813934,
+          "top": 2,
+          "low": 2.199999988079071
+        },
+        "draw_p95_ms": {
+          "wide": 2.4000000059604645,
+          "top": 2.5999999940395355,
+          "low": 3
+        },
+        "raf_fps": {
+          "wide": 59.999999999999986,
+          "top": 60,
+          "low": 60.00983767830792
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "top": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          }
+        },
+        "chrome_tree_rss_kib": 1898976,
+        "harness_tree_rss_kib": 2848512
+      },
+      {
+        "label": "B1",
+        "first_fresh_ms": 251.80000001192093,
+        "first_warm_ms": 158.2999999821186,
+        "first_interaction_ms": 31.5,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.014331999991554767,
+            "process_cpu_seconds": 0.013738000000000028
+          }
+        ],
+        "warm_rebuild_seconds": 0.053107791987713426,
+        "mesh_bytes": 2579664,
+        "image_gzip_bytes": 126978,
+        "image_decoded_bytes": 1048576,
+        "images": 1,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 3996690,
+            "resource_encoded": 3969252,
+            "resource_decoded": 4890850
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 2730675,
+            "resource_encoded": 2706642,
+            "resource_decoded": 3628240
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.9000000059604645,
+          "top": 1.9000000059604645,
+          "low": 2.300000011920929
+        },
+        "draw_p95_ms": {
+          "wide": 2.4000000059604645,
+          "top": 2.5,
+          "low": 2.7999999821186066
+        },
+        "raf_fps": {
+          "wide": 60,
+          "top": 60,
+          "low": 60.00393468424157
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "top": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "low": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          }
+        },
+        "chrome_tree_rss_kib": 1907328,
+        "harness_tree_rss_kib": 2867712
+      },
+      {
+        "label": "A2",
+        "first_fresh_ms": 274.09999999403954,
+        "first_warm_ms": 161.19999998807907,
+        "first_interaction_ms": 30.69999998807907,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.006825624994235113,
+            "process_cpu_seconds": 0.0064269999999999605
+          }
+        ],
+        "warm_rebuild_seconds": 0.051271208008984104,
+        "mesh_bytes": 2457072,
+        "image_gzip_bytes": 0,
+        "image_decoded_bytes": 0,
+        "images": 0,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 28,
+            "http_encoded_bytes": 3743303,
+            "resource_encoded": 3716327,
+            "resource_decoded": 3716327
+          },
+          "warm_navigation": {
+            "http_requests": 28,
+            "http_encoded_bytes": 2480769,
+            "resource_encoded": 2457072,
+            "resource_decoded": 2457072
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.9500000029802322,
+          "top": 1.7000000029802322,
+          "low": 2.4000000059604645
+        },
+        "draw_p95_ms": {
+          "wide": 2.5999999940395355,
+          "top": 2.300000011920929,
+          "low": 3
+        },
+        "raf_fps": {
+          "wide": 60,
+          "top": 60.00393468424159,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "top": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "low": {
+            "textures": 5,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          }
+        },
+        "chrome_tree_rss_kib": 1899312,
+        "harness_tree_rss_kib": 3030048
+      },
+      {
+        "label": "B2",
+        "first_fresh_ms": 256.10000002384186,
+        "first_warm_ms": 161.09999999403954,
+        "first_interaction_ms": 30.30000001192093,
+        "cold_payload_builds": [
+          {
+            "wall_seconds": 0.013431333005428314,
+            "process_cpu_seconds": 0.01306699999999994
+          }
+        ],
+        "warm_rebuild_seconds": 0.05740425002295524,
+        "mesh_bytes": 2579664,
+        "image_gzip_bytes": 126978,
+        "image_decoded_bytes": 1048576,
+        "images": 1,
+        "navigations": {
+          "fresh_profile": {
+            "http_requests": 30,
+            "http_encoded_bytes": 3996690,
+            "resource_encoded": 3969252,
+            "resource_decoded": 4890850
+          },
+          "warm_navigation": {
+            "http_requests": 30,
+            "http_encoded_bytes": 2730675,
+            "resource_encoded": 2706642,
+            "resource_decoded": 3628240
+          }
+        },
+        "draw_median_ms": {
+          "wide": 1.9000000059604645,
+          "top": 1.8999999910593033,
+          "low": 2.2000000178813934
+        },
+        "draw_p95_ms": {
+          "wide": 2.5999999940395355,
+          "top": 2.399999976158142,
+          "low": 3.199999988079071
+        },
+        "raf_fps": {
+          "wide": 59.99803285138191,
+          "top": 60,
+          "low": 60
+        },
+        "gpu_resources": {
+          "wide": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "top": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          },
+          "low": {
+            "textures": 6,
+            "geometries": 73,
+            "programs": 12,
+            "calls": 70,
+            "triangles": 33520
+          }
+        },
+        "chrome_tree_rss_kib": 1912400,
+        "harness_tree_rss_kib": 3043312
+      }
+    ]
+  },
+  "native_visual_pair_differences": [
+    {
+      "scene": "x2",
+      "view": "wide",
+      "mean_absolute_pixel_difference": 0.6833893229166667,
+      "different_channels": 98035
+    },
+    {
+      "scene": "x2",
+      "view": "top",
+      "mean_absolute_pixel_difference": 3.1996650390625,
+      "different_channels": 501946
+    },
+    {
+      "scene": "x2",
+      "view": "low",
+      "mean_absolute_pixel_difference": 6.953222981770834,
+      "different_channels": 1003984
+    },
+    {
+      "scene": "anymal",
+      "view": "wide",
+      "mean_absolute_pixel_difference": 0.118087890625,
+      "different_channels": 52429
+    },
+    {
+      "scene": "anymal",
+      "view": "side",
+      "mean_absolute_pixel_difference": 0.220123046875,
+      "different_channels": 104042
+    },
+    {
+      "scene": "anymal",
+      "view": "low",
+      "mean_absolute_pixel_difference": 0.8515266927083334,
+      "different_channels": 394550
+    },
+    {
+      "scene": "composite",
+      "view": "wide",
+      "mean_absolute_pixel_difference": 0.12831673177083333,
+      "different_channels": 21632
+    },
+    {
+      "scene": "composite",
+      "view": "top",
+      "mean_absolute_pixel_difference": 0.8006438802083333,
+      "different_channels": 127897
+    },
+    {
+      "scene": "composite",
+      "view": "low",
+      "mean_absolute_pixel_difference": 0.5964527994791666,
+      "different_channels": 90065
+    }
+  ],
+  "untextured_exact_control_views": 17,
+  "checks": [
+    "A1 runtime before/after",
+    "A1 identical harness_sha256",
+    "A1 identical support_sha256",
+    "A1 identical imported_helpers",
+    "A1 identical fixtures",
+    "A1 identical cameras",
+    "A1x2 exact frozen physics",
+    "A1x2 error free",
+    "A1x2 native interaction",
+    "A1x2 one real cold payload build",
+    "A1x2 unchanged nontexture scene",
+    "A1x2 unchanged geometry/legacy colors",
+    "A1x2 mesh byte accounting",
+    "A1x2 encoded byte accounting",
+    "A1x2 unchanged old image-free payload",
+    "A1x2wide GPU/sample count",
+    "A1x2wide exact prescribed camera",
+    "A1x2top GPU/sample count",
+    "A1x2top exact prescribed camera",
+    "A1x2low GPU/sample count",
+    "A1x2low exact prescribed camera",
+    "A1anymal exact frozen physics",
+    "A1anymal error free",
+    "A1anymal native interaction",
+    "A1anymal one real cold payload build",
+    "A1anymal unchanged nontexture scene",
+    "A1anymal unchanged geometry/legacy colors",
+    "A1anymal mesh byte accounting",
+    "A1anymal encoded byte accounting",
+    "A1anymal unchanged old image-free payload",
+    "A1anymalwide GPU/sample count",
+    "A1anymalwide exact prescribed camera",
+    "A1anymalside GPU/sample count",
+    "A1anymalside exact prescribed camera",
+    "A1anymallow GPU/sample count",
+    "A1anymallow exact prescribed camera",
+    "A1composite exact frozen physics",
+    "A1composite error free",
+    "A1composite native interaction",
+    "A1composite one real cold payload build",
+    "A1composite unchanged nontexture scene",
+    "A1composite unchanged geometry/legacy colors",
+    "A1composite mesh byte accounting",
+    "A1composite encoded byte accounting",
+    "A1composite unchanged old image-free payload",
+    "A1compositewide GPU/sample count",
+    "A1compositewide exact prescribed camera",
+    "A1compositetop GPU/sample count",
+    "A1compositetop exact prescribed camera",
+    "A1compositelow GPU/sample count",
+    "A1compositelow exact prescribed camera",
+    "B1 runtime before/after",
+    "B1 identical harness_sha256",
+    "B1 identical support_sha256",
+    "B1 identical imported_helpers",
+    "B1 identical fixtures",
+    "B1 identical cameras",
+    "B1x2 exact frozen physics",
+    "B1x2 error free",
+    "B1x2 native interaction",
+    "B1x2 one real cold payload build",
+    "B1x2 unchanged nontexture scene",
+    "B1x2 unchanged geometry/legacy colors",
+    "B1x2 mesh byte accounting",
+    "B1x2 encoded byte accounting",
+    "B1x2 bounded decoded image data",
+    "B1x2 bounded edges/image count",
+    "B1x2 srgb source provenance",
+    "B1x2wide GPU/sample count",
+    "B1x2wide exact prescribed camera",
+    "B1x2top GPU/sample count",
+    "B1x2top exact prescribed camera",
+    "B1x2low GPU/sample count",
+    "B1x2low exact prescribed camera",
+    "B1anymal exact frozen physics",
+    "B1anymal error free",
+    "B1anymal native interaction",
+    "B1anymal one real cold payload build",
+    "B1anymal unchanged nontexture scene",
+    "B1anymal unchanged geometry/legacy colors",
+    "B1anymal mesh byte accounting",
+    "B1anymal encoded byte accounting",
+    "B1anymal bounded decoded image data",
+    "B1anymal bounded edges/image count",
+    "B1anymal srgb source provenance",
+    "B1anymalwide GPU/sample count",
+    "B1anymalwide exact prescribed camera",
+    "B1anymalside GPU/sample count",
+    "B1anymalside exact prescribed camera",
+    "B1anymallow GPU/sample count",
+    "B1anymallow exact prescribed camera",
+    "B1composite exact frozen physics",
+    "B1composite error free",
+    "B1composite native interaction",
+    "B1composite one real cold payload build",
+    "B1composite unchanged nontexture scene",
+    "B1composite unchanged geometry/legacy colors",
+    "B1composite mesh byte accounting",
+    "B1composite encoded byte accounting",
+    "B1composite bounded decoded image data",
+    "B1composite bounded edges/image count",
+    "B1composite srgb source provenance",
+    "B1compositewide GPU/sample count",
+    "B1compositewide exact prescribed camera",
+    "B1compositetop GPU/sample count",
+    "B1compositetop exact prescribed camera",
+    "B1compositelow GPU/sample count",
+    "B1compositelow exact prescribed camera",
+    "A2 runtime before/after",
+    "A2 identical harness_sha256",
+    "A2 identical support_sha256",
+    "A2 identical imported_helpers",
+    "A2 identical fixtures",
+    "A2 identical cameras",
+    "A2x2 exact frozen physics",
+    "A2x2 error free",
+    "A2x2 native interaction",
+    "A2x2 one real cold payload build",
+    "A2x2 unchanged nontexture scene",
+    "A2x2 unchanged geometry/legacy colors",
+    "A2x2 mesh byte accounting",
+    "A2x2 encoded byte accounting",
+    "A2x2 unchanged old image-free payload",
+    "A2x2wide GPU/sample count",
+    "A2x2wide exact prescribed camera",
+    "A2x2top GPU/sample count",
+    "A2x2top exact prescribed camera",
+    "A2x2low GPU/sample count",
+    "A2x2low exact prescribed camera",
+    "A2anymal exact frozen physics",
+    "A2anymal error free",
+    "A2anymal native interaction",
+    "A2anymal one real cold payload build",
+    "A2anymal unchanged nontexture scene",
+    "A2anymal unchanged geometry/legacy colors",
+    "A2anymal mesh byte accounting",
+    "A2anymal encoded byte accounting",
+    "A2anymal unchanged old image-free payload",
+    "A2anymalwide GPU/sample count",
+    "A2anymalwide exact prescribed camera",
+    "A2anymalside GPU/sample count",
+    "A2anymalside exact prescribed camera",
+    "A2anymallow GPU/sample count",
+    "A2anymallow exact prescribed camera",
+    "A2composite exact frozen physics",
+    "A2composite error free",
+    "A2composite native interaction",
+    "A2composite one real cold payload build",
+    "A2composite unchanged nontexture scene",
+    "A2composite unchanged geometry/legacy colors",
+    "A2composite mesh byte accounting",
+    "A2composite encoded byte accounting",
+    "A2composite unchanged old image-free payload",
+    "A2compositewide GPU/sample count",
+    "A2compositewide exact prescribed camera",
+    "A2compositetop GPU/sample count",
+    "A2compositetop exact prescribed camera",
+    "A2compositelow GPU/sample count",
+    "A2compositelow exact prescribed camera",
+    "B2 runtime before/after",
+    "B2 identical harness_sha256",
+    "B2 identical support_sha256",
+    "B2 identical imported_helpers",
+    "B2 identical fixtures",
+    "B2 identical cameras",
+    "B2x2 exact frozen physics",
+    "B2x2 error free",
+    "B2x2 native interaction",
+    "B2x2 one real cold payload build",
+    "B2x2 unchanged nontexture scene",
+    "B2x2 unchanged geometry/legacy colors",
+    "B2x2 mesh byte accounting",
+    "B2x2 encoded byte accounting",
+    "B2x2 bounded decoded image data",
+    "B2x2 bounded edges/image count",
+    "B2x2 srgb source provenance",
+    "B2x2wide GPU/sample count",
+    "B2x2wide exact prescribed camera",
+    "B2x2top GPU/sample count",
+    "B2x2top exact prescribed camera",
+    "B2x2low GPU/sample count",
+    "B2x2low exact prescribed camera",
+    "B2anymal exact frozen physics",
+    "B2anymal error free",
+    "B2anymal native interaction",
+    "B2anymal one real cold payload build",
+    "B2anymal unchanged nontexture scene",
+    "B2anymal unchanged geometry/legacy colors",
+    "B2anymal mesh byte accounting",
+    "B2anymal encoded byte accounting",
+    "B2anymal bounded decoded image data",
+    "B2anymal bounded edges/image count",
+    "B2anymal srgb source provenance",
+    "B2anymalwide GPU/sample count",
+    "B2anymalwide exact prescribed camera",
+    "B2anymalside GPU/sample count",
+    "B2anymalside exact prescribed camera",
+    "B2anymallow GPU/sample count",
+    "B2anymallow exact prescribed camera",
+    "B2composite exact frozen physics",
+    "B2composite error free",
+    "B2composite native interaction",
+    "B2composite one real cold payload build",
+    "B2composite unchanged nontexture scene",
+    "B2composite unchanged geometry/legacy colors",
+    "B2composite mesh byte accounting",
+    "B2composite encoded byte accounting",
+    "B2composite bounded decoded image data",
+    "B2composite bounded edges/image count",
+    "B2composite srgb source provenance",
+    "B2compositewide GPU/sample count",
+    "B2compositewide exact prescribed camera",
+    "B2compositetop GPU/sample count",
+    "B2compositetop exact prescribed camera",
+    "B2compositelow GPU/sample count",
+    "B2compositelow exact prescribed camera",
+    "untextured runtime before/after",
+    "gallery exact full control scene JSON",
+    "gallery exact control physics",
+    "galleryfresh_profile no new untextured HTTP requests",
+    "galleryfresh_profile no native module/image load",
+    "gallerywarm_navigation no new untextured HTTP requests",
+    "gallerywarm_navigation no native module/image load",
+    "galleryfar exact untextured PNG",
+    "galleryfar identical calls",
+    "galleryfar identical triangles",
+    "galleryfar identical textures",
+    "galleryfar identical geometries",
+    "galleryfar identical programs",
+    "gallerynear exact untextured PNG",
+    "gallerynear identical calls",
+    "gallerynear identical triangles",
+    "gallerynear identical textures",
+    "gallerynear identical geometries",
+    "gallerynear identical programs",
+    "gallerylow exact untextured PNG",
+    "gallerylow identical calls",
+    "gallerylow identical triangles",
+    "gallerylow identical textures",
+    "gallerylow identical geometries",
+    "gallerylow identical programs",
+    "kitchen exact full control scene JSON",
+    "kitchen exact control physics",
+    "kitchenfresh_profile no new untextured HTTP requests",
+    "kitchenfresh_profile no native module/image load",
+    "kitchenwarm_navigation no new untextured HTTP requests",
+    "kitchenwarm_navigation no native module/image load",
+    "kitchenfar exact untextured PNG",
+    "kitchenfar identical calls",
+    "kitchenfar identical triangles",
+    "kitchenfar identical textures",
+    "kitchenfar identical geometries",
+    "kitchenfar identical programs",
+    "kitchennear exact untextured PNG",
+    "kitchennear identical calls",
+    "kitchennear identical triangles",
+    "kitchennear identical textures",
+    "kitchennear identical geometries",
+    "kitchennear identical programs",
+    "kitchenlow exact untextured PNG",
+    "kitchenlow identical calls",
+    "kitchenlow identical triangles",
+    "kitchenlow identical textures",
+    "kitchenlow identical geometries",
+    "kitchenlow identical programs",
+    "park exact full control scene JSON",
+    "park exact control physics",
+    "parkfresh_profile no new untextured HTTP requests",
+    "parkfresh_profile no native module/image load",
+    "parkwarm_navigation no new untextured HTTP requests",
+    "parkwarm_navigation no native module/image load",
+    "parkfar exact untextured PNG",
+    "parkfar identical calls",
+    "parkfar identical triangles",
+    "parkfar identical textures",
+    "parkfar identical geometries",
+    "parkfar identical programs",
+    "parknear exact untextured PNG",
+    "parknear identical calls",
+    "parknear identical triangles",
+    "parknear identical textures",
+    "parknear identical geometries",
+    "parknear identical programs",
+    "parklow exact untextured PNG",
+    "parklow identical calls",
+    "parklow identical triangles",
+    "parklow identical textures",
+    "parklow identical geometries",
+    "parklow identical programs",
+    "parkbench_detail exact untextured PNG",
+    "parkbench_detail identical calls",
+    "parkbench_detail identical triangles",
+    "parkbench_detail identical textures",
+    "parkbench_detail identical geometries",
+    "parkbench_detail identical programs",
+    "parkbench_grazing exact untextured PNG",
+    "parkbench_grazing identical calls",
+    "parkbench_grazing identical triangles",
+    "parkbench_grazing identical textures",
+    "parkbench_grazing identical geometries",
+    "parkbench_grazing identical programs",
+    "wood_props exact full control scene JSON",
+    "wood_props exact control physics",
+    "wood_propsfresh_profile no new untextured HTTP requests",
+    "wood_propsfresh_profile no native module/image load",
+    "wood_propswarm_navigation no new untextured HTTP requests",
+    "wood_propswarm_navigation no native module/image load",
+    "wood_propsnear exact untextured PNG",
+    "wood_propsnear identical calls",
+    "wood_propsnear identical triangles",
+    "wood_propsnear identical textures",
+    "wood_propsnear identical geometries",
+    "wood_propsnear identical programs",
+    "wood_propstable_top exact untextured PNG",
+    "wood_propstable_top identical calls",
+    "wood_propstable_top identical triangles",
+    "wood_propstable_top identical textures",
+    "wood_propstable_top identical geometries",
+    "wood_propstable_top identical programs",
+    "wood_propstable_detail exact untextured PNG",
+    "wood_propstable_detail identical calls",
+    "wood_propstable_detail identical triangles",
+    "wood_propstable_detail identical textures",
+    "wood_propstable_detail identical geometries",
+    "wood_propstable_detail identical programs",
+    "wood_propstable_grazing exact untextured PNG",
+    "wood_propstable_grazing identical calls",
+    "wood_propstable_grazing identical triangles",
+    "wood_propstable_grazing identical textures",
+    "wood_propstable_grazing identical geometries",
+    "wood_propstable_grazing identical programs",
+    "wood_propsfloor_detail exact untextured PNG",
+    "wood_propsfloor_detail identical calls",
+    "wood_propsfloor_detail identical triangles",
+    "wood_propsfloor_detail identical textures",
+    "wood_propsfloor_detail identical geometries",
+    "wood_propsfloor_detail identical programs",
+    "wood_propsfloor_grazing exact untextured PNG",
+    "wood_propsfloor_grazing identical calls",
+    "wood_propsfloor_grazing identical triangles",
+    "wood_propsfloor_grazing identical textures",
+    "wood_propsfloor_grazing identical geometries",
+    "wood_propsfloor_grazing identical programs",
+    "focused-default no failures/skips",
+    "browser-full no failures/skips",
+    "slow-assets-sensors no failures/skips",
+    "all final stages pass",
+    "framework seven cases"
+  ],
+  "definitions": {
+    "fresh": "Fresh Chrome profile on an already-running server, cached local assets and compiled/restored model; machine, driver and OS caches not cleared.",
+    "warm": "Second navigation of the same browser profile/tab and server; texture payload remains cached per model version.",
+    "payload": "Same external cache-miss timing wrapper on both sources; process CPU includes other threads. Separate warm rebuild is a new hub, not an existing cache hit.",
+    "draw": "Forty synchronous renders plus GPU pixel readback per view; independent one-second RAF sample; desktop1280x800 DPR1.",
+    "memory": "Process-tree RSS can count shared pages repeatedly; not GPU VRAM. The1MiB cap is base RGBA data; mipmaps and sampler/source bookkeeping have additional cost.",
+    "video": "Paused physics, actual full browser camera motion screencast; not an autonomous locomotion demonstration."
+  },
+  "formal_budget": {
+    "path": "budget/2026-10-24-e6d0fc2-dirty-partial.json",
+    "sha256": "b17d0065a26bd2ceac815b22ead537ee654ef5b86c6c4d0c60509bf4c39a0571",
+    "checks": {
+      "install.wheel_kb": "ok",
+      "install.installed_mb": "ok",
+      "install.download_mb": "ok",
+      "install.packages": "ok",
+      "viewer.cold_start_s": "ok",
+      "viewer.fps": "ok",
+      "viewer.frame_ms": "ok",
+      "viewer.assets_fps": "ok",
+      "viewer.assets_frame_ms": "ok",
+      "viewer.server_peak_mb": "ok",
+      "viewer.idle_cpu_pct": "ok"
+    },
+    "results": {
+      "install": {
+        "wheel_kb": {
+          "value": 3657.874,
+          "unit": "KB",
+          "better": "lower"
+        },
+        "installed_mb": {
+          "value": 163.2012,
+          "unit": "MB",
+          "better": "lower",
+          "top": [
+            [
+              "mujoco==3.15.0",
+              71.4
+            ],
+            [
+              "numpy==2.5.4",
+              19.6
+            ],
+            [
+              "coacd==1.0.14",
+              14.2
+            ],
+            [
+              "pillow==12.3.0",
+              12.7
+            ],
+            [
+              "cryptography==50.0.2",
+              10.5
+            ],
+            [
+              "robotforge==0.0.1",
+              8.1
+            ],
+            [
+              "pyopengl==3.1.10",
+              7.5
+            ],
+            [
+              "pydantic-core==2.50.1",
+              4.5
+            ]
+          ]
+        },
+        "packages": {
+          "value": 42.0,
+          "unit": "",
+          "better": "lower",
+          "versions": [
+            "absl-py==2.5.1",
+            "annotated-types==0.8.0",
+            "anyio==4.15.1",
+            "attrs==26.1.0",
+            "cffi==2.1.1",
+            "click==8.5.0",
+            "coacd==1.0.14",
+            "cryptography==50.0.2",
+            "etils==1.14.0",
+            "fsspec==2026.9.0",
+            "glfw==2.10.2",
+            "h11==0.16.0",
+            "httpcore2==2.13.1",
+            "httpx2==2.13.1",
+            "idna==3.20",
+            "jsonschema-specifications==2025.9.1",
+            "jsonschema==4.26.0",
+            "mcp-types==2.3.0",
+            "mcp==2.3.0",
+            "mujoco==3.15.0",
+            "numpy==2.5.4",
+            "opentelemetry-api==1.45.1",
+            "pillow==12.3.0",
+            "pycparser==3.11",
+            "pydantic-core==2.50.1",
+            "pydantic==2.14.1",
+            "pyjwt==2.15.1",
+            "pyopengl==3.1.10",
+            "python-multipart==0.0.32",
+            "pyyaml==6.0.3",
+            "referencing==0.37.0",
+            "robotforge==0.0.1",
+            "rpds-py==2026.9.1",
+            "sse-starlette==3.5.0",
+            "starlette==1.8.0",
+            "trimesh==5.1.1",
+            "truststore==0.10.5",
+            "typing-extensions==4.16.0",
+            "typing-inspection==0.4.4",
+            "uvicorn==0.54.0",
+            "websockets==17.2",
+            "zipp==4.1.1"
+          ]
+        },
+        "download_mb": {
+          "value": 52.5149,
+          "unit": "MB",
+          "better": "lower"
+        }
+      },
+      "viewer": {
+        "cold_start_s": {
+          "value": 0.496,
+          "unit": "s",
+          "better": "lower",
+          "served_s": 0.306
+        },
+        "fps": {
+          "value": 60.253,
+          "unit": "fps",
+          "better": "higher",
+          "world": "warehouse + go2",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "frame_ms": {
+          "value": 3.3,
+          "unit": "ms",
+          "better": "lower",
+          "median": 3.2999999821186066,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 151,
+          "triangles": 483270
+        },
+        "assets_fps": {
+          "value": 60.085,
+          "unit": "fps",
+          "better": "higher",
+          "world": "centaur, arm, humanoid, dog, rover",
+          "size": [
+            1280,
+            800,
+            2
+          ]
+        },
+        "assets_frame_ms": {
+          "value": 5.0,
+          "unit": "ms",
+          "better": "lower",
+          "median": 5,
+          "drawing_buffer": [
+            2560,
+            1600
+          ],
+          "calls": 358,
+          "triangles": 126622
+        },
+        "server_peak_mb": {
+          "value": 133.4,
+          "unit": "MB",
+          "better": "lower",
+          "noise": [
+            0.05,
+            5.0
+          ],
+          "warehouse": 558.1
+        },
+        "idle_cpu_pct": {
+          "value": 5.8,
+          "unit": "%",
+          "better": "lower",
+          "seconds": 5.0
+        }
+      }
+    },
+    "coverage": "Exactly one unchanged full install/viewer run; other benchmark sections not run; no stable idle-CPU upper bound or general speedup claim."
+  },
+  "post_stages": [
+    {
+      "name": "fixed-views",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-object-editing/fixed_scene_compare.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/fixed-candidate",
+        "--expected-source-root",
+        "/Users/yusenthebot/dev/robotforge",
+        "--expected-source",
+        "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db"
+      ],
+      "exit_code": 0,
+      "seconds": 38.896780375012895,
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "media-qa",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/media_qa.py"
+      ],
+      "exit_code": 0,
+      "seconds": 10.333360332995653,
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "archive-assets",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/archive_assets.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.6797800000058487,
+      "frozen_inputs_unchanged": true
+    },
+    {
+      "name": "analysis",
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/analyze.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.3573506249813363,
+      "frozen_inputs_unchanged": true
+    }
+  ],
+  "formal_stages": [
+    {
+      "label": "A1",
+      "exit_code": 0,
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/native_capture.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/formal-A1",
+        "--expected",
+        "ee36b9a8de315fb9debe8fbfb8b070a59bc0720fec145796cfb0d3558ffc4799",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/baseline",
+        "--video"
+      ],
+      "runtime": "ee36b9a8de315fb9debe8fbfb8b070a59bc0720fec145796cfb0d3558ffc4799",
+      "helper_sha256": "8a7bcb499bacc267a3c9fc1864d5d835cf43eb239af8a6346c8cc61505249317"
+    },
+    {
+      "label": "B1",
+      "exit_code": 0,
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/native_capture.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/formal-B1",
+        "--expected",
+        "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge",
+        "--video"
+      ],
+      "runtime": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "helper_sha256": "8a7bcb499bacc267a3c9fc1864d5d835cf43eb239af8a6346c8cc61505249317"
+    },
+    {
+      "label": "A2",
+      "exit_code": 0,
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/native_capture.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/formal-A2",
+        "--expected",
+        "ee36b9a8de315fb9debe8fbfb8b070a59bc0720fec145796cfb0d3558ffc4799",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/baseline"
+      ],
+      "runtime": "ee36b9a8de315fb9debe8fbfb8b070a59bc0720fec145796cfb0d3558ffc4799",
+      "helper_sha256": "8a7bcb499bacc267a3c9fc1864d5d835cf43eb239af8a6346c8cc61505249317"
+    },
+    {
+      "label": "B2",
+      "exit_code": 0,
+      "command": [
+        "uv",
+        "run",
+        "--frozen",
+        "python",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/native_capture.py",
+        "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/formal-B2",
+        "--expected",
+        "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+        "--root",
+        "/Users/yusenthebot/dev/robotforge"
+      ],
+      "runtime": "8f26dfb7fcf4630ef4a2c7460a399d947e37d050d3ab72546b526f40a91c21db",
+      "helper_sha256": "8a7bcb499bacc267a3c9fc1864d5d835cf43eb239af8a6346c8cc61505249317"
+    }
+  ],
+  "media": {
+    "videos": [
+      {
+        "path": "formal-A1/x2_motion.mp4",
+        "sha256": "496186f7864b07618285f4d26cb5befeab6acb14dc45e0dfad089df62fc493cf",
+        "bytes": 2007894,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.182301044464111,
+        "duration_capped": false
+      },
+      {
+        "path": "formal-A1/anymal_motion.mp4",
+        "sha256": "a2250a3a86a352dcefc3cee557ff63e1aa6ce0db65f01a5ebd17885d14a3a84a",
+        "bytes": 1947535,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.181428909301758,
+        "duration_capped": false
+      },
+      {
+        "path": "formal-A1/composite_motion.mp4",
+        "sha256": "7736bc2525d27f1b24ca54464a90451d4d2c0a4c5a0cf6af1f04142e7481eb4e",
+        "bytes": 2155734,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.184244871139526,
+        "duration_capped": false
+      },
+      {
+        "path": "native-models-before.mp4",
+        "sha256": "82636a9140a686066a0bfbae240c20528e168f8065641046842501b16471f51a",
+        "bytes": 6109549,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "24.900000",
+          "nb_read_frames": "747"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "source_clips": [
+          "formal-A1/x2_motion.mp4",
+          "formal-A1/anymal_motion.mp4",
+          "formal-A1/composite_motion.mp4"
+        ]
+      },
+      {
+        "path": "formal-B1/x2_motion.mp4",
+        "sha256": "ba286c9234557e9059a58139bb6028e8a7aba6115f11bef4cd961dd6505a507e",
+        "bytes": 2324694,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.182247161865234,
+        "duration_capped": false
+      },
+      {
+        "path": "formal-B1/anymal_motion.mp4",
+        "sha256": "ba3892b098db7ccc1a38c57aedfe2e6695bdda40b6dacf1816d81bf53361f58e",
+        "bytes": 1970151,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.18224310874939,
+        "duration_capped": false
+      },
+      {
+        "path": "formal-B1/composite_motion.mp4",
+        "sha256": "7a583a0c1ba866e36083c9e558dbaa0c7d282dbc64907b01a1b64813a3fe0970",
+        "bytes": 2249011,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "8.300000",
+          "nb_read_frames": "249"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "raw_frames": 492,
+        "raw_span_seconds": 8.183084964752197,
+        "duration_capped": false
+      },
+      {
+        "path": "native-models-after.mp4",
+        "sha256": "6e2d45a39887940544a432e804a37f5eb01934bf73880384961a5d399effcc2e",
+        "bytes": 6542250,
+        "stream": {
+          "codec_name": "h264",
+          "width": 1280,
+          "height": 800,
+          "r_frame_rate": "30/1",
+          "duration": "24.900000",
+          "nb_read_frames": "747"
+        },
+        "full_decode_exit_code": 0,
+        "decode_stderr": "",
+        "source_clips": [
+          "formal-B1/x2_motion.mp4",
+          "formal-B1/anymal_motion.mp4",
+          "formal-B1/composite_motion.mp4"
+        ]
+      }
+    ],
+    "definition": "Complete actual screencast timestamps retained; physics paused, camera moves. Stream-copy concatenations add no synthetic frames. Full decode checks all frames; contact images are sampled visual inspection only."
+  },
+  "reviews": {
+    "path": "review.md",
+    "sha256": "acd2d09aec2b43c3ccaa1e82d0bdad1902412e6186543614247b91b3368f0b7b",
+    "visual_path": "visual-review.md",
+    "visual_sha256": "24b3d707af4ac99069c35a9cb3906dc1c2f9c6f8d391091ef5cf4f865805ca9b"
+  },
+  "scope": {
+    "name": "Bounded native RGB/RGBA image detail for imported/library/composed meshes with authored UVs",
+    "broad_goal_status": "active",
+    "tests": "607 distinct scoped cases plus7 unchanged framework cases; complete default suite not rerun",
+    "performance": "ANYmal first complete view costs+122.5/+131.5ms; paired Chrome process-tree RSS+4.16\u201326.06MiB; mixed frame/loading samples retained. One official install/viewer run passes11 measured budgets.",
+    "limits": "Base RGBA cap is not GPU VRAM. Global legacy sRGB convention does not implement explicit-linear image parity. Sampled visual inspection; paused-physics camera videos; no phone/Windows/other-driver certification.",
+    "next": "Durable named layout save/restore for creative map exploration, separate from transient Undo and live physics snapshots."
+  },
+  "record": {
+    "id": "2251df29-650a-4790-9db0-048bad7bec30",
+    "status": "completed",
+    "path": "/Users/yusenthebot/dev/robotforge-evidence/2026-10-24-native-model-textures/verification-store/2251df29-650a-4790-9db0-048bad7bec30/experiment.json",
+    "sha256": "cf938bb867fb87a49c20571fa632a24d716f20442a41aff17db8fc51498f4f97",
+    "artifacts": 301,
+    "raw_files": 4387,
+    "raw_bytes": 566662216
+  }
+}

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import numpy as np
 from starlette.testclient import TestClient
@@ -88,6 +89,30 @@ def test_model_reload_pushes_a_new_scene():
         second = _next_text(ws, "scene")
         assert second["version"] == first["version"] + 1
         assert client.get(f"/mesh/{first['version']}.bin").status_code == 409
+        assert client.get(f"/texture/{first['version']}.bin").status_code == 409
+
+
+def test_native_image_bundle_is_versioned_and_cached(monkeypatch):
+    from test_viewer_textures import XML
+
+    from robotforge.viewer import scene
+
+    session = SimSession.from_xml(XML)
+    hub = ViewerHub(session)
+    build = Mock(wraps=scene.build_mesh_payload)
+    monkeypatch.setattr(scene, "build_mesh_payload", build)
+    client = TestClient(create_app(hub), base_url="http://127.0.0.1:8737")
+    with client:
+        desc = client.get("/scene.json").json()
+        blob = client.get(f"/texture/{desc['version']}.bin")
+        assert blob.status_code == 200 and blob.headers["cache-control"] == "no-store"
+        assert blob.headers["content-encoding"] == "gzip"
+        assert len(blob.content) == sum(e["length"] for e in desc["textures"])
+        assert client.get("/scene.json").json() == desc
+        assert client.get(f"/texture/{desc['version']}.bin").content == blob.content
+        assert build.call_count == 1
+        session.load_path(DEMO)
+        assert client.get(f"/texture/{desc['version']}.bin").status_code == 409
 
 
 def test_scene_extras_are_asked_for_without_the_session_lock():
